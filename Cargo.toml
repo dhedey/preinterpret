@@ -4,7 +4,7 @@ version = "0.1.3"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = ["David Edey <github@david-edey.com>"]
-description = "An intuitive toolkit to simplify declarative macro development"
+description = "An intuitive toolkit to simplify code generation development"
 repository = "https://github.com/dhedey/preinterpret"
 keywords = ["macros", "declarative-macros", "toolkit", "interpreter", "preprocessor"]
 # Categories have to come from https://crates.io/category_slugs

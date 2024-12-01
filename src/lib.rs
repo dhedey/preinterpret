@@ -1,23 +1,23 @@
-//! This crate provides the `preinterpret!` macro, which works as a simple pre-processor to the token stream, and is designed for declarative macro builders.
+//! This crate provides the `preinterpret!` macro, which works as a simple pre-processor to the token stream. It is inspired by the [quote](https://crates.io/crates/quote) and [paste](https://crates.io/crates/paste) crates, and built to empower code generation authors and declarative macro writers, bringing:
 //!
-//! It is inspired by the [quote](https://crates.io/crates/quote) and [paste](https://crates.io/crates/paste) crates, and built for declarative macro authors to provide:
-//!
-//! * **Heightened readability** - allowing developers to build more maintainable macros.
-//! * **Heightened expressivity** - mitigating the need to build custom procedural macros.
-//! * **Heightened sensibility** - helping developers avoid various declarative macro surprises.
+//! * **Heightened readability** - making it easier to work with code generation code.
+//! * **Heightened expressivity** - reducing boilerplate, and mitigating the need to build custom procedural macros in some cases.
+//! * **Heightened simplicity** - helping developers avoid various declarative macro surprises.
 //!
 //! It provides two composable features:
 //!
 //! * Variable definition with `[!set! #variable = ... ]` and variable substition with `#variable` (think [quote](https://crates.io/crates/quote) for declarative macros).
 //! * A toolkit of simple functions operating on token streams, literals and idents, such as `[!ident! Hello #world]` (think [paste](https://crates.io/crates/paste) but more comprehesive, and still maintained).
 //!
+//! The `preinterpret!` macro can be used inside the output of a declarative macro, or by itself, functioning as a mini code generation tool all of its own.
+//!
 //! ## Motivation
 //!
-//! ### Heightened readability
+//! ### Readability
 //!
-//! The preinterpret syntax is intended to be immediately intuitive even for people not familiar with the crate. And it enables developers to make more readable macros:
-//! * Developers can name clear concepts in their macro output, and re-use them by name, decreasing code duplication.
-//! * Developers can use variables to subdivide logic inside the macro, without having to resort to creating lots of small, functional helper macros.
+//! The preinterpret syntax is intended to be immediately intuitive even for people not familiar with the crate. And it enables developers to make their code generation code more readable:
+//! * Developers can name clear concepts in their output, and re-use them by name, decreasing code duplication.
+//! * Developers can use variables to subdivide generation logic, without having to resort to creating lots of small, functional helper macros.
 //!
 //! A simple example follows, but variable substitution becomes even more useful in larger macros with more boilerplate:
 //!
@@ -53,14 +53,14 @@
 //! }
 //! ```
 //!
-//! ### Heightened Expressivity
+//! ### Expressivity
 //!
-//! Preinterpret provides a suite of composable functions to convert token streams, literals and idents. The full list is documented in the [Details](#details) section.
+//! Preinterpret provides a suite of simple, composable commands to convert token streams, literals and idents. The full list is documented in the [Details](#details) section.
 //!
 //! For example:
 //!
 //! ```rust
-//! macro_rules! make_a_struct_and_getters {
+//! macro_rules! create_struct_and_getters {
 //!     (
 //!         $name:ident { $($field:ident),* $(,)? }
 //!     ) => {preinterpret::preinterpret!{
@@ -81,7 +81,7 @@
 //!         }
 //!     }}
 //! }
-//! make_a_struct_and_getters! {
+//! create_struct_and_getters! {
 //!   MyStruct { hello, world }
 //! }
 //! ```
@@ -125,7 +125,7 @@
 //! Now the `preinterpret!` macro runs, resulting in `#count` equal to the token stream `0usize + 1 + 1 + 1`.
 //! This will be improved in future releases by adding support for mathematical operations on integer literals.
 //!
-//! ### Heightened sensibility
+//! ### Simplicity
 //!
 //! Using preinterpret partially mitigates some common areas of confusion when writing declarative macros.
 //!

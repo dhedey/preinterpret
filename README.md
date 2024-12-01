@@ -1,4 +1,4 @@
-# Preinterpet - The declarative macro toolkit
+# Preinterpet - The code generation toolkit
 
 [<img alt="github" src="https://img.shields.io/badge/github-dhedey/preinterpret-8da0cb?style=for-the-badge&labelColor=555555&logo=github" height="20">](https://github.com/dhedey/preinterpret)
 [<img alt="crates.io" src="https://img.shields.io/crates/v/preinterpret.svg?style=for-the-badge&color=fc8d62&logo=rust" height="20">](https://crates.io/crates/preinterpret)
@@ -10,18 +10,18 @@
 If updating this readme, please ensure that the rustdoc is also updated.
 -->
 
-This crate provides the `preinterpret!` macro, which works as a simple pre-processor to the token stream, and is designed for declarative macro authors.
+This crate provides the `preinterpret!` macro, which works as a simple pre-processor to the token stream. It is inspired by the [quote](https://crates.io/crates/quote) and [paste](https://crates.io/crates/paste) crates, and built to empower code generation authors and declarative macro writers, bringing:
 
-It is inspired by the [quote](https://crates.io/crates/quote) and [paste](https://crates.io/crates/paste) crates, and built for code generator / declarative macro authors to provide:
-
-* **Heightened readability** - allowing developers to build more maintainable macros.
-* **Heightened expressivity** - mitigating the need to build custom procedural macros.
-* **Heightened sensibility** - helping developers avoid various declarative macro surprises.
+* **Heightened readability** - making it easier to work with code generation code.
+* **Heightened expressivity** - reducing boilerplate, and mitigating the need to build custom procedural macros in some cases.
+* **Heightened simplicity** - helping developers avoid various declarative macro surprises.
 
 It provides two composable features:
 
 * Variable definition with `[!set! #variable = ... ]` and variable substition with `#variable` (think [quote](https://crates.io/crates/quote) for declarative macros)
 * A toolkit of simple functions operating on token streams, literals and idents, such as `[!ident! Hello #world]` (think [paste](https://crates.io/crates/paste) but more comprehesive, and still maintained)
+
+The `preinterpret!` macro can be used inside the output of a declarative macro, or by itself, functioning as a mini code generation tool all of its own.
 
 ```toml
 [dependencies]
@@ -30,9 +30,10 @@ preinterpret = "0.1"
 
 ## Motivation
 
-### Heightened readability
+### Readability
 
 The preinterpret syntax is intended to be immediately intuitive even for people not familiar with the crate. And it enables developers to make more readable macros:
+
 * Developers can name clear concepts in their macro output, and re-use them by name, decreasing code duplication.
 * Developers can use variables to subdivide logic inside the macro, without having to resort to creating lots of small, functional helper macros.
 
@@ -65,14 +66,14 @@ impl_marker_traits! {
 };
 ```
 
-### Heightened Expressivity
+### Expressivity
 
-Preinterpret provides a suite of composable functions to convert token streams, literals and idents. The full list is documented in the [Details](#details) section.
+Preinterpret provides a suite of simple, composable commands to convert token streams, literals and idents. The full list is documented in the [Details](#details) section.
 
 For example:
 
 ```rust
-macro_rules! make_a_struct_and_getters {
+macro_rules! create_struct_and_getters {
     (
         $name:ident { $($field:ident),* $(,)? }
     ) => {preinterpret::preinterpret!{
@@ -93,7 +94,7 @@ macro_rules! make_a_struct_and_getters {
         }
     }}
 }
-make_a_struct_and_getters! {
+create_struct_and_getters! {
   MyStruct { hello, world }
 }
 ```
@@ -136,7 +137,7 @@ let count = preinterpret::preinterpret!{
 Now the `preinterpret!` macro runs, resulting in `#count` equal to the token stream `0usize + 1 + 1 + 1`.
 This will be improved in future releases by adding support for mathematical operations on integer literals.
 
-### Heightened sensibility
+### Heightened simplicity
 
 Using preinterpret partially mitigates some common areas of confusion when writing declarative macros.
 
