@@ -8,7 +8,7 @@ impl CommandDefinition for SetCommand {
     fn execute(interpreter: &mut Interpreter, argument: CommandArgumentStream, command_span: Span) -> Result<TokenStream> {
         let mut argument_tokens = argument.tokens();
         let Some(ident) = parse_variable_set(&mut argument_tokens) else {
-            return Err(command_span.error("A set call is expected to start with `#VariableName = ..`."));
+            return Err(command_span.error("A set call is expected to start with `#variable_name = ..`."));
         };
     
         let result_tokens = interpreter.interpret_tokens(argument_tokens)?;

@@ -70,7 +70,7 @@ fn parse_command_invocation(group: &Group) -> Result<Option<CommandInvocation>> 
     match consume_command_end(&command_ident, &mut remaining_tokens) {
         Some(command_kind) => Ok(Some(CommandInvocation::new(command_kind, group, remaining_tokens))),
         None => Err(Error::new(
-            group.span(),
+            command_ident.span(),
             format!("Expected `[!<command>! ..]`, for <command> one of: {}.\nIf this wasn't intended to be a preinterpret command, you can work around this with [!raw! [!{command_ident} ... ]]", CommandKind::list_all()),
         )),
     }
