@@ -10,18 +10,18 @@
 If updating this readme, please ensure that the rustdoc is also updated.
 -->
 
-This crate provides the `preinterpret!` macro, which works as a simple pre-processor to the token stream, and is designed for declarative macro builders.
+This crate provides the `preinterpret!` macro, which works as a simple pre-processor to the token stream, and is designed for declarative macro authors.
 
-It provides two composable features:
-* Variable definition with `[!set! #variable = ... ]` and variable substition with `#variable` (think [quote](https://crates.io/crates/quote) for declarative macros).
-* A toolkit of simple functions operating on token streams, literals and idents, such as `[!ident! Hello #world]` (think [paste](https://crates.io/crates/paste) but more comprehesive, and still maintained).
-
-It is inspired by the [quote](https://crates.io/crates/quote) and [paste](https://crates.io/crates/paste) crates, and built for declarative macro authors to provide:
+It is inspired by the [quote](https://crates.io/crates/quote) and [paste](https://crates.io/crates/paste) crates, and built for code generator / declarative macro authors to provide:
 
 * **Heightened readability** - allowing developers to build more maintainable macros.
 * **Heightened expressivity** - mitigating the need to build custom procedural macros.
 * **Heightened sensibility** - helping developers avoid various declarative macro surprises.
 
+It provides two composable features:
+
+* Variable definition with `[!set! #variable = ... ]` and variable substition with `#variable` (think [quote](https://crates.io/crates/quote) for declarative macros)
+* A toolkit of simple functions operating on token streams, literals and idents, such as `[!ident! Hello #world]` (think [paste](https://crates.io/crates/paste) but more comprehesive, and still maintained)
 
 ```toml
 [dependencies]
@@ -36,20 +36,19 @@ The preinterpret syntax is intended to be immediately intuitive even for people 
 * Developers can name clear concepts in their macro output, and re-use them by name, decreasing code duplication.
 * Developers can use variables to subdivide logic inside the macro, without having to resort to creating lots of small, functional helper macros.
 
-A simple example follows, but variable substitution becomes even more useful in larger macros with more boilerplate:
+These ideas are demonstrated with the following simple example:
 
 ```rust
 macro_rules! impl_marker_traits {
     {
-        $vis:vis $type_name:ident
+        impl [
+            // The marker traits to implement
+            $($trait:ident),* $(,)?
+        ] for $type_name:ident
         $(
             // Arbitrary (non-const) type generics
             < $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? $( = $deflt:tt)? ),+ >
         )?
-        [
-            // The marker traits to implement
-            $($trait:ident),* $(,)?
-        ]
     } => {preinterpret::preinterpret!{
         [!set! #impl_generics = $(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)?]
         [!set! #type_generics = $(< $( $lt ),+ >)?]
@@ -61,6 +60,9 @@ macro_rules! impl_marker_traits {
         )*
     }}
 }
+impl_marker_traits! {
+    impl [MarkerTrait1, MarkerTrait2] for MyType<T: Clone>
+};
 ```
 
 ### Heightened Expressivity
@@ -72,8 +74,8 @@ For example:
 ```rust
 macro_rules! make_a_struct_and_getters {
     (
-        $name:ident { $($field:ident),* (,)?
-    }) => {preinterpret::preinterpret!{
+        $name:ident { $($field:ident),* $(,)? }
+    ) => {preinterpret::preinterpret!{
         // Define a struct with the given fields
         pub struct $name {
             $(
@@ -90,6 +92,9 @@ macro_rules! make_a_struct_and_getters {
             )*
         }
     }}
+}
+make_a_struct_and_getters! {
+  MyStruct { hello, world }
 }
 ```
 
@@ -131,15 +136,15 @@ Now the `preinterpret!` macro runs, resulting in `#count` equal to the literal `
 
 ### Heightened sensibility
 
-Using preinterpret partially mitigates some common issues when writing declarative macros.
+Using preinterpret partially mitigates some common areas of confusion when writing declarative macros.
 
-#### Cartesian zip confusion
+#### Cartesian metavariable expansion errors
 
-The declarative macro evaluator zips metavariables together, but sometimes you wish to loop over to separate meta-variables at once - but this [gives an unhelpful error message](https://github.com/rust-lang/rust/issues/96184#issue-1207293401).
+Sometimes you wish to output some loop over one meta-variable, whilst inside the loop of a non-parent meta-variable - in other words, you expect to create a cartesian product across these variables. But the macro evaluator only supports zipping of meta-variables of the same length, and [gives an unhelpful error message](https://github.com/rust-lang/rust/issues/96184#issue-1207293401).
 
 The classical wisdom is to output an internal `macro_rules!` definition to handle the inner output of the cartesian product [as per this stack overflow post](https://stackoverflow.com/a/73543948), but this isn't very intuitive.
 
-Standard use of preinterpret avoids this problem entirely. The example under the readability demonstrates this. If written without preinterpret, the iteration of the generics in `#impl_generics` and `#my_type` wouldn't be compatible with the iteration over `$trait`.
+Standard use of preinterpret avoids this problem entirely, as demonstrated by the first readability example. If written out natively without preinterpret, the iteration of the generics in `#impl_generics` and `#my_type` wouldn't be compatible with the iteration over `$trait`.
 
 #### Eager macro confusion
 
@@ -154,19 +159,19 @@ Preinterpet commands also typically interpret their arguments eagerly and recurs
 * Using a different syntax `[!command! ...]` to macros to avoid confusion.
 * Taking on the functionality of the `concat!` and `concat_idents!` macros so they don't have to be used alongside other macros.
 
-#### Recursive function paradigm shift
+#### The recursive macro paradigm shift
 
 To do anything particularly advanced with declarative macros, you end up needing to conjure up various functional macro helpers to partially apply or re-order grammars. This is quite a paradigm-shift from most rust code.
 
 In quite a few cases, preinterpret can allow developers to avoid writing these recursive helper macros entirely.
 
-#### Paste limitations problem
+#### Limitations with paste support
 
-The widely used [paste](https://crates.io/crates/paste) crate which inspired this crate has a few awkward issues.
+The widely used [paste](https://crates.io/crates/paste) crate takes the approach of magically hiding the token types from the developer, by attempting to work out whether a pasted value should be an ident, string or literal.
 
-The issue which originally inspired `printerpret` was that [paste doesn't work well inside attributes](https://github.com/dtolnay/paste/issues/99#issue-1909928493).
+This works 95% of the time, but in other cases such as [in attributes](https://github.com/dtolnay/paste/issues/99#issue-1909928493), it can cause developer friction. This proved to be one of the motivating use cases for developing preinterpret.
 
-Preinterpret doesn't have any such restrictions. For example:
+Preinterpret is more explicit about types, and doesn't have these issues:
 
 ```rust
 macro_rules! impl_new_type {
