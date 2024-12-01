@@ -3,4 +3,4 @@
 set -e
 
 cargo fmt;
-cargo clippy --fix --tests;
+cargo clippy --fix --tests --allow-dirty --allow-staged;

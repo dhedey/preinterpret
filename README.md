@@ -229,7 +229,7 @@ To create idents from these methods, simply nest them, like so:
 >
 > Such characters get dropped in camel case conversions. This could break up grapheme clusters and cause other non-intuitive behaviour. See the [tests in string_conversion.rs](https://www.github.com/dhedey/preinterpret/blob/main/src/string_conversion.rs) for more details.
 
-### Integer commands
+### Integer commands (COMING SOON!)
 
 Each of these commands functions in three steps:
 * Apply the interpreter to the token stream, which recursively executes preinterpret commands.
@@ -245,7 +245,7 @@ The supported integer commands are:
 We also support the following assignment commands:
 * `[!increment! #i]` is shorthand for `[!set! #i [!add! #i 1]]` and outputs no  tokens.
 
-### Boolean commands
+### Boolean commands (COMING SOON!)
 
 Each of these commands functions in three steps:
 * Apply the interpreter to the token stream, which recursively executes preinterpret commands.
@@ -263,7 +263,7 @@ The supported comparison commands are:
 * `[!not! #foo]` expects a single boolean literal, and outputs the negation of `#foo`
 * `[!str_contains! "needle" [!string! haystack]]` expects two string literals, and outputs `true` if the first string is a substring of the second string.
 
-### Control flow commands
+### Control flow commands (COMING SOON!)
 
 Currently, only `if` is supported:
 * `[!if! #cond then { #a } else { #b }]` outputs `#a` if `#cond` is `true`, else `#b` if `#cond` is false.
