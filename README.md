@@ -234,30 +234,43 @@ To create idents from these methods, simply nest them, like so:
 >
 > Such characters get dropped in camel case conversions. This could break up grapheme clusters and cause other non-intuitive behaviour. See the [tests in string_conversion.rs](https://www.github.com/dhedey/preinterpret/blob/main/src/string_conversion.rs) for more details.
 
-### Integer commands (COMING SOON!)
+## Contributing
+
+If you have an idea for additional commands, please raise an issue or a PR.
+
+Any commands should be simple, composable, and likely to see use in declarative macros, to keep code bloat down.
+
+## Future Extension Reflections
+
+### Possible extension: Integer commands
 
 Each of these commands functions in three steps:
 * Apply the interpreter to the token stream, which recursively executes preinterpret commands.
 * Iterate over each token (recursing into groups), expecting each to be an integer literal.
 * Apply some command-specific mapping to this stream of integer literals, and output a single integer literal without its type suffix. The suffix can be added back manually if required with a wrapper such as `[!literal! [!add! 1 2] u64]`.
 
-The supported integer commands are:
+Integer commands under consideration are:
 
 * `[!add! 5u64 9 32]` outputs `46`. It takes any number of integers and outputs their sum. The calculation operates in `u128` space.
 * `[!sub! 64u32 1u32]` outputs `63`. It takes two integers and outputs their difference. The calculation operates in `i128` space.
 * `[!mod! $length 2]` outputs `0` if `$length` is even, else `1`. It takes two integers `a` and `b`, and outputs `a mod b`.
 
 We also support the following assignment commands:
-* `[!increment! #i]` is shorthand for `[!set! #i [!add! #i 1]]` and outputs no  tokens.
 
-### Boolean commands (COMING SOON!)
+* `[!increment! #i]` is shorthand for `[!set! #i [!add! #i 1]]` and outputs no tokens.
+
+We could even support:
+
+* `[!math! (5 + 10) / mod(4, 2)]` outputs `7`
+
+### Possible extension: Boolean commands
 
 Each of these commands functions in three steps:
 * Apply the interpreter to the token stream, which recursively executes preinterpret commands.
 * Expects to read exactly two token trees (unless otherwise specified)
 * Apply some command-specific comparison, and outputs the boolean literal `true` or `false`.
 
-The supported comparison commands are:
+Comparison commands under consideration are:
 * `[!eq! #foo #bar]` outputs `true` if `#foo` and `#bar` are exactly the same token tree, via structural equality. For example:
   * `[!eq! (3 4) (3   4)]` outputs `true` because the token stream ignores spacing.
   * `[!eq! 1u64 1]` outputs `false` because these are different literals.
@@ -268,44 +281,29 @@ The supported comparison commands are:
 * `[!not! #foo]` expects a single boolean literal, and outputs the negation of `#foo`
 * `[!str_contains! "needle" [!string! haystack]]` expects two string literals, and outputs `true` if the first string is a substring of the second string.
 
-### Control flow commands (COMING SOON!)
+### Possible extension: Token stream commands
+* `[!skip! 4 from [#stream]]` reads and drops the first 4 token trees from the stream, and outputs the rest
+* `[!ungroup! (#stream)]` outputs `#stream`. It expects to receive a single group (i.e. wrapped in brackets), and unwraps it.
 
-Currently, only `if` is supported:
-* `[!if! #cond then { #a } else { #b }]` outputs `#a` if `#cond` is `true`, else `#b` if `#cond` is false.
+### Possible extension: Control flow commands
+
+#### If statement
+
+`[!if! #cond then { #a } else { #b }]` outputs `#a` if `#cond` is `true`, else `#b` if `#cond` is false.
 
 The `if` command works as follows:
 * It starts by only interpreting its first token tree, and expects to see a single `true` or `false` literal.
 * It then expects to reads an unintepreted `then` ident, following by a single `{ .. }` group, whose contents get interpreted and output only if the condition was `true`.
 * It optionally also reads an `else` ident and a by a single `{ .. }` group, whose contents get interpreted and output only if the condition was `false`.
 
-## Contributing
+#### For loop
 
-If you have an idea for additional commands, please raise an issue or a PR.
+* `[!for! #token_tree in [#stream] { ... }]`
 
-Any commands should be simple, composable, and likely to see use in declarative macros, to keep code bloat down.
+#### Goto and label
 
-## Future Extension Reflections
-
-### Eager expansion of macros
-When [eager expansion of macros returning literals](https://github.com/rust-lang/rust/issues/90765) is stabilized, it would be nice to include a command to do that, which could be used to include code, for example: `[!expand_literal_macros! include!("my-poem.txt")]`.
-
-### Removing syn
-
-The heavy `syn` library is only needed for literal parsing, and error conversion into compile errors. This could be removed to speed up compile times a lot for stacks which don't have a `syn` dependency.
-
-### Further Control Flow
-
-In theory, some additional control flow or lazy evaluation could be added to bring turing completeness. This would also allow the preinterpret to find some niche uses outside of declarative macros.
-
-I'm not sure if the complexity is warranted though. For declarative macro use-cases, the looping logic is currently provided by the meta-variables from the declarative macro. Mixing this with a separate layer of control flow might be confusing.
-
-But in theory, we could add a naive control flow with `[!label! loop_start]` and `[!goto! loop_start]`, where:
-* `goto` could only jump backwards to labels which have already been read.
-* A label's position is defined as the position in the input stream after the currently executing command stack. e.g. `Hello [!label! loop] World [!goto! loop]` 
-* For the jump to make consistent sense in terms of keeping brackets balanced, the label and its goto must exist in the same parent group / stream.
-* It would need a bit of a rearchitecture of the token streaming logic to support holding a clone of the input stream at the label point to enable jumping backwards in the stream to that point.
-
-Potential syntax:
+* `[!label! loop_start]` - defines a label which can be returned to. Effectively, it takes a clones of the remaining token stream after the label in the interpreter.
+* `[!goto! loop_start]` - jumps to the last execution of `[!label! loop_start]`. It unrolls the preinterpret stack (dropping all unwritten token streams) until it finds a stackframe in which the interpreter has the defined label, and continues the token stream from there.
 
 ```rust
 preinterpret::preinterpret!{
@@ -316,3 +314,10 @@ preinterpret::preinterpret!{
     [!if! [!lte! #i 100] then { [!goto! loop] }]
 }
 ```
+
+### Possible extension: Eager expansion of macros
+When [eager expansion of macros returning literals](https://github.com/rust-lang/rust/issues/90765) is stabilized, it would be nice to include a command to do that, which could be used to include code, for example: `[!expand_literal_macros! include!("my-poem.txt")]`.
+
+### Possible extension: Removing syn
+
+The heavy `syn` library is only needed for literal parsing, and error conversion into compile errors. This could be removed to speed up compile times a lot for stacks which don't have a `syn` dependency.

@@ -97,7 +97,7 @@
 //!         [!set! #current_index = 0]
 //!         $(
 //!             [!ignore! $item] // Loop over the items, but don't output them
-//!             [!increment! #current_index]
+//!             [!set! #current_index = #current_index + 1]
 //!         )*
 //!         [!set! #count = #current_index]
 //!         #count
@@ -112,16 +112,17 @@
 //! preinterpret::preinterpret!{
 //!   [!set! #current_index = 0]
 //!   [!ignore! a]
-//!   [!increment! #current_index]
+//!   [!set! #current_index = #current_index + 1]
 //!   [!ignore! = b]
-//!   [!increment! #current_index]
+//!   [!set! #current_index = #current_index + 1]
 //!   [!ignore! = c]
-//!   [!increment! #current_index]
+//!   [!set! #current_index = #current_index + 1]
 //!   [!set! #count = #current_index]
 //!   #count
 //! }
 //! ```
-//! Now the `preinterpret!` macro runs, resulting in `#count` equal to the literal `3`.
+//! Now the `preinterpret!` macro runs, resulting in `#count` equal to the token stream `0 + 1 + 1 + 1`.
+//! This will be improved in future releases by adding support for mathematical operations on integer literals.
 //!
 //! ### Heightened sensibility
 //!
@@ -223,50 +224,9 @@
 //! >
 //! > Such characters get dropped in camel case conversions. This could break up grapheme clusters and cause other non-intuitive behaviour. See the [tests in string_conversion.rs](https://www.github.com/dhedey/preinterpret/blob/main/src/string_conversion.rs) for more details.
 //!
-//! ### Integer commands (COMING SOON!)
+//! ## Future plans
 //!
-//! Each of these commands functions in three steps:
-//! * Apply the interpreter to the token stream, which recursively executes preinterpret commands.
-//! * Iterate over each token (recursing into groups), expecting each to be an integer literal.
-//! * Apply some command-specific mapping to this stream of integer literals, and output a single integer literal without its type suffix. The suffix can be added back manually if required with a wrapper such as `[!literal! [!add! 1 2] u64]`.
-//!
-//! The supported integer commands are:
-//!
-//! * `[!add! 5u64 9 32]` outputs `46`. It takes any number of integers and outputs their sum. The calculation operates in `u128` space.
-//! * `[!sub! 64u32 1u32]` outputs `63`. It takes two integers and outputs their difference. The calculation operates in `i128` space.
-//! * `[!mod! $length 2]` outputs `0` if `$length` is even, else `1`. It takes two integers `a` and `b`, and outputs `a mod b`.
-//!
-//! We also support the following assignment commands:
-//! * `[!increment! #i]` is shorthand for `[!set! #i [!add! #i 1]]` and outputs no  tokens.
-//!
-//! ### Boolean commands (COMING SOON!)
-//!
-//! Each of these commands functions in three steps:
-//! * Apply the interpreter to the token stream, which recursively executes preinterpret commands.
-//! * Expects to read exactly two token trees (unless otherwise specified)
-//! * Apply some command-specific comparison, and outputs the boolean literal `true` or `false`.
-//!
-//! The supported comparison commands are:
-//! * `[!eq! #foo #bar]` outputs `true` if `#foo` and `#bar` are exactly the same token tree, via structural equality. For example:
-//!   * `[!eq! (3 4) (3   4)]` outputs `true` because the token stream ignores spacing.
-//!   * `[!eq! 1u64 1]` outputs `false` because these are different literals.
-//! * `[!lt! #foo #bar]` outputs `true` if `#foo` is an integer literal and less than `#bar`
-//! * `[!gt! #foo #bar]` outputs `true` if `#foo` is an integer literal and greater than `#bar`
-//! * `[!lte! #foo #bar]` outputs `true` if `#foo` is an integer literal and less than or equal to `#bar`
-//! * `[!gte! #foo #bar]` outputs `true` if `#foo` is an integer literal and greater than or equal to `#bar`
-//! * `[!not! #foo]` expects a single boolean literal, and outputs the negation of `#foo`
-//! * `[!str_contains! "needle" [!string! haystack]]` expects two string literals, and outputs `true` if the first string is a substring of the second string.
-//!
-//! ### Control flow commands (COMING SOON!)
-//!
-//! Currently, only `if` is supported:
-//! * `[!if! #cond then { #a } else { #b }]` outputs `#a` if `#cond` is `true`, else `#b` if `#cond` is false.
-//!
-//! The `if` command works as follows:
-//! * It starts by only interpreting its first token tree, and expects to see a single `true` or `false` literal.
-//! * It then expects to reads an unintepreted `then` ident, following by a single `{ .. }` group, whose contents get interpreted and output only if the condition was `true`.
-//! * It optionally also reads an `else` ident and a by a single `{ .. }` group, whose contents get interpreted and output only if the condition was `false`.
-
+//! Future plans for extensions are discussed in the [preinterpret README](https://crates.io/crates/preinterpret).
 mod command;
 mod commands;
 mod internal_prelude;

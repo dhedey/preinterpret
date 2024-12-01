@@ -1,6 +1,6 @@
 [package]
 name = "preinterpret"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = ["David Edey <github@david-edey.com>"]
@@ -10,7 +10,7 @@ keywords = ["macros", "declarative-macros", "toolkit", "interpreter", "preproces
 # Categories have to come from https://crates.io/category_slugs
 # And whilst there's a development-tools::procedural-macro-helpers, there's no declarative macro category.
 categories = ["development-tools", "compilers"]
-# MSRV is the start of Edition 2021
+# MSRV 1.56.0 is the start of Edition 2021
 # If changing this, update the local-check-msrv.sh script, ci.yml, and README.md
 rust-version = "1.56.0"
 
