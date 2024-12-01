@@ -14,69 +14,70 @@ permissions:
 env:
   RUSTFLAGS: -Dwarnings
 
-test:
-  name: Rust ${{matrix.rust}}
-  runs-on: ubuntu-latest
-  strategy:
-    fail-fast: false
-    matrix:
-      rust: [nightly, beta, stable]
-  timeout-minutes: 45
-  steps:
-    - uses: actions/checkout@v4
-    - uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: ${{matrix.rust}}
-    - name: Enable type layout randomization
-      run: echo RUSTFLAGS=${RUSTFLAGS}\ -Zrandomize-layout >> $GITHUB_ENV
-      if: matrix.rust == 'nightly'
-    - run: cargo test
-    - uses: actions/upload-artifact@v4
-      if: matrix.rust == 'nightly' && always()
-      with:
-        name: Cargo.lock
-        path: Cargo.lock
+jobs:
+  test:
+    name: Rust ${{matrix.rust}}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: [nightly, beta, stable]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{matrix.rust}}
+      - name: Enable type layout randomization
+        run: echo RUSTFLAGS=${RUSTFLAGS}\ -Zrandomize-layout >> $GITHUB_ENV
+        if: matrix.rust == 'nightly'
+      - run: cargo test
+      - uses: actions/upload-artifact@v4
+        if: matrix.rust == 'nightly' && always()
+        with:
+          name: Cargo.lock
+          path: Cargo.lock
 
-msrv:
-  name: MSRV (1.56) Compiles
-  runs-on: ubuntu-latest
-  timeout-minutes: 45
-  steps:
-    - uses: actions/checkout@v4
-    - uses: dtolnay/rust-toolchain@master
-      toolchain: 1.56.0
-    - run: cargo check
+  msrv:
+    name: MSRV (1.56) Compiles
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        toolchain: 1.56.0
+      - run: cargo check
 
-style-check:
-  name: Style Check
-  runs-on: ubuntu-latest
-  timeout-minutes: 45
-  steps:
-    - uses: actions/checkout@v4
-    - uses: dtolnay/rust-toolchain@master
-      components: clippy, rustfmt
-      toolchain: stable
-    - run: ./style-check.sh
+  style-check:
+    name: Style Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        components: clippy, rustfmt
+        toolchain: stable
+      - run: ./style-check.sh
 
-miri:
-  name: Miri
-  runs-on: ubuntu-latest
-  timeout-minutes: 45
-  steps:
-    - uses: actions/checkout@v4
-    - uses: dtolnay/rust-toolchain@miri
-    - run: cargo miri setup
-    - run: cargo miri test
-      env:
-        MIRIFLAGS: -Zmiri-strict-provenance
+  miri:
+    name: Miri
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@miri
+      - run: cargo miri setup
+      - run: cargo miri test
+        env:
+          MIRIFLAGS: -Zmiri-strict-provenance
 
-outdated:
-  name: Outdated Dependency Check
-  runs-on: ubuntu-latest
-  if: github.event_name == 'schedule'
-  timeout-minutes: 45
-  steps:
-    - uses: actions/checkout@v4
-    - uses: dtolnay/rust-toolchain@stable
-    - uses: dtolnay/install@cargo-outdated
-    - run: cargo outdated --workspace --exit-code 1
+  outdated:
+    name: Outdated Dependency Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/install@cargo-outdated
+      - run: cargo outdated --workspace --exit-code 1
