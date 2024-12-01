@@ -6,13 +6,15 @@ preinterpret! {
     [!set! #MyRawVar = [!raw! Test no #str [!ident! replacement]]]
     struct MyStruct;
     type [!ident! X "Boo" [!string! Hello 1] #postfix] = MyStruct;
-    const MY_NUM: u32 = [!literal! 1337u #bytes];
-    const MY_STRING: &'static str = [!string! #MyRawVar];
+    const NUM: u32 = [!literal! 1337u #bytes];
+    const STRING: &'static str = [!string! #MyRawVar];
+    const SNAKE_CASE: &'static str = [!snake_case! MyVar];
 }
 
 #[test]
 fn complex_example_evaluates_correctly() {
     let _x: XBooHello1HelloWorld32 = MyStruct;
-    assert_eq!(MY_NUM, 1337u32);
-    assert_eq!(MY_STRING, "Testno#str[!ident!replacement]");
+    assert_eq!(NUM, 1337u32);
+    assert_eq!(STRING, "Testno#str[!ident!replacement]");
+    assert_eq!(SNAKE_CASE, "my_var");
 }

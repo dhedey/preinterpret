@@ -187,7 +187,7 @@ macro_rules! impl_new_type {
 * `[!raw! abc #abc [!ident! test]]` outputs its contents as-is, without any interpretation, giving the token stream `abc #abc [!ident! test]`.
 * `[!ignore! $foo]` ignores all of its content and outputs no tokens. It is useful to make a declarative macro loop over a meta-variable without outputting it into the resulting stream.
 
-## Concatenating commands
+## Concatenate and convert commands
 
 Each of these commands functions in three steps:
 * Apply the interpreter to the token stream, which recursively executes preinterpret commands.
@@ -202,12 +202,22 @@ The grammar value conversion commands are:
 * `[!literal! '"' hello '"']` outputs the string literal `"hello"`
 
 The supported string conversion commands are:
-* `[!snake_case! FooBar]` outputs `"foo_bar"` (lower snake case)
-* `[!camel_case! foo_bar]` outputs `"FooBar"` (upper camel case)
+
 * `[!upper_case! foo_bar]` outputs `"FOO_BAR"`
 * `[!lower_case! FooBar]` outputs `"foobar"`
+* `[!snake_case! FooBar]` and `[!lower_snake_case! FooBar]` are equivalent and output `"foo_bar"`
+* `[!upper_snake_case! FooBar]` outputs `"FOO_BAR"`
+* `[!camel_case! foo_bar]` and `[!upper_camel_case! foo_bar]` are equivalent and output `"FooBar"`
+* `[!lower_camel_case! foo_bar]` outputs `"fooBar"`
 * `[!capitalize! fooBar]` outputs `"FooBar"`
 * `[!decapitalize! FooBar]` outputs `"fooBar"`
+
+To create idents from these methods, simply nest them, like so:
+```rust
+[!ident! get_ [!snake_case! $field_name]]
+```
+
+These string conversion methods are designed to work intuitively across a relatively wide class of input strings, BUT treat all characters which are not lowercase or uppercase as word boundaries. Such characters get dropped in camel case conversions. This could break up grapheme clusters and cause other non-intuitive behaviour. See the tests in [https://www.github.com/dhedey/preinterpret/blob/main/src/string_conversion.rs](string_conversion.rs) for more details.
 
 ## Integer commands
 
@@ -243,7 +253,6 @@ The supported comparison commands are:
 * `[!not! #foo]` expects a single boolean literal, and outputs the negation of `#foo`
 * `[!str_contains! "needle" [!string! haystack]]` expects two string literals, and outputs `true` if the first string is a substring of the second string.
 
-
 ## Control flow commands
 
 Currently, only `if` is supported:
@@ -272,6 +281,10 @@ Any commands should be simple, composable, and likely to see widespread use in d
 
 ## Eager expansion of macros
 When [eager expansion of macros returning literals](https://github.com/rust-lang/rust/issues/90765) is stabilized, it would be nice to include a command to do that, which could be used to include code, for example: `[!expand_literal_macros! include!("my-poem.txt")]`.
+
+## Removing syn
+
+The heavy `syn` library is only needed for literal parsing, and error conversion into compile errors. This could be removed to speed up compile times a lot for stacks which don't have a `syn` dependency.
 
 ## Further Control Flow
 

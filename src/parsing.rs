@@ -9,38 +9,59 @@ pub(crate) enum NextItem {
 }
 
 pub(crate) fn parse_next_item(
-    tokens: &mut PeekableTokenIter,
+    tokens: &mut Tokens,
 ) -> Result<NextItem> {
     Ok(match tokens.next() {
-        None => NextItem::EndOfStream,
         Some(TokenTree::Group(group)) => {
-            if let Some(command_invocation) = consume_if_command_invocation(&group)? {
+            if let Some(command_invocation) = parse_command_invocation(&group)? {
                 NextItem::CommandInvocation(command_invocation)
             } else {
                 NextItem::Group(group)
             }
         }
         Some(TokenTree::Punct(punct)) => {
-            if let Some(variable_substitution) = consume_if_variable_substitution(&punct, tokens) {
+            if let Some(variable_substitution) = parse_only_if_variable_substitution(&punct, tokens) {
                 NextItem::VariableSubstitution(variable_substitution)
             } else {
                 NextItem::Leaf(TokenTree::Punct(punct))
             }
         }
         Some(leaf) => NextItem::Leaf(leaf),
+        None => NextItem::EndOfStream,
     })
 }
 
-pub(crate) fn consume_set_statement(source_tokens: &mut PeekableTokenIter) -> Option<Ident> {
-    consume_if_punct_matching(source_tokens, '#')?;
-    let ident = consume_if_ident(source_tokens)?;
-    consume_if_punct_matching(source_tokens, '=')?;
-    Some(ident)
+pub(crate) fn parse_variable_set(tokens: &mut Tokens) -> Option<Ident> {
+    let variable_name = parse_variable(tokens)?;
+    tokens.next_as_punct_matching('=')?;
+    Some(variable_name)
 }
 
-fn consume_if_command_invocation(group: &Group) -> Result<Option<CommandInvocation>> {
-    // Attempt to match `[!ident`, if that doesn't match, we assume it's not a command invocation.
-    let Some((command_ident, mut remaining_tokens)) = consume_if_command_start(group) else {
+pub(crate) fn parse_variable(tokens: &mut Tokens) -> Option<Ident> {
+    tokens.next_as_punct_matching('#')?;
+    tokens.next_as_ident()
+}
+
+fn parse_command_invocation(group: &Group) -> Result<Option<CommandInvocation>> {
+    fn consume_command_start(group: &Group) -> Option<(Ident, Tokens)> {
+        if group.delimiter() != Delimiter::Bracket {
+            return None;
+        }
+        let mut tokens = Tokens::new(group.stream());
+        tokens.next_as_punct_matching('!')?;
+        let ident = tokens.next_as_ident()?;
+        Some((ident, tokens))
+    }
+
+    fn consume_command_end(command_ident: &Ident, tokens: &mut Tokens) -> Option<CommandKind> {
+        let command_kind = CommandKind::attempt_parse(command_ident)?;
+        tokens.next_as_punct_matching('!')?;
+        Some(command_kind)
+    }
+
+    // Attempt to match `[!ident`, if that doesn't match, we assume it's not a command invocation,
+    // so return `Ok(None)`
+    let Some((command_ident, mut remaining_tokens)) = consume_command_start(group) else {
         return Ok(None);
     };
 
@@ -55,49 +76,16 @@ fn consume_if_command_invocation(group: &Group) -> Result<Option<CommandInvocati
     }
 }
 
-fn consume_if_command_start(group: &Group) -> Option<(Ident, PeekableTokenIter)> {
-    if group.delimiter() != Delimiter::Bracket {
-        return None;
-    }
-    let mut group_tokens = group.stream().into_iter().peekable();
-    consume_if_punct_matching(&mut group_tokens, '!')?;
-    let ident = consume_if_ident(&mut group_tokens)?;
-    Some((ident, group_tokens))
-}
-
-fn consume_command_end(command_ident: &Ident, tokens: &mut PeekableTokenIter) -> Option<CommandKind> {
-    let command_kind = parse_supported_command_kind(command_ident)?;
-    consume_if_punct_matching(tokens, '!')?;
-    Some(command_kind)
-}
-
-fn consume_if_variable_substitution(punct: &Punct, tokens: &mut PeekableTokenIter) -> Option<VariableSubstitution> {
+// We ensure we don't consume any tokens unless we have a variable substitution
+fn parse_only_if_variable_substitution(punct: &Punct, tokens: &mut Tokens) -> Option<VariableSubstitution> {
     if punct.as_char() != '#' {
         return None;
     }
-    let variable_name = consume_if_ident(tokens)?;
-    Some(VariableSubstitution::new(punct.clone(), variable_name))
-}
-
-pub(crate) fn consume_if_punct_matching(tokens: &mut PeekableTokenIter, char: char) -> Option<Punct> {
-    let Some(TokenTree::Punct(punct)) = tokens.peek() else {
-        return None;
-    };
-    if punct.as_char() != char {
-        return None;
-    }
-    let Some(TokenTree::Punct(punct)) = tokens.next() else {
-        unreachable!("We just peeked a token of this type");
-    };
-    Some(punct)
-}
-
-pub(crate) fn consume_if_ident(tokens: &mut PeekableTokenIter) -> Option<Ident> {
     let Some(TokenTree::Ident(_)) = tokens.peek() else {
         return None;
     };
-    let Some(TokenTree::Ident(ident)) = tokens.next() else {
+    let Some(TokenTree::Ident(variable_name)) = tokens.next() else {
         unreachable!("We just peeked a token of this type");
     };
-    Some(ident)
+    Some(VariableSubstitution::new(punct.clone(), variable_name))
 }
