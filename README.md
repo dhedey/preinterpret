@@ -106,10 +106,10 @@ macro_rules! count_idents {
     {
         $($item: ident),*
     } => {preinterpret::preinterpret!{
-        [!set! #current_index = 0]
+        [!set! #current_index = 0usize]
         $(
             [!ignore! $item] // Loop over the items, but don't output them
-            [!increment! #current_index]
+            [!set! #current_index = #current_index + 1]
         )*
         [!set! #count = #current_index]
         #count
@@ -120,19 +120,21 @@ macro_rules! count_idents {
 To quickly explain how this works, imagine we evaluate `count_idents!(a, b, c)`. As `count_idents!` is the most outer macro, it runs first, and expands into the following token stream:
 
 ```rust
-preinterpret::preinterpret!{
-  [!set! #current_index = 0]
+let count = preinterpret::preinterpret!{
+  [!set! #current_index = 0usize]
   [!ignore! a]
-  [!increment! #current_index]
+  [!set! #current_index = #current_index + 1]
   [!ignore! = b]
-  [!increment! #current_index]
+  [!set! #current_index = #current_index + 1]
   [!ignore! = c]
-  [!increment! #current_index]
+  [!set! #current_index = #current_index + 1]
   [!set! #count = #current_index]
   #count
 }
 ```
-Now the `preinterpret!` macro runs, resulting in `#count` equal to the literal `3`.
+
+Now the `preinterpret!` macro runs, resulting in `#count` equal to the token stream `0usize + 1 + 1 + 1`.
+This will be improved in future releases by adding support for mathematical operations on integer literals.
 
 ### Heightened sensibility
 
@@ -261,7 +263,7 @@ We also support the following assignment commands:
 
 We could even support:
 
-* `[!math! (5 + 10) / mod(4, 2)]` outputs `7`
+* `[!usize! (5 + 10) / mod(4, 2)]` outputs `7usize`
 
 ### Possible extension: Boolean commands
 
@@ -310,7 +312,7 @@ preinterpret::preinterpret!{
     [!set! #i = 0]
     [!label! loop]
     const [!ident! AB #i]: u8 = 0;
-    [!set! #i = [!add! i 1]]
+    [!increment! #i]
     [!if! [!lte! #i 100] then { [!goto! loop] }]
 }
 ```

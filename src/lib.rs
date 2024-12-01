@@ -89,12 +89,12 @@
 //! Variable assignment works intuitively with the `* + ?` expansion operators, allowing basic procedural logic, such as creation of loop counts and indices before [meta-variables](https://github.com/rust-lang/rust/issues/83527) are stabilized.
 //!
 //! For example:
-//! ```rust,ignore
+//! ```rust
 //! macro_rules! count_idents {
 //!     {
 //!         $($item: ident),*
 //!     } => {preinterpret::preinterpret!{
-//!         [!set! #current_index = 0]
+//!         [!set! #current_index = 0usize]
 //!         $(
 //!             [!ignore! $item] // Loop over the items, but don't output them
 //!             [!set! #current_index = #current_index + 1]
@@ -108,9 +108,9 @@
 //!
 //! To quickly explain how this works, imagine we evaluate `count_idents!(a, b, c)`. As `count_idents!` is the most outer macro, it runs first, and expands into the following token stream:
 //!
-//! ```rust,ignore
-//! preinterpret::preinterpret!{
-//!   [!set! #current_index = 0]
+//! ```rust
+//! let count = preinterpret::preinterpret!{
+//!   [!set! #current_index = 0usize]
 //!   [!ignore! a]
 //!   [!set! #current_index = #current_index + 1]
 //!   [!ignore! = b]
@@ -119,9 +119,10 @@
 //!   [!set! #current_index = #current_index + 1]
 //!   [!set! #count = #current_index]
 //!   #count
-//! }
+//! };
 //! ```
-//! Now the `preinterpret!` macro runs, resulting in `#count` equal to the token stream `0 + 1 + 1 + 1`.
+//!
+//! Now the `preinterpret!` macro runs, resulting in `#count` equal to the token stream `0usize + 1 + 1 + 1`.
 //! This will be improved in future releases by adding support for mathematical operations on integer literals.
 //!
 //! ### Heightened sensibility
