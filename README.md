@@ -240,7 +240,7 @@ If you have an idea for additional commands, please raise an issue or a PR.
 
 Any commands should be simple, composable, and likely to see use in declarative macros, to keep code bloat down.
 
-## Future Extension Reflections
+## Future Extension Possibilities
 
 ### Possible extension: Integer commands
 
