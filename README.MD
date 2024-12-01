@@ -2,6 +2,7 @@
 
 [<img alt="github" src="https://img.shields.io/badge/github-dhedey/preinterpret-8da0cb?style=for-the-badge&labelColor=555555&logo=github" height="20">](https://github.com/dhedey/preinterpret)
 [<img alt="crates.io" src="https://img.shields.io/crates/v/preinterpret.svg?style=for-the-badge&color=fc8d62&logo=rust" height="20">](https://crates.io/crates/preinterpret)
+[<img alt="Crates.io MSRV" src="https://img.shields.io/crates/msrv/preinterpret?style=for-the-badge&logo=rust&logoColor=green&color=green" height="20">](https://crates.io/crates/preinterpret)
 [<img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-preinterpret-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs" height="20">](https://docs.rs/preinterpret)
 [<img alt="build status" src="https://img.shields.io/github/actions/workflow/status/dhedey/preinterpret/ci.yml?branch=main&style=for-the-badge" height="20">](https://github.com/dhedey/preinterpret/actions?query=branch%3Amain)
 
@@ -9,17 +10,17 @@
 If updating this readme, please ensure that the rustdoc is also updated.
 -->
 
-This crate provides the `preinterpret!` macro, which works as a simple simple pre-processor to the token stream, and is designed for use in declarative macro outputs.
+This crate provides the `preinterpret!` macro, which works as a simple pre-processor to the token stream, and is designed for declarative macro builders.
 
-It provides two core, complementary features:
-* Variable definition and substitution via `[!set! #variable = ... ]` and `#variable` (think [quote](https://crates.io/crates/quote) for declarative macros).
-* A composable toolkit of simple functions to map token streams, literals and idents, such as `[!ident! Hello #world]` (think [paste](https://crates.io/crates/paste) but more comprehesive, and still maintained).
+It provides two composable features:
+* Variable definition with `[!set! #variable = ... ]` and variable substition with `#variable` (think [quote](https://crates.io/crates/quote) for declarative macros).
+* A toolkit of simple functions operating on token streams, literals and idents, such as `[!ident! Hello #world]` (think [paste](https://crates.io/crates/paste) but more comprehesive, and still maintained).
 
 It is inspired by the [quote](https://crates.io/crates/quote) and [paste](https://crates.io/crates/paste) crates, and built for declarative macro authors to provide:
 
 * **Heightened readability** - allowing developers to build more maintainable macros.
-* **Heightened expressivity** - decreasing the frequency of developers needing to build heavy-weight custom procedural macros.
-* **Heightened sensibility** - allowing developers to avoid various declarative macro footguns.
+* **Heightened expressivity** - mitigating the need to build custom procedural macros.
+* **Heightened sensibility** - helping developers avoid various declarative macro surprises.
 
 
 ```toml
@@ -42,11 +43,11 @@ macro_rules! impl_marker_traits {
     {
         $vis:vis $type_name:ident
         $(
-            // Capture arbitrary generics
+            // Arbitrary (non-const) type generics
             < $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? $( = $deflt:tt)? ),+ >
         )?
         [
-            // Capture the marker traits to implement
+            // The marker traits to implement
             $($trait:ident),* $(,)?
         ]
     } => {preinterpret::preinterpret!{
@@ -54,8 +55,8 @@ macro_rules! impl_marker_traits {
         [!set! #type_generics = $(< $( $lt ),+ >)?]
         [!set! #my_type = $type_name #type_generics]
 
-        // Output for each marker trait
         $(
+            // Output each marker trait for the type
             impl #impl_generics $trait for #my_type {}
         )*
     }}
@@ -181,6 +182,12 @@ macro_rules! impl_new_type {
 
 # Details
 
+Each command except `raw` resolve in a nested manner as you would expect:
+```rust
+[!set! #foo = fn [!ident! get_ [!snake_case! Hello World]]()]
+#foo // "fn get_hello_world()"
+```
+
 ## Core commands
 
 * `[!set! #foo = Hello]` followed by `[!set! #foo = #bar(World)]` sets the variable `#foo` to the token stream `Hello` and `#bar` to the token stream `Hello(World)`, and outputs no tokens. Using `#foo` or `#bar` later on will output the current value in the corresponding variable.
@@ -217,7 +224,11 @@ To create idents from these methods, simply nest them, like so:
 [!ident! get_ [!snake_case! $field_name]]
 ```
 
-These string conversion methods are designed to work intuitively across a relatively wide class of input strings, BUT treat all characters which are not lowercase or uppercase as word boundaries. Such characters get dropped in camel case conversions. This could break up grapheme clusters and cause other non-intuitive behaviour. See the tests in [https://www.github.com/dhedey/preinterpret/blob/main/src/string_conversion.rs](string_conversion.rs) for more details.
+> [!NOTE]
+>
+> These string conversion methods are designed to work intuitively across a relatively wide class of input strings, but treat all characters which are not lowercase or uppercase as word boundaries.
+>
+> Such characters get dropped in camel case conversions. This could break up grapheme clusters and cause other non-intuitive behaviour. See the [tests in string_conversion.rs](https://www.github.com/dhedey/preinterpret/blob/main/src/string_conversion.rs) for more details.
 
 ## Integer commands
 
@@ -263,19 +274,11 @@ The `if` command works as follows:
 * It then expects to reads an unintepreted `then` ident, following by a single `{ .. }` group, whose contents get interpreted and output only if the condition was `true`.
 * It optionally also reads an `else` ident and a by a single `{ .. }` group, whose contents get interpreted and output only if the condition was `false`.
 
-## Composability
-
-All commands except `raw` resolve in a nested manner as you would expect, e.g.
-```rust
-[!set! #foo = fn [!ident! get_ [!snake_case! Hello World]]()]
-#foo // "fn get_hello_world()"
-```
-
 # Contributing
 
 If you have an idea for additional commands, please raise an issue or a PR.
 
-Any commands should be simple, composable, and likely to see widespread use in declarative macros, to keep code bloat down.
+Any commands should be simple, composable, and likely to see use in declarative macros, to keep code bloat down.
 
 # Future Extension Reflections
 

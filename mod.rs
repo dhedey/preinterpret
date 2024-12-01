@@ -1,15 +1,15 @@
-// mod boolean_commands;
-mod concat_commands;
-// mod control_flow_commands;
+mod boolean_commands;
 mod core_commands;
-// mod integer_commands;
+mod concat_commands;
+mod control_flow_commands;
+mod integer_commands;
 
 use crate::internal_prelude::*;
-// use boolean_commands::*;
-use concat_commands::*;
-// use control_flow_commands::*;
+use boolean_commands::*;
 use core_commands::*;
-// use integer_commands::*;
+use concat_commands::*;
+use control_flow_commands::*;
+use integer_commands::*;
 
 define_commands! {
     pub(crate) enum CommandKind {

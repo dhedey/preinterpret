@@ -20,9 +20,12 @@ fn to_snake_case(value: &str) -> String {
     for ch in value.chars() {
         let (_, word_start) = parse_state.update(ch);
         match word_start {
-            WordStart::FirstWordAtStringStart | WordStart::FirstWordAfterNonLetter | WordStart::MiddleWordAfterNonLetter | WordStart::None => {
+            WordStart::FirstWordAtStringStart
+            | WordStart::FirstWordAfterNonLetter
+            | WordStart::MiddleWordAfterNonLetter
+            | WordStart::None => {
                 acc.push(ch);
-            },
+            }
             WordStart::MiddleWordAfterLetter => {
                 acc.push('_');
                 acc.push(ch);
@@ -72,7 +75,7 @@ pub(crate) fn to_camel_case(value: &str, first_letter_case: LetterCase) -> Strin
             }
             WordStart::FirstWordAtStringStart | WordStart::FirstWordAfterNonLetter => {
                 first_letter_case.apply(&mut acc, ch);
-            },
+            }
             WordStart::MiddleWordAfterLetter | WordStart::MiddleWordAfterNonLetter => {
                 acc.extend(ch.to_uppercase());
             }
@@ -143,24 +146,64 @@ impl StringParseState {
             CharClass::NonLetter
         };
         let (word_start, new_state) = match (*self, char_class) {
-            (StringParseState::Start, CharClass::Uppercase) => (WordStart::FirstWordAtStringStart, Self::WordUpperCasedSoFar),
-            (StringParseState::Start, CharClass::Lowercase) => (WordStart::FirstWordAtStringStart, Self::WordLowerCasedSoFar),
-            (StringParseState::Start, CharClass::NonLetter) => (WordStart::None, StringParseState::NonLetterBeforeFirstWord),
-            (StringParseState::WordUpperCasedSoFar, CharClass::Uppercase) => (WordStart::None, Self::WordUpperCasedSoFar),
-            (StringParseState::WordUpperCasedSoFar, CharClass::Lowercase) => (WordStart::None, Self::WordUpperCamelCasedSoFar),
-            (StringParseState::WordUpperCasedSoFar, CharClass::NonLetter) => (WordStart::None, Self::NonLetterBetweenWords),
-            (StringParseState::WordLowerCasedSoFar, CharClass::Uppercase) => (WordStart::MiddleWordAfterLetter, Self::WordUpperCasedSoFar),
-            (StringParseState::WordLowerCasedSoFar, CharClass::Lowercase) => (WordStart::None, Self::WordLowerCasedSoFar),
-            (StringParseState::WordLowerCasedSoFar, CharClass::NonLetter) => (WordStart::None, Self::NonLetterBetweenWords),
-            (StringParseState::WordUpperCamelCasedSoFar, CharClass::Uppercase) => (WordStart::MiddleWordAfterLetter, Self::WordUpperCasedSoFar),
-            (StringParseState::WordUpperCamelCasedSoFar, CharClass::Lowercase) => (WordStart::None, Self::WordUpperCamelCasedSoFar),
-            (StringParseState::WordUpperCamelCasedSoFar, CharClass::NonLetter) => (WordStart::None, Self::NonLetterBetweenWords),
-            (StringParseState::NonLetterBeforeFirstWord, CharClass::Uppercase) => (WordStart::FirstWordAfterNonLetter, Self::WordUpperCasedSoFar),
-            (StringParseState::NonLetterBeforeFirstWord, CharClass::Lowercase) => (WordStart::FirstWordAfterNonLetter, Self::WordLowerCasedSoFar),
-            (StringParseState::NonLetterBeforeFirstWord, CharClass::NonLetter) => (WordStart::None, StringParseState::NonLetterBeforeFirstWord),
-            (StringParseState::NonLetterBetweenWords, CharClass::Uppercase) => (WordStart::MiddleWordAfterNonLetter, Self::WordUpperCasedSoFar),
-            (StringParseState::NonLetterBetweenWords, CharClass::Lowercase) => (WordStart::MiddleWordAfterNonLetter, Self::WordLowerCasedSoFar),
-            (StringParseState::NonLetterBetweenWords, CharClass::NonLetter) => (WordStart::None, Self::NonLetterBetweenWords),
+            (StringParseState::Start, CharClass::Uppercase) => {
+                (WordStart::FirstWordAtStringStart, Self::WordUpperCasedSoFar)
+            }
+            (StringParseState::Start, CharClass::Lowercase) => {
+                (WordStart::FirstWordAtStringStart, Self::WordLowerCasedSoFar)
+            }
+            (StringParseState::Start, CharClass::NonLetter) => {
+                (WordStart::None, StringParseState::NonLetterBeforeFirstWord)
+            }
+            (StringParseState::WordUpperCasedSoFar, CharClass::Uppercase) => {
+                (WordStart::None, Self::WordUpperCasedSoFar)
+            }
+            (StringParseState::WordUpperCasedSoFar, CharClass::Lowercase) => {
+                (WordStart::None, Self::WordUpperCamelCasedSoFar)
+            }
+            (StringParseState::WordUpperCasedSoFar, CharClass::NonLetter) => {
+                (WordStart::None, Self::NonLetterBetweenWords)
+            }
+            (StringParseState::WordLowerCasedSoFar, CharClass::Uppercase) => {
+                (WordStart::MiddleWordAfterLetter, Self::WordUpperCasedSoFar)
+            }
+            (StringParseState::WordLowerCasedSoFar, CharClass::Lowercase) => {
+                (WordStart::None, Self::WordLowerCasedSoFar)
+            }
+            (StringParseState::WordLowerCasedSoFar, CharClass::NonLetter) => {
+                (WordStart::None, Self::NonLetterBetweenWords)
+            }
+            (StringParseState::WordUpperCamelCasedSoFar, CharClass::Uppercase) => {
+                (WordStart::MiddleWordAfterLetter, Self::WordUpperCasedSoFar)
+            }
+            (StringParseState::WordUpperCamelCasedSoFar, CharClass::Lowercase) => {
+                (WordStart::None, Self::WordUpperCamelCasedSoFar)
+            }
+            (StringParseState::WordUpperCamelCasedSoFar, CharClass::NonLetter) => {
+                (WordStart::None, Self::NonLetterBetweenWords)
+            }
+            (StringParseState::NonLetterBeforeFirstWord, CharClass::Uppercase) => (
+                WordStart::FirstWordAfterNonLetter,
+                Self::WordUpperCasedSoFar,
+            ),
+            (StringParseState::NonLetterBeforeFirstWord, CharClass::Lowercase) => (
+                WordStart::FirstWordAfterNonLetter,
+                Self::WordLowerCasedSoFar,
+            ),
+            (StringParseState::NonLetterBeforeFirstWord, CharClass::NonLetter) => {
+                (WordStart::None, StringParseState::NonLetterBeforeFirstWord)
+            }
+            (StringParseState::NonLetterBetweenWords, CharClass::Uppercase) => (
+                WordStart::MiddleWordAfterNonLetter,
+                Self::WordUpperCasedSoFar,
+            ),
+            (StringParseState::NonLetterBetweenWords, CharClass::Lowercase) => (
+                WordStart::MiddleWordAfterNonLetter,
+                Self::WordLowerCasedSoFar,
+            ),
+            (StringParseState::NonLetterBetweenWords, CharClass::NonLetter) => {
+                (WordStart::None, Self::NonLetterBetweenWords)
+            }
         };
         *self = new_state;
         (char_class, word_start)

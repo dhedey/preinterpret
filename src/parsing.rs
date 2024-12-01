@@ -8,9 +8,7 @@ pub(crate) enum NextItem {
     EndOfStream,
 }
 
-pub(crate) fn parse_next_item(
-    tokens: &mut Tokens,
-) -> Result<NextItem> {
+pub(crate) fn parse_next_item(tokens: &mut Tokens) -> Result<NextItem> {
     Ok(match tokens.next() {
         Some(TokenTree::Group(group)) => {
             if let Some(command_invocation) = parse_command_invocation(&group)? {
@@ -20,7 +18,8 @@ pub(crate) fn parse_next_item(
             }
         }
         Some(TokenTree::Punct(punct)) => {
-            if let Some(variable_substitution) = parse_only_if_variable_substitution(&punct, tokens) {
+            if let Some(variable_substitution) = parse_only_if_variable_substitution(&punct, tokens)
+            {
                 NextItem::VariableSubstitution(variable_substitution)
             } else {
                 NextItem::Leaf(TokenTree::Punct(punct))
@@ -61,8 +60,9 @@ fn parse_command_invocation(group: &Group) -> Result<Option<CommandInvocation>> 
 
     // Attempt to match `[!ident`, if that doesn't match, we assume it's not a command invocation,
     // so return `Ok(None)`
-    let Some((command_ident, mut remaining_tokens)) = consume_command_start(group) else {
-        return Ok(None);
+    let (command_ident, mut remaining_tokens) = match consume_command_start(group) {
+        Some(command_start) => command_start,
+        None => return Ok(None),
     };
 
     // We have now checked enough that we're confident the user is pretty intentionally using
@@ -71,21 +71,31 @@ fn parse_command_invocation(group: &Group) -> Result<Option<CommandInvocation>> 
         Some(command_kind) => Ok(Some(CommandInvocation::new(command_kind, group, remaining_tokens))),
         None => Err(Error::new(
             command_ident.span(),
-            format!("Expected `[!<command>! ..]`, for <command> one of: {}.\nIf this wasn't intended to be a preinterpret command, you can work around this with [!raw! [!{command_ident} ... ]]", CommandKind::list_all()),
+            format!(
+                "Expected `[!<command>! ..]`, for <command> one of: {}.\nIf this wasn't intended to be a preinterpret command, you can work around this with [!raw! [!{} ... ]]",
+                CommandKind::list_all(),
+                command_ident,
+            ),
         )),
     }
 }
 
 // We ensure we don't consume any tokens unless we have a variable substitution
-fn parse_only_if_variable_substitution(punct: &Punct, tokens: &mut Tokens) -> Option<VariableSubstitution> {
+fn parse_only_if_variable_substitution(
+    punct: &Punct,
+    tokens: &mut Tokens,
+) -> Option<VariableSubstitution> {
     if punct.as_char() != '#' {
         return None;
     }
-    let Some(TokenTree::Ident(_)) = tokens.peek() else {
-        return None;
-    };
-    let Some(TokenTree::Ident(variable_name)) = tokens.next() else {
-        unreachable!("We just peeked a token of this type");
-    };
-    Some(VariableSubstitution::new(punct.clone(), variable_name))
+    match tokens.peek() {
+        Some(TokenTree::Ident(_)) => {}
+        _ => return None,
+    }
+    match tokens.next() {
+        Some(TokenTree::Ident(variable_name)) => {
+            Some(VariableSubstitution::new(punct.clone(), variable_name))
+        }
+        _ => unreachable!("We just peeked a token of this type"),
+    }
 }

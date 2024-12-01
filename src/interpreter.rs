@@ -27,11 +27,8 @@ impl Interpreter {
         let mut expanded = TokenStream::new();
         loop {
             match parse_next_item(&mut source_tokens)? {
-                NextItem::CommandInvocation(command_invocation) => {
-                    expanded.extend(command_invocation.execute(self)?);
-                }
-                NextItem::VariableSubstitution(variable_substitution) => {
-                    expanded.extend(variable_substitution.execute(self)?);
+                NextItem::Leaf(token_tree) => {
+                    expanded.extend(iter::once(token_tree));
                 }
                 NextItem::Group(group) => {
                     expanded.extend(iter::once(TokenTree::Group(Group::new(
@@ -40,12 +37,14 @@ impl Interpreter {
                         self.interpret_tokens(Tokens::new(group.stream()))?,
                     ))));
                 }
-                NextItem::Leaf(token_tree) => {
-                    expanded.extend(iter::once(token_tree));
+                NextItem::VariableSubstitution(variable_substitution) => {
+                    expanded.extend(variable_substitution.execute(self)?);
                 }
-                NextItem::EndOfStream => break,
+                NextItem::CommandInvocation(command_invocation) => {
+                    expanded.extend(command_invocation.execute(self)?);
+                }
+                NextItem::EndOfStream => return Ok(expanded),
             }
         }
-        return Ok(expanded);    
     }
 }

@@ -4,12 +4,15 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = ["David Edey <github@david-edey.com>"]
-description = "The preinterpret! macro provides an intuitive toolkit for simplifying the building of declarative macros. It fills the role as a spritual successor to the paste macro, which was marked as unmaintained in late 2024."
+description = "An intuitive toolkit to simplify declarative macro development"
 repository = "https://github.com/dhedey/preinterpret"
 keywords = ["macros", "declarative-macros", "toolkit", "interpreter", "preprocessor"]
 # Categories have to come from https://crates.io/category_slugs
 # And whilst there's a development-tools::procedural-macro-helpers, there's no declarative macro category.
 categories = ["development-tools", "compilers"]
+# MSRV is the start of Edition 2021
+# If changing this, update the local-check-msrv.sh script, ci.yml, and README.md
+rust-version = "1.56.0"
 
 [lib]
 proc-macro = true
