@@ -28,9 +28,9 @@ It is inspired by the [quote](https://crates.io/crates/quote) and [paste](https:
 preinterpret = "0.1"
 ```
 
-# Core use cases
+## Motivation
 
-## Heightened readability
+### Heightened readability
 
 The preinterpret syntax is intended to be immediately intuitive even for people not familiar with the crate. And it enables developers to make more readable macros:
 * Developers can name clear concepts in their macro output, and re-use them by name, decreasing code duplication.
@@ -63,7 +63,7 @@ macro_rules! impl_marker_traits {
 }
 ```
 
-## Heightened Expressivity
+### Heightened Expressivity
 
 Preinterpret provides a suite of composable functions to convert token streams, literals and idents. The full list is documented in the [Details](#details) section.
 
@@ -129,11 +129,11 @@ preinterpret::preinterpret!{
 ```
 Now the `preinterpret!` macro runs, resulting in `#count` equal to the literal `3`.
 
-## Heightened sensibility
+### Heightened sensibility
 
 Using preinterpret partially mitigates some common issues when writing declarative macros.
 
-### Cartesian zip confusion
+#### Cartesian zip confusion
 
 The declarative macro evaluator zips metavariables together, but sometimes you wish to loop over to separate meta-variables at once - but this [gives an unhelpful error message](https://github.com/rust-lang/rust/issues/96184#issue-1207293401).
 
@@ -141,8 +141,7 @@ The classical wisdom is to output an internal `macro_rules!` definition to handl
 
 Standard use of preinterpret avoids this problem entirely. The example under the readability demonstrates this. If written without preinterpret, the iteration of the generics in `#impl_generics` and `#my_type` wouldn't be compatible with the iteration over `$trait`.
 
-
-### Eager macro confusion
+#### Eager macro confusion
 
 User-defined macros are not eager - they take a token stream in, and return a token stream; and further macros can then execute in this token stream.
 
@@ -155,13 +154,13 @@ Preinterpet commands also typically interpret their arguments eagerly and recurs
 * Using a different syntax `[!command! ...]` to macros to avoid confusion.
 * Taking on the functionality of the `concat!` and `concat_idents!` macros so they don't have to be used alongside other macros.
 
-### Recursive function paradigm shift
+#### Recursive function paradigm shift
 
 To do anything particularly advanced with declarative macros, you end up needing to conjure up various functional macro helpers to partially apply or re-order grammars. This is quite a paradigm-shift from most rust code.
 
 In quite a few cases, preinterpret can allow developers to avoid writing these recursive helper macros entirely.
 
-### Paste limitations problem
+#### Paste limitations problem
 
 The widely used [paste](https://crates.io/crates/paste) crate which inspired this crate has a few awkward issues.
 
@@ -180,21 +179,21 @@ macro_rules! impl_new_type {
 }
 ```
 
-# Details
+## Details
 
-Each command except `raw` resolve in a nested manner as you would expect:
+Each command except `raw` resolves in a nested manner as you would expect:
 ```rust
 [!set! #foo = fn [!ident! get_ [!snake_case! Hello World]]()]
 #foo // "fn get_hello_world()"
 ```
 
-## Core commands
+### Core commands
 
 * `[!set! #foo = Hello]` followed by `[!set! #foo = #bar(World)]` sets the variable `#foo` to the token stream `Hello` and `#bar` to the token stream `Hello(World)`, and outputs no tokens. Using `#foo` or `#bar` later on will output the current value in the corresponding variable.
 * `[!raw! abc #abc [!ident! test]]` outputs its contents as-is, without any interpretation, giving the token stream `abc #abc [!ident! test]`.
 * `[!ignore! $foo]` ignores all of its content and outputs no tokens. It is useful to make a declarative macro loop over a meta-variable without outputting it into the resulting stream.
 
-## Concatenate and convert commands
+### Concatenate and convert commands
 
 Each of these commands functions in three steps:
 * Apply the interpreter to the token stream, which recursively executes preinterpret commands.
@@ -230,7 +229,7 @@ To create idents from these methods, simply nest them, like so:
 >
 > Such characters get dropped in camel case conversions. This could break up grapheme clusters and cause other non-intuitive behaviour. See the [tests in string_conversion.rs](https://www.github.com/dhedey/preinterpret/blob/main/src/string_conversion.rs) for more details.
 
-## Integer commands
+### Integer commands
 
 Each of these commands functions in three steps:
 * Apply the interpreter to the token stream, which recursively executes preinterpret commands.
@@ -246,7 +245,7 @@ The supported integer commands are:
 We also support the following assignment commands:
 * `[!increment! #i]` is shorthand for `[!set! #i [!add! #i 1]]` and outputs no  tokens.
 
-## Boolean commands
+### Boolean commands
 
 Each of these commands functions in three steps:
 * Apply the interpreter to the token stream, which recursively executes preinterpret commands.
@@ -264,7 +263,7 @@ The supported comparison commands are:
 * `[!not! #foo]` expects a single boolean literal, and outputs the negation of `#foo`
 * `[!str_contains! "needle" [!string! haystack]]` expects two string literals, and outputs `true` if the first string is a substring of the second string.
 
-## Control flow commands
+### Control flow commands
 
 Currently, only `if` is supported:
 * `[!if! #cond then { #a } else { #b }]` outputs `#a` if `#cond` is `true`, else `#b` if `#cond` is false.
@@ -274,22 +273,22 @@ The `if` command works as follows:
 * It then expects to reads an unintepreted `then` ident, following by a single `{ .. }` group, whose contents get interpreted and output only if the condition was `true`.
 * It optionally also reads an `else` ident and a by a single `{ .. }` group, whose contents get interpreted and output only if the condition was `false`.
 
-# Contributing
+## Contributing
 
 If you have an idea for additional commands, please raise an issue or a PR.
 
 Any commands should be simple, composable, and likely to see use in declarative macros, to keep code bloat down.
 
-# Future Extension Reflections
+## Future Extension Reflections
 
-## Eager expansion of macros
+### Eager expansion of macros
 When [eager expansion of macros returning literals](https://github.com/rust-lang/rust/issues/90765) is stabilized, it would be nice to include a command to do that, which could be used to include code, for example: `[!expand_literal_macros! include!("my-poem.txt")]`.
 
-## Removing syn
+### Removing syn
 
 The heavy `syn` library is only needed for literal parsing, and error conversion into compile errors. This could be removed to speed up compile times a lot for stacks which don't have a `syn` dependency.
 
-## Further Control Flow
+### Further Control Flow
 
 In theory, some additional control flow or lazy evaluation could be added to bring turing completeness. This would also allow the preinterpret to find some niche uses outside of declarative macros.
 
