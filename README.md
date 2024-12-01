@@ -236,12 +236,6 @@ To create idents from these methods, simply nest them, like so:
 >
 > Such characters get dropped in camel case conversions. This could break up grapheme clusters and cause other non-intuitive behaviour. See the [tests in string_conversion.rs](https://www.github.com/dhedey/preinterpret/blob/main/src/string_conversion.rs) for more details.
 
-## Contributing
-
-If you have an idea for additional commands, please raise an issue or a PR.
-
-Any commands should be simple, composable, and likely to see use in declarative macros, to keep code bloat down.
-
 ## Future Extension Possibilities
 
 ### Possible extension: Integer commands
@@ -323,3 +317,10 @@ When [eager expansion of macros returning literals](https://github.com/rust-lang
 ### Possible extension: Removing syn
 
 The heavy `syn` library is only needed for literal parsing, and error conversion into compile errors. This could be removed to speed up compile times a lot for stacks which don't have a `syn` dependency.
+
+## License
+
+Licensed under either of the [Apache License, Version 2.0](LICENSE-APACHE)
+or the [MIT license](LICENSE-MIT) at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in this crate by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
