@@ -279,6 +279,7 @@ Comparison commands under consideration are:
 * `[!str_contains! "needle" [!string! haystack]]` expects two string literals, and outputs `true` if the first string is a substring of the second string.
 
 ### Possible extension: Token stream commands
+
 * `[!skip! 4 from [#stream]]` reads and drops the first 4 token trees from the stream, and outputs the rest
 * `[!ungroup! (#stream)]` outputs `#stream`. It expects to receive a single group (i.e. wrapped in brackets), and unwraps it.
 
@@ -313,11 +314,81 @@ preinterpret::preinterpret!{
 ```
 
 ### Possible extension: Eager expansion of macros
+
 When [eager expansion of macros returning literals](https://github.com/rust-lang/rust/issues/90765) is stabilized, it would be nice to include a command to do that, which could be used to include code, for example: `[!expand_literal_macros! include!("my-poem.txt")]`.
+
+### Possible extension: Destructuring / Parsing Syntax, and Declarative Macros 2.0
+
+Instead of just a single variable, allow destructuring, for example:
+* `[!set! (#x, #y) = ]` or `[!set! Hello(#x, #y) = ]`
+* `[!for! (#x, #y) in ...]` or `[!for! Hello(#x, #y) in ...]`
+
+This puts us in the camp of being a simple replacement for a single-use declarative macro:
+```rust
+preinterpret::preinterpret! {
+    [!set #input =
+        (MyTrait for MyType)
+        (MyTrait for MyType2)
+    ]
+
+    [!for! (#trait for #type) in #input {
+        impl #trait for #type
+    }]
+}
+
+// Could even define simple macros which take a token stream:
+preinterpret::preinterpret! {
+    [!define! my_macro!(#inner) {
+        [!for! (#trait for #type) in #input {
+            impl #trait for #type
+        }]
+    }]
+}
+```
+
+This is getting awfully close to looking like a declarative macro definition which takes a token stream,
+and parses it at destructing time inside the macro. Which actually might be super useful, because:
+* It can give much clearer compiler errors compared to declarative macros which fail silently
+* It can re-interpret the same tokens in different ways in different parts of the macro
+
+However, a few things stand in our way:
+* Naively, it can only operate on streams of token trees, so it might need lots of brackets for parsing groups
+* But instead, we can work around this by implementing simple composable parsers, which can break it up step-by-step:
+  * `[!parse! <GROUP> = #y]` is a more general `[!set!]` which takes a group on the left and a value on the right, and interprets `#x` as a binding (i.e. place/lvalue) rather than as a value. Functions accepted in a binding are:
+    * Maybe `[!group!]` to create a group with no brackets, to avoid parser amibuity in some cases
+    * `[!fields!]` - which calls `[!parse_fields!]` on the token
+    * `[!subfields!]` - which calls `[!parse_subfields!]` on the token
+    * `[!item!]` - which calls `[!parse_item!]` on the token
+    * Lists / for-loops should however delay parsing till execution time
+  * `[!group!]` creates a group with no brackets, to avoid parser ambiguity 
+  * `[!parse_fields! { hello: #a, world?: #b }] = #x]` which can parse `#x` in any order, cope with trailing commas, and permit fields on the RHS not on the LHS
+  * `[!parse_subfields! { hello: #a, world?: #b }] = #x]` which can parse `#x` in any order, cope with trailing commas, and permit fields on the RHS not on the LHS
+  * `[!for! (#a) in (#b) { ... }]` which first ungroups `#a` and `#b`, and allows optional commas between values and copes with trailing commas
+  * `[!parse_impl_generics! { impl: #x, type: #y } = #generics]` which can parse impl generics output `{ impl: XX, type: XX, where: XX }`, and use `[!parse_fields_loose!]` on the provided value.
+
+```rust
+preinterpret::preinterpret! {
+    [!define! multi_impl_super_duper!(
+        #type_list,
+        ImplOptions [!fields!
+            hello: #hello,
+            world?: #world
+        ]
+    ) = {
+        [!set_if_empty! #world = "Default"]
+        [!for_csv! (#type [!generics! { impl: #impl_generics, type: #type_generics }]) in (#type_list) {
+            impl<#impl_generics> SuperDuper for #type #type_generics {
+                type Hello = #hello;
+                type World = #world;
+            }
+        }]
+    }]
+}
+```
 
 ### Possible extension: Removing syn
 
-The heavy `syn` library is only needed for literal parsing, and error conversion into compile errors. This could be removed to speed up compile times a lot for stacks which don't have a `syn` dependency.
+The heavy `syn` library is only needed for literal parsing, and error conversion into compile errors. This could be removed to speed up compile times a lot for stacks which don't have a `syn` dependency - at least if we dropped parsing support.
 
 ## License
 
