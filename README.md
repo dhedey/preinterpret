@@ -239,6 +239,10 @@ To create idents from these methods, simply nest them, like so:
 
 ## Future Extension Possibilities
 
+### Add github docs page / rust book
+
+Add a github docs page / rust book at this repository, to allow us to build out a suite of examples, like `serde` or the little book of macros.
+
 ### Possible extension: Integer commands
 
 Each of these commands functions in three steps:
