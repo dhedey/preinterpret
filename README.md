@@ -368,7 +368,7 @@ But instead, we can work around this by implementing simple composable parsers, 
     * To me, this feels very natural, and fits more with typical rust patterns than with the pattern matching in procedural macros...
 
 This would look something like:
-* `[!parse! (<INPUT>) = (<OUTPUT>)]` is a more general `[!set!]` which takes a `()` wrapped group on the left and a value on the right, and interprets any `#x` on the left as a binding (i.e. place/lvalue) rather than as a value. This will handled commas intelligently, and accept functions as:
+* `[!parse! (<INPUT>) = (<OUTPUT>)]` is a more general `[!set!]` which takes a `()` wrapped group on the left and a value on the right, and interprets any `#x` on the left as a binding (i.e. place/lvalue) rather than as a value. This will handled commas intelligently, and accept parse-functions as:
     * `[!fields! { hello: #a, world?: #b }]` - which can parse `#x` in any order, cope with trailing commas, and permit fields on the RHS not on the LHS
     * `[!subfields! { hello: #a, world?: #b }]` - which can parse fields in any order, cope with trailing commas, and permit fields on the RHS not on the LHS
     * `[!item!]` - which calls syn's parse item on the token
@@ -377,7 +377,7 @@ This would look something like:
     * Possibly `[!group!]` to parse a group with no brackets, to avoid parser amibuity in some cases
     * Any complex logic (loops, matching), is delayed lazily until execution logic time - making it much more intuitive.
 * `[!for! (#a) in (#b) { ... }]` gets the power of parse in the left group, and has support for optional commas between values at the end
-* `[!match! (<INPUT>) => { (<CASE1>) => {<OUTPUT1>}, (<CASE2>) => {<OUTPUT1>}, }]` which captures semantics like the declarative macro inputs, and each case can optionally bind its own variables.
+* `[!match! (<INPUT>) => { (<CASE1>) => {<OUTPUT1>}, (<CASE2>) => {<OUTPUT1>}, (#fallback) => {<OUTPUT3>} }]` which captures semantics like the declarative macro inputs, and each case can optionally bind its own variables.
 
 With a future extension of `if let .. = .. {}` and `let .. = .. else {}` equivalents, to save match statements.
 
@@ -391,7 +391,9 @@ preinterpret::preinterpret! {
             world?: #world (default "Default")
         ]
     ) = {
-        [!for! (#type [!generics! { impl: #impl_generics, type: #type_generics }]) in (#type_list) {
+        [!for! (
+            #type [!generics! { impl: #impl_generics, type: #type_generics }]
+        ) in (#type_list) {
             impl<#impl_generics> SuperDuper for #type #type_generics {
                 type Hello = #hello;
                 type World = #world;
