@@ -362,16 +362,24 @@ and parses it at destructing time inside the macro. Which actually might be supe
 
 However, a few things stand in our way. Naively, it can only operate on streams of token trees, so it might need lots of brackets for parsing groups.
 
-But instead, we can work around this by implementing simple composable parsers, which can break it up step-by-step:
-* `[!parse! <GROUP> = <GROUP>]` is a more general `[!set!]` which takes a `()` wrapped group on the left and a value on the right, and interprets any `#x` on the left as a binding (i.e. place/lvalue) rather than as a value. This will handled commas intelligently, and accept functions as:
-    * Maybe `[!group!]` to create a group with no brackets, to avoid parser amibuity in some cases
+But instead, we can work around this by implementing simple composable parsers, which can:
+* Have concrete parse steps, intuitively handling lots of common patterns seen in code (basically making various syn helpers available)
+* Separate out control flow (loops, matches and the like) to run lazily and declaratively.
+    * To me, this feels very natural, and fits more with typical rust patterns than with the pattern matching in procedural macros...
+
+This would look something like:
+* `[!parse! (<INPUT>) = (<OUTPUT>)]` is a more general `[!set!]` which takes a `()` wrapped group on the left and a value on the right, and interprets any `#x` on the left as a binding (i.e. place/lvalue) rather than as a value. This will handled commas intelligently, and accept functions as:
     * `[!fields! { hello: #a, world?: #b }]` - which can parse `#x` in any order, cope with trailing commas, and permit fields on the RHS not on the LHS
     * `[!subfields! { hello: #a, world?: #b }]` - which can parse fields in any order, cope with trailing commas, and permit fields on the RHS not on the LHS
     * `[!item!]` - which calls syn's parse item on the token
+    * `[!ident! ...]`, `[!literal! ...]` and the like to parse idents / literals etc (rather than token streams).
     * More tailored examples, such as `[!generics! { impl: #x, type: #y, where: #z }]` which uses syn to parse the generics, and then uses subfields on the result.
+    * Possibly `[!group!]` to parse a group with no brackets, to avoid parser amibuity in some cases
     * Any complex logic (loops, matching), is delayed lazily until execution logic time - making it much more intuitive.
-* `[!for! (#a) in (#b) { ... }]` gets the power of parse in the left group (including allowing optional commas between values and copes with trailing commas)
+* `[!for! (#a) in (#b) { ... }]` gets the power of parse in the left group, and has support for optional commas between values at the end
 * `[!match! (<INPUT>) => { (<CASE1>) => {<OUTPUT1>}, (<CASE2>) => {<OUTPUT1>}, }]` which captures semantics like the declarative macro inputs, and each case can optionally bind its own variables.
+
+With a future extension of `if let .. = .. {}` and `let .. = .. else {}` equivalents, to save match statements.
 
 ```rust,ignore
 // Hypothetical future syntax - not yet implemented!
