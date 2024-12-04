@@ -258,3 +258,11 @@ pub fn preinterpret(token_stream: proc_macro::TokenStream) -> proc_macro::TokenS
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }
+
+// This is the recommended way to run the doc tests in the readme
+#[doc = include_str!("../README.md")]
+#[cfg(doctest)] // Don't actually export this!
+#[proc_macro]
+pub fn readme_doctests(token_stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    unimplemented!()
+}

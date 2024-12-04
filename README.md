@@ -61,6 +61,9 @@ macro_rules! impl_marker_traits {
         )*
     }}
 }
+trait MarkerTrait1 {}
+trait MarkerTrait2 {}
+struct MyType<T: Clone>(T);
 impl_marker_traits! {
     impl [MarkerTrait1, MarkerTrait2] for MyType<T: Clone>
 };
@@ -131,7 +134,7 @@ let count = preinterpret::preinterpret!{
   [!set! #current_index = #current_index + 1]
   [!set! #count = #current_index]
   #count
-}
+};
 ```
 
 Now the `preinterpret!` macro runs, resulting in `#count` equal to the token stream `0usize + 1 + 1 + 1`.
@@ -190,7 +193,7 @@ macro_rules! impl_new_type {
 ## Details
 
 Each command except `raw` resolves in a nested manner as you would expect:
-```rust
+```rust,ignore
 [!set! #foo = fn [!ident! get_ [!snake_case! Hello World]]()]
 #foo // "fn get_hello_world()"
 ```
@@ -227,7 +230,7 @@ The supported string conversion commands are:
 * `[!decapitalize! FooBar]` outputs `"fooBar"`
 
 To create idents from these methods, simply nest them, like so:
-```rust
+```rust,ignore
 [!ident! get_ [!snake_case! $field_name]]
 ```
 
@@ -307,7 +310,8 @@ The `if` command works as follows:
 * `[!label! loop_start]` - defines a label which can be returned to. Effectively, it takes a clones of the remaining token stream after the label in the interpreter.
 * `[!goto! loop_start]` - jumps to the last execution of `[!label! loop_start]`. It unrolls the preinterpret stack (dropping all unwritten token streams) until it finds a stackframe in which the interpreter has the defined label, and continues the token stream from there.
 
-```rust
+```rust,ignore
+// Hypothetical future syntax - not yet implemented!
 preinterpret::preinterpret!{
     [!set! #i = 0]
     [!label! loop]
@@ -328,9 +332,10 @@ Instead of just a single variable, allow destructuring, for example:
 * `[!for! (#x, #y) in ...]` or `[!for! Hello(#x, #y) in ...]`
 
 This puts us in the camp of being a simple replacement for a single-use declarative macro:
-```rust
+```rust,ignore
+// Hypothetical future syntax - not yet implemented!
 preinterpret::preinterpret! {
-    [!set #input =
+    [!set! #input =
         (MyTrait for MyType)
         (MyTrait for MyType2)
     ]
@@ -370,7 +375,8 @@ However, a few things stand in our way:
   * `[!for! (#a) in (#b) { ... }]` which first ungroups `#a` and `#b`, and allows optional commas between values and copes with trailing commas
   * `[!parse_impl_generics! { impl: #x, type: #y } = #generics]` which can parse impl generics output `{ impl: XX, type: XX, where: XX }`, and use `[!parse_fields_loose!]` on the provided value.
 
-```rust
+```rust,ignore
+// Hypothetical future syntax - not yet implemented!
 preinterpret::preinterpret! {
     [!define! multi_impl_super_duper!(
         #type_list,
