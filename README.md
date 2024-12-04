@@ -360,20 +360,18 @@ and parses it at destructing time inside the macro. Which actually might be supe
 * It can give much clearer compiler errors compared to declarative macros which fail silently
 * It can re-interpret the same tokens in different ways in different parts of the macro
 
-However, a few things stand in our way:
-* Naively, it can only operate on streams of token trees, so it might need lots of brackets for parsing groups
-* But instead, we can work around this by implementing simple composable parsers, which can break it up step-by-step:
-  * `[!parse! <GROUP> = #y]` is a more general `[!set!]` which takes a group on the left and a value on the right, and interprets `#x` as a binding (i.e. place/lvalue) rather than as a value. Functions accepted in a binding are:
+However, a few things stand in our way. Naively, it can only operate on streams of token trees, so it might need lots of brackets for parsing groups.
+
+But instead, we can work around this by implementing simple composable parsers, which can break it up step-by-step:
+* `[!parse! <GROUP> = <GROUP>]` is a more general `[!set!]` which takes a `()` wrapped group on the left and a value on the right, and interprets any `#x` on the left as a binding (i.e. place/lvalue) rather than as a value. This will handled commas intelligently, and accept functions as:
     * Maybe `[!group!]` to create a group with no brackets, to avoid parser amibuity in some cases
-    * `[!fields!]` - which calls `[!parse_fields!]` on the token
-    * `[!subfields!]` - which calls `[!parse_subfields!]` on the token
-    * `[!item!]` - which calls `[!parse_item!]` on the token
-    * Lists / for-loops should however delay parsing till execution time
-  * `[!group!]` creates a group with no brackets, to avoid parser ambiguity 
-  * `[!parse_fields! { hello: #a, world?: #b }] = #x]` which can parse `#x` in any order, cope with trailing commas, and permit fields on the RHS not on the LHS
-  * `[!parse_subfields! { hello: #a, world?: #b }] = #x]` which can parse `#x` in any order, cope with trailing commas, and permit fields on the RHS not on the LHS
-  * `[!for! (#a) in (#b) { ... }]` which first ungroups `#a` and `#b`, and allows optional commas between values and copes with trailing commas
-  * `[!parse_impl_generics! { impl: #x, type: #y } = #generics]` which can parse impl generics output `{ impl: XX, type: XX, where: XX }`, and use `[!parse_fields_loose!]` on the provided value.
+    * `[!fields! { hello: #a, world?: #b }]` - which can parse `#x` in any order, cope with trailing commas, and permit fields on the RHS not on the LHS
+    * `[!subfields! { hello: #a, world?: #b }]` - which can parse fields in any order, cope with trailing commas, and permit fields on the RHS not on the LHS
+    * `[!item!]` - which calls syn's parse item on the token
+    * More tailored examples, such as `[!generics! { impl: #x, type: #y, where: #z }]` which uses syn to parse the generics, and then uses subfields on the result.
+    * Any complex logic (loops, matching), is delayed lazily until execution logic time - making it much more intuitive.
+* `[!for! (#a) in (#b) { ... }]` gets the power of parse in the left group (including allowing optional commas between values and copes with trailing commas)
+* `[!match! (<INPUT>) => { (<CASE1>) => {<OUTPUT1>}, (<CASE2>) => {<OUTPUT1>}, }]` which captures semantics like the declarative macro inputs, and each case can optionally bind its own variables.
 
 ```rust,ignore
 // Hypothetical future syntax - not yet implemented!
@@ -382,11 +380,10 @@ preinterpret::preinterpret! {
         #type_list,
         ImplOptions [!fields!
             hello: #hello,
-            world?: #world
+            world?: #world (default "Default")
         ]
     ) = {
-        [!set_if_empty! #world = "Default"]
-        [!for_csv! (#type [!generics! { impl: #impl_generics, type: #type_generics }]) in (#type_list) {
+        [!for! (#type [!generics! { impl: #impl_generics, type: #type_generics }]) in (#type_list) {
             impl<#impl_generics> SuperDuper for #type #type_generics {
                 type Hello = #hello;
                 type World = #world;
@@ -396,9 +393,11 @@ preinterpret::preinterpret! {
 }
 ```
 
-### Possible extension: Removing syn
+### Possible extension: Explicit parsing feature to enable syn
 
-The heavy `syn` library is only needed for literal parsing, and error conversion into compile errors. This could be removed to speed up compile times a lot for stacks which don't have a `syn` dependency - at least if we dropped parsing support.
+The heavy `syn` library is (in basic preinterpret) only needed for literal parsing, and error conversion into compile errors.
+
+We could add a parsing feature to speed up compile times a lot for stacks which don't need the parsing functionality.
 
 ## License
 
