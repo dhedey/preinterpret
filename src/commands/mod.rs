@@ -1,15 +1,9 @@
-// mod boolean_commands;
 mod concat_commands;
-// mod control_flow_commands;
 mod core_commands;
-// mod integer_commands;
 
 use crate::internal_prelude::*;
-// use boolean_commands::*;
 use concat_commands::*;
-// use control_flow_commands::*;
 use core_commands::*;
-// use integer_commands::*;
 
 define_commands! {
     pub(crate) enum CommandKind {
@@ -24,21 +18,16 @@ define_commands! {
         ToLiteralCommand,
 
         // Concat & String Convert Commands
-        UpperCaseCommand,
-        LowerCaseCommand,
-        SnakeCaseCommand,
-        LowerSnakeCaseCommand,
-        UpperSnakeCaseCommand,
-        CamelCaseCommand,
-        LowerCamelCaseCommand,
-        UpperCamelCaseCommand,
+        UpperCommand,
+        LowerCommand,
+        SnakeCommand,
+        LowerSnakeCommand,
+        UpperSnakeCommand,
+        CamelCommand,
+        LowerCamelCommand,
+        UpperCamelCommand,
         CapitalizeCommand,
         DecapitalizeCommand,
-
-        // Integer Commands
-
-        // Boolean Commands
-
-        // Control Flow Commands
+        InsertSpacesCommand,
     }
 }

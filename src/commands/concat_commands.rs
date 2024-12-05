@@ -91,10 +91,10 @@ fn concat_string_and_convert(
     Ok(TokenStream::from(TokenTree::Literal(string_literal)))
 }
 
-pub(crate) struct UpperCaseCommand;
+pub(crate) struct UpperCommand;
 
-impl CommandDefinition for UpperCaseCommand {
-    const COMMAND_NAME: &'static str = "upper_case";
+impl CommandDefinition for UpperCommand {
+    const COMMAND_NAME: &'static str = "upper";
 
     fn execute(
         interpreter: &mut Interpreter,
@@ -105,10 +105,10 @@ impl CommandDefinition for UpperCaseCommand {
     }
 }
 
-pub(crate) struct LowerCaseCommand;
+pub(crate) struct LowerCommand;
 
-impl CommandDefinition for LowerCaseCommand {
-    const COMMAND_NAME: &'static str = "lower_case";
+impl CommandDefinition for LowerCommand {
+    const COMMAND_NAME: &'static str = "lower";
 
     fn execute(
         interpreter: &mut Interpreter,
@@ -119,10 +119,10 @@ impl CommandDefinition for LowerCaseCommand {
     }
 }
 
-pub(crate) struct SnakeCaseCommand;
+pub(crate) struct SnakeCommand;
 
-impl CommandDefinition for SnakeCaseCommand {
-    const COMMAND_NAME: &'static str = "snake_case";
+impl CommandDefinition for SnakeCommand {
+    const COMMAND_NAME: &'static str = "snake";
 
     fn execute(
         interpreter: &mut Interpreter,
@@ -130,14 +130,14 @@ impl CommandDefinition for SnakeCaseCommand {
         command_span: Span,
     ) -> Result<TokenStream> {
         // Lower snake case is the more common casing in Rust, so default to that
-        LowerSnakeCaseCommand::execute(interpreter, argument, command_span)
+        LowerSnakeCommand::execute(interpreter, argument, command_span)
     }
 }
 
-pub(crate) struct LowerSnakeCaseCommand;
+pub(crate) struct LowerSnakeCommand;
 
-impl CommandDefinition for LowerSnakeCaseCommand {
-    const COMMAND_NAME: &'static str = "lower_snake_case";
+impl CommandDefinition for LowerSnakeCommand {
+    const COMMAND_NAME: &'static str = "lower_snake";
 
     fn execute(
         interpreter: &mut Interpreter,
@@ -148,10 +148,10 @@ impl CommandDefinition for LowerSnakeCaseCommand {
     }
 }
 
-pub(crate) struct UpperSnakeCaseCommand;
+pub(crate) struct UpperSnakeCommand;
 
-impl CommandDefinition for UpperSnakeCaseCommand {
-    const COMMAND_NAME: &'static str = "upper_snake_case";
+impl CommandDefinition for UpperSnakeCommand {
+    const COMMAND_NAME: &'static str = "upper_snake";
 
     fn execute(
         interpreter: &mut Interpreter,
@@ -162,10 +162,10 @@ impl CommandDefinition for UpperSnakeCaseCommand {
     }
 }
 
-pub(crate) struct CamelCaseCommand;
+pub(crate) struct CamelCommand;
 
-impl CommandDefinition for CamelCaseCommand {
-    const COMMAND_NAME: &'static str = "camel_case";
+impl CommandDefinition for CamelCommand {
+    const COMMAND_NAME: &'static str = "camel";
 
     fn execute(
         interpreter: &mut Interpreter,
@@ -173,14 +173,14 @@ impl CommandDefinition for CamelCaseCommand {
         command_span: Span,
     ) -> Result<TokenStream> {
         // Upper camel case is the more common casing in Rust, so default to that
-        UpperCamelCaseCommand::execute(interpreter, argument, command_span)
+        UpperCamelCommand::execute(interpreter, argument, command_span)
     }
 }
 
-pub(crate) struct LowerCamelCaseCommand;
+pub(crate) struct LowerCamelCommand;
 
-impl CommandDefinition for LowerCamelCaseCommand {
-    const COMMAND_NAME: &'static str = "lower_camel_case";
+impl CommandDefinition for LowerCamelCommand {
+    const COMMAND_NAME: &'static str = "lower_camel";
 
     fn execute(
         interpreter: &mut Interpreter,
@@ -191,10 +191,10 @@ impl CommandDefinition for LowerCamelCaseCommand {
     }
 }
 
-pub(crate) struct UpperCamelCaseCommand;
+pub(crate) struct UpperCamelCommand;
 
-impl CommandDefinition for UpperCamelCaseCommand {
-    const COMMAND_NAME: &'static str = "upper_camel_case";
+impl CommandDefinition for UpperCamelCommand {
+    const COMMAND_NAME: &'static str = "upper_camel";
 
     fn execute(
         interpreter: &mut Interpreter,
@@ -230,5 +230,24 @@ impl CommandDefinition for DecapitalizeCommand {
         command_span: Span,
     ) -> Result<TokenStream> {
         concat_string_and_convert(interpreter, argument, command_span, decapitalize)
+    }
+}
+
+pub(crate) struct InsertSpacesCommand;
+
+impl CommandDefinition for InsertSpacesCommand {
+    const COMMAND_NAME: &'static str = "insert_spaces";
+
+    fn execute(
+        interpreter: &mut Interpreter,
+        argument: CommandArgumentStream,
+        command_span: Span,
+    ) -> Result<TokenStream> {
+        concat_string_and_convert(
+            interpreter,
+            argument,
+            command_span,
+            insert_spaces_between_words,
+        )
     }
 }

@@ -43,24 +43,6 @@ pub(crate) fn to_upper_camel_case(value: &str) -> String {
     to_camel_case(value, LetterCase::Upper)
 }
 
-pub(crate) enum LetterCase {
-    Upper,
-    Lower,
-}
-
-impl LetterCase {
-    fn apply(&self, acc: &mut String, ch: char) {
-        match self {
-            LetterCase::Upper => {
-                acc.extend(ch.to_uppercase());
-            }
-            LetterCase::Lower => {
-                acc.extend(ch.to_lowercase());
-            }
-        }
-    }
-}
-
 pub(crate) fn to_camel_case(value: &str, first_letter_case: LetterCase) -> String {
     let mut acc = String::new();
     let mut parse_state = StringParseState::Start;
@@ -92,7 +74,46 @@ pub(crate) fn decapitalize(value: &str) -> String {
     change_case_of_first_letter(value, LetterCase::Lower)
 }
 
-pub(crate) fn change_case_of_first_letter(value: &str, first_letter_case: LetterCase) -> String {
+pub(crate) fn insert_spaces_between_words(value: &str) -> String {
+    let mut acc = String::new();
+    let mut parse_state = StringParseState::Start;
+    for ch in value.chars() {
+        let (_, word_start) = parse_state.update(ch);
+        match word_start {
+            WordStart::MiddleWordAfterLetter => {
+                acc.push(' ');
+                acc.push(ch);
+            }
+            WordStart::None
+            | WordStart::FirstWordAtStringStart
+            | WordStart::FirstWordAfterNonLetter
+            | WordStart::MiddleWordAfterNonLetter => {
+                acc.push(ch);
+            }
+        }
+    }
+    acc
+}
+
+pub(crate) enum LetterCase {
+    Upper,
+    Lower,
+}
+
+impl LetterCase {
+    fn apply(&self, acc: &mut String, ch: char) {
+        match self {
+            LetterCase::Upper => {
+                acc.extend(ch.to_uppercase());
+            }
+            LetterCase::Lower => {
+                acc.extend(ch.to_lowercase());
+            }
+        }
+    }
+}
+
+pub fn change_case_of_first_letter(value: &str, first_letter_case: LetterCase) -> String {
     let mut acc = String::new();
     let mut parse_state = StringParseState::Start;
     for ch in value.chars() {

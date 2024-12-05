@@ -8,7 +8,7 @@ preinterpret! {
     type [!ident! X "Boo" [!string! Hello 1] #postfix] = MyStruct;
     const NUM: u32 = [!literal! 1337u #bytes];
     const STRING: &str = [!string! #MyRawVar];
-    const SNAKE_CASE: &str = [!snake_case! MyVar];
+    const SNAKE_CASE: &str = [!snake! MyVar];
 }
 
 #[test]

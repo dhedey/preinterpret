@@ -12,9 +12,9 @@ If updating this readme, please ensure that the rustdoc is also updated.
 
 This crate provides the `preinterpret!` macro, which works as a simple pre-processor to the token stream. It is inspired by the [quote](https://crates.io/crates/quote) and [paste](https://crates.io/crates/paste) crates, and built to empower code generation authors and declarative macro writers, bringing:
 
-* **Heightened readability** - making it easier to work with code generation code.
-* **Heightened expressivity** - reducing boilerplate, and mitigating the need to build custom procedural macros in some cases.
-* **Heightened simplicity** - helping developers avoid various declarative macro surprises.
+* **Heightened [readability](#readability)** - making it easier to work with code generation code.
+* **Heightened [expressivity](#expressivity)** - reducing boilerplate, and mitigating the need to build custom procedural macros in some cases.
+* **Heightened [simplicity](#simplicity)** - helping developers avoid various declarative macro surprises.
 
 It provides two composable features:
 
@@ -27,6 +27,146 @@ The `preinterpret!` macro can be used inside the output of a declarative macro, 
 [dependencies]
 preinterpret = "0.1"
 ```
+
+## User Guide
+
+Preinterpret works with its own very simple language, with two main syntax additions:
+
+* Commands all have the syntax `[!command_name! ...input token stream...]`
+* Variables are defined with `[!set! #var_name = token stream...]` and substituted using `#var_name`
+
+Commands can be nested intuitively: the input of all commands (except `[!raw! ...]`) are first interpreted before the command itself executes.
+
+### Example in a declarative macro
+
+The following artificial example demonstrates how `preinterpret` can be integrate into declarative macros, and covers use of variables, idents and case conversion:
+
+```rust
+macro_rules! create_my_type {
+    (
+        $(#[$attributes:meta])*
+        $vis:vis struct $type_name:ident {
+            $($field_name:ident: $inner_type:ident),* $(,)?
+        }
+    ) => {preinterpret::preinterpret! {
+        [!set! #type_name = [!ident! My $type_name]]
+        
+        $(#[$attributes])*
+        $vis struct #type_name {
+            $($field_name: $inner_type,)*
+        }
+
+        impl #type_name {
+            $(
+                fn [!ident! my_ [!snake! $inner_type]](&self) -> &$inner_type {
+                    &self.$field_name
+                }
+
+                fn [!ident! my_ [!snake! $inner_type] _mut](&mut self) -> &mut $inner_type {
+                    &mut self.$field_name
+                }
+            )*
+        }
+    }}
+}
+create_my_type! {
+    struct Struct {
+        field0: String,
+        field1: u64,
+    }
+}
+assert_eq!(MyStruct { field0: "Hello".into(), field1: 21 }.my_string(), "Hello")
+```
+
+### Quick background on token streams and macros
+
+To properly understand how preinterpret works, we need to take a very brief detour into the language of macros.
+
+In Rust, the input and output to a macro is a [`TokenStream`](https://doc.rust-lang.org/proc_macro/enum.TokenStream.html). A `TokenStream` is simply an iterator of [`TokenTree`](https://doc.rust-lang.org/proc_macro/enum.TokenTree.html)s at a particular nesting level. A token tree is one of four things:
+
+* A [`Group`](https://doc.rust-lang.org/proc_macro/struct.Group.html) - typically `(..)`, `[..]` or `{..}`. It consists of a matched pair of brackets "[`Delimiter`s]` and an internal token stream. There is technically a fourth type of group, with transparent brackets; used to encapsulate declarative macro substitutions. This is purposefully ignored/flattened in pre-interpret.
+* An [`Ident`](https://doc.rust-lang.org/proc_macro/struct.Ident.html) - An unquoted string, used to identitied something named. Think `MyStruct`, or `do_work` or `my_module`.
+* A [`Punct`](https://doc.rust-lang.org/proc_macro/struct.Punct.html) - A single piece of punctuation. Think `!` or `:`.
+* A [`Literal`](https://doc.rust-lang.org/proc_macro/struct.Literal.html) - This includes string literals `"my string"`, char literals `'x'` and numeric literals `23` / `51u64`. Note that `true`/`false` are technically idents.
+
+When you return output from a macro, you are outputting back a token stream, which the compiler will interpret.
+
+### Migration from paste
+
+If migrating from [paste](https://crates.io/crates/paste), the main difference is that you need to specify _what kind of concatenated thing you want to create_. Paste tried to work this out magically from context, but sometimes got it wrong.
+
+In other words, you typically want to replace `[< ... >]` with `[!ident! ...]`, and sometimes `[!string! ...]` or `[!literal! ...]`:
+* To create type and function names, use `[!ident! My #preinterpret_type_name $macro_type_name]`
+* For doc macros or concatenated strings, use `[!string! "My type is: " #type_name]`
+* If you're creating literals of some kind by concatenating parts together, use `[!literal! 32 u32]`
+
+The paste suffices such as `:lower`, `:camel` and `:snake` are replaced with corresponding commands which output string literals, and can be converted into idents as needed.
+
+For example:
+
+```rust
+preinterpret::preinterpret! {
+    [!set! #type_name = [!ident! HelloWorld]]
+
+    struct #type_name;
+
+    #[doc = [!string! "This type is called [`" #type_name "`]"]]
+    impl #type_name {
+        fn [!ident! say_ [!snake! #type_name]]() -> &'static str {
+            [!string! "It's time to say: " [!insert_spaces! #type_name] "!"]
+        }
+    }
+}
+assert_eq!(HelloWorld::say_hello_world(), "It's time to say: Hello World!")
+```
+
+## Command List
+
+### Special commands
+
+* `[!set! #foo = Hello]` followed by `[!set! #foo = #bar(World)]` sets the variable `#foo` to the token stream `Hello` and `#bar` to the token stream `Hello(World)`, and outputs no tokens. Using `#foo` or `#bar` later on will output the current value in the corresponding variable.
+* `[!raw! abc #abc [!ident! test]]` outputs its contents as-is, without any interpretation, giving the token stream `abc #abc [!ident! test]`.
+* `[!ignore! $foo]` ignores all of its content and outputs no tokens. It is useful to make a declarative macro loop over a meta-variable without outputting it into the resulting stream.
+
+### Concatenate and convert commands
+
+Each of these commands functions in three steps:
+* Apply the interpreter to the token stream, which recursively executes preinterpret commands.
+* Convert each token of the resulting stream into a string, and concatenate these together. String and char literals are unquoted, and this process recurses into groups.
+* Apply some command-specific conversion.
+
+The token conversion commands are:
+
+* `[!ident! X Y "Z"]` outputs the ident `XYZ`
+* `[!string! X Y " " Z (Hello World)]` outputs `"XY Z(HelloWorld)"`
+* `[!literal! 31 u 32]` outputs the integer literal `31u32`
+* `[!literal! '"' hello '"']` outputs the string literal `"hello"`
+
+The supported string conversion commands are:
+
+* `[!upper! foo_bar]` outputs `"FOO_BAR"`
+* `[!lower! FooBar]` outputs `"foobar"`
+* `[!snake! FooBar]` and `[!lower_snake! FooBar]` are equivalent and output `"foo_bar"`
+* `[!upper_snake! FooBar]` outputs `"FOO_BAR"`
+* `[!camel! foo_bar]` and `[!upper_camel! foo_bar]` are equivalent and output `"FooBar"`
+* `[!lower_camel! foo_bar]` outputs `"fooBar"`
+* `[!capitalize! fooBar]` outputs `"FooBar"`
+* `[!decapitalize! FooBar]` outputs `"fooBar"`
+* `[!insert_spaces! fooBar]` ouputs `"foo Bar"`
+
+To create idents from these methods, simply nest them, like so:
+```rust,ignore
+[!ident! get_ [!snake! $field_name]]
+```
+
+> [!NOTE]
+>
+> These string conversion methods are designed to work intuitively across a relatively wide class of input strings, but treat all characters which are not lowercase or uppercase as word boundaries.
+>
+> Such characters get dropped in camel case conversions. This could break up grapheme clusters and cause other non-intuitive behaviour. See the [tests in string_conversion.rs](https://www.github.com/dhedey/preinterpret/blob/main/src/string_conversion.rs) for more details.
+
+
+<!-- USE DIFFS -->
 
 ## Motivation
 
@@ -71,7 +211,7 @@ impl_marker_traits! {
 
 ### Expressivity
 
-Preinterpret provides a suite of simple, composable commands to convert token streams, literals and idents. The full list is documented in the [Details](#details) section.
+Preinterpret provides a suite of simple, composable commands to convert token streams, literals and idents. The full list is documented in the [Command List](#command-list) section.
 
 For example:
 
@@ -140,7 +280,7 @@ let count = preinterpret::preinterpret!{
 Now the `preinterpret!` macro runs, resulting in `#count` equal to the token stream `0usize + 1 + 1 + 1`.
 This will be improved in future releases by adding support for mathematical operations on integer literals.
 
-### Heightened simplicity
+### Simplicity
 
 Using preinterpret partially mitigates some common areas of confusion when writing declarative macros.
 
@@ -189,56 +329,6 @@ macro_rules! impl_new_type {
     }}
 }
 ```
-
-## Details
-
-Each command except `raw` resolves in a nested manner as you would expect:
-```rust,ignore
-[!set! #foo = fn [!ident! get_ [!snake_case! Hello World]]()]
-#foo // "fn get_hello_world()"
-```
-
-### Core commands
-
-* `[!set! #foo = Hello]` followed by `[!set! #foo = #bar(World)]` sets the variable `#foo` to the token stream `Hello` and `#bar` to the token stream `Hello(World)`, and outputs no tokens. Using `#foo` or `#bar` later on will output the current value in the corresponding variable.
-* `[!raw! abc #abc [!ident! test]]` outputs its contents as-is, without any interpretation, giving the token stream `abc #abc [!ident! test]`.
-* `[!ignore! $foo]` ignores all of its content and outputs no tokens. It is useful to make a declarative macro loop over a meta-variable without outputting it into the resulting stream.
-
-### Concatenate and convert commands
-
-Each of these commands functions in three steps:
-* Apply the interpreter to the token stream, which recursively executes preinterpret commands.
-* Convert each token of the resulting stream into a string, and concatenate these together. String and char literals are unquoted, and this process recurses into groups.
-* Apply some command-specific conversion.
-
-The grammar value conversion commands are:
-
-* `[!string! X Y " " Z (Hello World)]` outputs `"XY Z(HelloWorld)"`
-* `[!ident! X Y "Z"]` outputs the ident `XYZ`
-* `[!literal! 31 u 32]` outputs the integer literal `31u32`
-* `[!literal! '"' hello '"']` outputs the string literal `"hello"`
-
-The supported string conversion commands are:
-
-* `[!upper_case! foo_bar]` outputs `"FOO_BAR"`
-* `[!lower_case! FooBar]` outputs `"foobar"`
-* `[!snake_case! FooBar]` and `[!lower_snake_case! FooBar]` are equivalent and output `"foo_bar"`
-* `[!upper_snake_case! FooBar]` outputs `"FOO_BAR"`
-* `[!camel_case! foo_bar]` and `[!upper_camel_case! foo_bar]` are equivalent and output `"FooBar"`
-* `[!lower_camel_case! foo_bar]` outputs `"fooBar"`
-* `[!capitalize! fooBar]` outputs `"FooBar"`
-* `[!decapitalize! FooBar]` outputs `"fooBar"`
-
-To create idents from these methods, simply nest them, like so:
-```rust,ignore
-[!ident! get_ [!snake_case! $field_name]]
-```
-
-> [!NOTE]
->
-> These string conversion methods are designed to work intuitively across a relatively wide class of input strings, but treat all characters which are not lowercase or uppercase as word boundaries.
->
-> Such characters get dropped in camel case conversions. This could break up grapheme clusters and cause other non-intuitive behaviour. See the [tests in string_conversion.rs](https://www.github.com/dhedey/preinterpret/blob/main/src/string_conversion.rs) for more details.
 
 ## Future Extension Possibilities
 
