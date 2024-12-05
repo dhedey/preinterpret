@@ -113,7 +113,7 @@ impl LetterCase {
     }
 }
 
-pub fn change_case_of_first_letter(value: &str, first_letter_case: LetterCase) -> String {
+pub(crate) fn change_case_of_first_letter(value: &str, first_letter_case: LetterCase) -> String {
     let mut acc = String::new();
     let mut parse_state = StringParseState::Start;
     for ch in value.chars() {
