@@ -28,9 +28,9 @@ fn parse_ident(value: &str, span: Span) -> Result<Ident> {
 // Concatenating type-conversion commands
 //=======================================
 
-pub(crate) struct ToStringCommand;
+pub(crate) struct StringCommand;
 
-impl CommandDefinition for ToStringCommand {
+impl CommandDefinition for StringCommand {
     const COMMAND_NAME: &'static str = "string";
 
     fn execute(
@@ -44,9 +44,9 @@ impl CommandDefinition for ToStringCommand {
     }
 }
 
-pub(crate) struct ToIdentCommand;
+pub(crate) struct IdentCommand;
 
-impl CommandDefinition for ToIdentCommand {
+impl CommandDefinition for IdentCommand {
     const COMMAND_NAME: &'static str = "ident";
 
     fn execute(
@@ -60,9 +60,60 @@ impl CommandDefinition for ToIdentCommand {
     }
 }
 
-pub(crate) struct ToLiteralCommand;
+pub(crate) struct IdentCamelCommand;
 
-impl CommandDefinition for ToLiteralCommand {
+impl CommandDefinition for IdentCamelCommand {
+    const COMMAND_NAME: &'static str = "ident_camel";
+
+    fn execute(
+        interpreter: &mut Interpreter,
+        argument: CommandArgumentStream,
+        command_span: Span,
+    ) -> Result<TokenStream> {
+        let interpreted = argument.interpret_and_concat_to_string(interpreter)?;
+        let upper_camel_cased = to_upper_camel_case(&interpreted);
+        let parsed_ident = parse_ident(&upper_camel_cased, command_span)?;
+        Ok(TokenStream::from(TokenTree::Ident(parsed_ident)))
+    }
+}
+
+pub(crate) struct IdentSnakeCommand;
+
+impl CommandDefinition for IdentSnakeCommand {
+    const COMMAND_NAME: &'static str = "ident_snake";
+
+    fn execute(
+        interpreter: &mut Interpreter,
+        argument: CommandArgumentStream,
+        command_span: Span,
+    ) -> Result<TokenStream> {
+        let interpreted = argument.interpret_and_concat_to_string(interpreter)?;
+        let lower_snake_cased = to_lower_snake_case(&interpreted);
+        let parsed_ident = parse_ident(&lower_snake_cased, command_span)?;
+        Ok(TokenStream::from(TokenTree::Ident(parsed_ident)))
+    }
+}
+
+pub(crate) struct IdentUpperSnakeCommand;
+
+impl CommandDefinition for IdentUpperSnakeCommand {
+    const COMMAND_NAME: &'static str = "ident_upper_snake";
+
+    fn execute(
+        interpreter: &mut Interpreter,
+        argument: CommandArgumentStream,
+        command_span: Span,
+    ) -> Result<TokenStream> {
+        let interpreted = argument.interpret_and_concat_to_string(interpreter)?;
+        let upper_snake_cased = to_upper_snake_case(&interpreted);
+        let parsed_ident = parse_ident(&upper_snake_cased, command_span)?;
+        Ok(TokenStream::from(TokenTree::Ident(parsed_ident)))
+    }
+}
+
+pub(crate) struct LiteralCommand;
+
+impl CommandDefinition for LiteralCommand {
     const COMMAND_NAME: &'static str = "literal";
 
     fn execute(
@@ -162,6 +213,22 @@ impl CommandDefinition for UpperSnakeCommand {
     }
 }
 
+pub(crate) struct KebabCommand;
+
+impl CommandDefinition for KebabCommand {
+    const COMMAND_NAME: &'static str = "kebab";
+
+    fn execute(
+        interpreter: &mut Interpreter,
+        argument: CommandArgumentStream,
+        command_span: Span,
+    ) -> Result<TokenStream> {
+        // Kebab case is normally lower case (including in Rust where it's used - e.g. crate names)
+        // It can always be combined with other casing to get other versions
+        concat_string_and_convert(interpreter, argument, command_span, to_lower_kebab_case)
+    }
+}
+
 pub(crate) struct CamelCommand;
 
 impl CommandDefinition for CamelCommand {
@@ -230,6 +297,20 @@ impl CommandDefinition for DecapitalizeCommand {
         command_span: Span,
     ) -> Result<TokenStream> {
         concat_string_and_convert(interpreter, argument, command_span, decapitalize)
+    }
+}
+
+pub(crate) struct TitleCommand;
+
+impl CommandDefinition for TitleCommand {
+    const COMMAND_NAME: &'static str = "title";
+
+    fn execute(
+        interpreter: &mut Interpreter,
+        argument: CommandArgumentStream,
+        command_span: Span,
+    ) -> Result<TokenStream> {
+        concat_string_and_convert(interpreter, argument, command_span, title_case)
     }
 }
 

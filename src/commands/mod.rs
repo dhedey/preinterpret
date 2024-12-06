@@ -9,13 +9,16 @@ define_commands! {
     pub(crate) enum CommandKind {
         // Core Commands
         SetCommand,
-        AsRawTokensCommand,
+        RawCommand,
         IgnoreCommand,
 
         // Concat & Type Convert Commands
-        ToStringCommand,
-        ToIdentCommand,
-        ToLiteralCommand,
+        StringCommand,
+        IdentCommand,
+        IdentCamelCommand,
+        IdentSnakeCommand,
+        IdentUpperSnakeCommand,
+        LiteralCommand,
 
         // Concat & String Convert Commands
         UpperCommand,
@@ -26,8 +29,10 @@ define_commands! {
         CamelCommand,
         LowerCamelCommand,
         UpperCamelCommand,
+        KebabCommand,
         CapitalizeCommand,
         DecapitalizeCommand,
+        TitleCommand,
         InsertSpacesCommand,
     }
 }

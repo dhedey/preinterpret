@@ -7,33 +7,29 @@
 [<img alt="build status" src="https://img.shields.io/github/actions/workflow/status/dhedey/preinterpret/ci.yml?branch=main&style=for-the-badge" height="20">](https://github.com/dhedey/preinterpret/actions?query=branch%3Amain)
 
 <!--
-If updating this readme, please ensure that the rustdoc is also updated.
+If updating this readme, please ensure that the lib.rs rustdoc is also updated.
+Copy the rest of this document to a new text file, replace `/n` with `\n//! ` prefix to each line, and paste into `lib.rs`
 -->
 
-This crate provides the `preinterpret!` macro, which works as a simple pre-processor to the token stream. It is inspired by the [quote](https://crates.io/crates/quote) and [paste](https://crates.io/crates/paste) crates, and built to empower code generation authors and declarative macro writers, bringing:
+This crate provides the `preinterpret!` macro, which works as a simple pre-processor to the token stream. It takes inspiration from the [quote](https://crates.io/crates/quote), [paste](https://crates.io/crates/paste) and [syn](https://crates.io/crates/syn) crates, and is generalized to empower code generation authors and declarative macro writers, bringing:
 
-* **Heightened [readability](#readability)** - making it easier to work with code generation code.
-* **Heightened [expressivity](#expressivity)** - reducing boilerplate, and mitigating the need to build custom procedural macros in some cases.
-* **Heightened [simplicity](#simplicity)** - helping developers avoid various declarative macro surprises.
-
-It provides two composable features:
-
-* Variable definition with `[!set! #variable = ... ]` and variable substition with `#variable` (think [quote](https://crates.io/crates/quote) for declarative macros)
-* A toolkit of simple functions operating on token streams, literals and idents, such as `[!ident! Hello #world]` (think [paste](https://crates.io/crates/paste) but more comprehesive, and still maintained)
+* **Heightened [readability](#readability)** - [quote](https://crates.io/crates/quote)-like variable definition and substitution make it easier to work with code generation code.
+* **Heightened [expressivity](#expressivity)** - a toolkit of simple commands reduce boilerplate, and mitigate the need to build custom procedural macros in some cases.
+* **Heightened [simplicity](#simplicity)** - helping developers avoid the confusing corners of declarative macro land.
 
 The `preinterpret!` macro can be used inside the output of a declarative macro, or by itself, functioning as a mini code generation tool all of its own.
 
 ```toml
 [dependencies]
-preinterpret = "0.1"
+preinterpret = "0.2"
 ```
 
 ## User Guide
 
-Preinterpret works with its own very simple language, with two main syntax additions:
+Preinterpret works with its own very simple language, with two main syntax elements:
 
-* Commands all have the syntax `[!command_name! ...input token stream...]`
-* Variables are defined with `[!set! #var_name = token stream...]` and substituted using `#var_name`
+* Commands - which have the syntax `[!command_name! ...input token stream...]` and output a token stream. There are a number of commands which cover a toolkit of useful functions. 
+* Variables - which are defined with `[!set! #var_name = token stream...]` and substituted with `#var_name`.
 
 Commands can be nested intuitively: the input of all commands (except `[!raw! ...]`) are first interpreted before the command itself executes.
 
@@ -58,11 +54,11 @@ macro_rules! create_my_type {
 
         impl #type_name {
             $(
-                fn [!ident! my_ [!snake! $inner_type]](&self) -> &$inner_type {
+                fn [!ident_snake! my_ $inner_type](&self) -> &$inner_type {
                     &self.$field_name
                 }
 
-                fn [!ident! my_ [!snake! $inner_type] _mut](&mut self) -> &mut $inner_type {
+                fn [!ident_snake! my_ $inner_type _mut](&mut self) -> &mut $inner_type {
                     &mut self.$field_name
                 }
             )*
@@ -84,7 +80,7 @@ To properly understand how preinterpret works, we need to take a very brief deto
 
 In Rust, the input and output to a macro is a [`TokenStream`](https://doc.rust-lang.org/proc_macro/enum.TokenStream.html). A `TokenStream` is simply an iterator of [`TokenTree`](https://doc.rust-lang.org/proc_macro/enum.TokenTree.html)s at a particular nesting level. A token tree is one of four things:
 
-* A [`Group`](https://doc.rust-lang.org/proc_macro/struct.Group.html) - typically `(..)`, `[..]` or `{..}`. It consists of a matched pair of brackets "[`Delimiter`s]` and an internal token stream. There is technically a fourth type of group, with transparent brackets; used to encapsulate declarative macro substitutions. This is purposefully ignored/flattened in pre-interpret.
+* A [`Group`](https://doc.rust-lang.org/proc_macro/struct.Group.html) - typically `(..)`, `[..]` or `{..}`. It consists of a matched pair of brackets "[`Delimiter`s]` and an internal token stream. There is technically a [confusing](https://github.com/rust-lang/rust/issues/67062) fourth type of group, with transparent brackets; used to encapsulate declarative macro substitutions. This is purposefully ignored/flattened in pre-interpret.
 * An [`Ident`](https://doc.rust-lang.org/proc_macro/struct.Ident.html) - An unquoted string, used to identitied something named. Think `MyStruct`, or `do_work` or `my_module`.
 * A [`Punct`](https://doc.rust-lang.org/proc_macro/struct.Punct.html) - A single piece of punctuation. Think `!` or `:`.
 * A [`Literal`](https://doc.rust-lang.org/proc_macro/struct.Literal.html) - This includes string literals `"my string"`, char literals `'x'` and numeric literals `23` / `51u64`. Note that `true`/`false` are technically idents.
@@ -96,11 +92,9 @@ When you return output from a macro, you are outputting back a token stream, whi
 If migrating from [paste](https://crates.io/crates/paste), the main difference is that you need to specify _what kind of concatenated thing you want to create_. Paste tried to work this out magically from context, but sometimes got it wrong.
 
 In other words, you typically want to replace `[< ... >]` with `[!ident! ...]`, and sometimes `[!string! ...]` or `[!literal! ...]`:
-* To create type and function names, use `[!ident! My #preinterpret_type_name $macro_type_name]`
+* To create type and function names, use `[!ident! My #preinterpret_type_name $macro_type_name]`, `[!ident_camel! ...]`, `[!ident_snake! ...]` or `[!ident_upper_snake! ...]`
 * For doc macros or concatenated strings, use `[!string! "My type is: " #type_name]`
 * If you're creating literals of some kind by concatenating parts together, use `[!literal! 32 u32]`
-
-The paste suffices such as `:lower`, `:camel` and `:snake` are replaced with corresponding commands which output string literals, and can be converted into idents as needed.
 
 For example:
 
@@ -112,8 +106,8 @@ preinterpret::preinterpret! {
 
     #[doc = [!string! "This type is called [`" #type_name "`]"]]
     impl #type_name {
-        fn [!ident! say_ [!snake! #type_name]]() -> &'static str {
-            [!string! "It's time to say: " [!insert_spaces! #type_name] "!"]
+        fn [!ident_snake! say_ #type_name]() -> &'static str {
+            [!string! "It's time to say: " [!title! #type_name] "!"]
         }
     }
 }
@@ -135,38 +129,43 @@ Each of these commands functions in three steps:
 * Convert each token of the resulting stream into a string, and concatenate these together. String and char literals are unquoted, and this process recurses into groups.
 * Apply some command-specific conversion.
 
-The token conversion commands are:
+The following commands output idents:
 
 * `[!ident! X Y "Z"]` outputs the ident `XYZ`
-* `[!string! X Y " " Z (Hello World)]` outputs `"XY Z(HelloWorld)"`
+* `[!ident_camel! my hello_world]` outputs `MyHelloWorld`
+* `[!ident_snake! my_ HelloWorld]` outputs `my_hello_world`
+* `[!ident_upper_snake! my_ const Name]` outputs `MY_CONST_NAME`
+
+The `!literal!` command outputs any kind of literal, for example:
+
 * `[!literal! 31 u 32]` outputs the integer literal `31u32`
 * `[!literal! '"' hello '"']` outputs the string literal `"hello"`
 
-The supported string conversion commands are:
+The following commands output strings, without dropping non-alphanumeric characters:
 
+* `[!string! X Y " " Z (Hello World)]` outputs `"XY Z(HelloWorld)"`
 * `[!upper! foo_bar]` outputs `"FOO_BAR"`
 * `[!lower! FooBar]` outputs `"foobar"`
-* `[!snake! FooBar]` and `[!lower_snake! FooBar]` are equivalent and output `"foo_bar"`
-* `[!upper_snake! FooBar]` outputs `"FOO_BAR"`
-* `[!camel! foo_bar]` and `[!upper_camel! foo_bar]` are equivalent and output `"FooBar"`
-* `[!lower_camel! foo_bar]` outputs `"fooBar"`
 * `[!capitalize! fooBar]` outputs `"FooBar"`
 * `[!decapitalize! FooBar]` outputs `"fooBar"`
-* `[!insert_spaces! fooBar]` ouputs `"foo Bar"`
+* `[!insert_spaces! fooBar]` outputs `"foo Bar"`
 
-To create idents from these methods, simply nest them, like so:
-```rust,ignore
-[!ident! get_ [!snake! $field_name]]
-```
+The following commands output strings, whilst also dropping non-alphanumeric characters:
+
+* `[!snake! FooBar]` and `[!lower_snake! FooBar]` are equivalent and output `"foo_bar"`
+* `[!upper_snake! FooBar]` outputs `"FOO_BAR"`
+* `[!camel! foo_bar]` and `[!upper_camel! foo_bar]` are equivalent and output `"FooBar"`. This filters out non-alphanumeric characters.
+* `[!lower_camel! foo_bar]` outputs `"fooBar"`
+* `[!kebab! fooBar]` outputs `"foo-bar"`
 
 > [!NOTE]
 >
-> These string conversion methods are designed to work intuitively across a relatively wide class of input strings, but treat all characters which are not lowercase or uppercase as word boundaries.
+> These string conversion methods are designed to work intuitively across a wide class of input strings, by creating word boundaries when going from non-alphanumeric to alphanumeric, lowercase to uppercase, or uppercase to uppercase if the next character is lowercase.
 >
-> Such characters get dropped in camel case conversions. This could break up grapheme clusters and cause other non-intuitive behaviour. See the [tests in string_conversion.rs](https://www.github.com/dhedey/preinterpret/blob/main/src/string_conversion.rs) for more details.
-
-
-<!-- USE DIFFS -->
+> The case-conversion commands which drop non-alphanumeric characters can potentially break up grapheme clusters and can cause unintuitive behaviour
+> when used with complex unicode strings.  
+>
+> A wide ranging set of tests covering behaviour are in [tests/string.rs](https://www.github.com/dhedey/preinterpret/blob/main/tests/string.rs).
 
 ## Motivation
 
@@ -336,6 +335,88 @@ macro_rules! impl_new_type {
 
 Add a github docs page / rust book at this repository, to allow us to build out a suite of examples, like `serde` or the little book of macros.
 
+### Destructuring / Parsing Syntax, and Declarative Macros 2.0
+
+I have a vision for having preinterpret effectively replace the use of declarative macros in the Rust ecosystem, by:
+
+* Enabling writing intuitive, procedural code, which feels a lot like normal rust
+* Exposing the power of [syn](https://crates.io/crates/syn) into this language, and preparing people to write procedural macros
+
+This would avoid pretty much all of the main the complexities of declarative macros:
+
+* The entirely lacking compile errors and auto-complete when it can't match tokens.
+* What the metavariable types mean as `:ty`, `:tt`, `:vis` and how to use them all... And the fact that, once matched, all but `tt` are opaque for future matching.
+* Having to learn a new paradigm of inverted thinking, which is pretty alien to rust.
+* The `macro_rules!` declaration itself - I can never remember which brackets to use...
+
+The idea is that we create two new tools:
+
+* The `parse` command which can be built up of compasable parse-helpers (mostly wrapping `syn` calls), intuitively handling lots of common patterns seen in code
+* Add control flow (`for`, `match` and the like) which runs lazily and declaratively, over the token stream primitive
+
+In more detail:
+
+* `[!parse! (<PARSE_DEFINITION>) = (<INPUT>)]` is a more general `[!set!]` which takes a `()` wrapped parse definition on the left and a token stream on the right. Any `#x` in the parse definition acts as a binding rather than as a substitution. Parse operations look like `[<] Iterations are _not_ supported, but `[!optional] This will handled commas intelligently, and accept intelligent parse-helpers like:
+    * `[<fields> { hello: #a, world?: #b }]` - which can parse `#x` in any order, cope with trailing commas, and permit fields on the RHS not on the LHS
+    * `[<subfields> { hello: #a, world?: #b }]` - which can parse fields in any order, cope with trailing commas, and permit fields on the RHS not on the LHS
+    * `[<item> { #ident, #impl_generics, ... }]` - which calls syn's parse item on the token
+    * `[<ident> ...]`, `[<literal> ...]` and the like to parse idents / literals etc directly from the token stream (rather than token streams).
+    * More tailored examples, such as `[<generics> { impl: #x, type: #y, where: #z }]` which uses syn to parse the generics, and then uses subfields on the result.
+    * Possibly `[<group> #x]` to parse a group with no brackets, to avoid parser ambguity in some cases
+    * Any complex logic (loops, matching), is delayed lazily until execution logic time - making it much more intuitive.
+* `[!for! (#a) in (#b) { ... }]` gets the power of parse in the left group, and has support for optional commas between values at the end
+* `[!match! (<INPUT>) => { (<CASE1>) => {<OUTPUT1>}, (<CASE2>) => {<OUTPUT1>}, (#fallback) => {<OUTPUT3>} }]` which captures semantics like the declarative macro inputs, and each case can optionally bind its own variables.
+* `[!macro_rules! name!()]
+
+With a future extension of `if let .. = .. {}` and `let .. = .. else {}` equivalents, to save match statements.
+
+And then 
+```rust,ignore
+// =================================================
+// Hypothetical future syntax - not yet implemented!
+// =================================================
+
+// A simple macro can just take a token stream as input
+preinterpret::preinterpret! {
+    [!macro_rules! my_macro!(#input) {
+        [!for! (#trait for #type) in (#input) {
+            impl #trait for #type
+        }]
+    }]
+}
+
+// Or automatically parse input
+preinterpret::preinterpret! {
+    [!macro_rules! multi_impl_super_duper!(
+        #type_list,
+        ImplOptions [!fields! {
+            hello: #hello,
+            world?: #world (default "Default")
+        }]
+    ) = {
+        [!for! (
+            #type [!generics! { impl: #impl_generics, type: #type_generics }]
+        ) in (#type_list) {
+            impl<#impl_generics> SuperDuper for #type #type_generics {
+                type Hello = #hello;
+                type World = #world;
+            }
+        }]
+    }]
+}
+
+preinterpret::preinterpret! {
+    [!set! #input =
+        MyTrait for MyType,
+        MyTrait for MyType2,
+    ]
+
+    [!for! (#trait for #type) in (#input) {
+        impl #trait for #type
+    }]
+}
+```
+
 ### Possible extension: Integer commands
 
 Each of these commands functions in three steps:
@@ -414,84 +495,6 @@ preinterpret::preinterpret!{
 ### Possible extension: Eager expansion of macros
 
 When [eager expansion of macros returning literals](https://github.com/rust-lang/rust/issues/90765) is stabilized, it would be nice to include a command to do that, which could be used to include code, for example: `[!expand_literal_macros! include!("my-poem.txt")]`.
-
-### Possible extension: Destructuring / Parsing Syntax, and Declarative Macros 2.0
-
-Instead of just a single variable, allow destructuring, for example:
-* `[!set! (#x, #y) = ]` or `[!set! Hello(#x, #y) = ]`
-* `[!for! (#x, #y) in ...]` or `[!for! Hello(#x, #y) in ...]`
-
-This puts us in the camp of being a simple replacement for a single-use declarative macro:
-```rust,ignore
-// Hypothetical future syntax - not yet implemented!
-preinterpret::preinterpret! {
-    [!set! #input =
-        (MyTrait for MyType)
-        (MyTrait for MyType2)
-    ]
-
-    [!for! (#trait for #type) in #input {
-        impl #trait for #type
-    }]
-}
-
-// Could even define simple macros which take a token stream:
-preinterpret::preinterpret! {
-    [!define! my_macro!(#inner) {
-        [!for! (#trait for #type) in #input {
-            impl #trait for #type
-        }]
-    }]
-}
-```
-
-This is getting awfully close to looking like a declarative macro definition which takes a token stream,
-and parses it at destructing time inside the macro. Which actually might be super useful, because:
-* It can give much clearer compiler errors compared to declarative macros which fail silently
-* It can re-interpret the same tokens in different ways in different parts of the macro
-
-However, a few things stand in our way. Naively, it can only operate on streams of token trees, so it might need lots of brackets for parsing groups.
-
-But instead, we can work around this by implementing simple composable parsers, which can:
-* Have concrete parse steps, intuitively handling lots of common patterns seen in code (basically making various syn helpers available)
-* Separate out control flow (loops, matches and the like) to run lazily and declaratively.
-    * To me, this feels very natural, and fits more with typical rust patterns than with the pattern matching in procedural macros...
-
-This would look something like:
-* `[!parse! (<INPUT>) = (<OUTPUT>)]` is a more general `[!set!]` which takes a `()` wrapped group on the left and a value on the right, and interprets any `#x` on the left as a binding (i.e. place/lvalue) rather than as a value. This will handled commas intelligently, and accept parse-functions as:
-    * `[!fields! { hello: #a, world?: #b }]` - which can parse `#x` in any order, cope with trailing commas, and permit fields on the RHS not on the LHS
-    * `[!subfields! { hello: #a, world?: #b }]` - which can parse fields in any order, cope with trailing commas, and permit fields on the RHS not on the LHS
-    * `[!item!]` - which calls syn's parse item on the token
-    * `[!ident! ...]`, `[!literal! ...]` and the like to parse idents / literals etc (rather than token streams).
-    * More tailored examples, such as `[!generics! { impl: #x, type: #y, where: #z }]` which uses syn to parse the generics, and then uses subfields on the result.
-    * Possibly `[!group!]` to parse a group with no brackets, to avoid parser amibuity in some cases
-    * Any complex logic (loops, matching), is delayed lazily until execution logic time - making it much more intuitive.
-* `[!for! (#a) in (#b) { ... }]` gets the power of parse in the left group, and has support for optional commas between values at the end
-* `[!match! (<INPUT>) => { (<CASE1>) => {<OUTPUT1>}, (<CASE2>) => {<OUTPUT1>}, (#fallback) => {<OUTPUT3>} }]` which captures semantics like the declarative macro inputs, and each case can optionally bind its own variables.
-
-With a future extension of `if let .. = .. {}` and `let .. = .. else {}` equivalents, to save match statements.
-
-```rust,ignore
-// Hypothetical future syntax - not yet implemented!
-preinterpret::preinterpret! {
-    [!define! multi_impl_super_duper!(
-        #type_list,
-        ImplOptions [!fields!
-            hello: #hello,
-            world?: #world (default "Default")
-        ]
-    ) = {
-        [!for! (
-            #type [!generics! { impl: #impl_generics, type: #type_generics }]
-        ) in (#type_list) {
-            impl<#impl_generics> SuperDuper for #type #type_generics {
-                type Hello = #hello;
-                type World = #world;
-            }
-        }]
-    }]
-}
-```
 
 ### Possible extension: Explicit parsing feature to enable syn
 

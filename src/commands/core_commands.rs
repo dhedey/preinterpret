@@ -15,7 +15,7 @@ impl CommandDefinition for SetCommand {
             Some(ident) => ident.to_string(),
             None => {
                 return Err(command_span
-                    .error("A set call is expected to start with `#variable_name = ..`."));
+                    .error("A set call is expected to start with `#variable_name = ..`"));
             }
         };
 
@@ -26,9 +26,9 @@ impl CommandDefinition for SetCommand {
     }
 }
 
-pub(crate) struct AsRawTokensCommand;
+pub(crate) struct RawCommand;
 
-impl CommandDefinition for AsRawTokensCommand {
+impl CommandDefinition for RawCommand {
     const COMMAND_NAME: &'static str = "raw";
 
     fn execute(

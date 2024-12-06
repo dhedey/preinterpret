@@ -2,5 +2,5 @@
 
 set -e
 
-rustup install 1.56.0
-rm Cargo.lock && rustup run 1.56.0 cargo check
+rustup install 1.61
+rm Cargo.lock && rustup run 1.61 cargo check

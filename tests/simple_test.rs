@@ -4,6 +4,7 @@ preinterpret! {
     [!set! #bytes = 32]
     [!set! #postfix = Hello World #bytes]
     [!set! #MyRawVar = [!raw! Test no #str [!ident! replacement]]]
+    [!ignore! non - sensical !code :D - ignored (!)]
     struct MyStruct;
     type [!ident! X "Boo" [!string! Hello 1] #postfix] = MyStruct;
     const NUM: u32 = [!literal! 1337u #bytes];

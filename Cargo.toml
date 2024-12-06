@@ -1,6 +1,6 @@
 [package]
 name = "preinterpret"
-version = "0.1.3"
+version = "0.2.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = ["David Edey <github@david-edey.com>"]
@@ -11,8 +11,9 @@ keywords = ["macros", "declarative-macros", "toolkit", "interpreter", "preproces
 # And whilst there's a development-tools::procedural-macro-helpers, there's no declarative macro category.
 categories = ["development-tools", "compilers"]
 # MSRV 1.56.0 is the start of Edition 2021
-# If changing this, update the local-check-msrv.sh script, ci.yml, and README.md
-rust-version = "1.56.0"
+# MSRV 1.61.0 is the current MSRV of syn
+# If changing this, also update the local-check-msrv.sh script and ci.yml
+rust-version = "1.61"
 
 [lib]
 proc-macro = true
