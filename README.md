@@ -8,14 +8,14 @@
 
 <!--
 If updating this readme, please ensure that the lib.rs rustdoc is also updated.
-Copy the rest of this document to a new text file, replace `/n` with `\n//! ` prefix to each line, and paste into `lib.rs`
+Copy the whole of this document to a new text file, replace `/n` with `\n//! ` prefix to each line, and paste into `lib.rs`
 -->
 
-This crate provides the `preinterpret!` macro, which works as a simple pre-processor to the token stream. It takes inspiration from the [quote](https://crates.io/crates/quote), [paste](https://crates.io/crates/paste) and [syn](https://crates.io/crates/syn) crates, and is generalized to empower code generation authors and declarative macro writers, bringing:
+This crate provides the `preinterpret!` macro, which works as a simple pre-processor to the token stream. It takes inspiration from and effectively combines the [quote](https://crates.io/crates/quote), [paste](https://crates.io/crates/paste) and [syn](https://crates.io/crates/syn) crates, to empower code generation authors and declarative macro writers, bringing:
 
-* **Heightened [readability](#readability)** - [quote](https://crates.io/crates/quote)-like variable definition and substitution make it easier to work with code generation code.
+* **Heightened [readability](#readability)** - quote-like variable definition and substitution make it easier to work with code generation code.
 * **Heightened [expressivity](#expressivity)** - a toolkit of simple commands reduce boilerplate, and mitigate the need to build custom procedural macros in some cases.
-* **Heightened [simplicity](#simplicity)** - helping developers avoid the confusing corners of declarative macro land.
+* **Heightened [simplicity](#simplicity)** - helping developers avoid the confusing corners [[1](https://veykril.github.io/tlborm/decl-macros/patterns/callbacks.html), [2](https://github.com/rust-lang/rust/issues/96184#issue-1207293401), [3](https://veykril.github.io/tlborm/decl-macros/minutiae/metavar-and-expansion.html), [4](https://veykril.github.io/tlborm/decl-macros/patterns/push-down-acc.html)] of declarative macro land.
 
 The `preinterpret!` macro can be used inside the output of a declarative macro, or by itself, functioning as a mini code generation tool all of its own.
 
@@ -28,12 +28,12 @@ preinterpret = "0.2"
 
 Preinterpret works with its own very simple language, with two main syntax elements:
 
-* Commands - which have the syntax `[!command_name! ...input token stream...]` and output a token stream. There are a number of commands which cover a toolkit of useful functions. 
-* Variables - which are defined with `[!set! #var_name = token stream...]` and substituted with `#var_name`.
+* **Commands**: `[!command_name! ...input token stream...]` take an input token stream and output a token stream. There are a number of commands which cover a toolkit of useful functions.
+* **Variables**: `[!set! #var_name = token stream...]` defines a variable, and `#var_name` substitutes the variable into another command or the output.
 
-Commands can be nested intuitively: the input of all commands (except `[!raw! ...]`) are first interpreted before the command itself executes.
+Commands can be nested intuitively. The input of all commands (except `[!raw! ...]`) are first interpreted before the command itself executes.
 
-### Example in a declarative macro
+### Declarative macro example
 
 The following artificial example demonstrates how `preinterpret` can be integrate into declarative macros, and covers use of variables, idents and case conversion:
 
@@ -86,6 +86,8 @@ In Rust, the input and output to a macro is a [`TokenStream`](https://doc.rust-l
 * A [`Literal`](https://doc.rust-lang.org/proc_macro/struct.Literal.html) - This includes string literals `"my string"`, char literals `'x'` and numeric literals `23` / `51u64`. Note that `true`/`false` are technically idents.
 
 When you return output from a macro, you are outputting back a token stream, which the compiler will interpret.
+
+Preinterpret commands take token streams as input, and return token streams as output.
 
 ### Migration from paste
 
@@ -356,7 +358,7 @@ The idea is that we create two new tools:
 
 In more detail:
 
-* `[!parse! (<PARSE_DEFINITION>) = (<INPUT>)]` is a more general `[!set!]` which takes a `()` wrapped parse definition on the left and a token stream on the right. Any `#x` in the parse definition acts as a binding rather than as a substitution. Parse operations look like `[<] Iterations are _not_ supported, but `[!optional] This will handled commas intelligently, and accept intelligent parse-helpers like:
+* `[!parse! (<PARSE_DESTRUCTURING>) = (<INPUT>)]` is a more general `[!set!]` which acts like a `let <XX> = <YY> else { panic!() }`. It takes a `()`-wrapped parse destructuring on the left and a token stream as input on the right. Any `#x` in the parse definition acts as a binding rather than as a substitution. Parse operations look like `[<] Iterations are _not_ supported, but `[!optional] This will handled commas intelligently, and accept intelligent parse-helpers like:
     * `[<fields> { hello: #a, world?: #b }]` - which can parse `#x` in any order, cope with trailing commas, and permit fields on the RHS not on the LHS
     * `[<subfields> { hello: #a, world?: #b }]` - which can parse fields in any order, cope with trailing commas, and permit fields on the RHS not on the LHS
     * `[<item> { #ident, #impl_generics, ... }]` - which calls syn's parse item on the token
@@ -364,13 +366,12 @@ In more detail:
     * More tailored examples, such as `[<generics> { impl: #x, type: #y, where: #z }]` which uses syn to parse the generics, and then uses subfields on the result.
     * Possibly `[<group> #x]` to parse a group with no brackets, to avoid parser ambguity in some cases
     * Any complex logic (loops, matching), is delayed lazily until execution logic time - making it much more intuitive.
-* `[!for! (#a) in (#b) { ... }]` gets the power of parse in the left group, and has support for optional commas between values at the end
-* `[!match! (<INPUT>) => { (<CASE1>) => {<OUTPUT1>}, (<CASE2>) => {<OUTPUT1>}, (#fallback) => {<OUTPUT3>} }]` which captures semantics like the declarative macro inputs, and each case can optionally bind its own variables.
-* `[!macro_rules! name!()]
+* `[!for! (<PARSE_DESTRUCTURING>) in (<INPUT>) { ... }]` which operates like the rust `for` loop, and uses a parse destructuring on the left, and has support for optional commas between values
+* `[!match! (<INPUT>) => { (<CASE1>) => { ... }, (<CASE2>) => { ... }, (#fallback) => { ... } }]` which operates like a rust `match` expression, and can replace the function of the branches of declarative macro inputs.
+* `[!macro_rules! name!(<PARSE_DESTRUCTURING>) = { ... }]` which can define a declarative macro, but just parses its inputs as a token stream, and uses preinterpret for its heavy lifting.
 
-With a future extension of `if let .. = .. {}` and `let .. = .. else {}` equivalents, to save match statements.
+And then we can end up with syntax like the following:
 
-And then 
 ```rust,ignore
 // =================================================
 // Hypothetical future syntax - not yet implemented!
@@ -385,7 +386,9 @@ preinterpret::preinterpret! {
     }]
 }
 
-// Or automatically parse input
+// Or can parse input - although loops are kept as a token stream and delegated
+// to explicit lazy iteration, allowing a more procedural code style,
+// and clearer compiler errors.
 preinterpret::preinterpret! {
     [!macro_rules! multi_impl_super_duper!(
         #type_list,
@@ -432,11 +435,15 @@ Integer commands under consideration are:
 
 We also support the following assignment commands:
 
-* `[!increment! #i]` is shorthand for `[!set! #i [!add! #i 1]]` and outputs no tokens.
+* `[!increment! #i]` is shorthand for `[!set! #i = [!add! #i 1]]` and outputs no tokens.
 
-We could even support:
+Even better - we could even support calculator-style expression interpretation:
 
 * `[!usize! (5 + 10) / mod(4, 2)]` outputs `7usize`
+
+### Possible extension: User-defined commands
+
+* `[!define! [!my_command! <PARSE_DESTRUCTURING>] { <OUTPUT> }]`
 
 ### Possible extension: Boolean commands
 
