@@ -61,10 +61,6 @@ macro_rules! create_my_type {
                 fn [!ident_snake! my_ $inner_type](&self) -> &$inner_type {
                     &self.$field_name
                 }
-
-                fn [!ident_snake! my_ $inner_type _mut](&mut self) -> &mut $inner_type {
-                    &mut self.$field_name
-                }
             )*
         }
     }}
