@@ -7,8 +7,12 @@
 [<img alt="build status" src="https://img.shields.io/github/actions/workflow/status/dhedey/preinterpret/ci.yml?branch=main&style=for-the-badge" height="20">](https://github.com/dhedey/preinterpret/actions?query=branch%3Amain)
 
 <!--
-If updating this readme, please ensure that the lib.rs rustdoc is also updated.
-Copy the whole of this document to a new text file, replace `/n` with `\n//! ` prefix to each line, and paste into `lib.rs`
+If updating this readme, please ensure that the lib.rs rustdoc is also updated:
+* Copy the whole of this document to a new text file
+* Replace `\n` with `\n//! ` prefix to each line
+* Also fix the first line
+* Paste into `lib.rs`
+* Run ./style-fix.sh
 -->
 
 This crate provides the `preinterpret!` macro, which works as a simple pre-processor to the token stream. It takes inspiration from and effectively combines the [quote](https://crates.io/crates/quote), [paste](https://crates.io/crates/paste) and [syn](https://crates.io/crates/syn) crates, to empower code generation authors and declarative macro writers, bringing:
@@ -26,9 +30,9 @@ preinterpret = "0.2"
 
 ## User Guide
 
-Preinterpret works with its own very simple language, with two main syntax elements:
+Preinterpret works with its own very simple language, with two pieces of syntax:
 
-* **Commands**: `[!command_name! ...input token stream...]` take an input token stream and output a token stream. There are a number of commands which cover a toolkit of useful functions.
+* **Commands**: `[!command_name! input token stream...]` take an input token stream and output a token stream. There are a number of commands which cover a toolkit of useful functions.
 * **Variables**: `[!set! #var_name = token stream...]` defines a variable, and `#var_name` substitutes the variable into another command or the output.
 
 Commands can be nested intuitively. The input of all commands (except `[!raw! ...]`) are first interpreted before the command itself executes.
@@ -80,10 +84,10 @@ To properly understand how preinterpret works, we need to take a very brief deto
 
 In Rust, the input and output to a macro is a [`TokenStream`](https://doc.rust-lang.org/proc_macro/enum.TokenStream.html). A `TokenStream` is simply an iterator of [`TokenTree`](https://doc.rust-lang.org/proc_macro/enum.TokenTree.html)s at a particular nesting level. A token tree is one of four things:
 
-* A [`Group`](https://doc.rust-lang.org/proc_macro/struct.Group.html) - typically `(..)`, `[..]` or `{..}`. It consists of a matched pair of brackets "[`Delimiter`s]` and an internal token stream. There is technically a [confusing](https://github.com/rust-lang/rust/issues/67062) fourth type of group, with transparent brackets; used to encapsulate declarative macro substitutions. This is purposefully ignored/flattened in pre-interpret.
-* An [`Ident`](https://doc.rust-lang.org/proc_macro/struct.Ident.html) - An unquoted string, used to identitied something named. Think `MyStruct`, or `do_work` or `my_module`.
+* A [`Group`](https://doc.rust-lang.org/proc_macro/struct.Group.html) - typically `(..)`, `[..]` or `{..}`. It consists of a matched pair of [`Delimiter`s](https://doc.rust-lang.org/proc_macro/enum.Delimiter.html) and an internal token stream. There is also a transparent delimiter, used to group the result of token stream substitutions (although [confusingly](https://github.com/rust-lang/rust/issues/67062) a little broken in rustc).
+* An [`Ident`](https://doc.rust-lang.org/proc_macro/struct.Ident.html) - An unquoted string, used to identitied something named. Think `MyStruct`, or `do_work` or `my_module`. Note that keywords such as `struct` or `async` and the values `true` and `false` are classified as idents at this abstraction level.
 * A [`Punct`](https://doc.rust-lang.org/proc_macro/struct.Punct.html) - A single piece of punctuation. Think `!` or `:`.
-* A [`Literal`](https://doc.rust-lang.org/proc_macro/struct.Literal.html) - This includes string literals `"my string"`, char literals `'x'` and numeric literals `23` / `51u64`. Note that `true`/`false` are technically idents.
+* A [`Literal`](https://doc.rust-lang.org/proc_macro/struct.Literal.html) - This includes string literals `"my string"`, char literals `'x'` and numeric literals `23` / `51u64`.
 
 When you return output from a macro, you are outputting back a token stream, which the compiler will interpret.
 
@@ -150,7 +154,6 @@ The following commands output strings, without dropping non-alphanumeric charact
 * `[!lower! FooBar]` outputs `"foobar"`
 * `[!capitalize! fooBar]` outputs `"FooBar"`
 * `[!decapitalize! FooBar]` outputs `"fooBar"`
-* `[!insert_spaces! fooBar]` outputs `"foo Bar"`
 
 The following commands output strings, whilst also dropping non-alphanumeric characters:
 
@@ -159,6 +162,8 @@ The following commands output strings, whilst also dropping non-alphanumeric cha
 * `[!camel! foo_bar]` and `[!upper_camel! foo_bar]` are equivalent and output `"FooBar"`. This filters out non-alphanumeric characters.
 * `[!lower_camel! foo_bar]` outputs `"fooBar"`
 * `[!kebab! fooBar]` outputs `"foo-bar"`
+* `[!title! fooBar]` outputs `"Foo Bar"`
+* `[!insert_spaces! fooBar]` outputs `"foo Bar"`
 
 > [!NOTE]
 >
@@ -173,7 +178,7 @@ The following commands output strings, whilst also dropping non-alphanumeric cha
 
 ### Readability
 
-The preinterpret syntax is intended to be immediately intuitive even for people not familiar with the crate. And it enables developers to make more readable macros:
+The preinterpret syntax is intended to be immediately intuitive even for people not familiar with the crate. It enables developers to make more readable macros:
 
 * Developers can name clear concepts in their macro output, and re-use them by name, decreasing code duplication.
 * Developers can use variables to subdivide logic inside the macro, without having to resort to creating lots of small, functional helper macros.
