@@ -155,7 +155,7 @@
 //!
 //! * `[!snake! FooBar]` and `[!lower_snake! FooBar]` are equivalent and output `"foo_bar"`
 //! * `[!upper_snake! FooBar]` outputs `"FOO_BAR"`
-//! * `[!camel! foo_bar]` and `[!upper_camel! foo_bar]` are equivalent and output `"FooBar"`. This filters out non-alphanumeric characters.
+//! * `[!camel! foo_bar]` and `[!upper_camel! foo_bar]` are equivalent and output `"FooBar"`
 //! * `[!lower_camel! foo_bar]` outputs `"fooBar"`
 //! * `[!kebab! fooBar]` outputs `"foo-bar"`
 //! * `[!title! fooBar]` outputs `"Foo Bar"`
