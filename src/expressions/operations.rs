@@ -72,10 +72,13 @@ impl UnaryOperation {
                         && type_path.path.leading_colon.is_none()
                         && type_path.path.segments.len() == 1 =>
                 {
-                    let Some(ident) = type_path.path.get_ident() else {
-                        return type_path
-                            .span_range()
-                            .err("This type is not supported in preinterpret cast expressions");
+                    let ident = match type_path.path.get_ident() {
+                        Some(ident) => ident,
+                        None => {
+                            return type_path
+                                .span_range()
+                                .err("This type is not supported in preinterpret cast expressions")
+                        }
                     };
                     match ident.to_string().as_str() {
                         "int" | "integer" => Ok(ValueKind::Integer(IntegerKind::Untyped)),

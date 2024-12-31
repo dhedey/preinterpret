@@ -138,8 +138,9 @@ impl Tokens {
     }
 
     pub(crate) fn next_item(&mut self) -> Result<Option<NextItem>> {
-        let Some(next) = self.next() else {
-            return Ok(None);
+        let next = match self.next() {
+            Some(next) => next,
+            None => return Ok(None),
         };
         Ok(Some(match next {
             TokenTree::Group(group) => {

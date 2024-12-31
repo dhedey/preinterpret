@@ -10,8 +10,11 @@ impl CommandDefinition for IfCommand {
         argument: CommandArgumentStream,
         command_span: Span,
     ) -> Result<TokenStream> {
-        let Some(parsed) = parse_if_statement(&mut argument.tokens()) else {
-            return command_span.span_range().err("Expected [!if! (condition) { true_code }] or [!if! (condition) { true_code } !else! { false_code}]");
+        let parsed = match parse_if_statement(&mut argument.tokens()) {
+            Some(parsed) => parsed,
+            None => {
+                return command_span.span_range().err("Expected [!if! (condition) { true_code }] or [!if! (condition) { true_code } !else! { false_code}]");
+            }
         };
 
         let interpreted_condition = interpreter.interpret_item(parsed.condition)?;
