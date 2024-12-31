@@ -1,6 +1,6 @@
-# Major Version 0.2
+# Major Version 0.3
 
-## 0.2.1
+## 0.3.0
 
 ### New Commands
 
@@ -10,10 +10,15 @@
 
 ### To come
 
+* Use `[!let! #x = 12]` instead of `[!set! ..]`.
+* Disallow `[!let! #x =]` and require `[!let! #x = [!empty!]]` (give a good error message).
 * `[!while! cond {}]`
 * `[!for! #x in [#y] {}]`... and make it so that whether commands or variable substitutions get replaced by groups depends on the interpreter context (likely only expressions should use groups)
 * `[!group! ...]` which wraps the tokens in a transparent group. Useful with `!for!`.
-* Remove `[!increment! ...]` and replace with `[!set! #x += 1]`
+* `[!empty!]`
+* `[!is_empty! #stream]`
+* `[!range! 0..5]`
+* Remove `[!increment! ...]` and replace with `[!assign! #x += 1]`
 * Support `!else if!` in `!if!`
 * Token stream manipulation... and make it performant
   * Extend token stream
@@ -25,6 +30,8 @@
   * Add compile failure tests
 * Work on book
   * Including documenting expressions
+
+# Major Version 0.2
 
 ## 0.2.0
 

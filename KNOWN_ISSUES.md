@@ -1,4 +1,4 @@
-# Since Major Version 0.2.1
+# Since Major Version 0.3.0
 
 * `[MAX LITERAL]` - In an expression, the maximum negative integer literal is not valid, for example `-128i8`.
   * By comparison, in `rustc`, there is special handling for such literals, so that e.g. `-128i8` and `--(-128i8)` are accepted.

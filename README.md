@@ -418,8 +418,8 @@ preinterpret::preinterpret! {
 * `[!skip! #stream 4]` expects to receive a (possibly transparent) group, and reads and drops the first 4 token trees from the group's stream, and outputs the rest
 * `[!ungroup! #stream]` expects `#stream` to be a single group and unwraps it once
 * `[!flatten! #stream]` removes all singleton groups from `#stream`, leaving a token stream of idents, literals and punctuation
-* `[!at! #stream 2]` takes the 2nd token tree from the stream
-* `[!zip! #a #b #c]` returns a transparent group tuple of the nth token in each of `#a`, `#b` and `#c`. Errors if they are of different lengths.
+* `[!index! #stream 0]` takes the 0th token tree from the stream
+* `[!zip! #a #b #c]` returns a transparent group tuple of the nth token in each of `#a`, `#b` and `#c`. Errors if they are of different lengths
 
 We could support a piped calling convention, such as the `[!pipe! ...]` special command: `[!pipe! #stream as #x |> [!skip! #x 4] |> [!ungroup! #x]]`
 
@@ -427,10 +427,11 @@ We could support a piped calling convention, such as the `[!pipe! ...]` special 
 
 Do some testing and ensure there are tools to avoid `N^2` performance when doing token manipulation, e.g. with:
 
-* `[!push! #stream new tokens...]`
-* `[!take! #stream #x]` where `#x` is read as the first token tree from `#stream`
-* `[!take! #stream (<PARSE_DESTRUCTURING>)]` where the parser is read greadily from `#stream`
-* `[!is_empty! #stream]`
+* `[!append! #stream += new tokens...]`
+* `[!consume_from! #stream #x]` where `#x` is read as the first token tree from `#stream`
+* `[!consume_from! #stream (<PARSE_DESTRUCTURING>)]` where the parser is read greedily from `#stream`
+
+We could consider tweaking some commands to execute lazily, i.e. change the infrastructure to operate over a `TokenIterable` which is either a `TokenStream` or `LazyTokenStream`. Things like `[!zip! ...]` or `[!range! ...]` could then output a `LazyTokenStream`.
 
 ### Possible extension: User-defined commands
 
