@@ -75,12 +75,18 @@ impl CommandInvocation {
     }
 }
 
-pub(crate) struct VariableSubstitution {
+impl HasSpanRange for CommandInvocation {
+    fn span_range(&self) -> SpanRange {
+        self.command_span.span_range()
+    }
+}
+
+pub(crate) struct Variable {
     marker: Punct, // #
     variable_name: Ident,
 }
 
-impl VariableSubstitution {
+impl Variable {
     pub(crate) fn new(marker: Punct, variable_name: Ident) -> Self {
         Self {
             marker,
@@ -88,8 +94,15 @@ impl VariableSubstitution {
         }
     }
 
-    pub(crate) fn execute(self, interpreter: &mut Interpreter) -> Result<TokenStream> {
-        let VariableSubstitution {
+    pub(crate) fn variable_name(&self) -> &Ident {
+        &self.variable_name
+    }
+
+    pub(crate) fn execute_substitution(
+        &self,
+        interpreter: &mut Interpreter,
+    ) -> Result<TokenStream> {
+        let Variable {
             marker,
             variable_name,
         } = self;
@@ -99,8 +112,7 @@ impl VariableSubstitution {
                 let marker = marker.as_char();
                 let name_str = variable_name.to_string();
                 let name_str = &name_str;
-                Err(Error::new(
-                    variable_name.span(),
+                variable_name.span().err(
                     format!(
                         "The variable {}{} wasn't set.\nIf this wasn't intended to be a variable, work around this with [!raw! {}{}]",
                         marker,
@@ -108,9 +120,21 @@ impl VariableSubstitution {
                         marker,
                         name_str,
                     ),
-                ))
+                )
             }
         }
+    }
+}
+
+impl core::fmt::Display for Variable {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}{}", self.marker.as_char(), self.variable_name)
+    }
+}
+
+impl HasSpanRange for Variable {
+    fn span_range(&self) -> SpanRange {
+        SpanRange::new_between(self.marker.span(), self.variable_name.span())
     }
 }
 
@@ -121,6 +145,10 @@ pub(crate) struct CommandArgumentStream {
 impl CommandArgumentStream {
     fn new(tokens: Tokens) -> Self {
         Self { tokens }
+    }
+
+    pub(crate) fn interpret(self, interpreter: &mut Interpreter) -> Result<TokenStream> {
+        interpreter.interpret_tokens(self.tokens)
     }
 
     pub(crate) fn interpret_and_concat_to_string(

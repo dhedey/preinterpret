@@ -359,7 +359,7 @@ The idea is that we create two new tools:
 
 In more detail:
 
-* `[!parse! (DESTRUCTURING) = (INPUT)]` is a more general `[!set!]` which acts like a `let <XX> = <YY> else { panic!() }`. It takes a `()`-wrapped parse destructuring on the left and a token stream as input on the right. Any `#x` in the parse definition acts as a binding rather than as a substitution. Parsing will handled commas intelligently, and accept intelligent parse operations to do heavy-lifting for the user. Parse operations look like `[!OPERATION! DESTRUCTURING]` with the operation name in `UPPER_SNAKE_CASE`. Some examples might be:
+* `[!let! (DESTRUCTURING) = (INPUT)]` (or maybe `!let!` or `!set!`) is a more general `[!set!]` which acts like a `let <XX> = <YY> else { panic!() }`. It takes a `()`-wrapped parse destructuring on the left and a `()`-wrapped token stream as input on the right. Any `#x` in the parse definition acts as a binding rather than as a substitution. Parsing will handled commas intelligently, and accept intelligent parse operations to do heavy-lifting for the user. Parse operations look like `[!OPERATION! DESTRUCTURING]` with the operation name in `UPPER_SNAKE_CASE`. Some examples might be:
     * `[!FIELDS! { hello: #a, world?: #b }]` - which can be parsed in any order, cope with trailing commas, and forbid fields in the source stream which aren't in the destructuring.
     * `[!SUBFIELDS! { hello: #a, world?: #b }]` - which can parse fields in any order, cope with trailing commas, and allow fields in the source stream which aren't in the destructuring.
     * `[!ITEM! { #ident, #impl_generics, ... }]` - which calls syn's parse item on the token
@@ -367,9 +367,11 @@ In more detail:
     * More tailored examples, such as `[!GENERICS! { impl: #x, type: #y, where: #z }]` which uses syn to parse the generics, and then uses subfields on the result.
     * Possibly `[!GROUPED! #x]` to parse a group with no brackets, to avoid parser ambiguity in some cases
     * `[!OPTIONAL! ...]` might be supported, but other complex logic (loops, matching) is delayed lazily until interpretation time - which feels more intuitive.
-* `[!for! (DESTRUCTURING) in (INPUT) { ... }]` which operates like the rust `for` loop, and uses a parse destructuring on the left, and has support for optional commas between values
-* `[!match! (INPUT) => { (DESTRUCTURING_1) => { ... }, (DESTRUCTURING_2) => { ... }, (#fallback) => { ... } }]` which operates like a rust `match` expression, and can replace the function of the branches of declarative macro inputs.
-* `[!macro_rules! name!(DESTRUCTURING) = { ... }]` which can define a declarative macro, but just parses its inputs as a token stream, and uses preinterpret for its heavy lifting.
+* `[!for! (DESTRUCTURING) in [!split_at! INPUT ,] { ... }]` which operates like the rust `for` loop over token trees, allowing them to be parsed. Instead of the destructuring, you can also just use a variable e.g. `#x` Operates well with the `[!split_at! ..]` command.
+* `[!while! [!parse_start_from! #variable DESTRUCTURING] { ... }]` can be used to consume a destructuring from the start of #variable. `[!parse_start_from! ..]` returns true if the parse succeeded, false if the variable is an empty token stream, and errors otherwise.
+* `[!parse_loop! #variable as (DESTRUCTURING), { ... }]` where the `,` is a separator and cleverly handles trailing `,` or `;` - similar to `syn::Punctuated`
+* `[!match! (INPUT) => { (DESTRUCTURING_1) => { ... }, (DESTRUCTURING_2) => { ... }, #fallback => { ... } }]` which operates like a rust `match` expression, and can replace the function of the branches of declarative macro inputs.
+* `[!macro_rules! name!(DESTRUCTURING) = { ... }]` which can define a declarative macro, but just parses its inputs as a token stream, and uses preinterpret for its heavy lifting. This could alternatively exist as `preinterpret::define_macro!{ my_macro!(DESTRUCTURING) = { ... }}`.
 
 And then we can end up with syntax like the following:
 
@@ -381,7 +383,7 @@ And then we can end up with syntax like the following:
 // A simple macro can just take a token stream as input
 preinterpret::preinterpret! {
     [!macro_rules! my_macro!(#input) {
-        [!for! (#trait for #type) in (#input) {
+        [!parse_loop! #input as (#trait for #type), {
             impl #trait for #type
         }]
     }]
@@ -403,9 +405,9 @@ preinterpret::preinterpret! {
             punctuation?: #punct = ("!") // Default
         }]
     ) = {
-        [!for! (
+        [!parse_loop! #type_list as (
             #type [!GENERICS! { impl: #impl_generics, type: #type_generics }]
-        ) in (#type_list) {
+        ) {
             impl<#impl_generics> SuperDuper for #type #type_generics {
                 const Hello: &'static str = [!string! #hello " " #world #punct];
             }
@@ -414,26 +416,66 @@ preinterpret::preinterpret! {
 }
 ```
 
-### Possible extension: Integer commands
+### Possible extension: Numeric commands
 
-Each of these commands functions in three steps:
-* Apply the interpreter to the token stream, which recursively executes preinterpret commands.
-* Iterate over each token (recursing into groups), expecting each to be an integer literal.
-* Apply some command-specific mapping to this stream of integer literals, and output a single integer literal without its type suffix. The suffix can be added back manually if required with a wrapper such as `[!literal! [!add! 1 2] u64]`.
+<!--
+TODO:
+Change this to use literal-by-literal inference like rustc (except with different defaults)
+* Suffix => use suffix
+* No suffix, decimal point => f64 (output a .0 if it's a whole number to keep it in decimal mode)
+* No suffix, no decimal point => i128 (slight)
 
-Integer commands under consideration are:
+And have `usize`, `i32` just do a final cast
+-->
+These might be introduced behind a default-enabled feature flag.
 
-* `[!add! 5u64 9 32]` outputs `46`. It takes any number of integers and outputs their sum. The calculation operates in `u128` space.
-* `[!sub! 64u32 1u32]` outputs `63`. It takes two integers and outputs their difference. The calculation operates in `i128` space.
-* `[!mod! $length 2]` outputs `0` if `$length` is even, else `1`. It takes two integers `a` and `b`, and outputs `a mod b`.
+Each numeric command would have an implicit configuration:
+* A calculation space (e.g. as `i32` or `f64`)
+* An output literal suffix (e.g. output no suffix or add `i32`)
+
+We could support:
+* Inferred configurations (like rustc, by looking at the suffices of literals or inferring them)
+  * `calc` (inferred space, explicit suffix or no suffix)
+* Non-specific configurations, such as:
+  * `int` (`i128` space, no suffix)
+  * `float` (`f64` space, no suffix)
+* Specific configurations, such as:
+  * `i32` (`i32` space, `i32` suffix)
+  * `usize` (`u64` space, `usize` suffix)
+
+#### Mathematical interpretation
+
+This would support calculator style expressions:
+* `[!calc! (5 + 10) / 2]` outputs `7` as an integer space is inferred
+* `[!int! (5 + 10) / 2]` outputs `7`
+* `[!f64! (5 + 10) / 2]` outputs `7.5f64`
+
+These commands would execute in these steps:
+* Apply the interpreter to the token stream, which recursively executes preinterpret commands, wrapping their outputs in transparent groups.
+* Iterate over each token (or groups with `(..)` or transparent delimeters), expecting numeric literals, or operators `+` / `-` / `*` / `/`.
+* Evaluate the mathematical expression in the given calculation space. Any literals are cast to the given calculation space.
+* Output a single literal, with its output literal suffix.
+
+Extra details:
+* Overflows would default to outputting a compile error, with a possible option to reconfigure the interpreter to use different overflow behaviour.
+* A suffix could be stripped with e.g. `[!strip_suffix! 7.5f32]` giving `7.5`.
+* A sum over some unknown number of items could be achieved with e.g. `[!int! 0 $(+ $x)*]`
+
+#### Numeric functions
+
+A functions with N parameters works in three steps:
+* Apply the interpreter to the token stream, which recursively executes preinterpret commands, wrapping their outputs in transparent groups.
+* Expect N remaining token trees as the arguments. Each should be evaluated as a mathematical expression, using an inferred calculation space
+* Output a single literal, with its calculation space suffix.
+
+Example commands could be:
+
+* `[!mod! $length 2]` outputs `0` if `$length` is even, else `1`. It takes two integers `a` and `b`, and outputs `a mod b`. The calculation operates in the space of `$length` if it has a suffix, else in `int` space.
+* `[!sum! 5u64 9 32]` outputs `46u64`. It takes any number of integers and outputs their sum. The calculation operates in `u64` space.
 
 We also support the following assignment commands:
 
-* `[!increment! #i]` is shorthand for `[!set! #i = [!add! #i 1]]` and outputs no tokens.
-
-Even better - we could even support calculator-style expression interpretation:
-
-* `[!usize! (5 + 10) / mod(4, 2)]` outputs `7usize`
+* `[!increment! #i]` is shorthand for `[!set! #i = [!calc! #i + 1]]` and outputs no tokens.
 
 ### Possible extension: User-defined commands
 
@@ -441,41 +483,56 @@ Even better - we could even support calculator-style expression interpretation:
 
 ### Possible extension: Boolean commands
 
+Similar to numeric commands, these could be an interpretation mode with e.g.
+* `[!bool! (true || false) && !true || #x <= 3]`
+
 Each of these commands functions in three steps:
-* Apply the interpreter to the token stream, which recursively executes preinterpret commands.
-* Expects to read exactly two token trees (unless otherwise specified)
+* Apply the interpreter to the token stream, which recursively executes preinterpret commands, wrapping their outputs in transparent groups.
+* Iterate over each token (or groups with `(..)` or transparent delimeters), expecting boolean literals, boolean operators, or comparison statements.
 * Apply some command-specific comparison, and outputs the boolean literal `true` or `false`.
 
-Comparison commands under consideration are:
-* `[!eq! #foo #bar]` outputs `true` if `#foo` and `#bar` are exactly the same token tree, via structural equality. For example:
-  * `[!eq! (3 4) (3   4)]` outputs `true` because the token stream ignores spacing.
-  * `[!eq! 1u64 1]` outputs `false` because these are different literals.
-* `[!lt! #foo #bar]` outputs `true` if `#foo` is an integer literal and less than `#bar`
-* `[!gt! #foo #bar]` outputs `true` if `#foo` is an integer literal and greater than `#bar`
-* `[!lte! #foo #bar]` outputs `true` if `#foo` is an integer literal and less than or equal to `#bar`
-* `[!gte! #foo #bar]` outputs `true` if `#foo` is an integer literal and greater than or equal to `#bar`
-* `[!not! #foo]` expects a single boolean literal, and outputs the negation of `#foo`
+Comparison statements could look like the following and operate on literals. For each, a comparison space (e.g. `string` or `u32`) needs to be inferrable from the literals. A compile error is thrown if a comparison space cannot be inferred:
+* `#foo == #bar` outputs `true` if `#foo` and `#bar` are exactly the same literal.
+* `#foo <= #bar` outputs `true` if `#foo` is less than or equal to `#bar`
+* `#foo >= #bar` outputs `true` if `#foo` is greater than or equal to `#bar`
+* `#foo > #bar` outputs `true` if `#foo` is greater than `#bar`
+* `#foo < #bar` outputs `true` if `#foo` is less than `#bar`
+
+Other boolean commands could be possible, similar to numeric commands:
+* `[!tokens_eq! #foo #bar]` outputs `true` if `#foo` and `#bar` are exactly the same token tree, via structural equality. For example:
+  * `[!tokens_eq! (3 4) (3   4)]` outputs `true` because the token stream ignores spacing.
+  * `[!tokens_eq! 1u64 1]` outputs `false` because these are different literals.
 * `[!str_contains! "needle" [!string! haystack]]` expects two string literals, and outputs `true` if the first string is a substring of the second string.
 
 ### Possible extension: Token stream commands
 
-* `[!skip! 4 from [#stream]]` reads and drops the first 4 token trees from the stream, and outputs the rest
-* `[!ungroup! (#stream)]` outputs `#stream`. It expects to receive a single group (i.e. wrapped in brackets), and unwraps it.
+* `[!split_at! #stream ,]` expects a token tree, and then some punct. Returns a stream split into transparent groups by the given token. Ignores a trailing empty stream.
+* `[!skip! #stream 4]` expects to receive a (possibly transparent) group, and reads and drops the first 4 token trees from the group's stream, and outputs the rest
+* `[!ungroup! [(#stream)]]` outputs `#stream` without any groups. It expects to receive a single group, and if the resulting token stream is a single group, it unwraps again
+* `[!flatten! #stream]` removes all groups from `#stream`, leaving a token stream of idents, literals and punctuation
+* `[!at! #stream 2]` takes the 2nd token tree from the stream
+* `[!zip! #a #b #c]` returns a transparent group tuple of the nth token in each of `#a`, `#b` and `#c`. Errors if they are of different lengths.
+
+We could support a piped calling convention, such as the `[!pipe! ...]` special command: `[!pipe! #stream as #x |> [!skip! #x 4] |> [!ungroup! #x]]`
 
 ### Possible extension: Control flow commands
 
 #### If statement
 
-`[!if! #cond then { #a } else { #b }]` outputs `#a` if `#cond` is `true`, else `#b` if `#cond` is false.
+`[!if! (XXX) { #a } else { #b }]` outputs `#a` if `XXX` is a boolean expression evaluating to `true`, else outputs `#b`.
 
 The `if` command works as follows:
-* It starts by only interpreting its first token tree, and expects to see a single `true` or `false` literal.
-* It then expects to reads an unintepreted `then` ident, following by a single `{ .. }` group, whose contents get interpreted and output only if the condition was `true`.
+* It starts by only interpreting its first token tree, and expects to see a `(..)` group which can be evaluated as a boolean expression.
+* It then expects a single `{ .. }` group, whose contents get interpreted and output only if the condition was `true`.
 * It optionally also reads an `else` ident and a by a single `{ .. }` group, whose contents get interpreted and output only if the condition was `false`.
+
+#### While loop
+
+Is discussed in macro 2.0 above.
 
 #### For loop
 
-* `[!for! #token_tree in [#stream] { ... }]`
+Is discussed in macro 2.0 above.
 
 #### Goto and label
 
@@ -489,7 +546,7 @@ preinterpret::preinterpret!{
     [!label! loop]
     const [!ident! AB #i]: u8 = 0;
     [!increment! #i]
-    [!if! [!lte! #i 100] then { [!goto! loop] }]
+    [!if! (#i <= 100) { [!goto! loop] }]
 }
 ```
 

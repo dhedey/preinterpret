@@ -61,6 +61,17 @@ jobs:
           toolchain: stable
       - run: ./style-check.sh
 
+  book:
+    name: Rust Book Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - run: ./book/test.sh
+
   miri:
     name: Miri
     runs-on: ubuntu-latest

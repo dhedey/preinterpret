@@ -12,10 +12,10 @@ impl CommandDefinition for SetCommand {
     ) -> Result<TokenStream> {
         let mut argument_tokens = argument.tokens();
         let variable_name = match parse_variable_set(&mut argument_tokens) {
-            Some(ident) => ident.to_string(),
+            Some(variable) => variable.variable_name().to_string(),
             None => {
-                return Err(command_span
-                    .error("A set call is expected to start with `#variable_name = ..`"));
+                return command_span
+                    .err("A set call is expected to start with `#variable_name = ..`");
             }
         };
 
@@ -24,6 +24,12 @@ impl CommandDefinition for SetCommand {
 
         Ok(TokenStream::new())
     }
+}
+
+pub(crate) fn parse_variable_set(tokens: &mut Tokens) -> Option<Variable> {
+    let variable = tokens.next_item_as_variable("").ok()?;
+    tokens.next_as_punct_matching('=')?;
+    Some(variable)
 }
 
 pub(crate) struct RawCommand;

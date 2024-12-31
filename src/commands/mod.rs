@@ -1,9 +1,13 @@
 mod concat_commands;
+mod control_flow_commands;
 mod core_commands;
+mod expression_commands;
 
 use crate::internal_prelude::*;
 use concat_commands::*;
+use control_flow_commands::*;
 use core_commands::*;
+use expression_commands::*;
 
 define_commands! {
     pub(crate) enum CommandKind {
@@ -34,5 +38,12 @@ define_commands! {
         DecapitalizeCommand,
         TitleCommand,
         InsertSpacesCommand,
+
+        // Expression Commands
+        EvaluateCommand,
+        IncrementCommand,
+
+        // Control flow commands
+        IfCommand,
     }
 }

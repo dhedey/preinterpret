@@ -512,9 +512,9 @@
 //!
 mod command;
 mod commands;
+mod expressions;
 mod internal_prelude;
 mod interpreter;
-mod parsing;
 mod string_conversion;
 
 use internal_prelude::*;
