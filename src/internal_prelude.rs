@@ -11,6 +11,16 @@ pub(crate) use crate::expressions::*;
 pub(crate) use crate::interpreter::*;
 pub(crate) use crate::string_conversion::*;
 
+pub(crate) trait TokenTreeExt: Sized {
+    fn bool(value: bool, span: Span) -> Self;
+}
+
+impl TokenTreeExt for TokenTree {
+    fn bool(value: bool, span: Span) -> Self {
+        TokenTree::Ident(Ident::new(&value.to_string(), span))
+    }
+}
+
 pub(crate) trait TokenStreamExt: Sized {
     fn push_token_tree(&mut self, token_tree: TokenTree);
     fn push_new_group(

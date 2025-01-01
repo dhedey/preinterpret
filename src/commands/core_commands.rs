@@ -7,19 +7,16 @@ impl CommandDefinition for SetCommand {
 
     fn execute(
         interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        command_span: Span,
+        mut command: Command,
     ) -> Result<TokenStream> {
-        let mut argument_tokens = argument.tokens();
-        let variable_name = match parse_variable_set(&mut argument_tokens) {
+        let variable_name = match parse_variable_set(command.argument_tokens()) {
             Some(variable) => variable.variable_name().to_string(),
             None => {
-                return command_span
-                    .err("A set call is expected to start with `#variable_name = ..`");
+                return command.err("A set call is expected to start with `#variable_name = ..`");
             }
         };
 
-        let result_tokens = interpreter.interpret_tokens(argument_tokens)?;
+        let result_tokens = command.interpret_remaining_arguments(interpreter, SubstitutionMode::token_stream())?;
         interpreter.set_variable(variable_name, result_tokens);
 
         Ok(TokenStream::new())
@@ -39,10 +36,9 @@ impl CommandDefinition for RawCommand {
 
     fn execute(
         _interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        _command_span: Span,
+        command: Command,
     ) -> Result<TokenStream> {
-        Ok(argument.tokens().into_token_stream())
+        Ok(command.into_argument_tokens().into_token_stream())
     }
 }
 
@@ -51,7 +47,7 @@ pub(crate) struct IgnoreCommand;
 impl CommandDefinition for IgnoreCommand {
     const COMMAND_NAME: &'static str = "ignore";
 
-    fn execute(_: &mut Interpreter, _: CommandArgumentStream, _: Span) -> Result<TokenStream> {
+    fn execute(_: &mut Interpreter, _: Command) -> Result<TokenStream> {
         Ok(TokenStream::new())
     }
 }

@@ -24,6 +24,39 @@ fn parse_ident(value: &str, span: Span) -> Result<Ident> {
     Ok(ident)
 }
 
+fn concat_into_string(
+    interpreter: &mut Interpreter,
+    mut command: Command,
+    conversion_fn: impl Fn(&str) -> String,
+) -> Result<TokenStream> {
+    let interpreted = command.interpret_remaining_arguments(interpreter, SubstitutionMode::token_stream())?;
+    let concatenated = concat_recursive(interpreted);
+    let string_literal = string_literal(&conversion_fn(&concatenated), command.span());
+    Ok(TokenStream::from(TokenTree::Literal(string_literal)))
+}
+
+fn concat_into_ident(
+    interpreter: &mut Interpreter,
+    mut command: Command,
+    conversion_fn: impl Fn(&str) -> String,
+) -> Result<TokenStream> {
+    let interpreted = command.interpret_remaining_arguments(interpreter, SubstitutionMode::token_stream())?;
+    let concatenated = concat_recursive(interpreted);
+    let ident = parse_ident(&conversion_fn(&concatenated), command.span())?;
+    Ok(TokenStream::from(TokenTree::Ident(ident)))
+}
+
+fn concat_into_literal(
+    interpreter: &mut Interpreter,
+    mut command: Command,
+    conversion_fn: impl Fn(&str) -> String,
+) -> Result<TokenStream> {
+    let interpreted = command.interpret_remaining_arguments(interpreter, SubstitutionMode::token_stream())?;
+    let concatenated = concat_recursive(interpreted);
+    let literal = parse_literal(&conversion_fn(&concatenated), command.span())?;
+    Ok(TokenStream::from(TokenTree::Literal(literal)))
+}
+
 //=======================================
 // Concatenating type-conversion commands
 //=======================================
@@ -35,12 +68,9 @@ impl CommandDefinition for StringCommand {
 
     fn execute(
         interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        command_span: Span,
+        command: Command,
     ) -> Result<TokenStream> {
-        let interpreted = argument.interpret_and_concat_to_string(interpreter)?;
-        let string_literal = string_literal(&interpreted, command_span);
-        Ok(TokenStream::from(TokenTree::Literal(string_literal)))
+        concat_into_string(interpreter, command, |s| s.to_string())
     }
 }
 
@@ -51,12 +81,9 @@ impl CommandDefinition for IdentCommand {
 
     fn execute(
         interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        command_span: Span,
+        command: Command,
     ) -> Result<TokenStream> {
-        let interpreted = argument.interpret_and_concat_to_string(interpreter)?;
-        let parsed_ident = parse_ident(&interpreted, command_span)?;
-        Ok(TokenStream::from(TokenTree::Ident(parsed_ident)))
+        concat_into_ident(interpreter, command, |s| s.to_string())
     }
 }
 
@@ -67,13 +94,9 @@ impl CommandDefinition for IdentCamelCommand {
 
     fn execute(
         interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        command_span: Span,
+        command: Command,
     ) -> Result<TokenStream> {
-        let interpreted = argument.interpret_and_concat_to_string(interpreter)?;
-        let upper_camel_cased = to_upper_camel_case(&interpreted);
-        let parsed_ident = parse_ident(&upper_camel_cased, command_span)?;
-        Ok(TokenStream::from(TokenTree::Ident(parsed_ident)))
+        concat_into_ident(interpreter, command, to_upper_camel_case)
     }
 }
 
@@ -84,13 +107,9 @@ impl CommandDefinition for IdentSnakeCommand {
 
     fn execute(
         interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        command_span: Span,
+        command: Command,
     ) -> Result<TokenStream> {
-        let interpreted = argument.interpret_and_concat_to_string(interpreter)?;
-        let lower_snake_cased = to_lower_snake_case(&interpreted);
-        let parsed_ident = parse_ident(&lower_snake_cased, command_span)?;
-        Ok(TokenStream::from(TokenTree::Ident(parsed_ident)))
+        concat_into_ident(interpreter, command, to_lower_snake_case)
     }
 }
 
@@ -101,13 +120,9 @@ impl CommandDefinition for IdentUpperSnakeCommand {
 
     fn execute(
         interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        command_span: Span,
+        command: Command,
     ) -> Result<TokenStream> {
-        let interpreted = argument.interpret_and_concat_to_string(interpreter)?;
-        let upper_snake_cased = to_upper_snake_case(&interpreted);
-        let parsed_ident = parse_ident(&upper_snake_cased, command_span)?;
-        Ok(TokenStream::from(TokenTree::Ident(parsed_ident)))
+        concat_into_ident(interpreter, command, to_upper_snake_case)
     }
 }
 
@@ -118,29 +133,15 @@ impl CommandDefinition for LiteralCommand {
 
     fn execute(
         interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        command_span: Span,
+        command: Command,
     ) -> Result<TokenStream> {
-        let interpreted = argument.interpret_and_concat_to_string(interpreter)?;
-        let parsed_literal = parse_literal(&interpreted, command_span)?;
-        Ok(TokenStream::from(TokenTree::Literal(parsed_literal)))
+        concat_into_literal(interpreter, command, |s| s.to_string())
     }
 }
 
 //===========================
 // String conversion commands
 //===========================
-
-fn concat_string_and_convert(
-    interpreter: &mut Interpreter,
-    argument: CommandArgumentStream,
-    command_span: Span,
-    conversion_fn: impl Fn(&str) -> String,
-) -> Result<TokenStream> {
-    let interpreted = argument.interpret_and_concat_to_string(interpreter)?;
-    let string_literal = string_literal(&conversion_fn(&interpreted), command_span);
-    Ok(TokenStream::from(TokenTree::Literal(string_literal)))
-}
 
 pub(crate) struct UpperCommand;
 
@@ -149,10 +150,9 @@ impl CommandDefinition for UpperCommand {
 
     fn execute(
         interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        command_span: Span,
+        command: Command,
     ) -> Result<TokenStream> {
-        concat_string_and_convert(interpreter, argument, command_span, to_uppercase)
+        concat_into_string(interpreter, command, to_uppercase)
     }
 }
 
@@ -163,10 +163,9 @@ impl CommandDefinition for LowerCommand {
 
     fn execute(
         interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        command_span: Span,
+        command: Command,
     ) -> Result<TokenStream> {
-        concat_string_and_convert(interpreter, argument, command_span, to_lowercase)
+        concat_into_string(interpreter, command, to_lowercase)
     }
 }
 
@@ -177,11 +176,10 @@ impl CommandDefinition for SnakeCommand {
 
     fn execute(
         interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        command_span: Span,
+        command: Command,
     ) -> Result<TokenStream> {
         // Lower snake case is the more common casing in Rust, so default to that
-        LowerSnakeCommand::execute(interpreter, argument, command_span)
+        LowerSnakeCommand::execute(interpreter, command)
     }
 }
 
@@ -192,10 +190,9 @@ impl CommandDefinition for LowerSnakeCommand {
 
     fn execute(
         interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        command_span: Span,
+        command: Command,
     ) -> Result<TokenStream> {
-        concat_string_and_convert(interpreter, argument, command_span, to_lower_snake_case)
+        concat_into_string(interpreter, command, to_lower_snake_case)
     }
 }
 
@@ -206,10 +203,9 @@ impl CommandDefinition for UpperSnakeCommand {
 
     fn execute(
         interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        command_span: Span,
+        command: Command,
     ) -> Result<TokenStream> {
-        concat_string_and_convert(interpreter, argument, command_span, to_upper_snake_case)
+        concat_into_string(interpreter, command, to_upper_snake_case)
     }
 }
 
@@ -220,12 +216,11 @@ impl CommandDefinition for KebabCommand {
 
     fn execute(
         interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        command_span: Span,
+        command: Command,
     ) -> Result<TokenStream> {
         // Kebab case is normally lower case (including in Rust where it's used - e.g. crate names)
         // It can always be combined with other casing to get other versions
-        concat_string_and_convert(interpreter, argument, command_span, to_lower_kebab_case)
+        concat_into_string(interpreter, command, to_lower_kebab_case)
     }
 }
 
@@ -236,11 +231,10 @@ impl CommandDefinition for CamelCommand {
 
     fn execute(
         interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        command_span: Span,
+        command: Command,
     ) -> Result<TokenStream> {
         // Upper camel case is the more common casing in Rust, so default to that
-        UpperCamelCommand::execute(interpreter, argument, command_span)
+        UpperCamelCommand::execute(interpreter, command)
     }
 }
 
@@ -251,10 +245,9 @@ impl CommandDefinition for LowerCamelCommand {
 
     fn execute(
         interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        command_span: Span,
+        command: Command,
     ) -> Result<TokenStream> {
-        concat_string_and_convert(interpreter, argument, command_span, to_lower_camel_case)
+        concat_into_string(interpreter, command, to_lower_camel_case)
     }
 }
 
@@ -265,10 +258,9 @@ impl CommandDefinition for UpperCamelCommand {
 
     fn execute(
         interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        command_span: Span,
+        command: Command,
     ) -> Result<TokenStream> {
-        concat_string_and_convert(interpreter, argument, command_span, to_upper_camel_case)
+        concat_into_string(interpreter, command, to_upper_camel_case)
     }
 }
 
@@ -279,10 +271,9 @@ impl CommandDefinition for CapitalizeCommand {
 
     fn execute(
         interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        command_span: Span,
+        command: Command,
     ) -> Result<TokenStream> {
-        concat_string_and_convert(interpreter, argument, command_span, capitalize)
+        concat_into_string(interpreter, command, capitalize)
     }
 }
 
@@ -293,10 +284,9 @@ impl CommandDefinition for DecapitalizeCommand {
 
     fn execute(
         interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        command_span: Span,
+        command: Command,
     ) -> Result<TokenStream> {
-        concat_string_and_convert(interpreter, argument, command_span, decapitalize)
+        concat_into_string(interpreter, command, decapitalize)
     }
 }
 
@@ -307,10 +297,9 @@ impl CommandDefinition for TitleCommand {
 
     fn execute(
         interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        command_span: Span,
+        command: Command,
     ) -> Result<TokenStream> {
-        concat_string_and_convert(interpreter, argument, command_span, title_case)
+        concat_into_string(interpreter, command, title_case)
     }
 }
 
@@ -321,14 +310,61 @@ impl CommandDefinition for InsertSpacesCommand {
 
     fn execute(
         interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        command_span: Span,
+        command: Command,
     ) -> Result<TokenStream> {
-        concat_string_and_convert(
+        concat_into_string(
             interpreter,
-            argument,
-            command_span,
+            command,
             insert_spaces_between_words,
         )
     }
+}
+
+fn concat_recursive(arguments: TokenStream) -> String {
+    fn concat_recursive_internal(output: &mut String, arguments: TokenStream) {
+        for token_tree in arguments {
+            match token_tree {
+                TokenTree::Literal(literal) => {
+                    let lit: Lit = parse_str(&literal.to_string()).expect(
+                        "All proc_macro2::Literal values should be decodable as a syn::Lit",
+                    );
+                    match lit {
+                        Lit::Str(lit_str) => output.push_str(&lit_str.value()),
+                        Lit::Char(lit_char) => output.push(lit_char.value()),
+                        _ => {
+                            output.push_str(&literal.to_string());
+                        }
+                    }
+                }
+                TokenTree::Group(group) => match group.delimiter() {
+                    Delimiter::Parenthesis => {
+                        output.push('(');
+                        concat_recursive_internal(output, group.stream());
+                        output.push(')');
+                    }
+                    Delimiter::Brace => {
+                        output.push('{');
+                        concat_recursive_internal(output, group.stream());
+                        output.push('}');
+                    }
+                    Delimiter::Bracket => {
+                        output.push('[');
+                        concat_recursive_internal(output, group.stream());
+                        output.push(']');
+                    }
+                    Delimiter::None => {
+                        concat_recursive_internal(output, group.stream());
+                    }
+                },
+                TokenTree::Punct(punct) => {
+                    output.push(punct.as_char());
+                }
+                TokenTree::Ident(ident) => output.push_str(&ident.to_string()),
+            }
+        }
+    }
+
+    let mut output = String::new();
+    concat_recursive_internal(&mut output, arguments);
+    output
 }

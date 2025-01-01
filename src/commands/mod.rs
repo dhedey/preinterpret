@@ -2,12 +2,14 @@ mod concat_commands;
 mod control_flow_commands;
 mod core_commands;
 mod expression_commands;
+mod token_commands;
 
 use crate::internal_prelude::*;
 use concat_commands::*;
 use control_flow_commands::*;
 use core_commands::*;
 use expression_commands::*;
+use token_commands::*;
 
 define_commands! {
     pub(crate) enum CommandKind {
@@ -45,5 +47,11 @@ define_commands! {
 
         // Control flow commands
         IfCommand,
+
+        // Token Commands
+        EmptyCommand,
+        IsEmptyCommand,
+        LengthCommand,
+        GroupCommand,
     }
 }

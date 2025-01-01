@@ -1,7 +1,10 @@
 use crate::internal_prelude::*;
 
 pub(crate) fn interpret(token_stream: TokenStream) -> Result<TokenStream> {
-    Interpreter::new().interpret_tokens(Tokens::new(token_stream))
+    Interpreter::new().interpret_tokens(
+        &mut Tokens::new(token_stream),
+        SubstitutionMode::token_stream(),
+    )
 }
 
 pub(crate) struct Interpreter {
@@ -26,27 +29,28 @@ impl Interpreter {
     pub(crate) fn interpret_token_stream(
         &mut self,
         token_stream: TokenStream,
+        substitution_mode: SubstitutionMode,
     ) -> Result<TokenStream> {
-        self.interpret_tokens(Tokens::new(token_stream))
+        self.interpret_tokens(&mut Tokens::new(token_stream), substitution_mode)
     }
 
-    pub(crate) fn interpret_item(&mut self, item: NextItem) -> Result<TokenStream> {
+    pub(crate) fn interpret_item(&mut self, item: NextItem, substitution_mode: SubstitutionMode) -> Result<TokenStream> {
         let mut expanded = TokenStream::new();
-        self.interpret_next_item(item, &mut expanded)?;
+        self.interpret_next_item(item, substitution_mode, &mut expanded)?;
         Ok(expanded)
     }
 
-    pub(crate) fn interpret_tokens(&mut self, mut source_tokens: Tokens) -> Result<TokenStream> {
+    pub(crate) fn interpret_tokens(&mut self, source_tokens: &mut Tokens, substitution_mode: SubstitutionMode) -> Result<TokenStream> {
         let mut expanded = TokenStream::new();
         loop {
             match source_tokens.next_item()? {
-                Some(next_item) => self.interpret_next_item(next_item, &mut expanded)?,
+                Some(next_item) => self.interpret_next_item(next_item, substitution_mode, &mut expanded)?,
                 None => return Ok(expanded),
             }
         }
     }
 
-    fn interpret_next_item(&mut self, next_item: NextItem, output: &mut TokenStream) -> Result<()> {
+    fn interpret_next_item(&mut self, next_item: NextItem, substitution_mode: SubstitutionMode, output: &mut TokenStream) -> Result<()> {
         // We wrap command/variable substitutions in a transparent group so that they
         // can be treated as a single item in other commands.
         // e.g. if #x = 1 + 1, then [!math! #x * #x] should be 4.
@@ -61,28 +65,70 @@ impl Interpreter {
                 output.push_new_group(
                     group.span_range(),
                     group.delimiter(),
-                    self.interpret_tokens(Tokens::new(group.stream()))?,
+                    self.interpret_tokens(&mut Tokens::new(group.stream()), substitution_mode)?,
                 );
             }
-            NextItem::Variable(variable_substitution) => {
-                // We wrap substituted variables in a transparent group so that
-                // they can be used collectively in future expressions, so that
-                // e.g. if #x = 1 + 1 then #x * #x = 4 rather than 3
-                output.push_new_group(
-                    variable_substitution.span_range(),
-                    Delimiter::None,
-                    variable_substitution.execute_substitution(self)?,
+            NextItem::Variable(variable) => {
+                substitution_mode.apply(
+                    output,
+                    variable.span_range(),
+                    variable.execute_substitution(self)?,
                 );
             }
             NextItem::CommandInvocation(command_invocation) => {
-                output.push_new_group(
+                substitution_mode.apply(
+                    output,
                     command_invocation.span_range(),
-                    Delimiter::None,
                     command_invocation.execute(self)?,
                 );
             }
         }
         Ok(())
+    }
+}
+
+/// How to output `#variables` and `[!commands!]` into the output stream
+#[derive(Clone, Copy)]
+pub(crate) struct SubstitutionMode(SubstitutionModeInternal);
+
+#[derive(Clone, Copy)]
+enum SubstitutionModeInternal {
+    /// The tokens are just output as they are to the token stream.
+    ///
+    /// This is the default, and should typically be used by commands which
+    /// deal with flattened token streams.
+    Extend,
+    /// The tokens are grouped into a group.
+    ///
+    /// This should be used when calculating expressions.
+    ///
+    /// We wrap substituted variables in a transparent group so that
+    /// they can be used collectively in future expressions, so that
+    /// e.g. if `#x = 1 + 1` then `#x * #x = 4` rather than `3`.
+    Group(Delimiter),
+}
+
+impl SubstitutionMode {
+    /// When creating a token stream, substitutions extend the token stream output.
+    pub(crate) fn token_stream() -> Self {
+        Self(SubstitutionModeInternal::Extend)
+    }
+
+    /// When creating a token stream for an expression, substitutions are wrapped
+    /// in a transparent group.
+    pub(crate) fn expression() -> Self {
+        Self(SubstitutionModeInternal::Group(Delimiter::None))
+    }
+
+    fn apply(self, tokens: &mut TokenStream, span_range: SpanRange, substitution: TokenStream) {
+        match self.0 {
+            SubstitutionModeInternal::Extend => tokens.extend(substitution),
+            SubstitutionModeInternal::Group(delimiter) => tokens.push_new_group(
+                span_range,
+                delimiter,
+                substitution,
+            ),
+        }
     }
 }
 
@@ -122,8 +168,12 @@ impl Tokens {
         }
     }
 
+    pub(crate) fn is_empty(&mut self) -> bool {
+        self.peek().is_none()
+    }
+
     pub(crate) fn check_end(&mut self) -> Option<()> {
-        if self.peek().is_none() {
+        if self.is_empty() {
             Some(())
         } else {
             None
@@ -224,7 +274,7 @@ fn parse_command_invocation(group: &Group) -> Result<Option<CommandInvocation>> 
     // We have now checked enough that we're confident the user is pretty intentionally using
     // the call convention. Any issues we hit from this point will be a helpful compiler error.
     match consume_command_end(&command_ident, &mut remaining_tokens) {
-        Some(command_kind) => Ok(Some(CommandInvocation::new(command_kind, group, remaining_tokens))),
+        Some(command_kind) => Ok(Some(CommandInvocation::new(command_ident.clone(), command_kind, group, remaining_tokens))),
         None => Err(command_ident.span().error(
             format!(
                 "Expected `[!<command>! ..]`, for <command> one of: {}.\nIf this wasn't intended to be a preinterpret command, you can work around this with [!raw! [!{} ... ]]",

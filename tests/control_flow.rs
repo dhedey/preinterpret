@@ -7,12 +7,21 @@ macro_rules! assert_preinterpret_eq {
 }
 
 #[test]
-fn test_basic_evaluate_works() {
+fn test_if() {
     assert_preinterpret_eq!([!if! (1 == 2) { "YES" } !else! { "NO" }], "NO");
     assert_preinterpret_eq!({
         [!set! #x = 1 == 2]
-        [!if! (#x) { "YES" } !else! { "NO" }]
+        [!if! #x { "YES" } !else! { "NO" }]
     }, "NO");
+    assert_preinterpret_eq!({
+        [!set! #x = 1]
+        [!set! #y = 2]
+        [!if! (#x == #y) { "YES" } !else! { "NO" }]
+    }, "NO");
+    assert_preinterpret_eq!({
+        0
+        [!if! true { + 1 }]
+    }, 1);
     assert_preinterpret_eq!({
         0
         [!if! false { + 1 }]

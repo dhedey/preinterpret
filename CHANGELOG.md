@@ -4,9 +4,16 @@
 
 ### New Commands
 
-* `[!evaluate! ...]`
-* `[!if! COND { ... }]` and `[!if! COND { ... } !else! { ... }]`
-* `[!increment! ...]`
+* Expression commands:
+  * `[!evaluate! ...]`
+  * `[!increment! ...]`
+* Control flow commands:
+  * `[!if! COND { ... }]` and `[!if! COND { ... } !else! { ... }]`
+* Token-stream utility commands:
+  * `[!empty!]`
+  * `[!is_empty! #stream]`
+  * `[!length! #stream]` which gives the number of token trees in the token stream.
+  * `[!group! ...]` which wraps the tokens in a transparent group. Useful with `!for!`.
 
 ### To come
 
@@ -14,10 +21,8 @@
 * Disallow `[!let! #x =]` and require `[!let! #x = [!empty!]]` (give a good error message).
 * `[!while! cond {}]`
 * `[!for! #x in [#y] {}]`... and make it so that whether commands or variable substitutions get replaced by groups depends on the interpreter context (likely only expressions should use groups)
-* `[!group! ...]` which wraps the tokens in a transparent group. Useful with `!for!`.
-* `[!empty!]`
-* `[!is_empty! #stream]`
 * `[!range! 0..5]`
+* `[!error! "message" token stream for span]`
 * Remove `[!increment! ...]` and replace with `[!assign! #x += 1]`
 * Support `!else if!` in `!if!`
 * Token stream manipulation... and make it performant

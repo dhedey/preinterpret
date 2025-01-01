@@ -5,8 +5,7 @@ pub(crate) trait CommandDefinition {
 
     fn execute(
         interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        command_span: Span,
+        argument: Command,
     ) -> Result<TokenStream>;
 }
 
@@ -26,10 +25,10 @@ macro_rules! define_commands {
         }
 
         impl $enum_name {
-            pub(crate) fn execute(self, interpreter: &mut Interpreter, argument_stream: CommandArgumentStream, command_span: Span) -> Result<TokenStream> {
+            pub(crate) fn execute(self, interpreter: &mut Interpreter, command: Command) -> Result<TokenStream> {
                 match self {
                     $(
-                        Self::$command => $command::execute(interpreter, argument_stream, command_span),
+                        Self::$command => $command::execute(interpreter, command),
                     )*
                 }
             }
@@ -56,28 +55,30 @@ pub(crate) use define_commands;
 
 pub(crate) struct CommandInvocation {
     command_kind: CommandKind,
-    argument_stream: CommandArgumentStream,
-    command_span: Span,
+    command: Command,
 }
 
 impl CommandInvocation {
-    pub(crate) fn new(command_kind: CommandKind, group: &Group, argument_tokens: Tokens) -> Self {
+    pub(crate) fn new(command_ident: Ident, command_kind: CommandKind, group: &Group, argument_tokens: Tokens) -> Self {
         Self {
             command_kind,
-            argument_stream: CommandArgumentStream::new(argument_tokens),
-            command_span: group.span(),
+            command: Command::new(
+                command_ident,
+                group.span(),
+                argument_tokens,
+            ),
         }
     }
 
     pub(crate) fn execute(self, interpreter: &mut Interpreter) -> Result<TokenStream> {
         self.command_kind
-            .execute(interpreter, self.argument_stream, self.command_span)
+            .execute(interpreter, self.command)
     }
 }
 
 impl HasSpanRange for CommandInvocation {
     fn span_range(&self) -> SpanRange {
-        self.command_span.span_range()
+        self.command.span_range()
     }
 }
 
@@ -103,32 +104,21 @@ impl Variable {
         interpreter: &mut Interpreter,
     ) -> Result<TokenStream> {
         let Variable {
-            marker,
             variable_name,
+            ..
         } = self;
         match interpreter.get_variable(&variable_name.to_string()) {
             Some(variable_value) => Ok(variable_value.clone()),
             None => {
-                let marker = marker.as_char();
-                let name_str = variable_name.to_string();
-                let name_str = &name_str;
-                variable_name.span().err(
+                self.span_range().err(
                     format!(
-                        "The variable {}{} wasn't set.\nIf this wasn't intended to be a variable, work around this with [!raw! {}{}]",
-                        marker,
-                        name_str,
-                        marker,
-                        name_str,
+                        "The variable {} wasn't set.\nIf this wasn't intended to be a variable, work around this with [!raw! {}]",
+                        self,
+                        self,
                     ),
                 )
             }
         }
-    }
-}
-
-impl core::fmt::Display for Variable {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}{}", self.marker.as_char(), self.variable_name)
     }
 }
 
@@ -138,77 +128,60 @@ impl HasSpanRange for Variable {
     }
 }
 
-pub(crate) struct CommandArgumentStream {
-    tokens: Tokens,
-}
-
-impl CommandArgumentStream {
-    fn new(tokens: Tokens) -> Self {
-        Self { tokens }
-    }
-
-    pub(crate) fn interpret(self, interpreter: &mut Interpreter) -> Result<TokenStream> {
-        interpreter.interpret_tokens(self.tokens)
-    }
-
-    pub(crate) fn interpret_and_concat_to_string(
-        self,
-        interpreter: &mut Interpreter,
-    ) -> Result<String> {
-        let interpreted = interpreter.interpret_tokens(self.tokens)?;
-        Ok(concat_recursive(interpreted))
-    }
-
-    pub(crate) fn tokens(self) -> Tokens {
-        self.tokens
+impl core::fmt::Display for Variable {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}{}", self.marker.as_char(), self.variable_name)
     }
 }
 
-fn concat_recursive(arguments: TokenStream) -> String {
-    fn concat_recursive_internal(output: &mut String, arguments: TokenStream) {
-        for token_tree in arguments {
-            match token_tree {
-                TokenTree::Literal(literal) => {
-                    let lit: Lit = parse_str(&literal.to_string()).expect(
-                        "All proc_macro2::Literal values should be decodable as a syn::Lit",
-                    );
-                    match lit {
-                        Lit::Str(lit_str) => output.push_str(&lit_str.value()),
-                        Lit::Char(lit_char) => output.push(lit_char.value()),
-                        _ => {
-                            output.push_str(&literal.to_string());
-                        }
-                    }
-                }
-                TokenTree::Group(group) => match group.delimiter() {
-                    Delimiter::Parenthesis => {
-                        output.push('(');
-                        concat_recursive_internal(output, group.stream());
-                        output.push(')');
-                    }
-                    Delimiter::Brace => {
-                        output.push('{');
-                        concat_recursive_internal(output, group.stream());
-                        output.push('}');
-                    }
-                    Delimiter::Bracket => {
-                        output.push('[');
-                        concat_recursive_internal(output, group.stream());
-                        output.push(']');
-                    }
-                    Delimiter::None => {
-                        concat_recursive_internal(output, group.stream());
-                    }
-                },
-                TokenTree::Punct(punct) => {
-                    output.push(punct.as_char());
-                }
-                TokenTree::Ident(ident) => output.push_str(&ident.to_string()),
-            }
+pub(crate) struct Command {
+    command_ident: Ident,
+    command_span: Span,
+    argument_tokens: Tokens,
+}
+
+impl Command {
+    fn new(command_ident: Ident, command_span: Span, argument_tokens: Tokens) -> Self {
+        Self { command_ident, command_span, argument_tokens }
+    }
+
+    #[allow(unused)] // Likely useful in future
+    pub(crate) fn ident_span(&self) -> Span {
+        self.command_ident.span()
+    }
+
+    pub(crate) fn span(&self) -> Span {
+        self.command_span
+    }
+
+    pub(crate) fn error(&self, message: impl core::fmt::Display) -> syn::Error {
+        self.command_span.error(message)
+    }
+
+    pub(crate) fn err(&self, message: impl core::fmt::Display) -> Result<TokenStream> {
+        Err(self.error(message))
+    }
+
+    /// Expects the remaining arguments to be non-empty
+    pub(crate) fn interpret_remaining_arguments(&mut self, interpreter: &mut Interpreter, substitution_mode: SubstitutionMode) -> Result<TokenStream> {
+        if self.argument_tokens.is_empty() {
+            // This is simply for clarity / to make empty arguments explicit.
+            return self.err("Arguments were empty. Use [!empty!] if you want to use an empty token stream.");
         }
+        interpreter.interpret_tokens(&mut self.argument_tokens, substitution_mode)
     }
 
-    let mut output = String::new();
-    concat_recursive_internal(&mut output, arguments);
-    output
+    pub(crate) fn argument_tokens(&mut self) -> &mut Tokens {
+        &mut self.argument_tokens
+    }
+
+    pub(crate) fn into_argument_tokens(self) -> Tokens {
+        self.argument_tokens
+    }
+}
+
+impl HasSpanRange for Command {
+    fn span_range(&self) -> SpanRange {
+        self.span().span_range()
+    }
 }

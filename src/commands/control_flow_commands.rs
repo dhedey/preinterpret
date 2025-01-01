@@ -7,17 +7,16 @@ impl CommandDefinition for IfCommand {
 
     fn execute(
         interpreter: &mut Interpreter,
-        argument: CommandArgumentStream,
-        command_span: Span,
+        mut command: Command,
     ) -> Result<TokenStream> {
-        let parsed = match parse_if_statement(&mut argument.tokens()) {
+        let parsed = match parse_if_statement(command.argument_tokens()) {
             Some(parsed) => parsed,
             None => {
-                return command_span.span_range().err("Expected [!if! (condition) { true_code }] or [!if! (condition) { true_code } !else! { false_code}]");
+                return command.err("Expected [!if! (condition) { true_code }] or [!if! (condition) { true_code } !else! { false_code}]");
             }
         };
 
-        let interpreted_condition = interpreter.interpret_item(parsed.condition)?;
+        let interpreted_condition = interpreter.interpret_item(parsed.condition, SubstitutionMode::expression())?;
         let evaluated_condition = evaluate_expression(
             interpreted_condition,
             ExpressionParsingMode::BeforeCurlyBraces,
@@ -26,9 +25,9 @@ impl CommandDefinition for IfCommand {
         .value();
 
         if evaluated_condition {
-            interpreter.interpret_token_stream(parsed.true_code)
+            interpreter.interpret_token_stream(parsed.true_code, SubstitutionMode::token_stream())
         } else if let Some(false_code) = parsed.false_code {
-            interpreter.interpret_token_stream(false_code)
+            interpreter.interpret_token_stream(false_code, SubstitutionMode::token_stream())
         } else {
             Ok(TokenStream::new())
         }
