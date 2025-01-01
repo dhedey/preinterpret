@@ -34,23 +34,38 @@ impl Interpreter {
         self.interpret_tokens(&mut Tokens::new(token_stream), substitution_mode)
     }
 
-    pub(crate) fn interpret_item(&mut self, item: NextItem, substitution_mode: SubstitutionMode) -> Result<TokenStream> {
+    pub(crate) fn interpret_item(
+        &mut self,
+        item: NextItem,
+        substitution_mode: SubstitutionMode,
+    ) -> Result<TokenStream> {
         let mut expanded = TokenStream::new();
         self.interpret_next_item(item, substitution_mode, &mut expanded)?;
         Ok(expanded)
     }
 
-    pub(crate) fn interpret_tokens(&mut self, source_tokens: &mut Tokens, substitution_mode: SubstitutionMode) -> Result<TokenStream> {
+    pub(crate) fn interpret_tokens(
+        &mut self,
+        source_tokens: &mut Tokens,
+        substitution_mode: SubstitutionMode,
+    ) -> Result<TokenStream> {
         let mut expanded = TokenStream::new();
         loop {
             match source_tokens.next_item()? {
-                Some(next_item) => self.interpret_next_item(next_item, substitution_mode, &mut expanded)?,
+                Some(next_item) => {
+                    self.interpret_next_item(next_item, substitution_mode, &mut expanded)?
+                }
                 None => return Ok(expanded),
             }
         }
     }
 
-    fn interpret_next_item(&mut self, next_item: NextItem, substitution_mode: SubstitutionMode, output: &mut TokenStream) -> Result<()> {
+    fn interpret_next_item(
+        &mut self,
+        next_item: NextItem,
+        substitution_mode: SubstitutionMode,
+        output: &mut TokenStream,
+    ) -> Result<()> {
         // We wrap command/variable substitutions in a transparent group so that they
         // can be treated as a single item in other commands.
         // e.g. if #x = 1 + 1, then [!math! #x * #x] should be 4.
@@ -123,11 +138,9 @@ impl SubstitutionMode {
     fn apply(self, tokens: &mut TokenStream, span_range: SpanRange, substitution: TokenStream) {
         match self.0 {
             SubstitutionModeInternal::Extend => tokens.extend(substitution),
-            SubstitutionModeInternal::Group(delimiter) => tokens.push_new_group(
-                span_range,
-                delimiter,
-                substitution,
-            ),
+            SubstitutionModeInternal::Group(delimiter) => {
+                tokens.push_new_group(span_range, delimiter, substitution)
+            }
         }
     }
 }

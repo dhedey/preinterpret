@@ -3,10 +3,7 @@ use crate::internal_prelude::*;
 pub(crate) trait CommandDefinition {
     const COMMAND_NAME: &'static str;
 
-    fn execute(
-        interpreter: &mut Interpreter,
-        argument: Command,
-    ) -> Result<TokenStream>;
+    fn execute(interpreter: &mut Interpreter, argument: Command) -> Result<TokenStream>;
 }
 
 macro_rules! define_commands {
@@ -59,20 +56,20 @@ pub(crate) struct CommandInvocation {
 }
 
 impl CommandInvocation {
-    pub(crate) fn new(command_ident: Ident, command_kind: CommandKind, group: &Group, argument_tokens: Tokens) -> Self {
+    pub(crate) fn new(
+        command_ident: Ident,
+        command_kind: CommandKind,
+        group: &Group,
+        argument_tokens: Tokens,
+    ) -> Self {
         Self {
             command_kind,
-            command: Command::new(
-                command_ident,
-                group.span(),
-                argument_tokens,
-            ),
+            command: Command::new(command_ident, group.span(), argument_tokens),
         }
     }
 
     pub(crate) fn execute(self, interpreter: &mut Interpreter) -> Result<TokenStream> {
-        self.command_kind
-            .execute(interpreter, self.command)
+        self.command_kind.execute(interpreter, self.command)
     }
 }
 
@@ -103,10 +100,7 @@ impl Variable {
         &self,
         interpreter: &mut Interpreter,
     ) -> Result<TokenStream> {
-        let Variable {
-            variable_name,
-            ..
-        } = self;
+        let Variable { variable_name, .. } = self;
         match interpreter.get_variable(&variable_name.to_string()) {
             Some(variable_value) => Ok(variable_value.clone()),
             None => {
@@ -142,7 +136,11 @@ pub(crate) struct Command {
 
 impl Command {
     fn new(command_ident: Ident, command_span: Span, argument_tokens: Tokens) -> Self {
-        Self { command_ident, command_span, argument_tokens }
+        Self {
+            command_ident,
+            command_span,
+            argument_tokens,
+        }
     }
 
     #[allow(unused)] // Likely useful in future
@@ -163,10 +161,16 @@ impl Command {
     }
 
     /// Expects the remaining arguments to be non-empty
-    pub(crate) fn interpret_remaining_arguments(&mut self, interpreter: &mut Interpreter, substitution_mode: SubstitutionMode) -> Result<TokenStream> {
+    pub(crate) fn interpret_remaining_arguments(
+        &mut self,
+        interpreter: &mut Interpreter,
+        substitution_mode: SubstitutionMode,
+    ) -> Result<TokenStream> {
         if self.argument_tokens.is_empty() {
             // This is simply for clarity / to make empty arguments explicit.
-            return self.err("Arguments were empty. Use [!empty!] if you want to use an empty token stream.");
+            return self.err(
+                "Arguments were empty. Use [!empty!] if you want to use an empty token stream.",
+            );
         }
         interpreter.interpret_tokens(&mut self.argument_tokens, substitution_mode)
     }

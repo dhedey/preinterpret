@@ -5,10 +5,7 @@ pub(crate) struct IfCommand;
 impl CommandDefinition for IfCommand {
     const COMMAND_NAME: &'static str = "if";
 
-    fn execute(
-        interpreter: &mut Interpreter,
-        mut command: Command,
-    ) -> Result<TokenStream> {
+    fn execute(interpreter: &mut Interpreter, mut command: Command) -> Result<TokenStream> {
         let parsed = match parse_if_statement(command.argument_tokens()) {
             Some(parsed) => parsed,
             None => {
@@ -16,7 +13,8 @@ impl CommandDefinition for IfCommand {
             }
         };
 
-        let interpreted_condition = interpreter.interpret_item(parsed.condition, SubstitutionMode::expression())?;
+        let interpreted_condition =
+            interpreter.interpret_item(parsed.condition, SubstitutionMode::expression())?;
         let evaluated_condition = evaluate_expression(
             interpreted_condition,
             ExpressionParsingMode::BeforeCurlyBraces,

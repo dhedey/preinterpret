@@ -7,6 +7,7 @@ macro_rules! assert_preinterpret_eq {
 }
 
 #[test]
+#[allow(clippy::identity_op)] // https://github.com/rust-lang/rust-clippy/issues/13924
 fn test_if() {
     assert_preinterpret_eq!([!if! (1 == 2) { "YES" } !else! { "NO" }], "NO");
     assert_preinterpret_eq!({

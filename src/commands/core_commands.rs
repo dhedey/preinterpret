@@ -5,10 +5,7 @@ pub(crate) struct SetCommand;
 impl CommandDefinition for SetCommand {
     const COMMAND_NAME: &'static str = "set";
 
-    fn execute(
-        interpreter: &mut Interpreter,
-        mut command: Command,
-    ) -> Result<TokenStream> {
+    fn execute(interpreter: &mut Interpreter, mut command: Command) -> Result<TokenStream> {
         let variable_name = match parse_variable_set(command.argument_tokens()) {
             Some(variable) => variable.variable_name().to_string(),
             None => {
@@ -16,7 +13,8 @@ impl CommandDefinition for SetCommand {
             }
         };
 
-        let result_tokens = command.interpret_remaining_arguments(interpreter, SubstitutionMode::token_stream())?;
+        let result_tokens =
+            command.interpret_remaining_arguments(interpreter, SubstitutionMode::token_stream())?;
         interpreter.set_variable(variable_name, result_tokens);
 
         Ok(TokenStream::new())
@@ -34,10 +32,7 @@ pub(crate) struct RawCommand;
 impl CommandDefinition for RawCommand {
     const COMMAND_NAME: &'static str = "raw";
 
-    fn execute(
-        _interpreter: &mut Interpreter,
-        command: Command,
-    ) -> Result<TokenStream> {
+    fn execute(_interpreter: &mut Interpreter, command: Command) -> Result<TokenStream> {
         Ok(command.into_argument_tokens().into_token_stream())
     }
 }

@@ -30,12 +30,8 @@ fn test_length_and_group() {
     assert_preinterpret_eq!({
         [!length! "hello" World]
     }, 2);
-    assert_preinterpret_eq!({
-        [!length! ("hello" World)]
-    }, 1);
-    assert_preinterpret_eq!({
-        [!length! [!group! "hello" World]]
-    }, 1);
+    assert_preinterpret_eq!({ [!length! ("hello" World)] }, 1);
+    assert_preinterpret_eq!({ [!length! [!group! "hello" World]] }, 1);
     assert_preinterpret_eq!({
         [!set! #x = Hello "World" (1 2 3 4 5)]
         [!length! #x]
