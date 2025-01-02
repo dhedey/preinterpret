@@ -8,12 +8,14 @@ pub(crate) fn interpret(token_stream: TokenStream) -> Result<TokenStream> {
 }
 
 pub(crate) struct Interpreter {
+    config: InterpreterConfig,
     variables: HashMap<String, TokenStream>,
 }
 
 impl Interpreter {
     pub(crate) fn new() -> Self {
         Self {
+            config: Default::default(),
             variables: Default::default(),
         }
     }
@@ -26,6 +28,10 @@ impl Interpreter {
         self.variables.get(name)
     }
 
+    pub(crate) fn config(&self) -> &InterpreterConfig {
+        &self.config
+    }
+
     pub(crate) fn interpret_token_stream(
         &mut self,
         token_stream: TokenStream,
@@ -34,13 +40,22 @@ impl Interpreter {
         self.interpret_tokens(&mut Tokens::new(token_stream), substitution_mode)
     }
 
+    pub(crate) fn interpret_token_stream_into(
+        &mut self,
+        token_stream: TokenStream,
+        substitution_mode: SubstitutionMode,
+        output: &mut TokenStream,
+    ) -> Result<()> {
+        self.interpret_tokens_into(&mut Tokens::new(token_stream), substitution_mode, output)
+    }
+
     pub(crate) fn interpret_item(
         &mut self,
         item: NextItem,
         substitution_mode: SubstitutionMode,
     ) -> Result<TokenStream> {
         let mut expanded = TokenStream::new();
-        self.interpret_next_item(item, substitution_mode, &mut expanded)?;
+        self.interpret_next_item_into(item, substitution_mode, &mut expanded)?;
         Ok(expanded)
     }
 
@@ -50,27 +65,32 @@ impl Interpreter {
         substitution_mode: SubstitutionMode,
     ) -> Result<TokenStream> {
         let mut expanded = TokenStream::new();
+        self.interpret_tokens_into(source_tokens, substitution_mode, &mut expanded)?;
+        Ok(expanded)
+    }
+
+    pub(crate) fn interpret_tokens_into(
+        &mut self,
+        source_tokens: &mut Tokens,
+        substitution_mode: SubstitutionMode,
+        output: &mut TokenStream,
+    ) -> Result<()> {
         loop {
             match source_tokens.next_item()? {
                 Some(next_item) => {
-                    self.interpret_next_item(next_item, substitution_mode, &mut expanded)?
+                    self.interpret_next_item_into(next_item, substitution_mode, output)?
                 }
-                None => return Ok(expanded),
+                None => return Ok(()),
             }
         }
     }
 
-    fn interpret_next_item(
+    fn interpret_next_item_into(
         &mut self,
         next_item: NextItem,
         substitution_mode: SubstitutionMode,
         output: &mut TokenStream,
     ) -> Result<()> {
-        // We wrap command/variable substitutions in a transparent group so that they
-        // can be treated as a single item in other commands.
-        // e.g. if #x = 1 + 1, then [!math! #x * #x] should be 4.
-        // Note that such groups are ignored in the macro output, due to this
-        // issue in rustc: https://github.com/rust-lang/rust/issues/67062
         match next_item {
             NextItem::Leaf(token_tree) => {
                 output.push_token_tree(token_tree);
@@ -78,16 +98,16 @@ impl Interpreter {
             NextItem::Group(group) => {
                 // If it's a group, run interpret on its contents recursively.
                 output.push_new_group(
-                    group.span_range(),
-                    group.delimiter(),
                     self.interpret_tokens(&mut Tokens::new(group.stream()), substitution_mode)?,
+                    group.delimiter(),
+                    group.span_range(),
                 );
             }
             NextItem::Variable(variable) => {
                 substitution_mode.apply(
                     output,
                     variable.span_range(),
-                    variable.execute_substitution(self)?,
+                    variable.read_substitution(self)?.clone(),
                 );
             }
             NextItem::CommandInvocation(command_invocation) => {
@@ -96,6 +116,29 @@ impl Interpreter {
                     command_invocation.span_range(),
                     command_invocation.execute(self)?,
                 );
+            }
+        }
+        Ok(())
+    }
+}
+
+pub(crate) struct InterpreterConfig {
+    iteration_limit: Option<usize>,
+}
+
+impl Default for InterpreterConfig {
+    fn default() -> Self {
+        Self {
+            iteration_limit: Some(10000),
+        }
+    }
+}
+
+impl InterpreterConfig {
+    pub(crate) fn check_iteration_count(&self, command: &Command, count: usize) -> Result<()> {
+        if let Some(limit) = self.iteration_limit {
+            if count > limit {
+                return command.err(format!("Iteration limit of {} exceeded", limit));
             }
         }
         Ok(())
@@ -139,12 +182,13 @@ impl SubstitutionMode {
         match self.0 {
             SubstitutionModeInternal::Extend => tokens.extend(substitution),
             SubstitutionModeInternal::Group(delimiter) => {
-                tokens.push_new_group(span_range, delimiter, substitution)
+                tokens.push_new_group(substitution, delimiter, span_range)
             }
         }
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct Tokens(iter::Peekable<<TokenStream as IntoIterator>::IntoIter>);
 
 impl Tokens {
@@ -163,6 +207,13 @@ impl Tokens {
     pub(crate) fn next_as_ident(&mut self) -> Option<Ident> {
         match self.next() {
             Some(TokenTree::Ident(ident)) => Some(ident),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn next_as_punct(&mut self) -> Option<Punct> {
+        match self.next() {
+            Some(TokenTree::Punct(punct)) => Some(punct),
             _ => None,
         }
     }
@@ -242,6 +293,7 @@ impl Tokens {
     }
 }
 
+#[derive(Clone)]
 pub(crate) enum NextItem {
     CommandInvocation(CommandInvocation),
     Variable(Variable),

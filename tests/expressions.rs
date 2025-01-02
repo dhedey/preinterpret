@@ -53,5 +53,18 @@ fn increment_works() {
     );
 }
 
+#[test]
+fn assign_works() {
+    assert_preinterpret_eq!(
+        {
+            [!set! #x = 8 + 2]      // 10
+            [!assign! #x /= 1 + 1]  // 5
+            [!assign! #x += 2 + #x] // 12
+            #x
+        },
+        12
+    );
+}
+
 // TODO - Add failing tests for these:
 // assert_preinterpret_eq!([!evaluate! !!(!!({true}))], true);

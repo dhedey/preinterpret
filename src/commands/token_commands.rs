@@ -49,9 +49,9 @@ impl CommandDefinition for GroupCommand {
     fn execute(interpreter: &mut Interpreter, mut command: Command) -> Result<TokenStream> {
         let mut output = TokenStream::new();
         output.push_new_group(
-            command.span_range(),
-            Delimiter::None,
             command.interpret_remaining_arguments(interpreter, SubstitutionMode::token_stream())?,
+            Delimiter::None,
+            command.span_range(),
         );
         Ok(output)
     }

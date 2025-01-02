@@ -15,6 +15,7 @@ macro_rules! define_commands {
         }
     ) => {
         #[allow(clippy::enum_variant_names)]
+        #[derive(Clone, Copy)]
         pub(crate) enum $enum_name {
             $(
                 $command,
@@ -50,6 +51,7 @@ macro_rules! define_commands {
 }
 pub(crate) use define_commands;
 
+#[derive(Clone)]
 pub(crate) struct CommandInvocation {
     command_kind: CommandKind,
     command: Command,
@@ -79,6 +81,7 @@ impl HasSpanRange for CommandInvocation {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct Variable {
     marker: Punct, // #
     variable_name: Ident,
@@ -92,27 +95,62 @@ impl Variable {
         }
     }
 
-    pub(crate) fn variable_name(&self) -> &Ident {
-        &self.variable_name
+    pub(crate) fn variable_name(&self) -> String {
+        self.variable_name.to_string()
     }
 
-    pub(crate) fn execute_substitution(
+    pub(crate) fn set<'i>(
         &self,
-        interpreter: &mut Interpreter,
-    ) -> Result<TokenStream> {
-        let Variable { variable_name, .. } = self;
-        match interpreter.get_variable(&variable_name.to_string()) {
-            Some(variable_value) => Ok(variable_value.clone()),
-            None => {
-                self.span_range().err(
-                    format!(
-                        "The variable {} wasn't set.\nIf this wasn't intended to be a variable, work around this with [!raw! {}]",
-                        self,
-                        self,
-                    ),
-                )
-            }
+        interpreter: &'i mut Interpreter,
+        value: TokenStream,
+    ) {
+        interpreter.set_variable(self.variable_name(), value);
+    }
+
+    pub(crate) fn read_substitution<'i>(
+        &self,
+        interpreter: &'i Interpreter,
+    ) -> Result<&'i TokenStream> {
+        self.read_or_else(
+            interpreter,
+            || format!(
+                "The variable {} wasn't set.\nIf this wasn't intended to be a variable, work around this with [!raw! {}]",
+                self,
+                self,
+            )
+        )
+    }
+
+    pub(crate) fn read_required<'i>(
+        &self,
+        interpreter: &'i Interpreter,
+    ) -> Result<&'i TokenStream> {
+        self.read_or_else(
+            interpreter,
+            || format!(
+                "The variable {} wasn't set.",
+                self,
+            )
+        )
+    }
+
+    pub(crate) fn read_or_else<'i>(
+        &self,
+        interpreter: &'i Interpreter,
+        create_error: impl FnOnce() -> String,
+    ) -> Result<&'i TokenStream> {
+        match self.read_option(interpreter) {
+            Some(token_stream) => Ok(token_stream),
+            None => self.span_range().err(create_error()),
         }
+    }
+
+    fn read_option<'i>(
+        &self,
+        interpreter: &'i Interpreter,
+    ) -> Option<&'i TokenStream> {
+        let Variable { variable_name, .. } = self;
+        interpreter.get_variable(&variable_name.to_string())
     }
 }
 
@@ -128,6 +166,7 @@ impl core::fmt::Display for Variable {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct Command {
     command_ident: Ident,
     command_span: Span,
@@ -156,7 +195,7 @@ impl Command {
         self.command_span.error(message)
     }
 
-    pub(crate) fn err(&self, message: impl core::fmt::Display) -> Result<TokenStream> {
+    pub(crate) fn err<T>(&self, message: impl core::fmt::Display) -> Result<T> {
         Err(self.error(message))
     }
 

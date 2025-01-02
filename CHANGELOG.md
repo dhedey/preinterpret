@@ -9,24 +9,25 @@
   * `[!increment! ...]`
 * Control flow commands:
   * `[!if! COND { ... }]` and `[!if! COND { ... } !else! { ... }]`
+  * `[!while! cond {}]`
 * Token-stream utility commands:
   * `[!empty!]`
   * `[!is_empty! #stream]`
   * `[!length! #stream]` which gives the number of token trees in the token stream.
   * `[!group! ...]` which wraps the tokens in a transparent group. Useful with `!for!`.
+  * Disallow `[!let! #x =]` and require `[!let! #x = [!empty!]]` (give a good error message).
 
 ### To come
 
-* Use `[!let! #x = 12]` instead of `[!set! ..]`.
-* Disallow `[!let! #x =]` and require `[!let! #x = [!empty!]]` (give a good error message).
-* `[!while! cond {}]`
-* `[!for! #x in [#y] {}]`... and make it so that whether commands or variable substitutions get replaced by groups depends on the interpreter context (likely only expressions should use groups)
+* ? Use `[!let! #x = 12]` instead of `[!set! ..]`.
+* `[!for! #x in [#y] {}]`
 * `[!range! 0..5]`
 * `[!error! "message" token stream for span]`
 * Remove `[!increment! ...]` and replace with `[!assign! #x += 1]`
+* Reconfiguring iteration limit
 * Support `!else if!` in `!if!`
-* Token stream manipulation... and make it performant
-  * Extend token stream
+* Token stream manipulation... and make it performant (maybe by storing either TokenStream for extension; or `ParseStream` for consumption)
+  * Extend token stream `[!extend! #x += ...]`
   * Consume from start of token stream
 * Support string & char literals (for comparisons & casts) in expressions
 * Add more tests

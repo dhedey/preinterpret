@@ -43,10 +43,12 @@ define_commands! {
 
         // Expression Commands
         EvaluateCommand,
+        AssignCommand,
         IncrementCommand,
 
         // Control flow commands
         IfCommand,
+        WhileCommand,
 
         // Token Commands
         EmptyCommand,

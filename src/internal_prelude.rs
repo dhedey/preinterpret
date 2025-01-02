@@ -13,11 +13,16 @@ pub(crate) use crate::string_conversion::*;
 
 pub(crate) trait TokenTreeExt: Sized {
     fn bool(value: bool, span: Span) -> Self;
+    fn group(tokens: TokenStream, delimeter: Delimiter, span: Span) -> Self;
 }
 
 impl TokenTreeExt for TokenTree {
     fn bool(value: bool, span: Span) -> Self {
         TokenTree::Ident(Ident::new(&value.to_string(), span))
+    }
+
+    fn group(inner_tokens: TokenStream, delimeter: Delimiter, span: Span) -> Self {
+        TokenTree::Group(Group::new(delimeter, inner_tokens).with_span(span))
     }
 }
 
@@ -25,9 +30,9 @@ pub(crate) trait TokenStreamExt: Sized {
     fn push_token_tree(&mut self, token_tree: TokenTree);
     fn push_new_group(
         &mut self,
-        span_range: SpanRange,
-        delimiter: Delimiter,
         inner_tokens: TokenStream,
+        delimiter: Delimiter,
+        span_range: SpanRange,
     );
 }
 
@@ -38,12 +43,11 @@ impl TokenStreamExt for TokenStream {
 
     fn push_new_group(
         &mut self,
-        span_range: SpanRange,
-        delimiter: Delimiter,
         inner_tokens: TokenStream,
+        delimiter: Delimiter,
+        span_range: SpanRange,
     ) {
-        let group = Group::new(delimiter, inner_tokens).with_span(span_range.span());
-        self.push_token_tree(TokenTree::Group(group));
+        self.push_token_tree(TokenTree::group(inner_tokens, delimiter, span_range.span()));
     }
 }
 
