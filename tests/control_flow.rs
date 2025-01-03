@@ -34,7 +34,7 @@ fn test_if() {
 fn test_while() {
     assert_preinterpret_eq!({
         [!set! #x = 0]
-        [!while! (#x < 5) { [!increment! #x] }]
+        [!while! (#x < 5) { [!assign! #x += 1] }]
         #x
     }, 5);
 }

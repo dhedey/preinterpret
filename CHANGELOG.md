@@ -6,7 +6,7 @@
 
 * Expression commands:
   * `[!evaluate! ...]`
-  * `[!increment! ...]`
+  * `[!assign! #x += ...]` for `+` and other supported operators
 * Control flow commands:
   * `[!if! COND { ... }]` and `[!if! COND { ... } !else! { ... }]`
   * `[!while! cond {}]`
@@ -23,7 +23,6 @@
 * `[!for! #x in [#y] {}]`
 * `[!range! 0..5]`
 * `[!error! "message" token stream for span]`
-* Remove `[!increment! ...]` and replace with `[!assign! #x += 1]`
 * Reconfiguring iteration limit
 * Support `!else if!` in `!if!`
 * Token stream manipulation... and make it performant (maybe by storing either TokenStream for extension; or `ParseStream` for consumption)

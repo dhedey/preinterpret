@@ -445,20 +445,28 @@ Other boolean commands could be possible, similar to numeric commands:
   * `[!tokens_eq! 1u64 1]` outputs `false` because these are different literals.
 * `[!str_contains! "needle" [!string! haystack]]` expects two string literals, and outputs `true` if the first string is a substring of the second string.
 
+### Possible extension: Loop, Break
+
+These aren't the highest priority, as they can be simulated with `if` statements inside a `while` loop:
+
+* `[!loop! { ... }]` for `[!while! true { ... }]`
+* `[!break!]` to break the inner-most loop
+
 ### Possible extension: Goto
 
-_This probably isn't needed_.
+_This probably isn't needed, if we have `while` and `for`_.
 
 * `[!label! loop_start]` - defines a label which can be returned to. Effectively, it takes a clones of the remaining token stream after the label in the interpreter.
 * `[!goto! loop_start]` - jumps to the last execution of `[!label! loop_start]`. It unrolls the preinterpret stack (dropping all unwritten token streams) until it finds a stackframe in which the interpreter has the defined label, and continues the token stream from there.
 
 ```rust,ignore
 // Hypothetical future syntax - not yet implemented!
+// For now you can use a `[!while! #i <= 100 { ... }]` instead
 preinterpret::preinterpret!{
     [!set! #i = 0]
     [!label! loop]
     const [!ident! AB #i]: u8 = 0;
-    [!increment! #i]
+    [!assign! #i += 1]
     [!if! (#i <= 100) { [!goto! loop] }]
 }
 ```

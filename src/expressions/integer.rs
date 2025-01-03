@@ -85,25 +85,6 @@ impl EvaluationInteger {
             }
         }
     }
-
-    pub(crate) fn increment(self, operator_span: SpanRange) -> Result<Self> {
-        let span_for_output = self.source_span;
-        EvaluationOutput::Value(EvaluationValue::Integer(self))
-            .expect_value_pair(
-                PairedBinaryOperator::Addition,
-                EvaluationOutput::Value(EvaluationValue::Integer(EvaluationInteger::new(
-                    EvaluationIntegerValue::Untyped(UntypedInteger::from_fallback(1)),
-                    operator_span,
-                ))),
-                operator_span,
-            )?
-            .handle_paired_binary_operation(BinaryOperation {
-                span_for_output,
-                operator_span,
-                operator: BinaryOperator::Paired(PairedBinaryOperator::Addition),
-            })?
-            .expect_integer("Integer should be created by summing too integers")
-    }
 }
 
 impl quote::ToTokens for EvaluationInteger {

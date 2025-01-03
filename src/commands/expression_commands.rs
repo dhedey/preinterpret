@@ -71,28 +71,3 @@ impl AssignStatementStart {
         })
     }
 }
-
-pub(crate) struct IncrementCommand;
-
-impl CommandDefinition for IncrementCommand {
-    const COMMAND_NAME: &'static str = "increment";
-
-    fn execute(interpreter: &mut Interpreter, mut command: Command) -> Result<TokenStream> {
-        let error_message = "Expected [!increment! #variable]";
-        let variable = command
-            .argument_tokens()
-            .next_item_as_variable(error_message)?;
-        command.argument_tokens().assert_end(error_message)?;
-        let variable_contents = variable.read_substitution(interpreter)?;
-        let evaluated_integer =
-            evaluate_expression(variable_contents.clone(), ExpressionParsingMode::Standard)?
-                .expect_integer(&format!("Expected {variable} to evaluate to an integer"))?;
-        interpreter.set_variable(
-            variable.variable_name().to_string(),
-            evaluated_integer
-                .increment(command.span_range())?
-                .to_token_stream(),
-        );
-        Ok(TokenStream::new())
-    }
-}

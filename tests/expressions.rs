@@ -41,19 +41,6 @@ fn test_basic_evaluate_works() {
 }
 
 #[test]
-fn increment_works() {
-    assert_preinterpret_eq!(
-        {
-            [!set! #x = 2 + 2]
-            [!increment! #x]
-            [!increment! #x]
-            #x
-        },
-        6
-    );
-}
-
-#[test]
 fn assign_works() {
     assert_preinterpret_eq!(
         {
