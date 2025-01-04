@@ -5,29 +5,27 @@ pub(crate) struct IfCommand;
 impl CommandDefinition for IfCommand {
     const COMMAND_NAME: &'static str = "if";
 
-    fn execute(interpreter: &mut Interpreter, mut command: Command) -> Result<TokenStream> {
-        let parsed = match parse_if_statement(command.argument_tokens()) {
+    fn execute(interpreter: &mut Interpreter, mut command: Command) -> Result<InterpretedStream> {
+        let parsed = match parse_if_statement(command.arguments()) {
             Some(parsed) => parsed,
             None => {
                 return command.err("Expected [!if! (condition) { true_code }] or [!if! (condition) { true_code } !else! { false_code}]");
             }
         };
 
-        let interpreted_condition =
-            interpreter.interpret_item(parsed.condition, SubstitutionMode::expression())?;
-        let evaluated_condition = evaluate_expression(
-            interpreted_condition,
-            ExpressionParsingMode::BeforeCurlyBraces,
-        )?
-        .expect_bool("An if condition must evaluate to a boolean")?
-        .value();
+        let evaluated_condition = parsed
+            .condition
+            .interpret_as_expression(interpreter)?
+            .evaluate()?
+            .expect_bool("An if condition must evaluate to a boolean")?
+            .value();
 
         if evaluated_condition {
-            interpreter.interpret_token_stream(parsed.true_code, SubstitutionMode::token_stream())
+            parsed.true_code.interpret_as_tokens(interpreter)
         } else if let Some(false_code) = parsed.false_code {
-            interpreter.interpret_token_stream(false_code, SubstitutionMode::token_stream())
+            false_code.interpret_as_tokens(interpreter)
         } else {
-            Ok(TokenStream::new())
+            Ok(InterpretedStream::new())
         }
     }
 }
@@ -65,34 +63,33 @@ pub(crate) struct WhileCommand;
 impl CommandDefinition for WhileCommand {
     const COMMAND_NAME: &'static str = "while";
 
-    fn execute(interpreter: &mut Interpreter, mut command: Command) -> Result<TokenStream> {
-        let parsed = match parse_while_statement(command.argument_tokens()) {
+    fn execute(interpreter: &mut Interpreter, mut command: Command) -> Result<InterpretedStream> {
+        let parsed = match parse_while_statement(command.arguments()) {
             Some(parsed) => parsed,
             None => {
                 return command.err("Expected [!while! (condition) { code }]");
             }
         };
 
-        let mut output = TokenStream::new();
+        let mut output = InterpretedStream::new();
         let mut iteration_count = 0;
         loop {
-            let interpreted_condition =
-                interpreter.interpret_item(parsed.condition.clone(), SubstitutionMode::expression())?;
-            let evaluated_condition = evaluate_expression(
-                interpreted_condition,
-                ExpressionParsingMode::BeforeCurlyBraces,
-            )?
-            .expect_bool("An if condition must evaluate to a boolean")?
-            .value();
+            let evaluated_condition = parsed
+                .condition
+                .clone()
+                .interpret_as_expression(interpreter)?
+                .evaluate()?
+                .expect_bool("An if condition must evaluate to a boolean")?
+                .value();
 
-            iteration_count += 1;
             if !evaluated_condition {
                 break;
             }
+
+            iteration_count += 1;
             interpreter.config().check_iteration_count(&command, iteration_count)?;
-            interpreter.interpret_token_stream_into(
-                parsed.code.clone(),
-                SubstitutionMode::token_stream(),
+            parsed.code.clone().interpret_as_tokens_into(
+                interpreter,
                 &mut output,
             )?;
         }

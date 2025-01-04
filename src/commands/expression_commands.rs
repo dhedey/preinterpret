@@ -5,10 +5,9 @@ pub(crate) struct EvaluateCommand;
 impl CommandDefinition for EvaluateCommand {
     const COMMAND_NAME: &'static str = "evaluate";
 
-    fn execute(interpreter: &mut Interpreter, mut command: Command) -> Result<TokenStream> {
-        let token_stream =
-            command.interpret_remaining_arguments(interpreter, SubstitutionMode::expression())?;
-        Ok(evaluate_expression(token_stream, ExpressionParsingMode::Standard)?.into_token_stream())
+    fn execute(interpreter: &mut Interpreter, mut command: Command) -> Result<InterpretedStream> {
+        let expression = command.arguments().interpret_as_expression(interpreter)?;
+        Ok(expression.evaluate()?.into_interpreted_stream())
     }
 }
 
@@ -17,37 +16,22 @@ pub(crate) struct AssignCommand;
 impl CommandDefinition for AssignCommand {
     const COMMAND_NAME: &'static str = "assign";
 
-    fn execute(interpreter: &mut Interpreter, mut command: Command) -> Result<TokenStream> {
+    fn execute(interpreter: &mut Interpreter, mut command: Command) -> Result<InterpretedStream> {
         let AssignStatementStart {
             variable,
             operator,
-        } = AssignStatementStart::parse(command.argument_tokens())
+        } = AssignStatementStart::parse(command.arguments())
             .ok_or_else(|| command.error("Expected [!assign! #variable += ...] for + or some other operator supported in an expression"))?;
 
-        let mut expression_tokens = TokenStream::new();
-        expression_tokens.push_new_group(
-            // TODO: Replace with `variable.read_into(tokens, substitution_mode)`
-            // TODO: Replace most methods on interpeter with e.g.
-            // command.interpret_into, next_item.interpet_into, etc.
-            // And also create an Expression struct
-            // TODO: Fix Expression to not need different parsing modes,
-            // and to be parsed from the full token stream or until braces { .. }
-            // or as a single item
-            variable.read_required(interpreter)?.clone(),
-            Delimiter::None,
-            variable.span_range(),
-        );
-        expression_tokens.push_token_tree(operator.into());
-        expression_tokens.push_new_group(
-            command.interpret_remaining_arguments(interpreter, SubstitutionMode::expression())?,
-            Delimiter::None,
-            command.span_range(),
-        );
+        let mut expression_stream = ExpressionStream::new();
+        variable.interpret_as_expression_into(interpreter, &mut expression_stream)?;
+        operator.into_token_stream().interpret_as_expression_into(interpreter, &mut expression_stream)?;
+        command.arguments().interpret_as_expression_into(interpreter, &mut expression_stream)?;
 
-        let output = evaluate_expression(expression_tokens, ExpressionParsingMode::Standard)?.into_token_stream();
+        let output = expression_stream.evaluate()?.into_interpreted_stream();
         variable.set(interpreter, output);
 
-        Ok(TokenStream::new())
+        Ok(InterpretedStream::new())
     }
 }
 

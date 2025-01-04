@@ -510,11 +510,11 @@
 //!
 //! Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in this crate by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
 //!
-mod command;
 mod commands;
 mod expressions;
 mod internal_prelude;
-mod interpreter;
+mod interpretation;
+mod traits;
 mod string_conversion;
 
 use internal_prelude::*;
@@ -538,7 +538,10 @@ use internal_prelude::*;
 /// See the [crate-level documentation](crate) for full details.
 #[proc_macro]
 pub fn preinterpret(token_stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    interpret(proc_macro2::TokenStream::from(token_stream))
+    let mut interpreter = Interpreter::new();
+    proc_macro2::TokenStream::from(token_stream)
+        .interpret_as_tokens(&mut interpreter)
+        .map(InterpretedStream::into_token_stream)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }

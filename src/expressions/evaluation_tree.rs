@@ -429,8 +429,12 @@ impl EvaluationOutput {
 
     pub(super) fn into_value(self) -> EvaluationValue {
         match self {
-            Self::Value(literal) => literal,
+            Self::Value(value) => value,
         }
+    }
+
+    pub(crate) fn into_interpreted_stream(self) -> InterpretedStream {
+        InterpretedStream::raw(self.into_token_stream())
     }
 }
 

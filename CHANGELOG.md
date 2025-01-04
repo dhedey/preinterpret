@@ -20,6 +20,8 @@
 ### To come
 
 * ? Use `[!let! #x = 12]` instead of `[!set! ..]`.
+* Fix `if` and `while` to read expression until braces
+* Refactor command parsing/execution
 * `[!for! #x in [#y] {}]`
 * `[!range! 0..5]`
 * `[!error! "message" token stream for span]`
