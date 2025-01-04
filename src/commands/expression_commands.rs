@@ -45,7 +45,7 @@ struct AssignStatementStart {
 }
 
 impl AssignStatementStart {
-    fn parse(tokens: &mut Tokens) -> Option<Self> {
+    fn parse(tokens: &mut InterpreterParseStream) -> Option<Self> {
         let variable = tokens.next_item_as_variable("").ok()?;
         let operator = tokens.next_as_punct()?;
         match operator.as_char() {

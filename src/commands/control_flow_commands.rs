@@ -36,7 +36,7 @@ struct IfStatement {
     false_code: Option<TokenStream>,
 }
 
-fn parse_if_statement(tokens: &mut Tokens) -> Option<IfStatement> {
+fn parse_if_statement(tokens: &mut InterpreterParseStream) -> Option<IfStatement> {
     let condition = tokens.next_item().ok()??;
     let true_code = tokens.next_as_kinded_group(Delimiter::Brace)?.stream();
     let false_code = if tokens.peek().is_some() {
@@ -105,7 +105,7 @@ struct WhileStatement {
     code: TokenStream,
 }
 
-fn parse_while_statement(tokens: &mut Tokens) -> Option<WhileStatement> {
+fn parse_while_statement(tokens: &mut InterpreterParseStream) -> Option<WhileStatement> {
     let condition = tokens.next_item().ok()??;
     let code = tokens.next_as_kinded_group(Delimiter::Brace)?.stream();
     tokens.check_end()?;

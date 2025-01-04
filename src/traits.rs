@@ -46,7 +46,7 @@ impl Interpret for TokenStream {
         output: &mut InterpretedStream,
     ) -> Result<()> {
         let span_range = self.span_range();
-        Tokens::new(self, span_range).interpret_as_tokens_into(interpreter, output)
+        InterpreterParseStream::new(self, span_range).interpret_as_tokens_into(interpreter, output)
     }
 
     fn interpret_as_expression_into(
@@ -55,7 +55,8 @@ impl Interpret for TokenStream {
         expression_stream: &mut ExpressionStream,
     ) -> Result<()> {
         let span_range = self.span_range();
-        Tokens::new(self, span_range).interpret_as_expression_into(interpreter, expression_stream)
+        InterpreterParseStream::new(self, span_range)
+            .interpret_as_expression_into(interpreter, expression_stream)
     }
 }
 

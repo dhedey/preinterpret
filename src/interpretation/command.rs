@@ -62,7 +62,7 @@ impl CommandInvocation {
         command_ident: Ident,
         command_kind: CommandKind,
         group: &Group,
-        argument_tokens: Tokens,
+        argument_tokens: InterpreterParseStream,
     ) -> Self {
         Self {
             command_kind,
@@ -112,11 +112,15 @@ impl Interpret for CommandInvocation {
 pub(crate) struct Command {
     command_ident: Ident,
     command_span: Span,
-    argument_tokens: Tokens,
+    argument_tokens: InterpreterParseStream,
 }
 
 impl Command {
-    fn new(command_ident: Ident, command_span: Span, argument_tokens: Tokens) -> Self {
+    fn new(
+        command_ident: Ident,
+        command_span: Span,
+        argument_tokens: InterpreterParseStream,
+    ) -> Self {
         Self {
             command_ident,
             command_span,
@@ -141,7 +145,7 @@ impl Command {
         Err(self.error(message))
     }
 
-    pub(crate) fn arguments(&mut self) -> &mut Tokens {
+    pub(crate) fn arguments(&mut self) -> &mut InterpreterParseStream {
         &mut self.argument_tokens
     }
 }

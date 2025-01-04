@@ -20,7 +20,7 @@ impl CommandDefinition for SetCommand {
     }
 }
 
-pub(crate) fn parse_variable_set(tokens: &mut Tokens) -> Option<Variable> {
+pub(crate) fn parse_variable_set(tokens: &mut InterpreterParseStream) -> Option<Variable> {
     let variable = tokens.next_item_as_variable("").ok()?;
     tokens.next_as_punct_matching('=')?;
     Some(variable)

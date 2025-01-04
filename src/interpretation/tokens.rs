@@ -1,25 +1,26 @@
 use crate::internal_prelude::*;
 
-/// An analogue to [`syn::parse::ParseStream`].
-///
-/// In future, perhaps we should use it.
 #[derive(Clone)]
-pub(crate) struct Tokens(
-    iter::Peekable<<TokenStream as IntoIterator>::IntoIter>,
-    SpanRange,
-);
+pub(crate) struct InterpreterParseStream {
+    // In future, we should consider making this a `syn::Cursor`...
+    tokens: iter::Peekable<<TokenStream as IntoIterator>::IntoIter>,
+    span_range: SpanRange,
+}
 
-impl Tokens {
-    pub(crate) fn new(tokens: TokenStream, span_range: SpanRange) -> Self {
-        Self(tokens.into_iter().peekable(), span_range)
+impl InterpreterParseStream {
+    pub(crate) fn new(token_stream: TokenStream, span_range: SpanRange) -> Self {
+        Self {
+            tokens: token_stream.into_iter().peekable(),
+            span_range,
+        }
     }
 
     pub(crate) fn peek(&mut self) -> Option<&TokenTree> {
-        self.0.peek()
+        self.tokens.peek()
     }
 
     pub(crate) fn next(&mut self) -> Option<TokenTree> {
-        self.0.next()
+        self.tokens.next()
     }
 
     pub(crate) fn next_as_ident(&mut self) -> Option<Ident> {
@@ -107,11 +108,11 @@ impl Tokens {
     }
 
     pub(crate) fn read_all_as_token_stream(&mut self) -> TokenStream {
-        core::mem::replace(&mut self.0, TokenStream::new().into_iter().peekable()).collect()
+        core::mem::replace(&mut self.tokens, TokenStream::new().into_iter().peekable()).collect()
     }
 }
 
-impl<'a> Interpret for &'a mut Tokens {
+impl<'a> Interpret for &'a mut InterpreterParseStream {
     fn interpret_as_tokens_into(
         self,
         interpreter: &mut Interpreter,
@@ -132,23 +133,30 @@ impl<'a> Interpret for &'a mut Tokens {
         while let Some(next_item) = self.next_item()? {
             next_item.interpret_as_expression_into(interpreter, &mut inner_expression_stream)?;
         }
-        expression_stream.push_expression_group(inner_expression_stream, Delimiter::None, self.1);
+        expression_stream.push_expression_group(
+            inner_expression_stream,
+            Delimiter::None,
+            self.span_range,
+        );
         Ok(())
     }
 }
 
 fn parse_command_invocation(group: &Group) -> Result<Option<CommandInvocation>> {
-    fn consume_command_start(group: &Group) -> Option<(Ident, Tokens)> {
+    fn consume_command_start(group: &Group) -> Option<(Ident, InterpreterParseStream)> {
         if group.delimiter() != Delimiter::Bracket {
             return None;
         }
-        let mut tokens = Tokens::new(group.stream(), group.span_range());
+        let mut tokens = InterpreterParseStream::new(group.stream(), group.span_range());
         tokens.next_as_punct_matching('!')?;
         let ident = tokens.next_as_ident()?;
         Some((ident, tokens))
     }
 
-    fn consume_command_end(command_ident: &Ident, tokens: &mut Tokens) -> Option<CommandKind> {
+    fn consume_command_end(
+        command_ident: &Ident,
+        tokens: &mut InterpreterParseStream,
+    ) -> Option<CommandKind> {
         let command_kind = CommandKind::attempt_parse(command_ident)?;
         tokens.next_as_punct_matching('!')?;
         Some(command_kind)
@@ -176,7 +184,10 @@ fn parse_command_invocation(group: &Group) -> Result<Option<CommandInvocation>> 
 }
 
 // We ensure we don't consume any tokens unless we have a variable substitution
-fn parse_only_if_variable_substitution(punct: &Punct, tokens: &mut Tokens) -> Option<Variable> {
+fn parse_only_if_variable_substitution(
+    punct: &Punct,
+    tokens: &mut InterpreterParseStream,
+) -> Option<Variable> {
     if punct.as_char() != '#' {
         return None;
     }
