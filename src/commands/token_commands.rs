@@ -6,7 +6,9 @@ impl CommandDefinition for EmptyCommand {
     const COMMAND_NAME: &'static str = "empty";
 
     fn execute(_interpreter: &mut Interpreter, mut command: Command) -> Result<InterpretedStream> {
-        command.arguments().assert_end("The !empty! command does not take any arguments")?;
+        command
+            .arguments()
+            .assert_end("The !empty! command does not take any arguments")?;
         Ok(InterpretedStream::new())
     }
 }

@@ -38,7 +38,11 @@ impl InterpretedStream {
         delimiter: Delimiter,
         span_range: SpanRange,
     ) {
-        self.push_raw_token_tree(TokenTree::group(inner_tokens.token_stream, delimiter, span_range.span()));
+        self.push_raw_token_tree(TokenTree::group(
+            inner_tokens.token_stream,
+            delimiter,
+            span_range.span(),
+        ));
     }
 
     pub(crate) fn is_empty(&self) -> bool {

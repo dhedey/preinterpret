@@ -1,14 +1,22 @@
 use crate::internal_prelude::*;
 
 pub(crate) trait Interpret: Sized {
-    fn interpret_as_tokens_into(self, interpreter: &mut Interpreter, output: &mut InterpretedStream) -> Result<()>;
+    fn interpret_as_tokens_into(
+        self,
+        interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()>;
     fn interpret_as_tokens(self, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
         let mut output = InterpretedStream::new();
         self.interpret_as_tokens_into(interpreter, &mut output)?;
         Ok(output)
     }
 
-    fn interpret_as_expression_into(self, interpreter: &mut Interpreter, expression_stream: &mut ExpressionStream) -> Result<()>;
+    fn interpret_as_expression_into(
+        self,
+        interpreter: &mut Interpreter,
+        expression_stream: &mut ExpressionStream,
+    ) -> Result<()>;
     fn interpret_as_expression(self, interpreter: &mut Interpreter) -> Result<ExpressionStream> {
         let mut output = ExpressionStream::new();
         self.interpret_as_expression_into(interpreter, &mut output)?;
@@ -32,19 +40,31 @@ impl TokenTreeExt for TokenTree {
 }
 
 impl Interpret for TokenStream {
-    fn interpret_as_tokens_into(self, interpreter: &mut Interpreter, output: &mut InterpretedStream) -> Result<()> {
+    fn interpret_as_tokens_into(
+        self,
+        interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()> {
         let span_range = self.span_range();
         Tokens::new(self, span_range).interpret_as_tokens_into(interpreter, output)
     }
 
-    fn interpret_as_expression_into(self, interpreter: &mut Interpreter, expression_stream: &mut ExpressionStream) -> Result<()> {
+    fn interpret_as_expression_into(
+        self,
+        interpreter: &mut Interpreter,
+        expression_stream: &mut ExpressionStream,
+    ) -> Result<()> {
         let span_range = self.span_range();
         Tokens::new(self, span_range).interpret_as_expression_into(interpreter, expression_stream)
     }
 }
 
 impl Interpret for Group {
-    fn interpret_as_tokens_into(self, interpreter: &mut Interpreter, output: &mut InterpretedStream) -> Result<()> {
+    fn interpret_as_tokens_into(
+        self,
+        interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()> {
         output.push_new_group(
             self.stream().interpret_as_tokens(interpreter)?,
             self.delimiter(),
@@ -53,7 +73,11 @@ impl Interpret for Group {
         Ok(())
     }
 
-    fn interpret_as_expression_into(self, interpreter: &mut Interpreter, expression_stream: &mut ExpressionStream) -> Result<()> {
+    fn interpret_as_expression_into(
+        self,
+        interpreter: &mut Interpreter,
+        expression_stream: &mut ExpressionStream,
+    ) -> Result<()> {
         expression_stream.push_expression_group(
             self.stream().interpret_as_expression(interpreter)?,
             self.delimiter(),

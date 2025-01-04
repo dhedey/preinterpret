@@ -514,8 +514,8 @@ mod commands;
 mod expressions;
 mod internal_prelude;
 mod interpretation;
-mod traits;
 mod string_conversion;
+mod traits;
 
 use internal_prelude::*;
 

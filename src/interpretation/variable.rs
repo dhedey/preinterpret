@@ -18,18 +18,11 @@ impl Variable {
         self.variable_name.to_string()
     }
 
-    pub(crate) fn set<'i>(
-        &self,
-        interpreter: &'i mut Interpreter,
-        value: InterpretedStream,
-    ) {
+    pub(crate) fn set(&self, interpreter: &mut Interpreter, value: InterpretedStream) {
         interpreter.set_variable(self.variable_name(), value);
     }
 
-    fn substitute(
-        &self,
-        interpreter: &Interpreter,
-    ) -> Result<InterpretedStream> {
+    fn substitute(&self, interpreter: &Interpreter) -> Result<InterpretedStream> {
         Ok(self.read_or_else(
             interpreter,
             || format!(
@@ -51,26 +44,28 @@ impl Variable {
         }
     }
 
-    fn read_option<'i>(
-        &self,
-        interpreter: &'i Interpreter,
-    ) -> Option<&'i InterpretedStream> {
+    fn read_option<'i>(&self, interpreter: &'i Interpreter) -> Option<&'i InterpretedStream> {
         let Variable { variable_name, .. } = self;
         interpreter.get_variable(&variable_name.to_string())
     }
 }
 
 impl<'a> Interpret for &'a Variable {
-    fn interpret_as_tokens_into(self, interpreter: &mut Interpreter, output: &mut InterpretedStream) -> Result<()> {
+    fn interpret_as_tokens_into(
+        self,
+        interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()> {
         output.extend(self.substitute(interpreter)?);
         Ok(())
     }
 
-    fn interpret_as_expression_into(self, interpreter: &mut Interpreter, expression_stream: &mut ExpressionStream) -> Result<()> {
-        expression_stream.push_interpreted_group(
-            self.substitute(interpreter)?,
-            self.span_range(),
-        );
+    fn interpret_as_expression_into(
+        self,
+        interpreter: &mut Interpreter,
+        expression_stream: &mut ExpressionStream,
+    ) -> Result<()> {
+        expression_stream.push_interpreted_group(self.substitute(interpreter)?, self.span_range());
         Ok(())
     }
 }

@@ -9,7 +9,11 @@ pub(crate) enum NextItem {
 }
 
 impl Interpret for NextItem {
-    fn interpret_as_tokens_into(self, interpreter: &mut Interpreter, output: &mut InterpretedStream) -> Result<()> {
+    fn interpret_as_tokens_into(
+        self,
+        interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()> {
         match self {
             NextItem::Leaf(token_tree) => {
                 output.push_raw_token_tree(token_tree);
@@ -27,7 +31,11 @@ impl Interpret for NextItem {
         Ok(())
     }
 
-    fn interpret_as_expression_into(self, interpreter: &mut Interpreter, expression_stream: &mut ExpressionStream) -> Result<()> {
+    fn interpret_as_expression_into(
+        self,
+        interpreter: &mut Interpreter,
+        expression_stream: &mut ExpressionStream,
+    ) -> Result<()> {
         match self {
             NextItem::Leaf(token_tree) => {
                 expression_stream.push_raw_token_tree(token_tree);

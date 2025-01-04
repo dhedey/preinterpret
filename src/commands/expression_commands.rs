@@ -25,8 +25,12 @@ impl CommandDefinition for AssignCommand {
 
         let mut expression_stream = ExpressionStream::new();
         variable.interpret_as_expression_into(interpreter, &mut expression_stream)?;
-        operator.into_token_stream().interpret_as_expression_into(interpreter, &mut expression_stream)?;
-        command.arguments().interpret_as_expression_into(interpreter, &mut expression_stream)?;
+        operator
+            .into_token_stream()
+            .interpret_as_expression_into(interpreter, &mut expression_stream)?;
+        command
+            .arguments()
+            .interpret_as_expression_into(interpreter, &mut expression_stream)?;
 
         let output = expression_stream.evaluate()?.into_interpreted_stream();
         variable.set(interpreter, output);
@@ -49,9 +53,6 @@ impl AssignStatementStart {
             _ => return None,
         }
         tokens.next_as_punct_matching('=')?;
-        Some(AssignStatementStart {
-            variable,
-            operator,
-        })
+        Some(AssignStatementStart { variable, operator })
     }
 }

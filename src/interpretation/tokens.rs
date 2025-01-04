@@ -1,10 +1,13 @@
 use crate::internal_prelude::*;
 
 /// An analogue to [`syn::parse::ParseStream`].
-/// 
+///
 /// In future, perhaps we should use it.
 #[derive(Clone)]
-pub(crate) struct Tokens(iter::Peekable<<TokenStream as IntoIterator>::IntoIter>, SpanRange);
+pub(crate) struct Tokens(
+    iter::Peekable<<TokenStream as IntoIterator>::IntoIter>,
+    SpanRange,
+);
 
 impl Tokens {
     pub(crate) fn new(tokens: TokenStream, span_range: SpanRange) -> Self {
@@ -103,38 +106,33 @@ impl Tokens {
         }
     }
 
-    pub(crate) fn into_token_stream(&mut self) -> TokenStream {
+    pub(crate) fn read_all_as_token_stream(&mut self) -> TokenStream {
         core::mem::replace(&mut self.0, TokenStream::new().into_iter().peekable()).collect()
     }
 }
 
 impl<'a> Interpret for &'a mut Tokens {
-    fn interpret_as_tokens_into(self, interpreter: &mut Interpreter, output: &mut InterpretedStream) -> Result<()> {
-        loop {
-            match self.next_item()? {
-                Some(next_item) => {
-                    next_item.interpret_as_tokens_into(interpreter, output)?
-                }
-                None => return Ok(()),
-            }
+    fn interpret_as_tokens_into(
+        self,
+        interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()> {
+        while let Some(next_item) = self.next_item()? {
+            next_item.interpret_as_tokens_into(interpreter, output)?;
         }
+        Ok(())
     }
 
-    fn interpret_as_expression_into(self, interpreter: &mut Interpreter, expression_stream: &mut ExpressionStream) -> Result<()> {
+    fn interpret_as_expression_into(
+        self,
+        interpreter: &mut Interpreter,
+        expression_stream: &mut ExpressionStream,
+    ) -> Result<()> {
         let mut inner_expression_stream = ExpressionStream::new();
-        loop {
-            match self.next_item()? {
-                Some(next_item) => {
-                    next_item.interpret_as_expression_into(interpreter, &mut inner_expression_stream)?
-                }
-                None => break,
-            }
+        while let Some(next_item) = self.next_item()? {
+            next_item.interpret_as_expression_into(interpreter, &mut inner_expression_stream)?;
         }
-        expression_stream.push_expression_group(
-            inner_expression_stream,
-            Delimiter::None,
-            self.1,
-        );
+        expression_stream.push_expression_group(inner_expression_stream, Delimiter::None, self.1);
         Ok(())
     }
 }

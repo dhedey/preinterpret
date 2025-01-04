@@ -16,12 +16,23 @@ impl ExpressionStream {
         self.interpreted_stream.push_raw_token_tree(token_tree);
     }
 
-    pub(crate) fn push_interpreted_group(&mut self, contents: InterpretedStream, span_range: SpanRange) {
-        self.interpreted_stream.push_new_group(contents, Delimiter::None, span_range);
+    pub(crate) fn push_interpreted_group(
+        &mut self,
+        contents: InterpretedStream,
+        span_range: SpanRange,
+    ) {
+        self.interpreted_stream
+            .push_new_group(contents, Delimiter::None, span_range);
     }
 
-    pub(crate) fn push_expression_group(&mut self, contents: Self, delimiter: Delimiter, span_range: SpanRange) {
-        self.interpreted_stream.push_new_group(contents.interpreted_stream, delimiter, span_range);
+    pub(crate) fn push_expression_group(
+        &mut self,
+        contents: Self,
+        delimiter: Delimiter,
+        span_range: SpanRange,
+    ) {
+        self.interpreted_stream
+            .push_new_group(contents.interpreted_stream, delimiter, span_range);
     }
 
     pub(crate) fn evaluate(self) -> Result<EvaluationOutput> {
@@ -40,7 +51,6 @@ impl ExpressionStream {
         // `Expr::parse_without_eager_brace` or `Expr::parse_with_earlier_boundary_rule`.
         let expression = Expr::parse.parse2(self.interpreted_stream.into_token_stream())?;
 
-        EvaluationTree::build_from(&expression)?
-            .evaluate()
+        EvaluationTree::build_from(&expression)?.evaluate()
     }
 }

@@ -87,11 +87,13 @@ impl CommandDefinition for WhileCommand {
             }
 
             iteration_count += 1;
-            interpreter.config().check_iteration_count(&command, iteration_count)?;
-            parsed.code.clone().interpret_as_tokens_into(
-                interpreter,
-                &mut output,
-            )?;
+            interpreter
+                .config()
+                .check_iteration_count(&command, iteration_count)?;
+            parsed
+                .code
+                .clone()
+                .interpret_as_tokens_into(interpreter, &mut output)?;
         }
 
         Ok(output)
@@ -107,8 +109,5 @@ fn parse_while_statement(tokens: &mut Tokens) -> Option<WhileStatement> {
     let condition = tokens.next_item().ok()??;
     let code = tokens.next_as_kinded_group(Delimiter::Brace)?.stream();
     tokens.check_end()?;
-    Some(WhileStatement {
-        condition,
-        code,
-    })
+    Some(WhileStatement { condition, code })
 }

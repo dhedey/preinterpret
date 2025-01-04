@@ -32,7 +32,9 @@ impl CommandDefinition for RawCommand {
     const COMMAND_NAME: &'static str = "raw";
 
     fn execute(_interpreter: &mut Interpreter, mut command: Command) -> Result<InterpretedStream> {
-        Ok(InterpretedStream::raw(command.arguments().into_token_stream()))
+        Ok(InterpretedStream::raw(
+            command.arguments().read_all_as_token_stream(),
+        ))
     }
 }
 

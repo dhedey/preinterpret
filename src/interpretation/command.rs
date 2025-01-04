@@ -88,16 +88,22 @@ impl HasSpanRange for CommandInvocation {
 }
 
 impl Interpret for CommandInvocation {
-    fn interpret_as_tokens_into(self, interpreter: &mut Interpreter, output: &mut InterpretedStream) -> Result<()> {
+    fn interpret_as_tokens_into(
+        self,
+        interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()> {
         self.execute_into(interpreter, output)
     }
 
-    fn interpret_as_expression_into(self, interpreter: &mut Interpreter, expression_stream: &mut ExpressionStream) -> Result<()> {
+    fn interpret_as_expression_into(
+        self,
+        interpreter: &mut Interpreter,
+        expression_stream: &mut ExpressionStream,
+    ) -> Result<()> {
         let span_range = self.span_range();
-        expression_stream.push_interpreted_group(
-            self.interpret_as_tokens(interpreter)?,
-            span_range,
-        );
+        expression_stream
+            .push_interpreted_group(self.interpret_as_tokens(interpreter)?, span_range);
         Ok(())
     }
 }
