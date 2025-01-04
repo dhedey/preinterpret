@@ -1,8 +1,34 @@
 use crate::internal_prelude::*;
 
+// ===============================================
+// How syn features fits with preinterpret parsing
+// ===============================================
+//
+// I spent quite a while considering whether this could be wrapping a
+// `syn::parse::ParseBuffer<'a>` or `syn::buffer::Cursor<'a>`, instead
+// of a custom Peekable<TokenIter>
+//
+// I came to the conclusion it doesn't make much sense for now, but
+// could be explored in future:
+//
+// * ParseBuffer / ParseStream is powerful but restrictive
+//   > We currently have an Interpreter with us as we parse, which the `Parse`
+//     trait doesn't allow.
+//   > We could consider splitting into a two-pass Parse/Interpret cycle,
+//     but it might be hard to reason about and would be a big change
+// * Cursor needs to reference into some TokenBuffer
+//   > We would convert the input TokenStream into a TokenBuffer and
+//     Cursor into that
+//   > This could work, assuming we don't have a need to parse intermediate
+//     outputs
+//
+// In terms of future features:
+// * We may need to store special TokenBuffer / parsable #VARIABLES
+// * For parse/destructuring operations, we may need to temporarily
+//   create parse streams in scope of a command execution
+
 #[derive(Clone)]
 pub(crate) struct InterpreterParseStream {
-    // In future, we should consider making this a `syn::Cursor`...
     tokens: iter::Peekable<<TokenStream as IntoIterator>::IntoIter>,
     span_range: SpanRange,
 }
