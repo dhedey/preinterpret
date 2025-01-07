@@ -427,7 +427,7 @@ We could support a piped calling convention, such as the `[!pipe! ...]` special 
 
 Do some testing and ensure there are tools to avoid `N^2` performance when doing token manipulation, e.g. with:
 
-* `[!append! #stream += new tokens...]`
+* `[!extend! #stream += new tokens...]`
 * `[!consume_from! #stream #x]` where `#x` is read as the first token tree from `#stream`
 * `[!consume_from! #stream (<PARSE_DESTRUCTURING>)]` where the parser is read greedily from `#stream`
 

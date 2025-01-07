@@ -12,20 +12,28 @@ use crate::internal_prelude::*;
 // could be explored in future:
 //
 // * ParseBuffer / ParseStream is powerful but restrictive
+//   > Due to how it works, we'd need to use it to parse the initial input
+//     in a single initial pass.
 //   > We currently have an Interpreter with us as we parse, which the `Parse`
 //     trait doesn't allow.
-//   > We could consider splitting into a two-pass Parse/Interpret cycle,
-//     but it might be hard to reason about and would be a big change
+//   > We could consider splitting into a two-pass approach, where we start
+//     with a Parse step, and then we interpret after, but it would be quite
+//     a big change internally
 // * Cursor needs to reference into some TokenBuffer
 //   > We would convert the input TokenStream into a TokenBuffer and
 //     Cursor into that
-//   > This could work, assuming we don't have a need to parse intermediate
-//     outputs
+//   > But this can't be converted into a ParseBuffer outside of the syn crate,
+//     and so it doesn't get much benefit
 //
-// In terms of future features:
-// * We may need to store special TokenBuffer / parsable #VARIABLES
+// Either of these approaches appear disjoint from the parse/destructuring
+// operations...
+//
 // * For parse/destructuring operations, we may need to temporarily
 //   create parse streams in scope of a command execution
+// * For #VARIABLES which can be incrementally consumed / parsed,
+//   it would be nice to be able to store a Cursor into a TokenBuffer,
+//   but annoyingly it isn't possible to convert this to a ParseStream
+//   outside of syn.
 
 #[derive(Clone)]
 pub(crate) struct InterpreterParseStream {
