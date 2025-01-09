@@ -8,23 +8,26 @@ pub(crate) struct InterpretationStream {
 }
 
 impl InterpretationStream {
-    pub(crate) fn parse_from_token_stream(token_stream: TokenStream, span_range: SpanRange) -> Result<Self> {
+    pub(crate) fn parse_from_token_stream(
+        token_stream: TokenStream,
+        span_range: SpanRange,
+    ) -> Result<Self> {
         InterpreterParseStream::new(token_stream, span_range).parse_all_for_interpretation()
     }
 
-    pub(crate) fn parse(parse_stream: &mut InterpreterParseStream, span_range: SpanRange) -> Result<Self> {
+    pub(crate) fn parse(
+        parse_stream: &mut InterpreterParseStream,
+        span_range: SpanRange,
+    ) -> Result<Self> {
         let mut items = Vec::new();
         while let Some(next_item) = NextItem::parse(parse_stream)? {
             items.push(next_item);
         }
-        Ok(Self {
-            items,
-            span_range,
-        })
+        Ok(Self { items, span_range })
     }
 }
 
-impl<'a> Interpret for InterpretationStream {
+impl Interpret for InterpretationStream {
     fn interpret_as_tokens_into(
         self,
         interpreter: &mut Interpreter,
@@ -69,8 +72,9 @@ pub(crate) struct InterpretationGroup {
 
 impl InterpretationGroup {
     pub(super) fn parse(source_group: Group) -> Result<Self> {
-        let interpretation_stream = InterpreterParseStream::new(source_group.stream(), source_group.span_range())
-            .parse_all_for_interpretation()?;
+        let interpretation_stream =
+            InterpreterParseStream::new(source_group.stream(), source_group.span_range())
+                .parse_all_for_interpretation()?;
         Ok(Self {
             source_group,
             interpretation_stream,
@@ -93,7 +97,8 @@ impl Interpret for InterpretationGroup {
         output: &mut InterpretedStream,
     ) -> Result<()> {
         output.push_new_group(
-            self.interpretation_stream.interpret_as_tokens(interpreter)?,
+            self.interpretation_stream
+                .interpret_as_tokens(interpreter)?,
             self.source_group.delimiter(),
             self.source_group.span_range(),
         );
@@ -106,7 +111,8 @@ impl Interpret for InterpretationGroup {
         expression_stream: &mut ExpressionStream,
     ) -> Result<()> {
         expression_stream.push_expression_group(
-            self.interpretation_stream.interpret_as_expression(interpreter)?,
+            self.interpretation_stream
+                .interpret_as_expression(interpreter)?,
             self.source_group.delimiter(),
             self.source_group.span_range(),
         );

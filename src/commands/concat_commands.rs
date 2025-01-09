@@ -57,7 +57,6 @@ fn concat_into_literal(
     Ok(InterpretedStream::of_literal(literal))
 }
 
-
 fn concat_recursive(arguments: InterpretedStream) -> String {
     fn concat_recursive_internal(output: &mut String, arguments: TokenStream) {
         for token_tree in arguments {
@@ -118,9 +117,9 @@ macro_rules! define_concat_command {
 
         impl CommandDefinition for $command {
             const COMMAND_NAME: &'static str = $command_name;
-        
+
             const OUTPUT_BEHAVIOUR: CommandOutputBehaviour = CommandOutputBehaviour::SingleToken;
-        
+
             fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
                 Ok(Self {
                     arguments: arguments.parse_all_for_interpretation()?,
@@ -129,11 +128,14 @@ macro_rules! define_concat_command {
         }
 
         impl CommandInvocation for $command {
-            fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
+            fn execute(
+                self: Box<Self>,
+                interpreter: &mut Interpreter,
+            ) -> Result<InterpretedStream> {
                 $output_fn(self.arguments, interpreter, $conversion_fn)
             }
         }
-    }
+    };
 }
 
 //=======================================

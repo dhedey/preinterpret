@@ -16,12 +16,18 @@ impl CommandDefinition for IfCommand {
         static ERROR: &str = "Expected [!if! (condition) { true_code }] or [!if! (condition) { true_code } !else! { false_code}]";
 
         let condition = arguments.next_item(ERROR)?;
-        let true_code = arguments.next_as_kinded_group(Delimiter::Brace, ERROR)?.into_inner_stream();
+        let true_code = arguments
+            .next_as_kinded_group(Delimiter::Brace, ERROR)?
+            .into_inner_stream();
         let false_code = if !arguments.is_empty() {
             arguments.next_as_punct_matching('!', ERROR)?;
             arguments.next_as_ident_matching("else", ERROR)?;
             arguments.next_as_punct_matching('!', ERROR)?;
-            Some(arguments.next_as_kinded_group(Delimiter::Brace, ERROR)?.into_inner_stream())
+            Some(
+                arguments
+                    .next_as_kinded_group(Delimiter::Brace, ERROR)?
+                    .into_inner_stream(),
+            )
         } else {
             None
         };
@@ -69,7 +75,9 @@ impl CommandDefinition for WhileCommand {
         static ERROR: &str = "Expected [!while! (condition) { code }]";
 
         let condition = arguments.next_item(ERROR)?;
-        let loop_code = arguments.next_as_kinded_group(Delimiter::Brace, ERROR)?.into_inner_stream();
+        let loop_code = arguments
+            .next_as_kinded_group(Delimiter::Brace, ERROR)?
+            .into_inner_stream();
         arguments.assert_end(ERROR)?;
 
         Ok(Self {
@@ -84,7 +92,8 @@ impl CommandInvocation for WhileCommand {
         let mut output = InterpretedStream::new();
         let mut iteration_count = 0;
         loop {
-            let evaluated_condition = self.condition
+            let evaluated_condition = self
+                .condition
                 .clone()
                 .interpret_as_expression(interpreter)?
                 .evaluate()?
@@ -99,7 +108,9 @@ impl CommandInvocation for WhileCommand {
             interpreter
                 .config()
                 .check_iteration_count(&self.condition, iteration_count)?;
-            self.loop_code.clone().interpret_as_tokens_into(interpreter, &mut output)?;
+            self.loop_code
+                .clone()
+                .interpret_as_tokens_into(interpreter, &mut output)?;
         }
 
         Ok(output)

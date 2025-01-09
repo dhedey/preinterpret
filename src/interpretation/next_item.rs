@@ -25,7 +25,8 @@ impl NextItem {
                 }
             }
             TokenTree::Punct(punct) => {
-                if let Some(variable) = Variable::parse_consuming_only_if_match(&punct, parse_stream)
+                if let Some(variable) =
+                    Variable::parse_consuming_only_if_match(&punct, parse_stream)
                 {
                     NextItem::Variable(variable)
                 } else {

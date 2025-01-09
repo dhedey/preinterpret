@@ -545,7 +545,8 @@ pub fn preinterpret(token_stream: proc_macro::TokenStream) -> proc_macro::TokenS
 
 fn preinterpret_internal(input: TokenStream) -> Result<TokenStream> {
     let mut interpreter = Interpreter::new();
-    let interpretation_stream = InterpretationStream::parse_from_token_stream(input, Span::call_site().span_range())?;
+    let interpretation_stream =
+        InterpretationStream::parse_from_token_stream(input, Span::call_site().span_range())?;
     let interpreted_stream = interpretation_stream.interpret_as_tokens(&mut interpreter)?;
     Ok(interpreted_stream.into_token_stream())
 }

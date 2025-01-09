@@ -4,7 +4,7 @@ use super::*;
 ///
 /// Ideally we'd parse expressions at parse time, but that requires writing a custom parser for
 /// a subset of the rust expression tree...
-/// 
+///
 /// Instead, to be lazy for now, we interpret the stream at intepretation time to substitute
 /// in variables and commands, and then parse the resulting expression with syn.
 #[derive(Clone)]

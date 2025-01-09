@@ -39,7 +39,11 @@ impl Default for InterpreterConfig {
 }
 
 impl InterpreterConfig {
-    pub(crate) fn check_iteration_count(&self, span_source: &impl HasSpanRange, count: usize) -> Result<()> {
+    pub(crate) fn check_iteration_count(
+        &self,
+        span_source: &impl HasSpanRange,
+        count: usize,
+    ) -> Result<()> {
         if let Some(limit) = self.iteration_limit {
             if count > limit {
                 return span_source.err(format!("Iteration limit of {} exceeded", limit));

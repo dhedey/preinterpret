@@ -106,7 +106,7 @@ impl Command {
             let ident = tokens.next_as_ident("").ok()?;
             Some((ident, tokens))
         }
-    
+
         fn extract_command_data(
             command_ident: &Ident,
             parse_stream: &mut InterpreterParseStream,
@@ -115,14 +115,14 @@ impl Command {
             parse_stream.next_as_punct_matching('!', "").ok()?;
             Some(command_kind)
         }
-    
+
         // Attempt to match `[!ident`, if that doesn't match, we assume it's not a command invocation,
         // so return `Ok(None)`
         let (command_ident, mut parse_stream) = match matches_command_start(group) {
             Some(command_start) => command_start,
             None => return Ok(None),
         };
-    
+
         // We have now checked enough that we're confident the user is pretty intentionally using
         // the call convention. Any issues we hit from this point will be a helpful compiler error.
         match extract_command_data(&command_ident, &mut parse_stream) {
@@ -154,7 +154,9 @@ impl Command {
             CommandOutputBehaviour::GroupedStream => {
                 output.push_new_group(substitution, Delimiter::None, self.source_group_span_range);
             }
-            CommandOutputBehaviour::EmptyStream | CommandOutputBehaviour::SingleToken | CommandOutputBehaviour::AppendStream => {
+            CommandOutputBehaviour::EmptyStream
+            | CommandOutputBehaviour::SingleToken
+            | CommandOutputBehaviour::AppendStream => {
                 output.extend(substitution);
             }
         }
