@@ -24,6 +24,7 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 * Grouping... Proposal:
   * #x is a group, #..x is flattened
   * Whether a command is flattened or not is dependent on the command
+  * Command arguments which are streams should be surrounded by `[ ... ]`... a `[!..! ...]` may also be used instead.
 * ? Use `[!let! #x = 12]` instead of `[!set! ...]`
   * ...Or maybe not. Maybe `[!let! #..x = Hello World]` does parsing and is equivalent to `[!set! #x = Hello World]`
 * Fix `if` and `while` to read expression until braces
@@ -32,7 +33,7 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
   * e.g. for various expressions
   * e.g. for long sums
   * Add compile failure tests
-* `[!range! 0..5]` outputs `[0 1 2 3 4]`
+* `[!range! 0..5]` outputs `0 1 2 3 4`
 * `[!error! "message" token stream for span]`
 * Reconfiguring iteration limit
 * Support `!else if!` in `!if!`

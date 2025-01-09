@@ -63,7 +63,7 @@ impl Variable {
     }
 }
 
-impl<'a> Interpret for &'a Variable {
+impl Interpret for &Variable {
     fn interpret_as_tokens_into(
         self,
         interpreter: &mut Interpreter,
