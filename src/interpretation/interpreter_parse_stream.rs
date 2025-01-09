@@ -94,7 +94,7 @@ impl InterpreterParseStream {
         error_message: &'static str,
     ) -> Result<Ident> {
         match self.next_item(error_message)? {
-            NextItem::Ident(ident) if ident.to_string() == ident_name => Ok(ident),
+            NextItem::Ident(ident) if ident == ident_name => Ok(ident),
             other => other.err(error_message),
         }
     }
