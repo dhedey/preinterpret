@@ -1,5 +1,12 @@
 use super::*;
 
+/// This abstraction is a bit ropey...
+///
+/// Ideally we'd parse expressions at parse time, but that requires writing a custom parser for
+/// a subset of the rust expression tree...
+/// 
+/// Instead, to be lazy for now, we interpret the stream at intepretation time to substitute
+/// in variables and commands, and then parse the resulting expression with syn.
 #[derive(Clone)]
 pub(crate) struct ExpressionStream {
     interpreted_stream: InterpretedStream,
@@ -12,8 +19,17 @@ impl ExpressionStream {
         }
     }
 
-    pub(crate) fn push_raw_token_tree(&mut self, token_tree: TokenTree) {
-        self.interpreted_stream.push_raw_token_tree(token_tree);
+    pub(crate) fn push_literal(&mut self, literal: Literal) {
+        self.interpreted_stream.push_literal(literal);
+    }
+
+    /// Only true and false make sense, but allow all here and catch others at evaluation time
+    pub(crate) fn push_ident(&mut self, ident: Ident) {
+        self.interpreted_stream.push_ident(ident);
+    }
+
+    pub(crate) fn push_punct(&mut self, punct: Punct) {
+        self.interpreted_stream.push_punct(punct);
     }
 
     pub(crate) fn push_interpreted_group(

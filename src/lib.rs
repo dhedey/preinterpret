@@ -538,12 +538,16 @@ use internal_prelude::*;
 /// See the [crate-level documentation](crate) for full details.
 #[proc_macro]
 pub fn preinterpret(token_stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let mut interpreter = Interpreter::new();
-    proc_macro2::TokenStream::from(token_stream)
-        .interpret_as_tokens(&mut interpreter)
-        .map(InterpretedStream::into_token_stream)
+    preinterpret_internal(proc_macro2::TokenStream::from(token_stream))
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
+}
+
+fn preinterpret_internal(input: TokenStream) -> Result<TokenStream> {
+    let mut interpreter = Interpreter::new();
+    let interpretation_stream = InterpretationStream::parse_from_token_stream(input, Span::call_site().span_range())?;
+    let interpreted_stream = interpretation_stream.interpret_as_tokens(&mut interpreter)?;
+    Ok(interpreted_stream.into_token_stream())
 }
 
 // This is the recommended way to run the doc tests in the readme

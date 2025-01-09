@@ -7,10 +7,23 @@ pub(crate) struct Variable {
 }
 
 impl Variable {
-    pub(crate) fn new(marker: Punct, variable_name: Ident) -> Self {
-        Self {
-            marker,
-            variable_name,
+    pub(super) fn parse_consuming_only_if_match(
+        punct: &Punct,
+        parse_stream: &mut InterpreterParseStream,
+    ) -> Option<Self> {
+        if punct.as_char() != '#' {
+            return None;
+        }
+        match parse_stream.peek_token_tree() {
+            Some(TokenTree::Ident(_)) => {}
+            _ => return None,
+        }
+        match parse_stream.next_token_tree_or_end() {
+            Some(TokenTree::Ident(variable_name)) => Some(Self {
+                marker: punct.clone(),
+                variable_name,
+            }),
+            _ => unreachable!("We just peeked a token of this type"),
         }
     }
 

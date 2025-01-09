@@ -6,6 +6,7 @@ pub(crate) trait Interpret: Sized {
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> Result<()>;
+
     fn interpret_as_tokens(self, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
         let mut output = InterpretedStream::new();
         self.interpret_as_tokens_into(interpreter, &mut output)?;
@@ -17,6 +18,7 @@ pub(crate) trait Interpret: Sized {
         interpreter: &mut Interpreter,
         expression_stream: &mut ExpressionStream,
     ) -> Result<()>;
+
     fn interpret_as_expression(self, interpreter: &mut Interpreter) -> Result<ExpressionStream> {
         let mut output = ExpressionStream::new();
         self.interpret_as_expression_into(interpreter, &mut output)?;
@@ -39,71 +41,22 @@ impl TokenTreeExt for TokenTree {
     }
 }
 
-impl Interpret for TokenStream {
-    fn interpret_as_tokens_into(
-        self,
-        interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
-    ) -> Result<()> {
-        let span_range = self.span_range();
-        InterpreterParseStream::new(self, span_range).interpret_as_tokens_into(interpreter, output)
-    }
-
-    fn interpret_as_expression_into(
-        self,
-        interpreter: &mut Interpreter,
-        expression_stream: &mut ExpressionStream,
-    ) -> Result<()> {
-        let span_range = self.span_range();
-        InterpreterParseStream::new(self, span_range)
-            .interpret_as_expression_into(interpreter, expression_stream)
-    }
-}
-
-impl Interpret for Group {
-    fn interpret_as_tokens_into(
-        self,
-        interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
-    ) -> Result<()> {
-        output.push_new_group(
-            self.stream().interpret_as_tokens(interpreter)?,
-            self.delimiter(),
-            self.span_range(),
-        );
-        Ok(())
-    }
-
-    fn interpret_as_expression_into(
-        self,
-        interpreter: &mut Interpreter,
-        expression_stream: &mut ExpressionStream,
-    ) -> Result<()> {
-        expression_stream.push_expression_group(
-            self.stream().interpret_as_expression(interpreter)?,
-            self.delimiter(),
-            self.span_range(),
-        );
-        Ok(())
-    }
-}
-
 pub(crate) trait SpanErrorExt: Sized {
-    fn err<T>(self, message: impl std::fmt::Display) -> syn::Result<T> {
+    fn err<T>(&self, message: impl std::fmt::Display) -> syn::Result<T> {
         Err(self.error(message))
     }
 
-    fn error(self, message: impl std::fmt::Display) -> syn::Error;
+    fn error(&self, message: impl std::fmt::Display) -> syn::Error;
 }
 
-impl SpanErrorExt for Span {
-    fn error(self, message: impl std::fmt::Display) -> syn::Error {
-        syn::Error::new(self, message)
+impl<T: HasSpanRange> SpanErrorExt for T {
+    fn error(&self, message: impl std::fmt::Display) -> syn::Error {
+        self.span_range().error(message)
     }
 }
 
 impl SpanErrorExt for SpanRange {
-    fn error(self, message: impl std::fmt::Display) -> syn::Error {
+    fn error(&self, message: impl std::fmt::Display) -> syn::Error {
         syn::Error::new_spanned(self, message)
     }
 }
@@ -135,6 +88,10 @@ impl WithSpanExt for Group {
 
 pub(crate) trait HasSpanRange {
     fn span_range(&self) -> SpanRange;
+
+    fn span(&self) -> Span {
+        self.span_range().span()
+    }
 }
 
 /// [`syn::spanned`] has the limitation that it uses [`proc_macro::Span::join`]
@@ -237,6 +194,9 @@ macro_rules! impl_auto_span_range {
 
 impl_auto_span_range! {
     TokenStream,
+    Ident,
+    Punct,
+    Literal,
     syn::Expr,
     syn::ExprBinary,
     syn::ExprUnary,

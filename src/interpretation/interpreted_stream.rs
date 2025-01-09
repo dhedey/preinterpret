@@ -28,8 +28,16 @@ impl InterpretedStream {
         self.token_stream.extend(interpreted_stream.token_stream);
     }
 
-    pub(crate) fn push_raw_token_tree(&mut self, token_tree: TokenTree) {
-        self.token_stream.extend(iter::once(token_tree));
+    pub(crate) fn push_literal(&mut self, literal: Literal) {
+        self.push_raw_token_tree(literal.into());
+    }
+
+    pub(crate) fn push_ident(&mut self, ident: Ident) {
+        self.push_raw_token_tree(ident.into());
+    }
+
+    pub(crate) fn push_punct(&mut self, punct: Punct) {
+        self.push_raw_token_tree(punct.into());
     }
 
     pub(crate) fn push_new_group(
@@ -43,6 +51,10 @@ impl InterpretedStream {
             delimiter,
             span_range.span(),
         ));
+    }
+
+    fn push_raw_token_tree(&mut self, token_tree: TokenTree) {
+        self.token_stream.extend(iter::once(token_tree));
     }
 
     pub(crate) fn is_empty(&self) -> bool {

@@ -1,49 +1,75 @@
 use crate::internal_prelude::*;
 
-pub(crate) struct SetCommand;
+#[derive(Clone)]
+pub(crate) struct SetCommand {
+    variable: Variable,
+    #[allow(unused)]
+    equals: Punct,
+    arguments: InterpretationStream,
+}
 
 impl CommandDefinition for SetCommand {
     const COMMAND_NAME: &'static str = "set";
 
-    fn execute(interpreter: &mut Interpreter, mut command: Command) -> Result<InterpretedStream> {
-        let variable_name = match parse_variable_set(command.arguments()) {
-            Some(variable) => variable.variable_name().to_string(),
-            None => {
-                return command.err("A set call is expected to start with `#variable_name = ..`");
-            }
-        };
+    const OUTPUT_BEHAVIOUR: CommandOutputBehaviour = CommandOutputBehaviour::EmptyStream;
 
-        let result_tokens = command.arguments().interpret_as_tokens(interpreter)?;
-        interpreter.set_variable(variable_name, result_tokens);
+    fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
+        static ERROR: &str = "Expected [!set! #variable = ... ]";
+        Ok(Self {
+            variable: arguments.next_as_variable(ERROR)?,
+            equals: arguments.next_as_punct_matching('=', ERROR)?,
+            arguments: arguments.parse_all_for_interpretation()?,
+        })
+    }
+}
+
+impl CommandInvocation for SetCommand {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
+        let result_tokens = self.arguments.interpret_as_tokens(interpreter)?;
+        self.variable.set(interpreter, result_tokens);
 
         Ok(InterpretedStream::new())
     }
 }
 
-pub(crate) fn parse_variable_set(tokens: &mut InterpreterParseStream) -> Option<Variable> {
-    let variable = tokens.next_item_as_variable("").ok()?;
-    tokens.next_as_punct_matching('=')?;
-    Some(variable)
+#[derive(Clone)]
+pub(crate) struct RawCommand {
+    token_stream: TokenStream,
 }
-
-pub(crate) struct RawCommand;
 
 impl CommandDefinition for RawCommand {
     const COMMAND_NAME: &'static str = "raw";
 
-    fn execute(_interpreter: &mut Interpreter, mut command: Command) -> Result<InterpretedStream> {
-        Ok(InterpretedStream::raw(
-            command.arguments().read_all_as_token_stream(),
-        ))
+    const OUTPUT_BEHAVIOUR: CommandOutputBehaviour = CommandOutputBehaviour::AppendStream;
+
+    fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
+        Ok(Self {
+            token_stream: arguments.read_all_as_raw_token_stream(),
+        })
     }
 }
 
+impl CommandInvocation for RawCommand {
+    fn execute(self: Box<Self>, _interpreter: &mut Interpreter) -> Result<InterpretedStream> {
+        Ok(InterpretedStream::raw(self.token_stream))
+    }
+}
+
+#[derive(Clone)]
 pub(crate) struct IgnoreCommand;
 
 impl CommandDefinition for IgnoreCommand {
     const COMMAND_NAME: &'static str = "ignore";
 
-    fn execute(_: &mut Interpreter, _: Command) -> Result<InterpretedStream> {
+    const OUTPUT_BEHAVIOUR: CommandOutputBehaviour = CommandOutputBehaviour::EmptyStream;
+
+    fn parse(_arguments: InterpreterParseStream) -> Result<Self> {
+        Ok(Self)
+    }
+}
+
+impl CommandInvocation for IgnoreCommand {
+    fn execute(self: Box<Self>, _interpreter: &mut Interpreter) -> Result<InterpretedStream> {
         Ok(InterpretedStream::new())
     }
 }

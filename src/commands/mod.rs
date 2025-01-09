@@ -11,48 +11,46 @@ use core_commands::*;
 use expression_commands::*;
 use token_commands::*;
 
-define_commands! {
-    pub(crate) enum CommandKind {
-        // Core Commands
-        SetCommand,
-        RawCommand,
-        IgnoreCommand,
+define_command_kind! {
+    // Core Commands
+    SetCommand,
+    RawCommand,
+    IgnoreCommand,
 
-        // Concat & Type Convert Commands
-        StringCommand,
-        IdentCommand,
-        IdentCamelCommand,
-        IdentSnakeCommand,
-        IdentUpperSnakeCommand,
-        LiteralCommand,
+    // Concat & Type Convert Commands
+    StringCommand,
+    IdentCommand,
+    IdentCamelCommand,
+    IdentSnakeCommand,
+    IdentUpperSnakeCommand,
+    LiteralCommand,
 
-        // Concat & String Convert Commands
-        UpperCommand,
-        LowerCommand,
-        SnakeCommand,
-        LowerSnakeCommand,
-        UpperSnakeCommand,
-        CamelCommand,
-        LowerCamelCommand,
-        UpperCamelCommand,
-        KebabCommand,
-        CapitalizeCommand,
-        DecapitalizeCommand,
-        TitleCommand,
-        InsertSpacesCommand,
+    // Concat & String Convert Commands
+    UpperCommand,
+    LowerCommand,
+    SnakeCommand,
+    LowerSnakeCommand,
+    UpperSnakeCommand,
+    CamelCommand,
+    LowerCamelCommand,
+    UpperCamelCommand,
+    KebabCommand,
+    CapitalizeCommand,
+    DecapitalizeCommand,
+    TitleCommand,
+    InsertSpacesCommand,
 
-        // Expression Commands
-        EvaluateCommand,
-        AssignCommand,
+    // Expression Commands
+    EvaluateCommand,
+    AssignCommand,
 
-        // Control flow commands
-        IfCommand,
-        WhileCommand,
+    // Control flow commands
+    IfCommand,
+    WhileCommand,
 
-        // Token Commands
-        EmptyCommand,
-        IsEmptyCommand,
-        LengthCommand,
-        GroupCommand,
-    }
+    // Token Commands
+    EmptyCommand,
+    IsEmptyCommand,
+    LengthCommand,
+    GroupCommand,
 }

@@ -1,19 +1,43 @@
 use crate::internal_prelude::*;
 
-pub(crate) struct IfCommand;
+#[derive(Clone)]
+pub(crate) struct IfCommand {
+    condition: NextItem,
+    true_code: InterpretationStream,
+    false_code: Option<InterpretationStream>,
+}
 
 impl CommandDefinition for IfCommand {
     const COMMAND_NAME: &'static str = "if";
 
-    fn execute(interpreter: &mut Interpreter, mut command: Command) -> Result<InterpretedStream> {
-        let parsed = match parse_if_statement(command.arguments()) {
-            Some(parsed) => parsed,
-            None => {
-                return command.err("Expected [!if! (condition) { true_code }] or [!if! (condition) { true_code } !else! { false_code}]");
-            }
-        };
+    const OUTPUT_BEHAVIOUR: CommandOutputBehaviour = CommandOutputBehaviour::AppendStream;
 
-        let evaluated_condition = parsed
+    fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
+        static ERROR: &str = "Expected [!if! (condition) { true_code }] or [!if! (condition) { true_code } !else! { false_code}]";
+
+        let condition = arguments.next_item(ERROR)?;
+        let true_code = arguments.next_as_kinded_group(Delimiter::Brace, ERROR)?.into_inner_stream();
+        let false_code = if !arguments.is_empty() {
+            arguments.next_as_punct_matching('!', ERROR)?;
+            arguments.next_as_ident_matching("else", ERROR)?;
+            arguments.next_as_punct_matching('!', ERROR)?;
+            Some(arguments.next_as_kinded_group(Delimiter::Brace, ERROR)?.into_inner_stream())
+        } else {
+            None
+        };
+        arguments.assert_end(ERROR)?;
+
+        Ok(Self {
+            condition,
+            true_code,
+            false_code,
+        })
+    }
+}
+
+impl CommandInvocation for IfCommand {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
+        let evaluated_condition = self
             .condition
             .interpret_as_expression(interpreter)?
             .evaluate()?
@@ -21,8 +45,8 @@ impl CommandDefinition for IfCommand {
             .value();
 
         if evaluated_condition {
-            parsed.true_code.interpret_as_tokens(interpreter)
-        } else if let Some(false_code) = parsed.false_code {
+            self.true_code.interpret_as_tokens(interpreter)
+        } else if let Some(false_code) = self.false_code {
             false_code.interpret_as_tokens(interpreter)
         } else {
             Ok(InterpretedStream::new())
@@ -30,52 +54,37 @@ impl CommandDefinition for IfCommand {
     }
 }
 
-struct IfStatement {
+#[derive(Clone)]
+pub(crate) struct WhileCommand {
     condition: NextItem,
-    true_code: TokenStream,
-    false_code: Option<TokenStream>,
+    loop_code: InterpretationStream,
 }
-
-fn parse_if_statement(tokens: &mut InterpreterParseStream) -> Option<IfStatement> {
-    let condition = tokens.next_item().ok()??;
-    let true_code = tokens.next_as_kinded_group(Delimiter::Brace)?.stream();
-    let false_code = if tokens.peek().is_some() {
-        tokens.next_as_punct_matching('!')?;
-        let else_word = tokens.next_as_ident()?;
-        tokens.next_as_punct_matching('!')?;
-        if else_word != "else" {
-            return None;
-        }
-        Some(tokens.next_as_kinded_group(Delimiter::Brace)?.stream())
-    } else {
-        None
-    };
-    tokens.check_end()?;
-    Some(IfStatement {
-        condition,
-        true_code,
-        false_code,
-    })
-}
-
-pub(crate) struct WhileCommand;
 
 impl CommandDefinition for WhileCommand {
     const COMMAND_NAME: &'static str = "while";
 
-    fn execute(interpreter: &mut Interpreter, mut command: Command) -> Result<InterpretedStream> {
-        let parsed = match parse_while_statement(command.arguments()) {
-            Some(parsed) => parsed,
-            None => {
-                return command.err("Expected [!while! (condition) { code }]");
-            }
-        };
+    const OUTPUT_BEHAVIOUR: CommandOutputBehaviour = CommandOutputBehaviour::AppendStream;
 
+    fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
+        static ERROR: &str = "Expected [!while! (condition) { code }]";
+
+        let condition = arguments.next_item(ERROR)?;
+        let loop_code = arguments.next_as_kinded_group(Delimiter::Brace, ERROR)?.into_inner_stream();
+        arguments.assert_end(ERROR)?;
+
+        Ok(Self {
+            condition,
+            loop_code,
+        })
+    }
+}
+
+impl CommandInvocation for WhileCommand {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
         let mut output = InterpretedStream::new();
         let mut iteration_count = 0;
         loop {
-            let evaluated_condition = parsed
-                .condition
+            let evaluated_condition = self.condition
                 .clone()
                 .interpret_as_expression(interpreter)?
                 .evaluate()?
@@ -89,25 +98,10 @@ impl CommandDefinition for WhileCommand {
             iteration_count += 1;
             interpreter
                 .config()
-                .check_iteration_count(&command, iteration_count)?;
-            parsed
-                .code
-                .clone()
-                .interpret_as_tokens_into(interpreter, &mut output)?;
+                .check_iteration_count(&self.condition, iteration_count)?;
+            self.loop_code.clone().interpret_as_tokens_into(interpreter, &mut output)?;
         }
 
         Ok(output)
     }
-}
-
-struct WhileStatement {
-    condition: NextItem,
-    code: TokenStream,
-}
-
-fn parse_while_statement(tokens: &mut InterpreterParseStream) -> Option<WhileStatement> {
-    let condition = tokens.next_item().ok()??;
-    let code = tokens.next_as_kinded_group(Delimiter::Brace)?.stream();
-    tokens.check_end()?;
-    Some(WhileStatement { condition, code })
 }

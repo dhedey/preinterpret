@@ -25,239 +25,38 @@ fn parse_ident(value: &str, span: Span) -> Result<Ident> {
 }
 
 fn concat_into_string(
+    input: InterpretationStream,
     interpreter: &mut Interpreter,
-    mut command: Command,
     conversion_fn: impl Fn(&str) -> String,
 ) -> Result<InterpretedStream> {
-    let interpreted = command.arguments().interpret_as_tokens(interpreter)?;
-    let concatenated = concat_recursive(interpreted);
-    let string_literal = string_literal(&conversion_fn(&concatenated), command.span());
+    let output_span = input.span();
+    let concatenated = concat_recursive(input.interpret_as_tokens(interpreter)?);
+    let string_literal = string_literal(&conversion_fn(&concatenated), output_span);
     Ok(InterpretedStream::of_literal(string_literal))
 }
 
 fn concat_into_ident(
+    input: InterpretationStream,
     interpreter: &mut Interpreter,
-    mut command: Command,
     conversion_fn: impl Fn(&str) -> String,
 ) -> Result<InterpretedStream> {
-    let interpreted = command.arguments().interpret_as_tokens(interpreter)?;
-    let concatenated = concat_recursive(interpreted);
-    let ident = parse_ident(&conversion_fn(&concatenated), command.span())?;
+    let output_span = input.span();
+    let concatenated = concat_recursive(input.interpret_as_tokens(interpreter)?);
+    let ident = parse_ident(&conversion_fn(&concatenated), output_span)?;
     Ok(InterpretedStream::of_ident(ident))
 }
 
 fn concat_into_literal(
+    input: InterpretationStream,
     interpreter: &mut Interpreter,
-    mut command: Command,
     conversion_fn: impl Fn(&str) -> String,
 ) -> Result<InterpretedStream> {
-    let interpreted = command.arguments().interpret_as_tokens(interpreter)?;
-    let concatenated = concat_recursive(interpreted);
-    let literal = parse_literal(&conversion_fn(&concatenated), command.span())?;
+    let output_span = input.span();
+    let concatenated = concat_recursive(input.interpret_as_tokens(interpreter)?);
+    let literal = parse_literal(&conversion_fn(&concatenated), output_span)?;
     Ok(InterpretedStream::of_literal(literal))
 }
 
-//=======================================
-// Concatenating type-conversion commands
-//=======================================
-
-pub(crate) struct StringCommand;
-
-impl CommandDefinition for StringCommand {
-    const COMMAND_NAME: &'static str = "string";
-
-    fn execute(interpreter: &mut Interpreter, command: Command) -> Result<InterpretedStream> {
-        concat_into_string(interpreter, command, |s| s.to_string())
-    }
-}
-
-pub(crate) struct IdentCommand;
-
-impl CommandDefinition for IdentCommand {
-    const COMMAND_NAME: &'static str = "ident";
-
-    fn execute(interpreter: &mut Interpreter, command: Command) -> Result<InterpretedStream> {
-        concat_into_ident(interpreter, command, |s| s.to_string())
-    }
-}
-
-pub(crate) struct IdentCamelCommand;
-
-impl CommandDefinition for IdentCamelCommand {
-    const COMMAND_NAME: &'static str = "ident_camel";
-
-    fn execute(interpreter: &mut Interpreter, command: Command) -> Result<InterpretedStream> {
-        concat_into_ident(interpreter, command, to_upper_camel_case)
-    }
-}
-
-pub(crate) struct IdentSnakeCommand;
-
-impl CommandDefinition for IdentSnakeCommand {
-    const COMMAND_NAME: &'static str = "ident_snake";
-
-    fn execute(interpreter: &mut Interpreter, command: Command) -> Result<InterpretedStream> {
-        concat_into_ident(interpreter, command, to_lower_snake_case)
-    }
-}
-
-pub(crate) struct IdentUpperSnakeCommand;
-
-impl CommandDefinition for IdentUpperSnakeCommand {
-    const COMMAND_NAME: &'static str = "ident_upper_snake";
-
-    fn execute(interpreter: &mut Interpreter, command: Command) -> Result<InterpretedStream> {
-        concat_into_ident(interpreter, command, to_upper_snake_case)
-    }
-}
-
-pub(crate) struct LiteralCommand;
-
-impl CommandDefinition for LiteralCommand {
-    const COMMAND_NAME: &'static str = "literal";
-
-    fn execute(interpreter: &mut Interpreter, command: Command) -> Result<InterpretedStream> {
-        concat_into_literal(interpreter, command, |s| s.to_string())
-    }
-}
-
-//===========================
-// String conversion commands
-//===========================
-
-pub(crate) struct UpperCommand;
-
-impl CommandDefinition for UpperCommand {
-    const COMMAND_NAME: &'static str = "upper";
-
-    fn execute(interpreter: &mut Interpreter, command: Command) -> Result<InterpretedStream> {
-        concat_into_string(interpreter, command, to_uppercase)
-    }
-}
-
-pub(crate) struct LowerCommand;
-
-impl CommandDefinition for LowerCommand {
-    const COMMAND_NAME: &'static str = "lower";
-
-    fn execute(interpreter: &mut Interpreter, command: Command) -> Result<InterpretedStream> {
-        concat_into_string(interpreter, command, to_lowercase)
-    }
-}
-
-pub(crate) struct SnakeCommand;
-
-impl CommandDefinition for SnakeCommand {
-    const COMMAND_NAME: &'static str = "snake";
-
-    fn execute(interpreter: &mut Interpreter, command: Command) -> Result<InterpretedStream> {
-        // Lower snake case is the more common casing in Rust, so default to that
-        LowerSnakeCommand::execute(interpreter, command)
-    }
-}
-
-pub(crate) struct LowerSnakeCommand;
-
-impl CommandDefinition for LowerSnakeCommand {
-    const COMMAND_NAME: &'static str = "lower_snake";
-
-    fn execute(interpreter: &mut Interpreter, command: Command) -> Result<InterpretedStream> {
-        concat_into_string(interpreter, command, to_lower_snake_case)
-    }
-}
-
-pub(crate) struct UpperSnakeCommand;
-
-impl CommandDefinition for UpperSnakeCommand {
-    const COMMAND_NAME: &'static str = "upper_snake";
-
-    fn execute(interpreter: &mut Interpreter, command: Command) -> Result<InterpretedStream> {
-        concat_into_string(interpreter, command, to_upper_snake_case)
-    }
-}
-
-pub(crate) struct KebabCommand;
-
-impl CommandDefinition for KebabCommand {
-    const COMMAND_NAME: &'static str = "kebab";
-
-    fn execute(interpreter: &mut Interpreter, command: Command) -> Result<InterpretedStream> {
-        // Kebab case is normally lower case (including in Rust where it's used - e.g. crate names)
-        // It can always be combined with other casing to get other versions
-        concat_into_string(interpreter, command, to_lower_kebab_case)
-    }
-}
-
-pub(crate) struct CamelCommand;
-
-impl CommandDefinition for CamelCommand {
-    const COMMAND_NAME: &'static str = "camel";
-
-    fn execute(interpreter: &mut Interpreter, command: Command) -> Result<InterpretedStream> {
-        // Upper camel case is the more common casing in Rust, so default to that
-        UpperCamelCommand::execute(interpreter, command)
-    }
-}
-
-pub(crate) struct LowerCamelCommand;
-
-impl CommandDefinition for LowerCamelCommand {
-    const COMMAND_NAME: &'static str = "lower_camel";
-
-    fn execute(interpreter: &mut Interpreter, command: Command) -> Result<InterpretedStream> {
-        concat_into_string(interpreter, command, to_lower_camel_case)
-    }
-}
-
-pub(crate) struct UpperCamelCommand;
-
-impl CommandDefinition for UpperCamelCommand {
-    const COMMAND_NAME: &'static str = "upper_camel";
-
-    fn execute(interpreter: &mut Interpreter, command: Command) -> Result<InterpretedStream> {
-        concat_into_string(interpreter, command, to_upper_camel_case)
-    }
-}
-
-pub(crate) struct CapitalizeCommand;
-
-impl CommandDefinition for CapitalizeCommand {
-    const COMMAND_NAME: &'static str = "capitalize";
-
-    fn execute(interpreter: &mut Interpreter, command: Command) -> Result<InterpretedStream> {
-        concat_into_string(interpreter, command, capitalize)
-    }
-}
-
-pub(crate) struct DecapitalizeCommand;
-
-impl CommandDefinition for DecapitalizeCommand {
-    const COMMAND_NAME: &'static str = "decapitalize";
-
-    fn execute(interpreter: &mut Interpreter, command: Command) -> Result<InterpretedStream> {
-        concat_into_string(interpreter, command, decapitalize)
-    }
-}
-
-pub(crate) struct TitleCommand;
-
-impl CommandDefinition for TitleCommand {
-    const COMMAND_NAME: &'static str = "title";
-
-    fn execute(interpreter: &mut Interpreter, command: Command) -> Result<InterpretedStream> {
-        concat_into_string(interpreter, command, title_case)
-    }
-}
-
-pub(crate) struct InsertSpacesCommand;
-
-impl CommandDefinition for InsertSpacesCommand {
-    const COMMAND_NAME: &'static str = "insert_spaces";
-
-    fn execute(interpreter: &mut Interpreter, command: Command) -> Result<InterpretedStream> {
-        concat_into_string(interpreter, command, insert_spaces_between_words)
-    }
-}
 
 fn concat_recursive(arguments: InterpretedStream) -> String {
     fn concat_recursive_internal(output: &mut String, arguments: TokenStream) {
@@ -307,3 +106,65 @@ fn concat_recursive(arguments: InterpretedStream) -> String {
     concat_recursive_internal(&mut output, arguments.into_token_stream());
     output
 }
+
+macro_rules! define_concat_command {
+    (
+        $command_name:literal => $command:ident: $output_fn:ident($conversion_fn:expr)
+    ) => {
+        #[derive(Clone)]
+        pub(crate) struct $command {
+            arguments: InterpretationStream,
+        }
+
+        impl CommandDefinition for $command {
+            const COMMAND_NAME: &'static str = $command_name;
+        
+            const OUTPUT_BEHAVIOUR: CommandOutputBehaviour = CommandOutputBehaviour::SingleToken;
+        
+            fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
+                Ok(Self {
+                    arguments: arguments.parse_all_for_interpretation()?,
+                })
+            }
+        }
+
+        impl CommandInvocation for $command {
+            fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
+                $output_fn(self.arguments, interpreter, $conversion_fn)
+            }
+        }
+    }
+}
+
+//=======================================
+// Concatenating type-conversion commands
+//=======================================
+
+define_concat_command!("string" => StringCommand: concat_into_string(|s| s.to_string()));
+define_concat_command!("ident" => IdentCommand: concat_into_ident(|s| s.to_string()));
+define_concat_command!("ident_camel" => IdentCamelCommand: concat_into_ident(to_upper_camel_case));
+define_concat_command!("ident_snake" => IdentSnakeCommand: concat_into_ident(to_lower_snake_case));
+define_concat_command!("ident_upper_snake" => IdentUpperSnakeCommand: concat_into_ident(to_upper_snake_case));
+define_concat_command!("literal" => LiteralCommand: concat_into_literal(|s| s.to_string()));
+
+//===========================
+// String conversion commands
+//===========================
+
+define_concat_command!("upper" => UpperCommand: concat_into_string(to_uppercase));
+define_concat_command!("lower" => LowerCommand: concat_into_string(to_lowercase));
+// Snake case is typically lower snake case in Rust, so default to that
+define_concat_command!("snake" => SnakeCommand: concat_into_string(to_lower_snake_case));
+define_concat_command!("lower_snake" => LowerSnakeCommand: concat_into_string(to_lower_snake_case));
+define_concat_command!("upper_snake" => UpperSnakeCommand: concat_into_string(to_upper_snake_case));
+// Kebab case is normally lower case (including in Rust where it's used - e.g. crate names)
+// It can always be combined with other casing to get other versions
+define_concat_command!("kebab" => KebabCommand: concat_into_string(to_lower_kebab_case));
+// Upper camel case is the more common casing in Rust, so default to that
+define_concat_command!("camel" => CamelCommand: concat_into_string(to_upper_camel_case));
+define_concat_command!("lower_camel" => LowerCamelCommand: concat_into_string(to_lower_camel_case));
+define_concat_command!("upper_camel" => UpperCamelCommand: concat_into_string(to_upper_camel_case));
+define_concat_command!("capitalize" => CapitalizeCommand: concat_into_string(capitalize));
+define_concat_command!("decapitalize" => DecapitalizeCommand: concat_into_string(decapitalize));
+define_concat_command!("title" => TitleCommand: concat_into_string(title_case));
+define_concat_command!("insert_spaces" => InsertSpacesCommand: concat_into_string(insert_spaces_between_words));

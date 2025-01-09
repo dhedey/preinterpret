@@ -15,10 +15,15 @@
   * `[!is_empty! #stream]`
   * `[!length! #stream]` which gives the number of token trees in the token stream.
   * `[!group! ...]` which wraps the tokens in a transparent group. Useful with `!for!`.
-  * Disallow `[!let! #x =]` and require `[!let! #x = [!empty!]]` (give a good error message).
+
+I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x = [!empty!]]`, but deemed it unhelpful, because then they have awkward edge-cases when embedding empty tokenstreams from declarative macros `($each_tt)*`.
 
 ### To come
 
+* Update big comment in parse stream file
+* Grouping... Proposal:
+  * #x is a group, #..x is flattened
+  * Whether a command is flattened or not is dependent on the command
 * ? Use `[!let! #x = 12]` instead of `[!set! ...]`
   * ...Or maybe not. Maybe `[!let! #..x = Hello World]` does parsing and is equivalent to `[!set! #x = Hello World]`
 * Fix `if` and `while` to read expression until braces
@@ -27,7 +32,6 @@
   * e.g. for various expressions
   * e.g. for long sums
   * Add compile failure tests
-* Refactor command parsing/execution
 * `[!range! 0..5]` outputs `[0 1 2 3 4]`
 * `[!error! "message" token stream for span]`
 * Reconfiguring iteration limit
@@ -55,7 +59,7 @@
         * To get this to work, we'd need to:
           * Make it so that the `#x` binding consumes a single token tree, and auto-expands zero or more transparent group/s
             * (Incidentally this is also how the syn Cursor type iteration works, roughly)
-          * And possibly have `#..x` consume the remainder of the stream??
+          * And possibly have `#..x` consumes the remainder of the stream??
           * Make it so that `[!set! #x = ...]` wraps the `...` in a transparent group so it's consistent.
         * And we can support basic parsing, via:
           * Various groupings or `[!GROUP!]` for a transparent group
@@ -75,7 +79,7 @@
   * `[!OPTIONAL! ...]`
   * Groups or `[!GROUP! ...]`
   * `[!RAW!]` for e.g. `[!while_parse! [!RAW! from] from #X]`
-* `[!match!]`
+* `[!match!]` (with `#..x` as a catch-all)
 * Work on book
   * Including documenting expressions
 
