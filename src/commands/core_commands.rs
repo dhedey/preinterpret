@@ -49,7 +49,10 @@ impl CommandDefinition for RawCommand {
 
 impl CommandInvocation for RawCommand {
     fn execute(self: Box<Self>, _interpreter: &mut Interpreter) -> Result<CommandOutput> {
-        Ok(CommandOutput::AppendStream(InterpretedStream::raw(self.arguments_span_range, self.token_stream)))
+        Ok(CommandOutput::AppendStream(InterpretedStream::raw(
+            self.arguments_span_range,
+            self.token_stream,
+        )))
     }
 }
 
@@ -83,7 +86,9 @@ impl CommandDefinition for ErrorCommand {
         static ERROR: &str = "Expected [!error! \"Error message\" [tokens spanning error]], for example:\n* [!error! \"Compiler error message\" [$tokens_covering_error]]\n * [!error! [!string! \"My Error\" \"in bits\"] []]";
         let parsed = Self {
             message: arguments.next_item(ERROR)?,
-            error_span_stream: arguments.next_as_kinded_group(Delimiter::Bracket, ERROR)?.into_inner_stream(),
+            error_span_stream: arguments
+                .next_as_kinded_group(Delimiter::Bracket, ERROR)?
+                .into_inner_stream(),
         };
         arguments.assert_end(ERROR)?;
         Ok(parsed)
@@ -94,17 +99,22 @@ impl CommandInvocation for ErrorCommand {
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
         static ERROR: &str = "Expected a single string literal as the error message";
         let message_span_range = self.message.span_range();
-        let message = self.message.interpret_as_tokens(interpreter)?
-            .as_singleton(ERROR)?
+        let message = self
+            .message
+            .interpret_as_tokens(interpreter)?
+            .into_singleton(ERROR)?
             .to_literal(ERROR)?
             .content_if_string()
             .ok_or_else(|| message_span_range.error(ERROR))?;
         let error_span_stream = self.error_span_stream.interpret_as_tokens(interpreter)?;
 
         if error_span_stream.is_empty() {
-            return Span::call_site().err(message);
+            Span::call_site().err(message)
         } else {
-            error_span_stream.into_token_stream().span_range().err(message)
+            error_span_stream
+                .into_token_stream()
+                .span_range()
+                .err(message)
         }
     }
 }

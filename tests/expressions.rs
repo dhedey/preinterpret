@@ -24,7 +24,7 @@ fn test_basic_evaluate_works() {
     assert_preinterpret_eq!([!evaluate! -3.2], -3.2);
     assert_preinterpret_eq!([!evaluate! true && true || false], true);
     assert_preinterpret_eq!([!evaluate! true || false && false], true); // The && has priority
-    assert_preinterpret_eq!([!evaluate! true | false & false], true);   // The & has priority
+    assert_preinterpret_eq!([!evaluate! true | false & false], true); // The & has priority
     assert_preinterpret_eq!([!evaluate! true as u32 + 2], 3);
     assert_preinterpret_eq!([!evaluate! 3.57 as int + 1], 4u32);
     assert_preinterpret_eq!([!evaluate! 3.57 as int + 1], 4u64);

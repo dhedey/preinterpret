@@ -147,19 +147,19 @@ impl Interpret for Command {
         output: &mut InterpretedStream,
     ) -> Result<()> {
         match self.invocation.execute(interpreter)? {
-            CommandOutput::Empty => {},
+            CommandOutput::Empty => {}
             CommandOutput::Literal(literal) => {
                 output.push_literal(literal);
-            },
+            }
             CommandOutput::Ident(ident) => {
                 output.push_ident(ident);
-            },
+            }
             CommandOutput::AppendStream(stream) => {
                 output.extend(stream);
-            },
+            }
             CommandOutput::GroupedStream(stream) => {
                 output.push_new_group(stream, Delimiter::None, self.source_group_span_range);
-            },
+            }
         };
         Ok(())
     }
@@ -170,17 +170,17 @@ impl Interpret for Command {
         expression_stream: &mut ExpressionStream,
     ) -> Result<()> {
         match self.invocation.execute(interpreter)? {
-            CommandOutput::Empty => {},
+            CommandOutput::Empty => {}
             CommandOutput::Literal(literal) => {
                 expression_stream.push_literal(literal);
-            },
+            }
             CommandOutput::Ident(ident) => {
                 expression_stream.push_ident(ident);
-            },
-            CommandOutput::AppendStream(stream)
-            | CommandOutput::GroupedStream(stream) => {
-                expression_stream.push_grouped_interpreted_stream(stream, self.source_group_span_range);
-            },
+            }
+            CommandOutput::AppendStream(stream) | CommandOutput::GroupedStream(stream) => {
+                expression_stream
+                    .push_grouped_interpreted_stream(stream, self.source_group_span_range);
+            }
         };
         Ok(())
     }

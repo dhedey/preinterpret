@@ -36,7 +36,6 @@ impl IdentExt for Ident {
     }
 }
 
-
 pub(crate) trait LiteralExt: Sized {
     fn content_if_string(&self) -> Option<String>;
     fn content_if_string_or_char(&self) -> Option<String>;
@@ -68,8 +67,8 @@ impl TokenTreeExt for TokenTree {
     fn group(inner_tokens: TokenStream, delimeter: Delimiter, span: Span) -> Self {
         TokenTree::Group(Group::new(delimeter, inner_tokens).with_span(span))
     }
-    
-    fn to_literal(self, error_message: &str) -> Result<Literal>  {
+
+    fn to_literal(self, error_message: &str) -> Result<Literal> {
         match self {
             TokenTree::Literal(literal) => Ok(literal),
             other => other.err(error_message),

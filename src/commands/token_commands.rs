@@ -37,7 +37,10 @@ impl CommandInvocation for IsEmptyCommand {
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
         let output_span = self.arguments.span_range().span();
         let interpreted = self.arguments.interpret_as_tokens(interpreter)?;
-        Ok(CommandOutput::Ident(Ident::new_bool(interpreted.is_empty(), output_span)))
+        Ok(CommandOutput::Ident(Ident::new_bool(
+            interpreted.is_empty(),
+            output_span,
+        )))
     }
 }
 

@@ -61,12 +61,10 @@ fn concat_recursive(arguments: InterpretedStream) -> String {
     fn concat_recursive_internal(output: &mut String, arguments: TokenStream) {
         for token_tree in arguments {
             match token_tree {
-                TokenTree::Literal(literal) => {
-                    match literal.content_if_string_or_char() {
-                        Some(content) => output.push_str(&content),
-                        None => output.push_str(&literal.to_string()),
-                    }
-                }
+                TokenTree::Literal(literal) => match literal.content_if_string_or_char() {
+                    Some(content) => output.push_str(&content),
+                    None => output.push_str(&literal.to_string()),
+                },
                 TokenTree::Group(group) => match group.delimiter() {
                     Delimiter::Parenthesis => {
                         output.push('(');
@@ -120,10 +118,7 @@ macro_rules! define_concat_command {
         }
 
         impl CommandInvocation for $command {
-            fn execute(
-                self: Box<Self>,
-                interpreter: &mut Interpreter,
-            ) -> Result<CommandOutput> {
+            fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
                 $output_fn(self.arguments, interpreter, $conversion_fn)
             }
         }

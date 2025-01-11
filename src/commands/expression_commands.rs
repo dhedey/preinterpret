@@ -18,7 +18,9 @@ impl CommandDefinition for EvaluateCommand {
 impl CommandInvocation for EvaluateCommand {
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
         let expression = self.expression.interpret_as_expression(interpreter)?;
-        Ok(CommandOutput::GroupedStream(expression.evaluate()?.into_interpreted_stream()))
+        Ok(CommandOutput::GroupedStream(
+            expression.evaluate()?.into_interpreted_stream(),
+        ))
     }
 }
 

@@ -78,7 +78,8 @@ impl Interpret for &Variable {
         interpreter: &mut Interpreter,
         expression_stream: &mut ExpressionStream,
     ) -> Result<()> {
-        expression_stream.push_grouped_interpreted_stream(self.substitute(interpreter)?, self.span_range());
+        expression_stream
+            .push_grouped_interpreted_stream(self.substitute(interpreter)?, self.span_range());
         Ok(())
     }
 }

@@ -6,7 +6,6 @@ macro_rules! my_assert_eq {
     };
 }
 
-
 #[test]
 fn test_core_compilation_failures() {
     let t = trybuild::TestCases::new();
@@ -31,9 +30,10 @@ fn test_set() {
 
 #[test]
 fn test_raw() {
-    my_assert_eq!({
-        [!string! [!raw! #variable and [!command!] are not interpreted or error]]
-    }, "#variableand[!command!]arenotinterpretedorerror");
+    my_assert_eq!(
+        { [!string! [!raw! #variable and [!command!] are not interpreted or error]] },
+        "#variableand[!command!]arenotinterpretedorerror"
+    );
 }
 
 #[test]

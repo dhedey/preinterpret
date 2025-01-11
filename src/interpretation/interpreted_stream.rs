@@ -58,7 +58,7 @@ impl InterpretedStream {
         self.token_stream.is_empty()
     }
 
-    pub(crate) fn as_singleton(self, error_message: &str) -> Result<TokenTree> {
+    pub(crate) fn into_singleton(self, error_message: &str) -> Result<TokenTree> {
         if self.is_empty() {
             return self.source_span_range.err(error_message);
         }
