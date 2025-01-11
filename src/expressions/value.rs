@@ -69,11 +69,7 @@ impl EvaluationValue {
 
 impl HasSpanRange for EvaluationValue {
     fn span_range(&self) -> SpanRange {
-        match self {
-            Self::Integer(int) => int.source_span,
-            Self::Float(float) => float.source_span,
-            Self::Boolean(bool) => bool.source_span,
-        }
+        self.source_span()
     }
 }
 

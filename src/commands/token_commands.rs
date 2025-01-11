@@ -6,8 +6,6 @@ pub(crate) struct EmptyCommand;
 impl CommandDefinition for EmptyCommand {
     const COMMAND_NAME: &'static str = "empty";
 
-    const OUTPUT_BEHAVIOUR: CommandOutputBehaviour = CommandOutputBehaviour::EmptyStream;
-
     fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
         arguments.assert_end("The !empty! command does not take any arguments")?;
         Ok(Self)
@@ -15,8 +13,8 @@ impl CommandDefinition for EmptyCommand {
 }
 
 impl CommandInvocation for EmptyCommand {
-    fn execute(self: Box<Self>, _interpreter: &mut Interpreter) -> Result<InterpretedStream> {
-        Ok(InterpretedStream::new())
+    fn execute(self: Box<Self>, _interpreter: &mut Interpreter) -> Result<CommandOutput> {
+        Ok(CommandOutput::Empty)
     }
 }
 
@@ -28,8 +26,6 @@ pub(crate) struct IsEmptyCommand {
 impl CommandDefinition for IsEmptyCommand {
     const COMMAND_NAME: &'static str = "is_empty";
 
-    const OUTPUT_BEHAVIOUR: CommandOutputBehaviour = CommandOutputBehaviour::SingleToken;
-
     fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
         Ok(Self {
             arguments: arguments.parse_all_for_interpretation()?,
@@ -38,10 +34,10 @@ impl CommandDefinition for IsEmptyCommand {
 }
 
 impl CommandInvocation for IsEmptyCommand {
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
         let output_span = self.arguments.span_range().span();
         let interpreted = self.arguments.interpret_as_tokens(interpreter)?;
-        Ok(TokenTree::bool(interpreted.is_empty(), output_span).into())
+        Ok(CommandOutput::Ident(Ident::new_bool(interpreted.is_empty(), output_span)))
     }
 }
 
@@ -53,8 +49,6 @@ pub(crate) struct LengthCommand {
 impl CommandDefinition for LengthCommand {
     const COMMAND_NAME: &'static str = "length";
 
-    const OUTPUT_BEHAVIOUR: CommandOutputBehaviour = CommandOutputBehaviour::SingleToken;
-
     fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
         Ok(Self {
             arguments: arguments.parse_all_for_interpretation()?,
@@ -63,12 +57,12 @@ impl CommandDefinition for LengthCommand {
 }
 
 impl CommandInvocation for LengthCommand {
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
         let output_span = self.arguments.span_range().span();
         let interpreted = self.arguments.interpret_as_tokens(interpreter)?;
         let stream_length = interpreted.into_token_stream().into_iter().count();
         let length_literal = Literal::usize_unsuffixed(stream_length).with_span(output_span);
-        Ok(InterpretedStream::of_literal(length_literal))
+        Ok(CommandOutput::Literal(length_literal))
     }
 }
 
@@ -80,8 +74,6 @@ pub(crate) struct GroupCommand {
 impl CommandDefinition for GroupCommand {
     const COMMAND_NAME: &'static str = "group";
 
-    const OUTPUT_BEHAVIOUR: CommandOutputBehaviour = CommandOutputBehaviour::AppendStream;
-
     fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
         Ok(Self {
             arguments: arguments.parse_all_for_interpretation()?,
@@ -90,14 +82,8 @@ impl CommandDefinition for GroupCommand {
 }
 
 impl CommandInvocation for GroupCommand {
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
-        let mut output = InterpretedStream::new();
-        let span_range = self.arguments.span_range();
-        output.push_new_group(
-            self.arguments.interpret_as_tokens(interpreter)?,
-            Delimiter::None,
-            span_range,
-        );
-        Ok(output)
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
+        let output = self.arguments.interpret_as_tokens(interpreter)?;
+        Ok(CommandOutput::GroupedStream(output))
     }
 }

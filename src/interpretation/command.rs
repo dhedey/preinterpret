@@ -1,22 +1,21 @@
 use crate::internal_prelude::*;
 
-pub(crate) enum CommandOutputBehaviour {
-    EmptyStream,
-    #[allow(unused)] // Likely useful in future
-    GroupedStream,
-    AppendStream,
-    SingleToken,
-}
-
 pub(crate) trait CommandDefinition: CommandInvocation + Clone {
     const COMMAND_NAME: &'static str;
-    const OUTPUT_BEHAVIOUR: CommandOutputBehaviour;
 
     fn parse(arguments: InterpreterParseStream) -> Result<Self>;
 }
 
 pub(crate) trait CommandInvocation {
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<InterpretedStream>;
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput>;
+}
+
+pub(crate) enum CommandOutput {
+    Empty,
+    Literal(Literal),
+    Ident(Ident),
+    AppendStream(InterpretedStream),
+    GroupedStream(InterpretedStream),
 }
 
 pub(crate) trait ClonableCommandInvocation: CommandInvocation {
@@ -60,14 +59,6 @@ macro_rules! define_command_kind {
                 })
             }
 
-            pub(crate) fn output_behaviour(&self) -> CommandOutputBehaviour {
-                match self {
-                    $(
-                        Self::$command => <$command as CommandDefinition>::OUTPUT_BEHAVIOUR,
-                    )*
-                }
-            }
-
             pub(crate) fn for_ident(ident: &Ident) -> Option<Self> {
                 Some(match ident.to_string().as_ref() {
                     $(
@@ -90,9 +81,8 @@ pub(crate) use define_command_kind;
 
 #[derive(Clone)]
 pub(crate) struct Command {
-    command_kind: CommandKind,
-    source_group_span_range: SpanRange,
     invocation: Box<dyn ClonableCommandInvocation>,
+    source_group_span_range: SpanRange,
 }
 
 impl Command {
@@ -129,9 +119,8 @@ impl Command {
             Some(command_kind) => {
                 let invocation = command_kind.parse_invocation( parse_stream)?;
                 Ok(Some(Self {
-                    command_kind,
-                    source_group_span_range: group.span_range(),
                     invocation,
+                    source_group_span_range: group.span_range(),
                 }))
             },
             None => Err(command_ident.span().error(
@@ -142,25 +131,6 @@ impl Command {
                 ),
             )),
         }
-    }
-
-    fn execute_into(
-        self,
-        interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
-    ) -> Result<()> {
-        let substitution = self.invocation.execute(interpreter)?;
-        match self.command_kind.output_behaviour() {
-            CommandOutputBehaviour::GroupedStream => {
-                output.push_new_group(substitution, Delimiter::None, self.source_group_span_range);
-            }
-            CommandOutputBehaviour::EmptyStream
-            | CommandOutputBehaviour::SingleToken
-            | CommandOutputBehaviour::AppendStream => {
-                output.extend(substitution);
-            }
-        }
-        Ok(())
     }
 }
 
@@ -176,7 +146,22 @@ impl Interpret for Command {
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> Result<()> {
-        self.execute_into(interpreter, output)
+        match self.invocation.execute(interpreter)? {
+            CommandOutput::Empty => {},
+            CommandOutput::Literal(literal) => {
+                output.push_literal(literal);
+            },
+            CommandOutput::Ident(ident) => {
+                output.push_ident(ident);
+            },
+            CommandOutput::AppendStream(stream) => {
+                output.extend(stream);
+            },
+            CommandOutput::GroupedStream(stream) => {
+                output.push_new_group(stream, Delimiter::None, self.source_group_span_range);
+            },
+        };
+        Ok(())
     }
 
     fn interpret_as_expression_into(
@@ -184,9 +169,19 @@ impl Interpret for Command {
         interpreter: &mut Interpreter,
         expression_stream: &mut ExpressionStream,
     ) -> Result<()> {
-        let span_range = self.span_range();
-        expression_stream
-            .push_interpreted_group(self.interpret_as_tokens(interpreter)?, span_range);
+        match self.invocation.execute(interpreter)? {
+            CommandOutput::Empty => {},
+            CommandOutput::Literal(literal) => {
+                expression_stream.push_literal(literal);
+            },
+            CommandOutput::Ident(ident) => {
+                expression_stream.push_ident(ident);
+            },
+            CommandOutput::AppendStream(stream)
+            | CommandOutput::GroupedStream(stream) => {
+                expression_stream.push_grouped_interpreted_stream(stream, self.source_group_span_range);
+            },
+        };
         Ok(())
     }
 }

@@ -1,0 +1,5 @@
+error: This expression is not supported in preinterpret expressions
+ --> tests/compilation_failures/expressions/braces.rs:5:21
+  |
+5 |         [!evaluate! {true}]
+  |                     ^^^^^^

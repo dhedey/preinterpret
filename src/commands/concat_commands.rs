@@ -28,33 +28,33 @@ fn concat_into_string(
     input: InterpretationStream,
     interpreter: &mut Interpreter,
     conversion_fn: impl Fn(&str) -> String,
-) -> Result<InterpretedStream> {
+) -> Result<CommandOutput> {
     let output_span = input.span();
     let concatenated = concat_recursive(input.interpret_as_tokens(interpreter)?);
     let string_literal = string_literal(&conversion_fn(&concatenated), output_span);
-    Ok(InterpretedStream::of_literal(string_literal))
+    Ok(CommandOutput::Literal(string_literal))
 }
 
 fn concat_into_ident(
     input: InterpretationStream,
     interpreter: &mut Interpreter,
     conversion_fn: impl Fn(&str) -> String,
-) -> Result<InterpretedStream> {
+) -> Result<CommandOutput> {
     let output_span = input.span();
     let concatenated = concat_recursive(input.interpret_as_tokens(interpreter)?);
     let ident = parse_ident(&conversion_fn(&concatenated), output_span)?;
-    Ok(InterpretedStream::of_ident(ident))
+    Ok(CommandOutput::Ident(ident))
 }
 
 fn concat_into_literal(
     input: InterpretationStream,
     interpreter: &mut Interpreter,
     conversion_fn: impl Fn(&str) -> String,
-) -> Result<InterpretedStream> {
+) -> Result<CommandOutput> {
     let output_span = input.span();
     let concatenated = concat_recursive(input.interpret_as_tokens(interpreter)?);
     let literal = parse_literal(&conversion_fn(&concatenated), output_span)?;
-    Ok(InterpretedStream::of_literal(literal))
+    Ok(CommandOutput::Literal(literal))
 }
 
 fn concat_recursive(arguments: InterpretedStream) -> String {
@@ -62,15 +62,9 @@ fn concat_recursive(arguments: InterpretedStream) -> String {
         for token_tree in arguments {
             match token_tree {
                 TokenTree::Literal(literal) => {
-                    let lit: Lit = parse_str(&literal.to_string()).expect(
-                        "All proc_macro2::Literal values should be decodable as a syn::Lit",
-                    );
-                    match lit {
-                        Lit::Str(lit_str) => output.push_str(&lit_str.value()),
-                        Lit::Char(lit_char) => output.push(lit_char.value()),
-                        _ => {
-                            output.push_str(&literal.to_string());
-                        }
+                    match literal.content_if_string_or_char() {
+                        Some(content) => output.push_str(&content),
+                        None => output.push_str(&literal.to_string()),
                     }
                 }
                 TokenTree::Group(group) => match group.delimiter() {
@@ -118,8 +112,6 @@ macro_rules! define_concat_command {
         impl CommandDefinition for $command {
             const COMMAND_NAME: &'static str = $command_name;
 
-            const OUTPUT_BEHAVIOUR: CommandOutputBehaviour = CommandOutputBehaviour::SingleToken;
-
             fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
                 Ok(Self {
                     arguments: arguments.parse_all_for_interpretation()?,
@@ -131,7 +123,7 @@ macro_rules! define_concat_command {
             fn execute(
                 self: Box<Self>,
                 interpreter: &mut Interpreter,
-            ) -> Result<InterpretedStream> {
+            ) -> Result<CommandOutput> {
                 $output_fn(self.arguments, interpreter, $conversion_fn)
             }
         }

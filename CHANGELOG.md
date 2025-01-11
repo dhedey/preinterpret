@@ -15,6 +15,8 @@
   * `[!is_empty! #stream]`
   * `[!length! #stream]` which gives the number of token trees in the token stream.
   * `[!group! ...]` which wraps the tokens in a transparent group. Useful with `!for!`.
+* Other commands:
+  * `[!error! ..]`
 
 I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x = [!empty!]]`, but deemed it unhelpful, because then they have awkward edge-cases when embedding empty tokenstreams from declarative macros `($each_tt)*`.
 
@@ -34,7 +36,8 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
   * e.g. for long sums
   * Add compile failure tests
 * `[!range! 0..5]` outputs `0 1 2 3 4`
-* `[!error! "message" token stream for span]`
+* `[!error! "message" [token stream for span]]`
+* Parse fields `{ ... }` and change `!error! to use them as per https://github.com/rust-lang/rust/issues/54140#issuecomment-2585002922.
 * Reconfiguring iteration limit
 * Support `!else if!` in `!if!`
 * `[!extend! #x += ...]` to make such actions more performant

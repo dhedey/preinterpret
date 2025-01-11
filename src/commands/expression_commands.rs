@@ -8,8 +8,6 @@ pub(crate) struct EvaluateCommand {
 impl CommandDefinition for EvaluateCommand {
     const COMMAND_NAME: &'static str = "evaluate";
 
-    const OUTPUT_BEHAVIOUR: CommandOutputBehaviour = CommandOutputBehaviour::SingleToken;
-
     fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
         Ok(Self {
             expression: arguments.parse_all_for_interpretation()?,
@@ -18,9 +16,9 @@ impl CommandDefinition for EvaluateCommand {
 }
 
 impl CommandInvocation for EvaluateCommand {
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
         let expression = self.expression.interpret_as_expression(interpreter)?;
-        Ok(expression.evaluate()?.into_interpreted_stream())
+        Ok(CommandOutput::GroupedStream(expression.evaluate()?.into_interpreted_stream()))
     }
 }
 
@@ -35,8 +33,6 @@ pub(crate) struct AssignCommand {
 
 impl CommandDefinition for AssignCommand {
     const COMMAND_NAME: &'static str = "assign";
-
-    const OUTPUT_BEHAVIOUR: CommandOutputBehaviour = CommandOutputBehaviour::EmptyStream;
 
     fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
         static ERROR: &str = "Expected [!assign! #variable += ...] for + or some other operator supported in an expression";
@@ -57,7 +53,7 @@ impl CommandDefinition for AssignCommand {
 }
 
 impl CommandInvocation for AssignCommand {
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
         let Self {
             variable,
             operator,
@@ -65,7 +61,7 @@ impl CommandInvocation for AssignCommand {
             expression,
         } = *self;
 
-        let mut expression_stream = ExpressionStream::new();
+        let mut expression_stream = ExpressionStream::new(expression.span_range());
         variable.interpret_as_expression_into(interpreter, &mut expression_stream)?;
         expression_stream.push_punct(operator);
         expression.interpret_as_expression_into(interpreter, &mut expression_stream)?;
@@ -73,6 +69,6 @@ impl CommandInvocation for AssignCommand {
         let output = expression_stream.evaluate()?.into_interpreted_stream();
         variable.set(interpreter, output);
 
-        Ok(InterpretedStream::new())
+        Ok(CommandOutput::Empty)
     }
 }

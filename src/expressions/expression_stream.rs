@@ -13,9 +13,9 @@ pub(crate) struct ExpressionStream {
 }
 
 impl ExpressionStream {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(source_span_range: SpanRange) -> Self {
         Self {
-            interpreted_stream: InterpretedStream::new(),
+            interpreted_stream: InterpretedStream::new(source_span_range),
         }
     }
 
@@ -32,7 +32,7 @@ impl ExpressionStream {
         self.interpreted_stream.push_punct(punct);
     }
 
-    pub(crate) fn push_interpreted_group(
+    pub(crate) fn push_grouped_interpreted_stream(
         &mut self,
         contents: InterpretedStream,
         span_range: SpanRange,

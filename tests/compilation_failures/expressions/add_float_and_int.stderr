@@ -1,0 +1,5 @@
+error: The + operator cannot infer a common operand type from untyped float and untyped integer. Consider using `as` to cast to matching types.
+ --> tests/compilation_failures/expressions/add_float_and_int.rs:5:25
+  |
+5 |         [!evaluate! 1.2 + 1]
+  |                         ^

@@ -1,0 +1,5 @@
+error: number too large to fit in target type
+ --> tests/compilation_failures/expressions/fix_me_negative_max_int_fails.rs:8:22
+  |
+8 |         [!evaluate! -128i8]
+  |                      ^^^^^

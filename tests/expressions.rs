@@ -7,6 +7,12 @@ macro_rules! assert_preinterpret_eq {
 }
 
 #[test]
+fn test_expression_compilation_failures() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compilation_failures/expressions/*.rs");
+}
+
+#[test]
 fn test_basic_evaluate_works() {
     assert_preinterpret_eq!([!evaluate! !!(!!(true))], true);
     assert_preinterpret_eq!([!evaluate! 1 + 5], 6u8);
@@ -17,6 +23,8 @@ fn test_basic_evaluate_works() {
     assert_preinterpret_eq!([!evaluate! 3.6 + 3999999999999999992.0], 3.6 + 3999999999999999992.0);
     assert_preinterpret_eq!([!evaluate! -3.2], -3.2);
     assert_preinterpret_eq!([!evaluate! true && true || false], true);
+    assert_preinterpret_eq!([!evaluate! true || false && false], true); // The && has priority
+    assert_preinterpret_eq!([!evaluate! true | false & false], true);   // The & has priority
     assert_preinterpret_eq!([!evaluate! true as u32 + 2], 3);
     assert_preinterpret_eq!([!evaluate! 3.57 as int + 1], 4u32);
     assert_preinterpret_eq!([!evaluate! 3.57 as int + 1], 4u64);
@@ -52,6 +60,3 @@ fn assign_works() {
         12
     );
 }
-
-// TODO - Add failing tests for these:
-// assert_preinterpret_eq!([!evaluate! !!(!!({true}))], true);

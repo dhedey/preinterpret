@@ -434,7 +434,8 @@ impl EvaluationOutput {
     }
 
     pub(crate) fn into_interpreted_stream(self) -> InterpretedStream {
-        InterpretedStream::raw(self.into_token_stream())
+        let value = self.into_value();
+        InterpretedStream::raw(value.source_span(), value.into_token_stream())
     }
 }
 

@@ -1,6 +1,6 @@
 use crate::internal_prelude::*;
 
-pub(crate) trait Interpret: Sized {
+pub(crate) trait Interpret: Sized + HasSpanRange {
     fn interpret_as_tokens_into(
         self,
         interpreter: &mut Interpreter,
@@ -8,7 +8,7 @@ pub(crate) trait Interpret: Sized {
     ) -> Result<()>;
 
     fn interpret_as_tokens(self, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
-        let mut output = InterpretedStream::new();
+        let mut output = InterpretedStream::new(self.span_range());
         self.interpret_as_tokens_into(interpreter, &mut output)?;
         Ok(output)
     }
@@ -20,24 +20,60 @@ pub(crate) trait Interpret: Sized {
     ) -> Result<()>;
 
     fn interpret_as_expression(self, interpreter: &mut Interpreter) -> Result<ExpressionStream> {
-        let mut output = ExpressionStream::new();
+        let mut output = ExpressionStream::new(self.span_range());
         self.interpret_as_expression_into(interpreter, &mut output)?;
         Ok(output)
     }
 }
 
+pub(crate) trait IdentExt: Sized {
+    fn new_bool(value: bool, span: Span) -> Self;
+}
+
+impl IdentExt for Ident {
+    fn new_bool(value: bool, span: Span) -> Self {
+        Ident::new(&value.to_string(), span)
+    }
+}
+
+
+pub(crate) trait LiteralExt: Sized {
+    fn content_if_string(&self) -> Option<String>;
+    fn content_if_string_or_char(&self) -> Option<String>;
+}
+
+impl LiteralExt for Literal {
+    fn content_if_string(&self) -> Option<String> {
+        match parse_str::<Lit>(&self.to_string()).unwrap() {
+            Lit::Str(lit_str) => Some(lit_str.value()),
+            _ => None,
+        }
+    }
+
+    fn content_if_string_or_char(&self) -> Option<String> {
+        match parse_str::<Lit>(&self.to_string()).unwrap() {
+            Lit::Str(lit_str) => Some(lit_str.value()),
+            Lit::Char(lit_char) => Some(lit_char.value().to_string()),
+            _ => None,
+        }
+    }
+}
+
 pub(crate) trait TokenTreeExt: Sized {
-    fn bool(value: bool, span: Span) -> Self;
     fn group(tokens: TokenStream, delimeter: Delimiter, span: Span) -> Self;
+    fn to_literal(self, error_message: &str) -> Result<Literal>;
 }
 
 impl TokenTreeExt for TokenTree {
-    fn bool(value: bool, span: Span) -> Self {
-        TokenTree::Ident(Ident::new(&value.to_string(), span))
-    }
-
     fn group(inner_tokens: TokenStream, delimeter: Delimiter, span: Span) -> Self {
         TokenTree::Group(Group::new(delimeter, inner_tokens).with_span(span))
+    }
+    
+    fn to_literal(self, error_message: &str) -> Result<Literal>  {
+        match self {
+            TokenTree::Literal(literal) => Ok(literal),
+            other => other.err(error_message),
+        }
     }
 }
 

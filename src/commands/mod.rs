@@ -16,6 +16,7 @@ define_command_kind! {
     SetCommand,
     RawCommand,
     IgnoreCommand,
+    ErrorCommand,
 
     // Concat & Type Convert Commands
     StringCommand,

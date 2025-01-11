@@ -78,12 +78,12 @@ impl Interpret for &Variable {
         interpreter: &mut Interpreter,
         expression_stream: &mut ExpressionStream,
     ) -> Result<()> {
-        expression_stream.push_interpreted_group(self.substitute(interpreter)?, self.span_range());
+        expression_stream.push_grouped_interpreted_stream(self.substitute(interpreter)?, self.span_range());
         Ok(())
     }
 }
 
-impl HasSpanRange for Variable {
+impl HasSpanRange for &Variable {
     fn span_range(&self) -> SpanRange {
         SpanRange::new_between(self.marker.span(), self.variable_name.span())
     }

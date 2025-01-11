@@ -53,6 +53,10 @@ impl InterpreterParseStream {
         }
     }
 
+    pub(crate) fn full_span_range(&self) -> SpanRange {
+        self.full_span_range
+    }
+
     pub(super) fn peek_token_tree(&mut self) -> Option<&TokenTree> {
         self.tokens.peek()
     }

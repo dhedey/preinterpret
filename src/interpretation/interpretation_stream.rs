@@ -44,7 +44,7 @@ impl Interpret for InterpretationStream {
         interpreter: &mut Interpreter,
         expression_stream: &mut ExpressionStream,
     ) -> Result<()> {
-        let mut inner_expression_stream = ExpressionStream::new();
+        let mut inner_expression_stream = ExpressionStream::new(self.span_range);
         for item in self.items {
             item.interpret_as_expression_into(interpreter, &mut inner_expression_stream)?;
         }

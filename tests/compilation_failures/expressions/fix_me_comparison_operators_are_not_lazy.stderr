@@ -1,0 +1,13 @@
+error: The && expression is not evaluated lazily
+  --> tests/compilation_failures/expressions/fix_me_comparison_operators_are_not_lazy.rs:4:5
+   |
+4  | /     preinterpret!{
+5  | |         [!set! #is_eager = false]
+6  | |         let _ = [!evaluate! false && ([!set! #is_eager = true] true)];
+7  | |         [!if! #is_eager {
+8  | |             [!error! "The && expression is not evaluated lazily" []]
+9  | |         }]
+10 | |     }
+   | |_____^
+   |
+   = note: this error originates in the macro `preinterpret` (in Nightly builds, run with -Z macro-backtrace for more info)
