@@ -4,36 +4,62 @@ use crate::internal_prelude::*;
 // How syn features fits with preinterpret parsing
 // ===============================================
 //
+// There are a few places where we parse in preinterpret:
+// * Parse the initial input from the macro, into an interpretable structure
+// * Parsing as part of interpretation
+//   * e.g. of raw tokens, either from the preinterpret declaration, or from a variable
+//   * e.g. of a variable, as part of incremental parsing (while_parse style loops)
+//
 // I spent quite a while considering whether this could be wrapping a
-// `syn::parse::ParseBuffer<'a>` or `syn::buffer::Cursor<'a>`, instead
-// of a custom Peekable<TokenIter>
+// `syn::parse::ParseBuffer<'a>` or `syn::buffer::Cursor<'a>`...
 //
-// I came to the conclusion it doesn't make much sense for now, but
-// could be explored in future:
+// Parsing the initial input
+// -------------------------
 //
-// * ParseBuffer / ParseStream is powerful but restrictive
-//   > Due to how it works, we'd need to use it to parse the initial input
-//     in a single initial pass.
-//   > We currently have an Interpreter with us as we parse, which the `Parse`
-//     trait doesn't allow.
-//   > We could consider splitting into a two-pass approach, where we start
-//     with a Parse step, and then we interpret after, but it would be quite
-//     a big change internally
-// * Cursor needs to reference into some TokenBuffer
-//   > We would convert the input TokenStream into a TokenBuffer and
-//     Cursor into that
-//   > But this can't be converted into a ParseBuffer outside of the syn crate,
-//     and so it doesn't get much benefit
+// This is where InterpreterParseStream comes in.
 //
-// Either of these approaches appear disjoint from the parse/destructuring
-// operations...
+// Now that I've changed how preinterpret works to be a two-pass approach
+// (first parsing, then interpreting), we could consider swapping out the
+// InterpreterParseStream to wrap a syn::ParseStream instead.
 //
-// * For parse/destructuring operations, we may need to temporarily
-//   create parse streams in scope of a command execution
-// * For #VARIABLES which can be incrementally consumed / parsed,
-//   it would be nice to be able to store a Cursor into a TokenBuffer,
-//   but annoyingly it isn't possible to convert this to a ParseStream
-//   outside of syn.
+// This probably could work, but has a little more overhead to swap to a
+// TokenBuffer (and so ParseStream) and back.
+//
+// Parsing in the context of a command execution
+// ---------------------------------------------
+//
+// For parse/destructuring operations, we could temporarily create parse
+// streams in scope of a command execution.
+//
+// Parsing a variable or other token stream
+// ----------------------------------------
+//
+// Some commands want to performantly parse a variable or other token stream.
+//
+// Here we want variables to support:
+// * Easy appending of tokens
+// * Incremental parsing
+//
+// Ideally we'd want to be able to store a syn::TokenBuffer, and be able to
+// append to it, and freely convert it to a syn::ParseStream, possibly even storing
+// a cursor position into it.
+//
+// Unfortunately this isn't at all possible:
+// * TokenBuffer appending isn't a thing, you can only create one (recursively) from
+//   a TokenStream
+// * TokenBuffer can't be converted to a ParseStream outside of the syn crate
+// * For performance, a cursor stores a pointer into a TokenBuffer, so it can only be
+//   used against a fixed buffer.
+//
+// We could probably work around these limitations by sacrificing performance and transforming
+// to TokenStream and back, but probably there's a better way.
+//
+// What we probably want is our own abstraction, likely a fork from `syn`, which supports
+// converting a Cursor into an indexed based cursor, which can safely be stored separately
+// from the TokenBuffer.
+//
+// We could use this abstraction for InterpretedStream; and our variables could store a
+// tuple of (IndexCursor, PreinterpretTokenBuffer)
 
 #[derive(Clone)]
 pub(crate) struct InterpreterParseStream {

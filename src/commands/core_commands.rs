@@ -98,15 +98,46 @@ impl CommandDefinition for ErrorCommand {
 impl CommandInvocation for ErrorCommand {
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
         static ERROR: &str = "Expected a single string literal as the error message";
+
         let message_span_range = self.message.span_range();
         let message = self
             .message
             .interpret_as_tokens(interpreter)?
+            .flatten_transparent_groups()
             .into_singleton(ERROR)?
             .to_literal(ERROR)?
             .content_if_string()
             .ok_or_else(|| message_span_range.error(ERROR))?;
-        let error_span_stream = self.error_span_stream.interpret_as_tokens(interpreter)?;
+
+        // Consider the case where preinterpret embeds in a declarative macro, and we have
+        // an error like this:
+        // [!error! [!string! "Expected 100, got " $input] [$input]]
+        //
+        // In cases like this, rustc wraps $input in a transparent group, which means that
+        // the span of that group is the span of the tokens "$input" in the definition of the
+        // declarative macro. This is not what we want. We want the span of the tokens which
+        // were fed into $input in the declarative macro.
+        //
+        // The simplest solution here is to get rid of all transparent groups, to get back to the
+        // source spans.
+        //
+        // Once this workstream with macro diagnostics is stabilised:
+        // https://github.com/rust-lang/rust/issues/54140#issuecomment-802701867
+        //
+        // Then we can revisit this and do something better, and include all spans as separate spans
+        // in the error message, which will allow a user to trace an error through N different layers
+        // of macros.
+        //
+        // (Possibly we can try to join spans together, and if they don't join, they become separate
+        // spans which get printed to the error message).
+        //
+        // Coincidentally, rust analyzer currently does not properly support
+        // transparent groups (as of Jan 2025), so gets it right without this flattening:
+        // https://github.com/rust-lang/rust-analyzer/issues/18211
+        let error_span_stream = self
+            .error_span_stream
+            .interpret_as_tokens(interpreter)?
+            .flatten_transparent_groups();
 
         if error_span_stream.is_empty() {
             Span::call_site().err(message)

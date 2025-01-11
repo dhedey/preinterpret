@@ -58,6 +58,13 @@ impl InterpretedStream {
         self.token_stream.is_empty()
     }
 
+    pub(crate) fn flatten_transparent_groups(self) -> InterpretedStream {
+        InterpretedStream {
+            source_span_range: self.source_span_range,
+            token_stream: self.token_stream.flatten_transparent_groups(),
+        }
+    }
+
     pub(crate) fn into_singleton(self, error_message: &str) -> Result<TokenTree> {
         if self.is_empty() {
             return self.source_span_range.err(error_message);

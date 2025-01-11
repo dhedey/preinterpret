@@ -61,7 +61,7 @@ fn concat_recursive(arguments: InterpretedStream) -> String {
     fn concat_recursive_internal(output: &mut String, arguments: TokenStream) {
         for token_tree in arguments {
             match token_tree {
-                TokenTree::Literal(literal) => match literal.content_if_string_or_char() {
+                TokenTree::Literal(literal) => match literal.content_if_string_like() {
                     Some(content) => output.push_str(&content),
                     None => output.push_str(&literal.to_string()),
                 },

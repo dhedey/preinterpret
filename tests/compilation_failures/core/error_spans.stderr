@@ -1,10 +1,5 @@
 error: Expected 100, got 5
-  --> tests/compilation_failures/core/error_spans.rs:6:62
+  --> tests/compilation_failures/core/error_spans.rs:12:20
    |
-6  |             [!error! [!string! "Expected 100, got " $input] [$input]]
-   |                                                              ^^^^^^
-...
-14 |     assert_is_100!(5);
-   |     ----------------- in this macro invocation
-   |
-   = note: this error originates in the macro `assert_is_100` (in Nightly builds, run with -Z macro-backtrace for more info)
+12 |     assert_is_100!(5);
+   |                    ^

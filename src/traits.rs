@@ -38,7 +38,7 @@ impl IdentExt for Ident {
 
 pub(crate) trait LiteralExt: Sized {
     fn content_if_string(&self) -> Option<String>;
-    fn content_if_string_or_char(&self) -> Option<String>;
+    fn content_if_string_like(&self) -> Option<String>;
 }
 
 impl LiteralExt for Literal {
@@ -49,12 +49,32 @@ impl LiteralExt for Literal {
         }
     }
 
-    fn content_if_string_or_char(&self) -> Option<String> {
+    fn content_if_string_like(&self) -> Option<String> {
         match parse_str::<Lit>(&self.to_string()).unwrap() {
             Lit::Str(lit_str) => Some(lit_str.value()),
             Lit::Char(lit_char) => Some(lit_char.value().to_string()),
+            Lit::CStr(lit_cstr) => Some(lit_cstr.value().to_string_lossy().to_string()),
             _ => None,
         }
+    }
+}
+
+pub(crate) trait TokenStreamExt: Sized {
+    fn flatten_transparent_groups(self) -> Self;
+}
+
+impl TokenStreamExt for TokenStream {
+    fn flatten_transparent_groups(self) -> Self {
+        let mut output = TokenStream::new();
+        for token in self {
+            match token {
+                TokenTree::Group(group) if group.delimiter() == Delimiter::None => {
+                    output.extend(group.stream().flatten_transparent_groups());
+                }
+                other => output.extend(iter::once(other)),
+            }
+        }
+        output
     }
 }
 

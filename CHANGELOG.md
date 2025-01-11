@@ -22,11 +22,11 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 
 ### To come
 
-* Update big comment in parse stream file
 * Grouping... Proposal:
   * #x is a group, #..x is flattened
   * Whether a command is flattened or not is dependent on the command
-  * Command arguments which are streams should be surrounded by `[ ... ]`... a `[!..! ...]` may also be used instead.
+  * Command arguments which are streams should be surrounded by `[ ... ]`... a `[!command! ...]` may also be used instead.
+  * For more complicated argument-lists, we can consider using `{ .. }` field-based arguments
 * ? Use `[!let! #x = 12]` instead of `[!set! ...]`
   * ...Or maybe not. Maybe `[!let! #..x = Hello World]` does parsing and is equivalent to `[!set! #x = Hello World]`
 * Fix `if` and `while` to read expression until braces

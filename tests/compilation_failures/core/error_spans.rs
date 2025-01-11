@@ -9,7 +9,5 @@ macro_rules! assert_is_100 {
 }
 
 fn main() {
-    // In rust analyzer, the span is in the correct location
-    // But in rustc it's not... I'm not really sure why.
     assert_is_100!(5);
 }
