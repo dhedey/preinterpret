@@ -75,39 +75,54 @@ impl CommandInvocation for IgnoreCommand {
 
 #[derive(Clone)]
 pub(crate) struct ErrorCommand {
-    message: NextItem,
-    error_span_stream: InterpretationStream,
+    arguments: InterpretationStream,
 }
 
 impl CommandDefinition for ErrorCommand {
     const COMMAND_NAME: &'static str = "error";
 
     fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
-        static ERROR: &str = "Expected [!error! \"Error message\" [tokens spanning error]], for example:\n* [!error! \"Compiler error message\" [$tokens_covering_error]]\n * [!error! [!string! \"My Error\" \"in bits\"] []]";
-        let parsed = Self {
-            message: arguments.next_item(ERROR)?,
-            error_span_stream: arguments
-                .next_as_kinded_group(Delimiter::Bracket, ERROR)?
-                .into_inner_stream(),
-        };
-        arguments.assert_end(ERROR)?;
-        Ok(parsed)
+        Ok(Self {
+            arguments: arguments.parse_all_for_interpretation()?,
+        })
     }
+}
+
+#[derive(Default)]
+struct ErrorCommandArguments {
+    message: Option<syn::LitStr>,
+    error_spans: Option<BracketedTokenStream>,
 }
 
 impl CommandInvocation for ErrorCommand {
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
-        static ERROR: &str = "Expected a single string literal as the error message";
+        let fields_parser = FieldsParseDefinition::new(ErrorCommandArguments::default())
+            .add_required_field(
+                "message",
+                "\"Error message to display\"",
+                None,
+                |params, val| params.message = Some(val),
+            )
+            .add_optional_field(
+                "spans",
+                "[$abc]",
+                Some("An optional [token stream], to determine where to show the error message"),
+                |params, val| params.error_spans = Some(val),
+            );
 
-        let message_span_range = self.message.span_range();
-        let message = self
-            .message
+        let arguments = self.arguments
             .interpret_as_tokens(interpreter)?
-            .flatten_transparent_groups()
-            .into_singleton(ERROR)?
-            .to_literal(ERROR)?
-            .content_if_string()
-            .ok_or_else(|| message_span_range.error(ERROR))?;
+            .parse_into_fields(fields_parser)?;
+
+        let message = arguments
+            .message
+            .unwrap() // Field was required
+            .value();
+
+        let error_span_stream = arguments
+            .error_spans
+            .map(|b| b.token_stream)
+            .unwrap_or_default();
 
         // Consider the case where preinterpret embeds in a declarative macro, and we have
         // an error like this:
@@ -134,10 +149,7 @@ impl CommandInvocation for ErrorCommand {
         // Coincidentally, rust analyzer currently does not properly support
         // transparent groups (as of Jan 2025), so gets it right without this flattening:
         // https://github.com/rust-lang/rust-analyzer/issues/18211
-        let error_span_stream = self
-            .error_span_stream
-            .interpret_as_tokens(interpreter)?
-            .flatten_transparent_groups();
+        let error_span_stream = error_span_stream.flatten_transparent_groups();
 
         if error_span_stream.is_empty() {
             Span::call_site().err(message)

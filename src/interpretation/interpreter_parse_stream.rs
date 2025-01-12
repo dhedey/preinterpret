@@ -91,6 +91,16 @@ impl InterpreterParseStream {
         self.tokens.next()
     }
 
+    #[allow(unused)]
+    pub(super) fn next_token_tree(&mut self, error_message: &str) -> Result<TokenTree> {
+        match self.next_token_tree_or_end() {
+            Some(token_tree) => Ok(token_tree),
+            None => self
+                .latest_item_span_range
+                .err(format!("Unexpected end: {error_message}")),
+        }
+    }
+
     fn next_item_or_end(&mut self) -> Result<Option<NextItem>> {
         let next_item = NextItem::parse(self)?;
         Ok(match next_item {
@@ -102,7 +112,7 @@ impl InterpreterParseStream {
         })
     }
 
-    pub(crate) fn next_item(&mut self, error_message: &'static str) -> Result<NextItem> {
+    pub(crate) fn next_item(&mut self, error_message: &str) -> Result<NextItem> {
         match self.next_item_or_end()? {
             Some(item) => Ok(item),
             None => self

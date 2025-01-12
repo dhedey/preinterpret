@@ -37,6 +37,7 @@ impl IdentExt for Ident {
 }
 
 pub(crate) trait LiteralExt: Sized {
+    #[allow(unused)]
     fn content_if_string(&self) -> Option<String>;
     fn content_if_string_like(&self) -> Option<String>;
 }
@@ -80,19 +81,23 @@ impl TokenStreamExt for TokenStream {
 
 pub(crate) trait TokenTreeExt: Sized {
     fn group(tokens: TokenStream, delimeter: Delimiter, span: Span) -> Self;
-    fn to_literal(self, error_message: &str) -> Result<Literal>;
 }
 
 impl TokenTreeExt for TokenTree {
     fn group(inner_tokens: TokenStream, delimeter: Delimiter, span: Span) -> Self {
         TokenTree::Group(Group::new(delimeter, inner_tokens).with_span(span))
     }
+}
 
-    fn to_literal(self, error_message: &str) -> Result<Literal> {
-        match self {
-            TokenTree::Literal(literal) => Ok(literal),
-            other => other.err(error_message),
-        }
+pub(crate) trait SynErrorExt: Sized {
+    fn concat(self, extra: &str) -> Self;
+}
+
+impl SynErrorExt for syn::Error {
+    fn concat(self, extra: &str) -> Self {
+        let mut message = self.to_string();
+        message.push_str(extra);
+        Self::new(self.span(), message)
     }
 }
 

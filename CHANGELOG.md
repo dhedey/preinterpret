@@ -23,10 +23,9 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 ### To come
 
 * Grouping... Proposal:
-  * #x is a group, #..x is flattened
-  * Whether a command is flattened or not is dependent on the command
+  * In output land: #x is a group, #..x is flattened
+  * In parse land: #x matches a single token, #..x consumes the rest of a stream
   * Command arguments which are streams should be surrounded by `[ ... ]`... a `[!command! ...]` may also be used instead.
-  * For more complicated argument-lists, we can consider using `{ .. }` field-based arguments
 * ? Use `[!let! #x = 12]` instead of `[!set! ...]`
   * ...Or maybe not. Maybe `[!let! #..x = Hello World]` does parsing and is equivalent to `[!set! #x = Hello World]`
 * Fix `if` and `while` to read expression until braces
@@ -36,8 +35,6 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
   * e.g. for long sums
   * Add compile failure tests
 * `[!range! 0..5]` outputs `0 1 2 3 4`
-* `[!error! "message" [token stream for span]]`
-* Parse fields `{ ... }` and change `!error! to use them as per https://github.com/rust-lang/rust/issues/54140#issuecomment-2585002922.
 * Reconfiguring iteration limit
 * Support `!else if!` in `!if!`
 * `[!extend! #x += ...]` to make such actions more performant
@@ -57,6 +54,8 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
       * How does this extend to parsing scenarios, such as a punctuated `,`?
         * It doesn't explicitly...
         * But `[!for! #x in [!split! [Hello, World,] on ,]]` could work, if `[!split!]` outputs transparent groups, and discards empty final items
+          * `[!comma_split! Hello, World,]`
+          * `[!split! { input: [Hello, World,], separator: [,], ignore_empty_at_end?: true, require_trailing_separator?: false, }]`
       * How does this handle zipping / unzipping and un-grouping, and/or parsing a more complicated group?
         * Proposal: The parsing operates over the content of a single token tree, possibly via explicitly ungrouping.
         * e.g. `[!for! (#country #flag #capital) in [!zip! (#countries #flags #capitals)]`
@@ -82,6 +81,8 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
   * `[!LITERAL! #x]` / `[!IDENT! #x]` bindings
   * `[!OPTIONAL! ...]`
   * Groups or `[!GROUP! ...]`
+  * `#x` binding reads a token tree
+  * `#..x` binding reads the rest of the stream
   * `[!RAW!]` for e.g. `[!while_parse! [!RAW! from] from #X]`
 * `[!match!]` (with `#..x` as a catch-all)
 * Work on book
