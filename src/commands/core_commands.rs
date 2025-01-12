@@ -110,7 +110,8 @@ impl CommandInvocation for ErrorCommand {
                 |params, val| params.error_spans = Some(val),
             );
 
-        let arguments = self.arguments
+        let arguments = self
+            .arguments
             .interpret_as_tokens(interpreter)?
             .parse_into_fields(fields_parser)?;
 

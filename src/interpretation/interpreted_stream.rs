@@ -60,7 +60,10 @@ impl InterpretedStream {
         self.token_stream.is_empty()
     }
 
-    pub(crate) fn parse_into_fields<T: 'static>(self, parser: FieldsParseDefinition<T>) -> Result<T> {
+    pub(crate) fn parse_into_fields<T: 'static>(
+        self,
+        parser: FieldsParseDefinition<T>,
+    ) -> Result<T> {
         let source_span_range = self.source_span_range;
         self.syn_parse(parser.create_syn_parser(source_span_range))
     }
@@ -125,7 +128,6 @@ impl syn::parse::Parse for BracketedTokenStream {
     }
 }
 
-
 pub(crate) struct FieldsParseDefinition<T> {
     new_builder: T,
     field_definitions: FieldDefinitions<T>,
@@ -168,25 +170,33 @@ impl<T: 'static> FieldsParseDefinition<T> {
         parse: impl Fn(syn::parse::ParseStream) -> Result<F> + 'static,
         set: impl Fn(&mut T, F) + 'static,
     ) -> Self {
-        if self.field_definitions.0.insert(
-            field_name.to_string(),
-            FieldParseDefinition {
-                is_required,
-                example: example.into(),
-                explanation: explanation.map(|s| s.to_string()),
-                parse_and_set: Box::new(move |builder, content| {
-                    let value = parse(content)?;
-                    set(builder, value);
-                    Ok(())
-                }),
-            },
-        ).is_some() {
+        if self
+            .field_definitions
+            .0
+            .insert(
+                field_name.to_string(),
+                FieldParseDefinition {
+                    is_required,
+                    example: example.into(),
+                    explanation: explanation.map(|s| s.to_string()),
+                    parse_and_set: Box::new(move |builder, content| {
+                        let value = parse(content)?;
+                        set(builder, value);
+                        Ok(())
+                    }),
+                },
+            )
+            .is_some()
+        {
             panic!("Duplicate field name: {field_name:?}");
         }
         self
     }
 
-    pub(crate) fn create_syn_parser(self, error_span_range: SpanRange) -> impl FnOnce(syn::parse::ParseStream) -> Result<T> {
+    pub(crate) fn create_syn_parser(
+        self,
+        error_span_range: SpanRange,
+    ) -> impl FnOnce(syn::parse::ParseStream) -> Result<T> {
         fn inner<T>(
             input: syn::parse::ParseStream,
             new_builder: T,
@@ -200,12 +210,12 @@ impl<T: 'static> FieldsParseDefinition<T> {
             let mut required_field_names: BTreeSet<_> = field_definitions
                 .0
                 .iter()
-                .filter_map(|(field_name, field_definition)| {
-                    match field_definition.is_required {
+                .filter_map(
+                    |(field_name, field_definition)| match field_definition.is_required {
                         true => Some(field_name.clone()),
                         false => None,
-                    }
-                })
+                    },
+                )
                 .collect();
             let mut seen_field_names = HashSet::new();
 
@@ -220,7 +230,7 @@ impl<T: 'static> FieldsParseDefinition<T> {
                 let field_definition = field_definitions
                     .0
                     .get(field_name_value.as_str())
-                    .ok_or_else(|| field_name.error(format!("Unsupported field name")))?;
+                    .ok_or_else(|| field_name.error("Unsupported field name".to_string()))?;
                 (field_definition.parse_and_set)(&mut builder, &content)?;
                 if !content.is_empty() {
                     content.parse::<syn::Token![,]>()?;
@@ -237,24 +247,28 @@ impl<T: 'static> FieldsParseDefinition<T> {
             Ok(builder)
         }
         move |input: syn::parse::ParseStream| {
-            inner(input, self.new_builder, &self.field_definitions, error_span_range)
-                .map_err(|error| {
-                    // Sadly error combination is just buggy - the two outputted
-                    // compile_error! invocations are back to back which causes a rustc
-                    // parse error. Instead, let's do this.
-                    error
-                        .concat("\n")
-                        .concat(&self.field_definitions.error_message())
-                })
+            inner(
+                input,
+                self.new_builder,
+                &self.field_definitions,
+                error_span_range,
+            )
+            .map_err(|error| {
+                // Sadly error combination is just buggy - the two outputted
+                // compile_error! invocations are back to back which causes a rustc
+                // parse error. Instead, let's do this.
+                error
+                    .concat("\n")
+                    .concat(&self.field_definitions.error_message())
+            })
         }
     }
 }
 
-
 struct FieldDefinitions<T>(BTreeMap<String, FieldParseDefinition<T>>);
 
 impl<T> FieldDefinitions<T> {
-    fn error_message(&self) -> String{
+    fn error_message(&self) -> String {
         use std::fmt::Write;
         let mut message = "Expected: {\n".to_string();
         for (field_name, field_definition) in &self.0 {
@@ -262,16 +276,22 @@ impl<T> FieldDefinitions<T> {
                 &mut message,
                 "    {}{}: {}",
                 field_name,
-                if field_definition.is_required { "" } else { "?" },
+                if field_definition.is_required {
+                    ""
+                } else {
+                    "?"
+                },
                 field_definition.example,
-            ).unwrap();
+            )
+            .unwrap();
             match field_definition.explanation {
-                Some(ref explanation) => write!(
+                Some(ref explanation) => writeln!(
                     &mut message,
-                    ", // {explanation}\n",
+                    ", // {explanation}",
                     explanation = explanation,
-                ).unwrap(),
-                None => write!(&mut message, ",\n").unwrap(),
+                )
+                .unwrap(),
+                None => writeln!(&mut message, ",").unwrap(),
             }
         }
         message.push('}');
@@ -283,5 +303,6 @@ struct FieldParseDefinition<T> {
     is_required: bool,
     example: String,
     explanation: Option<String>,
+    #[allow(clippy::type_complexity)]
     parse_and_set: Box<dyn Fn(&mut T, syn::parse::ParseStream) -> Result<()>>,
 }
