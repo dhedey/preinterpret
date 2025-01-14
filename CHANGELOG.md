@@ -21,11 +21,16 @@
 I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x = [!empty!]]`, but deemed it unhelpful, because then they have awkward edge-cases when embedding empty tokenstreams from declarative macros `($each_tt)*`.
 
 ### To come
-
+  
+* Support field parsing both before and at command execution.
+  * Trial moving to `ParseStream`-based parsing 
+  * Move `[!error!]` field parsing to be at parse time
+    => Input fields defined via macro, including static parse step e.g. `message: InterpretationItem, spans: Option<InterpretationItem>`
+    => Then each input can be interpreted as a specific type during execution.
 * Grouping... Proposal:
   * In output land: #x is a group, #..x is flattened
   * In parse land: #x matches a single token, #..x consumes the rest of a stream
-  * Command arguments which are streams should be surrounded by `[ ... ]`... a `[!command! ...]` may also be used instead.
+  * Command arguments which are streams should be surrounded by `[ ... ]`... a `[!command! ...]` or `#x` may also be used instead.
 * ? Use `[!let! #x = 12]` instead of `[!set! ...]`
   * ...Or maybe not. Maybe `[!let! #..x = Hello World]` does parsing and is equivalent to `[!set! #x = Hello World]`
 * Fix `if` and `while` to read expression until braces
@@ -78,6 +83,7 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 * Basic place parsing
   * Auto-expand transparent groups, like syn. Maybe even using syn `TokenBuffer` / `Cursor`!
   * Explicit Punct, Idents, Literals
+  * `[!STREAM! ]` method to take a stream
   * `[!LITERAL! #x]` / `[!IDENT! #x]` bindings
   * `[!OPTIONAL! ...]`
   * Groups or `[!GROUP! ...]`

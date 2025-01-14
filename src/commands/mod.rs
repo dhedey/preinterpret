@@ -16,6 +16,7 @@ define_command_kind! {
     SetCommand,
     RawCommand,
     IgnoreCommand,
+    StreamCommand,
     ErrorCommand,
 
     // Concat & Type Convert Commands

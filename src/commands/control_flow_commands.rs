@@ -2,7 +2,7 @@ use crate::internal_prelude::*;
 
 #[derive(Clone)]
 pub(crate) struct IfCommand {
-    condition: NextItem,
+    condition: InterpretationItem,
     true_code: InterpretationStream,
     false_code: Option<InterpretationStream>,
     nothing_span_range: SpanRange,
@@ -64,7 +64,7 @@ impl CommandInvocation for IfCommand {
 
 #[derive(Clone)]
 pub(crate) struct WhileCommand {
-    condition: NextItem,
+    condition: InterpretationItem,
     loop_code: InterpretationStream,
     nothing_span_range: SpanRange,
 }

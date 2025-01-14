@@ -514,6 +514,7 @@ mod commands;
 mod expressions;
 mod internal_prelude;
 mod interpretation;
+mod parsing;
 mod string_conversion;
 mod traits;
 

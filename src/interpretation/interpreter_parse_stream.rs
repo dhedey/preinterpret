@@ -101,8 +101,8 @@ impl InterpreterParseStream {
         }
     }
 
-    fn next_item_or_end(&mut self) -> Result<Option<NextItem>> {
-        let next_item = NextItem::parse(self)?;
+    fn next_item_or_end(&mut self) -> Result<Option<InterpretationItem>> {
+        let next_item = InterpretationItem::parse(self)?;
         Ok(match next_item {
             Some(next_item) => {
                 self.latest_item_span_range = next_item.span_range();
@@ -112,7 +112,7 @@ impl InterpreterParseStream {
         })
     }
 
-    pub(crate) fn next_item(&mut self, error_message: &str) -> Result<NextItem> {
+    pub(crate) fn next_item(&mut self, error_message: &str) -> Result<InterpretationItem> {
         match self.next_item_or_end()? {
             Some(item) => Ok(item),
             None => self
@@ -123,7 +123,7 @@ impl InterpreterParseStream {
 
     pub(crate) fn next_as_ident(&mut self, error_message: &'static str) -> Result<Ident> {
         match self.next_item(error_message)? {
-            NextItem::Ident(ident) => Ok(ident),
+            InterpretationItem::Ident(ident) => Ok(ident),
             other => other.err(error_message),
         }
     }
@@ -134,14 +134,14 @@ impl InterpreterParseStream {
         error_message: &'static str,
     ) -> Result<Ident> {
         match self.next_item(error_message)? {
-            NextItem::Ident(ident) if ident == ident_name => Ok(ident),
+            InterpretationItem::Ident(ident) if ident == ident_name => Ok(ident),
             other => other.err(error_message),
         }
     }
 
     pub(crate) fn next_as_punct(&mut self, error_message: &'static str) -> Result<Punct> {
         match self.next_item(error_message)? {
-            NextItem::Punct(punct) => Ok(punct),
+            InterpretationItem::Punct(punct) => Ok(punct),
             other => other.err(error_message),
         }
     }
@@ -152,7 +152,7 @@ impl InterpreterParseStream {
         error_message: &'static str,
     ) -> Result<Punct> {
         match self.next_item(error_message)? {
-            NextItem::Punct(punct) if punct.as_char() == char => Ok(punct),
+            InterpretationItem::Punct(punct) if punct.as_char() == char => Ok(punct),
             other => other.err(error_message),
         }
     }
@@ -163,14 +163,14 @@ impl InterpreterParseStream {
         error_message: &'static str,
     ) -> Result<InterpretationGroup> {
         match self.next_item(error_message)? {
-            NextItem::Group(group) if group.delimiter() == delimiter => Ok(group),
+            InterpretationItem::Group(group) if group.delimiter() == delimiter => Ok(group),
             other => other.err(error_message),
         }
     }
 
     pub(crate) fn next_as_variable(&mut self, error_message: &'static str) -> Result<Variable> {
         match self.next_item(error_message)? {
-            NextItem::Variable(variable_substitution) => Ok(variable_substitution),
+            InterpretationItem::Variable(variable_substitution) => Ok(variable_substitution),
             other => other.err(error_message),
         }
     }

@@ -3,7 +3,7 @@ use crate::internal_prelude::*;
 /// A parsed stream ready for interpretation
 #[derive(Clone)]
 pub(crate) struct InterpretationStream {
-    items: Vec<NextItem>,
+    items: Vec<InterpretationItem>,
     span_range: SpanRange,
 }
 
@@ -20,7 +20,7 @@ impl InterpretationStream {
         span_range: SpanRange,
     ) -> Result<Self> {
         let mut items = Vec::new();
-        while let Some(next_item) = NextItem::parse(parse_stream)? {
+        while let Some(next_item) = InterpretationItem::parse(parse_stream)? {
             items.push(next_item);
         }
         Ok(Self { items, span_range })

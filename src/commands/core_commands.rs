@@ -73,6 +73,30 @@ impl CommandInvocation for IgnoreCommand {
     }
 }
 
+/// This serves as a no-op command to take a stream when the grammar only allows a single item
+#[derive(Clone)]
+pub(crate) struct StreamCommand {
+    arguments: InterpretationStream,
+}
+
+impl CommandDefinition for StreamCommand {
+    const COMMAND_NAME: &'static str = "stream";
+
+    fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
+        Ok(Self {
+            arguments: arguments.parse_all_for_interpretation()?,
+        })
+    }
+}
+
+impl CommandInvocation for StreamCommand {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
+        Ok(CommandOutput::AppendStream(
+            self.arguments.interpret_as_tokens(interpreter)?,
+        ))
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct ErrorCommand {
     arguments: InterpretationStream,

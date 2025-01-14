@@ -1,7 +1,7 @@
 use crate::internal_prelude::*;
 
 #[derive(Clone)]
-pub(crate) enum NextItem {
+pub(crate) enum InterpretationItem {
     Command(Command),
     Variable(Variable),
     Group(InterpretationGroup),
@@ -10,7 +10,7 @@ pub(crate) enum NextItem {
     Literal(Literal),
 }
 
-impl NextItem {
+impl InterpretationItem {
     pub(super) fn parse(parse_stream: &mut InterpreterParseStream) -> Result<Option<Self>> {
         let next = match parse_stream.next_token_tree_or_end() {
             Some(next) => next,
@@ -19,45 +19,45 @@ impl NextItem {
         Ok(Some(match next {
             TokenTree::Group(group) => {
                 if let Some(command) = Command::attempt_parse_from_group(&group)? {
-                    NextItem::Command(command)
+                    InterpretationItem::Command(command)
                 } else {
-                    NextItem::Group(InterpretationGroup::parse(group)?)
+                    InterpretationItem::Group(InterpretationGroup::parse(group)?)
                 }
             }
             TokenTree::Punct(punct) => {
                 if let Some(variable) =
                     Variable::parse_consuming_only_if_match(&punct, parse_stream)
                 {
-                    NextItem::Variable(variable)
+                    InterpretationItem::Variable(variable)
                 } else {
-                    NextItem::Punct(punct)
+                    InterpretationItem::Punct(punct)
                 }
             }
-            TokenTree::Ident(ident) => NextItem::Ident(ident),
-            TokenTree::Literal(literal) => NextItem::Literal(literal),
+            TokenTree::Ident(ident) => InterpretationItem::Ident(ident),
+            TokenTree::Literal(literal) => InterpretationItem::Literal(literal),
         }))
     }
 }
 
-impl Interpret for NextItem {
+impl Interpret for InterpretationItem {
     fn interpret_as_tokens_into(
         self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> Result<()> {
         match self {
-            NextItem::Command(command_invocation) => {
+            InterpretationItem::Command(command_invocation) => {
                 command_invocation.interpret_as_tokens_into(interpreter, output)?;
             }
-            NextItem::Variable(variable) => {
+            InterpretationItem::Variable(variable) => {
                 variable.interpret_as_tokens_into(interpreter, output)?;
             }
-            NextItem::Group(group) => {
+            InterpretationItem::Group(group) => {
                 group.interpret_as_tokens_into(interpreter, output)?;
             }
-            NextItem::Punct(punct) => output.push_punct(punct),
-            NextItem::Ident(ident) => output.push_ident(ident),
-            NextItem::Literal(literal) => output.push_literal(literal),
+            InterpretationItem::Punct(punct) => output.push_punct(punct),
+            InterpretationItem::Ident(ident) => output.push_ident(ident),
+            InterpretationItem::Literal(literal) => output.push_literal(literal),
         }
         Ok(())
     }
@@ -68,32 +68,34 @@ impl Interpret for NextItem {
         expression_stream: &mut ExpressionStream,
     ) -> Result<()> {
         match self {
-            NextItem::Command(command_invocation) => {
+            InterpretationItem::Command(command_invocation) => {
                 command_invocation.interpret_as_expression_into(interpreter, expression_stream)?;
             }
-            NextItem::Variable(variable) => {
+            InterpretationItem::Variable(variable) => {
                 variable.interpret_as_expression_into(interpreter, expression_stream)?;
             }
-            NextItem::Group(group) => {
+            InterpretationItem::Group(group) => {
                 group.interpret_as_expression_into(interpreter, expression_stream)?;
             }
-            NextItem::Punct(punct) => expression_stream.push_punct(punct),
-            NextItem::Ident(ident) => expression_stream.push_ident(ident),
-            NextItem::Literal(literal) => expression_stream.push_literal(literal),
+            InterpretationItem::Punct(punct) => expression_stream.push_punct(punct),
+            InterpretationItem::Ident(ident) => expression_stream.push_ident(ident),
+            InterpretationItem::Literal(literal) => expression_stream.push_literal(literal),
         }
         Ok(())
     }
 }
 
-impl HasSpanRange for NextItem {
+impl HasSpanRange for InterpretationItem {
     fn span_range(&self) -> SpanRange {
         match self {
-            NextItem::Command(command_invocation) => command_invocation.span_range(),
-            NextItem::Variable(variable_substitution) => variable_substitution.span_range(),
-            NextItem::Group(group) => group.span_range(),
-            NextItem::Punct(punct) => punct.span_range(),
-            NextItem::Ident(ident) => ident.span_range(),
-            NextItem::Literal(literal) => literal.span_range(),
+            InterpretationItem::Command(command_invocation) => command_invocation.span_range(),
+            InterpretationItem::Variable(variable_substitution) => {
+                variable_substitution.span_range()
+            }
+            InterpretationItem::Group(group) => group.span_range(),
+            InterpretationItem::Punct(punct) => punct.span_range(),
+            InterpretationItem::Ident(ident) => ident.span_range(),
+            InterpretationItem::Literal(literal) => literal.span_range(),
         }
     }
 }
