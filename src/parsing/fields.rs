@@ -99,14 +99,14 @@ impl<T: 'static> FieldsParseDefinition<T> {
                     return field_name.err("Duplicate field name");
                 }
                 required_field_names.remove(field_name_value.as_str());
-                let _ = content.parse::<syn::Token![:]>()?;
+                let _ = content.parse::<Token![:]>()?;
                 let field_definition = field_definitions
                     .0
                     .get(field_name_value.as_str())
                     .ok_or_else(|| field_name.error("Unsupported field name".to_string()))?;
                 (field_definition.parse_and_set)(&mut builder, &content)?;
                 if !content.is_empty() {
-                    content.parse::<syn::Token![,]>()?;
+                    content.parse::<Token![,]>()?;
                 }
             }
 

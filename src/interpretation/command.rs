@@ -3,7 +3,7 @@ use crate::internal_prelude::*;
 pub(crate) trait CommandDefinition: CommandInvocation + Clone {
     const COMMAND_NAME: &'static str;
 
-    fn parse(arguments: InterpreterParseStream) -> Result<Self>;
+    fn parse(arguments: CommandArguments) -> Result<Self>;
 }
 
 pub(crate) trait CommandInvocation {
@@ -49,7 +49,7 @@ macro_rules! define_command_kind {
         }
 
         impl CommandKind {
-            pub(crate) fn parse_invocation(&self, arguments: InterpreterParseStream) -> Result<Box<dyn ClonableCommandInvocation>> {
+            pub(crate) fn parse_invocation(&self, arguments: CommandArguments) -> Result<Box<dyn ClonableCommandInvocation>> {
                 Ok(match self {
                     $(
                         Self::$command => Box::new(
@@ -79,64 +79,47 @@ macro_rules! define_command_kind {
 }
 pub(crate) use define_command_kind;
 
+impl Parse for CommandKind {
+    fn parse(input: ParseStream) -> Result<Self> {
+        // Support parsing any ident
+        let ident = input.call(Ident::parse_any)?;
+        match Self::for_ident(&ident) {
+            Some(command_kind) => Ok(command_kind),
+            None => ident.span().err(
+                format!(
+                    "Expected `[!<command>! ..]`, for <command> one of: {}.\nIf this wasn't intended to be a preinterpret command, you can work around this with [!raw! [!{} ... ]]",
+                    Self::list_all(),
+                    ident,
+                ),
+            ),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct Command {
     invocation: Box<dyn ClonableCommandInvocation>,
-    source_group_span_range: SpanRange,
+    source_group_span: DelimSpan,
 }
 
-impl Command {
-    pub(super) fn attempt_parse_from_group(group: &Group) -> Result<Option<Self>> {
-        fn matches_command_start(group: &Group) -> Option<(Ident, InterpreterParseStream)> {
-            if group.delimiter() != Delimiter::Bracket {
-                return None;
-            }
-            let mut tokens = InterpreterParseStream::new(group.stream(), group.span_range());
-            tokens.next_as_punct_matching('!', "").ok()?;
-            let ident = tokens.next_as_ident("").ok()?;
-            Some((ident, tokens))
-        }
-
-        fn extract_command_data(
-            command_ident: &Ident,
-            parse_stream: &mut InterpreterParseStream,
-        ) -> Option<CommandKind> {
-            let command_kind = CommandKind::for_ident(command_ident)?;
-            parse_stream.next_as_punct_matching('!', "").ok()?;
-            Some(command_kind)
-        }
-
-        // Attempt to match `[!ident`, if that doesn't match, we assume it's not a command invocation,
-        // so return `Ok(None)`
-        let (command_ident, mut parse_stream) = match matches_command_start(group) {
-            Some(command_start) => command_start,
-            None => return Ok(None),
-        };
-
-        // We have now checked enough that we're confident the user is pretty intentionally using
-        // the call convention. Any issues we hit from this point will be a helpful compiler error.
-        match extract_command_data(&command_ident, &mut parse_stream) {
-            Some(command_kind) => {
-                let invocation = command_kind.parse_invocation( parse_stream)?;
-                Ok(Some(Self {
-                    invocation,
-                    source_group_span_range: group.span_range(),
-                }))
-            },
-            None => Err(command_ident.span().error(
-                format!(
-                    "Expected `[!<command>! ..]`, for <command> one of: {}.\nIf this wasn't intended to be a preinterpret command, you can work around this with [!raw! [!{} ... ]]",
-                    CommandKind::list_all(),
-                    command_ident,
-                ),
-            )),
-        }
+impl Parse for Command {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let content;
+        let open_bracket = syn::bracketed!(content in input);
+        content.parse::<Token![!]>()?;
+        let command_kind = content.parse::<CommandKind>()?;
+        content.parse::<Token![!]>()?;
+        let invocation = command_kind.parse_invocation( CommandArguments::new(&content, open_bracket.span.span_range()))?;
+        Ok(Self {
+            invocation,
+            source_group_span: open_bracket.span,
+        })
     }
 }
 
 impl HasSpanRange for Command {
     fn span_range(&self) -> SpanRange {
-        self.source_group_span_range
+        self.source_group_span.span_range()
     }
 }
 
@@ -158,7 +141,7 @@ impl Interpret for Command {
                 output.extend(stream);
             }
             CommandOutput::GroupedStream(stream) => {
-                output.push_new_group(stream, Delimiter::None, self.source_group_span_range);
+                output.push_new_group(stream, Delimiter::None, self.source_group_span.join());
             }
         };
         Ok(())
@@ -179,7 +162,7 @@ impl Interpret for Command {
             }
             CommandOutput::AppendStream(stream) | CommandOutput::GroupedStream(stream) => {
                 expression_stream
-                    .push_grouped_interpreted_stream(stream, self.source_group_span_range);
+                    .push_grouped_interpreted_stream(stream, self.source_group_span.join());
             }
         };
         Ok(())

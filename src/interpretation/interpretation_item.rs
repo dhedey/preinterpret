@@ -10,32 +10,48 @@ pub(crate) enum InterpretationItem {
     Literal(Literal),
 }
 
-impl InterpretationItem {
-    pub(super) fn parse(parse_stream: &mut InterpreterParseStream) -> Result<Option<Self>> {
-        let next = match parse_stream.next_token_tree_or_end() {
-            Some(next) => next,
-            None => return Ok(None),
-        };
-        Ok(Some(match next {
-            TokenTree::Group(group) => {
-                if let Some(command) = Command::attempt_parse_from_group(&group)? {
-                    InterpretationItem::Command(command)
-                } else {
-                    InterpretationItem::Group(InterpretationGroup::parse(group)?)
-                }
-            }
-            TokenTree::Punct(punct) => {
-                if let Some(variable) =
-                    Variable::parse_consuming_only_if_match(&punct, parse_stream)
-                {
-                    InterpretationItem::Variable(variable)
-                } else {
-                    InterpretationItem::Punct(punct)
-                }
-            }
+enum GroupMatch {
+    Command,
+    OtherGroup,
+    None,
+}
+
+fn attempt_match_group(cursor: syn::buffer::Cursor) -> GroupMatch {
+    let next = match cursor.any_group() {
+        Some((next, delimiter, _, _)) if delimiter == Delimiter::Bracket => next,
+        Some(_) => return GroupMatch::OtherGroup,
+        None => return GroupMatch::None,
+    };
+    let next = match next.punct() {
+        Some((punct, next)) if punct.as_char() == '!' => next,
+        _ => return GroupMatch::OtherGroup,
+    };
+    let next = match next.ident() {
+        Some((_, next)) => next,
+        _ => return GroupMatch::OtherGroup,
+    };
+    match next.punct() {
+        Some((punct, _)) if punct.as_char() == '!' => GroupMatch::Command,
+        _ => GroupMatch::OtherGroup,
+    }
+}
+
+impl Parse for InterpretationItem {
+    fn parse(input: ParseStream) -> Result<Self> {
+        match attempt_match_group(input.cursor()) {
+            GroupMatch::Command => return Ok(InterpretationItem::Command(input.parse()?)),
+            GroupMatch::OtherGroup => return Ok(InterpretationItem::Group(input.parse()?)),
+            GroupMatch::None => {},
+        }
+        if input.peek(token::Pound) && input.peek2(syn::Ident) {
+            return Ok(InterpretationItem::Variable(input.parse()?))
+        }
+        Ok(match input.parse::<TokenTree>()? {
+            TokenTree::Group(_) => unreachable!("Should have been already handled by the first branch above"),
+            TokenTree::Punct(punct) => InterpretationItem::Punct(punct),
             TokenTree::Ident(ident) => InterpretationItem::Ident(ident),
             TokenTree::Literal(literal) => InterpretationItem::Literal(literal),
-        }))
+        })
     }
 }
 

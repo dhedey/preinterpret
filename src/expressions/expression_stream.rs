@@ -35,20 +35,20 @@ impl ExpressionStream {
     pub(crate) fn push_grouped_interpreted_stream(
         &mut self,
         contents: InterpretedStream,
-        span_range: SpanRange,
+        span: Span,
     ) {
         self.interpreted_stream
-            .push_new_group(contents, Delimiter::None, span_range);
+            .push_new_group(contents, Delimiter::None, span);
     }
 
     pub(crate) fn push_expression_group(
         &mut self,
         contents: Self,
         delimiter: Delimiter,
-        span_range: SpanRange,
+        span: Span,
     ) {
         self.interpreted_stream
-            .push_new_group(contents.interpreted_stream, delimiter, span_range);
+            .push_new_group(contents.interpreted_stream, delimiter, span);
     }
 
     pub(crate) fn evaluate(self) -> Result<EvaluationOutput> {

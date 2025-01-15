@@ -11,33 +11,27 @@ pub(crate) struct IfCommand {
 impl CommandDefinition for IfCommand {
     const COMMAND_NAME: &'static str = "if";
 
-    fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
-        static ERROR: &str = "Expected [!if! (condition) { true_code }] or [!if! (condition) { true_code } !else! { false_code}]";
-
-        let condition = arguments.next_item(ERROR)?;
-        let true_code = arguments
-            .next_as_kinded_group(Delimiter::Brace, ERROR)?
-            .into_inner_stream();
-        let false_code = if !arguments.is_empty() {
-            arguments.next_as_punct_matching('!', ERROR)?;
-            arguments.next_as_ident_matching("else", ERROR)?;
-            arguments.next_as_punct_matching('!', ERROR)?;
-            Some(
-                arguments
-                    .next_as_kinded_group(Delimiter::Brace, ERROR)?
-                    .into_inner_stream(),
-            )
-        } else {
-            None
-        };
-        arguments.assert_end(ERROR)?;
-
-        Ok(Self {
-            condition,
-            true_code,
-            false_code,
-            nothing_span_range: arguments.full_span_range(),
-        })
+    fn parse(arguments: CommandArguments) -> Result<Self> {
+        arguments.fully_parse_or_error(
+            |input| {
+                Ok(Self {
+                    condition: input.parse()?,
+                    true_code: input.parse_code_group_for_interpretation()?,
+                    false_code: {
+                        if !input.is_empty() {
+                            input.parse::<Token![!]>()?;
+                            input.parse::<Token![else]>()?;
+                            input.parse::<Token![!]>()?;
+                            Some(input.parse_code_group_for_interpretation()?)
+                        } else {
+                            None
+                        }
+                    },
+                    nothing_span_range: arguments.full_span_range(),
+                })
+            },
+            "Expected [!if! (condition) { true_code }] or [!if! (condition) { true_code } !else! { false_code }]",
+        )
     }
 }
 
@@ -72,20 +66,17 @@ pub(crate) struct WhileCommand {
 impl CommandDefinition for WhileCommand {
     const COMMAND_NAME: &'static str = "while";
 
-    fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
-        static ERROR: &str = "Expected [!while! (condition) { code }]";
-
-        let condition = arguments.next_item(ERROR)?;
-        let loop_code = arguments
-            .next_as_kinded_group(Delimiter::Brace, ERROR)?
-            .into_inner_stream();
-        arguments.assert_end(ERROR)?;
-
-        Ok(Self {
-            condition,
-            loop_code,
-            nothing_span_range: arguments.full_span_range(),
-        })
+    fn parse(arguments: CommandArguments) -> Result<Self> {
+        arguments.fully_parse_or_error(
+            |input| {
+                Ok(Self {
+                    condition: input.parse()?,
+                    loop_code: input.parse_code_group_for_interpretation()?,
+                    nothing_span_range: arguments.full_span_range(),
+                })
+            },
+            "Expected [!while! (condition) { code }]",
+        )
     }
 }
 

@@ -3,7 +3,7 @@ use crate::internal_prelude::*;
 /// Parses a [..] block.
 pub(crate) struct BracketedTokenStream {
     #[allow(unused)]
-    pub(crate) brackets: syn::token::Bracket,
+    pub(crate) brackets: token::Bracket,
     pub(crate) token_stream: TokenStream,
 }
 

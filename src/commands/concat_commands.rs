@@ -110,7 +110,7 @@ macro_rules! define_concat_command {
         impl CommandDefinition for $command {
             const COMMAND_NAME: &'static str = $command_name;
 
-            fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
+            fn parse(arguments: CommandArguments) -> Result<Self> {
                 Ok(Self {
                     arguments: arguments.parse_all_for_interpretation()?,
                 })

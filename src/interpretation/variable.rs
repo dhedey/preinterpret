@@ -2,31 +2,20 @@ use crate::internal_prelude::*;
 
 #[derive(Clone)]
 pub(crate) struct Variable {
-    marker: Punct, // #
+    marker: Token![#],
     variable_name: Ident,
 }
 
-impl Variable {
-    pub(super) fn parse_consuming_only_if_match(
-        punct: &Punct,
-        parse_stream: &mut InterpreterParseStream,
-    ) -> Option<Self> {
-        if punct.as_char() != '#' {
-            return None;
-        }
-        match parse_stream.peek_token_tree() {
-            Some(TokenTree::Ident(_)) => {}
-            _ => return None,
-        }
-        match parse_stream.next_token_tree_or_end() {
-            Some(TokenTree::Ident(variable_name)) => Some(Self {
-                marker: punct.clone(),
-                variable_name,
-            }),
-            _ => unreachable!("We just peeked a token of this type"),
-        }
+impl Parse for Variable {
+    fn parse(input: ParseStream) -> Result<Self> {
+        Ok(Self {
+            marker: input.parse()?,
+            variable_name: input.parse()?,
+        })
     }
+}
 
+impl Variable {
     pub(crate) fn variable_name(&self) -> String {
         self.variable_name.to_string()
     }
@@ -79,19 +68,19 @@ impl Interpret for &Variable {
         expression_stream: &mut ExpressionStream,
     ) -> Result<()> {
         expression_stream
-            .push_grouped_interpreted_stream(self.substitute(interpreter)?, self.span_range());
+            .push_grouped_interpreted_stream(self.substitute(interpreter)?, self.span_range().span());
         Ok(())
     }
 }
 
 impl HasSpanRange for &Variable {
     fn span_range(&self) -> SpanRange {
-        SpanRange::new_between(self.marker.span(), self.variable_name.span())
+        SpanRange::new_between(self.marker.span, self.variable_name.span())
     }
 }
 
 impl core::fmt::Display for Variable {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}{}", self.marker.as_char(), self.variable_name)
+        write!(f, "#{}", self.variable_name)
     }
 }

@@ -12,16 +12,17 @@ impl InterpretationStream {
         token_stream: TokenStream,
         span_range: SpanRange,
     ) -> Result<Self> {
-        InterpreterParseStream::new(token_stream, span_range).parse_all_for_interpretation()
+        Self::create_parser(span_range).parse2(token_stream)
     }
+}
 
-    pub(crate) fn parse(
-        parse_stream: &mut InterpreterParseStream,
-        span_range: SpanRange,
-    ) -> Result<Self> {
+impl ContextualParse for InterpretationStream {
+    type Context = SpanRange;
+
+    fn parse_with_context(input: ParseStream, span_range: Self::Context) -> Result<Self> {
         let mut items = Vec::new();
-        while let Some(next_item) = InterpretationItem::parse(parse_stream)? {
-            items.push(next_item);
+        while !input.is_empty() {
+            items.push(input.parse()?);
         }
         Ok(Self { items, span_range })
     }
@@ -51,7 +52,7 @@ impl Interpret for InterpretationStream {
         expression_stream.push_expression_group(
             inner_expression_stream,
             Delimiter::None,
-            self.span_range,
+            self.span_range.span(),
         );
         Ok(())
     }
@@ -66,23 +67,26 @@ impl HasSpanRange for InterpretationStream {
 /// A parsed group ready for interpretation
 #[derive(Clone)]
 pub(crate) struct InterpretationGroup {
-    source_group: Group,
+    source_delimeter: Delimiter,
+    source_delim_span: DelimSpan,
     interpretation_stream: InterpretationStream,
 }
 
-impl InterpretationGroup {
-    pub(super) fn parse(source_group: Group) -> Result<Self> {
-        let interpretation_stream =
-            InterpreterParseStream::new(source_group.stream(), source_group.span_range())
-                .parse_all_for_interpretation()?;
+impl Parse for InterpretationGroup {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let (delimeter, delim_span, content) = input.parse_any_delimiter()?;
+        let span_range = delim_span.span_range();
         Ok(Self {
-            source_group,
-            interpretation_stream,
+            source_delimeter: delimeter,
+            source_delim_span: delim_span,
+            interpretation_stream: content.parse_with(span_range)?,
         })
     }
+}
 
+impl InterpretationGroup {
     pub(crate) fn delimiter(&self) -> Delimiter {
-        self.source_group.delimiter()
+        self.source_delimeter
     }
 
     pub(crate) fn into_inner_stream(self) -> InterpretationStream {
@@ -99,8 +103,8 @@ impl Interpret for InterpretationGroup {
         output.push_new_group(
             self.interpretation_stream
                 .interpret_as_tokens(interpreter)?,
-            self.source_group.delimiter(),
-            self.source_group.span_range(),
+            self.source_delimeter,
+            self.source_delim_span.join(),
         );
         Ok(())
     }
@@ -113,8 +117,8 @@ impl Interpret for InterpretationGroup {
         expression_stream.push_expression_group(
             self.interpretation_stream
                 .interpret_as_expression(interpreter)?,
-            self.source_group.delimiter(),
-            self.source_group.span_range(),
+            self.source_delimeter,
+            self.source_delim_span.join(),
         );
         Ok(())
     }
@@ -122,6 +126,6 @@ impl Interpret for InterpretationGroup {
 
 impl HasSpanRange for InterpretationGroup {
     fn span_range(&self) -> SpanRange {
-        self.source_group.span_range()
+        self.source_delim_span.span_range()
     }
 }

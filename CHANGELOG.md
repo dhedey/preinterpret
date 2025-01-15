@@ -23,7 +23,6 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 ### To come
   
 * Support field parsing both before and at command execution.
-  * Trial moving to `ParseStream`-based parsing 
   * Move `[!error!]` field parsing to be at parse time
     => Input fields defined via macro, including static parse step e.g. `message: InterpretationItem, spans: Option<InterpretationItem>`
     => Then each input can be interpreted as a specific type during execution.

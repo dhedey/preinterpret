@@ -89,6 +89,42 @@ impl TokenTreeExt for TokenTree {
     }
 }
 
+pub(crate) trait ParserExt {
+    fn parse_with<T: ContextualParse>(&self, context: T::Context) -> Result<T>;
+    fn parse_all_for_interpretation(&self, span_range: SpanRange) -> Result<InterpretationStream>;
+    fn parse_code_group_for_interpretation(&self) -> Result<InterpretationStream>;
+}
+
+impl<'a> ParserExt for ParseBuffer<'a> {
+    fn parse_with<T: ContextualParse>(&self, context: T::Context) -> Result<T> {
+        T::parse_with_context(self, context)
+    }
+
+    fn parse_all_for_interpretation(&self, span_range: SpanRange) -> Result<InterpretationStream> {
+        self.parse_with(span_range)
+    }
+
+    fn parse_code_group_for_interpretation(&self) -> Result<InterpretationStream> {
+        let group = self.parse::<InterpretationGroup>()?;
+        if group.delimiter() != Delimiter::Brace {
+            return group.err("expected {");
+        }
+        Ok(group.into_inner_stream())
+    }
+}
+
+pub(crate) trait ContextualParse: Sized {
+    type Context;
+
+    fn parse_with_context(input: ParseStream, context: Self::Context) -> Result<Self>;
+
+    fn create_parser(context: Self::Context) -> impl FnOnce(ParseStream) -> Result<Self> {
+        move |input: ParseStream| {
+            Self::parse_with_context(input, context)
+        }
+    }
+}
+
 pub(crate) trait SynErrorExt: Sized {
     fn concat(self, extra: &str) -> Self;
 }
@@ -225,7 +261,7 @@ impl HasSpanRange for Group {
     }
 }
 
-impl HasSpanRange for proc_macro2::extra::DelimSpan {
+impl HasSpanRange for DelimSpan {
     fn span_range(&self) -> SpanRange {
         SpanRange::new_between(self.open(), self.close())
     }

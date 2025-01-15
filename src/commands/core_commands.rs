@@ -4,20 +4,25 @@ use crate::internal_prelude::*;
 pub(crate) struct SetCommand {
     variable: Variable,
     #[allow(unused)]
-    equals: Punct,
+    equals: Token![=],
     arguments: InterpretationStream,
 }
 
 impl CommandDefinition for SetCommand {
     const COMMAND_NAME: &'static str = "set";
 
-    fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
-        static ERROR: &str = "Expected [!set! #variable = ... ]";
-        Ok(Self {
-            variable: arguments.next_as_variable(ERROR)?,
-            equals: arguments.next_as_punct_matching('=', ERROR)?,
-            arguments: arguments.parse_all_for_interpretation()?,
-        })
+    fn parse(arguments: CommandArguments) -> Result<Self> {
+        arguments
+            .fully_parse_or_error(
+                |input| {
+                    Ok(Self {
+                        variable: input.parse()?,
+                        equals: input.parse()?,
+                        arguments: input.parse_with(arguments.full_span_range())?,
+                    })
+                },
+                "Expected [!set! #variable = ... ]",
+            )
     }
 }
 
@@ -39,7 +44,7 @@ pub(crate) struct RawCommand {
 impl CommandDefinition for RawCommand {
     const COMMAND_NAME: &'static str = "raw";
 
-    fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {
             arguments_span_range: arguments.full_span_range(),
             token_stream: arguments.read_all_as_raw_token_stream(),
@@ -62,7 +67,9 @@ pub(crate) struct IgnoreCommand;
 impl CommandDefinition for IgnoreCommand {
     const COMMAND_NAME: &'static str = "ignore";
 
-    fn parse(_arguments: InterpreterParseStream) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> Result<Self> {
+        // Avoid a syn parse error by reading all the tokens
+        let _ = arguments.read_all_as_raw_token_stream();
         Ok(Self)
     }
 }
@@ -82,7 +89,7 @@ pub(crate) struct StreamCommand {
 impl CommandDefinition for StreamCommand {
     const COMMAND_NAME: &'static str = "stream";
 
-    fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {
             arguments: arguments.parse_all_for_interpretation()?,
         })
@@ -105,7 +112,7 @@ pub(crate) struct ErrorCommand {
 impl CommandDefinition for ErrorCommand {
     const COMMAND_NAME: &'static str = "error";
 
-    fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {
             arguments: arguments.parse_all_for_interpretation()?,
         })

@@ -8,7 +8,7 @@ pub(crate) struct EvaluateCommand {
 impl CommandDefinition for EvaluateCommand {
     const COMMAND_NAME: &'static str = "evaluate";
 
-    fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {
             expression: arguments.parse_all_for_interpretation()?,
         })
@@ -29,28 +29,32 @@ pub(crate) struct AssignCommand {
     variable: Variable,
     operator: Punct,
     #[allow(unused)]
-    equals: Punct,
+    equals: Token![=],
     expression: InterpretationStream,
 }
 
 impl CommandDefinition for AssignCommand {
     const COMMAND_NAME: &'static str = "assign";
 
-    fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
-        static ERROR: &str = "Expected [!assign! #variable += ...] for + or some other operator supported in an expression";
-        Ok(Self {
-            variable: arguments.next_as_variable(ERROR)?,
-            operator: {
-                let operator = arguments.next_as_punct(ERROR)?;
-                match operator.as_char() {
-                    '+' | '-' | '*' | '/' | '%' | '&' | '|' | '^' => {}
-                    _ => return operator.err("Expected one of + - * / % & | or ^"),
-                }
-                operator
+    fn parse(arguments: CommandArguments) -> Result<Self> {
+        arguments.fully_parse_or_error(
+            |input| {
+                Ok(Self {
+                    variable: input.parse()?,
+                    operator: {
+                        let operator: Punct = input.parse()?;
+                        match operator.as_char() {
+                            '+' | '-' | '*' | '/' | '%' | '&' | '|' | '^' => {}
+                            _ => return operator.err("Expected one of + - * / % & | or ^"),
+                        }
+                        operator
+                    },
+                    equals: input.parse()?,
+                    expression: input.parse_with(arguments.full_span_range())?,
+                })
             },
-            equals: arguments.next_as_punct_matching('=', ERROR)?,
-            expression: arguments.parse_all_for_interpretation()?,
-        })
+            "Expected [!assign! #variable += ...] for + or some other operator supported in an expression",
+        )
     }
 }
 

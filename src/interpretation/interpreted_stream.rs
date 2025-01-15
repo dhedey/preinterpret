@@ -41,12 +41,12 @@ impl InterpretedStream {
         &mut self,
         inner_tokens: InterpretedStream,
         delimiter: Delimiter,
-        span_range: SpanRange,
+        span: Span,
     ) {
         self.push_raw_token_tree(TokenTree::group(
             inner_tokens.token_stream,
             delimiter,
-            span_range.span(),
+            span,
         ));
     }
 

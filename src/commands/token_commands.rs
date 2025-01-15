@@ -6,8 +6,8 @@ pub(crate) struct EmptyCommand;
 impl CommandDefinition for EmptyCommand {
     const COMMAND_NAME: &'static str = "empty";
 
-    fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
-        arguments.assert_end("The !empty! command does not take any arguments")?;
+    fn parse(arguments: CommandArguments) -> Result<Self> {
+        arguments.assert_empty("The !empty! command does not take any arguments")?;
         Ok(Self)
     }
 }
@@ -26,7 +26,7 @@ pub(crate) struct IsEmptyCommand {
 impl CommandDefinition for IsEmptyCommand {
     const COMMAND_NAME: &'static str = "is_empty";
 
-    fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {
             arguments: arguments.parse_all_for_interpretation()?,
         })
@@ -52,7 +52,7 @@ pub(crate) struct LengthCommand {
 impl CommandDefinition for LengthCommand {
     const COMMAND_NAME: &'static str = "length";
 
-    fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {
             arguments: arguments.parse_all_for_interpretation()?,
         })
@@ -77,7 +77,7 @@ pub(crate) struct GroupCommand {
 impl CommandDefinition for GroupCommand {
     const COMMAND_NAME: &'static str = "group";
 
-    fn parse(mut arguments: InterpreterParseStream) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {
             arguments: arguments.parse_all_for_interpretation()?,
         })
