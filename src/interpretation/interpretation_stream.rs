@@ -14,6 +14,10 @@ impl InterpretationStream {
     ) -> Result<Self> {
         Self::create_parser(span_range).parse2(token_stream)
     }
+
+    fn create_parser(context: SpanRange) -> impl FnOnce(ParseStream) -> Result<Self> {
+        move |input: ParseStream| Self::parse_with_context(input, context)
+    }
 }
 
 impl ContextualParse for InterpretationStream {

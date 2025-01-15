@@ -52,8 +52,6 @@ impl ExpressionStream {
     }
 
     pub(crate) fn evaluate(self) -> Result<EvaluationOutput> {
-        use syn::parse::{Parse, Parser};
-
         // Parsing into a rust expression is overkill here.
         //
         // In future we could choose to implement a subset of the grammar which we actually can use/need.

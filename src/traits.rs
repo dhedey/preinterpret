@@ -117,10 +117,6 @@ pub(crate) trait ContextualParse: Sized {
     type Context;
 
     fn parse_with_context(input: ParseStream, context: Self::Context) -> Result<Self>;
-
-    fn create_parser(context: Self::Context) -> impl FnOnce(ParseStream) -> Result<Self> {
-        move |input: ParseStream| Self::parse_with_context(input, context)
-    }
 }
 
 pub(crate) trait SynErrorExt: Sized {
