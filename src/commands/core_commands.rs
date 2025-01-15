@@ -12,17 +12,16 @@ impl CommandDefinition for SetCommand {
     const COMMAND_NAME: &'static str = "set";
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
-        arguments
-            .fully_parse_or_error(
-                |input| {
-                    Ok(Self {
-                        variable: input.parse()?,
-                        equals: input.parse()?,
-                        arguments: input.parse_with(arguments.full_span_range())?,
-                    })
-                },
-                "Expected [!set! #variable = ... ]",
-            )
+        arguments.fully_parse_or_error(
+            |input| {
+                Ok(Self {
+                    variable: input.parse()?,
+                    equals: input.parse()?,
+                    arguments: input.parse_with(arguments.full_span_range())?,
+                })
+            },
+            "Expected [!set! #variable = ... ]",
+        )
     }
 }
 

@@ -43,11 +43,7 @@ impl InterpretedStream {
         delimiter: Delimiter,
         span: Span,
     ) {
-        self.push_raw_token_tree(TokenTree::group(
-            inner_tokens.token_stream,
-            delimiter,
-            span,
-        ));
+        self.push_raw_token_tree(TokenTree::group(inner_tokens.token_stream, delimiter, span));
     }
 
     fn push_raw_token_tree(&mut self, token_tree: TokenTree) {

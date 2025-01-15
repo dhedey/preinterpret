@@ -109,7 +109,10 @@ impl Parse for Command {
         content.parse::<Token![!]>()?;
         let command_kind = content.parse::<CommandKind>()?;
         content.parse::<Token![!]>()?;
-        let invocation = command_kind.parse_invocation( CommandArguments::new(&content, open_bracket.span.span_range()))?;
+        let invocation = command_kind.parse_invocation(CommandArguments::new(
+            &content,
+            open_bracket.span.span_range(),
+        ))?;
         Ok(Self {
             invocation,
             source_group_span: open_bracket.span,

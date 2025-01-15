@@ -95,7 +95,7 @@ impl<'a> CommandArguments<'a> {
     pub(crate) fn fully_parse_or_error<T>(
         &self,
         parse_function: impl FnOnce(ParseStream) -> Result<T>,
-        error_message: &'static str
+        error_message: &'static str,
     ) -> Result<T> {
         let parsed = parse_function(self.parse_stream)
             .or_else(|_| self.full_span_range.err(error_message))?;
@@ -106,7 +106,8 @@ impl<'a> CommandArguments<'a> {
     }
 
     pub(crate) fn parse_all_for_interpretation(&self) -> Result<InterpretationStream> {
-        self.parse_stream.parse_all_for_interpretation(self.full_span_range)
+        self.parse_stream
+            .parse_all_for_interpretation(self.full_span_range)
     }
 
     pub(crate) fn read_all_as_raw_token_stream(&self) -> TokenStream {

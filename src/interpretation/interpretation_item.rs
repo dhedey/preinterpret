@@ -18,7 +18,7 @@ enum GroupMatch {
 
 fn attempt_match_group(cursor: syn::buffer::Cursor) -> GroupMatch {
     let next = match cursor.any_group() {
-        Some((next, delimiter, _, _)) if delimiter == Delimiter::Bracket => next,
+        Some((next, Delimiter::Bracket, _, _)) => next,
         Some(_) => return GroupMatch::OtherGroup,
         None => return GroupMatch::None,
     };
@@ -41,13 +41,15 @@ impl Parse for InterpretationItem {
         match attempt_match_group(input.cursor()) {
             GroupMatch::Command => return Ok(InterpretationItem::Command(input.parse()?)),
             GroupMatch::OtherGroup => return Ok(InterpretationItem::Group(input.parse()?)),
-            GroupMatch::None => {},
+            GroupMatch::None => {}
         }
         if input.peek(token::Pound) && input.peek2(syn::Ident) {
-            return Ok(InterpretationItem::Variable(input.parse()?))
+            return Ok(InterpretationItem::Variable(input.parse()?));
         }
         Ok(match input.parse::<TokenTree>()? {
-            TokenTree::Group(_) => unreachable!("Should have been already handled by the first branch above"),
+            TokenTree::Group(_) => {
+                unreachable!("Should have been already handled by the first branch above")
+            }
             TokenTree::Punct(punct) => InterpretationItem::Punct(punct),
             TokenTree::Ident(ident) => InterpretationItem::Ident(ident),
             TokenTree::Literal(literal) => InterpretationItem::Literal(literal),
