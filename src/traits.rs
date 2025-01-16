@@ -68,7 +68,7 @@ pub(crate) trait ParserExt {
     fn parse_all_for_interpretation(&self, span_range: SpanRange) -> Result<InterpretationStream>;
 }
 
-impl<'a> ParserExt for ParseBuffer<'a> {
+impl ParserExt for ParseBuffer<'_> {
     fn parse_with<T: ContextualParse>(&self, context: T::Context) -> Result<T> {
         T::parse_with_context(self, context)
     }
