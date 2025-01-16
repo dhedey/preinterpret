@@ -86,8 +86,16 @@ impl InterpretedStream {
         }
     }
 
+    pub(crate) fn set_span_range(&mut self, span_range: SpanRange) {
+        self.source_span_range = span_range;
+    }
+
     pub(crate) fn into_token_stream(self) -> TokenStream {
         self.token_stream
+    }
+
+    pub(crate) fn append_cloned_into(&self, output: &mut InterpretedStream) {
+        output.token_stream.extend(self.token_stream.clone())
     }
 }
 

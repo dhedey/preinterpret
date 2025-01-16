@@ -121,7 +121,7 @@ impl CommandDefinition for ErrorCommand {
 #[derive(Clone)]
 struct ErrorArguments {
     message: InterpretationValue<syn::LitStr>,
-    spans: Option<InterpretationValue<InterpretationBracketedGroup>>,
+    spans: Option<CommandStreamInput>,
 }
 
 impl ArgumentsContent for ErrorArguments {
@@ -191,7 +191,7 @@ impl CommandInvocation for ErrorCommand {
 
         let error_span = match self.arguments.spans {
             Some(spans) => {
-                let error_span_stream = spans.interpret(interpreter)?;
+                let error_span_stream = spans.interpret_as_tokens(interpreter)?;
 
                 // Consider the case where preinterpret embeds in a declarative macro, and we have
                 // an error like this:
@@ -220,7 +220,6 @@ impl CommandInvocation for ErrorCommand {
                 // https://github.com/rust-lang/rust-analyzer/issues/18211
 
                 let error_span_stream = error_span_stream
-                    .interpreted_stream
                     .into_token_stream()
                     .flatten_transparent_groups();
                 if error_span_stream.is_empty() {

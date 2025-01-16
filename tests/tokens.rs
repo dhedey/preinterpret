@@ -7,6 +7,12 @@ macro_rules! assert_preinterpret_eq {
 }
 
 #[test]
+fn test_tokens_compilation_failures() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compilation_failures/tokens/*.rs");
+}
+
+#[test]
 fn test_empty_and_is_empty() {
     assert_preinterpret_eq!({
         [!empty!] "hello" [!empty!] [!empty!]

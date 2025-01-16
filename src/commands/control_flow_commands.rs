@@ -3,8 +3,8 @@ use crate::internal_prelude::*;
 #[derive(Clone)]
 pub(crate) struct IfCommand {
     condition: InterpretationItem,
-    true_code: InterpretationStream,
-    false_code: Option<InterpretationStream>,
+    true_code: CommandCodeInput,
+    false_code: Option<CommandCodeInput>,
     nothing_span_range: SpanRange,
 }
 
@@ -16,13 +16,13 @@ impl CommandDefinition for IfCommand {
             |input| {
                 Ok(Self {
                     condition: input.parse()?,
-                    true_code: input.parse_code_group_for_interpretation()?,
+                    true_code: input.parse()?,
                     false_code: {
                         if !input.is_empty() {
                             input.parse::<Token![!]>()?;
                             input.parse::<Token![else]>()?;
                             input.parse::<Token![!]>()?;
-                            Some(input.parse_code_group_for_interpretation()?)
+                            Some(input.parse()?)
                         } else {
                             None
                         }
@@ -59,7 +59,7 @@ impl CommandInvocation for IfCommand {
 #[derive(Clone)]
 pub(crate) struct WhileCommand {
     condition: InterpretationItem,
-    loop_code: InterpretationStream,
+    loop_code: CommandCodeInput,
     nothing_span_range: SpanRange,
 }
 
@@ -71,7 +71,7 @@ impl CommandDefinition for WhileCommand {
             |input| {
                 Ok(Self {
                     condition: input.parse()?,
-                    loop_code: input.parse_code_group_for_interpretation()?,
+                    loop_code: input.parse()?,
                     nothing_span_range: arguments.full_span_range(),
                 })
             },

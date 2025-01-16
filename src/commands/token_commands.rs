@@ -7,7 +7,9 @@ impl CommandDefinition for EmptyCommand {
     const COMMAND_NAME: &'static str = "empty";
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
-        arguments.assert_empty("The !empty! command does not take any arguments")?;
+        arguments.assert_empty(
+            "The !empty! command does not take any arguments. Perhaps you want !is_empty! instead?",
+        )?;
         Ok(Self)
     }
 }

@@ -35,35 +35,67 @@ impl Variable {
         self.variable_name.to_string()
     }
 
+    pub(crate) fn is_flattened(&self) -> bool {
+        self.is_flattened
+    }
+
     pub(crate) fn set(&self, interpreter: &mut Interpreter, value: InterpretedStream) {
         interpreter.set_variable(self.variable_name(), value);
     }
 
-    fn substitute(&self, interpreter: &Interpreter) -> Result<InterpretedStream> {
-        Ok(self.read_or_else(
-            interpreter,
-            || format!(
+    pub(super) fn interpret_into_stream(
+        &self,
+        interpreter: &Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()> {
+        self.read_existing(interpreter)?.append_cloned_into(output);
+        Ok(())
+    }
+
+    pub(super) fn interpret_as_new_stream(
+        &self,
+        interpreter: &Interpreter,
+    ) -> Result<InterpretedStream> {
+        let mut cloned = self.read_existing(interpreter)?.clone();
+        cloned.set_span_range(self.span_range());
+        Ok(cloned)
+    }
+
+    pub(crate) fn substitute_into(
+        &self,
+        interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()> {
+        if self.is_flattened {
+            self.interpret_into_stream(interpreter, output)
+        } else {
+            output.push_new_group(
+                self.interpret_as_new_stream(interpreter)?,
+                Delimiter::None,
+                self.span(),
+            );
+            Ok(())
+        }
+    }
+
+    fn read_existing<'i>(&self, interpreter: &'i Interpreter) -> Result<&'i InterpretedStream> {
+        match self.read_option(interpreter) {
+            Some(token_stream) => Ok(token_stream),
+            None => self.span_range().err(format!(
                 "The variable {} wasn't set.\nIf this wasn't intended to be a variable, work around this with [!raw! {}]",
                 self,
                 self,
-            )
-        )?.clone())
-    }
-
-    fn read_or_else<'i>(
-        &self,
-        interpreter: &'i Interpreter,
-        create_error: impl FnOnce() -> String,
-    ) -> Result<&'i InterpretedStream> {
-        match self.read_option(interpreter) {
-            Some(token_stream) => Ok(token_stream),
-            None => self.span_range().err(create_error()),
+            )),
         }
     }
 
     fn read_option<'i>(&self, interpreter: &'i Interpreter) -> Option<&'i InterpretedStream> {
         let Variable { variable_name, .. } = self;
         interpreter.get_variable(&variable_name.to_string())
+    }
+
+    pub(crate) fn display_unflattened_variable_token(&self) -> String {
+        format!("#{}", self.variable_name)
     }
 }
 
@@ -73,12 +105,7 @@ impl Interpret for &Variable {
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> Result<()> {
-        if self.is_flattened {
-            output.extend(self.substitute(interpreter)?);
-        } else {
-            output.push_new_group(self.substitute(interpreter)?, Delimiter::None, self.span());
-        }
-        Ok(())
+        self.substitute_into(interpreter, output)
     }
 }
 
@@ -89,16 +116,22 @@ impl Express for &Variable {
         expression_stream: &mut ExpressionStream,
     ) -> Result<()> {
         expression_stream.push_grouped_interpreted_stream(
-            self.substitute(interpreter)?,
-            self.span_range().span(),
+            self.interpret_as_new_stream(interpreter)?,
+            self.span(),
         );
         Ok(())
     }
 }
 
-impl HasSpanRange for &Variable {
+impl HasSpanRange for Variable {
     fn span_range(&self) -> SpanRange {
         SpanRange::new_between(self.marker.span, self.variable_name.span())
+    }
+}
+
+impl HasSpanRange for &Variable {
+    fn span_range(&self) -> SpanRange {
+        Variable::span_range(self)
     }
 }
 

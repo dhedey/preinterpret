@@ -66,7 +66,6 @@ impl TokenTreeExt for TokenTree {
 pub(crate) trait ParserExt {
     fn parse_with<T: ContextualParse>(&self, context: T::Context) -> Result<T>;
     fn parse_all_for_interpretation(&self, span_range: SpanRange) -> Result<InterpretationStream>;
-    fn parse_code_group_for_interpretation(&self) -> Result<InterpretationStream>;
 }
 
 impl<'a> ParserExt for ParseBuffer<'a> {
@@ -76,14 +75,6 @@ impl<'a> ParserExt for ParseBuffer<'a> {
 
     fn parse_all_for_interpretation(&self, span_range: SpanRange) -> Result<InterpretationStream> {
         self.parse_with(span_range)
-    }
-
-    fn parse_code_group_for_interpretation(&self) -> Result<InterpretationStream> {
-        let group = self.parse::<InterpretationGroup>()?;
-        if group.delimiter() != Delimiter::Brace {
-            return group.err("expected {");
-        }
-        Ok(group.into_inner_stream())
     }
 }
 

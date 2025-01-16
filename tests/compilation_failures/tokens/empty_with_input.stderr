@@ -1,0 +1,5 @@
+error: The !empty! command does not take any arguments. Perhaps you want !is_empty! instead?
+ --> tests/compilation_failures/tokens/empty_with_input.rs:4:19
+  |
+4 |     preinterpret!([!empty! should not have arguments]);
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

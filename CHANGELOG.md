@@ -23,10 +23,8 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 ### To come
   
 * Create fields parsing macro
-* Add compile tests for incorrectly formatted nested commands, e.g. an error inside an if
-* Grouping... Proposal:
-  * Command arguments which are streams should be surrounded by `[ ... ]`... a `[!command! ...]` or `#x` may also be used instead.
-    * Add test that I can load !error! spans from `#x = Hello World` or `#..x = [Hello World]`
+* Add tests for `$x` being raw.
+* Add tests for CommandStreamInput (via `[!split! ]` or `[!intersperse! ]`?) from `#x = Hello World` or `#..x = [Hello World]` or `$x`
 * ? Use `[!let! #x = 12]` instead of `[!set! ...]`
   * ...Or maybe not. Maybe `[!let! #..x = Hello World]` does parsing and is equivalent to `[!set! #x = Hello World]`
 * Fix `if` and `while` to read expression until braces
@@ -75,6 +73,7 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
     * Even though this might be more performant, I'm not too much of a fan of this, as it's hard to understand
     * Perhaps we can leave it to the `[!while_parse! #x[!OPTIONAL! ,] from #X]` style commands?
 * `[!split!]` and `[!split_no_trailing!]`
+* `[!intersperse! { items: X, with: X, add_trailing?: false, override_final?: X }]` for adding something between each item, where each `X` is a `CommandStreamInput`
 * `[!zip! ([Hello Goodbye] [World Friend])]` => `[(Hello World), (Goodbye Friend)]`
 * Basic place parsing
   * In parse land: #x matches a single token, #..x consumes the rest of a stream
@@ -88,7 +87,7 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
   * `#..x` binding reads the rest of the stream
   * `[!RAW!]` for e.g. `[!while_parse! [!RAW! from] from #X]`
 * `[!match!]` (with `#..x` as a catch-all)
-* Check all #[allow(unused)] and remove any which aren't needed
+* Check all `#[allow(unused)]` and remove any which aren't needed
 * Rework expression parsing
 * Work on book
   * Including documenting expressions
