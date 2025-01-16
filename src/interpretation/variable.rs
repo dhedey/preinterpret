@@ -20,13 +20,21 @@ impl GroupedVariable {
         self.variable_name.to_string()
     }
 
-    pub(crate) fn set(&self, interpreter: &mut Interpreter, value: InterpretedStream) -> Result<()> {
+    pub(crate) fn set(
+        &self,
+        interpreter: &mut Interpreter,
+        value: InterpretedStream,
+    ) -> Result<()> {
         interpreter.set_variable(self.variable_name(), value);
         Ok(())
     }
 
-    pub(crate) fn get_mut<'i>(&self, interpreter: &'i mut Interpreter) -> Result<&'i mut InterpretedStream> {
-        interpreter.get_variable_mut(&self.variable_name())
+    pub(crate) fn get_mut<'i>(
+        &self,
+        interpreter: &'i mut Interpreter,
+    ) -> Result<&'i mut InterpretedStream> {
+        interpreter
+            .get_variable_mut(&self.variable_name())
             .ok_or_else(|| self.error(format!("The variable {} wasn't already set", self)))
     }
 
@@ -184,9 +192,7 @@ impl Express for &FlattenedVariable {
         interpreter: &mut Interpreter,
         expression_stream: &mut ExpressionStream,
     ) -> Result<()> {
-        expression_stream.push_interpreted_stream(
-            self.interpret_as_tokens(interpreter)?,
-        );
+        expression_stream.push_interpreted_stream(self.interpret_as_tokens(interpreter)?);
         Ok(())
     }
 }

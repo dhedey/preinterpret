@@ -54,7 +54,7 @@ impl CommandDefinition for ExtendCommand {
                     arguments: input.parse_all_for_interpretation(arguments.full_span_range())?,
                 })
             },
-            "Expected [!extend! #variable += .. tokens ..]"
+            "Expected [!extend! #variable += .. tokens ..]",
         )
     }
 }
@@ -62,8 +62,7 @@ impl CommandDefinition for ExtendCommand {
 impl CommandInvocation for ExtendCommand {
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
         let output = self.arguments.interpret_as_tokens(interpreter)?;
-        self.variable.get_mut(interpreter)?
-            .extend(output);
+        self.variable.get_mut(interpreter)?.extend(output);
         Ok(CommandOutput::Empty)
     }
 }

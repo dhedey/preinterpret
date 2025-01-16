@@ -125,12 +125,8 @@ impl HasSpanRange for InterpretationItem {
     fn span_range(&self) -> SpanRange {
         match self {
             InterpretationItem::Command(command_invocation) => command_invocation.span_range(),
-            InterpretationItem::FlattenedVariable(variable) => {
-                variable.span_range()
-            }
-            InterpretationItem::GroupedVariable(variable) => {
-                variable.span_range()
-            }
+            InterpretationItem::FlattenedVariable(variable) => variable.span_range(),
+            InterpretationItem::GroupedVariable(variable) => variable.span_range(),
             InterpretationItem::Group(group) => group.span_range(),
             InterpretationItem::Punct(punct) => punct.span_range(),
             InterpretationItem::Ident(ident) => ident.span_range(),
