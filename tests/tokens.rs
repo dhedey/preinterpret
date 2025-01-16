@@ -7,6 +7,7 @@ macro_rules! assert_preinterpret_eq {
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "incompatible with miri")]
 fn test_tokens_compilation_failures() {
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/compilation_failures/tokens/*.rs");

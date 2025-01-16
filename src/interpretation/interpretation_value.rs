@@ -7,7 +7,8 @@ use crate::internal_prelude::*;
 #[derive(Clone)]
 pub(crate) enum InterpretationValue<T> {
     Command(Command),
-    Variable(Variable),
+    GroupedVariable(GroupedVariable),
+    FlattenedVariable(FlattenedVariable),
     Value(T),
 }
 
@@ -21,7 +22,12 @@ impl<T: Parse> Parse for InterpretationValue<T> {
         let fork = input.fork();
         if let Ok(command) = fork.parse() {
             input.advance_to(&fork);
-            return Ok(InterpretationValue::Variable(command));
+            return Ok(InterpretationValue::GroupedVariable(command));
+        }
+        let fork = input.fork();
+        if let Ok(command) = fork.parse() {
+            input.advance_to(&fork);
+            return Ok(InterpretationValue::FlattenedVariable(command));
         }
         Ok(InterpretationValue::Value(input.parse()?))
     }
@@ -31,7 +37,8 @@ impl<T: HasSpanRange> HasSpanRange for InterpretationValue<T> {
     fn span_range(&self) -> SpanRange {
         match self {
             InterpretationValue::Command(command) => command.span_range(),
-            InterpretationValue::Variable(variable) => variable.span_range(),
+            InterpretationValue::GroupedVariable(variable) => variable.span_range(),
+            InterpretationValue::FlattenedVariable(variable) => variable.span_range(),
             InterpretationValue::Value(value) => value.span_range(),
         }
     }
@@ -45,7 +52,10 @@ impl<T: InterpretValue<InterpretedValue = I>, I: Parse> InterpretValue for Inter
             InterpretationValue::Command(command) => command
                 .interpret_as_tokens(interpreter)?
                 .syn_parse(I::parse),
-            InterpretationValue::Variable(variable) => variable
+            InterpretationValue::GroupedVariable(variable) => variable
+                .interpret_as_tokens(interpreter)?
+                .syn_parse(I::parse),
+            InterpretationValue::FlattenedVariable(variable) => variable
                 .interpret_as_tokens(interpreter)?
                 .syn_parse(I::parse),
             InterpretationValue::Value(value) => value.interpret(interpreter),

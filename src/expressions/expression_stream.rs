@@ -55,6 +55,13 @@ impl ExpressionStream {
             .push_new_group(contents, Delimiter::None, span);
     }
 
+    pub(crate) fn push_interpreted_stream(
+        &mut self,
+        contents: InterpretedStream,
+    ) {
+        self.interpreted_stream.extend(contents);
+    }
+
     pub(crate) fn push_expression_group(
         &mut self,
         contents: Self,

@@ -21,6 +21,10 @@ impl Interpreter {
         self.variables.get(name)
     }
 
+    pub(crate) fn get_variable_mut<'i>(&'i mut self, name: &str) -> Option<&'i mut InterpretedStream> {
+        self.variables.get_mut(name)
+    }
+
     pub(crate) fn config(&self) -> &InterpreterConfig {
         &self.config
     }

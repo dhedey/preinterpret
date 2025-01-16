@@ -14,6 +14,7 @@ use token_commands::*;
 define_command_kind! {
     // Core Commands
     SetCommand,
+    ExtendCommand,
     RawCommand,
     IgnoreCommand,
     StreamCommand,

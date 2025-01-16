@@ -11,7 +11,8 @@ use crate::internal_prelude::*;
 #[derive(Clone)]
 pub(crate) enum CommandStreamInput {
     Command(Command),
-    Variable(Variable),
+    GroupedVariable(GroupedVariable),
+    FlattenedVariable(FlattenedVariable),
     Bracketed {
         delim_span: DelimSpan,
         inner: InterpretationStream,
@@ -32,7 +33,12 @@ impl Parse for CommandStreamInput {
         let fork = input.fork();
         if let Ok(command) = fork.parse() {
             input.advance_to(&fork);
-            return Ok(CommandStreamInput::Variable(command));
+            return Ok(CommandStreamInput::GroupedVariable(command));
+        }
+        let fork = input.fork();
+        if let Ok(command) = fork.parse() {
+            input.advance_to(&fork);
+            return Ok(CommandStreamInput::FlattenedVariable(command));
         }
         let error_span = input.span();
         match input.parse_any_delimiter() {
@@ -54,7 +60,8 @@ impl HasSpanRange for CommandStreamInput {
     fn span_range(&self) -> SpanRange {
         match self {
             CommandStreamInput::Command(command) => command.span_range(),
-            CommandStreamInput::Variable(variable) => variable.span_range(),
+            CommandStreamInput::GroupedVariable(variable) => variable.span_range(),
+            CommandStreamInput::FlattenedVariable(variable) => variable.span_range(),
             CommandStreamInput::Bracketed {
                 delim_span: span, ..
             } => span.span_range(),
@@ -75,29 +82,28 @@ impl Interpret for CommandStreamInput {
             CommandStreamInput::Command(command) => {
                 command.interpret_as_tokens_into(interpreter, output)
             }
-            CommandStreamInput::Variable(variable) => {
-                if variable.is_flattened() {
-                    let tokens = variable.interpret_as_new_stream(interpreter)?
-                        .syn_parse(|input: ParseStream| -> Result<TokenStream> {
-                            let (delimiter, _, content) = input.parse_any_delimiter()?;
-                            match delimiter {
-                                Delimiter::Bracket | Delimiter::None if input.is_empty() => {
-                                    content.parse()
-                                },
-                                _ => {
-                                    variable.err(format!(
-                                        "expected variable to contain a single [ .. ] or transparent group. Perhaps you want to use {} instead, to use the content of the variable as the stream.",
-                                        variable.display_unflattened_variable_token(),
-                                    ))
-                                },
-                            }
-                        })?;
+            CommandStreamInput::FlattenedVariable(variable) => {
+                let tokens = variable.interpret_as_new_stream(interpreter)?
+                    .syn_parse(|input: ParseStream| -> Result<TokenStream> {
+                        let (delimiter, _, content) = input.parse_any_delimiter()?;
+                        match delimiter {
+                            Delimiter::Bracket | Delimiter::None if input.is_empty() => {
+                                content.parse()
+                            },
+                            _ => {
+                                variable.err(format!(
+                                    "expected variable to contain a single [ .. ] or transparent group. Perhaps you want to use {} instead, to use the content of the variable as the stream.",
+                                    variable.display_grouped_variable_token(),
+                                ))
+                            },
+                        }
+                    })?;
 
-                    output.extend_raw(tokens);
-                    Ok(())
-                } else {
-                    variable.interpret_into_stream(interpreter, output)
-                }
+                output.extend_raw(tokens);
+                Ok(())
+            }
+            CommandStreamInput::GroupedVariable(variable) => {
+                variable.interpret_as_tokens_into(interpreter, output)
             }
             CommandStreamInput::Bracketed { inner, .. } => {
                 inner.interpret_as_tokens_into(interpreter, output)

@@ -26,7 +26,7 @@ impl CommandInvocation for EvaluateCommand {
 
 #[derive(Clone)]
 pub(crate) struct AssignCommand {
-    variable: Variable,
+    variable: GroupedVariable,
     operator: Punct,
     #[allow(unused)]
     equals: Token![=],
@@ -73,7 +73,7 @@ impl CommandInvocation for AssignCommand {
         expression.interpret_as_expression_into(interpreter, &mut expression_stream)?;
 
         let output = expression_stream.evaluate()?.into_interpreted_stream();
-        variable.set(interpreter, output);
+        variable.set(interpreter, output)?;
 
         Ok(CommandOutput::Empty)
     }

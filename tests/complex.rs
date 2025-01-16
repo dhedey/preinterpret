@@ -14,6 +14,7 @@ preinterpret! {
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "incompatible with miri")]
 fn test_complex_compilation_failures() {
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/compilation_failures/complex/*.rs");

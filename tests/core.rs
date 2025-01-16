@@ -7,6 +7,7 @@ macro_rules! my_assert_eq {
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "incompatible with miri")]
 fn test_core_compilation_failures() {
     let t = trybuild::TestCases::new();
     // In particular, the "error" command is tested here.

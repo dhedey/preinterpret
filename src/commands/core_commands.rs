@@ -2,7 +2,7 @@ use crate::internal_prelude::*;
 
 #[derive(Clone)]
 pub(crate) struct SetCommand {
-    variable: Variable,
+    variable: GroupedVariable,
     #[allow(unused)]
     equals: Token![=],
     arguments: InterpretationStream,
@@ -28,8 +28,42 @@ impl CommandDefinition for SetCommand {
 impl CommandInvocation for SetCommand {
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
         let result_tokens = self.arguments.interpret_as_tokens(interpreter)?;
-        self.variable.set(interpreter, result_tokens);
+        self.variable.set(interpreter, result_tokens)?;
 
+        Ok(CommandOutput::Empty)
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct ExtendCommand {
+    variable: GroupedVariable,
+    #[allow(unused)]
+    plus_equals: Token![+=],
+    arguments: InterpretationStream,
+}
+
+impl CommandDefinition for ExtendCommand {
+    const COMMAND_NAME: &'static str = "extend";
+
+    fn parse(arguments: CommandArguments) -> Result<Self> {
+        arguments.fully_parse_or_error(
+            |input| {
+                Ok(Self {
+                    variable: input.parse()?,
+                    plus_equals: input.parse()?,
+                    arguments: input.parse_all_for_interpretation(arguments.full_span_range())?,
+                })
+            },
+            "Expected [!extend! #variable += .. tokens ..]"
+        )
+    }
+}
+
+impl CommandInvocation for ExtendCommand {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
+        let output = self.arguments.interpret_as_tokens(interpreter)?;
+        self.variable.get_mut(interpreter)?
+            .extend(output);
         Ok(CommandOutput::Empty)
     }
 }

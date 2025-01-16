@@ -3,7 +3,8 @@ use crate::internal_prelude::*;
 #[derive(Clone)]
 pub(crate) enum InterpretationItem {
     Command(Command),
-    Variable(Variable),
+    GroupedVariable(GroupedVariable),
+    FlattenedVariable(FlattenedVariable),
     Group(InterpretationGroup),
     Punct(Punct),
     Ident(Ident),
@@ -21,7 +22,12 @@ impl Parse for InterpretationItem {
             let fork = input.fork();
             if let Ok(variable) = fork.parse() {
                 input.advance_to(&fork);
-                return Ok(InterpretationItem::Variable(variable));
+                return Ok(InterpretationItem::GroupedVariable(variable));
+            }
+            let fork = input.fork();
+            if let Ok(variable) = fork.parse() {
+                input.advance_to(&fork);
+                return Ok(InterpretationItem::FlattenedVariable(variable));
             }
         }
         Ok(match input.parse::<TokenTree>()? {
@@ -71,7 +77,10 @@ impl Interpret for InterpretationItem {
             InterpretationItem::Command(command_invocation) => {
                 command_invocation.interpret_as_tokens_into(interpreter, output)?;
             }
-            InterpretationItem::Variable(variable) => {
+            InterpretationItem::GroupedVariable(variable) => {
+                variable.interpret_as_tokens_into(interpreter, output)?;
+            }
+            InterpretationItem::FlattenedVariable(variable) => {
                 variable.interpret_as_tokens_into(interpreter, output)?;
             }
             InterpretationItem::Group(group) => {
@@ -95,7 +104,10 @@ impl Express for InterpretationItem {
             InterpretationItem::Command(command_invocation) => {
                 command_invocation.interpret_as_expression_into(interpreter, expression_stream)?;
             }
-            InterpretationItem::Variable(variable) => {
+            InterpretationItem::FlattenedVariable(variable) => {
+                variable.interpret_as_expression_into(interpreter, expression_stream)?;
+            }
+            InterpretationItem::GroupedVariable(variable) => {
                 variable.interpret_as_expression_into(interpreter, expression_stream)?;
             }
             InterpretationItem::Group(group) => {
@@ -113,8 +125,11 @@ impl HasSpanRange for InterpretationItem {
     fn span_range(&self) -> SpanRange {
         match self {
             InterpretationItem::Command(command_invocation) => command_invocation.span_range(),
-            InterpretationItem::Variable(variable_substitution) => {
-                variable_substitution.span_range()
+            InterpretationItem::FlattenedVariable(variable) => {
+                variable.span_range()
+            }
+            InterpretationItem::GroupedVariable(variable) => {
+                variable.span_range()
             }
             InterpretationItem::Group(group) => group.span_range(),
             InterpretationItem::Punct(punct) => punct.span_range(),

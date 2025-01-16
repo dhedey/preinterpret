@@ -21,7 +21,9 @@
 I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x = [!empty!]]`, but deemed it unhelpful, because then they have awkward edge-cases when embedding empty tokenstreams from declarative macros `($each_tt)*`.
 
 ### To come
-  
+
+* Tests for `[!extend!]`
+* Compile error test for `[!set #..x = f]` and `[!extend! #..x += f]`
 * Create fields parsing macro
 * Add tests for `$x` being raw.
 * Add tests for CommandStreamInput (via `[!split! ]` or `[!intersperse! ]`?) from `#x = Hello World` or `#..x = [Hello World]` or `$x`
@@ -36,7 +38,6 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 * `[!range! 0..5]` outputs `0 1 2 3 4`
 * Reconfiguring iteration limit
 * Support `!else if!` in `!if!`
-* `[!extend! #x += ...]` to make such actions more performant
 * Support `!for!` so we can use it for simple generation scenarios without needing macros at all:
   * Complexities:
     * Parsing `,`
@@ -72,8 +73,8 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
     * `[!for! [!SPLIT! #x,] in [Hello, World,]]`
     * Even though this might be more performant, I'm not too much of a fan of this, as it's hard to understand
     * Perhaps we can leave it to the `[!while_parse! #x[!OPTIONAL! ,] from #X]` style commands?
-* `[!split!]` and `[!split_no_trailing!]`
-* `[!intersperse! { items: X, with: X, add_trailing?: false, override_final?: X }]` for adding something between each item, where each `X` is a `CommandStreamInput`
+* `[!split! { items: X, with: X, drop_trailing_empty?: true }]`
+* `[!intersperse! { items: X, with: X, add_trailing?: false, override_final_with?: X }]` for adding something between each item, where each `X` is a `CommandStreamInput`
 * `[!zip! ([Hello Goodbye] [World Friend])]` => `[(Hello World), (Goodbye Friend)]`
 * Basic place parsing
   * In parse land: #x matches a single token, #..x consumes the rest of a stream
@@ -91,6 +92,10 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 * Rework expression parsing
 * Work on book
   * Including documenting expressions
+  * There are three main kinds of commands:
+    * Those taking a stream as-is
+    * Those taking some { fields }
+    * Those taking some custom syntax, e.g. `!set!`, `!if!`, `!while!`
 
 # Major Version 0.2
 
