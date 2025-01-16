@@ -1,0 +1,5 @@
+error: Iteration limit of 10000 exceeded
+ --> tests/compilation_failures/control_flow/while_infinite_loop.rs:4:28
+  |
+4 |     preinterpret!([!while! true {}]);
+  |                            ^^^^

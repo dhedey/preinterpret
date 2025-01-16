@@ -1,5 +1,19 @@
 use super::*;
 
+pub(crate) trait Express: Sized + HasSpanRange {
+    fn interpret_as_expression_into(
+        self,
+        interpreter: &mut Interpreter,
+        expression_stream: &mut ExpressionStream,
+    ) -> Result<()>;
+
+    fn interpret_as_expression(self, interpreter: &mut Interpreter) -> Result<ExpressionStream> {
+        let mut output = ExpressionStream::new(self.span_range());
+        self.interpret_as_expression_into(interpreter, &mut output)?;
+        Ok(output)
+    }
+}
+
 /// This abstraction is a bit ropey...
 ///
 /// Ideally we'd parse expressions at parse time, but that requires writing a custom parser for

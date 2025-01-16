@@ -1,11 +1,13 @@
 use crate::internal_prelude::*;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
+#[allow(unused)]
 pub(crate) struct FieldsParseDefinition<T> {
     new_builder: T,
     field_definitions: FieldDefinitions<T>,
 }
 
+#[allow(unused)]
 impl<T: 'static> FieldsParseDefinition<T> {
     pub(crate) fn new(new_builder: T) -> Self {
         Self {
@@ -172,6 +174,7 @@ impl<T> FieldDefinitions<T> {
     }
 }
 
+#[allow(unused)]
 struct FieldParseDefinition<T> {
     is_required: bool,
     example: String,

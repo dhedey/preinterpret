@@ -1,31 +1,5 @@
 use crate::internal_prelude::*;
 
-pub(crate) trait Interpret: Sized + HasSpanRange {
-    fn interpret_as_tokens_into(
-        self,
-        interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
-    ) -> Result<()>;
-
-    fn interpret_as_tokens(self, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
-        let mut output = InterpretedStream::new(self.span_range());
-        self.interpret_as_tokens_into(interpreter, &mut output)?;
-        Ok(output)
-    }
-
-    fn interpret_as_expression_into(
-        self,
-        interpreter: &mut Interpreter,
-        expression_stream: &mut ExpressionStream,
-    ) -> Result<()>;
-
-    fn interpret_as_expression(self, interpreter: &mut Interpreter) -> Result<ExpressionStream> {
-        let mut output = ExpressionStream::new(self.span_range());
-        self.interpret_as_expression_into(interpreter, &mut output)?;
-        Ok(output)
-    }
-}
-
 pub(crate) trait IdentExt: Sized {
     fn new_bool(value: bool, span: Span) -> Self;
 }
@@ -119,6 +93,7 @@ pub(crate) trait ContextualParse: Sized {
     fn parse_with_context(input: ParseStream, context: Self::Context) -> Result<Self>;
 }
 
+#[allow(unused)]
 pub(crate) trait SynErrorExt: Sized {
     fn concat(self, extra: &str) -> Self;
 }
@@ -257,7 +232,10 @@ impl HasSpanRange for Group {
 
 impl HasSpanRange for DelimSpan {
     fn span_range(&self) -> SpanRange {
-        SpanRange::new_between(self.open(), self.close())
+        // We could use self.open() => self.close() here, but using
+        // self.join() is better as it can be round-tripped to a span
+        // as the whole span, rather than just the start or end.
+        SpanRange::new_between(self.join(), self.join())
     }
 }
 

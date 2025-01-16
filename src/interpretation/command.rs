@@ -79,23 +79,6 @@ macro_rules! define_command_kind {
 }
 pub(crate) use define_command_kind;
 
-impl Parse for CommandKind {
-    fn parse(input: ParseStream) -> Result<Self> {
-        // Support parsing any ident
-        let ident = input.call(Ident::parse_any)?;
-        match Self::for_ident(&ident) {
-            Some(command_kind) => Ok(command_kind),
-            None => ident.span().err(
-                format!(
-                    "Expected `[!<command>! ..]`, for <command> one of: {}.\nIf this wasn't intended to be a preinterpret command, you can work around this with [!raw! [!{} ... ]]",
-                    Self::list_all(),
-                    ident,
-                ),
-            ),
-        }
-    }
-}
-
 #[derive(Clone)]
 pub(crate) struct Command {
     invocation: Box<dyn ClonableCommandInvocation>,
@@ -107,10 +90,21 @@ impl Parse for Command {
         let content;
         let open_bracket = syn::bracketed!(content in input);
         content.parse::<Token![!]>()?;
-        let command_kind = content.parse::<CommandKind>()?;
+        let command_name = content.call(Ident::parse_any)?;
+        let command_kind = match CommandKind::for_ident(&command_name) {
+            Some(command_kind) => command_kind,
+            None => command_name.span().err(
+                format!(
+                    "Expected `[!<command>! ..]`, for <command> one of: {}.\nIf this wasn't intended to be a preinterpret command, you can work around this with [!raw! [!{} ... ]]",
+                    CommandKind::list_all(),
+                    command_name,
+                ),
+            )?,
+        };
         content.parse::<Token![!]>()?;
         let invocation = command_kind.parse_invocation(CommandArguments::new(
             &content,
+            command_name,
             open_bracket.span.span_range(),
         ))?;
         Ok(Self {
@@ -149,7 +143,9 @@ impl Interpret for Command {
         };
         Ok(())
     }
+}
 
+impl Express for Command {
     fn interpret_as_expression_into(
         self,
         interpreter: &mut Interpreter,

@@ -43,7 +43,9 @@ impl Interpret for InterpretationStream {
         }
         Ok(())
     }
+}
 
+impl Express for InterpretationStream {
     fn interpret_as_expression_into(
         self,
         interpreter: &mut Interpreter,
@@ -112,7 +114,9 @@ impl Interpret for InterpretationGroup {
         );
         Ok(())
     }
+}
 
+impl Express for InterpretationGroup {
     fn interpret_as_expression_into(
         self,
         interpreter: &mut Interpreter,

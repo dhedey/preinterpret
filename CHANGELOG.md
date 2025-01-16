@@ -22,14 +22,11 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 
 ### To come
   
-* Support field parsing both before and at command execution.
-  * Move `[!error!]` field parsing to be at parse time
-    => Input fields defined via macro, including static parse step e.g. `message: InterpretationItem, spans: Option<InterpretationItem>`
-    => Then each input can be interpreted as a specific type during execution.
+* Create fields parsing macro
+* Add compile tests for incorrectly formatted nested commands, e.g. an error inside an if
 * Grouping... Proposal:
-  * In output land: #x is a group, #..x is flattened
-  * In parse land: #x matches a single token, #..x consumes the rest of a stream
   * Command arguments which are streams should be surrounded by `[ ... ]`... a `[!command! ...]` or `#x` may also be used instead.
+    * Add test that I can load !error! spans from `#x = Hello World` or `#..x = [Hello World]`
 * ? Use `[!let! #x = 12]` instead of `[!set! ...]`
   * ...Or maybe not. Maybe `[!let! #..x = Hello World]` does parsing and is equivalent to `[!set! #x = Hello World]`
 * Fix `if` and `while` to read expression until braces
@@ -80,6 +77,7 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 * `[!split!]` and `[!split_no_trailing!]`
 * `[!zip! ([Hello Goodbye] [World Friend])]` => `[(Hello World), (Goodbye Friend)]`
 * Basic place parsing
+  * In parse land: #x matches a single token, #..x consumes the rest of a stream
   * Auto-expand transparent groups, like syn. Maybe even using syn `TokenBuffer` / `Cursor`!
   * Explicit Punct, Idents, Literals
   * `[!STREAM! ]` method to take a stream
@@ -90,6 +88,8 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
   * `#..x` binding reads the rest of the stream
   * `[!RAW!]` for e.g. `[!while_parse! [!RAW! from] from #X]`
 * `[!match!]` (with `#..x` as a catch-all)
+* Check all #[allow(unused)] and remove any which aren't needed
+* Rework expression parsing
 * Work on book
   * Including documenting expressions
 

@@ -105,7 +105,7 @@ impl CommandInvocation for StreamCommand {
 
 #[derive(Clone)]
 pub(crate) struct ErrorCommand {
-    arguments: InterpretationStream,
+    arguments: ErrorArguments,
 }
 
 impl CommandDefinition for ErrorCommand {
@@ -113,82 +113,125 @@ impl CommandDefinition for ErrorCommand {
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {
-            arguments: arguments.parse_all_for_interpretation()?,
+            arguments: arguments.fully_parse_as()?,
         })
     }
 }
 
-#[derive(Default)]
-struct ErrorCommandArguments {
-    message: Option<syn::LitStr>,
-    error_spans: Option<BracketedTokenStream>,
+#[derive(Clone)]
+struct ErrorArguments {
+    message: InterpretationValue<syn::LitStr>,
+    spans: Option<InterpretationValue<InterpretationBracketedGroup>>,
+}
+
+impl ArgumentsContent for ErrorArguments {
+    fn error_message() -> String {
+        r#"Expected: {
+    // The error message to display
+    message: "...",
+    // An optional [token stream], to determine where to show the error message
+    spans?: [$abc],
+}"#
+        .to_string()
+    }
+}
+
+impl Parse for ErrorArguments {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let mut message = None;
+        let mut spans = None;
+
+        let content;
+        let brace = syn::braced!(content in input);
+        while !content.is_empty() {
+            let ident: Ident = content.parse()?;
+            content.parse::<Token![:]>()?;
+            match ident.to_string().as_str() {
+                "message" => {
+                    if message.is_some() {
+                        return ident.err("duplicate field");
+                    }
+                    message = Some(content.parse()?);
+                }
+                "spans" => {
+                    if spans.is_some() {
+                        return ident.err("duplicate field");
+                    }
+                    spans = Some(content.parse()?);
+                }
+                _ => return ident.err("unexpected field"),
+            }
+            if !content.is_empty() {
+                content.parse::<Token![,]>()?;
+            }
+        }
+        let mut missing_fields: Vec<String> = vec![];
+
+        if message.is_none() {
+            missing_fields.push("message".to_string());
+        }
+
+        if !missing_fields.is_empty() {
+            return brace.span.err(format!(
+                "required fields are missing: {}",
+                missing_fields.join(", ")
+            ));
+        }
+
+        Ok(Self {
+            message: message.unwrap(),
+            spans,
+        })
+    }
 }
 
 impl CommandInvocation for ErrorCommand {
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
-        let fields_parser = FieldsParseDefinition::new(ErrorCommandArguments::default())
-            .add_required_field(
-                "message",
-                "\"Error message to display\"",
-                None,
-                |params, val| params.message = Some(val),
-            )
-            .add_optional_field(
-                "spans",
-                "[$abc]",
-                Some("An optional [token stream], to determine where to show the error message"),
-                |params, val| params.error_spans = Some(val),
-            );
+        let message = self.arguments.message.interpret(interpreter)?.value();
 
-        let arguments = self
-            .arguments
-            .interpret_as_tokens(interpreter)?
-            .parse_into_fields(fields_parser)?;
+        let error_span = match self.arguments.spans {
+            Some(spans) => {
+                let error_span_stream = spans.interpret(interpreter)?;
 
-        let message = arguments
-            .message
-            .unwrap() // Field was required
-            .value();
+                // Consider the case where preinterpret embeds in a declarative macro, and we have
+                // an error like this:
+                // [!error! [!string! "Expected 100, got " $input] [$input]]
+                //
+                // In cases like this, rustc wraps $input in a transparent group, which means that
+                // the span of that group is the span of the tokens "$input" in the definition of the
+                // declarative macro. This is not what we want. We want the span of the tokens which
+                // were fed into $input in the declarative macro.
+                //
+                // The simplest solution here is to get rid of all transparent groups, to get back to the
+                // source spans.
+                //
+                // Once this workstream with macro diagnostics is stabilised:
+                // https://github.com/rust-lang/rust/issues/54140#issuecomment-802701867
+                //
+                // Then we can revisit this and do something better, and include all spans as separate spans
+                // in the error message, which will allow a user to trace an error through N different layers
+                // of macros.
+                //
+                // (Possibly we can try to join spans together, and if they don't join, they become separate
+                // spans which get printed to the error message).
+                //
+                // Coincidentally, rust analyzer currently does not properly support
+                // transparent groups (as of Jan 2025), so gets it right without this flattening:
+                // https://github.com/rust-lang/rust-analyzer/issues/18211
 
-        let error_span_stream = arguments
-            .error_spans
-            .map(|b| b.token_stream)
-            .unwrap_or_default();
+                let error_span_stream = error_span_stream
+                    .interpreted_stream
+                    .into_token_stream()
+                    .flatten_transparent_groups();
+                if error_span_stream.is_empty() {
+                    Span::call_site().span_range()
+                } else {
+                    error_span_stream.span_range()
+                }
+            }
+            None => Span::call_site().span_range(),
+        };
 
-        // Consider the case where preinterpret embeds in a declarative macro, and we have
-        // an error like this:
-        // [!error! [!string! "Expected 100, got " $input] [$input]]
-        //
-        // In cases like this, rustc wraps $input in a transparent group, which means that
-        // the span of that group is the span of the tokens "$input" in the definition of the
-        // declarative macro. This is not what we want. We want the span of the tokens which
-        // were fed into $input in the declarative macro.
-        //
-        // The simplest solution here is to get rid of all transparent groups, to get back to the
-        // source spans.
-        //
-        // Once this workstream with macro diagnostics is stabilised:
-        // https://github.com/rust-lang/rust/issues/54140#issuecomment-802701867
-        //
-        // Then we can revisit this and do something better, and include all spans as separate spans
-        // in the error message, which will allow a user to trace an error through N different layers
-        // of macros.
-        //
-        // (Possibly we can try to join spans together, and if they don't join, they become separate
-        // spans which get printed to the error message).
-        //
-        // Coincidentally, rust analyzer currently does not properly support
-        // transparent groups (as of Jan 2025), so gets it right without this flattening:
-        // https://github.com/rust-lang/rust-analyzer/issues/18211
-        let error_span_stream = error_span_stream.flatten_transparent_groups();
-
-        if error_span_stream.is_empty() {
-            Span::call_site().err(message)
-        } else {
-            error_span_stream
-                .into_token_stream()
-                .span_range()
-                .err(message)
-        }
+        error_span.err(message)
     }
 }

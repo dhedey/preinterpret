@@ -1,0 +1,5 @@
+error: Expected 102 to equal 64
+  --> tests/compilation_failures/core/error_span_multiple.rs:15:25
+   |
+15 |     assert_literals_eq!(102 and 64);
+   |                         ^^^^^^^^^^

@@ -4,7 +4,7 @@ pub(crate) use proc_macro2::*;
 pub(crate) use quote::ToTokens;
 pub(crate) use std::{collections::HashMap, str::FromStr};
 pub(crate) use syn::ext::IdentExt as SynIdentExt;
-pub(crate) use syn::parse::{discouraged::AnyDelimiter, Parse, ParseBuffer, ParseStream, Parser};
+pub(crate) use syn::parse::{discouraged::*, Parse, ParseBuffer, ParseStream, Parser};
 pub(crate) use syn::{
     parse_str, token, Expr, ExprLit, Lit, LitBool, LitFloat, LitInt, Result, Token, UnOp,
 };

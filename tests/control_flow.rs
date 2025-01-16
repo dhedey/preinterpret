@@ -9,6 +9,13 @@ macro_rules! assert_preinterpret_eq {
 }
 
 #[test]
+fn test_control_flow_compilation_failures() {
+    let t = trybuild::TestCases::new();
+    // In particular, the "error" command is tested here.
+    t.compile_fail("tests/compilation_failures/control_flow/*.rs");
+}
+
+#[test]
 fn test_if() {
     assert_preinterpret_eq!([!if! (1 == 2) { "YES" } !else! { "NO" }], "NO");
     assert_preinterpret_eq!({
@@ -38,8 +45,3 @@ fn test_while() {
         #x
     }, 5);
 }
-
-// TODO: Check compilation error for:
-// assert_preinterpret_eq!({
-//    [!while! true {}]
-// }, 5);

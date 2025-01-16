@@ -3,15 +3,30 @@ use crate::internal_prelude::*;
 #[derive(Clone)]
 pub(crate) struct Variable {
     marker: Token![#],
+    is_flattened: bool,
     variable_name: Ident,
 }
 
 impl Parse for Variable {
     fn parse(input: ParseStream) -> Result<Self> {
-        Ok(Self {
-            marker: input.parse()?,
-            variable_name: input.parse()?,
-        })
+        let marker = input.parse()?;
+        let lookahead = input.lookahead1();
+        if lookahead.peek(Ident::peek_any) {
+            return Ok(Self {
+                marker,
+                is_flattened: false,
+                variable_name: input.parse()?,
+            });
+        }
+        if lookahead.peek(Token![..]) {
+            let _ = input.parse::<Token![..]>();
+            return Ok(Self {
+                marker,
+                is_flattened: true,
+                variable_name: input.parse()?,
+            });
+        }
+        Err(lookahead.error())
     }
 }
 
@@ -58,10 +73,16 @@ impl Interpret for &Variable {
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> Result<()> {
-        output.extend(self.substitute(interpreter)?);
+        if self.is_flattened {
+            output.extend(self.substitute(interpreter)?);
+        } else {
+            output.push_new_group(self.substitute(interpreter)?, Delimiter::None, self.span());
+        }
         Ok(())
     }
+}
 
+impl Express for &Variable {
     fn interpret_as_expression_into(
         self,
         interpreter: &mut Interpreter,

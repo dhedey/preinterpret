@@ -10,13 +10,38 @@ pub(crate) enum InterpretationItem {
     Literal(Literal),
 }
 
+impl Parse for InterpretationItem {
+    fn parse(input: ParseStream) -> Result<Self> {
+        match detect_group(input.cursor()) {
+            GroupMatch::Command => return Ok(InterpretationItem::Command(input.parse()?)),
+            GroupMatch::OtherGroup => return Ok(InterpretationItem::Group(input.parse()?)),
+            GroupMatch::None => {}
+        }
+        if input.peek(token::Pound) {
+            let fork = input.fork();
+            if let Ok(variable) = fork.parse() {
+                input.advance_to(&fork);
+                return Ok(InterpretationItem::Variable(variable));
+            }
+        }
+        Ok(match input.parse::<TokenTree>()? {
+            TokenTree::Group(_) => {
+                unreachable!("Should have been already handled by the first branch above")
+            }
+            TokenTree::Punct(punct) => InterpretationItem::Punct(punct),
+            TokenTree::Ident(ident) => InterpretationItem::Ident(ident),
+            TokenTree::Literal(literal) => InterpretationItem::Literal(literal),
+        })
+    }
+}
+
 enum GroupMatch {
     Command,
     OtherGroup,
     None,
 }
 
-fn attempt_match_group(cursor: syn::buffer::Cursor) -> GroupMatch {
+fn detect_group(cursor: syn::buffer::Cursor) -> GroupMatch {
     let next = match cursor.any_group() {
         Some((next, Delimiter::Bracket, _, _)) => next,
         Some(_) => return GroupMatch::OtherGroup,
@@ -33,27 +58,6 @@ fn attempt_match_group(cursor: syn::buffer::Cursor) -> GroupMatch {
     match next.punct() {
         Some((punct, _)) if punct.as_char() == '!' => GroupMatch::Command,
         _ => GroupMatch::OtherGroup,
-    }
-}
-
-impl Parse for InterpretationItem {
-    fn parse(input: ParseStream) -> Result<Self> {
-        match attempt_match_group(input.cursor()) {
-            GroupMatch::Command => return Ok(InterpretationItem::Command(input.parse()?)),
-            GroupMatch::OtherGroup => return Ok(InterpretationItem::Group(input.parse()?)),
-            GroupMatch::None => {}
-        }
-        if input.peek(token::Pound) && input.peek2(syn::Ident) {
-            return Ok(InterpretationItem::Variable(input.parse()?));
-        }
-        Ok(match input.parse::<TokenTree>()? {
-            TokenTree::Group(_) => {
-                unreachable!("Should have been already handled by the first branch above")
-            }
-            TokenTree::Punct(punct) => InterpretationItem::Punct(punct),
-            TokenTree::Ident(ident) => InterpretationItem::Ident(ident),
-            TokenTree::Literal(literal) => InterpretationItem::Literal(literal),
-        })
     }
 }
 
@@ -79,7 +83,9 @@ impl Interpret for InterpretationItem {
         }
         Ok(())
     }
+}
 
+impl Express for InterpretationItem {
     fn interpret_as_expression_into(
         self,
         interpreter: &mut Interpreter,

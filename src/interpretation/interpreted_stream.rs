@@ -46,6 +46,10 @@ impl InterpretedStream {
         self.push_raw_token_tree(TokenTree::group(inner_tokens.token_stream, delimiter, span));
     }
 
+    pub(crate) fn extend_raw(&mut self, tokens: impl ToTokens) {
+        tokens.to_tokens(&mut self.token_stream);
+    }
+
     fn push_raw_token_tree(&mut self, token_tree: TokenTree) {
         self.token_stream.extend(iter::once(token_tree));
     }
@@ -54,6 +58,7 @@ impl InterpretedStream {
         self.token_stream.is_empty()
     }
 
+    #[allow(unused)]
     pub(crate) fn parse_into_fields<T: 'static>(
         self,
         parser: FieldsParseDefinition<T>,

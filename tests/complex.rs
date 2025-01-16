@@ -1,4 +1,4 @@
-use preinterpret::preinterpret;
+use preinterpret::*;
 
 preinterpret! {
     [!set! #bytes = 32]
@@ -11,6 +11,12 @@ preinterpret! {
     const NUM: u32 = [!literal! 1337u #bytes];
     const STRING: &str = [!string! #MyRawVar];
     const SNAKE_CASE: &str = [!snake! MyVar];
+}
+
+#[test]
+fn test_complex_compilation_failures() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/compilation_failures/complex/*.rs");
 }
 
 #[test]

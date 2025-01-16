@@ -1,5 +1,5 @@
 error: Expected 100, got 5
-  --> tests/compilation_failures/core/error_spans.rs:15:20
+  --> tests/compilation_failures/core/error_span_single.rs:15:20
    |
 15 |     assert_is_100!(5);
    |                    ^
