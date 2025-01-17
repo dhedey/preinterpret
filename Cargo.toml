@@ -20,7 +20,7 @@ proc-macro = true
 
 [dependencies]
 proc-macro2 = { version = "1.0" }
-syn = { version = "2.0", default-features = false, features = ["parsing", "derive", "printing", "clone-impls"] }
+syn = { version = "2.0", default-features = false, features = ["parsing", "derive", "printing", "clone-impls", "full"] }
 quote = { version = "1.0", default-features = false }
 
 [dev-dependencies]

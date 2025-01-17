@@ -38,6 +38,33 @@ fn test_raw() {
 }
 
 #[test]
+fn test_extend() {
+    my_assert_eq!(
+        {
+            [!set! #variable = "Hello"]
+            [!extend! #variable += " World!"]
+            [!string! #variable]
+        },
+        "Hello World!"
+    );
+    my_assert_eq!(
+        {
+            [!set! #i = 1]
+            [!set! #output = [!empty!]]
+            [!while! (#i <= 4) {
+                [!extend! #output += #i]
+                [!if! (#i <= 3) {
+                    [!extend! #output += ", "]
+                }]
+                [!assign! #i += 1]
+            }]
+            [!string! #output]
+        },
+        "1, 2, 3, 4"
+    );
+}
+
+#[test]
 fn test_ignore() {
     my_assert_eq!({
         true

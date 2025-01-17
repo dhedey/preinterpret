@@ -2,7 +2,7 @@ use crate::internal_prelude::*;
 
 #[derive(Clone)]
 pub(crate) struct IfCommand {
-    condition: InterpretationItem,
+    condition: ExpressionInput,
     true_code: CommandCodeInput,
     false_code: Option<CommandCodeInput>,
     nothing_span_range: SpanRange,
@@ -39,8 +39,7 @@ impl CommandInvocation for IfCommand {
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
         let evaluated_condition = self
             .condition
-            .interpret_as_expression(interpreter)?
-            .evaluate()?
+            .evaluate(interpreter)?
             .expect_bool("An if condition must evaluate to a boolean")?
             .value();
 
@@ -58,7 +57,7 @@ impl CommandInvocation for IfCommand {
 
 #[derive(Clone)]
 pub(crate) struct WhileCommand {
-    condition: InterpretationItem,
+    condition: ExpressionInput,
     loop_code: CommandCodeInput,
     nothing_span_range: SpanRange,
 }
@@ -88,8 +87,7 @@ impl CommandInvocation for WhileCommand {
             let evaluated_condition = self
                 .condition
                 .clone()
-                .interpret_as_expression(interpreter)?
-                .evaluate()?
+                .evaluate(interpreter)?
                 .expect_bool("An if condition must evaluate to a boolean")?
                 .value();
 

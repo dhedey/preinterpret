@@ -146,10 +146,10 @@ impl Interpret for Command {
 }
 
 impl Express for Command {
-    fn interpret_as_expression_into(
+    fn add_to_expression(
         self,
         interpreter: &mut Interpreter,
-        expression_stream: &mut ExpressionStream,
+        expression_stream: &mut ExpressionBuilder,
     ) -> Result<()> {
         match self.invocation.execute(interpreter)? {
             CommandOutput::Empty => {}
@@ -159,7 +159,10 @@ impl Express for Command {
             CommandOutput::Ident(ident) => {
                 expression_stream.push_ident(ident);
             }
-            CommandOutput::AppendStream(stream) | CommandOutput::GroupedStream(stream) => {
+            CommandOutput::AppendStream(stream) => {
+                expression_stream.extend_with_interpreted_stream(stream);
+            }
+            CommandOutput::GroupedStream(stream) => {
                 expression_stream
                     .push_grouped_interpreted_stream(stream, self.source_group_span.join());
             }

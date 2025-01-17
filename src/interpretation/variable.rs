@@ -8,10 +8,15 @@ pub(crate) struct GroupedVariable {
 
 impl Parse for GroupedVariable {
     fn parse(input: ParseStream) -> Result<Self> {
-        Ok(Self {
-            marker: input.parse()?,
-            variable_name: input.call(Ident::parse_any)?,
-        })
+        input.try_parse_or_message(
+            |input| {
+                Ok(Self {
+                    marker: input.parse()?,
+                    variable_name: input.call(Ident::parse_any)?,
+                })
+            },
+            "Expected #variable",
+        )
     }
 }
 
@@ -87,10 +92,10 @@ impl Interpret for &GroupedVariable {
 }
 
 impl Express for &GroupedVariable {
-    fn interpret_as_expression_into(
+    fn add_to_expression(
         self,
         interpreter: &mut Interpreter,
-        expression_stream: &mut ExpressionStream,
+        expression_stream: &mut ExpressionBuilder,
     ) -> Result<()> {
         expression_stream.push_grouped_interpreted_stream(
             self.interpret_as_new_stream(interpreter)?,
@@ -128,11 +133,16 @@ pub(crate) struct FlattenedVariable {
 
 impl Parse for FlattenedVariable {
     fn parse(input: ParseStream) -> Result<Self> {
-        Ok(Self {
-            marker: input.parse()?,
-            flatten: input.parse()?,
-            variable_name: input.call(Ident::parse_any)?,
-        })
+        input.try_parse_or_message(
+            |input| {
+                Ok(Self {
+                    marker: input.parse()?,
+                    flatten: input.parse()?,
+                    variable_name: input.call(Ident::parse_any)?,
+                })
+            },
+            "Expected #..variable",
+        )
     }
 }
 
@@ -187,12 +197,12 @@ impl Interpret for &FlattenedVariable {
 }
 
 impl Express for &FlattenedVariable {
-    fn interpret_as_expression_into(
+    fn add_to_expression(
         self,
         interpreter: &mut Interpreter,
-        expression_stream: &mut ExpressionStream,
+        expression_stream: &mut ExpressionBuilder,
     ) -> Result<()> {
-        expression_stream.push_interpreted_stream(self.interpret_as_tokens(interpreter)?);
+        expression_stream.extend_with_interpreted_stream(self.interpret_as_tokens(interpreter)?);
         Ok(())
     }
 }

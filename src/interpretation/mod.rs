@@ -1,6 +1,7 @@
 mod command;
 mod command_arguments;
 mod command_code_input;
+mod command_fields_input;
 mod command_stream_input;
 mod interpret_traits;
 mod interpretation_item;
@@ -13,6 +14,7 @@ mod variable;
 pub(crate) use command::*;
 pub(crate) use command_arguments::*;
 pub(crate) use command_code_input::*;
+pub(crate) use command_fields_input::*;
 pub(crate) use command_stream_input::*;
 pub(crate) use interpret_traits::*;
 pub(crate) use interpretation_item::*;

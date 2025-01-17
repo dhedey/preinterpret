@@ -46,8 +46,12 @@ impl InterpretedStream {
         self.push_raw_token_tree(TokenTree::group(inner_tokens.token_stream, delimiter, span));
     }
 
-    pub(crate) fn extend_raw(&mut self, tokens: impl ToTokens) {
+    pub(crate) fn extend_raw_tokens(&mut self, tokens: impl ToTokens) {
         tokens.to_tokens(&mut self.token_stream);
+    }
+
+    pub(crate) fn extend_raw_token_iter(&mut self, tokens: impl IntoIterator<Item = TokenTree>) {
+        self.token_stream.extend(tokens);
     }
 
     fn push_raw_token_tree(&mut self, token_tree: TokenTree) {

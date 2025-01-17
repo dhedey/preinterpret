@@ -4,40 +4,40 @@
 
 ### New Commands
 
+* Core commands:
+  * `[!error! ...]`
+  * `[!stream! ...]` command which just returns its contents, but can be used in places where a single item is expected when parsing.
 * Expression commands:
   * `[!evaluate! ...]`
   * `[!assign! #x += ...]` for `+` and other supported operators
+  * `[!range! 0..5]` outputs `0 1 2 3 4`
 * Control flow commands:
   * `[!if! COND { ... }]` and `[!if! COND { ... } !else! { ... }]`
-  * `[!while! cond {}]`
+  * `[!while! COND {}]`
 * Token-stream utility commands:
   * `[!empty!]`
   * `[!is_empty! #stream]`
   * `[!length! #stream]` which gives the number of token trees in the token stream.
   * `[!group! ...]` which wraps the tokens in a transparent group. Useful with `!for!`.
-* Other commands:
-  * `[!error! ..]`
 
 I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x = [!empty!]]`, but deemed it unhelpful, because then they have awkward edge-cases when embedding empty tokenstreams from declarative macros `($each_tt)*`.
 
 ### To come
 
-* Tests for `[!extend!]`
-* Compile error test for `[!set #..x = f]` and `[!extend! #..x += f]`
-* Create fields parsing macro
-* Add tests for `$x` being raw.
-* Add tests for CommandStreamInput (via `[!split! ]` or `[!intersperse! ]`?) from `#x = Hello World` or `#..x = [Hello World]` or `$x`
-* ? Use `[!let! #x = 12]` instead of `[!set! ...]`
-  * ...Or maybe not. Maybe `[!let! #..x = Hello World]` does parsing and is equivalent to `[!set! #x = Hello World]`
-* Fix `if` and `while` to read expression until braces
+* Explore getting rid of lots of the span range stuff
+* Support `!else if!` in `!if!`
 * Support string & char literals (for comparisons & casts) in expressions
+* Reconfiguring iteration limit, via `[!settings! { iteration_limit: 4000 }]`
+* Other token stream commands
+* Add tests for CommandStreamInput (via `[!split! ]` or `[!intersperse! ]`?):
+  => From `#x = Hello World`
+  => Or `#..x = [Hello World]`
+  => But not `$x` - it has to be wrapped in `[]`
+  => Improve tests for `[!range!]`
 * Add more tests
   * e.g. for various expressions
   * e.g. for long sums
   * Add compile failure tests
-* `[!range! 0..5]` outputs `0 1 2 3 4`
-* Reconfiguring iteration limit
-* Support `!else if!` in `!if!`
 * Support `!for!` so we can use it for simple generation scenarios without needing macros at all:
   * Complexities:
     * Parsing `,`
@@ -77,17 +77,21 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 * `[!intersperse! { items: X, with: X, add_trailing?: false, override_final_with?: X }]` for adding something between each item, where each `X` is a `CommandStreamInput`
 * `[!zip! ([Hello Goodbye] [World Friend])]` => `[(Hello World), (Goodbye Friend)]`
 * Basic place parsing
+  * Introduce `[!let! #..x = Hello World]` does parsing and is equivalent to `[!set! #x = Hello World]`
   * In parse land: #x matches a single token, #..x consumes the rest of a stream
   * Auto-expand transparent groups, like syn. Maybe even using syn `TokenBuffer` / `Cursor`!
   * Explicit Punct, Idents, Literals
-  * `[!STREAM! ]` method to take a stream
+  * `[!PARSER! ]` method to take a stream
   * `[!LITERAL! #x]` / `[!IDENT! #x]` bindings
-  * `[!OPTIONAL! ...]`
+  * `[!OPTIONAL! ...]` and/or possibly `#(..)?` and `[!is_set! #x]`?
   * Groups or `[!GROUP! ...]`
+  * Regarding `#(..)+` and `#(..)*`...
+    * Any binding could be set to an array, but it gets complicated fast with nested bindings.
+    * Instead for now, we could push people towards capturing the input and parsing it with for loops and matches.
   * `#x` binding reads a token tree
   * `#..x` binding reads the rest of the stream
   * `[!RAW!]` for e.g. `[!while_parse! [!RAW! from] from #X]`
-* `[!match!]` (with `#..x` as a catch-all)
+  * `[!match!]` (with `#..x` as a catch-all)
 * Check all `#[allow(unused)]` and remove any which aren't needed
 * Rework expression parsing
 * Work on book

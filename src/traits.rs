@@ -10,6 +10,19 @@ impl IdentExt for Ident {
     }
 }
 
+pub(crate) trait CursorExt: Sized {
+    fn punct_matching(self, char: char) -> Option<(Punct, Self)>;
+}
+
+impl CursorExt for Cursor<'_> {
+    fn punct_matching(self, char: char) -> Option<(Punct, Self)> {
+        match self.punct() {
+            Some((punct, next)) if punct.as_char() == char => Some((punct, next)),
+            _ => None,
+        }
+    }
+}
+
 pub(crate) trait LiteralExt: Sized {
     #[allow(unused)]
     fn content_if_string(&self) -> Option<String>;
@@ -66,6 +79,11 @@ impl TokenTreeExt for TokenTree {
 pub(crate) trait ParserExt {
     fn parse_with<T: ContextualParse>(&self, context: T::Context) -> Result<T>;
     fn parse_all_for_interpretation(&self, span_range: SpanRange) -> Result<InterpretationStream>;
+    fn try_parse_or_message<T, F: FnOnce(&Self) -> Result<T>, M: std::fmt::Display>(
+        &self,
+        func: F,
+        message: M,
+    ) -> Result<T>;
 }
 
 impl ParserExt for ParseBuffer<'_> {
@@ -75,6 +93,15 @@ impl ParserExt for ParseBuffer<'_> {
 
     fn parse_all_for_interpretation(&self, span_range: SpanRange) -> Result<InterpretationStream> {
         self.parse_with(span_range)
+    }
+
+    fn try_parse_or_message<T, F: FnOnce(&Self) -> Result<T>, M: std::fmt::Display>(
+        &self,
+        parse: F,
+        message: M,
+    ) -> Result<T> {
+        let error_span = self.span();
+        parse(self).map_err(|_| error_span.error(message))
     }
 }
 
@@ -107,13 +134,7 @@ pub(crate) trait SpanErrorExt: Sized {
 
 impl<T: HasSpanRange> SpanErrorExt for T {
     fn error(&self, message: impl std::fmt::Display) -> syn::Error {
-        self.span_range().error(message)
-    }
-}
-
-impl SpanErrorExt for SpanRange {
-    fn error(&self, message: impl std::fmt::Display) -> syn::Error {
-        syn::Error::new_spanned(self, message)
+        self.span_range().create_error(message)
     }
 }
 
@@ -170,6 +191,10 @@ impl SpanRange {
         Self { start, end }
     }
 
+    fn create_error(&self, message: impl std::fmt::Display) -> syn::Error {
+        syn::Error::new_spanned(self, message)
+    }
+
     /// * On nightly, this gives a span covering the full range (the same result as `Span::join` would)
     /// * On stable, this gives the span of the first token of the group (because [`proc_macro::Span::join`] is not supported)
     pub(crate) fn span(&self) -> Span {
@@ -200,6 +225,12 @@ impl ToTokens for SpanRange {
             TokenTree::Punct(Punct::new('<', Spacing::Alone).with_span(self.start)),
             TokenTree::Punct(Punct::new('>', Spacing::Alone).with_span(self.end)),
         ]);
+    }
+}
+
+impl HasSpanRange for SpanRange {
+    fn span_range(&self) -> SpanRange {
+        *self
     }
 }
 
@@ -241,7 +272,7 @@ impl<T: ToTokens + AutoSpanRange> HasSpanRange for T {
 
 /// This should only be used for syn built-ins or when there isn't a better
 /// span range available
-trait AutoSpanRange {}
+pub(crate) trait AutoSpanRange {}
 
 macro_rules! impl_auto_span_range {
     ($($ty:ty),* $(,)?) => {

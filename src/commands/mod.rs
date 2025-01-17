@@ -46,6 +46,7 @@ define_command_kind! {
     // Expression Commands
     EvaluateCommand,
     AssignCommand,
+    RangeCommand,
 
     // Control flow commands
     IfCommand,

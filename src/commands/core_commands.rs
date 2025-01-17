@@ -20,7 +20,7 @@ impl CommandDefinition for SetCommand {
                     arguments: input.parse_with(arguments.full_span_range())?,
                 })
             },
-            "Expected [!set! #variable = ... ]",
+            "Expected [!set! #variable = ..]",
         )
     }
 }
@@ -54,7 +54,7 @@ impl CommandDefinition for ExtendCommand {
                     arguments: input.parse_all_for_interpretation(arguments.full_span_range())?,
                 })
             },
-            "Expected [!extend! #variable += .. tokens ..]",
+            "Expected [!extend! #variable += ..]",
         )
     }
 }
@@ -138,7 +138,18 @@ impl CommandInvocation for StreamCommand {
 
 #[derive(Clone)]
 pub(crate) struct ErrorCommand {
-    arguments: ErrorArguments,
+    inputs: ErrorInputs,
+}
+
+define_field_inputs! {
+    ErrorInputs {
+        required: {
+            message: InterpretationValue<syn::LitStr> = r#""...""# ("The error message to display"),
+        },
+        optional: {
+            spans: CommandStreamInput = "[$abc]" ("An optional [token stream], to determine where to show the error message"),
+        }
+    }
 }
 
 impl CommandDefinition for ErrorCommand {
@@ -146,83 +157,16 @@ impl CommandDefinition for ErrorCommand {
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {
-            arguments: arguments.fully_parse_as()?,
-        })
-    }
-}
-
-#[derive(Clone)]
-struct ErrorArguments {
-    message: InterpretationValue<syn::LitStr>,
-    spans: Option<CommandStreamInput>,
-}
-
-impl ArgumentsContent for ErrorArguments {
-    fn error_message() -> String {
-        r#"Expected: {
-    // The error message to display
-    message: "...",
-    // An optional [token stream], to determine where to show the error message
-    spans?: [$abc],
-}"#
-        .to_string()
-    }
-}
-
-impl Parse for ErrorArguments {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let mut message = None;
-        let mut spans = None;
-
-        let content;
-        let brace = syn::braced!(content in input);
-        while !content.is_empty() {
-            let ident: Ident = content.parse()?;
-            content.parse::<Token![:]>()?;
-            match ident.to_string().as_str() {
-                "message" => {
-                    if message.is_some() {
-                        return ident.err("duplicate field");
-                    }
-                    message = Some(content.parse()?);
-                }
-                "spans" => {
-                    if spans.is_some() {
-                        return ident.err("duplicate field");
-                    }
-                    spans = Some(content.parse()?);
-                }
-                _ => return ident.err("unexpected field"),
-            }
-            if !content.is_empty() {
-                content.parse::<Token![,]>()?;
-            }
-        }
-        let mut missing_fields: Vec<String> = vec![];
-
-        if message.is_none() {
-            missing_fields.push("message".to_string());
-        }
-
-        if !missing_fields.is_empty() {
-            return brace.span.err(format!(
-                "required fields are missing: {}",
-                missing_fields.join(", ")
-            ));
-        }
-
-        Ok(Self {
-            message: message.unwrap(),
-            spans,
+            inputs: arguments.fully_parse_as()?,
         })
     }
 }
 
 impl CommandInvocation for ErrorCommand {
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
-        let message = self.arguments.message.interpret(interpreter)?.value();
+        let message = self.inputs.message.interpret(interpreter)?.value();
 
-        let error_span = match self.arguments.spans {
+        let error_span = match self.inputs.spans {
             Some(spans) => {
                 let error_span_stream = spans.interpret_as_tokens(interpreter)?;
 

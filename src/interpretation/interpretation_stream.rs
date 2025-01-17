@@ -45,25 +45,6 @@ impl Interpret for InterpretationStream {
     }
 }
 
-impl Express for InterpretationStream {
-    fn interpret_as_expression_into(
-        self,
-        interpreter: &mut Interpreter,
-        expression_stream: &mut ExpressionStream,
-    ) -> Result<()> {
-        let mut inner_expression_stream = ExpressionStream::new(self.span_range);
-        for item in self.items {
-            item.interpret_as_expression_into(interpreter, &mut inner_expression_stream)?;
-        }
-        expression_stream.push_expression_group(
-            inner_expression_stream,
-            Delimiter::None,
-            self.span_range.span(),
-        );
-        Ok(())
-    }
-}
-
 impl HasSpanRange for InterpretationStream {
     fn span_range(&self) -> SpanRange {
         self.span_range
@@ -73,29 +54,23 @@ impl HasSpanRange for InterpretationStream {
 /// A parsed group ready for interpretation
 #[derive(Clone)]
 pub(crate) struct InterpretationGroup {
-    source_delimeter: Delimiter,
+    source_delimiter: Delimiter,
     source_delim_span: DelimSpan,
-    content: InterpretationGroupContent,
+    content: InterpretationStream,
 }
 
-#[derive(Clone)]
-enum InterpretationGroupContent {
-    Interpeted(InterpretationStream),
-    Raw(TokenStream),
+impl InterpretationGroup {
+    pub(crate) fn into_content(self) -> InterpretationStream {
+        self.content
+    }
 }
 
 impl Parse for InterpretationGroup {
     fn parse(input: ParseStream) -> Result<Self> {
         let (delimiter, delim_span, content) = input.parse_any_delimiter()?;
-        let span_range = delim_span.span_range();
-        let content = match delimiter {
-            // This is likely from a macro variable or macro expansion.
-            // Either way, we shouldn't be interpreting it.
-            Delimiter::None => InterpretationGroupContent::Raw(content.parse()?),
-            _ => InterpretationGroupContent::Interpeted(content.parse_with(span_range)?),
-        };
+        let content = content.parse_with(delim_span.span_range())?;
         Ok(Self {
-            source_delimeter: delimiter,
+            source_delimiter: delimiter,
             source_delim_span: delim_span,
             content,
         })
@@ -108,43 +83,72 @@ impl Interpret for InterpretationGroup {
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> Result<()> {
-        let inner = match self.content {
-            InterpretationGroupContent::Interpeted(stream) => {
-                stream.interpret_as_tokens(interpreter)?
-            }
-            InterpretationGroupContent::Raw(token_stream) => {
-                InterpretedStream::raw(self.source_delim_span.span_range(), token_stream)
-            }
-        };
-        output.push_new_group(inner, self.source_delimeter, self.source_delim_span.join());
-        Ok(())
-    }
-}
-
-impl Express for InterpretationGroup {
-    fn interpret_as_expression_into(
-        self,
-        interpreter: &mut Interpreter,
-        expression_stream: &mut ExpressionStream,
-    ) -> Result<()> {
-        match self.content {
-            InterpretationGroupContent::Interpeted(stream) => expression_stream
-                .push_expression_group(
-                    stream.interpret_as_expression(interpreter)?,
-                    self.source_delimeter,
-                    self.source_delim_span.join(),
-                ),
-            InterpretationGroupContent::Raw(token_stream) => expression_stream
-                .push_grouped_interpreted_stream(
-                    InterpretedStream::raw(self.source_delim_span.span_range(), token_stream),
-                    self.source_delim_span.join(),
-                ),
-        }
+        let inner = self.content.interpret_as_tokens(interpreter)?;
+        output.push_new_group(inner, self.source_delimiter, self.source_delim_span.join());
         Ok(())
     }
 }
 
 impl HasSpanRange for InterpretationGroup {
+    fn span_range(&self) -> SpanRange {
+        self.source_delim_span.span_range()
+    }
+}
+
+/// A parsed group intended to be raw tokens
+#[derive(Clone)]
+pub(crate) struct RawGroup {
+    source_delimeter: Delimiter,
+    source_delim_span: DelimSpan,
+    content: TokenStream,
+}
+
+#[allow(unused)]
+impl RawGroup {
+    pub(crate) fn into_content(self) -> TokenStream {
+        self.content
+    }
+}
+
+impl Parse for RawGroup {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let (delimiter, delim_span, content) = input.parse_any_delimiter()?;
+        let content = content.parse()?;
+        Ok(Self {
+            source_delimeter: delimiter,
+            source_delim_span: delim_span,
+            content,
+        })
+    }
+}
+
+impl Interpret for RawGroup {
+    fn interpret_as_tokens_into(
+        self,
+        _: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()> {
+        let inner = InterpretedStream::raw(self.source_delim_span.span_range(), self.content);
+        output.push_new_group(inner, self.source_delimeter, self.source_delim_span.join());
+        Ok(())
+    }
+}
+
+impl Express for RawGroup {
+    fn add_to_expression(
+        self,
+        _: &mut Interpreter,
+        expression_stream: &mut ExpressionBuilder,
+    ) -> Result<()> {
+        expression_stream.push_grouped_interpreted_stream(
+            InterpretedStream::raw(self.source_delim_span.span_range(), self.content),
+            self.source_delim_span.join(),
+        );
+        Ok(())
+    }
+}
+
+impl HasSpanRange for RawGroup {
     fn span_range(&self) -> SpanRange {
         self.source_delim_span.span_range()
     }

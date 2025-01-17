@@ -14,22 +14,12 @@ pub(crate) enum InterpretationValue<T> {
 
 impl<T: Parse> Parse for InterpretationValue<T> {
     fn parse(input: ParseStream) -> Result<Self> {
-        let fork = input.fork();
-        if let Ok(command) = fork.parse() {
-            input.advance_to(&fork);
-            return Ok(InterpretationValue::Command(command));
-        }
-        let fork = input.fork();
-        if let Ok(command) = fork.parse() {
-            input.advance_to(&fork);
-            return Ok(InterpretationValue::GroupedVariable(command));
-        }
-        let fork = input.fork();
-        if let Ok(command) = fork.parse() {
-            input.advance_to(&fork);
-            return Ok(InterpretationValue::FlattenedVariable(command));
-        }
-        Ok(InterpretationValue::Value(input.parse()?))
+        Ok(match detect_preinterpret_grammar(input.cursor()) {
+            PeekMatch::Command => Self::Command(input.parse()?),
+            PeekMatch::GroupedVariable => Self::GroupedVariable(input.parse()?),
+            PeekMatch::FlattenedVariable => Self::FlattenedVariable(input.parse()?),
+            PeekMatch::InterpretationGroup(_) | PeekMatch::Other => Self::Value(input.parse()?),
+        })
     }
 }
 

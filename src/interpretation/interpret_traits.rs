@@ -26,7 +26,7 @@ impl<T: InterpretValue<InterpretedValue = I> + HasSpanRange, I: ToTokens> Interp
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> Result<()> {
-        output.extend_raw(self.interpret(interpreter)?);
+        output.extend_raw_tokens(self.interpret(interpreter)?);
         Ok(())
     }
 }

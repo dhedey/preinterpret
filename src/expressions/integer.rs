@@ -17,6 +17,30 @@ impl EvaluationInteger {
         })
     }
 
+    pub(crate) fn try_into_i128(self) -> Result<i128> {
+        let option_of_fallback = match self.value {
+            EvaluationIntegerValue::Untyped(x) => x.parse_fallback().ok(),
+            EvaluationIntegerValue::U8(x) => Some(x.into()),
+            EvaluationIntegerValue::U16(x) => Some(x.into()),
+            EvaluationIntegerValue::U32(x) => Some(x.into()),
+            EvaluationIntegerValue::U64(x) => Some(x.into()),
+            EvaluationIntegerValue::U128(x) => x.try_into().ok(),
+            EvaluationIntegerValue::Usize(x) => x.try_into().ok(),
+            EvaluationIntegerValue::I8(x) => Some(x.into()),
+            EvaluationIntegerValue::I16(x) => Some(x.into()),
+            EvaluationIntegerValue::I32(x) => Some(x.into()),
+            EvaluationIntegerValue::I64(x) => Some(x.into()),
+            EvaluationIntegerValue::I128(x) => Some(x),
+            EvaluationIntegerValue::Isize(x) => x.try_into().ok(),
+        };
+        match option_of_fallback {
+            Some(value) => Ok(value),
+            None => self
+                .source_span
+                .err("The integer does not fit in a i128".to_string()),
+        }
+    }
+
     pub(super) fn handle_unary_operation(
         self,
         operation: UnaryOperation,

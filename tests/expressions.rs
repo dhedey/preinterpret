@@ -47,6 +47,13 @@ fn test_basic_evaluate_works() {
         },
         36
     );
+    assert_preinterpret_eq!(
+        {
+            [!set! #partial_sum = + 2]
+            [!evaluate! 5 #..partial_sum]
+        },
+        7
+    );
 }
 
 #[test]
@@ -60,4 +67,17 @@ fn assign_works() {
         },
         12
     );
+}
+
+#[test]
+fn range_works() {
+    assert_preinterpret_eq!([!string! [!range! -2..5]], "-2-101234");
+    assert_preinterpret_eq!(
+        {
+            [!set! #x = 2]
+            [!string! [!range! (#x + #x)..=5]]
+        },
+        "45"
+    );
+    assert_preinterpret_eq!({ [!string! [!range! 8..=5]] }, "");
 }

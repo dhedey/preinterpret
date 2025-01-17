@@ -5,54 +5,31 @@ use crate::internal_prelude::*;
 /// It accepts any of the following:
 /// * A `[..]` group - the input stream is the interpreted contents of the brackets
 /// * A [!command! ...] - the input stream is the command's output
-/// * A $macro_variable or other transparent group - the input stream is the *raw* contents of the group
 /// * A `#variable` - the input stream is the content of the variable
 /// * A flattened `#..variable` - the variable must contain a single `[..]` or transparent group, the input stream are the group contents
+///
+/// We don't support transparent groups, because they are not used consistently and it would expose this
+/// inconsistency to the user, and be a potentially breaking change for other tooling to add/remove them.
+/// For example, as of Jan 2025, in declarative macro substitutions a $literal gets a wrapping group,
+/// but a $tt or $($tt)* does not.
 #[derive(Clone)]
 pub(crate) enum CommandStreamInput {
     Command(Command),
     GroupedVariable(GroupedVariable),
     FlattenedVariable(FlattenedVariable),
-    Bracketed {
-        delim_span: DelimSpan,
-        inner: InterpretationStream,
-    },
-    Raw {
-        delim_span: DelimSpan,
-        inner: TokenStream,
-    },
+    ExplicitStream(InterpretationGroup),
 }
 
 impl Parse for CommandStreamInput {
     fn parse(input: ParseStream) -> Result<Self> {
-        let fork = input.fork();
-        if let Ok(command) = fork.parse() {
-            input.advance_to(&fork);
-            return Ok(CommandStreamInput::Command(command));
-        }
-        let fork = input.fork();
-        if let Ok(command) = fork.parse() {
-            input.advance_to(&fork);
-            return Ok(CommandStreamInput::GroupedVariable(command));
-        }
-        let fork = input.fork();
-        if let Ok(command) = fork.parse() {
-            input.advance_to(&fork);
-            return Ok(CommandStreamInput::FlattenedVariable(command));
-        }
-        let error_span = input.span();
-        match input.parse_any_delimiter() {
-            Ok((Delimiter::Bracket, delim_span, content)) => Ok(CommandStreamInput::Bracketed {
-                delim_span,
-                inner: content.parse_with(delim_span.span_range())?,
-            }),
-            Ok((Delimiter::None, delim_span, content)) => Ok(CommandStreamInput::Raw {
-                delim_span,
-                inner: content.parse()?,
-            }),
-            _ => error_span
-                .err("expected [ ..<input>.. ] or a [!command! ..], #variable, or #macro_variable"),
-        }
+        Ok(match detect_preinterpret_grammar(input.cursor()) {
+            PeekMatch::Command => Self::Command(input.parse()?),
+            PeekMatch::GroupedVariable => Self::GroupedVariable(input.parse()?),
+            PeekMatch::FlattenedVariable => Self::FlattenedVariable(input.parse()?),
+            PeekMatch::InterpretationGroup(Delimiter::Bracket) => Self::ExplicitStream(input.parse()?),
+            PeekMatch::InterpretationGroup(_) | PeekMatch::Other => input.span()
+                .err("Expected [ ..input stream.. ] or a [!command! ..], #variable or #..variable.\nMacro substitutions such as $x should be placed inside square brackets.")?,
+        })
     }
 }
 
@@ -62,12 +39,7 @@ impl HasSpanRange for CommandStreamInput {
             CommandStreamInput::Command(command) => command.span_range(),
             CommandStreamInput::GroupedVariable(variable) => variable.span_range(),
             CommandStreamInput::FlattenedVariable(variable) => variable.span_range(),
-            CommandStreamInput::Bracketed {
-                delim_span: span, ..
-            } => span.span_range(),
-            CommandStreamInput::Raw {
-                delim_span: span, ..
-            } => span.span_range(),
+            CommandStreamInput::ExplicitStream(group) => group.span_range(),
         }
     }
 }
@@ -99,19 +71,15 @@ impl Interpret for CommandStreamInput {
                         }
                     })?;
 
-                output.extend_raw(tokens);
+                output.extend_raw_tokens(tokens);
                 Ok(())
             }
             CommandStreamInput::GroupedVariable(variable) => {
                 variable.interpret_as_tokens_into(interpreter, output)
             }
-            CommandStreamInput::Bracketed { inner, .. } => {
-                inner.interpret_as_tokens_into(interpreter, output)
-            }
-            CommandStreamInput::Raw { inner, .. } => {
-                output.extend_raw(inner);
-                Ok(())
-            }
+            CommandStreamInput::ExplicitStream(group) => group
+                .into_content()
+                .interpret_as_tokens_into(interpreter, output),
         }
     }
 }

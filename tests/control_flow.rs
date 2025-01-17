@@ -26,7 +26,7 @@ fn test_if() {
     assert_preinterpret_eq!({
         [!set! #x = 1]
         [!set! #y = 2]
-        [!if! (#x == #y) { "YES" } !else! { "NO" }]
+        [!if! #x == #y { "YES" } !else! { "NO" }]
     }, "NO");
     assert_preinterpret_eq!({
         0
@@ -42,7 +42,7 @@ fn test_if() {
 fn test_while() {
     assert_preinterpret_eq!({
         [!set! #x = 0]
-        [!while! (#x < 5) { [!assign! #x += 1] }]
+        [!while! #x < 5 { [!assign! #x += 1] }]
         #x
     }, 5);
 }
