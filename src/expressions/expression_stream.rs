@@ -35,7 +35,8 @@ impl Parse for ExpressionInput {
             // before code blocks or .. in [!range!] so we can break on those.
             // These aren't valid inside expressions we support anyway, so it's good enough for now.
             let item = match detect_preinterpret_grammar(input.cursor()) {
-                PeekMatch::Command => ExpressionItem::Command(input.parse()?),
+                PeekMatch::GroupedCommand => ExpressionItem::Command(input.parse()?),
+                PeekMatch::FlattenedCommand => ExpressionItem::Command(input.parse()?),
                 PeekMatch::GroupedVariable => ExpressionItem::GroupedVariable(input.parse()?),
                 PeekMatch::FlattenedVariable => ExpressionItem::FlattenedVariable(input.parse()?),
                 PeekMatch::InterpretationGroup(Delimiter::Brace | Delimiter::Bracket) => break,

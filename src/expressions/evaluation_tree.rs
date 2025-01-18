@@ -433,6 +433,12 @@ impl EvaluationOutput {
         }
     }
 
+    pub(crate) fn into_token_tree(self) -> TokenTree {
+        match self {
+            Self::Value(value) => value.into_token_tree(),
+        }
+    }
+
     pub(crate) fn into_interpreted_stream(self) -> InterpretedStream {
         let value = self.into_value();
         InterpretedStream::raw(value.source_span(), value.into_token_stream())

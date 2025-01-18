@@ -7,6 +7,7 @@ pub(crate) struct EvaluateCommand {
 
 impl CommandDefinition for EvaluateCommand {
     const COMMAND_NAME: &'static str = "evaluate";
+    type OutputKind = OutputKindValue;
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         arguments.fully_parse_or_error(
@@ -18,14 +19,10 @@ impl CommandDefinition for EvaluateCommand {
             "Expected [!evaluate! ...] containing a valid preinterpret expression",
         )
     }
-}
 
-impl CommandInvocation for EvaluateCommand {
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<TokenTree> {
         let expression = self.expression.start_expression_builder(interpreter)?;
-        Ok(CommandOutput::Stream(
-            expression.evaluate()?.into_interpreted_stream(),
-        ))
+        Ok(expression.evaluate()?.into_token_tree())
     }
 }
 
@@ -40,6 +37,7 @@ pub(crate) struct AssignCommand {
 
 impl CommandDefinition for AssignCommand {
     const COMMAND_NAME: &'static str = "assign";
+    type OutputKind = OutputKindNone;
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         arguments.fully_parse_or_error(
@@ -61,10 +59,8 @@ impl CommandDefinition for AssignCommand {
             "Expected [!assign! #variable += ...] for + or some other operator supported in an expression",
         )
     }
-}
 
-impl CommandInvocation for AssignCommand {
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
         let Self {
             variable,
             operator,
@@ -82,7 +78,7 @@ impl CommandInvocation for AssignCommand {
         let output = builder.evaluate()?.into_interpreted_stream();
         variable.set(interpreter, output)?;
 
-        Ok(CommandOutput::Empty)
+        Ok(())
     }
 }
 
@@ -95,6 +91,7 @@ pub(crate) struct RangeCommand {
 
 impl CommandDefinition for RangeCommand {
     const COMMAND_NAME: &'static str = "range";
+    type OutputKind = OutputKindStreamOrGroup;
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         arguments.fully_parse_or_error(
@@ -108,10 +105,8 @@ impl CommandDefinition for RangeCommand {
             "Expected a rust range expression such as [!range! 1..4]",
         )
     }
-}
 
-impl CommandInvocation for RangeCommand {
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
         let range_span_range = self.range_limits.span_range();
 
         let left = self
@@ -124,8 +119,9 @@ impl CommandInvocation for RangeCommand {
             .evaluate(interpreter)?
             .expect_integer("The right side of the range must be an integer")?
             .try_into_i128()?;
+
         if left > right {
-            return Ok(CommandOutput::Empty);
+            return Ok(InterpretedStream::new(range_span_range));
         }
 
         let length = self
@@ -151,7 +147,8 @@ impl CommandInvocation for RangeCommand {
                 output.extend_raw_token_iter(iter)
             }
         };
-        Ok(CommandOutput::Stream(output))
+
+        Ok(output)
     }
 }
 

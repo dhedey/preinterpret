@@ -46,14 +46,17 @@ impl EvaluationFloat {
             }
         }
     }
+
+    pub(super) fn to_literal(&self) -> Literal {
+        self.value
+            .to_unspanned_literal()
+            .with_span(self.source_span.start())
+    }
 }
 
 impl quote::ToTokens for EvaluationFloat {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.value
-            .to_unspanned_literal()
-            .with_span(self.source_span.start())
-            .to_tokens(tokens)
+        self.to_literal().to_tokens(tokens)
     }
 }
 

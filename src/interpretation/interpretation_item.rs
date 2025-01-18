@@ -14,7 +14,8 @@ pub(crate) enum InterpretationItem {
 impl Parse for InterpretationItem {
     fn parse(input: ParseStream) -> Result<Self> {
         Ok(match detect_preinterpret_grammar(input.cursor()) {
-            PeekMatch::Command => InterpretationItem::Command(input.parse()?),
+            PeekMatch::GroupedCommand => InterpretationItem::Command(input.parse()?),
+            PeekMatch::FlattenedCommand => InterpretationItem::Command(input.parse()?),
             PeekMatch::InterpretationGroup(_) => {
                 InterpretationItem::InterpretationGroup(input.parse()?)
             }
@@ -33,7 +34,8 @@ impl Parse for InterpretationItem {
 }
 
 pub(crate) enum PeekMatch {
-    Command,
+    GroupedCommand,
+    FlattenedCommand,
     GroupedVariable,
     FlattenedVariable,
     InterpretationGroup(Delimiter),
@@ -48,7 +50,16 @@ pub(crate) fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> PeekMa
             if let Some((_, next)) = next.punct_matching('!') {
                 if let Some((_, next)) = next.ident() {
                     if next.punct_matching('!').is_some() {
-                        return PeekMatch::Command;
+                        return PeekMatch::GroupedCommand;
+                    }
+                }
+                if let Some((_, next)) = next.punct_matching('.') {
+                    if let Some((_, next)) = next.punct_matching('.') {
+                        if let Some((_, next)) = next.ident() {
+                            if next.punct_matching('!').is_some() {
+                                return PeekMatch::FlattenedCommand;
+                            }
+                        }
                     }
                 }
             }

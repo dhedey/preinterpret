@@ -5,6 +5,7 @@ pub(crate) struct EmptyCommand;
 
 impl CommandDefinition for EmptyCommand {
     const COMMAND_NAME: &'static str = "empty";
+    type OutputKind = OutputKindNone;
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         arguments.assert_empty(
@@ -12,11 +13,9 @@ impl CommandDefinition for EmptyCommand {
         )?;
         Ok(Self)
     }
-}
 
-impl CommandInvocation for EmptyCommand {
-    fn execute(self: Box<Self>, _interpreter: &mut Interpreter) -> Result<CommandOutput> {
-        Ok(CommandOutput::Empty)
+    fn execute(self: Box<Self>, _interpreter: &mut Interpreter) -> Result<()> {
+        Ok(())
     }
 }
 
@@ -27,22 +26,18 @@ pub(crate) struct IsEmptyCommand {
 
 impl CommandDefinition for IsEmptyCommand {
     const COMMAND_NAME: &'static str = "is_empty";
+    type OutputKind = OutputKindValue;
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {
             arguments: arguments.parse_all_for_interpretation()?,
         })
     }
-}
 
-impl CommandInvocation for IsEmptyCommand {
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<TokenTree> {
         let output_span = self.arguments.span_range().span();
         let interpreted = self.arguments.interpret_as_tokens(interpreter)?;
-        Ok(CommandOutput::Ident(Ident::new_bool(
-            interpreted.is_empty(),
-            output_span,
-        )))
+        Ok(Ident::new_bool(interpreted.is_empty(), output_span).into())
     }
 }
 
@@ -53,21 +48,20 @@ pub(crate) struct LengthCommand {
 
 impl CommandDefinition for LengthCommand {
     const COMMAND_NAME: &'static str = "length";
+    type OutputKind = OutputKindValue;
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {
             arguments: arguments.parse_all_for_interpretation()?,
         })
     }
-}
 
-impl CommandInvocation for LengthCommand {
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<TokenTree> {
         let output_span = self.arguments.span_range().span();
         let interpreted = self.arguments.interpret_as_tokens(interpreter)?;
         let stream_length = interpreted.into_token_stream().into_iter().count();
         let length_literal = Literal::usize_unsuffixed(stream_length).with_span(output_span);
-        Ok(CommandOutput::Literal(length_literal))
+        Ok(length_literal.into())
     }
 }
 
@@ -78,21 +72,20 @@ pub(crate) struct GroupCommand {
 
 impl CommandDefinition for GroupCommand {
     const COMMAND_NAME: &'static str = "group";
+    type OutputKind = OutputKindStreamOrGroup;
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {
             arguments: arguments.parse_all_for_interpretation()?,
         })
     }
-}
 
-impl CommandInvocation for GroupCommand {
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
         let mut output = InterpretedStream::new(self.arguments.span_range());
         let group_span = self.arguments.span();
         let inner = self.arguments.interpret_as_tokens(interpreter)?;
         output.push_new_group(inner, Delimiter::None, group_span);
-        Ok(CommandOutput::Stream(output))
+        Ok(output)
     }
 }
 
@@ -117,6 +110,7 @@ define_field_inputs! {
 
 impl CommandDefinition for IntersperseCommand {
     const COMMAND_NAME: &'static str = "intersperse";
+    type OutputKind = OutputKindStreamOrGroup;
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {
@@ -124,10 +118,8 @@ impl CommandDefinition for IntersperseCommand {
             inputs: arguments.fully_parse_as()?,
         })
     }
-}
 
-impl CommandInvocation for IntersperseCommand {
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
         let items = self
             .inputs
             .items
@@ -141,7 +133,7 @@ impl CommandInvocation for IntersperseCommand {
         let mut output = InterpretedStream::new(self.span_range);
 
         if items.is_empty() {
-            return Ok(CommandOutput::Stream(output));
+            return Ok(output);
         }
 
         let mut appender = SeparatorAppender {
@@ -172,7 +164,7 @@ impl CommandInvocation for IntersperseCommand {
             }
         }
 
-        Ok(CommandOutput::Stream(output))
+        Ok(output)
     }
 }
 

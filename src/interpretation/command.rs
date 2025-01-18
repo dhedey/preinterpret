@@ -1,15 +1,5 @@
 use crate::internal_prelude::*;
 
-pub(crate) trait CommandDefinition: CommandInvocation + Clone {
-    const COMMAND_NAME: &'static str;
-
-    fn parse(arguments: CommandArguments) -> Result<Self>;
-}
-
-pub(crate) trait CommandInvocation {
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput>;
-}
-
 pub(crate) enum CommandOutput {
     Empty,
     Literal(Literal),
@@ -17,11 +7,108 @@ pub(crate) enum CommandOutput {
     Stream(InterpretedStream),
 }
 
+#[allow(unused)]
+pub(crate) enum CommandOutputKind {
+    None,
+    /// LiteralOrBool
+    Value,
+    Ident,
+    StreamOrGroup,
+}
+
+pub(crate) trait OutputKind {
+    type Output;
+    #[allow(unused)]
+    fn value() -> CommandOutputKind;
+    fn to_output_enum(output: Self::Output) -> CommandOutput;
+}
+
+pub(crate) struct OutputKindNone;
+impl OutputKind for OutputKindNone {
+    type Output = ();
+
+    fn value() -> CommandOutputKind {
+        CommandOutputKind::None
+    }
+
+    fn to_output_enum(_output: ()) -> CommandOutput {
+        CommandOutput::Empty
+    }
+}
+
+pub(crate) struct OutputKindValue;
+impl OutputKind for OutputKindValue {
+    type Output = TokenTree;
+
+    fn value() -> CommandOutputKind {
+        CommandOutputKind::Value
+    }
+
+    fn to_output_enum(output: TokenTree) -> CommandOutput {
+        match output {
+            TokenTree::Literal(literal) => CommandOutput::Literal(literal),
+            TokenTree::Ident(ident) => CommandOutput::Ident(ident),
+            _ => panic!("Value Output Commands should only output literals or idents"),
+        }
+    }
+}
+
+pub(crate) struct OutputKindIdent;
+impl OutputKind for OutputKindIdent {
+    type Output = Ident;
+
+    fn value() -> CommandOutputKind {
+        CommandOutputKind::Ident
+    }
+
+    fn to_output_enum(ident: Ident) -> CommandOutput {
+        CommandOutput::Ident(ident)
+    }
+}
+
+pub(crate) struct OutputKindStreamOrGroup;
+impl OutputKind for OutputKindStreamOrGroup {
+    type Output = InterpretedStream;
+
+    fn value() -> CommandOutputKind {
+        CommandOutputKind::StreamOrGroup
+    }
+
+    fn to_output_enum(output: InterpretedStream) -> CommandOutput {
+        CommandOutput::Stream(output)
+    }
+}
+
+pub(crate) trait CommandDefinition: Sized {
+    const COMMAND_NAME: &'static str;
+    type OutputKind: OutputKind;
+
+    fn parse(arguments: CommandArguments) -> Result<Self>;
+
+    fn execute(
+        self: Box<Self>,
+        interpreter: &mut Interpreter,
+    ) -> Result<<Self::OutputKind as OutputKind>::Output>;
+}
+
+impl<C: CommandDefinition> CommandInvocation for C {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
+        let output = <Self as CommandDefinition>::execute(self, interpreter)?;
+        Ok(<C::OutputKind as OutputKind>::to_output_enum(output))
+    }
+}
+
+//=========================
+
+pub(crate) trait CommandInvocation {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput>;
+}
+
 pub(crate) trait ClonableCommandInvocation: CommandInvocation {
     fn clone_box(&self) -> Box<dyn ClonableCommandInvocation>;
 }
 
-impl<C: CommandDefinition + CommandInvocation + 'static> ClonableCommandInvocation for C {
+impl<C: Clone + CommandInvocation + 'static> ClonableCommandInvocation for C {
     fn clone_box(&self) -> Box<dyn ClonableCommandInvocation> {
         Box::new(self.clone())
     }

@@ -26,6 +26,9 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 ### To come
 
 * Consider [!..flattened! ] and getting rid of !group!
+  => Make the type of commands static
+  => Disallow most command types in expressions
+  => Get rid of [!empty!] and [!stream!] and replace with [!..group!] or [!group!]
 * Explore getting rid of lots of the span range stuff
 * Support `!else if!` in `!if!`
 * Support string & char literals (for comparisons & casts) in expressions

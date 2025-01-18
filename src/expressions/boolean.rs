@@ -90,6 +90,15 @@ impl EvaluationBoolean {
             PairedBinaryOperator::GreaterThan => operation.output(lhs & !rhs),
         }
     }
+
+    pub(super) fn to_ident(&self) -> Ident {
+        Ident::new_bool(self.value, self.source_span.start())
+    }
+
+    #[allow(unused)]
+    pub(super) fn to_lit_bool(&self) -> LitBool {
+        LitBool::new(self.value, self.source_span.span())
+    }
 }
 
 impl ToEvaluationOutput for bool {
@@ -100,6 +109,6 @@ impl ToEvaluationOutput for bool {
 
 impl quote::ToTokens for EvaluationBoolean {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        LitBool::new(self.value, self.source_span.span()).to_tokens(tokens)
+        self.to_ident().to_tokens(tokens)
     }
 }

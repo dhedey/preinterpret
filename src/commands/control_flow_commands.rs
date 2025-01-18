@@ -10,6 +10,7 @@ pub(crate) struct IfCommand {
 
 impl CommandDefinition for IfCommand {
     const COMMAND_NAME: &'static str = "if";
+    type OutputKind = OutputKindStreamOrGroup;
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         arguments.fully_parse_or_error(
@@ -33,10 +34,8 @@ impl CommandDefinition for IfCommand {
             "Expected [!if! (condition) { true_code }] or [!if! (condition) { true_code } !else! { false_code }]",
         )
     }
-}
 
-impl CommandInvocation for IfCommand {
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
         let evaluated_condition = self
             .condition
             .evaluate(interpreter)?
@@ -51,7 +50,7 @@ impl CommandInvocation for IfCommand {
             InterpretedStream::new(self.nothing_span_range)
         };
 
-        Ok(CommandOutput::Stream(output))
+        Ok(output)
     }
 }
 
@@ -64,6 +63,7 @@ pub(crate) struct WhileCommand {
 
 impl CommandDefinition for WhileCommand {
     const COMMAND_NAME: &'static str = "while";
+    type OutputKind = OutputKindStreamOrGroup;
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         arguments.fully_parse_or_error(
@@ -77,10 +77,8 @@ impl CommandDefinition for WhileCommand {
             "Expected [!while! (condition) { code }]",
         )
     }
-}
 
-impl CommandInvocation for WhileCommand {
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
         let mut output = InterpretedStream::new(self.nothing_span_range);
         let mut iteration_count = 0;
         loop {
@@ -104,6 +102,6 @@ impl CommandInvocation for WhileCommand {
                 .interpret_as_tokens_into(interpreter, &mut output)?;
         }
 
-        Ok(CommandOutput::Stream(output))
+        Ok(output)
     }
 }

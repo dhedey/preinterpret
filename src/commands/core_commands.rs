@@ -10,6 +10,7 @@ pub(crate) struct SetCommand {
 
 impl CommandDefinition for SetCommand {
     const COMMAND_NAME: &'static str = "set";
+    type OutputKind = OutputKindNone;
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         arguments.fully_parse_or_error(
@@ -23,14 +24,12 @@ impl CommandDefinition for SetCommand {
             "Expected [!set! #variable = ..]",
         )
     }
-}
 
-impl CommandInvocation for SetCommand {
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
         let result_tokens = self.arguments.interpret_as_tokens(interpreter)?;
         self.variable.set(interpreter, result_tokens)?;
 
-        Ok(CommandOutput::Empty)
+        Ok(())
     }
 }
 
@@ -44,6 +43,7 @@ pub(crate) struct ExtendCommand {
 
 impl CommandDefinition for ExtendCommand {
     const COMMAND_NAME: &'static str = "extend";
+    type OutputKind = OutputKindNone;
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         arguments.fully_parse_or_error(
@@ -57,13 +57,11 @@ impl CommandDefinition for ExtendCommand {
             "Expected [!extend! #variable += ..]",
         )
     }
-}
 
-impl CommandInvocation for ExtendCommand {
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
         let output = self.arguments.interpret_as_tokens(interpreter)?;
         self.variable.get_mut(interpreter)?.extend(output);
-        Ok(CommandOutput::Empty)
+        Ok(())
     }
 }
 
@@ -75,6 +73,7 @@ pub(crate) struct RawCommand {
 
 impl CommandDefinition for RawCommand {
     const COMMAND_NAME: &'static str = "raw";
+    type OutputKind = OutputKindStreamOrGroup;
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {
@@ -82,14 +81,12 @@ impl CommandDefinition for RawCommand {
             token_stream: arguments.read_all_as_raw_token_stream(),
         })
     }
-}
 
-impl CommandInvocation for RawCommand {
-    fn execute(self: Box<Self>, _interpreter: &mut Interpreter) -> Result<CommandOutput> {
-        Ok(CommandOutput::Stream(InterpretedStream::raw(
+    fn execute(self: Box<Self>, _interpreter: &mut Interpreter) -> Result<InterpretedStream> {
+        Ok(InterpretedStream::raw(
             self.arguments_span_range,
             self.token_stream,
-        )))
+        ))
     }
 }
 
@@ -98,17 +95,16 @@ pub(crate) struct IgnoreCommand;
 
 impl CommandDefinition for IgnoreCommand {
     const COMMAND_NAME: &'static str = "ignore";
+    type OutputKind = OutputKindNone;
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         // Avoid a syn parse error by reading all the tokens
         let _ = arguments.read_all_as_raw_token_stream();
         Ok(Self)
     }
-}
 
-impl CommandInvocation for IgnoreCommand {
-    fn execute(self: Box<Self>, _interpreter: &mut Interpreter) -> Result<CommandOutput> {
-        Ok(CommandOutput::Empty)
+    fn execute(self: Box<Self>, _interpreter: &mut Interpreter) -> Result<()> {
+        Ok(())
     }
 }
 
@@ -120,19 +116,16 @@ pub(crate) struct StreamCommand {
 
 impl CommandDefinition for StreamCommand {
     const COMMAND_NAME: &'static str = "stream";
+    type OutputKind = OutputKindStreamOrGroup;
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {
             arguments: arguments.parse_all_for_interpretation()?,
         })
     }
-}
 
-impl CommandInvocation for StreamCommand {
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
-        Ok(CommandOutput::Stream(
-            self.arguments.interpret_as_tokens(interpreter)?,
-        ))
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
+        self.arguments.interpret_as_tokens(interpreter)
     }
 }
 
@@ -154,16 +147,15 @@ define_field_inputs! {
 
 impl CommandDefinition for ErrorCommand {
     const COMMAND_NAME: &'static str = "error";
+    type OutputKind = OutputKindNone;
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {
             inputs: arguments.fully_parse_as()?,
         })
     }
-}
 
-impl CommandInvocation for ErrorCommand {
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
         let message = self.inputs.message.interpret(interpreter)?.value();
 
         let error_span = match self.inputs.spans {

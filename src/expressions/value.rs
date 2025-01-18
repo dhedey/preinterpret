@@ -7,6 +7,13 @@ pub(crate) enum EvaluationValue {
 }
 
 impl EvaluationValue {
+    pub(super) fn into_token_tree(self) -> TokenTree {
+        match self {
+            Self::Integer(int) => int.to_literal().into(),
+            Self::Float(float) => float.to_literal().into(),
+            Self::Boolean(bool) => bool.to_ident().into(),
+        }
+    }
     pub(super) fn for_literal_expression(expr: &ExprLit) -> Result<Self> {
         // https://docs.rs/syn/latest/syn/enum.Lit.html
         Ok(match &expr.lit {
