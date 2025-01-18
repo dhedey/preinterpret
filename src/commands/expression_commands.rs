@@ -5,9 +5,12 @@ pub(crate) struct EvaluateCommand {
     expression: ExpressionInput,
 }
 
-impl CommandDefinition for EvaluateCommand {
-    const COMMAND_NAME: &'static str = "evaluate";
+impl CommandType for EvaluateCommand {
     type OutputKind = OutputKindValue;
+}
+
+impl ValueCommandDefinition for EvaluateCommand {
+    const COMMAND_NAME: &'static str = "evaluate";
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         arguments.fully_parse_or_error(
@@ -35,9 +38,12 @@ pub(crate) struct AssignCommand {
     expression: ExpressionInput,
 }
 
-impl CommandDefinition for AssignCommand {
-    const COMMAND_NAME: &'static str = "assign";
+impl CommandType for AssignCommand {
     type OutputKind = OutputKindNone;
+}
+
+impl NoOutputCommandDefinition for AssignCommand {
+    const COMMAND_NAME: &'static str = "assign";
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         arguments.fully_parse_or_error(
@@ -89,9 +95,12 @@ pub(crate) struct RangeCommand {
     right: ExpressionInput,
 }
 
-impl CommandDefinition for RangeCommand {
+impl CommandType for RangeCommand {
+    type OutputKind = OutputKindStreaming;
+}
+
+impl StreamingCommandDefinition for RangeCommand {
     const COMMAND_NAME: &'static str = "range";
-    type OutputKind = OutputKindStreamOrGroup;
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         arguments.fully_parse_or_error(
@@ -106,7 +115,11 @@ impl CommandDefinition for RangeCommand {
         )
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
+    fn execute(
+        self: Box<Self>,
+        interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()> {
         let range_span_range = self.range_limits.span_range();
 
         let left = self
@@ -121,7 +134,7 @@ impl CommandDefinition for RangeCommand {
             .try_into_i128()?;
 
         if left > right {
-            return Ok(InterpretedStream::new(range_span_range));
+            return Ok(());
         }
 
         let length = self
@@ -134,7 +147,6 @@ impl CommandDefinition for RangeCommand {
             .config()
             .check_iteration_count(&range_span_range, length)?;
 
-        let mut output = InterpretedStream::new(range_span_range);
         match self.range_limits {
             RangeLimits::HalfOpen(_) => {
                 let iter =
@@ -148,7 +160,7 @@ impl CommandDefinition for RangeCommand {
             }
         };
 
-        Ok(output)
+        Ok(())
     }
 }
 

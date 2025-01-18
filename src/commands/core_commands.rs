@@ -8,9 +8,12 @@ pub(crate) struct SetCommand {
     arguments: InterpretationStream,
 }
 
-impl CommandDefinition for SetCommand {
-    const COMMAND_NAME: &'static str = "set";
+impl CommandType for SetCommand {
     type OutputKind = OutputKindNone;
+}
+
+impl NoOutputCommandDefinition for SetCommand {
+    const COMMAND_NAME: &'static str = "set";
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         arguments.fully_parse_or_error(
@@ -41,9 +44,12 @@ pub(crate) struct ExtendCommand {
     arguments: InterpretationStream,
 }
 
-impl CommandDefinition for ExtendCommand {
-    const COMMAND_NAME: &'static str = "extend";
+impl CommandType for ExtendCommand {
     type OutputKind = OutputKindNone;
+}
+
+impl NoOutputCommandDefinition for ExtendCommand {
+    const COMMAND_NAME: &'static str = "extend";
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         arguments.fully_parse_or_error(
@@ -59,6 +65,18 @@ impl CommandDefinition for ExtendCommand {
     }
 
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
+        // We'd like to do this to avoid double-passing the intrepreted tokens:
+        // self.arguments.interpret_as_tokens_into(interpreter, self.variable.get_mut(interpreter)?);
+        // But this doesn't work because the interpreter is mut borrowed twice.
+        //
+        // Conceptually this does protect us from issues... e.g. it prevents us
+        // from allowing:
+        // [!extend! #x += ..#x]
+        // Which is pretty non-sensical.
+        //
+        // In future, we could improve this by having the interpreter store
+        // a RefCell and erroring on self-reference, with a hint to use a [!buffer!]
+        // to break the self-reference / error.
         let output = self.arguments.interpret_as_tokens(interpreter)?;
         self.variable.get_mut(interpreter)?.extend(output);
         Ok(())
@@ -67,35 +85,41 @@ impl CommandDefinition for ExtendCommand {
 
 #[derive(Clone)]
 pub(crate) struct RawCommand {
-    arguments_span_range: SpanRange,
     token_stream: TokenStream,
 }
 
-impl CommandDefinition for RawCommand {
+impl CommandType for RawCommand {
+    type OutputKind = OutputKindStreaming;
+}
+
+impl StreamingCommandDefinition for RawCommand {
     const COMMAND_NAME: &'static str = "raw";
-    type OutputKind = OutputKindStreamOrGroup;
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {
-            arguments_span_range: arguments.full_span_range(),
             token_stream: arguments.read_all_as_raw_token_stream(),
         })
     }
 
-    fn execute(self: Box<Self>, _interpreter: &mut Interpreter) -> Result<InterpretedStream> {
-        Ok(InterpretedStream::raw(
-            self.arguments_span_range,
-            self.token_stream,
-        ))
+    fn execute(
+        self: Box<Self>,
+        _interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()> {
+        output.extend_raw_token_iter(self.token_stream);
+        Ok(())
     }
 }
 
 #[derive(Clone)]
 pub(crate) struct IgnoreCommand;
 
-impl CommandDefinition for IgnoreCommand {
-    const COMMAND_NAME: &'static str = "ignore";
+impl CommandType for IgnoreCommand {
     type OutputKind = OutputKindNone;
+}
+
+impl NoOutputCommandDefinition for IgnoreCommand {
+    const COMMAND_NAME: &'static str = "ignore";
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         // Avoid a syn parse error by reading all the tokens
@@ -114,9 +138,12 @@ pub(crate) struct StreamCommand {
     arguments: InterpretationStream,
 }
 
-impl CommandDefinition for StreamCommand {
+impl CommandType for StreamCommand {
+    type OutputKind = OutputKindStreaming;
+}
+
+impl StreamingCommandDefinition for StreamCommand {
     const COMMAND_NAME: &'static str = "stream";
-    type OutputKind = OutputKindStreamOrGroup;
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {
@@ -124,14 +151,22 @@ impl CommandDefinition for StreamCommand {
         })
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
-        self.arguments.interpret_as_tokens(interpreter)
+    fn execute(
+        self: Box<Self>,
+        interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()> {
+        self.arguments.interpret_as_tokens_into(interpreter, output)
     }
 }
 
 #[derive(Clone)]
 pub(crate) struct ErrorCommand {
     inputs: ErrorInputs,
+}
+
+impl CommandType for ErrorCommand {
+    type OutputKind = OutputKindNone;
 }
 
 define_field_inputs! {
@@ -145,9 +180,8 @@ define_field_inputs! {
     }
 }
 
-impl CommandDefinition for ErrorCommand {
+impl NoOutputCommandDefinition for ErrorCommand {
     const COMMAND_NAME: &'static str = "error";
-    type OutputKind = OutputKindNone;
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {

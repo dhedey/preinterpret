@@ -107,9 +107,12 @@ macro_rules! define_literal_concat_command {
             arguments: InterpretationStream,
         }
 
-        impl CommandDefinition for $command {
-            const COMMAND_NAME: &'static str = $command_name;
+        impl CommandType for $command {
             type OutputKind = OutputKindValue;
+        }
+
+        impl ValueCommandDefinition for $command {
+            const COMMAND_NAME: &'static str = $command_name;
 
             fn parse(arguments: CommandArguments) -> Result<Self> {
                 Ok(Self {
@@ -133,9 +136,12 @@ macro_rules! define_ident_concat_command {
             arguments: InterpretationStream,
         }
 
-        impl CommandDefinition for $command {
-            const COMMAND_NAME: &'static str = $command_name;
+        impl CommandType for $command {
             type OutputKind = OutputKindIdent;
+        }
+
+        impl IdentCommandDefinition for $command {
+            const COMMAND_NAME: &'static str = $command_name;
 
             fn parse(arguments: CommandArguments) -> Result<Self> {
                 Ok(Self {

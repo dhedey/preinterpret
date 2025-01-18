@@ -55,8 +55,32 @@ impl Interpret for CommandStreamInput {
         output: &mut InterpretedStream,
     ) -> Result<()> {
         match self {
-            CommandStreamInput::Command(command) => {
-                command.interpret_as_tokens_into(interpreter, output)
+            CommandStreamInput::Command(mut command) => {
+                match command.output_kind() {
+                    CommandOutputKind::None
+                    | CommandOutputKind::Value
+                    | CommandOutputKind::Ident => {
+                        command.err("The command does not output a stream")
+                    }
+                    CommandOutputKind::FlattenedStream => {
+                        let span = command.span();
+                        let tokens = parse_as_stream_input(
+                            command.interpret_as_tokens(interpreter)?,
+                            || {
+                                span.error("Expected output of flattened command to contain a single [ ... ] or transparent group. Perhaps you want to remove the .., to use the command output as-is.")
+                            },
+                        )?;
+                        output.extend_raw_tokens(tokens);
+                        Ok(())
+                    }
+                    CommandOutputKind::GroupedStream(_) => {
+                        unsafe {
+                            // SAFETY: The kind change GroupedStream <=> FlattenedStream is valid
+                            command.set_output_kind(CommandOutputKind::FlattenedStream);
+                        }
+                        command.interpret_as_tokens_into(interpreter, output)
+                    }
+                }
             }
             CommandStreamInput::FlattenedVariable(variable) => {
                 let tokens = parse_as_stream_input(

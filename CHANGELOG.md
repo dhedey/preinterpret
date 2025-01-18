@@ -26,6 +26,7 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 ### To come
 
 * Consider [!..flattened! ] and getting rid of !group!
+  => Add separate ControlFlowCode type
   => Make the type of commands static
   => Disallow most command types in expressions
   => Get rid of [!empty!] and [!stream!] and replace with [!..group!] or [!group!]
@@ -81,6 +82,7 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 * `[!split! { items: X, with: X, drop_trailing_empty?: true }]`
 * `[!intersperse! { items: X, with: X, add_trailing?: false, override_final_with?: X }]` for adding something between each item, where each `X` is a `CommandStreamInput`
 * `[!zip! ([Hello Goodbye] [World Friend])]` => `[(Hello World), (Goodbye Friend)]`
+* See comment on `!assign!`
 * Basic place parsing
   * Introduce `[!let! #..x = Hello World]` does parsing and is equivalent to `[!set! #x = Hello World]`
   * In parse land: #x matches a single token, #..x consumes the rest of a stream

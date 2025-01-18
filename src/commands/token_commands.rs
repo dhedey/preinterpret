@@ -3,9 +3,12 @@ use crate::internal_prelude::*;
 #[derive(Clone)]
 pub(crate) struct EmptyCommand;
 
-impl CommandDefinition for EmptyCommand {
-    const COMMAND_NAME: &'static str = "empty";
+impl CommandType for EmptyCommand {
     type OutputKind = OutputKindNone;
+}
+
+impl NoOutputCommandDefinition for EmptyCommand {
+    const COMMAND_NAME: &'static str = "empty";
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         arguments.assert_empty(
@@ -24,9 +27,12 @@ pub(crate) struct IsEmptyCommand {
     arguments: InterpretationStream,
 }
 
-impl CommandDefinition for IsEmptyCommand {
-    const COMMAND_NAME: &'static str = "is_empty";
+impl CommandType for IsEmptyCommand {
     type OutputKind = OutputKindValue;
+}
+
+impl ValueCommandDefinition for IsEmptyCommand {
+    const COMMAND_NAME: &'static str = "is_empty";
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {
@@ -46,9 +52,12 @@ pub(crate) struct LengthCommand {
     arguments: InterpretationStream,
 }
 
-impl CommandDefinition for LengthCommand {
-    const COMMAND_NAME: &'static str = "length";
+impl CommandType for LengthCommand {
     type OutputKind = OutputKindValue;
+}
+
+impl ValueCommandDefinition for LengthCommand {
+    const COMMAND_NAME: &'static str = "length";
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {
@@ -70,9 +79,12 @@ pub(crate) struct GroupCommand {
     arguments: InterpretationStream,
 }
 
-impl CommandDefinition for GroupCommand {
+impl CommandType for GroupCommand {
+    type OutputKind = OutputKindStreaming;
+}
+
+impl StreamingCommandDefinition for GroupCommand {
     const COMMAND_NAME: &'static str = "group";
-    type OutputKind = OutputKindStreamOrGroup;
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {
@@ -80,19 +92,27 @@ impl CommandDefinition for GroupCommand {
         })
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
-        let mut output = InterpretedStream::new(self.arguments.span_range());
+    fn execute(
+        self: Box<Self>,
+        interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()> {
         let group_span = self.arguments.span();
-        let inner = self.arguments.interpret_as_tokens(interpreter)?;
-        output.push_new_group(inner, Delimiter::None, group_span);
-        Ok(output)
+        output.push_grouped(
+            |inner| self.arguments.interpret_as_tokens_into(interpreter, inner),
+            Delimiter::None,
+            group_span,
+        )
     }
 }
 
 #[derive(Clone)]
 pub(crate) struct IntersperseCommand {
-    span_range: SpanRange,
     inputs: IntersperseInputs,
+}
+
+impl CommandType for IntersperseCommand {
+    type OutputKind = OutputKindStreaming;
 }
 
 define_field_inputs! {
@@ -108,18 +128,20 @@ define_field_inputs! {
     }
 }
 
-impl CommandDefinition for IntersperseCommand {
+impl StreamingCommandDefinition for IntersperseCommand {
     const COMMAND_NAME: &'static str = "intersperse";
-    type OutputKind = OutputKindStreamOrGroup;
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
         Ok(Self {
-            span_range: arguments.full_span_range(),
             inputs: arguments.fully_parse_as()?,
         })
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
+    fn execute(
+        self: Box<Self>,
+        interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()> {
         let items = self
             .inputs
             .items
@@ -130,10 +152,8 @@ impl CommandDefinition for IntersperseCommand {
             None => false,
         };
 
-        let mut output = InterpretedStream::new(self.span_range);
-
         if items.is_empty() {
-            return Ok(output);
+            return Ok(());
         }
 
         let mut appender = SeparatorAppender {
@@ -154,17 +174,17 @@ impl CommandDefinition for IntersperseCommand {
                     } else {
                         RemainingItemCount::ExactlyOne
                     };
-                    appender.add_separator(interpreter, remaining, &mut output)?;
+                    appender.add_separator(interpreter, remaining, output)?;
                     this_item = next_item;
                 }
                 None => {
-                    appender.add_separator(interpreter, RemainingItemCount::None, &mut output)?;
+                    appender.add_separator(interpreter, RemainingItemCount::None, output)?;
                     break;
                 }
             }
         }
 
-        Ok(output)
+        Ok(())
     }
 }
 

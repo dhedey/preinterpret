@@ -81,6 +81,18 @@ impl InterpretedStream {
         self.push_raw_token_tree(punct.into());
     }
 
+    pub(crate) fn push_grouped(
+        &mut self,
+        appender: impl FnOnce(&mut Self) -> Result<()>,
+        delimiter: Delimiter,
+        span: Span,
+    ) -> Result<()> {
+        let mut inner = Self::new(span.span_range());
+        appender(&mut inner)?;
+        self.push_new_group(inner, delimiter, span);
+        Ok(())
+    }
+
     pub(crate) fn push_new_group(
         &mut self,
         inner_tokens: InterpretedStream,

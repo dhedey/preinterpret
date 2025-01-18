@@ -220,7 +220,7 @@ fn complex_cases_for_intersperse_and_input_types() {
     }, "0_1_2_3");
     // Grouped variable containing flattened command can be used for items
     assert_preinterpret_eq!({
-        [!set! #items = [!range! 0..4]]
+        [!set! #items = [!..range! 0..4]]
         [!string! [!intersperse! {
             items: #items,
             separator: [_],
