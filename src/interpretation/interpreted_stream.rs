@@ -54,7 +54,7 @@ impl InterpretedStream {
         self.token_stream.extend(tokens);
     }
 
-    fn push_raw_token_tree(&mut self, token_tree: TokenTree) {
+    pub(crate) fn push_raw_token_tree(&mut self, token_tree: TokenTree) {
         self.token_stream.extend(iter::once(token_tree));
     }
 

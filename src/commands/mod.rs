@@ -57,4 +57,5 @@ define_command_kind! {
     IsEmptyCommand,
     LengthCommand,
     GroupCommand,
+    IntersperseCommand,
 }

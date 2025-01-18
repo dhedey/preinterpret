@@ -19,11 +19,13 @@
   * `[!is_empty! #stream]`
   * `[!length! #stream]` which gives the number of token trees in the token stream.
   * `[!group! ...]` which wraps the tokens in a transparent group. Useful with `!for!`.
+  * `[!intersperse! { .. }]` which inserts separator tokens between each token tree in a stream.
 
 I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x = [!empty!]]`, but deemed it unhelpful, because then they have awkward edge-cases when embedding empty tokenstreams from declarative macros `($each_tt)*`.
 
 ### To come
 
+* Consider [!..flattened! ] and getting rid of !group!
 * Explore getting rid of lots of the span range stuff
 * Support `!else if!` in `!if!`
 * Support string & char literals (for comparisons & casts) in expressions
@@ -95,6 +97,9 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 * Check all `#[allow(unused)]` and remove any which aren't needed
 * Rework expression parsing
 * Work on book
+  * Input paradigms:
+    * Streams
+    * StreamInput / ValueInput / CodeInput
   * Including documenting expressions
   * There are three main kinds of commands:
     * Those taking a stream as-is

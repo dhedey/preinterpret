@@ -1,0 +1,5 @@
+error: Expected the { ... } block to output a single [ ... ] group or transparent group. You may wish to replace the outer `{ ... }` block with a `[ ... ]` block, which outputs all its contents as a stream.
+ --> tests/compilation_failures/tokens/intersperse_stream_input_braces_issue.rs:6:20
+  |
+6 |             items: { 1 2 3 },
+  |                    ^^^^^^^^^

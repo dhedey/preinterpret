@@ -17,6 +17,7 @@ pub(crate) enum CommandStreamInput {
     Command(Command),
     GroupedVariable(GroupedVariable),
     FlattenedVariable(FlattenedVariable),
+    Code(CommandCodeInput),
     ExplicitStream(InterpretationGroup),
 }
 
@@ -27,8 +28,9 @@ impl Parse for CommandStreamInput {
             PeekMatch::GroupedVariable => Self::GroupedVariable(input.parse()?),
             PeekMatch::FlattenedVariable => Self::FlattenedVariable(input.parse()?),
             PeekMatch::InterpretationGroup(Delimiter::Bracket) => Self::ExplicitStream(input.parse()?),
+            PeekMatch::InterpretationGroup(Delimiter::Brace) => Self::Code(input.parse()?),
             PeekMatch::InterpretationGroup(_) | PeekMatch::Other => input.span()
-                .err("Expected [ ..input stream.. ] or a [!command! ..], #variable or #..variable.\nMacro substitutions such as $x should be placed inside square brackets.")?,
+                .err("Expected [ ..input stream.. ], { [..input stream..] } or a [!command! ..], #variable or #..variable.\nMacro substitutions such as $x should be placed inside square brackets.")?,
         })
     }
 }
@@ -39,6 +41,7 @@ impl HasSpanRange for CommandStreamInput {
             CommandStreamInput::Command(command) => command.span_range(),
             CommandStreamInput::GroupedVariable(variable) => variable.span_range(),
             CommandStreamInput::FlattenedVariable(variable) => variable.span_range(),
+            CommandStreamInput::Code(code) => code.span_range(),
             CommandStreamInput::ExplicitStream(group) => group.span_range(),
         }
     }
@@ -55,31 +58,57 @@ impl Interpret for CommandStreamInput {
                 command.interpret_as_tokens_into(interpreter, output)
             }
             CommandStreamInput::FlattenedVariable(variable) => {
-                let tokens = variable.interpret_as_new_stream(interpreter)?
-                    .syn_parse(|input: ParseStream| -> Result<TokenStream> {
-                        let (delimiter, _, content) = input.parse_any_delimiter()?;
-                        match delimiter {
-                            Delimiter::Bracket | Delimiter::None if input.is_empty() => {
-                                content.parse()
-                            },
-                            _ => {
-                                variable.err(format!(
-                                    "expected variable to contain a single [ .. ] or transparent group. Perhaps you want to use {} instead, to use the content of the variable as the stream.",
-                                    variable.display_grouped_variable_token(),
-                                ))
-                            },
-                        }
-                    })?;
-
+                let tokens = parse_as_stream_input(
+                    variable.interpret_as_new_stream(interpreter)?,
+                    || {
+                        variable.error(format!(
+                        "Expected variable to contain a single [ ... ] or transparent group. Perhaps you want to use {} instead, to use the content of the variable as the stream.",
+                        variable.display_grouped_variable_token(),
+                    ))
+                    },
+                )?;
                 output.extend_raw_tokens(tokens);
                 Ok(())
             }
             CommandStreamInput::GroupedVariable(variable) => {
-                variable.interpret_as_tokens_into(interpreter, output)
+                let ungrouped_variable_contents = variable.interpret_as_new_stream(interpreter)?;
+                output.extend(ungrouped_variable_contents);
+                Ok(())
+            }
+            CommandStreamInput::Code(code) => {
+                let span = code.span();
+                let tokens = parse_as_stream_input(code.interpret_as_tokens(interpreter)?, || {
+                    span.error("Expected the { ... } block to output a single [ ... ] group or transparent group. You may wish to replace the outer `{ ... }` block with a `[ ... ]` block, which outputs all its contents as a stream.".to_string())
+                })?;
+                output.extend_raw_tokens(tokens);
+                Ok(())
             }
             CommandStreamInput::ExplicitStream(group) => group
                 .into_content()
                 .interpret_as_tokens_into(interpreter, output),
         }
     }
+}
+
+fn parse_as_stream_input(
+    interpreted: InterpretedStream,
+    on_error: impl FnOnce() -> Error,
+) -> Result<TokenStream> {
+    fn get_group(interpreted: InterpretedStream) -> Option<Group> {
+        let mut token_iter = interpreted.into_token_stream().into_iter();
+        let group = match token_iter.next()? {
+            TokenTree::Group(group)
+                if matches!(group.delimiter(), Delimiter::Bracket | Delimiter::None) =>
+            {
+                Some(group)
+            }
+            _ => return None,
+        };
+        if token_iter.next().is_some() {
+            return None;
+        }
+        group
+    }
+    let group = get_group(interpreted).ok_or_else(on_error)?;
+    Ok(group.stream())
 }

@@ -86,7 +86,7 @@ impl CommandDefinition for RawCommand {
 
 impl CommandInvocation for RawCommand {
     fn execute(self: Box<Self>, _interpreter: &mut Interpreter) -> Result<CommandOutput> {
-        Ok(CommandOutput::AppendStream(InterpretedStream::raw(
+        Ok(CommandOutput::Stream(InterpretedStream::raw(
             self.arguments_span_range,
             self.token_stream,
         )))
@@ -130,7 +130,7 @@ impl CommandDefinition for StreamCommand {
 
 impl CommandInvocation for StreamCommand {
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
-        Ok(CommandOutput::AppendStream(
+        Ok(CommandOutput::Stream(
             self.arguments.interpret_as_tokens(interpreter)?,
         ))
     }
@@ -144,7 +144,7 @@ pub(crate) struct ErrorCommand {
 define_field_inputs! {
     ErrorInputs {
         required: {
-            message: InterpretationValue<syn::LitStr> = r#""...""# ("The error message to display"),
+            message: CommandValueInput<syn::LitStr> = r#""...""# ("The error message to display"),
         },
         optional: {
             spans: CommandStreamInput = "[$abc]" ("An optional [token stream], to determine where to show the error message"),

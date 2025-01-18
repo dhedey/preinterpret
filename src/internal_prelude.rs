@@ -7,7 +7,7 @@ pub(crate) use syn::buffer::Cursor;
 pub(crate) use syn::ext::IdentExt as SynIdentExt;
 pub(crate) use syn::parse::{discouraged::*, Parse, ParseBuffer, ParseStream, Parser};
 pub(crate) use syn::{
-    parse_str, Expr, ExprLit, Lit, LitBool, LitFloat, LitInt, Result, Token, UnOp,
+    parse_str, Error, Expr, ExprLit, Lit, LitBool, LitFloat, LitInt, Result, Token, UnOp,
 };
 
 pub(crate) use crate::commands::*;

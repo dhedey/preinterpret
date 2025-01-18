@@ -23,7 +23,7 @@ impl CommandDefinition for EvaluateCommand {
 impl CommandInvocation for EvaluateCommand {
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<CommandOutput> {
         let expression = self.expression.start_expression_builder(interpreter)?;
-        Ok(CommandOutput::GroupedStream(
+        Ok(CommandOutput::Stream(
             expression.evaluate()?.into_interpreted_stream(),
         ))
     }
@@ -151,7 +151,7 @@ impl CommandInvocation for RangeCommand {
                 output.extend_raw_token_iter(iter)
             }
         };
-        Ok(CommandOutput::GroupedStream(output))
+        Ok(CommandOutput::Stream(output))
     }
 }
 

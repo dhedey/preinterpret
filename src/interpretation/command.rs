@@ -14,8 +14,7 @@ pub(crate) enum CommandOutput {
     Empty,
     Literal(Literal),
     Ident(Ident),
-    AppendStream(InterpretedStream),
-    GroupedStream(InterpretedStream),
+    Stream(InterpretedStream),
 }
 
 pub(crate) trait ClonableCommandInvocation: CommandInvocation {
@@ -134,11 +133,8 @@ impl Interpret for Command {
             CommandOutput::Ident(ident) => {
                 output.push_ident(ident);
             }
-            CommandOutput::AppendStream(stream) => {
+            CommandOutput::Stream(stream) => {
                 output.extend(stream);
-            }
-            CommandOutput::GroupedStream(stream) => {
-                output.push_new_group(stream, Delimiter::None, self.source_group_span.join());
             }
         };
         Ok(())
@@ -159,10 +155,7 @@ impl Express for Command {
             CommandOutput::Ident(ident) => {
                 expression_stream.push_ident(ident);
             }
-            CommandOutput::AppendStream(stream) => {
-                expression_stream.extend_with_interpreted_stream(stream);
-            }
-            CommandOutput::GroupedStream(stream) => {
+            CommandOutput::Stream(stream) => {
                 expression_stream
                     .push_grouped_interpreted_stream(stream, self.source_group_span.join());
             }

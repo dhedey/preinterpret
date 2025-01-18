@@ -51,7 +51,7 @@ impl CommandInvocation for IfCommand {
             InterpretedStream::new(self.nothing_span_range)
         };
 
-        Ok(CommandOutput::AppendStream(output))
+        Ok(CommandOutput::Stream(output))
     }
 }
 
@@ -104,6 +104,6 @@ impl CommandInvocation for WhileCommand {
                 .interpret_as_tokens_into(interpreter, &mut output)?;
         }
 
-        Ok(CommandOutput::AppendStream(output))
+        Ok(CommandOutput::Stream(output))
     }
 }

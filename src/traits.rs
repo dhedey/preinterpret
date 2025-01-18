@@ -48,10 +48,16 @@ impl LiteralExt for Literal {
 }
 
 pub(crate) trait TokenStreamExt: Sized {
+    #[allow(unused)]
+    fn push(&mut self, token: TokenTree);
     fn flatten_transparent_groups(self) -> Self;
 }
 
 impl TokenStreamExt for TokenStream {
+    fn push(&mut self, token: TokenTree) {
+        self.extend(iter::once(token));
+    }
+
     fn flatten_transparent_groups(self) -> Self {
         let mut output = TokenStream::new();
         for token in self {
@@ -187,6 +193,11 @@ pub(crate) struct SpanRange {
 
 #[allow(unused)]
 impl SpanRange {
+    /// For use where the span range is unused, but needs to be provided
+    pub(crate) fn ignored() -> Self {
+        Span::call_site().span_range()
+    }
+
     pub(crate) fn new_between(start: Span, end: Span) -> Self {
         Self { start, end }
     }

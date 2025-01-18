@@ -1,0 +1,5 @@
+error: Expected variable to contain a single [ ... ] or transparent group. Perhaps you want to use #x instead, to use the content of the variable as the stream.
+ --> tests/compilation_failures/tokens/intersperse_stream_input_variable_issue.rs:7:20
+  |
+7 |             items: #..x,
+  |                    ^^^^
