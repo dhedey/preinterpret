@@ -1,5 +1,49 @@
 use crate::internal_prelude::*;
 
+// ======================================
+// How syn fits with preinterpret parsing
+// ======================================
+//
+// TLDR: This is discussed on this syn issue, where David Tolnay suggested
+// forking syn to get what we want (i.e. a more versatile TokenBuffer):
+// ==> https://github.com/dtolnay/syn/issues/1842
+//
+// There are a few places where we support (or might wish to support) parsing
+// as part of interpretation:
+// * e.g. of a token stream in `CommandValueInput`
+// * e.g. as part of a PARSER, from an InterpretedStream
+// * e.g. of a variable, as part of incremental parsing (while_parse style loops)
+//
+// I spent quite a while considering whether this could be wrapping a
+// `syn::parse::ParseBuffer<'a>` or `syn::buffer::Cursor<'a>`...
+//
+// Some commands want to performantly parse a variable or other token stream.
+//
+// Here we want variables to support:
+// * Easy appending of tokens
+// * Incremental parsing
+//
+// Ideally we'd want to be able to store a syn::TokenBuffer, and be able to
+// append to it, and freely convert it to a syn::ParseStream, possibly even storing
+// a cursor position into it.
+//
+// Unfortunately this isn't at all possible:
+// * TokenBuffer appending isn't a thing, you can only create one (recursively) from
+//   a TokenStream
+// * TokenBuffer can't be converted to a ParseStream outside of the syn crate
+// * For performance, a cursor stores a pointer into a TokenBuffer, so it can only be
+//   used against a fixed buffer.
+//
+// We could probably work around these limitations by sacrificing performance and transforming
+// to TokenStream and back, but probably there's a better way.
+//
+// What we probably want is our own abstraction, likely a fork from `syn`, which supports
+// converting a Cursor into an indexed based cursor, which can safely be stored separately
+// from the TokenBuffer.
+//
+// We could use this abstraction for InterpretedStream; and our variables could store a
+// tuple of (IndexCursor, PreinterpretTokenBuffer)
+
 #[derive(Clone)]
 pub(crate) struct InterpretedStream {
     source_span_range: SpanRange,
