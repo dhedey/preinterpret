@@ -8,10 +8,10 @@ pub(crate) struct IfCommand {
 }
 
 impl CommandType for IfCommand {
-    type OutputKind = OutputKindStreaming;
+    type OutputKind = OutputKindControlFlow;
 }
 
-impl StreamingCommandDefinition for IfCommand {
+impl ControlFlowCommandDefinition for IfCommand {
     const COMMAND_NAME: &'static str = "if";
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
@@ -65,10 +65,10 @@ pub(crate) struct WhileCommand {
 }
 
 impl CommandType for WhileCommand {
-    type OutputKind = OutputKindStreaming;
+    type OutputKind = OutputKindControlFlow;
 }
 
-impl StreamingCommandDefinition for WhileCommand {
+impl ControlFlowCommandDefinition for WhileCommand {
     const COMMAND_NAME: &'static str = "while";
 
     fn parse(arguments: CommandArguments) -> Result<Self> {

@@ -80,6 +80,17 @@ impl Interpret for CommandStreamInput {
                         }
                         command.interpret_as_tokens_into(interpreter, output)
                     }
+                    CommandOutputKind::ControlFlowFlattenedStream => {
+                        let span = command.span();
+                        let tokens = parse_as_stream_input(
+                            command.interpret_as_tokens(interpreter)?,
+                            || {
+                                span.error("Expected output of control flow command to contain a single [ ... ] or transparent group.")
+                            },
+                        )?;
+                        output.extend_raw_tokens(tokens);
+                        Ok(())
+                    }
                 }
             }
             CommandStreamInput::FlattenedVariable(variable) => {

@@ -25,9 +25,8 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 
 ### To come
 
-* Consider [!..flattened! ] and getting rid of !group!
-  => Add separate ControlFlowCode type
-  => Make the type of commands static
+* Add !interspersed! above
+* Consider [!..flattened! ] etc
   => Disallow most command types in expressions
   => Get rid of [!empty!] and [!stream!] and replace with [!..group!] or [!group!]
 * Explore getting rid of lots of the span range stuff

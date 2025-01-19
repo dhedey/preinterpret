@@ -89,10 +89,10 @@ pub(crate) struct RawCommand {
 }
 
 impl CommandType for RawCommand {
-    type OutputKind = OutputKindStreaming;
+    type OutputKind = OutputKindStream;
 }
 
-impl StreamingCommandDefinition for RawCommand {
+impl StreamCommandDefinition for RawCommand {
     const COMMAND_NAME: &'static str = "raw";
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
@@ -139,10 +139,10 @@ pub(crate) struct StreamCommand {
 }
 
 impl CommandType for StreamCommand {
-    type OutputKind = OutputKindStreaming;
+    type OutputKind = OutputKindStream;
 }
 
-impl StreamingCommandDefinition for StreamCommand {
+impl StreamCommandDefinition for StreamCommand {
     const COMMAND_NAME: &'static str = "stream";
 
     fn parse(arguments: CommandArguments) -> Result<Self> {

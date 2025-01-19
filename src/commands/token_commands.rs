@@ -80,10 +80,10 @@ pub(crate) struct GroupCommand {
 }
 
 impl CommandType for GroupCommand {
-    type OutputKind = OutputKindStreaming;
+    type OutputKind = OutputKindStream;
 }
 
-impl StreamingCommandDefinition for GroupCommand {
+impl StreamCommandDefinition for GroupCommand {
     const COMMAND_NAME: &'static str = "group";
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
@@ -112,7 +112,7 @@ pub(crate) struct IntersperseCommand {
 }
 
 impl CommandType for IntersperseCommand {
-    type OutputKind = OutputKindStreaming;
+    type OutputKind = OutputKindStream;
 }
 
 define_field_inputs! {
@@ -128,7 +128,7 @@ define_field_inputs! {
     }
 }
 
-impl StreamingCommandDefinition for IntersperseCommand {
+impl StreamCommandDefinition for IntersperseCommand {
     const COMMAND_NAME: &'static str = "intersperse";
 
     fn parse(arguments: CommandArguments) -> Result<Self> {

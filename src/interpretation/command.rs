@@ -5,7 +5,8 @@ pub(crate) enum CommandOutput {
     Literal(Literal),
     Ident(Ident),
     FlattenedStream(InterpretedStream),
-    Grouped(InterpretedStream, Span),
+    GroupedStream(InterpretedStream, Span),
+    ControlFlowCodeStream(InterpretedStream),
 }
 
 #[allow(unused)]
@@ -17,12 +18,21 @@ pub(crate) enum CommandOutputKind {
     Ident,
     FlattenedStream,
     GroupedStream(Span),
+    ControlFlowFlattenedStream,
+}
+
+pub(crate) trait CommandType {
+    type OutputKind: OutputKind;
 }
 
 pub(crate) trait OutputKind {
     type Output;
     fn resolve(span: &DelimSpan, flattening: Option<Token![..]>) -> Result<CommandOutputKind>;
 }
+
+//===============
+// OutputKindNone
+//===============
 
 pub(crate) struct OutputKindNone;
 impl OutputKind for OutputKindNone {
@@ -34,50 +44,6 @@ impl OutputKind for OutputKindNone {
             None => Ok(CommandOutputKind::None),
         }
     }
-}
-
-pub(crate) struct OutputKindValue;
-impl OutputKind for OutputKindValue {
-    type Output = TokenTree;
-
-    fn resolve(_: &DelimSpan, flattening: Option<Token![..]>) -> Result<CommandOutputKind> {
-        match flattening {
-            Some(dots) => {
-                dots.err("This command outputs a single value, so cannot be flattened with ..")
-            }
-            None => Ok(CommandOutputKind::Value),
-        }
-    }
-}
-
-pub(crate) struct OutputKindIdent;
-impl OutputKind for OutputKindIdent {
-    type Output = Ident;
-
-    fn resolve(_: &DelimSpan, flattening: Option<Token![..]>) -> Result<CommandOutputKind> {
-        match flattening {
-            Some(dots) => {
-                dots.err("This command outputs a single ident, so cannot be flattened with ..")
-            }
-            None => Ok(CommandOutputKind::Ident),
-        }
-    }
-}
-
-pub(crate) struct OutputKindStreaming;
-impl OutputKind for OutputKindStreaming {
-    type Output = InterpretedStream;
-
-    fn resolve(span: &DelimSpan, flattening: Option<Token![..]>) -> Result<CommandOutputKind> {
-        match flattening {
-            Some(_) => Ok(CommandOutputKind::FlattenedStream),
-            None => Ok(CommandOutputKind::GroupedStream(span.join())),
-        }
-    }
-}
-
-pub(crate) trait CommandType {
-    type OutputKind: OutputKind;
 }
 
 pub(crate) trait NoOutputCommandDefinition:
@@ -109,31 +75,21 @@ impl<C: NoOutputCommandDefinition> CommandInvocationAs<OutputKindNone> for C {
     }
 }
 
-pub(crate) trait IdentCommandDefinition:
-    Sized + CommandType<OutputKind = OutputKindIdent>
-{
-    const COMMAND_NAME: &'static str;
-    fn parse(arguments: CommandArguments) -> Result<Self>;
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<Ident>;
-}
+//================
+// OutputKindValue
+//================
 
-impl<C: IdentCommandDefinition> CommandInvocationAs<OutputKindIdent> for C {
-    fn execute_into(
-        self: Box<Self>,
-        _: CommandOutputKind,
-        interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
-    ) -> Result<()> {
-        output.push_ident(self.execute(interpreter)?);
-        Ok(())
-    }
+pub(crate) struct OutputKindValue;
+impl OutputKind for OutputKindValue {
+    type Output = TokenTree;
 
-    fn execute_into_value(
-        self: Box<Self>,
-        _: CommandOutputKind,
-        interpreter: &mut Interpreter,
-    ) -> Result<CommandOutput> {
-        Ok(CommandOutput::Ident(self.execute(interpreter)?))
+    fn resolve(_: &DelimSpan, flattening: Option<Token![..]>) -> Result<CommandOutputKind> {
+        match flattening {
+            Some(dots) => {
+                dots.err("This command outputs a single value, so cannot be flattened with ..")
+            }
+            None => Ok(CommandOutputKind::Value),
+        }
     }
 }
 
@@ -169,8 +125,70 @@ impl<C: ValueCommandDefinition> CommandInvocationAs<OutputKindValue> for C {
     }
 }
 
-pub(crate) trait StreamingCommandDefinition:
-    Sized + CommandType<OutputKind = OutputKindStreaming>
+//================
+// OutputKindIdent
+//================
+
+pub(crate) struct OutputKindIdent;
+impl OutputKind for OutputKindIdent {
+    type Output = Ident;
+
+    fn resolve(_: &DelimSpan, flattening: Option<Token![..]>) -> Result<CommandOutputKind> {
+        match flattening {
+            Some(dots) => {
+                dots.err("This command outputs a single ident, so cannot be flattened with ..")
+            }
+            None => Ok(CommandOutputKind::Ident),
+        }
+    }
+}
+
+pub(crate) trait IdentCommandDefinition:
+    Sized + CommandType<OutputKind = OutputKindIdent>
+{
+    const COMMAND_NAME: &'static str;
+    fn parse(arguments: CommandArguments) -> Result<Self>;
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<Ident>;
+}
+
+impl<C: IdentCommandDefinition> CommandInvocationAs<OutputKindIdent> for C {
+    fn execute_into(
+        self: Box<Self>,
+        _: CommandOutputKind,
+        interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()> {
+        output.push_ident(self.execute(interpreter)?);
+        Ok(())
+    }
+
+    fn execute_into_value(
+        self: Box<Self>,
+        _: CommandOutputKind,
+        interpreter: &mut Interpreter,
+    ) -> Result<CommandOutput> {
+        Ok(CommandOutput::Ident(self.execute(interpreter)?))
+    }
+}
+
+//=================
+// OutputKindStream
+//=================
+
+pub(crate) struct OutputKindStream;
+impl OutputKind for OutputKindStream {
+    type Output = InterpretedStream;
+
+    fn resolve(span: &DelimSpan, flattening: Option<Token![..]>) -> Result<CommandOutputKind> {
+        match flattening {
+            Some(_) => Ok(CommandOutputKind::FlattenedStream),
+            None => Ok(CommandOutputKind::GroupedStream(span.join())),
+        }
+    }
+}
+
+pub(crate) trait StreamCommandDefinition:
+    Sized + CommandType<OutputKind = OutputKindStream>
 {
     const COMMAND_NAME: &'static str;
     fn parse(arguments: CommandArguments) -> Result<Self>;
@@ -181,7 +199,7 @@ pub(crate) trait StreamingCommandDefinition:
     ) -> Result<()>;
 }
 
-impl<C: StreamingCommandDefinition> CommandInvocationAs<OutputKindStreaming> for C {
+impl<C: StreamCommandDefinition> CommandInvocationAs<OutputKindStream> for C {
     fn execute_into(
         self: Box<Self>,
         output_kind: CommandOutputKind,
@@ -208,9 +226,58 @@ impl<C: StreamingCommandDefinition> CommandInvocationAs<OutputKindStreaming> for
         self.execute(interpreter, &mut output)?;
         Ok(match output_kind {
             CommandOutputKind::FlattenedStream => CommandOutput::FlattenedStream(output),
-            CommandOutputKind::GroupedStream(span) => CommandOutput::Grouped(output, span),
+            CommandOutputKind::GroupedStream(span) => CommandOutput::GroupedStream(output, span),
             _ => unreachable!(),
         })
+    }
+}
+
+//======================
+// OutputKindControlFlow
+//======================
+
+pub(crate) struct OutputKindControlFlow;
+impl OutputKind for OutputKindControlFlow {
+    type Output = ();
+
+    fn resolve(_: &DelimSpan, flattening: Option<Token![..]>) -> Result<CommandOutputKind> {
+        match flattening {
+            Some(dots) => dots.err("This command is control flow, so is always flattened and cannot be flattened. If it needs to be grouped, wrap it in a [!group! ..] command"),
+            None => Ok(CommandOutputKind::ControlFlowFlattenedStream),
+        }
+    }
+}
+
+pub(crate) trait ControlFlowCommandDefinition:
+    Sized + CommandType<OutputKind = OutputKindControlFlow>
+{
+    const COMMAND_NAME: &'static str;
+    fn parse(arguments: CommandArguments) -> Result<Self>;
+    fn execute(
+        self: Box<Self>,
+        interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()>;
+}
+
+impl<C: ControlFlowCommandDefinition> CommandInvocationAs<OutputKindControlFlow> for C {
+    fn execute_into(
+        self: Box<Self>,
+        _: CommandOutputKind,
+        interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()> {
+        self.execute(interpreter, output)
+    }
+
+    fn execute_into_value(
+        self: Box<Self>,
+        _: CommandOutputKind,
+        interpreter: &mut Interpreter,
+    ) -> Result<CommandOutput> {
+        let mut output = InterpretedStream::new(SpanRange::ignored());
+        self.execute(interpreter, &mut output)?;
+        Ok(CommandOutput::ControlFlowCodeStream(output))
     }
 }
 
@@ -422,7 +489,7 @@ impl Express for Command {
     fn add_to_expression(
         self,
         interpreter: &mut Interpreter,
-        expression_stream: &mut ExpressionBuilder,
+        builder: &mut ExpressionBuilder,
     ) -> Result<()> {
         match self
             .invocation
@@ -430,17 +497,19 @@ impl Express for Command {
         {
             CommandOutput::None => {}
             CommandOutput::Literal(literal) => {
-                expression_stream.push_literal(literal);
+                builder.push_literal(literal);
             }
             CommandOutput::Ident(ident) => {
-                expression_stream.push_ident(ident);
+                builder.push_ident(ident);
             }
-            CommandOutput::Grouped(stream, span) => {
-                expression_stream.push_grouped_interpreted_stream(stream, span);
+            CommandOutput::GroupedStream(stream, span) => {
+                builder.push_grouped_interpreted_stream(stream, span);
             }
             CommandOutput::FlattenedStream(stream) => {
-                expression_stream
-                    .push_grouped_interpreted_stream(stream, self.source_group_span.join());
+                builder.push_grouped_interpreted_stream(stream, self.source_group_span.join());
+            }
+            CommandOutput::ControlFlowCodeStream(stream) => {
+                builder.push_grouped_interpreted_stream(stream, self.source_group_span.join());
             }
         };
         Ok(())
