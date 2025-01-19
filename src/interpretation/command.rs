@@ -405,7 +405,6 @@ define_command_kind! {
     ExtendCommand,
     RawCommand,
     IgnoreCommand,
-    StreamCommand,
     ErrorCommand,
 
     // Concat & Type Convert Commands
@@ -441,7 +440,6 @@ define_command_kind! {
     WhileCommand,
 
     // Token Commands
-    EmptyCommand,
     IsEmptyCommand,
     LengthCommand,
     GroupCommand,

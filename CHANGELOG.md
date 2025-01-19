@@ -6,7 +6,6 @@
 
 * Core commands:
   * `[!error! ...]`
-  * `[!stream! ...]` command which just returns its contents, but can be used in places where a single item is expected when parsing.
 * Expression commands:
   * `[!evaluate! ...]`
   * `[!assign! #x += ...]` for `+` and other supported operators
@@ -15,18 +14,17 @@
   * `[!if! COND { ... }]` and `[!if! COND { ... } !else! { ... }]`
   * `[!while! COND {}]`
 * Token-stream utility commands:
-  * `[!empty!]`
   * `[!is_empty! #stream]`
   * `[!length! #stream]` which gives the number of token trees in the token stream.
   * `[!group! ...]` which wraps the tokens in a transparent group. Useful with `!for!`.
+  * `[!..group!]` which just outputs its contents as-is, useful where the grammar
+    only takes a single item, but we want to output multiple tokens
   * `[!intersperse! { .. }]` which inserts separator tokens between each token tree in a stream.
 
-I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x = [!empty!]]`, but deemed it unhelpful, because then they have awkward edge-cases when embedding empty tokenstreams from declarative macros `($each_tt)*`.
+I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x = [!..group!]]`, but deemed it unhelpful, because then they have awkward edge-cases when embedding empty tokenstreams from declarative macros `($each_tt)*`.
 
 ### To come
 
-* Consider [!..flattened! ] etc
-  => Get rid of [!empty!] and [!stream!] and replace with [!..group!] or [!group!]
 * Explore getting rid of lots of the span range stuff
 * Add [!break!] and [!continue!] commands using a flag in the interpreter
 * Support `!else if!` in `!if!`

@@ -50,7 +50,7 @@ fn test_extend() {
     my_assert_eq!(
         {
             [!set! #i = 1]
-            [!set! #output = [!empty!]]
+            [!set! #output = [!..group!]]
             [!while! (#i <= 4) {
                 [!extend! #output += #i]
                 [!if! (#i <= 3) {

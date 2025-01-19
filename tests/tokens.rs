@@ -14,19 +14,20 @@ fn test_tokens_compilation_failures() {
 }
 
 #[test]
-fn test_empty_and_is_empty() {
+fn test_flattened_group_and_is_empty() {
     assert_preinterpret_eq!({
-        [!empty!] "hello" [!empty!] [!empty!]
+        [!..group!] "hello" [!..group!] [!..group!]
     }, "hello");
-    assert_preinterpret_eq!([!is_empty! [!empty!]], true);
-    assert_preinterpret_eq!([!is_empty! [!empty!] [!empty!]], true);
+    assert_preinterpret_eq!([!is_empty!], true);
+    assert_preinterpret_eq!([!is_empty! [!..group!]], true);
+    assert_preinterpret_eq!([!is_empty! [!..group!] [!..group!]], true);
     assert_preinterpret_eq!([!is_empty! Not Empty], false);
     assert_preinterpret_eq!({
-        [!set! #x = [!empty!]]
+        [!set! #x =]
         [!is_empty! #..x]
     }, true);
     assert_preinterpret_eq!({
-        [!set! #x = [!empty!]]
+        [!set! #x =]
         [!set! #x = #x is no longer empty]
         [!is_empty! #x]
     }, false);

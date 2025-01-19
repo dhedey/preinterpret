@@ -1,28 +1,6 @@
 use crate::internal_prelude::*;
 
 #[derive(Clone)]
-pub(crate) struct EmptyCommand;
-
-impl CommandType for EmptyCommand {
-    type OutputKind = OutputKindNone;
-}
-
-impl NoOutputCommandDefinition for EmptyCommand {
-    const COMMAND_NAME: &'static str = "empty";
-
-    fn parse(arguments: CommandArguments) -> Result<Self> {
-        arguments.assert_empty(
-            "The !empty! command does not take any arguments. Perhaps you want !is_empty! instead?",
-        )?;
-        Ok(Self)
-    }
-
-    fn execute(self: Box<Self>, _interpreter: &mut Interpreter) -> Result<()> {
-        Ok(())
-    }
-}
-
-#[derive(Clone)]
 pub(crate) struct IsEmptyCommand {
     arguments: InterpretationStream,
 }
@@ -97,12 +75,9 @@ impl StreamCommandDefinition for GroupCommand {
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> Result<()> {
-        let group_span = self.arguments.span();
-        output.push_grouped(
-            |inner| self.arguments.interpret_as_tokens_into(interpreter, inner),
-            Delimiter::None,
-            group_span,
-        )
+        // The grouping happens automatically because a non-flattened
+        // stream command is outputted in a group.
+        self.arguments.interpret_as_tokens_into(interpreter, output)
     }
 }
 
