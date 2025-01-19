@@ -79,8 +79,8 @@ impl NoOutputCommandDefinition for AssignCommand {
         builder.push_punct(operator);
         builder.extend_with_evaluation_output(expression.evaluate(interpreter)?);
 
-        let output = builder.evaluate()?.into_interpreted_stream();
-        variable.set(interpreter, output)?;
+        let output = builder.evaluate()?.into_token_tree();
+        variable.set(interpreter, output.into())?;
 
         Ok(())
     }

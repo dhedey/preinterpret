@@ -196,9 +196,8 @@ pub(crate) struct ExpressionBuilder {
 
 impl ExpressionBuilder {
     pub(crate) fn new() -> Self {
-        let unused_span_range = Span::call_site().span_range();
         Self {
-            interpreted_stream: InterpretedStream::new(unused_span_range),
+            interpreted_stream: InterpretedStream::new(),
         }
     }
 

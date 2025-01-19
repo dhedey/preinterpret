@@ -43,16 +43,7 @@ impl GroupedVariable {
             .ok_or_else(|| self.error(format!("The variable {} wasn't already set", self)))
     }
 
-    pub(super) fn interpret_ungrouped_contents(
-        &self,
-        interpreter: &Interpreter,
-    ) -> Result<InterpretedStream> {
-        let mut cloned = self.read_existing(interpreter)?.clone();
-        cloned.set_span_range(self.span_range());
-        Ok(cloned)
-    }
-
-    pub(crate) fn substitute_contents_into(
+    pub(crate) fn substitute_ungrouped_contents_into(
         &self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
@@ -67,7 +58,7 @@ impl GroupedVariable {
         output: &mut InterpretedStream,
     ) -> Result<()> {
         output.push_new_group(
-            self.interpret_ungrouped_contents(interpreter)?,
+            self.read_existing(interpreter)?.clone(),
             Delimiter::None,
             self.span(),
         );
@@ -107,7 +98,7 @@ impl Express for &GroupedVariable {
         expression_stream: &mut ExpressionBuilder,
     ) -> Result<()> {
         expression_stream.push_grouped(
-            |inner| self.substitute_contents_into(interpreter, inner),
+            |inner| self.substitute_ungrouped_contents_into(interpreter, inner),
             self.span(),
         )
     }

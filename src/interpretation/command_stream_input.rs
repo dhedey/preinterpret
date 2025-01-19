@@ -107,9 +107,7 @@ impl Interpret for CommandStreamInput {
                 Ok(())
             }
             CommandStreamInput::GroupedVariable(variable) => {
-                let group_contents = variable.interpret_ungrouped_contents(interpreter)?;
-                output.extend(group_contents);
-                Ok(())
+                variable.substitute_ungrouped_contents_into(interpreter, output)
             }
             CommandStreamInput::Code(code) => {
                 let span = code.span();

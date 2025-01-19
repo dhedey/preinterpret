@@ -197,13 +197,7 @@ pub(crate) struct SpanRange {
     end: Span,
 }
 
-#[allow(unused)]
 impl SpanRange {
-    /// For use where the span range is unused, but needs to be provided
-    pub(crate) fn ignored() -> Self {
-        Span::call_site().span_range()
-    }
-
     pub(crate) fn new_between(start: Span, end: Span) -> Self {
         Self { start, end }
     }
@@ -222,16 +216,9 @@ impl SpanRange {
         self.start
     }
 
+    #[allow(unused)]
     pub(crate) fn end(&self) -> Span {
         self.end
-    }
-
-    pub(crate) fn replace_start(self, start: Span) -> Self {
-        Self { start, ..self }
-    }
-
-    pub(crate) fn replace_end(self, end: Span) -> Self {
-        Self { end, ..self }
     }
 }
 
@@ -274,7 +261,7 @@ impl HasSpanRange for DelimSpan {
         // We could use self.open() => self.close() here, but using
         // self.join() is better as it can be round-tripped to a span
         // as the whole span, rather than just the start or end.
-        SpanRange::new_between(self.join(), self.join())
+        self.join().span_range()
     }
 }
 

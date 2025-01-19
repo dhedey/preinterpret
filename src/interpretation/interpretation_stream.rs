@@ -128,8 +128,11 @@ impl Interpret for RawGroup {
         _: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> Result<()> {
-        let inner = InterpretedStream::raw(self.source_delim_span.span_range(), self.content);
-        output.push_new_group(inner, self.source_delimeter, self.source_delim_span.join());
+        output.push_new_group(
+            InterpretedStream::raw(self.content),
+            self.source_delimeter,
+            self.source_delim_span.join(),
+        );
         Ok(())
     }
 }

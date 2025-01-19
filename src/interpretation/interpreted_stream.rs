@@ -46,23 +46,18 @@ use crate::internal_prelude::*;
 
 #[derive(Clone)]
 pub(crate) struct InterpretedStream {
-    source_span_range: SpanRange,
     token_stream: TokenStream,
 }
 
 impl InterpretedStream {
-    pub(crate) fn new(source_span_range: SpanRange) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
-            source_span_range,
             token_stream: TokenStream::new(),
         }
     }
 
-    pub(crate) fn raw(empty_span_range: SpanRange, token_stream: TokenStream) -> Self {
-        Self {
-            source_span_range: empty_span_range,
-            token_stream,
-        }
+    pub(crate) fn raw(token_stream: TokenStream) -> Self {
+        Self { token_stream }
     }
 
     pub(crate) fn extend(&mut self, interpreted_stream: InterpretedStream) {
@@ -87,7 +82,7 @@ impl InterpretedStream {
         delimiter: Delimiter,
         span: Span,
     ) -> Result<()> {
-        let mut inner = Self::new(span.span_range());
+        let mut inner = Self::new();
         appender(&mut inner)?;
         self.push_new_group(inner, delimiter, span);
         Ok(())
@@ -122,32 +117,15 @@ impl InterpretedStream {
     pub(crate) fn parse_into_fields<T: 'static>(
         self,
         parser: FieldsParseDefinition<T>,
+        error_span_range: SpanRange,
     ) -> Result<T> {
-        let source_span_range = self.source_span_range;
-        self.syn_parse(parser.create_syn_parser(source_span_range))
+        self.syn_parse(parser.create_syn_parser(error_span_range))
     }
 
     /// For a type `T` which implements `syn::Parse`, you can call this as `syn_parse(self, T::parse)`.
     /// For more complicated parsers, just pass the parsing function to this function.
     pub(crate) fn syn_parse<P: syn::parse::Parser>(self, parser: P) -> Result<P::Output> {
         parser.parse2(self.token_stream)
-    }
-
-    #[allow(unused)]
-    pub(crate) fn into_singleton(self, error_message: &str) -> Result<TokenTree> {
-        if self.is_empty() {
-            return self.source_span_range.err(error_message);
-        }
-        let mut iter = self.token_stream.into_iter();
-        let first = iter.next().unwrap(); // No panic because we're not empty
-        match iter.next() {
-            Some(_) => self.source_span_range.err(error_message),
-            None => Ok(first),
-        }
-    }
-
-    pub(crate) fn set_span_range(&mut self, span_range: SpanRange) {
-        self.source_span_range = span_range;
     }
 
     pub(crate) fn into_token_stream(self) -> TokenStream {
@@ -162,18 +140,7 @@ impl InterpretedStream {
 impl From<TokenTree> for InterpretedStream {
     fn from(value: TokenTree) -> Self {
         InterpretedStream {
-            source_span_range: value.span_range(),
             token_stream: value.into(),
-        }
-    }
-}
-
-impl HasSpanRange for InterpretedStream {
-    fn span_range(&self) -> SpanRange {
-        if self.token_stream.is_empty() {
-            self.source_span_range
-        } else {
-            self.token_stream.span_range()
         }
     }
 }

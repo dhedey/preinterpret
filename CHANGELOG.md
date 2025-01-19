@@ -25,12 +25,11 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 
 ### To come
 
-* Explore getting rid of lots of the span range stuff
-* Add [!break!] and [!continue!] commands using a flag in the interpreter
+* Implement comment on `!assign!` and `!buffer!`
 * Support `!else if!` in `!if!`
+* Add [!break!] and [!continue!] commands using a flag in the interpreter
 * Support string & char literals (for comparisons & casts) in expressions
 * Reconfiguring iteration limit, via `[!settings! { iteration_limit: 4000 }]`
-* Implement comment on `!assign!` and !buffer!
 * Other token stream commands
 * Add basic `!for!` loops
 * Add more tests

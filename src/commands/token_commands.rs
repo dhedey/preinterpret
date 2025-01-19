@@ -176,16 +176,22 @@ impl SeparatorAppender {
         remaining: RemainingItemCount,
         output: &mut InterpretedStream,
     ) -> Result<()> {
-        let extender = match self.separator(remaining) {
-            TrailingSeparator::Normal => self.separator.clone().interpret_as_tokens(interpreter)?,
+        match self.separator(remaining) {
+            TrailingSeparator::Normal => self
+                .separator
+                .clone()
+                .interpret_as_tokens_into(interpreter, output),
             TrailingSeparator::Final => match self.final_separator.take() {
-                Some(final_separator) => final_separator.interpret_as_tokens(interpreter)?,
-                None => self.separator.clone().interpret_as_tokens(interpreter)?,
+                Some(final_separator) => {
+                    final_separator.interpret_as_tokens_into(interpreter, output)
+                }
+                None => self
+                    .separator
+                    .clone()
+                    .interpret_as_tokens_into(interpreter, output),
             },
-            TrailingSeparator::None => InterpretedStream::new(SpanRange::ignored()),
-        };
-        output.extend(extender);
-        Ok(())
+            TrailingSeparator::None => Ok(()),
+        }
     }
 
     fn separator(&self, remaining_item_count: RemainingItemCount) -> TrailingSeparator {
