@@ -32,17 +32,12 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 * Support `!else if!` in `!if!`
 * Support string & char literals (for comparisons & casts) in expressions
 * Reconfiguring iteration limit, via `[!settings! { iteration_limit: 4000 }]`
-* See comment on `!assign!`
+* Implement comment on `!assign!` and !buffer!
 * Other token stream commands
-* Add tests for CommandStreamInput (via `[!split! ]` or `[!intersperse! ]`?):
-  => From `#x = Hello World`
-  => Or `#..x = [Hello World]`
-  => But not `$x` - it has to be wrapped in `[]`
-  => Improve tests for `[!range!]`
+* Add basic `!for!` loops
 * Add more tests
   * e.g. for various expressions
   * e.g. for long sums
-  * Add compile failure tests
 * Support `!for!` so we can use it for simple generation scenarios without needing macros at all:
   * Complexities:
     * Parsing `,`

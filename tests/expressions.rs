@@ -79,13 +79,37 @@ fn assign_works() {
 
 #[test]
 fn range_works() {
-    assert_preinterpret_eq!([!string! [!range! -2..5]], "-2-101234");
+    assert_preinterpret_eq!(
+        [!string![!intersperse! {
+            items: [!range! -2..5],
+            separator: [" "],
+        }]],
+        "-2 -1 0 1 2 3 4"
+    );
+    assert_preinterpret_eq!(
+        [!string![!intersperse! {
+            items: [!range! -2..=5],
+            separator: [" "],
+        }]],
+        "-2 -1 0 1 2 3 4 5"
+    );
     assert_preinterpret_eq!(
         {
             [!set! #x = 2]
-            [!string! [!range! (#x + #x)..=5]]
+            [!string! [!intersperse! {
+                items: [!range! (#x + #x)..=5],
+                separator: [" "],
+            }]]
         },
-        "45"
+        "4 5"
     );
-    assert_preinterpret_eq!({ [!string! [!range! 8..=5]] }, "");
+    assert_preinterpret_eq!(
+        {
+            [!string![!intersperse! {
+                items: [!range! 8..=5],
+                separator: [" "],
+            }]]
+        },
+        ""
+    );
 }

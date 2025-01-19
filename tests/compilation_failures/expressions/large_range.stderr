@@ -1,0 +1,5 @@
+error: Iteration limit of 10000 exceeded
+ --> tests/compilation_failures/expressions/large_range.rs:5:19
+  |
+5 |         [!range! 0..10000000]
+  |                   ^^

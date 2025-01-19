@@ -119,6 +119,7 @@ impl StreamCommandDefinition for RangeCommand {
         output: &mut InterpretedStream,
     ) -> Result<()> {
         let range_span_range = self.range_limits.span_range();
+        let range_span = self.range_limits.span();
 
         let left = self
             .left
@@ -141,25 +142,32 @@ impl StreamCommandDefinition for RangeCommand {
             .ok_or_else(|| {
                 range_span_range.error("The range is too large to be represented as a usize")
             })?;
+
         interpreter
             .config()
             .check_iteration_count(&range_span_range, length)?;
 
         match self.range_limits {
             RangeLimits::HalfOpen(_) => {
-                let iter =
-                    (left..right).map(|value| TokenTree::Literal(Literal::i128_unsuffixed(value)));
-                output.extend_raw_token_iter(iter)
+                output_range(left..right, range_span, output);
             }
             RangeLimits::Closed(_) => {
-                let iter =
-                    (left..=right).map(|value| TokenTree::Literal(Literal::i128_unsuffixed(value)));
-                output.extend_raw_token_iter(iter)
+                output_range(left..=right, range_span, output);
             }
         };
 
         Ok(())
     }
+}
+
+fn output_range(iter: impl Iterator<Item = i128>, span: Span, output: &mut InterpretedStream) {
+    output.extend_raw_token_iter(iter.map(|value| {
+        let literal = Literal::i128_unsuffixed(value).with_span(span);
+        TokenTree::Literal(literal)
+            // We wrap it in a singleton group to ensure that negative
+            // numbers are treated as single items in other stream commands
+            .into_singleton_group(Delimiter::None)
+    }))
 }
 
 // A copy of syn::RangeLimits to avoid needing a `full` dependency on syn

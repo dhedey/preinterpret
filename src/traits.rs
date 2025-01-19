@@ -74,11 +74,17 @@ impl TokenStreamExt for TokenStream {
 
 pub(crate) trait TokenTreeExt: Sized {
     fn group(tokens: TokenStream, delimeter: Delimiter, span: Span) -> Self;
+    fn into_singleton_group(self, delimiter: Delimiter) -> Self;
 }
 
 impl TokenTreeExt for TokenTree {
     fn group(inner_tokens: TokenStream, delimeter: Delimiter, span: Span) -> Self {
         TokenTree::Group(Group::new(delimeter, inner_tokens).with_span(span))
+    }
+
+    fn into_singleton_group(self, delimiter: Delimiter) -> Self {
+        let span = self.span();
+        Self::group(self.into_token_stream(), delimiter, span)
     }
 }
 
