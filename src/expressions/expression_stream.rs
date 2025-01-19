@@ -215,21 +215,22 @@ impl ExpressionBuilder {
         self.interpreted_stream.push_punct(punct);
     }
 
-    pub(crate) fn push_grouped_interpreted_stream(
+    pub(crate) fn push_grouped(
         &mut self,
-        contents: InterpretedStream,
+        appender: impl FnOnce(&mut InterpretedStream) -> Result<()>,
         span: Span,
-    ) {
+    ) -> Result<()> {
         // Currently using Expr::Parse, it ignores transparent groups, which is
         // a little too permissive.
         // Instead, we use parentheses to ensure that the group has to be a valid
         // expression itself, without being flattened
         self.interpreted_stream
-            .push_new_group(contents, Delimiter::Parenthesis, span);
+            .push_grouped(appender, Delimiter::Parenthesis, span)
     }
 
-    pub(crate) fn extend_with_interpreted_stream(&mut self, contents: InterpretedStream) {
-        self.interpreted_stream.extend(contents);
+    pub(crate) fn extend_with_evaluation_output(&mut self, value: EvaluationOutput) {
+        self.interpreted_stream
+            .extend_raw_tokens(value.into_token_tree());
     }
 
     pub(crate) fn push_expression_group(

@@ -25,14 +25,14 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 
 ### To come
 
-* Add !interspersed! above
 * Consider [!..flattened! ] etc
-  => Disallow most command types in expressions
   => Get rid of [!empty!] and [!stream!] and replace with [!..group!] or [!group!]
 * Explore getting rid of lots of the span range stuff
+* Add [!break!] and [!continue!] commands using a flag in the interpreter
 * Support `!else if!` in `!if!`
 * Support string & char literals (for comparisons & casts) in expressions
 * Reconfiguring iteration limit, via `[!settings! { iteration_limit: 4000 }]`
+* See comment on `!assign!`
 * Other token stream commands
 * Add tests for CommandStreamInput (via `[!split! ]` or `[!intersperse! ]`?):
   => From `#x = Hello World`
@@ -81,7 +81,6 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 * `[!split! { items: X, with: X, drop_trailing_empty?: true }]`
 * `[!intersperse! { items: X, with: X, add_trailing?: false, override_final_with?: X }]` for adding something between each item, where each `X` is a `CommandStreamInput`
 * `[!zip! ([Hello Goodbye] [World Friend])]` => `[(Hello World), (Goodbye Friend)]`
-* See comment on `!assign!`
 * Basic place parsing
   * Introduce `[!let! #..x = Hello World]` does parsing and is equivalent to `[!set! #x = Hello World]`
   * In parse land: #x matches a single token, #..x consumes the rest of a stream
@@ -99,7 +98,11 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
   * `[!RAW!]` for e.g. `[!while_parse! [!RAW! from] from #X]`
   * `[!match!]` (with `#..x` as a catch-all)
 * Check all `#[allow(unused)]` and remove any which aren't needed
-* Rework expression parsing
+* Rework expression parsing, in order to:
+  * Fix comments in the expression files
+  * Enable lazy && and ||
+  * Enable support for code blocks { .. } in expressions,
+    and remove hacks where expression parsing stops at {} or .
 * Work on book
   * Input paradigms:
     * Streams

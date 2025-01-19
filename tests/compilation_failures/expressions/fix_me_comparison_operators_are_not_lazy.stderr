@@ -3,7 +3,7 @@ error: The && expression is not evaluated lazily
    |
 4  | /     preinterpret!{
 5  | |         [!set! #is_eager = false]
-6  | |         let _ = [!evaluate! false && ([!set! #is_eager = true] true)];
+6  | |         let _ = [!evaluate! false && [!group! [!set! #is_eager = true] true]];
 7  | |         [!if! #is_eager {
 8  | |             [!error! { message: "The && expression is not evaluated lazily" }]
 9  | |         }]

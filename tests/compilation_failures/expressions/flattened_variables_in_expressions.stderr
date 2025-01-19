@@ -1,0 +1,6 @@
+error: Flattened variables cannot be used directly in expressions.
+       Consider removing the .. or wrapping it inside a command such as [!group! ..] which returns an expression
+ --> tests/compilation_failures/expressions/flattened_variables_in_expressions.rs:6:24
+  |
+6 |         [!evaluate! 5 #..partial_sum]
+  |                        ^^

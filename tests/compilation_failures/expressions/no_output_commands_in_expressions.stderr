@@ -1,0 +1,6 @@
+error: Commands with no output cannot be used directly in expressions.
+       Consider wrapping it inside a command such as [!group! ..] which returns an expression
+ --> tests/compilation_failures/expressions/no_output_commands_in_expressions.rs:5:25
+  |
+5 |         [!evaluate! 5 + [!set! #x = 2] 2]
+  |                         ^^^^^^^^^^^^^^

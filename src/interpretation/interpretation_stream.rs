@@ -140,11 +140,13 @@ impl Express for RawGroup {
         _: &mut Interpreter,
         expression_stream: &mut ExpressionBuilder,
     ) -> Result<()> {
-        expression_stream.push_grouped_interpreted_stream(
-            InterpretedStream::raw(self.source_delim_span.span_range(), self.content),
+        expression_stream.push_grouped(
+            |inner| {
+                inner.extend_raw_token_iter(self.content);
+                Ok(())
+            },
             self.source_delim_span.join(),
-        );
-        Ok(())
+        )
     }
 }
 

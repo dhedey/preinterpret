@@ -43,7 +43,7 @@ impl GroupedVariable {
             .ok_or_else(|| self.error(format!("The variable {} wasn't already set", self)))
     }
 
-    pub(super) fn interpret_as_new_stream(
+    pub(super) fn interpret_ungrouped_contents(
         &self,
         interpreter: &Interpreter,
     ) -> Result<InterpretedStream> {
@@ -52,13 +52,22 @@ impl GroupedVariable {
         Ok(cloned)
     }
 
-    pub(crate) fn substitute_into(
+    pub(crate) fn substitute_contents_into(
+        &self,
+        interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()> {
+        self.read_existing(interpreter)?.append_cloned_into(output);
+        Ok(())
+    }
+
+    pub(crate) fn substitute_grouped_into(
         &self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> Result<()> {
         output.push_new_group(
-            self.interpret_as_new_stream(interpreter)?,
+            self.interpret_ungrouped_contents(interpreter)?,
             Delimiter::None,
             self.span(),
         );
@@ -87,7 +96,7 @@ impl Interpret for &GroupedVariable {
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> Result<()> {
-        self.substitute_into(interpreter, output)
+        self.substitute_grouped_into(interpreter, output)
     }
 }
 
@@ -97,11 +106,10 @@ impl Express for &GroupedVariable {
         interpreter: &mut Interpreter,
         expression_stream: &mut ExpressionBuilder,
     ) -> Result<()> {
-        expression_stream.push_grouped_interpreted_stream(
-            self.interpret_as_new_stream(interpreter)?,
+        expression_stream.push_grouped(
+            |inner| self.substitute_contents_into(interpreter, inner),
             self.span(),
-        );
-        Ok(())
+        )
     }
 }
 
@@ -147,15 +155,6 @@ impl Parse for FlattenedVariable {
 }
 
 impl FlattenedVariable {
-    pub(super) fn interpret_as_new_stream(
-        &self,
-        interpreter: &Interpreter,
-    ) -> Result<InterpretedStream> {
-        let mut cloned = self.read_existing(interpreter)?.clone();
-        cloned.set_span_range(self.span_range());
-        Ok(cloned)
-    }
-
     pub(crate) fn substitute_into(
         &self,
         interpreter: &mut Interpreter,
@@ -197,13 +196,12 @@ impl Interpret for &FlattenedVariable {
 }
 
 impl Express for &FlattenedVariable {
-    fn add_to_expression(
-        self,
-        interpreter: &mut Interpreter,
-        expression_stream: &mut ExpressionBuilder,
-    ) -> Result<()> {
-        expression_stream.extend_with_interpreted_stream(self.interpret_as_tokens(interpreter)?);
-        Ok(())
+    fn add_to_expression(self, _: &mut Interpreter, _: &mut ExpressionBuilder) -> Result<()> {
+        // Just like with commands, we throw an error in the flattened case so
+        // that we can determine in future the exact structure of the expression
+        // at parse time.
+        self.flatten
+            .err("Flattened variables cannot be used directly in expressions.\nConsider removing the .. or wrapping it inside a command such as [!group! ..] which returns an expression")
     }
 }
 

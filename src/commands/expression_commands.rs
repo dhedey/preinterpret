@@ -77,9 +77,7 @@ impl NoOutputCommandDefinition for AssignCommand {
         let mut builder = ExpressionBuilder::new();
         variable.add_to_expression(interpreter, &mut builder)?;
         builder.push_punct(operator);
-        builder.extend_with_interpreted_stream(
-            expression.evaluate(interpreter)?.into_interpreted_stream(),
-        );
+        builder.extend_with_evaluation_output(expression.evaluate(interpreter)?);
 
         let output = builder.evaluate()?.into_interpreted_stream();
         variable.set(interpreter, output)?;

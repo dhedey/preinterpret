@@ -73,14 +73,14 @@ impl Interpret for CommandStreamInput {
                         output.extend_raw_tokens(tokens);
                         Ok(())
                     }
-                    CommandOutputKind::GroupedStream(_) => {
+                    CommandOutputKind::GroupedStream => {
                         unsafe {
                             // SAFETY: The kind change GroupedStream <=> FlattenedStream is valid
                             command.set_output_kind(CommandOutputKind::FlattenedStream);
                         }
                         command.interpret_as_tokens_into(interpreter, output)
                     }
-                    CommandOutputKind::ControlFlowFlattenedStream => {
+                    CommandOutputKind::ControlFlowCodeStream => {
                         let span = command.span();
                         let tokens = parse_as_stream_input(
                             command.interpret_as_tokens(interpreter)?,
@@ -95,7 +95,7 @@ impl Interpret for CommandStreamInput {
             }
             CommandStreamInput::FlattenedVariable(variable) => {
                 let tokens = parse_as_stream_input(
-                    variable.interpret_as_new_stream(interpreter)?,
+                    variable.interpret_as_tokens(interpreter)?,
                     || {
                         variable.error(format!(
                         "Expected variable to contain a single [ ... ] or transparent group. Perhaps you want to use {} instead, to use the content of the variable as the stream.",
@@ -107,8 +107,8 @@ impl Interpret for CommandStreamInput {
                 Ok(())
             }
             CommandStreamInput::GroupedVariable(variable) => {
-                let ungrouped_variable_contents = variable.interpret_as_new_stream(interpreter)?;
-                output.extend(ungrouped_variable_contents);
+                let group_contents = variable.interpret_ungrouped_contents(interpreter)?;
+                output.extend(group_contents);
                 Ok(())
             }
             CommandStreamInput::Code(code) => {

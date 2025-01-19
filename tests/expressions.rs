@@ -50,9 +50,17 @@ fn test_basic_evaluate_works() {
     assert_preinterpret_eq!(
         {
             [!set! #partial_sum = + 2]
-            [!evaluate! 5 #..partial_sum]
+            // The [!group! ...] constructs an expression from tokens,
+            // which is then interpreted / executed.
+            [!evaluate! [!group! 5 #..partial_sum]]
         },
         7
+    );
+    assert_preinterpret_eq!(
+        {
+            [!evaluate! 1 + [!range! 1..2]]
+        },
+        2
     );
 }
 
