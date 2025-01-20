@@ -8,6 +8,15 @@ use std::rc::Rc;
 pub(crate) struct Interpreter {
     config: InterpreterConfig,
     variable_data: HashMap<String, VariableData>,
+    loop_condition: LoopCondition,
+}
+
+#[derive(Clone, Copy)]
+#[must_use]
+pub(crate) enum LoopCondition {
+    None,
+    Continue,
+    Break,
 }
 
 #[derive(Clone)]
@@ -58,6 +67,7 @@ impl Interpreter {
         Self {
             config: Default::default(),
             variable_data: Default::default(),
+            loop_condition: LoopCondition::None,
         }
     }
 
@@ -87,12 +97,62 @@ impl Interpreter {
             .ok_or_else(make_error)
     }
 
-    pub(crate) fn config(&self) -> &InterpreterConfig {
-        &self.config
+    pub(crate) fn start_iteration_counter<'s, S: HasSpanRange>(
+        &self,
+        span_source: &'s S,
+    ) -> IterationCounter<'s, S> {
+        IterationCounter {
+            span_source,
+            count: 0,
+            iteration_limit: self.config.iteration_limit,
+        }
     }
 
-    pub(crate) fn mut_config(&mut self) -> &mut InterpreterConfig {
-        &mut self.config
+    pub(crate) fn set_iteration_limit(&mut self, limit: Option<usize>) {
+        self.config.iteration_limit = limit;
+    }
+
+    /// Panics if called with [`LoopCondition::None`]
+    pub(crate) fn start_loop_action(&mut self, source: Span, action: LoopCondition) -> Error {
+        self.loop_condition = action;
+        match action {
+            LoopCondition::None => panic!("Not allowed"),
+            LoopCondition::Continue => {
+                source.error("The continue command is only allowed inside a loop")
+            }
+            LoopCondition::Break => source.error("The break command is only allowed inside a loop"),
+        }
+    }
+
+    pub(crate) fn outstanding_loop_condition(&mut self) -> LoopCondition {
+        std::mem::replace(&mut self.loop_condition, LoopCondition::None)
+    }
+}
+
+pub(crate) struct IterationCounter<'a, S: HasSpanRange> {
+    span_source: &'a S,
+    count: usize,
+    iteration_limit: Option<usize>,
+}
+
+impl<'a, S: HasSpanRange> IterationCounter<'a, S> {
+    pub(crate) fn add_and_check(&mut self, count: usize) -> Result<()> {
+        self.count = self.count.wrapping_add(count);
+        self.check()
+    }
+
+    pub(crate) fn increment_and_check(&mut self) -> Result<()> {
+        self.count += 1;
+        self.check()
+    }
+
+    pub(crate) fn check(&self) -> Result<()> {
+        if let Some(limit) = self.iteration_limit {
+            if self.count > limit {
+                return self.span_source.err(format!("Iteration limit of {} exceeded.\nIf needed, the limit can be reconfigured with [!settings! {{ iteration_limit: X }}]", limit));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -100,31 +160,12 @@ pub(crate) struct InterpreterConfig {
     iteration_limit: Option<usize>,
 }
 
-pub(crate) const DEFAULT_ITERATION_LIMIT: usize = 10000;
+pub(crate) const DEFAULT_ITERATION_LIMIT: usize = 1000;
 
 impl Default for InterpreterConfig {
     fn default() -> Self {
         Self {
             iteration_limit: Some(DEFAULT_ITERATION_LIMIT),
         }
-    }
-}
-
-impl InterpreterConfig {
-    pub(crate) fn set_iteration_limit(&mut self, limit: Option<usize>) {
-        self.iteration_limit = limit;
-    }
-
-    pub(crate) fn check_iteration_count(
-        &self,
-        span_source: &impl HasSpanRange,
-        count: usize,
-    ) -> Result<()> {
-        if let Some(limit) = self.iteration_limit {
-            if count > limit {
-                return span_source.err(format!("Iteration limit of {} exceeded", limit));
-            }
-        }
-        Ok(())
     }
 }

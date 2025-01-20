@@ -440,6 +440,9 @@ define_command_kind! {
     IfCommand,
     WhileCommand,
     ForCommand,
+    LoopCommand,
+    ContinueCommand,
+    BreakCommand,
 
     // Token Commands
     IsEmptyCommand,

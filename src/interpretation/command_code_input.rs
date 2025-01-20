@@ -25,6 +25,23 @@ impl HasSpanRange for CommandCodeInput {
     }
 }
 
+impl CommandCodeInput {
+    pub(crate) fn interpret_loop_content_into(
+        self,
+        interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<LoopCondition> {
+        match self.inner.interpret_into(interpreter, output) {
+            Ok(()) => Ok(LoopCondition::None),
+            Err(err) => match interpreter.outstanding_loop_condition() {
+                LoopCondition::None => Err(err),
+                LoopCondition::Break => Ok(LoopCondition::Break),
+                LoopCondition::Continue => Ok(LoopCondition::Continue),
+            },
+        }
+    }
+}
+
 impl Interpret for CommandCodeInput {
     fn interpret_into(
         self,

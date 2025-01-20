@@ -110,8 +110,10 @@ impl ControlFlowCommandDefinition for WhileCommand {
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> Result<()> {
-        let mut iteration_count = 0;
+        let mut iteration_counter = interpreter.start_iteration_counter(&self.condition);
         loop {
+            iteration_counter.increment_and_check()?;
+
             let evaluated_condition = self
                 .condition
                 .clone()
@@ -123,13 +125,63 @@ impl ControlFlowCommandDefinition for WhileCommand {
                 break;
             }
 
-            iteration_count += 1;
-            interpreter
-                .config()
-                .check_iteration_count(&self.condition, iteration_count)?;
-            self.loop_code.clone().interpret_into(interpreter, output)?;
+            match self
+                .loop_code
+                .clone()
+                .interpret_loop_content_into(interpreter, output)?
+            {
+                LoopCondition::None => {}
+                LoopCondition::Continue => continue,
+                LoopCondition::Break => break,
+            }
         }
 
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct LoopCommand {
+    loop_code: CommandCodeInput,
+}
+
+impl CommandType for LoopCommand {
+    type OutputKind = OutputKindControlFlow;
+}
+
+impl ControlFlowCommandDefinition for LoopCommand {
+    const COMMAND_NAME: &'static str = "loop";
+
+    fn parse(arguments: CommandArguments) -> Result<Self> {
+        arguments.fully_parse_or_error(
+            |input| {
+                Ok(Self {
+                    loop_code: input.parse()?,
+                })
+            },
+            "Expected [!loop! { ... }]",
+        )
+    }
+
+    fn execute(
+        self: Box<Self>,
+        interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()> {
+        let mut iteration_counter = interpreter.start_iteration_counter(&self.loop_code);
+
+        loop {
+            iteration_counter.increment_and_check()?;
+            match self
+                .loop_code
+                .clone()
+                .interpret_loop_content_into(interpreter, output)?
+            {
+                LoopCondition::None => {}
+                LoopCondition::Continue => continue,
+                LoopCondition::Break => break,
+            }
+        }
         Ok(())
     }
 }
@@ -140,7 +192,7 @@ pub(crate) struct ForCommand {
     #[allow(unused)]
     in_token: Token![in],
     input: CommandStreamInput,
-    code_block: CommandCodeInput,
+    loop_code: CommandCodeInput,
 }
 
 impl CommandType for ForCommand {
@@ -157,7 +209,7 @@ impl ControlFlowCommandDefinition for ForCommand {
                     parse_place: input.parse()?,
                     in_token: input.parse()?,
                     input: input.parse()?,
-                    code_block: input.parse()?,
+                    loop_code: input.parse()?,
                 })
             },
             "Expected [!for! #x in [ ... ] { code }]",
@@ -171,22 +223,73 @@ impl ControlFlowCommandDefinition for ForCommand {
     ) -> Result<()> {
         let stream = self.input.interpret_to_new_stream(interpreter)?;
 
-        let mut iteration_count = 0;
+        let mut iteration_counter = interpreter.start_iteration_counter(&self.in_token);
 
         for token in stream.into_token_stream() {
+            iteration_counter.increment_and_check()?;
             self.parse_place.handle_parse_from_stream(
                 InterpretedStream::raw(token.into_token_stream()),
                 interpreter,
             )?;
-            self.code_block
+            match self
+                .loop_code
                 .clone()
-                .interpret_into(interpreter, output)?;
-            iteration_count += 1;
-            interpreter
-                .config()
-                .check_iteration_count(&self.in_token, iteration_count)?;
+                .interpret_loop_content_into(interpreter, output)?
+            {
+                LoopCondition::None => {}
+                LoopCondition::Continue => continue,
+                LoopCondition::Break => break,
+            }
         }
 
         Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct ContinueCommand {
+    span: Span,
+}
+
+impl CommandType for ContinueCommand {
+    type OutputKind = OutputKindNone;
+}
+
+impl NoOutputCommandDefinition for ContinueCommand {
+    const COMMAND_NAME: &'static str = "continue";
+
+    fn parse(arguments: CommandArguments) -> Result<Self> {
+        arguments.assert_empty("The !continue! command takes no arguments")?;
+        Ok(Self {
+            span: arguments.full_span_range().span(),
+        })
+    }
+
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
+        Err(interpreter.start_loop_action(self.span, LoopCondition::Continue))
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct BreakCommand {
+    span: Span,
+}
+
+impl CommandType for BreakCommand {
+    type OutputKind = OutputKindNone;
+}
+
+impl NoOutputCommandDefinition for BreakCommand {
+    const COMMAND_NAME: &'static str = "break";
+
+    fn parse(arguments: CommandArguments) -> Result<Self> {
+        arguments.assert_empty("The !break! command takes no arguments")?;
+        Ok(Self {
+            span: arguments.full_span_range().span(),
+        })
+    }
+
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
+        Err(interpreter.start_loop_action(self.span, LoopCondition::Break))
     }
 }

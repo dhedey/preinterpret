@@ -144,8 +144,8 @@ impl StreamCommandDefinition for RangeCommand {
             })?;
 
         interpreter
-            .config()
-            .check_iteration_count(&range_span_range, length)?;
+            .start_iteration_counter(&range_span_range)
+            .add_and_check(length)?;
 
         match self.range_limits {
             RangeLimits::HalfOpen(_) => {

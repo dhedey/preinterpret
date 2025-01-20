@@ -69,3 +69,27 @@ fn test_for() {
         "ABCDE"
     );
 }
+
+#[test]
+fn test_loop_continue_and_break() {
+    assert_preinterpret_eq!(
+        {
+            [!set! #x = 0]
+            [!loop! {
+                [!assign! #x += 1]
+                [!if! #x >= 10 { [!break!] }]
+            }]
+            #x
+        },
+        10
+    );
+    assert_preinterpret_eq!(
+        {
+            [!string! [!for! #x in [!range! 65..75] {
+                [!if! #x % 2 == 0 { [!continue!] }]
+                [!evaluate! #x as u8 as char]
+            }]]
+        },
+        "ACEGI"
+    );
+}

@@ -1,4 +1,5 @@
-error: Iteration limit of 5 exceeded
+error: Iteration limit of 5 exceeded.
+       If needed, the limit can be reconfigured with [!settings! { iteration_limit: X }]
  --> tests/compilation_failures/core/settings_update_iteration_limit.rs:6:19
   |
 6 |         [!range! 0..100]
