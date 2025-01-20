@@ -49,7 +49,7 @@ impl HasSpanRange for CommandStreamInput {
 }
 
 impl Interpret for CommandStreamInput {
-    fn interpret_as_tokens_into(
+    fn interpret_into(
         self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
@@ -65,7 +65,7 @@ impl Interpret for CommandStreamInput {
                     CommandOutputKind::FlattenedStream => {
                         let span = command.span();
                         let tokens = parse_as_stream_input(
-                            command.interpret_as_tokens(interpreter)?,
+                            command.interpret_to_new_stream(interpreter)?,
                             || {
                                 span.error("Expected output of flattened command to contain a single [ ... ] or transparent group. Perhaps you want to remove the .., to use the command output as-is.")
                             },
@@ -78,12 +78,12 @@ impl Interpret for CommandStreamInput {
                             // SAFETY: The kind change GroupedStream <=> FlattenedStream is valid
                             command.set_output_kind(CommandOutputKind::FlattenedStream);
                         }
-                        command.interpret_as_tokens_into(interpreter, output)
+                        command.interpret_into(interpreter, output)
                     }
                     CommandOutputKind::ControlFlowCodeStream => {
                         let span = command.span();
                         let tokens = parse_as_stream_input(
-                            command.interpret_as_tokens(interpreter)?,
+                            command.interpret_to_new_stream(interpreter)?,
                             || {
                                 span.error("Expected output of control flow command to contain a single [ ... ] or transparent group.")
                             },
@@ -95,7 +95,7 @@ impl Interpret for CommandStreamInput {
             }
             CommandStreamInput::FlattenedVariable(variable) => {
                 let tokens = parse_as_stream_input(
-                    variable.interpret_as_tokens(interpreter)?,
+                    variable.interpret_to_new_stream(interpreter)?,
                     || {
                         variable.error(format!(
                         "Expected variable to contain a single [ ... ] or transparent group. Perhaps you want to use {} instead, to use the content of the variable as the stream.",
@@ -111,15 +111,18 @@ impl Interpret for CommandStreamInput {
             }
             CommandStreamInput::Code(code) => {
                 let span = code.span();
-                let tokens = parse_as_stream_input(code.interpret_as_tokens(interpreter)?, || {
-                    span.error("Expected the { ... } block to output a single [ ... ] group or transparent group. You may wish to replace the outer `{ ... }` block with a `[ ... ]` block, which outputs all its contents as a stream.".to_string())
-                })?;
+                let tokens = parse_as_stream_input(
+                    code.interpret_to_new_stream(interpreter)?,
+                    || {
+                        span.error("Expected the { ... } block to output a single [ ... ] group or transparent group. You may wish to replace the outer `{ ... }` block with a `[ ... ]` block, which outputs all its contents as a stream.".to_string())
+                    },
+                )?;
                 output.extend_raw_tokens(tokens);
                 Ok(())
             }
-            CommandStreamInput::ExplicitStream(group) => group
-                .into_content()
-                .interpret_as_tokens_into(interpreter, output),
+            CommandStreamInput::ExplicitStream(group) => {
+                group.into_content().interpret_into(interpreter, output)
+            }
         }
     }
 }

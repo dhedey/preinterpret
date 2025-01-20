@@ -1,15 +1,15 @@
 use crate::internal_prelude::*;
 
 pub(crate) trait Interpret: Sized {
-    fn interpret_as_tokens_into(
+    fn interpret_into(
         self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> Result<()>;
 
-    fn interpret_as_tokens(self, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
+    fn interpret_to_new_stream(self, interpreter: &mut Interpreter) -> Result<InterpretedStream> {
         let mut output = InterpretedStream::new();
-        self.interpret_as_tokens_into(interpreter, &mut output)?;
+        self.interpret_into(interpreter, &mut output)?;
         Ok(output)
     }
 }
@@ -21,7 +21,7 @@ pub(crate) trait InterpretValue: Sized {
 }
 
 impl<T: InterpretValue<InterpretedValue = I> + HasSpanRange, I: ToTokens> Interpret for T {
-    fn interpret_as_tokens_into(
+    fn interpret_into(
         self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,

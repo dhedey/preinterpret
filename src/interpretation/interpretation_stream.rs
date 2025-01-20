@@ -33,13 +33,13 @@ impl ContextualParse for InterpretationStream {
 }
 
 impl Interpret for InterpretationStream {
-    fn interpret_as_tokens_into(
+    fn interpret_into(
         self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> Result<()> {
         for item in self.items {
-            item.interpret_as_tokens_into(interpreter, output)?;
+            item.interpret_into(interpreter, output)?;
         }
         Ok(())
     }
@@ -78,12 +78,12 @@ impl Parse for InterpretationGroup {
 }
 
 impl Interpret for InterpretationGroup {
-    fn interpret_as_tokens_into(
+    fn interpret_into(
         self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> Result<()> {
-        let inner = self.content.interpret_as_tokens(interpreter)?;
+        let inner = self.content.interpret_to_new_stream(interpreter)?;
         output.push_new_group(inner, self.source_delimiter, self.source_delim_span.join());
         Ok(())
     }
@@ -123,11 +123,7 @@ impl Parse for RawGroup {
 }
 
 impl Interpret for RawGroup {
-    fn interpret_as_tokens_into(
-        self,
-        _: &mut Interpreter,
-        output: &mut InterpretedStream,
-    ) -> Result<()> {
+    fn interpret_into(self, _: &mut Interpreter, output: &mut InterpretedStream) -> Result<()> {
         output.push_new_group(
             InterpretedStream::raw(self.content),
             self.source_delimeter,

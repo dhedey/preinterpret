@@ -425,17 +425,23 @@ We could support a piped calling convention, such as the `[!pipe! ...]` special 
 
 #### Possible extension: Better performance
 
-Do some testing and ensure there are tools to avoid `N^2` performance when doing token manipulation, e.g. with:
+We could tweak some commands to execute lazily:
+* Replace `output: &mut InterpretedStream` with `output: &mut impl OutputSource` which could either write to the output or be buffered/streamed into other commands.
+This would allow things like `[!zip! ...]` or `[!range! ...]` to execute lazily, assuming the consuming command such as `for` read lazily.
 
-* `[!extend! #stream += new tokens...]`
+Incremental parsing using a fork of syn ([see issue](https://github.com/dtolnay/syn/issues/1842)) would allow:
+
+* Cheaper conversions between variables and parsing.
 * `[!consume_from! #stream #x]` where `#x` is read as the first token tree from `#stream`
 * `[!consume_from! #stream (<PARSE_DESTRUCTURING>)]` where the parser is read greedily from `#stream`
 
-We could consider tweaking some commands to execute lazily, i.e. change the infrastructure to operate over a `TokenIterable` which is either a `TokenStream` or `LazyTokenStream`. Things like `[!zip! ...]` or `[!range! ...]` could then output a `LazyTokenStream`.
+Forking syn may also allow some parts to be made more performant.
 
 ### Possible extension: User-defined commands
 
 * `[!define! [!my_command! <PARSE_DESTRUCTURING>] { <OUTPUT> }]`
+* Some ability to define and re-use commands across multiple invocations
+  without being too expensive. Still unsure how to make this work.
 
 ### Possible extension: Further utility commands
 
@@ -444,13 +450,6 @@ Other boolean commands could be possible, similar to numeric commands:
   * `[!tokens_eq! (3 4) (3   4)]` outputs `true` because the token stream ignores spacing.
   * `[!tokens_eq! 1u64 1]` outputs `false` because these are different literals.
 * `[!str_contains! "needle" [!string! haystack]]` expects two string literals, and outputs `true` if the first string is a substring of the second string.
-
-### Possible extension: Loop, Break
-
-These aren't the highest priority, as they can be simulated with `if` statements inside a `while` loop:
-
-* `[!loop! { ... }]` for `[!while! true { ... }]`
-* `[!break!]` to break the inner-most loop
 
 ### Possible extension: Goto
 
@@ -474,12 +473,6 @@ preinterpret::preinterpret!{
 ### Possible extension: Eager expansion of macros
 
 When [eager expansion of macros returning literals](https://github.com/rust-lang/rust/issues/90765) is stabilized, it would be nice to include a command to do that, which could be used to include code, for example: `[!expand_literal_macros! include!("my-poem.txt")]`.
-
-### Possible extension: Explicit parsing feature to enable syn
-
-The heavy `syn` library is (in basic preinterpret) only needed for literal parsing, and error conversion into compile errors.
-
-We could add a parsing feature to speed up compile times a lot for stacks which don't need the parsing functionality.
 
 ## License
 

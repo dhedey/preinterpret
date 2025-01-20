@@ -48,10 +48,9 @@ impl ControlFlowCommandDefinition for IfCommand {
             .value();
 
         if evaluated_condition {
-            self.true_code
-                .interpret_as_tokens_into(interpreter, output)?
+            self.true_code.interpret_into(interpreter, output)?
         } else if let Some(false_code) = self.false_code {
-            false_code.interpret_as_tokens_into(interpreter, output)?
+            false_code.interpret_into(interpreter, output)?
         }
 
         Ok(())
@@ -105,9 +104,7 @@ impl ControlFlowCommandDefinition for WhileCommand {
             interpreter
                 .config()
                 .check_iteration_count(&self.condition, iteration_count)?;
-            self.loop_code
-                .clone()
-                .interpret_as_tokens_into(interpreter, output)?;
+            self.loop_code.clone().interpret_into(interpreter, output)?;
         }
 
         Ok(())

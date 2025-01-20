@@ -98,23 +98,23 @@ pub(crate) fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> PeekMa
 }
 
 impl Interpret for InterpretationItem {
-    fn interpret_as_tokens_into(
+    fn interpret_into(
         self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> Result<()> {
         match self {
             InterpretationItem::Command(command_invocation) => {
-                command_invocation.interpret_as_tokens_into(interpreter, output)?;
+                command_invocation.interpret_into(interpreter, output)?;
             }
             InterpretationItem::GroupedVariable(variable) => {
-                variable.interpret_as_tokens_into(interpreter, output)?;
+                variable.interpret_into(interpreter, output)?;
             }
             InterpretationItem::FlattenedVariable(variable) => {
-                variable.interpret_as_tokens_into(interpreter, output)?;
+                variable.interpret_into(interpreter, output)?;
             }
             InterpretationItem::InterpretationGroup(group) => {
-                group.interpret_as_tokens_into(interpreter, output)?;
+                group.interpret_into(interpreter, output)?;
             }
             InterpretationItem::Punct(punct) => output.push_punct(punct),
             InterpretationItem::Ident(ident) => output.push_ident(ident),

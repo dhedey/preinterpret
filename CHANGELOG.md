@@ -6,6 +6,7 @@
 
 * Core commands:
   * `[!error! ...]`
+  * `[!extend! #x += ...]` to performantly add extra characters to the stream 
 * Expression commands:
   * `[!evaluate! ...]`
   * `[!assign! #x += ...]` for `+` and other supported operators
@@ -17,7 +18,7 @@
   * `[!is_empty! #stream]`
   * `[!length! #stream]` which gives the number of token trees in the token stream.
   * `[!group! ...]` which wraps the tokens in a transparent group. Useful with `!for!`.
-  * `[!..group!]` which just outputs its contents as-is, useful where the grammar
+  * `[!..group! ...]` which just outputs its contents as-is, useful where the grammar
     only takes a single item, but we want to output multiple tokens
   * `[!intersperse! { .. }]` which inserts separator tokens between each token tree in a stream.
 
@@ -26,10 +27,11 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 ### To come
 
 * Support `!else if!` in `!if!`
-* Add [!break!] and [!continue!] commands using a flag in the interpreter
 * Support string & char literals (for comparisons & casts) in expressions
 * Reconfiguring iteration limit, via `[!settings! { iteration_limit: 4000 }]`
-* Other token stream commands
+* Add [!loop!], [!break!] and [!continue!] commands using a flag in the interpreter
+* `[!split! { items: X, with: X, drop_trailing_empty?: true }]`
+* `[!zip! ([Hello Goodbye] [World Friend])]` => `[(Hello World), (Goodbye Friend)]`
 * Add basic `!for!` loops
 * Add more tests
   * e.g. for various expressions
@@ -69,14 +71,11 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
     * `[!for! [!SPLIT! #x,] in [Hello, World,]]`
     * Even though this might be more performant, I'm not too much of a fan of this, as it's hard to understand
     * Perhaps we can leave it to the `[!while_parse! #x[!OPTIONAL! ,] from #X]` style commands?
-* `[!split! { items: X, with: X, drop_trailing_empty?: true }]`
-* `[!intersperse! { items: X, with: X, add_trailing?: false, override_final_with?: X }]` for adding something between each item, where each `X` is a `CommandStreamInput`
-* `[!zip! ([Hello Goodbye] [World Friend])]` => `[(Hello World), (Goodbye Friend)]`
 * Basic place parsing
   * Introduce `[!let! #..x = Hello World]` does parsing and is equivalent to `[!set! #x = Hello World]`
   * In parse land: #x matches a single token, #..x consumes the rest of a stream
   * Auto-expand transparent groups, like syn. Maybe even using syn `TokenBuffer` / `Cursor`!
-  * Explicit Punct, Idents, Literals
+  * Explicit raw Punct, Idents, Literals and Groups
   * `[!PARSER! ]` method to take a stream
   * `[!LITERAL! #x]` / `[!IDENT! #x]` bindings
   * `[!OPTIONAL! ...]` and/or possibly `#(..)?` and `[!is_set! #x]`?
@@ -85,7 +84,8 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
     * Any binding could be set to an array, but it gets complicated fast with nested bindings.
     * Instead for now, we could push people towards capturing the input and parsing it with for loops and matches.
   * `#x` binding reads a token tree
-  * `#..x` binding reads the rest of the stream
+  * `#..x` binding reads the rest of the stream... until the following raw token stream is detected (if at all). It must be followed by one or more raw tokens,
+  or the end of the stream.
   * `[!RAW!]` for e.g. `[!while_parse! [!RAW! from] from #X]`
   * `[!match!]` (with `#..x` as a catch-all)
 * Check all `#[allow(unused)]` and remove any which aren't needed

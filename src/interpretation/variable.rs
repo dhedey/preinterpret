@@ -87,7 +87,7 @@ impl IsVariable for GroupedVariable {
 }
 
 impl Interpret for &GroupedVariable {
-    fn interpret_as_tokens_into(
+    fn interpret_into(
         self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
@@ -185,7 +185,7 @@ impl IsVariable for FlattenedVariable {
 }
 
 impl Interpret for &FlattenedVariable {
-    fn interpret_as_tokens_into(
+    fn interpret_into(
         self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,

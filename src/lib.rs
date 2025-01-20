@@ -548,7 +548,7 @@ fn preinterpret_internal(input: TokenStream) -> Result<TokenStream> {
     let mut interpreter = Interpreter::new();
     let interpretation_stream =
         InterpretationStream::parse_from_token_stream(input, Span::call_site().span_range())?;
-    let interpreted_stream = interpretation_stream.interpret_as_tokens(&mut interpreter)?;
+    let interpreted_stream = interpretation_stream.interpret_to_new_stream(&mut interpreter)?;
     Ok(interpreted_stream.into_token_stream())
 }
 

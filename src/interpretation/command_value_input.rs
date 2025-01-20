@@ -50,14 +50,14 @@ impl<T: InterpretValue<InterpretedValue = I>, I: Parse> InterpretValue for Comma
             CommandValueInput::Value(_) => "value",
         };
         let interpreted_stream = match self {
-            CommandValueInput::Command(command) => command.interpret_as_tokens(interpreter)?,
+            CommandValueInput::Command(command) => command.interpret_to_new_stream(interpreter)?,
             CommandValueInput::GroupedVariable(variable) => {
-                variable.interpret_as_tokens(interpreter)?
+                variable.interpret_to_new_stream(interpreter)?
             }
             CommandValueInput::FlattenedVariable(variable) => {
-                variable.interpret_as_tokens(interpreter)?
+                variable.interpret_to_new_stream(interpreter)?
             }
-            CommandValueInput::Code(code) => code.interpret_as_tokens(interpreter)?,
+            CommandValueInput::Code(code) => code.interpret_to_new_stream(interpreter)?,
             CommandValueInput::Value(value) => return value.interpret(interpreter),
         };
         match interpreted_stream.syn_parse(I::parse) {

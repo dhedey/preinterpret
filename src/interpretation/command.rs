@@ -509,7 +509,7 @@ impl HasSpanRange for Command {
 }
 
 impl Interpret for Command {
-    fn interpret_as_tokens_into(
+    fn interpret_into(
         self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,

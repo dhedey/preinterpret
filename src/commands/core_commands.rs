@@ -31,7 +31,7 @@ impl NoOutputCommandDefinition for SetCommand {
     }
 
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
-        let result_tokens = self.arguments.interpret_as_tokens(interpreter)?;
+        let result_tokens = self.arguments.interpret_to_new_stream(interpreter)?;
         self.variable.set(interpreter, result_tokens)?;
 
         Ok(())
@@ -68,7 +68,7 @@ impl NoOutputCommandDefinition for ExtendCommand {
 
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
         let variable_data = self.variable.get_existing_for_mutation(interpreter)?;
-        self.arguments.interpret_as_tokens_into(
+        self.arguments.interpret_into(
             interpreter,
             variable_data.get_mut(&self.variable)?.deref_mut(),
         )?;
@@ -159,7 +159,7 @@ impl NoOutputCommandDefinition for ErrorCommand {
 
         let error_span = match self.inputs.spans {
             Some(spans) => {
-                let error_span_stream = spans.interpret_as_tokens(interpreter)?;
+                let error_span_stream = spans.interpret_to_new_stream(interpreter)?;
 
                 // Consider the case where preinterpret embeds in a declarative macro, and we have
                 // an error like this:

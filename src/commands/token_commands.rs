@@ -20,7 +20,7 @@ impl ValueCommandDefinition for IsEmptyCommand {
 
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<TokenTree> {
         let output_span = self.arguments.span_range().span();
-        let interpreted = self.arguments.interpret_as_tokens(interpreter)?;
+        let interpreted = self.arguments.interpret_to_new_stream(interpreter)?;
         Ok(Ident::new_bool(interpreted.is_empty(), output_span).into())
     }
 }
@@ -45,7 +45,7 @@ impl ValueCommandDefinition for LengthCommand {
 
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<TokenTree> {
         let output_span = self.arguments.span_range().span();
-        let interpreted = self.arguments.interpret_as_tokens(interpreter)?;
+        let interpreted = self.arguments.interpret_to_new_stream(interpreter)?;
         let stream_length = interpreted.into_token_stream().into_iter().count();
         let length_literal = Literal::usize_unsuffixed(stream_length).with_span(output_span);
         Ok(length_literal.into())
@@ -77,7 +77,7 @@ impl StreamCommandDefinition for GroupCommand {
     ) -> Result<()> {
         // The grouping happens automatically because a non-flattened
         // stream command is outputted in a group.
-        self.arguments.interpret_as_tokens_into(interpreter, output)
+        self.arguments.interpret_into(interpreter, output)
     }
 }
 
@@ -120,7 +120,7 @@ impl StreamCommandDefinition for IntersperseCommand {
         let items = self
             .inputs
             .items
-            .interpret_as_tokens(interpreter)?
+            .interpret_to_new_stream(interpreter)?
             .into_token_stream();
         let add_trailing = match self.inputs.add_trailing {
             Some(add_trailing) => add_trailing.interpret(interpreter)?.value(),
@@ -177,18 +177,10 @@ impl SeparatorAppender {
         output: &mut InterpretedStream,
     ) -> Result<()> {
         match self.separator(remaining) {
-            TrailingSeparator::Normal => self
-                .separator
-                .clone()
-                .interpret_as_tokens_into(interpreter, output),
+            TrailingSeparator::Normal => self.separator.clone().interpret_into(interpreter, output),
             TrailingSeparator::Final => match self.final_separator.take() {
-                Some(final_separator) => {
-                    final_separator.interpret_as_tokens_into(interpreter, output)
-                }
-                None => self
-                    .separator
-                    .clone()
-                    .interpret_as_tokens_into(interpreter, output),
+                Some(final_separator) => final_separator.interpret_into(interpreter, output),
+                None => self.separator.clone().interpret_into(interpreter, output),
             },
             TrailingSeparator::None => Ok(()),
         }

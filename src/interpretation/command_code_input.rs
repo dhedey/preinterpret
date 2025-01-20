@@ -26,11 +26,11 @@ impl HasSpanRange for CommandCodeInput {
 }
 
 impl Interpret for CommandCodeInput {
-    fn interpret_as_tokens_into(
+    fn interpret_into(
         self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> Result<()> {
-        self.inner.interpret_as_tokens_into(interpreter, output)
+        self.inner.interpret_into(interpreter, output)
     }
 }

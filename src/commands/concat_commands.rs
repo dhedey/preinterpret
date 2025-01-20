@@ -30,7 +30,7 @@ fn concat_into_string(
     conversion_fn: impl Fn(&str) -> String,
 ) -> Result<Literal> {
     let output_span = input.span();
-    let concatenated = concat_recursive(input.interpret_as_tokens(interpreter)?);
+    let concatenated = concat_recursive(input.interpret_to_new_stream(interpreter)?);
     let string_literal = string_literal(&conversion_fn(&concatenated), output_span);
     Ok(string_literal)
 }
@@ -41,7 +41,7 @@ fn concat_into_ident(
     conversion_fn: impl Fn(&str) -> String,
 ) -> Result<Ident> {
     let output_span = input.span();
-    let concatenated = concat_recursive(input.interpret_as_tokens(interpreter)?);
+    let concatenated = concat_recursive(input.interpret_to_new_stream(interpreter)?);
     let ident = parse_ident(&conversion_fn(&concatenated), output_span)?;
     Ok(ident)
 }
@@ -52,7 +52,7 @@ fn concat_into_literal(
     conversion_fn: impl Fn(&str) -> String,
 ) -> Result<Literal> {
     let output_span = input.span();
-    let concatenated = concat_recursive(input.interpret_as_tokens(interpreter)?);
+    let concatenated = concat_recursive(input.interpret_to_new_stream(interpreter)?);
     let literal = parse_literal(&conversion_fn(&concatenated), output_span)?;
     Ok(literal)
 }
