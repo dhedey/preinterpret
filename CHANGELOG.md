@@ -25,7 +25,6 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 
 ### To come
 
-* Implement comment on `!assign!` and `!buffer!`
 * Support `!else if!` in `!if!`
 * Add [!break!] and [!continue!] commands using a flag in the interpreter
 * Support string & char literals (for comparisons & casts) in expressions

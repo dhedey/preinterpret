@@ -1,3 +1,5 @@
+use std::ops::DerefMut;
+
 use crate::internal_prelude::*;
 
 #[derive(Clone)]
@@ -65,20 +67,11 @@ impl NoOutputCommandDefinition for ExtendCommand {
     }
 
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
-        // We'd like to do this to avoid double-passing the intrepreted tokens:
-        // self.arguments.interpret_as_tokens_into(interpreter, self.variable.get_mut(interpreter)?);
-        // But this doesn't work because the interpreter is mut borrowed twice.
-        //
-        // Conceptually this does protect us from issues... e.g. it prevents us
-        // from allowing:
-        // [!extend! #x += ..#x]
-        // Which is pretty non-sensical.
-        //
-        // In future, we could improve this by having the interpreter store
-        // a RefCell and erroring on self-reference, with a hint to use a [!buffer!]
-        // to break the self-reference / error.
-        let output = self.arguments.interpret_as_tokens(interpreter)?;
-        self.variable.get_mut(interpreter)?.extend(output);
+        let variable_data = self.variable.get_existing_for_mutation(interpreter)?;
+        self.arguments.interpret_as_tokens_into(
+            interpreter,
+            variable_data.get_mut(&self.variable)?.deref_mut(),
+        )?;
         Ok(())
     }
 }

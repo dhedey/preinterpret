@@ -75,6 +75,16 @@ fn assign_works() {
         },
         12
     );
+    // Assign can reference itself in its expression,
+    // because the expression result is buffered.
+    assert_preinterpret_eq!(
+        {
+            [!set! #x = 2]      // 10
+            [!assign! #x += #x]
+            #x
+        },
+        4
+    );
 }
 
 #[test]

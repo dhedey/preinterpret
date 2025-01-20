@@ -60,10 +60,6 @@ impl InterpretedStream {
         Self { token_stream }
     }
 
-    pub(crate) fn extend(&mut self, interpreted_stream: InterpretedStream) {
-        self.token_stream.extend(interpreted_stream.token_stream);
-    }
-
     pub(crate) fn push_literal(&mut self, literal: Literal) {
         self.push_raw_token_tree(literal.into());
     }

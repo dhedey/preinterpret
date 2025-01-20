@@ -1,0 +1,5 @@
+error: The variable cannot be modified if it is already currently being modified
+ --> tests/compilation_failures/core/extend_variable_and_then_set_it.rs:6:45
+  |
+6 |         [!extend! #variable += World [!set! #variable = Hello2]]
+  |                                             ^^^^^^^^^

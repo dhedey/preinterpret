@@ -1,5 +1,9 @@
 use crate::internal_prelude::*;
 
+pub(crate) trait IsVariable: HasSpanRange {
+    fn get_name(&self) -> String;
+}
+
 #[derive(Clone)]
 pub(crate) struct GroupedVariable {
     marker: Token![#],
@@ -21,26 +25,23 @@ impl Parse for GroupedVariable {
 }
 
 impl GroupedVariable {
-    pub(crate) fn variable_name(&self) -> String {
-        self.variable_name.to_string()
-    }
-
     pub(crate) fn set(
         &self,
         interpreter: &mut Interpreter,
         value: InterpretedStream,
     ) -> Result<()> {
-        interpreter.set_variable(self.variable_name(), value);
-        Ok(())
+        interpreter.set_variable(self, value)
     }
 
-    pub(crate) fn get_mut<'i>(
+    pub(crate) fn get_existing_for_mutation(
         &self,
-        interpreter: &'i mut Interpreter,
-    ) -> Result<&'i mut InterpretedStream> {
-        interpreter
-            .get_variable_mut(&self.variable_name())
-            .ok_or_else(|| self.error(format!("The variable {} wasn't already set", self)))
+        interpreter: &Interpreter,
+    ) -> Result<VariableData> {
+        Ok(interpreter
+            .get_existing_variable_data(self, || {
+                self.error(format!("The variable {} wasn't already set", self))
+            })?
+            .cheap_clone())
     }
 
     pub(crate) fn substitute_ungrouped_contents_into(
@@ -48,7 +49,9 @@ impl GroupedVariable {
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> Result<()> {
-        self.read_existing(interpreter)?.append_cloned_into(output);
+        self.read_existing(interpreter)?
+            .get(self)?
+            .append_cloned_into(output);
         Ok(())
     }
 
@@ -58,26 +61,28 @@ impl GroupedVariable {
         output: &mut InterpretedStream,
     ) -> Result<()> {
         output.push_new_group(
-            self.read_existing(interpreter)?.clone(),
+            self.read_existing(interpreter)?.get(self)?.clone(),
             Delimiter::None,
             self.span(),
         );
         Ok(())
     }
 
-    fn read_existing<'i>(&self, interpreter: &'i Interpreter) -> Result<&'i InterpretedStream> {
-        match self.read_option(interpreter) {
-            Some(token_stream) => Ok(token_stream),
-            None => self.span_range().err(format!(
+    fn read_existing<'i>(&self, interpreter: &'i Interpreter) -> Result<&'i VariableData> {
+        interpreter.get_existing_variable_data(
+            self,
+            || self.error(format!(
                 "The variable {} wasn't set.\nIf this wasn't intended to be a variable, work around this with [!raw! {}]",
                 self,
                 self,
             )),
-        }
+        )
     }
+}
 
-    fn read_option<'i>(&self, interpreter: &'i Interpreter) -> Option<&'i InterpretedStream> {
-        interpreter.get_variable(&self.variable_name.to_string())
+impl IsVariable for GroupedVariable {
+    fn get_name(&self) -> String {
+        self.variable_name.to_string()
     }
 }
 
@@ -118,7 +123,7 @@ impl HasSpanRange for &GroupedVariable {
 
 impl core::fmt::Display for GroupedVariable {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "#..{}", self.variable_name)
+        write!(f, "#{}", self.variable_name)
     }
 }
 
@@ -151,28 +156,31 @@ impl FlattenedVariable {
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> Result<()> {
-        self.read_existing(interpreter)?.append_cloned_into(output);
+        self.read_existing(interpreter)?
+            .get(self)?
+            .append_cloned_into(output);
         Ok(())
     }
 
-    fn read_existing<'i>(&self, interpreter: &'i Interpreter) -> Result<&'i InterpretedStream> {
-        match self.read_option(interpreter) {
-            Some(token_stream) => Ok(token_stream),
-            None => self.span_range().err(format!(
+    fn read_existing<'i>(&self, interpreter: &'i Interpreter) -> Result<&'i VariableData> {
+        interpreter.get_existing_variable_data(
+            self,
+            || self.error(format!(
                 "The variable {} wasn't set.\nIf this wasn't intended to be a variable, work around this with [!raw! {}]",
                 self,
                 self,
             )),
-        }
-    }
-
-    fn read_option<'i>(&self, interpreter: &'i Interpreter) -> Option<&'i InterpretedStream> {
-        let FlattenedVariable { variable_name, .. } = self;
-        interpreter.get_variable(&variable_name.to_string())
+        )
     }
 
     pub(crate) fn display_grouped_variable_token(&self) -> String {
         format!("#{}", self.variable_name)
+    }
+}
+
+impl IsVariable for FlattenedVariable {
+    fn get_name(&self) -> String {
+        self.variable_name.to_string()
     }
 }
 

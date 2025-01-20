@@ -1,0 +1,5 @@
+error: The variable #variable wasn't already set
+ --> tests/compilation_failures/core/extend_non_existing_variable.rs:5:19
+  |
+5 |         [!extend! #variable += 2]
+  |                   ^^^^^^^^^
