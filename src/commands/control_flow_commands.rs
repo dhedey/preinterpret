@@ -4,7 +4,8 @@ use crate::internal_prelude::*;
 pub(crate) struct IfCommand {
     condition: ExpressionInput,
     true_code: CommandCodeInput,
-    false_code: Option<CommandCodeInput>,
+    else_ifs: Vec<(ExpressionInput, CommandCodeInput)>,
+    else_code: Option<CommandCodeInput>,
 }
 
 impl CommandType for IfCommand {
@@ -17,22 +18,31 @@ impl ControlFlowCommandDefinition for IfCommand {
     fn parse(arguments: CommandArguments) -> Result<Self> {
         arguments.fully_parse_or_error(
             |input| {
+                let condition = input.parse()?;
+                let true_code = input.parse()?;
+                let mut else_ifs = Vec::new();
+                let mut else_code = None;
+                while !input.is_empty() {
+                    input.parse::<Token![!]>()?;
+                    if input.peek_ident_matching("elif") {
+                        input.parse_ident_matching("elif")?;
+                        input.parse::<Token![!]>()?;
+                        else_ifs.push((input.parse()?, input.parse()?));
+                    } else {
+                        input.parse_ident_matching("else")?;
+                        input.parse::<Token![!]>()?;
+                        else_code = Some(input.parse()?);
+                        break;
+                    }
+                }
                 Ok(Self {
-                    condition: input.parse()?,
-                    true_code: input.parse()?,
-                    false_code: {
-                        if !input.is_empty() {
-                            input.parse::<Token![!]>()?;
-                            input.parse::<Token![else]>()?;
-                            input.parse::<Token![!]>()?;
-                            Some(input.parse()?)
-                        } else {
-                            None
-                        }
-                    },
+                    condition,
+                    true_code,
+                    else_ifs,
+                    else_code,
                 })
             },
-            "Expected [!if! (condition) { true_code }] or [!if! (condition) { true_code } !else! { false_code }]",
+            "Expected [!if! ... { ... } !else if! ... { ... } !else! ... { ... }]",
         )
     }
 
@@ -48,9 +58,22 @@ impl ControlFlowCommandDefinition for IfCommand {
             .value();
 
         if evaluated_condition {
-            self.true_code.interpret_into(interpreter, output)?
-        } else if let Some(false_code) = self.false_code {
-            false_code.interpret_into(interpreter, output)?
+            return self.true_code.interpret_into(interpreter, output);
+        }
+
+        for (condition, code) in self.else_ifs {
+            let evaluated_condition = condition
+                .evaluate(interpreter)?
+                .expect_bool("An else if condition must evaluate to a boolean")?
+                .value();
+
+            if evaluated_condition {
+                return code.interpret_into(interpreter, output);
+            }
+        }
+
+        if let Some(false_code) = self.else_code {
+            return false_code.interpret_into(interpreter, output);
         }
 
         Ok(())

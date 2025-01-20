@@ -36,6 +36,17 @@ fn test_if() {
         0
         [!if! false { + 1 }]
     }, 0);
+    assert_preinterpret_eq!({
+        [!if! false {
+            1
+        } !elif! false {
+            2
+        } !elif! true {
+            3
+        } !else! {
+            4
+        }]
+    }, 3);
 }
 
 #[test]

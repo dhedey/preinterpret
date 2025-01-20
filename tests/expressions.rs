@@ -62,6 +62,14 @@ fn test_basic_evaluate_works() {
         },
         2
     );
+    assert_preinterpret_eq!([!evaluate! "hello" == "world"], false);
+    assert_preinterpret_eq!([!evaluate! "hello" == "hello"], true);
+    assert_preinterpret_eq!([!evaluate! 'A' as u8 == 65], true);
+    assert_preinterpret_eq!([!evaluate! 65u8 as char == 'A'], true);
+    assert_preinterpret_eq!([!evaluate! 'A' == 'A'], true);
+    assert_preinterpret_eq!([!evaluate! 'A' == 'B'], false);
+    assert_preinterpret_eq!([!evaluate! 'A' < 'B'], true);
+    assert_preinterpret_eq!([!evaluate! "Zoo" > "Aardvark"], true);
 }
 
 #[test]

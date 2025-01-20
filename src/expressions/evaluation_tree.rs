@@ -407,6 +407,12 @@ impl EvaluationOutput {
                 };
                 EvaluationLiteralPair::Float(float_pair)
             }
+            (EvaluationValue::String(left), EvaluationValue::String(right)) => {
+                EvaluationLiteralPair::StringPair(left, right)
+            }
+            (EvaluationValue::Char(left), EvaluationValue::Char(right)) => {
+                EvaluationLiteralPair::CharPair(left, right)
+            }
             (left, right) => {
                 return operator_span.err(format!("The {} operator cannot infer a common operand type from {} and {}. Consider using `as` to cast to matching types.", operator.symbol(), left.describe_type(), right.describe_type()));
             }

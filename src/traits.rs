@@ -11,10 +11,18 @@ impl IdentExt for Ident {
 }
 
 pub(crate) trait CursorExt: Sized {
+    fn ident_matching(self, content: &str) -> Option<(Ident, Self)>;
     fn punct_matching(self, char: char) -> Option<(Punct, Self)>;
 }
 
 impl CursorExt for Cursor<'_> {
+    fn ident_matching(self, content: &str) -> Option<(Ident, Self)> {
+        match self.ident() {
+            Some((ident, next)) if ident == content => Some((ident, next)),
+            _ => None,
+        }
+    }
+
     fn punct_matching(self, char: char) -> Option<(Punct, Self)> {
         match self.punct() {
             Some((punct, next)) if punct.as_char() == char => Some((punct, next)),
@@ -96,6 +104,8 @@ pub(crate) trait ParserExt {
         func: F,
         message: M,
     ) -> Result<T>;
+    fn peek_ident_matching(&self, content: &str) -> bool;
+    fn parse_ident_matching(&self, content: &str) -> Result<Ident>;
 }
 
 impl ParserExt for ParseBuffer<'_> {
@@ -114,6 +124,18 @@ impl ParserExt for ParseBuffer<'_> {
     ) -> Result<T> {
         let error_span = self.span();
         parse(self).map_err(|_| error_span.error(message))
+    }
+
+    fn peek_ident_matching(&self, content: &str) -> bool {
+        self.cursor().ident_matching(content).is_some()
+    }
+
+    fn parse_ident_matching(&self, content: &str) -> Result<Ident> {
+        self.step(|cursor| {
+            cursor
+                .ident_matching(content)
+                .ok_or_else(|| cursor.span().error(format!("expected {}", content)))
+        })
     }
 }
 

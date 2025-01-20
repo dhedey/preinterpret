@@ -26,16 +26,49 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 
 ### To come
 
-* Support `!else if!` in `!if!`
-* Support string & char literals (for comparisons & casts) in expressions
 * Reconfiguring iteration limit, via `[!settings! { iteration_limit: 4000 }]`
 * Add [!loop!], [!break!] and [!continue!] commands using a flag in the interpreter
-* `[!split! { items: X, with: X, drop_trailing_empty?: true }]`
-* `[!zip! ([Hello Goodbye] [World Friend])]` => `[(Hello World), (Goodbye Friend)]`
+* `[!split! { stream: X, separator: X, drop_empty?: false, drop_trailing_empty?: true, }]` and `[!comma_split! ...]`
+* `[!zip! ([Hello Goodbye] [World Friend])]` => `[(Hello World), (Goodbye Friend)]` and/or `[!zip! { streams: (#countries #flags #capitals), trim_to_shortest?: false }]` with `InterpretValue<AnyGrouped<Repeated<CodeInput>>>`
 * Add basic `!for!` loops
 * Add more tests
   * e.g. for various expressions
   * e.g. for long sums
+* Basic place parsing
+  * Introduce `[!let! #..x = Hello World]` does parsing and is equivalent to `[!set! #x = Hello World]`
+  * In parse land: #x matches a single token, #..x consumes the rest of a stream
+  * Auto-expand transparent groups, like syn. Maybe even using syn `TokenBuffer` / `Cursor`!
+  * Explicit raw Punct, Idents, Literals and Groups
+    * e.g. `[!for! (#country #flag #capital) in [!zip! (#countries #flags #capitals)]`
+  * `[!PARSER! ]` method to take a stream
+  * `[!LITERAL! #x]` / `[!IDENT! #x]` bindings
+  * `[!OPTIONAL! ...]` and/or possibly `#(..)?` and `[!is_set! #x]`?
+  * Groups or `[!GROUP! ...]`
+  * Regarding `#(..)+` and `#(..)*`...
+    * Any binding could be set to an array, but it gets complicated fast with nested bindings.
+    * Instead for now, we could push people towards capturing the input and parsing it with for loops and matches.
+  * `#x` binding reads a token tree
+  * `#..x` binding reads the rest of the stream... until the following raw token stream is detected (if at all). It must be followed by one or more raw tokens,
+  or the end of the stream.
+  * `[!RAW!]` for e.g. `[!while_parse! [!RAW! from] from #X]`
+  * `[!match!]` (with `#..x` as a catch-all)
+* Check all `#[allow(unused)]` and remove any which aren't needed
+* Rework expression parsing, in order to:
+  * Fix comments in the expression files
+  * Enable lazy && and ||
+  * Enable support for code blocks { .. } in expressions, and remove hacks where expression parsing stops at {} or .
+* Work on book
+  * Input paradigms:
+    * Streams
+    * StreamInput / ValueInput / CodeInput
+  * Including documenting expressions
+  * There are three main kinds of commands:
+    * Those taking a stream as-is
+    * Those taking some { fields }
+    * Those taking some custom syntax, e.g. `!set!`, `!if!`, `!while!`
+
+### Side notes on how to build !for!
+
 * Support `!for!` so we can use it for simple generation scenarios without needing macros at all:
   * Complexities:
     * Parsing `,`
@@ -71,38 +104,7 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
     * `[!for! [!SPLIT! #x,] in [Hello, World,]]`
     * Even though this might be more performant, I'm not too much of a fan of this, as it's hard to understand
     * Perhaps we can leave it to the `[!while_parse! #x[!OPTIONAL! ,] from #X]` style commands?
-* Basic place parsing
-  * Introduce `[!let! #..x = Hello World]` does parsing and is equivalent to `[!set! #x = Hello World]`
-  * In parse land: #x matches a single token, #..x consumes the rest of a stream
-  * Auto-expand transparent groups, like syn. Maybe even using syn `TokenBuffer` / `Cursor`!
-  * Explicit raw Punct, Idents, Literals and Groups
-  * `[!PARSER! ]` method to take a stream
-  * `[!LITERAL! #x]` / `[!IDENT! #x]` bindings
-  * `[!OPTIONAL! ...]` and/or possibly `#(..)?` and `[!is_set! #x]`?
-  * Groups or `[!GROUP! ...]`
-  * Regarding `#(..)+` and `#(..)*`...
-    * Any binding could be set to an array, but it gets complicated fast with nested bindings.
-    * Instead for now, we could push people towards capturing the input and parsing it with for loops and matches.
-  * `#x` binding reads a token tree
-  * `#..x` binding reads the rest of the stream... until the following raw token stream is detected (if at all). It must be followed by one or more raw tokens,
-  or the end of the stream.
-  * `[!RAW!]` for e.g. `[!while_parse! [!RAW! from] from #X]`
-  * `[!match!]` (with `#..x` as a catch-all)
-* Check all `#[allow(unused)]` and remove any which aren't needed
-* Rework expression parsing, in order to:
-  * Fix comments in the expression files
-  * Enable lazy && and ||
-  * Enable support for code blocks { .. } in expressions,
-    and remove hacks where expression parsing stops at {} or .
-* Work on book
-  * Input paradigms:
-    * Streams
-    * StreamInput / ValueInput / CodeInput
-  * Including documenting expressions
-  * There are three main kinds of commands:
-    * Those taking a stream as-is
-    * Those taking some { fields }
-    * Those taking some custom syntax, e.g. `!set!`, `!if!`, `!while!`
+
 
 # Major Version 0.2
 

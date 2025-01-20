@@ -64,7 +64,7 @@ impl UnaryOperation {
     }
 
     pub(super) fn for_cast_expression(expr: &syn::ExprCast) -> Result<Self> {
-        fn extract_type(ty: &syn::Type) -> Result<ValueKind> {
+        fn extract_type(ty: &syn::Type) -> Result<CastTarget> {
             match ty {
                 syn::Type::Group(group) => extract_type(&group.elem),
                 syn::Type::Path(type_path)
@@ -81,23 +81,24 @@ impl UnaryOperation {
                         }
                     };
                     match ident.to_string().as_str() {
-                        "int" | "integer" => Ok(ValueKind::Integer(IntegerKind::Untyped)),
-                        "u8" => Ok(ValueKind::Integer(IntegerKind::U8)),
-                        "u16" => Ok(ValueKind::Integer(IntegerKind::U16)),
-                        "u32" => Ok(ValueKind::Integer(IntegerKind::U32)),
-                        "u64" => Ok(ValueKind::Integer(IntegerKind::U64)),
-                        "u128" => Ok(ValueKind::Integer(IntegerKind::U128)),
-                        "usize" => Ok(ValueKind::Integer(IntegerKind::Usize)),
-                        "i8" => Ok(ValueKind::Integer(IntegerKind::I8)),
-                        "i16" => Ok(ValueKind::Integer(IntegerKind::I16)),
-                        "i32" => Ok(ValueKind::Integer(IntegerKind::I32)),
-                        "i64" => Ok(ValueKind::Integer(IntegerKind::I64)),
-                        "i128" => Ok(ValueKind::Integer(IntegerKind::I128)),
-                        "isize" => Ok(ValueKind::Integer(IntegerKind::Isize)),
-                        "float" => Ok(ValueKind::Float(FloatKind::Untyped)),
-                        "f32" => Ok(ValueKind::Float(FloatKind::F32)),
-                        "f64" => Ok(ValueKind::Float(FloatKind::F64)),
-                        "bool" => Ok(ValueKind::Boolean),
+                        "int" | "integer" => Ok(CastTarget::Integer(IntegerKind::Untyped)),
+                        "u8" => Ok(CastTarget::Integer(IntegerKind::U8)),
+                        "u16" => Ok(CastTarget::Integer(IntegerKind::U16)),
+                        "u32" => Ok(CastTarget::Integer(IntegerKind::U32)),
+                        "u64" => Ok(CastTarget::Integer(IntegerKind::U64)),
+                        "u128" => Ok(CastTarget::Integer(IntegerKind::U128)),
+                        "usize" => Ok(CastTarget::Integer(IntegerKind::Usize)),
+                        "i8" => Ok(CastTarget::Integer(IntegerKind::I8)),
+                        "i16" => Ok(CastTarget::Integer(IntegerKind::I16)),
+                        "i32" => Ok(CastTarget::Integer(IntegerKind::I32)),
+                        "i64" => Ok(CastTarget::Integer(IntegerKind::I64)),
+                        "i128" => Ok(CastTarget::Integer(IntegerKind::I128)),
+                        "isize" => Ok(CastTarget::Integer(IntegerKind::Isize)),
+                        "float" => Ok(CastTarget::Float(FloatKind::Untyped)),
+                        "f32" => Ok(CastTarget::Float(FloatKind::F32)),
+                        "f64" => Ok(CastTarget::Float(FloatKind::F64)),
+                        "bool" => Ok(CastTarget::Boolean),
+                        "char" => Ok(CastTarget::Char),
                         _ => ident
                             .span()
                             .span_range()
@@ -160,7 +161,7 @@ pub(super) enum UnaryOperator {
     Neg,
     Not,
     NoOp,
-    Cast(ValueKind),
+    Cast(CastTarget),
 }
 
 impl UnaryOperator {

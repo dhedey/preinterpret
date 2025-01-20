@@ -275,6 +275,16 @@ fn complex_cases_for_intersperse_and_input_types() {
             separator: [_],
         }]]
     }, "01_01");
+    // Control stream commands can be used, if they return a valid stream grouping
+    assert_preinterpret_eq!(
+        {
+            [!string![!intersperse! {
+                items: [!if! false { [0 1] } !else! { [2 3] }],
+                separator: [_],
+            }]]
+        },
+        "2_3"
+    );
     // All inputs can be variables
     // Inputs can be in any order
     assert_preinterpret_eq!({
