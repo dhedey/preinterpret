@@ -109,6 +109,26 @@ impl Express for &GroupedVariable {
     }
 }
 
+impl HandleParse for GroupedVariable {
+    fn handle_parse(&self, input: ParseStream, interpreter: &mut Interpreter) -> Result<()> {
+        let variable_contents = match input.parse::<TokenTree>()? {
+            TokenTree::Group(group) if group.delimiter() == Delimiter::None => {
+                InterpretedStream::raw(group.stream())
+            }
+            TokenTree::Group(group) => {
+                return group
+                    .delim_span()
+                    .open()
+                    .err("Expected a group with transparent delimiters");
+            }
+            TokenTree::Ident(ident) => InterpretedStream::raw(ident.to_token_stream()),
+            TokenTree::Punct(punct) => InterpretedStream::raw(punct.to_token_stream()),
+            TokenTree::Literal(literal) => InterpretedStream::raw(literal.to_token_stream()),
+        };
+        self.set(interpreter, variable_contents)
+    }
+}
+
 impl HasSpanRange for GroupedVariable {
     fn span_range(&self) -> SpanRange {
         SpanRange::new_between(self.marker.span, self.variable_name.span())

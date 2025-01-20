@@ -90,21 +90,31 @@ impl Interpreter {
     pub(crate) fn config(&self) -> &InterpreterConfig {
         &self.config
     }
+
+    pub(crate) fn mut_config(&mut self) -> &mut InterpreterConfig {
+        &mut self.config
+    }
 }
 
 pub(crate) struct InterpreterConfig {
     iteration_limit: Option<usize>,
 }
 
+pub(crate) const DEFAULT_ITERATION_LIMIT: usize = 10000;
+
 impl Default for InterpreterConfig {
     fn default() -> Self {
         Self {
-            iteration_limit: Some(10000),
+            iteration_limit: Some(DEFAULT_ITERATION_LIMIT),
         }
     }
 }
 
 impl InterpreterConfig {
+    pub(crate) fn set_iteration_limit(&mut self, limit: Option<usize>) {
+        self.iteration_limit = limit;
+    }
+
     pub(crate) fn check_iteration_count(
         &self,
         span_source: &impl HasSpanRange,

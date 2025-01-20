@@ -405,6 +405,7 @@ define_command_kind! {
     ExtendCommand,
     RawCommand,
     IgnoreCommand,
+    SettingsCommand,
     ErrorCommand,
 
     // Concat & Type Convert Commands
@@ -438,6 +439,7 @@ define_command_kind! {
     // Control flow commands
     IfCommand,
     WhileCommand,
+    ForCommand,
 
     // Token Commands
     IsEmptyCommand,

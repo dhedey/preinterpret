@@ -133,3 +133,60 @@ impl ControlFlowCommandDefinition for WhileCommand {
         Ok(())
     }
 }
+
+#[derive(Clone)]
+pub(crate) struct ForCommand {
+    parse_place: ParsePlace,
+    #[allow(unused)]
+    in_token: Token![in],
+    input: CommandStreamInput,
+    code_block: CommandCodeInput,
+}
+
+impl CommandType for ForCommand {
+    type OutputKind = OutputKindControlFlow;
+}
+
+impl ControlFlowCommandDefinition for ForCommand {
+    const COMMAND_NAME: &'static str = "for";
+
+    fn parse(arguments: CommandArguments) -> Result<Self> {
+        arguments.fully_parse_or_error(
+            |input| {
+                Ok(Self {
+                    parse_place: input.parse()?,
+                    in_token: input.parse()?,
+                    input: input.parse()?,
+                    code_block: input.parse()?,
+                })
+            },
+            "Expected [!for! #x in [ ... ] { code }]",
+        )
+    }
+
+    fn execute(
+        self: Box<Self>,
+        interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()> {
+        let stream = self.input.interpret_to_new_stream(interpreter)?;
+
+        let mut iteration_count = 0;
+
+        for token in stream.into_token_stream() {
+            self.parse_place.handle_parse_from_stream(
+                InterpretedStream::raw(token.into_token_stream()),
+                interpreter,
+            )?;
+            self.code_block
+                .clone()
+                .interpret_into(interpreter, output)?;
+            iteration_count += 1;
+            interpreter
+                .config()
+                .check_iteration_count(&self.in_token, iteration_count)?;
+        }
+
+        Ok(())
+    }
+}

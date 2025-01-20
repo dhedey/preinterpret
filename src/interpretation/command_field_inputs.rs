@@ -3,12 +3,12 @@ macro_rules! define_field_inputs {
         $inputs_type:ident {
             required: {
                 $(
-                    $required_field:ident: $required_type:ty = $required_example:literal $(($required_description:literal))?
+                    $required_field:ident: $required_type:ty = $required_example:tt $(($required_description:literal))?
                 ),* $(,)?
             }$(,)?
             optional: {
                 $(
-                    $optional_field:ident: $optional_type:ty = $optional_example:literal $(($optional_description:literal))?
+                    $optional_field:ident: $optional_type:ty = $optional_example:tt $(($optional_description:literal))?
                 ),* $(,)?
             }$(,)?
         }
@@ -62,6 +62,8 @@ macro_rules! define_field_inputs {
                         content.parse::<Token![,]>()?;
                     }
                 }
+
+                #[allow(unused_mut)]
                 let mut missing_fields: Vec<String> = vec![];
 
                 $(

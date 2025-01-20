@@ -14,6 +14,7 @@
 * Control flow commands:
   * `[!if! COND { ... }]` and `[!if! COND { ... } !else! { ... }]`
   * `[!while! COND {}]`
+  * `[!for! #x in [ ... ] { ... }]`
 * Token-stream utility commands:
   * `[!is_empty! #stream]`
   * `[!length! #stream]` which gives the number of token trees in the token stream.
@@ -30,7 +31,7 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 * Add [!loop!], [!break!] and [!continue!] commands using a flag in the interpreter
 * `[!split! { stream: X, separator: X, drop_empty?: false, drop_trailing_empty?: true, }]` and `[!comma_split! ...]`
 * `[!zip! ([Hello Goodbye] [World Friend])]` => `[(Hello World), (Goodbye Friend)]` and/or `[!zip! { streams: (#countries #flags #capitals), trim_to_shortest?: false }]` with `InterpretValue<AnyGrouped<Repeated<CodeInput>>>`
-* Add basic `!for!` loops
+* Add casts of other integers to char, via char::from_u32(u32::try_from(x))
 * Add more tests
   * e.g. for various expressions
   * e.g. for long sums

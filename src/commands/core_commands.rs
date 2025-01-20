@@ -126,6 +126,42 @@ impl NoOutputCommandDefinition for IgnoreCommand {
 }
 
 #[derive(Clone)]
+pub(crate) struct SettingsCommand {
+    inputs: SettingsInputs,
+}
+
+impl CommandType for SettingsCommand {
+    type OutputKind = OutputKindNone;
+}
+
+define_field_inputs! {
+    SettingsInputs {
+        required: {},
+        optional: {
+            iteration_limit: CommandValueInput<syn::LitInt> = DEFAULT_ITERATION_LIMIT ("The new iteration limit"),
+        }
+    }
+}
+
+impl NoOutputCommandDefinition for SettingsCommand {
+    const COMMAND_NAME: &'static str = "settings";
+
+    fn parse(arguments: CommandArguments) -> Result<Self> {
+        Ok(Self {
+            inputs: arguments.fully_parse_as()?,
+        })
+    }
+
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
+        if let Some(limit) = self.inputs.iteration_limit {
+            let limit: usize = limit.interpret(interpreter)?.base10_parse()?;
+            interpreter.mut_config().set_iteration_limit(Some(limit));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
 pub(crate) struct ErrorCommand {
     inputs: ErrorInputs,
 }

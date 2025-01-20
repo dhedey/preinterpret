@@ -321,4 +321,5 @@ impl_auto_span_range! {
     syn::Type,
     syn::TypePath,
     syn::token::DotDot,
+    syn::token::In,
 }

@@ -57,3 +57,15 @@ fn test_while() {
         #x
     }, 5);
 }
+
+#[test]
+fn test_for() {
+    assert_preinterpret_eq!(
+        {
+            [!string! [!for! #x in [!range! 65..70] {
+                [!evaluate! #x as u8 as char]
+            }]]
+        },
+        "ABCDE"
+    );
+}
