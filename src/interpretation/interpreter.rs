@@ -135,7 +135,7 @@ pub(crate) struct IterationCounter<'a, S: HasSpanRange> {
     iteration_limit: Option<usize>,
 }
 
-impl<'a, S: HasSpanRange> IterationCounter<'a, S> {
+impl<S: HasSpanRange> IterationCounter<'_, S> {
     pub(crate) fn add_and_check(&mut self, count: usize) -> Result<()> {
         self.count = self.count.wrapping_add(count);
         self.check()
