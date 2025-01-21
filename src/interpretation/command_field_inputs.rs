@@ -96,9 +96,15 @@ macro_rules! define_field_inputs {
 
         impl ArgumentsContent for $inputs_type {
             fn error_message() -> String {
+                format!("Expected: {}", Self::fields_description())
+            }
+        }
+
+        impl $inputs_type {
+            fn fields_description() -> String {
                 use std::fmt::Write;
-                let mut message = "Expected: {\n".to_string();
-                let buffer = &mut message;
+                let mut buffer = String::new();
+                buffer.write_str("{\n").unwrap();
                 $(
                     $(writeln!(buffer, "    // {}", $required_description).unwrap();)?
                     writeln!(buffer, "    {}: {},", stringify!($required_field), $required_example).unwrap();
@@ -107,8 +113,8 @@ macro_rules! define_field_inputs {
                     $(writeln!(buffer, "    // {}", $optional_description).unwrap();)?
                     writeln!(buffer, "    {}?: {},", stringify!($optional_field), $optional_example).unwrap();
                 )*
-                buffer.push('}');
-                message
+                buffer.write_str("}").unwrap();
+                buffer
             }
         }
     };

@@ -163,11 +163,17 @@ impl NoOutputCommandDefinition for SettingsCommand {
 
 #[derive(Clone)]
 pub(crate) struct ErrorCommand {
-    inputs: ErrorInputs,
+    inputs: EitherErrorInput,
 }
 
 impl CommandType for ErrorCommand {
     type OutputKind = OutputKindNone;
+}
+
+#[derive(Clone)]
+enum EitherErrorInput {
+    Fields(ErrorInputs),
+    JustMessage(InterpretationStream),
 }
 
 define_field_inputs! {
@@ -185,15 +191,41 @@ impl NoOutputCommandDefinition for ErrorCommand {
     const COMMAND_NAME: &'static str = "error";
 
     fn parse(arguments: CommandArguments) -> Result<Self> {
-        Ok(Self {
-            inputs: arguments.fully_parse_as()?,
-        })
+        arguments.fully_parse_or_error(
+            |input| {
+                if input.peek(syn::token::Brace) {
+                    Ok(Self {
+                        inputs: EitherErrorInput::Fields(input.parse()?),
+                    })
+                } else {
+                    Ok(Self {
+                        inputs: EitherErrorInput::JustMessage(
+                            input.parse_with(arguments.full_span_range())?,
+                        ),
+                    })
+                }
+            },
+            format!(
+                "Expected [!error! \"Expected X, found: \" #world] or [!error! {}]",
+                ErrorInputs::fields_description()
+            ),
+        )
     }
 
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
-        let message = self.inputs.message.interpret(interpreter)?.value();
+        let fields = match self.inputs {
+            EitherErrorInput::Fields(error_inputs) => error_inputs,
+            EitherErrorInput::JustMessage(stream) => {
+                let error_message = stream
+                    .interpret_to_new_stream(interpreter)?
+                    .concat_recursive();
+                return Span::call_site().err(error_message);
+            }
+        };
 
-        let error_span = match self.inputs.spans {
+        let message = fields.message.interpret(interpreter)?.value();
+
+        let error_span = match fields.spans {
             Some(spans) => {
                 let error_span_stream = spans.interpret_to_new_stream(interpreter)?;
 

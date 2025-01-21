@@ -30,13 +30,15 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
 
 ### To come
 
-* Accept `[!error! <message>]` as well
 * `[!split! { stream: X, separator: X, drop_empty?: false, drop_trailing_empty?: true, }]` and `[!comma_split! ...]`
 * `[!zip! ([Hello Goodbye] [World Friend])]` => `[(Hello World), (Goodbye Friend)]` and/or `[!zip! { streams: (#countries #flags #capitals), trim_to_shortest?: false }]` with `InterpretValue<AnyGrouped<Repeated<CodeInput>>>`
 * Add casts of other integers to char, via `char::from_u32(u32::try_from(x))`
 * Add more tests
   * e.g. for various expressions
   * e.g. for long sums
+* Rework `Error` as:
+  * `ParseResult` with `ParseError::LowLevel(syn::Error)` | `ParseError::Contextual(syn::Error)`
+  * `ExecutionInterrupt` with `ExecutionInterrupt::Err(syn::Error)` | `ExecutionInterrupt::ControlFlow(..)`
 * Basic place parsing
   * Introduce `[!let! #..x = Hello World]` does parsing and is equivalent to `[!set! #x = Hello World]`
   * In parse land: #x matches a single token, #..x consumes the rest of a stream
@@ -47,12 +49,15 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
   * `[!LITERAL! #x]` / `[!IDENT! #x]` bindings
   * `[!OPTIONAL! ...]` and/or possibly `#(..)?` and `[!is_set! #x]`?
   * Groups or `[!GROUP! ...]`
-  * Regarding `#(..)+` and `#(..)*`...
-    * Any binding could be set to an array, but it gets complicated fast with nested bindings.
-    * Instead for now, we could push people towards capturing the input and parsing it with for loops and matches.
-  * `#x` binding reads a token tree
+  * `#x` binding reads a token tree and appends its contents into `#x`
   * `#..x` binding reads the rest of the stream... until the following raw token stream is detected (if at all). It must be followed by one or more raw tokens,
   or the end of the stream.
+  * `#+x` binding reads a token tree and appends it to `#x` as the full token tree
+  * `#..+x` reads a stream and appends it to `#x`
+  * `[!REPEATED! ...]` or `[!PUNCTUATED! ...]` also forbid `#x` bindings inside of them unless a `[!settings!]` has been overriden
+    * Regarding `#(..)+` and `#(..)*`...
+    * Any binding could be set to an array, but it gets complicated fast with nested bindings.
+    * Instead for now, we could push people towards capturing the input and parsing it with for loops and matches.
   * `[!RAW!]` for e.g. `[!while_parse! [!RAW! from] from #X]`
   * `[!match!]` (with `#..x` as a catch-all)
 * Check all `#[allow(unused)]` and remove any which aren't needed
@@ -60,6 +65,8 @@ I considered disallowing commands like `[!set! #x =]` and requiring `[!set! #x =
   * Fix comments in the expression files
   * Enable lazy && and ||
   * Enable support for code blocks { .. } in expressions, and remove hacks where expression parsing stops at {} or .
+* Make InterpretedStream an enum of either `Raw` or `Interpreted` including recursively (with `InterpretedTokenTree`) to fix rust-analyzer
+* Push fork of syn::TokenBuffer to 0.4 to permit `[!parse_while! [!PARSE! ...] from #x { ... }]`
 * Work on book
   * Input paradigms:
     * Streams

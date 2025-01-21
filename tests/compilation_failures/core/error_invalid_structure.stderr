@@ -5,10 +5,7 @@ error: required fields are missing: message
            // An optional [token stream], to determine where to show the error message
            spans?: [$abc],
        }]
- --> tests/compilation_failures/complex/nested.rs:7:26
+ --> tests/compilation_failures/core/error_invalid_structure.rs:4:28
   |
-7 |                   [!error! {
-  |  __________________________^
-8 | |                     // Missing message
-9 | |                 }]
-  | |_________________^
+4 |     preinterpret!([!error! { }]);
+  |                            ^^^

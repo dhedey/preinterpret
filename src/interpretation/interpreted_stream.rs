@@ -92,6 +92,47 @@ impl InterpretedStream {
     pub(crate) fn append_cloned_into(&self, output: &mut InterpretedStream) {
         output.token_stream.extend(self.token_stream.clone())
     }
+
+    pub(crate) fn concat_recursive(self) -> String {
+        fn concat_recursive_internal(output: &mut String, token_stream: TokenStream) {
+            for token_tree in token_stream {
+                match token_tree {
+                    TokenTree::Literal(literal) => match literal.content_if_string_like() {
+                        Some(content) => output.push_str(&content),
+                        None => output.push_str(&literal.to_string()),
+                    },
+                    TokenTree::Group(group) => match group.delimiter() {
+                        Delimiter::Parenthesis => {
+                            output.push('(');
+                            concat_recursive_internal(output, group.stream());
+                            output.push(')');
+                        }
+                        Delimiter::Brace => {
+                            output.push('{');
+                            concat_recursive_internal(output, group.stream());
+                            output.push('}');
+                        }
+                        Delimiter::Bracket => {
+                            output.push('[');
+                            concat_recursive_internal(output, group.stream());
+                            output.push(']');
+                        }
+                        Delimiter::None => {
+                            concat_recursive_internal(output, group.stream());
+                        }
+                    },
+                    TokenTree::Punct(punct) => {
+                        output.push(punct.as_char());
+                    }
+                    TokenTree::Ident(ident) => output.push_str(&ident.to_string()),
+                }
+            }
+        }
+
+        let mut output = String::new();
+        concat_recursive_internal(&mut output, self.into_token_stream());
+        output
+    }
 }
 
 impl From<TokenTree> for InterpretedStream {

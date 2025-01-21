@@ -4,35 +4,17 @@ use crate::internal_prelude::*;
 // Helpers
 //========
 
-fn string_literal(value: &str, span: Span) -> Literal {
-    let mut literal = Literal::string(value);
-    literal.set_span(span);
-    literal
-}
-
-fn parse_literal(value: &str, span: Span) -> Result<Literal> {
-    let mut literal = Literal::from_str(value)
-        .map_err(|err| span.error(format!("`{}` is not a valid literal: {:?}", value, err,)))?;
-    literal.set_span(span);
-    Ok(literal)
-}
-
-fn parse_ident(value: &str, span: Span) -> Result<Ident> {
-    let mut ident = parse_str::<Ident>(value)
-        .map_err(|err| span.error(format!("`{}` is not a valid ident: {:?}", value, err,)))?;
-    ident.set_span(span);
-    Ok(ident)
-}
-
 fn concat_into_string(
     input: InterpretationStream,
     interpreter: &mut Interpreter,
     conversion_fn: impl Fn(&str) -> String,
 ) -> Result<Literal> {
     let output_span = input.span();
-    let concatenated = concat_recursive(input.interpret_to_new_stream(interpreter)?);
-    let string_literal = string_literal(&conversion_fn(&concatenated), output_span);
-    Ok(string_literal)
+    let concatenated = input
+        .interpret_to_new_stream(interpreter)?
+        .concat_recursive();
+    let value = conversion_fn(&concatenated);
+    Ok(Literal::string(&value).with_span(output_span))
 }
 
 fn concat_into_ident(
@@ -41,8 +23,13 @@ fn concat_into_ident(
     conversion_fn: impl Fn(&str) -> String,
 ) -> Result<Ident> {
     let output_span = input.span();
-    let concatenated = concat_recursive(input.interpret_to_new_stream(interpreter)?);
-    let ident = parse_ident(&conversion_fn(&concatenated), output_span)?;
+    let concatenated = input
+        .interpret_to_new_stream(interpreter)?
+        .concat_recursive();
+    let value = conversion_fn(&concatenated);
+    let ident = parse_str::<Ident>(&value)
+        .map_err(|err| output_span.error(format!("`{}` is not a valid ident: {:?}", value, err,)))?
+        .with_span(output_span);
     Ok(ident)
 }
 
@@ -52,50 +39,16 @@ fn concat_into_literal(
     conversion_fn: impl Fn(&str) -> String,
 ) -> Result<Literal> {
     let output_span = input.span();
-    let concatenated = concat_recursive(input.interpret_to_new_stream(interpreter)?);
-    let literal = parse_literal(&conversion_fn(&concatenated), output_span)?;
+    let concatenated = input
+        .interpret_to_new_stream(interpreter)?
+        .concat_recursive();
+    let value = conversion_fn(&concatenated);
+    let literal = Literal::from_str(&value)
+        .map_err(|err| {
+            output_span.error(format!("`{}` is not a valid literal: {:?}", value, err,))
+        })?
+        .with_span(output_span);
     Ok(literal)
-}
-
-fn concat_recursive(arguments: InterpretedStream) -> String {
-    fn concat_recursive_internal(output: &mut String, arguments: TokenStream) {
-        for token_tree in arguments {
-            match token_tree {
-                TokenTree::Literal(literal) => match literal.content_if_string_like() {
-                    Some(content) => output.push_str(&content),
-                    None => output.push_str(&literal.to_string()),
-                },
-                TokenTree::Group(group) => match group.delimiter() {
-                    Delimiter::Parenthesis => {
-                        output.push('(');
-                        concat_recursive_internal(output, group.stream());
-                        output.push(')');
-                    }
-                    Delimiter::Brace => {
-                        output.push('{');
-                        concat_recursive_internal(output, group.stream());
-                        output.push('}');
-                    }
-                    Delimiter::Bracket => {
-                        output.push('[');
-                        concat_recursive_internal(output, group.stream());
-                        output.push(']');
-                    }
-                    Delimiter::None => {
-                        concat_recursive_internal(output, group.stream());
-                    }
-                },
-                TokenTree::Punct(punct) => {
-                    output.push(punct.as_char());
-                }
-                TokenTree::Ident(ident) => output.push_str(&ident.to_string()),
-            }
-        }
-    }
-
-    let mut output = String::new();
-    concat_recursive_internal(&mut output, arguments.into_token_stream());
-    output
 }
 
 macro_rules! define_literal_concat_command {

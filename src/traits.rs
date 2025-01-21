@@ -2,11 +2,17 @@ use crate::internal_prelude::*;
 
 pub(crate) trait IdentExt: Sized {
     fn new_bool(value: bool, span: Span) -> Self;
+    fn with_span(self, span: Span) -> Self;
 }
 
 impl IdentExt for Ident {
     fn new_bool(value: bool, span: Span) -> Self {
         Ident::new(&value.to_string(), span)
+    }
+
+    fn with_span(mut self, span: Span) -> Self {
+        self.set_span(span);
+        self
     }
 }
 
