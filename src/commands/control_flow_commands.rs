@@ -225,12 +225,10 @@ impl ControlFlowCommandDefinition for ForCommand {
 
         let mut iteration_counter = interpreter.start_iteration_counter(&self.in_token);
 
-        for token in stream.into_token_stream() {
+        for token in stream.into_item_vec() {
             iteration_counter.increment_and_check()?;
-            self.parse_place.handle_parse_from_stream(
-                InterpretedStream::raw(token.into_token_stream()),
-                interpreter,
-            )?;
+            self.parse_place
+                .handle_parse_from_stream(token.into(), interpreter)?;
             match self
                 .loop_code
                 .clone()

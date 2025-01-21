@@ -62,17 +62,14 @@ impl Interpret for CommandStreamInput {
                     | CommandOutputKind::Ident => {
                         command.err("The command does not output a stream")
                     }
-                    CommandOutputKind::FlattenedStream => {
-                        let span = command.span();
-                        let tokens = parse_as_stream_input(
-                            command.interpret_to_new_stream(interpreter)?,
-                            || {
-                                span.error("Expected output of flattened command to contain a single [ ... ] or transparent group. Perhaps you want to remove the .., to use the command output as-is.")
-                            },
-                        )?;
-                        output.extend_raw_tokens(tokens);
-                        Ok(())
-                    }
+                    CommandOutputKind::FlattenedStream => parse_as_stream_input(
+                        command,
+                        interpreter,
+                        || {
+                            "Expected output of flattened command to contain a single [ ... ] or transparent group. Perhaps you want to remove the .., to use the command output as-is.".to_string()
+                        },
+                        output,
+                    ),
                     CommandOutputKind::GroupedStream => {
                         unsafe {
                             // SAFETY: The kind change GroupedStream <=> FlattenedStream is valid
@@ -80,46 +77,38 @@ impl Interpret for CommandStreamInput {
                         }
                         command.interpret_into(interpreter, output)
                     }
-                    CommandOutputKind::ControlFlowCodeStream => {
-                        let span = command.span();
-                        let tokens = parse_as_stream_input(
-                            command.interpret_to_new_stream(interpreter)?,
-                            || {
-                                span.error("Expected output of control flow command to contain a single [ ... ] or transparent group.")
-                            },
-                        )?;
-                        output.extend_raw_tokens(tokens);
-                        Ok(())
-                    }
+                    CommandOutputKind::ControlFlowCodeStream => parse_as_stream_input(
+                        command,
+                        interpreter,
+                        || {
+                            "Expected output of control flow command to contain a single [ ... ] or transparent group.".to_string()
+                        },
+                        output,
+                    ),
                 }
             }
-            CommandStreamInput::FlattenedVariable(variable) => {
-                let tokens = parse_as_stream_input(
-                    variable.interpret_to_new_stream(interpreter)?,
-                    || {
-                        variable.error(format!(
+            CommandStreamInput::FlattenedVariable(variable) => parse_as_stream_input(
+                &variable,
+                interpreter,
+                || {
+                    format!(
                         "Expected variable to contain a single [ ... ] or transparent group. Perhaps you want to use {} instead, to use the content of the variable as the stream.",
                         variable.display_grouped_variable_token(),
-                    ))
-                    },
-                )?;
-                output.extend_raw_tokens(tokens);
-                Ok(())
-            }
+                    )
+                },
+                output,
+            ),
             CommandStreamInput::GroupedVariable(variable) => {
                 variable.substitute_ungrouped_contents_into(interpreter, output)
             }
-            CommandStreamInput::Code(code) => {
-                let span = code.span();
-                let tokens = parse_as_stream_input(
-                    code.interpret_to_new_stream(interpreter)?,
-                    || {
-                        span.error("Expected the { ... } block to output a single [ ... ] group or transparent group. You may wish to replace the outer `{ ... }` block with a `[ ... ]` block, which outputs all its contents as a stream.".to_string())
-                    },
-                )?;
-                output.extend_raw_tokens(tokens);
-                Ok(())
-            }
+            CommandStreamInput::Code(code) => parse_as_stream_input(
+                code,
+                interpreter,
+                || {
+                    "Expected the { ... } block to output a single [ ... ] group or transparent group. You may wish to replace the outer `{ ... }` block with a `[ ... ]` block, which outputs all its contents as a stream.".to_string()
+                },
+                output,
+            ),
             CommandStreamInput::ExplicitStream(group) => {
                 group.into_content().interpret_into(interpreter, output)
             }
@@ -128,24 +117,18 @@ impl Interpret for CommandStreamInput {
 }
 
 fn parse_as_stream_input(
-    interpreted: InterpretedStream,
-    on_error: impl FnOnce() -> Error,
-) -> Result<TokenStream> {
-    fn get_group(interpreted: InterpretedStream) -> Option<Group> {
-        let mut token_iter = interpreted.into_token_stream().into_iter();
-        let group = match token_iter.next()? {
-            TokenTree::Group(group)
-                if matches!(group.delimiter(), Delimiter::Bracket | Delimiter::None) =>
-            {
-                Some(group)
-            }
-            _ => return None,
-        };
-        if token_iter.next().is_some() {
-            return None;
-        }
-        group
-    }
-    let group = get_group(interpreted).ok_or_else(on_error)?;
-    Ok(group.stream())
+    input: impl Interpret + HasSpanRange,
+    interpreter: &mut Interpreter,
+    error_message: impl FnOnce() -> String,
+    output: &mut InterpretedStream,
+) -> Result<()> {
+    let span = input.span_range();
+    input
+        .interpret_to_new_stream(interpreter)?
+        .unwrap_singleton_group(
+            |delimiter| matches!(delimiter, Delimiter::Bracket | Delimiter::None),
+            || span.error(error_message()),
+        )?
+        .append_into(output);
+    Ok(())
 }

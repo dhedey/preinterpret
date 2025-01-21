@@ -99,7 +99,7 @@ impl StreamCommandDefinition for RawCommand {
         _interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> Result<()> {
-        output.extend_raw_token_iter(self.token_stream);
+        output.extend_raw_tokens(self.token_stream);
         Ok(())
     }
 }
@@ -255,9 +255,8 @@ impl NoOutputCommandDefinition for ErrorCommand {
                 // transparent groups (as of Jan 2025), so gets it right without this flattening:
                 // https://github.com/rust-lang/rust-analyzer/issues/18211
 
-                let error_span_stream = error_span_stream
-                    .into_token_stream()
-                    .flatten_transparent_groups();
+                let error_span_stream =
+                    error_span_stream.into_token_stream_removing_any_transparent_groups();
                 if error_span_stream.is_empty() {
                     Span::call_site().span_range()
                 } else {

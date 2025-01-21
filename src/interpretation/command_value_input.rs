@@ -60,13 +60,17 @@ impl<T: InterpretValue<InterpretedValue = I>, I: Parse> InterpretValue for Comma
             CommandValueInput::Code(code) => code.interpret_to_new_stream(interpreter)?,
             CommandValueInput::Value(value) => return value.interpret(interpreter),
         };
-        match interpreted_stream.syn_parse(I::parse) {
-            Ok(value) => Ok(value),
-            Err(err) => Err(err.concat(&format!(
-                "\nOccurred whilst parsing the {} to a {}.",
-                descriptor,
-                std::any::type_name::<I>()
-            ))),
+        unsafe {
+            // RUST-ANALYZER SAFETY: We only use I with simple parse functions so far which don't care about
+            // none-delimited groups
+            match interpreted_stream.syn_parse(I::parse) {
+                Ok(value) => Ok(value),
+                Err(err) => Err(err.concat(&format!(
+                    "\nOccurred whilst parsing the {} to a {}.",
+                    descriptor,
+                    std::any::type_name::<I>()
+                ))),
+            }
         }
     }
 }

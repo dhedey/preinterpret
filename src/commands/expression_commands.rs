@@ -161,7 +161,7 @@ impl StreamCommandDefinition for RangeCommand {
 }
 
 fn output_range(iter: impl Iterator<Item = i128>, span: Span, output: &mut InterpretedStream) {
-    output.extend_raw_token_iter(iter.map(|value| {
+    output.extend_raw_tokens(iter.map(|value| {
         let literal = Literal::i128_unsuffixed(value).with_span(span);
         TokenTree::Literal(literal)
             // We wrap it in a singleton group to ensure that negative

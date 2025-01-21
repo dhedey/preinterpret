@@ -46,8 +46,7 @@ impl ValueCommandDefinition for LengthCommand {
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<TokenTree> {
         let output_span = self.arguments.span_range().span();
         let interpreted = self.arguments.interpret_to_new_stream(interpreter)?;
-        let stream_length = interpreted.into_token_stream().into_iter().count();
-        let length_literal = Literal::usize_unsuffixed(stream_length).with_span(output_span);
+        let length_literal = Literal::usize_unsuffixed(interpreted.len()).with_span(output_span);
         Ok(length_literal.into())
     }
 }
@@ -121,7 +120,7 @@ impl StreamCommandDefinition for IntersperseCommand {
             .inputs
             .items
             .interpret_to_new_stream(interpreter)?
-            .into_token_stream();
+            .into_item_vec();
         let add_trailing = match self.inputs.add_trailing {
             Some(add_trailing) => add_trailing.interpret(interpreter)?.value(),
             None => false,
@@ -140,7 +139,7 @@ impl StreamCommandDefinition for IntersperseCommand {
         let mut items = items.into_iter().peekable();
         let mut this_item = items.next().unwrap(); // Safe to unwrap as non-empty
         loop {
-            output.push_raw_token_tree(this_item);
+            output.push_segment_item(this_item);
             let next_item = items.next();
             match next_item {
                 Some(next_item) => {

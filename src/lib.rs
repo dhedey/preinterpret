@@ -549,7 +549,11 @@ fn preinterpret_internal(input: TokenStream) -> Result<TokenStream> {
     let interpretation_stream =
         InterpretationStream::parse_from_token_stream(input, Span::call_site().span_range())?;
     let interpreted_stream = interpretation_stream.interpret_to_new_stream(&mut interpreter)?;
-    Ok(interpreted_stream.into_token_stream())
+    unsafe {
+        // RUST-ANALYZER-SAFETY: This might drop transparent groups in the output of
+        // rust-analyzer. There's not much we can do here...
+        Ok(interpreted_stream.into_token_stream())
+    }
 }
 
 // This is the recommended way to run the doc tests in the readme

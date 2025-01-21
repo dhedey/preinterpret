@@ -141,7 +141,7 @@ impl Express for RawGroup {
     ) -> Result<()> {
         expression_stream.push_grouped(
             |inner| {
-                inner.extend_raw_token_iter(self.content);
+                inner.extend_raw_tokens(self.content);
                 Ok(())
             },
             self.source_delim_span.join(),

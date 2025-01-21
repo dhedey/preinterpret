@@ -6,19 +6,48 @@ pub(crate) struct InterpretedStream {
     /// breaks in rust-analyzer. This causes various spurious errors in the IDE.
     /// See: https://github.com/rust-lang/rust-analyzer/issues/18211#issuecomment-2604547032
     ///
+    /// So instead of just storing a TokenStream here, we store a list of TokenStreams and interpreted groups.
+    /// This ensures any non-delimited groups are not round-tripped to a TokenStream.
+    ///
     /// In future, we may wish to internally use some kind of `TokenBuffer` type, which I've started on below.
-    token_stream: TokenStream,
+    segments: Vec<InterpretedSegment>,
+    token_length: usize,
+}
+
+#[derive(Clone)]
+// This was primarily implemented to avoid this issue: https://github.com/rust-lang/rust-analyzer/issues/18211#issuecomment-2604547032
+// But it doesn't actually help because the `syn::parse` mechanism only operates on a TokenStream,
+// so we have to convert back into a TokenStream.
+enum InterpretedSegment {
+    TokenVec(Vec<TokenTree>), // Cheaper than a TokenStream (probably)
+    InterpretedGroup(Delimiter, Span, InterpretedStream),
+}
+
+pub(crate) enum InterpretedTokenTree {
+    TokenTree(TokenTree),
+    InterpretedGroup(Delimiter, Span, InterpretedStream),
+}
+
+impl From<InterpretedTokenTree> for InterpretedStream {
+    fn from(value: InterpretedTokenTree) -> Self {
+        let mut new = Self::new();
+        new.push_segment_item(value);
+        new
+    }
 }
 
 impl InterpretedStream {
     pub(crate) fn new() -> Self {
         Self {
-            token_stream: TokenStream::new(),
+            segments: vec![],
+            token_length: 0,
         }
     }
 
     pub(crate) fn raw(token_stream: TokenStream) -> Self {
-        Self { token_stream }
+        let mut new = Self::new();
+        new.extend_raw_tokens(token_stream);
+        new
     }
 
     pub(crate) fn push_literal(&mut self, literal: Literal) {
@@ -51,76 +80,236 @@ impl InterpretedStream {
         delimiter: Delimiter,
         span: Span,
     ) {
-        self.push_raw_token_tree(TokenTree::group(inner_tokens.token_stream, delimiter, span));
+        self.segments.push(InterpretedSegment::InterpretedGroup(
+            delimiter,
+            span,
+            inner_tokens,
+        ));
+        self.token_length += 1;
     }
 
-    pub(crate) fn extend_raw_tokens(&mut self, tokens: impl ToTokens) {
-        tokens.to_tokens(&mut self.token_stream);
+    pub(crate) fn extend_with_raw_tokens_from(&mut self, tokens: impl ToTokens) {
+        self.extend_raw_tokens(tokens.into_token_stream())
     }
 
-    pub(crate) fn extend_raw_token_iter(&mut self, tokens: impl IntoIterator<Item = TokenTree>) {
-        self.token_stream.extend(tokens);
+    pub(crate) fn push_segment_item(&mut self, segment_item: InterpretedTokenTree) {
+        match segment_item {
+            InterpretedTokenTree::TokenTree(token_tree) => {
+                self.push_raw_token_tree(token_tree);
+            }
+            InterpretedTokenTree::InterpretedGroup(delimiter, span, inner_tokens) => {
+                self.push_new_group(inner_tokens, delimiter, span);
+            }
+        }
     }
 
     pub(crate) fn push_raw_token_tree(&mut self, token_tree: TokenTree) {
-        self.token_stream.extend(iter::once(token_tree));
+        self.extend_raw_tokens(iter::once(token_tree));
+    }
+
+    pub(crate) fn extend_raw_tokens(&mut self, tokens: impl IntoIterator<Item = TokenTree>) {
+        if !matches!(self.segments.last(), Some(InterpretedSegment::TokenVec(_))) {
+            self.segments.push(InterpretedSegment::TokenVec(vec![]));
+        }
+
+        match self.segments.last_mut() {
+            Some(InterpretedSegment::TokenVec(token_vec)) => {
+                let before_length = token_vec.len();
+                token_vec.extend(tokens);
+                self.token_length += token_vec.len() - before_length;
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.token_length
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        self.token_stream.is_empty()
-    }
-
-    #[allow(unused)]
-    pub(crate) fn parse_into_fields<T: 'static>(
-        self,
-        parser: FieldsParseDefinition<T>,
-        error_span_range: SpanRange,
-    ) -> Result<T> {
-        self.syn_parse(parser.create_syn_parser(error_span_range))
+        self.token_length == 0
     }
 
     /// For a type `T` which implements `syn::Parse`, you can call this as `syn_parse(self, T::parse)`.
     /// For more complicated parsers, just pass the parsing function to this function.
-    pub(crate) fn syn_parse<P: syn::parse::Parser>(self, parser: P) -> Result<P::Output> {
-        parser.parse2(self.token_stream)
+    ///
+    /// WARNING: With rust-analyzer, this loses transparent groups which have been inserted.
+    /// Use only where that doesn't matter: https://github.com/rust-lang/rust-analyzer/issues/18211#issuecomment-2604547032
+    ///
+    /// Annotate usages with // RUST-ANALYZER SAFETY: ... to explain why the use of this function is OK.
+    pub(crate) unsafe fn syn_parse<P: syn::parse::Parser>(self, parser: P) -> Result<P::Output> {
+        parser.parse2(self.into_token_stream())
     }
 
-    pub(crate) fn into_token_stream(self) -> TokenStream {
-        self.token_stream
+    pub(crate) fn append_into(self, output: &mut InterpretedStream) {
+        output.segments.extend(self.segments);
+        output.token_length += self.token_length;
     }
 
     pub(crate) fn append_cloned_into(&self, output: &mut InterpretedStream) {
-        output.token_stream.extend(self.token_stream.clone())
+        self.clone().append_into(output);
+    }
+
+    /// WARNING: With rust-analyzer, this loses transparent groups which have been inserted.
+    /// Use only where that doesn't matter: https://github.com/rust-lang/rust-analyzer/issues/18211#issuecomment-2604547032
+    ///
+    /// Annotate usages with // RUST-ANALYZER SAFETY: ... to explain why the use of this function is OK.
+    pub(crate) unsafe fn into_token_stream(self) -> TokenStream {
+        let mut output = TokenStream::new();
+        self.append_to_token_stream(&mut output);
+        output
+    }
+
+    unsafe fn append_to_token_stream(self, output: &mut TokenStream) {
+        for segment in self.segments {
+            match segment {
+                InterpretedSegment::TokenVec(vec) => {
+                    output.extend(vec);
+                }
+                InterpretedSegment::InterpretedGroup(delimiter, span, inner) => {
+                    output.extend(iter::once(TokenTree::Group(
+                        Group::new(delimiter, inner.into_token_stream()).with_span(span),
+                    )))
+                }
+            }
+        }
+    }
+
+    pub(crate) fn into_token_stream_removing_any_transparent_groups(self) -> TokenStream {
+        let mut output = TokenStream::new();
+        self.append_to_token_stream_without_transparent_groups(&mut output);
+        output
+    }
+
+    fn append_to_token_stream_without_transparent_groups(self, output: &mut TokenStream) {
+        for segment in self.segments {
+            match segment {
+                InterpretedSegment::TokenVec(vec) => {
+                    for token in vec {
+                        match token {
+                            TokenTree::Group(group) if group.delimiter() == Delimiter::None => {
+                                output.extend(group.stream().flatten_transparent_groups());
+                            }
+                            other => output.extend(iter::once(other)),
+                        }
+                    }
+                }
+                InterpretedSegment::InterpretedGroup(delimiter, span, interpreted_stream) => {
+                    if delimiter == Delimiter::None {
+                        interpreted_stream
+                            .append_to_token_stream_without_transparent_groups(output);
+                    } else {
+                        let mut inner = TokenStream::new();
+                        interpreted_stream
+                            .append_to_token_stream_without_transparent_groups(&mut inner);
+                        output.extend(iter::once(TokenTree::Group(
+                            Group::new(delimiter, inner).with_span(span),
+                        )));
+                    }
+                }
+            }
+        }
+    }
+
+    pub(crate) fn unwrap_singleton_group(
+        self,
+        check_group: impl FnOnce(Delimiter) -> bool,
+        create_error: impl FnOnce() -> Error,
+    ) -> Result<InterpretedStream> {
+        let mut item_vec = self.into_item_vec();
+        if item_vec.len() == 1 {
+            match item_vec.pop().unwrap() {
+                InterpretedTokenTree::InterpretedGroup(delimiter, _, inner) => {
+                    if check_group(delimiter) {
+                        return Ok(inner);
+                    }
+                }
+                InterpretedTokenTree::TokenTree(TokenTree::Group(group)) => {
+                    if check_group(group.delimiter()) {
+                        return Ok(Self::raw(group.stream()));
+                    }
+                }
+                _ => {}
+            }
+        }
+        Err(create_error())
+    }
+
+    pub(crate) fn into_item_vec(self) -> Vec<InterpretedTokenTree> {
+        let mut output = Vec::with_capacity(self.token_length);
+        for segment in self.segments {
+            match segment {
+                InterpretedSegment::TokenVec(vec) => {
+                    output.extend(vec.into_iter().map(InterpretedTokenTree::TokenTree));
+                }
+                InterpretedSegment::InterpretedGroup(delimiter, span, interpreted_stream) => {
+                    output.push(InterpretedTokenTree::InterpretedGroup(
+                        delimiter,
+                        span,
+                        interpreted_stream,
+                    ));
+                }
+            }
+        }
+        output
     }
 
     pub(crate) fn concat_recursive(self) -> String {
-        fn concat_recursive_internal(output: &mut String, token_stream: TokenStream) {
+        fn wrap_delimiters(
+            output: &mut String,
+            delimiter: Delimiter,
+            inner: impl FnOnce(&mut String),
+        ) {
+            match delimiter {
+                Delimiter::Parenthesis => {
+                    output.push('(');
+                    inner(output);
+                    output.push(')');
+                }
+                Delimiter::Brace => {
+                    output.push('{');
+                    inner(output);
+                    output.push('}');
+                }
+                Delimiter::Bracket => {
+                    output.push('[');
+                    inner(output);
+                    output.push(']');
+                }
+                Delimiter::None => {
+                    inner(output);
+                }
+            }
+        }
+
+        fn concat_recursive_interpreted_stream(output: &mut String, stream: InterpretedStream) {
+            for segment in stream.segments {
+                match segment {
+                    InterpretedSegment::TokenVec(vec) => concat_recursive_token_stream(output, vec),
+                    InterpretedSegment::InterpretedGroup(delimiter, _, interpreted_stream) => {
+                        wrap_delimiters(output, delimiter, |output| {
+                            concat_recursive_interpreted_stream(output, interpreted_stream);
+                        });
+                    }
+                }
+            }
+        }
+
+        fn concat_recursive_token_stream(
+            output: &mut String,
+            token_stream: impl IntoIterator<Item = TokenTree>,
+        ) {
             for token_tree in token_stream {
                 match token_tree {
                     TokenTree::Literal(literal) => match literal.content_if_string_like() {
                         Some(content) => output.push_str(&content),
                         None => output.push_str(&literal.to_string()),
                     },
-                    TokenTree::Group(group) => match group.delimiter() {
-                        Delimiter::Parenthesis => {
-                            output.push('(');
-                            concat_recursive_internal(output, group.stream());
-                            output.push(')');
-                        }
-                        Delimiter::Brace => {
-                            output.push('{');
-                            concat_recursive_internal(output, group.stream());
-                            output.push('}');
-                        }
-                        Delimiter::Bracket => {
-                            output.push('[');
-                            concat_recursive_internal(output, group.stream());
-                            output.push(']');
-                        }
-                        Delimiter::None => {
-                            concat_recursive_internal(output, group.stream());
-                        }
-                    },
+                    TokenTree::Group(group) => {
+                        wrap_delimiters(output, group.delimiter(), |output| {
+                            concat_recursive_token_stream(output, group.stream());
+                        });
+                    }
                     TokenTree::Punct(punct) => {
                         output.push(punct.as_char());
                     }
@@ -130,16 +319,14 @@ impl InterpretedStream {
         }
 
         let mut output = String::new();
-        concat_recursive_internal(&mut output, self.into_token_stream());
+        concat_recursive_interpreted_stream(&mut output, self);
         output
     }
 }
 
 impl From<TokenTree> for InterpretedStream {
     fn from(value: TokenTree) -> Self {
-        InterpretedStream {
-            token_stream: value.into(),
-        }
+        InterpretedStream::raw(value.into())
     }
 }
 

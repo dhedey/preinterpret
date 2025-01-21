@@ -219,17 +219,16 @@ impl ExpressionBuilder {
         appender: impl FnOnce(&mut InterpretedStream) -> Result<()>,
         span: Span,
     ) -> Result<()> {
-        // Currently using Expr::Parse, it ignores transparent groups, which is
-        // a little too permissive.
-        // Instead, we use parentheses to ensure that the group has to be a valid
-        // expression itself, without being flattened
+        // Currently using Expr::Parse, it ignores transparent groups, which is a little too permissive.
+        // Instead, we use parentheses to ensure that the group has to be a valid expression itself, without being flattened.
+        // This also works around the SAFETY issue in syn_parse below
         self.interpreted_stream
             .push_grouped(appender, Delimiter::Parenthesis, span)
     }
 
     pub(crate) fn extend_with_evaluation_output(&mut self, value: EvaluationOutput) {
         self.interpreted_stream
-            .extend_raw_tokens(value.into_token_tree());
+            .extend_with_raw_tokens_from(value.into_token_tree());
     }
 
     pub(crate) fn push_expression_group(
@@ -254,7 +253,11 @@ impl ExpressionBuilder {
         // Because of the kind of expressions we're parsing (i.e. no {} allowed),
         // we can get by with parsing it as `Expr::parse` rather than with
         // `Expr::parse_without_eager_brace` or `Expr::parse_with_earlier_boundary_rule`.
-        let expression = Expr::parse.parse2(self.interpreted_stream.into_token_stream())?;
+        let expression = unsafe {
+            // RUST-ANALYZER SAFETY: We wrap commands and variables in `()` instead of none-delimited groups in expressions,
+            // so it doesn't matter that we can drop none-delimited groups
+            self.interpreted_stream.syn_parse(Expr::parse)?
+        };
 
         EvaluationTree::build_from(&expression)?.evaluate()
     }
