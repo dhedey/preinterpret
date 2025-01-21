@@ -238,9 +238,9 @@ fn complex_cases_for_intersperse_and_input_types() {
     // Flattened variable containing transparent group
     assert_preinterpret_eq!({
         [!set! #items = 0 1 2 3]
-        [!set! #wrapped_items = #items] // [!GROUP! 0 1 2 3]
+        [!set! #wrapped_items = #items] // #items is "grouped variable" so outputs [!group! 0 1 2 3]
         [!string! [!intersperse! {
-            items: #..wrapped_items, // [!GROUP! 0 1 2 3]
+            items: #..wrapped_items, // #..wrapped_items returns its contents: [!group! 0 1 2 3]
             separator: [_],
         }]]
     }, "0_1_2_3");
@@ -249,7 +249,7 @@ fn complex_cases_for_intersperse_and_input_types() {
         [!set! #items = 0 1 2 3]
         [!string! [!intersperse! {
             items: {
-                #items
+                #items // #items is "grouped variable syntax" so outputs [!group! 0 1 2 3]
             },
             separator: [_],
         }]]

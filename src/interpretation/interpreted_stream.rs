@@ -4,7 +4,7 @@ use crate::internal_prelude::*;
 pub(crate) struct InterpretedStream {
     /// Currently, even ~inside~ macro executions, round-tripping [`Delimiter::None`] groups to a TokenStream
     /// breaks in rust-analyzer. This causes various spurious errors in the IDE.
-    /// See: https://github.com/dtolnay/syn/issues/1464 and https://github.com/rust-lang/rust-analyzer/issues/18211
+    /// See: https://github.com/rust-lang/rust-analyzer/issues/18211#issuecomment-2604547032
     ///
     /// In future, we may wish to internally use some kind of `TokenBuffer` type, which I've started on below.
     token_stream: TokenStream,

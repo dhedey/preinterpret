@@ -92,8 +92,8 @@ pub(crate) trait TokenTreeExt: Sized {
 }
 
 impl TokenTreeExt for TokenTree {
-    fn group(inner_tokens: TokenStream, delimeter: Delimiter, span: Span) -> Self {
-        TokenTree::Group(Group::new(delimeter, inner_tokens).with_span(span))
+    fn group(inner_tokens: TokenStream, delimiter: Delimiter, span: Span) -> Self {
+        TokenTree::Group(Group::new(delimiter, inner_tokens).with_span(span))
     }
 
     fn into_singleton_group(self, delimiter: Delimiter) -> Self {
