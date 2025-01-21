@@ -1,5 +1,5 @@
 mod boolean;
-mod char;
+mod character;
 mod evaluation_tree;
 mod expression_stream;
 mod float;
@@ -11,7 +11,7 @@ mod value;
 // Marked as use for expression sub-modules to use with a `use super::*` statement
 use crate::internal_prelude::*;
 use boolean::*;
-use char::*;
+use character::*;
 use evaluation_tree::*;
 use float::*;
 use integer::*;
