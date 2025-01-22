@@ -19,6 +19,8 @@ impl IdentExt for Ident {
 pub(crate) trait CursorExt: Sized {
     fn ident_matching(self, content: &str) -> Option<(Ident, Self)>;
     fn punct_matching(self, char: char) -> Option<(Punct, Self)>;
+    fn literal_matching(self, content: &str) -> Option<(Literal, Self)>;
+    fn group_matching(self, expected_delimiter: Delimiter) -> Option<(DelimSpan, Self, Self)>;
 }
 
 impl CursorExt for Cursor<'_> {
@@ -32,6 +34,24 @@ impl CursorExt for Cursor<'_> {
     fn punct_matching(self, char: char) -> Option<(Punct, Self)> {
         match self.punct() {
             Some((punct, next)) if punct.as_char() == char => Some((punct, next)),
+            _ => None,
+        }
+    }
+
+    fn literal_matching(self, content: &str) -> Option<(Literal, Self)> {
+        match self.literal() {
+            Some((literal, next)) if literal.to_string() == content => Some((literal, next)),
+            _ => None,
+        }
+    }
+
+    fn group_matching(self, expected_delimiter: Delimiter) -> Option<(DelimSpan, Self, Self)> {
+        match self.any_group() {
+            Some((inner_cursor, delimiter, delim_span, next_outer_cursor))
+                if delimiter == expected_delimiter =>
+            {
+                Some((delim_span, inner_cursor, next_outer_cursor))
+            }
             _ => None,
         }
     }
@@ -112,6 +132,12 @@ pub(crate) trait ParserExt {
     ) -> Result<T>;
     fn peek_ident_matching(&self, content: &str) -> bool;
     fn parse_ident_matching(&self, content: &str) -> Result<Ident>;
+    fn peek_punct_matching(&self, punct: char) -> bool;
+    fn parse_punct_matching(&self, content: char) -> Result<Punct>;
+    fn peek_literal_matching(&self, content: &str) -> bool;
+    fn parse_literal_matching(&self, content: &str) -> Result<Literal>;
+    fn peek_group_matching(&self, delimiter: Delimiter) -> bool;
+    fn parse_group_matching(&self, delimiter: Delimiter) -> Result<(DelimSpan, ParseBuffer)>;
 }
 
 impl ParserExt for ParseBuffer<'_> {
@@ -142,6 +168,50 @@ impl ParserExt for ParseBuffer<'_> {
                 .ident_matching(content)
                 .ok_or_else(|| cursor.span().error(format!("expected {}", content)))
         })
+    }
+
+    fn peek_punct_matching(&self, punct: char) -> bool {
+        self.cursor().punct_matching(punct).is_some()
+    }
+
+    fn parse_punct_matching(&self, punct: char) -> Result<Punct> {
+        self.step(|cursor| {
+            cursor
+                .punct_matching(punct)
+                .ok_or_else(|| cursor.span().error(format!("expected {}", punct)))
+        })
+    }
+
+    fn peek_literal_matching(&self, content: &str) -> bool {
+        self.cursor().literal_matching(content).is_some()
+    }
+
+    fn parse_literal_matching(&self, content: &str) -> Result<Literal> {
+        self.step(|cursor| {
+            cursor
+                .literal_matching(content)
+                .ok_or_else(|| cursor.span().error(format!("expected {}", content)))
+        })
+    }
+
+    fn peek_group_matching(&self, delimiter: Delimiter) -> bool {
+        self.cursor().group_matching(delimiter).is_some()
+    }
+
+    fn parse_group_matching(
+        &self,
+        expected_delimiter: Delimiter,
+    ) -> Result<(DelimSpan, ParseBuffer)> {
+        let (delimiter, delim_span, inner_stream) = self.parse_any_delimiter()?;
+        if delimiter != expected_delimiter {
+            return delim_span.open().err(match expected_delimiter {
+                Delimiter::Parenthesis => "Expected (",
+                Delimiter::Brace => "Expected {",
+                Delimiter::Bracket => "Expected [",
+                Delimiter::None => "Expected start of transparent group",
+            });
+        }
+        Ok((delim_span, inner_stream))
     }
 }
 

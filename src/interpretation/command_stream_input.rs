@@ -28,9 +28,9 @@ impl Parse for CommandStreamInput {
             PeekMatch::FlattenedCommand => Self::Command(input.parse()?),
             PeekMatch::GroupedVariable => Self::GroupedVariable(input.parse()?),
             PeekMatch::FlattenedVariable => Self::FlattenedVariable(input.parse()?),
-            PeekMatch::InterpretationGroup(Delimiter::Bracket) => Self::ExplicitStream(input.parse()?),
-            PeekMatch::InterpretationGroup(Delimiter::Brace) => Self::Code(input.parse()?),
-            PeekMatch::InterpretationGroup(_) | PeekMatch::Other => input.span()
+            PeekMatch::Group(Delimiter::Bracket) => Self::ExplicitStream(input.parse()?),
+            PeekMatch::Group(Delimiter::Brace) => Self::Code(input.parse()?),
+            PeekMatch::Group(_) | PeekMatch::AppendVariableDestructuring | PeekMatch::NamedDestructuring | PeekMatch::Other => input.span()
                 .err("Expected [ ..input stream.. ], { [..input stream..] } or a [!command! ..], #variable or #..variable.\nMacro substitutions such as $x should be placed inside square brackets.")?,
         })
     }

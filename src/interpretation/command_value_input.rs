@@ -20,8 +20,11 @@ impl<T: Parse> Parse for CommandValueInput<T> {
             PeekMatch::FlattenedCommand => Self::Command(input.parse()?),
             PeekMatch::GroupedVariable => Self::GroupedVariable(input.parse()?),
             PeekMatch::FlattenedVariable => Self::FlattenedVariable(input.parse()?),
-            PeekMatch::InterpretationGroup(Delimiter::Brace) => Self::Code(input.parse()?),
-            PeekMatch::InterpretationGroup(_) | PeekMatch::Other => Self::Value(input.parse()?),
+            PeekMatch::Group(Delimiter::Brace) => Self::Code(input.parse()?),
+            PeekMatch::AppendVariableDestructuring | PeekMatch::NamedDestructuring => {
+                return input.span().err("Destructurings are not supported here")
+            }
+            PeekMatch::Group(_) | PeekMatch::Other => Self::Value(input.parse()?),
         })
     }
 }

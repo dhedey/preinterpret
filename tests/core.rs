@@ -30,6 +30,54 @@ fn test_set() {
 }
 
 #[test]
+fn test_let() {
+    my_assert_eq!({
+        [!let! <Hello #inner World> = <Hello Beautiful World>]
+        [!string! #inner]
+    }, "Beautiful");
+    my_assert_eq!({
+        [!let! #..inner = <Hello Beautiful World>]
+        [!string! #inner]
+    }, "<HelloBeautifulWorld>");
+    my_assert_eq!({
+        [!let! #..x = Hello => World]
+        [!string! #x]
+    }, "Hello=>World");
+    my_assert_eq!({
+        [!let! Hello #..x!! = Hello => World!!]
+        [!string! #x]
+    }, "=>World");
+    my_assert_eq!({
+        [!let! Hello #..x World = Hello => World]
+        [!string! #x]
+    }, "=>");
+    my_assert_eq!({
+        [!let! Hello #..x World = Hello And Welcome To The Wonderful World]
+        [!string! #x]
+    }, "AndWelcomeToTheWonderful");
+    my_assert_eq!({
+        [!let! Hello #..x "World"! = Hello World And Welcome To The Wonderful "World"!]
+        [!string! #x]
+    }, "WorldAndWelcomeToTheWonderful");
+    my_assert_eq!({
+        [!let! #..x (#..y) = Why Hello (World)]
+        [!string! "#x = " #x "; #y = " #y]
+    }, "#x = WhyHello; #y = World");
+    my_assert_eq!({
+        [!set! #x =]
+        [!let!
+            #>>x     // Matches one tt and appends it: Why
+            #..>>x   // Matches stream until (, appends it grouped: [!group! Hello Everyone]
+            (
+                #>>..x   // Matches one tt and appends it flattened: This is an exciting adventure
+                #..>>..x // Matches stream and appends it flattened: do you agree ?
+            )
+            = Why Hello Everyone ([!group! This is an exciting adventure] do you agree?)]
+        [!string! [!intersperse! { items: #x, separator: [_] } ]]
+    }, "Why_HelloEveryone_This_is_an_exciting_adventure_do_you_agree_?");
+}
+
+#[test]
 fn test_raw() {
     my_assert_eq!(
         { [!string! [!raw! #variable and [!command!] are not interpreted or error]] },

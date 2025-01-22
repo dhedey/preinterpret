@@ -39,9 +39,10 @@ impl Parse for ExpressionInput {
                 PeekMatch::FlattenedCommand => ExpressionItem::Command(input.parse()?),
                 PeekMatch::GroupedVariable => ExpressionItem::GroupedVariable(input.parse()?),
                 PeekMatch::FlattenedVariable => ExpressionItem::FlattenedVariable(input.parse()?),
-                PeekMatch::InterpretationGroup(Delimiter::Brace | Delimiter::Bracket) => break,
-                PeekMatch::InterpretationGroup(_) => {
-                    ExpressionItem::ExpressionGroup(input.parse()?)
+                PeekMatch::Group(Delimiter::Brace | Delimiter::Bracket) => break,
+                PeekMatch::Group(_) => ExpressionItem::ExpressionGroup(input.parse()?),
+                PeekMatch::NamedDestructuring | PeekMatch::AppendVariableDestructuring => {
+                    return Err(input.error("Destructuring is not supported in an expression"));
                 }
                 PeekMatch::Other => {
                     if input.cursor().punct_matching('.').is_some() {

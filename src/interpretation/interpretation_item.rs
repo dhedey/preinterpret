@@ -16,11 +16,12 @@ impl Parse for InterpretationItem {
         Ok(match detect_preinterpret_grammar(input.cursor()) {
             PeekMatch::GroupedCommand => InterpretationItem::Command(input.parse()?),
             PeekMatch::FlattenedCommand => InterpretationItem::Command(input.parse()?),
-            PeekMatch::InterpretationGroup(_) => {
-                InterpretationItem::InterpretationGroup(input.parse()?)
-            }
+            PeekMatch::Group(_) => InterpretationItem::InterpretationGroup(input.parse()?),
             PeekMatch::GroupedVariable => InterpretationItem::GroupedVariable(input.parse()?),
             PeekMatch::FlattenedVariable => InterpretationItem::FlattenedVariable(input.parse()?),
+            PeekMatch::AppendVariableDestructuring | PeekMatch::NamedDestructuring => {
+                return input.span().err("Destructurings are not supported here")
+            }
             PeekMatch::Other => match input.parse::<TokenTree>()? {
                 TokenTree::Group(_) => {
                     unreachable!("Should have been already handled by InterpretationGroup above")
@@ -38,7 +39,9 @@ pub(crate) enum PeekMatch {
     FlattenedCommand,
     GroupedVariable,
     FlattenedVariable,
-    InterpretationGroup(Delimiter),
+    AppendVariableDestructuring,
+    NamedDestructuring,
+    Group(Delimiter),
     Other,
 }
 
@@ -64,6 +67,15 @@ pub(crate) fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> PeekMa
                 }
             }
         }
+        if delimiter == Delimiter::Parenthesis {
+            if let Some((_, next)) = next.punct_matching('!') {
+                if let Some((_, next)) = next.ident() {
+                    if next.punct_matching('!').is_some() {
+                        return PeekMatch::NamedDestructuring;
+                    }
+                }
+            }
+        }
 
         // Ideally we'd like to detect $($tt)* substitutions from macros and interpret them as
         // a Raw (uninterpreted) group, because typically that's what a user would typically intend.
@@ -76,7 +88,7 @@ pub(crate) fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> PeekMa
         // So this isn't possible. It's unlikely to matter much, and a user can always do:
         // [!raw! $($tt)*] anyway.
 
-        return PeekMatch::InterpretationGroup(delimiter);
+        return PeekMatch::Group(delimiter);
     }
     if let Some((_, next)) = cursor.punct_matching('#') {
         if next.ident().is_some() {
@@ -87,9 +99,20 @@ pub(crate) fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> PeekMa
                 if next.ident().is_some() {
                     return PeekMatch::FlattenedVariable;
                 }
+                if let Some((_, next)) = next.punct_matching('>') {
+                    if next.punct_matching('>').is_some() {
+                        return PeekMatch::AppendVariableDestructuring;
+                    }
+                }
+            }
+        }
+        if let Some((_, next)) = next.punct_matching('>') {
+            if next.punct_matching('>').is_some() {
+                return PeekMatch::AppendVariableDestructuring;
             }
         }
     }
+
     // This is rather annoying for our purposes, but the Cursor (and even `impl Parse on Punct`)
     // treats `'` specially, and there's no way to peek a ' token which isn't part of a lifetime.
     // Instead of dividing up specific cases here, we let the caller handle it by parsing as a

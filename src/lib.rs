@@ -511,10 +511,10 @@
 //! Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in this crate by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
 //!
 mod commands;
+mod destructuring;
 mod expressions;
 mod internal_prelude;
 mod interpretation;
-mod parsing;
 mod string_conversion;
 mod traits;
 

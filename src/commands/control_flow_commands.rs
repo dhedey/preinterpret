@@ -188,7 +188,7 @@ impl ControlFlowCommandDefinition for LoopCommand {
 
 #[derive(Clone)]
 pub(crate) struct ForCommand {
-    parse_place: ParsePlace,
+    parse_place: DestructureUntil<Token![in]>,
     #[allow(unused)]
     in_token: Token![in],
     input: CommandStreamInput,
@@ -228,7 +228,7 @@ impl ControlFlowCommandDefinition for ForCommand {
         for token in stream.into_item_vec() {
             iteration_counter.increment_and_check()?;
             self.parse_place
-                .handle_parse_from_stream(token.into(), interpreter)?;
+                .handle_destructure_from_stream(token.into(), interpreter)?;
             match self
                 .loop_code
                 .clone()

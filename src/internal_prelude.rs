@@ -1,4 +1,6 @@
 pub(crate) use core::iter;
+pub(crate) use core::marker::PhantomData;
+pub(crate) use core::ops::DerefMut;
 pub(crate) use proc_macro2::extra::*;
 pub(crate) use proc_macro2::*;
 pub(crate) use quote::ToTokens;
@@ -11,8 +13,8 @@ pub(crate) use syn::{
 };
 
 pub(crate) use crate::commands::*;
+pub(crate) use crate::destructuring::*;
 pub(crate) use crate::expressions::*;
 pub(crate) use crate::interpretation::*;
-pub(crate) use crate::parsing::*;
 pub(crate) use crate::string_conversion::*;
 pub(crate) use crate::traits::*;

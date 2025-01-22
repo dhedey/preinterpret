@@ -68,6 +68,14 @@ fn test_for() {
         },
         "ABCDE"
     );
+    assert_preinterpret_eq!(
+        {
+            [!string! [!for! (#x,) in [(a,) (b,) (c,)] {
+                #x
+            }]]
+        },
+        "abc"
+    );
 }
 
 #[test]

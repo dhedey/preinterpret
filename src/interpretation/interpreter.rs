@@ -71,7 +71,7 @@ impl Interpreter {
         }
     }
 
-    pub(super) fn set_variable(
+    pub(crate) fn set_variable(
         &mut self,
         variable: &impl IsVariable,
         tokens: InterpretedStream,
