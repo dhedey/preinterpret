@@ -17,6 +17,8 @@ impl IdentExt for Ident {
 }
 
 pub(crate) trait CursorExt: Sized {
+    /// Because syn doesn't parse ' as a punct (not aligned with the TokenTree abstraction)
+    fn any_punct(self) -> Option<(Punct, Self)>;
     fn ident_matching(self, content: &str) -> Option<(Ident, Self)>;
     fn punct_matching(self, char: char) -> Option<(Punct, Self)>;
     fn literal_matching(self, content: &str) -> Option<(Literal, Self)>;
@@ -24,6 +26,13 @@ pub(crate) trait CursorExt: Sized {
 }
 
 impl CursorExt for Cursor<'_> {
+    fn any_punct(self) -> Option<(Punct, Self)> {
+        match self.token_tree() {
+            Some((TokenTree::Punct(punct), next)) => Some((punct, next)),
+            _ => None,
+        }
+    }
+
     fn ident_matching(self, content: &str) -> Option<(Ident, Self)> {
         match self.ident() {
             Some((ident, next)) if ident == content => Some((ident, next)),
@@ -130,6 +139,8 @@ pub(crate) trait ParserExt {
         func: F,
         message: M,
     ) -> Result<T>;
+    fn parse_any_ident(&self) -> Result<Ident>;
+    fn parse_any_punct(&self) -> Result<Punct>;
     fn peek_ident_matching(&self, content: &str) -> bool;
     fn parse_ident_matching(&self, content: &str) -> Result<Ident>;
     fn peek_punct_matching(&self, punct: char) -> bool;
@@ -156,6 +167,18 @@ impl ParserExt for ParseBuffer<'_> {
     ) -> Result<T> {
         let error_span = self.span();
         parse(self).map_err(|_| error_span.error(message))
+    }
+
+    fn parse_any_ident(&self) -> Result<Ident> {
+        Ident::parse_any(self)
+    }
+
+    fn parse_any_punct(&self) -> Result<Punct> {
+        // Annoyingly, ' behaves weirdly in syn, so we need to handle it
+        match self.parse::<TokenTree>()? {
+            TokenTree::Punct(punct) => Ok(punct),
+            _ => self.span().err("expected punctuation"),
+        }
     }
 
     fn peek_ident_matching(&self, content: &str) -> bool {

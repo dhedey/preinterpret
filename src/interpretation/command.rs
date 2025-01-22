@@ -1,7 +1,7 @@
 use crate::internal_prelude::*;
 
 #[allow(unused)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CommandOutputKind {
     None,
     /// LiteralOrBool
@@ -306,7 +306,7 @@ impl OutputKind for OutputKindControlFlow {
 
     fn resolve(flattening: Option<Token![..]>) -> Result<CommandOutputKind> {
         match flattening {
-            Some(dots) => dots.err("This command is control flow, so is always flattened and cannot be flattened. If it needs to be grouped, wrap it in a [!group! ..] command"),
+            Some(dots) => dots.err("This command is control flow, so is always flattened and cannot be explicitly flattened. If it needs to be grouped, wrap it in a [!group! ..] command"),
             None => Ok(CommandOutputKind::ControlFlowCodeStream),
         }
     }

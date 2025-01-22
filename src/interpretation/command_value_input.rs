@@ -16,15 +16,19 @@ pub(crate) enum CommandValueInput<T> {
 impl<T: Parse> Parse for CommandValueInput<T> {
     fn parse(input: ParseStream) -> Result<Self> {
         Ok(match detect_preinterpret_grammar(input.cursor()) {
-            PeekMatch::GroupedCommand => Self::Command(input.parse()?),
-            PeekMatch::FlattenedCommand => Self::Command(input.parse()?),
+            PeekMatch::GroupedCommand(_) => Self::Command(input.parse()?),
+            PeekMatch::FlattenedCommand(_) => Self::Command(input.parse()?),
             PeekMatch::GroupedVariable => Self::GroupedVariable(input.parse()?),
             PeekMatch::FlattenedVariable => Self::FlattenedVariable(input.parse()?),
             PeekMatch::Group(Delimiter::Brace) => Self::Code(input.parse()?),
-            PeekMatch::AppendVariableDestructuring | PeekMatch::NamedDestructuring => {
+            PeekMatch::AppendVariableDestructuring | PeekMatch::Destructurer(_) => {
                 return input.span().err("Destructurings are not supported here")
             }
-            PeekMatch::Group(_) | PeekMatch::Other => Self::Value(input.parse()?),
+            PeekMatch::Group(_)
+            | PeekMatch::Punct(_)
+            | PeekMatch::Literal(_)
+            | PeekMatch::Ident(_)
+            | PeekMatch::End => Self::Value(input.parse()?),
         })
     }
 }

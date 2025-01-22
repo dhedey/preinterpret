@@ -14,35 +14,35 @@ pub(crate) enum InterpretationItem {
 impl Parse for InterpretationItem {
     fn parse(input: ParseStream) -> Result<Self> {
         Ok(match detect_preinterpret_grammar(input.cursor()) {
-            PeekMatch::GroupedCommand => InterpretationItem::Command(input.parse()?),
-            PeekMatch::FlattenedCommand => InterpretationItem::Command(input.parse()?),
+            PeekMatch::GroupedCommand(_) => InterpretationItem::Command(input.parse()?),
+            PeekMatch::FlattenedCommand(_) => InterpretationItem::Command(input.parse()?),
             PeekMatch::Group(_) => InterpretationItem::InterpretationGroup(input.parse()?),
             PeekMatch::GroupedVariable => InterpretationItem::GroupedVariable(input.parse()?),
             PeekMatch::FlattenedVariable => InterpretationItem::FlattenedVariable(input.parse()?),
-            PeekMatch::AppendVariableDestructuring | PeekMatch::NamedDestructuring => {
+            PeekMatch::AppendVariableDestructuring | PeekMatch::Destructurer(_) => {
                 return input.span().err("Destructurings are not supported here")
             }
-            PeekMatch::Other => match input.parse::<TokenTree>()? {
-                TokenTree::Group(_) => {
-                    unreachable!("Should have been already handled by InterpretationGroup above")
-                }
-                TokenTree::Punct(punct) => InterpretationItem::Punct(punct),
-                TokenTree::Ident(ident) => InterpretationItem::Ident(ident),
-                TokenTree::Literal(literal) => InterpretationItem::Literal(literal),
-            },
+            PeekMatch::Punct(_) => InterpretationItem::Punct(input.parse_any_punct()?),
+            PeekMatch::Ident(_) => InterpretationItem::Ident(input.parse_any_ident()?),
+            PeekMatch::Literal(_) => InterpretationItem::Literal(input.parse()?),
+            PeekMatch::End => return input.span().err("Expected some item"),
         })
     }
 }
 
+#[allow(unused)]
 pub(crate) enum PeekMatch {
-    GroupedCommand,
-    FlattenedCommand,
+    GroupedCommand(Option<CommandKind>),
+    FlattenedCommand(Option<CommandKind>),
     GroupedVariable,
     FlattenedVariable,
     AppendVariableDestructuring,
-    NamedDestructuring,
+    Destructurer(Option<DestructurerKind>),
     Group(Delimiter),
-    Other,
+    Ident(Ident),
+    Punct(Punct),
+    Literal(Literal),
+    End,
 }
 
 pub(crate) fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> PeekMatch {
@@ -51,16 +51,16 @@ pub(crate) fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> PeekMa
     if let Some((next, delimiter, _, _)) = cursor.any_group() {
         if delimiter == Delimiter::Bracket {
             if let Some((_, next)) = next.punct_matching('!') {
-                if let Some((_, next)) = next.ident() {
+                if let Some((ident, next)) = next.ident() {
                     if next.punct_matching('!').is_some() {
-                        return PeekMatch::GroupedCommand;
+                        return PeekMatch::GroupedCommand(CommandKind::for_ident(&ident));
                     }
                 }
                 if let Some((_, next)) = next.punct_matching('.') {
                     if let Some((_, next)) = next.punct_matching('.') {
-                        if let Some((_, next)) = next.ident() {
+                        if let Some((ident, next)) = next.ident() {
                             if next.punct_matching('!').is_some() {
-                                return PeekMatch::FlattenedCommand;
+                                return PeekMatch::FlattenedCommand(CommandKind::for_ident(&ident));
                             }
                         }
                     }
@@ -69,9 +69,9 @@ pub(crate) fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> PeekMa
         }
         if delimiter == Delimiter::Parenthesis {
             if let Some((_, next)) = next.punct_matching('!') {
-                if let Some((_, next)) = next.ident() {
+                if let Some((ident, next)) = next.ident() {
                     if next.punct_matching('!').is_some() {
-                        return PeekMatch::NamedDestructuring;
+                        return PeekMatch::Destructurer(DestructurerKind::for_ident(&ident));
                     }
                 }
             }
@@ -113,11 +113,13 @@ pub(crate) fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> PeekMa
         }
     }
 
-    // This is rather annoying for our purposes, but the Cursor (and even `impl Parse on Punct`)
-    // treats `'` specially, and there's no way to peek a ' token which isn't part of a lifetime.
-    // Instead of dividing up specific cases here, we let the caller handle it by parsing as a
-    // TokenTree if they need to, which doesn't have these limitations.
-    PeekMatch::Other
+    match cursor.token_tree() {
+        Some((TokenTree::Ident(ident), _)) => PeekMatch::Ident(ident),
+        Some((TokenTree::Punct(punct), _)) => PeekMatch::Punct(punct),
+        Some((TokenTree::Literal(literal), _)) => PeekMatch::Literal(literal),
+        Some((TokenTree::Group(_), _)) => unreachable!("Already covered above"),
+        None => PeekMatch::End,
+    }
 }
 
 impl Interpret for InterpretationItem {

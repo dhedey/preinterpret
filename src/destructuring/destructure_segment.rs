@@ -5,8 +5,8 @@ pub(crate) trait StopCondition: Clone {
 }
 
 #[derive(Clone)]
-pub(crate) struct UntilEmpty;
-impl StopCondition for UntilEmpty {
+pub(crate) struct UntilEnd;
+impl StopCondition for UntilEnd {
     fn should_stop(input: ParseStream) -> bool {
         input.is_empty()
     }
@@ -46,7 +46,7 @@ impl<T: PeekableToken> StopCondition for UntilToken<T> {
     }
 }
 
-pub(crate) type DestructureRemaining = DestructureSegment<UntilEmpty>;
+pub(crate) type DestructureRemaining = DestructureSegment<UntilEnd>;
 pub(crate) type DestructureUntil<T> = DestructureSegment<UntilToken<T>>;
 
 #[derive(Clone)]

@@ -6,8 +6,6 @@ pub(crate) struct CommandArguments<'a> {
     command_name: Ident,
     /// The span range of the original stream, before tokens were consumed
     full_span_range: SpanRange,
-    /// The span of the last item consumed (or the full span range if no items have been consumed yet)
-    latest_item_span_range: SpanRange,
 }
 
 impl<'a> CommandArguments<'a> {
@@ -20,7 +18,6 @@ impl<'a> CommandArguments<'a> {
             parse_stream,
             command_name,
             full_span_range: span_range,
-            latest_item_span_range: span_range,
         }
     }
 
@@ -33,7 +30,7 @@ impl<'a> CommandArguments<'a> {
         if self.parse_stream.is_empty() {
             Ok(())
         } else {
-            self.latest_item_span_range.err(error_message)
+            self.full_span_range.err(error_message)
         }
     }
 

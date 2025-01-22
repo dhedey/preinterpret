@@ -58,11 +58,20 @@ Destructuring performs parsing of a token stream. It supports:
   * `#>>..x` - Reads a token tree, appends a stream (i.e. flatten it if it's a group)
   * `#..>>x` - Reads a stream, appends a group (opposite of for #y in #x)
   * `#..>>..x` - Reads a stream, appends a stream
-* COMING SOON: Commands which don't output a value
-* COMING SOON: Named destructurings which look like `(!name! ...)`
+* Commands which don't output a value, like `[!set! ...]` or `[!extend! ...]`
+* Named destructurings:
+  * `(!stream! ...)` (TODO - decide if this is a good name)
+  * `(!ident! ...)`
+  * `(!punct! ...)`
+  * `(!literal! ...)`
+  * `(!group! ...)`
 
 ### To come
 
+* Refactoring & testing
+  * Move destructuring commands to separate file and tests
+  * Add tests for `(!stream! ...)`, `(!group! ...)`, `(!ident! ...)`, `(!punct! ...)` including matching `'`, `(!literal! ...)`
+  * Add compile error tests for all the destructuring errors
 * `[!split! { stream: X, separator: X, drop_empty?: false, permit_trailing_separator?: true, }]` and `[!comma_split! ...]`
 * `[!zip! ([Hello Goodbye] [World Friend])]` => `[(Hello World), (Goodbye Friend)]` and/or `[!zip! { streams: (#countries #flags #capitals), trim_to_shortest?: false }]` with `InterpretValue<AnyGrouped<Repeated<CodeInput>>>`
   * e.g. `[!for! (#country #flag #capital) in [!zip! (#countries #flags #capitals)]`
@@ -76,26 +85,25 @@ Destructuring performs parsing of a token stream. It supports:
 * Rework `Error` as:
   * `ParseResult` with `ParseError::LowLevel(syn::Error)` | `ParseError::Contextual(syn::Error)`
   * `ExecutionInterrupt` with `ExecutionInterrupt::Err(syn::Error)` | `ExecutionInterrupt::ControlFlow(..)`
-* Basic place destructuring
-  * `(!stream! ...)` method to take a group
-  * `(!literal! #x)` / `(!ident! #x)` bindings
+* Place destructuring
   * `(!optional! ...)`
-  * `(!group! ...)`
-  * Support commands, but only commands which don't output a value 
   * `(!repeated! ...)` also forbid `#x` bindings inside of them unless a `[!settings! { ... }]` has been overriden
     * `{ item: (!stream! ...), minimum?: syn::int, maximum?: syn::int, separator?: (!stream! ...), after_each?: { ... }, before_all?: {}, after_all?: {}, }`
-  * (MAYBE) `#(..)?`, `#(..)+`, `#(..),+`, `#(..)*`, `#(..),*` but I don't like them much
   * `(!raw! ...)`
   * `(!match! ...)` (with `#..x` as a catch-all)
+  * `(!fields! ...)` and `(!subfields! ...)`
+  * (MAYBE) `#(..)?`, `#(..)+`, `#(..),+`, `#(..)*`, `#(..),*` but I don't like them much
 * Check all `#[allow(unused)]` and remove any which aren't needed
 * Rework expression parsing, in order to:
   * Fix comments in the expression files
   * Enable lazy && and ||
   * Enable support for code blocks { .. } in expressions, and remove hacks where expression parsing stops at {} or .
-* Pushed to 0.4 - fork of syn to:
-  * Fix issues in Rust Analyzer
-  * Improve performance
-  * Permit `[!parse_while! [!PARSE! ...] from #x { ... }]`
+* Pushed to 0.4:
+  * Fork of syn to:
+    * Fix issues in Rust Analyzer
+    * Improve performance
+    * Permit `[!parse_while! [!PARSE! ...] from #x { ... }]`
+  * Further syn parsings (e.g. item, fields, etc)
 * Work on book
   * Input paradigms:
     * Streams

@@ -35,30 +35,20 @@ impl Parse for ExpressionInput {
             // before code blocks or .. in [!range!] so we can break on those.
             // These aren't valid inside expressions we support anyway, so it's good enough for now.
             let item = match detect_preinterpret_grammar(input.cursor()) {
-                PeekMatch::GroupedCommand => ExpressionItem::Command(input.parse()?),
-                PeekMatch::FlattenedCommand => ExpressionItem::Command(input.parse()?),
+                PeekMatch::GroupedCommand(_) => ExpressionItem::Command(input.parse()?),
+                PeekMatch::FlattenedCommand(_) => ExpressionItem::Command(input.parse()?),
                 PeekMatch::GroupedVariable => ExpressionItem::GroupedVariable(input.parse()?),
                 PeekMatch::FlattenedVariable => ExpressionItem::FlattenedVariable(input.parse()?),
                 PeekMatch::Group(Delimiter::Brace | Delimiter::Bracket) => break,
                 PeekMatch::Group(_) => ExpressionItem::ExpressionGroup(input.parse()?),
-                PeekMatch::NamedDestructuring | PeekMatch::AppendVariableDestructuring => {
+                PeekMatch::Destructurer(_) | PeekMatch::AppendVariableDestructuring => {
                     return Err(input.error("Destructuring is not supported in an expression"));
                 }
-                PeekMatch::Other => {
-                    if input.cursor().punct_matching('.').is_some() {
-                        break;
-                    }
-                    match input.parse::<TokenTree>()? {
-                        TokenTree::Group(_) => {
-                            unreachable!(
-                                "Should have been already handled by InterpretationGroup above"
-                            )
-                        }
-                        TokenTree::Punct(punct) => ExpressionItem::Punct(punct),
-                        TokenTree::Ident(ident) => ExpressionItem::Ident(ident),
-                        TokenTree::Literal(literal) => ExpressionItem::Literal(literal),
-                    }
-                }
+                PeekMatch::Punct(punct) if punct.as_char() == '.' => break,
+                PeekMatch::Punct(_) => ExpressionItem::Punct(input.parse_any_punct()?),
+                PeekMatch::Ident(_) => ExpressionItem::Ident(input.parse_any_ident()?),
+                PeekMatch::Literal(_) => ExpressionItem::Literal(input.parse()?),
+                PeekMatch::End => return input.span().err("Expected an expression"),
             };
             items.push(item);
         }

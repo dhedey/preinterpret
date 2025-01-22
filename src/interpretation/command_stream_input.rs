@@ -24,13 +24,13 @@ pub(crate) enum CommandStreamInput {
 impl Parse for CommandStreamInput {
     fn parse(input: ParseStream) -> Result<Self> {
         Ok(match detect_preinterpret_grammar(input.cursor()) {
-            PeekMatch::GroupedCommand => Self::Command(input.parse()?),
-            PeekMatch::FlattenedCommand => Self::Command(input.parse()?),
+            PeekMatch::GroupedCommand(_) => Self::Command(input.parse()?),
+            PeekMatch::FlattenedCommand(_) => Self::Command(input.parse()?),
             PeekMatch::GroupedVariable => Self::GroupedVariable(input.parse()?),
             PeekMatch::FlattenedVariable => Self::FlattenedVariable(input.parse()?),
             PeekMatch::Group(Delimiter::Bracket) => Self::ExplicitStream(input.parse()?),
             PeekMatch::Group(Delimiter::Brace) => Self::Code(input.parse()?),
-            PeekMatch::Group(_) | PeekMatch::AppendVariableDestructuring | PeekMatch::NamedDestructuring | PeekMatch::Other => input.span()
+            _ => input.span()
                 .err("Expected [ ..input stream.. ], { [..input stream..] } or a [!command! ..], #variable or #..variable.\nMacro substitutions such as $x should be placed inside square brackets.")?,
         })
     }

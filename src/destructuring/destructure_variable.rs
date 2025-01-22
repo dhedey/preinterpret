@@ -54,6 +54,16 @@ pub(crate) enum DestructureVariable {
 }
 
 impl DestructureVariable {
+    pub(crate) fn parse_only_unflattened_input(input: ParseStream) -> Result<Self> {
+        let variable: DestructureVariable = Self::parse_until::<UntilEnd>(input)?;
+        if variable.is_flattened_input() {
+            return variable
+                .span_range()
+                .err("A flattened input variable is not supported here");
+        }
+        Ok(variable)
+    }
+
     pub(crate) fn parse_until<C: StopCondition>(input: ParseStream) -> Result<Self> {
         let marker = input.parse()?;
         if input.peek(Token![..]) {
@@ -145,6 +155,15 @@ impl HasSpanRange for DestructureVariable {
 }
 
 impl DestructureVariable {
+    pub(crate) fn is_flattened_input(&self) -> bool {
+        matches!(
+            self,
+            DestructureVariable::Flattened { .. }
+                | DestructureVariable::FlattenedAppendGrouped { .. }
+                | DestructureVariable::FlattenedAppendFlattened { .. }
+        )
+    }
+
     fn get_variable_data(&self, interpreter: &mut Interpreter) -> Result<VariableData> {
         let variable_data = interpreter
             .get_existing_variable_data(self, || {
@@ -272,26 +291,21 @@ impl ParseUntil {
             return Ok(ParseUntil::End);
         }
         Ok(match detect_preinterpret_grammar(input.cursor()) {
-            PeekMatch::GroupedCommand
-            | PeekMatch::FlattenedCommand
+            PeekMatch::GroupedCommand(_)
+            | PeekMatch::FlattenedCommand(_)
             | PeekMatch::GroupedVariable
             | PeekMatch::FlattenedVariable
-            | PeekMatch::NamedDestructuring
+            | PeekMatch::Destructurer(_)
             | PeekMatch::AppendVariableDestructuring => {
                 return input
                     .span()
                     .err("This cannot follow a flattened destructure match");
             }
             PeekMatch::Group(delimiter) => ParseUntil::Group(delimiter),
-            PeekMatch::Other => match input.cursor().token_tree() {
-                Some((token_tree, _)) => match token_tree {
-                    TokenTree::Group(group) => ParseUntil::Group(group.delimiter()),
-                    TokenTree::Ident(ident) => ParseUntil::Ident(ident),
-                    TokenTree::Punct(punct) => ParseUntil::Punct(punct),
-                    TokenTree::Literal(literal) => ParseUntil::Literal(literal),
-                },
-                None => ParseUntil::End,
-            },
+            PeekMatch::Ident(ident) => ParseUntil::Ident(ident),
+            PeekMatch::Literal(literal) => ParseUntil::Literal(literal),
+            PeekMatch::Punct(punct) => ParseUntil::Punct(punct),
+            PeekMatch::End => ParseUntil::End,
         })
     }
 
