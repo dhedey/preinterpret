@@ -406,6 +406,7 @@ define_command_kind! {
     ExtendCommand,
     RawCommand,
     IgnoreCommand,
+    VoidCommand,
     SettingsCommand,
     ErrorCommand,
     DebugCommand,

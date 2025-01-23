@@ -123,6 +123,30 @@ impl NoOutputCommandDefinition for IgnoreCommand {
 }
 
 #[derive(Clone)]
+pub(crate) struct VoidCommand {
+    inner: InterpretationStream,
+}
+
+impl CommandType for VoidCommand {
+    type OutputKind = OutputKindNone;
+}
+
+impl NoOutputCommandDefinition for VoidCommand {
+    const COMMAND_NAME: &'static str = "void";
+
+    fn parse(arguments: CommandArguments) -> Result<Self> {
+        Ok(Self {
+            inner: arguments.parse_all_for_interpretation()?,
+        })
+    }
+
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
+        let _ = self.inner.interpret_to_new_stream(interpreter)?;
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
 pub(crate) struct SettingsCommand {
     inputs: SettingsInputs,
 }

@@ -12,7 +12,8 @@
 * Core commands:
   * `[!error! ...]` to output a compile error
   * `[!extend! #x += ...]` to performantly add extra characters to the stream 
-  * `[!let! <destructuring> = ...]` does destructuring/parsing (see next section)
+  * `[!debug! ...]` to output its interpreted contents including none-delimited groups. Useful for debugging the content of variables.
+  * `[!void! ...]` interprets its arguments but then ignores any outputs. It can be used inside destructurings.
 * Expression commands:
   * `[!evaluate! <expression>]`
   * `[!assign! #x += <expression>]` for `+` and other supported operators
@@ -31,6 +32,8 @@
   * `[!..group! ...]` which just outputs its contents as-is, useful where the grammar
     only takes a single item, but we want to output multiple tokens
   * `[!intersperse! { ... }]` which inserts separator tokens between each token tree in a stream.
+* Destructuring commands:
+  * `[!let! <destructuring> = ...]` does destructuring/parsing (see next section). Note `[!let! #..x = ...]` is equivalent to `[!set! #x = ...]`
 
 ### Expressions
 
@@ -52,11 +55,11 @@ Destructuring performs parsing of a token stream. It supports:
 
 * Explicit punctuation, idents, literals and groups
 * Variable bindings:
-  * `#x` - Reads a token tree, writes a stream (opposite of #x)
-  * `#..x` - Reads a stream, writes a stream (opposite of #..x)
-  * `#>>x` - Reads a token tree, appends a token tree (opposite of for #y in #x)
+  * `#x` - Reads a token tree, writes a stream (opposite of `#x`)
+  * `#..x` - Reads a stream, writes a stream (opposite of `#..x`)
+  * `#>>x` - Reads a token tree, appends a token tree (can be read back with `!for! #y in #x { ... }`)
   * `#>>..x` - Reads a token tree, appends a stream (i.e. flatten it if it's a group)
-  * `#..>>x` - Reads a stream, appends a group (opposite of for #y in #x)
+  * `#..>>x` - Reads a stream, appends a group (can be read back with `!for! #y in #x { ... }`)
   * `#..>>..x` - Reads a stream, appends a stream
 * Commands which don't output a value, like `[!set! ...]` or `[!extend! ...]`
 * Named destructurings:

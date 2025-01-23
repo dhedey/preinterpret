@@ -134,3 +134,11 @@ fn test_group_destructurer() {
         [!debug! #..y]
     }, "\"hello\" \"world\"");
 }
+
+#[test]
+fn test_none_output_commands_mid_parse() {
+    assert_preinterpret_eq!({
+        [!let! The "quick" (!literal! #x) fox [!let! #y = #x] (!ident! #x) = The "quick" "brown" fox jumps]
+        [!string! "#x = " [!debug! #..x] "; #y = "[!debug! #..y]]
+    }, "#x = jumps; #y = \"brown\"");
+}

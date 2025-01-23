@@ -67,7 +67,17 @@ fn test_extend() {
 #[test]
 fn test_ignore() {
     assert_preinterpret_eq!({
-        true
-        [!ignore! this is all just ignored!]
+        [!set! #x = false]
+        [!ignore! [!set! #x = true] nothing is interpreted. Everything is ignored...]
+        #x
+    }, false);
+}
+
+#[test]
+fn test_void() {
+    assert_preinterpret_eq!({
+        [!set! #x = false]
+        [!void! [!set! #x = true] things _are_ interpreted, but the result is ignored...]
+        #x
     }, true);
 }
