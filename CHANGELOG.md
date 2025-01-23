@@ -68,15 +68,11 @@ Destructuring performs parsing of a token stream. It supports:
 
 ### To come
 
-* Refactoring & testing
-  * Move destructuring commands to separate file and tests
-  * Add tests for `(!stream! ...)`, `(!group! ...)`, `(!ident! ...)`, `(!punct! ...)` including matching `'`, `(!literal! ...)`
-  * Add compile error tests for all the destructuring errors
-* `[!split! { stream: X, separator: X, drop_empty?: false, permit_trailing_separator?: true, }]` and `[!comma_split! ...]`
-* `[!zip! ([Hello Goodbye] [World Friend])]` => `[(Hello World), (Goodbye Friend)]` and/or `[!zip! { streams: (#countries #flags #capitals), trim_to_shortest?: false }]` with `InterpretValue<AnyGrouped<Repeated<CodeInput>>>`
+* Add compile error tests for all the destructuring errors
+* `[!split! { stream: [...], separator: [...], drop_empty?: false, permit_trailing_separator?: true, }]` and `[!comma_split! ...]`
+* `[!zip! ([Hello Goodbye] [World Friend])]` => `[(Hello World), (Goodbye Friend)]` and/or `[!zip! { streams: (#countries #flags #capitals), error_on_length_mismatch?: true }]` with `InterpretValue<AnyGrouped<Repeated<CodeInput>>>`
   * e.g. `[!for! (#country #flag #capital) in [!zip! (#countries #flags #capitals)]`
 * `[!is_set! #x]`
-* `[!debug!]` command to output an error with the current content of all variables.
 * `[!str_split! { input: Value<LitStr>, separator: Value<LitStr>, }]`
 * Add casts of other integers to char, via `char::from_u32(u32::try_from(x))`
 * Add more tests
@@ -84,15 +80,17 @@ Destructuring performs parsing of a token stream. It supports:
   * e.g. for long sums
 * Rework `Error` as:
   * `ParseResult` with `ParseError::LowLevel(syn::Error)` | `ParseError::Contextual(syn::Error)`
-  * `ExecutionInterrupt` with `ExecutionInterrupt::Err(syn::Error)` | `ExecutionInterrupt::ControlFlow(..)`
-* Place destructuring
-  * `(!optional! ...)`
+  * `ExecutionResult` with `ExecutionInterrupt::Err(syn::Error)` | `ExecutionInterrupt::ControlFlow(..)`
+* Destructurers
   * `(!repeated! ...)` also forbid `#x` bindings inside of them unless a `[!settings! { ... }]` has been overriden
     * `{ item: (!stream! ...), minimum?: syn::int, maximum?: syn::int, separator?: (!stream! ...), after_each?: { ... }, before_all?: {}, after_all?: {}, }`
   * `(!raw! ...)`
-  * `(!match! ...)` (with `#..x` as a catch-all)
   * `(!fields! ...)` and `(!subfields! ...)`
+  * Add ability to fork (copy on write?) / revert the interpreter state and can then add:
+    * `(!optional! ...)`
+    * `(!match! ...)` (with `#..x` as a catch-all)
   * (MAYBE) `#(..)?`, `#(..)+`, `#(..),+`, `#(..)*`, `#(..),*` but I don't like them much
+* `[!match! ...]` command - similar to the match destructurer, but a command...
 * Check all `#[allow(unused)]` and remove any which aren't needed
 * Rework expression parsing, in order to:
   * Fix comments in the expression files

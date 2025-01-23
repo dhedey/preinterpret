@@ -1,5 +1,3 @@
-use std::ops::DerefMut;
-
 use crate::internal_prelude::*;
 
 #[derive(Clone)]
@@ -33,43 +31,7 @@ impl NoOutputCommandDefinition for SetCommand {
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
         let result_tokens = self.arguments.interpret_to_new_stream(interpreter)?;
         self.variable.set(interpreter, result_tokens)?;
-
         Ok(())
-    }
-}
-
-#[derive(Clone)]
-pub(crate) struct LetCommand {
-    destructuring: DestructureUntil<Token![=]>,
-    #[allow(unused)]
-    equals: Token![=],
-    arguments: InterpretationStream,
-}
-
-impl CommandType for LetCommand {
-    type OutputKind = OutputKindNone;
-}
-
-impl NoOutputCommandDefinition for LetCommand {
-    const COMMAND_NAME: &'static str = "let";
-
-    fn parse(arguments: CommandArguments) -> Result<Self> {
-        arguments.fully_parse_or_error(
-            |input| {
-                Ok(Self {
-                    destructuring: input.parse()?,
-                    equals: input.parse()?,
-                    arguments: input.parse_with(arguments.full_span_range())?,
-                })
-            },
-            "Expected [!let! <destructuring> = ..]",
-        )
-    }
-
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
-        let result_tokens = self.arguments.interpret_to_new_stream(interpreter)?;
-        self.destructuring
-            .handle_destructure_from_stream(result_tokens, interpreter)
     }
 }
 
@@ -253,7 +215,7 @@ impl NoOutputCommandDefinition for ErrorCommand {
             EitherErrorInput::JustMessage(stream) => {
                 let error_message = stream
                     .interpret_to_new_stream(interpreter)?
-                    .concat_recursive();
+                    .concat_recursive(&ConcatBehaviour::standard());
                 return Span::call_site().err(error_message);
             }
         };
@@ -302,5 +264,33 @@ impl NoOutputCommandDefinition for ErrorCommand {
         };
 
         error_span.err(message)
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct DebugCommand {
+    inner: InterpretationStream,
+}
+
+impl CommandType for DebugCommand {
+    type OutputKind = OutputKindValue;
+}
+
+impl ValueCommandDefinition for DebugCommand {
+    const COMMAND_NAME: &'static str = "debug";
+
+    fn parse(arguments: CommandArguments) -> Result<Self> {
+        Ok(Self {
+            inner: arguments.parse_all_for_interpretation()?,
+        })
+    }
+
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<TokenTree> {
+        let span = self.inner.span();
+        let debug_string = self
+            .inner
+            .interpret_to_new_stream(interpreter)?
+            .concat_recursive(&ConcatBehaviour::debug());
+        Ok(Literal::string(&debug_string).with_span(span).into())
     }
 }

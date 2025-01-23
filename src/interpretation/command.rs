@@ -408,6 +408,7 @@ define_command_kind! {
     IgnoreCommand,
     SettingsCommand,
     ErrorCommand,
+    DebugCommand,
 
     // Concat & Type Convert Commands
     StringCommand,

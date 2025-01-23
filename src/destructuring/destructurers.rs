@@ -1,189 +1,154 @@
 use crate::internal_prelude::*;
 
-pub(crate) trait DestructurerDefinition: Clone {
-    const DESTRUCTURER_NAME: &'static str;
-    fn parse(arguments: DestructurerArguments) -> Result<Self>;
-    fn handle_destructure(&self, input: ParseStream, interpreter: &mut Interpreter) -> Result<()>;
-}
-
 #[derive(Clone)]
-pub(crate) struct DestructurerArguments<'a> {
-    parse_stream: ParseStream<'a>,
-    destructurer_name: Ident,
-    full_span_range: SpanRange,
+pub(crate) struct StreamDestructurer {
+    inner: DestructureRemaining,
 }
 
-#[allow(unused)]
-impl<'a> DestructurerArguments<'a> {
-    pub(crate) fn new(
-        parse_stream: ParseStream<'a>,
-        destructurer_name: Ident,
-        span_range: SpanRange,
-    ) -> Self {
-        Self {
-            parse_stream,
-            destructurer_name,
-            full_span_range: span_range,
-        }
-    }
+impl DestructurerDefinition for StreamDestructurer {
+    const DESTRUCTURER_NAME: &'static str = "stream";
 
-    pub(crate) fn full_span_range(&self) -> SpanRange {
-        self.full_span_range
-    }
-
-    /// We use this instead of the "unexpected / drop glue" pattern in order to give a better error message
-    pub(crate) fn assert_empty(&self, error_message: impl std::fmt::Display) -> Result<()> {
-        if self.parse_stream.is_empty() {
-            Ok(())
-        } else {
-            self.full_span_range.err(error_message)
-        }
-    }
-
-    pub(crate) fn fully_parse_no_error_override<T: Parse>(&self) -> Result<T> {
-        self.parse_stream.parse()
-    }
-
-    pub(crate) fn fully_parse_as<T: ArgumentsContent>(&self) -> Result<T> {
-        self.fully_parse_or_error(T::parse, T::error_message())
-    }
-
-    pub(crate) fn fully_parse_or_error<T>(
-        &self,
-        parse_function: impl FnOnce(ParseStream) -> Result<T>,
-        error_message: impl std::fmt::Display,
-    ) -> Result<T> {
-        let parsed = parse_function(self.parse_stream).or_else(|error| {
-            // In future, when the diagnostic API is stable,
-            // we can add this context directly onto the command ident...
-            // Rather than just selectively adding it to the inner-most error.
-            let error_string = error.to_string();
-
-            // We avoid adding this additional context if it's already been added in an
-            // inner error, because that's likely the correct error to show.
-            if error_string.contains("\nOccurred whilst parsing") {
-                return Err(error);
-            }
-            error.span().err(format!(
-                "{}\nOccurred whilst parsing (!{}! ..) - {}",
-                error_string, self.destructurer_name, error_message,
-            ))
-        })?;
-
-        self.assert_empty(error_message)?;
-
-        Ok(parsed)
-    }
-}
-
-#[derive(Clone)]
-pub(crate) struct Destructurer {
-    instance: NamedDestructurer,
-    #[allow(unused)]
-    source_group_span: DelimSpan,
-}
-
-impl Parse for Destructurer {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let content;
-        let open_bracket = syn::parenthesized!(content in input);
-        content.parse::<Token![!]>()?;
-        let destructurer_name = content.call(Ident::parse_any)?;
-        let destructurer_kind = match DestructurerKind::for_ident(&destructurer_name) {
-            Some(destructurer_kind) => destructurer_kind,
-            None => destructurer_name.span().err(
-                format!(
-                    "Expected `(!<name>! ...)`, for <name> one of: {}.\nIf this wasn't intended to be a named destructuring, you can work around this with (!raw! (!{} ... ))",
-                    DestructurerKind::list_all(),
-                    destructurer_name,
-                ),
-            )?,
-        };
-        content.parse::<Token![!]>()?;
-        let instance = destructurer_kind.parse_instance(DestructurerArguments::new(
-            &content,
-            destructurer_name,
-            open_bracket.span.span_range(),
-        ))?;
+    fn parse(arguments: DestructurerArguments) -> Result<Self> {
         Ok(Self {
-            instance,
-            source_group_span: open_bracket.span,
+            inner: arguments.fully_parse_no_error_override()?,
         })
     }
-}
 
-impl HandleDestructure for Destructurer {
     fn handle_destructure(&self, input: ParseStream, interpreter: &mut Interpreter) -> Result<()> {
-        self.instance.handle_destructure(input, interpreter)
+        self.inner.handle_destructure(input, interpreter)
     }
 }
 
-macro_rules! define_destructurers {
-    (
-        $(
-            $destructurer:ident,
-        )*
-    ) => {
-        #[allow(clippy::enum_variant_names)]
-        #[derive(Clone, Copy)]
-        pub(crate) enum DestructurerKind {
-            $(
-                $destructurer,
-            )*
-        }
-
-        impl DestructurerKind {
-            fn parse_instance(&self, arguments: DestructurerArguments) -> Result<NamedDestructurer> {
-                Ok(match self {
-                    $(
-                        Self::$destructurer => NamedDestructurer::$destructurer(
-                            $destructurer::parse(arguments)?
-                        ),
-                    )*
-                })
-            }
-
-            pub(crate) fn for_ident(ident: &Ident) -> Option<Self> {
-                Some(match ident.to_string().as_ref() {
-                    $(
-                        $destructurer::DESTRUCTURER_NAME => Self::$destructurer,
-                    )*
-                    _ => return None,
-                })
-            }
-
-            const ALL_KIND_NAMES: &'static [&'static str] = &[$($destructurer::DESTRUCTURER_NAME,)*];
-
-            pub(crate) fn list_all() -> String {
-                // TODO improve to add an "and" at the end
-                Self::ALL_KIND_NAMES.join(", ")
-            }
-        }
-
-        #[derive(Clone)]
-        #[allow(clippy::enum_variant_names)]
-        pub(crate) enum NamedDestructurer {
-            $(
-                $destructurer($destructurer),
-            )*
-        }
-
-        impl NamedDestructurer {
-            fn handle_destructure(&self, input: ParseStream, interpreter: &mut Interpreter) -> Result<()> {
-                match self {
-                    $(
-                        Self::$destructurer(destructurer) => destructurer.handle_destructure(input, interpreter),
-                    )*
-                }
-            }
-        }
-    };
+#[derive(Clone)]
+pub(crate) struct IdentDestructurer {
+    variable: Option<DestructureVariable>,
 }
 
-define_destructurers! {
-    StreamDestructurer,
-    IdentDestructurer,
-    LiteralDestructurer,
-    PunctDestructurer,
-    GroupDestructurer,
+impl DestructurerDefinition for IdentDestructurer {
+    const DESTRUCTURER_NAME: &'static str = "ident";
+
+    fn parse(arguments: DestructurerArguments) -> Result<Self> {
+        arguments.fully_parse_or_error(
+            |input| {
+                if input.is_empty() {
+                    Ok(Self { variable: None })
+                } else {
+                    Ok(Self {
+                        variable: Some(DestructureVariable::parse_only_unflattened_input(input)?),
+                    })
+                }
+            },
+            "Expected (!ident! #x) or (!ident #>>x) or (!ident!)",
+        )
+    }
+
+    fn handle_destructure(&self, input: ParseStream, interpreter: &mut Interpreter) -> Result<()> {
+        if input.cursor().ident().is_some() {
+            match &self.variable {
+                Some(variable) => variable.handle_destructure(input, interpreter),
+                None => {
+                    let _ = input.parse_any_ident()?;
+                    Ok(())
+                }
+            }
+        } else {
+            Err(input.error("Expected an ident"))
+        }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct LiteralDestructurer {
+    variable: Option<DestructureVariable>,
+}
+
+impl DestructurerDefinition for LiteralDestructurer {
+    const DESTRUCTURER_NAME: &'static str = "literal";
+
+    fn parse(arguments: DestructurerArguments) -> Result<Self> {
+        arguments.fully_parse_or_error(
+            |input| {
+                if input.is_empty() {
+                    Ok(Self { variable: None })
+                } else {
+                    Ok(Self {
+                        variable: Some(DestructureVariable::parse_only_unflattened_input(input)?),
+                    })
+                }
+            },
+            "Expected (!literal! #x) or (!literal! #>>x) or (!literal!)",
+        )
+    }
+
+    fn handle_destructure(&self, input: ParseStream, interpreter: &mut Interpreter) -> Result<()> {
+        if input.cursor().literal().is_some() {
+            match &self.variable {
+                Some(variable) => variable.handle_destructure(input, interpreter),
+                None => {
+                    let _ = input.parse::<Literal>()?;
+                    Ok(())
+                }
+            }
+        } else {
+            Err(input.error("Expected a literal"))
+        }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct PunctDestructurer {
+    variable: Option<DestructureVariable>,
+}
+
+impl DestructurerDefinition for PunctDestructurer {
+    const DESTRUCTURER_NAME: &'static str = "punct";
+
+    fn parse(arguments: DestructurerArguments) -> Result<Self> {
+        arguments.fully_parse_or_error(
+            |input| {
+                if input.is_empty() {
+                    Ok(Self { variable: None })
+                } else {
+                    Ok(Self {
+                        variable: Some(DestructureVariable::parse_only_unflattened_input(input)?),
+                    })
+                }
+            },
+            "Expected (!punct! #x) or (!punct! #>>x) or (!punct!)",
+        )
+    }
+
+    fn handle_destructure(&self, input: ParseStream, interpreter: &mut Interpreter) -> Result<()> {
+        if input.cursor().any_punct().is_some() {
+            match &self.variable {
+                Some(variable) => variable.handle_destructure(input, interpreter),
+                None => {
+                    let _ = input.parse_any_punct()?;
+                    Ok(())
+                }
+            }
+        } else {
+            Err(input.error("Expected a punct"))
+        }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct GroupDestructurer {
+    inner: DestructureRemaining,
+}
+
+impl DestructurerDefinition for GroupDestructurer {
+    const DESTRUCTURER_NAME: &'static str = "group";
+
+    fn parse(arguments: DestructurerArguments) -> Result<Self> {
+        Ok(Self {
+            inner: arguments.fully_parse_no_error_override()?,
+        })
+    }
+
+    fn handle_destructure(&self, input: ParseStream, interpreter: &mut Interpreter) -> Result<()> {
+        let (_, inner) = input.parse_group_matching(Delimiter::None)?;
+        self.inner.handle_destructure(&inner, interpreter)
+    }
 }

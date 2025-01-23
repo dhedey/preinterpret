@@ -41,7 +41,13 @@ impl CursorExt for Cursor<'_> {
     }
 
     fn punct_matching(self, char: char) -> Option<(Punct, Self)> {
-        match self.punct() {
+        // self.punct() is a little more efficient, but can't match '
+        let matcher = if char == '\'' {
+            self.any_punct()
+        } else {
+            self.punct()
+        };
+        match matcher {
             Some((punct, next)) if punct.as_char() == char => Some((punct, next)),
             _ => None,
         }

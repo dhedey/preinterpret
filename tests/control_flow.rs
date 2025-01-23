@@ -59,26 +59,6 @@ fn test_while() {
 }
 
 #[test]
-fn test_for() {
-    assert_preinterpret_eq!(
-        {
-            [!string! [!for! #x in [!range! 65..70] {
-                [!evaluate! #x as u8 as char]
-            }]]
-        },
-        "ABCDE"
-    );
-    assert_preinterpret_eq!(
-        {
-            [!string! [!for! (#x,) in [(a,) (b,) (c,)] {
-                #x
-            }]]
-        },
-        "abc"
-    );
-}
-
-#[test]
 fn test_loop_continue_and_break() {
     assert_preinterpret_eq!(
         {
@@ -99,5 +79,26 @@ fn test_loop_continue_and_break() {
             }]]
         },
         "ACEGI"
+    );
+}
+
+#[test]
+fn test_for() {
+    assert_preinterpret_eq!(
+        {
+            [!string! [!for! #x in [!range! 65..70] {
+                [!evaluate! #x as u8 as char]
+            }]]
+        },
+        "ABCDE"
+    );
+    assert_preinterpret_eq!(
+        {
+            [!string! [!for! (#x,) in [(a,) (b,) (c,)] {
+                #x
+                [!if! [!string! #x] == "b" { [!break!] }]
+            }]]
+        },
+        "ab"
     );
 }

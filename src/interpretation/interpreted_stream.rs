@@ -254,41 +254,24 @@ impl InterpretedStream {
         output
     }
 
-    pub(crate) fn concat_recursive(self) -> String {
-        fn wrap_delimiters(
+    pub(crate) fn concat_recursive(self, behaviour: &ConcatBehaviour) -> String {
+        fn concat_recursive_interpreted_stream(
+            behaviour: &ConcatBehaviour,
             output: &mut String,
-            delimiter: Delimiter,
-            inner: impl FnOnce(&mut String),
+            stream: InterpretedStream,
         ) {
-            match delimiter {
-                Delimiter::Parenthesis => {
-                    output.push('(');
-                    inner(output);
-                    output.push(')');
-                }
-                Delimiter::Brace => {
-                    output.push('{');
-                    inner(output);
-                    output.push('}');
-                }
-                Delimiter::Bracket => {
-                    output.push('[');
-                    inner(output);
-                    output.push(']');
-                }
-                Delimiter::None => {
-                    inner(output);
-                }
-            }
-        }
-
-        fn concat_recursive_interpreted_stream(output: &mut String, stream: InterpretedStream) {
             for segment in stream.segments {
                 match segment {
-                    InterpretedSegment::TokenVec(vec) => concat_recursive_token_stream(output, vec),
+                    InterpretedSegment::TokenVec(vec) => {
+                        concat_recursive_token_stream(behaviour, output, vec)
+                    }
                     InterpretedSegment::InterpretedGroup(delimiter, _, interpreted_stream) => {
-                        wrap_delimiters(output, delimiter, |output| {
-                            concat_recursive_interpreted_stream(output, interpreted_stream);
+                        behaviour.wrap_delimiters(output, delimiter, |output| {
+                            concat_recursive_interpreted_stream(
+                                behaviour,
+                                output,
+                                interpreted_stream,
+                            );
                         });
                     }
                 }
@@ -296,18 +279,19 @@ impl InterpretedStream {
         }
 
         fn concat_recursive_token_stream(
+            behaviour: &ConcatBehaviour,
             output: &mut String,
             token_stream: impl IntoIterator<Item = TokenTree>,
         ) {
-            for token_tree in token_stream {
+            for (n, token_tree) in token_stream.into_iter().enumerate() {
+                behaviour.before_nth_token_tree(output, n);
                 match token_tree {
-                    TokenTree::Literal(literal) => match literal.content_if_string_like() {
-                        Some(content) => output.push_str(&content),
-                        None => output.push_str(&literal.to_string()),
-                    },
+                    TokenTree::Literal(literal) => {
+                        behaviour.handle_literal(output, literal);
+                    }
                     TokenTree::Group(group) => {
-                        wrap_delimiters(output, group.delimiter(), |output| {
-                            concat_recursive_token_stream(output, group.stream());
+                        behaviour.wrap_delimiters(output, group.delimiter(), |output| {
+                            concat_recursive_token_stream(behaviour, output, group.stream());
                         });
                     }
                     TokenTree::Punct(punct) => {
@@ -319,8 +303,83 @@ impl InterpretedStream {
         }
 
         let mut output = String::new();
-        concat_recursive_interpreted_stream(&mut output, self);
+        concat_recursive_interpreted_stream(behaviour, &mut output, self);
         output
+    }
+}
+
+pub(crate) struct ConcatBehaviour<'a> {
+    pub(crate) between_token_trees: Option<&'a str>,
+    pub(crate) output_transparent_group_as_command: bool,
+    pub(crate) unwrap_contents_of_string_like_literals: bool,
+}
+
+impl ConcatBehaviour<'_> {
+    pub(crate) fn standard() -> Self {
+        Self {
+            between_token_trees: None,
+            output_transparent_group_as_command: false,
+            unwrap_contents_of_string_like_literals: true,
+        }
+    }
+
+    pub(crate) fn debug() -> Self {
+        Self {
+            between_token_trees: Some(" "),
+            output_transparent_group_as_command: true,
+            unwrap_contents_of_string_like_literals: false,
+        }
+    }
+
+    fn before_nth_token_tree(&self, output: &mut String, n: usize) {
+        if let Some(between) = self.between_token_trees {
+            if n > 0 {
+                output.push_str(between);
+            }
+        }
+    }
+
+    fn handle_literal(&self, output: &mut String, literal: Literal) {
+        match literal.content_if_string_like() {
+            Some(content) if self.unwrap_contents_of_string_like_literals => {
+                output.push_str(&content)
+            }
+            _ => output.push_str(&literal.to_string()),
+        }
+    }
+
+    fn wrap_delimiters(
+        &self,
+        output: &mut String,
+        delimiter: Delimiter,
+        inner: impl FnOnce(&mut String),
+    ) {
+        match delimiter {
+            Delimiter::Parenthesis => {
+                output.push('(');
+                inner(output);
+                output.push(')');
+            }
+            Delimiter::Brace => {
+                output.push('{');
+                inner(output);
+                output.push('}');
+            }
+            Delimiter::Bracket => {
+                output.push('[');
+                inner(output);
+                output.push(']');
+            }
+            Delimiter::None => {
+                if self.output_transparent_group_as_command {
+                    output.push_str("[!group! ");
+                    inner(output);
+                    output.push(']');
+                } else {
+                    inner(output);
+                }
+            }
+        }
     }
 }
 
