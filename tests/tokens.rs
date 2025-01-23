@@ -313,3 +313,80 @@ fn complex_cases_for_intersperse_and_input_types() {
         #x
     }, "EXECUTED");
 }
+
+#[test]
+fn test_split() {
+    // Double separators are allowed
+    assert_preinterpret_eq!(
+        {
+            [!debug! [!..split! {
+                stream: [A::B::C],
+                separator: [::],
+            }]]
+        },
+        "[!group! A] [!group! B] [!group! C]"
+    );
+    // Trailing separator is ignored by default
+    assert_preinterpret_eq!(
+        {
+            [!debug! [!..split! {
+                stream: [Pizza, Mac and Cheese, Hamburger,],
+                separator: [,],
+            }]]
+        },
+        "[!group! Pizza] [!group! Mac and Cheese] [!group! Hamburger]"
+    );
+    // By default, empty groups are included except at the end
+    assert_preinterpret_eq!(
+        {
+            [!debug! [!..split! {
+                stream: [::A::B::::C::],
+                separator: [::],
+            }]]
+        },
+        "[!group!] [!group! A] [!group! B] [!group!] [!group! C]"
+    );
+    // Stream and separator are both interpreted
+    assert_preinterpret_eq!({
+        [!set! #x = ;]
+        [!debug! [!..split! {
+            stream: [;A;;B;C;D #..x E;],
+            separator: #x,
+            drop_empty_start: true,
+            drop_empty_middle: true,
+            drop_empty_end: true,
+        }]]
+    }, "[!group! A] [!group! B] [!group! C] [!group! D] [!group! E]");
+    // Drop empty false works
+    assert_preinterpret_eq!({
+        [!set! #x = ;]
+        [!debug! [!..split! {
+            stream: [;A;;B;C;D #..x E;],
+            separator: #x,
+            drop_empty_start: false,
+            drop_empty_middle: false,
+            drop_empty_end: false,
+        }]]
+    }, "[!group!] [!group! A] [!group!] [!group! B] [!group! C] [!group! D] [!group! E] [!group!]");
+    // Drop empty middle works
+    assert_preinterpret_eq!(
+        {
+            [!debug! [!..split! {
+                stream: [;A;;B;;;;E;],
+                separator: [;],
+                drop_empty_start: false,
+                drop_empty_middle: true,
+                drop_empty_end: false,
+            }]]
+        },
+        "[!group!] [!group! A] [!group! B] [!group! E] [!group!]"
+    );
+}
+
+#[test]
+fn test_comma_split() {
+    assert_preinterpret_eq!(
+        { [!debug! [!..comma_split! Pizza, Mac and Cheese, Hamburger,]] },
+        "[!group! Pizza] [!group! Mac and Cheese] [!group! Hamburger]"
+    );
+}

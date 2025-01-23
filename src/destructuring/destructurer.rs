@@ -186,4 +186,6 @@ define_destructurers! {
     LiteralDestructurer,
     PunctDestructurer,
     GroupDestructurer,
+    RawDestructurer,
+    ContentDestructurer,
 }

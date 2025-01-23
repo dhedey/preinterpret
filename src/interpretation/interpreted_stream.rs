@@ -254,25 +254,52 @@ impl InterpretedStream {
         output
     }
 
+    pub(crate) fn into_raw_destructure_stream(self) -> RawDestructureStream {
+        let mut output = RawDestructureStream::empty();
+        for segment in self.segments {
+            match segment {
+                InterpretedSegment::TokenVec(vec) => {
+                    output.append_from_token_stream(vec);
+                }
+                InterpretedSegment::InterpretedGroup(delimiter, _, inner) => {
+                    output.push_item(RawDestructureItem::Group(RawDestructureGroup::new(
+                        delimiter,
+                        inner.into_raw_destructure_stream(),
+                    )));
+                }
+            }
+        }
+        output
+    }
+
     pub(crate) fn concat_recursive(self, behaviour: &ConcatBehaviour) -> String {
         fn concat_recursive_interpreted_stream(
             behaviour: &ConcatBehaviour,
             output: &mut String,
             stream: InterpretedStream,
         ) {
+            let mut n = 0;
             for segment in stream.segments {
                 match segment {
                     InterpretedSegment::TokenVec(vec) => {
-                        concat_recursive_token_stream(behaviour, output, vec)
+                        n += vec.len();
+                        concat_recursive_token_stream(behaviour, output, vec);
                     }
                     InterpretedSegment::InterpretedGroup(delimiter, _, interpreted_stream) => {
-                        behaviour.wrap_delimiters(output, delimiter, |output| {
-                            concat_recursive_interpreted_stream(
-                                behaviour,
-                                output,
-                                interpreted_stream,
-                            );
-                        });
+                        behaviour.before_nth_token_tree(output, n);
+                        behaviour.wrap_delimiters(
+                            output,
+                            delimiter,
+                            interpreted_stream.is_empty(),
+                            |output| {
+                                concat_recursive_interpreted_stream(
+                                    behaviour,
+                                    output,
+                                    interpreted_stream,
+                                );
+                            },
+                        );
+                        n += 1;
                     }
                 }
             }
@@ -290,9 +317,15 @@ impl InterpretedStream {
                         behaviour.handle_literal(output, literal);
                     }
                     TokenTree::Group(group) => {
-                        behaviour.wrap_delimiters(output, group.delimiter(), |output| {
-                            concat_recursive_token_stream(behaviour, output, group.stream());
-                        });
+                        let inner = group.stream();
+                        behaviour.wrap_delimiters(
+                            output,
+                            group.delimiter(),
+                            inner.is_empty(),
+                            |output| {
+                                concat_recursive_token_stream(behaviour, output, inner);
+                            },
+                        );
                     }
                     TokenTree::Punct(punct) => {
                         output.push(punct.as_char());
@@ -352,6 +385,7 @@ impl ConcatBehaviour<'_> {
         &self,
         output: &mut String,
         delimiter: Delimiter,
+        is_empty: bool,
         inner: impl FnOnce(&mut String),
     ) {
         match delimiter {
@@ -372,7 +406,11 @@ impl ConcatBehaviour<'_> {
             }
             Delimiter::None => {
                 if self.output_transparent_group_as_command {
-                    output.push_str("[!group! ");
+                    if is_empty {
+                        output.push_str("[!group!");
+                    } else {
+                        output.push_str("[!group! ");
+                    }
                     inner(output);
                     output.push(']');
                 } else {

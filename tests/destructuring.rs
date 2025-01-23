@@ -142,3 +142,28 @@ fn test_none_output_commands_mid_parse() {
         [!string! "#x = " [!debug! #..x] "; #y = "[!debug! #..y]]
     }, "#x = jumps; #y = \"brown\"");
 }
+
+#[test]
+fn test_raw_destructurer() {
+    assert_preinterpret_eq!({
+        [!set! #x = true]
+        [!let! The (!raw! #x) = The  [!raw! #] x]
+        #x
+    }, true);
+}
+
+#[test]
+fn test_content_destructurer() {
+    // Content works
+    assert_preinterpret_eq!({
+        [!set! #x = true]
+        [!let! The (!content! #..x) = The true]
+        #x
+    }, true);
+    // Content is evaluated at destructuring time
+    assert_preinterpret_eq!({
+        [!set! #x =]
+        [!let! The #>>..x fox is #>>..x. It 's super (!content! #..x). = The brown fox is brown. It 's super brown brown.]
+        true
+    }, true);
+}

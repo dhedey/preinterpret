@@ -32,6 +32,8 @@
   * `[!..group! ...]` which just outputs its contents as-is, useful where the grammar
     only takes a single item, but we want to output multiple tokens
   * `[!intersperse! { ... }]` which inserts separator tokens between each token tree in a stream.
+  * `[!split! ...]`
+  * `[!comma_split! ...]`
 * Destructuring commands:
   * `[!let! <destructuring> = ...]` does destructuring/parsing (see next section). Note `[!let! #..x = ...]` is equivalent to `[!set! #x = ...]`
 
@@ -68,11 +70,12 @@ Destructuring performs parsing of a token stream. It supports:
   * `(!punct! ...)`
   * `(!literal! ...)`
   * `(!group! ...)`
+  * `(!raw! ...)`
+  * `(!content! ...)`
 
 ### To come
 
-* Add compile error tests for all the destructuring errors
-* `[!split! { stream: [...], separator: [...], drop_empty?: false, permit_trailing_separator?: true, }]` and `[!comma_split! ...]`
+* Add compile error tests for all the standard destructuring errors
 * `[!zip! ([Hello Goodbye] [World Friend])]` => `[(Hello World), (Goodbye Friend)]` and/or `[!zip! { streams: (#countries #flags #capitals), error_on_length_mismatch?: true }]` with `InterpretValue<AnyGrouped<Repeated<CodeInput>>>`
   * e.g. `[!for! (#country #flag #capital) in [!zip! (#countries #flags #capitals)]`
 * `[!is_set! #x]`
@@ -85,12 +88,11 @@ Destructuring performs parsing of a token stream. It supports:
   * `ParseResult` with `ParseError::LowLevel(syn::Error)` | `ParseError::Contextual(syn::Error)`
   * `ExecutionResult` with `ExecutionInterrupt::Err(syn::Error)` | `ExecutionInterrupt::ControlFlow(..)`
 * Destructurers
-  * `(!repeated! ...)` also forbid `#x` bindings inside of them unless a `[!settings! { ... }]` has been overriden
-    * `{ item: (!stream! ...), minimum?: syn::int, maximum?: syn::int, separator?: (!stream! ...), after_each?: { ... }, before_all?: {}, after_all?: {}, }`
-  * `(!raw! ...)`
   * `(!fields! ...)` and `(!subfields! ...)`
   * Add ability to fork (copy on write?) / revert the interpreter state and can then add:
     * `(!optional! ...)`
+    * `(!repeated! ...)` also forbid `#x` bindings inside of them unless a `[!settings! { ... }]` has been overriden
+      * `{ item: (!stream! ...), minimum?: syn::int, maximum?: syn::int, separator?: (!stream! ...), after_each?: { ... }, before_all?: {}, after_all?: {}, }`
     * `(!match! ...)` (with `#..x` as a catch-all)
   * (MAYBE) `#(..)?`, `#(..)+`, `#(..),+`, `#(..)*`, `#(..),*` but I don't like them much
 * `[!match! ...]` command - similar to the match destructurer, but a command...

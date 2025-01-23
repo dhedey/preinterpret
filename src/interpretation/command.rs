@@ -452,6 +452,8 @@ define_command_kind! {
     LengthCommand,
     GroupCommand,
     IntersperseCommand,
+    SplitCommand,
+    CommaSplitCommand,
 }
 
 #[derive(Clone)]

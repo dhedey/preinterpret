@@ -217,3 +217,144 @@ enum TrailingSeparator {
     Final,
     None,
 }
+
+#[derive(Clone)]
+pub(crate) struct SplitCommand {
+    inputs: SplitInputs,
+}
+
+impl CommandType for SplitCommand {
+    type OutputKind = OutputKindStream;
+}
+
+define_field_inputs! {
+    SplitInputs {
+        required: {
+            stream: CommandStreamInput = "[...] or #var or [!cmd! ...]",
+            separator: CommandStreamInput = "[::]" ("The token/s to split if they match"),
+        },
+        optional: {
+            drop_empty_start: CommandValueInput<LitBool> = "false" ("If true, a leading separator does not yield in an empty item at the start (default: false)"),
+            drop_empty_middle: CommandValueInput<LitBool> = "false" ("If true, adjacent separators do not yield an empty item between them (default: false)"),
+            drop_empty_end: CommandValueInput<LitBool> = "true" ("If true, a trailing separator does not yield an empty item at the end (default: true)"),
+        }
+    }
+}
+
+impl StreamCommandDefinition for SplitCommand {
+    const COMMAND_NAME: &'static str = "split";
+
+    fn parse(arguments: CommandArguments) -> Result<Self> {
+        Ok(Self {
+            inputs: arguments.fully_parse_as()?,
+        })
+    }
+
+    fn execute(
+        self: Box<Self>,
+        interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()> {
+        let output_span = self.inputs.stream.span();
+        let stream = self.inputs.stream.interpret_to_new_stream(interpreter)?;
+        let separator = self.inputs.separator.interpret_to_new_stream(interpreter)?;
+
+        let drop_empty_start = match self.inputs.drop_empty_start {
+            Some(value) => value.interpret(interpreter)?.value(),
+            None => false,
+        };
+        let drop_empty_middle = match self.inputs.drop_empty_middle {
+            Some(value) => value.interpret(interpreter)?.value(),
+            None => false,
+        };
+        let drop_empty_end = match self.inputs.drop_empty_end {
+            Some(value) => value.interpret(interpreter)?.value(),
+            None => true,
+        };
+
+        handle_split(
+            stream,
+            output,
+            output_span,
+            separator.into_raw_destructure_stream(),
+            drop_empty_start,
+            drop_empty_middle,
+            drop_empty_end,
+        )
+    }
+}
+
+fn handle_split(
+    input: InterpretedStream,
+    output: &mut InterpretedStream,
+    output_span: Span,
+    separator: RawDestructureStream,
+    drop_empty_start: bool,
+    drop_empty_middle: bool,
+    drop_empty_end: bool,
+) -> Result<()> {
+    unsafe {
+        // RUST-ANALYZER SAFETY: This is as safe as we can get.
+        // Typically the separator won't contain none-delimited groups, so we're OK
+        input.syn_parse(move |input: ParseStream| -> Result<()> {
+            let mut current_item = InterpretedStream::new();
+            let mut drop_empty_next = drop_empty_start;
+            while !input.is_empty() {
+                let separator_fork = input.fork();
+                if separator.handle_destructure(&separator_fork).is_err() {
+                    current_item.push_raw_token_tree(input.parse()?);
+                    continue;
+                }
+                input.advance_to(&separator_fork);
+                if !(current_item.is_empty() && drop_empty_next) {
+                    let complete_item =
+                        core::mem::replace(&mut current_item, InterpretedStream::new());
+                    output.push_new_group(complete_item, Delimiter::None, output_span);
+                }
+                drop_empty_next = drop_empty_middle;
+            }
+            if !(current_item.is_empty() && drop_empty_end) {
+                output.push_new_group(current_item, Delimiter::None, output_span);
+            }
+            Ok(())
+        })?;
+    }
+    Ok(())
+}
+
+#[derive(Clone)]
+pub(crate) struct CommaSplitCommand {
+    input: InterpretationStream,
+}
+
+impl CommandType for CommaSplitCommand {
+    type OutputKind = OutputKindStream;
+}
+
+impl StreamCommandDefinition for CommaSplitCommand {
+    const COMMAND_NAME: &'static str = "comma_split";
+
+    fn parse(arguments: CommandArguments) -> Result<Self> {
+        Ok(Self {
+            input: arguments.parse_all_for_interpretation()?,
+        })
+    }
+
+    fn execute(
+        self: Box<Self>,
+        interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> Result<()> {
+        let output_span = self.input.span();
+        let stream = self.input.interpret_to_new_stream(interpreter)?;
+        let separator = {
+            let mut stream = RawDestructureStream::empty();
+            stream.push_item(RawDestructureItem::Punct(
+                Punct::new(',', Spacing::Alone).with_span(output_span),
+            ));
+            stream
+        };
+
+        handle_split(stream, output, output_span, separator, false, false, true)
+    }
+}

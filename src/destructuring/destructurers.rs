@@ -152,3 +152,54 @@ impl DestructurerDefinition for GroupDestructurer {
         self.inner.handle_destructure(&inner, interpreter)
     }
 }
+
+#[derive(Clone)]
+pub(crate) struct RawDestructurer {
+    stream: RawDestructureStream,
+}
+
+impl DestructurerDefinition for RawDestructurer {
+    const DESTRUCTURER_NAME: &'static str = "raw";
+
+    fn parse(arguments: DestructurerArguments) -> Result<Self> {
+        let token_stream: TokenStream = arguments.fully_parse_no_error_override()?;
+        Ok(Self {
+            stream: RawDestructureStream::new_from_token_stream(token_stream),
+        })
+    }
+
+    fn handle_destructure(&self, input: ParseStream, _: &mut Interpreter) -> Result<()> {
+        self.stream.handle_destructure(input)
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct ContentDestructurer {
+    stream: InterpretationStream,
+}
+
+impl DestructurerDefinition for ContentDestructurer {
+    const DESTRUCTURER_NAME: &'static str = "content";
+
+    fn parse(arguments: DestructurerArguments) -> Result<Self> {
+        arguments.fully_parse_or_error(
+            |input| {
+                Ok(Self {
+                    stream: InterpretationStream::parse_with_context(
+                        input,
+                        arguments.full_span_range(),
+                    )?,
+                })
+            },
+            "Expected (!content! ... interpretable input ...)",
+        )
+    }
+
+    fn handle_destructure(&self, input: ParseStream, interpreter: &mut Interpreter) -> Result<()> {
+        self.stream
+            .clone()
+            .interpret_to_new_stream(interpreter)?
+            .into_raw_destructure_stream()
+            .handle_destructure(input)
+    }
+}
