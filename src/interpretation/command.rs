@@ -473,7 +473,7 @@ impl Parse for Command {
         } else {
             None
         };
-        let command_name = content.call(Ident::parse_any)?;
+        let command_name = content.parse_any_ident()?;
         let (command_kind, output_kind) = match CommandKind::for_ident(&command_name) {
             Some(command_kind) => {
                 let output_kind = command_kind.output_kind(flattening)?;

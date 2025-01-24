@@ -88,7 +88,7 @@ impl Parse for Destructurer {
         let content;
         let open_bracket = syn::parenthesized!(content in input);
         content.parse::<Token![!]>()?;
-        let destructurer_name = content.call(Ident::parse_any)?;
+        let destructurer_name = content.parse_any_ident()?;
         let destructurer_kind = match DestructurerKind::for_ident(&destructurer_name) {
             Some(destructurer_kind) => destructurer_kind,
             None => destructurer_name.span().err(

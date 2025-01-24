@@ -16,7 +16,7 @@ impl Parse for GroupedVariable {
             |input| {
                 Ok(Self {
                     marker: input.parse()?,
-                    variable_name: input.call(Ident::parse_any)?,
+                    variable_name: input.parse_any_ident()?,
                 })
             },
             "Expected #variable",
@@ -142,7 +142,7 @@ impl Parse for FlattenedVariable {
                 Ok(Self {
                     marker: input.parse()?,
                     flatten: input.parse()?,
-                    variable_name: input.call(Ident::parse_any)?,
+                    variable_name: input.parse_any_ident()?,
                 })
             },
             "Expected #..variable",

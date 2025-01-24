@@ -37,7 +37,7 @@ macro_rules! define_field_inputs {
                 let brace = syn::braced!(content in input);
 
                 while !content.is_empty() {
-                    let ident = content.call(Ident::parse_any)?;
+                    let ident = content.parse_any_ident()?;
                     content.parse::<Token![:]>()?;
                     match ident.to_string().as_str() {
                         $(

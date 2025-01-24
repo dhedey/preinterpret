@@ -80,6 +80,7 @@ Destructuring performs parsing of a token stream. It supports:
   * e.g. `[!for! (#country #flag #capital) in [!zip! (#countries #flags #capitals)]`
 * `[!is_set! #x]`
 * `[!str_split! { input: Value<LitStr>, separator: Value<LitStr>, }]`
+* Change `(!content! ...)` to unwrap none groups, to be more permissive
 * Add casts of other integers to char, via `char::from_u32(u32::try_from(x))`
 * Add more tests
   * e.g. for various expressions
@@ -106,6 +107,7 @@ Destructuring performs parsing of a token stream. It supports:
     * Fix issues in Rust Analyzer
     * Improve performance
     * Permit `[!parse_while! [!PARSE! ...] from #x { ... }]`
+    * Fix `any_punct()` to ignore none groups
   * Further syn parsings (e.g. item, fields, etc)
 * Work on book
   * Input paradigms:
