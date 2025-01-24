@@ -13,7 +13,7 @@ pub(super) enum EvaluationOperator {
 }
 
 impl EvaluationOperator {
-    pub(super) fn evaluate(self) -> Result<EvaluationOutput> {
+    pub(super) fn evaluate(self) -> ExecutionResult<EvaluationOutput> {
         const OPERATOR_INPUT_EXPECT_STR: &str = "Handling children on the stack ordering should ensure the parent input is always set when the parent is evaluated";
 
         match self {
@@ -40,14 +40,14 @@ pub(super) struct UnaryOperation {
 }
 
 impl UnaryOperation {
-    fn error(&self, error_message: &str) -> syn::Error {
-        self.operator_span.error(error_message)
+    fn error(&self, error_message: &str) -> ExecutionInterrupt {
+        self.operator_span.execution_error(error_message)
     }
 
     pub(super) fn unsupported_for_value_type_err(
         &self,
         value_type: &'static str,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         Err(self.error(&format!(
             "The {} operator is not supported for {} values",
             self.operator.symbol(),
@@ -55,16 +55,19 @@ impl UnaryOperation {
         )))
     }
 
-    pub(super) fn err(&self, error_message: &'static str) -> Result<EvaluationOutput> {
+    pub(super) fn err(&self, error_message: &'static str) -> ExecutionResult<EvaluationOutput> {
         Err(self.error(error_message))
     }
 
-    pub(super) fn output(&self, output_value: impl ToEvaluationOutput) -> Result<EvaluationOutput> {
+    pub(super) fn output(
+        &self,
+        output_value: impl ToEvaluationOutput,
+    ) -> ExecutionResult<EvaluationOutput> {
         Ok(output_value.to_output(self.span_for_output))
     }
 
-    pub(super) fn for_cast_expression(expr: &syn::ExprCast) -> Result<Self> {
-        fn extract_type(ty: &syn::Type) -> Result<CastTarget> {
+    pub(super) fn for_cast_expression(expr: &syn::ExprCast) -> ExecutionResult<Self> {
+        fn extract_type(ty: &syn::Type) -> ExecutionResult<CastTarget> {
             match ty {
                 syn::Type::Group(group) => extract_type(&group.elem),
                 syn::Type::Path(type_path)
@@ -75,9 +78,9 @@ impl UnaryOperation {
                     let ident = match type_path.path.get_ident() {
                         Some(ident) => ident,
                         None => {
-                            return type_path
-                                .span_range()
-                                .err("This type is not supported in preinterpret cast expressions")
+                            return type_path.execution_err(
+                                "This type is not supported in preinterpret cast expressions",
+                            )
                         }
                     };
                     match ident.to_string().as_str() {
@@ -99,15 +102,13 @@ impl UnaryOperation {
                         "f64" => Ok(CastTarget::Float(FloatKind::F64)),
                         "bool" => Ok(CastTarget::Boolean),
                         "char" => Ok(CastTarget::Char),
-                        _ => ident
-                            .span()
-                            .span_range()
-                            .err("This type is not supported in preinterpret cast expressions"),
+                        _ => ident.execution_err(
+                            "This type is not supported in preinterpret cast expressions",
+                        ),
                     }
                 }
                 other => other
-                    .span_range()
-                    .err("This type is not supported in preinterpret cast expressions"),
+                    .execution_err("This type is not supported in preinterpret cast expressions"),
             }
         }
 
@@ -118,7 +119,7 @@ impl UnaryOperation {
         })
     }
 
-    pub(super) fn for_group_expression(expr: &syn::ExprGroup) -> Result<Self> {
+    pub(super) fn for_group_expression(expr: &syn::ExprGroup) -> ExecutionResult<Self> {
         Ok(Self {
             span_for_output: expr.group_token.span.span_range(),
             operator_span: expr.group_token.span.span_range(),
@@ -126,7 +127,7 @@ impl UnaryOperation {
         })
     }
 
-    pub(super) fn for_paren_expression(expr: &syn::ExprParen) -> Result<Self> {
+    pub(super) fn for_paren_expression(expr: &syn::ExprParen) -> ExecutionResult<Self> {
         Ok(Self {
             span_for_output: expr.paren_token.span.span_range(),
             operator_span: expr.paren_token.span.span_range(),
@@ -134,14 +135,14 @@ impl UnaryOperation {
         })
     }
 
-    pub(super) fn for_unary_expression(expr: &syn::ExprUnary) -> Result<Self> {
+    pub(super) fn for_unary_expression(expr: &syn::ExprUnary) -> ExecutionResult<Self> {
         let operator = match &expr.op {
             UnOp::Neg(_) => UnaryOperator::Neg,
             UnOp::Not(_) => UnaryOperator::Not,
             other_unary_op => {
-                return other_unary_op
-                    .span_range()
-                    .err("This unary operator is not supported in preinterpret expressions");
+                return other_unary_op.execution_err(
+                    "This unary operator is not supported in preinterpret expressions",
+                );
             }
         };
         Ok(Self {
@@ -151,7 +152,7 @@ impl UnaryOperation {
         })
     }
 
-    pub(super) fn evaluate(self, input: EvaluationOutput) -> Result<EvaluationOutput> {
+    pub(super) fn evaluate(self, input: EvaluationOutput) -> ExecutionResult<EvaluationOutput> {
         input.into_value().handle_unary_operation(self)
     }
 }
@@ -176,7 +177,10 @@ impl UnaryOperator {
 }
 
 pub(super) trait HandleUnaryOperation: Sized {
-    fn handle_unary_operation(self, operation: &UnaryOperation) -> Result<EvaluationOutput>;
+    fn handle_unary_operation(
+        self,
+        operation: &UnaryOperation,
+    ) -> ExecutionResult<EvaluationOutput>;
 }
 
 pub(super) struct BinaryOperation {
@@ -186,14 +190,14 @@ pub(super) struct BinaryOperation {
 }
 
 impl BinaryOperation {
-    fn error(&self, error_message: &str) -> syn::Error {
-        self.operator_span.error(error_message)
+    fn error(&self, error_message: &str) -> ExecutionInterrupt {
+        self.operator_span.execution_error(error_message)
     }
 
     pub(super) fn unsupported_for_value_type_err(
         &self,
         value_type: &'static str,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         Err(self.error(&format!(
             "The {} operator is not supported for {} values",
             self.operator.symbol(),
@@ -201,7 +205,10 @@ impl BinaryOperation {
         )))
     }
 
-    pub(super) fn output(&self, output_value: impl ToEvaluationOutput) -> Result<EvaluationOutput> {
+    pub(super) fn output(
+        &self,
+        output_value: impl ToEvaluationOutput,
+    ) -> ExecutionResult<EvaluationOutput> {
         Ok(output_value.to_output(self.span_for_output))
     }
 
@@ -209,14 +216,14 @@ impl BinaryOperation {
         &self,
         output_value: Option<impl ToEvaluationOutput>,
         error_message: impl FnOnce() -> String,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         match output_value {
             Some(output_value) => self.output(output_value),
-            None => Err(self.operator_span.error(error_message())),
+            None => self.operator_span.execution_err(error_message()),
         }
     }
 
-    pub(super) fn for_binary_expression(expr: &syn::ExprBinary) -> Result<Self> {
+    pub(super) fn for_binary_expression(expr: &syn::ExprBinary) -> ExecutionResult<Self> {
         let operator = match &expr.op {
             syn::BinOp::Add(_) => BinaryOperator::Paired(PairedBinaryOperator::Addition),
             syn::BinOp::Sub(_) => BinaryOperator::Paired(PairedBinaryOperator::Subtraction),
@@ -238,8 +245,7 @@ impl BinaryOperation {
             syn::BinOp::Gt(_) => BinaryOperator::Paired(PairedBinaryOperator::GreaterThan),
             other_binary_operation => {
                 return other_binary_operation
-                    .span_range()
-                    .err("This operation is not supported in preinterpret expressions")
+                    .execution_err("This operation is not supported in preinterpret expressions")
             }
         };
         Ok(Self {
@@ -249,7 +255,11 @@ impl BinaryOperation {
         })
     }
 
-    fn evaluate(self, left: EvaluationOutput, right: EvaluationOutput) -> Result<EvaluationOutput> {
+    fn evaluate(
+        self,
+        left: EvaluationOutput,
+        right: EvaluationOutput,
+    ) -> ExecutionResult<EvaluationOutput> {
         match self.operator {
             BinaryOperator::Paired(operator) => {
                 let value_pair = left.expect_value_pair(operator, right, self.operator_span)?;
@@ -356,11 +366,11 @@ pub(super) trait HandleBinaryOperation: Sized {
         self,
         rhs: Self,
         operation: &BinaryOperation,
-    ) -> Result<EvaluationOutput>;
+    ) -> ExecutionResult<EvaluationOutput>;
 
     fn handle_integer_binary_operation(
         self,
         rhs: EvaluationInteger,
         operation: &BinaryOperation,
-    ) -> Result<EvaluationOutput>;
+    ) -> ExecutionResult<EvaluationOutput>;
 }

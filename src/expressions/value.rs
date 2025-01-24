@@ -19,7 +19,7 @@ impl EvaluationValue {
         }
     }
 
-    pub(super) fn for_literal_expression(expr: &ExprLit) -> Result<Self> {
+    pub(super) fn for_literal_expression(expr: &ExprLit) -> ExecutionResult<Self> {
         // https://docs.rs/syn/latest/syn/enum.Lit.html
         Ok(match &expr.lit {
             Lit::Int(lit) => Self::Integer(EvaluationInteger::for_litint(lit)?),
@@ -30,7 +30,7 @@ impl EvaluationValue {
             other_literal => {
                 return other_literal
                     .span()
-                    .err("This literal is not supported in preinterpret expressions");
+                    .execution_err("This literal is not supported in preinterpret expressions");
             }
         })
     }
@@ -48,7 +48,7 @@ impl EvaluationValue {
     pub(super) fn handle_unary_operation(
         self,
         operation: UnaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         match self {
             EvaluationValue::Integer(value) => value.handle_unary_operation(operation),
             EvaluationValue::Float(value) => value.handle_unary_operation(operation),
@@ -62,7 +62,7 @@ impl EvaluationValue {
         self,
         right: EvaluationInteger,
         operation: BinaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         match self {
             EvaluationValue::Integer(value) => {
                 value.handle_integer_binary_operation(right, operation)
@@ -129,7 +129,7 @@ impl EvaluationLiteralPair {
     pub(super) fn handle_paired_binary_operation(
         self,
         operation: BinaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         match self {
             Self::Integer(pair) => pair.handle_paired_binary_operation(&operation),
             Self::Float(pair) => pair.handle_paired_binary_operation(&operation),

@@ -1,4 +1,4 @@
-error: The continue command is only allowed inside a loop
+error: Continue can only be used inside a loop
  --> tests/compilation_failures/control_flow/continue_outside_a_loop.rs:4:23
   |
 4 |     preinterpret!(1 + [!continue!] 2);

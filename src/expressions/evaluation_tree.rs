@@ -7,11 +7,11 @@ pub(super) struct EvaluationTree {
 }
 
 impl EvaluationTree {
-    pub(super) fn build_from(expression: &Expr) -> Result<EvaluationTree> {
+    pub(super) fn build_from(expression: &Expr) -> ExecutionResult<EvaluationTree> {
         EvaluationTreeBuilder::new(expression).build()
     }
 
-    pub(super) fn evaluate(mut self) -> Result<EvaluationOutput> {
+    pub(super) fn evaluate(mut self) -> ExecutionResult<EvaluationOutput> {
         loop {
             let EvaluationNode { result_placement, content } = self.evaluation_stack.pop()
                 .expect("The builder should ensure that the stack is non-empty and has a final element of a RootResult which results in a return below.");
@@ -60,7 +60,7 @@ impl<'a> EvaluationTreeBuilder<'a> {
     /// Attempts to construct a preinterpret expression tree from a syn [Expr].
     /// It tries to align with the [rustc expression] building approach.
     /// [rustc expression]: https://doc.rust-lang.org/reference/expressions.html
-    fn build(mut self) -> Result<EvaluationTree> {
+    fn build(mut self) -> ExecutionResult<EvaluationTree> {
         while let Some((expression, placement)) = self.work_stack.pop() {
             match expression {
                 Expr::Binary(expr) => {
@@ -103,9 +103,9 @@ impl<'a> EvaluationTreeBuilder<'a> {
                     );
                 }
                 other_expression => {
-                    return other_expression
-                        .span_range()
-                        .err("This expression is not supported in preinterpret expressions");
+                    return other_expression.execution_err(
+                        "This expression is not supported in preinterpret expressions",
+                    );
                 }
             }
         }
@@ -186,7 +186,7 @@ enum EvaluationNodeContent {
 }
 
 impl EvaluationNodeContent {
-    fn evaluate(self) -> Result<EvaluationOutput> {
+    fn evaluate(self) -> ExecutionResult<EvaluationOutput> {
         match self {
             Self::Literal(literal) => Ok(EvaluationOutput::Value(literal)),
             Self::Operator(operator) => operator.evaluate(),
@@ -238,7 +238,7 @@ impl EvaluationOutput {
         operator: PairedBinaryOperator,
         right: EvaluationOutput,
         operator_span: SpanRange,
-    ) -> Result<EvaluationLiteralPair> {
+    ) -> ExecutionResult<EvaluationLiteralPair> {
         let left_lit = self.into_value();
         let right_lit = right.into_value();
         Ok(match (left_lit, right_lit) {
@@ -363,7 +363,7 @@ impl EvaluationOutput {
                         EvaluationIntegerValuePair::Isize(lhs, rhs)
                     }
                     (left_value, right_value) => {
-                        return operator_span.err(format!("The {} operator cannot infer a common integer operand type from {} and {}. Consider using `as` to cast to matching types.", operator.symbol(), left_value.describe_type(), right_value.describe_type()));
+                        return operator_span.execution_err(format!("The {} operator cannot infer a common integer operand type from {} and {}. Consider using `as` to cast to matching types.", operator.symbol(), left_value.describe_type(), right_value.describe_type()));
                     }
                 };
                 EvaluationLiteralPair::Integer(integer_pair)
@@ -402,7 +402,7 @@ impl EvaluationOutput {
                         EvaluationFloatValuePair::F64(lhs, rhs)
                     }
                     (left_value, right_value) => {
-                        return operator_span.err(format!("The {} operator cannot infer a common float operand type from {} and {}. Consider using `as` to cast to matching types.", operator.symbol(), left_value.describe_type(), right_value.describe_type()));
+                        return operator_span.execution_err(format!("The {} operator cannot infer a common float operand type from {} and {}. Consider using `as` to cast to matching types.", operator.symbol(), left_value.describe_type(), right_value.describe_type()));
                     }
                 };
                 EvaluationLiteralPair::Float(float_pair)
@@ -414,22 +414,22 @@ impl EvaluationOutput {
                 EvaluationLiteralPair::CharPair(left, right)
             }
             (left, right) => {
-                return operator_span.err(format!("The {} operator cannot infer a common operand type from {} and {}. Consider using `as` to cast to matching types.", operator.symbol(), left.describe_type(), right.describe_type()));
+                return operator_span.execution_err(format!("The {} operator cannot infer a common operand type from {} and {}. Consider using `as` to cast to matching types.", operator.symbol(), left.describe_type(), right.describe_type()));
             }
         })
     }
 
-    pub(crate) fn expect_integer(self, error_message: &str) -> Result<EvaluationInteger> {
+    pub(crate) fn expect_integer(self, error_message: &str) -> ExecutionResult<EvaluationInteger> {
         match self.into_value() {
             EvaluationValue::Integer(value) => Ok(value),
-            other => other.source_span().err(error_message),
+            other => other.source_span().execution_err(error_message),
         }
     }
 
-    pub(crate) fn expect_bool(self, error_message: &str) -> Result<EvaluationBoolean> {
+    pub(crate) fn expect_bool(self, error_message: &str) -> ExecutionResult<EvaluationBoolean> {
         match self.into_value() {
             EvaluationValue::Boolean(value) => Ok(value),
-            other => other.source_span().err(error_message),
+            other => other.source_span().execution_err(error_message),
         }
     }
 

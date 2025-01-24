@@ -14,21 +14,23 @@ pub(crate) enum CommandValueInput<T> {
 }
 
 impl<T: Parse> Parse for CommandValueInput<T> {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> ParseResult<Self> {
         Ok(match detect_preinterpret_grammar(input.cursor()) {
-            PeekMatch::GroupedCommand(_) => Self::Command(input.parse()?),
-            PeekMatch::FlattenedCommand(_) => Self::Command(input.parse()?),
-            PeekMatch::GroupedVariable => Self::GroupedVariable(input.parse()?),
-            PeekMatch::FlattenedVariable => Self::FlattenedVariable(input.parse()?),
-            PeekMatch::Group(Delimiter::Brace) => Self::Code(input.parse()?),
+            PeekMatch::GroupedCommand(_) => Self::Command(input.parse_v2()?),
+            PeekMatch::FlattenedCommand(_) => Self::Command(input.parse_v2()?),
+            PeekMatch::GroupedVariable => Self::GroupedVariable(input.parse_v2()?),
+            PeekMatch::FlattenedVariable => Self::FlattenedVariable(input.parse_v2()?),
+            PeekMatch::Group(Delimiter::Brace) => Self::Code(input.parse_v2()?),
             PeekMatch::AppendVariableDestructuring | PeekMatch::Destructurer(_) => {
-                return input.span().err("Destructurings are not supported here")
+                return input
+                    .span()
+                    .parse_err("Destructurings are not supported here")
             }
             PeekMatch::Group(_)
             | PeekMatch::Punct(_)
             | PeekMatch::Literal(_)
             | PeekMatch::Ident(_)
-            | PeekMatch::End => Self::Value(input.parse()?),
+            | PeekMatch::End => Self::Value(input.parse_v2()?),
         })
     }
 }
@@ -48,7 +50,7 @@ impl<T: HasSpanRange> HasSpanRange for CommandValueInput<T> {
 impl<T: InterpretValue<InterpretedValue = I>, I: Parse> InterpretValue for CommandValueInput<T> {
     type InterpretedValue = I;
 
-    fn interpret(self, interpreter: &mut Interpreter) -> Result<I> {
+    fn interpret(self, interpreter: &mut Interpreter) -> ExecutionResult<I> {
         let descriptor = match self {
             CommandValueInput::Command(_) => "command output",
             CommandValueInput::GroupedVariable(_) => "grouped variable output",
@@ -70,14 +72,16 @@ impl<T: InterpretValue<InterpretedValue = I>, I: Parse> InterpretValue for Comma
         unsafe {
             // RUST-ANALYZER SAFETY: We only use I with simple parse functions so far which don't care about
             // none-delimited groups
-            match interpreted_stream.syn_parse(I::parse) {
-                Ok(value) => Ok(value),
-                Err(err) => Err(err.concat(&format!(
-                    "\nOccurred whilst parsing the {} to a {}.",
-                    descriptor,
-                    std::any::type_name::<I>()
-                ))),
-            }
+            interpreted_stream
+                .syn_parse(I::parse)
+                .add_context_if_error_and_no_context(|| {
+                    format!(
+                        "Occurred whilst parsing the {} to a {}.",
+                        descriptor,
+                        std::any::type_name::<I>()
+                    )
+                })
+                .into_execution_result()
         }
     }
 }

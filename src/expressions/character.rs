@@ -20,7 +20,7 @@ impl EvaluationChar {
     pub(super) fn handle_unary_operation(
         self,
         operation: UnaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         let char = self.value;
         match operation.operator {
             UnaryOperator::NoOp => operation.output(char),
@@ -55,7 +55,7 @@ impl EvaluationChar {
         self,
         _right: EvaluationInteger,
         operation: BinaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         operation.unsupported_for_value_type_err("char")
     }
 
@@ -63,7 +63,7 @@ impl EvaluationChar {
         self,
         rhs: Self,
         operation: &BinaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         let lhs = self.value;
         let rhs = rhs.value;
         match operation.paired_operator() {

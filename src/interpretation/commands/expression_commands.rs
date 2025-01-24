@@ -12,18 +12,18 @@ impl CommandType for EvaluateCommand {
 impl ValueCommandDefinition for EvaluateCommand {
     const COMMAND_NAME: &'static str = "evaluate";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
-                    expression: input.parse()?,
+                    expression: input.parse_v2()?,
                 })
             },
             "Expected [!evaluate! ...] containing a valid preinterpret expression",
         )
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<TokenTree> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree> {
         let expression = self.expression.start_expression_builder(interpreter)?;
         Ok(expression.evaluate()?.into_token_tree())
     }
@@ -45,28 +45,28 @@ impl CommandType for AssignCommand {
 impl NoOutputCommandDefinition for AssignCommand {
     const COMMAND_NAME: &'static str = "assign";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
-                    variable: input.parse()?,
+                    variable: input.parse_v2()?,
                     operator: {
                         let operator: Punct = input.parse()?;
                         match operator.as_char() {
                             '+' | '-' | '*' | '/' | '%' | '&' | '|' | '^' => {}
-                            _ => return operator.err("Expected one of + - * / % & | or ^"),
+                            _ => return operator.parse_err("Expected one of + - * / % & | or ^"),
                         }
                         operator
                     },
                     equals: input.parse()?,
-                    expression: input.parse()?,
+                    expression: input.parse_v2()?,
                 })
             },
             "Expected [!assign! #variable += ...] for + or some other operator supported in an expression",
         )
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         let Self {
             variable,
             operator,
@@ -100,13 +100,13 @@ impl CommandType for RangeCommand {
 impl StreamCommandDefinition for RangeCommand {
     const COMMAND_NAME: &'static str = "range";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
-                    left: input.parse()?,
-                    range_limits: input.parse()?,
-                    right: input.parse()?,
+                    left: input.parse_v2()?,
+                    range_limits: input.parse_v2()?,
+                    right: input.parse_v2()?,
                 })
             },
             "Expected a rust range expression such as [!range! 1..4]",
@@ -117,7 +117,7 @@ impl StreamCommandDefinition for RangeCommand {
         self: Box<Self>,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         let range_span_range = self.range_limits.span_range();
         let range_span = self.range_limits.span();
 
@@ -178,7 +178,7 @@ enum RangeLimits {
 }
 
 impl Parse for RangeLimits {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> ParseResult<Self> {
         if input.peek(Token![..=]) {
             Ok(RangeLimits::Closed(input.parse()?))
         } else {

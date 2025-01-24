@@ -11,7 +11,7 @@ impl EvaluationFloat {
         Self { value, source_span }
     }
 
-    pub(super) fn for_litfloat(lit: &syn::LitFloat) -> Result<Self> {
+    pub(super) fn for_litfloat(lit: &syn::LitFloat) -> ExecutionResult<Self> {
         Ok(Self {
             source_span: lit.span().span_range(),
             value: EvaluationFloatValue::for_litfloat(lit)?,
@@ -21,7 +21,7 @@ impl EvaluationFloat {
     pub(super) fn handle_unary_operation(
         self,
         operation: UnaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         match self.value {
             EvaluationFloatValue::Untyped(input) => input.handle_unary_operation(&operation),
             EvaluationFloatValue::F32(input) => input.handle_unary_operation(&operation),
@@ -33,7 +33,7 @@ impl EvaluationFloat {
         self,
         right: EvaluationInteger,
         operation: BinaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         match self.value {
             EvaluationFloatValue::Untyped(input) => {
                 input.handle_integer_binary_operation(right, &operation)
@@ -70,7 +70,7 @@ impl EvaluationFloatValuePair {
     pub(super) fn handle_paired_binary_operation(
         self,
         operation: &BinaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         match self {
             Self::Untyped(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
             Self::F32(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
@@ -86,13 +86,13 @@ pub(super) enum EvaluationFloatValue {
 }
 
 impl EvaluationFloatValue {
-    pub(super) fn for_litfloat(lit: &syn::LitFloat) -> Result<Self> {
+    pub(super) fn for_litfloat(lit: &syn::LitFloat) -> ExecutionResult<Self> {
         Ok(match lit.suffix() {
             "" => Self::Untyped(UntypedFloat::new_from_lit_float(lit)),
             "f32" => Self::F32(lit.base10_parse()?),
             "f64" => Self::F64(lit.base10_parse()?),
             suffix => {
-                return lit.span().err(format!(
+                return lit.span().execution_err(format!(
                     "The literal suffix {suffix} is not supported in preinterpret expressions"
                 ));
             }
@@ -142,7 +142,7 @@ impl UntypedFloat {
     pub(super) fn handle_unary_operation(
         self,
         operation: &UnaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         let input = self.parse_fallback()?;
         match operation.operator {
             UnaryOperator::Neg => operation.output(Self::from_fallback(-input)),
@@ -180,7 +180,7 @@ impl UntypedFloat {
         self,
         _rhs: EvaluationInteger,
         operation: &BinaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         match operation.integer_operator() {
             IntegerBinaryOperator::ShiftLeft | IntegerBinaryOperator::ShiftRight => {
                 operation.unsupported_for_value_type_err("untyped float")
@@ -192,7 +192,7 @@ impl UntypedFloat {
         self,
         rhs: Self,
         operation: &BinaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         let lhs = self.parse_fallback()?;
         let rhs = rhs.parse_fallback()?;
         match operation.paired_operator() {
@@ -224,9 +224,9 @@ impl UntypedFloat {
         Self::new_from_literal(Literal::f64_unsuffixed(value))
     }
 
-    fn parse_fallback(&self) -> Result<FallbackFloat> {
+    fn parse_fallback(&self) -> ExecutionResult<FallbackFloat> {
         self.0.base10_digits().parse().map_err(|err| {
-            self.0.span().error(format!(
+            self.0.span().execution_error(format!(
                 "Could not parse as the default inferred type {}: {}",
                 core::any::type_name::<FallbackFloat>(),
                 err
@@ -234,13 +234,13 @@ impl UntypedFloat {
         })
     }
 
-    pub(super) fn parse_as<N>(&self) -> Result<N>
+    pub(super) fn parse_as<N>(&self) -> ExecutionResult<N>
     where
         N: FromStr,
         N::Err: core::fmt::Display,
     {
         self.0.base10_digits().parse().map_err(|err| {
-            self.0.span().error(format!(
+            self.0.span().execution_error(format!(
                 "Could not parse as {}: {}",
                 core::any::type_name::<N>(),
                 err
@@ -274,7 +274,7 @@ macro_rules! impl_float_operations {
         }
 
         impl HandleUnaryOperation for $float_type {
-            fn handle_unary_operation(self, operation: &UnaryOperation) -> Result<EvaluationOutput> {
+            fn handle_unary_operation(self, operation: &UnaryOperation) -> ExecutionResult<EvaluationOutput> {
                 match operation.operator {
                     UnaryOperator::Neg => operation.output(-self),
                     UnaryOperator::Not => operation.unsupported_for_value_type_err(stringify!($float_type)),
@@ -303,7 +303,7 @@ macro_rules! impl_float_operations {
         }
 
         impl HandleBinaryOperation for $float_type {
-            fn handle_paired_binary_operation(self, rhs: Self, operation: &BinaryOperation) -> Result<EvaluationOutput> {
+            fn handle_paired_binary_operation(self, rhs: Self, operation: &BinaryOperation) -> ExecutionResult<EvaluationOutput> {
                 // Unlike integer arithmetic, float arithmetic does not overflow
                 // and instead falls back to NaN or infinity. In future we could
                 // allow trapping on these codes, but for now this is good enough
@@ -336,7 +336,7 @@ macro_rules! impl_float_operations {
                 self,
                 _rhs: EvaluationInteger,
                 operation: &BinaryOperation,
-            ) -> Result<EvaluationOutput> {
+            ) -> ExecutionResult<EvaluationOutput> {
                 match operation.integer_operator() {
                     IntegerBinaryOperator::ShiftLeft | IntegerBinaryOperator::ShiftRight => {
                         operation.unsupported_for_value_type_err(stringify!($float_type))

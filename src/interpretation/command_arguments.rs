@@ -26,46 +26,44 @@ impl<'a> CommandArguments<'a> {
     }
 
     /// We use this instead of the "unexpected / drop glue" pattern in order to give a better error message
-    pub(crate) fn assert_empty(&self, error_message: impl std::fmt::Display) -> Result<()> {
+    pub(crate) fn assert_empty(&self, error_message: impl std::fmt::Display) -> ParseResult<()> {
         if self.parse_stream.is_empty() {
             Ok(())
         } else {
-            self.full_span_range.err(error_message)
+            self.full_span_range.parse_err(error_message)
         }
     }
 
-    pub(crate) fn fully_parse_as<T: ArgumentsContent>(&self) -> Result<T> {
+    pub(crate) fn fully_parse_as<T: ArgumentsContent>(&self) -> ParseResult<T> {
         self.fully_parse_or_error(T::parse, T::error_message())
     }
 
     pub(crate) fn fully_parse_or_error<T>(
         &self,
-        parse_function: impl FnOnce(ParseStream) -> Result<T>,
+        parse_function: impl FnOnce(ParseStream) -> ParseResult<T>,
         error_message: impl std::fmt::Display,
-    ) -> Result<T> {
-        let parsed = parse_function(self.parse_stream).or_else(|error| {
-            // In future, when the diagnostic API is stable,
-            // we can add this context directly onto the command ident...
-            // Rather than just selectively adding it to the inner-most error.
-            let error_string = error.to_string();
-
-            // We avoid adding this additional context if it's already been added in an
-            // inner error, because that's likely the correct error to show.
-            if error_string.contains("\nOccurred whilst parsing") {
-                return Err(error);
-            }
-            error.span().err(format!(
-                "{}\nOccurred whilst parsing [!{}! ..] - {}",
-                error_string, self.command_name, error_message,
-            ))
-        })?;
+    ) -> ParseResult<T> {
+        // In future, when the diagnostic API is stable,
+        // we can add this context directly onto the command ident...
+        // Rather than just selectively adding it to the inner-most error.
+        //
+        // For now though, we can add additional context to the error message.
+        // But we can avoid adding this additional context if it's already been added in an
+        // inner error, because that's likely the correct local context to show.
+        let parsed =
+            parse_function(self.parse_stream).add_context_if_error_and_no_context(|| {
+                format!(
+                    "Occurred whilst parsing [!{}! ...] - {}",
+                    self.command_name, error_message,
+                )
+            })?;
 
         self.assert_empty(error_message)?;
 
         Ok(parsed)
     }
 
-    pub(crate) fn parse_all_for_interpretation(&self) -> Result<InterpretationStream> {
+    pub(crate) fn parse_all_for_interpretation(&self) -> ParseResult<InterpretationStream> {
         self.parse_stream
             .parse_all_for_interpretation(self.full_span_range)
     }

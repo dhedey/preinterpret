@@ -7,14 +7,12 @@ pub(crate) use quote::ToTokens;
 pub(crate) use std::{collections::HashMap, str::FromStr};
 pub(crate) use syn::buffer::Cursor;
 pub(crate) use syn::ext::IdentExt as SynIdentExt;
-pub(crate) use syn::parse::{discouraged::*, Parse, ParseBuffer, ParseStream, Parser};
-pub(crate) use syn::{
-    parse_str, Error, Expr, ExprLit, Lit, LitBool, LitFloat, LitInt, Result, Token, UnOp,
-};
+pub(crate) use syn::parse::{discouraged::*, Parse as SynParse, ParseBuffer, ParseStream, Parser};
+pub(crate) use syn::{parse_str, Expr, ExprLit, Lit, LitBool, LitFloat, LitInt, Token, UnOp};
+pub(crate) use syn::{Error as SynError, Result as SynResult};
 
-pub(crate) use crate::commands::*;
 pub(crate) use crate::destructuring::*;
 pub(crate) use crate::expressions::*;
+pub(crate) use crate::extensions::*;
 pub(crate) use crate::interpretation::*;
-pub(crate) use crate::string_conversion::*;
-pub(crate) use crate::traits::*;
+pub(crate) use crate::misc::*;

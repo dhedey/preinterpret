@@ -7,26 +7,13 @@ pub(crate) struct InterpretationStream {
     span_range: SpanRange,
 }
 
-impl InterpretationStream {
-    pub(crate) fn parse_from_token_stream(
-        token_stream: TokenStream,
-        span_range: SpanRange,
-    ) -> Result<Self> {
-        Self::create_parser(span_range).parse2(token_stream)
-    }
-
-    fn create_parser(context: SpanRange) -> impl FnOnce(ParseStream) -> Result<Self> {
-        move |input: ParseStream| Self::parse_with_context(input, context)
-    }
-}
-
 impl ContextualParse for InterpretationStream {
     type Context = SpanRange;
 
-    fn parse_with_context(input: ParseStream, span_range: Self::Context) -> Result<Self> {
+    fn parse_with_context(input: ParseStream, span_range: Self::Context) -> ParseResult<Self> {
         let mut items = Vec::new();
         while !input.is_empty() {
-            items.push(input.parse()?);
+            items.push(input.parse_v2()?);
         }
         Ok(Self { items, span_range })
     }
@@ -37,7 +24,7 @@ impl Interpret for InterpretationStream {
         self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         for item in self.items {
             item.interpret_into(interpreter, output)?;
         }
@@ -66,7 +53,7 @@ impl InterpretationGroup {
 }
 
 impl Parse for InterpretationGroup {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> ParseResult<Self> {
         let (delimiter, delim_span, content) = input.parse_any_delimiter()?;
         let content = content.parse_with(delim_span.span_range())?;
         Ok(Self {
@@ -82,7 +69,7 @@ impl Interpret for InterpretationGroup {
         self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         let inner = self.content.interpret_to_new_stream(interpreter)?;
         output.push_new_group(inner, self.source_delimiter, self.source_delim_span.join());
         Ok(())
@@ -111,7 +98,7 @@ impl RawGroup {
 }
 
 impl Parse for RawGroup {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> ParseResult<Self> {
         let (delimiter, delim_span, content) = input.parse_any_delimiter()?;
         let content = content.parse()?;
         Ok(Self {
@@ -123,7 +110,11 @@ impl Parse for RawGroup {
 }
 
 impl Interpret for RawGroup {
-    fn interpret_into(self, _: &mut Interpreter, output: &mut InterpretedStream) -> Result<()> {
+    fn interpret_into(
+        self,
+        _: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> ExecutionResult<()> {
         output.push_new_group(
             InterpretedStream::raw(self.content),
             self.source_delimeter,
@@ -138,7 +129,7 @@ impl Express for RawGroup {
         self,
         _: &mut Interpreter,
         expression_stream: &mut ExpressionBuilder,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         expression_stream.push_grouped(
             |inner| {
                 inner.extend_raw_tokens(self.content);

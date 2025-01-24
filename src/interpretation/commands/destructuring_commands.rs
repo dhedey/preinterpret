@@ -15,12 +15,12 @@ impl CommandType for LetCommand {
 impl NoOutputCommandDefinition for LetCommand {
     const COMMAND_NAME: &'static str = "let";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
-                    destructuring: input.parse()?,
-                    equals: input.parse()?,
+                    destructuring: input.parse_v2()?,
+                    equals: input.parse_v2()?,
                     arguments: input.parse_with(arguments.full_span_range())?,
                 })
             },
@@ -28,7 +28,7 @@ impl NoOutputCommandDefinition for LetCommand {
         )
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         let result_tokens = self.arguments.interpret_to_new_stream(interpreter)?;
         self.destructuring
             .handle_destructure_from_stream(result_tokens, interpreter)

@@ -510,13 +510,12 @@
 //!
 //! Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in this crate by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
 //!
-mod commands;
 mod destructuring;
 mod expressions;
+mod extensions;
 mod internal_prelude;
 mod interpretation;
-mod string_conversion;
-mod traits;
+mod misc;
 
 use internal_prelude::*;
 
@@ -544,11 +543,19 @@ pub fn preinterpret(token_stream: proc_macro::TokenStream) -> proc_macro::TokenS
         .into()
 }
 
-fn preinterpret_internal(input: TokenStream) -> Result<TokenStream> {
+fn preinterpret_internal(input: TokenStream) -> SynResult<TokenStream> {
     let mut interpreter = Interpreter::new();
-    let interpretation_stream =
-        InterpretationStream::parse_from_token_stream(input, Span::call_site().span_range())?;
-    let interpreted_stream = interpretation_stream.interpret_to_new_stream(&mut interpreter)?;
+
+    let interpretation_stream = input
+        .parse_with(|input| {
+            InterpretationStream::parse_with_context(input, Span::call_site().span_range())
+        })
+        .convert_to_final_result()?;
+
+    let interpreted_stream = interpretation_stream
+        .interpret_to_new_stream(&mut interpreter)
+        .convert_to_final_result()?;
+
     unsafe {
         // RUST-ANALYZER-SAFETY: This might drop transparent groups in the output of
         // rust-analyzer. There's not much we can do here...

@@ -24,7 +24,7 @@ impl EvaluationBoolean {
     pub(super) fn handle_unary_operation(
         self,
         operation: UnaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         let input = self.value;
         match operation.operator {
             UnaryOperator::Neg => operation.unsupported_for_value_type_err("boolean"),
@@ -58,7 +58,7 @@ impl EvaluationBoolean {
         self,
         _right: EvaluationInteger,
         operation: BinaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         match operation.integer_operator() {
             IntegerBinaryOperator::ShiftLeft | IntegerBinaryOperator::ShiftRight => {
                 operation.unsupported_for_value_type_err("boolean")
@@ -70,7 +70,7 @@ impl EvaluationBoolean {
         self,
         rhs: Self,
         operation: &BinaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         let lhs = self.value;
         let rhs = rhs.value;
         match operation.paired_operator() {

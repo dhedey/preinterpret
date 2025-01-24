@@ -64,10 +64,10 @@ impl InterpretedStream {
 
     pub(crate) fn push_grouped(
         &mut self,
-        appender: impl FnOnce(&mut Self) -> Result<()>,
+        appender: impl FnOnce(&mut Self) -> ExecutionResult<()>,
         delimiter: Delimiter,
         span: Span,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         let mut inner = Self::new();
         appender(&mut inner)?;
         self.push_new_group(inner, delimiter, span);
@@ -137,8 +137,11 @@ impl InterpretedStream {
     /// Use only where that doesn't matter: https://github.com/rust-lang/rust-analyzer/issues/18211#issuecomment-2604547032
     ///
     /// Annotate usages with // RUST-ANALYZER SAFETY: ... to explain why the use of this function is OK.
-    pub(crate) unsafe fn syn_parse<P: syn::parse::Parser>(self, parser: P) -> Result<P::Output> {
-        parser.parse2(self.into_token_stream())
+    pub(crate) unsafe fn syn_parse<T, E: From<syn::Error>>(
+        self,
+        parser: impl FnOnce(ParseStream) -> Result<T, E>,
+    ) -> Result<T, E> {
+        self.into_token_stream().parse_with(parser)
     }
 
     pub(crate) fn append_into(self, output: &mut InterpretedStream) {
@@ -214,8 +217,8 @@ impl InterpretedStream {
     pub(crate) fn unwrap_singleton_group(
         self,
         check_group: impl FnOnce(Delimiter) -> bool,
-        create_error: impl FnOnce() -> Error,
-    ) -> Result<InterpretedStream> {
+        create_error: impl FnOnce() -> SynError,
+    ) -> ParseResult<InterpretedStream> {
         let mut item_vec = self.into_item_vec();
         if item_vec.len() == 1 {
             match item_vec.pop().unwrap() {
@@ -232,7 +235,7 @@ impl InterpretedStream {
                 _ => {}
             }
         }
-        Err(create_error())
+        Err(create_error().into())
     }
 
     pub(crate) fn into_item_vec(self) -> Vec<InterpretedTokenTree> {

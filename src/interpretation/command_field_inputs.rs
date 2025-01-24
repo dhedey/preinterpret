@@ -25,7 +25,7 @@ macro_rules! define_field_inputs {
         }
 
         impl Parse for $inputs_type {
-            fn parse(input: ParseStream) -> Result<Self> {
+            fn parse(input: ParseStream) -> ParseResult<Self> {
                 $(
                     let mut $required_field: Option<$required_type> = None;
                 )*
@@ -33,8 +33,7 @@ macro_rules! define_field_inputs {
                     let mut $optional_field: Option<$optional_type> = None;
                 )*
 
-                let content;
-                let brace = syn::braced!(content in input);
+                let (delim_span, content) = input.parse_group_matching(Delimiter::Brace)?;
 
                 while !content.is_empty() {
                     let ident = content.parse_any_ident()?;
@@ -43,20 +42,20 @@ macro_rules! define_field_inputs {
                         $(
                             stringify!($required_field) => {
                                 if $required_field.is_some() {
-                                    return ident.err("duplicate field");
+                                    return ident.parse_err("duplicate field");
                                 }
-                                $required_field = Some(content.parse()?);
+                                $required_field = Some(content.parse_v2()?);
                             }
                         )*
                         $(
                             stringify!($optional_field) => {
                                 if $optional_field.is_some() {
-                                    return ident.err("duplicate field");
+                                    return ident.parse_err("duplicate field");
                                 }
-                                $optional_field = Some(content.parse()?);
+                                $optional_field = Some(content.parse_v2()?);
                             }
                         )*
-                        _ => return ident.err("unexpected field"),
+                        _ => return ident.parse_err("unexpected field"),
                     }
                     if !content.is_empty() {
                         content.parse::<Token![,]>()?;
@@ -73,7 +72,7 @@ macro_rules! define_field_inputs {
                 )*
 
                 if !missing_fields.is_empty() {
-                    return brace.span.err(format!(
+                    return delim_span.join().parse_err(format!(
                         "required fields are missing: {}",
                         missing_fields.join(", ")
                     ));

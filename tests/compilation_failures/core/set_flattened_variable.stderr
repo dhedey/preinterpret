@@ -1,5 +1,5 @@
 error: Expected #variable
-       Occurred whilst parsing [!set! ..] - Expected [!set! #variable = ..]
+       Occurred whilst parsing [!set! ...] - Expected [!set! #variable = ..]
  --> tests/compilation_failures/core/set_flattened_variable.rs:5:16
   |
 5 |         [!set! #..variable = 1]

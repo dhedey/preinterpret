@@ -5,9 +5,12 @@ pub(crate) trait Express: Sized {
         self,
         interpreter: &mut Interpreter,
         builder: &mut ExpressionBuilder,
-    ) -> Result<()>;
+    ) -> ExecutionResult<()>;
 
-    fn start_expression_builder(self, interpreter: &mut Interpreter) -> Result<ExpressionBuilder> {
+    fn start_expression_builder(
+        self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<ExpressionBuilder> {
         let mut output = ExpressionBuilder::new();
         self.add_to_expression(interpreter, &mut output)?;
         Ok(output)
@@ -27,7 +30,7 @@ pub(crate) struct ExpressionInput {
 }
 
 impl Parse for ExpressionInput {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> ParseResult<Self> {
         let mut items = Vec::new();
         while !input.is_empty() {
             // Until we create a proper ExpressionInput parser which builds up a syntax tree
@@ -35,25 +38,29 @@ impl Parse for ExpressionInput {
             // before code blocks or .. in [!range!] so we can break on those.
             // These aren't valid inside expressions we support anyway, so it's good enough for now.
             let item = match detect_preinterpret_grammar(input.cursor()) {
-                PeekMatch::GroupedCommand(_) => ExpressionItem::Command(input.parse()?),
-                PeekMatch::FlattenedCommand(_) => ExpressionItem::Command(input.parse()?),
-                PeekMatch::GroupedVariable => ExpressionItem::GroupedVariable(input.parse()?),
-                PeekMatch::FlattenedVariable => ExpressionItem::FlattenedVariable(input.parse()?),
+                PeekMatch::GroupedCommand(_) => ExpressionItem::Command(input.parse_v2()?),
+                PeekMatch::FlattenedCommand(_) => ExpressionItem::Command(input.parse_v2()?),
+                PeekMatch::GroupedVariable => ExpressionItem::GroupedVariable(input.parse_v2()?),
+                PeekMatch::FlattenedVariable => {
+                    ExpressionItem::FlattenedVariable(input.parse_v2()?)
+                }
                 PeekMatch::Group(Delimiter::Brace | Delimiter::Bracket) => break,
-                PeekMatch::Group(_) => ExpressionItem::ExpressionGroup(input.parse()?),
+                PeekMatch::Group(_) => ExpressionItem::ExpressionGroup(input.parse_v2()?),
                 PeekMatch::Destructurer(_) | PeekMatch::AppendVariableDestructuring => {
-                    return Err(input.error("Destructuring is not supported in an expression"));
+                    return input
+                        .span()
+                        .parse_err("Destructuring is not supported in an expression");
                 }
                 PeekMatch::Punct(punct) if punct.as_char() == '.' => break,
                 PeekMatch::Punct(_) => ExpressionItem::Punct(input.parse_any_punct()?),
                 PeekMatch::Ident(_) => ExpressionItem::Ident(input.parse_any_ident()?),
-                PeekMatch::Literal(_) => ExpressionItem::Literal(input.parse()?),
-                PeekMatch::End => return input.span().err("Expected an expression"),
+                PeekMatch::Literal(_) => ExpressionItem::Literal(input.parse_v2()?),
+                PeekMatch::End => return input.span().parse_err("Expected an expression"),
             };
             items.push(item);
         }
         if items.is_empty() {
-            return input.span().err("Expected an expression");
+            return input.span().parse_err("Expected an expression");
         }
         Ok(Self { items })
     }
@@ -73,7 +80,7 @@ impl Express for ExpressionInput {
         self,
         interpreter: &mut Interpreter,
         builder: &mut ExpressionBuilder,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         for item in self.items {
             item.add_to_expression(interpreter, builder)?;
         }
@@ -82,7 +89,10 @@ impl Express for ExpressionInput {
 }
 
 impl ExpressionInput {
-    pub(crate) fn evaluate(self, interpreter: &mut Interpreter) -> Result<EvaluationOutput> {
+    pub(crate) fn evaluate(
+        self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<EvaluationOutput> {
         self.start_expression_builder(interpreter)?.evaluate()
     }
 }
@@ -119,7 +129,7 @@ impl Express for ExpressionItem {
         self,
         interpreter: &mut Interpreter,
         builder: &mut ExpressionBuilder,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         match self {
             ExpressionItem::Command(command_invocation) => {
                 command_invocation.add_to_expression(interpreter, builder)?;
@@ -149,12 +159,12 @@ pub(crate) struct ExpressionGroup {
 }
 
 impl Parse for ExpressionGroup {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> ParseResult<Self> {
         let (delimiter, delim_span, content) = input.parse_any_delimiter()?;
         Ok(Self {
             source_delimiter: delimiter,
             source_delim_span: delim_span,
-            content: content.parse()?,
+            content: content.parse_v2()?,
         })
     }
 }
@@ -164,7 +174,7 @@ impl Express for ExpressionGroup {
         self,
         interpreter: &mut Interpreter,
         builder: &mut ExpressionBuilder,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         builder.push_expression_group(
             self.content.start_expression_builder(interpreter)?,
             self.source_delimiter,
@@ -207,9 +217,9 @@ impl ExpressionBuilder {
 
     pub(crate) fn push_grouped(
         &mut self,
-        appender: impl FnOnce(&mut InterpretedStream) -> Result<()>,
+        appender: impl FnOnce(&mut InterpretedStream) -> ExecutionResult<()>,
         span: Span,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         // Currently using Expr::Parse, it ignores transparent groups, which is a little too permissive.
         // Instead, we use parentheses to ensure that the group has to be a valid expression itself, without being flattened.
         // This also works around the SAFETY issue in syn_parse below
@@ -232,7 +242,7 @@ impl ExpressionBuilder {
             .push_new_group(contents.interpreted_stream, delimiter, span);
     }
 
-    pub(crate) fn evaluate(self) -> Result<EvaluationOutput> {
+    pub(crate) fn evaluate(self) -> ExecutionResult<EvaluationOutput> {
         // Parsing into a rust expression is overkill here.
         //
         // In future we could choose to implement a subset of the grammar which we actually can use/need.
@@ -247,7 +257,7 @@ impl ExpressionBuilder {
         let expression = unsafe {
             // RUST-ANALYZER SAFETY: We wrap commands and variables in `()` instead of none-delimited groups in expressions,
             // so it doesn't matter that we can drop none-delimited groups
-            self.interpreted_stream.syn_parse(Expr::parse)?
+            self.interpreted_stream.syn_parse(<Expr as Parse>::parse)?
         };
 
         EvaluationTree::build_from(&expression)?.evaluate()

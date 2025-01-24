@@ -8,15 +8,6 @@ use std::rc::Rc;
 pub(crate) struct Interpreter {
     config: InterpreterConfig,
     variable_data: HashMap<String, VariableData>,
-    loop_condition: LoopCondition,
-}
-
-#[derive(Clone, Copy)]
-#[must_use]
-pub(crate) enum LoopCondition {
-    None,
-    Continue,
-    Break,
 }
 
 #[derive(Clone)]
@@ -34,23 +25,30 @@ impl VariableData {
     pub(crate) fn get<'d>(
         &'d self,
         variable: &impl IsVariable,
-    ) -> Result<Ref<'d, InterpretedStream>> {
+    ) -> ExecutionResult<Ref<'d, InterpretedStream>> {
         self.value.try_borrow().map_err(|_| {
-            variable.error("The variable cannot be read if it is currently being modified")
+            variable
+                .error("The variable cannot be read if it is currently being modified")
+                .into()
         })
     }
 
     pub(crate) fn get_mut<'d>(
         &'d self,
         variable: &impl IsVariable,
-    ) -> Result<RefMut<'d, InterpretedStream>> {
+    ) -> ExecutionResult<RefMut<'d, InterpretedStream>> {
         self.value.try_borrow_mut().map_err(|_| {
-            variable
-                .error("The variable cannot be modified if it is already currently being modified")
+            variable.execution_error(
+                "The variable cannot be modified if it is already currently being modified",
+            )
         })
     }
 
-    pub(crate) fn set(&self, variable: &impl IsVariable, content: InterpretedStream) -> Result<()> {
+    pub(crate) fn set(
+        &self,
+        variable: &impl IsVariable,
+        content: InterpretedStream,
+    ) -> ExecutionResult<()> {
         *self.get_mut(variable)? = content;
         Ok(())
     }
@@ -67,7 +65,6 @@ impl Interpreter {
         Self {
             config: Default::default(),
             variable_data: Default::default(),
-            loop_condition: LoopCondition::None,
         }
     }
 
@@ -75,7 +72,7 @@ impl Interpreter {
         &mut self,
         variable: &impl IsVariable,
         tokens: InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         match self.variable_data.entry(variable.get_name()) {
             Entry::Occupied(mut entry) => {
                 entry.get_mut().set(variable, tokens)?;
@@ -90,11 +87,11 @@ impl Interpreter {
     pub(crate) fn get_existing_variable_data(
         &self,
         variable: &impl IsVariable,
-        make_error: impl FnOnce() -> Error,
-    ) -> Result<&VariableData> {
+        make_error: impl FnOnce() -> SynError,
+    ) -> ExecutionResult<&VariableData> {
         self.variable_data
             .get(&variable.get_name())
-            .ok_or_else(make_error)
+            .ok_or_else(|| make_error().into())
     }
 
     pub(crate) fn start_iteration_counter<'s, S: HasSpanRange>(
@@ -111,22 +108,6 @@ impl Interpreter {
     pub(crate) fn set_iteration_limit(&mut self, limit: Option<usize>) {
         self.config.iteration_limit = limit;
     }
-
-    /// Panics if called with [`LoopCondition::None`]
-    pub(crate) fn start_loop_action(&mut self, source: Span, action: LoopCondition) -> Error {
-        self.loop_condition = action;
-        match action {
-            LoopCondition::None => panic!("Not allowed"),
-            LoopCondition::Continue => {
-                source.error("The continue command is only allowed inside a loop")
-            }
-            LoopCondition::Break => source.error("The break command is only allowed inside a loop"),
-        }
-    }
-
-    pub(crate) fn outstanding_loop_condition(&mut self) -> LoopCondition {
-        std::mem::replace(&mut self.loop_condition, LoopCondition::None)
-    }
 }
 
 pub(crate) struct IterationCounter<'a, S: HasSpanRange> {
@@ -136,20 +117,20 @@ pub(crate) struct IterationCounter<'a, S: HasSpanRange> {
 }
 
 impl<S: HasSpanRange> IterationCounter<'_, S> {
-    pub(crate) fn add_and_check(&mut self, count: usize) -> Result<()> {
+    pub(crate) fn add_and_check(&mut self, count: usize) -> ExecutionResult<()> {
         self.count = self.count.wrapping_add(count);
         self.check()
     }
 
-    pub(crate) fn increment_and_check(&mut self) -> Result<()> {
+    pub(crate) fn increment_and_check(&mut self) -> ExecutionResult<()> {
         self.count += 1;
         self.check()
     }
 
-    pub(crate) fn check(&self) -> Result<()> {
+    pub(crate) fn check(&self) -> ExecutionResult<()> {
         if let Some(limit) = self.iteration_limit {
             if self.count > limit {
-                return self.span_source.err(format!("Iteration limit of {} exceeded.\nIf needed, the limit can be reconfigured with [!settings! {{ iteration_limit: X }}]", limit));
+                return self.span_source.execution_err(format!("Iteration limit of {} exceeded.\nIf needed, the limit can be reconfigured with [!settings! {{ iteration_limit: X }}]", limit));
             }
         }
         Ok(())

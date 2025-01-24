@@ -10,14 +10,14 @@ impl EvaluationInteger {
         Self { value, source_span }
     }
 
-    pub(super) fn for_litint(lit: &syn::LitInt) -> Result<Self> {
+    pub(super) fn for_litint(lit: &syn::LitInt) -> ExecutionResult<Self> {
         Ok(Self {
             source_span: lit.span().span_range(),
             value: EvaluationIntegerValue::for_litint(lit)?,
         })
     }
 
-    pub(crate) fn try_into_i128(self) -> Result<i128> {
+    pub(crate) fn try_into_i128(self) -> ExecutionResult<i128> {
         let option_of_fallback = match self.value {
             EvaluationIntegerValue::Untyped(x) => x.parse_fallback().ok(),
             EvaluationIntegerValue::U8(x) => Some(x.into()),
@@ -37,14 +37,14 @@ impl EvaluationInteger {
             Some(value) => Ok(value),
             None => self
                 .source_span
-                .err("The integer does not fit in a i128".to_string()),
+                .execution_err("The integer does not fit in a i128".to_string()),
         }
     }
 
     pub(super) fn handle_unary_operation(
         self,
         operation: UnaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         match self.value {
             EvaluationIntegerValue::Untyped(input) => input.handle_unary_operation(&operation),
             EvaluationIntegerValue::U8(input) => input.handle_unary_operation(&operation),
@@ -66,7 +66,7 @@ impl EvaluationInteger {
         self,
         right: EvaluationInteger,
         operation: BinaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         match self.value {
             EvaluationIntegerValue::Untyped(input) => {
                 input.handle_integer_binary_operation(right, &operation)
@@ -143,7 +143,7 @@ impl EvaluationIntegerValuePair {
     pub(super) fn handle_paired_binary_operation(
         self,
         operation: &BinaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         match self {
             Self::Untyped(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
             Self::U8(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
@@ -196,7 +196,7 @@ pub(super) enum EvaluationIntegerValue {
 }
 
 impl EvaluationIntegerValue {
-    pub(super) fn for_litint(lit: &syn::LitInt) -> Result<Self> {
+    pub(super) fn for_litint(lit: &syn::LitInt) -> ExecutionResult<Self> {
         Ok(match lit.suffix() {
             "" => Self::Untyped(UntypedInteger::new_from_lit_int(lit)),
             "u8" => Self::U8(lit.base10_parse()?),
@@ -212,7 +212,7 @@ impl EvaluationIntegerValue {
             "i128" => Self::I128(lit.base10_parse()?),
             "isize" => Self::Isize(lit.base10_parse()?),
             suffix => {
-                return lit.span().err(format!(
+                return lit.span().execution_err(format!(
                     "The literal suffix {suffix} is not supported in preinterpret expressions"
                 ));
             }
@@ -275,7 +275,7 @@ impl UntypedInteger {
     pub(super) fn handle_unary_operation(
         self,
         operation: &UnaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         let input = self.parse_fallback()?;
         match operation.operator {
             UnaryOperator::Neg => operation.output(Self::from_fallback(-input)),
@@ -313,7 +313,7 @@ impl UntypedInteger {
         self,
         rhs: EvaluationInteger,
         operation: &BinaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         let lhs = self.parse_fallback()?;
         match operation.integer_operator() {
             IntegerBinaryOperator::ShiftLeft => match rhs.value {
@@ -357,7 +357,7 @@ impl UntypedInteger {
         self,
         rhs: Self,
         operation: &BinaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         let lhs = self.parse_fallback()?;
         let rhs = rhs.parse_fallback()?;
         let overflow_error = || {
@@ -408,9 +408,9 @@ impl UntypedInteger {
         Self::new_from_literal(Literal::i128_unsuffixed(value))
     }
 
-    pub(super) fn parse_fallback(&self) -> Result<FallbackInteger> {
+    pub(super) fn parse_fallback(&self) -> ExecutionResult<FallbackInteger> {
         self.0.base10_digits().parse().map_err(|err| {
-            self.0.span().error(format!(
+            self.0.span().execution_error(format!(
                 "Could not parse as the default inferred type {}: {}",
                 core::any::type_name::<FallbackInteger>(),
                 err
@@ -418,13 +418,13 @@ impl UntypedInteger {
         })
     }
 
-    pub(super) fn parse_as<N>(&self) -> Result<N>
+    pub(super) fn parse_as<N>(&self) -> ExecutionResult<N>
     where
         N: FromStr,
         N::Err: core::fmt::Display,
     {
         self.0.base10_digits().parse().map_err(|err| {
-            self.0.span().error(format!(
+            self.0.span().execution_error(format!(
                 "Could not parse as {}: {}",
                 core::any::type_name::<N>(),
                 err
@@ -459,7 +459,7 @@ macro_rules! impl_int_operations_except_unary {
         }
 
         impl HandleBinaryOperation for $integer_type {
-            fn handle_paired_binary_operation(self, rhs: Self, operation: &BinaryOperation) -> Result<EvaluationOutput> {
+            fn handle_paired_binary_operation(self, rhs: Self, operation: &BinaryOperation) -> ExecutionResult<EvaluationOutput> {
                 let lhs = self;
                 let overflow_error = || format!("The {} operation {:?} {} {:?} overflowed", stringify!($integer_type), lhs, operation.operator.symbol(), rhs);
                 match operation.paired_operator() {
@@ -486,7 +486,7 @@ macro_rules! impl_int_operations_except_unary {
                 self,
                 rhs: EvaluationInteger,
                 operation: &BinaryOperation,
-            ) -> Result<EvaluationOutput> {
+            ) -> ExecutionResult<EvaluationOutput> {
                 let lhs = self;
                 match operation.integer_operator() {
                     IntegerBinaryOperator::ShiftLeft => {
@@ -532,7 +532,7 @@ macro_rules! impl_int_operations_except_unary {
 macro_rules! impl_unsigned_unary_operations {
     ($($integer_type:ident),* $(,)?) => {$(
         impl HandleUnaryOperation for $integer_type {
-            fn handle_unary_operation(self, operation: &UnaryOperation) -> Result<EvaluationOutput> {
+            fn handle_unary_operation(self, operation: &UnaryOperation) -> ExecutionResult<EvaluationOutput> {
                 match operation.operator {
                     UnaryOperator::NoOp => operation.output(self),
                     UnaryOperator::Neg
@@ -568,7 +568,7 @@ macro_rules! impl_unsigned_unary_operations {
 macro_rules! impl_signed_unary_operations {
     ($($integer_type:ident),* $(,)?) => {$(
         impl HandleUnaryOperation for $integer_type {
-            fn handle_unary_operation(self, operation: &UnaryOperation) -> Result<EvaluationOutput> {
+            fn handle_unary_operation(self, operation: &UnaryOperation) -> ExecutionResult<EvaluationOutput> {
                 match operation.operator {
                     UnaryOperator::NoOp => operation.output(self),
                     UnaryOperator::Neg => operation.output(-self),
@@ -601,7 +601,10 @@ macro_rules! impl_signed_unary_operations {
 }
 
 impl HandleUnaryOperation for u8 {
-    fn handle_unary_operation(self, operation: &UnaryOperation) -> Result<EvaluationOutput> {
+    fn handle_unary_operation(
+        self,
+        operation: &UnaryOperation,
+    ) -> ExecutionResult<EvaluationOutput> {
         match operation.operator {
             UnaryOperator::NoOp => operation.output(self),
             UnaryOperator::Neg | UnaryOperator::Not => {

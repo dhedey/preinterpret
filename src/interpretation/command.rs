@@ -1,3 +1,4 @@
+use super::commands::*;
 use crate::internal_prelude::*;
 
 #[allow(unused)]
@@ -18,7 +19,7 @@ pub(crate) trait CommandType {
 
 pub(crate) trait OutputKind {
     type Output;
-    fn resolve(flattening: Option<Token![..]>) -> Result<CommandOutputKind>;
+    fn resolve(flattening: Option<Token![..]>) -> ParseResult<CommandOutputKind>;
 }
 
 struct ExecutionContext<'a> {
@@ -32,13 +33,13 @@ trait CommandInvocation {
         self: Box<Self>,
         context: ExecutionContext,
         output: &mut InterpretedStream,
-    ) -> Result<()>;
+    ) -> ExecutionResult<()>;
 
     fn execute_into_expression(
         self: Box<Self>,
         context: ExecutionContext,
         builder: &mut ExpressionBuilder,
-    ) -> Result<()>;
+    ) -> ExecutionResult<()>;
 }
 
 trait ClonableCommandInvocation: CommandInvocation {
@@ -64,13 +65,13 @@ trait CommandInvocationAs<T: OutputKind> {
         self: Box<Self>,
         context: ExecutionContext,
         output: &mut InterpretedStream,
-    ) -> Result<()>;
+    ) -> ExecutionResult<()>;
 
     fn execute_into_expression(
         self: Box<Self>,
         context: ExecutionContext,
         builder: &mut ExpressionBuilder,
-    ) -> Result<()>;
+    ) -> ExecutionResult<()>;
 }
 
 impl<C: CommandType + CommandInvocationAs<C::OutputKind>> CommandInvocation for C {
@@ -78,7 +79,7 @@ impl<C: CommandType + CommandInvocationAs<C::OutputKind>> CommandInvocation for 
         self: Box<Self>,
         context: ExecutionContext,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         <Self as CommandInvocationAs<C::OutputKind>>::execute_into(self, context, output)
     }
 
@@ -86,7 +87,7 @@ impl<C: CommandType + CommandInvocationAs<C::OutputKind>> CommandInvocation for 
         self: Box<Self>,
         context: ExecutionContext,
         builder: &mut ExpressionBuilder,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         <Self as CommandInvocationAs<C::OutputKind>>::execute_into_expression(
             self, context, builder,
         )
@@ -101,9 +102,11 @@ pub(crate) struct OutputKindNone;
 impl OutputKind for OutputKindNone {
     type Output = ();
 
-    fn resolve(flattening: Option<Token![..]>) -> Result<CommandOutputKind> {
+    fn resolve(flattening: Option<Token![..]>) -> ParseResult<CommandOutputKind> {
         match flattening {
-            Some(dots) => dots.err("This command has no output, so cannot be flattened with .."),
+            Some(dots) => {
+                dots.parse_err("This command has no output, so cannot be flattened with ..")
+            }
             None => Ok(CommandOutputKind::None),
         }
     }
@@ -113,8 +116,8 @@ pub(crate) trait NoOutputCommandDefinition:
     Sized + CommandType<OutputKind = OutputKindNone>
 {
     const COMMAND_NAME: &'static str;
-    fn parse(arguments: CommandArguments) -> Result<Self>;
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()>;
+    fn parse(arguments: CommandArguments) -> ParseResult<Self>;
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<()>;
 }
 
 impl<C: NoOutputCommandDefinition> CommandInvocationAs<OutputKindNone> for C {
@@ -122,7 +125,7 @@ impl<C: NoOutputCommandDefinition> CommandInvocationAs<OutputKindNone> for C {
         self: Box<Self>,
         context: ExecutionContext,
         _: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         self.execute(context.interpreter)?;
         Ok(())
     }
@@ -131,10 +134,10 @@ impl<C: NoOutputCommandDefinition> CommandInvocationAs<OutputKindNone> for C {
         self: Box<Self>,
         context: ExecutionContext,
         _: &mut ExpressionBuilder,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         context.delim_span
             .join()
-            .err("Commands with no output cannot be used directly in expressions.\nConsider wrapping it inside a command such as [!group! ..] which returns an expression")
+            .execution_err("Commands with no output cannot be used directly in expressions.\nConsider wrapping it inside a command such as [!group! ..] which returns an expression")
     }
 }
 
@@ -146,11 +149,10 @@ pub(crate) struct OutputKindValue;
 impl OutputKind for OutputKindValue {
     type Output = TokenTree;
 
-    fn resolve(flattening: Option<Token![..]>) -> Result<CommandOutputKind> {
+    fn resolve(flattening: Option<Token![..]>) -> ParseResult<CommandOutputKind> {
         match flattening {
-            Some(dots) => {
-                dots.err("This command outputs a single value, so cannot be flattened with ..")
-            }
+            Some(dots) => dots
+                .parse_err("This command outputs a single value, so cannot be flattened with .."),
             None => Ok(CommandOutputKind::Value),
         }
     }
@@ -160,8 +162,8 @@ pub(crate) trait ValueCommandDefinition:
     Sized + CommandType<OutputKind = OutputKindValue>
 {
     const COMMAND_NAME: &'static str;
-    fn parse(arguments: CommandArguments) -> Result<Self>;
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<TokenTree>;
+    fn parse(arguments: CommandArguments) -> ParseResult<Self>;
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree>;
 }
 
 impl<C: ValueCommandDefinition> CommandInvocationAs<OutputKindValue> for C {
@@ -169,7 +171,7 @@ impl<C: ValueCommandDefinition> CommandInvocationAs<OutputKindValue> for C {
         self: Box<Self>,
         context: ExecutionContext,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         output.push_raw_token_tree(self.execute(context.interpreter)?);
         Ok(())
     }
@@ -178,7 +180,7 @@ impl<C: ValueCommandDefinition> CommandInvocationAs<OutputKindValue> for C {
         self: Box<Self>,
         context: ExecutionContext,
         builder: &mut ExpressionBuilder,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         match self.execute(context.interpreter)? {
             TokenTree::Literal(literal) => builder.push_literal(literal),
             TokenTree::Ident(ident) => builder.push_ident(ident),
@@ -196,11 +198,10 @@ pub(crate) struct OutputKindIdent;
 impl OutputKind for OutputKindIdent {
     type Output = Ident;
 
-    fn resolve(flattening: Option<Token![..]>) -> Result<CommandOutputKind> {
+    fn resolve(flattening: Option<Token![..]>) -> ParseResult<CommandOutputKind> {
         match flattening {
-            Some(dots) => {
-                dots.err("This command outputs a single ident, so cannot be flattened with ..")
-            }
+            Some(dots) => dots
+                .parse_err("This command outputs a single ident, so cannot be flattened with .."),
             None => Ok(CommandOutputKind::Ident),
         }
     }
@@ -210,8 +211,8 @@ pub(crate) trait IdentCommandDefinition:
     Sized + CommandType<OutputKind = OutputKindIdent>
 {
     const COMMAND_NAME: &'static str;
-    fn parse(arguments: CommandArguments) -> Result<Self>;
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<Ident>;
+    fn parse(arguments: CommandArguments) -> ParseResult<Self>;
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<Ident>;
 }
 
 impl<C: IdentCommandDefinition> CommandInvocationAs<OutputKindIdent> for C {
@@ -219,7 +220,7 @@ impl<C: IdentCommandDefinition> CommandInvocationAs<OutputKindIdent> for C {
         self: Box<Self>,
         context: ExecutionContext,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         output.push_ident(self.execute(context.interpreter)?);
         Ok(())
     }
@@ -228,7 +229,7 @@ impl<C: IdentCommandDefinition> CommandInvocationAs<OutputKindIdent> for C {
         self: Box<Self>,
         context: ExecutionContext,
         builder: &mut ExpressionBuilder,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         builder.push_ident(self.execute(context.interpreter)?);
         Ok(())
     }
@@ -242,7 +243,7 @@ pub(crate) struct OutputKindStream;
 impl OutputKind for OutputKindStream {
     type Output = InterpretedStream;
 
-    fn resolve(flattening: Option<Token![..]>) -> Result<CommandOutputKind> {
+    fn resolve(flattening: Option<Token![..]>) -> ParseResult<CommandOutputKind> {
         match flattening {
             Some(_) => Ok(CommandOutputKind::FlattenedStream),
             None => Ok(CommandOutputKind::GroupedStream),
@@ -254,12 +255,12 @@ pub(crate) trait StreamCommandDefinition:
     Sized + CommandType<OutputKind = OutputKindStream>
 {
     const COMMAND_NAME: &'static str;
-    fn parse(arguments: CommandArguments) -> Result<Self>;
+    fn parse(arguments: CommandArguments) -> ParseResult<Self>;
     fn execute(
         self: Box<Self>,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()>;
+    ) -> ExecutionResult<()>;
 }
 
 impl<C: StreamCommandDefinition> CommandInvocationAs<OutputKindStream> for C {
@@ -267,7 +268,7 @@ impl<C: StreamCommandDefinition> CommandInvocationAs<OutputKindStream> for C {
         self: Box<Self>,
         context: ExecutionContext,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         match context.output_kind {
             CommandOutputKind::FlattenedStream => self.execute(context.interpreter, output),
             CommandOutputKind::GroupedStream => output.push_grouped(
@@ -283,11 +284,11 @@ impl<C: StreamCommandDefinition> CommandInvocationAs<OutputKindStream> for C {
         self: Box<Self>,
         context: ExecutionContext,
         builder: &mut ExpressionBuilder,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         if let CommandOutputKind::FlattenedStream = context.output_kind {
             return context.delim_span
                 .join()
-                .err("Flattened commands cannot be used directly in expressions.\nConsider removing the .. or wrapping it inside a command such as [!group! ..] which returns an expression");
+                .execution_err("Flattened commands cannot be used directly in expressions.\nConsider removing the .. or wrapping it inside a command such as [!group! ..] which returns an expression");
         }
         builder.push_grouped(
             |output| self.execute(context.interpreter, output),
@@ -304,9 +305,9 @@ pub(crate) struct OutputKindControlFlow;
 impl OutputKind for OutputKindControlFlow {
     type Output = ();
 
-    fn resolve(flattening: Option<Token![..]>) -> Result<CommandOutputKind> {
+    fn resolve(flattening: Option<Token![..]>) -> ParseResult<CommandOutputKind> {
         match flattening {
-            Some(dots) => dots.err("This command is control flow, so is always flattened and cannot be explicitly flattened. If it needs to be grouped, wrap it in a [!group! ..] command"),
+            Some(dots) => dots.parse_err("This command is control flow, so is always flattened and cannot be explicitly flattened. If it needs to be grouped, wrap it in a [!group! ..] command"),
             None => Ok(CommandOutputKind::ControlFlowCodeStream),
         }
     }
@@ -316,12 +317,12 @@ pub(crate) trait ControlFlowCommandDefinition:
     Sized + CommandType<OutputKind = OutputKindControlFlow>
 {
     const COMMAND_NAME: &'static str;
-    fn parse(arguments: CommandArguments) -> Result<Self>;
+    fn parse(arguments: CommandArguments) -> ParseResult<Self>;
     fn execute(
         self: Box<Self>,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()>;
+    ) -> ExecutionResult<()>;
 }
 
 impl<C: ControlFlowCommandDefinition> CommandInvocationAs<OutputKindControlFlow> for C {
@@ -329,7 +330,7 @@ impl<C: ControlFlowCommandDefinition> CommandInvocationAs<OutputKindControlFlow>
         self: Box<Self>,
         context: ExecutionContext,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         self.execute(context.interpreter, output)
     }
 
@@ -337,7 +338,7 @@ impl<C: ControlFlowCommandDefinition> CommandInvocationAs<OutputKindControlFlow>
         self: Box<Self>,
         context: ExecutionContext,
         builder: &mut ExpressionBuilder,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         builder.push_grouped(
             |output| self.execute(context.interpreter, output),
             context.delim_span.join(),
@@ -362,7 +363,7 @@ macro_rules! define_command_kind {
         }
 
         impl CommandKind {
-            fn parse_invocation(&self, arguments: CommandArguments) -> Result<Box<dyn ClonableCommandInvocation>> {
+            fn parse_invocation(&self, arguments: CommandArguments) -> ParseResult<Box<dyn ClonableCommandInvocation>> {
                 Ok(match self {
                     $(
                         Self::$command => Box::new(
@@ -372,7 +373,7 @@ macro_rules! define_command_kind {
                 })
             }
 
-            pub(crate) fn output_kind(&self, flattening: Option<Token![..]>) -> Result<CommandOutputKind> {
+            pub(crate) fn output_kind(&self, flattening: Option<Token![..]>) -> ParseResult<CommandOutputKind> {
                 match self {
                     $(
                         Self::$command => <$command as CommandType>::OutputKind::resolve(flattening),
@@ -464,9 +465,8 @@ pub(crate) struct Command {
 }
 
 impl Parse for Command {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let content;
-        let open_bracket = syn::bracketed!(content in input);
+    fn parse(input: ParseStream) -> ParseResult<Self> {
+        let (delim_span, content) = input.parse_group_matching(Delimiter::Bracket)?;
         content.parse::<Token![!]>()?;
         let flattening = if content.peek(Token![.]) {
             Some(content.parse::<Token![..]>()?)
@@ -491,12 +491,12 @@ impl Parse for Command {
         let invocation = command_kind.parse_invocation(CommandArguments::new(
             &content,
             command_name,
-            open_bracket.span.span_range(),
+            delim_span.span_range(),
         ))?;
         Ok(Self {
             invocation,
             output_kind,
-            source_group_span: open_bracket.span,
+            source_group_span: delim_span,
         })
     }
 }
@@ -523,7 +523,7 @@ impl Interpret for Command {
         self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         let context = ExecutionContext {
             interpreter,
             output_kind: self.output_kind,
@@ -538,7 +538,7 @@ impl Express for Command {
         self,
         interpreter: &mut Interpreter,
         builder: &mut ExpressionBuilder,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         let context = ExecutionContext {
             interpreter,
             output_kind: self.output_kind,

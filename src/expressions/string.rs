@@ -20,7 +20,7 @@ impl EvaluationString {
     pub(super) fn handle_unary_operation(
         self,
         operation: UnaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         match operation.operator {
             UnaryOperator::NoOp => operation.output(self.value),
             UnaryOperator::Neg | UnaryOperator::Not | UnaryOperator::Cast(_) => {
@@ -33,7 +33,7 @@ impl EvaluationString {
         self,
         _right: EvaluationInteger,
         operation: BinaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         operation.unsupported_for_value_type_err("string")
     }
 
@@ -41,7 +41,7 @@ impl EvaluationString {
         self,
         rhs: Self,
         operation: &BinaryOperation,
-    ) -> Result<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationOutput> {
         let lhs = self.value;
         let rhs = rhs.value;
         match operation.paired_operator() {

@@ -75,6 +75,7 @@ Destructuring performs parsing of a token stream. It supports:
 
 ### To come
 
+* Add our own ParseBuffer / ParseStream types so we can e.g. override `parse`
 * Add compile error tests for all the standard destructuring errors
 * `[!zip! ([Hello Goodbye] [World Friend])]` => `[(Hello World), (Goodbye Friend)]` and/or `[!zip! { streams: (#countries #flags #capitals), error_on_length_mismatch?: true }]` with `InterpretValue<AnyGrouped<Repeated<CodeInput>>>`
   * e.g. `[!for! (#country #flag #capital) in [!zip! (#countries #flags #capitals)]`
@@ -85,9 +86,6 @@ Destructuring performs parsing of a token stream. It supports:
 * Add more tests
   * e.g. for various expressions
   * e.g. for long sums
-* Rework `Error` as:
-  * `ParseResult` with `ParseError::LowLevel(syn::Error)` | `ParseError::Contextual(syn::Error)`
-  * `ExecutionResult` with `ExecutionInterrupt::Err(syn::Error)` | `ExecutionInterrupt::ControlFlow(..)`
 * Destructurers
   * `(!fields! ...)` and `(!subfields! ...)`
   * Add ability to fork (copy on write?) / revert the interpreter state and can then add:

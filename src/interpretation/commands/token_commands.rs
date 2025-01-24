@@ -12,13 +12,13 @@ impl CommandType for IsEmptyCommand {
 impl ValueCommandDefinition for IsEmptyCommand {
     const COMMAND_NAME: &'static str = "is_empty";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         Ok(Self {
             arguments: arguments.parse_all_for_interpretation()?,
         })
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<TokenTree> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree> {
         let output_span = self.arguments.span_range().span();
         let interpreted = self.arguments.interpret_to_new_stream(interpreter)?;
         Ok(Ident::new_bool(interpreted.is_empty(), output_span).into())
@@ -37,13 +37,13 @@ impl CommandType for LengthCommand {
 impl ValueCommandDefinition for LengthCommand {
     const COMMAND_NAME: &'static str = "length";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         Ok(Self {
             arguments: arguments.parse_all_for_interpretation()?,
         })
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<TokenTree> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree> {
         let output_span = self.arguments.span_range().span();
         let interpreted = self.arguments.interpret_to_new_stream(interpreter)?;
         let length_literal = Literal::usize_unsuffixed(interpreted.len()).with_span(output_span);
@@ -63,7 +63,7 @@ impl CommandType for GroupCommand {
 impl StreamCommandDefinition for GroupCommand {
     const COMMAND_NAME: &'static str = "group";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         Ok(Self {
             arguments: arguments.parse_all_for_interpretation()?,
         })
@@ -73,7 +73,7 @@ impl StreamCommandDefinition for GroupCommand {
         self: Box<Self>,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         // The grouping happens automatically because a non-flattened
         // stream command is outputted in a group.
         self.arguments.interpret_into(interpreter, output)
@@ -105,7 +105,7 @@ define_field_inputs! {
 impl StreamCommandDefinition for IntersperseCommand {
     const COMMAND_NAME: &'static str = "intersperse";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         Ok(Self {
             inputs: arguments.fully_parse_as()?,
         })
@@ -115,7 +115,7 @@ impl StreamCommandDefinition for IntersperseCommand {
         self: Box<Self>,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         let items = self
             .inputs
             .items
@@ -174,7 +174,7 @@ impl SeparatorAppender {
         interpreter: &mut Interpreter,
         remaining: RemainingItemCount,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         match self.separator(remaining) {
             TrailingSeparator::Normal => self.separator.clone().interpret_into(interpreter, output),
             TrailingSeparator::Final => match self.final_separator.take() {
@@ -244,7 +244,7 @@ define_field_inputs! {
 impl StreamCommandDefinition for SplitCommand {
     const COMMAND_NAME: &'static str = "split";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         Ok(Self {
             inputs: arguments.fully_parse_as()?,
         })
@@ -254,7 +254,7 @@ impl StreamCommandDefinition for SplitCommand {
         self: Box<Self>,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         let output_span = self.inputs.stream.span();
         let stream = self.inputs.stream.interpret_to_new_stream(interpreter)?;
         let separator = self.inputs.separator.interpret_to_new_stream(interpreter)?;
@@ -292,11 +292,11 @@ fn handle_split(
     drop_empty_start: bool,
     drop_empty_middle: bool,
     drop_empty_end: bool,
-) -> Result<()> {
+) -> ExecutionResult<()> {
     unsafe {
         // RUST-ANALYZER SAFETY: This is as safe as we can get.
         // Typically the separator won't contain none-delimited groups, so we're OK
-        input.syn_parse(move |input: ParseStream| -> Result<()> {
+        input.syn_parse(move |input| {
             let mut current_item = InterpretedStream::new();
             let mut drop_empty_next = drop_empty_start;
             while !input.is_empty() {
@@ -317,9 +317,8 @@ fn handle_split(
                 output.push_new_group(current_item, Delimiter::None, output_span);
             }
             Ok(())
-        })?;
+        })
     }
-    Ok(())
 }
 
 #[derive(Clone)]
@@ -334,7 +333,7 @@ impl CommandType for CommaSplitCommand {
 impl StreamCommandDefinition for CommaSplitCommand {
     const COMMAND_NAME: &'static str = "comma_split";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         Ok(Self {
             input: arguments.parse_all_for_interpretation()?,
         })
@@ -344,7 +343,7 @@ impl StreamCommandDefinition for CommaSplitCommand {
         self: Box<Self>,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         let output_span = self.input.span();
         let stream = self.input.interpret_to_new_stream(interpreter)?;
         let separator = {

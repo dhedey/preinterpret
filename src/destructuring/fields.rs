@@ -16,7 +16,7 @@ impl<T: 'static> FieldsParseDefinition<T> {
         }
     }
 
-    pub(crate) fn add_required_field<F: syn::parse::Parse + 'static>(
+    pub(crate) fn add_required_field<F: Parse + 'static>(
         self,
         field_name: &str,
         example: &str,
@@ -26,7 +26,7 @@ impl<T: 'static> FieldsParseDefinition<T> {
         self.add_field(field_name, example, explanation, true, F::parse, set)
     }
 
-    pub(crate) fn add_optional_field<F: syn::parse::Parse + 'static>(
+    pub(crate) fn add_optional_field<F: Parse + 'static>(
         self,
         field_name: &str,
         example: &str,
@@ -42,7 +42,7 @@ impl<T: 'static> FieldsParseDefinition<T> {
         example: &str,
         explanation: Option<&str>,
         is_required: bool,
-        parse: impl Fn(syn::parse::ParseStream) -> Result<F> + 'static,
+        parse: impl Fn(syn::parse::ParseStream) -> ParseResult<F> + 'static,
         set: impl Fn(&mut T, F) + 'static,
     ) -> Self {
         if self
@@ -71,16 +71,15 @@ impl<T: 'static> FieldsParseDefinition<T> {
     pub(crate) fn create_syn_parser(
         self,
         error_span_range: SpanRange,
-    ) -> impl FnOnce(syn::parse::ParseStream) -> Result<T> {
+    ) -> impl FnOnce(ParseStream) -> ParseResult<T> {
         fn inner<T>(
-            input: syn::parse::ParseStream,
+            input: ParseStream,
             new_builder: T,
             field_definitions: &FieldDefinitions<T>,
             error_span_range: SpanRange,
-        ) -> Result<T> {
+        ) -> ParseResult<T> {
             let mut builder = new_builder;
-            let content;
-            let _ = syn::braced!(content in input);
+            let (_, content) = input.parse_group_matching(Delimiter::Brace)?;
 
             let mut required_field_names: BTreeSet<_> = field_definitions
                 .0
@@ -98,7 +97,7 @@ impl<T: 'static> FieldsParseDefinition<T> {
                 let field_name = content.parse::<Ident>()?;
                 let field_name_value = field_name.to_string();
                 if !seen_field_names.insert(field_name_value.clone()) {
-                    return field_name.err("Duplicate field name");
+                    return field_name.parse_err("Duplicate field name");
                 }
                 required_field_names.remove(field_name_value.as_str());
                 let _ = content.parse::<Token![:]>()?;
@@ -113,7 +112,7 @@ impl<T: 'static> FieldsParseDefinition<T> {
             }
 
             if !required_field_names.is_empty() {
-                return error_span_range.err(format!(
+                return error_span_range.parse_err(format!(
                     "Missing required fields: {missing_fields:?}",
                     missing_fields = required_field_names,
                 ));
@@ -128,14 +127,7 @@ impl<T: 'static> FieldsParseDefinition<T> {
                 &self.field_definitions,
                 error_span_range,
             )
-            .map_err(|error| {
-                // Sadly error combination is just buggy - the two outputted
-                // compile_error! invocations are back to back which causes a rustc
-                // parse error. Instead, let's do this.
-                error
-                    .concat("\n")
-                    .concat(&self.field_definitions.error_message())
-            })
+            .add_context_if_error_and_no_context(|| self.field_definitions.error_message())
         }
     }
 }
@@ -180,5 +172,5 @@ struct FieldParseDefinition<T> {
     example: String,
     explanation: Option<String>,
     #[allow(clippy::type_complexity)]
-    parse_and_set: Box<dyn Fn(&mut T, syn::parse::ParseStream) -> Result<()>>,
+    parse_and_set: Box<dyn Fn(&mut T, syn::parse::ParseStream) -> ParseResult<()>>,
 }

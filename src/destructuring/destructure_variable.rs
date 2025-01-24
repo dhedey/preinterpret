@@ -54,17 +54,17 @@ pub(crate) enum DestructureVariable {
 }
 
 impl DestructureVariable {
-    pub(crate) fn parse_only_unflattened_input(input: ParseStream) -> Result<Self> {
+    pub(crate) fn parse_only_unflattened_input(input: ParseStream) -> ParseResult<Self> {
         let variable: DestructureVariable = Self::parse_until::<UntilEnd>(input)?;
         if variable.is_flattened_input() {
             return variable
                 .span_range()
-                .err("A flattened input variable is not supported here");
+                .parse_err("A flattened input variable is not supported here");
         }
         Ok(variable)
     }
 
-    pub(crate) fn parse_until<C: StopCondition>(input: ParseStream) -> Result<Self> {
+    pub(crate) fn parse_until<C: StopCondition>(input: ParseStream) -> ParseResult<Self> {
         let marker = input.parse()?;
         if input.peek(Token![..]) {
             let flatten = input.parse()?;
@@ -164,7 +164,7 @@ impl DestructureVariable {
         )
     }
 
-    fn get_variable_data(&self, interpreter: &mut Interpreter) -> Result<VariableData> {
+    fn get_variable_data(&self, interpreter: &mut Interpreter) -> ExecutionResult<VariableData> {
         let variable_data = interpreter
             .get_existing_variable_data(self, || {
                 self.error(format!(
@@ -178,10 +178,14 @@ impl DestructureVariable {
 }
 
 impl HandleDestructure for DestructureVariable {
-    fn handle_destructure(&self, input: ParseStream, interpreter: &mut Interpreter) -> Result<()> {
+    fn handle_destructure(
+        &self,
+        input: ParseStream,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<()> {
         match self {
             DestructureVariable::Grouped { .. } => {
-                let content = input.parse::<ParsedTokenTree>()?.into_interpreted();
+                let content = input.parse_v2::<ParsedTokenTree>()?.into_interpreted();
                 interpreter.set_variable(self, content)?;
             }
             DestructureVariable::Flattened { until, .. } => {
@@ -192,13 +196,13 @@ impl HandleDestructure for DestructureVariable {
             DestructureVariable::GroupedAppendGrouped { .. } => {
                 let variable_data = self.get_variable_data(interpreter)?;
                 input
-                    .parse::<ParsedTokenTree>()?
+                    .parse_v2::<ParsedTokenTree>()?
                     .push_as_token_tree(variable_data.get_mut(self)?.deref_mut());
             }
             DestructureVariable::GroupedAppendFlattened { .. } => {
                 let variable_data = self.get_variable_data(interpreter)?;
                 input
-                    .parse::<ParsedTokenTree>()?
+                    .parse_v2::<ParsedTokenTree>()?
                     .flatten_into(variable_data.get_mut(self)?.deref_mut());
             }
             DestructureVariable::FlattenedAppendGrouped { marker, until, .. } => {
@@ -257,7 +261,7 @@ impl ParsedTokenTree {
 }
 
 impl Parse for ParsedTokenTree {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> ParseResult<Self> {
         Ok(match input.parse::<TokenTree>()? {
             TokenTree::Group(group) if group.delimiter() == Delimiter::None => {
                 ParsedTokenTree::NoneGroup(group)
@@ -266,7 +270,7 @@ impl Parse for ParsedTokenTree {
                 return group
                     .delim_span()
                     .open()
-                    .err("Expected a group with transparent delimiters");
+                    .parse_err("Expected a group with transparent delimiters");
             }
             TokenTree::Ident(ident) => ParsedTokenTree::Ident(ident),
             TokenTree::Punct(punct) => ParsedTokenTree::Punct(punct),
@@ -286,7 +290,7 @@ pub(crate) enum ParseUntil {
 
 impl ParseUntil {
     /// Peeks the next token, to discover what we should parse next
-    fn peek_flatten_limit<C: StopCondition>(input: ParseStream) -> Result<ParseUntil> {
+    fn peek_flatten_limit<C: StopCondition>(input: ParseStream) -> ParseResult<ParseUntil> {
         if C::should_stop(input) {
             return Ok(ParseUntil::End);
         }
@@ -299,7 +303,7 @@ impl ParseUntil {
             | PeekMatch::AppendVariableDestructuring => {
                 return input
                     .span()
-                    .err("This cannot follow a flattened destructure match");
+                    .parse_err("This cannot follow a flattened destructure match");
             }
             PeekMatch::Group(delimiter) => ParseUntil::Group(delimiter),
             PeekMatch::Ident(ident) => ParseUntil::Ident(ident),
@@ -309,7 +313,11 @@ impl ParseUntil {
         })
     }
 
-    fn handle_parse_into(&self, input: ParseStream, output: &mut InterpretedStream) -> Result<()> {
+    fn handle_parse_into(
+        &self,
+        input: ParseStream,
+        output: &mut InterpretedStream,
+    ) -> ExecutionResult<()> {
         match self {
             ParseUntil::End => output.extend_raw_tokens(input.parse::<TokenStream>()?),
             ParseUntil::Group(delimiter) => {

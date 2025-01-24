@@ -8,14 +8,10 @@ pub(crate) struct CommandCodeInput {
 }
 
 impl Parse for CommandCodeInput {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let content;
-        let bracket = syn::braced!(content in input);
-        let inner = content.parse_with(bracket.span.span_range())?;
-        Ok(Self {
-            delim_span: bracket.span,
-            inner,
-        })
+    fn parse(input: ParseStream) -> ParseResult<Self> {
+        let (delim_span, content) = input.parse_group_matching(Delimiter::Brace)?;
+        let inner = content.parse_with(delim_span.join().span_range())?;
+        Ok(Self { delim_span, inner })
     }
 }
 
@@ -30,14 +26,13 @@ impl CommandCodeInput {
         self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<LoopCondition> {
+    ) -> ExecutionResult<Option<ControlFlowInterrupt>> {
         match self.inner.interpret_into(interpreter, output) {
-            Ok(()) => Ok(LoopCondition::None),
-            Err(err) => match interpreter.outstanding_loop_condition() {
-                LoopCondition::None => Err(err),
-                LoopCondition::Break => Ok(LoopCondition::Break),
-                LoopCondition::Continue => Ok(LoopCondition::Continue),
-            },
+            Ok(()) => Ok(None),
+            Err(ExecutionInterrupt::ControlFlow(control_flow_interrupt, _)) => {
+                Ok(Some(control_flow_interrupt))
+            }
+            Err(error) => Err(error),
         }
     }
 }
@@ -47,7 +42,7 @@ impl Interpret for CommandCodeInput {
         self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         self.inner.interpret_into(interpreter, output)
     }
 }

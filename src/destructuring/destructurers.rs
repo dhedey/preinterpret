@@ -8,13 +8,17 @@ pub(crate) struct StreamDestructurer {
 impl DestructurerDefinition for StreamDestructurer {
     const DESTRUCTURER_NAME: &'static str = "stream";
 
-    fn parse(arguments: DestructurerArguments) -> Result<Self> {
+    fn parse(arguments: DestructurerArguments) -> ParseResult<Self> {
         Ok(Self {
             inner: arguments.fully_parse_no_error_override()?,
         })
     }
 
-    fn handle_destructure(&self, input: ParseStream, interpreter: &mut Interpreter) -> Result<()> {
+    fn handle_destructure(
+        &self,
+        input: ParseStream,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<()> {
         self.inner.handle_destructure(input, interpreter)
     }
 }
@@ -27,7 +31,7 @@ pub(crate) struct IdentDestructurer {
 impl DestructurerDefinition for IdentDestructurer {
     const DESTRUCTURER_NAME: &'static str = "ident";
 
-    fn parse(arguments: DestructurerArguments) -> Result<Self> {
+    fn parse(arguments: DestructurerArguments) -> ParseResult<Self> {
         arguments.fully_parse_or_error(
             |input| {
                 if input.is_empty() {
@@ -42,7 +46,11 @@ impl DestructurerDefinition for IdentDestructurer {
         )
     }
 
-    fn handle_destructure(&self, input: ParseStream, interpreter: &mut Interpreter) -> Result<()> {
+    fn handle_destructure(
+        &self,
+        input: ParseStream,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<()> {
         if input.cursor().ident().is_some() {
             match &self.variable {
                 Some(variable) => variable.handle_destructure(input, interpreter),
@@ -52,7 +60,7 @@ impl DestructurerDefinition for IdentDestructurer {
                 }
             }
         } else {
-            Err(input.error("Expected an ident"))
+            input.parse_err("Expected an ident")?
         }
     }
 }
@@ -65,7 +73,7 @@ pub(crate) struct LiteralDestructurer {
 impl DestructurerDefinition for LiteralDestructurer {
     const DESTRUCTURER_NAME: &'static str = "literal";
 
-    fn parse(arguments: DestructurerArguments) -> Result<Self> {
+    fn parse(arguments: DestructurerArguments) -> ParseResult<Self> {
         arguments.fully_parse_or_error(
             |input| {
                 if input.is_empty() {
@@ -80,7 +88,11 @@ impl DestructurerDefinition for LiteralDestructurer {
         )
     }
 
-    fn handle_destructure(&self, input: ParseStream, interpreter: &mut Interpreter) -> Result<()> {
+    fn handle_destructure(
+        &self,
+        input: ParseStream,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<()> {
         if input.cursor().literal().is_some() {
             match &self.variable {
                 Some(variable) => variable.handle_destructure(input, interpreter),
@@ -90,7 +102,7 @@ impl DestructurerDefinition for LiteralDestructurer {
                 }
             }
         } else {
-            Err(input.error("Expected a literal"))
+            input.parse_err("Expected a literal")?
         }
     }
 }
@@ -103,7 +115,7 @@ pub(crate) struct PunctDestructurer {
 impl DestructurerDefinition for PunctDestructurer {
     const DESTRUCTURER_NAME: &'static str = "punct";
 
-    fn parse(arguments: DestructurerArguments) -> Result<Self> {
+    fn parse(arguments: DestructurerArguments) -> ParseResult<Self> {
         arguments.fully_parse_or_error(
             |input| {
                 if input.is_empty() {
@@ -118,7 +130,11 @@ impl DestructurerDefinition for PunctDestructurer {
         )
     }
 
-    fn handle_destructure(&self, input: ParseStream, interpreter: &mut Interpreter) -> Result<()> {
+    fn handle_destructure(
+        &self,
+        input: ParseStream,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<()> {
         if input.cursor().any_punct().is_some() {
             match &self.variable {
                 Some(variable) => variable.handle_destructure(input, interpreter),
@@ -128,7 +144,7 @@ impl DestructurerDefinition for PunctDestructurer {
                 }
             }
         } else {
-            Err(input.error("Expected a punct"))
+            input.parse_err("Expected a punct")?
         }
     }
 }
@@ -141,13 +157,17 @@ pub(crate) struct GroupDestructurer {
 impl DestructurerDefinition for GroupDestructurer {
     const DESTRUCTURER_NAME: &'static str = "group";
 
-    fn parse(arguments: DestructurerArguments) -> Result<Self> {
+    fn parse(arguments: DestructurerArguments) -> ParseResult<Self> {
         Ok(Self {
             inner: arguments.fully_parse_no_error_override()?,
         })
     }
 
-    fn handle_destructure(&self, input: ParseStream, interpreter: &mut Interpreter) -> Result<()> {
+    fn handle_destructure(
+        &self,
+        input: ParseStream,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<()> {
         let (_, inner) = input.parse_group_matching(Delimiter::None)?;
         self.inner.handle_destructure(&inner, interpreter)
     }
@@ -161,14 +181,14 @@ pub(crate) struct RawDestructurer {
 impl DestructurerDefinition for RawDestructurer {
     const DESTRUCTURER_NAME: &'static str = "raw";
 
-    fn parse(arguments: DestructurerArguments) -> Result<Self> {
+    fn parse(arguments: DestructurerArguments) -> ParseResult<Self> {
         let token_stream: TokenStream = arguments.fully_parse_no_error_override()?;
         Ok(Self {
             stream: RawDestructureStream::new_from_token_stream(token_stream),
         })
     }
 
-    fn handle_destructure(&self, input: ParseStream, _: &mut Interpreter) -> Result<()> {
+    fn handle_destructure(&self, input: ParseStream, _: &mut Interpreter) -> ExecutionResult<()> {
         self.stream.handle_destructure(input)
     }
 }
@@ -181,7 +201,7 @@ pub(crate) struct ContentDestructurer {
 impl DestructurerDefinition for ContentDestructurer {
     const DESTRUCTURER_NAME: &'static str = "content";
 
-    fn parse(arguments: DestructurerArguments) -> Result<Self> {
+    fn parse(arguments: DestructurerArguments) -> ParseResult<Self> {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
@@ -195,7 +215,11 @@ impl DestructurerDefinition for ContentDestructurer {
         )
     }
 
-    fn handle_destructure(&self, input: ParseStream, interpreter: &mut Interpreter) -> Result<()> {
+    fn handle_destructure(
+        &self,
+        input: ParseStream,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<()> {
         self.stream
             .clone()
             .interpret_to_new_stream(interpreter)?

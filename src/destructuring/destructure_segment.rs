@@ -56,7 +56,7 @@ pub(crate) struct DestructureSegment<C: StopCondition> {
 }
 
 impl<C: StopCondition> Parse for DestructureSegment<C> {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> ParseResult<Self> {
         let mut inner = vec![];
         while !C::should_stop(input) {
             inner.push(DestructureItem::parse_until::<C>(input)?);
@@ -69,7 +69,11 @@ impl<C: StopCondition> Parse for DestructureSegment<C> {
 }
 
 impl<C: StopCondition> HandleDestructure for DestructureSegment<C> {
-    fn handle_destructure(&self, input: ParseStream, interpreter: &mut Interpreter) -> Result<()> {
+    fn handle_destructure(
+        &self,
+        input: ParseStream,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<()> {
         for item in self.inner.iter() {
             item.handle_destructure(input, interpreter)?;
         }

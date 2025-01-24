@@ -2,8 +2,12 @@ use crate::internal_prelude::*;
 
 pub(crate) trait DestructurerDefinition: Clone {
     const DESTRUCTURER_NAME: &'static str;
-    fn parse(arguments: DestructurerArguments) -> Result<Self>;
-    fn handle_destructure(&self, input: ParseStream, interpreter: &mut Interpreter) -> Result<()>;
+    fn parse(arguments: DestructurerArguments) -> ParseResult<Self>;
+    fn handle_destructure(
+        &self,
+        input: ParseStream,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<()>;
 }
 
 #[derive(Clone)]
@@ -32,43 +36,41 @@ impl<'a> DestructurerArguments<'a> {
     }
 
     /// We use this instead of the "unexpected / drop glue" pattern in order to give a better error message
-    pub(crate) fn assert_empty(&self, error_message: impl std::fmt::Display) -> Result<()> {
+    pub(crate) fn assert_empty(&self, error_message: impl std::fmt::Display) -> ParseResult<()> {
         if self.parse_stream.is_empty() {
             Ok(())
         } else {
-            self.full_span_range.err(error_message)
+            self.full_span_range.parse_err(error_message)
         }
     }
 
-    pub(crate) fn fully_parse_no_error_override<T: Parse>(&self) -> Result<T> {
-        self.parse_stream.parse()
+    pub(crate) fn fully_parse_no_error_override<T: Parse>(&self) -> ParseResult<T> {
+        self.parse_stream.parse_v2()
     }
 
-    pub(crate) fn fully_parse_as<T: ArgumentsContent>(&self) -> Result<T> {
+    pub(crate) fn fully_parse_as<T: ArgumentsContent>(&self) -> ParseResult<T> {
         self.fully_parse_or_error(T::parse, T::error_message())
     }
 
     pub(crate) fn fully_parse_or_error<T>(
         &self,
-        parse_function: impl FnOnce(ParseStream) -> Result<T>,
+        parse_function: impl FnOnce(ParseStream) -> ParseResult<T>,
         error_message: impl std::fmt::Display,
-    ) -> Result<T> {
-        let parsed = parse_function(self.parse_stream).or_else(|error| {
-            // In future, when the diagnostic API is stable,
-            // we can add this context directly onto the command ident...
-            // Rather than just selectively adding it to the inner-most error.
-            let error_string = error.to_string();
-
-            // We avoid adding this additional context if it's already been added in an
-            // inner error, because that's likely the correct error to show.
-            if error_string.contains("\nOccurred whilst parsing") {
-                return Err(error);
-            }
-            error.span().err(format!(
-                "{}\nOccurred whilst parsing (!{}! ..) - {}",
-                error_string, self.destructurer_name, error_message,
-            ))
-        })?;
+    ) -> ParseResult<T> {
+        // In future, when the diagnostic API is stable,
+        // we can add this context directly onto the command ident...
+        // Rather than just selectively adding it to the inner-most error.
+        //
+        // For now though, we can add additional context to the error message.
+        // But we can avoid adding this additional context if it's already been added in an
+        // inner error, because that's likely the correct local context to show.
+        let parsed =
+            parse_function(self.parse_stream).add_context_if_error_and_no_context(|| {
+                format!(
+                    "Occurred whilst parsing (!{}! ...) - {}",
+                    self.destructurer_name, error_message,
+                )
+            })?;
 
         self.assert_empty(error_message)?;
 
@@ -84,9 +86,8 @@ pub(crate) struct Destructurer {
 }
 
 impl Parse for Destructurer {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let content;
-        let open_bracket = syn::parenthesized!(content in input);
+    fn parse(input: ParseStream) -> ParseResult<Self> {
+        let (delim_span, content) = input.parse_group_matching(Delimiter::Parenthesis)?;
         content.parse::<Token![!]>()?;
         let destructurer_name = content.parse_any_ident()?;
         let destructurer_kind = match DestructurerKind::for_ident(&destructurer_name) {
@@ -103,17 +104,21 @@ impl Parse for Destructurer {
         let instance = destructurer_kind.parse_instance(DestructurerArguments::new(
             &content,
             destructurer_name,
-            open_bracket.span.span_range(),
+            delim_span.join().span_range(),
         ))?;
         Ok(Self {
             instance,
-            source_group_span: open_bracket.span,
+            source_group_span: delim_span,
         })
     }
 }
 
 impl HandleDestructure for Destructurer {
-    fn handle_destructure(&self, input: ParseStream, interpreter: &mut Interpreter) -> Result<()> {
+    fn handle_destructure(
+        &self,
+        input: ParseStream,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<()> {
         self.instance.handle_destructure(input, interpreter)
     }
 }
@@ -133,7 +138,7 @@ macro_rules! define_destructurers {
         }
 
         impl DestructurerKind {
-            fn parse_instance(&self, arguments: DestructurerArguments) -> Result<NamedDestructurer> {
+            fn parse_instance(&self, arguments: DestructurerArguments) -> ParseResult<NamedDestructurer> {
                 Ok(match self {
                     $(
                         Self::$destructurer => NamedDestructurer::$destructurer(
@@ -169,7 +174,7 @@ macro_rules! define_destructurers {
         }
 
         impl NamedDestructurer {
-            fn handle_destructure(&self, input: ParseStream, interpreter: &mut Interpreter) -> Result<()> {
+            fn handle_destructure(&self, input: ParseStream, interpreter: &mut Interpreter) -> ExecutionResult<()> {
                 match self {
                     $(
                         Self::$destructurer(destructurer) => destructurer.handle_destructure(input, interpreter),

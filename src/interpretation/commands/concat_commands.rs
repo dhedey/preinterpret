@@ -8,7 +8,7 @@ fn concat_into_string(
     input: InterpretationStream,
     interpreter: &mut Interpreter,
     conversion_fn: impl Fn(&str) -> String,
-) -> Result<Literal> {
+) -> ExecutionResult<Literal> {
     let output_span = input.span();
     let concatenated = input
         .interpret_to_new_stream(interpreter)?
@@ -21,7 +21,7 @@ fn concat_into_ident(
     input: InterpretationStream,
     interpreter: &mut Interpreter,
     conversion_fn: impl Fn(&str) -> String,
-) -> Result<Ident> {
+) -> ExecutionResult<Ident> {
     let output_span = input.span();
     let concatenated = input
         .interpret_to_new_stream(interpreter)?
@@ -37,7 +37,7 @@ fn concat_into_literal(
     input: InterpretationStream,
     interpreter: &mut Interpreter,
     conversion_fn: impl Fn(&str) -> String,
-) -> Result<Literal> {
+) -> ExecutionResult<Literal> {
     let output_span = input.span();
     let concatenated = input
         .interpret_to_new_stream(interpreter)?
@@ -67,13 +67,16 @@ macro_rules! define_literal_concat_command {
         impl ValueCommandDefinition for $command {
             const COMMAND_NAME: &'static str = $command_name;
 
-            fn parse(arguments: CommandArguments) -> Result<Self> {
+            fn parse(arguments: CommandArguments) -> ParseResult<Self> {
                 Ok(Self {
                     arguments: arguments.parse_all_for_interpretation()?,
                 })
             }
 
-            fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<TokenTree> {
+            fn execute(
+                self: Box<Self>,
+                interpreter: &mut Interpreter,
+            ) -> ExecutionResult<TokenTree> {
                 Ok($output_fn(self.arguments, interpreter, $conversion_fn)?.into())
             }
         }
@@ -96,13 +99,13 @@ macro_rules! define_ident_concat_command {
         impl IdentCommandDefinition for $command {
             const COMMAND_NAME: &'static str = $command_name;
 
-            fn parse(arguments: CommandArguments) -> Result<Self> {
+            fn parse(arguments: CommandArguments) -> ParseResult<Self> {
                 Ok(Self {
                     arguments: arguments.parse_all_for_interpretation()?,
                 })
             }
 
-            fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<Ident> {
+            fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<Ident> {
                 $output_fn(self.arguments, interpreter, $conversion_fn).into()
             }
         }

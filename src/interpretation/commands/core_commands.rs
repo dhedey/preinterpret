@@ -15,11 +15,11 @@ impl CommandType for SetCommand {
 impl NoOutputCommandDefinition for SetCommand {
     const COMMAND_NAME: &'static str = "set";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
-                    variable: input.parse()?,
+                    variable: input.parse_v2()?,
                     equals: input.parse()?,
                     arguments: input.parse_with(arguments.full_span_range())?,
                 })
@@ -28,7 +28,7 @@ impl NoOutputCommandDefinition for SetCommand {
         )
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         let result_tokens = self.arguments.interpret_to_new_stream(interpreter)?;
         self.variable.set(interpreter, result_tokens)?;
         Ok(())
@@ -50,11 +50,11 @@ impl CommandType for ExtendCommand {
 impl NoOutputCommandDefinition for ExtendCommand {
     const COMMAND_NAME: &'static str = "extend";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
-                    variable: input.parse()?,
+                    variable: input.parse_v2()?,
                     plus_equals: input.parse()?,
                     arguments: input.parse_all_for_interpretation(arguments.full_span_range())?,
                 })
@@ -63,7 +63,7 @@ impl NoOutputCommandDefinition for ExtendCommand {
         )
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         let variable_data = self.variable.get_existing_for_mutation(interpreter)?;
         self.arguments.interpret_into(
             interpreter,
@@ -85,7 +85,7 @@ impl CommandType for RawCommand {
 impl StreamCommandDefinition for RawCommand {
     const COMMAND_NAME: &'static str = "raw";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         Ok(Self {
             token_stream: arguments.read_all_as_raw_token_stream(),
         })
@@ -95,7 +95,7 @@ impl StreamCommandDefinition for RawCommand {
         self: Box<Self>,
         _interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         output.extend_raw_tokens(self.token_stream);
         Ok(())
     }
@@ -111,13 +111,13 @@ impl CommandType for IgnoreCommand {
 impl NoOutputCommandDefinition for IgnoreCommand {
     const COMMAND_NAME: &'static str = "ignore";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         // Avoid a syn parse error by reading all the tokens
         let _ = arguments.read_all_as_raw_token_stream();
         Ok(Self)
     }
 
-    fn execute(self: Box<Self>, _interpreter: &mut Interpreter) -> Result<()> {
+    fn execute(self: Box<Self>, _interpreter: &mut Interpreter) -> ExecutionResult<()> {
         Ok(())
     }
 }
@@ -134,13 +134,13 @@ impl CommandType for VoidCommand {
 impl NoOutputCommandDefinition for VoidCommand {
     const COMMAND_NAME: &'static str = "void";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         Ok(Self {
             inner: arguments.parse_all_for_interpretation()?,
         })
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         let _ = self.inner.interpret_to_new_stream(interpreter)?;
         Ok(())
     }
@@ -167,13 +167,13 @@ define_field_inputs! {
 impl NoOutputCommandDefinition for SettingsCommand {
     const COMMAND_NAME: &'static str = "settings";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         Ok(Self {
             inputs: arguments.fully_parse_as()?,
         })
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         if let Some(limit) = self.inputs.iteration_limit {
             let limit: usize = limit.interpret(interpreter)?.base10_parse()?;
             interpreter.set_iteration_limit(Some(limit));
@@ -211,12 +211,12 @@ define_field_inputs! {
 impl NoOutputCommandDefinition for ErrorCommand {
     const COMMAND_NAME: &'static str = "error";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         arguments.fully_parse_or_error(
             |input| {
                 if input.peek(syn::token::Brace) {
                     Ok(Self {
-                        inputs: EitherErrorInput::Fields(input.parse()?),
+                        inputs: EitherErrorInput::Fields(input.parse_v2()?),
                     })
                 } else {
                     Ok(Self {
@@ -233,14 +233,14 @@ impl NoOutputCommandDefinition for ErrorCommand {
         )
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         let fields = match self.inputs {
             EitherErrorInput::Fields(error_inputs) => error_inputs,
             EitherErrorInput::JustMessage(stream) => {
                 let error_message = stream
                     .interpret_to_new_stream(interpreter)?
                     .concat_recursive(&ConcatBehaviour::standard());
-                return Span::call_site().err(error_message);
+                return Span::call_site().execution_err(error_message);
             }
         };
 
@@ -287,7 +287,7 @@ impl NoOutputCommandDefinition for ErrorCommand {
             None => Span::call_site().span_range(),
         };
 
-        error_span.err(message)
+        error_span.execution_err(message)
     }
 }
 
@@ -303,13 +303,13 @@ impl CommandType for DebugCommand {
 impl ValueCommandDefinition for DebugCommand {
     const COMMAND_NAME: &'static str = "debug";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         Ok(Self {
             inner: arguments.parse_all_for_interpretation()?,
         })
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<TokenTree> {
+    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree> {
         let span = self.inner.span();
         let debug_string = self
             .inner

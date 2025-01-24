@@ -11,7 +11,7 @@ pub(crate) struct GroupedVariable {
 }
 
 impl Parse for GroupedVariable {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> ParseResult<Self> {
         input.try_parse_or_message(
             |input| {
                 Ok(Self {
@@ -29,14 +29,14 @@ impl GroupedVariable {
         &self,
         interpreter: &mut Interpreter,
         value: InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         interpreter.set_variable(self, value)
     }
 
     pub(crate) fn get_existing_for_mutation(
         &self,
         interpreter: &Interpreter,
-    ) -> Result<VariableData> {
+    ) -> ExecutionResult<VariableData> {
         Ok(interpreter
             .get_existing_variable_data(self, || {
                 self.error(format!("The variable {} wasn't already set", self))
@@ -48,7 +48,7 @@ impl GroupedVariable {
         &self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         self.read_existing(interpreter)?
             .get(self)?
             .append_cloned_into(output);
@@ -59,7 +59,7 @@ impl GroupedVariable {
         &self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         output.push_new_group(
             self.read_existing(interpreter)?.get(self)?.clone(),
             Delimiter::None,
@@ -68,7 +68,7 @@ impl GroupedVariable {
         Ok(())
     }
 
-    fn read_existing<'i>(&self, interpreter: &'i Interpreter) -> Result<&'i VariableData> {
+    fn read_existing<'i>(&self, interpreter: &'i Interpreter) -> ExecutionResult<&'i VariableData> {
         interpreter.get_existing_variable_data(
             self,
             || self.error(format!(
@@ -91,7 +91,7 @@ impl Interpret for &GroupedVariable {
         self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         self.substitute_grouped_into(interpreter, output)
     }
 }
@@ -101,7 +101,7 @@ impl Express for &GroupedVariable {
         self,
         interpreter: &mut Interpreter,
         expression_stream: &mut ExpressionBuilder,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         expression_stream.push_grouped(
             |inner| self.substitute_ungrouped_contents_into(interpreter, inner),
             self.span(),
@@ -136,7 +136,7 @@ pub(crate) struct FlattenedVariable {
 }
 
 impl Parse for FlattenedVariable {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> ParseResult<Self> {
         input.try_parse_or_message(
             |input| {
                 Ok(Self {
@@ -155,14 +155,14 @@ impl FlattenedVariable {
         &self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         self.read_existing(interpreter)?
             .get(self)?
             .append_cloned_into(output);
         Ok(())
     }
 
-    fn read_existing<'i>(&self, interpreter: &'i Interpreter) -> Result<&'i VariableData> {
+    fn read_existing<'i>(&self, interpreter: &'i Interpreter) -> ExecutionResult<&'i VariableData> {
         interpreter.get_existing_variable_data(
             self,
             || self.error(format!(
@@ -189,18 +189,22 @@ impl Interpret for &FlattenedVariable {
         self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         self.substitute_into(interpreter, output)
     }
 }
 
 impl Express for &FlattenedVariable {
-    fn add_to_expression(self, _: &mut Interpreter, _: &mut ExpressionBuilder) -> Result<()> {
+    fn add_to_expression(
+        self,
+        _: &mut Interpreter,
+        _: &mut ExpressionBuilder,
+    ) -> ExecutionResult<()> {
         // Just like with commands, we throw an error in the flattened case so
         // that we can determine in future the exact structure of the expression
         // at parse time.
         self.flatten
-            .err("Flattened variables cannot be used directly in expressions.\nConsider removing the .. or wrapping it inside a command such as [!group! ..] which returns an expression")
+            .execution_err("Flattened variables cannot be used directly in expressions.\nConsider removing the .. or wrapping it inside a command such as [!group! ..] which returns an expression")
     }
 }
 

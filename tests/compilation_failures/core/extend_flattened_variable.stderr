@@ -1,5 +1,5 @@
 error: Expected #variable
-       Occurred whilst parsing [!extend! ..] - Expected [!extend! #variable += ..]
+       Occurred whilst parsing [!extend! ...] - Expected [!extend! #variable += ..]
  --> tests/compilation_failures/core/extend_flattened_variable.rs:6:19
   |
 6 |         [!extend! #..variable += 2]

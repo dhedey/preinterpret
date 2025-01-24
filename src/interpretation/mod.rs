@@ -4,6 +4,7 @@ mod command_code_input;
 mod command_field_inputs;
 mod command_stream_input;
 mod command_value_input;
+mod commands;
 mod interpret_traits;
 mod interpretation_item;
 mod interpretation_stream;

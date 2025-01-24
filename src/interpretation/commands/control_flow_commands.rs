@@ -15,11 +15,11 @@ impl CommandType for IfCommand {
 impl ControlFlowCommandDefinition for IfCommand {
     const COMMAND_NAME: &'static str = "if";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         arguments.fully_parse_or_error(
             |input| {
-                let condition = input.parse()?;
-                let true_code = input.parse()?;
+                let condition = input.parse_v2()?;
+                let true_code = input.parse_v2()?;
                 let mut else_ifs = Vec::new();
                 let mut else_code = None;
                 while !input.is_empty() {
@@ -27,11 +27,11 @@ impl ControlFlowCommandDefinition for IfCommand {
                     if input.peek_ident_matching("elif") {
                         input.parse_ident_matching("elif")?;
                         input.parse::<Token![!]>()?;
-                        else_ifs.push((input.parse()?, input.parse()?));
+                        else_ifs.push((input.parse_v2()?, input.parse_v2()?));
                     } else {
                         input.parse_ident_matching("else")?;
                         input.parse::<Token![!]>()?;
-                        else_code = Some(input.parse()?);
+                        else_code = Some(input.parse_v2()?);
                         break;
                     }
                 }
@@ -50,7 +50,7 @@ impl ControlFlowCommandDefinition for IfCommand {
         self: Box<Self>,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         let evaluated_condition = self
             .condition
             .evaluate(interpreter)?
@@ -93,12 +93,12 @@ impl CommandType for WhileCommand {
 impl ControlFlowCommandDefinition for WhileCommand {
     const COMMAND_NAME: &'static str = "while";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
-                    condition: input.parse()?,
-                    loop_code: input.parse()?,
+                    condition: input.parse_v2()?,
+                    loop_code: input.parse_v2()?,
                 })
             },
             "Expected [!while! (condition) { code }]",
@@ -109,7 +109,7 @@ impl ControlFlowCommandDefinition for WhileCommand {
         self: Box<Self>,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         let mut iteration_counter = interpreter.start_iteration_counter(&self.condition);
         loop {
             iteration_counter.increment_and_check()?;
@@ -130,9 +130,9 @@ impl ControlFlowCommandDefinition for WhileCommand {
                 .clone()
                 .interpret_loop_content_into(interpreter, output)?
             {
-                LoopCondition::None => {}
-                LoopCondition::Continue => continue,
-                LoopCondition::Break => break,
+                None => {}
+                Some(ControlFlowInterrupt::Continue) => continue,
+                Some(ControlFlowInterrupt::Break) => break,
             }
         }
 
@@ -152,11 +152,11 @@ impl CommandType for LoopCommand {
 impl ControlFlowCommandDefinition for LoopCommand {
     const COMMAND_NAME: &'static str = "loop";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
-                    loop_code: input.parse()?,
+                    loop_code: input.parse_v2()?,
                 })
             },
             "Expected [!loop! { ... }]",
@@ -167,7 +167,7 @@ impl ControlFlowCommandDefinition for LoopCommand {
         self: Box<Self>,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         let mut iteration_counter = interpreter.start_iteration_counter(&self.loop_code);
 
         loop {
@@ -177,9 +177,9 @@ impl ControlFlowCommandDefinition for LoopCommand {
                 .clone()
                 .interpret_loop_content_into(interpreter, output)?
             {
-                LoopCondition::None => {}
-                LoopCondition::Continue => continue,
-                LoopCondition::Break => break,
+                None => {}
+                Some(ControlFlowInterrupt::Continue) => continue,
+                Some(ControlFlowInterrupt::Break) => break,
             }
         }
         Ok(())
@@ -202,14 +202,14 @@ impl CommandType for ForCommand {
 impl ControlFlowCommandDefinition for ForCommand {
     const COMMAND_NAME: &'static str = "for";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
-                    parse_place: input.parse()?,
-                    in_token: input.parse()?,
-                    input: input.parse()?,
-                    loop_code: input.parse()?,
+                    parse_place: input.parse_v2()?,
+                    in_token: input.parse_v2()?,
+                    input: input.parse_v2()?,
+                    loop_code: input.parse_v2()?,
                 })
             },
             "Expected [!for! #x in [ ... ] { code }]",
@@ -220,7 +220,7 @@ impl ControlFlowCommandDefinition for ForCommand {
         self: Box<Self>,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         let stream = self.input.interpret_to_new_stream(interpreter)?;
 
         let mut iteration_counter = interpreter.start_iteration_counter(&self.in_token);
@@ -234,9 +234,9 @@ impl ControlFlowCommandDefinition for ForCommand {
                 .clone()
                 .interpret_loop_content_into(interpreter, output)?
             {
-                LoopCondition::None => {}
-                LoopCondition::Continue => continue,
-                LoopCondition::Break => break,
+                None => {}
+                Some(ControlFlowInterrupt::Continue) => continue,
+                Some(ControlFlowInterrupt::Break) => break,
             }
         }
 
@@ -256,15 +256,18 @@ impl CommandType for ContinueCommand {
 impl NoOutputCommandDefinition for ContinueCommand {
     const COMMAND_NAME: &'static str = "continue";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         arguments.assert_empty("The !continue! command takes no arguments")?;
         Ok(Self {
             span: arguments.full_span_range().span(),
         })
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
-        Err(interpreter.start_loop_action(self.span, LoopCondition::Continue))
+    fn execute(self: Box<Self>, _: &mut Interpreter) -> ExecutionResult<()> {
+        ExecutionResult::Err(ExecutionInterrupt::ControlFlow(
+            ControlFlowInterrupt::Continue,
+            self.span,
+        ))
     }
 }
 
@@ -280,14 +283,17 @@ impl CommandType for BreakCommand {
 impl NoOutputCommandDefinition for BreakCommand {
     const COMMAND_NAME: &'static str = "break";
 
-    fn parse(arguments: CommandArguments) -> Result<Self> {
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         arguments.assert_empty("The !break! command takes no arguments")?;
         Ok(Self {
             span: arguments.full_span_range().span(),
         })
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> Result<()> {
-        Err(interpreter.start_loop_action(self.span, LoopCondition::Break))
+    fn execute(self: Box<Self>, _: &mut Interpreter) -> ExecutionResult<()> {
+        ExecutionResult::Err(ExecutionInterrupt::ControlFlow(
+            ControlFlowInterrupt::Break,
+            self.span,
+        ))
     }
 }

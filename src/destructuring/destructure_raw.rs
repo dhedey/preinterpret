@@ -10,7 +10,7 @@ pub(crate) enum RawDestructureItem {
 }
 
 impl RawDestructureItem {
-    pub(crate) fn handle_destructure(&self, input: ParseStream) -> Result<()> {
+    pub(crate) fn handle_destructure(&self, input: ParseStream) -> ExecutionResult<()> {
         match self {
             RawDestructureItem::Punct(punct) => {
                 input.parse_punct_matching(punct.as_char())?;
@@ -65,7 +65,7 @@ impl RawDestructureStream {
         self.inner.push(item);
     }
 
-    pub(crate) fn handle_destructure(&self, input: ParseStream) -> Result<()> {
+    pub(crate) fn handle_destructure(&self, input: ParseStream) -> ExecutionResult<()> {
         for item in self.inner.iter() {
             item.handle_destructure(input)?;
         }
@@ -91,7 +91,7 @@ impl RawDestructureGroup {
         }
     }
 
-    pub(crate) fn handle_destructure(&self, input: ParseStream) -> Result<()> {
+    pub(crate) fn handle_destructure(&self, input: ParseStream) -> ExecutionResult<()> {
         let (_, inner) = input.parse_group_matching(self.delimiter)?;
         self.inner.handle_destructure(&inner)
     }

@@ -12,20 +12,22 @@ pub(crate) enum InterpretationItem {
 }
 
 impl Parse for InterpretationItem {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> ParseResult<Self> {
         Ok(match detect_preinterpret_grammar(input.cursor()) {
-            PeekMatch::GroupedCommand(_) => InterpretationItem::Command(input.parse()?),
-            PeekMatch::FlattenedCommand(_) => InterpretationItem::Command(input.parse()?),
-            PeekMatch::Group(_) => InterpretationItem::InterpretationGroup(input.parse()?),
-            PeekMatch::GroupedVariable => InterpretationItem::GroupedVariable(input.parse()?),
-            PeekMatch::FlattenedVariable => InterpretationItem::FlattenedVariable(input.parse()?),
+            PeekMatch::GroupedCommand(_) => InterpretationItem::Command(input.parse_v2()?),
+            PeekMatch::FlattenedCommand(_) => InterpretationItem::Command(input.parse_v2()?),
+            PeekMatch::Group(_) => InterpretationItem::InterpretationGroup(input.parse_v2()?),
+            PeekMatch::GroupedVariable => InterpretationItem::GroupedVariable(input.parse_v2()?),
+            PeekMatch::FlattenedVariable => {
+                InterpretationItem::FlattenedVariable(input.parse_v2()?)
+            }
             PeekMatch::AppendVariableDestructuring | PeekMatch::Destructurer(_) => {
-                return input.span().err("Destructurings are not supported here")
+                return input.parse_err("Destructurings are not supported here")
             }
             PeekMatch::Punct(_) => InterpretationItem::Punct(input.parse_any_punct()?),
             PeekMatch::Ident(_) => InterpretationItem::Ident(input.parse_any_ident()?),
             PeekMatch::Literal(_) => InterpretationItem::Literal(input.parse()?),
-            PeekMatch::End => return input.span().err("Expected some item"),
+            PeekMatch::End => return input.parse_err("Expected some item"),
         })
     }
 }
@@ -127,7 +129,7 @@ impl Interpret for InterpretationItem {
         self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         match self {
             InterpretationItem::Command(command_invocation) => {
                 command_invocation.interpret_into(interpreter, output)?;

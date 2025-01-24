@@ -22,16 +22,16 @@ pub(crate) enum CommandStreamInput {
 }
 
 impl Parse for CommandStreamInput {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> ParseResult<Self> {
         Ok(match detect_preinterpret_grammar(input.cursor()) {
-            PeekMatch::GroupedCommand(_) => Self::Command(input.parse()?),
-            PeekMatch::FlattenedCommand(_) => Self::Command(input.parse()?),
-            PeekMatch::GroupedVariable => Self::GroupedVariable(input.parse()?),
-            PeekMatch::FlattenedVariable => Self::FlattenedVariable(input.parse()?),
-            PeekMatch::Group(Delimiter::Bracket) => Self::ExplicitStream(input.parse()?),
-            PeekMatch::Group(Delimiter::Brace) => Self::Code(input.parse()?),
+            PeekMatch::GroupedCommand(_) => Self::Command(input.parse_v2()?),
+            PeekMatch::FlattenedCommand(_) => Self::Command(input.parse_v2()?),
+            PeekMatch::GroupedVariable => Self::GroupedVariable(input.parse_v2()?),
+            PeekMatch::FlattenedVariable => Self::FlattenedVariable(input.parse_v2()?),
+            PeekMatch::Group(Delimiter::Bracket) => Self::ExplicitStream(input.parse_v2()?),
+            PeekMatch::Group(Delimiter::Brace) => Self::Code(input.parse_v2()?),
             _ => input.span()
-                .err("Expected [ ..input stream.. ], { [..input stream..] } or a [!command! ..], #variable or #..variable.\nMacro substitutions such as $x should be placed inside square brackets.")?,
+                .parse_err("Expected [ ..input stream.. ], { [..input stream..] } or a [!command! ..], #variable or #..variable.\nMacro substitutions such as $x should be placed inside square brackets.")?,
         })
     }
 }
@@ -53,14 +53,14 @@ impl Interpret for CommandStreamInput {
         self,
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
-    ) -> Result<()> {
+    ) -> ExecutionResult<()> {
         match self {
             CommandStreamInput::Command(mut command) => {
                 match command.output_kind() {
                     CommandOutputKind::None
                     | CommandOutputKind::Value
                     | CommandOutputKind::Ident => {
-                        command.err("The command does not output a stream")
+                        command.execution_err("The command does not output a stream")
                     }
                     CommandOutputKind::FlattenedStream => parse_as_stream_input(
                         command,
@@ -121,7 +121,7 @@ fn parse_as_stream_input(
     interpreter: &mut Interpreter,
     error_message: impl FnOnce() -> String,
     output: &mut InterpretedStream,
-) -> Result<()> {
+) -> ExecutionResult<()> {
     let span = input.span_range();
     input
         .interpret_to_new_stream(interpreter)?
