@@ -19,8 +19,8 @@ impl NoOutputCommandDefinition for LetCommand {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
-                    destructuring: input.parse_v2()?,
-                    equals: input.parse_v2()?,
+                    destructuring: input.parse()?,
+                    equals: input.parse()?,
                     arguments: input.parse_with(arguments.full_span_range())?,
                 })
             },

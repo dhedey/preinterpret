@@ -14,13 +14,11 @@ pub(crate) enum InterpretationItem {
 impl Parse for InterpretationItem {
     fn parse(input: ParseStream) -> ParseResult<Self> {
         Ok(match detect_preinterpret_grammar(input.cursor()) {
-            PeekMatch::GroupedCommand(_) => InterpretationItem::Command(input.parse_v2()?),
-            PeekMatch::FlattenedCommand(_) => InterpretationItem::Command(input.parse_v2()?),
-            PeekMatch::Group(_) => InterpretationItem::InterpretationGroup(input.parse_v2()?),
-            PeekMatch::GroupedVariable => InterpretationItem::GroupedVariable(input.parse_v2()?),
-            PeekMatch::FlattenedVariable => {
-                InterpretationItem::FlattenedVariable(input.parse_v2()?)
-            }
+            PeekMatch::GroupedCommand(_) => InterpretationItem::Command(input.parse()?),
+            PeekMatch::FlattenedCommand(_) => InterpretationItem::Command(input.parse()?),
+            PeekMatch::Group(_) => InterpretationItem::InterpretationGroup(input.parse()?),
+            PeekMatch::GroupedVariable => InterpretationItem::GroupedVariable(input.parse()?),
+            PeekMatch::FlattenedVariable => InterpretationItem::FlattenedVariable(input.parse()?),
             PeekMatch::AppendVariableDestructuring | PeekMatch::Destructurer(_) => {
                 return input.parse_err("Destructurings are not supported here")
             }

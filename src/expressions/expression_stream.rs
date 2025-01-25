@@ -38,14 +38,12 @@ impl Parse for ExpressionInput {
             // before code blocks or .. in [!range!] so we can break on those.
             // These aren't valid inside expressions we support anyway, so it's good enough for now.
             let item = match detect_preinterpret_grammar(input.cursor()) {
-                PeekMatch::GroupedCommand(_) => ExpressionItem::Command(input.parse_v2()?),
-                PeekMatch::FlattenedCommand(_) => ExpressionItem::Command(input.parse_v2()?),
-                PeekMatch::GroupedVariable => ExpressionItem::GroupedVariable(input.parse_v2()?),
-                PeekMatch::FlattenedVariable => {
-                    ExpressionItem::FlattenedVariable(input.parse_v2()?)
-                }
+                PeekMatch::GroupedCommand(_) => ExpressionItem::Command(input.parse()?),
+                PeekMatch::FlattenedCommand(_) => ExpressionItem::Command(input.parse()?),
+                PeekMatch::GroupedVariable => ExpressionItem::GroupedVariable(input.parse()?),
+                PeekMatch::FlattenedVariable => ExpressionItem::FlattenedVariable(input.parse()?),
                 PeekMatch::Group(Delimiter::Brace | Delimiter::Bracket) => break,
-                PeekMatch::Group(_) => ExpressionItem::ExpressionGroup(input.parse_v2()?),
+                PeekMatch::Group(_) => ExpressionItem::ExpressionGroup(input.parse()?),
                 PeekMatch::Destructurer(_) | PeekMatch::AppendVariableDestructuring => {
                     return input
                         .span()
@@ -54,7 +52,7 @@ impl Parse for ExpressionInput {
                 PeekMatch::Punct(punct) if punct.as_char() == '.' => break,
                 PeekMatch::Punct(_) => ExpressionItem::Punct(input.parse_any_punct()?),
                 PeekMatch::Ident(_) => ExpressionItem::Ident(input.parse_any_ident()?),
-                PeekMatch::Literal(_) => ExpressionItem::Literal(input.parse_v2()?),
+                PeekMatch::Literal(_) => ExpressionItem::Literal(input.parse()?),
                 PeekMatch::End => return input.span().parse_err("Expected an expression"),
             };
             items.push(item);
@@ -160,11 +158,11 @@ pub(crate) struct ExpressionGroup {
 
 impl Parse for ExpressionGroup {
     fn parse(input: ParseStream) -> ParseResult<Self> {
-        let (delimiter, delim_span, content) = input.parse_any_delimiter()?;
+        let (delimiter, delim_span, content) = input.parse_any_group()?;
         Ok(Self {
             source_delimiter: delimiter,
             source_delim_span: delim_span,
-            content: content.parse_v2()?,
+            content: content.parse()?,
         })
     }
 }

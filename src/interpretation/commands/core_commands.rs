@@ -19,7 +19,7 @@ impl NoOutputCommandDefinition for SetCommand {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
-                    variable: input.parse_v2()?,
+                    variable: input.parse()?,
                     equals: input.parse()?,
                     arguments: input.parse_with(arguments.full_span_range())?,
                 })
@@ -54,7 +54,7 @@ impl NoOutputCommandDefinition for ExtendCommand {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
-                    variable: input.parse_v2()?,
+                    variable: input.parse()?,
                     plus_equals: input.parse()?,
                     arguments: input.parse_all_for_interpretation(arguments.full_span_range())?,
                 })
@@ -216,7 +216,7 @@ impl NoOutputCommandDefinition for ErrorCommand {
             |input| {
                 if input.peek(syn::token::Brace) {
                     Ok(Self {
-                        inputs: EitherErrorInput::Fields(input.parse_v2()?),
+                        inputs: EitherErrorInput::Fields(input.parse()?),
                     })
                 } else {
                     Ok(Self {

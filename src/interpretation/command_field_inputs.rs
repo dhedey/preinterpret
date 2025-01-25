@@ -44,7 +44,7 @@ macro_rules! define_field_inputs {
                                 if $required_field.is_some() {
                                     return ident.parse_err("duplicate field");
                                 }
-                                $required_field = Some(content.parse_v2()?);
+                                $required_field = Some(content.parse()?);
                             }
                         )*
                         $(
@@ -52,7 +52,7 @@ macro_rules! define_field_inputs {
                                 if $optional_field.is_some() {
                                     return ident.parse_err("duplicate field");
                                 }
-                                $optional_field = Some(content.parse_v2()?);
+                                $optional_field = Some(content.parse()?);
                             }
                         )*
                         _ => return ident.parse_err("unexpected field"),

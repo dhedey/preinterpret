@@ -13,7 +13,7 @@ impl ContextualParse for InterpretationStream {
     fn parse_with_context(input: ParseStream, span_range: Self::Context) -> ParseResult<Self> {
         let mut items = Vec::new();
         while !input.is_empty() {
-            items.push(input.parse_v2()?);
+            items.push(input.parse()?);
         }
         Ok(Self { items, span_range })
     }
@@ -54,7 +54,7 @@ impl InterpretationGroup {
 
 impl Parse for InterpretationGroup {
     fn parse(input: ParseStream) -> ParseResult<Self> {
-        let (delimiter, delim_span, content) = input.parse_any_delimiter()?;
+        let (delimiter, delim_span, content) = input.parse_any_group()?;
         let content = content.parse_with(delim_span.span_range())?;
         Ok(Self {
             source_delimiter: delimiter,
@@ -99,7 +99,7 @@ impl RawGroup {
 
 impl Parse for RawGroup {
     fn parse(input: ParseStream) -> ParseResult<Self> {
-        let (delimiter, delim_span, content) = input.parse_any_delimiter()?;
+        let (delimiter, delim_span, content) = input.parse_any_group()?;
         let content = content.parse()?;
         Ok(Self {
             source_delimeter: delimiter,

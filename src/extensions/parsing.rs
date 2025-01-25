@@ -13,8 +13,8 @@ impl TokenStreamParseExt for TokenStream {
         parser: impl FnOnce(ParseStream) -> Result<T, E>,
     ) -> Result<T, E> {
         let mut result = None;
-        let parse_result = (|input: ParseStream| -> SynResult<()> {
-            result = Some(parser(input));
+        let parse_result = (|input: SynParseStream| -> SynResult<()> {
+            result = Some(parser(input.into()));
             match &result {
                 // Some fallback error to ensure that we don't go down the unexpected branch inside parse2
                 Some(Err(_)) => Err(SynError::new(Span::call_site(), "")),
@@ -91,8 +91,7 @@ impl CursorExt for Cursor<'_> {
     }
 }
 
-pub(crate) trait ParserExt {
-    fn parse_v2<T: Parse>(&self) -> ParseResult<T>;
+pub(crate) trait ParserBufferExt {
     fn parse_with<T: ContextualParse>(&self, context: T::Context) -> ParseResult<T>;
     fn parse_all_for_interpretation(
         &self,
@@ -111,17 +110,14 @@ pub(crate) trait ParserExt {
     fn parse_punct_matching(&self, content: char) -> ParseResult<Punct>;
     fn peek_literal_matching(&self, content: &str) -> bool;
     fn parse_literal_matching(&self, content: &str) -> ParseResult<Literal>;
+    fn parse_any_group(&self) -> ParseResult<(Delimiter, DelimSpan, ParseBuffer)>;
     fn peek_group_matching(&self, delimiter: Delimiter) -> bool;
     fn parse_group_matching(&self, delimiter: Delimiter) -> ParseResult<(DelimSpan, ParseBuffer)>;
     fn parse_err<T>(&self, message: impl std::fmt::Display) -> ParseResult<T>;
     fn parse_error(&self, message: impl std::fmt::Display) -> ParseError;
 }
 
-impl ParserExt for ParseBuffer<'_> {
-    fn parse_v2<T: Parse>(&self) -> ParseResult<T> {
-        T::parse(self)
-    }
-
+impl ParserBufferExt for ParseBuffer<'_> {
     fn parse_with<T: ContextualParse>(&self, context: T::Context) -> ParseResult<T> {
         T::parse_with_context(self, context)
     }
@@ -143,7 +139,7 @@ impl ParserExt for ParseBuffer<'_> {
     }
 
     fn parse_any_ident(&self) -> ParseResult<Ident> {
-        Ok(Ident::parse_any(self)?)
+        Ok(self.call(Ident::parse_any)?)
     }
 
     fn parse_any_punct(&self) -> ParseResult<Punct> {
@@ -190,6 +186,12 @@ impl ParserExt for ParseBuffer<'_> {
         })?)
     }
 
+    fn parse_any_group(&self) -> ParseResult<(Delimiter, DelimSpan, ParseBuffer)> {
+        use syn::parse::discouraged::AnyDelimiter;
+        let (delimiter, delim_span, parse_buffer) = self.parse_any_delimiter()?;
+        Ok((delimiter, delim_span, parse_buffer.into()))
+    }
+
     fn peek_group_matching(&self, delimiter: Delimiter) -> bool {
         self.cursor().group_matching(delimiter).is_some()
     }
@@ -198,7 +200,8 @@ impl ParserExt for ParseBuffer<'_> {
         &self,
         expected_delimiter: Delimiter,
     ) -> ParseResult<(DelimSpan, ParseBuffer)> {
-        let (delimiter, delim_span, inner_stream) = self.parse_any_delimiter()?;
+        use syn::parse::discouraged::AnyDelimiter;
+        let (delimiter, delim_span, inner) = self.parse_any_delimiter()?;
         if delimiter != expected_delimiter {
             return delim_span.open().parse_err(match expected_delimiter {
                 Delimiter::Parenthesis => "Expected (",
@@ -207,7 +210,7 @@ impl ParserExt for ParseBuffer<'_> {
                 Delimiter::None => "Expected start of transparent group",
             });
         }
-        Ok((delim_span, inner_stream))
+        Ok((delim_span, inner.into()))
     }
 
     fn parse_err<T>(&self, message: impl std::fmt::Display) -> ParseResult<T> {

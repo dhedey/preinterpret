@@ -185,7 +185,7 @@ impl HandleDestructure for DestructureVariable {
     ) -> ExecutionResult<()> {
         match self {
             DestructureVariable::Grouped { .. } => {
-                let content = input.parse_v2::<ParsedTokenTree>()?.into_interpreted();
+                let content = input.parse::<ParsedTokenTree>()?.into_interpreted();
                 interpreter.set_variable(self, content)?;
             }
             DestructureVariable::Flattened { until, .. } => {
@@ -196,13 +196,13 @@ impl HandleDestructure for DestructureVariable {
             DestructureVariable::GroupedAppendGrouped { .. } => {
                 let variable_data = self.get_variable_data(interpreter)?;
                 input
-                    .parse_v2::<ParsedTokenTree>()?
+                    .parse::<ParsedTokenTree>()?
                     .push_as_token_tree(variable_data.get_mut(self)?.deref_mut());
             }
             DestructureVariable::GroupedAppendFlattened { .. } => {
                 let variable_data = self.get_variable_data(interpreter)?;
                 input
-                    .parse_v2::<ParsedTokenTree>()?
+                    .parse::<ParsedTokenTree>()?
                     .flatten_into(variable_data.get_mut(self)?.deref_mut());
             }
             DestructureVariable::FlattenedAppendGrouped { marker, until, .. } => {

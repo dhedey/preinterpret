@@ -16,11 +16,11 @@ pub(crate) enum CommandValueInput<T> {
 impl<T: Parse> Parse for CommandValueInput<T> {
     fn parse(input: ParseStream) -> ParseResult<Self> {
         Ok(match detect_preinterpret_grammar(input.cursor()) {
-            PeekMatch::GroupedCommand(_) => Self::Command(input.parse_v2()?),
-            PeekMatch::FlattenedCommand(_) => Self::Command(input.parse_v2()?),
-            PeekMatch::GroupedVariable => Self::GroupedVariable(input.parse_v2()?),
-            PeekMatch::FlattenedVariable => Self::FlattenedVariable(input.parse_v2()?),
-            PeekMatch::Group(Delimiter::Brace) => Self::Code(input.parse_v2()?),
+            PeekMatch::GroupedCommand(_) => Self::Command(input.parse()?),
+            PeekMatch::FlattenedCommand(_) => Self::Command(input.parse()?),
+            PeekMatch::GroupedVariable => Self::GroupedVariable(input.parse()?),
+            PeekMatch::FlattenedVariable => Self::FlattenedVariable(input.parse()?),
+            PeekMatch::Group(Delimiter::Brace) => Self::Code(input.parse()?),
             PeekMatch::AppendVariableDestructuring | PeekMatch::Destructurer(_) => {
                 return input
                     .span()
@@ -30,7 +30,7 @@ impl<T: Parse> Parse for CommandValueInput<T> {
             | PeekMatch::Punct(_)
             | PeekMatch::Literal(_)
             | PeekMatch::Ident(_)
-            | PeekMatch::End => Self::Value(input.parse_v2()?),
+            | PeekMatch::End => Self::Value(input.parse()?),
         })
     }
 }

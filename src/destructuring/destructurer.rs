@@ -45,7 +45,7 @@ impl<'a> DestructurerArguments<'a> {
     }
 
     pub(crate) fn fully_parse_no_error_override<T: Parse>(&self) -> ParseResult<T> {
-        self.parse_stream.parse_v2()
+        self.parse_stream.parse()
     }
 
     pub(crate) fn fully_parse_as<T: ArgumentsContent>(&self) -> ParseResult<T> {

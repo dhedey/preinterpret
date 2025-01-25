@@ -16,7 +16,7 @@ impl ValueCommandDefinition for EvaluateCommand {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
-                    expression: input.parse_v2()?,
+                    expression: input.parse()?,
                 })
             },
             "Expected [!evaluate! ...] containing a valid preinterpret expression",
@@ -49,7 +49,7 @@ impl NoOutputCommandDefinition for AssignCommand {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
-                    variable: input.parse_v2()?,
+                    variable: input.parse()?,
                     operator: {
                         let operator: Punct = input.parse()?;
                         match operator.as_char() {
@@ -59,7 +59,7 @@ impl NoOutputCommandDefinition for AssignCommand {
                         operator
                     },
                     equals: input.parse()?,
-                    expression: input.parse_v2()?,
+                    expression: input.parse()?,
                 })
             },
             "Expected [!assign! #variable += ...] for + or some other operator supported in an expression",
@@ -104,9 +104,9 @@ impl StreamCommandDefinition for RangeCommand {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
-                    left: input.parse_v2()?,
-                    range_limits: input.parse_v2()?,
-                    right: input.parse_v2()?,
+                    left: input.parse()?,
+                    range_limits: input.parse()?,
+                    right: input.parse()?,
                 })
             },
             "Expected a rust range expression such as [!range! 1..4]",

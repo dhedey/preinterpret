@@ -24,12 +24,12 @@ pub(crate) enum CommandStreamInput {
 impl Parse for CommandStreamInput {
     fn parse(input: ParseStream) -> ParseResult<Self> {
         Ok(match detect_preinterpret_grammar(input.cursor()) {
-            PeekMatch::GroupedCommand(_) => Self::Command(input.parse_v2()?),
-            PeekMatch::FlattenedCommand(_) => Self::Command(input.parse_v2()?),
-            PeekMatch::GroupedVariable => Self::GroupedVariable(input.parse_v2()?),
-            PeekMatch::FlattenedVariable => Self::FlattenedVariable(input.parse_v2()?),
-            PeekMatch::Group(Delimiter::Bracket) => Self::ExplicitStream(input.parse_v2()?),
-            PeekMatch::Group(Delimiter::Brace) => Self::Code(input.parse_v2()?),
+            PeekMatch::GroupedCommand(_) => Self::Command(input.parse()?),
+            PeekMatch::FlattenedCommand(_) => Self::Command(input.parse()?),
+            PeekMatch::GroupedVariable => Self::GroupedVariable(input.parse()?),
+            PeekMatch::FlattenedVariable => Self::FlattenedVariable(input.parse()?),
+            PeekMatch::Group(Delimiter::Bracket) => Self::ExplicitStream(input.parse()?),
+            PeekMatch::Group(Delimiter::Brace) => Self::Code(input.parse()?),
             _ => input.span()
                 .parse_err("Expected [ ..input stream.. ], { [..input stream..] } or a [!command! ..], #variable or #..variable.\nMacro substitutions such as $x should be placed inside square brackets.")?,
         })

@@ -8,10 +8,10 @@ pub(crate) struct DestructureGroup {
 
 impl Parse for DestructureGroup {
     fn parse(input: ParseStream) -> ParseResult<Self> {
-        let (delimiter, _, content) = input.parse_any_delimiter()?;
+        let (delimiter, _, content) = input.parse_any_group()?;
         Ok(Self {
             delimiter,
-            inner: content.parse_v2()?,
+            inner: content.parse()?,
         })
     }
 }

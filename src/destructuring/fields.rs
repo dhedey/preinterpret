@@ -42,7 +42,7 @@ impl<T: 'static> FieldsParseDefinition<T> {
         example: &str,
         explanation: Option<&str>,
         is_required: bool,
-        parse: impl Fn(syn::parse::ParseStream) -> ParseResult<F> + 'static,
+        parse: impl Fn(ParseStream) -> ParseResult<F> + 'static,
         set: impl Fn(&mut T, F) + 'static,
     ) -> Self {
         if self
@@ -71,7 +71,7 @@ impl<T: 'static> FieldsParseDefinition<T> {
     pub(crate) fn create_syn_parser(
         self,
         error_span_range: SpanRange,
-    ) -> impl FnOnce(ParseStream) -> ParseResult<T> {
+    ) -> impl FnOnce(SynParseStream) -> ParseResult<T> {
         fn inner<T>(
             input: ParseStream,
             new_builder: T,
@@ -120,9 +120,9 @@ impl<T: 'static> FieldsParseDefinition<T> {
 
             Ok(builder)
         }
-        move |input: syn::parse::ParseStream| {
+        move |input: SynParseStream| {
             inner(
-                input,
+                input.into(),
                 self.new_builder,
                 &self.field_definitions,
                 error_span_range,
@@ -172,5 +172,5 @@ struct FieldParseDefinition<T> {
     example: String,
     explanation: Option<String>,
     #[allow(clippy::type_complexity)]
-    parse_and_set: Box<dyn Fn(&mut T, syn::parse::ParseStream) -> ParseResult<()>>,
+    parse_and_set: Box<dyn Fn(&mut T, ParseStream) -> ParseResult<()>>,
 }

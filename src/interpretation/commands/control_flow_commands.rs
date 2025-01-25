@@ -18,8 +18,8 @@ impl ControlFlowCommandDefinition for IfCommand {
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         arguments.fully_parse_or_error(
             |input| {
-                let condition = input.parse_v2()?;
-                let true_code = input.parse_v2()?;
+                let condition = input.parse()?;
+                let true_code = input.parse()?;
                 let mut else_ifs = Vec::new();
                 let mut else_code = None;
                 while !input.is_empty() {
@@ -27,11 +27,11 @@ impl ControlFlowCommandDefinition for IfCommand {
                     if input.peek_ident_matching("elif") {
                         input.parse_ident_matching("elif")?;
                         input.parse::<Token![!]>()?;
-                        else_ifs.push((input.parse_v2()?, input.parse_v2()?));
+                        else_ifs.push((input.parse()?, input.parse()?));
                     } else {
                         input.parse_ident_matching("else")?;
                         input.parse::<Token![!]>()?;
-                        else_code = Some(input.parse_v2()?);
+                        else_code = Some(input.parse()?);
                         break;
                     }
                 }
@@ -97,8 +97,8 @@ impl ControlFlowCommandDefinition for WhileCommand {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
-                    condition: input.parse_v2()?,
-                    loop_code: input.parse_v2()?,
+                    condition: input.parse()?,
+                    loop_code: input.parse()?,
                 })
             },
             "Expected [!while! (condition) { code }]",
@@ -156,7 +156,7 @@ impl ControlFlowCommandDefinition for LoopCommand {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
-                    loop_code: input.parse_v2()?,
+                    loop_code: input.parse()?,
                 })
             },
             "Expected [!loop! { ... }]",
@@ -206,10 +206,10 @@ impl ControlFlowCommandDefinition for ForCommand {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
-                    parse_place: input.parse_v2()?,
-                    in_token: input.parse_v2()?,
-                    input: input.parse_v2()?,
-                    loop_code: input.parse_v2()?,
+                    parse_place: input.parse()?,
+                    in_token: input.parse()?,
+                    input: input.parse()?,
+                    loop_code: input.parse()?,
                 })
             },
             "Expected [!for! #x in [ ... ] { code }]",

@@ -21,7 +21,7 @@ impl DestructureItem {
             PeekMatch::GroupedCommand(Some(command_kind))
                 if matches!(command_kind.output_kind(None), Ok(CommandOutputKind::None)) =>
             {
-                Self::NoneOutputCommand(input.parse_v2()?)
+                Self::NoneOutputCommand(input.parse()?)
             }
             PeekMatch::GroupedCommand(_) => return input.parse_err(
                 "Grouped commands returning a value are not supported in destructuring positions",
@@ -35,8 +35,8 @@ impl DestructureItem {
             | PeekMatch::AppendVariableDestructuring => {
                 Self::Variable(DestructureVariable::parse_until::<C>(input)?)
             }
-            PeekMatch::Group(_) => Self::ExactGroup(input.parse_v2()?),
-            PeekMatch::Destructurer(_) => Self::Destructurer(input.parse_v2()?),
+            PeekMatch::Group(_) => Self::ExactGroup(input.parse()?),
+            PeekMatch::Destructurer(_) => Self::Destructurer(input.parse()?),
             PeekMatch::Punct(_) => Self::ExactPunct(input.parse_any_punct()?),
             PeekMatch::Literal(_) => Self::ExactLiteral(input.parse()?),
             PeekMatch::Ident(_) => Self::ExactIdent(input.parse_any_ident()?),
