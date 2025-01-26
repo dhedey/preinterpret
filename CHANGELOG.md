@@ -76,6 +76,7 @@ Destructuring performs parsing of a token stream. It supports:
 
 ### To come
 
+* The `[!assign! ...]` operator is optional, if not present, it functions as `[!set! #x = [!evaluate! ...]]`
 * Add compile error tests for all the standard destructuring errors
 * `[!is_set! #x]`
 * `[!str_split! { input: Value<LitStr>, separator: Value<LitStr>, }]`
@@ -90,10 +91,9 @@ Destructuring performs parsing of a token stream. It supports:
     * `(!optional! ...)`
     * `(!repeated! ...)` also forbid `#x` bindings inside of them unless a `[!settings! { ... }]` has been overriden
       * `{ item: (!stream! ...), minimum?: syn::int, maximum?: syn::int, separator?: (!stream! ...), after_each?: { ... }, before_all?: {}, after_all?: {}, }`
-    * `(!match! ...)` (with `#..x` as a catch-all) but without arms...
-      so I guess it's more of an `(!any! ...)`
+    * `[!match! ...]` command
+    * `(!any! ...)` (with `#..x` as a catch-all) like the [!match!] command but without arms...
   * (MAYBE) `#(..)?`, `#(..)+`, `#(..),+`, `#(..)*`, `#(..),*` but I don't like them much
-* `[!match! ...]` command - similar to the match destructurer, but a command...
 * Check all `#[allow(unused)]` and remove any which aren't needed
 * Rework expression parsing, in order to:
   * Fix comments in the expression files

@@ -22,7 +22,7 @@ impl HandleDestructure for DestructureGroup {
         input: ParseStream,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
-        let (_, inner) = input.parse_group_matching(self.delimiter)?;
+        let (_, inner) = input.parse_specific_group(self.delimiter)?;
         self.inner.handle_destructure(&inner, interpreter)
     }
 }

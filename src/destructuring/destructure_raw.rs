@@ -92,7 +92,7 @@ impl RawDestructureGroup {
     }
 
     pub(crate) fn handle_destructure(&self, input: ParseStream) -> ExecutionResult<()> {
-        let (_, inner) = input.parse_group_matching(self.delimiter)?;
+        let (_, inner) = input.parse_specific_group(self.delimiter)?;
         self.inner.handle_destructure(&inner)
     }
 }

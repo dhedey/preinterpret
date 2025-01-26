@@ -9,7 +9,7 @@ pub(crate) struct CommandCodeInput {
 
 impl Parse for CommandCodeInput {
     fn parse(input: ParseStream) -> ParseResult<Self> {
-        let (delim_span, content) = input.parse_group_matching(Delimiter::Brace)?;
+        let (delim_span, content) = input.parse_specific_group(Delimiter::Brace)?;
         let inner = content.parse_with(delim_span.join().span_range())?;
         Ok(Self { delim_span, inner })
     }

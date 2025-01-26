@@ -467,7 +467,7 @@ pub(crate) struct Command {
 
 impl Parse for Command {
     fn parse(input: ParseStream) -> ParseResult<Self> {
-        let (delim_span, content) = input.parse_group_matching(Delimiter::Bracket)?;
+        let (delim_span, content) = input.parse_specific_group(Delimiter::Bracket)?;
         content.parse::<Token![!]>()?;
         let flattening = if content.peek(Token![.]) {
             Some(content.parse::<Token![..]>()?)

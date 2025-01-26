@@ -111,8 +111,13 @@ pub(crate) trait ParserBufferExt {
     fn peek_literal_matching(&self, content: &str) -> bool;
     fn parse_literal_matching(&self, content: &str) -> ParseResult<Literal>;
     fn parse_any_group(&self) -> ParseResult<(Delimiter, DelimSpan, ParseBuffer)>;
-    fn peek_group_matching(&self, delimiter: Delimiter) -> bool;
-    fn parse_group_matching(&self, delimiter: Delimiter) -> ParseResult<(DelimSpan, ParseBuffer)>;
+    fn peek_specific_group(&self, delimiter: Delimiter) -> bool;
+    fn parse_group_matching(
+        &self,
+        matching: impl FnOnce(Delimiter) -> bool,
+        expected_message: impl FnOnce() -> String,
+    ) -> ParseResult<(DelimSpan, ParseBuffer)>;
+    fn parse_specific_group(&self, delimiter: Delimiter) -> ParseResult<(DelimSpan, ParseBuffer)>;
     fn parse_err<T>(&self, message: impl std::fmt::Display) -> ParseResult<T>;
     fn parse_error(&self, message: impl std::fmt::Display) -> ParseError;
 }
@@ -192,25 +197,34 @@ impl ParserBufferExt for ParseBuffer<'_> {
         Ok((delimiter, delim_span, parse_buffer.into()))
     }
 
-    fn peek_group_matching(&self, delimiter: Delimiter) -> bool {
+    fn peek_specific_group(&self, delimiter: Delimiter) -> bool {
         self.cursor().group_matching(delimiter).is_some()
     }
 
     fn parse_group_matching(
         &self,
-        expected_delimiter: Delimiter,
+        matching: impl FnOnce(Delimiter) -> bool,
+        expected_message: impl FnOnce() -> String,
     ) -> ParseResult<(DelimSpan, ParseBuffer)> {
         use syn::parse::discouraged::AnyDelimiter;
-        let (delimiter, delim_span, inner) = self.parse_any_delimiter()?;
-        if delimiter != expected_delimiter {
-            return delim_span.open().parse_err(match expected_delimiter {
-                Delimiter::Parenthesis => "Expected (",
-                Delimiter::Brace => "Expected {",
-                Delimiter::Bracket => "Expected [",
-                Delimiter::None => "Expected start of transparent group",
-            });
-        }
-        Ok((delim_span, inner.into()))
+        let error_span = match self.parse_any_delimiter() {
+            Ok((delimiter, delim_span, inner)) if matching(delimiter) => {
+                return Ok((delim_span, inner.into()));
+            }
+            Ok((_, delim_span, _)) => delim_span.open(),
+            Err(error) => error.span(),
+        };
+        error_span.parse_err(expected_message())
+    }
+
+    fn parse_specific_group(
+        &self,
+        expected_delimiter: Delimiter,
+    ) -> ParseResult<(DelimSpan, ParseBuffer)> {
+        self.parse_group_matching(
+            |delimiter| delimiter == expected_delimiter,
+            || format!("Expected {}", expected_delimiter.description_of_open()),
+        )
     }
 
     fn parse_err<T>(&self, message: impl std::fmt::Display) -> ParseResult<T> {
@@ -219,5 +233,31 @@ impl ParserBufferExt for ParseBuffer<'_> {
 
     fn parse_error(&self, message: impl std::fmt::Display) -> ParseError {
         self.span().parse_error(message)
+    }
+}
+
+pub(crate) trait DelimiterExt {
+    fn description_of_open(&self) -> &'static str;
+    #[allow(unused)]
+    fn description_of_group(&self) -> &'static str;
+}
+
+impl DelimiterExt for Delimiter {
+    fn description_of_open(&self) -> &'static str {
+        match self {
+            Delimiter::Parenthesis => "(",
+            Delimiter::Brace => "{",
+            Delimiter::Bracket => "[",
+            Delimiter::None => "start of transparent group, from a grouped #variable substitution or stream-based command such as [!group! ...]",
+        }
+    }
+
+    fn description_of_group(&self) -> &'static str {
+        match self {
+            Delimiter::Parenthesis => "(...)",
+            Delimiter::Brace => "{ ... }",
+            Delimiter::Bracket => "[...]",
+            Delimiter::None => "transparent group, from a grouped #variable substitution or stream-based command such as [!group! ...]",
+        }
     }
 }

@@ -66,7 +66,7 @@ impl Interpret for CommandStreamInput {
                         command,
                         interpreter,
                         || {
-                            "Expected output of flattened command to contain a single [ ... ] or transparent group. Perhaps you want to remove the .., to use the command output as-is.".to_string()
+                            "Expected output of flattened command to contain a single [...] group or transparent group from a #variable or stream-output command such as [!group! ...]. Perhaps you want to remove the .., to use the command output as-is.".to_string()
                         },
                         output,
                     ),
@@ -81,7 +81,7 @@ impl Interpret for CommandStreamInput {
                         command,
                         interpreter,
                         || {
-                            "Expected output of control flow command to contain a single [ ... ] or transparent group.".to_string()
+                            "Expected output of control flow command to contain a single [...] group or transparent group from a #variable or stream-output command such as [!group! ...].".to_string()
                         },
                         output,
                     ),
@@ -92,7 +92,7 @@ impl Interpret for CommandStreamInput {
                 interpreter,
                 || {
                     format!(
-                        "Expected variable to contain a single [ ... ] or transparent group. Perhaps you want to use {} instead, to use the content of the variable as the stream.",
+                        "Expected variable to contain a single [...] group or transparent group from a #variable or stream-output command such as [!group! ...]. Perhaps you want to use {} instead, to use the content of the variable as the stream.",
                         variable.display_grouped_variable_token(),
                     )
                 },
@@ -105,7 +105,7 @@ impl Interpret for CommandStreamInput {
                 code,
                 interpreter,
                 || {
-                    "Expected the { ... } block to output a single [ ... ] group or transparent group. You may wish to replace the outer `{ ... }` block with a `[ ... ]` block, which outputs all its contents as a stream.".to_string()
+                    "Expected the { ... } block to output a single [...] group or transparent group from a #variable or stream-output command such as [!group! ...]. You may wish to replace the outer `{ ... }` block with a `[ ... ]` block, which outputs all its contents as a stream.".to_string()
                 },
                 output,
             ),
@@ -154,12 +154,12 @@ impl Parse for InterpretedCommandStream {
     fn parse(input: ParseStream) -> ParseResult<Self> {
         // We assume we're parsing an already interpreted raw stream here, so we replicate
         // parse_as_stream_input
-        let (delimiter, delim_span, inner) = input.parse_any_group()?;
-        match delimiter {
-            Delimiter::Bracket | Delimiter::None => Ok(Self {
-                stream: InterpretedStream::raw(inner.parse()?),
-            }),
-            _ => delim_span.parse_err("Expected a [ ... ] or transparent group"),
-        }
+        let (_, inner) = input.parse_group_matching(
+            |delimiter| matches!(delimiter, Delimiter::Bracket | Delimiter::None),
+            || "Expected [...] or a transparent group from a #variable or stream-output command such as [!group! ...]".to_string(),
+        )?;
+        Ok(Self {
+            stream: InterpretedStream::raw(inner.parse()?),
+        })
     }
 }

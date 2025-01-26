@@ -322,7 +322,7 @@ impl ParseUntil {
             ParseUntil::End => output.extend_raw_tokens(input.parse::<TokenStream>()?),
             ParseUntil::Group(delimiter) => {
                 while !input.is_empty() {
-                    if input.peek_group_matching(*delimiter) {
+                    if input.peek_specific_group(*delimiter) {
                         return Ok(());
                     }
                     output.push_raw_token_tree(input.parse()?);

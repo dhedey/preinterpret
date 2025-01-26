@@ -168,7 +168,7 @@ impl DestructurerDefinition for GroupDestructurer {
         input: ParseStream,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
-        let (_, inner) = input.parse_group_matching(Delimiter::None)?;
+        let (_, inner) = input.parse_specific_group(Delimiter::None)?;
         self.inner.handle_destructure(&inner, interpreter)
     }
 }

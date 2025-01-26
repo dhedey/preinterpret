@@ -33,7 +33,7 @@ macro_rules! define_field_inputs {
                     let mut $optional_field: Option<$optional_type> = None;
                 )*
 
-                let (delim_span, content) = input.parse_group_matching(Delimiter::Brace)?;
+                let (delim_span, content) = input.parse_specific_group(Delimiter::Brace)?;
 
                 while !content.is_empty() {
                     let ident = content.parse_any_ident()?;

@@ -87,7 +87,7 @@ pub(crate) struct Destructurer {
 
 impl Parse for Destructurer {
     fn parse(input: ParseStream) -> ParseResult<Self> {
-        let (delim_span, content) = input.parse_group_matching(Delimiter::Parenthesis)?;
+        let (delim_span, content) = input.parse_specific_group(Delimiter::Parenthesis)?;
         content.parse::<Token![!]>()?;
         let destructurer_name = content.parse_any_ident()?;
         let destructurer_kind = match DestructurerKind::for_ident(&destructurer_name) {
