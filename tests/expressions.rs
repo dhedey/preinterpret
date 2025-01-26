@@ -76,9 +76,16 @@ fn test_basic_evaluate_works() {
 fn assign_works() {
     assert_preinterpret_eq!(
         {
-            [!set! #x = 8 + 2]      // 10
-            [!assign! #x /= 1 + 1]  // 5
-            [!assign! #x += 2 + #x] // 12
+            [!assign! #x = 5 + 5]
+            [!debug! #..x]
+        },
+        "10"
+    );
+    assert_preinterpret_eq!(
+        {
+            [!set! #x = 8 + 2]      // 8 + 2 (not evaluated)
+            [!assign! #x /= 1 + 1]  // ((8 + 2) / (1 + 1)) => 5
+            [!assign! #x += 2 + #x] // ((10) + 2) => 12
             #x
         },
         12

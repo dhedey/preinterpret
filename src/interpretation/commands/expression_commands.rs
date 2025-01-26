@@ -32,7 +32,7 @@ impl ValueCommandDefinition for EvaluateCommand {
 #[derive(Clone)]
 pub(crate) struct AssignCommand {
     variable: GroupedVariable,
-    operator: Punct,
+    operator: Option<Punct>,
     #[allow(unused)]
     equals: Token![=],
     expression: ExpressionInput,
@@ -51,18 +51,22 @@ impl NoOutputCommandDefinition for AssignCommand {
                 Ok(Self {
                     variable: input.parse()?,
                     operator: {
-                        let operator: Punct = input.parse()?;
-                        match operator.as_char() {
-                            '+' | '-' | '*' | '/' | '%' | '&' | '|' | '^' => {}
-                            _ => return operator.parse_err("Expected one of + - * / % & | or ^"),
+                        if input.peek(Token![=]) {
+                            None
+                        } else {
+                            let operator: Punct = input.parse()?;
+                            match operator.as_char() {
+                                '+' | '-' | '*' | '/' | '%' | '&' | '|' | '^' => {}
+                                _ => return operator.parse_err("Expected one of + - * / % & | or ^"),
+                            }
+                            Some(operator)
                         }
-                        operator
                     },
                     equals: input.parse()?,
                     expression: input.parse()?,
                 })
             },
-            "Expected [!assign! #variable += ...] for + or some other operator supported in an expression",
+            "Expected [!assign! #variable = <expression>] or [!assign! #variable X= <expression>] for X one of + - * / % & | or ^",
         )
     }
 
@@ -75,8 +79,10 @@ impl NoOutputCommandDefinition for AssignCommand {
         } = *self;
 
         let mut builder = ExpressionBuilder::new();
-        variable.add_to_expression(interpreter, &mut builder)?;
-        builder.push_punct(operator);
+        if let Some(operator) = operator {
+            variable.add_to_expression(interpreter, &mut builder)?;
+            builder.push_punct(operator);
+        }
         builder.extend_with_evaluation_output(expression.evaluate(interpreter)?);
 
         let output = builder.evaluate()?.into_token_tree();
