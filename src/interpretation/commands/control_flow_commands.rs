@@ -225,7 +225,7 @@ impl ControlFlowCommandDefinition for ForCommand {
 
         let mut iteration_counter = interpreter.start_iteration_counter(&self.in_token);
 
-        for token in stream.into_item_vec() {
+        for token in stream {
             iteration_counter.increment_and_check()?;
             self.parse_place
                 .handle_destructure_from_stream(token.into(), interpreter)?;

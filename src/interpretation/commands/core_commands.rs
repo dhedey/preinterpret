@@ -175,7 +175,7 @@ impl NoOutputCommandDefinition for SettingsCommand {
 
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         if let Some(limit) = self.inputs.iteration_limit {
-            let limit: usize = limit.interpret(interpreter)?.base10_parse()?;
+            let limit: usize = limit.interpret_to_value(interpreter)?.base10_parse()?;
             interpreter.set_iteration_limit(Some(limit));
         }
         Ok(())
@@ -244,7 +244,7 @@ impl NoOutputCommandDefinition for ErrorCommand {
             }
         };
 
-        let message = fields.message.interpret(interpreter)?.value();
+        let message = fields.message.interpret_to_value(interpreter)?.value();
 
         let error_span = match fields.spans {
             Some(spans) => {

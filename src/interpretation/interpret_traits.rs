@@ -20,24 +20,19 @@ pub(crate) trait Interpret: Sized {
 pub(crate) trait InterpretValue: Sized {
     type InterpretedValue;
 
-    fn interpret(self, interpreter: &mut Interpreter) -> ExecutionResult<Self::InterpretedValue>;
-}
-
-impl<T: InterpretValue<InterpretedValue = I> + HasSpanRange, I: ToTokens> Interpret for T {
-    fn interpret_into(
+    fn interpret_to_value(
         self,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
-    ) -> ExecutionResult<()> {
-        output.extend_with_raw_tokens_from(self.interpret(interpreter)?);
-        Ok(())
-    }
+    ) -> ExecutionResult<Self::InterpretedValue>;
 }
 
 impl<T: ToTokens> InterpretValue for T {
     type InterpretedValue = Self;
 
-    fn interpret(self, _interpreter: &mut Interpreter) -> ExecutionResult<Self::InterpretedValue> {
+    fn interpret_to_value(
+        self,
+        _interpreter: &mut Interpreter,
+    ) -> ExecutionResult<Self::InterpretedValue> {
         Ok(self)
     }
 }

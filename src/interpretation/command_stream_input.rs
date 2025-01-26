@@ -132,3 +132,34 @@ fn parse_as_stream_input(
         .append_into(output);
     Ok(())
 }
+
+impl InterpretValue for CommandStreamInput {
+    type InterpretedValue = InterpretedCommandStream;
+
+    fn interpret_to_value(
+        self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<Self::InterpretedValue> {
+        Ok(InterpretedCommandStream {
+            stream: self.interpret_to_new_stream(interpreter)?,
+        })
+    }
+}
+
+pub(crate) struct InterpretedCommandStream {
+    pub(crate) stream: InterpretedStream,
+}
+
+impl Parse for InterpretedCommandStream {
+    fn parse(input: ParseStream) -> ParseResult<Self> {
+        // We assume we're parsing an already interpreted raw stream here, so we replicate
+        // parse_as_stream_input
+        let (delimiter, delim_span, inner) = input.parse_any_group()?;
+        match delimiter {
+            Delimiter::Bracket | Delimiter::None => Ok(Self {
+                stream: InterpretedStream::raw(inner.parse()?),
+            }),
+            _ => delim_span.parse_err("Expected a [ ... ] or transparent group"),
+        }
+    }
+}

@@ -31,7 +31,7 @@ pub(crate) enum InterpretedTokenTree {
 impl From<InterpretedTokenTree> for InterpretedStream {
     fn from(value: InterpretedTokenTree) -> Self {
         let mut new = Self::new();
-        new.push_segment_item(value);
+        new.push_interpreted_item(value);
         new
     }
 }
@@ -92,7 +92,7 @@ impl InterpretedStream {
         self.extend_raw_tokens(tokens.into_token_stream())
     }
 
-    pub(crate) fn push_segment_item(&mut self, segment_item: InterpretedTokenTree) {
+    pub(crate) fn push_interpreted_item(&mut self, segment_item: InterpretedTokenTree) {
         match segment_item {
             InterpretedTokenTree::TokenTree(token_tree) => {
                 self.push_raw_token_tree(token_tree);
@@ -344,6 +344,15 @@ impl InterpretedStream {
     }
 }
 
+impl IntoIterator for InterpretedStream {
+    type IntoIter = std::vec::IntoIter<InterpretedTokenTree>;
+    type Item = InterpretedTokenTree;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.into_item_vec().into_iter()
+    }
+}
+
 pub(crate) struct ConcatBehaviour<'a> {
     pub(crate) between_token_trees: Option<&'a str>,
     pub(crate) output_transparent_group_as_command: bool,
@@ -398,9 +407,15 @@ impl ConcatBehaviour<'_> {
                 output.push(')');
             }
             Delimiter::Brace => {
-                output.push('{');
-                inner(output);
-                output.push('}');
+                if is_empty {
+                    output.push('{');
+                    inner(output);
+                    output.push('}');
+                } else {
+                    output.push_str("{ ");
+                    inner(output);
+                    output.push_str(" }");
+                }
             }
             Delimiter::Bracket => {
                 output.push('[');

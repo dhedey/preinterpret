@@ -390,3 +390,91 @@ fn test_comma_split() {
         "[!group! Pizza] [!group! Mac and Cheese] [!group! Hamburger]"
     );
 }
+
+#[test]
+fn test_zip() {
+    assert_preinterpret_eq!(
+        { [!debug! [!..zip! ([Hello Goodbye] [World Friend])]] },
+        "(Hello World) (Goodbye Friend)"
+    );
+    assert_preinterpret_eq!(
+        {
+            [!set! #countries = France Germany Italy]
+            [!set! #flags = "🇫🇷" "🇩🇪" "🇮🇹"]
+            [!set! #capitals = Paris Berlin Rome]
+            [!debug! [!zip! {
+                streams: [#countries #flags #capitals],
+            }]]
+        },
+        r#"[!group! [France "🇫🇷" Paris] [Germany "🇩🇪" Berlin] [Italy "🇮🇹" Rome]]"#,
+    );
+    assert_preinterpret_eq!(
+        {
+            [!set! #longer = A B C D]
+            [!set! #shorter = 1 2 3]
+            [!set! #combined = #longer #shorter]
+            [!debug! [!..zip! {
+                streams: #combined,
+                error_on_length_mismatch: false,
+            }]]
+        },
+        r#"[!group! A 1] [!group! B 2] [!group! C 3]"#,
+    );
+    assert_preinterpret_eq!(
+        {
+            [!set! #letters = A B C]
+            [!set! #numbers = 1 2 3]
+            [!set! #combined = #letters #numbers]
+            [!debug! [!..zip! {
+                streams: {
+                    { #..combined }
+                },
+            }]]
+        },
+        r#"{ A 1 } { B 2 } { C 3 }"#,
+    );
+    assert_preinterpret_eq!(
+        {
+            [!set! #letters = A B C]
+            [!set! #numbers = 1 2 3]
+            [!set! #combined = { #letters #numbers }]
+            [!debug! [!..zip! {
+                streams: #..combined,
+            }]]
+        },
+        r#"{ A 1 } { B 2 } { C 3 }"#,
+    );
+    assert_preinterpret_eq!(
+        {
+            [!set! #letters = A B C]
+            [!set! #numbers = 1 2 3]
+            [!set! #combined = [#letters #numbers]]
+            [!debug! [!..zip! #..combined]]
+        },
+        r#"[A 1] [B 2] [C 3]"#,
+    );
+}
+
+#[test]
+fn test_zip_with_for() {
+    assert_preinterpret_eq!(
+        {
+            [!set! #countries = France Germany Italy]
+            [!set! #flags = "🇫🇷" "🇩🇪" "🇮🇹"]
+            [!set! #capitals = Paris Berlin Rome]
+            [!set! #facts = [!for! (#country #flag #capital) in [!zip! (#countries #flags #capitals)] {
+                [!string! "=> The capital of " #country " is " #capital " and its flag is " #flag]
+            }]]
+
+            [!string! "The facts are:\n" [!intersperse! {
+                items: #facts,
+                separator: ["\n"],
+            }] "\n"]
+        },
+        r#"The facts are:
+=> The capital of France is Paris and its flag is 🇫🇷
+=> The capital of Germany is Berlin and its flag is 🇩🇪
+=> The capital of Italy is Rome and its flag is 🇮🇹
+"#,
+    );
+}

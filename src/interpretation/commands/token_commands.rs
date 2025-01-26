@@ -116,13 +116,9 @@ impl StreamCommandDefinition for IntersperseCommand {
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> ExecutionResult<()> {
-        let items = self
-            .inputs
-            .items
-            .interpret_to_new_stream(interpreter)?
-            .into_item_vec();
+        let items = self.inputs.items.interpret_to_new_stream(interpreter)?;
         let add_trailing = match self.inputs.add_trailing {
-            Some(add_trailing) => add_trailing.interpret(interpreter)?.value(),
+            Some(add_trailing) => add_trailing.interpret_to_value(interpreter)?.value(),
             None => false,
         };
 
@@ -139,7 +135,7 @@ impl StreamCommandDefinition for IntersperseCommand {
         let mut items = items.into_iter().peekable();
         let mut this_item = items.next().unwrap(); // Safe to unwrap as non-empty
         loop {
-            output.push_segment_item(this_item);
+            output.push_interpreted_item(this_item);
             let next_item = items.next();
             match next_item {
                 Some(next_item) => {
@@ -260,15 +256,15 @@ impl StreamCommandDefinition for SplitCommand {
         let separator = self.inputs.separator.interpret_to_new_stream(interpreter)?;
 
         let drop_empty_start = match self.inputs.drop_empty_start {
-            Some(value) => value.interpret(interpreter)?.value(),
+            Some(value) => value.interpret_to_value(interpreter)?.value(),
             None => false,
         };
         let drop_empty_middle = match self.inputs.drop_empty_middle {
-            Some(value) => value.interpret(interpreter)?.value(),
+            Some(value) => value.interpret_to_value(interpreter)?.value(),
             None => false,
         };
         let drop_empty_end = match self.inputs.drop_empty_end {
-            Some(value) => value.interpret(interpreter)?.value(),
+            Some(value) => value.interpret_to_value(interpreter)?.value(),
             None => true,
         };
 
@@ -355,5 +351,109 @@ impl StreamCommandDefinition for CommaSplitCommand {
         };
 
         handle_split(stream, output, output_span, separator, false, false, true)
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct ZipCommand {
+    inputs: EitherZipInput,
+}
+
+type Streams = CommandValueInput<Grouped<Repeated<CommandStreamInput>>>;
+
+#[derive(Clone)]
+enum EitherZipInput {
+    Fields(ZipInputs),
+    JustStream(Streams),
+}
+
+define_field_inputs! {
+    ZipInputs {
+        required: {
+            streams: Streams = r#"([Hello Goodbye] [World Friend])"# ("A group of one or more streams to zip together. The outer brackets are used for the group."),
+        },
+        optional: {
+            error_on_length_mismatch: CommandValueInput<syn::LitBool> = "true" ("If false, uses shortest stream length, if true, errors on unequal length. Defaults to true."),
+        }
+    }
+}
+
+impl CommandType for ZipCommand {
+    type OutputKind = OutputKindStream;
+}
+
+impl StreamCommandDefinition for ZipCommand {
+    const COMMAND_NAME: &'static str = "zip";
+
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
+        arguments.fully_parse_or_error(
+            |input| {
+                if input.peek(syn::token::Brace) {
+                    Ok(Self {
+                        inputs: EitherZipInput::Fields(input.parse()?),
+                    })
+                } else {
+                    Ok(Self {
+                        inputs: EitherZipInput::JustStream(input.parse()?),
+                    })
+                }
+            },
+            format!(
+                "Expected [!zip! (#a #b #c)] or [!zip! {}]",
+                ZipInputs::fields_description()
+            ),
+        )
+    }
+
+    fn execute(
+        self: Box<Self>,
+        interpreter: &mut Interpreter,
+        output: &mut InterpretedStream,
+    ) -> ExecutionResult<()> {
+        let (grouped_streams, error_on_length_mismatch) = match self.inputs {
+            EitherZipInput::Fields(inputs) => (inputs.streams, inputs.error_on_length_mismatch),
+            EitherZipInput::JustStream(streams) => (streams, None),
+        };
+        let grouped_streams = grouped_streams.interpret_to_value(interpreter)?;
+        let error_on_length_mismatch = match error_on_length_mismatch {
+            Some(value) => value.interpret_to_value(interpreter)?.value(),
+            None => true,
+        };
+        let Grouped {
+            delimiter,
+            delim_span,
+            inner: Repeated { inner: streams },
+        } = grouped_streams;
+        if streams.is_empty() {
+            return delim_span
+                .join()
+                .execution_err("At least one stream is required to zip");
+        }
+        let stream_lengths = streams
+            .iter()
+            .map(|stream| stream.stream.len())
+            .collect::<Vec<_>>();
+        let min_stream_length = *stream_lengths.iter().min().unwrap();
+        if error_on_length_mismatch {
+            let max_stream_length = *stream_lengths.iter().max().unwrap();
+            if min_stream_length != max_stream_length {
+                return delim_span.join().execution_err(format!(
+                    "Streams have different lengths and zip's error_on_length_mismatch is true. The lengths vary from {} to {}",
+                    min_stream_length, max_stream_length
+                ));
+            }
+        }
+        let mut iters: Vec<_> = streams
+            .into_iter()
+            .map(|stream| stream.stream.into_iter())
+            .collect();
+        for _ in 0..min_stream_length {
+            let mut inner = InterpretedStream::new();
+            for iter in iters.iter_mut() {
+                inner.push_interpreted_item(iter.next().unwrap());
+            }
+            output.push_new_group(inner, delimiter, delim_span.span());
+        }
+        Ok(())
     }
 }

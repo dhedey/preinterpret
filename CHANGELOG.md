@@ -19,7 +19,7 @@
   * `[!assign! #x += <expression>]` for `+` and other supported operators
   * `[!range! 0..5]` outputs `0 1 2 3 4`
 * Control flow commands:
-  * `[!if! <expression> { ... }]` and `[!if! <expression> { ... } !else! { ... }]`
+  * `[!if! <expression> { ... }]` and `[!if! <expression> { ... } !elif! <expression> { ... } !else! { ... }]`
   * `[!while! <expression> { ... }]`
   * `[!for! <destructuring> in [ ... ] { ... }]`
   * `[!loop! { ... }]`
@@ -34,6 +34,7 @@
   * `[!intersperse! { ... }]` which inserts separator tokens between each token tree in a stream.
   * `[!split! ...]`
   * `[!comma_split! ...]`
+  * `[!zip! (#countries #flags #capitals)]` which can be used to combine multiple streams together
 * Destructuring commands:
   * `[!let! <destructuring> = ...]` does destructuring/parsing (see next section). Note `[!let! #..x = ...]` is equivalent to `[!set! #x = ...]`
 
@@ -75,10 +76,7 @@ Destructuring performs parsing of a token stream. It supports:
 
 ### To come
 
-* Add our own ParseBuffer / ParseStream types so we can e.g. override `parse`
 * Add compile error tests for all the standard destructuring errors
-* `[!zip! ([Hello Goodbye] [World Friend])]` => `[(Hello World), (Goodbye Friend)]` and/or `[!zip! { streams: (#countries #flags #capitals), error_on_length_mismatch?: true }]` with `InterpretValue<AnyGrouped<Repeated<CodeInput>>>`
-  * e.g. `[!for! (#country #flag #capital) in [!zip! (#countries #flags #capitals)]`
 * `[!is_set! #x]`
 * `[!str_split! { input: Value<LitStr>, separator: Value<LitStr>, }]`
 * Change `(!content! ...)` to unwrap none groups, to be more permissive
@@ -92,7 +90,8 @@ Destructuring performs parsing of a token stream. It supports:
     * `(!optional! ...)`
     * `(!repeated! ...)` also forbid `#x` bindings inside of them unless a `[!settings! { ... }]` has been overriden
       * `{ item: (!stream! ...), minimum?: syn::int, maximum?: syn::int, separator?: (!stream! ...), after_each?: { ... }, before_all?: {}, after_all?: {}, }`
-    * `(!match! ...)` (with `#..x` as a catch-all)
+    * `(!match! ...)` (with `#..x` as a catch-all) but without arms...
+      so I guess it's more of an `(!any! ...)`
   * (MAYBE) `#(..)?`, `#(..)+`, `#(..),+`, `#(..)*`, `#(..),*` but I don't like them much
 * `[!match! ...]` command - similar to the match destructurer, but a command...
 * Check all `#[allow(unused)]` and remove any which aren't needed

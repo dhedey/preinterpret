@@ -1,0 +1,5 @@
+error: Streams have different lengths and zip's error_on_length_mismatch is true. The lengths vary from 3 to 4
+ --> tests/compilation_failures/tokens/zip_different_length_streams.rs:5:16
+  |
+5 |         [!zip! ([A B C] [1 2 3 4])]
+  |                ^^^^^^^^^^^^^^^^^^^
