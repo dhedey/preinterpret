@@ -10,7 +10,6 @@ macro_rules! assert_preinterpret_eq {
 #[cfg_attr(miri, ignore = "incompatible with miri")]
 fn test_core_compilation_failures() {
     let t = trybuild::TestCases::new();
-    // In particular, the "error" command is tested here.
     t.compile_fail("tests/compilation_failures/core/*.rs");
 }
 

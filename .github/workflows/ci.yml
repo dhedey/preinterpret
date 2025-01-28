@@ -31,6 +31,8 @@ jobs:
       - name: Enable type layout randomization
         run: echo RUSTFLAGS=${RUSTFLAGS}\ -Zrandomize-layout >> $GITHUB_ENV
         if: matrix.rust == 'nightly'
+      - name: Add TEST_RUST_MODE env variable
+        run: echo TEST_RUST_MODE=${{matrix.rust}} >> $GITHUB_ENV
       - run: cargo test
       - uses: actions/upload-artifact@v4
         if: matrix.rust == 'nightly' && always()

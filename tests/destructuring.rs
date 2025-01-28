@@ -9,8 +9,11 @@ macro_rules! assert_preinterpret_eq {
 #[test]
 #[cfg_attr(miri, ignore = "incompatible with miri")]
 fn test_destructuring_compilation_failures() {
+    if option_env!("TEST_RUST_MODE") == Some("nightly") {
+        // Some of the outputs are different on nightly, so don't test these
+        return;
+    }
     let t = trybuild::TestCases::new();
-    // In particular, the "error" command is tested here.
     t.compile_fail("tests/compilation_failures/destructuring/*.rs");
 }
 
