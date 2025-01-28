@@ -133,8 +133,13 @@ impl HasSpanRange for DelimSpan {
     }
 }
 
-impl<T: ToTokens + AutoSpanRange> HasSpanRange for T {
-    fn span_range(&self) -> SpanRange {
+pub(crate) trait SlowSpanRange {
+    /// This name is purposefully very long to discourage use, as it can cause nasty performance issues
+    fn span_range_from_iterating_over_all_tokens(&self) -> SpanRange;
+}
+
+impl<T: ToTokens> SlowSpanRange for T {
+    fn span_range_from_iterating_over_all_tokens(&self) -> SpanRange {
         let mut iter = self.into_token_stream().into_iter();
         let start = iter.next().map_or_else(Span::call_site, |t| t.span());
         let end = iter.last().map_or(start, |t| t.span());
@@ -154,18 +159,24 @@ macro_rules! impl_auto_span_range {
     };
 }
 
+impl<T: ToTokens + AutoSpanRange> HasSpanRange for T {
+    fn span_range(&self) -> SpanRange {
+        // AutoSpanRange should only be used for tokens with a small number of tokens
+        SlowSpanRange::span_range_from_iterating_over_all_tokens(&self)
+    }
+}
+
+// This should only be used for types with a bounded number of tokens
+// otherwise, span_range_from_iterating_over_all_tokens() can be used
+// directly with a longer name to make the performance hit clearer, so
+// it's only used in error cases.
 impl_auto_span_range! {
-    TokenStream,
     Ident,
     Punct,
     Literal,
-    syn::Expr,
-    syn::ExprBinary,
-    syn::ExprUnary,
     syn::BinOp,
     syn::UnOp,
-    syn::Type,
-    syn::TypePath,
+    syn::token::As,
     syn::token::DotDot,
     syn::token::In,
 }

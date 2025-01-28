@@ -1,0 +1,7 @@
+error: expected World
+ --> tests/compilation_failures/destructuring/invalid_content_too_short.rs:4:5
+  |
+4 |     preinterpret!([!let! Hello World = Hello]);
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the macro `preinterpret` (in Nightly builds, run with -Z macro-backtrace for more info)

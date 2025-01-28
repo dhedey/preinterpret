@@ -281,7 +281,7 @@ impl NoOutputCommandDefinition for ErrorCommand {
                 if error_span_stream.is_empty() {
                     Span::call_site().span_range()
                 } else {
-                    error_span_stream.span_range()
+                    error_span_stream.span_range_from_iterating_over_all_tokens()
                 }
             }
             None => Span::call_site().span_range(),

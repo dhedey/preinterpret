@@ -1,0 +1,5 @@
+error: unexpected token
+ --> tests/compilation_failures/destructuring/invalid_content_too_long.rs:4:51
+  |
+4 |     preinterpret!([!let! Hello World = Hello World!!!]);
+  |                                                   ^

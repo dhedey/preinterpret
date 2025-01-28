@@ -79,6 +79,7 @@ impl<'a> EvaluationTreeBuilder<'a> {
                     );
                 }
                 Expr::Group(expr) => {
+                    // We handle these as a no-op operation so that they get the span from the group
                     self.add_unary_operation(
                         placement,
                         UnaryOperation::for_group_expression(expr)?,
@@ -89,6 +90,7 @@ impl<'a> EvaluationTreeBuilder<'a> {
                     self.add_literal(placement, EvaluationValue::for_literal_expression(expr)?);
                 }
                 Expr::Paren(expr) => {
+                    // We handle these as a no-op operation so that they get the span from the paren
                     self.add_unary_operation(
                         placement,
                         UnaryOperation::for_paren_expression(expr)?,
@@ -103,9 +105,11 @@ impl<'a> EvaluationTreeBuilder<'a> {
                     );
                 }
                 other_expression => {
-                    return other_expression.execution_err(
-                        "This expression is not supported in preinterpret expressions",
-                    );
+                    return other_expression
+                        .span_range_from_iterating_over_all_tokens()
+                        .execution_err(
+                            "This expression is not supported in preinterpret expressions",
+                        );
                 }
             }
         }
@@ -116,14 +120,14 @@ impl<'a> EvaluationTreeBuilder<'a> {
 
     fn add_binary_operation(
         &mut self,
-        placement: ResultPlacement,
+        result_placement: ResultPlacement,
         operation: BinaryOperation,
         lhs: &'a Expr,
         rhs: &'a Expr,
     ) {
         let parent_node_stack_index = self.evaluation_stack.len();
         self.evaluation_stack.push(EvaluationNode {
-            result_placement: placement,
+            result_placement,
             content: EvaluationNodeContent::Operator(EvaluationOperator::Binary {
                 operation,
                 left_input: None,

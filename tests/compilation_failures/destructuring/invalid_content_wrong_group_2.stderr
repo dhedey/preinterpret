@@ -1,0 +1,5 @@
+error: Expected start of transparent group, from a grouped #variable substitution or stream-based command such as [!group! ...]
+ --> tests/compilation_failures/destructuring/invalid_content_wrong_group_2.rs:4:43
+  |
+4 |     preinterpret!([!let! (!group! #..x) = [Hello World]]);
+  |                                           ^^^^^^^^^^^^^

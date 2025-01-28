@@ -76,8 +76,9 @@ Destructuring performs parsing of a token stream. It supports:
 
 ### To come
 
-* The `[!assign! ...]` operator is optional, if not present, it functions as `[!set! #x = [!evaluate! ...]]`
-* Add compile error tests for all the standard destructuring errors
+* Expression refactoring:
+  * Get rid of source span, and instead provide it when getting an output
+  * Also remove ToTokens etc
 * `[!is_set! #x]`
 * `[!str_split! { input: Value<LitStr>, separator: Value<LitStr>, }]`
 * Change `(!content! ...)` to unwrap none groups, to be more permissive
@@ -99,12 +100,20 @@ Destructuring performs parsing of a token stream. It supports:
   * Fix comments in the expression files
   * Enable lazy && and ||
   * Enable support for code blocks { .. } in expressions, and remove hacks where expression parsing stops at {} or .
+  * Remove stack overflow possibilities when parsing a long nested expression
 * Pushed to 0.4:
   * Fork of syn to:
     * Fix issues in Rust Analyzer
-    * Improve performance
-    * Permit `[!parse_while! [!PARSE! ...] from #x { ... }]`
+    * Improve performance (?)
+    * Permit `[!parse_while! (!stream! ...) from #x { ... }]`
     * Fix `any_punct()` to ignore none groups
+    * Groups can either be:
+      * Raw Groups
+      * Or created groups, where we store `DelimSpan` for re-parsing and accessing the open/close delimiters (this will let us improve `invalid_content_wrong_group`)
+    * Better error messages
+      * See e.g. invalid_content_too_short where ideally the error message would be on the last token in the stream. Perhaps End gets a span from the previous error?
+      * See e.g. invalid_content_too_long where `unexpected token` is quite vague.
+      Maybe we can't sensibly do better though...
   * Further syn parsings (e.g. item, fields, etc)
 * Work on book
   * Input paradigms:

@@ -1,0 +1,5 @@
+error: unexpected token, expected `)`
+ --> tests/compilation_failures/destructuring/invalid_group_content_too_long.rs:4:68
+  |
+4 |     preinterpret!([!let! Group: (Hello World) = Group: (Hello World!!!)]);
+  |                                                                    ^

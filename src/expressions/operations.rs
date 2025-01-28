@@ -78,9 +78,11 @@ impl UnaryOperation {
                     let ident = match type_path.path.get_ident() {
                         Some(ident) => ident,
                         None => {
-                            return type_path.execution_err(
-                                "This type is not supported in preinterpret cast expressions",
-                            )
+                            return type_path
+                                .span_range_from_iterating_over_all_tokens()
+                                .execution_err(
+                                    "This type is not supported in preinterpret cast expressions",
+                                )
                         }
                     };
                     match ident.to_string().as_str() {
@@ -108,13 +110,14 @@ impl UnaryOperation {
                     }
                 }
                 other => other
+                    .span_range_from_iterating_over_all_tokens()
                     .execution_err("This type is not supported in preinterpret cast expressions"),
             }
         }
 
         Ok(Self {
-            span_for_output: expr.expr.span_range(),
-            operator_span: expr.as_token.span.span_range(),
+            span_for_output: expr.as_token.span_range(),
+            operator_span: expr.as_token.span_range(),
             operator: UnaryOperator::Cast(extract_type(&expr.ty)?),
         })
     }
@@ -146,7 +149,7 @@ impl UnaryOperation {
             }
         };
         Ok(Self {
-            span_for_output: expr.span_range(),
+            span_for_output: expr.op.span_range(),
             operator_span: expr.op.span_range(),
             operator,
         })
@@ -249,7 +252,7 @@ impl BinaryOperation {
             }
         };
         Ok(Self {
-            span_for_output: expr.span_range(),
+            span_for_output: expr.op.span_range(),
             operator_span: expr.op.span_range(),
             operator,
         })

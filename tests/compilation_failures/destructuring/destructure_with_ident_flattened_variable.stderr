@@ -1,0 +1,6 @@
+error: A flattened input variable is not supported here
+       Occurred whilst parsing (!ident! ...) - Expected (!ident! #x) or (!ident #>>x) or (!ident!)
+ --> tests/compilation_failures/destructuring/destructure_with_ident_flattened_variable.rs:4:35
+  |
+4 |     preinterpret!([!let! (!ident! #..x) = Hello]);
+  |                                   ^
