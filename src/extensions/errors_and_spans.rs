@@ -80,6 +80,7 @@ impl SpanRange {
         <Self as syn::spanned::Spanned>::span(self)
     }
 
+    #[allow(unused)]
     pub(crate) fn start(&self) -> Span {
         self.start
     }

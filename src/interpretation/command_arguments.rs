@@ -4,25 +4,29 @@ use crate::internal_prelude::*;
 pub(crate) struct CommandArguments<'a> {
     parse_stream: ParseStream<'a>,
     command_name: Ident,
-    /// The span range of the original stream, before tokens were consumed
-    full_span_range: SpanRange,
+    /// The span of the [ ... ] which contained the command
+    command_span: Span,
 }
 
 impl<'a> CommandArguments<'a> {
     pub(crate) fn new(
         parse_stream: ParseStream<'a>,
         command_name: Ident,
-        span_range: SpanRange,
+        command_span: Span,
     ) -> Self {
         Self {
             parse_stream,
             command_name,
-            full_span_range: span_range,
+            command_span,
         }
     }
 
-    pub(crate) fn full_span_range(&self) -> SpanRange {
-        self.full_span_range
+    pub(crate) fn command_span(&self) -> Span {
+        self.command_span
+    }
+
+    pub(crate) fn command_span_range(&self) -> SpanRange {
+        self.command_span.span_range()
     }
 
     /// We use this instead of the "unexpected / drop glue" pattern in order to give a better error message
@@ -30,7 +34,7 @@ impl<'a> CommandArguments<'a> {
         if self.parse_stream.is_empty() {
             Ok(())
         } else {
-            self.full_span_range.parse_err(error_message)
+            self.command_span.parse_err(error_message)
         }
     }
 
@@ -65,7 +69,7 @@ impl<'a> CommandArguments<'a> {
 
     pub(crate) fn parse_all_for_interpretation(&self) -> ParseResult<InterpretationStream> {
         self.parse_stream
-            .parse_all_for_interpretation(self.full_span_range)
+            .parse_all_for_interpretation(self.command_span.span_range())
     }
 
     pub(crate) fn read_all_as_raw_token_stream(&self) -> TokenStream {

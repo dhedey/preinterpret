@@ -4,11 +4,15 @@ pub(super) struct EvaluationTree {
     /// We store the tree as a normalized stack of nodes to make it easier to evaluate
     /// without risking hitting stack overflow issues for deeply unbalanced trees
     evaluation_stack: Vec<EvaluationNode>,
+    fallback_output_span: Span,
 }
 
 impl EvaluationTree {
-    pub(super) fn build_from(expression: &Expr) -> ExecutionResult<EvaluationTree> {
-        EvaluationTreeBuilder::new(expression).build()
+    pub(super) fn build_from(
+        fallback_output_span: Span,
+        expression: &Expr,
+    ) -> ExecutionResult<EvaluationTree> {
+        EvaluationTreeBuilder::new(expression).build(fallback_output_span)
     }
 
     pub(super) fn evaluate(mut self) -> ExecutionResult<EvaluationOutput> {
@@ -17,7 +21,12 @@ impl EvaluationTree {
                 .expect("The builder should ensure that the stack is non-empty and has a final element of a RootResult which results in a return below.");
             let result = content.evaluate()?;
             match result_placement {
-                ResultPlacement::RootResult => return Ok(result),
+                ResultPlacement::RootResult => {
+                    return Ok(EvaluationOutput {
+                        value: result,
+                        fallback_output_span: self.fallback_output_span,
+                    })
+                }
                 ResultPlacement::UnaryOperationInput {
                     parent_node_stack_index,
                 } => {
@@ -60,7 +69,7 @@ impl<'a> EvaluationTreeBuilder<'a> {
     /// Attempts to construct a preinterpret expression tree from a syn [Expr].
     /// It tries to align with the [rustc expression] building approach.
     /// [rustc expression]: https://doc.rust-lang.org/reference/expressions.html
-    fn build(mut self) -> ExecutionResult<EvaluationTree> {
+    fn build(mut self, fallback_output_span: Span) -> ExecutionResult<EvaluationTree> {
         while let Some((expression, placement)) = self.work_stack.pop() {
             match expression {
                 Expr::Binary(expr) => {
@@ -115,6 +124,7 @@ impl<'a> EvaluationTreeBuilder<'a> {
         }
         Ok(EvaluationTree {
             evaluation_stack: self.evaluation_stack,
+            fallback_output_span,
         })
     }
 
@@ -174,7 +184,7 @@ impl<'a> EvaluationTreeBuilder<'a> {
     fn add_literal(&mut self, placement: ResultPlacement, literal: EvaluationValue) {
         self.evaluation_stack.push(EvaluationNode {
             result_placement: placement,
-            content: EvaluationNodeContent::Literal(literal),
+            content: EvaluationNodeContent::Value(literal),
         });
     }
 }
@@ -185,19 +195,19 @@ struct EvaluationNode {
 }
 
 enum EvaluationNodeContent {
-    Literal(EvaluationValue),
+    Value(EvaluationValue),
     Operator(EvaluationOperator),
 }
 
 impl EvaluationNodeContent {
-    fn evaluate(self) -> ExecutionResult<EvaluationOutput> {
+    fn evaluate(self) -> ExecutionResult<EvaluationValue> {
         match self {
-            Self::Literal(literal) => Ok(EvaluationOutput::Value(literal)),
+            Self::Value(value) => Ok(value),
             Self::Operator(operator) => operator.evaluate(),
         }
     }
 
-    fn set_unary_input(&mut self, input: EvaluationOutput) {
+    fn set_unary_input(&mut self, input: EvaluationValue) {
         match self {
             Self::Operator(EvaluationOperator::Unary {
                 input: existing_input,
@@ -207,7 +217,7 @@ impl EvaluationNodeContent {
         }
     }
 
-    fn set_binary_left_input(&mut self, input: EvaluationOutput) {
+    fn set_binary_left_input(&mut self, input: EvaluationValue) {
         match self {
             Self::Operator(EvaluationOperator::Binary {
                 left_input: existing_input,
@@ -217,7 +227,7 @@ impl EvaluationNodeContent {
         }
     }
 
-    fn set_binary_right_input(&mut self, input: EvaluationOutput) {
+    fn set_binary_right_input(&mut self, input: EvaluationValue) {
         match self {
             Self::Operator(EvaluationOperator::Binary {
                 right_input: existing_input,
@@ -228,239 +238,66 @@ impl EvaluationNodeContent {
     }
 }
 
-pub(crate) enum EvaluationOutput {
-    Value(EvaluationValue),
-}
-
-pub(super) trait ToEvaluationOutput: Sized {
-    fn to_output(self, span: SpanRange) -> EvaluationOutput;
+pub(crate) struct EvaluationOutput {
+    value: EvaluationValue,
+    fallback_output_span: Span,
 }
 
 impl EvaluationOutput {
-    pub(super) fn expect_value_pair(
-        self,
-        operator: PairedBinaryOperator,
-        right: EvaluationOutput,
-        operator_span: SpanRange,
-    ) -> ExecutionResult<EvaluationLiteralPair> {
-        let left_lit = self.into_value();
-        let right_lit = right.into_value();
-        Ok(match (left_lit, right_lit) {
-            (EvaluationValue::Integer(left), EvaluationValue::Integer(right)) => {
-                let integer_pair = match (left.value, right.value) {
-                    (EvaluationIntegerValue::Untyped(untyped_lhs), rhs) => match rhs {
-                        EvaluationIntegerValue::Untyped(untyped_rhs) => {
-                            EvaluationIntegerValuePair::Untyped(untyped_lhs, untyped_rhs)
-                        }
-                        EvaluationIntegerValue::U8(rhs) => {
-                            EvaluationIntegerValuePair::U8(untyped_lhs.parse_as()?, rhs)
-                        }
-                        EvaluationIntegerValue::U16(rhs) => {
-                            EvaluationIntegerValuePair::U16(untyped_lhs.parse_as()?, rhs)
-                        }
-                        EvaluationIntegerValue::U32(rhs) => {
-                            EvaluationIntegerValuePair::U32(untyped_lhs.parse_as()?, rhs)
-                        }
-                        EvaluationIntegerValue::U64(rhs) => {
-                            EvaluationIntegerValuePair::U64(untyped_lhs.parse_as()?, rhs)
-                        }
-                        EvaluationIntegerValue::U128(rhs) => {
-                            EvaluationIntegerValuePair::U128(untyped_lhs.parse_as()?, rhs)
-                        }
-                        EvaluationIntegerValue::Usize(rhs) => {
-                            EvaluationIntegerValuePair::Usize(untyped_lhs.parse_as()?, rhs)
-                        }
-                        EvaluationIntegerValue::I8(rhs) => {
-                            EvaluationIntegerValuePair::I8(untyped_lhs.parse_as()?, rhs)
-                        }
-                        EvaluationIntegerValue::I16(rhs) => {
-                            EvaluationIntegerValuePair::I16(untyped_lhs.parse_as()?, rhs)
-                        }
-                        EvaluationIntegerValue::I32(rhs) => {
-                            EvaluationIntegerValuePair::I32(untyped_lhs.parse_as()?, rhs)
-                        }
-                        EvaluationIntegerValue::I64(rhs) => {
-                            EvaluationIntegerValuePair::I64(untyped_lhs.parse_as()?, rhs)
-                        }
-                        EvaluationIntegerValue::I128(rhs) => {
-                            EvaluationIntegerValuePair::I128(untyped_lhs.parse_as()?, rhs)
-                        }
-                        EvaluationIntegerValue::Isize(rhs) => {
-                            EvaluationIntegerValuePair::Isize(untyped_lhs.parse_as()?, rhs)
-                        }
-                    },
-                    (lhs, EvaluationIntegerValue::Untyped(untyped_rhs)) => match lhs {
-                        EvaluationIntegerValue::Untyped(untyped_lhs) => {
-                            EvaluationIntegerValuePair::Untyped(untyped_lhs, untyped_rhs)
-                        }
-                        EvaluationIntegerValue::U8(lhs) => {
-                            EvaluationIntegerValuePair::U8(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationIntegerValue::U16(lhs) => {
-                            EvaluationIntegerValuePair::U16(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationIntegerValue::U32(lhs) => {
-                            EvaluationIntegerValuePair::U32(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationIntegerValue::U64(lhs) => {
-                            EvaluationIntegerValuePair::U64(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationIntegerValue::U128(lhs) => {
-                            EvaluationIntegerValuePair::U128(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationIntegerValue::Usize(lhs) => {
-                            EvaluationIntegerValuePair::Usize(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationIntegerValue::I8(lhs) => {
-                            EvaluationIntegerValuePair::I8(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationIntegerValue::I16(lhs) => {
-                            EvaluationIntegerValuePair::I16(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationIntegerValue::I32(lhs) => {
-                            EvaluationIntegerValuePair::I32(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationIntegerValue::I64(lhs) => {
-                            EvaluationIntegerValuePair::I64(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationIntegerValue::I128(lhs) => {
-                            EvaluationIntegerValuePair::I128(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationIntegerValue::Isize(lhs) => {
-                            EvaluationIntegerValuePair::Isize(lhs, untyped_rhs.parse_as()?)
-                        }
-                    },
-                    (EvaluationIntegerValue::U8(lhs), EvaluationIntegerValue::U8(rhs)) => {
-                        EvaluationIntegerValuePair::U8(lhs, rhs)
-                    }
-                    (EvaluationIntegerValue::U16(lhs), EvaluationIntegerValue::U16(rhs)) => {
-                        EvaluationIntegerValuePair::U16(lhs, rhs)
-                    }
-                    (EvaluationIntegerValue::U32(lhs), EvaluationIntegerValue::U32(rhs)) => {
-                        EvaluationIntegerValuePair::U32(lhs, rhs)
-                    }
-                    (EvaluationIntegerValue::U64(lhs), EvaluationIntegerValue::U64(rhs)) => {
-                        EvaluationIntegerValuePair::U64(lhs, rhs)
-                    }
-                    (EvaluationIntegerValue::U128(lhs), EvaluationIntegerValue::U128(rhs)) => {
-                        EvaluationIntegerValuePair::U128(lhs, rhs)
-                    }
-                    (EvaluationIntegerValue::Usize(lhs), EvaluationIntegerValue::Usize(rhs)) => {
-                        EvaluationIntegerValuePair::Usize(lhs, rhs)
-                    }
-                    (EvaluationIntegerValue::I8(lhs), EvaluationIntegerValue::I8(rhs)) => {
-                        EvaluationIntegerValuePair::I8(lhs, rhs)
-                    }
-                    (EvaluationIntegerValue::I16(lhs), EvaluationIntegerValue::I16(rhs)) => {
-                        EvaluationIntegerValuePair::I16(lhs, rhs)
-                    }
-                    (EvaluationIntegerValue::I32(lhs), EvaluationIntegerValue::I32(rhs)) => {
-                        EvaluationIntegerValuePair::I32(lhs, rhs)
-                    }
-                    (EvaluationIntegerValue::I64(lhs), EvaluationIntegerValue::I64(rhs)) => {
-                        EvaluationIntegerValuePair::I64(lhs, rhs)
-                    }
-                    (EvaluationIntegerValue::I128(lhs), EvaluationIntegerValue::I128(rhs)) => {
-                        EvaluationIntegerValuePair::I128(lhs, rhs)
-                    }
-                    (EvaluationIntegerValue::Isize(lhs), EvaluationIntegerValue::Isize(rhs)) => {
-                        EvaluationIntegerValuePair::Isize(lhs, rhs)
-                    }
-                    (left_value, right_value) => {
-                        return operator_span.execution_err(format!("The {} operator cannot infer a common integer operand type from {} and {}. Consider using `as` to cast to matching types.", operator.symbol(), left_value.describe_type(), right_value.describe_type()));
-                    }
-                };
-                EvaluationLiteralPair::Integer(integer_pair)
-            }
-            (EvaluationValue::Boolean(left), EvaluationValue::Boolean(right)) => {
-                EvaluationLiteralPair::BooleanPair(left, right)
-            }
-            (EvaluationValue::Float(left), EvaluationValue::Float(right)) => {
-                let float_pair = match (left.value, right.value) {
-                    (EvaluationFloatValue::Untyped(untyped_lhs), rhs) => match rhs {
-                        EvaluationFloatValue::Untyped(untyped_rhs) => {
-                            EvaluationFloatValuePair::Untyped(untyped_lhs, untyped_rhs)
-                        }
-                        EvaluationFloatValue::F32(rhs) => {
-                            EvaluationFloatValuePair::F32(untyped_lhs.parse_as()?, rhs)
-                        }
-                        EvaluationFloatValue::F64(rhs) => {
-                            EvaluationFloatValuePair::F64(untyped_lhs.parse_as()?, rhs)
-                        }
-                    },
-                    (lhs, EvaluationFloatValue::Untyped(untyped_rhs)) => match lhs {
-                        EvaluationFloatValue::Untyped(untyped_lhs) => {
-                            EvaluationFloatValuePair::Untyped(untyped_lhs, untyped_rhs)
-                        }
-                        EvaluationFloatValue::F32(lhs) => {
-                            EvaluationFloatValuePair::F32(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationFloatValue::F64(lhs) => {
-                            EvaluationFloatValuePair::F64(lhs, untyped_rhs.parse_as()?)
-                        }
-                    },
-                    (EvaluationFloatValue::F32(lhs), EvaluationFloatValue::F32(rhs)) => {
-                        EvaluationFloatValuePair::F32(lhs, rhs)
-                    }
-                    (EvaluationFloatValue::F64(lhs), EvaluationFloatValue::F64(rhs)) => {
-                        EvaluationFloatValuePair::F64(lhs, rhs)
-                    }
-                    (left_value, right_value) => {
-                        return operator_span.execution_err(format!("The {} operator cannot infer a common float operand type from {} and {}. Consider using `as` to cast to matching types.", operator.symbol(), left_value.describe_type(), right_value.describe_type()));
-                    }
-                };
-                EvaluationLiteralPair::Float(float_pair)
-            }
-            (EvaluationValue::String(left), EvaluationValue::String(right)) => {
-                EvaluationLiteralPair::StringPair(left, right)
-            }
-            (EvaluationValue::Char(left), EvaluationValue::Char(right)) => {
-                EvaluationLiteralPair::CharPair(left, right)
-            }
-            (left, right) => {
-                return operator_span.execution_err(format!("The {} operator cannot infer a common operand type from {} and {}. Consider using `as` to cast to matching types.", operator.symbol(), left.describe_type(), right.describe_type()));
-            }
-        })
-    }
-
-    pub(crate) fn expect_integer(self, error_message: &str) -> ExecutionResult<EvaluationInteger> {
-        match self.into_value() {
-            EvaluationValue::Integer(value) => Ok(value),
-            other => other.source_span().execution_err(error_message),
-        }
-    }
-
-    pub(crate) fn expect_bool(self, error_message: &str) -> ExecutionResult<EvaluationBoolean> {
-        match self.into_value() {
-            EvaluationValue::Boolean(value) => Ok(value),
-            other => other.source_span().execution_err(error_message),
-        }
-    }
-
+    #[allow(unused)]
     pub(super) fn into_value(self) -> EvaluationValue {
-        match self {
-            Self::Value(value) => value,
+        self.value
+    }
+
+    #[allow(unused)]
+    pub(crate) fn expect_integer(self, error_message: &str) -> ExecutionResult<EvaluationInteger> {
+        let error_span = self.span();
+        match self.value.into_integer() {
+            Some(integer) => Ok(integer),
+            None => error_span.execution_err(error_message),
         }
     }
 
-    pub(crate) fn into_token_tree(self) -> TokenTree {
-        match self {
-            Self::Value(value) => value.into_token_tree(),
+    pub(crate) fn try_into_i128(self, error_message: &str) -> ExecutionResult<i128> {
+        let error_span = self.span();
+        match self
+            .value
+            .into_integer()
+            .and_then(|integer| integer.try_into_i128())
+        {
+            Some(integer) => Ok(integer),
+            None => error_span.execution_err(error_message),
         }
+    }
+
+    pub(crate) fn expect_bool(self, error_message: &str) -> ExecutionResult<bool> {
+        let error_span = self.span();
+        match self.value.into_bool() {
+            Some(boolean) => Ok(boolean.value),
+            None => error_span.execution_err(error_message),
+        }
+    }
+
+    pub(crate) fn to_token_tree(&self) -> TokenTree {
+        self.value.to_token_tree(self.fallback_output_span)
     }
 }
 
-impl From<EvaluationValue> for EvaluationOutput {
-    fn from(literal: EvaluationValue) -> Self {
-        Self::Value(literal)
+impl HasSpanRange for EvaluationOutput {
+    fn span(&self) -> Span {
+        self.value
+            .source_span()
+            .unwrap_or(self.fallback_output_span)
+    }
+
+    fn span_range(&self) -> SpanRange {
+        self.span().span_range()
     }
 }
 
 impl quote::ToTokens for EvaluationOutput {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self {
-            EvaluationOutput::Value(evaluation_literal) => evaluation_literal.to_tokens(tokens),
-        }
+        self.to_token_tree().to_tokens(tokens);
     }
 }
 

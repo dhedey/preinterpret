@@ -76,9 +76,6 @@ Destructuring performs parsing of a token stream. It supports:
 
 ### To come
 
-* Expression refactoring:
-  * Get rid of source span, and instead provide it when getting an output
-  * Also remove ToTokens etc
 * `[!is_set! #x]`
 * `[!str_split! { input: Value<LitStr>, separator: Value<LitStr>, }]`
 * Change `(!content! ...)` to unwrap none groups, to be more permissive

@@ -2,26 +2,24 @@ use super::*;
 use crate::internal_prelude::*;
 
 pub(crate) struct EvaluationFloat {
-    pub(super) source_span: SpanRange,
     pub(super) value: EvaluationFloatValue,
+    /// The span of the source code that generated this boolean value.
+    /// It may not have a value if generated from a complex expression.
+    pub(super) source_span: Option<Span>,
 }
 
 impl EvaluationFloat {
-    pub(super) fn new(value: EvaluationFloatValue, source_span: SpanRange) -> Self {
-        Self { value, source_span }
-    }
-
     pub(super) fn for_litfloat(lit: &syn::LitFloat) -> ExecutionResult<Self> {
         Ok(Self {
-            source_span: lit.span().span_range(),
             value: EvaluationFloatValue::for_litfloat(lit)?,
+            source_span: Some(lit.span()),
         })
     }
 
     pub(super) fn handle_unary_operation(
         self,
         operation: UnaryOperation,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         match self.value {
             EvaluationFloatValue::Untyped(input) => input.handle_unary_operation(&operation),
             EvaluationFloatValue::F32(input) => input.handle_unary_operation(&operation),
@@ -33,7 +31,7 @@ impl EvaluationFloat {
         self,
         right: EvaluationInteger,
         operation: BinaryOperation,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         match self.value {
             EvaluationFloatValue::Untyped(input) => {
                 input.handle_integer_binary_operation(right, &operation)
@@ -47,16 +45,10 @@ impl EvaluationFloat {
         }
     }
 
-    pub(super) fn to_literal(&self) -> Literal {
+    pub(super) fn to_literal(&self, fallback_span: Span) -> Literal {
         self.value
             .to_unspanned_literal()
-            .with_span(self.source_span.start())
-    }
-}
-
-impl quote::ToTokens for EvaluationFloat {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.to_literal().to_tokens(tokens)
+            .with_span(self.source_span.unwrap_or(fallback_span))
     }
 }
 
@@ -70,7 +62,7 @@ impl EvaluationFloatValuePair {
     pub(super) fn handle_paired_binary_operation(
         self,
         operation: &BinaryOperation,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         match self {
             Self::Untyped(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
             Self::F32(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
@@ -142,7 +134,7 @@ impl UntypedFloat {
     pub(super) fn handle_unary_operation(
         self,
         operation: &UnaryOperation,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         let input = self.parse_fallback()?;
         match operation.operator {
             UnaryOperator::Neg => operation.output(Self::from_fallback(-input)),
@@ -180,7 +172,7 @@ impl UntypedFloat {
         self,
         _rhs: EvaluationInteger,
         operation: &BinaryOperation,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         match operation.integer_operator() {
             IntegerBinaryOperator::ShiftLeft | IntegerBinaryOperator::ShiftRight => {
                 operation.unsupported_for_value_type_err("untyped float")
@@ -192,7 +184,7 @@ impl UntypedFloat {
         self,
         rhs: Self,
         operation: &BinaryOperation,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         let lhs = self.parse_fallback()?;
         let rhs = rhs.parse_fallback()?;
         match operation.paired_operator() {
@@ -253,13 +245,12 @@ impl UntypedFloat {
     }
 }
 
-impl ToEvaluationOutput for UntypedFloat {
-    fn to_output(self, span_range: SpanRange) -> EvaluationOutput {
-        EvaluationValue::Float(EvaluationFloat::new(
-            EvaluationFloatValue::Untyped(self),
-            span_range,
-        ))
-        .into()
+impl ToEvaluationValue for UntypedFloat {
+    fn to_value(self, source_span: Option<Span>) -> EvaluationValue {
+        EvaluationValue::Float(EvaluationFloat {
+            value: EvaluationFloatValue::Untyped(self),
+            source_span,
+        })
     }
 }
 
@@ -267,14 +258,17 @@ macro_rules! impl_float_operations {
     (
         $($float_enum_variant:ident($float_type:ident)),* $(,)?
     ) => {$(
-        impl ToEvaluationOutput for $float_type {
-            fn to_output(self, span_range: SpanRange) -> EvaluationOutput {
-                EvaluationValue::Float(EvaluationFloat::new(EvaluationFloatValue::$float_enum_variant(self), span_range)).into()
+        impl ToEvaluationValue for $float_type {
+            fn to_value(self, source_span: Option<Span>) -> EvaluationValue {
+                EvaluationValue::Float(EvaluationFloat {
+                    value: EvaluationFloatValue::$float_enum_variant(self),
+                    source_span
+                })
             }
         }
 
         impl HandleUnaryOperation for $float_type {
-            fn handle_unary_operation(self, operation: &UnaryOperation) -> ExecutionResult<EvaluationOutput> {
+            fn handle_unary_operation(self, operation: &UnaryOperation) -> ExecutionResult<EvaluationValue> {
                 match operation.operator {
                     UnaryOperator::Neg => operation.output(-self),
                     UnaryOperator::Not => operation.unsupported_for_value_type_err(stringify!($float_type)),
@@ -303,7 +297,7 @@ macro_rules! impl_float_operations {
         }
 
         impl HandleBinaryOperation for $float_type {
-            fn handle_paired_binary_operation(self, rhs: Self, operation: &BinaryOperation) -> ExecutionResult<EvaluationOutput> {
+            fn handle_paired_binary_operation(self, rhs: Self, operation: &BinaryOperation) -> ExecutionResult<EvaluationValue> {
                 // Unlike integer arithmetic, float arithmetic does not overflow
                 // and instead falls back to NaN or infinity. In future we could
                 // allow trapping on these codes, but for now this is good enough
@@ -336,7 +330,7 @@ macro_rules! impl_float_operations {
                 self,
                 _rhs: EvaluationInteger,
                 operation: &BinaryOperation,
-            ) -> ExecutionResult<EvaluationOutput> {
+            ) -> ExecutionResult<EvaluationValue> {
                 match operation.integer_operator() {
                     IntegerBinaryOperator::ShiftLeft | IntegerBinaryOperator::ShiftRight => {
                         operation.unsupported_for_value_type_err(stringify!($float_type))

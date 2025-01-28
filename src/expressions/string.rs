@@ -2,25 +2,23 @@ use super::*;
 
 pub(crate) struct EvaluationString {
     pub(super) value: String,
-    pub(super) source_span: SpanRange,
+    /// The span of the source code that generated this boolean value.
+    /// It may not have a value if generated from a complex expression.
+    pub(super) source_span: Option<Span>,
 }
 
 impl EvaluationString {
-    pub(super) fn new(value: String, source_span: SpanRange) -> Self {
-        Self { value, source_span }
-    }
-
     pub(super) fn for_litstr(lit: &syn::LitStr) -> Self {
         Self {
             value: lit.value(),
-            source_span: lit.span().span_range(),
+            source_span: Some(lit.span()),
         }
     }
 
     pub(super) fn handle_unary_operation(
         self,
         operation: UnaryOperation,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         match operation.operator {
             UnaryOperator::NoOp => operation.output(self.value),
             UnaryOperator::Neg | UnaryOperator::Not | UnaryOperator::Cast(_) => {
@@ -33,7 +31,7 @@ impl EvaluationString {
         self,
         _right: EvaluationInteger,
         operation: BinaryOperation,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         operation.unsupported_for_value_type_err("string")
     }
 
@@ -41,7 +39,7 @@ impl EvaluationString {
         self,
         rhs: Self,
         operation: &BinaryOperation,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         let lhs = self.value;
         let rhs = rhs.value;
         match operation.paired_operator() {
@@ -64,25 +62,25 @@ impl EvaluationString {
         }
     }
 
-    pub(super) fn to_literal(&self) -> Literal {
-        Literal::string(&self.value).with_span(self.source_span.start())
+    pub(super) fn to_literal(&self, fallback_span: Span) -> Literal {
+        Literal::string(&self.value).with_span(self.source_span.unwrap_or(fallback_span))
     }
 }
 
-impl ToEvaluationOutput for String {
-    fn to_output(self, span: SpanRange) -> EvaluationOutput {
-        EvaluationValue::String(EvaluationString::new(self, span)).into()
+impl ToEvaluationValue for String {
+    fn to_value(self, source_span: Option<Span>) -> EvaluationValue {
+        EvaluationValue::String(EvaluationString {
+            value: self,
+            source_span,
+        })
     }
 }
 
-impl ToEvaluationOutput for &str {
-    fn to_output(self, span: SpanRange) -> EvaluationOutput {
-        EvaluationValue::String(EvaluationString::new(self.to_string(), span)).into()
-    }
-}
-
-impl quote::ToTokens for EvaluationString {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.to_literal().to_tokens(tokens)
+impl ToEvaluationValue for &str {
+    fn to_value(self, source_span: Option<Span>) -> EvaluationValue {
+        EvaluationValue::String(EvaluationString {
+            value: self.to_string(),
+            source_span,
+        })
     }
 }

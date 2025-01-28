@@ -492,7 +492,7 @@ impl Parse for Command {
         let invocation = command_kind.parse_invocation(CommandArguments::new(
             &content,
             command_name,
-            delim_span.span_range(),
+            delim_span.join(),
         ))?;
         Ok(Self {
             invocation,

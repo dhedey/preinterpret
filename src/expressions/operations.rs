@@ -3,17 +3,17 @@ use super::*;
 pub(super) enum EvaluationOperator {
     Unary {
         operation: UnaryOperation,
-        input: Option<EvaluationOutput>,
+        input: Option<EvaluationValue>,
     },
     Binary {
         operation: BinaryOperation,
-        left_input: Option<EvaluationOutput>,
-        right_input: Option<EvaluationOutput>,
+        left_input: Option<EvaluationValue>,
+        right_input: Option<EvaluationValue>,
     },
 }
 
 impl EvaluationOperator {
-    pub(super) fn evaluate(self) -> ExecutionResult<EvaluationOutput> {
+    pub(super) fn evaluate(self) -> ExecutionResult<EvaluationValue> {
         const OPERATOR_INPUT_EXPECT_STR: &str = "Handling children on the stack ordering should ensure the parent input is always set when the parent is evaluated";
 
         match self {
@@ -34,8 +34,8 @@ impl EvaluationOperator {
 }
 
 pub(super) struct UnaryOperation {
-    pub(super) span_for_output: SpanRange,
-    pub(super) operator_span: SpanRange,
+    pub(super) source_span: Option<Span>,
+    pub(super) operator_span: Span,
     pub(super) operator: UnaryOperator,
 }
 
@@ -47,7 +47,7 @@ impl UnaryOperation {
     pub(super) fn unsupported_for_value_type_err(
         &self,
         value_type: &'static str,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         Err(self.error(&format!(
             "The {} operator is not supported for {} values",
             self.operator.symbol(),
@@ -55,15 +55,15 @@ impl UnaryOperation {
         )))
     }
 
-    pub(super) fn err(&self, error_message: &'static str) -> ExecutionResult<EvaluationOutput> {
+    pub(super) fn err(&self, error_message: &'static str) -> ExecutionResult<EvaluationValue> {
         Err(self.error(error_message))
     }
 
     pub(super) fn output(
         &self,
-        output_value: impl ToEvaluationOutput,
-    ) -> ExecutionResult<EvaluationOutput> {
-        Ok(output_value.to_output(self.span_for_output))
+        output_value: impl ToEvaluationValue,
+    ) -> ExecutionResult<EvaluationValue> {
+        Ok(output_value.to_value(self.source_span))
     }
 
     pub(super) fn for_cast_expression(expr: &syn::ExprCast) -> ExecutionResult<Self> {
@@ -116,24 +116,26 @@ impl UnaryOperation {
         }
 
         Ok(Self {
-            span_for_output: expr.as_token.span_range(),
-            operator_span: expr.as_token.span_range(),
+            source_span: None,
+            operator_span: expr.as_token.span(),
             operator: UnaryOperator::Cast(extract_type(&expr.ty)?),
         })
     }
 
     pub(super) fn for_group_expression(expr: &syn::ExprGroup) -> ExecutionResult<Self> {
+        let span = expr.group_token.span;
         Ok(Self {
-            span_for_output: expr.group_token.span.span_range(),
-            operator_span: expr.group_token.span.span_range(),
+            source_span: Some(span),
+            operator_span: span,
             operator: UnaryOperator::NoOp,
         })
     }
 
     pub(super) fn for_paren_expression(expr: &syn::ExprParen) -> ExecutionResult<Self> {
+        let span = expr.paren_token.span.join();
         Ok(Self {
-            span_for_output: expr.paren_token.span.span_range(),
-            operator_span: expr.paren_token.span.span_range(),
+            source_span: Some(span),
+            operator_span: span,
             operator: UnaryOperator::NoOp,
         })
     }
@@ -144,19 +146,19 @@ impl UnaryOperation {
             UnOp::Not(_) => UnaryOperator::Not,
             other_unary_op => {
                 return other_unary_op.execution_err(
-                    "This unary operator is not supported in preinterpret expressions",
+                    "This unary operator is not supported in a preinterpret expression",
                 );
             }
         };
         Ok(Self {
-            span_for_output: expr.op.span_range(),
-            operator_span: expr.op.span_range(),
+            source_span: None,
+            operator_span: expr.op.span(),
             operator,
         })
     }
 
-    pub(super) fn evaluate(self, input: EvaluationOutput) -> ExecutionResult<EvaluationOutput> {
-        input.into_value().handle_unary_operation(self)
+    pub(super) fn evaluate(self, input: EvaluationValue) -> ExecutionResult<EvaluationValue> {
+        input.handle_unary_operation(self)
     }
 }
 
@@ -180,15 +182,14 @@ impl UnaryOperator {
 }
 
 pub(super) trait HandleUnaryOperation: Sized {
-    fn handle_unary_operation(
-        self,
-        operation: &UnaryOperation,
-    ) -> ExecutionResult<EvaluationOutput>;
+    fn handle_unary_operation(self, operation: &UnaryOperation)
+        -> ExecutionResult<EvaluationValue>;
 }
 
 pub(super) struct BinaryOperation {
-    pub(super) span_for_output: SpanRange,
-    pub(super) operator_span: SpanRange,
+    /// Only present if there is a single span for the source tokens
+    pub(super) source_span: Option<Span>,
+    pub(super) operator_span: Span,
     pub(super) operator: BinaryOperator,
 }
 
@@ -200,7 +201,7 @@ impl BinaryOperation {
     pub(super) fn unsupported_for_value_type_err(
         &self,
         value_type: &'static str,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         Err(self.error(&format!(
             "The {} operator is not supported for {} values",
             self.operator.symbol(),
@@ -210,16 +211,16 @@ impl BinaryOperation {
 
     pub(super) fn output(
         &self,
-        output_value: impl ToEvaluationOutput,
-    ) -> ExecutionResult<EvaluationOutput> {
-        Ok(output_value.to_output(self.span_for_output))
+        output_value: impl ToEvaluationValue,
+    ) -> ExecutionResult<EvaluationValue> {
+        Ok(output_value.to_value(self.source_span))
     }
 
     pub(super) fn output_if_some(
         &self,
-        output_value: Option<impl ToEvaluationOutput>,
+        output_value: Option<impl ToEvaluationValue>,
         error_message: impl FnOnce() -> String,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         match output_value {
             Some(output_value) => self.output(output_value),
             None => self.operator_span.execution_err(error_message()),
@@ -252,26 +253,28 @@ impl BinaryOperation {
             }
         };
         Ok(Self {
-            span_for_output: expr.op.span_range(),
-            operator_span: expr.op.span_range(),
+            source_span: None,
+            operator_span: expr.op.span(),
             operator,
         })
     }
 
     fn evaluate(
         self,
-        left: EvaluationOutput,
-        right: EvaluationOutput,
-    ) -> ExecutionResult<EvaluationOutput> {
+        left: EvaluationValue,
+        right: EvaluationValue,
+    ) -> ExecutionResult<EvaluationValue> {
         match self.operator {
             BinaryOperator::Paired(operator) => {
                 let value_pair = left.expect_value_pair(operator, right, self.operator_span)?;
                 value_pair.handle_paired_binary_operation(self)
             }
             BinaryOperator::Integer(_) => {
-                let right = right.expect_integer("The shift amount must be an integer")?;
-                left.into_value()
-                    .handle_integer_binary_operation(right, self)
+                let right = right.into_integer().ok_or_else(|| {
+                    self.operator_span
+                        .execution_error("The shift amount must be an integer")
+                })?;
+                left.handle_integer_binary_operation(right, self)
             }
         }
     }
@@ -369,11 +372,11 @@ pub(super) trait HandleBinaryOperation: Sized {
         self,
         rhs: Self,
         operation: &BinaryOperation,
-    ) -> ExecutionResult<EvaluationOutput>;
+    ) -> ExecutionResult<EvaluationValue>;
 
     fn handle_integer_binary_operation(
         self,
         rhs: EvaluationInteger,
         operation: &BinaryOperation,
-    ) -> ExecutionResult<EvaluationOutput>;
+    ) -> ExecutionResult<EvaluationValue>;
 }

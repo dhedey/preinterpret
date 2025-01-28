@@ -3,6 +3,7 @@ use crate::internal_prelude::*;
 #[derive(Clone)]
 pub(crate) struct EvaluateCommand {
     expression: ExpressionInput,
+    command_span: Span,
 }
 
 impl CommandType for EvaluateCommand {
@@ -17,6 +18,7 @@ impl ValueCommandDefinition for EvaluateCommand {
             |input| {
                 Ok(Self {
                     expression: input.parse()?,
+                    command_span: arguments.command_span(),
                 })
             },
             "Expected [!evaluate! ...] containing a valid preinterpret expression",
@@ -25,7 +27,7 @@ impl ValueCommandDefinition for EvaluateCommand {
 
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree> {
         let expression = self.expression.start_expression_builder(interpreter)?;
-        Ok(expression.evaluate()?.into_token_tree())
+        Ok(expression.evaluate(self.command_span)?.to_token_tree())
     }
 }
 
@@ -36,6 +38,7 @@ pub(crate) struct AssignCommand {
     #[allow(unused)]
     equals: Token![=],
     expression: ExpressionInput,
+    command_span: Span,
 }
 
 impl CommandType for AssignCommand {
@@ -64,6 +67,7 @@ impl NoOutputCommandDefinition for AssignCommand {
                     },
                     equals: input.parse()?,
                     expression: input.parse()?,
+                    command_span: arguments.command_span(),
                 })
             },
             "Expected [!assign! #variable = <expression>] or [!assign! #variable X= <expression>] for X one of + - * / % & | or ^",
@@ -76,6 +80,7 @@ impl NoOutputCommandDefinition for AssignCommand {
             operator,
             equals: _,
             expression,
+            command_span,
         } = *self;
 
         let mut builder = ExpressionBuilder::new();
@@ -85,7 +90,7 @@ impl NoOutputCommandDefinition for AssignCommand {
         }
         builder.extend_with_evaluation_output(expression.evaluate(interpreter)?);
 
-        let output = builder.evaluate()?.into_token_tree();
+        let output = builder.evaluate(command_span)?.to_token_tree();
         variable.set(interpreter, output.into())?;
 
         Ok(())
@@ -130,13 +135,11 @@ impl StreamCommandDefinition for RangeCommand {
         let left = self
             .left
             .evaluate(interpreter)?
-            .expect_integer("The left side of the range must be an integer")?
-            .try_into_i128()?;
+            .try_into_i128("The left side of the range must be an i128-compatible integer")?;
         let right = self
             .right
             .evaluate(interpreter)?
-            .expect_integer("The right side of the range must be an integer")?
-            .try_into_i128()?;
+            .try_into_i128("The right side of the range must be an i128-compatible integer")?;
 
         if left > right {
             return Ok(());

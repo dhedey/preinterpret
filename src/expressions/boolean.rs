@@ -1,22 +1,16 @@
 use super::*;
 
 pub(crate) struct EvaluationBoolean {
-    pub(super) source_span: SpanRange,
     pub(super) value: bool,
+    /// The span of the source code that generated this boolean value.
+    /// It may not have a value if generated from a complex expression.
+    pub(super) source_span: Option<Span>,
 }
 
 impl EvaluationBoolean {
-    pub(super) fn new(value: bool, source_span: SpanRange) -> Self {
-        Self { value, source_span }
-    }
-
-    pub(crate) fn value(&self) -> bool {
-        self.value
-    }
-
     pub(super) fn for_litbool(lit: &syn::LitBool) -> Self {
         Self {
-            source_span: lit.span().span_range(),
+            source_span: Some(lit.span()),
             value: lit.value,
         }
     }
@@ -24,7 +18,7 @@ impl EvaluationBoolean {
     pub(super) fn handle_unary_operation(
         self,
         operation: UnaryOperation,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         let input = self.value;
         match operation.operator {
             UnaryOperator::Neg => operation.unsupported_for_value_type_err("boolean"),
@@ -58,7 +52,7 @@ impl EvaluationBoolean {
         self,
         _right: EvaluationInteger,
         operation: BinaryOperation,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         match operation.integer_operator() {
             IntegerBinaryOperator::ShiftLeft | IntegerBinaryOperator::ShiftRight => {
                 operation.unsupported_for_value_type_err("boolean")
@@ -70,7 +64,7 @@ impl EvaluationBoolean {
         self,
         rhs: Self,
         operation: &BinaryOperation,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         let lhs = self.value;
         let rhs = rhs.value;
         match operation.paired_operator() {
@@ -93,24 +87,16 @@ impl EvaluationBoolean {
         }
     }
 
-    pub(super) fn to_ident(&self) -> Ident {
-        Ident::new_bool(self.value, self.source_span.start())
-    }
-
-    #[allow(unused)]
-    pub(super) fn to_lit_bool(&self) -> LitBool {
-        LitBool::new(self.value, self.source_span.span())
+    pub(super) fn to_ident(&self, fallback_span: Span) -> Ident {
+        Ident::new_bool(self.value, self.source_span.unwrap_or(fallback_span))
     }
 }
 
-impl ToEvaluationOutput for bool {
-    fn to_output(self, span: SpanRange) -> EvaluationOutput {
-        EvaluationValue::Boolean(EvaluationBoolean::new(self, span)).into()
-    }
-}
-
-impl quote::ToTokens for EvaluationBoolean {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.to_ident().to_tokens(tokens)
+impl ToEvaluationValue for bool {
+    fn to_value(self, source_span: Option<Span>) -> EvaluationValue {
+        EvaluationValue::Boolean(EvaluationBoolean {
+            value: self,
+            source_span,
+        })
     }
 }

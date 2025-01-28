@@ -2,25 +2,23 @@ use super::*;
 
 pub(crate) struct EvaluationChar {
     pub(super) value: char,
-    pub(super) source_span: SpanRange,
+    /// The span of the source code that generated this boolean value.
+    /// It may not have a value if generated from a complex expression.
+    pub(super) source_span: Option<Span>,
 }
 
 impl EvaluationChar {
-    pub(super) fn new(value: char, source_span: SpanRange) -> Self {
-        Self { value, source_span }
-    }
-
     pub(super) fn for_litchar(lit: &syn::LitChar) -> Self {
         Self {
             value: lit.value(),
-            source_span: lit.span().span_range(),
+            source_span: Some(lit.span()),
         }
     }
 
     pub(super) fn handle_unary_operation(
         self,
         operation: UnaryOperation,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         let char = self.value;
         match operation.operator {
             UnaryOperator::NoOp => operation.output(char),
@@ -55,7 +53,7 @@ impl EvaluationChar {
         self,
         _right: EvaluationInteger,
         operation: BinaryOperation,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         operation.unsupported_for_value_type_err("char")
     }
 
@@ -63,7 +61,7 @@ impl EvaluationChar {
         self,
         rhs: Self,
         operation: &BinaryOperation,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         let lhs = self.value;
         let rhs = rhs.value;
         match operation.paired_operator() {
@@ -86,19 +84,16 @@ impl EvaluationChar {
         }
     }
 
-    pub(super) fn to_literal(&self) -> Literal {
-        Literal::character(self.value).with_span(self.source_span.start())
+    pub(super) fn to_literal(&self, fallback_span: Span) -> Literal {
+        Literal::character(self.value).with_span(self.source_span.unwrap_or(fallback_span))
     }
 }
 
-impl ToEvaluationOutput for char {
-    fn to_output(self, span: SpanRange) -> EvaluationOutput {
-        EvaluationValue::Char(EvaluationChar::new(self, span)).into()
-    }
-}
-
-impl quote::ToTokens for EvaluationChar {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.to_literal().to_tokens(tokens)
+impl ToEvaluationValue for char {
+    fn to_value(self, source_span: Option<Span>) -> EvaluationValue {
+        EvaluationValue::Char(EvaluationChar {
+            value: self,
+            source_span,
+        })
     }
 }

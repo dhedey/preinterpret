@@ -1,24 +1,23 @@
 use super::*;
 
+#[derive(Clone)]
 pub(crate) struct EvaluationInteger {
-    pub(super) source_span: SpanRange,
     pub(super) value: EvaluationIntegerValue,
+    /// The span of the source code that generated this boolean value.
+    /// It may not have a value if generated from a complex expression.
+    pub(super) source_span: Option<Span>,
 }
 
 impl EvaluationInteger {
-    pub(super) fn new(value: EvaluationIntegerValue, source_span: SpanRange) -> Self {
-        Self { value, source_span }
-    }
-
     pub(super) fn for_litint(lit: &syn::LitInt) -> ExecutionResult<Self> {
         Ok(Self {
-            source_span: lit.span().span_range(),
             value: EvaluationIntegerValue::for_litint(lit)?,
+            source_span: Some(lit.span()),
         })
     }
 
-    pub(crate) fn try_into_i128(self) -> ExecutionResult<i128> {
-        let option_of_fallback = match self.value {
+    pub(crate) fn try_into_i128(self) -> Option<i128> {
+        match self.value {
             EvaluationIntegerValue::Untyped(x) => x.parse_fallback().ok(),
             EvaluationIntegerValue::U8(x) => Some(x.into()),
             EvaluationIntegerValue::U16(x) => Some(x.into()),
@@ -32,19 +31,13 @@ impl EvaluationInteger {
             EvaluationIntegerValue::I64(x) => Some(x.into()),
             EvaluationIntegerValue::I128(x) => Some(x),
             EvaluationIntegerValue::Isize(x) => x.try_into().ok(),
-        };
-        match option_of_fallback {
-            Some(value) => Ok(value),
-            None => self
-                .source_span
-                .execution_err("The integer does not fit in a i128".to_string()),
         }
     }
 
     pub(super) fn handle_unary_operation(
         self,
         operation: UnaryOperation,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         match self.value {
             EvaluationIntegerValue::Untyped(input) => input.handle_unary_operation(&operation),
             EvaluationIntegerValue::U8(input) => input.handle_unary_operation(&operation),
@@ -66,7 +59,7 @@ impl EvaluationInteger {
         self,
         right: EvaluationInteger,
         operation: BinaryOperation,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         match self.value {
             EvaluationIntegerValue::Untyped(input) => {
                 input.handle_integer_binary_operation(right, &operation)
@@ -110,16 +103,10 @@ impl EvaluationInteger {
         }
     }
 
-    pub(super) fn to_literal(&self) -> Literal {
+    pub(super) fn to_literal(&self, fallback_span: Span) -> Literal {
         self.value
             .to_unspanned_literal()
-            .with_span(self.source_span.start())
-    }
-}
-
-impl quote::ToTokens for EvaluationInteger {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.to_literal().to_tokens(tokens)
+            .with_span(self.source_span.unwrap_or(fallback_span))
     }
 }
 
@@ -143,7 +130,7 @@ impl EvaluationIntegerValuePair {
     pub(super) fn handle_paired_binary_operation(
         self,
         operation: &BinaryOperation,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         match self {
             Self::Untyped(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
             Self::U8(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
@@ -179,6 +166,7 @@ pub(super) enum IntegerKind {
     Usize,
 }
 
+#[derive(Clone)]
 pub(super) enum EvaluationIntegerValue {
     Untyped(UntypedInteger),
     U8(u8),
@@ -256,6 +244,7 @@ impl EvaluationIntegerValue {
     }
 }
 
+#[derive(Clone)]
 pub(super) struct UntypedInteger(
     /// The span of the literal is ignored, and will be set when converted to an output.
     syn::LitInt,
@@ -275,7 +264,7 @@ impl UntypedInteger {
     pub(super) fn handle_unary_operation(
         self,
         operation: &UnaryOperation,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         let input = self.parse_fallback()?;
         match operation.operator {
             UnaryOperator::Neg => operation.output(Self::from_fallback(-input)),
@@ -313,7 +302,7 @@ impl UntypedInteger {
         self,
         rhs: EvaluationInteger,
         operation: &BinaryOperation,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         let lhs = self.parse_fallback()?;
         match operation.integer_operator() {
             IntegerBinaryOperator::ShiftLeft => match rhs.value {
@@ -357,7 +346,7 @@ impl UntypedInteger {
         self,
         rhs: Self,
         operation: &BinaryOperation,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         let lhs = self.parse_fallback()?;
         let rhs = rhs.parse_fallback()?;
         let overflow_error = || {
@@ -437,13 +426,12 @@ impl UntypedInteger {
     }
 }
 
-impl ToEvaluationOutput for UntypedInteger {
-    fn to_output(self, span_range: SpanRange) -> EvaluationOutput {
-        EvaluationValue::Integer(EvaluationInteger::new(
-            EvaluationIntegerValue::Untyped(self),
-            span_range,
-        ))
-        .into()
+impl ToEvaluationValue for UntypedInteger {
+    fn to_value(self, source_span: Option<Span>) -> EvaluationValue {
+        EvaluationValue::Integer(EvaluationInteger {
+            value: EvaluationIntegerValue::Untyped(self),
+            source_span,
+        })
     }
 }
 
@@ -452,14 +440,17 @@ macro_rules! impl_int_operations_except_unary {
     (
         $($integer_enum_variant:ident($integer_type:ident)),* $(,)?
     ) => {$(
-        impl ToEvaluationOutput for $integer_type {
-            fn to_output(self, span_range: SpanRange) -> EvaluationOutput {
-                EvaluationValue::Integer(EvaluationInteger::new(EvaluationIntegerValue::$integer_enum_variant(self), span_range)).into()
+        impl ToEvaluationValue for $integer_type {
+            fn to_value(self, source_span: Option<Span>) -> EvaluationValue {
+                EvaluationValue::Integer(EvaluationInteger {
+                    value: EvaluationIntegerValue::$integer_enum_variant(self),
+                    source_span,
+                })
             }
         }
 
         impl HandleBinaryOperation for $integer_type {
-            fn handle_paired_binary_operation(self, rhs: Self, operation: &BinaryOperation) -> ExecutionResult<EvaluationOutput> {
+            fn handle_paired_binary_operation(self, rhs: Self, operation: &BinaryOperation) -> ExecutionResult<EvaluationValue> {
                 let lhs = self;
                 let overflow_error = || format!("The {} operation {:?} {} {:?} overflowed", stringify!($integer_type), lhs, operation.operator.symbol(), rhs);
                 match operation.paired_operator() {
@@ -486,7 +477,7 @@ macro_rules! impl_int_operations_except_unary {
                 self,
                 rhs: EvaluationInteger,
                 operation: &BinaryOperation,
-            ) -> ExecutionResult<EvaluationOutput> {
+            ) -> ExecutionResult<EvaluationValue> {
                 let lhs = self;
                 match operation.integer_operator() {
                     IntegerBinaryOperator::ShiftLeft => {
@@ -532,7 +523,7 @@ macro_rules! impl_int_operations_except_unary {
 macro_rules! impl_unsigned_unary_operations {
     ($($integer_type:ident),* $(,)?) => {$(
         impl HandleUnaryOperation for $integer_type {
-            fn handle_unary_operation(self, operation: &UnaryOperation) -> ExecutionResult<EvaluationOutput> {
+            fn handle_unary_operation(self, operation: &UnaryOperation) -> ExecutionResult<EvaluationValue> {
                 match operation.operator {
                     UnaryOperator::NoOp => operation.output(self),
                     UnaryOperator::Neg
@@ -568,7 +559,7 @@ macro_rules! impl_unsigned_unary_operations {
 macro_rules! impl_signed_unary_operations {
     ($($integer_type:ident),* $(,)?) => {$(
         impl HandleUnaryOperation for $integer_type {
-            fn handle_unary_operation(self, operation: &UnaryOperation) -> ExecutionResult<EvaluationOutput> {
+            fn handle_unary_operation(self, operation: &UnaryOperation) -> ExecutionResult<EvaluationValue> {
                 match operation.operator {
                     UnaryOperator::NoOp => operation.output(self),
                     UnaryOperator::Neg => operation.output(-self),
@@ -604,7 +595,7 @@ impl HandleUnaryOperation for u8 {
     fn handle_unary_operation(
         self,
         operation: &UnaryOperation,
-    ) -> ExecutionResult<EvaluationOutput> {
+    ) -> ExecutionResult<EvaluationValue> {
         match operation.operator {
             UnaryOperator::NoOp => operation.output(self),
             UnaryOperator::Neg | UnaryOperator::Not => {

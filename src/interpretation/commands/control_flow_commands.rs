@@ -54,8 +54,7 @@ impl ControlFlowCommandDefinition for IfCommand {
         let evaluated_condition = self
             .condition
             .evaluate(interpreter)?
-            .expect_bool("An if condition must evaluate to a boolean")?
-            .value();
+            .expect_bool("An if condition must evaluate to a boolean")?;
 
         if evaluated_condition {
             return self.true_code.interpret_into(interpreter, output);
@@ -64,8 +63,7 @@ impl ControlFlowCommandDefinition for IfCommand {
         for (condition, code) in self.else_ifs {
             let evaluated_condition = condition
                 .evaluate(interpreter)?
-                .expect_bool("An else if condition must evaluate to a boolean")?
-                .value();
+                .expect_bool("An else if condition must evaluate to a boolean")?;
 
             if evaluated_condition {
                 return code.interpret_into(interpreter, output);
@@ -118,8 +116,7 @@ impl ControlFlowCommandDefinition for WhileCommand {
                 .condition
                 .clone()
                 .evaluate(interpreter)?
-                .expect_bool("An if condition must evaluate to a boolean")?
-                .value();
+                .expect_bool("An if condition must evaluate to a boolean")?;
 
             if !evaluated_condition {
                 break;
@@ -259,7 +256,7 @@ impl NoOutputCommandDefinition for ContinueCommand {
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         arguments.assert_empty("The !continue! command takes no arguments")?;
         Ok(Self {
-            span: arguments.full_span_range().span(),
+            span: arguments.command_span(),
         })
     }
 
@@ -286,7 +283,7 @@ impl NoOutputCommandDefinition for BreakCommand {
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         arguments.assert_empty("The !break! command takes no arguments")?;
         Ok(Self {
-            span: arguments.full_span_range().span(),
+            span: arguments.command_span(),
         })
     }
 

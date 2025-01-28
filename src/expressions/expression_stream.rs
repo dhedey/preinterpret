@@ -91,7 +91,8 @@ impl ExpressionInput {
         self,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<EvaluationOutput> {
-        self.start_expression_builder(interpreter)?.evaluate()
+        let span = self.span();
+        self.start_expression_builder(interpreter)?.evaluate(span)
     }
 }
 
@@ -227,7 +228,7 @@ impl ExpressionBuilder {
 
     pub(crate) fn extend_with_evaluation_output(&mut self, value: EvaluationOutput) {
         self.interpreted_stream
-            .extend_with_raw_tokens_from(value.into_token_tree());
+            .extend_with_raw_tokens_from(value.to_token_tree());
     }
 
     pub(crate) fn push_expression_group(
@@ -240,7 +241,7 @@ impl ExpressionBuilder {
             .push_new_group(contents.interpreted_stream, delimiter, span);
     }
 
-    pub(crate) fn evaluate(self) -> ExecutionResult<EvaluationOutput> {
+    pub(crate) fn evaluate(self, fallback_output_span: Span) -> ExecutionResult<EvaluationOutput> {
         // Parsing into a rust expression is overkill here.
         //
         // In future we could choose to implement a subset of the grammar which we actually can use/need.
@@ -258,6 +259,6 @@ impl ExpressionBuilder {
             self.interpreted_stream.syn_parse(<Expr as Parse>::parse)?
         };
 
-        EvaluationTree::build_from(&expression)?.evaluate()
+        EvaluationTree::build_from(fallback_output_span, &expression)?.evaluate()
     }
 }
