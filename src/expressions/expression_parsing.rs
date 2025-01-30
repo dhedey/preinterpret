@@ -265,7 +265,7 @@ impl ExpressionNodes {
 /// Reference: https://doc.rust-lang.org/reference/expressions.html#expression-precedence
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(unused)]
-pub(crate) enum OperatorPrecendence {
+enum OperatorPrecendence {
     // return, break, closures
     Jump,
     /// = += -= *= /= %= &= |= ^= <<= >>=
@@ -301,9 +301,9 @@ pub(crate) enum OperatorPrecendence {
 }
 
 impl OperatorPrecendence {
-    pub(crate) const MIN: Self = OperatorPrecendence::Jump;
+    const MIN: Self = OperatorPrecendence::Jump;
 
-    pub(crate) fn of_unary_operator(op: &UnaryOperator) -> Self {
+    fn of_unary_operator(op: &UnaryOperator) -> Self {
         match op {
             UnaryOperator::GroupedNoOp { .. } => Self::Unambiguous,
             UnaryOperator::Cast { .. } => Self::Cast,
@@ -311,7 +311,7 @@ impl OperatorPrecendence {
         }
     }
 
-    pub(crate) fn of_binary_operator(op: &BinaryOperator) -> Self {
+    fn of_binary_operator(op: &BinaryOperator) -> Self {
         match op {
             BinaryOperator::Integer(op) => Self::of_integer_binary_operator(op),
             BinaryOperator::Paired(op) => Self::of_paired_binary_operator(op),
