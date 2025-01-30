@@ -10,14 +10,14 @@ pub(crate) struct CommandCodeInput {
 impl Parse for CommandCodeInput {
     fn parse(input: ParseStream) -> ParseResult<Self> {
         let (delim_span, content) = input.parse_specific_group(Delimiter::Brace)?;
-        let inner = content.parse_with(delim_span.join().span_range())?;
+        let inner = content.parse_with(delim_span.join())?;
         Ok(Self { delim_span, inner })
     }
 }
 
-impl HasSpanRange for CommandCodeInput {
-    fn span_range(&self) -> SpanRange {
-        self.delim_span.span_range()
+impl HasSpan for CommandCodeInput {
+    fn span(&self) -> Span {
+        self.delim_span.join()
     }
 }
 

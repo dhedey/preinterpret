@@ -26,7 +26,7 @@ impl Expression {
     ) -> ExecutionResult<EvaluationOutput> {
         Ok(EvaluationOutput {
             value: self.evaluate_to_value(interpreter)?,
-            fallback_output_span: self.span_range.span(),
+            fallback_output_span: self.span_range.join_into_span_else_start(),
         })
     }
 

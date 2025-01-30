@@ -449,9 +449,9 @@ impl Command {
     }
 }
 
-impl HasSpanRange for Command {
-    fn span_range(&self) -> SpanRange {
-        self.source_group_span.span_range()
+impl HasSpan for Command {
+    fn span(&self) -> Span {
+        self.source_group_span.join()
     }
 }
 

@@ -14,7 +14,7 @@ pub(crate) trait DestructurerDefinition: Clone {
 pub(crate) struct DestructurerArguments<'a> {
     parse_stream: ParseStream<'a>,
     destructurer_name: Ident,
-    full_span_range: SpanRange,
+    full_span: Span,
 }
 
 #[allow(unused)]
@@ -22,17 +22,17 @@ impl<'a> DestructurerArguments<'a> {
     pub(crate) fn new(
         parse_stream: ParseStream<'a>,
         destructurer_name: Ident,
-        span_range: SpanRange,
+        full_span: Span,
     ) -> Self {
         Self {
             parse_stream,
             destructurer_name,
-            full_span_range: span_range,
+            full_span,
         }
     }
 
-    pub(crate) fn full_span_range(&self) -> SpanRange {
-        self.full_span_range
+    pub(crate) fn full_span(&self) -> Span {
+        self.full_span
     }
 
     /// We use this instead of the "unexpected / drop glue" pattern in order to give a better error message
@@ -40,7 +40,7 @@ impl<'a> DestructurerArguments<'a> {
         if self.parse_stream.is_empty() {
             Ok(())
         } else {
-            self.full_span_range.parse_err(error_message)
+            self.full_span.parse_err(error_message)
         }
     }
 
@@ -104,7 +104,7 @@ impl Parse for Destructurer {
         let instance = destructurer_kind.parse_instance(DestructurerArguments::new(
             &content,
             destructurer_name,
-            delim_span.join().span_range(),
+            delim_span.join(),
         ))?;
         Ok(Self {
             instance,

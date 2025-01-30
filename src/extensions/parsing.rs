@@ -93,10 +93,7 @@ impl CursorExt for Cursor<'_> {
 
 pub(crate) trait ParserBufferExt {
     fn parse_with<T: ContextualParse>(&self, context: T::Context) -> ParseResult<T>;
-    fn parse_all_for_interpretation(
-        &self,
-        span_range: SpanRange,
-    ) -> ParseResult<InterpretationStream>;
+    fn parse_all_for_interpretation(&self, span: Span) -> ParseResult<InterpretationStream>;
     fn try_parse_or_message<T, F: FnOnce(&Self) -> ParseResult<T>, M: std::fmt::Display>(
         &self,
         func: F,
@@ -127,11 +124,8 @@ impl ParserBufferExt for ParseBuffer<'_> {
         T::parse_with_context(self, context)
     }
 
-    fn parse_all_for_interpretation(
-        &self,
-        span_range: SpanRange,
-    ) -> ParseResult<InterpretationStream> {
-        self.parse_with(span_range)
+    fn parse_all_for_interpretation(&self, span: Span) -> ParseResult<InterpretationStream> {
+        self.parse_with(span)
     }
 
     fn try_parse_or_message<T, F: FnOnce(&Self) -> ParseResult<T>, M: std::fmt::Display>(

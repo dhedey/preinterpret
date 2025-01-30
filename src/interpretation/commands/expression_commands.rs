@@ -146,7 +146,7 @@ impl StreamCommandDefinition for RangeCommand {
         output: &mut InterpretedStream,
     ) -> ExecutionResult<()> {
         let range_span_range = self.range_limits.span_range();
-        let range_span = self.range_limits.span();
+        let range_span = range_span_range.join_into_span_else_start();
 
         let left = self
             .left
@@ -221,7 +221,11 @@ impl ToTokens for RangeLimits {
     }
 }
 
-impl AutoSpanRange for RangeLimits {}
+impl HasSpanRange for RangeLimits {
+    fn span_range(&self) -> SpanRange {
+        self.span_range_from_iterating_over_all_tokens()
+    }
+}
 
 impl RangeLimits {
     fn length_of_range(&self, left: i128, right: i128) -> Option<usize> {

@@ -21,7 +21,7 @@ impl NoOutputCommandDefinition for SetCommand {
                 Ok(Self {
                     variable: input.parse()?,
                     equals: input.parse()?,
-                    arguments: input.parse_with(arguments.command_span_range())?,
+                    arguments: input.parse_with(arguments.command_span())?,
                 })
             },
             "Expected [!set! #variable = ..]",
@@ -56,8 +56,7 @@ impl NoOutputCommandDefinition for ExtendCommand {
                 Ok(Self {
                     variable: input.parse()?,
                     plus_equals: input.parse()?,
-                    arguments: input
-                        .parse_all_for_interpretation(arguments.command_span_range())?,
+                    arguments: input.parse_all_for_interpretation(arguments.command_span())?,
                 })
             },
             "Expected [!extend! #variable += ..]",
@@ -222,7 +221,7 @@ impl NoOutputCommandDefinition for ErrorCommand {
                 } else {
                     Ok(Self {
                         inputs: EitherErrorInput::JustMessage(
-                            input.parse_with(arguments.command_span_range())?,
+                            input.parse_with(arguments.command_span())?,
                         ),
                     })
                 }

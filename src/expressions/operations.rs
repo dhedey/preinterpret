@@ -120,7 +120,7 @@ impl UnaryOperator {
     }
 }
 
-impl HasSpanRange for UnaryOperator {
+impl HasSpan for UnaryOperator {
     fn span(&self) -> Span {
         match self {
             UnaryOperator::Neg { token } => token.span,
@@ -128,10 +128,6 @@ impl HasSpanRange for UnaryOperator {
             UnaryOperator::GroupedNoOp { span } => *span,
             UnaryOperator::Cast { as_token, .. } => as_token.span,
         }
-    }
-
-    fn span_range(&self) -> SpanRange {
-        self.span().span_range()
     }
 }
 
@@ -209,9 +205,42 @@ impl BinaryOperation {
         };
         Ok(Self {
             source_span: None,
-            operator_span: syn_operator.span(),
+            operator_span: syn_operator.span_range().join_into_span_else_start(),
             operator,
         })
+    }
+
+    pub(super) fn lazy_evaluate(
+        &self,
+        left: &EvaluationValue,
+    ) -> ExecutionResult<Option<EvaluationValue>> {
+        match self.operator {
+            BinaryOperator::Paired(PairedBinaryOperator::LogicalAnd) => {
+                match left.clone().into_bool() {
+                    Some(bool) => {
+                        if !bool.value {
+                            Ok(Some(EvaluationValue::Boolean(bool)))
+                        } else {
+                            Ok(None)
+                        }
+                    }
+                    None => self.execution_err("The left operand was not a boolean"),
+                }
+            }
+            BinaryOperator::Paired(PairedBinaryOperator::LogicalOr) => {
+                match left.clone().into_bool() {
+                    Some(bool) => {
+                        if bool.value {
+                            Ok(Some(EvaluationValue::Boolean(bool)))
+                        } else {
+                            Ok(None)
+                        }
+                    }
+                    None => self.execution_err("The left operand was not a boolean"),
+                }
+            }
+            _ => Ok(None),
+        }
     }
 
     pub(super) fn evaluate(
@@ -246,6 +275,12 @@ impl BinaryOperation {
             BinaryOperator::Paired(_) => panic!("Expected an integer operator"),
             BinaryOperator::Integer(operator) => operator,
         }
+    }
+}
+
+impl HasSpan for BinaryOperation {
+    fn span(&self) -> Span {
+        self.operator_span
     }
 }
 

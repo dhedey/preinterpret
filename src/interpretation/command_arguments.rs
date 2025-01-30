@@ -25,10 +25,6 @@ impl<'a> CommandArguments<'a> {
         self.command_span
     }
 
-    pub(crate) fn command_span_range(&self) -> SpanRange {
-        self.command_span.span_range()
-    }
-
     /// We use this instead of the "unexpected / drop glue" pattern in order to give a better error message
     pub(crate) fn assert_empty(&self, error_message: impl std::fmt::Display) -> ParseResult<()> {
         if self.parse_stream.is_empty() {
@@ -70,7 +66,7 @@ impl<'a> CommandArguments<'a> {
 
     pub(crate) fn parse_all_for_interpretation(&self) -> ParseResult<InterpretationStream> {
         self.parse_stream
-            .parse_all_for_interpretation(self.command_span.span_range())
+            .parse_all_for_interpretation(self.command_span)
     }
 
     pub(crate) fn read_all_as_raw_token_stream(&self) -> TokenStream {

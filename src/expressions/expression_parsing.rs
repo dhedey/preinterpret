@@ -46,7 +46,7 @@ impl<'a> ExpressionParser<'a> {
                 self.add_leaf(ExpressionLeaf::Command(command))
             }
             UnaryAtom::GroupedVariable(variable) => {
-                self.span_range.set_end(variable.span());
+                self.span_range.set_end(variable.span_range().end());
                 self.add_leaf(ExpressionLeaf::GroupedVariable(variable))
             }
             UnaryAtom::CodeBlock(code_block) => {

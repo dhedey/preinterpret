@@ -4,18 +4,18 @@ use crate::internal_prelude::*;
 #[derive(Clone)]
 pub(crate) struct InterpretationStream {
     items: Vec<InterpretationItem>,
-    span_range: SpanRange,
+    span: Span,
 }
 
 impl ContextualParse for InterpretationStream {
-    type Context = SpanRange;
+    type Context = Span;
 
-    fn parse_with_context(input: ParseStream, span_range: Self::Context) -> ParseResult<Self> {
+    fn parse_with_context(input: ParseStream, span: Self::Context) -> ParseResult<Self> {
         let mut items = Vec::new();
         while !input.is_empty() {
             items.push(input.parse()?);
         }
-        Ok(Self { items, span_range })
+        Ok(Self { items, span })
     }
 }
 
@@ -32,9 +32,9 @@ impl Interpret for InterpretationStream {
     }
 }
 
-impl HasSpanRange for InterpretationStream {
-    fn span_range(&self) -> SpanRange {
-        self.span_range
+impl HasSpan for InterpretationStream {
+    fn span(&self) -> Span {
+        self.span
     }
 }
 
@@ -55,7 +55,7 @@ impl InterpretationGroup {
 impl Parse for InterpretationGroup {
     fn parse(input: ParseStream) -> ParseResult<Self> {
         let (delimiter, delim_span, content) = input.parse_any_group()?;
-        let content = content.parse_with(delim_span.span_range())?;
+        let content = content.parse_with(delim_span.join())?;
         Ok(Self {
             source_delimiter: delimiter,
             source_delim_span: delim_span,
@@ -76,9 +76,9 @@ impl Interpret for InterpretationGroup {
     }
 }
 
-impl HasSpanRange for InterpretationGroup {
-    fn span_range(&self) -> SpanRange {
-        self.source_delim_span.span_range()
+impl HasSpan for InterpretationGroup {
+    fn span(&self) -> Span {
+        self.source_delim_span.join()
     }
 }
 
@@ -124,8 +124,8 @@ impl Interpret for RawGroup {
     }
 }
 
-impl HasSpanRange for RawGroup {
-    fn span_range(&self) -> SpanRange {
-        self.source_delim_span.span_range()
+impl HasSpan for RawGroup {
+    fn span(&self) -> Span {
+        self.source_delim_span.join()
     }
 }

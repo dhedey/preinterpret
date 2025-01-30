@@ -43,16 +43,31 @@ impl<T: HasSpanRange> SpanErrorExt for T {
     }
 }
 
+/// This is intended to be implemented only for types which have a cheap span.
+/// It is cheaper than [`syn::spanned`], which requires streaming the whole type,
+/// and can be very slow for e.g. large expressions.
+pub(crate) trait HasSpan {
+    fn span(&self) -> Span;
+}
+
+/// This is intended to be implemented only for types which have a cheap SpanRange.
+/// It is cheaper than [`syn::spanned`], which requires streaming the whole type,
+/// and can be very slow for e.g. large expressions.
+///
+/// See also [`SlowSpanRange`] for the equivalent of [`syn::spanned`].
 pub(crate) trait HasSpanRange {
     fn span_range(&self) -> SpanRange;
+}
 
-    fn span(&self) -> Span {
-        self.span_range().span()
+impl<T: HasSpan> HasSpanRange for T {
+    fn span_range(&self) -> SpanRange {
+        SpanRange::new_single(self.span())
     }
 }
 
-/// [`syn::spanned`] has the limitation that it uses [`proc_macro::Span::join`]
-/// and falls back to the span of the first token when not available.
+/// [`syn::spanned`] is potentially unexpectedly expensive, and has the
+/// limitation that it uses [`proc_macro::Span::join`] and falls back to the
+/// span of the first token when not available.
 ///
 /// Instead, [`syn::Error`] uses a trick involving a span range. This effectively
 /// allows capturing this trick when we're not immediately creating an error.
@@ -83,7 +98,7 @@ impl SpanRange {
 
     /// * On nightly, this gives a span covering the full range (the same result as `Span::join` would)
     /// * On stable, this gives the span of the first token of the group (because [`proc_macro::Span::join`] is not supported)
-    pub(crate) fn span(&self) -> Span {
+    pub(crate) fn join_into_span_else_start(&self) -> Span {
         <Self as syn::spanned::Spanned>::span(self)
     }
 
@@ -118,30 +133,57 @@ impl HasSpanRange for SpanRange {
     }
 }
 
-impl HasSpanRange for Span {
-    fn span_range(&self) -> SpanRange {
-        SpanRange::new_between(*self, *self)
+impl HasSpan for Span {
+    fn span(&self) -> Span {
+        *self
     }
 }
 
-impl HasSpanRange for TokenTree {
-    fn span_range(&self) -> SpanRange {
-        self.span().span_range()
+impl HasSpan for TokenTree {
+    fn span(&self) -> Span {
+        self.span()
     }
 }
 
-impl HasSpanRange for Group {
-    fn span_range(&self) -> SpanRange {
-        self.span().span_range()
+impl HasSpan for Group {
+    fn span(&self) -> Span {
+        self.span()
     }
 }
 
-impl HasSpanRange for DelimSpan {
-    fn span_range(&self) -> SpanRange {
-        // We could use self.open() => self.close() here, but using
-        // self.join() is better as it can be round-tripped to a span
-        // as the whole span, rather than just the start or end.
-        self.join().span_range()
+impl HasSpan for DelimSpan {
+    fn span(&self) -> Span {
+        self.join()
+    }
+}
+
+impl HasSpan for Ident {
+    fn span(&self) -> Span {
+        self.span()
+    }
+}
+
+impl HasSpan for Punct {
+    fn span(&self) -> Span {
+        self.span()
+    }
+}
+
+impl HasSpan for Literal {
+    fn span(&self) -> Span {
+        self.span()
+    }
+}
+
+impl HasSpan for Token![as] {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+impl HasSpan for Token![in] {
+    fn span(&self) -> Span {
+        self.span
     }
 }
 
@@ -159,36 +201,28 @@ impl<T: ToTokens> SlowSpanRange for T {
     }
 }
 
-/// This should only be used for syn built-ins or when there isn't a better
-/// span range available
-pub(crate) trait AutoSpanRange {}
-
+// This should only be used for types implementing ToTokens, which have
+// a small, bounded number of tokens, with sensible performance.
 macro_rules! impl_auto_span_range {
     ($($ty:ty),* $(,)?) => {
         $(
-            impl AutoSpanRange for $ty {}
+            impl HasSpanRange for $ty {
+                fn span_range(&self) -> SpanRange {
+                    SlowSpanRange::span_range_from_iterating_over_all_tokens(self)
+                }
+            }
         )*
     };
 }
 
-impl<T: ToTokens + AutoSpanRange> HasSpanRange for T {
-    fn span_range(&self) -> SpanRange {
-        // AutoSpanRange should only be used for tokens with a small number of tokens
-        SlowSpanRange::span_range_from_iterating_over_all_tokens(&self)
-    }
-}
-
 // This should only be used for types with a bounded number of tokens
-// otherwise, span_range_from_iterating_over_all_tokens() can be used
+// greater than one.
+// If exactly one, implement HasSpan.
+// Otherwise, span_range_from_iterating_over_all_tokens() can be used
 // directly with a longer name to make the performance hit clearer, so
 // it's only used in error cases.
 impl_auto_span_range! {
-    Ident,
-    Punct,
-    Literal,
     syn::BinOp,
     syn::UnOp,
-    syn::token::As,
     syn::token::DotDot,
-    syn::token::In,
 }

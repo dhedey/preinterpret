@@ -205,10 +205,7 @@ impl DestructurerDefinition for ContentDestructurer {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
-                    stream: InterpretationStream::parse_with_context(
-                        input,
-                        arguments.full_span_range(),
-                    )?,
+                    stream: InterpretationStream::parse_with_context(input, arguments.full_span())?,
                 })
             },
             "Expected (!content! ... interpretable input ...)",

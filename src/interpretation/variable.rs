@@ -63,7 +63,7 @@ impl GroupedVariable {
         output.push_new_group(
             self.read_existing(interpreter)?.get(self)?.clone(),
             Delimiter::None,
-            self.span(),
+            self.span_range().join_into_span_else_start(),
         );
         Ok(())
     }

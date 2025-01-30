@@ -58,6 +58,14 @@ fn test_basic_evaluate_works() {
     );
     assert_preinterpret_eq!(
         {
+            [!set! #partial_sum = + 2]
+            // A { ... } block is evaluated as an expression after interpretation
+            [!evaluate! { 1 #..partial_sum }]
+        },
+        3
+    );
+    assert_preinterpret_eq!(
+        {
             [!evaluate! 1 + [!range! 1..2]]
         },
         2
@@ -76,9 +84,35 @@ fn test_basic_evaluate_works() {
 fn test_very_long_expression_works() {
     assert_preinterpret_eq!(
         {
-            [!settings! { iteration_limit: 100000 }][!evaluate! [!group! 0 [!for! #i in [!range! 0..100000] { + 1 }]]]
+            [!settings! {
+                iteration_limit: 100000,
+            }][!evaluate! {
+                0 [!for! #i in [!range! 0..100000] { + 1 }]
+            }]
         },
         100000
+    );
+}
+
+#[test]
+fn boolean_operators_short_circuit() {
+    // && short-circuits if first operand is false
+    assert_preinterpret_eq!(
+        {
+            [!set! #is_lazy = true]
+            [!void! [!evaluate! false && { [!set! #is_lazy = false] true }]]
+            #is_lazy
+        },
+        true
+    );
+    // || short-circuits if first operand is true
+    assert_preinterpret_eq!(
+        {
+            [!set! #is_lazy = true]
+            [!void! [!evaluate! true || { [!set! #is_lazy = false] true }]]
+            #is_lazy
+        },
+        true
     );
 }
 

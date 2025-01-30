@@ -44,11 +44,15 @@ Expressions can be evaluated with `[!evaluate! ...]` and are also used in the `i
 
 Currently supported are:
 * Integer, Float, Bool, String and Char literals
-* The operators: `+ - * / % & | ^ || &&`
+* The operators: `+ - * / % & | ^`
+* The lazy boolean operators: `|| &&`
 * The comparison operators: `== != < > <= >=`
 * The shift operators: `>> <<`
 * Casting with `as` including to untyped integers/floats with `as int` and `as float`
 * () and none-delimited groups for precedence
+* Embedded `#x` grouped variables, whose contents are parsed as an expression
+  and evaluated.
+* `{ ... }` for creating sub-expressions, which are parsed from the resultant token stream.
 
 Expressions behave intuitively as you'd expect from writing regular rust code, except they happen at compile time.
 
@@ -77,10 +81,12 @@ Destructuring performs parsing of a token stream. It supports:
 ### To come
 
 * Complete expression rework:
-  * Enable lazy && and ||
-  * Enable support for code blocks { .. } in expressions
+  * Add more tests for operator precedence (e.g. the worked example)
   * Flatten `UnaryOperation` and `UnaryOperator`
   * Flatten `BinaryOperation` and `BinaryOperator`
+  * Disallow expressions/commands in re-evaluated `{ .. }` blocks and command outputs
+  * Revise the comment in expression_parsing.rs
+  * Create `ParseInterpreted` and `ParseSource` via `ParseStream<Marker>`, `SourceParseStream` and `InterpretedParseStream`, and add grammar peaking to `SourceParseStream` only. Add `[!reinterpret! ...]` command for an `eval` style command.
   * Search / resolve TODOs
 * `[!is_set! #x]`
 * `[!str_split! { input: Value<LitStr>, separator: Value<LitStr>, }]`
@@ -95,6 +101,7 @@ Destructuring performs parsing of a token stream. It supports:
     * `[!match! ...]` command
     * `(!any! ...)` (with `#..x` as a catch-all) like the [!match!] command but without arms...
   * (MAYBE) `#(..)?`, `#(..)+`, `#(..),+`, `#(..)*`, `#(..),*` but I don't like them much
+* TODO check
 * Check all `#[allow(unused)]` and remove any which aren't needed
 * Pushed to 0.4:
   * Fork of syn to:

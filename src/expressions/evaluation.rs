@@ -99,14 +99,18 @@ impl<'a> ExpressionEvaluator<'a> {
             }
             EvaluationStackFrame::BinaryOperation { operation, state } => match state {
                 BinaryPath::OnLeftBranch { right } => {
-                    self.operation_stack
-                        .push(EvaluationStackFrame::BinaryOperation {
-                            operation,
-                            state: BinaryPath::OnRightBranch {
-                                left: evaluation_value,
-                            },
-                        });
-                    NextAction::EnterNode(right)
+                    if let Some(result) = operation.lazy_evaluate(&evaluation_value)? {
+                        NextAction::HandleValue(result)
+                    } else {
+                        self.operation_stack
+                            .push(EvaluationStackFrame::BinaryOperation {
+                                operation,
+                                state: BinaryPath::OnRightBranch {
+                                    left: evaluation_value,
+                                },
+                            });
+                        NextAction::EnterNode(right)
+                    }
                 }
                 BinaryPath::OnRightBranch { left } => {
                     let result = operation.evaluate(left, evaluation_value)?;
@@ -182,15 +186,11 @@ impl EvaluationOutput {
     }
 }
 
-impl HasSpanRange for EvaluationOutput {
+impl HasSpan for EvaluationOutput {
     fn span(&self) -> Span {
         self.value
             .source_span()
             .unwrap_or(self.fallback_output_span)
-    }
-
-    fn span_range(&self) -> SpanRange {
-        self.span().span_range()
     }
 }
 

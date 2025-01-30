@@ -19,7 +19,7 @@ impl ValueCommandDefinition for IsEmptyCommand {
     }
 
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree> {
-        let output_span = self.arguments.span_range().span();
+        let output_span = self.arguments.span_range().join_into_span_else_start();
         let interpreted = self.arguments.interpret_to_new_stream(interpreter)?;
         Ok(Ident::new_bool(interpreted.is_empty(), output_span).into())
     }
@@ -44,7 +44,7 @@ impl ValueCommandDefinition for LengthCommand {
     }
 
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree> {
-        let output_span = self.arguments.span_range().span();
+        let output_span = self.arguments.span_range().join_into_span_else_start();
         let interpreted = self.arguments.interpret_to_new_stream(interpreter)?;
         let length_literal = Literal::usize_unsuffixed(interpreted.len()).with_span(output_span);
         Ok(length_literal.into())
@@ -251,7 +251,7 @@ impl StreamCommandDefinition for SplitCommand {
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> ExecutionResult<()> {
-        let output_span = self.inputs.stream.span();
+        let output_span = self.inputs.stream.span_range().join_into_span_else_start();
         let stream = self.inputs.stream.interpret_to_new_stream(interpreter)?;
         let separator = self.inputs.separator.interpret_to_new_stream(interpreter)?;
 
@@ -340,7 +340,7 @@ impl StreamCommandDefinition for CommaSplitCommand {
         interpreter: &mut Interpreter,
         output: &mut InterpretedStream,
     ) -> ExecutionResult<()> {
-        let output_span = self.input.span();
+        let output_span = self.input.span_range().join_into_span_else_start();
         let stream = self.input.interpret_to_new_stream(interpreter)?;
         let separator = {
             let mut stream = RawDestructureStream::empty();
