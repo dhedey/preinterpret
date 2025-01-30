@@ -1,0 +1,6 @@
+error: Square brackets [ .. ] are not supported in an expression
+       Occurred whilst parsing [!evaluate! ...] - Expected [!evaluate! ...] containing a valid preinterpret expression
+ --> tests/compilation_failures/expressions/brackets.rs:5:21
+  |
+5 |         [!evaluate! [true]]
+  |                     ^

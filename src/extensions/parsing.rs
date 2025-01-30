@@ -261,3 +261,76 @@ impl DelimiterExt for Delimiter {
         }
     }
 }
+
+/// Allows storing a stack of parse buffers for certain parse strategies which require
+/// handling multiple groups in parallel.
+pub(crate) struct ParseStreamStack<'a> {
+    base: ParseStream<'a>,
+    group_stack: Vec<ParseBuffer<'a>>,
+}
+
+impl<'a> ParseStreamStack<'a> {
+    pub(crate) fn new(base: ParseStream<'a>) -> Self {
+        Self {
+            base,
+            group_stack: Vec::new(),
+        }
+    }
+
+    fn current(&self) -> ParseStream<'_> {
+        self.group_stack.last().unwrap_or(self.base)
+    }
+
+    pub(crate) fn parse_err<T>(&self, message: impl std::fmt::Display) -> ParseResult<T> {
+        self.current().parse_err(message)
+    }
+
+    pub(crate) fn peek_grammar(&mut self) -> PeekMatch {
+        detect_preinterpret_grammar(self.current().cursor())
+    }
+
+    pub(crate) fn parse<T: Parse>(&mut self) -> ParseResult<T> {
+        self.current().parse()
+    }
+
+    pub(crate) fn parse_and_enter_group(&mut self) -> ParseResult<(Delimiter, DelimSpan)> {
+        let (delimiter, delim_span, inner) = self.current().parse_any_group()?;
+        let inner = unsafe {
+            // SAFETY: This is safe because the lifetime is there for two reasons:
+            // (A) Prevent mixing up different buffers from e.g. different groups,
+            // (B) Ensure the buffers are dropped in the correct order so that the unexpected drop glue triggers
+            // in the correct order.
+            //
+            // This invariant is maintained by this `ParseStreamStack` struct:
+            // (A) Is enforced by the fact we're parsing the group from the top parse buffer current().
+            // (B) Is enforced by a combination of:
+            // ==> exit_group() ensures the parse buffers are dropped in the correct order
+            // ==> If a user forgets to do it (or e.g. an error path or panic causes exit_group not to be called)
+            //     Then the drop glue ensures the groups are dropped in the correct order.
+            std::mem::transmute::<ParseBuffer<'_>, ParseBuffer<'a>>(inner)
+        };
+        self.group_stack.push(inner);
+        Ok((delimiter, delim_span))
+    }
+
+    /// Should be paired with `parse_and_enter_group`.
+    ///
+    /// If the group is not finished, the next attempt to read from the parent will trigger an error,
+    /// in accordance with the drop glue on `ParseBuffer`.
+    ///
+    /// ### Panics
+    /// Panics if there is no group available.
+    pub(crate) fn exit_group(&mut self) {
+        self.group_stack
+            .pop()
+            .expect("finish_group must be paired with push_group");
+    }
+}
+
+impl Drop for ParseStreamStack<'_> {
+    fn drop(&mut self) {
+        while !self.group_stack.is_empty() {
+            self.exit_group();
+        }
+    }
+}

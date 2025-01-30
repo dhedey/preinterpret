@@ -11,7 +11,7 @@ pub(crate) use syn::parse::{
     discouraged::Speculative, Parse as SynParse, ParseBuffer as SynParseBuffer,
     ParseStream as SynParseStream, Parser as SynParser,
 };
-pub(crate) use syn::{parse_str, Expr, ExprLit, Lit, LitBool, LitFloat, LitInt, Token, UnOp};
+pub(crate) use syn::{parse_str, Lit, LitBool, LitFloat, LitInt, Token, UnOp};
 pub(crate) use syn::{Error as SynError, Result as SynResult};
 
 pub(crate) use crate::destructuring::*;

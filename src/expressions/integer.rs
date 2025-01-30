@@ -9,10 +9,11 @@ pub(crate) struct EvaluationInteger {
 }
 
 impl EvaluationInteger {
-    pub(super) fn for_litint(lit: &syn::LitInt) -> ExecutionResult<Self> {
+    pub(super) fn for_litint(lit: syn::LitInt) -> ParseResult<Self> {
+        let source_span = Some(lit.span());
         Ok(Self {
             value: EvaluationIntegerValue::for_litint(lit)?,
-            source_span: Some(lit.span()),
+            source_span,
         })
     }
 
@@ -184,7 +185,7 @@ pub(super) enum EvaluationIntegerValue {
 }
 
 impl EvaluationIntegerValue {
-    pub(super) fn for_litint(lit: &syn::LitInt) -> ExecutionResult<Self> {
+    pub(super) fn for_litint(lit: syn::LitInt) -> ParseResult<Self> {
         Ok(match lit.suffix() {
             "" => Self::Untyped(UntypedInteger::new_from_lit_int(lit)),
             "u8" => Self::U8(lit.base10_parse()?),
@@ -200,7 +201,7 @@ impl EvaluationIntegerValue {
             "i128" => Self::I128(lit.base10_parse()?),
             "isize" => Self::Isize(lit.base10_parse()?),
             suffix => {
-                return lit.span().execution_err(format!(
+                return lit.span().parse_err(format!(
                     "The literal suffix {suffix} is not supported in preinterpret expressions"
                 ));
             }
@@ -252,9 +253,8 @@ pub(super) struct UntypedInteger(
 pub(super) type FallbackInteger = i128;
 
 impl UntypedInteger {
-    pub(super) fn new_from_lit_int(lit_int: &LitInt) -> Self {
-        // LitInt doesn't support Clone, so we have to do this
-        Self::new_from_literal(lit_int.token())
+    pub(super) fn new_from_lit_int(lit_int: LitInt) -> Self {
+        Self(lit_int)
     }
 
     pub(super) fn new_from_literal(literal: Literal) -> Self {
@@ -267,10 +267,12 @@ impl UntypedInteger {
     ) -> ExecutionResult<EvaluationValue> {
         let input = self.parse_fallback()?;
         match operation.operator {
-            UnaryOperator::Neg => operation.output(Self::from_fallback(-input)),
-            UnaryOperator::Not => operation.unsupported_for_value_type_err("untyped integer"),
-            UnaryOperator::NoOp => operation.output(self),
-            UnaryOperator::Cast(target) => match target {
+            UnaryOperator::Neg { .. } => operation.output(Self::from_fallback(-input)),
+            UnaryOperator::Not { .. } => {
+                operation.unsupported_for_value_type_err("untyped integer")
+            }
+            UnaryOperator::GroupedNoOp { .. } => operation.output(self),
+            UnaryOperator::Cast { target, .. } => match target {
                 CastTarget::Integer(IntegerKind::Untyped) => {
                     operation.output(UntypedInteger::from_fallback(input as FallbackInteger))
                 }
@@ -525,12 +527,12 @@ macro_rules! impl_unsigned_unary_operations {
         impl HandleUnaryOperation for $integer_type {
             fn handle_unary_operation(self, operation: &UnaryOperation) -> ExecutionResult<EvaluationValue> {
                 match operation.operator {
-                    UnaryOperator::NoOp => operation.output(self),
-                    UnaryOperator::Neg
-                    | UnaryOperator::Not => {
+                    UnaryOperator::GroupedNoOp { .. } => operation.output(self),
+                    UnaryOperator::Neg { .. }
+                    | UnaryOperator::Not { .. } => {
                         operation.unsupported_for_value_type_err(stringify!($integer_type))
                     },
-                    UnaryOperator::Cast(target) => match target {
+                    UnaryOperator::Cast { target, .. } => match target {
                         CastTarget::Integer(IntegerKind::Untyped) => operation.output(UntypedInteger::from_fallback(self as FallbackInteger)),
                         CastTarget::Integer(IntegerKind::I8) => operation.output(self as i8),
                         CastTarget::Integer(IntegerKind::I16) => operation.output(self as i16),
@@ -561,12 +563,12 @@ macro_rules! impl_signed_unary_operations {
         impl HandleUnaryOperation for $integer_type {
             fn handle_unary_operation(self, operation: &UnaryOperation) -> ExecutionResult<EvaluationValue> {
                 match operation.operator {
-                    UnaryOperator::NoOp => operation.output(self),
-                    UnaryOperator::Neg => operation.output(-self),
-                    UnaryOperator::Not => {
+                    UnaryOperator::GroupedNoOp { .. } => operation.output(self),
+                    UnaryOperator::Neg { .. } => operation.output(-self),
+                    UnaryOperator::Not { .. } => {
                         operation.unsupported_for_value_type_err(stringify!($integer_type))
                     },
-                    UnaryOperator::Cast(target) => match target {
+                    UnaryOperator::Cast { target, .. } => match target {
                         CastTarget::Integer(IntegerKind::Untyped) => operation.output(UntypedInteger::from_fallback(self as FallbackInteger)),
                         CastTarget::Integer(IntegerKind::I8) => operation.output(self as i8),
                         CastTarget::Integer(IntegerKind::I16) => operation.output(self as i16),
@@ -597,11 +599,11 @@ impl HandleUnaryOperation for u8 {
         operation: &UnaryOperation,
     ) -> ExecutionResult<EvaluationValue> {
         match operation.operator {
-            UnaryOperator::NoOp => operation.output(self),
-            UnaryOperator::Neg | UnaryOperator::Not => {
+            UnaryOperator::GroupedNoOp { .. } => operation.output(self),
+            UnaryOperator::Neg { .. } | UnaryOperator::Not { .. } => {
                 operation.unsupported_for_value_type_err("u8")
             }
-            UnaryOperator::Cast(target) => match target {
+            UnaryOperator::Cast { target, .. } => match target {
                 CastTarget::Integer(IntegerKind::Untyped) => {
                     operation.output(UntypedInteger::from_fallback(self as FallbackInteger))
                 }

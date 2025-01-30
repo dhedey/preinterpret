@@ -1,6 +1,0 @@
-error: Expected an expression
-       Occurred whilst parsing [!evaluate! ...] - Expected [!evaluate! ...] containing a valid preinterpret expression
- --> tests/compilation_failures/expressions/inner_braces.rs:5:22
-  |
-5 |         [!evaluate! ({true})]
-  |                      ^

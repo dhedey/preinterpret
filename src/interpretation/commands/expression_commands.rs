@@ -2,7 +2,7 @@ use crate::internal_prelude::*;
 
 #[derive(Clone)]
 pub(crate) struct EvaluateCommand {
-    expression: ExpressionInput,
+    expression: Expression,
     command_span: Span,
 }
 
@@ -26,8 +26,10 @@ impl ValueCommandDefinition for EvaluateCommand {
     }
 
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree> {
-        let expression = self.expression.start_expression_builder(interpreter)?;
-        Ok(expression.evaluate(self.command_span)?.to_token_tree())
+        Ok(self
+            .expression
+            .evaluate_with_span(interpreter, self.command_span)?
+            .to_token_tree())
     }
 }
 
@@ -37,7 +39,7 @@ pub(crate) struct AssignCommand {
     operator: Option<Punct>,
     #[allow(unused)]
     equals: Token![=],
-    expression: ExpressionInput,
+    expression: Expression,
     command_span: Span,
 }
 
@@ -83,14 +85,28 @@ impl NoOutputCommandDefinition for AssignCommand {
             command_span,
         } = *self;
 
-        let mut builder = ExpressionBuilder::new();
-        if let Some(operator) = operator {
-            variable.add_to_expression(interpreter, &mut builder)?;
-            builder.push_punct(operator);
-        }
-        builder.extend_with_evaluation_output(expression.evaluate(interpreter)?);
+        let expression = if let Some(operator) = operator {
+            let mut calculation = TokenStream::new();
+            unsafe {
+                // RUST-ANALYZER SAFETY: Hopefully it won't contain a none-delimited group
+                variable
+                    .interpret_to_new_stream(interpreter)?
+                    .syn_parse(Expression::parse)?
+                    .evaluate(interpreter)?
+                    .to_tokens(&mut calculation);
+            };
+            operator.to_tokens(&mut calculation);
+            expression
+                .evaluate(interpreter)?
+                .to_tokens(&mut calculation);
+            calculation.parse_with(Expression::parse)?
+        } else {
+            expression
+        };
 
-        let output = builder.evaluate(command_span)?.to_token_tree();
+        let output = expression
+            .evaluate_with_span(interpreter, command_span)?
+            .to_token_tree();
         variable.set(interpreter, output.into())?;
 
         Ok(())
@@ -99,9 +115,9 @@ impl NoOutputCommandDefinition for AssignCommand {
 
 #[derive(Clone)]
 pub(crate) struct RangeCommand {
-    left: ExpressionInput,
+    left: Expression,
     range_limits: RangeLimits,
-    right: ExpressionInput,
+    right: Expression,
 }
 
 impl CommandType for RangeCommand {

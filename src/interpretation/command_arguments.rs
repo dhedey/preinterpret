@@ -34,7 +34,8 @@ impl<'a> CommandArguments<'a> {
         if self.parse_stream.is_empty() {
             Ok(())
         } else {
-            self.command_span.parse_err(error_message)
+            self.parse_stream
+                .parse_err(format!("Unexpected extra tokens. {}", error_message))
         }
     }
 

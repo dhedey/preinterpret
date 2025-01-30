@@ -1,7 +1,8 @@
 mod boolean;
 mod character;
-mod evaluation_tree;
-mod expression_stream;
+mod evaluation;
+mod expression;
+mod expression_parsing;
 mod float;
 mod integer;
 mod operations;
@@ -12,11 +13,12 @@ mod value;
 use crate::internal_prelude::*;
 use boolean::*;
 use character::*;
-use evaluation_tree::*;
+use evaluation::*;
+use expression_parsing::*;
 use float::*;
 use integer::*;
 use operations::*;
 use string::*;
 use value::*;
 
-pub(crate) use expression_stream::*;
+pub(crate) use expression::*;

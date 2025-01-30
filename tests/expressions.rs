@@ -74,21 +74,11 @@ fn test_basic_evaluate_works() {
 
 #[test]
 fn test_very_long_expression_works() {
-    // Any larger than this gets hit by a stack overflow - which is in the syn library,
-    // during parsing the Expr, rather than in preinterpret.
-    // When we implement expression parsing in preinterpret, we can potentially flatten
-    // the parsing loop and get better performance.
-    assert_preinterpret_eq!({
-            [!set! #x = 0
-                [!for! #i in [!range! 0..1000] {
-                    [!for! #j in [!range! 0..25] {
-                        + 1
-                    }]
-                }]
-            ]
-            [!evaluate! #x]
+    assert_preinterpret_eq!(
+        {
+            [!settings! { iteration_limit: 100000 }][!evaluate! [!group! 0 [!for! #i in [!range! 0..100000] { + 1 }]]]
         },
-        25000
+        100000
     );
 }
 

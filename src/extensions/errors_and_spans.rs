@@ -66,6 +66,13 @@ pub(crate) struct SpanRange {
 }
 
 impl SpanRange {
+    pub(crate) fn new_single(span: Span) -> Self {
+        Self {
+            start: span,
+            end: span,
+        }
+    }
+
     pub(crate) fn new_between(start: Span, end: Span) -> Self {
         Self { start, end }
     }
@@ -78,6 +85,10 @@ impl SpanRange {
     /// * On stable, this gives the span of the first token of the group (because [`proc_macro::Span::join`] is not supported)
     pub(crate) fn span(&self) -> Span {
         <Self as syn::spanned::Spanned>::span(self)
+    }
+
+    pub(crate) fn set_end(&mut self, end: Span) {
+        self.end = end;
     }
 
     #[allow(unused)]

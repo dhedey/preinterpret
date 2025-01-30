@@ -1,5 +1,6 @@
 use super::*;
 
+#[derive(Clone)]
 pub(crate) struct EvaluationString {
     pub(super) value: String,
     /// The span of the source code that generated this boolean value.
@@ -8,7 +9,7 @@ pub(crate) struct EvaluationString {
 }
 
 impl EvaluationString {
-    pub(super) fn for_litstr(lit: &syn::LitStr) -> Self {
+    pub(super) fn for_litstr(lit: syn::LitStr) -> Self {
         Self {
             value: lit.value(),
             source_span: Some(lit.span()),
@@ -20,8 +21,8 @@ impl EvaluationString {
         operation: UnaryOperation,
     ) -> ExecutionResult<EvaluationValue> {
         match operation.operator {
-            UnaryOperator::NoOp => operation.output(self.value),
-            UnaryOperator::Neg | UnaryOperator::Not | UnaryOperator::Cast(_) => {
+            UnaryOperator::GroupedNoOp { .. } => operation.output(self.value),
+            UnaryOperator::Neg { .. } | UnaryOperator::Not { .. } | UnaryOperator::Cast { .. } => {
                 operation.unsupported_for_value_type_err("string")
             }
         }

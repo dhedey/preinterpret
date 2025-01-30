@@ -76,13 +76,16 @@ Destructuring performs parsing of a token stream. It supports:
 
 ### To come
 
+* Complete expression rework:
+  * Enable lazy && and ||
+  * Enable support for code blocks { .. } in expressions
+  * Flatten `UnaryOperation` and `UnaryOperator`
+  * Flatten `BinaryOperation` and `BinaryOperator`
+  * Search / resolve TODOs
 * `[!is_set! #x]`
 * `[!str_split! { input: Value<LitStr>, separator: Value<LitStr>, }]`
 * Change `(!content! ...)` to unwrap none groups, to be more permissive
 * Add casts of other integers to char, via `char::from_u32(u32::try_from(x))`
-* Add more tests
-  * e.g. for various expressions
-  * e.g. for long sums
 * Destructurers
   * `(!fields! ...)` and `(!subfields! ...)`
   * Add ability to fork (copy on write?) / revert the interpreter state and can then add:
@@ -93,11 +96,6 @@ Destructuring performs parsing of a token stream. It supports:
     * `(!any! ...)` (with `#..x` as a catch-all) like the [!match!] command but without arms...
   * (MAYBE) `#(..)?`, `#(..)+`, `#(..),+`, `#(..)*`, `#(..),*` but I don't like them much
 * Check all `#[allow(unused)]` and remove any which aren't needed
-* Rework expression parsing, in order to:
-  * Fix comments in the expression files
-  * Enable lazy && and ||
-  * Enable support for code blocks { .. } in expressions, and remove hacks where expression parsing stops at {} or .
-  * Remove stack overflow possibilities when parsing a long nested expression
 * Pushed to 0.4:
   * Fork of syn to:
     * Fix issues in Rust Analyzer

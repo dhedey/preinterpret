@@ -1,5 +1,6 @@
 use super::*;
 
+#[derive(Clone)]
 pub(crate) enum EvaluationValue {
     Integer(EvaluationInteger),
     Float(EvaluationFloat),
@@ -13,9 +14,9 @@ pub(super) trait ToEvaluationValue: Sized {
 }
 
 impl EvaluationValue {
-    pub(super) fn for_literal_expression(expr: &ExprLit) -> ExecutionResult<Self> {
+    pub(super) fn for_literal(lit: syn::Lit) -> ParseResult<Self> {
         // https://docs.rs/syn/latest/syn/enum.Lit.html
-        Ok(match &expr.lit {
+        Ok(match lit {
             Lit::Int(lit) => Self::Integer(EvaluationInteger::for_litint(lit)?),
             Lit::Float(lit) => Self::Float(EvaluationFloat::for_litfloat(lit)?),
             Lit::Bool(lit) => Self::Boolean(EvaluationBoolean::for_litbool(lit)),
@@ -24,7 +25,7 @@ impl EvaluationValue {
             other_literal => {
                 return other_literal
                     .span()
-                    .execution_err("This literal is not supported in preinterpret expressions");
+                    .parse_err("This literal is not supported in preinterpret expressions");
             }
         })
     }

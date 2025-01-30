@@ -1,6 +1,7 @@
 use super::*;
 use crate::internal_prelude::*;
 
+#[derive(Clone)]
 pub(crate) struct EvaluationFloat {
     pub(super) value: EvaluationFloatValue,
     /// The span of the source code that generated this boolean value.
@@ -9,10 +10,11 @@ pub(crate) struct EvaluationFloat {
 }
 
 impl EvaluationFloat {
-    pub(super) fn for_litfloat(lit: &syn::LitFloat) -> ExecutionResult<Self> {
+    pub(super) fn for_litfloat(lit: syn::LitFloat) -> ParseResult<Self> {
+        let source_span = Some(lit.span());
         Ok(Self {
             value: EvaluationFloatValue::for_litfloat(lit)?,
-            source_span: Some(lit.span()),
+            source_span,
         })
     }
 
@@ -71,6 +73,7 @@ impl EvaluationFloatValuePair {
     }
 }
 
+#[derive(Clone)]
 pub(super) enum EvaluationFloatValue {
     Untyped(UntypedFloat),
     F32(f32),
@@ -78,13 +81,13 @@ pub(super) enum EvaluationFloatValue {
 }
 
 impl EvaluationFloatValue {
-    pub(super) fn for_litfloat(lit: &syn::LitFloat) -> ExecutionResult<Self> {
+    pub(super) fn for_litfloat(lit: syn::LitFloat) -> ParseResult<Self> {
         Ok(match lit.suffix() {
             "" => Self::Untyped(UntypedFloat::new_from_lit_float(lit)),
             "f32" => Self::F32(lit.base10_parse()?),
             "f64" => Self::F64(lit.base10_parse()?),
             suffix => {
-                return lit.span().execution_err(format!(
+                return lit.span().parse_err(format!(
                     "The literal suffix {suffix} is not supported in preinterpret expressions"
                 ));
             }
@@ -115,6 +118,7 @@ pub(super) enum FloatKind {
     F64,
 }
 
+#[derive(Clone)]
 pub(super) struct UntypedFloat(
     /// The span of the literal is ignored, and will be set when converted to an output.
     LitFloat,
@@ -122,9 +126,8 @@ pub(super) struct UntypedFloat(
 pub(super) type FallbackFloat = f64;
 
 impl UntypedFloat {
-    pub(super) fn new_from_lit_float(lit_float: &LitFloat) -> Self {
-        // LitFloat doesn't support Clone, so we have to do this
-        Self::new_from_literal(lit_float.token())
+    pub(super) fn new_from_lit_float(lit_float: LitFloat) -> Self {
+        Self(lit_float)
     }
 
     pub(super) fn new_from_literal(literal: Literal) -> Self {
@@ -137,10 +140,10 @@ impl UntypedFloat {
     ) -> ExecutionResult<EvaluationValue> {
         let input = self.parse_fallback()?;
         match operation.operator {
-            UnaryOperator::Neg => operation.output(Self::from_fallback(-input)),
-            UnaryOperator::Not => operation.unsupported_for_value_type_err("untyped float"),
-            UnaryOperator::NoOp => operation.output(self),
-            UnaryOperator::Cast(target) => match target {
+            UnaryOperator::Neg { .. } => operation.output(Self::from_fallback(-input)),
+            UnaryOperator::Not { .. } => operation.unsupported_for_value_type_err("untyped float"),
+            UnaryOperator::GroupedNoOp { .. } => operation.output(self),
+            UnaryOperator::Cast { target, .. } => match target {
                 CastTarget::Integer(IntegerKind::Untyped) => {
                     operation.output(UntypedInteger::from_fallback(input as FallbackInteger))
                 }
@@ -270,10 +273,10 @@ macro_rules! impl_float_operations {
         impl HandleUnaryOperation for $float_type {
             fn handle_unary_operation(self, operation: &UnaryOperation) -> ExecutionResult<EvaluationValue> {
                 match operation.operator {
-                    UnaryOperator::Neg => operation.output(-self),
-                    UnaryOperator::Not => operation.unsupported_for_value_type_err(stringify!($float_type)),
-                    UnaryOperator::NoOp => operation.output(self),
-                    UnaryOperator::Cast(target) => match target {
+                    UnaryOperator::Neg { .. } => operation.output(-self),
+                    UnaryOperator::Not { .. } => operation.unsupported_for_value_type_err(stringify!($float_type)),
+                    UnaryOperator::GroupedNoOp { .. } => operation.output(self),
+                    UnaryOperator::Cast { target, .. } => match target {
                         CastTarget::Integer(IntegerKind::Untyped) => operation.output(UntypedInteger::from_fallback(self as FallbackInteger)),
                         CastTarget::Integer(IntegerKind::I8) => operation.output(self as i8),
                         CastTarget::Integer(IntegerKind::I16) => operation.output(self as i16),

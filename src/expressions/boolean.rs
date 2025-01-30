@@ -1,5 +1,6 @@
 use super::*;
 
+#[derive(Clone)]
 pub(crate) struct EvaluationBoolean {
     pub(super) value: bool,
     /// The span of the source code that generated this boolean value.
@@ -8,7 +9,7 @@ pub(crate) struct EvaluationBoolean {
 }
 
 impl EvaluationBoolean {
-    pub(super) fn for_litbool(lit: &syn::LitBool) -> Self {
+    pub(super) fn for_litbool(lit: syn::LitBool) -> Self {
         Self {
             source_span: Some(lit.span()),
             value: lit.value,
@@ -21,10 +22,10 @@ impl EvaluationBoolean {
     ) -> ExecutionResult<EvaluationValue> {
         let input = self.value;
         match operation.operator {
-            UnaryOperator::Neg => operation.unsupported_for_value_type_err("boolean"),
-            UnaryOperator::Not => operation.output(!input),
-            UnaryOperator::NoOp => operation.output(input),
-            UnaryOperator::Cast(target) => match target {
+            UnaryOperator::Neg { .. } => operation.unsupported_for_value_type_err("boolean"),
+            UnaryOperator::Not { .. } => operation.output(!input),
+            UnaryOperator::GroupedNoOp { .. } => operation.output(input),
+            UnaryOperator::Cast { target, .. } => match target {
                 CastTarget::Integer(IntegerKind::Untyped) => {
                     operation.output(UntypedInteger::from_fallback(input as FallbackInteger))
                 }

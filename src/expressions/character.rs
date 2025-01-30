@@ -1,5 +1,6 @@
 use super::*;
 
+#[derive(Clone)]
 pub(crate) struct EvaluationChar {
     pub(super) value: char,
     /// The span of the source code that generated this boolean value.
@@ -8,7 +9,7 @@ pub(crate) struct EvaluationChar {
 }
 
 impl EvaluationChar {
-    pub(super) fn for_litchar(lit: &syn::LitChar) -> Self {
+    pub(super) fn for_litchar(lit: syn::LitChar) -> Self {
         Self {
             value: lit.value(),
             source_span: Some(lit.span()),
@@ -21,11 +22,11 @@ impl EvaluationChar {
     ) -> ExecutionResult<EvaluationValue> {
         let char = self.value;
         match operation.operator {
-            UnaryOperator::NoOp => operation.output(char),
-            UnaryOperator::Neg | UnaryOperator::Not => {
+            UnaryOperator::GroupedNoOp { .. } => operation.output(char),
+            UnaryOperator::Neg { .. } | UnaryOperator::Not { .. } => {
                 operation.unsupported_for_value_type_err("char")
             }
-            UnaryOperator::Cast(target) => match target {
+            UnaryOperator::Cast { target, .. } => match target {
                 CastTarget::Integer(IntegerKind::Untyped) => {
                     operation.output(UntypedInteger::from_fallback(char as FallbackInteger))
                 }

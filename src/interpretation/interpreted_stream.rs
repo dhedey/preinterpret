@@ -88,10 +88,6 @@ impl InterpretedStream {
         self.token_length += 1;
     }
 
-    pub(crate) fn extend_with_raw_tokens_from(&mut self, tokens: impl ToTokens) {
-        self.extend_raw_tokens(tokens.into_token_stream())
-    }
-
     pub(crate) fn push_interpreted_item(&mut self, segment_item: InterpretedTokenTree) {
         match segment_item {
             InterpretedTokenTree::TokenTree(token_tree) => {

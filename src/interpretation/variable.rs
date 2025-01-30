@@ -96,19 +96,6 @@ impl Interpret for &GroupedVariable {
     }
 }
 
-impl Express for &GroupedVariable {
-    fn add_to_expression(
-        self,
-        interpreter: &mut Interpreter,
-        expression_stream: &mut ExpressionBuilder,
-    ) -> ExecutionResult<()> {
-        expression_stream.push_grouped(
-            |inner| self.substitute_ungrouped_contents_into(interpreter, inner),
-            self.span(),
-        )
-    }
-}
-
 impl HasSpanRange for GroupedVariable {
     fn span_range(&self) -> SpanRange {
         SpanRange::new_between(self.marker.span, self.variable_name.span())
@@ -191,20 +178,6 @@ impl Interpret for &FlattenedVariable {
         output: &mut InterpretedStream,
     ) -> ExecutionResult<()> {
         self.substitute_into(interpreter, output)
-    }
-}
-
-impl Express for &FlattenedVariable {
-    fn add_to_expression(
-        self,
-        _: &mut Interpreter,
-        _: &mut ExpressionBuilder,
-    ) -> ExecutionResult<()> {
-        // Just like with commands, we throw an error in the flattened case so
-        // that we can determine in future the exact structure of the expression
-        // at parse time.
-        self.flatten
-            .execution_err("Flattened variables cannot be used directly in expressions.\nConsider removing the .. or wrapping it inside a command such as [!group! ..] which returns an expression")
     }
 }
 

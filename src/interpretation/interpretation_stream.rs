@@ -124,22 +124,6 @@ impl Interpret for RawGroup {
     }
 }
 
-impl Express for RawGroup {
-    fn add_to_expression(
-        self,
-        _: &mut Interpreter,
-        expression_stream: &mut ExpressionBuilder,
-    ) -> ExecutionResult<()> {
-        expression_stream.push_grouped(
-            |inner| {
-                inner.extend_raw_tokens(self.content);
-                Ok(())
-            },
-            self.source_delim_span.join(),
-        )
-    }
-}
-
 impl HasSpanRange for RawGroup {
     fn span_range(&self) -> SpanRange {
         self.source_delim_span.span_range()

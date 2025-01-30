@@ -1,5 +1,5 @@
-error: expected an expression
- --> tests/compilation_failures/expressions/grouped_variable_with_incomplete_expression.rs:5:21
+error: Unexpected extra tokens. Expected [!evaluate! ...] containing a valid preinterpret expression
+ --> tests/compilation_failures/expressions/grouped_variable_with_incomplete_expression.rs:6:23
   |
-5 |         [!set! #x = + 1]
-  |                     ^
+6 |         [!evaluate! 1 #x]
+  |                       ^

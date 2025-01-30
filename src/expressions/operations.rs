@@ -1,47 +1,13 @@
 use super::*;
 
-pub(super) enum EvaluationOperator {
-    Unary {
-        operation: UnaryOperation,
-        input: Option<EvaluationValue>,
-    },
-    Binary {
-        operation: BinaryOperation,
-        left_input: Option<EvaluationValue>,
-        right_input: Option<EvaluationValue>,
-    },
-}
-
-impl EvaluationOperator {
-    pub(super) fn evaluate(self) -> ExecutionResult<EvaluationValue> {
-        const OPERATOR_INPUT_EXPECT_STR: &str = "Handling children on the stack ordering should ensure the parent input is always set when the parent is evaluated";
-
-        match self {
-            Self::Unary {
-                operation: operator,
-                input,
-            } => operator.evaluate(input.expect(OPERATOR_INPUT_EXPECT_STR)),
-            Self::Binary {
-                operation: operator,
-                left_input,
-                right_input,
-            } => operator.evaluate(
-                left_input.expect(OPERATOR_INPUT_EXPECT_STR),
-                right_input.expect(OPERATOR_INPUT_EXPECT_STR),
-            ),
-        }
-    }
-}
-
+#[derive(Clone)]
 pub(super) struct UnaryOperation {
-    pub(super) source_span: Option<Span>,
-    pub(super) operator_span: Span,
     pub(super) operator: UnaryOperator,
 }
 
 impl UnaryOperation {
     fn error(&self, error_message: &str) -> ExecutionInterrupt {
-        self.operator_span.execution_error(error_message)
+        self.operator.execution_error(error_message)
     }
 
     pub(super) fn unsupported_for_value_type_err(
@@ -63,98 +29,53 @@ impl UnaryOperation {
         &self,
         output_value: impl ToEvaluationValue,
     ) -> ExecutionResult<EvaluationValue> {
-        Ok(output_value.to_value(self.source_span))
+        Ok(output_value.to_value(self.operator.source_span_for_output()))
     }
 
-    pub(super) fn for_cast_expression(expr: &syn::ExprCast) -> ExecutionResult<Self> {
-        fn extract_type(ty: &syn::Type) -> ExecutionResult<CastTarget> {
-            match ty {
-                syn::Type::Group(group) => extract_type(&group.elem),
-                syn::Type::Path(type_path)
-                    if type_path.qself.is_none()
-                        && type_path.path.leading_colon.is_none()
-                        && type_path.path.segments.len() == 1 =>
-                {
-                    let ident = match type_path.path.get_ident() {
-                        Some(ident) => ident,
-                        None => {
-                            return type_path
-                                .span_range_from_iterating_over_all_tokens()
-                                .execution_err(
-                                    "This type is not supported in preinterpret cast expressions",
-                                )
-                        }
-                    };
-                    match ident.to_string().as_str() {
-                        "int" | "integer" => Ok(CastTarget::Integer(IntegerKind::Untyped)),
-                        "u8" => Ok(CastTarget::Integer(IntegerKind::U8)),
-                        "u16" => Ok(CastTarget::Integer(IntegerKind::U16)),
-                        "u32" => Ok(CastTarget::Integer(IntegerKind::U32)),
-                        "u64" => Ok(CastTarget::Integer(IntegerKind::U64)),
-                        "u128" => Ok(CastTarget::Integer(IntegerKind::U128)),
-                        "usize" => Ok(CastTarget::Integer(IntegerKind::Usize)),
-                        "i8" => Ok(CastTarget::Integer(IntegerKind::I8)),
-                        "i16" => Ok(CastTarget::Integer(IntegerKind::I16)),
-                        "i32" => Ok(CastTarget::Integer(IntegerKind::I32)),
-                        "i64" => Ok(CastTarget::Integer(IntegerKind::I64)),
-                        "i128" => Ok(CastTarget::Integer(IntegerKind::I128)),
-                        "isize" => Ok(CastTarget::Integer(IntegerKind::Isize)),
-                        "float" => Ok(CastTarget::Float(FloatKind::Untyped)),
-                        "f32" => Ok(CastTarget::Float(FloatKind::F32)),
-                        "f64" => Ok(CastTarget::Float(FloatKind::F64)),
-                        "bool" => Ok(CastTarget::Boolean),
-                        "char" => Ok(CastTarget::Char),
-                        _ => ident.execution_err(
-                            "This type is not supported in preinterpret cast expressions",
-                        ),
-                    }
-                }
-                other => other
-                    .span_range_from_iterating_over_all_tokens()
-                    .execution_err("This type is not supported in preinterpret cast expressions"),
+    pub(super) fn for_cast_operation(
+        as_token: Token![as],
+        target_type: Ident,
+    ) -> ParseResult<Self> {
+        let target = match target_type.to_string().as_str() {
+            "int" | "integer" => CastTarget::Integer(IntegerKind::Untyped),
+            "u8" => CastTarget::Integer(IntegerKind::U8),
+            "u16" => CastTarget::Integer(IntegerKind::U16),
+            "u32" => CastTarget::Integer(IntegerKind::U32),
+            "u64" => CastTarget::Integer(IntegerKind::U64),
+            "u128" => CastTarget::Integer(IntegerKind::U128),
+            "usize" => CastTarget::Integer(IntegerKind::Usize),
+            "i8" => CastTarget::Integer(IntegerKind::I8),
+            "i16" => CastTarget::Integer(IntegerKind::I16),
+            "i32" => CastTarget::Integer(IntegerKind::I32),
+            "i64" => CastTarget::Integer(IntegerKind::I64),
+            "i128" => CastTarget::Integer(IntegerKind::I128),
+            "isize" => CastTarget::Integer(IntegerKind::Isize),
+            "float" => CastTarget::Float(FloatKind::Untyped),
+            "f32" => CastTarget::Float(FloatKind::F32),
+            "f64" => CastTarget::Float(FloatKind::F64),
+            "bool" => CastTarget::Boolean,
+            "char" => CastTarget::Char,
+            _ => {
+                return target_type
+                    .parse_err("This type is not supported in preinterpret cast expressions")
             }
-        }
-
+        };
         Ok(Self {
-            source_span: None,
-            operator_span: expr.as_token.span(),
-            operator: UnaryOperator::Cast(extract_type(&expr.ty)?),
+            operator: UnaryOperator::Cast { as_token, target },
         })
     }
 
-    pub(super) fn for_group_expression(expr: &syn::ExprGroup) -> ExecutionResult<Self> {
-        let span = expr.group_token.span;
-        Ok(Self {
-            source_span: Some(span),
-            operator_span: span,
-            operator: UnaryOperator::NoOp,
-        })
-    }
-
-    pub(super) fn for_paren_expression(expr: &syn::ExprParen) -> ExecutionResult<Self> {
-        let span = expr.paren_token.span.join();
-        Ok(Self {
-            source_span: Some(span),
-            operator_span: span,
-            operator: UnaryOperator::NoOp,
-        })
-    }
-
-    pub(super) fn for_unary_expression(expr: &syn::ExprUnary) -> ExecutionResult<Self> {
-        let operator = match &expr.op {
-            UnOp::Neg(_) => UnaryOperator::Neg,
-            UnOp::Not(_) => UnaryOperator::Not,
+    pub(super) fn for_unary_operator(operator: syn::UnOp) -> ParseResult<Self> {
+        let operator = match operator {
+            UnOp::Neg(token) => UnaryOperator::Neg { token },
+            UnOp::Not(token) => UnaryOperator::Not { token },
             other_unary_op => {
-                return other_unary_op.execution_err(
+                return other_unary_op.parse_err(
                     "This unary operator is not supported in a preinterpret expression",
                 );
             }
         };
-        Ok(Self {
-            source_span: None,
-            operator_span: expr.op.span(),
-            operator,
-        })
+        Ok(Self { operator })
     }
 
     pub(super) fn evaluate(self, input: EvaluationValue) -> ExecutionResult<EvaluationValue> {
@@ -164,20 +85,53 @@ impl UnaryOperation {
 
 #[derive(Copy, Clone)]
 pub(super) enum UnaryOperator {
-    Neg,
-    Not,
-    NoOp,
-    Cast(CastTarget),
+    Neg {
+        token: Token![-],
+    },
+    Not {
+        token: Token![!],
+    },
+    GroupedNoOp {
+        span: Span,
+    },
+    Cast {
+        as_token: Token![as],
+        target: CastTarget,
+    },
 }
 
 impl UnaryOperator {
+    pub(crate) fn source_span_for_output(&self) -> Option<Span> {
+        match self {
+            UnaryOperator::Neg { .. } => None,
+            UnaryOperator::Not { .. } => None,
+            UnaryOperator::GroupedNoOp { span } => Some(*span),
+            UnaryOperator::Cast { .. } => None,
+        }
+    }
+
     pub(crate) fn symbol(&self) -> &'static str {
         match self {
-            UnaryOperator::Neg => "-",
-            UnaryOperator::Not => "!",
-            UnaryOperator::NoOp => "",
-            UnaryOperator::Cast(_) => "as",
+            UnaryOperator::Neg { .. } => "-",
+            UnaryOperator::Not { .. } => "!",
+            UnaryOperator::GroupedNoOp { .. } => "",
+            UnaryOperator::Cast { .. } => "as",
         }
+    }
+}
+
+impl HasSpanRange for UnaryOperator {
+    fn span(&self) -> Span {
+        match self {
+            UnaryOperator::Neg { token } => token.span,
+            UnaryOperator::Not { token } => token.span,
+            UnaryOperator::GroupedNoOp { span } => *span,
+            UnaryOperator::Cast { as_token, .. } => as_token.span,
+        }
+    }
+
+    fn span_range(&self) -> SpanRange {
+        self.span().span_range()
     }
 }
 
@@ -186,6 +140,7 @@ pub(super) trait HandleUnaryOperation: Sized {
         -> ExecutionResult<EvaluationValue>;
 }
 
+#[derive(Clone)]
 pub(super) struct BinaryOperation {
     /// Only present if there is a single span for the source tokens
     pub(super) source_span: Option<Span>,
@@ -227,8 +182,8 @@ impl BinaryOperation {
         }
     }
 
-    pub(super) fn for_binary_expression(expr: &syn::ExprBinary) -> ExecutionResult<Self> {
-        let operator = match &expr.op {
+    pub(super) fn for_binary_operator(syn_operator: syn::BinOp) -> ParseResult<Self> {
+        let operator = match syn_operator {
             syn::BinOp::Add(_) => BinaryOperator::Paired(PairedBinaryOperator::Addition),
             syn::BinOp::Sub(_) => BinaryOperator::Paired(PairedBinaryOperator::Subtraction),
             syn::BinOp::Mul(_) => BinaryOperator::Paired(PairedBinaryOperator::Multiplication),
@@ -249,17 +204,17 @@ impl BinaryOperation {
             syn::BinOp::Gt(_) => BinaryOperator::Paired(PairedBinaryOperator::GreaterThan),
             other_binary_operation => {
                 return other_binary_operation
-                    .execution_err("This operation is not supported in preinterpret expressions")
+                    .parse_err("This operation is not supported in preinterpret expressions")
             }
         };
         Ok(Self {
             source_span: None,
-            operator_span: expr.op.span(),
+            operator_span: syn_operator.span(),
             operator,
         })
     }
 
-    fn evaluate(
+    pub(super) fn evaluate(
         self,
         left: EvaluationValue,
         right: EvaluationValue,
