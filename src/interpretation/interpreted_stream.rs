@@ -275,17 +275,17 @@ impl InterpretedStream {
         fn concat_recursive_interpreted_stream(
             behaviour: &ConcatBehaviour,
             output: &mut String,
+            prefix_spacing: Spacing,
             stream: InterpretedStream,
         ) {
-            let mut n = 0;
+            let mut spacing = prefix_spacing;
             for segment in stream.segments {
-                match segment {
+                spacing = match segment {
                     InterpretedSegment::TokenVec(vec) => {
-                        n += vec.len();
-                        concat_recursive_token_stream(behaviour, output, vec);
+                        concat_recursive_token_stream(behaviour, output, spacing, vec)
                     }
                     InterpretedSegment::InterpretedGroup(delimiter, _, interpreted_stream) => {
-                        behaviour.before_nth_token_tree(output, n);
+                        behaviour.before_token_tree(output, spacing);
                         behaviour.wrap_delimiters(
                             output,
                             delimiter,
@@ -294,11 +294,12 @@ impl InterpretedStream {
                                 concat_recursive_interpreted_stream(
                                     behaviour,
                                     output,
+                                    Spacing::Joint,
                                     interpreted_stream,
                                 );
                             },
                         );
-                        n += 1;
+                        Spacing::Alone
                     }
                 }
             }
@@ -307,13 +308,16 @@ impl InterpretedStream {
         fn concat_recursive_token_stream(
             behaviour: &ConcatBehaviour,
             output: &mut String,
+            prefix_spacing: Spacing,
             token_stream: impl IntoIterator<Item = TokenTree>,
-        ) {
-            for (n, token_tree) in token_stream.into_iter().enumerate() {
-                behaviour.before_nth_token_tree(output, n);
-                match token_tree {
+        ) -> Spacing {
+            let mut spacing = prefix_spacing;
+            for token_tree in token_stream.into_iter() {
+                behaviour.before_token_tree(output, spacing);
+                spacing = match token_tree {
                     TokenTree::Literal(literal) => {
                         behaviour.handle_literal(output, literal);
+                        Spacing::Alone
                     }
                     TokenTree::Group(group) => {
                         let inner = group.stream();
@@ -322,20 +326,31 @@ impl InterpretedStream {
                             group.delimiter(),
                             inner.is_empty(),
                             |output| {
-                                concat_recursive_token_stream(behaviour, output, inner);
+                                concat_recursive_token_stream(
+                                    behaviour,
+                                    output,
+                                    Spacing::Joint,
+                                    inner,
+                                );
                             },
                         );
+                        Spacing::Alone
                     }
                     TokenTree::Punct(punct) => {
                         output.push(punct.as_char());
+                        punct.spacing()
                     }
-                    TokenTree::Ident(ident) => output.push_str(&ident.to_string()),
+                    TokenTree::Ident(ident) => {
+                        output.push_str(&ident.to_string());
+                        Spacing::Alone
+                    }
                 }
             }
+            spacing
         }
 
         let mut output = String::new();
-        concat_recursive_interpreted_stream(behaviour, &mut output, self);
+        concat_recursive_interpreted_stream(behaviour, &mut output, Spacing::Joint, self);
         output
     }
 }
@@ -349,16 +364,16 @@ impl IntoIterator for InterpretedStream {
     }
 }
 
-pub(crate) struct ConcatBehaviour<'a> {
-    pub(crate) between_token_trees: Option<&'a str>,
+pub(crate) struct ConcatBehaviour {
+    pub(crate) add_space_between_token_trees: bool,
     pub(crate) output_transparent_group_as_command: bool,
     pub(crate) unwrap_contents_of_string_like_literals: bool,
 }
 
-impl ConcatBehaviour<'_> {
+impl ConcatBehaviour {
     pub(crate) fn standard() -> Self {
         Self {
-            between_token_trees: None,
+            add_space_between_token_trees: false,
             output_transparent_group_as_command: false,
             unwrap_contents_of_string_like_literals: true,
         }
@@ -366,17 +381,15 @@ impl ConcatBehaviour<'_> {
 
     pub(crate) fn debug() -> Self {
         Self {
-            between_token_trees: Some(" "),
+            add_space_between_token_trees: true,
             output_transparent_group_as_command: true,
             unwrap_contents_of_string_like_literals: false,
         }
     }
 
-    fn before_nth_token_tree(&self, output: &mut String, n: usize) {
-        if let Some(between) = self.between_token_trees {
-            if n > 0 {
-                output.push_str(between);
-            }
+    fn before_token_tree(&self, output: &mut String, spacing: Spacing) {
+        if self.add_space_between_token_trees && spacing == Spacing::Alone {
+            output.push(' ');
         }
     }
 
