@@ -167,14 +167,13 @@ impl<'a> ExpressionParser<'a> {
 
     fn parse_unary_atom(&mut self) -> ParseResult<UnaryAtom> {
         Ok(match self.streams.peek_grammar() {
-            PeekMatch::GroupedCommand(Some(command_kind)) => {
-                match command_kind.grouped_output_kind().expression_support() {
+            PeekMatch::Command(Some(output_kind)) => {
+                match output_kind.expression_support() {
                     Ok(()) => UnaryAtom::Command(self.streams.parse()?),
                     Err(error_message) => return self.streams.parse_err(error_message),
                 }
             }
-            PeekMatch::GroupedCommand(None) => return self.streams.parse_err("Invalid command"),
-            PeekMatch::FlattenedCommand(_) => return self.streams.parse_err(CommandOutputKind::FlattenedStream.expression_support().unwrap_err()),
+            PeekMatch::Command(None) => return self.streams.parse_err("Invalid command"),
             PeekMatch::GroupedVariable => UnaryAtom::GroupedVariable(self.streams.parse()?),
             PeekMatch::FlattenedVariable => return self.streams.parse_err("Flattened variables cannot be used directly in expressions. Consider removing the .. or wrapping it inside a command such as [!group! ..] which returns an expression"),
             PeekMatch::AppendVariableDestructuring => return self.streams.parse_err("Append variable operations are not supported in an expression"),

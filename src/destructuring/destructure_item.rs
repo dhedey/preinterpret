@@ -18,17 +18,13 @@ impl DestructureItem {
     /// parsing `Hello` into `x`.
     pub(crate) fn parse_until<C: StopCondition>(input: ParseStream) -> ParseResult<Self> {
         Ok(match detect_preinterpret_grammar(input.cursor()) {
-            PeekMatch::GroupedCommand(Some(command_kind))
-                if matches!(command_kind.output_kind(None), Ok(CommandOutputKind::None)) =>
-            {
+            PeekMatch::Command(Some(CommandOutputKind::None)) => {
                 Self::NoneOutputCommand(input.parse()?)
             }
-            PeekMatch::GroupedCommand(_) => return input.parse_err(
-                "Grouped commands returning a value are not supported in destructuring positions",
-            ),
-            PeekMatch::FlattenedCommand(_) => {
-                return input
-                    .parse_err("Flattened commands are not supported in destructuring positions")
+            PeekMatch::Command(_) => {
+                return input.parse_err(
+                    "Commands which return something are not supported in destructuring positions",
+                )
             }
             PeekMatch::GroupedVariable
             | PeekMatch::FlattenedVariable

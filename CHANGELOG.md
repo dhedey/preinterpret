@@ -88,6 +88,7 @@ Destructuring performs parsing of a token stream. It supports:
   * Revise the comment in expression_parsing.rs
   * Create `ParseInterpreted` and `ParseSource` via `ParseStream<Marker>`, `SourceParseStream` and `InterpretedParseStream`, and add grammar peaking to `SourceParseStream` only. Add `[!reinterpret! ...]` command for an `eval` style command.
   * Search / resolve TODOs
+* Support `[!set! #x]` to be `[!set! #x =]`. 
 * `[!is_set! #x]`
 * `[!str_split! { input: Value<LitStr>, separator: Value<LitStr>, }]`
 * Change `(!content! ...)` to unwrap none groups, to be more permissive

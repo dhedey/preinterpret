@@ -16,8 +16,7 @@ pub(crate) enum CommandValueInput<T> {
 impl<T: Parse> Parse for CommandValueInput<T> {
     fn parse(input: ParseStream) -> ParseResult<Self> {
         Ok(match detect_preinterpret_grammar(input.cursor()) {
-            PeekMatch::GroupedCommand(_) => Self::Command(input.parse()?),
-            PeekMatch::FlattenedCommand(_) => Self::Command(input.parse()?),
+            PeekMatch::Command(_) => Self::Command(input.parse()?),
             PeekMatch::GroupedVariable => Self::GroupedVariable(input.parse()?),
             PeekMatch::FlattenedVariable => Self::FlattenedVariable(input.parse()?),
             PeekMatch::Group(Delimiter::Brace) => Self::Code(input.parse()?),

@@ -295,8 +295,7 @@ impl ParseUntil {
             return Ok(ParseUntil::End);
         }
         Ok(match detect_preinterpret_grammar(input.cursor()) {
-            PeekMatch::GroupedCommand(_)
-            | PeekMatch::FlattenedCommand(_)
+            PeekMatch::Command(_)
             | PeekMatch::GroupedVariable
             | PeekMatch::FlattenedVariable
             | PeekMatch::Destructurer(_)

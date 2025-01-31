@@ -31,7 +31,8 @@ pub(crate) trait CommandType {
 
 pub(crate) trait OutputKind {
     type Output;
-    fn resolve(flattening: Option<Token![..]>) -> ParseResult<CommandOutputKind>;
+    fn resolve_standard() -> CommandOutputKind;
+    fn resolve_flattened(error_span_range: SpanRange) -> ParseResult<CommandOutputKind>;
 }
 
 struct ExecutionContext<'a> {
@@ -92,13 +93,12 @@ pub(crate) struct OutputKindNone;
 impl OutputKind for OutputKindNone {
     type Output = ();
 
-    fn resolve(flattening: Option<Token![..]>) -> ParseResult<CommandOutputKind> {
-        match flattening {
-            Some(dots) => {
-                dots.parse_err("This command has no output, so cannot be flattened with ..")
-            }
-            None => Ok(CommandOutputKind::None),
-        }
+    fn resolve_standard() -> CommandOutputKind {
+        CommandOutputKind::None
+    }
+
+    fn resolve_flattened(error_span_range: SpanRange) -> ParseResult<CommandOutputKind> {
+        error_span_range.parse_err("This command has no output, so cannot be flattened with ..")
     }
 }
 
@@ -129,12 +129,13 @@ pub(crate) struct OutputKindValue;
 impl OutputKind for OutputKindValue {
     type Output = TokenTree;
 
-    fn resolve(flattening: Option<Token![..]>) -> ParseResult<CommandOutputKind> {
-        match flattening {
-            Some(dots) => dots
-                .parse_err("This command outputs a single value, so cannot be flattened with .."),
-            None => Ok(CommandOutputKind::Value),
-        }
+    fn resolve_standard() -> CommandOutputKind {
+        CommandOutputKind::Value
+    }
+
+    fn resolve_flattened(error_span_range: SpanRange) -> ParseResult<CommandOutputKind> {
+        error_span_range
+            .parse_err("This command outputs a single value, so cannot be flattened with ..")
     }
 }
 
@@ -165,12 +166,13 @@ pub(crate) struct OutputKindIdent;
 impl OutputKind for OutputKindIdent {
     type Output = Ident;
 
-    fn resolve(flattening: Option<Token![..]>) -> ParseResult<CommandOutputKind> {
-        match flattening {
-            Some(dots) => dots
-                .parse_err("This command outputs a single ident, so cannot be flattened with .."),
-            None => Ok(CommandOutputKind::Ident),
-        }
+    fn resolve_standard() -> CommandOutputKind {
+        CommandOutputKind::Ident
+    }
+
+    fn resolve_flattened(error_span_range: SpanRange) -> ParseResult<CommandOutputKind> {
+        error_span_range
+            .parse_err("This command outputs a single ident, so cannot be flattened with ..")
     }
 }
 
@@ -201,11 +203,12 @@ pub(crate) struct OutputKindStream;
 impl OutputKind for OutputKindStream {
     type Output = InterpretedStream;
 
-    fn resolve(flattening: Option<Token![..]>) -> ParseResult<CommandOutputKind> {
-        match flattening {
-            Some(_) => Ok(CommandOutputKind::FlattenedStream),
-            None => Ok(CommandOutputKind::GroupedStream),
-        }
+    fn resolve_standard() -> CommandOutputKind {
+        CommandOutputKind::GroupedStream
+    }
+
+    fn resolve_flattened(_: SpanRange) -> ParseResult<CommandOutputKind> {
+        Ok(CommandOutputKind::FlattenedStream)
     }
 }
 
@@ -247,11 +250,12 @@ pub(crate) struct OutputKindControlFlow;
 impl OutputKind for OutputKindControlFlow {
     type Output = ();
 
-    fn resolve(flattening: Option<Token![..]>) -> ParseResult<CommandOutputKind> {
-        match flattening {
-            Some(dots) => dots.parse_err("This command is control flow, so is always flattened and cannot be explicitly flattened. If it needs to be grouped, wrap it in a [!group! ..] command"),
-            None => Ok(CommandOutputKind::ControlFlowCodeStream),
-        }
+    fn resolve_standard() -> CommandOutputKind {
+        CommandOutputKind::ControlFlowCodeStream
+    }
+
+    fn resolve_flattened(error_span_range: SpanRange) -> ParseResult<CommandOutputKind> {
+        error_span_range.parse_err("This command is control flow, so is always flattened and cannot be explicitly flattened. If it needs to be grouped, wrap it in a [!group! ..] command")
     }
 }
 
@@ -304,15 +308,18 @@ macro_rules! define_command_kind {
                 })
             }
 
-            pub(crate) fn grouped_output_kind(&self) -> CommandOutputKind {
-                // Guaranteed to be Ok if no flattening is provided
-                self.output_kind(None).unwrap()
-            }
-
-            pub(crate) fn output_kind(&self, flattening: Option<Token![..]>) -> ParseResult<CommandOutputKind> {
+            pub(crate) fn standard_output_kind(&self) -> CommandOutputKind {
                 match self {
                     $(
-                        Self::$command => <$command as CommandType>::OutputKind::resolve(flattening),
+                        Self::$command => <$command as CommandType>::OutputKind::resolve_standard(),
+                    )*
+                }
+            }
+
+            pub(crate) fn flattened_output_kind(&self, error_span_range: SpanRange) -> ParseResult<CommandOutputKind> {
+                match self {
+                    $(
+                        Self::$command => <$command as CommandType>::OutputKind::resolve_flattened(error_span_range),
                     )*
                 }
             }
@@ -413,7 +420,10 @@ impl Parse for Command {
         let command_name = content.parse_any_ident()?;
         let (command_kind, output_kind) = match CommandKind::for_ident(&command_name) {
             Some(command_kind) => {
-                let output_kind = command_kind.output_kind(flattening)?;
+                let output_kind = match flattening {
+                    Some(flattening) => command_kind.flattened_output_kind(flattening.span_range())?,
+                    None => command_kind.standard_output_kind(),
+                };
                 (command_kind, output_kind)
             }
             None => command_name.span().err(

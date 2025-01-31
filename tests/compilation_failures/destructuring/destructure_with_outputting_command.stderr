@@ -1,4 +1,4 @@
-error: Grouped commands returning a value are not supported in destructuring positions
+error: Commands which return something are not supported in destructuring positions
        Occurred whilst parsing [!let! ...] - Expected [!let! <destructuring> = ...]
  --> tests/compilation_failures/destructuring/destructure_with_outputting_command.rs:4:26
   |

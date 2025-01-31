@@ -14,8 +14,7 @@ pub(crate) enum InterpretationItem {
 impl Parse for InterpretationItem {
     fn parse(input: ParseStream) -> ParseResult<Self> {
         Ok(match detect_preinterpret_grammar(input.cursor()) {
-            PeekMatch::GroupedCommand(_) => InterpretationItem::Command(input.parse()?),
-            PeekMatch::FlattenedCommand(_) => InterpretationItem::Command(input.parse()?),
+            PeekMatch::Command(_) => InterpretationItem::Command(input.parse()?),
             PeekMatch::Group(_) => InterpretationItem::InterpretationGroup(input.parse()?),
             PeekMatch::GroupedVariable => InterpretationItem::GroupedVariable(input.parse()?),
             PeekMatch::FlattenedVariable => InterpretationItem::FlattenedVariable(input.parse()?),
@@ -32,8 +31,7 @@ impl Parse for InterpretationItem {
 
 #[allow(unused)]
 pub(crate) enum PeekMatch {
-    GroupedCommand(Option<CommandKind>),
-    FlattenedCommand(Option<CommandKind>),
+    Command(Option<CommandOutputKind>),
     GroupedVariable,
     FlattenedVariable,
     AppendVariableDestructuring,
@@ -53,14 +51,19 @@ pub(crate) fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> PeekMa
             if let Some((_, next)) = next.punct_matching('!') {
                 if let Some((ident, next)) = next.ident() {
                     if next.punct_matching('!').is_some() {
-                        return PeekMatch::GroupedCommand(CommandKind::for_ident(&ident));
+                        let output_kind =
+                            CommandKind::for_ident(&ident).map(|kind| kind.standard_output_kind());
+                        return PeekMatch::Command(output_kind);
                     }
                 }
-                if let Some((_, next)) = next.punct_matching('.') {
+                if let Some((first, next)) = next.punct_matching('.') {
                     if let Some((_, next)) = next.punct_matching('.') {
                         if let Some((ident, next)) = next.ident() {
                             if next.punct_matching('!').is_some() {
-                                return PeekMatch::FlattenedCommand(CommandKind::for_ident(&ident));
+                                let output_kind = CommandKind::for_ident(&ident).and_then(|kind| {
+                                    kind.flattened_output_kind(first.span_range()).ok()
+                                });
+                                return PeekMatch::Command(output_kind);
                             }
                         }
                     }
