@@ -32,9 +32,8 @@ impl EvaluationValue {
 
     pub(super) fn expect_value_pair(
         self,
-        operator: PairedBinaryOperator,
+        operation: &PairedBinaryOperation,
         right: Self,
-        operator_span: Span,
     ) -> ExecutionResult<EvaluationLiteralPair> {
         Ok(match (self, right) {
             (EvaluationValue::Integer(left), EvaluationValue::Integer(right)) => {
@@ -158,7 +157,7 @@ impl EvaluationValue {
                         EvaluationIntegerValuePair::Isize(lhs, rhs)
                     }
                     (left_value, right_value) => {
-                        return operator_span.execution_err(format!("The {} operator cannot infer a common integer operand type from {} and {}. Consider using `as` to cast to matching types.", operator.symbol(), left_value.describe_type(), right_value.describe_type()));
+                        return operation.execution_err(format!("The {} operator cannot infer a common integer operand type from {} and {}. Consider using `as` to cast to matching types.", operation.symbol(), left_value.describe_type(), right_value.describe_type()));
                     }
                 };
                 EvaluationLiteralPair::Integer(integer_pair)
@@ -197,7 +196,7 @@ impl EvaluationValue {
                         EvaluationFloatValuePair::F64(lhs, rhs)
                     }
                     (left_value, right_value) => {
-                        return operator_span.execution_err(format!("The {} operator cannot infer a common float operand type from {} and {}. Consider using `as` to cast to matching types.", operator.symbol(), left_value.describe_type(), right_value.describe_type()));
+                        return operation.execution_err(format!("The {} operator cannot infer a common float operand type from {} and {}. Consider using `as` to cast to matching types.", operation.symbol(), left_value.describe_type(), right_value.describe_type()));
                     }
                 };
                 EvaluationLiteralPair::Float(float_pair)
@@ -209,7 +208,7 @@ impl EvaluationValue {
                 EvaluationLiteralPair::CharPair(left, right)
             }
             (left, right) => {
-                return operator_span.execution_err(format!("The {} operator cannot infer a common operand type from {} and {}. Consider using `as` to cast to matching types.", operator.symbol(), left.describe_type(), right.describe_type()));
+                return operation.execution_err(format!("The {} operator cannot infer a common operand type from {} and {}. Consider using `as` to cast to matching types.", operation.symbol(), left.describe_type(), right.describe_type()));
             }
         })
     }
@@ -275,7 +274,7 @@ impl EvaluationValue {
     pub(super) fn handle_integer_binary_operation(
         self,
         right: EvaluationInteger,
-        operation: BinaryOperation,
+        operation: &IntegerBinaryOperation,
     ) -> ExecutionResult<EvaluationValue> {
         match self {
             EvaluationValue::Integer(value) => {
@@ -314,14 +313,14 @@ pub(super) enum EvaluationLiteralPair {
 impl EvaluationLiteralPair {
     pub(super) fn handle_paired_binary_operation(
         self,
-        operation: BinaryOperation,
+        operation: &PairedBinaryOperation,
     ) -> ExecutionResult<EvaluationValue> {
         match self {
-            Self::Integer(pair) => pair.handle_paired_binary_operation(&operation),
-            Self::Float(pair) => pair.handle_paired_binary_operation(&operation),
-            Self::BooleanPair(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, &operation),
-            Self::StringPair(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, &operation),
-            Self::CharPair(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, &operation),
+            Self::Integer(pair) => pair.handle_paired_binary_operation(operation),
+            Self::Float(pair) => pair.handle_paired_binary_operation(operation),
+            Self::BooleanPair(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
+            Self::StringPair(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
+            Self::CharPair(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
         }
     }
 }

@@ -12,7 +12,7 @@ impl SynErrorExt for syn::Error {
     }
 }
 
-pub(crate) trait SpanErrorExt: Sized {
+pub(crate) trait SpanErrorExt {
     fn parse_err<T>(&self, message: impl std::fmt::Display) -> ParseResult<T> {
         Err(self.error(message).into())
     }
@@ -37,7 +37,7 @@ pub(crate) trait SpanErrorExt: Sized {
     }
 }
 
-impl<T: HasSpanRange> SpanErrorExt for T {
+impl<T: HasSpanRange + ?Sized> SpanErrorExt for T {
     fn error(&self, message: impl std::fmt::Display) -> syn::Error {
         self.span_range().create_error(message)
     }
@@ -59,7 +59,7 @@ pub(crate) trait HasSpanRange {
     fn span_range(&self) -> SpanRange;
 }
 
-impl<T: HasSpan> HasSpanRange for T {
+impl<T: HasSpan + ?Sized> HasSpanRange for T {
     fn span_range(&self) -> SpanRange {
         SpanRange::new_single(self.span())
     }
@@ -175,18 +175,6 @@ impl HasSpan for Literal {
     }
 }
 
-impl HasSpan for Token![as] {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
-
-impl HasSpan for Token![in] {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
-
 pub(crate) trait SlowSpanRange {
     /// This name is purposefully very long to discourage use, as it can cause nasty performance issues
     fn span_range_from_iterating_over_all_tokens(&self) -> SpanRange;
@@ -225,4 +213,43 @@ impl_auto_span_range! {
     syn::BinOp,
     syn::UnOp,
     syn::token::DotDot,
+    syn::token::Shl,
+    syn::token::Shr,
+    syn::token::AndAnd,
+    syn::token::OrOr,
+    syn::token::EqEq,
+    syn::token::Lt,
+    syn::token::Le,
+    syn::token::Ne,
+    syn::token::Ge,
+    syn::token::Gt,
+}
+
+macro_rules! single_span_token {
+    ($(Token![$token:tt]),* $(,)?) => {
+        $(
+            impl HasSpan for Token![$token] {
+                fn span(&self) -> Span {
+                    self.span
+                }
+            }
+        )*
+    };
+}
+
+single_span_token! {
+    Token![as],
+    Token![in],
+    Token![=],
+    Token![!],
+    Token![~],
+    Token![?],
+    Token![+],
+    Token![-],
+    Token![*],
+    Token![/],
+    Token![%],
+    Token![^],
+    Token![&],
+    Token![|],
 }

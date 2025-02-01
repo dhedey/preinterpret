@@ -81,13 +81,8 @@ Destructuring performs parsing of a token stream. It supports:
 ### To come
 
 * Complete expression rework:
-  * Add more tests for operator precedence (e.g. the worked example)
-  * Flatten `UnaryOperation` and `UnaryOperator`
-  * Flatten `BinaryOperation` and `BinaryOperator`
   * Disallow expressions/commands in re-evaluated `{ .. }` blocks and command outputs
-  * Revise the comment in expression_parsing.rs
   * Create `ParseInterpreted` and `ParseSource` via `ParseStream<Marker>`, `SourceParseStream` and `InterpretedParseStream`, and add grammar peaking to `SourceParseStream` only. Add `[!reinterpret! ...]` command for an `eval` style command.
-  * Search / resolve TODOs
 * Support `[!set! #x]` to be `[!set! #x =]`. 
 * `[!is_set! #x]`
 * `[!str_split! { input: Value<LitStr>, separator: Value<LitStr>, }]`
@@ -104,6 +99,15 @@ Destructuring performs parsing of a token stream. It supports:
   * (MAYBE) `#(..)?`, `#(..)+`, `#(..),+`, `#(..)*`, `#(..),*` but I don't like them much
 * TODO check
 * Check all `#[allow(unused)]` and remove any which aren't needed
+* Work on book
+  * Input paradigms:
+    * Streams
+    * StreamInput / ValueInput / CodeInput
+  * Including documenting expressions
+  * There are three main kinds of commands:
+    * Those taking a stream as-is
+    * Those taking some { fields }
+    * Those taking some custom syntax, e.g. `!set!`, `!if!`, `!while!` etc
 * Pushed to 0.4:
   * Fork of syn to:
     * Fix issues in Rust Analyzer
@@ -118,15 +122,6 @@ Destructuring performs parsing of a token stream. It supports:
       * See e.g. invalid_content_too_long where `unexpected token` is quite vague.
       Maybe we can't sensibly do better though...
   * Further syn parsings (e.g. item, fields, etc)
-* Work on book
-  * Input paradigms:
-    * Streams
-    * StreamInput / ValueInput / CodeInput
-  * Including documenting expressions
-  * There are three main kinds of commands:
-    * Those taking a stream as-is
-    * Those taking some { fields }
-    * Those taking some custom syntax, e.g. `!set!`, `!if!`, `!while!` etc
 
 # Major Version 0.2
 

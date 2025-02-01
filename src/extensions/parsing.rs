@@ -287,6 +287,25 @@ impl<'a> ParseStreamStack<'a> {
         self.current().parse()
     }
 
+    pub(crate) fn parse_with<T>(
+        &mut self,
+        parser: impl FnOnce(ParseStream) -> ParseResult<T>,
+    ) -> ParseResult<T> {
+        parser(self.current())
+    }
+
+    pub(crate) fn try_parse_or_revert<T: Parse>(&mut self) -> ParseResult<T> {
+        let current = self.current();
+        let fork = current.fork();
+        match fork.parse::<T>() {
+            Ok(output) => {
+                current.advance_to(&fork);
+                Ok(output)
+            }
+            Err(err) => Err(err),
+        }
+    }
+
     pub(crate) fn parse_and_enter_group(&mut self) -> ParseResult<(Delimiter, DelimSpan)> {
         let (delimiter, delim_span, inner) = self.current().parse_any_group()?;
         let inner = unsafe {

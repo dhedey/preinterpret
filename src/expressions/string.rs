@@ -20,18 +20,18 @@ impl EvaluationString {
         self,
         operation: UnaryOperation,
     ) -> ExecutionResult<EvaluationValue> {
-        match operation.operator {
-            UnaryOperator::GroupedNoOp { .. } => operation.output(self.value),
-            UnaryOperator::Neg { .. } | UnaryOperator::Not { .. } | UnaryOperator::Cast { .. } => {
-                operation.unsupported_for_value_type_err("string")
-            }
+        match operation {
+            UnaryOperation::GroupedNoOp { .. } => operation.output(self.value),
+            UnaryOperation::Neg { .. }
+            | UnaryOperation::Not { .. }
+            | UnaryOperation::Cast { .. } => operation.unsupported_for_value_type_err("string"),
         }
     }
 
     pub(super) fn handle_integer_binary_operation(
         self,
         _right: EvaluationInteger,
-        operation: BinaryOperation,
+        operation: &IntegerBinaryOperation,
     ) -> ExecutionResult<EvaluationValue> {
         operation.unsupported_for_value_type_err("string")
     }
@@ -39,27 +39,29 @@ impl EvaluationString {
     pub(super) fn handle_paired_binary_operation(
         self,
         rhs: Self,
-        operation: &BinaryOperation,
+        operation: &PairedBinaryOperation,
     ) -> ExecutionResult<EvaluationValue> {
         let lhs = self.value;
         let rhs = rhs.value;
-        match operation.paired_operator() {
-            PairedBinaryOperator::Addition
-            | PairedBinaryOperator::Subtraction
-            | PairedBinaryOperator::Multiplication
-            | PairedBinaryOperator::Division
-            | PairedBinaryOperator::LogicalAnd
-            | PairedBinaryOperator::LogicalOr
-            | PairedBinaryOperator::Remainder
-            | PairedBinaryOperator::BitXor
-            | PairedBinaryOperator::BitAnd
-            | PairedBinaryOperator::BitOr => operation.unsupported_for_value_type_err("string"),
-            PairedBinaryOperator::Equal => operation.output(lhs == rhs),
-            PairedBinaryOperator::LessThan => operation.output(lhs < rhs),
-            PairedBinaryOperator::LessThanOrEqual => operation.output(lhs <= rhs),
-            PairedBinaryOperator::NotEqual => operation.output(lhs != rhs),
-            PairedBinaryOperator::GreaterThanOrEqual => operation.output(lhs >= rhs),
-            PairedBinaryOperator::GreaterThan => operation.output(lhs > rhs),
+        match operation {
+            PairedBinaryOperation::Addition { .. }
+            | PairedBinaryOperation::Subtraction { .. }
+            | PairedBinaryOperation::Multiplication { .. }
+            | PairedBinaryOperation::Division { .. }
+            | PairedBinaryOperation::LogicalAnd { .. }
+            | PairedBinaryOperation::LogicalOr { .. }
+            | PairedBinaryOperation::Remainder { .. }
+            | PairedBinaryOperation::BitXor { .. }
+            | PairedBinaryOperation::BitAnd { .. }
+            | PairedBinaryOperation::BitOr { .. } => {
+                operation.unsupported_for_value_type_err("string")
+            }
+            PairedBinaryOperation::Equal { .. } => operation.output(lhs == rhs),
+            PairedBinaryOperation::LessThan { .. } => operation.output(lhs < rhs),
+            PairedBinaryOperation::LessThanOrEqual { .. } => operation.output(lhs <= rhs),
+            PairedBinaryOperation::NotEqual { .. } => operation.output(lhs != rhs),
+            PairedBinaryOperation::GreaterThanOrEqual { .. } => operation.output(lhs >= rhs),
+            PairedBinaryOperation::GreaterThan { .. } => operation.output(lhs > rhs),
         }
     }
 

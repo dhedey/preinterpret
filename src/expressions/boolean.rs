@@ -21,11 +21,11 @@ impl EvaluationBoolean {
         operation: UnaryOperation,
     ) -> ExecutionResult<EvaluationValue> {
         let input = self.value;
-        match operation.operator {
-            UnaryOperator::Neg { .. } => operation.unsupported_for_value_type_err("boolean"),
-            UnaryOperator::Not { .. } => operation.output(!input),
-            UnaryOperator::GroupedNoOp { .. } => operation.output(input),
-            UnaryOperator::Cast { target, .. } => match target {
+        match operation {
+            UnaryOperation::Neg { .. } => operation.unsupported_for_value_type_err("boolean"),
+            UnaryOperation::Not { .. } => operation.output(!input),
+            UnaryOperation::GroupedNoOp { .. } => operation.output(input),
+            UnaryOperation::Cast { target, .. } => match target {
                 CastTarget::Integer(IntegerKind::Untyped) => {
                     operation.output(UntypedInteger::from_fallback(input as FallbackInteger))
                 }
@@ -42,7 +42,7 @@ impl EvaluationBoolean {
                 CastTarget::Integer(IntegerKind::U128) => operation.output(input as u128),
                 CastTarget::Integer(IntegerKind::Usize) => operation.output(input as usize),
                 CastTarget::Float(_) | CastTarget::Char => {
-                    operation.err("This cast is not supported")
+                    operation.execution_err("This cast is not supported")
                 }
                 CastTarget::Boolean => operation.output(self.value),
             },
@@ -52,10 +52,11 @@ impl EvaluationBoolean {
     pub(super) fn handle_integer_binary_operation(
         self,
         _right: EvaluationInteger,
-        operation: BinaryOperation,
+        operation: &IntegerBinaryOperation,
     ) -> ExecutionResult<EvaluationValue> {
-        match operation.integer_operator() {
-            IntegerBinaryOperator::ShiftLeft | IntegerBinaryOperator::ShiftRight => {
+        match operation {
+            IntegerBinaryOperation::ShiftLeft { .. }
+            | IntegerBinaryOperation::ShiftRight { .. } => {
                 operation.unsupported_for_value_type_err("boolean")
             }
         }
@@ -64,27 +65,31 @@ impl EvaluationBoolean {
     pub(super) fn handle_paired_binary_operation(
         self,
         rhs: Self,
-        operation: &BinaryOperation,
+        operation: &PairedBinaryOperation,
     ) -> ExecutionResult<EvaluationValue> {
         let lhs = self.value;
         let rhs = rhs.value;
-        match operation.paired_operator() {
-            PairedBinaryOperator::Addition
-            | PairedBinaryOperator::Subtraction
-            | PairedBinaryOperator::Multiplication
-            | PairedBinaryOperator::Division => operation.unsupported_for_value_type_err("boolean"),
-            PairedBinaryOperator::LogicalAnd => operation.output(lhs && rhs),
-            PairedBinaryOperator::LogicalOr => operation.output(lhs || rhs),
-            PairedBinaryOperator::Remainder => operation.unsupported_for_value_type_err("boolean"),
-            PairedBinaryOperator::BitXor => operation.output(lhs ^ rhs),
-            PairedBinaryOperator::BitAnd => operation.output(lhs & rhs),
-            PairedBinaryOperator::BitOr => operation.output(lhs | rhs),
-            PairedBinaryOperator::Equal => operation.output(lhs == rhs),
-            PairedBinaryOperator::LessThan => operation.output(!lhs & rhs),
-            PairedBinaryOperator::LessThanOrEqual => operation.output(lhs <= rhs),
-            PairedBinaryOperator::NotEqual => operation.output(lhs != rhs),
-            PairedBinaryOperator::GreaterThanOrEqual => operation.output(lhs >= rhs),
-            PairedBinaryOperator::GreaterThan => operation.output(lhs & !rhs),
+        match operation {
+            PairedBinaryOperation::Addition { .. }
+            | PairedBinaryOperation::Subtraction { .. }
+            | PairedBinaryOperation::Multiplication { .. }
+            | PairedBinaryOperation::Division { .. } => {
+                operation.unsupported_for_value_type_err("boolean")
+            }
+            PairedBinaryOperation::LogicalAnd { .. } => operation.output(lhs && rhs),
+            PairedBinaryOperation::LogicalOr { .. } => operation.output(lhs || rhs),
+            PairedBinaryOperation::Remainder { .. } => {
+                operation.unsupported_for_value_type_err("boolean")
+            }
+            PairedBinaryOperation::BitXor { .. } => operation.output(lhs ^ rhs),
+            PairedBinaryOperation::BitAnd { .. } => operation.output(lhs & rhs),
+            PairedBinaryOperation::BitOr { .. } => operation.output(lhs | rhs),
+            PairedBinaryOperation::Equal { .. } => operation.output(lhs == rhs),
+            PairedBinaryOperation::LessThan { .. } => operation.output(!lhs & rhs),
+            PairedBinaryOperation::LessThanOrEqual { .. } => operation.output(lhs <= rhs),
+            PairedBinaryOperation::NotEqual { .. } => operation.output(lhs != rhs),
+            PairedBinaryOperation::GreaterThanOrEqual { .. } => operation.output(lhs >= rhs),
+            PairedBinaryOperation::GreaterThan { .. } => operation.output(lhs & !rhs),
         }
     }
 

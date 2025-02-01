@@ -64,7 +64,7 @@ impl<'a> ExpressionParser<'a> {
                 self.push_stack_frame(ExpressionStackFrame::Group { delim_span })
             }
             UnaryAtom::UnaryOperation(operation) => {
-                self.span_range.set_end(operation.operator.span());
+                self.span_range.set_end(operation.span());
                 self.push_stack_frame(ExpressionStackFrame::IncompletePrefixOperation { operation })
             }
         })
@@ -109,14 +109,11 @@ impl<'a> ExpressionParser<'a> {
                 ExpressionStackFrame::Group { delim_span } => {
                     assert!(matches!(extension, NodeExtension::NoneMatched));
                     self.streams.exit_group();
-                    let operation = UnaryOperation {
-                        operator: UnaryOperator::GroupedNoOp {
-                            span: delim_span.join(),
-                        },
-                    };
                     WorkItem::TryParseAndApplyExtension {
                         node: self.nodes.add_node(ExpressionNode::UnaryOperation {
-                            operation,
+                            operation: UnaryOperation::GroupedNoOp {
+                                span: delim_span.join(),
+                            },
                             input: node,
                         }),
                     }
@@ -146,12 +143,9 @@ impl<'a> ExpressionParser<'a> {
 
     fn parse_extension(&mut self) -> ParseResult<NodeExtension> {
         Ok(match self.streams.peek_grammar() {
-            PeekMatch::Punct(punct) => match punct.as_char() {
-                '.' => NodeExtension::NoneMatched,
-                _ => {
-                    let operation = BinaryOperation::for_binary_operator(self.streams.parse()?)?;
-                    NodeExtension::BinaryOperation(operation)
-                }
+            PeekMatch::Punct(_) => match self.streams.try_parse_or_revert::<BinaryOperation>() {
+                Ok(operation) => NodeExtension::BinaryOperation(operation),
+                Err(_) => NodeExtension::NoneMatched,
             },
             PeekMatch::Ident(ident) if ident == "as" => {
                 let cast_operation = UnaryOperation::for_cast_operation(self.streams.parse()?, {
@@ -185,8 +179,7 @@ impl<'a> ExpressionParser<'a> {
             PeekMatch::Group(Delimiter::Brace) => UnaryAtom::CodeBlock(self.streams.parse()?),
             PeekMatch::Group(Delimiter::Bracket) => return self.streams.parse_err("Square brackets [ .. ] are not supported in an expression"),
             PeekMatch::Punct(_) => {
-                let unary_operation = UnaryOperation::for_unary_operator(self.streams.parse()?)?;
-                UnaryAtom::UnaryOperation(unary_operation)
+                UnaryAtom::UnaryOperation(self.streams.parse_with(UnaryOperation::parse_from_prefix_punct)?)
             },
             PeekMatch::Ident(_) => {
                 UnaryAtom::Value(EvaluationValue::Boolean(EvaluationBoolean::for_litbool(self.streams.parse()?)))
@@ -302,59 +295,55 @@ enum OperatorPrecendence {
 impl OperatorPrecendence {
     const MIN: Self = OperatorPrecendence::Jump;
 
-    fn of_unary_operator(op: &UnaryOperator) -> Self {
+    fn of_unary_operation(op: &UnaryOperation) -> Self {
         match op {
-            UnaryOperator::GroupedNoOp { .. } => Self::Unambiguous,
-            UnaryOperator::Cast { .. } => Self::Cast,
-            UnaryOperator::Neg { .. } | UnaryOperator::Not { .. } => Self::Prefix,
+            UnaryOperation::GroupedNoOp { .. } => Self::Unambiguous,
+            UnaryOperation::Cast { .. } => Self::Cast,
+            UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => Self::Prefix,
         }
     }
 
-    fn of_binary_operator(op: &BinaryOperator) -> Self {
+    fn of_binary_operation(op: &BinaryOperation) -> Self {
         match op {
-            BinaryOperator::Integer(op) => Self::of_integer_binary_operator(op),
-            BinaryOperator::Paired(op) => Self::of_paired_binary_operator(op),
+            BinaryOperation::Integer(op) => Self::of_integer_binary_operator(op),
+            BinaryOperation::Paired(op) => Self::of_paired_binary_operator(op),
         }
     }
 
-    fn of_integer_binary_operator(op: &IntegerBinaryOperator) -> Self {
+    fn of_integer_binary_operator(op: &IntegerBinaryOperation) -> Self {
         match op {
-            IntegerBinaryOperator::ShiftLeft | IntegerBinaryOperator::ShiftRight => {
-                OperatorPrecendence::Shift
+            IntegerBinaryOperation::ShiftLeft { .. }
+            | IntegerBinaryOperation::ShiftRight { .. } => OperatorPrecendence::Shift,
+        }
+    }
+
+    fn of_paired_binary_operator(op: &PairedBinaryOperation) -> Self {
+        match op {
+            PairedBinaryOperation::Addition { .. } | PairedBinaryOperation::Subtraction { .. } => {
+                Self::Sum
             }
-        }
-    }
-
-    fn of_paired_binary_operator(op: &PairedBinaryOperator) -> Self {
-        match op {
-            PairedBinaryOperator::Addition | PairedBinaryOperator::Subtraction => Self::Sum,
-            PairedBinaryOperator::Multiplication
-            | PairedBinaryOperator::Division
-            | PairedBinaryOperator::Remainder => Self::Product,
-            PairedBinaryOperator::LogicalAnd => Self::And,
-            PairedBinaryOperator::LogicalOr => Self::Or,
-            PairedBinaryOperator::BitXor => Self::BitXor,
-            PairedBinaryOperator::BitAnd => Self::BitAnd,
-            PairedBinaryOperator::BitOr => Self::BitOr,
-            PairedBinaryOperator::Equal
-            | PairedBinaryOperator::LessThan
-            | PairedBinaryOperator::LessThanOrEqual
-            | PairedBinaryOperator::NotEqual
-            | PairedBinaryOperator::GreaterThanOrEqual
-            | PairedBinaryOperator::GreaterThan => Self::Compare,
+            PairedBinaryOperation::Multiplication { .. }
+            | PairedBinaryOperation::Division { .. }
+            | PairedBinaryOperation::Remainder { .. } => Self::Product,
+            PairedBinaryOperation::LogicalAnd { .. } => Self::And,
+            PairedBinaryOperation::LogicalOr { .. } => Self::Or,
+            PairedBinaryOperation::BitXor { .. } => Self::BitXor,
+            PairedBinaryOperation::BitAnd { .. } => Self::BitAnd,
+            PairedBinaryOperation::BitOr { .. } => Self::BitOr,
+            PairedBinaryOperation::Equal { .. }
+            | PairedBinaryOperation::LessThan { .. }
+            | PairedBinaryOperation::LessThanOrEqual { .. }
+            | PairedBinaryOperation::NotEqual { .. }
+            | PairedBinaryOperation::GreaterThanOrEqual { .. }
+            | PairedBinaryOperation::GreaterThan { .. } => Self::Compare,
         }
     }
 }
 
 /// Use of a stack avoids recursion, which hits limits with long/deep expressions.
 ///
-/// ## Expression Types (in decreasing precedence)
-/// * Leaf Expression: Command, Variable, Value (literal, true/false)
-/// * Prefix Expression: prefix-based unary operators
-/// * Postfix Expression: postfix-based unary operators such as casting
-/// * Binary Expression: binary operators
-///
 /// ## Worked Algorithm Sketch
+///
 /// Let ParseStream P be:
 /// a b cdx  e fg h i  j k
 /// 1 + -(1) + (2 + 4) * 3
@@ -362,66 +351,84 @@ impl OperatorPrecendence {
 /// The algorithm proceeds as follows:
 /// ```text
 /// => Start
-/// ===> PushParseBuffer([P])
-/// ===> WorkStack: [Root]
-/// => Root detects leaf a:1
-/// ===> PushEvalNode(A: Leaf(a:1), NewParentPrecedence: Root => >MIN)
-/// ===> WorkStack: [Root, TryExtend(A, >MIN)]
-/// => TryExtend detects binop b:+
-/// ===> WorkStack: [Root, BinOp(A, b:+)]
-/// => BinOp detects unop c:-
-/// ===> WorkStack: [Root, BinOp(A, b:+), PrefixOp(c:-)]
-/// => PrefixOp detects group d:([D])
+/// ===> Set parse stack to have a root parsebuffer of [P]
+/// ===> Stack: [Root]
+/// ===> WorkItem::RequireUnaryAtom
+/// => Read leaf a:1
+/// ===> PushEvalNode(A: Leaf(a:1))
+/// ===> Stack: [Root]
+/// ===> WorkItem::TryParseAndApplyExtension(A) with precedence >MIN from parent=Root
+/// => Read binop b:+
+/// ===> Stack: [Root, BinOp(A, b:+)]
+/// ===> WorkItem::RequireUnaryAtom
+/// => Read unop c:-
+/// ===> Stack: [Root, BinOp(A, b:+), PrefixOp(c:-)]
+/// ===> WorkItem::RequireUnaryAtom
+/// => Read group d:([D])
 /// ===> PushParseBuffer([D])
-/// ===> WorkStack: [Root, BinOp(A, b:+), PrefixOp(c:-), Group(d:Paren), EmptyExpression]
-/// => EmptyExpression detects leaf x:1
+/// ===> Stack: [Root, BinOp(A, b:+), PrefixOp(c:-), Group(d:Paren)]
+/// ===> WorkItem::RequireUnaryAtom
+/// => Read leaf x:1
 /// ===> PushEvalNode(X: Leaf(x:1), NewParentPrecedence: Group => >MIN)
-/// ===> WorkStack: [Root, BinOp(A, +), PrefixOp(c:-), Group(d:Paren), TryExtend(X, >MIN)]
-/// => TryExtend detects no valid extension, cascade X with Group:
-/// ===> PopWorkStack: It's a group, so PopParseBuffer, PushEvalNode(D: UnOp(d:(), X), NewParentPrecedence: PrefixOp => >PREFIX)
-/// ===> WorkStack: [Root, BinOp(A, b:+), PrefixOp(c:-), TryExtend(D, >PREFIX)]
-/// => TryExtend detects no valid extension (it's impossible), cascade D with PrefixOp:
-/// ===> PopWorkStack: PushEvalNode(C: UnOp(c:-, D), NewParentPrecedence: BinOp => >SUM)
-/// ===> WorkStack: [Root, BinOp(A, b:+), TryExtend(C, >SUM)]
-/// => TryExtend detects no valid extension, so cascade C with BinOp:
-/// ===> PopWorkStack: PushEvalNode(B: BinOp(A, b:+, C), NewParentPrecedence: EMPTY => >MIN)
-/// ===> WorkStack: [Root, TryExtend(B, >MIN)]
-/// => TryExtend detects binop e:+
-/// ===> WorkStack: [Root, BinOp(B, e:+)]
-/// => BinOp detects group f:([F])
+/// ===> Stack: [Root, BinOp(A, +), PrefixOp(c:-), Group(d:Paren)]
+/// ===> WorkItem::TryParseAndApplyExtension(X) with precedence >MIN from parent=Group
+/// => Extension of None is not valid, cascade X with Group:
+/// ===> PopStack: It's a group, so PopParseBuffer, PushEvalNode(D: UnOp(d:(), X))
+/// ===> Stack: [Root, BinOp(A, b:+), PrefixOp(c:-), TryExtend(D, >PREFIX)]
+/// ===> WorkItem::TryParseAndApplyExtension(X) with precedence >PREFIX from parent=PrefixOp(c:-)
+/// => Extension of + is not valid, cascade D with PrefixOp:
+/// ===> PopStack: PushEvalNode(C: UnOp(c:-, D))
+/// ===> Stack: [Root, BinOp(A, b:+)]
+/// ===> WorkItem::TryApplyAlreadyParsedExtension(C, +) with precedence >SUM from parent=BinOp(A, b:+)
+/// => Extension of + is not valid, so cascade C with BinOp:
+/// ===> PopStack: PushEvalNode(B: BinOp(A, b:+, C))
+/// ===> Stack: [Root]
+/// ===> WorkItem::TryApplyAlreadyParsedExtension(B, +) with precedence >MIN from parent=Root
+/// => Read binop e:+
+/// ===> Stack: [Root, BinOp(B, e:+)]
+/// ===> WorkItem::RequireUnaryAtom
+/// => Read group f:([F])
 /// ===> PushParseBuffer([F])
-/// ===> WorkStack: [Root, BinOp(B, e:+), Group(f:Paren), EmptyExpression]
-/// => EmptyExpression detects leaf g:2
-/// ===> PushEvalNode(G: Leaf(g:2), NewParentPrecedence: Group => >MIN)
-/// ===> WorkStack: [Root, BinOp(B, e:+), Group(f:Paren), TryExtend(G, >MIN)]
-/// => TryExtend detects binop h:+
-/// ===> WorkStack: [Root, BinOp(B, e:+), Group(f:Paren), BinOp(G, h:+)]
-/// => BinOp detects leaf i:2
-/// ===> PushEvalNode(I: Leaf(i:2), NewParentPrecedence: BinOp => >SUM)
-/// ===> WorkStack: [Root, BinOp(B, e:+), Group(f:Paren), BinOp(G, h:+), TryExtend(I, >SUM)]
-/// => TryExtend detects no valid extension, so cascade I with BinOp:
-/// ===> PopWorkStack: PushEvalNode(H: BinOp(G, h:+, I), NewParentPrecedence: Group => >MIN)
-/// ===> WorkStack: [Root, BinOp(B, e:+), Group(f:Paren), TryExtend(H, >MIN)]
-/// => TryExtend detects no valid extension, so cascade H with Group:
-/// ===> PopWorkStack: It's a group, so PopParseBuffer, PushEvalNode(F: UnOp(f:Paren, H), NewParentPrecedence: BinOp => >SUM)
-/// ===> WorkStack: [Root, BinOp(B, e:+), TryExtend(F, >SUM)]
-/// => TryExtend detects binop j:*
-/// ===> WorkStack: [Root, BinOp(B, e:+), BinOp(F, j:*)]
-/// => BinOp detects leaf k:3
-/// ===> PushEvalNode(K: Leaf(k:3), NewParentPrecedence: BinOp => >PRODUCT)
-/// ===> WorkStack: [Root, BinOp(B, e:+), BinOp(F, j:*), TryExtend(K, >PRODUCT)]
-/// => TryExtend detects no valid extension, so cascade K with BinOp:
-/// ===> PopWorkStack: PushEvalNode(J: BinOp(F, j:*, K), NewParentPrecedence: BinOp => >SUM)
-/// ===> WorkStack: [Root, BinOp(B, e:+), TryExtend(J, >SUM)]
-/// => TryExtend detects no valid extension, so cascade J with BinOp:
-/// ===> PopWorkStack: PushEvalNode(E: BinOp(B, e:*, J), NewParentPrecedence: Root => >MIN)
-/// ===> WorkStack: [Root, TryExtend(E, >MIN)]
-/// => TryExtend detects no valid extension, so cascade E with Root:
-/// ===> DONE Root = E
+/// ===> Stack: [Root, BinOp(B, e:+), Group(f:Paren)]
+/// ===> WorkItem::RequireUnaryAtom
+/// => Read leaf g:2
+/// ===> PushEvalNode(G: Leaf(g:2))
+/// ===> Stack: [Root, BinOp(B, e:+), Group(f:Paren)]
+/// ===> WorkItem::TryParseAndApplyExtension(G) with precedence >MIN from parent=Group
+/// => Read binop h:+
+/// ===> Stack: [Root, BinOp(B, e:+), Group(f:Paren), BinOp(G, h:+)]
+/// ===> WorkItem::RequireUnaryAtom
+/// => Read leaf i:2
+/// ===> PushEvalNode(I: Leaf(i:2))
+/// ===> Stack: [Root, BinOp(B, e:+), Group(f:Paren), BinOp(G, h:+)]
+/// ===> WorkItem::TryParseAndApplyExtension(I) with precedence >SUM from parent=BinOp(G, h:+)
+/// => Extension of None is not valid, so cascade I with BinOp:
+/// ===> PopStack: PushEvalNode(H: BinOp(G, h:+, I))
+/// ===> Stack: [Root, BinOp(B, e:+), Group(f:Paren)]
+/// ===> WorkItem::TryApplyAlreadyParsedExtension(H, None) with precedence >MIN from parent=Group
+/// => Extension of None is not valid, so cascade H with Group:
+/// ===> PopStack: It's a group, so PopParseBuffer, PushEvalNode(F: UnOp(f:Paren, H))
+/// ===> Stack: [Root, BinOp(B, e:+)]
+/// ===> WorkItem::TryParseAndApplyExtension(F) with precedence >SUM from parent=BinOp(B, e:+)
+/// => Read binop j:*
+/// ===> Stack: [Root, BinOp(B, e:+), BinOp(F, j:*)]
+/// ===> WorkItem::RequireUnaryAtom
+/// => Read leaf k:3
+/// ===> PushEvalNode(K: Leaf(k:3))
+/// ===> Stack: [Root, BinOp(B, e:+), BinOp(F, j:*)]
+/// ===> WorkItem::TryParseAndApplyExtension(K) with precedence >PRODUCT from parent=BinOp(F, j:*)
+/// => Extension of None is not valid, so cascade K with BinOp:
+/// ===> PopStack: PushEvalNode(J: BinOp(F, j:*, K))
+/// ===> Stack: [Root, BinOp(B, e:+)]
+/// ===> WorkItem::TryApplyAlreadyParsedExtension(J, None) with precedence >SUM from parent=BinOp(B, e:+)
+/// => Extension of None is not valid, so cascade J with BinOp:
+/// ===> PopStack: PushEvalNode(E: BinOp(B, e:*, J))
+/// ===> Stack: [Root]
+/// ===> WorkItem::TryApplyAlreadyParsedExtension(E, None) with precedence >MIN from parent=Root
+/// => Extension of None is not valid, so cascade E with Root:
+/// ===> Stack: []
+/// ===> WorkItem::Finished(E)
 /// ```
-///
-/// TODO SPECIAL CASES:
-/// * Some operators can't follow others, e.g. comparison operators can't be chained
 enum ExpressionStackFrame {
     /// A marker for the root of the expression
     Root,
@@ -445,10 +452,10 @@ impl ExpressionStackFrame {
             ExpressionStackFrame::Root => OperatorPrecendence::MIN,
             ExpressionStackFrame::Group { .. } => OperatorPrecendence::MIN,
             ExpressionStackFrame::IncompletePrefixOperation { operation, .. } => {
-                OperatorPrecendence::of_unary_operator(&operation.operator)
+                OperatorPrecendence::of_unary_operation(operation)
             }
             ExpressionStackFrame::IncompleteBinaryOperation { operation, .. } => {
-                OperatorPrecendence::of_binary_operator(&operation.operator)
+                OperatorPrecendence::of_binary_operation(operation)
             }
         }
     }
@@ -491,12 +498,8 @@ enum NodeExtension {
 impl NodeExtension {
     fn precedence(&self) -> OperatorPrecendence {
         match self {
-            NodeExtension::PostfixOperation(op) => {
-                OperatorPrecendence::of_unary_operator(&op.operator)
-            }
-            NodeExtension::BinaryOperation(op) => {
-                OperatorPrecendence::of_binary_operator(&op.operator)
-            }
+            NodeExtension::PostfixOperation(op) => OperatorPrecendence::of_unary_operation(op),
+            NodeExtension::BinaryOperation(op) => OperatorPrecendence::of_binary_operation(op),
             NodeExtension::NoneMatched => OperatorPrecendence::MIN,
         }
     }

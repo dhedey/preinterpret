@@ -1,35 +1,66 @@
 use super::*;
 
-#[derive(Clone)]
-pub(super) struct UnaryOperation {
-    pub(super) operator: UnaryOperator,
-}
-
-impl UnaryOperation {
-    fn error(&self, error_message: &str) -> ExecutionInterrupt {
-        self.operator.execution_error(error_message)
+pub(super) trait Operation: HasSpanRange {
+    fn output(&self, output_value: impl ToEvaluationValue) -> ExecutionResult<EvaluationValue> {
+        Ok(output_value.to_value(self.source_span_for_output()))
     }
 
-    pub(super) fn unsupported_for_value_type_err(
+    fn output_if_some(
+        &self,
+        output_value: Option<impl ToEvaluationValue>,
+        error_message: impl FnOnce() -> String,
+    ) -> ExecutionResult<EvaluationValue> {
+        match output_value {
+            Some(output_value) => self.output(output_value),
+            None => self.execution_err(error_message()),
+        }
+    }
+
+    fn unsupported_for_value_type_err(
         &self,
         value_type: &'static str,
     ) -> ExecutionResult<EvaluationValue> {
-        Err(self.error(&format!(
+        Err(self.execution_error(format!(
             "The {} operator is not supported for {} values",
-            self.operator.symbol(),
+            self.symbol(),
             value_type,
         )))
     }
 
-    pub(super) fn err(&self, error_message: &'static str) -> ExecutionResult<EvaluationValue> {
-        Err(self.error(error_message))
-    }
+    fn source_span_for_output(&self) -> Option<Span>;
+    fn symbol(&self) -> &'static str;
+}
 
-    pub(super) fn output(
-        &self,
-        output_value: impl ToEvaluationValue,
-    ) -> ExecutionResult<EvaluationValue> {
-        Ok(output_value.to_value(self.operator.source_span_for_output()))
+#[derive(Clone)]
+pub(super) enum UnaryOperation {
+    Neg {
+        token: Token![-],
+    },
+    Not {
+        token: Token![!],
+    },
+    GroupedNoOp {
+        span: Span,
+    },
+    Cast {
+        as_token: Token![as],
+        target: CastTarget,
+    },
+}
+
+impl UnaryOperation {
+    pub(super) fn parse_from_prefix_punct(input: ParseStream) -> ParseResult<Self> {
+        if input.peek(Token![-]) {
+            Ok(Self::Neg {
+                token: input.parse()?,
+            })
+        } else if input.peek(Token![!]) {
+            Ok(Self::Not {
+                token: input.parse()?,
+            })
+        } else {
+            input.parse_err("Expected ! or -")
+        }
     }
 
     pub(super) fn for_cast_operation(
@@ -60,22 +91,7 @@ impl UnaryOperation {
                     .parse_err("This type is not supported in preinterpret cast expressions")
             }
         };
-        Ok(Self {
-            operator: UnaryOperator::Cast { as_token, target },
-        })
-    }
-
-    pub(super) fn for_unary_operator(operator: syn::UnOp) -> ParseResult<Self> {
-        let operator = match operator {
-            UnOp::Neg(token) => UnaryOperator::Neg { token },
-            UnOp::Not(token) => UnaryOperator::Not { token },
-            other_unary_op => {
-                return other_unary_op.parse_err(
-                    "This unary operator is not supported in a preinterpret expression",
-                );
-            }
-        };
-        Ok(Self { operator })
+        Ok(Self::Cast { as_token, target })
     }
 
     pub(super) fn evaluate(self, input: EvaluationValue) -> ExecutionResult<EvaluationValue> {
@@ -83,50 +99,33 @@ impl UnaryOperation {
     }
 }
 
-#[derive(Copy, Clone)]
-pub(super) enum UnaryOperator {
-    Neg {
-        token: Token![-],
-    },
-    Not {
-        token: Token![!],
-    },
-    GroupedNoOp {
-        span: Span,
-    },
-    Cast {
-        as_token: Token![as],
-        target: CastTarget,
-    },
-}
-
-impl UnaryOperator {
-    pub(crate) fn source_span_for_output(&self) -> Option<Span> {
+impl Operation for UnaryOperation {
+    fn source_span_for_output(&self) -> Option<Span> {
         match self {
-            UnaryOperator::Neg { .. } => None,
-            UnaryOperator::Not { .. } => None,
-            UnaryOperator::GroupedNoOp { span } => Some(*span),
-            UnaryOperator::Cast { .. } => None,
+            UnaryOperation::Neg { .. } => None,
+            UnaryOperation::Not { .. } => None,
+            UnaryOperation::GroupedNoOp { span } => Some(*span),
+            UnaryOperation::Cast { .. } => None,
         }
     }
 
-    pub(crate) fn symbol(&self) -> &'static str {
+    fn symbol(&self) -> &'static str {
         match self {
-            UnaryOperator::Neg { .. } => "-",
-            UnaryOperator::Not { .. } => "!",
-            UnaryOperator::GroupedNoOp { .. } => "",
-            UnaryOperator::Cast { .. } => "as",
+            UnaryOperation::Neg { .. } => "-",
+            UnaryOperation::Not { .. } => "!",
+            UnaryOperation::GroupedNoOp { .. } => "",
+            UnaryOperation::Cast { .. } => "as",
         }
     }
 }
 
-impl HasSpan for UnaryOperator {
+impl HasSpan for UnaryOperation {
     fn span(&self) -> Span {
         match self {
-            UnaryOperator::Neg { token } => token.span,
-            UnaryOperator::Not { token } => token.span,
-            UnaryOperator::GroupedNoOp { span } => *span,
-            UnaryOperator::Cast { as_token, .. } => as_token.span,
+            UnaryOperation::Neg { token } => token.span,
+            UnaryOperation::Not { token } => token.span,
+            UnaryOperation::GroupedNoOp { span } => *span,
+            UnaryOperation::Cast { as_token, .. } => as_token.span,
         }
     }
 }
@@ -137,85 +136,93 @@ pub(super) trait HandleUnaryOperation: Sized {
 }
 
 #[derive(Clone)]
-pub(super) struct BinaryOperation {
-    /// Only present if there is a single span for the source tokens
-    pub(super) source_span: Option<Span>,
-    pub(super) operator_span: Span,
-    pub(super) operator: BinaryOperator,
+pub(super) enum BinaryOperation {
+    Paired(PairedBinaryOperation),
+    Integer(IntegerBinaryOperation),
+}
+
+impl Parse for BinaryOperation {
+    fn parse(input: ParseStream) -> ParseResult<Self> {
+        // In line with Syn's BinOp, we use peek instead of lookahead
+        // ...I assume for slightly increased performance
+        // ...Or becuase 30 alternative options in the error message is too many
+        if input.peek(Token![+]) {
+            Ok(Self::Paired(PairedBinaryOperation::Addition(
+                input.parse()?,
+            )))
+        } else if input.peek(Token![-]) {
+            Ok(Self::Paired(PairedBinaryOperation::Subtraction(
+                input.parse()?,
+            )))
+        } else if input.peek(Token![*]) {
+            Ok(Self::Paired(PairedBinaryOperation::Multiplication(
+                input.parse()?,
+            )))
+        } else if input.peek(Token![/]) {
+            Ok(Self::Paired(PairedBinaryOperation::Division(
+                input.parse()?,
+            )))
+        } else if input.peek(Token![%]) {
+            Ok(Self::Paired(PairedBinaryOperation::Remainder(
+                input.parse()?,
+            )))
+        } else if input.peek(Token![&&]) {
+            Ok(Self::Paired(PairedBinaryOperation::LogicalAnd(
+                input.parse()?,
+            )))
+        } else if input.peek(Token![||]) {
+            Ok(Self::Paired(PairedBinaryOperation::LogicalOr(
+                input.parse()?,
+            )))
+        } else if input.peek(Token![==]) {
+            Ok(Self::Paired(PairedBinaryOperation::Equal(input.parse()?)))
+        } else if input.peek(Token![!=]) {
+            Ok(Self::Paired(PairedBinaryOperation::NotEqual(
+                input.parse()?,
+            )))
+        } else if input.peek(Token![>=]) {
+            Ok(Self::Paired(PairedBinaryOperation::GreaterThanOrEqual(
+                input.parse()?,
+            )))
+        } else if input.peek(Token![<=]) {
+            Ok(Self::Paired(PairedBinaryOperation::LessThanOrEqual(
+                input.parse()?,
+            )))
+        } else if input.peek(Token![<<]) {
+            Ok(Self::Integer(IntegerBinaryOperation::ShiftLeft(
+                input.parse()?,
+            )))
+        } else if input.peek(Token![>>]) {
+            Ok(Self::Integer(IntegerBinaryOperation::ShiftRight(
+                input.parse()?,
+            )))
+        } else if input.peek(Token![>]) {
+            Ok(Self::Paired(PairedBinaryOperation::GreaterThan(
+                input.parse()?,
+            )))
+        } else if input.peek(Token![<]) {
+            Ok(Self::Paired(PairedBinaryOperation::LessThan(
+                input.parse()?,
+            )))
+        } else if input.peek(Token![&]) {
+            Ok(Self::Paired(PairedBinaryOperation::BitAnd(input.parse()?)))
+        } else if input.peek(Token![|]) {
+            Ok(Self::Paired(PairedBinaryOperation::BitOr(input.parse()?)))
+        } else if input.peek(Token![^]) {
+            Ok(Self::Paired(PairedBinaryOperation::BitXor(input.parse()?)))
+        } else {
+            input.parse_err("Expected one of + - * / % && || ^ & | == < <= != >= > << or >>")
+        }
+    }
 }
 
 impl BinaryOperation {
-    fn error(&self, error_message: &str) -> ExecutionInterrupt {
-        self.operator_span.execution_error(error_message)
-    }
-
-    pub(super) fn unsupported_for_value_type_err(
-        &self,
-        value_type: &'static str,
-    ) -> ExecutionResult<EvaluationValue> {
-        Err(self.error(&format!(
-            "The {} operator is not supported for {} values",
-            self.operator.symbol(),
-            value_type,
-        )))
-    }
-
-    pub(super) fn output(
-        &self,
-        output_value: impl ToEvaluationValue,
-    ) -> ExecutionResult<EvaluationValue> {
-        Ok(output_value.to_value(self.source_span))
-    }
-
-    pub(super) fn output_if_some(
-        &self,
-        output_value: Option<impl ToEvaluationValue>,
-        error_message: impl FnOnce() -> String,
-    ) -> ExecutionResult<EvaluationValue> {
-        match output_value {
-            Some(output_value) => self.output(output_value),
-            None => self.operator_span.execution_err(error_message()),
-        }
-    }
-
-    pub(super) fn for_binary_operator(syn_operator: syn::BinOp) -> ParseResult<Self> {
-        let operator = match syn_operator {
-            syn::BinOp::Add(_) => BinaryOperator::Paired(PairedBinaryOperator::Addition),
-            syn::BinOp::Sub(_) => BinaryOperator::Paired(PairedBinaryOperator::Subtraction),
-            syn::BinOp::Mul(_) => BinaryOperator::Paired(PairedBinaryOperator::Multiplication),
-            syn::BinOp::Div(_) => BinaryOperator::Paired(PairedBinaryOperator::Division),
-            syn::BinOp::Rem(_) => BinaryOperator::Paired(PairedBinaryOperator::Remainder),
-            syn::BinOp::And(_) => BinaryOperator::Paired(PairedBinaryOperator::LogicalAnd),
-            syn::BinOp::Or(_) => BinaryOperator::Paired(PairedBinaryOperator::LogicalOr),
-            syn::BinOp::BitXor(_) => BinaryOperator::Paired(PairedBinaryOperator::BitXor),
-            syn::BinOp::BitAnd(_) => BinaryOperator::Paired(PairedBinaryOperator::BitAnd),
-            syn::BinOp::BitOr(_) => BinaryOperator::Paired(PairedBinaryOperator::BitOr),
-            syn::BinOp::Shl(_) => BinaryOperator::Integer(IntegerBinaryOperator::ShiftLeft),
-            syn::BinOp::Shr(_) => BinaryOperator::Integer(IntegerBinaryOperator::ShiftRight),
-            syn::BinOp::Eq(_) => BinaryOperator::Paired(PairedBinaryOperator::Equal),
-            syn::BinOp::Lt(_) => BinaryOperator::Paired(PairedBinaryOperator::LessThan),
-            syn::BinOp::Le(_) => BinaryOperator::Paired(PairedBinaryOperator::LessThanOrEqual),
-            syn::BinOp::Ne(_) => BinaryOperator::Paired(PairedBinaryOperator::NotEqual),
-            syn::BinOp::Ge(_) => BinaryOperator::Paired(PairedBinaryOperator::GreaterThanOrEqual),
-            syn::BinOp::Gt(_) => BinaryOperator::Paired(PairedBinaryOperator::GreaterThan),
-            other_binary_operation => {
-                return other_binary_operation
-                    .parse_err("This operation is not supported in preinterpret expressions")
-            }
-        };
-        Ok(Self {
-            source_span: None,
-            operator_span: syn_operator.span_range().join_into_span_else_start(),
-            operator,
-        })
-    }
-
     pub(super) fn lazy_evaluate(
         &self,
         left: &EvaluationValue,
     ) -> ExecutionResult<Option<EvaluationValue>> {
-        match self.operator {
-            BinaryOperator::Paired(PairedBinaryOperator::LogicalAnd) => {
+        match self {
+            BinaryOperation::Paired(PairedBinaryOperation::LogicalAnd { .. }) => {
                 match left.clone().into_bool() {
                     Some(bool) => {
                         if !bool.value {
@@ -227,7 +234,7 @@ impl BinaryOperation {
                     None => self.execution_err("The left operand was not a boolean"),
                 }
             }
-            BinaryOperator::Paired(PairedBinaryOperator::LogicalOr) => {
+            BinaryOperation::Paired(PairedBinaryOperation::LogicalOr { .. }) => {
                 match left.clone().into_bool() {
                     Some(bool) => {
                         if bool.value {
@@ -244,115 +251,141 @@ impl BinaryOperation {
     }
 
     pub(super) fn evaluate(
-        self,
+        &self,
         left: EvaluationValue,
         right: EvaluationValue,
     ) -> ExecutionResult<EvaluationValue> {
-        match self.operator {
-            BinaryOperator::Paired(operator) => {
-                let value_pair = left.expect_value_pair(operator, right, self.operator_span)?;
-                value_pair.handle_paired_binary_operation(self)
+        match self {
+            BinaryOperation::Paired(operation) => {
+                let value_pair = left.expect_value_pair(operation, right)?;
+                value_pair.handle_paired_binary_operation(operation)
             }
-            BinaryOperator::Integer(_) => {
-                let right = right.into_integer().ok_or_else(|| {
-                    self.operator_span
-                        .execution_error("The shift amount must be an integer")
-                })?;
-                left.handle_integer_binary_operation(right, self)
+            BinaryOperation::Integer(operation) => {
+                let right = right
+                    .into_integer()
+                    .ok_or_else(|| self.execution_error("The shift amount must be an integer"))?;
+                left.handle_integer_binary_operation(right, operation)
             }
-        }
-    }
-
-    pub(super) fn paired_operator(&self) -> PairedBinaryOperator {
-        match self.operator {
-            BinaryOperator::Paired(operator) => operator,
-            BinaryOperator::Integer(_) => panic!("Expected a paired operator"),
-        }
-    }
-
-    pub(super) fn integer_operator(&self) -> IntegerBinaryOperator {
-        match self.operator {
-            BinaryOperator::Paired(_) => panic!("Expected an integer operator"),
-            BinaryOperator::Integer(operator) => operator,
         }
     }
 }
 
 impl HasSpan for BinaryOperation {
     fn span(&self) -> Span {
-        self.operator_span
+        match self {
+            BinaryOperation::Paired(_) => self.span(),
+            BinaryOperation::Integer(_) => self.span(),
+        }
     }
 }
 
-#[derive(Copy, Clone)]
-pub(super) enum BinaryOperator {
-    Paired(PairedBinaryOperator),
-    Integer(IntegerBinaryOperator),
-}
+impl Operation for BinaryOperation {
+    fn source_span_for_output(&self) -> Option<Span> {
+        None
+    }
 
-impl BinaryOperator {
-    pub(super) fn symbol(&self) -> &'static str {
+    fn symbol(&self) -> &'static str {
         match self {
-            BinaryOperator::Paired(paired) => paired.symbol(),
-            BinaryOperator::Integer(integer) => integer.symbol(),
+            BinaryOperation::Paired(paired) => paired.symbol(),
+            BinaryOperation::Integer(integer) => integer.symbol(),
         }
     }
 }
 
 #[derive(Copy, Clone)]
-pub(super) enum PairedBinaryOperator {
-    Addition,
-    Subtraction,
-    Multiplication,
-    Division,
-    Remainder,
-    LogicalAnd,
-    LogicalOr,
-    BitXor,
-    BitAnd,
-    BitOr,
-    Equal,
-    LessThan,
-    LessThanOrEqual,
-    NotEqual,
-    GreaterThanOrEqual,
-    GreaterThan,
+pub(super) enum PairedBinaryOperation {
+    Addition(Token![+]),
+    Subtraction(Token![-]),
+    Multiplication(Token![*]),
+    Division(Token![/]),
+    Remainder(Token![%]),
+    LogicalAnd(Token![&&]),
+    LogicalOr(Token![||]),
+    BitXor(Token![^]),
+    BitAnd(Token![&]),
+    BitOr(Token![|]),
+    Equal(Token![==]),
+    LessThan(Token![<]),
+    LessThanOrEqual(Token![<=]),
+    NotEqual(Token![!=]),
+    GreaterThanOrEqual(Token![>=]),
+    GreaterThan(Token![>]),
 }
 
-impl PairedBinaryOperator {
-    pub(super) fn symbol(&self) -> &'static str {
+impl Operation for PairedBinaryOperation {
+    fn source_span_for_output(&self) -> Option<Span> {
+        None
+    }
+
+    fn symbol(&self) -> &'static str {
         match self {
-            PairedBinaryOperator::Addition => "+",
-            PairedBinaryOperator::Subtraction => "-",
-            PairedBinaryOperator::Multiplication => "*",
-            PairedBinaryOperator::Division => "/",
-            PairedBinaryOperator::Remainder => "%",
-            PairedBinaryOperator::LogicalAnd => "&&",
-            PairedBinaryOperator::LogicalOr => "||",
-            PairedBinaryOperator::BitXor => "^",
-            PairedBinaryOperator::BitAnd => "&",
-            PairedBinaryOperator::BitOr => "|",
-            PairedBinaryOperator::Equal => "==",
-            PairedBinaryOperator::LessThan => "<",
-            PairedBinaryOperator::LessThanOrEqual => "<=",
-            PairedBinaryOperator::NotEqual => "!=",
-            PairedBinaryOperator::GreaterThanOrEqual => ">=",
-            PairedBinaryOperator::GreaterThan => ">",
+            PairedBinaryOperation::Addition { .. } => "+",
+            PairedBinaryOperation::Subtraction { .. } => "-",
+            PairedBinaryOperation::Multiplication { .. } => "*",
+            PairedBinaryOperation::Division { .. } => "/",
+            PairedBinaryOperation::Remainder { .. } => "%",
+            PairedBinaryOperation::LogicalAnd { .. } => "&&",
+            PairedBinaryOperation::LogicalOr { .. } => "||",
+            PairedBinaryOperation::BitXor { .. } => "^",
+            PairedBinaryOperation::BitAnd { .. } => "&",
+            PairedBinaryOperation::BitOr { .. } => "|",
+            PairedBinaryOperation::Equal { .. } => "==",
+            PairedBinaryOperation::LessThan { .. } => "<",
+            PairedBinaryOperation::LessThanOrEqual { .. } => "<=",
+            PairedBinaryOperation::NotEqual { .. } => "!=",
+            PairedBinaryOperation::GreaterThanOrEqual { .. } => ">=",
+            PairedBinaryOperation::GreaterThan { .. } => ">",
+        }
+    }
+}
+
+impl HasSpanRange for PairedBinaryOperation {
+    fn span_range(&self) -> SpanRange {
+        match self {
+            PairedBinaryOperation::Addition(plus) => plus.span_range(),
+            PairedBinaryOperation::Subtraction(minus) => minus.span_range(),
+            PairedBinaryOperation::Multiplication(star) => star.span_range(),
+            PairedBinaryOperation::Division(slash) => slash.span_range(),
+            PairedBinaryOperation::Remainder(percent) => percent.span_range(),
+            PairedBinaryOperation::LogicalAnd(and_and) => and_and.span_range(),
+            PairedBinaryOperation::LogicalOr(or_or) => or_or.span_range(),
+            PairedBinaryOperation::BitXor(caret) => caret.span_range(),
+            PairedBinaryOperation::BitAnd(and) => and.span_range(),
+            PairedBinaryOperation::BitOr(or) => or.span_range(),
+            PairedBinaryOperation::Equal(eq_eq) => eq_eq.span_range(),
+            PairedBinaryOperation::LessThan(lt) => lt.span_range(),
+            PairedBinaryOperation::LessThanOrEqual(le) => le.span_range(),
+            PairedBinaryOperation::NotEqual(ne) => ne.span_range(),
+            PairedBinaryOperation::GreaterThanOrEqual(ge) => ge.span_range(),
+            PairedBinaryOperation::GreaterThan(gt) => gt.span_range(),
         }
     }
 }
 
 #[derive(Copy, Clone)]
-pub(super) enum IntegerBinaryOperator {
-    ShiftLeft,
-    ShiftRight,
+pub(super) enum IntegerBinaryOperation {
+    ShiftLeft(Token![<<]),
+    ShiftRight(Token![>>]),
 }
 
-impl IntegerBinaryOperator {
-    pub(super) fn symbol(&self) -> &'static str {
+impl Operation for IntegerBinaryOperation {
+    fn source_span_for_output(&self) -> Option<Span> {
+        None
+    }
+
+    fn symbol(&self) -> &'static str {
         match self {
-            IntegerBinaryOperator::ShiftLeft => "<<",
-            IntegerBinaryOperator::ShiftRight => ">>",
+            IntegerBinaryOperation::ShiftLeft { .. } => "<<",
+            IntegerBinaryOperation::ShiftRight { .. } => ">>",
+        }
+    }
+}
+
+impl HasSpanRange for IntegerBinaryOperation {
+    fn span_range(&self) -> SpanRange {
+        match self {
+            IntegerBinaryOperation::ShiftLeft(shl) => shl.span_range(),
+            IntegerBinaryOperation::ShiftRight(shr) => shr.span_range(),
         }
     }
 }
@@ -361,12 +394,12 @@ pub(super) trait HandleBinaryOperation: Sized {
     fn handle_paired_binary_operation(
         self,
         rhs: Self,
-        operation: &BinaryOperation,
+        operation: &PairedBinaryOperation,
     ) -> ExecutionResult<EvaluationValue>;
 
     fn handle_integer_binary_operation(
         self,
         rhs: EvaluationInteger,
-        operation: &BinaryOperation,
+        operation: &IntegerBinaryOperation,
     ) -> ExecutionResult<EvaluationValue>;
 }

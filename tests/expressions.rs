@@ -81,6 +81,22 @@ fn test_basic_evaluate_works() {
 }
 
 #[test]
+fn test_expression_precedence() {
+    // The general rules are:
+    // * Operators at higher precedence should group more tightly than operators at lower precedence.
+    // * Operators at the same precedence should left-associate.
+
+    // 1 + -1 + ((2 + 4) * 3) - 9 => 1 + -1 + 18 - 9 => 9
+    assert_preinterpret_eq!([!evaluate! 1 + -(1) + (2 + 4) * 3 - 9], 9);
+    // (true > true) > true => false > true => false
+    assert_preinterpret_eq!([!evaluate! true > true > true], false);
+    // (5 - 2) - 1 => 3 - 1 => 2
+    assert_preinterpret_eq!([!evaluate! 5 - 2 - 1], 2);
+    // ((3 * 3 - 4) < (3 << 1)) && true => 5 < 6 => true
+    assert_preinterpret_eq!([!evaluate! 3 * 3 - 4 < 3 << 1 && true], true);
+}
+
+#[test]
 fn test_very_long_expression_works() {
     assert_preinterpret_eq!(
         {
