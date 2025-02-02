@@ -21,7 +21,7 @@ impl NoOutputCommandDefinition for SetCommand {
                 Ok(Self {
                     variable: input.parse()?,
                     equals: input.parse()?,
-                    arguments: input.parse_with(arguments.command_span())?,
+                    arguments: input.parse_with_context(arguments.command_span())?,
                 })
             },
             "Expected [!set! #variable = ..]",
@@ -221,7 +221,7 @@ impl NoOutputCommandDefinition for ErrorCommand {
                 } else {
                     Ok(Self {
                         inputs: EitherErrorInput::JustMessage(
-                            input.parse_with(arguments.command_span())?,
+                            input.parse_with_context(arguments.command_span())?,
                         ),
                     })
                 }

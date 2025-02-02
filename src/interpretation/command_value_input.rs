@@ -13,24 +13,30 @@ pub(crate) enum CommandValueInput<T> {
     Value(T),
 }
 
-impl<T: Parse> Parse for CommandValueInput<T> {
-    fn parse(input: ParseStream) -> ParseResult<Self> {
-        Ok(match detect_preinterpret_grammar(input.cursor()) {
-            PeekMatch::Command(_) => Self::Command(input.parse()?),
-            PeekMatch::GroupedVariable => Self::GroupedVariable(input.parse()?),
-            PeekMatch::FlattenedVariable => Self::FlattenedVariable(input.parse()?),
-            PeekMatch::Group(Delimiter::Brace) => Self::Code(input.parse()?),
-            PeekMatch::AppendVariableDestructuring | PeekMatch::Destructurer(_) => {
+impl<T: ParseFromSource> ParseFromSource for CommandValueInput<T> {
+    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
+        Ok(match input.peek_grammar() {
+            GrammarPeekMatch::Command(_) => Self::Command(input.parse()?),
+            GrammarPeekMatch::GroupedVariable => Self::GroupedVariable(input.parse()?),
+            GrammarPeekMatch::FlattenedVariable => Self::FlattenedVariable(input.parse()?),
+            GrammarPeekMatch::Group(Delimiter::Brace) => Self::Code(input.parse()?),
+            GrammarPeekMatch::AppendVariableDestructuring | GrammarPeekMatch::Destructurer(_) => {
                 return input
                     .span()
                     .parse_err("Destructurings are not supported here")
             }
-            PeekMatch::Group(_)
-            | PeekMatch::Punct(_)
-            | PeekMatch::Literal(_)
-            | PeekMatch::Ident(_)
-            | PeekMatch::End => Self::Value(input.parse()?),
+            GrammarPeekMatch::Group(_)
+            | GrammarPeekMatch::Punct(_)
+            | GrammarPeekMatch::Literal(_)
+            | GrammarPeekMatch::Ident(_)
+            | GrammarPeekMatch::End => Self::Value(input.parse()?),
         })
+    }
+}
+
+impl<T: ParseFromInterpreted> ParseFromInterpreted for CommandValueInput<T> {
+    fn parse_from_interpreted(input: InterpretedParseStream) -> ParseResult<Self> {
+        Ok(Self::Value(input.parse()?))
     }
 }
 
@@ -46,7 +52,9 @@ impl<T: HasSpanRange> HasSpanRange for CommandValueInput<T> {
     }
 }
 
-impl<T: InterpretValue<InterpretedValue = I>, I: Parse> InterpretValue for CommandValueInput<T> {
+impl<T: InterpretValue<InterpretedValue = I>, I: ParseFromInterpreted> InterpretValue
+    for CommandValueInput<T>
+{
     type InterpretedValue = I;
 
     fn interpret_to_value(self, interpreter: &mut Interpreter) -> ExecutionResult<I> {
@@ -72,7 +80,7 @@ impl<T: InterpretValue<InterpretedValue = I>, I: Parse> InterpretValue for Comma
             // RUST-ANALYZER SAFETY: We only use I with simple parse functions so far which don't care about
             // none-delimited groups
             interpreted_stream
-                .syn_parse(I::parse)
+                .parse_with(I::parse_from_interpreted)
                 .add_context_if_error_and_no_context(|| {
                     format!(
                         "Occurred whilst parsing the {} to a {}.",
@@ -92,8 +100,19 @@ pub(crate) struct Grouped<T> {
     pub(crate) inner: T,
 }
 
-impl<T: Parse> Parse for Grouped<T> {
-    fn parse(input: ParseStream) -> ParseResult<Self> {
+impl<T: ParseFromSource> ParseFromSource for Grouped<T> {
+    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
+        let (delimiter, delim_span, inner) = input.parse_any_group()?;
+        Ok(Self {
+            delimiter,
+            delim_span,
+            inner: inner.parse()?,
+        })
+    }
+}
+
+impl<T: ParseFromInterpreted> ParseFromInterpreted for Grouped<T> {
+    fn parse_from_interpreted(input: InterpretedParseStream) -> ParseResult<Self> {
         let (delimiter, delim_span, inner) = input.parse_any_group()?;
         Ok(Self {
             delimiter,
@@ -126,8 +145,18 @@ pub(crate) struct Repeated<T> {
     pub(crate) inner: Vec<T>,
 }
 
-impl<T: Parse> Parse for Repeated<T> {
-    fn parse(input: ParseStream) -> ParseResult<Self> {
+impl<T: ParseFromSource> ParseFromSource for Repeated<T> {
+    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
+        let mut inner = vec![];
+        while !input.is_empty() {
+            inner.push(input.parse::<T>()?);
+        }
+        Ok(Self { inner })
+    }
+}
+
+impl<T: ParseFromInterpreted> ParseFromInterpreted for Repeated<T> {
+    fn parse_from_interpreted(input: InterpretedParseStream) -> ParseResult<Self> {
         let mut inner = vec![];
         while !input.is_empty() {
             inner.push(input.parse::<T>()?);

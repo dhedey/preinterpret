@@ -7,10 +7,10 @@ pub(crate) struct CommandCodeInput {
     inner: InterpretationStream,
 }
 
-impl Parse for CommandCodeInput {
-    fn parse(input: ParseStream) -> ParseResult<Self> {
+impl ParseFromSource for CommandCodeInput {
+    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
         let (delim_span, content) = input.parse_specific_group(Delimiter::Brace)?;
-        let inner = content.parse_with(delim_span.join())?;
+        let inner = content.parse_with_context(delim_span.join())?;
         Ok(Self { delim_span, inner })
     }
 }

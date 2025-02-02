@@ -11,117 +11,25 @@ pub(crate) enum InterpretationItem {
     Literal(Literal),
 }
 
-impl Parse for InterpretationItem {
-    fn parse(input: ParseStream) -> ParseResult<Self> {
-        Ok(match detect_preinterpret_grammar(input.cursor()) {
-            PeekMatch::Command(_) => InterpretationItem::Command(input.parse()?),
-            PeekMatch::Group(_) => InterpretationItem::InterpretationGroup(input.parse()?),
-            PeekMatch::GroupedVariable => InterpretationItem::GroupedVariable(input.parse()?),
-            PeekMatch::FlattenedVariable => InterpretationItem::FlattenedVariable(input.parse()?),
-            PeekMatch::AppendVariableDestructuring | PeekMatch::Destructurer(_) => {
+impl ParseFromSource for InterpretationItem {
+    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
+        Ok(match input.peek_grammar() {
+            GrammarPeekMatch::Command(_) => InterpretationItem::Command(input.parse()?),
+            GrammarPeekMatch::Group(_) => InterpretationItem::InterpretationGroup(input.parse()?),
+            GrammarPeekMatch::GroupedVariable => {
+                InterpretationItem::GroupedVariable(input.parse()?)
+            }
+            GrammarPeekMatch::FlattenedVariable => {
+                InterpretationItem::FlattenedVariable(input.parse()?)
+            }
+            GrammarPeekMatch::AppendVariableDestructuring | GrammarPeekMatch::Destructurer(_) => {
                 return input.parse_err("Destructurings are not supported here")
             }
-            PeekMatch::Punct(_) => InterpretationItem::Punct(input.parse_any_punct()?),
-            PeekMatch::Ident(_) => InterpretationItem::Ident(input.parse_any_ident()?),
-            PeekMatch::Literal(_) => InterpretationItem::Literal(input.parse()?),
-            PeekMatch::End => return input.parse_err("Expected some item"),
+            GrammarPeekMatch::Punct(_) => InterpretationItem::Punct(input.parse_any_punct()?),
+            GrammarPeekMatch::Ident(_) => InterpretationItem::Ident(input.parse_any_ident()?),
+            GrammarPeekMatch::Literal(_) => InterpretationItem::Literal(input.parse()?),
+            GrammarPeekMatch::End => return input.parse_err("Expected some item"),
         })
-    }
-}
-
-#[allow(unused)]
-pub(crate) enum PeekMatch {
-    Command(Option<CommandOutputKind>),
-    GroupedVariable,
-    FlattenedVariable,
-    AppendVariableDestructuring,
-    Destructurer(Option<DestructurerKind>),
-    Group(Delimiter),
-    Ident(Ident),
-    Punct(Punct),
-    Literal(Literal),
-    End,
-}
-
-pub(crate) fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> PeekMatch {
-    // We have to check groups first, so that we handle transparent groups
-    // and avoid the self.ignore_none() calls inside cursor
-    if let Some((next, delimiter, _, _)) = cursor.any_group() {
-        if delimiter == Delimiter::Bracket {
-            if let Some((_, next)) = next.punct_matching('!') {
-                if let Some((ident, next)) = next.ident() {
-                    if next.punct_matching('!').is_some() {
-                        let output_kind =
-                            CommandKind::for_ident(&ident).map(|kind| kind.standard_output_kind());
-                        return PeekMatch::Command(output_kind);
-                    }
-                }
-                if let Some((first, next)) = next.punct_matching('.') {
-                    if let Some((_, next)) = next.punct_matching('.') {
-                        if let Some((ident, next)) = next.ident() {
-                            if next.punct_matching('!').is_some() {
-                                let output_kind = CommandKind::for_ident(&ident).and_then(|kind| {
-                                    kind.flattened_output_kind(first.span_range()).ok()
-                                });
-                                return PeekMatch::Command(output_kind);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        if delimiter == Delimiter::Parenthesis {
-            if let Some((_, next)) = next.punct_matching('!') {
-                if let Some((ident, next)) = next.ident() {
-                    if next.punct_matching('!').is_some() {
-                        return PeekMatch::Destructurer(DestructurerKind::for_ident(&ident));
-                    }
-                }
-            }
-        }
-
-        // Ideally we'd like to detect $($tt)* substitutions from macros and interpret them as
-        // a Raw (uninterpreted) group, because typically that's what a user would typically intend.
-        //
-        // You'd think mapping a Delimiter::None to a PeekMatch::RawGroup would be a good way
-        // of doing this, but unfortunately this behaviour is very arbitrary and not in a helpful way:
-        // => A $tt or $($tt)* is not grouped...
-        // => A $literal or $($literal)* _is_ outputted in a group...
-        //
-        // So this isn't possible. It's unlikely to matter much, and a user can always do:
-        // [!raw! $($tt)*] anyway.
-
-        return PeekMatch::Group(delimiter);
-    }
-    if let Some((_, next)) = cursor.punct_matching('#') {
-        if next.ident().is_some() {
-            return PeekMatch::GroupedVariable;
-        }
-        if let Some((_, next)) = next.punct_matching('.') {
-            if let Some((_, next)) = next.punct_matching('.') {
-                if next.ident().is_some() {
-                    return PeekMatch::FlattenedVariable;
-                }
-                if let Some((_, next)) = next.punct_matching('>') {
-                    if next.punct_matching('>').is_some() {
-                        return PeekMatch::AppendVariableDestructuring;
-                    }
-                }
-            }
-        }
-        if let Some((_, next)) = next.punct_matching('>') {
-            if next.punct_matching('>').is_some() {
-                return PeekMatch::AppendVariableDestructuring;
-            }
-        }
-    }
-
-    match cursor.token_tree() {
-        Some((TokenTree::Ident(ident), _)) => PeekMatch::Ident(ident),
-        Some((TokenTree::Punct(punct), _)) => PeekMatch::Punct(punct),
-        Some((TokenTree::Literal(literal), _)) => PeekMatch::Literal(literal),
-        Some((TokenTree::Group(_), _)) => unreachable!("Already covered above"),
-        None => PeekMatch::End,
     }
 }
 

@@ -35,6 +35,15 @@ impl From<syn::Error> for ParseError {
     }
 }
 
+impl HasSpan for ParseError {
+    fn span(&self) -> Span {
+        match self {
+            ParseError::Standard(e) => e.span(),
+            ParseError::Contextual(e, _) => e.span(),
+        }
+    }
+}
+
 impl ParseError {
     /// This is not a `From` because it wants to be explicit
     pub(crate) fn convert_to_final_error(self) -> syn::Error {

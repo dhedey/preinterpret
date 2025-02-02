@@ -7,10 +7,10 @@ pub(crate) struct InterpretationStream {
     span: Span,
 }
 
-impl ContextualParse for InterpretationStream {
+impl ContextualParseFromSource for InterpretationStream {
     type Context = Span;
 
-    fn parse_with_context(input: ParseStream, span: Self::Context) -> ParseResult<Self> {
+    fn parse_from_source(input: SourceParseStream, span: Self::Context) -> ParseResult<Self> {
         let mut items = Vec::new();
         while !input.is_empty() {
             items.push(input.parse()?);
@@ -52,10 +52,10 @@ impl InterpretationGroup {
     }
 }
 
-impl Parse for InterpretationGroup {
-    fn parse(input: ParseStream) -> ParseResult<Self> {
+impl ParseFromSource for InterpretationGroup {
+    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
         let (delimiter, delim_span, content) = input.parse_any_group()?;
-        let content = content.parse_with(delim_span.join())?;
+        let content = content.parse_with_context(delim_span.join())?;
         Ok(Self {
             source_delimiter: delimiter,
             source_delim_span: delim_span,
@@ -97,8 +97,8 @@ impl RawGroup {
     }
 }
 
-impl Parse for RawGroup {
-    fn parse(input: ParseStream) -> ParseResult<Self> {
+impl ParseFromSource for RawGroup {
+    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
         let (delimiter, delim_span, content) = input.parse_any_group()?;
         let content = content.parse()?;
         Ok(Self {

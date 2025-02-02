@@ -80,6 +80,15 @@ Destructuring performs parsing of a token stream. It supports:
 
 ### To come
 
+* Consider renames:
+  * KindedParseStream => ParseStream
+  * KindedParseBuffer => ParseBuffer
+  * Source => Grammar
+  * ParseFromSource => Parse<Grammar>
+  * InterpretationX => GrammarX
+  * ParseFromInterpreted => Parse<Output>
+  * Interpreted => Output
+  * InterpretedX => OutputX
 * Complete expression rework:
   * Disallow expressions/commands in re-evaluated `{ .. }` blocks and command outputs
   * Create `ParseInterpreted` and `ParseSource` via `ParseStream<Marker>`, `SourceParseStream` and `InterpretedParseStream`, and add grammar peaking to `SourceParseStream` only. Add `[!reinterpret! ...]` command for an `eval` style command.
@@ -87,6 +96,8 @@ Destructuring performs parsing of a token stream. It supports:
 * `[!is_set! #x]`
 * `[!str_split! { input: Value<LitStr>, separator: Value<LitStr>, }]`
 * Change `(!content! ...)` to unwrap none groups, to be more permissive
+* Support `'a'..'z'` in `[!range! 'a'..'z']`
+* Support `#x[0]` and `#x[0..3]` and `#..x[0..3]` and other things like `[ ..=3]`
 * Add casts of other integers to char, via `char::from_u32(u32::try_from(x))`
 * Destructurers
   * `(!fields! ...)` and `(!subfields! ...)`

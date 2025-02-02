@@ -2,9 +2,9 @@ use crate::internal_prelude::*;
 
 #[derive(Clone)]
 pub(crate) struct IfCommand {
-    condition: Expression,
+    condition: InterpretationExpression,
     true_code: CommandCodeInput,
-    else_ifs: Vec<(Expression, CommandCodeInput)>,
+    else_ifs: Vec<(InterpretationExpression, CommandCodeInput)>,
     else_code: Option<CommandCodeInput>,
 }
 
@@ -80,7 +80,7 @@ impl ControlFlowCommandDefinition for IfCommand {
 
 #[derive(Clone)]
 pub(crate) struct WhileCommand {
-    condition: Expression,
+    condition: InterpretationExpression,
     loop_code: CommandCodeInput,
 }
 

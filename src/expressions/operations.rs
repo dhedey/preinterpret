@@ -31,6 +31,41 @@ pub(super) trait Operation: HasSpanRange {
     fn symbol(&self) -> &'static str;
 }
 
+pub(super) enum PrefixUnaryOperation {
+    Neg(Token![-]),
+    Not(Token![!]),
+}
+
+impl SynParse for PrefixUnaryOperation {
+    fn parse(input: SynParseStream) -> SynResult<Self> {
+        if input.peek(Token![-]) {
+            Ok(Self::Neg(input.parse()?))
+        } else if input.peek(Token![!]) {
+            Ok(Self::Not(input.parse()?))
+        } else {
+            Err(input.error("Expected ! or -"))
+        }
+    }
+}
+
+impl HasSpan for PrefixUnaryOperation {
+    fn span(&self) -> Span {
+        match self {
+            PrefixUnaryOperation::Neg(token) => token.span,
+            PrefixUnaryOperation::Not(token) => token.span,
+        }
+    }
+}
+
+impl From<PrefixUnaryOperation> for UnaryOperation {
+    fn from(operation: PrefixUnaryOperation) -> Self {
+        match operation {
+            PrefixUnaryOperation::Neg(token) => Self::Neg { token },
+            PrefixUnaryOperation::Not(token) => Self::Not { token },
+        }
+    }
+}
+
 #[derive(Clone)]
 pub(super) enum UnaryOperation {
     Neg {
@@ -44,30 +79,17 @@ pub(super) enum UnaryOperation {
     },
     Cast {
         as_token: Token![as],
+        target_ident: Ident,
         target: CastTarget,
     },
 }
 
 impl UnaryOperation {
-    pub(super) fn parse_from_prefix_punct(input: ParseStream) -> ParseResult<Self> {
-        if input.peek(Token![-]) {
-            Ok(Self::Neg {
-                token: input.parse()?,
-            })
-        } else if input.peek(Token![!]) {
-            Ok(Self::Not {
-                token: input.parse()?,
-            })
-        } else {
-            input.parse_err("Expected ! or -")
-        }
-    }
-
     pub(super) fn for_cast_operation(
         as_token: Token![as],
-        target_type: Ident,
+        target_ident: Ident,
     ) -> ParseResult<Self> {
-        let target = match target_type.to_string().as_str() {
+        let target = match target_ident.to_string().as_str() {
             "int" | "integer" => CastTarget::Integer(IntegerKind::Untyped),
             "u8" => CastTarget::Integer(IntegerKind::U8),
             "u16" => CastTarget::Integer(IntegerKind::U16),
@@ -87,15 +109,28 @@ impl UnaryOperation {
             "bool" => CastTarget::Boolean,
             "char" => CastTarget::Char,
             _ => {
-                return target_type
+                return target_ident
                     .parse_err("This type is not supported in preinterpret cast expressions")
             }
         };
-        Ok(Self::Cast { as_token, target })
+        Ok(Self::Cast {
+            as_token,
+            target,
+            target_ident,
+        })
     }
 
     pub(super) fn evaluate(self, input: EvaluationValue) -> ExecutionResult<EvaluationValue> {
         input.handle_unary_operation(self)
+    }
+
+    pub(super) fn end_span(&self) -> Span {
+        match self {
+            UnaryOperation::Neg { token } => token.span,
+            UnaryOperation::Not { token } => token.span,
+            UnaryOperation::GroupedNoOp { span } => *span,
+            UnaryOperation::Cast { target_ident, .. } => target_ident.span(),
+        }
     }
 }
 
@@ -141,8 +176,8 @@ pub(super) enum BinaryOperation {
     Integer(IntegerBinaryOperation),
 }
 
-impl Parse for BinaryOperation {
-    fn parse(input: ParseStream) -> ParseResult<Self> {
+impl SynParse for BinaryOperation {
+    fn parse(input: SynParseStream) -> SynResult<Self> {
         // In line with Syn's BinOp, we use peek instead of lookahead
         // ...I assume for slightly increased performance
         // ...Or becuase 30 alternative options in the error message is too many
@@ -211,7 +246,7 @@ impl Parse for BinaryOperation {
         } else if input.peek(Token![^]) {
             Ok(Self::Paired(PairedBinaryOperation::BitXor(input.parse()?)))
         } else {
-            input.parse_err("Expected one of + - * / % && || ^ & | == < <= != >= > << or >>")
+            Err(input.error("Expected one of + - * / % && || ^ & | == < <= != >= > << or >>"))
         }
     }
 }
@@ -270,11 +305,11 @@ impl BinaryOperation {
     }
 }
 
-impl HasSpan for BinaryOperation {
-    fn span(&self) -> Span {
+impl HasSpanRange for BinaryOperation {
+    fn span_range(&self) -> SpanRange {
         match self {
-            BinaryOperation::Paired(_) => self.span(),
-            BinaryOperation::Integer(_) => self.span(),
+            BinaryOperation::Paired(op) => op.span_range(),
+            BinaryOperation::Integer(op) => op.span_range(),
         }
     }
 }

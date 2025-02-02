@@ -10,13 +10,13 @@ pub(crate) trait HandleDestructure {
             // RUST-ANALYZER-SAFETY: ...this isn't generally safe...
             // We should only do this when we know that either the input or parser doesn't require
             // analysis of nested None-delimited groups.
-            input.syn_parse(|input| self.handle_destructure(input, interpreter))
+            input.parse_with(|input| self.handle_destructure(input, interpreter))
         }
     }
 
     fn handle_destructure(
         &self,
-        input: ParseStream,
+        input: InterpretedParseStream,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()>;
 }

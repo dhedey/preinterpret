@@ -10,8 +10,8 @@ pub(crate) struct GroupedVariable {
     variable_name: Ident,
 }
 
-impl Parse for GroupedVariable {
-    fn parse(input: ParseStream) -> ParseResult<Self> {
+impl ParseFromSource for GroupedVariable {
+    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
         input.try_parse_or_message(
             |input| {
                 Ok(Self {
@@ -122,8 +122,8 @@ pub(crate) struct FlattenedVariable {
     variable_name: Ident,
 }
 
-impl Parse for FlattenedVariable {
-    fn parse(input: ParseStream) -> ParseResult<Self> {
+impl ParseFromSource for FlattenedVariable {
+    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
         input.try_parse_or_message(
             |input| {
                 Ok(Self {

@@ -2,7 +2,7 @@ use crate::internal_prelude::*;
 
 #[derive(Clone)]
 pub(crate) struct EvaluateCommand {
-    expression: Expression,
+    expression: InterpretationExpression,
     command_span: Span,
 }
 
@@ -39,7 +39,7 @@ pub(crate) struct AssignCommand {
     operator: Option<Punct>,
     #[allow(unused)]
     equals: Token![=],
-    expression: Expression,
+    expression: InterpretationExpression,
     command_span: Span,
 }
 
@@ -91,15 +91,15 @@ impl NoOutputCommandDefinition for AssignCommand {
                 // RUST-ANALYZER SAFETY: Hopefully it won't contain a none-delimited group
                 variable
                     .interpret_to_new_stream(interpreter)?
-                    .syn_parse(Expression::parse)?
-                    .evaluate(interpreter)?
+                    .parse_as::<InterpretedExpression>()?
+                    .evaluate()?
                     .to_tokens(&mut calculation);
             };
             operator.to_tokens(&mut calculation);
             expression
                 .evaluate(interpreter)?
                 .to_tokens(&mut calculation);
-            calculation.parse_with(Expression::parse)?
+            calculation.parse_as()?
         } else {
             expression
         };
@@ -115,9 +115,9 @@ impl NoOutputCommandDefinition for AssignCommand {
 
 #[derive(Clone)]
 pub(crate) struct RangeCommand {
-    left: Expression,
+    left: InterpretationExpression,
     range_limits: RangeLimits,
-    right: Expression,
+    right: InterpretationExpression,
 }
 
 impl CommandType for RangeCommand {
@@ -202,8 +202,8 @@ enum RangeLimits {
     Closed(Token![..=]),
 }
 
-impl Parse for RangeLimits {
-    fn parse(input: ParseStream) -> ParseResult<Self> {
+impl ParseFromSource for RangeLimits {
+    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
         if input.peek(Token![..=]) {
             Ok(RangeLimits::Closed(input.parse()?))
         } else {

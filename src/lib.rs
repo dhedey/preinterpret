@@ -547,7 +547,7 @@ fn preinterpret_internal(input: TokenStream) -> SynResult<TokenStream> {
     let mut interpreter = Interpreter::new();
 
     let interpretation_stream = input
-        .parse_with(|input| InterpretationStream::parse_with_context(input, Span::call_site()))
+        .parse_with(|input| InterpretationStream::parse_from_source(input, Span::call_site()))
         .convert_to_final_result()?;
 
     let interpreted_stream = interpretation_stream

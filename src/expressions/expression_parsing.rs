@@ -1,32 +1,44 @@
 use super::*;
 
-pub(super) struct ExpressionParser<'a> {
-    streams: ParseStreamStack<'a>,
-    nodes: ExpressionNodes,
+pub(super) struct ExpressionParser<'a, K: Expressionable> {
+    streams: ParseStreamStack<'a, K>,
+    nodes: ExpressionNodes<K>,
     expression_stack: Vec<ExpressionStackFrame>,
     span_range: SpanRange,
+    kind: PhantomData<K>,
 }
 
-impl<'a> ExpressionParser<'a> {
-    pub(super) fn new(input: ParseStream<'a>) -> Self {
+impl<'a, K: Expressionable> ExpressionParser<'a, K> {
+    pub(super) fn parse(input: KindedParseStream<'a, K>) -> ParseResult<Expression<K>> {
         Self {
             streams: ParseStreamStack::new(input),
             nodes: ExpressionNodes::new(),
             expression_stack: Vec::with_capacity(10),
             span_range: SpanRange::new_single(input.span()),
+            kind: PhantomData,
         }
+        .run()
     }
 
-    pub(super) fn parse(mut self) -> ParseResult<Expression> {
+    fn run(mut self) -> ParseResult<Expression<K>> {
         let mut work_item = self.push_stack_frame(ExpressionStackFrame::Root);
         loop {
             work_item = match work_item {
                 WorkItem::RequireUnaryAtom => {
-                    let unary_atom = self.parse_unary_atom()?;
+                    let unary_atom = K::parse_unary_atom(&mut self.streams)?;
                     self.extend_with_unary_atom(unary_atom)?
                 }
                 WorkItem::TryParseAndApplyExtension { node } => {
-                    let extension = self.parse_extension()?;
+                    let extension = K::parse_extension(&mut self.streams)?;
+                    match &extension {
+                        NodeExtension::PostfixOperation(op) => {
+                            self.span_range.set_end(op.end_span());
+                        }
+                        NodeExtension::BinaryOperation(op) => {
+                            self.span_range.set_end(op.span_range().end());
+                        }
+                        NodeExtension::NoneMatched => {}
+                    };
                     self.attempt_extension(node, extension)?
                 }
                 WorkItem::TryApplyAlreadyParsedExtension { node, extension } => {
@@ -39,31 +51,19 @@ impl<'a> ExpressionParser<'a> {
         }
     }
 
-    fn extend_with_unary_atom(&mut self, unary_atom: UnaryAtom) -> ParseResult<WorkItem> {
+    fn extend_with_unary_atom(&mut self, unary_atom: UnaryAtom<K>) -> ParseResult<WorkItem> {
         Ok(match unary_atom {
-            UnaryAtom::Command(command) => {
-                self.span_range.set_end(command.span());
-                self.add_leaf(ExpressionLeaf::Command(command))
-            }
-            UnaryAtom::GroupedVariable(variable) => {
-                self.span_range.set_end(variable.span_range().end());
-                self.add_leaf(ExpressionLeaf::GroupedVariable(variable))
-            }
-            UnaryAtom::CodeBlock(code_block) => {
-                self.span_range.set_end(code_block.span());
-                self.add_leaf(ExpressionLeaf::CodeBlock(code_block))
-            }
-            UnaryAtom::Value(value) => {
-                if let Some(span) = value.source_span() {
+            UnaryAtom::Leaf(leaf) => {
+                if let Some(span) = K::leaf_end_span(&leaf) {
                     self.span_range.set_end(span);
                 }
-                self.add_leaf(ExpressionLeaf::Value(value))
+                self.add_leaf(leaf)
             }
             UnaryAtom::Group(delim_span) => {
                 self.span_range.set_end(delim_span.close());
                 self.push_stack_frame(ExpressionStackFrame::Group { delim_span })
             }
-            UnaryAtom::UnaryOperation(operation) => {
+            UnaryAtom::PrefixUnaryOperation(operation) => {
                 self.span_range.set_end(operation.span());
                 self.push_stack_frame(ExpressionStackFrame::IncompletePrefixOperation { operation })
             }
@@ -121,7 +121,7 @@ impl<'a> ExpressionParser<'a> {
                 ExpressionStackFrame::IncompletePrefixOperation { operation } => {
                     WorkItem::TryApplyAlreadyParsedExtension {
                         node: self.nodes.add_node(ExpressionNode::UnaryOperation {
-                            operation,
+                            operation: operation.into(),
                             input: node,
                         }),
                         extension,
@@ -141,57 +141,7 @@ impl<'a> ExpressionParser<'a> {
         }
     }
 
-    fn parse_extension(&mut self) -> ParseResult<NodeExtension> {
-        Ok(match self.streams.peek_grammar() {
-            PeekMatch::Punct(_) => match self.streams.try_parse_or_revert::<BinaryOperation>() {
-                Ok(operation) => NodeExtension::BinaryOperation(operation),
-                Err(_) => NodeExtension::NoneMatched,
-            },
-            PeekMatch::Ident(ident) if ident == "as" => {
-                let cast_operation = UnaryOperation::for_cast_operation(self.streams.parse()?, {
-                    let target_type = self.streams.parse::<Ident>()?;
-                    self.span_range.set_end(target_type.span());
-                    target_type
-                })?;
-                NodeExtension::PostfixOperation(cast_operation)
-            }
-            _ => NodeExtension::NoneMatched,
-        })
-    }
-
-    fn parse_unary_atom(&mut self) -> ParseResult<UnaryAtom> {
-        Ok(match self.streams.peek_grammar() {
-            PeekMatch::Command(Some(output_kind)) => {
-                match output_kind.expression_support() {
-                    Ok(()) => UnaryAtom::Command(self.streams.parse()?),
-                    Err(error_message) => return self.streams.parse_err(error_message),
-                }
-            }
-            PeekMatch::Command(None) => return self.streams.parse_err("Invalid command"),
-            PeekMatch::GroupedVariable => UnaryAtom::GroupedVariable(self.streams.parse()?),
-            PeekMatch::FlattenedVariable => return self.streams.parse_err("Flattened variables cannot be used directly in expressions. Consider removing the .. or wrapping it inside a command such as [!group! ..] which returns an expression"),
-            PeekMatch::AppendVariableDestructuring => return self.streams.parse_err("Append variable operations are not supported in an expression"),
-            PeekMatch::Destructurer(_) => return self.streams.parse_err("Destructurings are not supported in an expression"),
-            PeekMatch::Group(Delimiter::None | Delimiter::Parenthesis) => {
-                let (_, delim_span) = self.streams.parse_and_enter_group()?;
-                UnaryAtom::Group(delim_span)
-            },
-            PeekMatch::Group(Delimiter::Brace) => UnaryAtom::CodeBlock(self.streams.parse()?),
-            PeekMatch::Group(Delimiter::Bracket) => return self.streams.parse_err("Square brackets [ .. ] are not supported in an expression"),
-            PeekMatch::Punct(_) => {
-                UnaryAtom::UnaryOperation(self.streams.parse_with(UnaryOperation::parse_from_prefix_punct)?)
-            },
-            PeekMatch::Ident(_) => {
-                UnaryAtom::Value(EvaluationValue::Boolean(EvaluationBoolean::for_litbool(self.streams.parse()?)))
-            },
-            PeekMatch::Literal(_) => {
-                UnaryAtom::Value(EvaluationValue::for_literal(self.streams.parse()?)?)
-            },
-            PeekMatch::End => return self.streams.parse_err("The expression ended in an incomplete state"),
-        })
-    }
-
-    fn add_leaf(&mut self, leaf: ExpressionLeaf) -> WorkItem {
+    fn add_leaf(&mut self, leaf: K::Leaf) -> WorkItem {
         let node = self.nodes.add_node(ExpressionNode::Leaf(leaf));
         WorkItem::TryParseAndApplyExtension { node }
     }
@@ -217,22 +167,22 @@ impl<'a> ExpressionParser<'a> {
     }
 }
 
-pub(super) struct ExpressionNodes {
-    nodes: Vec<ExpressionNode>,
+pub(super) struct ExpressionNodes<K: Expressionable> {
+    nodes: Vec<ExpressionNode<K>>,
 }
 
-impl ExpressionNodes {
+impl<K: Expressionable> ExpressionNodes<K> {
     pub(super) fn new() -> Self {
         Self { nodes: Vec::new() }
     }
 
-    pub(super) fn add_node(&mut self, node: ExpressionNode) -> ExpressionNodeId {
+    pub(super) fn add_node(&mut self, node: ExpressionNode<K>) -> ExpressionNodeId {
         let node_id = ExpressionNodeId(self.nodes.len());
         self.nodes.push(node);
         node_id
     }
 
-    pub(super) fn complete(self, root: ExpressionNodeId, span_range: SpanRange) -> Expression {
+    pub(super) fn complete(self, root: ExpressionNodeId, span_range: SpanRange) -> Expression<K> {
         Expression {
             root,
             span_range,
@@ -294,6 +244,12 @@ enum OperatorPrecendence {
 
 impl OperatorPrecendence {
     const MIN: Self = OperatorPrecendence::Jump;
+
+    fn of_prefix_unary_operation(op: &PrefixUnaryOperation) -> Self {
+        match op {
+            PrefixUnaryOperation::Neg { .. } | PrefixUnaryOperation::Not { .. } => Self::Prefix,
+        }
+    }
 
     fn of_unary_operation(op: &UnaryOperation) -> Self {
         match op {
@@ -438,7 +394,7 @@ enum ExpressionStackFrame {
     Group { delim_span: DelimSpan },
     /// An incomplete unary prefix operation
     /// NB: unary postfix operations such as `as` casting go straight to ExtendableNode
-    IncompletePrefixOperation { operation: UnaryOperation },
+    IncompletePrefixOperation { operation: PrefixUnaryOperation },
     /// An incomplete binary operation
     IncompleteBinaryOperation {
         lhs: ExpressionNodeId,
@@ -452,7 +408,7 @@ impl ExpressionStackFrame {
             ExpressionStackFrame::Root => OperatorPrecendence::MIN,
             ExpressionStackFrame::Group { .. } => OperatorPrecendence::MIN,
             ExpressionStackFrame::IncompletePrefixOperation { operation, .. } => {
-                OperatorPrecendence::of_unary_operation(operation)
+                OperatorPrecendence::of_prefix_unary_operation(operation)
             }
             ExpressionStackFrame::IncompleteBinaryOperation { operation, .. } => {
                 OperatorPrecendence::of_binary_operation(operation)
@@ -480,16 +436,13 @@ enum WorkItem {
     },
 }
 
-enum UnaryAtom {
-    Command(Command),
-    GroupedVariable(GroupedVariable),
-    CodeBlock(CommandCodeInput),
-    Value(EvaluationValue),
+pub(super) enum UnaryAtom<K: Expressionable> {
+    Leaf(K::Leaf),
     Group(DelimSpan),
-    UnaryOperation(UnaryOperation),
+    PrefixUnaryOperation(PrefixUnaryOperation),
 }
 
-enum NodeExtension {
+pub(super) enum NodeExtension {
     PostfixOperation(UnaryOperation),
     BinaryOperation(BinaryOperation),
     NoneMatched,

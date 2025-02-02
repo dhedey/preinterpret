@@ -2,7 +2,7 @@ use crate::internal_prelude::*;
 
 #[derive(Clone)]
 pub(crate) struct CommandArguments<'a> {
-    parse_stream: ParseStream<'a>,
+    parse_stream: SourceParseStream<'a>,
     command_name: Ident,
     /// The span of the [ ... ] which contained the command
     command_span: Span,
@@ -10,7 +10,7 @@ pub(crate) struct CommandArguments<'a> {
 
 impl<'a> CommandArguments<'a> {
     pub(crate) fn new(
-        parse_stream: ParseStream<'a>,
+        parse_stream: SourceParseStream<'a>,
         command_name: Ident,
         command_span: Span,
     ) -> Self {
@@ -36,12 +36,12 @@ impl<'a> CommandArguments<'a> {
     }
 
     pub(crate) fn fully_parse_as<T: ArgumentsContent>(&self) -> ParseResult<T> {
-        self.fully_parse_or_error(T::parse, T::error_message())
+        self.fully_parse_or_error(T::parse_from_source, T::error_message())
     }
 
     pub(crate) fn fully_parse_or_error<T>(
         &self,
-        parse_function: impl FnOnce(ParseStream) -> ParseResult<T>,
+        parse_function: impl FnOnce(SourceParseStream) -> ParseResult<T>,
         error_message: impl std::fmt::Display,
     ) -> ParseResult<T> {
         // In future, when the diagnostic API is stable,
@@ -74,6 +74,6 @@ impl<'a> CommandArguments<'a> {
     }
 }
 
-pub(crate) trait ArgumentsContent: Parse {
+pub(crate) trait ArgumentsContent: ParseFromSource {
     fn error_message() -> String;
 }

@@ -21,7 +21,7 @@ impl NoOutputCommandDefinition for LetCommand {
                 Ok(Self {
                     destructuring: input.parse()?,
                     equals: input.parse()?,
-                    arguments: input.parse_with(arguments.command_span())?,
+                    arguments: input.parse_with_context(arguments.command_span())?,
                 })
             },
             "Expected [!let! <destructuring> = ...]",

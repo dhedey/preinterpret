@@ -21,14 +21,14 @@ pub(crate) enum CommandStreamInput {
     ExplicitStream(InterpretationGroup),
 }
 
-impl Parse for CommandStreamInput {
-    fn parse(input: ParseStream) -> ParseResult<Self> {
-        Ok(match detect_preinterpret_grammar(input.cursor()) {
-            PeekMatch::Command(_) => Self::Command(input.parse()?),
-            PeekMatch::GroupedVariable => Self::GroupedVariable(input.parse()?),
-            PeekMatch::FlattenedVariable => Self::FlattenedVariable(input.parse()?),
-            PeekMatch::Group(Delimiter::Bracket) => Self::ExplicitStream(input.parse()?),
-            PeekMatch::Group(Delimiter::Brace) => Self::Code(input.parse()?),
+impl ParseFromSource for CommandStreamInput {
+    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
+        Ok(match input.peek_grammar() {
+            GrammarPeekMatch::Command(_) => Self::Command(input.parse()?),
+            GrammarPeekMatch::GroupedVariable => Self::GroupedVariable(input.parse()?),
+            GrammarPeekMatch::FlattenedVariable => Self::FlattenedVariable(input.parse()?),
+            GrammarPeekMatch::Group(Delimiter::Bracket) => Self::ExplicitStream(input.parse()?),
+            GrammarPeekMatch::Group(Delimiter::Brace) => Self::Code(input.parse()?),
             _ => input.span()
                 .parse_err("Expected [ ..input stream.. ], { [..input stream..] } or a [!command! ..], #variable or #..variable.\nMacro substitutions such as $x should be placed inside square brackets.")?,
         })
@@ -115,6 +115,9 @@ impl Interpret for CommandStreamInput {
     }
 }
 
+/// From a code neatness perspective, this would be better as `InterpretedCommandStream`...
+/// However this approach avoids a round-trip to TokenStream, which causes bugs in RustAnalyzer.
+/// This can be removed when we fork syn and can parse the InterpretedStream directly.
 fn parse_as_stream_input(
     input: impl Interpret + HasSpanRange,
     interpreter: &mut Interpreter,
@@ -149,10 +152,9 @@ pub(crate) struct InterpretedCommandStream {
     pub(crate) stream: InterpretedStream,
 }
 
-impl Parse for InterpretedCommandStream {
-    fn parse(input: ParseStream) -> ParseResult<Self> {
-        // We assume we're parsing an already interpreted raw stream here, so we replicate
-        // parse_as_stream_input
+impl ParseFromInterpreted for InterpretedCommandStream {
+    fn parse_from_interpreted(input: InterpretedParseStream) -> ParseResult<Self> {
+        // We replicate parse_as_stream_input
         let (_, inner) = input.parse_group_matching(
             |delimiter| matches!(delimiter, Delimiter::Bracket | Delimiter::None),
             || "Expected [...] or a transparent group from a #variable or stream-output command such as [!group! ...]".to_string(),

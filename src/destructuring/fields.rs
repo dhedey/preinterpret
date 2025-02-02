@@ -16,24 +16,38 @@ impl<T: 'static> FieldsParseDefinition<T> {
         }
     }
 
-    pub(crate) fn add_required_field<F: Parse + 'static>(
+    pub(crate) fn add_required_field<F: ParseFromSource + 'static>(
         self,
         field_name: &str,
         example: &str,
         explanation: Option<&str>,
         set: impl Fn(&mut T, F) + 'static,
     ) -> Self {
-        self.add_field(field_name, example, explanation, true, F::parse, set)
+        self.add_field(
+            field_name,
+            example,
+            explanation,
+            true,
+            F::parse_from_source,
+            set,
+        )
     }
 
-    pub(crate) fn add_optional_field<F: Parse + 'static>(
+    pub(crate) fn add_optional_field<F: ParseFromSource + 'static>(
         self,
         field_name: &str,
         example: &str,
         explanation: Option<&str>,
         set: impl Fn(&mut T, F) + 'static,
     ) -> Self {
-        self.add_field(field_name, example, explanation, false, F::parse, set)
+        self.add_field(
+            field_name,
+            example,
+            explanation,
+            false,
+            F::parse_from_source,
+            set,
+        )
     }
 
     pub(crate) fn add_field<F>(
@@ -42,7 +56,7 @@ impl<T: 'static> FieldsParseDefinition<T> {
         example: &str,
         explanation: Option<&str>,
         is_required: bool,
-        parse: impl Fn(ParseStream) -> ParseResult<F> + 'static,
+        parse: impl Fn(SourceParseStream) -> ParseResult<F> + 'static,
         set: impl Fn(&mut T, F) + 'static,
     ) -> Self {
         if self
@@ -73,7 +87,7 @@ impl<T: 'static> FieldsParseDefinition<T> {
         error_span_range: SpanRange,
     ) -> impl FnOnce(SynParseStream) -> ParseResult<T> {
         fn inner<T>(
-            input: ParseStream,
+            input: SourceParseStream,
             new_builder: T,
             field_definitions: &FieldDefinitions<T>,
             error_span_range: SpanRange,
@@ -172,5 +186,5 @@ struct FieldParseDefinition<T> {
     example: String,
     explanation: Option<String>,
     #[allow(clippy::type_complexity)]
-    parse_and_set: Box<dyn Fn(&mut T, ParseStream) -> ParseResult<()>>,
+    parse_and_set: Box<dyn Fn(&mut T, SourceParseStream) -> ParseResult<()>>,
 }

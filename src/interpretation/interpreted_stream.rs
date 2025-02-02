@@ -126,18 +126,23 @@ impl InterpretedStream {
         self.token_length == 0
     }
 
-    /// For a type `T` which implements `syn::Parse`, you can call this as `syn_parse(self, T::parse)`.
-    /// For more complicated parsers, just pass the parsing function to this function.
-    ///
     /// WARNING: With rust-analyzer, this loses transparent groups which have been inserted.
     /// Use only where that doesn't matter: https://github.com/rust-lang/rust-analyzer/issues/18211#issuecomment-2604547032
     ///
     /// Annotate usages with // RUST-ANALYZER SAFETY: ... to explain why the use of this function is OK.
-    pub(crate) unsafe fn syn_parse<T, E: From<syn::Error>>(
+    pub(crate) unsafe fn parse_with<T, E: From<syn::Error>>(
         self,
-        parser: impl FnOnce(ParseStream) -> Result<T, E>,
+        parser: impl FnOnce(InterpretedParseStream) -> Result<T, E>,
     ) -> Result<T, E> {
         self.into_token_stream().parse_with(parser)
+    }
+
+    /// WARNING: With rust-analyzer, this loses transparent groups which have been inserted.
+    /// Use only where that doesn't matter: https://github.com/rust-lang/rust-analyzer/issues/18211#issuecomment-2604547032
+    ///
+    /// Annotate usages with // RUST-ANALYZER SAFETY: ... to explain why the use of this function is OK.
+    pub(crate) unsafe fn parse_as<T: ParseFromInterpreted>(self) -> ParseResult<T> {
+        self.into_token_stream().parse_with(T::parse)
     }
 
     pub(crate) fn append_into(self, output: &mut InterpretedStream) {

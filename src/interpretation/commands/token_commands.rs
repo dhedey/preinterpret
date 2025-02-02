@@ -292,7 +292,7 @@ fn handle_split(
     unsafe {
         // RUST-ANALYZER SAFETY: This is as safe as we can get.
         // Typically the separator won't contain none-delimited groups, so we're OK
-        input.syn_parse(move |input| {
+        input.parse_with(move |input| {
             let mut current_item = InterpretedStream::new();
             let mut drop_empty_next = drop_empty_start;
             while !input.is_empty() {

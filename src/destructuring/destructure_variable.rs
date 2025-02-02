@@ -54,7 +54,7 @@ pub(crate) enum DestructureVariable {
 }
 
 impl DestructureVariable {
-    pub(crate) fn parse_only_unflattened_input(input: ParseStream) -> ParseResult<Self> {
+    pub(crate) fn parse_only_unflattened_input(input: SourceParseStream) -> ParseResult<Self> {
         let variable: DestructureVariable = Self::parse_until::<UntilEnd>(input)?;
         if variable.is_flattened_input() {
             return variable
@@ -64,7 +64,7 @@ impl DestructureVariable {
         Ok(variable)
     }
 
-    pub(crate) fn parse_until<C: StopCondition>(input: ParseStream) -> ParseResult<Self> {
+    pub(crate) fn parse_until<C: StopCondition>(input: SourceParseStream) -> ParseResult<Self> {
         let marker = input.parse()?;
         if input.peek(Token![..]) {
             let flatten = input.parse()?;
@@ -180,7 +180,7 @@ impl DestructureVariable {
 impl HandleDestructure for DestructureVariable {
     fn handle_destructure(
         &self,
-        input: ParseStream,
+        input: InterpretedParseStream,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         match self {
@@ -260,8 +260,8 @@ impl ParsedTokenTree {
     }
 }
 
-impl Parse for ParsedTokenTree {
-    fn parse(input: ParseStream) -> ParseResult<Self> {
+impl ParseFromInterpreted for ParsedTokenTree {
+    fn parse_from_interpreted(input: InterpretedParseStream) -> ParseResult<Self> {
         Ok(match input.parse::<TokenTree>()? {
             TokenTree::Group(group) if group.delimiter() == Delimiter::None => {
                 ParsedTokenTree::NoneGroup(group)
@@ -290,31 +290,31 @@ pub(crate) enum ParseUntil {
 
 impl ParseUntil {
     /// Peeks the next token, to discover what we should parse next
-    fn peek_flatten_limit<C: StopCondition>(input: ParseStream) -> ParseResult<ParseUntil> {
+    fn peek_flatten_limit<C: StopCondition>(input: SourceParseStream) -> ParseResult<ParseUntil> {
         if C::should_stop(input) {
             return Ok(ParseUntil::End);
         }
-        Ok(match detect_preinterpret_grammar(input.cursor()) {
-            PeekMatch::Command(_)
-            | PeekMatch::GroupedVariable
-            | PeekMatch::FlattenedVariable
-            | PeekMatch::Destructurer(_)
-            | PeekMatch::AppendVariableDestructuring => {
+        Ok(match input.peek_grammar() {
+            GrammarPeekMatch::Command(_)
+            | GrammarPeekMatch::GroupedVariable
+            | GrammarPeekMatch::FlattenedVariable
+            | GrammarPeekMatch::Destructurer(_)
+            | GrammarPeekMatch::AppendVariableDestructuring => {
                 return input
                     .span()
                     .parse_err("This cannot follow a flattened destructure match");
             }
-            PeekMatch::Group(delimiter) => ParseUntil::Group(delimiter),
-            PeekMatch::Ident(ident) => ParseUntil::Ident(ident),
-            PeekMatch::Literal(literal) => ParseUntil::Literal(literal),
-            PeekMatch::Punct(punct) => ParseUntil::Punct(punct),
-            PeekMatch::End => ParseUntil::End,
+            GrammarPeekMatch::Group(delimiter) => ParseUntil::Group(delimiter),
+            GrammarPeekMatch::Ident(ident) => ParseUntil::Ident(ident),
+            GrammarPeekMatch::Literal(literal) => ParseUntil::Literal(literal),
+            GrammarPeekMatch::Punct(punct) => ParseUntil::Punct(punct),
+            GrammarPeekMatch::End => ParseUntil::End,
         })
     }
 
     fn handle_parse_into(
         &self,
-        input: ParseStream,
+        input: InterpretedParseStream,
         output: &mut InterpretedStream,
     ) -> ExecutionResult<()> {
         match self {

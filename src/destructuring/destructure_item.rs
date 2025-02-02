@@ -16,27 +16,27 @@ impl DestructureItem {
     /// notably the flattened command. This allows [!let! #..x = Hello => World] to parse as setting
     /// `x` to `Hello => World` rather than having `#..x` peeking to see it is "up to =" and then only
     /// parsing `Hello` into `x`.
-    pub(crate) fn parse_until<C: StopCondition>(input: ParseStream) -> ParseResult<Self> {
-        Ok(match detect_preinterpret_grammar(input.cursor()) {
-            PeekMatch::Command(Some(CommandOutputKind::None)) => {
+    pub(crate) fn parse_until<C: StopCondition>(input: SourceParseStream) -> ParseResult<Self> {
+        Ok(match input.peek_grammar() {
+            GrammarPeekMatch::Command(Some(CommandOutputKind::None)) => {
                 Self::NoneOutputCommand(input.parse()?)
             }
-            PeekMatch::Command(_) => {
+            GrammarPeekMatch::Command(_) => {
                 return input.parse_err(
                     "Commands which return something are not supported in destructuring positions",
                 )
             }
-            PeekMatch::GroupedVariable
-            | PeekMatch::FlattenedVariable
-            | PeekMatch::AppendVariableDestructuring => {
+            GrammarPeekMatch::GroupedVariable
+            | GrammarPeekMatch::FlattenedVariable
+            | GrammarPeekMatch::AppendVariableDestructuring => {
                 Self::Variable(DestructureVariable::parse_until::<C>(input)?)
             }
-            PeekMatch::Group(_) => Self::ExactGroup(input.parse()?),
-            PeekMatch::Destructurer(_) => Self::Destructurer(input.parse()?),
-            PeekMatch::Punct(_) => Self::ExactPunct(input.parse_any_punct()?),
-            PeekMatch::Literal(_) => Self::ExactLiteral(input.parse()?),
-            PeekMatch::Ident(_) => Self::ExactIdent(input.parse_any_ident()?),
-            PeekMatch::End => return input.parse_err("Unexpected end"),
+            GrammarPeekMatch::Group(_) => Self::ExactGroup(input.parse()?),
+            GrammarPeekMatch::Destructurer(_) => Self::Destructurer(input.parse()?),
+            GrammarPeekMatch::Punct(_) => Self::ExactPunct(input.parse_any_punct()?),
+            GrammarPeekMatch::Literal(_) => Self::ExactLiteral(input.parse()?),
+            GrammarPeekMatch::Ident(_) => Self::ExactIdent(input.parse_any_ident()?),
+            GrammarPeekMatch::End => return input.parse_err("Unexpected end"),
         })
     }
 }
@@ -44,7 +44,7 @@ impl DestructureItem {
 impl HandleDestructure for DestructureItem {
     fn handle_destructure(
         &self,
-        input: ParseStream,
+        input: InterpretedParseStream,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         match self {

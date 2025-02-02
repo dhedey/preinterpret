@@ -408,8 +408,8 @@ pub(crate) struct Command {
     source_group_span: DelimSpan,
 }
 
-impl Parse for Command {
-    fn parse(input: ParseStream) -> ParseResult<Self> {
+impl ParseFromSource for Command {
+    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
         let (delim_span, content) = input.parse_specific_group(Delimiter::Bracket)?;
         content.parse::<Token![!]>()?;
         let flattening = if content.peek(Token![.]) {

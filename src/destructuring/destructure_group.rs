@@ -6,8 +6,8 @@ pub(crate) struct DestructureGroup {
     inner: DestructureRemaining,
 }
 
-impl Parse for DestructureGroup {
-    fn parse(input: ParseStream) -> ParseResult<Self> {
+impl ParseFromSource for DestructureGroup {
+    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
         let (delimiter, _, content) = input.parse_any_group()?;
         Ok(Self {
             delimiter,
@@ -19,7 +19,7 @@ impl Parse for DestructureGroup {
 impl HandleDestructure for DestructureGroup {
     fn handle_destructure(
         &self,
-        input: ParseStream,
+        input: InterpretedParseStream,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         let (_, inner) = input.parse_specific_group(self.delimiter)?;

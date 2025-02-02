@@ -24,8 +24,8 @@ macro_rules! define_field_inputs {
             )*
         }
 
-        impl Parse for $inputs_type {
-            fn parse(input: ParseStream) -> ParseResult<Self> {
+        impl ParseFromSource for $inputs_type {
+            fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
                 $(
                     let mut $required_field: Option<$required_type> = None;
                 )*

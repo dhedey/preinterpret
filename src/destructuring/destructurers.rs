@@ -16,7 +16,7 @@ impl DestructurerDefinition for StreamDestructurer {
 
     fn handle_destructure(
         &self,
-        input: ParseStream,
+        input: InterpretedParseStream,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         self.inner.handle_destructure(input, interpreter)
@@ -48,7 +48,7 @@ impl DestructurerDefinition for IdentDestructurer {
 
     fn handle_destructure(
         &self,
-        input: ParseStream,
+        input: InterpretedParseStream,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         if input.cursor().ident().is_some() {
@@ -90,7 +90,7 @@ impl DestructurerDefinition for LiteralDestructurer {
 
     fn handle_destructure(
         &self,
-        input: ParseStream,
+        input: InterpretedParseStream,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         if input.cursor().literal().is_some() {
@@ -132,7 +132,7 @@ impl DestructurerDefinition for PunctDestructurer {
 
     fn handle_destructure(
         &self,
-        input: ParseStream,
+        input: InterpretedParseStream,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         if input.cursor().any_punct().is_some() {
@@ -165,7 +165,7 @@ impl DestructurerDefinition for GroupDestructurer {
 
     fn handle_destructure(
         &self,
-        input: ParseStream,
+        input: InterpretedParseStream,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         let (_, inner) = input.parse_specific_group(Delimiter::None)?;
@@ -188,7 +188,11 @@ impl DestructurerDefinition for RawDestructurer {
         })
     }
 
-    fn handle_destructure(&self, input: ParseStream, _: &mut Interpreter) -> ExecutionResult<()> {
+    fn handle_destructure(
+        &self,
+        input: InterpretedParseStream,
+        _: &mut Interpreter,
+    ) -> ExecutionResult<()> {
         self.stream.handle_destructure(input)
     }
 }
@@ -205,7 +209,7 @@ impl DestructurerDefinition for ContentDestructurer {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
-                    stream: InterpretationStream::parse_with_context(input, arguments.full_span())?,
+                    stream: InterpretationStream::parse_from_source(input, arguments.full_span())?,
                 })
             },
             "Expected (!content! ... interpretable input ...)",
@@ -214,7 +218,7 @@ impl DestructurerDefinition for ContentDestructurer {
 
     fn handle_destructure(
         &self,
-        input: ParseStream,
+        input: InterpretedParseStream,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         self.stream

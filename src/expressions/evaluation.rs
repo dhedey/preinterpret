@@ -1,12 +1,12 @@
 use super::*;
 
-pub(super) struct ExpressionEvaluator<'a> {
-    nodes: &'a [ExpressionNode],
+pub(super) struct ExpressionEvaluator<'a, K: Expressionable> {
+    nodes: &'a [ExpressionNode<K>],
     operation_stack: Vec<EvaluationStackFrame>,
 }
 
-impl<'a> ExpressionEvaluator<'a> {
-    pub(super) fn new(nodes: &'a [ExpressionNode]) -> Self {
+impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
+    pub(super) fn new(nodes: &'a [ExpressionNode<K>]) -> Self {
         Self {
             nodes,
             operation_stack: Vec::new(),
@@ -16,9 +16,9 @@ impl<'a> ExpressionEvaluator<'a> {
     pub(super) fn evaluate(
         mut self,
         root: ExpressionNodeId,
-        interpreter: &mut Interpreter,
+        evaluation_context: &mut K::EvaluationContext,
     ) -> ExecutionResult<EvaluationValue> {
-        let mut next = self.begin_node_evaluation(root, interpreter)?;
+        let mut next = self.begin_node_evaluation(root, evaluation_context)?;
 
         loop {
             match next {
@@ -30,7 +30,7 @@ impl<'a> ExpressionEvaluator<'a> {
                     next = self.continue_node_evaluation(top_of_stack, evaluation_value)?;
                 }
                 NextAction::EnterNode(next_node) => {
-                    next = self.begin_node_evaluation(next_node, interpreter)?;
+                    next = self.begin_node_evaluation(next_node, evaluation_context)?;
                 }
             }
         }
@@ -39,29 +39,11 @@ impl<'a> ExpressionEvaluator<'a> {
     fn begin_node_evaluation(
         &mut self,
         node_id: ExpressionNodeId,
-        interpreter: &mut Interpreter,
+        evaluation_context: &mut K::EvaluationContext,
     ) -> ExecutionResult<NextAction> {
         Ok(match &self.nodes[node_id.0] {
             ExpressionNode::Leaf(leaf) => {
-                let interpreted = match leaf {
-                    ExpressionLeaf::Command(command) => {
-                        command.clone().interpret_to_new_stream(interpreter)?
-                    }
-                    ExpressionLeaf::GroupedVariable(grouped_variable) => {
-                        grouped_variable.interpret_to_new_stream(interpreter)?
-                    }
-                    ExpressionLeaf::CodeBlock(code_block) => {
-                        code_block.clone().interpret_to_new_stream(interpreter)?
-                    }
-                    ExpressionLeaf::Value(value) => {
-                        return Ok(NextAction::HandleValue(value.clone()))
-                    }
-                };
-                let parsed_expression = unsafe {
-                    // RUST-ANALYZER SAFETY: This isn't very safe, as it could have a none-delimited group in it
-                    interpreted.syn_parse(Expression::parse)?
-                };
-                NextAction::HandleValue(parsed_expression.evaluate_to_value(interpreter)?)
+                NextAction::HandleValue(K::evaluate_leaf(leaf, evaluation_context)?)
             }
             ExpressionNode::UnaryOperation { operation, input } => {
                 self.operation_stack
