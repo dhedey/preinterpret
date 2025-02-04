@@ -2,7 +2,7 @@ use crate::internal_prelude::*;
 
 #[derive(Clone)]
 pub(crate) struct IsEmptyCommand {
-    arguments: InterpretationStream,
+    arguments: SourceStream,
 }
 
 impl CommandType for IsEmptyCommand {
@@ -14,7 +14,7 @@ impl ValueCommandDefinition for IsEmptyCommand {
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         Ok(Self {
-            arguments: arguments.parse_all_for_interpretation()?,
+            arguments: arguments.parse_all_as_source()?,
         })
     }
 
@@ -27,7 +27,7 @@ impl ValueCommandDefinition for IsEmptyCommand {
 
 #[derive(Clone)]
 pub(crate) struct LengthCommand {
-    arguments: InterpretationStream,
+    arguments: SourceStream,
 }
 
 impl CommandType for LengthCommand {
@@ -39,7 +39,7 @@ impl ValueCommandDefinition for LengthCommand {
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         Ok(Self {
-            arguments: arguments.parse_all_for_interpretation()?,
+            arguments: arguments.parse_all_as_source()?,
         })
     }
 
@@ -53,7 +53,7 @@ impl ValueCommandDefinition for LengthCommand {
 
 #[derive(Clone)]
 pub(crate) struct GroupCommand {
-    arguments: InterpretationStream,
+    arguments: SourceStream,
 }
 
 impl CommandType for GroupCommand {
@@ -65,14 +65,14 @@ impl StreamCommandDefinition for GroupCommand {
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         Ok(Self {
-            arguments: arguments.parse_all_for_interpretation()?,
+            arguments: arguments.parse_all_as_source()?,
         })
     }
 
     fn execute(
         self: Box<Self>,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         // The grouping happens automatically because a non-flattened
         // stream command is outputted in a group.
@@ -114,7 +114,7 @@ impl StreamCommandDefinition for IntersperseCommand {
     fn execute(
         self: Box<Self>,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         let items = self.inputs.items.interpret_to_new_stream(interpreter)?;
         let add_trailing = match self.inputs.add_trailing {
@@ -169,7 +169,7 @@ impl SeparatorAppender {
         &mut self,
         interpreter: &mut Interpreter,
         remaining: RemainingItemCount,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         match self.separator(remaining) {
             TrailingSeparator::Normal => self.separator.clone().interpret_into(interpreter, output),
@@ -249,7 +249,7 @@ impl StreamCommandDefinition for SplitCommand {
     fn execute(
         self: Box<Self>,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         let output_span = self.inputs.stream.span_range().join_into_span_else_start();
         let stream = self.inputs.stream.interpret_to_new_stream(interpreter)?;
@@ -281,8 +281,8 @@ impl StreamCommandDefinition for SplitCommand {
 }
 
 fn handle_split(
-    input: InterpretedStream,
-    output: &mut InterpretedStream,
+    input: OutputStream,
+    output: &mut OutputStream,
     output_span: Span,
     separator: RawDestructureStream,
     drop_empty_start: bool,
@@ -293,7 +293,7 @@ fn handle_split(
         // RUST-ANALYZER SAFETY: This is as safe as we can get.
         // Typically the separator won't contain none-delimited groups, so we're OK
         input.parse_with(move |input| {
-            let mut current_item = InterpretedStream::new();
+            let mut current_item = OutputStream::new();
             let mut drop_empty_next = drop_empty_start;
             while !input.is_empty() {
                 let separator_fork = input.fork();
@@ -303,8 +303,7 @@ fn handle_split(
                 }
                 input.advance_to(&separator_fork);
                 if !(current_item.is_empty() && drop_empty_next) {
-                    let complete_item =
-                        core::mem::replace(&mut current_item, InterpretedStream::new());
+                    let complete_item = core::mem::replace(&mut current_item, OutputStream::new());
                     output.push_new_group(complete_item, Delimiter::None, output_span);
                 }
                 drop_empty_next = drop_empty_middle;
@@ -319,7 +318,7 @@ fn handle_split(
 
 #[derive(Clone)]
 pub(crate) struct CommaSplitCommand {
-    input: InterpretationStream,
+    input: SourceStream,
 }
 
 impl CommandType for CommaSplitCommand {
@@ -331,14 +330,14 @@ impl StreamCommandDefinition for CommaSplitCommand {
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         Ok(Self {
-            input: arguments.parse_all_for_interpretation()?,
+            input: arguments.parse_all_as_source()?,
         })
     }
 
     fn execute(
         self: Box<Self>,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         let output_span = self.input.span_range().join_into_span_else_start();
         let stream = self.input.interpret_to_new_stream(interpreter)?;
@@ -408,7 +407,7 @@ impl StreamCommandDefinition for ZipCommand {
     fn execute(
         self: Box<Self>,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         let (grouped_streams, error_on_length_mismatch) = match self.inputs {
             EitherZipInput::Fields(inputs) => (inputs.streams, inputs.error_on_length_mismatch),
@@ -448,7 +447,7 @@ impl StreamCommandDefinition for ZipCommand {
             .map(|stream| stream.stream.into_iter())
             .collect();
         for _ in 0..min_stream_length {
-            let mut inner = InterpretedStream::new();
+            let mut inner = OutputStream::new();
             for iter in iters.iter_mut() {
                 inner.push_interpreted_item(iter.next().unwrap());
             }

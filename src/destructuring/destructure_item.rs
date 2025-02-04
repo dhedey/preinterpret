@@ -16,7 +16,7 @@ impl DestructureItem {
     /// notably the flattened command. This allows [!let! #..x = Hello => World] to parse as setting
     /// `x` to `Hello => World` rather than having `#..x` peeking to see it is "up to =" and then only
     /// parsing `Hello` into `x`.
-    pub(crate) fn parse_until<C: StopCondition>(input: SourceParseStream) -> ParseResult<Self> {
+    pub(crate) fn parse_until<C: StopCondition>(input: ParseStream<Source>) -> ParseResult<Self> {
         Ok(match input.peek_grammar() {
             GrammarPeekMatch::Command(Some(CommandOutputKind::None)) => {
                 Self::NoneOutputCommand(input.parse()?)
@@ -44,7 +44,7 @@ impl DestructureItem {
 impl HandleDestructure for DestructureItem {
     fn handle_destructure(
         &self,
-        input: InterpretedParseStream,
+        input: ParseStream<Output>,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         match self {

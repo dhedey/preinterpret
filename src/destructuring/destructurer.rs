@@ -5,14 +5,14 @@ pub(crate) trait DestructurerDefinition: Clone {
     fn parse(arguments: DestructurerArguments) -> ParseResult<Self>;
     fn handle_destructure(
         &self,
-        input: InterpretedParseStream,
+        input: ParseStream<Output>,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()>;
 }
 
 #[derive(Clone)]
 pub(crate) struct DestructurerArguments<'a> {
-    parse_stream: SourceParseStream<'a>,
+    parse_stream: ParseStream<'a, Source>,
     destructurer_name: Ident,
     full_span: Span,
 }
@@ -20,7 +20,7 @@ pub(crate) struct DestructurerArguments<'a> {
 #[allow(unused)]
 impl<'a> DestructurerArguments<'a> {
     pub(crate) fn new(
-        parse_stream: SourceParseStream<'a>,
+        parse_stream: ParseStream<'a, Source>,
         destructurer_name: Ident,
         full_span: Span,
     ) -> Self {
@@ -44,17 +44,17 @@ impl<'a> DestructurerArguments<'a> {
         }
     }
 
-    pub(crate) fn fully_parse_no_error_override<T: ParseFromSource>(&self) -> ParseResult<T> {
+    pub(crate) fn fully_parse_no_error_override<T: Parse<Source>>(&self) -> ParseResult<T> {
         self.parse_stream.parse()
     }
 
     pub(crate) fn fully_parse_as<T: ArgumentsContent>(&self) -> ParseResult<T> {
-        self.fully_parse_or_error(T::parse_from_source, T::error_message())
+        self.fully_parse_or_error(T::parse, T::error_message())
     }
 
     pub(crate) fn fully_parse_or_error<T>(
         &self,
-        parse_function: impl FnOnce(SourceParseStream) -> ParseResult<T>,
+        parse_function: impl FnOnce(ParseStream<Source>) -> ParseResult<T>,
         error_message: impl std::fmt::Display,
     ) -> ParseResult<T> {
         // In future, when the diagnostic API is stable,
@@ -85,8 +85,8 @@ pub(crate) struct Destructurer {
     source_group_span: DelimSpan,
 }
 
-impl ParseFromSource for Destructurer {
-    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
+impl Parse<Source> for Destructurer {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         let (delim_span, content) = input.parse_specific_group(Delimiter::Parenthesis)?;
         content.parse::<Token![!]>()?;
         let destructurer_name = content.parse_any_ident()?;
@@ -116,7 +116,7 @@ impl ParseFromSource for Destructurer {
 impl HandleDestructure for Destructurer {
     fn handle_destructure(
         &self,
-        input: InterpretedParseStream,
+        input: ParseStream<Output>,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         self.instance.handle_destructure(input, interpreter)
@@ -174,7 +174,7 @@ macro_rules! define_destructurers {
         }
 
         impl NamedDestructurer {
-            fn handle_destructure(&self, input: InterpretedParseStream, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+            fn handle_destructure(&self, input: ParseStream<Output>, interpreter: &mut Interpreter) -> ExecutionResult<()> {
                 match self {
                     $(
                         Self::$destructurer(destructurer) => destructurer.handle_destructure(input, interpreter),

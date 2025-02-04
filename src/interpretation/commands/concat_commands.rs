@@ -5,7 +5,7 @@ use crate::internal_prelude::*;
 //========
 
 fn concat_into_string(
-    input: InterpretationStream,
+    input: SourceStream,
     interpreter: &mut Interpreter,
     conversion_fn: impl Fn(&str) -> String,
 ) -> ExecutionResult<Literal> {
@@ -18,7 +18,7 @@ fn concat_into_string(
 }
 
 fn concat_into_ident(
-    input: InterpretationStream,
+    input: SourceStream,
     interpreter: &mut Interpreter,
     conversion_fn: impl Fn(&str) -> String,
 ) -> ExecutionResult<Ident> {
@@ -34,7 +34,7 @@ fn concat_into_ident(
 }
 
 fn concat_into_literal(
-    input: InterpretationStream,
+    input: SourceStream,
     interpreter: &mut Interpreter,
     conversion_fn: impl Fn(&str) -> String,
 ) -> ExecutionResult<Literal> {
@@ -57,7 +57,7 @@ macro_rules! define_literal_concat_command {
     ) => {
         #[derive(Clone)]
         pub(crate) struct $command {
-            arguments: InterpretationStream,
+            arguments: SourceStream,
         }
 
         impl CommandType for $command {
@@ -69,7 +69,7 @@ macro_rules! define_literal_concat_command {
 
             fn parse(arguments: CommandArguments) -> ParseResult<Self> {
                 Ok(Self {
-                    arguments: arguments.parse_all_for_interpretation()?,
+                    arguments: arguments.parse_all_as_source()?,
                 })
             }
 
@@ -89,7 +89,7 @@ macro_rules! define_ident_concat_command {
     ) => {
         #[derive(Clone)]
         pub(crate) struct $command {
-            arguments: InterpretationStream,
+            arguments: SourceStream,
         }
 
         impl CommandType for $command {
@@ -101,7 +101,7 @@ macro_rules! define_ident_concat_command {
 
             fn parse(arguments: CommandArguments) -> ParseResult<Self> {
                 Ok(Self {
-                    arguments: arguments.parse_all_for_interpretation()?,
+                    arguments: arguments.parse_all_as_source()?,
                 })
             }
 

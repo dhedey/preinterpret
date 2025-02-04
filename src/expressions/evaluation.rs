@@ -17,7 +17,7 @@ impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
         mut self,
         root: ExpressionNodeId,
         evaluation_context: &mut K::EvaluationContext,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         let mut next = self.begin_node_evaluation(root, evaluation_context)?;
 
         loop {
@@ -72,7 +72,7 @@ impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
     fn continue_node_evaluation(
         &mut self,
         top_of_stack: EvaluationStackFrame,
-        evaluation_value: EvaluationValue,
+        evaluation_value: ExpressionValue,
     ) -> ExecutionResult<NextAction> {
         Ok(match top_of_stack {
             EvaluationStackFrame::UnaryOperation { operation } => {
@@ -104,7 +104,7 @@ impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
 }
 
 enum NextAction {
-    HandleValue(EvaluationValue),
+    HandleValue(ExpressionValue),
     EnterNode(ExpressionNodeId),
 }
 
@@ -120,17 +120,17 @@ enum EvaluationStackFrame {
 
 enum BinaryPath {
     OnLeftBranch { right: ExpressionNodeId },
-    OnRightBranch { left: EvaluationValue },
+    OnRightBranch { left: ExpressionValue },
 }
 
 pub(crate) struct EvaluationOutput {
-    pub(super) value: EvaluationValue,
+    pub(super) value: ExpressionValue,
     pub(super) fallback_output_span: Span,
 }
 
 impl EvaluationOutput {
     #[allow(unused)]
-    pub(super) fn into_value(self) -> EvaluationValue {
+    pub(super) fn into_value(self) -> ExpressionValue {
         self.value
     }
 

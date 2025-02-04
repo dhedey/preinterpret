@@ -1,7 +1,7 @@
 use crate::internal_prelude::*;
 
 #[derive(Clone)]
-pub(crate) struct InterpretedStream {
+pub(crate) struct OutputStream {
     /// Currently, even ~inside~ macro executions, round-tripping [`Delimiter::None`] groups to a TokenStream
     /// breaks in rust-analyzer. This causes various spurious errors in the IDE.
     /// See: https://github.com/rust-lang/rust-analyzer/issues/18211#issuecomment-2604547032
@@ -10,7 +10,7 @@ pub(crate) struct InterpretedStream {
     /// This ensures any non-delimited groups are not round-tripped to a TokenStream.
     ///
     /// In future, we may wish to internally use some kind of `TokenBuffer` type, which I've started on below.
-    segments: Vec<InterpretedSegment>,
+    segments: Vec<OutputSegment>,
     token_length: usize,
 }
 
@@ -18,25 +18,25 @@ pub(crate) struct InterpretedStream {
 // This was primarily implemented to avoid this issue: https://github.com/rust-lang/rust-analyzer/issues/18211#issuecomment-2604547032
 // But it doesn't actually help because the `syn::parse` mechanism only operates on a TokenStream,
 // so we have to convert back into a TokenStream.
-enum InterpretedSegment {
+enum OutputSegment {
     TokenVec(Vec<TokenTree>), // Cheaper than a TokenStream (probably)
-    InterpretedGroup(Delimiter, Span, InterpretedStream),
+    OutputGroup(Delimiter, Span, OutputStream),
 }
 
-pub(crate) enum InterpretedTokenTree {
+pub(crate) enum OutputTokenTree {
     TokenTree(TokenTree),
-    InterpretedGroup(Delimiter, Span, InterpretedStream),
+    OutputGroup(Delimiter, Span, OutputStream),
 }
 
-impl From<InterpretedTokenTree> for InterpretedStream {
-    fn from(value: InterpretedTokenTree) -> Self {
+impl From<OutputTokenTree> for OutputStream {
+    fn from(value: OutputTokenTree) -> Self {
         let mut new = Self::new();
         new.push_interpreted_item(value);
         new
     }
 }
 
-impl InterpretedStream {
+impl OutputStream {
     pub(crate) fn new() -> Self {
         Self {
             segments: vec![],
@@ -76,24 +76,21 @@ impl InterpretedStream {
 
     pub(crate) fn push_new_group(
         &mut self,
-        inner_tokens: InterpretedStream,
+        inner_tokens: OutputStream,
         delimiter: Delimiter,
         span: Span,
     ) {
-        self.segments.push(InterpretedSegment::InterpretedGroup(
-            delimiter,
-            span,
-            inner_tokens,
-        ));
+        self.segments
+            .push(OutputSegment::OutputGroup(delimiter, span, inner_tokens));
         self.token_length += 1;
     }
 
-    pub(crate) fn push_interpreted_item(&mut self, segment_item: InterpretedTokenTree) {
+    pub(crate) fn push_interpreted_item(&mut self, segment_item: OutputTokenTree) {
         match segment_item {
-            InterpretedTokenTree::TokenTree(token_tree) => {
+            OutputTokenTree::TokenTree(token_tree) => {
                 self.push_raw_token_tree(token_tree);
             }
-            InterpretedTokenTree::InterpretedGroup(delimiter, span, inner_tokens) => {
+            OutputTokenTree::OutputGroup(delimiter, span, inner_tokens) => {
                 self.push_new_group(inner_tokens, delimiter, span);
             }
         }
@@ -104,12 +101,12 @@ impl InterpretedStream {
     }
 
     pub(crate) fn extend_raw_tokens(&mut self, tokens: impl IntoIterator<Item = TokenTree>) {
-        if !matches!(self.segments.last(), Some(InterpretedSegment::TokenVec(_))) {
-            self.segments.push(InterpretedSegment::TokenVec(vec![]));
+        if !matches!(self.segments.last(), Some(OutputSegment::TokenVec(_))) {
+            self.segments.push(OutputSegment::TokenVec(vec![]));
         }
 
         match self.segments.last_mut() {
-            Some(InterpretedSegment::TokenVec(token_vec)) => {
+            Some(OutputSegment::TokenVec(token_vec)) => {
                 let before_length = token_vec.len();
                 token_vec.extend(tokens);
                 self.token_length += token_vec.len() - before_length;
@@ -132,25 +129,25 @@ impl InterpretedStream {
     /// Annotate usages with // RUST-ANALYZER SAFETY: ... to explain why the use of this function is OK.
     pub(crate) unsafe fn parse_with<T, E: From<syn::Error>>(
         self,
-        parser: impl FnOnce(InterpretedParseStream) -> Result<T, E>,
+        parser: impl FnOnce(ParseStream<Output>) -> Result<T, E>,
     ) -> Result<T, E> {
-        self.into_token_stream().parse_with(parser)
+        self.into_token_stream().interpreted_parse_with(parser)
     }
 
     /// WARNING: With rust-analyzer, this loses transparent groups which have been inserted.
     /// Use only where that doesn't matter: https://github.com/rust-lang/rust-analyzer/issues/18211#issuecomment-2604547032
     ///
     /// Annotate usages with // RUST-ANALYZER SAFETY: ... to explain why the use of this function is OK.
-    pub(crate) unsafe fn parse_as<T: ParseFromInterpreted>(self) -> ParseResult<T> {
-        self.into_token_stream().parse_with(T::parse)
+    pub(crate) unsafe fn parse_as<T: Parse<Output>>(self) -> ParseResult<T> {
+        self.into_token_stream().interpreted_parse_with(T::parse)
     }
 
-    pub(crate) fn append_into(self, output: &mut InterpretedStream) {
+    pub(crate) fn append_into(self, output: &mut OutputStream) {
         output.segments.extend(self.segments);
         output.token_length += self.token_length;
     }
 
-    pub(crate) fn append_cloned_into(&self, output: &mut InterpretedStream) {
+    pub(crate) fn append_cloned_into(&self, output: &mut OutputStream) {
         self.clone().append_into(output);
     }
 
@@ -167,10 +164,10 @@ impl InterpretedStream {
     unsafe fn append_to_token_stream(self, output: &mut TokenStream) {
         for segment in self.segments {
             match segment {
-                InterpretedSegment::TokenVec(vec) => {
+                OutputSegment::TokenVec(vec) => {
                     output.extend(vec);
                 }
-                InterpretedSegment::InterpretedGroup(delimiter, span, inner) => {
+                OutputSegment::OutputGroup(delimiter, span, inner) => {
                     output.extend(iter::once(TokenTree::Group(
                         Group::new(delimiter, inner.into_token_stream()).with_span(span),
                     )))
@@ -188,7 +185,7 @@ impl InterpretedStream {
     fn append_to_token_stream_without_transparent_groups(self, output: &mut TokenStream) {
         for segment in self.segments {
             match segment {
-                InterpretedSegment::TokenVec(vec) => {
+                OutputSegment::TokenVec(vec) => {
                     for token in vec {
                         match token {
                             TokenTree::Group(group) if group.delimiter() == Delimiter::None => {
@@ -198,7 +195,7 @@ impl InterpretedStream {
                         }
                     }
                 }
-                InterpretedSegment::InterpretedGroup(delimiter, span, interpreted_stream) => {
+                OutputSegment::OutputGroup(delimiter, span, interpreted_stream) => {
                     if delimiter == Delimiter::None {
                         interpreted_stream
                             .append_to_token_stream_without_transparent_groups(output);
@@ -219,16 +216,16 @@ impl InterpretedStream {
         self,
         check_group: impl FnOnce(Delimiter) -> bool,
         create_error: impl FnOnce() -> SynError,
-    ) -> ParseResult<InterpretedStream> {
+    ) -> ParseResult<OutputStream> {
         let mut item_vec = self.into_item_vec();
         if item_vec.len() == 1 {
             match item_vec.pop().unwrap() {
-                InterpretedTokenTree::InterpretedGroup(delimiter, _, inner) => {
+                OutputTokenTree::OutputGroup(delimiter, _, inner) => {
                     if check_group(delimiter) {
                         return Ok(inner);
                     }
                 }
-                InterpretedTokenTree::TokenTree(TokenTree::Group(group)) => {
+                OutputTokenTree::TokenTree(TokenTree::Group(group)) => {
                     if check_group(group.delimiter()) {
                         return Ok(Self::raw(group.stream()));
                     }
@@ -239,15 +236,15 @@ impl InterpretedStream {
         Err(create_error().into())
     }
 
-    pub(crate) fn into_item_vec(self) -> Vec<InterpretedTokenTree> {
+    pub(crate) fn into_item_vec(self) -> Vec<OutputTokenTree> {
         let mut output = Vec::with_capacity(self.token_length);
         for segment in self.segments {
             match segment {
-                InterpretedSegment::TokenVec(vec) => {
-                    output.extend(vec.into_iter().map(InterpretedTokenTree::TokenTree));
+                OutputSegment::TokenVec(vec) => {
+                    output.extend(vec.into_iter().map(OutputTokenTree::TokenTree));
                 }
-                InterpretedSegment::InterpretedGroup(delimiter, span, interpreted_stream) => {
-                    output.push(InterpretedTokenTree::InterpretedGroup(
+                OutputSegment::OutputGroup(delimiter, span, interpreted_stream) => {
+                    output.push(OutputTokenTree::OutputGroup(
                         delimiter,
                         span,
                         interpreted_stream,
@@ -262,10 +259,10 @@ impl InterpretedStream {
         let mut output = RawDestructureStream::empty();
         for segment in self.segments {
             match segment {
-                InterpretedSegment::TokenVec(vec) => {
+                OutputSegment::TokenVec(vec) => {
                     output.append_from_token_stream(vec);
                 }
-                InterpretedSegment::InterpretedGroup(delimiter, _, inner) => {
+                OutputSegment::OutputGroup(delimiter, _, inner) => {
                     output.push_item(RawDestructureItem::Group(RawDestructureGroup::new(
                         delimiter,
                         inner.into_raw_destructure_stream(),
@@ -281,15 +278,15 @@ impl InterpretedStream {
             behaviour: &ConcatBehaviour,
             output: &mut String,
             prefix_spacing: Spacing,
-            stream: InterpretedStream,
+            stream: OutputStream,
         ) {
             let mut spacing = prefix_spacing;
             for segment in stream.segments {
                 spacing = match segment {
-                    InterpretedSegment::TokenVec(vec) => {
+                    OutputSegment::TokenVec(vec) => {
                         concat_recursive_token_stream(behaviour, output, spacing, vec)
                     }
-                    InterpretedSegment::InterpretedGroup(delimiter, _, interpreted_stream) => {
+                    OutputSegment::OutputGroup(delimiter, _, interpreted_stream) => {
                         behaviour.before_token_tree(output, spacing);
                         behaviour.wrap_delimiters(
                             output,
@@ -360,9 +357,9 @@ impl InterpretedStream {
     }
 }
 
-impl IntoIterator for InterpretedStream {
-    type IntoIter = std::vec::IntoIter<InterpretedTokenTree>;
-    type Item = InterpretedTokenTree;
+impl IntoIterator for OutputStream {
+    type IntoIter = std::vec::IntoIter<OutputTokenTree>;
+    type Item = OutputTokenTree;
 
     fn into_iter(self) -> Self::IntoIter {
         self.into_item_vec().into_iter()
@@ -453,9 +450,9 @@ impl ConcatBehaviour {
     }
 }
 
-impl From<TokenTree> for InterpretedStream {
+impl From<TokenTree> for OutputStream {
     fn from(value: TokenTree) -> Self {
-        InterpretedStream::raw(value.into())
+        OutputStream::raw(value.into())
     }
 }
 
@@ -470,7 +467,7 @@ impl From<TokenTree> for InterpretedStream {
 // There are a few places where we support (or might wish to support) parsing
 // as part of interpretation:
 // * e.g. of a token stream in `CommandValueInput`
-// * e.g. as part of a PARSER, from an InterpretedStream
+// * e.g. as part of a PARSER, from an OutputStream
 // * e.g. of a variable, as part of incremental parsing (while_parse style loops)
 //
 // I spent quite a while considering whether this could be wrapping a
@@ -500,7 +497,7 @@ impl From<TokenTree> for InterpretedStream {
 // converting a Cursor into an indexed based cursor, which can safely be stored separately
 // from the TokenBuffer.
 //
-// We could use this abstraction for InterpretedStream; and our variables could store a
+// We could use this abstraction for OutputStream; and our variables could store a
 // tuple of (IndexCursor, PreinterpretTokenBuffer)
 
 /// Inspired/ forked from [`syn::buffer::TokenBuffer`], in order to support appending tokens,

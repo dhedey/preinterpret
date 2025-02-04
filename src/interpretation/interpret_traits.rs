@@ -4,35 +4,35 @@ pub(crate) trait Interpret: Sized {
     fn interpret_into(
         self,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()>;
 
     fn interpret_to_new_stream(
         self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<InterpretedStream> {
-        let mut output = InterpretedStream::new();
+    ) -> ExecutionResult<OutputStream> {
+        let mut output = OutputStream::new();
         self.interpret_into(interpreter, &mut output)?;
         Ok(output)
     }
 }
 
 pub(crate) trait InterpretValue: Sized {
-    type InterpretedValue;
+    type OutputValue;
 
     fn interpret_to_value(
         self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Self::InterpretedValue>;
+    ) -> ExecutionResult<Self::OutputValue>;
 }
 
 impl<T: ToTokens> InterpretValue for T {
-    type InterpretedValue = Self;
+    type OutputValue = Self;
 
     fn interpret_to_value(
         self,
         _interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Self::InterpretedValue> {
+    ) -> ExecutionResult<Self::OutputValue> {
         Ok(self)
     }
 }

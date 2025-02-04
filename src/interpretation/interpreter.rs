@@ -12,11 +12,11 @@ pub(crate) struct Interpreter {
 
 #[derive(Clone)]
 pub(crate) struct VariableData {
-    value: Rc<RefCell<InterpretedStream>>,
+    value: Rc<RefCell<OutputStream>>,
 }
 
 impl VariableData {
-    fn new(tokens: InterpretedStream) -> Self {
+    fn new(tokens: OutputStream) -> Self {
         Self {
             value: Rc::new(RefCell::new(tokens)),
         }
@@ -25,7 +25,7 @@ impl VariableData {
     pub(crate) fn get<'d>(
         &'d self,
         variable: &impl IsVariable,
-    ) -> ExecutionResult<Ref<'d, InterpretedStream>> {
+    ) -> ExecutionResult<Ref<'d, OutputStream>> {
         self.value.try_borrow().map_err(|_| {
             variable
                 .error("The variable cannot be read if it is currently being modified")
@@ -36,7 +36,7 @@ impl VariableData {
     pub(crate) fn get_mut<'d>(
         &'d self,
         variable: &impl IsVariable,
-    ) -> ExecutionResult<RefMut<'d, InterpretedStream>> {
+    ) -> ExecutionResult<RefMut<'d, OutputStream>> {
         self.value.try_borrow_mut().map_err(|_| {
             variable.execution_error(
                 "The variable cannot be modified if it is already currently being modified",
@@ -47,7 +47,7 @@ impl VariableData {
     pub(crate) fn set(
         &self,
         variable: &impl IsVariable,
-        content: InterpretedStream,
+        content: OutputStream,
     ) -> ExecutionResult<()> {
         *self.get_mut(variable)? = content;
         Ok(())
@@ -71,7 +71,7 @@ impl Interpreter {
     pub(crate) fn set_variable(
         &mut self,
         variable: &impl IsVariable,
-        tokens: InterpretedStream,
+        tokens: OutputStream,
     ) -> ExecutionResult<()> {
         match self.variable_data.entry(variable.get_name()) {
             Entry::Occupied(mut entry) => {

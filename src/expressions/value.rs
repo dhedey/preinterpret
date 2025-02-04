@@ -1,7 +1,7 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) enum EvaluationValue {
+pub(crate) enum ExpressionValue {
     Integer(EvaluationInteger),
     Float(EvaluationFloat),
     Boolean(EvaluationBoolean),
@@ -9,11 +9,11 @@ pub(crate) enum EvaluationValue {
     Char(EvaluationChar),
 }
 
-pub(super) trait ToEvaluationValue: Sized {
-    fn to_value(self, source_span: Option<Span>) -> EvaluationValue;
+pub(super) trait ToExpressionValue: Sized {
+    fn to_value(self, source_span: Option<Span>) -> ExpressionValue;
 }
 
-impl EvaluationValue {
+impl ExpressionValue {
     pub(super) fn for_literal(lit: syn::Lit) -> ParseResult<Self> {
         // https://docs.rs/syn/latest/syn/enum.Lit.html
         Ok(match lit {
@@ -36,7 +36,7 @@ impl EvaluationValue {
         right: Self,
     ) -> ExecutionResult<EvaluationLiteralPair> {
         Ok(match (self, right) {
-            (EvaluationValue::Integer(left), EvaluationValue::Integer(right)) => {
+            (ExpressionValue::Integer(left), ExpressionValue::Integer(right)) => {
                 let integer_pair = match (left.value, right.value) {
                     (EvaluationIntegerValue::Untyped(untyped_lhs), rhs) => match rhs {
                         EvaluationIntegerValue::Untyped(untyped_rhs) => {
@@ -162,10 +162,10 @@ impl EvaluationValue {
                 };
                 EvaluationLiteralPair::Integer(integer_pair)
             }
-            (EvaluationValue::Boolean(left), EvaluationValue::Boolean(right)) => {
+            (ExpressionValue::Boolean(left), ExpressionValue::Boolean(right)) => {
                 EvaluationLiteralPair::BooleanPair(left, right)
             }
-            (EvaluationValue::Float(left), EvaluationValue::Float(right)) => {
+            (ExpressionValue::Float(left), ExpressionValue::Float(right)) => {
                 let float_pair = match (left.value, right.value) {
                     (EvaluationFloatValue::Untyped(untyped_lhs), rhs) => match rhs {
                         EvaluationFloatValue::Untyped(untyped_rhs) => {
@@ -201,10 +201,10 @@ impl EvaluationValue {
                 };
                 EvaluationLiteralPair::Float(float_pair)
             }
-            (EvaluationValue::String(left), EvaluationValue::String(right)) => {
+            (ExpressionValue::String(left), ExpressionValue::String(right)) => {
                 EvaluationLiteralPair::StringPair(left, right)
             }
-            (EvaluationValue::Char(left), EvaluationValue::Char(right)) => {
+            (ExpressionValue::Char(left), ExpressionValue::Char(right)) => {
                 EvaluationLiteralPair::CharPair(left, right)
             }
             (left, right) => {
@@ -215,14 +215,14 @@ impl EvaluationValue {
 
     pub(crate) fn into_integer(self) -> Option<EvaluationInteger> {
         match self {
-            EvaluationValue::Integer(value) => Some(value),
+            ExpressionValue::Integer(value) => Some(value),
             _ => None,
         }
     }
 
     pub(crate) fn into_bool(self) -> Option<EvaluationBoolean> {
         match self {
-            EvaluationValue::Boolean(value) => Some(value),
+            ExpressionValue::Boolean(value) => Some(value),
             _ => None,
         }
     }
@@ -261,13 +261,13 @@ impl EvaluationValue {
     pub(super) fn handle_unary_operation(
         self,
         operation: UnaryOperation,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         match self {
-            EvaluationValue::Integer(value) => value.handle_unary_operation(operation),
-            EvaluationValue::Float(value) => value.handle_unary_operation(operation),
-            EvaluationValue::Boolean(value) => value.handle_unary_operation(operation),
-            EvaluationValue::String(value) => value.handle_unary_operation(operation),
-            EvaluationValue::Char(value) => value.handle_unary_operation(operation),
+            ExpressionValue::Integer(value) => value.handle_unary_operation(operation),
+            ExpressionValue::Float(value) => value.handle_unary_operation(operation),
+            ExpressionValue::Boolean(value) => value.handle_unary_operation(operation),
+            ExpressionValue::String(value) => value.handle_unary_operation(operation),
+            ExpressionValue::Char(value) => value.handle_unary_operation(operation),
         }
     }
 
@@ -275,21 +275,21 @@ impl EvaluationValue {
         self,
         right: EvaluationInteger,
         operation: &IntegerBinaryOperation,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         match self {
-            EvaluationValue::Integer(value) => {
+            ExpressionValue::Integer(value) => {
                 value.handle_integer_binary_operation(right, operation)
             }
-            EvaluationValue::Float(value) => {
+            ExpressionValue::Float(value) => {
                 value.handle_integer_binary_operation(right, operation)
             }
-            EvaluationValue::Boolean(value) => {
+            ExpressionValue::Boolean(value) => {
                 value.handle_integer_binary_operation(right, operation)
             }
-            EvaluationValue::String(value) => {
+            ExpressionValue::String(value) => {
                 value.handle_integer_binary_operation(right, operation)
             }
-            EvaluationValue::Char(value) => value.handle_integer_binary_operation(right, operation),
+            ExpressionValue::Char(value) => value.handle_integer_binary_operation(right, operation),
         }
     }
 }
@@ -314,7 +314,7 @@ impl EvaluationLiteralPair {
     pub(super) fn handle_paired_binary_operation(
         self,
         operation: &PairedBinaryOperation,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         match self {
             Self::Integer(pair) => pair.handle_paired_binary_operation(operation),
             Self::Float(pair) => pair.handle_paired_binary_operation(operation),

@@ -38,7 +38,7 @@ impl EvaluationInteger {
     pub(super) fn handle_unary_operation(
         self,
         operation: UnaryOperation,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         match self.value {
             EvaluationIntegerValue::Untyped(input) => input.handle_unary_operation(&operation),
             EvaluationIntegerValue::U8(input) => input.handle_unary_operation(&operation),
@@ -60,7 +60,7 @@ impl EvaluationInteger {
         self,
         right: EvaluationInteger,
         operation: &IntegerBinaryOperation,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         match self.value {
             EvaluationIntegerValue::Untyped(input) => {
                 input.handle_integer_binary_operation(right, operation)
@@ -131,7 +131,7 @@ impl EvaluationIntegerValuePair {
     pub(super) fn handle_paired_binary_operation(
         self,
         operation: &PairedBinaryOperation,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         match self {
             Self::Untyped(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
             Self::U8(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
@@ -264,7 +264,7 @@ impl UntypedInteger {
     pub(super) fn handle_unary_operation(
         self,
         operation: &UnaryOperation,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         let input = self.parse_fallback()?;
         match operation {
             UnaryOperation::Neg { .. } => operation.output(Self::from_fallback(-input)),
@@ -304,7 +304,7 @@ impl UntypedInteger {
         self,
         rhs: EvaluationInteger,
         operation: &IntegerBinaryOperation,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.parse_fallback()?;
         match operation {
             IntegerBinaryOperation::ShiftLeft { .. } => match rhs.value {
@@ -348,7 +348,7 @@ impl UntypedInteger {
         self,
         rhs: Self,
         operation: &PairedBinaryOperation,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.parse_fallback()?;
         let rhs = rhs.parse_fallback()?;
         let overflow_error = || {
@@ -432,9 +432,9 @@ impl UntypedInteger {
     }
 }
 
-impl ToEvaluationValue for UntypedInteger {
-    fn to_value(self, source_span: Option<Span>) -> EvaluationValue {
-        EvaluationValue::Integer(EvaluationInteger {
+impl ToExpressionValue for UntypedInteger {
+    fn to_value(self, source_span: Option<Span>) -> ExpressionValue {
+        ExpressionValue::Integer(EvaluationInteger {
             value: EvaluationIntegerValue::Untyped(self),
             source_span,
         })
@@ -446,9 +446,9 @@ macro_rules! impl_int_operations_except_unary {
     (
         $($integer_enum_variant:ident($integer_type:ident)),* $(,)?
     ) => {$(
-        impl ToEvaluationValue for $integer_type {
-            fn to_value(self, source_span: Option<Span>) -> EvaluationValue {
-                EvaluationValue::Integer(EvaluationInteger {
+        impl ToExpressionValue for $integer_type {
+            fn to_value(self, source_span: Option<Span>) -> ExpressionValue {
+                ExpressionValue::Integer(EvaluationInteger {
                     value: EvaluationIntegerValue::$integer_enum_variant(self),
                     source_span,
                 })
@@ -456,7 +456,7 @@ macro_rules! impl_int_operations_except_unary {
         }
 
         impl HandleBinaryOperation for $integer_type {
-            fn handle_paired_binary_operation(self, rhs: Self, operation: &PairedBinaryOperation) -> ExecutionResult<EvaluationValue> {
+            fn handle_paired_binary_operation(self, rhs: Self, operation: &PairedBinaryOperation) -> ExecutionResult<ExpressionValue> {
                 let lhs = self;
                 let overflow_error = || format!("The {} operation {:?} {} {:?} overflowed", stringify!($integer_type), lhs, operation.symbol(), rhs);
                 match operation {
@@ -483,7 +483,7 @@ macro_rules! impl_int_operations_except_unary {
                 self,
                 rhs: EvaluationInteger,
                 operation: &IntegerBinaryOperation,
-            ) -> ExecutionResult<EvaluationValue> {
+            ) -> ExecutionResult<ExpressionValue> {
                 let lhs = self;
                 match operation {
                     IntegerBinaryOperation::ShiftLeft { .. } => {
@@ -529,7 +529,7 @@ macro_rules! impl_int_operations_except_unary {
 macro_rules! impl_unsigned_unary_operations {
     ($($integer_type:ident),* $(,)?) => {$(
         impl HandleUnaryOperation for $integer_type {
-            fn handle_unary_operation(self, operation: &UnaryOperation) -> ExecutionResult<EvaluationValue> {
+            fn handle_unary_operation(self, operation: &UnaryOperation) -> ExecutionResult<ExpressionValue> {
                 match operation {
                     UnaryOperation::GroupedNoOp { .. } => operation.output(self),
                     UnaryOperation::Neg { .. }
@@ -564,7 +564,7 @@ macro_rules! impl_unsigned_unary_operations {
 macro_rules! impl_signed_unary_operations {
     ($($integer_type:ident),* $(,)?) => {$(
         impl HandleUnaryOperation for $integer_type {
-            fn handle_unary_operation(self, operation: &UnaryOperation) -> ExecutionResult<EvaluationValue> {
+            fn handle_unary_operation(self, operation: &UnaryOperation) -> ExecutionResult<ExpressionValue> {
                 match operation {
                     UnaryOperation::GroupedNoOp { .. } => operation.output(self),
                     UnaryOperation::Neg { .. } => operation.output(-self),
@@ -600,7 +600,7 @@ impl HandleUnaryOperation for u8 {
     fn handle_unary_operation(
         self,
         operation: &UnaryOperation,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         match operation {
             UnaryOperation::GroupedNoOp { .. } => operation.output(self),
             UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => {

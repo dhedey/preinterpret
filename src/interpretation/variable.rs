@@ -10,9 +10,9 @@ pub(crate) struct GroupedVariable {
     variable_name: Ident,
 }
 
-impl ParseFromSource for GroupedVariable {
-    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
-        input.try_parse_or_message(
+impl Parse<Source> for GroupedVariable {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+        input.try_parse_or_error(
             |input| {
                 Ok(Self {
                     marker: input.parse()?,
@@ -28,7 +28,7 @@ impl GroupedVariable {
     pub(crate) fn set(
         &self,
         interpreter: &mut Interpreter,
-        value: InterpretedStream,
+        value: OutputStream,
     ) -> ExecutionResult<()> {
         interpreter.set_variable(self, value)
     }
@@ -47,7 +47,7 @@ impl GroupedVariable {
     pub(crate) fn substitute_ungrouped_contents_into(
         &self,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         self.read_existing(interpreter)?
             .get(self)?
@@ -58,7 +58,7 @@ impl GroupedVariable {
     pub(crate) fn substitute_grouped_into(
         &self,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         output.push_new_group(
             self.read_existing(interpreter)?.get(self)?.clone(),
@@ -90,7 +90,7 @@ impl Interpret for &GroupedVariable {
     fn interpret_into(
         self,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         self.substitute_grouped_into(interpreter, output)
     }
@@ -122,9 +122,9 @@ pub(crate) struct FlattenedVariable {
     variable_name: Ident,
 }
 
-impl ParseFromSource for FlattenedVariable {
-    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
-        input.try_parse_or_message(
+impl Parse<Source> for FlattenedVariable {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+        input.try_parse_or_error(
             |input| {
                 Ok(Self {
                     marker: input.parse()?,
@@ -141,7 +141,7 @@ impl FlattenedVariable {
     pub(crate) fn substitute_into(
         &self,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         self.read_existing(interpreter)?
             .get(self)?
@@ -175,7 +175,7 @@ impl Interpret for &FlattenedVariable {
     fn interpret_into(
         self,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         self.substitute_into(interpreter, output)
     }

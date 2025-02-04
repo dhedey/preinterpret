@@ -9,7 +9,7 @@ pub(super) struct ExpressionParser<'a, K: Expressionable> {
 }
 
 impl<'a, K: Expressionable> ExpressionParser<'a, K> {
-    pub(super) fn parse(input: KindedParseStream<'a, K>) -> ParseResult<Expression<K>> {
+    pub(super) fn parse(input: ParseStream<'a, K>) -> ParseResult<Expression<K>> {
         Self {
             streams: ParseStreamStack::new(input),
             nodes: ExpressionNodes::new(),

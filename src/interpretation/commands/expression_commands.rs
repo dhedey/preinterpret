@@ -2,7 +2,7 @@ use crate::internal_prelude::*;
 
 #[derive(Clone)]
 pub(crate) struct EvaluateCommand {
-    expression: InterpretationExpression,
+    expression: SourceExpression,
     command_span: Span,
 }
 
@@ -39,7 +39,7 @@ pub(crate) struct AssignCommand {
     operator: Option<Punct>,
     #[allow(unused)]
     equals: Token![=],
-    expression: InterpretationExpression,
+    expression: SourceExpression,
     command_span: Span,
 }
 
@@ -91,7 +91,7 @@ impl NoOutputCommandDefinition for AssignCommand {
                 // RUST-ANALYZER SAFETY: Hopefully it won't contain a none-delimited group
                 variable
                     .interpret_to_new_stream(interpreter)?
-                    .parse_as::<InterpretedExpression>()?
+                    .parse_as::<OutputExpression>()?
                     .evaluate()?
                     .to_tokens(&mut calculation);
             };
@@ -99,7 +99,7 @@ impl NoOutputCommandDefinition for AssignCommand {
             expression
                 .evaluate(interpreter)?
                 .to_tokens(&mut calculation);
-            calculation.parse_as()?
+            calculation.source_parse_as()?
         } else {
             expression
         };
@@ -115,9 +115,9 @@ impl NoOutputCommandDefinition for AssignCommand {
 
 #[derive(Clone)]
 pub(crate) struct RangeCommand {
-    left: InterpretationExpression,
+    left: SourceExpression,
     range_limits: RangeLimits,
-    right: InterpretationExpression,
+    right: SourceExpression,
 }
 
 impl CommandType for RangeCommand {
@@ -143,7 +143,7 @@ impl StreamCommandDefinition for RangeCommand {
     fn execute(
         self: Box<Self>,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         let range_span_range = self.range_limits.span_range();
         let range_span = range_span_range.join_into_span_else_start();
@@ -185,7 +185,7 @@ impl StreamCommandDefinition for RangeCommand {
     }
 }
 
-fn output_range(iter: impl Iterator<Item = i128>, span: Span, output: &mut InterpretedStream) {
+fn output_range(iter: impl Iterator<Item = i128>, span: Span, output: &mut OutputStream) {
     output.extend_raw_tokens(iter.map(|value| {
         let literal = Literal::i128_unsuffixed(value).with_span(span);
         TokenTree::Literal(literal)
@@ -202,8 +202,8 @@ enum RangeLimits {
     Closed(Token![..=]),
 }
 
-impl ParseFromSource for RangeLimits {
-    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
+impl Parse<Source> for RangeLimits {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         if input.peek(Token![..=]) {
             Ok(RangeLimits::Closed(input.parse()?))
         } else {

@@ -54,7 +54,7 @@ pub(crate) enum DestructureVariable {
 }
 
 impl DestructureVariable {
-    pub(crate) fn parse_only_unflattened_input(input: SourceParseStream) -> ParseResult<Self> {
+    pub(crate) fn parse_only_unflattened_input(input: ParseStream<Source>) -> ParseResult<Self> {
         let variable: DestructureVariable = Self::parse_until::<UntilEnd>(input)?;
         if variable.is_flattened_input() {
             return variable
@@ -64,7 +64,7 @@ impl DestructureVariable {
         Ok(variable)
     }
 
-    pub(crate) fn parse_until<C: StopCondition>(input: SourceParseStream) -> ParseResult<Self> {
+    pub(crate) fn parse_until<C: StopCondition>(input: ParseStream<Source>) -> ParseResult<Self> {
         let marker = input.parse()?;
         if input.peek(Token![..]) {
             let flatten = input.parse()?;
@@ -180,7 +180,7 @@ impl DestructureVariable {
 impl HandleDestructure for DestructureVariable {
     fn handle_destructure(
         &self,
-        input: InterpretedParseStream,
+        input: ParseStream<Output>,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         match self {
@@ -189,7 +189,7 @@ impl HandleDestructure for DestructureVariable {
                 interpreter.set_variable(self, content)?;
             }
             DestructureVariable::Flattened { until, .. } => {
-                let mut content = InterpretedStream::new();
+                let mut content = OutputStream::new();
                 until.handle_parse_into(input, &mut content)?;
                 interpreter.set_variable(self, content)?;
             }
@@ -230,16 +230,16 @@ enum ParsedTokenTree {
 }
 
 impl ParsedTokenTree {
-    fn into_interpreted(self) -> InterpretedStream {
+    fn into_interpreted(self) -> OutputStream {
         match self {
-            ParsedTokenTree::NoneGroup(group) => InterpretedStream::raw(group.stream()),
-            ParsedTokenTree::Ident(ident) => InterpretedStream::raw(ident.to_token_stream()),
-            ParsedTokenTree::Punct(punct) => InterpretedStream::raw(punct.to_token_stream()),
-            ParsedTokenTree::Literal(literal) => InterpretedStream::raw(literal.to_token_stream()),
+            ParsedTokenTree::NoneGroup(group) => OutputStream::raw(group.stream()),
+            ParsedTokenTree::Ident(ident) => OutputStream::raw(ident.to_token_stream()),
+            ParsedTokenTree::Punct(punct) => OutputStream::raw(punct.to_token_stream()),
+            ParsedTokenTree::Literal(literal) => OutputStream::raw(literal.to_token_stream()),
         }
     }
 
-    fn push_as_token_tree(self, output: &mut InterpretedStream) {
+    fn push_as_token_tree(self, output: &mut OutputStream) {
         match self {
             ParsedTokenTree::NoneGroup(group) => {
                 output.push_raw_token_tree(TokenTree::Group(group))
@@ -250,7 +250,7 @@ impl ParsedTokenTree {
         }
     }
 
-    fn flatten_into(self, output: &mut InterpretedStream) {
+    fn flatten_into(self, output: &mut OutputStream) {
         match self {
             ParsedTokenTree::NoneGroup(group) => output.extend_raw_tokens(group.stream()),
             ParsedTokenTree::Ident(ident) => output.push_ident(ident),
@@ -260,8 +260,8 @@ impl ParsedTokenTree {
     }
 }
 
-impl ParseFromInterpreted for ParsedTokenTree {
-    fn parse_from_interpreted(input: InterpretedParseStream) -> ParseResult<Self> {
+impl Parse<Output> for ParsedTokenTree {
+    fn parse(input: ParseStream<Output>) -> ParseResult<Self> {
         Ok(match input.parse::<TokenTree>()? {
             TokenTree::Group(group) if group.delimiter() == Delimiter::None => {
                 ParsedTokenTree::NoneGroup(group)
@@ -290,7 +290,7 @@ pub(crate) enum ParseUntil {
 
 impl ParseUntil {
     /// Peeks the next token, to discover what we should parse next
-    fn peek_flatten_limit<C: StopCondition>(input: SourceParseStream) -> ParseResult<ParseUntil> {
+    fn peek_flatten_limit<C: StopCondition>(input: ParseStream<Source>) -> ParseResult<ParseUntil> {
         if C::should_stop(input) {
             return Ok(ParseUntil::End);
         }
@@ -314,8 +314,8 @@ impl ParseUntil {
 
     fn handle_parse_into(
         &self,
-        input: InterpretedParseStream,
-        output: &mut InterpretedStream,
+        input: ParseStream<Output>,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         match self {
             ParseUntil::End => output.extend_raw_tokens(input.parse::<TokenStream>()?),

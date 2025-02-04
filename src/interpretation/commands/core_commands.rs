@@ -5,7 +5,7 @@ pub(crate) struct SetCommand {
     variable: GroupedVariable,
     #[allow(unused)]
     equals: Token![=],
-    arguments: InterpretationStream,
+    arguments: SourceStream,
 }
 
 impl CommandType for SetCommand {
@@ -40,7 +40,7 @@ pub(crate) struct ExtendCommand {
     variable: GroupedVariable,
     #[allow(unused)]
     plus_equals: Token![+=],
-    arguments: InterpretationStream,
+    arguments: SourceStream,
 }
 
 impl CommandType for ExtendCommand {
@@ -56,7 +56,7 @@ impl NoOutputCommandDefinition for ExtendCommand {
                 Ok(Self {
                     variable: input.parse()?,
                     plus_equals: input.parse()?,
-                    arguments: input.parse_all_for_interpretation(arguments.command_span())?,
+                    arguments: input.parse_with_context(arguments.command_span())?,
                 })
             },
             "Expected [!extend! #variable += ..]",
@@ -94,7 +94,7 @@ impl StreamCommandDefinition for RawCommand {
     fn execute(
         self: Box<Self>,
         _interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         output.extend_raw_tokens(self.token_stream);
         Ok(())
@@ -124,7 +124,7 @@ impl NoOutputCommandDefinition for IgnoreCommand {
 
 #[derive(Clone)]
 pub(crate) struct VoidCommand {
-    inner: InterpretationStream,
+    inner: SourceStream,
 }
 
 impl CommandType for VoidCommand {
@@ -136,7 +136,7 @@ impl NoOutputCommandDefinition for VoidCommand {
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         Ok(Self {
-            inner: arguments.parse_all_for_interpretation()?,
+            inner: arguments.parse_all_as_source()?,
         })
     }
 
@@ -194,7 +194,7 @@ impl CommandType for ErrorCommand {
 #[derive(Clone)]
 enum EitherErrorInput {
     Fields(ErrorInputs),
-    JustMessage(InterpretationStream),
+    JustMessage(SourceStream),
 }
 
 define_field_inputs! {
@@ -293,7 +293,7 @@ impl NoOutputCommandDefinition for ErrorCommand {
 
 #[derive(Clone)]
 pub(crate) struct DebugCommand {
-    inner: InterpretationStream,
+    inner: SourceStream,
 }
 
 impl CommandType for DebugCommand {
@@ -305,7 +305,7 @@ impl ValueCommandDefinition for DebugCommand {
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         Ok(Self {
-            inner: arguments.parse_all_for_interpretation()?,
+            inner: arguments.parse_all_as_source()?,
         })
     }
 

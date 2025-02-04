@@ -1,28 +1,28 @@
 use super::*;
 
-// Interpretation = Source
+// Source
 // =======================
 
 #[derive(Clone)]
-pub(crate) struct InterpretationExpression {
+pub(crate) struct SourceExpression {
     inner: Expression<Source>,
 }
 
-impl HasSpanRange for InterpretationExpression {
+impl HasSpanRange for SourceExpression {
     fn span_range(&self) -> SpanRange {
         self.inner.span_range
     }
 }
 
-impl ParseFromSource for InterpretationExpression {
-    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
+impl Parse<Source> for SourceExpression {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         Ok(Self {
             inner: ExpressionParser::parse(input)?,
         })
     }
 }
 
-impl InterpretationExpression {
+impl SourceExpression {
     pub(crate) fn evaluate(
         &self,
         interpreter: &mut Interpreter,
@@ -47,30 +47,28 @@ impl InterpretationExpression {
     pub(crate) fn evaluate_to_value(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         Source::evaluate_to_value(&self.inner, interpreter)
     }
 }
 
-pub(super) enum InterpretationExpressionLeaf {
+pub(super) enum SourceExpressionLeaf {
     Command(Command),
     GroupedVariable(GroupedVariable),
-    CodeBlock(CommandCodeInput),
-    Value(EvaluationValue),
+    CodeBlock(SourceCodeBlock),
+    Value(ExpressionValue),
 }
 
 impl Expressionable for Source {
-    type Leaf = InterpretationExpressionLeaf;
+    type Leaf = SourceExpressionLeaf;
     type EvaluationContext = Interpreter;
 
     fn leaf_end_span(leaf: &Self::Leaf) -> Option<Span> {
         match leaf {
-            InterpretationExpressionLeaf::Command(command) => Some(command.span()),
-            InterpretationExpressionLeaf::GroupedVariable(variable) => {
-                Some(variable.span_range().end())
-            }
-            InterpretationExpressionLeaf::CodeBlock(code_block) => Some(code_block.span()),
-            InterpretationExpressionLeaf::Value(value) => value.source_span(),
+            SourceExpressionLeaf::Command(command) => Some(command.span()),
+            SourceExpressionLeaf::GroupedVariable(variable) => Some(variable.span_range().end()),
+            SourceExpressionLeaf::CodeBlock(code_block) => Some(code_block.span()),
+            SourceExpressionLeaf::Value(value) => value.source_span(),
         }
     }
 
@@ -92,7 +90,7 @@ impl Expressionable for Source {
                 UnaryAtom::Group(delim_span)
             },
             GrammarPeekMatch::Group(Delimiter::Brace) => {
-                let leaf = InterpretationExpressionLeaf::CodeBlock(input.parse()?);
+                let leaf = SourceExpressionLeaf::CodeBlock(input.parse()?);
                 UnaryAtom::Leaf(leaf)
             }
             GrammarPeekMatch::Group(Delimiter::Bracket) => return input.parse_err("Square brackets [ .. ] are not supported in an expression"),
@@ -100,11 +98,11 @@ impl Expressionable for Source {
                 UnaryAtom::PrefixUnaryOperation(input.parse()?)
             },
             GrammarPeekMatch::Ident(_) => {
-                let value = EvaluationValue::Boolean(EvaluationBoolean::for_litbool(input.parse()?));
+                let value = ExpressionValue::Boolean(EvaluationBoolean::for_litbool(input.parse()?));
                 UnaryAtom::Leaf(Self::Leaf::Value(value))
             },
             GrammarPeekMatch::Literal(_) => {
-                let value = EvaluationValue::for_literal(input.parse()?)?;
+                let value = ExpressionValue::for_literal(input.parse()?)?;
                 UnaryAtom::Leaf(Self::Leaf::Value(value))
             },
             GrammarPeekMatch::End => return input.parse_err("The expression ended in an incomplete state"),
@@ -129,44 +127,44 @@ impl Expressionable for Source {
     fn evaluate_leaf(
         leaf: &Self::Leaf,
         interpreter: &mut Self::EvaluationContext,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         let interpreted = match leaf {
-            InterpretationExpressionLeaf::Command(command) => {
+            SourceExpressionLeaf::Command(command) => {
                 command.clone().interpret_to_new_stream(interpreter)?
             }
-            InterpretationExpressionLeaf::GroupedVariable(grouped_variable) => {
+            SourceExpressionLeaf::GroupedVariable(grouped_variable) => {
                 grouped_variable.interpret_to_new_stream(interpreter)?
             }
-            InterpretationExpressionLeaf::CodeBlock(code_block) => {
+            SourceExpressionLeaf::CodeBlock(code_block) => {
                 code_block.clone().interpret_to_new_stream(interpreter)?
             }
-            InterpretationExpressionLeaf::Value(value) => return Ok(value.clone()),
+            SourceExpressionLeaf::Value(value) => return Ok(value.clone()),
         };
         let parsed_expression = unsafe {
             // RUST-ANALYZER SAFETY: This isn't very safe, as it could have a none-delimited group in it
-            interpreted.parse_as::<InterpretedExpression>()?
+            interpreted.parse_as::<OutputExpression>()?
         };
         parsed_expression.evaluate_to_value()
     }
 }
 
-// Interpreted
+// Output
 // ===========
 
 #[derive(Clone)]
-pub(crate) struct InterpretedExpression {
-    inner: Expression<Interpreted>,
+pub(crate) struct OutputExpression {
+    inner: Expression<Output>,
 }
 
-impl ParseFromInterpreted for InterpretedExpression {
-    fn parse_from_interpreted(input: InterpretedParseStream) -> ParseResult<Self> {
+impl Parse<Output> for OutputExpression {
+    fn parse(input: ParseStream<Output>) -> ParseResult<Self> {
         Ok(Self {
             inner: ExpressionParser::parse(input)?,
         })
     }
 }
 
-impl InterpretedExpression {
+impl OutputExpression {
     pub(crate) fn evaluate(&self) -> ExecutionResult<EvaluationOutput> {
         Ok(EvaluationOutput {
             value: self.evaluate_to_value()?,
@@ -174,13 +172,13 @@ impl InterpretedExpression {
         })
     }
 
-    pub(crate) fn evaluate_to_value(&self) -> ExecutionResult<EvaluationValue> {
-        Interpreted::evaluate_to_value(&self.inner, &mut ())
+    pub(crate) fn evaluate_to_value(&self) -> ExecutionResult<ExpressionValue> {
+        Output::evaluate_to_value(&self.inner, &mut ())
     }
 }
 
-impl Expressionable for Interpreted {
-    type Leaf = EvaluationValue;
+impl Expressionable for Output {
+    type Leaf = ExpressionValue;
     type EvaluationContext = ();
 
     fn leaf_end_span(leaf: &Self::Leaf) -> Option<Span> {
@@ -190,45 +188,43 @@ impl Expressionable for Interpreted {
     fn evaluate_leaf(
         leaf: &Self::Leaf,
         _: &mut Self::EvaluationContext,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         Ok(leaf.clone())
     }
 
     fn parse_unary_atom(input: &mut ParseStreamStack<Self>) -> ParseResult<UnaryAtom<Self>> {
-        Ok(match input.peek_token() {
-            InterpretedPeekMatch::Group(Delimiter::None | Delimiter::Parenthesis) => {
+        Ok(match input.peek_grammar() {
+            OutputPeekMatch::Group(Delimiter::None | Delimiter::Parenthesis) => {
                 let (_, delim_span) = input.parse_and_enter_group()?;
                 UnaryAtom::Group(delim_span)
             }
-            InterpretedPeekMatch::Group(Delimiter::Brace) => {
+            OutputPeekMatch::Group(Delimiter::Brace) => {
                 return input
                     .parse_err("Curly braces are not supported in a re-interpreted expression")
             }
-            InterpretedPeekMatch::Group(Delimiter::Bracket) => {
+            OutputPeekMatch::Group(Delimiter::Bracket) => {
                 return input.parse_err("Square brackets [ .. ] are not supported in an expression")
             }
-            InterpretedPeekMatch::Ident(_) => UnaryAtom::Leaf(EvaluationValue::Boolean(
+            OutputPeekMatch::Ident(_) => UnaryAtom::Leaf(ExpressionValue::Boolean(
                 EvaluationBoolean::for_litbool(input.parse()?),
             )),
-            InterpretedPeekMatch::Punct(_) => UnaryAtom::PrefixUnaryOperation(input.parse()?),
-            InterpretedPeekMatch::Literal(_) => {
-                UnaryAtom::Leaf(EvaluationValue::for_literal(input.parse()?)?)
+            OutputPeekMatch::Punct(_) => UnaryAtom::PrefixUnaryOperation(input.parse()?),
+            OutputPeekMatch::Literal(_) => {
+                UnaryAtom::Leaf(ExpressionValue::for_literal(input.parse()?)?)
             }
-            InterpretedPeekMatch::End => {
+            OutputPeekMatch::End => {
                 return input.parse_err("The expression ended in an incomplete state")
             }
         })
     }
 
     fn parse_extension(input: &mut ParseStreamStack<Self>) -> ParseResult<NodeExtension> {
-        Ok(match input.peek_token() {
-            InterpretedPeekMatch::Punct(_) => {
-                match input.try_parse_or_revert::<BinaryOperation>() {
-                    Ok(operation) => NodeExtension::BinaryOperation(operation),
-                    Err(_) => NodeExtension::NoneMatched,
-                }
-            }
-            InterpretedPeekMatch::Ident(ident) if ident == "as" => {
+        Ok(match input.peek_grammar() {
+            OutputPeekMatch::Punct(_) => match input.try_parse_or_revert::<BinaryOperation>() {
+                Ok(operation) => NodeExtension::BinaryOperation(operation),
+                Err(_) => NodeExtension::NoneMatched,
+            },
+            OutputPeekMatch::Ident(ident) if ident == "as" => {
                 let cast_operation =
                     UnaryOperation::for_cast_operation(input.parse()?, input.parse_any_ident()?)?;
                 NodeExtension::PostfixOperation(cast_operation)
@@ -285,12 +281,12 @@ pub(super) trait Expressionable: Sized {
     fn evaluate_leaf(
         leaf: &Self::Leaf,
         context: &mut Self::EvaluationContext,
-    ) -> ExecutionResult<EvaluationValue>;
+    ) -> ExecutionResult<ExpressionValue>;
 
     fn evaluate_to_value(
         expression: &Expression<Self>,
         context: &mut Self::EvaluationContext,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         ExpressionEvaluator::new(&expression.nodes).evaluate(expression.root, context)
     }
 }

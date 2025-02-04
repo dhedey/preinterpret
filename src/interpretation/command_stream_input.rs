@@ -17,12 +17,12 @@ pub(crate) enum CommandStreamInput {
     Command(Command),
     GroupedVariable(GroupedVariable),
     FlattenedVariable(FlattenedVariable),
-    Code(CommandCodeInput),
-    ExplicitStream(InterpretationGroup),
+    Code(SourceCodeBlock),
+    ExplicitStream(SourceGroup),
 }
 
-impl ParseFromSource for CommandStreamInput {
-    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
+impl Parse<Source> for CommandStreamInput {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         Ok(match input.peek_grammar() {
             GrammarPeekMatch::Command(_) => Self::Command(input.parse()?),
             GrammarPeekMatch::GroupedVariable => Self::GroupedVariable(input.parse()?),
@@ -51,7 +51,7 @@ impl Interpret for CommandStreamInput {
     fn interpret_into(
         self,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         match self {
             CommandStreamInput::Command(mut command) => {
@@ -115,14 +115,14 @@ impl Interpret for CommandStreamInput {
     }
 }
 
-/// From a code neatness perspective, this would be better as `InterpretedCommandStream`...
+/// From a code neatness perspective, this would be better as `OutputCommandStream`...
 /// However this approach avoids a round-trip to TokenStream, which causes bugs in RustAnalyzer.
-/// This can be removed when we fork syn and can parse the InterpretedStream directly.
+/// This can be removed when we fork syn and can parse the OutputStream directly.
 fn parse_as_stream_input(
     input: impl Interpret + HasSpanRange,
     interpreter: &mut Interpreter,
     error_message: impl FnOnce() -> String,
-    output: &mut InterpretedStream,
+    output: &mut OutputStream,
 ) -> ExecutionResult<()> {
     let span = input.span_range();
     input
@@ -136,31 +136,31 @@ fn parse_as_stream_input(
 }
 
 impl InterpretValue for CommandStreamInput {
-    type InterpretedValue = InterpretedCommandStream;
+    type OutputValue = OutputCommandStream;
 
     fn interpret_to_value(
         self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Self::InterpretedValue> {
-        Ok(InterpretedCommandStream {
+    ) -> ExecutionResult<Self::OutputValue> {
+        Ok(OutputCommandStream {
             stream: self.interpret_to_new_stream(interpreter)?,
         })
     }
 }
 
-pub(crate) struct InterpretedCommandStream {
-    pub(crate) stream: InterpretedStream,
+pub(crate) struct OutputCommandStream {
+    pub(crate) stream: OutputStream,
 }
 
-impl ParseFromInterpreted for InterpretedCommandStream {
-    fn parse_from_interpreted(input: InterpretedParseStream) -> ParseResult<Self> {
+impl Parse<Output> for OutputCommandStream {
+    fn parse(input: ParseStream<Output>) -> ParseResult<Self> {
         // We replicate parse_as_stream_input
         let (_, inner) = input.parse_group_matching(
             |delimiter| matches!(delimiter, Delimiter::Bracket | Delimiter::None),
             || "Expected [...] or a transparent group from a #variable or stream-output command such as [!group! ...]".to_string(),
         )?;
         Ok(Self {
-            stream: InterpretedStream::raw(inner.parse()?),
+            stream: OutputStream::raw(inner.parse()?),
         })
     }
 }

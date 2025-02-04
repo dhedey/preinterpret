@@ -9,12 +9,12 @@ pub(crate) enum CommandValueInput<T> {
     Command(Command),
     GroupedVariable(GroupedVariable),
     FlattenedVariable(FlattenedVariable),
-    Code(CommandCodeInput),
+    Code(SourceCodeBlock),
     Value(T),
 }
 
-impl<T: ParseFromSource> ParseFromSource for CommandValueInput<T> {
-    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
+impl<T: Parse<Source>> Parse<Source> for CommandValueInput<T> {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         Ok(match input.peek_grammar() {
             GrammarPeekMatch::Command(_) => Self::Command(input.parse()?),
             GrammarPeekMatch::GroupedVariable => Self::GroupedVariable(input.parse()?),
@@ -34,8 +34,8 @@ impl<T: ParseFromSource> ParseFromSource for CommandValueInput<T> {
     }
 }
 
-impl<T: ParseFromInterpreted> ParseFromInterpreted for CommandValueInput<T> {
-    fn parse_from_interpreted(input: InterpretedParseStream) -> ParseResult<Self> {
+impl<T: Parse<Output>> Parse<Output> for CommandValueInput<T> {
+    fn parse(input: ParseStream<Output>) -> ParseResult<Self> {
         Ok(Self::Value(input.parse()?))
     }
 }
@@ -52,10 +52,8 @@ impl<T: HasSpanRange> HasSpanRange for CommandValueInput<T> {
     }
 }
 
-impl<T: InterpretValue<InterpretedValue = I>, I: ParseFromInterpreted> InterpretValue
-    for CommandValueInput<T>
-{
-    type InterpretedValue = I;
+impl<T: InterpretValue<OutputValue = I>, I: Parse<Output>> InterpretValue for CommandValueInput<T> {
+    type OutputValue = I;
 
     fn interpret_to_value(self, interpreter: &mut Interpreter) -> ExecutionResult<I> {
         let descriptor = match self {
@@ -77,10 +75,10 @@ impl<T: InterpretValue<InterpretedValue = I>, I: ParseFromInterpreted> Interpret
             CommandValueInput::Value(value) => return value.interpret_to_value(interpreter),
         };
         unsafe {
-            // RUST-ANALYZER SAFETY: We only use I with simple parse functions so far which don't care about
-            // none-delimited groups
+            // RUST-ANALYZER SAFETY: If I is a very simple parse function, this is safe.
+            // Zip uses it with a parse function which does care about none-delimited groups however.
             interpreted_stream
-                .parse_with(I::parse_from_interpreted)
+                .parse_with(I::parse)
                 .add_context_if_error_and_no_context(|| {
                     format!(
                         "Occurred whilst parsing the {} to a {}.",
@@ -100,8 +98,8 @@ pub(crate) struct Grouped<T> {
     pub(crate) inner: T,
 }
 
-impl<T: ParseFromSource> ParseFromSource for Grouped<T> {
-    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
+impl<T: Parse<Source>> Parse<Source> for Grouped<T> {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         let (delimiter, delim_span, inner) = input.parse_any_group()?;
         Ok(Self {
             delimiter,
@@ -111,8 +109,8 @@ impl<T: ParseFromSource> ParseFromSource for Grouped<T> {
     }
 }
 
-impl<T: ParseFromInterpreted> ParseFromInterpreted for Grouped<T> {
-    fn parse_from_interpreted(input: InterpretedParseStream) -> ParseResult<Self> {
+impl<T: Parse<Output>> Parse<Output> for Grouped<T> {
+    fn parse(input: ParseStream<Output>) -> ParseResult<Self> {
         let (delimiter, delim_span, inner) = input.parse_any_group()?;
         Ok(Self {
             delimiter,
@@ -124,14 +122,14 @@ impl<T: ParseFromInterpreted> ParseFromInterpreted for Grouped<T> {
 
 impl<T, I> InterpretValue for Grouped<T>
 where
-    T: InterpretValue<InterpretedValue = I>,
+    T: InterpretValue<OutputValue = I>,
 {
-    type InterpretedValue = Grouped<I>;
+    type OutputValue = Grouped<I>;
 
     fn interpret_to_value(
         self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Self::InterpretedValue> {
+    ) -> ExecutionResult<Self::OutputValue> {
         Ok(Grouped {
             delimiter: self.delimiter,
             delim_span: self.delim_span,
@@ -145,8 +143,8 @@ pub(crate) struct Repeated<T> {
     pub(crate) inner: Vec<T>,
 }
 
-impl<T: ParseFromSource> ParseFromSource for Repeated<T> {
-    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
+impl<T: Parse<Source>> Parse<Source> for Repeated<T> {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         let mut inner = vec![];
         while !input.is_empty() {
             inner.push(input.parse::<T>()?);
@@ -155,8 +153,8 @@ impl<T: ParseFromSource> ParseFromSource for Repeated<T> {
     }
 }
 
-impl<T: ParseFromInterpreted> ParseFromInterpreted for Repeated<T> {
-    fn parse_from_interpreted(input: InterpretedParseStream) -> ParseResult<Self> {
+impl<T: Parse<Output>> Parse<Output> for Repeated<T> {
+    fn parse(input: ParseStream<Output>) -> ParseResult<Self> {
         let mut inner = vec![];
         while !input.is_empty() {
             inner.push(input.parse::<T>()?);
@@ -167,14 +165,14 @@ impl<T: ParseFromInterpreted> ParseFromInterpreted for Repeated<T> {
 
 impl<T, I> InterpretValue for Repeated<T>
 where
-    T: InterpretValue<InterpretedValue = I>,
+    T: InterpretValue<OutputValue = I>,
 {
-    type InterpretedValue = Repeated<I>;
+    type OutputValue = Repeated<I>;
 
     fn interpret_to_value(
         self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Self::InterpretedValue> {
+    ) -> ExecutionResult<Self::OutputValue> {
         let mut interpreted = Vec::with_capacity(self.inner.len());
         for item in self.inner.into_iter() {
             interpreted.push(item.interpret_to_value(interpreter)?);

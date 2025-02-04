@@ -3,7 +3,7 @@ use crate::internal_prelude::*;
 pub(crate) trait HandleDestructure {
     fn handle_destructure_from_stream(
         &self,
-        input: InterpretedStream,
+        input: OutputStream,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         unsafe {
@@ -16,7 +16,7 @@ pub(crate) trait HandleDestructure {
 
     fn handle_destructure(
         &self,
-        input: InterpretedParseStream,
+        input: ParseStream<Output>,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()>;
 }

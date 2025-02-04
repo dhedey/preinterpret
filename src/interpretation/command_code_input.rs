@@ -1,31 +1,31 @@
 use crate::internal_prelude::*;
 
-/// Parses a group { .. } for interpretation
+/// A group { .. } representing code which can be interpreted
 #[derive(Clone)]
-pub(crate) struct CommandCodeInput {
+pub(crate) struct SourceCodeBlock {
     delim_span: DelimSpan,
-    inner: InterpretationStream,
+    inner: SourceStream,
 }
 
-impl ParseFromSource for CommandCodeInput {
-    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
+impl Parse<Source> for SourceCodeBlock {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         let (delim_span, content) = input.parse_specific_group(Delimiter::Brace)?;
         let inner = content.parse_with_context(delim_span.join())?;
         Ok(Self { delim_span, inner })
     }
 }
 
-impl HasSpan for CommandCodeInput {
+impl HasSpan for SourceCodeBlock {
     fn span(&self) -> Span {
         self.delim_span.join()
     }
 }
 
-impl CommandCodeInput {
+impl SourceCodeBlock {
     pub(crate) fn interpret_loop_content_into(
         self,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<Option<ControlFlowInterrupt>> {
         match self.inner.interpret_into(interpreter, output) {
             Ok(()) => Ok(None),
@@ -37,11 +37,11 @@ impl CommandCodeInput {
     }
 }
 
-impl Interpret for CommandCodeInput {
+impl Interpret for SourceCodeBlock {
     fn interpret_into(
         self,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         self.inner.interpret_into(interpreter, output)
     }

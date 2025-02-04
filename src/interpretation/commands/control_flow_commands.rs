@@ -2,10 +2,10 @@ use crate::internal_prelude::*;
 
 #[derive(Clone)]
 pub(crate) struct IfCommand {
-    condition: InterpretationExpression,
-    true_code: CommandCodeInput,
-    else_ifs: Vec<(InterpretationExpression, CommandCodeInput)>,
-    else_code: Option<CommandCodeInput>,
+    condition: SourceExpression,
+    true_code: SourceCodeBlock,
+    else_ifs: Vec<(SourceExpression, SourceCodeBlock)>,
+    else_code: Option<SourceCodeBlock>,
 }
 
 impl CommandType for IfCommand {
@@ -49,7 +49,7 @@ impl ControlFlowCommandDefinition for IfCommand {
     fn execute(
         self: Box<Self>,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         let evaluated_condition = self
             .condition
@@ -80,8 +80,8 @@ impl ControlFlowCommandDefinition for IfCommand {
 
 #[derive(Clone)]
 pub(crate) struct WhileCommand {
-    condition: InterpretationExpression,
-    loop_code: CommandCodeInput,
+    condition: SourceExpression,
+    loop_code: SourceCodeBlock,
 }
 
 impl CommandType for WhileCommand {
@@ -106,7 +106,7 @@ impl ControlFlowCommandDefinition for WhileCommand {
     fn execute(
         self: Box<Self>,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         let mut iteration_counter = interpreter.start_iteration_counter(&self.condition);
         loop {
@@ -139,7 +139,7 @@ impl ControlFlowCommandDefinition for WhileCommand {
 
 #[derive(Clone)]
 pub(crate) struct LoopCommand {
-    loop_code: CommandCodeInput,
+    loop_code: SourceCodeBlock,
 }
 
 impl CommandType for LoopCommand {
@@ -163,7 +163,7 @@ impl ControlFlowCommandDefinition for LoopCommand {
     fn execute(
         self: Box<Self>,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         let mut iteration_counter = interpreter.start_iteration_counter(&self.loop_code);
 
@@ -189,7 +189,7 @@ pub(crate) struct ForCommand {
     #[allow(unused)]
     in_token: Token![in],
     input: CommandStreamInput,
-    loop_code: CommandCodeInput,
+    loop_code: SourceCodeBlock,
 }
 
 impl CommandType for ForCommand {
@@ -216,7 +216,7 @@ impl ControlFlowCommandDefinition for ForCommand {
     fn execute(
         self: Box<Self>,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         let stream = self.input.interpret_to_new_stream(interpreter)?;
 

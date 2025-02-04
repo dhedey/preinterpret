@@ -1,15 +1,15 @@
 use super::*;
 
 pub(super) trait Operation: HasSpanRange {
-    fn output(&self, output_value: impl ToEvaluationValue) -> ExecutionResult<EvaluationValue> {
+    fn output(&self, output_value: impl ToExpressionValue) -> ExecutionResult<ExpressionValue> {
         Ok(output_value.to_value(self.source_span_for_output()))
     }
 
     fn output_if_some(
         &self,
-        output_value: Option<impl ToEvaluationValue>,
+        output_value: Option<impl ToExpressionValue>,
         error_message: impl FnOnce() -> String,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         match output_value {
             Some(output_value) => self.output(output_value),
             None => self.execution_err(error_message()),
@@ -19,7 +19,7 @@ pub(super) trait Operation: HasSpanRange {
     fn unsupported_for_value_type_err(
         &self,
         value_type: &'static str,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         Err(self.execution_error(format!(
             "The {} operator is not supported for {} values",
             self.symbol(),
@@ -120,7 +120,7 @@ impl UnaryOperation {
         })
     }
 
-    pub(super) fn evaluate(self, input: EvaluationValue) -> ExecutionResult<EvaluationValue> {
+    pub(super) fn evaluate(self, input: ExpressionValue) -> ExecutionResult<ExpressionValue> {
         input.handle_unary_operation(self)
     }
 
@@ -167,7 +167,7 @@ impl HasSpan for UnaryOperation {
 
 pub(super) trait HandleUnaryOperation: Sized {
     fn handle_unary_operation(self, operation: &UnaryOperation)
-        -> ExecutionResult<EvaluationValue>;
+        -> ExecutionResult<ExpressionValue>;
 }
 
 #[derive(Clone)]
@@ -254,14 +254,14 @@ impl SynParse for BinaryOperation {
 impl BinaryOperation {
     pub(super) fn lazy_evaluate(
         &self,
-        left: &EvaluationValue,
-    ) -> ExecutionResult<Option<EvaluationValue>> {
+        left: &ExpressionValue,
+    ) -> ExecutionResult<Option<ExpressionValue>> {
         match self {
             BinaryOperation::Paired(PairedBinaryOperation::LogicalAnd { .. }) => {
                 match left.clone().into_bool() {
                     Some(bool) => {
                         if !bool.value {
-                            Ok(Some(EvaluationValue::Boolean(bool)))
+                            Ok(Some(ExpressionValue::Boolean(bool)))
                         } else {
                             Ok(None)
                         }
@@ -273,7 +273,7 @@ impl BinaryOperation {
                 match left.clone().into_bool() {
                     Some(bool) => {
                         if bool.value {
-                            Ok(Some(EvaluationValue::Boolean(bool)))
+                            Ok(Some(ExpressionValue::Boolean(bool)))
                         } else {
                             Ok(None)
                         }
@@ -287,9 +287,9 @@ impl BinaryOperation {
 
     pub(super) fn evaluate(
         &self,
-        left: EvaluationValue,
-        right: EvaluationValue,
-    ) -> ExecutionResult<EvaluationValue> {
+        left: ExpressionValue,
+        right: ExpressionValue,
+    ) -> ExecutionResult<ExpressionValue> {
         match self {
             BinaryOperation::Paired(operation) => {
                 let value_pair = left.expect_value_pair(operation, right)?;
@@ -430,11 +430,11 @@ pub(super) trait HandleBinaryOperation: Sized {
         self,
         rhs: Self,
         operation: &PairedBinaryOperation,
-    ) -> ExecutionResult<EvaluationValue>;
+    ) -> ExecutionResult<ExpressionValue>;
 
     fn handle_integer_binary_operation(
         self,
         rhs: EvaluationInteger,
         operation: &IntegerBinaryOperation,
-    ) -> ExecutionResult<EvaluationValue>;
+    ) -> ExecutionResult<ExpressionValue>;
 }

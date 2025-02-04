@@ -5,7 +5,7 @@ pub(crate) struct LetCommand {
     destructuring: DestructureUntil<Token![=]>,
     #[allow(unused)]
     equals: Token![=],
-    arguments: InterpretationStream,
+    arguments: SourceStream,
 }
 
 impl CommandType for LetCommand {

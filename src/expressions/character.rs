@@ -19,7 +19,7 @@ impl EvaluationChar {
     pub(super) fn handle_unary_operation(
         self,
         operation: UnaryOperation,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         let char = self.value;
         match operation {
             UnaryOperation::GroupedNoOp { .. } => operation.output(char),
@@ -54,7 +54,7 @@ impl EvaluationChar {
         self,
         _right: EvaluationInteger,
         operation: &IntegerBinaryOperation,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         operation.unsupported_for_value_type_err("char")
     }
 
@@ -62,7 +62,7 @@ impl EvaluationChar {
         self,
         rhs: Self,
         operation: &PairedBinaryOperation,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.value;
         let rhs = rhs.value;
         match operation {
@@ -92,9 +92,9 @@ impl EvaluationChar {
     }
 }
 
-impl ToEvaluationValue for char {
-    fn to_value(self, source_span: Option<Span>) -> EvaluationValue {
-        EvaluationValue::Char(EvaluationChar {
+impl ToExpressionValue for char {
+    fn to_value(self, source_span: Option<Span>) -> ExpressionValue {
+        ExpressionValue::Char(EvaluationChar {
             value: self,
             source_span,
         })

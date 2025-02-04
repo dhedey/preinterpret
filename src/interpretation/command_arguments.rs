@@ -2,7 +2,7 @@ use crate::internal_prelude::*;
 
 #[derive(Clone)]
 pub(crate) struct CommandArguments<'a> {
-    parse_stream: SourceParseStream<'a>,
+    parse_stream: ParseStream<'a, Source>,
     command_name: Ident,
     /// The span of the [ ... ] which contained the command
     command_span: Span,
@@ -10,7 +10,7 @@ pub(crate) struct CommandArguments<'a> {
 
 impl<'a> CommandArguments<'a> {
     pub(crate) fn new(
-        parse_stream: SourceParseStream<'a>,
+        parse_stream: ParseStream<'a, Source>,
         command_name: Ident,
         command_span: Span,
     ) -> Self {
@@ -36,12 +36,12 @@ impl<'a> CommandArguments<'a> {
     }
 
     pub(crate) fn fully_parse_as<T: ArgumentsContent>(&self) -> ParseResult<T> {
-        self.fully_parse_or_error(T::parse_from_source, T::error_message())
+        self.fully_parse_or_error(T::parse, T::error_message())
     }
 
     pub(crate) fn fully_parse_or_error<T>(
         &self,
-        parse_function: impl FnOnce(SourceParseStream) -> ParseResult<T>,
+        parse_function: impl FnOnce(ParseStream<Source>) -> ParseResult<T>,
         error_message: impl std::fmt::Display,
     ) -> ParseResult<T> {
         // In future, when the diagnostic API is stable,
@@ -64,9 +64,8 @@ impl<'a> CommandArguments<'a> {
         Ok(parsed)
     }
 
-    pub(crate) fn parse_all_for_interpretation(&self) -> ParseResult<InterpretationStream> {
-        self.parse_stream
-            .parse_all_for_interpretation(self.command_span)
+    pub(crate) fn parse_all_as_source(&self) -> ParseResult<SourceStream> {
+        self.parse_stream.parse_with_context(self.command_span)
     }
 
     pub(crate) fn read_all_as_raw_token_stream(&self) -> TokenStream {
@@ -74,6 +73,6 @@ impl<'a> CommandArguments<'a> {
     }
 }
 
-pub(crate) trait ArgumentsContent: ParseFromSource {
+pub(crate) trait ArgumentsContent: Parse<Source> {
     fn error_message() -> String;
 }

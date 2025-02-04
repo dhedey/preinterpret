@@ -414,20 +414,12 @@ preinterpret::preinterpret! {
 
 ### Possible extension: Token stream commands
 
-* `[!split! #stream ,]` expects a token tree, and then some punct. Returns a stream split into transparent groups by the given token. Ignores a trailing empty stream.
-* `[!skip! #stream 4]` expects to receive a (possibly transparent) group, and reads and drops the first 4 token trees from the group's stream, and outputs the rest
 * `[!ungroup! #stream]` expects `#stream` to be a single group and unwraps it once
 * `[!flatten! #stream]` removes all singleton groups from `#stream`, leaving a token stream of idents, literals and punctuation
-* `[!index! #stream 0]` takes the 0th token tree from the stream
-* `[!zip! #a #b #c]` returns a transparent group tuple of the nth token in each of `#a`, `#b` and `#c`. Errors if they are of different lengths
 
-We could support a piped calling convention, such as the `[!pipe! ...]` special command: `[!pipe! #stream as #x |> [!skip! #x 4] |> [!ungroup! #x]]`
+We could support a postfix calling convention, such as the `[!pipe! ...]` special command: `[!pipe! #stream > #x [!index! #x[4]] > #x [!ungroup! #x]]` or something like a scala for comprehension. But honestly, just saving things to variables might be cleaner.
 
-#### Possible extension: Better performance
-
-We could tweak some commands to execute lazily:
-* Replace `output: &mut InterpretedStream` with `output: &mut impl OutputSource` which could either write to the output or be buffered/streamed into other commands.
-This would allow things like `[!zip! ...]` or `[!range! ...]` to execute lazily, assuming the consuming command such as `for` read lazily.
+### Possible extension: Better performance via incremental parsing
 
 Incremental parsing using a fork of syn ([see issue](https://github.com/dtolnay/syn/issues/1842)) would allow:
 
@@ -437,9 +429,15 @@ Incremental parsing using a fork of syn ([see issue](https://github.com/dtolnay/
 
 Forking syn may also allow some parts to be made more performant.
 
+### Possible extension: Better performance via lazy execution
+
+We could tweak some commands to execute lazily. We replace `output: &mut OutputStream` with `output: &mut impl OutputSource` which could either write to the output or be buffered/streamed into other commands.
+
+This could allow things like `[!zip! ...]` or `[!range! ...]` to execute lazily, assuming the consuming command such as `for` read lazily.
+
 ### Possible extension: User-defined commands
 
-* `[!define! [!my_command! <PARSE_DESTRUCTURING>] { <OUTPUT> }]`
+* `[!define_command! [!my_command! <ARGUMENTS_DESTRUCTURING>] { <OUTPUT> }]`
 * Some ability to define and re-use commands across multiple invocations
   without being too expensive. Still unsure how to make this work.
 
@@ -449,26 +447,9 @@ Other boolean commands could be possible, similar to numeric commands:
 * `[!tokens_eq! #foo #bar]` outputs `true` if `#foo` and `#bar` are exactly the same token tree, via structural equality. For example:
   * `[!tokens_eq! (3 4) (3   4)]` outputs `true` because the token stream ignores spacing.
   * `[!tokens_eq! 1u64 1]` outputs `false` because these are different literals.
+  * This can be effectively done already with `[!evaluate! [!debug! #x] == [!debug! #y]]`
+* `[!str_split! { input: Value<LitStr>, separator: Value<LitStr>, }]`
 * `[!str_contains! "needle" [!string! haystack]]` expects two string literals, and outputs `true` if the first string is a substring of the second string.
-
-### Possible extension: Goto
-
-_This probably isn't needed, if we have `while` and `for`_.
-
-* `[!label! loop_start]` - defines a label which can be returned to. Effectively, it takes a clones of the remaining token stream after the label in the interpreter.
-* `[!goto! loop_start]` - jumps to the last execution of `[!label! loop_start]`. It unrolls the preinterpret stack (dropping all unwritten token streams) until it finds a stackframe in which the interpreter has the defined label, and continues the token stream from there.
-
-```rust,ignore
-// Hypothetical future syntax - not yet implemented!
-// For now you can use a `[!while! #i <= 100 { ... }]` instead
-preinterpret::preinterpret!{
-    [!set! #i = 0]
-    [!label! loop]
-    const [!ident! AB #i]: u8 = 0;
-    [!assign! #i += 1]
-    [!if! (#i <= 100) { [!goto! loop] }]
-}
-```
 
 ### Possible extension: Eager expansion of macros
 

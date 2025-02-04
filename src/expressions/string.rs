@@ -19,7 +19,7 @@ impl EvaluationString {
     pub(super) fn handle_unary_operation(
         self,
         operation: UnaryOperation,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         match operation {
             UnaryOperation::GroupedNoOp { .. } => operation.output(self.value),
             UnaryOperation::Neg { .. }
@@ -32,7 +32,7 @@ impl EvaluationString {
         self,
         _right: EvaluationInteger,
         operation: &IntegerBinaryOperation,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         operation.unsupported_for_value_type_err("string")
     }
 
@@ -40,7 +40,7 @@ impl EvaluationString {
         self,
         rhs: Self,
         operation: &PairedBinaryOperation,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.value;
         let rhs = rhs.value;
         match operation {
@@ -70,18 +70,18 @@ impl EvaluationString {
     }
 }
 
-impl ToEvaluationValue for String {
-    fn to_value(self, source_span: Option<Span>) -> EvaluationValue {
-        EvaluationValue::String(EvaluationString {
+impl ToExpressionValue for String {
+    fn to_value(self, source_span: Option<Span>) -> ExpressionValue {
+        ExpressionValue::String(EvaluationString {
             value: self,
             source_span,
         })
     }
 }
 
-impl ToEvaluationValue for &str {
-    fn to_value(self, source_span: Option<Span>) -> EvaluationValue {
-        EvaluationValue::String(EvaluationString {
+impl ToExpressionValue for &str {
+    fn to_value(self, source_span: Option<Span>) -> ExpressionValue {
+        ExpressionValue::String(EvaluationString {
             value: self.to_string(),
             source_span,
         })

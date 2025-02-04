@@ -45,7 +45,7 @@ trait CommandInvocation {
     fn execute_into(
         self: Box<Self>,
         context: ExecutionContext,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()>;
 }
 
@@ -71,7 +71,7 @@ trait CommandInvocationAs<T: OutputKind> {
     fn execute_into(
         self: Box<Self>,
         context: ExecutionContext,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()>;
 }
 
@@ -79,7 +79,7 @@ impl<C: CommandType + CommandInvocationAs<C::OutputKind>> CommandInvocation for 
     fn execute_into(
         self: Box<Self>,
         context: ExecutionContext,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         <Self as CommandInvocationAs<C::OutputKind>>::execute_into(self, context, output)
     }
@@ -114,7 +114,7 @@ impl<C: NoOutputCommandDefinition> CommandInvocationAs<OutputKindNone> for C {
     fn execute_into(
         self: Box<Self>,
         context: ExecutionContext,
-        _: &mut InterpretedStream,
+        _: &mut OutputStream,
     ) -> ExecutionResult<()> {
         self.execute(context.interpreter)?;
         Ok(())
@@ -151,7 +151,7 @@ impl<C: ValueCommandDefinition> CommandInvocationAs<OutputKindValue> for C {
     fn execute_into(
         self: Box<Self>,
         context: ExecutionContext,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         output.push_raw_token_tree(self.execute(context.interpreter)?);
         Ok(())
@@ -188,7 +188,7 @@ impl<C: IdentCommandDefinition> CommandInvocationAs<OutputKindIdent> for C {
     fn execute_into(
         self: Box<Self>,
         context: ExecutionContext,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         output.push_ident(self.execute(context.interpreter)?);
         Ok(())
@@ -201,7 +201,7 @@ impl<C: IdentCommandDefinition> CommandInvocationAs<OutputKindIdent> for C {
 
 pub(crate) struct OutputKindStream;
 impl OutputKind for OutputKindStream {
-    type Output = InterpretedStream;
+    type Output = OutputStream;
 
     fn resolve_standard() -> CommandOutputKind {
         CommandOutputKind::GroupedStream
@@ -220,7 +220,7 @@ pub(crate) trait StreamCommandDefinition:
     fn execute(
         self: Box<Self>,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()>;
 }
 
@@ -228,7 +228,7 @@ impl<C: StreamCommandDefinition> CommandInvocationAs<OutputKindStream> for C {
     fn execute_into(
         self: Box<Self>,
         context: ExecutionContext,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         match context.output_kind {
             CommandOutputKind::FlattenedStream => self.execute(context.interpreter, output),
@@ -267,7 +267,7 @@ pub(crate) trait ControlFlowCommandDefinition:
     fn execute(
         self: Box<Self>,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()>;
 }
 
@@ -275,7 +275,7 @@ impl<C: ControlFlowCommandDefinition> CommandInvocationAs<OutputKindControlFlow>
     fn execute_into(
         self: Box<Self>,
         context: ExecutionContext,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         self.execute(context.interpreter, output)
     }
@@ -408,8 +408,8 @@ pub(crate) struct Command {
     source_group_span: DelimSpan,
 }
 
-impl ParseFromSource for Command {
-    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
+impl Parse<Source> for Command {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         let (delim_span, content) = input.parse_specific_group(Delimiter::Bracket)?;
         content.parse::<Token![!]>()?;
         let flattening = if content.peek(Token![.]) {
@@ -469,7 +469,7 @@ impl Interpret for Command {
     fn interpret_into(
         self,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         let context = ExecutionContext {
             interpreter,

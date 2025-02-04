@@ -2,15 +2,15 @@ use crate::internal_prelude::*;
 
 /// A parsed stream ready for interpretation
 #[derive(Clone)]
-pub(crate) struct InterpretationStream {
-    items: Vec<InterpretationItem>,
+pub(crate) struct SourceStream {
+    items: Vec<SourceItem>,
     span: Span,
 }
 
-impl ContextualParseFromSource for InterpretationStream {
+impl ContextualParse<Source> for SourceStream {
     type Context = Span;
 
-    fn parse_from_source(input: SourceParseStream, span: Self::Context) -> ParseResult<Self> {
+    fn parse(input: ParseStream<Source>, span: Self::Context) -> ParseResult<Self> {
         let mut items = Vec::new();
         while !input.is_empty() {
             items.push(input.parse()?);
@@ -19,11 +19,11 @@ impl ContextualParseFromSource for InterpretationStream {
     }
 }
 
-impl Interpret for InterpretationStream {
+impl Interpret for SourceStream {
     fn interpret_into(
         self,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         for item in self.items {
             item.interpret_into(interpreter, output)?;
@@ -32,7 +32,7 @@ impl Interpret for InterpretationStream {
     }
 }
 
-impl HasSpan for InterpretationStream {
+impl HasSpan for SourceStream {
     fn span(&self) -> Span {
         self.span
     }
@@ -40,20 +40,20 @@ impl HasSpan for InterpretationStream {
 
 /// A parsed group ready for interpretation
 #[derive(Clone)]
-pub(crate) struct InterpretationGroup {
+pub(crate) struct SourceGroup {
     source_delimiter: Delimiter,
     source_delim_span: DelimSpan,
-    content: InterpretationStream,
+    content: SourceStream,
 }
 
-impl InterpretationGroup {
-    pub(crate) fn into_content(self) -> InterpretationStream {
+impl SourceGroup {
+    pub(crate) fn into_content(self) -> SourceStream {
         self.content
     }
 }
 
-impl ParseFromSource for InterpretationGroup {
-    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
+impl Parse<Source> for SourceGroup {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         let (delimiter, delim_span, content) = input.parse_any_group()?;
         let content = content.parse_with_context(delim_span.join())?;
         Ok(Self {
@@ -64,11 +64,11 @@ impl ParseFromSource for InterpretationGroup {
     }
 }
 
-impl Interpret for InterpretationGroup {
+impl Interpret for SourceGroup {
     fn interpret_into(
         self,
         interpreter: &mut Interpreter,
-        output: &mut InterpretedStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         let inner = self.content.interpret_to_new_stream(interpreter)?;
         output.push_new_group(inner, self.source_delimiter, self.source_delim_span.join());
@@ -76,7 +76,7 @@ impl Interpret for InterpretationGroup {
     }
 }
 
-impl HasSpan for InterpretationGroup {
+impl HasSpan for SourceGroup {
     fn span(&self) -> Span {
         self.source_delim_span.join()
     }
@@ -97,8 +97,8 @@ impl RawGroup {
     }
 }
 
-impl ParseFromSource for RawGroup {
-    fn parse_from_source(input: SourceParseStream) -> ParseResult<Self> {
+impl Parse<Source> for RawGroup {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         let (delimiter, delim_span, content) = input.parse_any_group()?;
         let content = content.parse()?;
         Ok(Self {
@@ -110,13 +110,9 @@ impl ParseFromSource for RawGroup {
 }
 
 impl Interpret for RawGroup {
-    fn interpret_into(
-        self,
-        _: &mut Interpreter,
-        output: &mut InterpretedStream,
-    ) -> ExecutionResult<()> {
+    fn interpret_into(self, _: &mut Interpreter, output: &mut OutputStream) -> ExecutionResult<()> {
         output.push_new_group(
-            InterpretedStream::raw(self.content),
+            OutputStream::raw(self.content),
             self.source_delimeter,
             self.source_delim_span.join(),
         );

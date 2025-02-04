@@ -19,7 +19,7 @@ impl EvaluationBoolean {
     pub(super) fn handle_unary_operation(
         self,
         operation: UnaryOperation,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         let input = self.value;
         match operation {
             UnaryOperation::Neg { .. } => operation.unsupported_for_value_type_err("boolean"),
@@ -53,7 +53,7 @@ impl EvaluationBoolean {
         self,
         _right: EvaluationInteger,
         operation: &IntegerBinaryOperation,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         match operation {
             IntegerBinaryOperation::ShiftLeft { .. }
             | IntegerBinaryOperation::ShiftRight { .. } => {
@@ -66,7 +66,7 @@ impl EvaluationBoolean {
         self,
         rhs: Self,
         operation: &PairedBinaryOperation,
-    ) -> ExecutionResult<EvaluationValue> {
+    ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.value;
         let rhs = rhs.value;
         match operation {
@@ -98,9 +98,9 @@ impl EvaluationBoolean {
     }
 }
 
-impl ToEvaluationValue for bool {
-    fn to_value(self, source_span: Option<Span>) -> EvaluationValue {
-        EvaluationValue::Boolean(EvaluationBoolean {
+impl ToExpressionValue for bool {
+    fn to_value(self, source_span: Option<Span>) -> ExpressionValue {
+        ExpressionValue::Boolean(EvaluationBoolean {
             value: self,
             source_span,
         })
