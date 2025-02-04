@@ -347,10 +347,8 @@ define_command_kind! {
     // Core Commands
     SetCommand,
     LetCommand,
-    ExtendCommand,
     RawCommand,
     IgnoreCommand,
-    VoidCommand,
     SettingsCommand,
     ErrorCommand,
     DebugCommand,

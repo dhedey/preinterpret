@@ -1,5 +1,5 @@
 error: The variable cannot be modified if it is already currently being modified
- --> tests/compilation_failures/core/extend_variable_and_then_extend_it_again.rs:6:48
+ --> tests/compilation_failures/core/extend_variable_and_then_extend_it_again.rs:6:42
   |
-6 |         [!extend! #variable += World [!extend! #variable += !]]
-  |                                                ^^^^^^^^^
+6 |         [!set! #variable += World [!set! #variable += !]]
+  |                                          ^^^^^^^^^

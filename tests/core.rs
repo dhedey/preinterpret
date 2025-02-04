@@ -41,7 +41,7 @@ fn test_extend() {
     assert_preinterpret_eq!(
         {
             [!set! #variable = "Hello"]
-            [!extend! #variable += " World!"]
+            [!set! #variable += " World!"]
             [!string! #variable]
         },
         "Hello World!"
@@ -51,9 +51,9 @@ fn test_extend() {
             [!set! #i = 1]
             [!set! #output = [!..group!]]
             [!while! (#i <= 4) {
-                [!extend! #output += #i]
+                [!set! #output += #i]
                 [!if! (#i <= 3) {
-                    [!extend! #output += ", "]
+                    [!set! #output += ", "]
                 }]
                 [!assign! #i += 1]
             }]
@@ -72,11 +72,33 @@ fn test_ignore() {
     }, false);
 }
 
+
 #[test]
-fn test_void() {
+fn test_empty_set() {
+    assert_preinterpret_eq!({
+        [!set! #x]
+        [!set! #x += "hello"]
+        #x
+    }, "hello");
+    assert_preinterpret_eq!({
+        [!set! #x, #y]
+        [!set! #x += "hello"]
+        [!set! #y += "world"]
+        [!string! #x " " #y]
+    }, "hello world");
+    assert_preinterpret_eq!({
+        [!set! #x, #y, #z,]
+        [!set! #x += "hello"]
+        [!set! #y += "world"]
+        [!string! #x " " #y #z]
+    }, "hello world");
+}
+
+#[test]
+fn test_discard_set() {
     assert_preinterpret_eq!({
         [!set! #x = false]
-        [!void! [!set! #x = true] things _are_ interpreted, but the result is ignored...]
+        [!set! _ = [!set! #x = true] things _are_ interpreted, but the result is ignored...]
         #x
     }, true);
 }

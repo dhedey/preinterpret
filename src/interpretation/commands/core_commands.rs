@@ -2,10 +2,30 @@ use crate::internal_prelude::*;
 
 #[derive(Clone)]
 pub(crate) struct SetCommand {
-    variable: GroupedVariable,
-    #[allow(unused)]
-    equals: Token![=],
-    arguments: SourceStream,
+    arguments: SetArguments,
+}
+
+#[allow(unused)]
+#[derive(Clone)]
+enum SetArguments {
+    SetVariable {
+        variable: GroupedVariable,
+        equals: Token![=],
+        content: SourceStream,
+    },
+    ExtendVariable {
+        variable: GroupedVariable,
+        plus_equals: Token![+=],
+        content: SourceStream,
+    },
+    SetVariablesEmpty {
+        variables: Vec<GroupedVariable>,
+    },
+    Discard {
+        discard: Token![_],
+        equals: Token![=],
+        content: SourceStream,
+    },
 }
 
 impl CommandType for SetCommand {
@@ -18,57 +38,73 @@ impl NoOutputCommandDefinition for SetCommand {
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         arguments.fully_parse_or_error(
             |input| {
-                Ok(Self {
-                    variable: input.parse()?,
-                    equals: input.parse()?,
-                    arguments: input.parse_with_context(arguments.command_span())?,
-                })
+                if input.peek(Token![_]) {
+                    return Ok(SetCommand {
+                        arguments: SetArguments::Discard {
+                            discard: input.parse()?,
+                            equals: input.parse()?,
+                            content: input.parse_with_context(arguments.command_span())?,
+                        },
+                    });
+                }
+                let variable = input.parse()?;
+                if input.peek(Token![+=]) {
+                    return Ok(SetCommand {
+                        arguments: SetArguments::ExtendVariable {
+                            variable,
+                            plus_equals: input.parse()?,
+                            content: input.parse_with_context(arguments.command_span())?,
+                        },
+                    })
+                }
+                if input.peek(Token![=]) {
+                    return Ok(SetCommand {
+                        arguments: SetArguments::SetVariable {
+                            variable,
+                            equals: input.parse()?,
+                            content: input.parse_with_context(arguments.command_span())?,
+                        },
+                    })
+                }
+                let mut variables = vec![variable];
+                loop {
+                    if !input.is_empty() {
+                        input.parse::<Token![,]>()?;
+                    }
+                    if input.is_empty() {
+                        return Ok(SetCommand {
+                            arguments: SetArguments::SetVariablesEmpty { variables },
+                        });
+                    }
+                    variables.push(input.parse()?);
+                }
             },
-            "Expected [!set! #variable = ..]",
+            "Expected [!set! #var1 = ...] or [!set! #var1 += ...] or [!set! _ = ...] or [!set! #var1, #var2]",
         )
     }
 
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        let result_tokens = self.arguments.interpret_to_new_stream(interpreter)?;
-        self.variable.set(interpreter, result_tokens)?;
-        Ok(())
-    }
-}
-
-#[derive(Clone)]
-pub(crate) struct ExtendCommand {
-    variable: GroupedVariable,
-    #[allow(unused)]
-    plus_equals: Token![+=],
-    arguments: SourceStream,
-}
-
-impl CommandType for ExtendCommand {
-    type OutputKind = OutputKindNone;
-}
-
-impl NoOutputCommandDefinition for ExtendCommand {
-    const COMMAND_NAME: &'static str = "extend";
-
-    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
-        arguments.fully_parse_or_error(
-            |input| {
-                Ok(Self {
-                    variable: input.parse()?,
-                    plus_equals: input.parse()?,
-                    arguments: input.parse_with_context(arguments.command_span())?,
-                })
+        match self.arguments {
+            SetArguments::SetVariable { variable, content, .. } => {
+                let content = content.interpret_to_new_stream(interpreter)?;
+                variable.set(interpreter, content)?;
             },
-            "Expected [!extend! #variable += ..]",
-        )
-    }
-
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        let variable_data = self.variable.get_existing_for_mutation(interpreter)?;
-        self.arguments.interpret_into(
-            interpreter,
-            variable_data.get_mut(&self.variable)?.deref_mut(),
-        )?;
+            SetArguments::ExtendVariable { variable, content, .. } => {
+                let variable_data = variable.get_existing_for_mutation(interpreter)?;
+                content.interpret_into(
+                    interpreter,
+                    variable_data.get_mut(&variable)?.deref_mut(),
+                )?;
+            },
+            SetArguments::SetVariablesEmpty { variables } => {
+                for variable in variables {
+                    variable.set(interpreter, OutputStream::new())?;
+                }
+            },
+            SetArguments::Discard { content, .. } => {
+                let _ = content.interpret_to_new_stream(interpreter)?;
+            },
+        }
         Ok(())
     }
 }
@@ -118,30 +154,6 @@ impl NoOutputCommandDefinition for IgnoreCommand {
     }
 
     fn execute(self: Box<Self>, _interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        Ok(())
-    }
-}
-
-#[derive(Clone)]
-pub(crate) struct VoidCommand {
-    inner: SourceStream,
-}
-
-impl CommandType for VoidCommand {
-    type OutputKind = OutputKindNone;
-}
-
-impl NoOutputCommandDefinition for VoidCommand {
-    const COMMAND_NAME: &'static str = "void";
-
-    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
-        Ok(Self {
-            inner: arguments.parse_all_as_source()?,
-        })
-    }
-
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        let _ = self.inner.interpret_to_new_stream(interpreter)?;
         Ok(())
     }
 }

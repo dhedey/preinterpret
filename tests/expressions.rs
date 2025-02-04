@@ -116,7 +116,7 @@ fn boolean_operators_short_circuit() {
     assert_preinterpret_eq!(
         {
             [!set! #is_lazy = true]
-            [!void! [!evaluate! false && { [!set! #is_lazy = false] true }]]
+            [!set! _ = [!evaluate! false && { [!set! #is_lazy = false] true }]]
             #is_lazy
         },
         true
@@ -125,7 +125,7 @@ fn boolean_operators_short_circuit() {
     assert_preinterpret_eq!(
         {
             [!set! #is_lazy = true]
-            [!void! [!evaluate! true || { [!set! #is_lazy = false] true }]]
+            [!set! _ = [!evaluate! true || { [!set! #is_lazy = false] true }]]
             #is_lazy
         },
         true

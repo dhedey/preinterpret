@@ -11,7 +11,7 @@
 
 * Core commands:
   * `[!error! ...]` to output a compile error
-  * `[!extend! #x += ...]` to performantly add extra characters to the stream 
+  * `[!set! #x += ...]` to performantly add extra characters to the stream 
   * `[!debug! ...]` to output its interpreted contents including none-delimited groups. Useful for debugging the content of variables.
   * `[!void! ...]` interprets its arguments but then ignores any outputs. It can be used inside destructurings.
 * Expression commands:
@@ -68,7 +68,7 @@ Destructuring performs parsing of a token stream. It supports:
   * `#>>..x` - Reads a token tree, appends a stream (i.e. flatten it if it's a group)
   * `#..>>x` - Reads a stream, appends a group (can be read back with `!for! #y in #x { ... }`)
   * `#..>>..x` - Reads a stream, appends a stream
-* Commands which don't output a value, like `[!set! ...]` or `[!extend! ...]`
+* Commands which don't output a value, like `[!set! ...]`
 * Named destructurings:
   * `(!stream! ...)` (TODO - decide if this is a good name)
   * `(!ident! ...)`
@@ -80,7 +80,6 @@ Destructuring performs parsing of a token stream. It supports:
 
 ### To come
 
-* Support `[!set! #x]` to be `[!set! #x =]`, and allow `[!set! _ = ]` to replace `[!void! ]`.
 * `[!is_set! #x]`
 * Support `'a'..'z'` in `[!range! 'a'..'z']`
 * Destructurers => Transformers 

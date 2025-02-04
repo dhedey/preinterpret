@@ -1,6 +1,6 @@
 error: Expected #variable
-       Occurred whilst parsing [!extend! ...] - Expected [!extend! #variable += ..]
- --> tests/compilation_failures/core/extend_flattened_variable.rs:6:19
+       Occurred whilst parsing [!set! ...] - Expected [!set! #var1 = ...] or [!set! #var1 += ...] or [!set! _ = ...] or [!set! #var1, #var2]
+ --> tests/compilation_failures/core/extend_flattened_variable.rs:6:16
   |
-6 |         [!extend! #..variable += 2]
-  |                   ^
+6 |         [!set! #..variable += 2]
+  |                ^
