@@ -381,6 +381,19 @@ fn test_split() {
         },
         "[!group!] [!group! A] [!group! B] [!group! E] [!group!]"
     );
+    // Code blocks are only evaluated once
+    // (i.e. no "unknown variable B is output in the below")
+    assert_preinterpret_eq!(
+        {
+            [!debug! [!..split! {
+                stream: {
+                    [A [!raw! #] B [!raw! #]  C]
+                },
+                separator: [#],
+            }]]
+        },
+        "[!group! A] [!group! B] [!group! C]"
+    );
 }
 
 #[test]

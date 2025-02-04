@@ -80,13 +80,12 @@ Destructuring performs parsing of a token stream. It supports:
 
 ### To come
 
-* Add test to disallow source stuff in re-evaluated `{ .. }` blocks and command outputs
-* Add `[!reinterpret! ...]` command for an `eval` style command.
-* Support `[!set! #x]` to be `[!set! #x =]`. 
+* Support `[!set! #x]` to be `[!set! #x =]`, and allow `[!set! _ = ]` to replace `[!void! ]`.
 * `[!is_set! #x]`
 * Support `'a'..'z'` in `[!range! 'a'..'z']`
 * Destructurers => Transformers 
   * Implement pivot to transformers outputting things ... `@[#x = @IDENT]`...
+  * Scrap `[!let!]` in favour of `[!parse! #x as #(...)]`
   * `@TOKEN_TREE`
   * `@REST`
   * `@[UNTIL xxxx]`
@@ -99,8 +98,6 @@ Destructuring performs parsing of a token stream. It supports:
     * `@[ANY { ... }]` (with `#..x` as a catch-all) like the [!match!] command but without arms...
     * `#(..)?`, `#(..)+`, `#(..),+`, `#(..)*`, `#(..),*`
 * Consider:
-  * Scrap `[!let!]` in favour of `[!parse! #x as #(...)]`
-  * Scrap `[!void! ...]` in favour of `[!set! _ = ...]`
   * Destructurer needs to have different syntax. It's too confusingly similar!
     * Final decision: `@[#x = @IDENT]` because destructurers output (SEE BELOW FOR MOST OF THE WORKING)
     * Some other ideas considered:
@@ -125,6 +122,7 @@ Destructuring performs parsing of a token stream. It supports:
   * `[!..index! #x[0..3]]` and other things like `[ ..=3]`
   * `[!index! [Hello World][...]]`
   => NB: This isn't in the grammar because of the risk of `#x[0]` wanting to mean `my_arr[0]` rather than "index my variable".
+* Add `[!reinterpret! ...]` command for an `eval` style command.
 * Add casts of other integers to char, via `char::from_u32(u32::try_from(x))`
 * TODO check
 * Check all `#[allow(unused)]` and remove any which aren't needed
@@ -218,20 +216,16 @@ Destructuring performs parsing of a token stream. It supports:
 [!parse_for! #input as @(impl @[#x = @IDENT] for @[#y = @IDENT]),+ {
 
 }]
-
-// OUTSTANDING QUESTION:
-// => Token streams are a good stand-in for arrays
-// => Do we need a good stand-in for fields / key-value maps and other structured data?
-//   => e.g. #x.hello = BLAH
-//   => Has a stream-representation as { hello: [!group! BLAH], } but is more performant,
-//      and can be destructured with `[@FIELDS { #hello }]` or read with `[!read! #x.hello]
-// => And can transform output as #(.hello = @X) - Mixing/matching append output and field output will error
-// => Debug impl is `[!fields! hello: [!group! BLAH],]`
-// => Can be embedded into an output stream as a fields group
-// => If necessary, can be converted to a stream and parsed back as `{ hello: [!group! BLAH], }`
 ```
 
 * Pushed to 0.4:
+  * Map/Field style variable type, like a JS object:
+    * e.g. #x.hello = BLAH
+    * Has a stream-representation as `{ hello: [!group! BLAH], }` but is more performant, and can be destructured with `[@FIELDS { #hello }]` or read with `[!read! #x.hello]` or `[!read! #x["hello"]]`
+    * And can transform output as `#(.hello = @X)` (mixing/matching append output and field output will error)
+    * Debug impl is `[!fields! hello: [!group! BLAH],]`
+    * Can be embedded into an output stream as a fields group
+    * If necessary, can be converted to a stream and parsed back as `{ hello: [!group! BLAH], }`
   * Fork of syn to:
     * Fix issues in Rust Analyzer
     * Add support for a more general `TokenBuffer`, and ensure that Cursor can work in a backwards-compatible way with that buffer. Support:

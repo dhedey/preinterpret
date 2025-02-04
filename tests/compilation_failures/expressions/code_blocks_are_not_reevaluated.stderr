@@ -1,0 +1,5 @@
+error: Expected ! or -
+ --> tests/compilation_failures/expressions/code_blocks_are_not_reevaluated.rs:6:35
+  |
+6 |         [!set! #indirect = [!raw! #value]]
+  |                                   ^
