@@ -163,7 +163,7 @@ fn assign_works() {
 }
 
 #[test]
-fn range_works() {
+fn test_range() {
     assert_preinterpret_eq!(
         [!string![!intersperse! {
             items: [!range! -2..5],
@@ -196,5 +196,10 @@ fn range_works() {
             }]]
         },
         ""
+    );
+    assert_preinterpret_eq!({ [!string! [!range! 'a'..='f']] }, "abcdef");
+    assert_preinterpret_eq!(
+        { [!debug! [!..range! -1i8..3i8]] },
+        "[!group! - 1i8] [!group! 0i8] [!group! 1i8] [!group! 2i8]"
     );
 }

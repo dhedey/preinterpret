@@ -85,25 +85,27 @@ impl NoOutputCommandDefinition for SetCommand {
 
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         match self.arguments {
-            SetArguments::SetVariable { variable, content, .. } => {
+            SetArguments::SetVariable {
+                variable, content, ..
+            } => {
                 let content = content.interpret_to_new_stream(interpreter)?;
                 variable.set(interpreter, content)?;
-            },
-            SetArguments::ExtendVariable { variable, content, .. } => {
+            }
+            SetArguments::ExtendVariable {
+                variable, content, ..
+            } => {
                 let variable_data = variable.get_existing_for_mutation(interpreter)?;
-                content.interpret_into(
-                    interpreter,
-                    variable_data.get_mut(&variable)?.deref_mut(),
-                )?;
-            },
+                content
+                    .interpret_into(interpreter, variable_data.get_mut(&variable)?.deref_mut())?;
+            }
             SetArguments::SetVariablesEmpty { variables } => {
                 for variable in variables {
                     variable.set(interpreter, OutputStream::new())?;
                 }
-            },
+            }
             SetArguments::Discard { content, .. } => {
                 let _ = content.interpret_to_new_stream(interpreter)?;
-            },
+            }
         }
         Ok(())
     }

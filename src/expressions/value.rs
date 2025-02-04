@@ -2,11 +2,11 @@ use super::*;
 
 #[derive(Clone)]
 pub(crate) enum ExpressionValue {
-    Integer(EvaluationInteger),
-    Float(EvaluationFloat),
-    Boolean(EvaluationBoolean),
-    String(EvaluationString),
-    Char(EvaluationChar),
+    Integer(ExpressionInteger),
+    Float(ExpressionFloat),
+    Boolean(ExpressionBoolean),
+    String(ExpressionString),
+    Char(ExpressionChar),
 }
 
 pub(super) trait ToExpressionValue: Sized {
@@ -17,11 +17,11 @@ impl ExpressionValue {
     pub(super) fn for_literal(lit: syn::Lit) -> ParseResult<Self> {
         // https://docs.rs/syn/latest/syn/enum.Lit.html
         Ok(match lit {
-            Lit::Int(lit) => Self::Integer(EvaluationInteger::for_litint(lit)?),
-            Lit::Float(lit) => Self::Float(EvaluationFloat::for_litfloat(lit)?),
-            Lit::Bool(lit) => Self::Boolean(EvaluationBoolean::for_litbool(lit)),
-            Lit::Str(lit) => Self::String(EvaluationString::for_litstr(lit)),
-            Lit::Char(lit) => Self::Char(EvaluationChar::for_litchar(lit)),
+            Lit::Int(lit) => Self::Integer(ExpressionInteger::for_litint(lit)?),
+            Lit::Float(lit) => Self::Float(ExpressionFloat::for_litfloat(lit)?),
+            Lit::Bool(lit) => Self::Boolean(ExpressionBoolean::for_litbool(lit)),
+            Lit::Str(lit) => Self::String(ExpressionString::for_litstr(lit)),
+            Lit::Char(lit) => Self::Char(ExpressionChar::for_litchar(lit)),
             other_literal => {
                 return other_literal
                     .span()
@@ -32,129 +32,129 @@ impl ExpressionValue {
 
     pub(super) fn expect_value_pair(
         self,
-        operation: &PairedBinaryOperation,
+        operation: &impl Operation,
         right: Self,
     ) -> ExecutionResult<EvaluationLiteralPair> {
         Ok(match (self, right) {
             (ExpressionValue::Integer(left), ExpressionValue::Integer(right)) => {
                 let integer_pair = match (left.value, right.value) {
-                    (EvaluationIntegerValue::Untyped(untyped_lhs), rhs) => match rhs {
-                        EvaluationIntegerValue::Untyped(untyped_rhs) => {
-                            EvaluationIntegerValuePair::Untyped(untyped_lhs, untyped_rhs)
+                    (ExpressionIntegerValue::Untyped(untyped_lhs), rhs) => match rhs {
+                        ExpressionIntegerValue::Untyped(untyped_rhs) => {
+                            ExpressionIntegerValuePair::Untyped(untyped_lhs, untyped_rhs)
                         }
-                        EvaluationIntegerValue::U8(rhs) => {
-                            EvaluationIntegerValuePair::U8(untyped_lhs.parse_as()?, rhs)
+                        ExpressionIntegerValue::U8(rhs) => {
+                            ExpressionIntegerValuePair::U8(untyped_lhs.parse_as()?, rhs)
                         }
-                        EvaluationIntegerValue::U16(rhs) => {
-                            EvaluationIntegerValuePair::U16(untyped_lhs.parse_as()?, rhs)
+                        ExpressionIntegerValue::U16(rhs) => {
+                            ExpressionIntegerValuePair::U16(untyped_lhs.parse_as()?, rhs)
                         }
-                        EvaluationIntegerValue::U32(rhs) => {
-                            EvaluationIntegerValuePair::U32(untyped_lhs.parse_as()?, rhs)
+                        ExpressionIntegerValue::U32(rhs) => {
+                            ExpressionIntegerValuePair::U32(untyped_lhs.parse_as()?, rhs)
                         }
-                        EvaluationIntegerValue::U64(rhs) => {
-                            EvaluationIntegerValuePair::U64(untyped_lhs.parse_as()?, rhs)
+                        ExpressionIntegerValue::U64(rhs) => {
+                            ExpressionIntegerValuePair::U64(untyped_lhs.parse_as()?, rhs)
                         }
-                        EvaluationIntegerValue::U128(rhs) => {
-                            EvaluationIntegerValuePair::U128(untyped_lhs.parse_as()?, rhs)
+                        ExpressionIntegerValue::U128(rhs) => {
+                            ExpressionIntegerValuePair::U128(untyped_lhs.parse_as()?, rhs)
                         }
-                        EvaluationIntegerValue::Usize(rhs) => {
-                            EvaluationIntegerValuePair::Usize(untyped_lhs.parse_as()?, rhs)
+                        ExpressionIntegerValue::Usize(rhs) => {
+                            ExpressionIntegerValuePair::Usize(untyped_lhs.parse_as()?, rhs)
                         }
-                        EvaluationIntegerValue::I8(rhs) => {
-                            EvaluationIntegerValuePair::I8(untyped_lhs.parse_as()?, rhs)
+                        ExpressionIntegerValue::I8(rhs) => {
+                            ExpressionIntegerValuePair::I8(untyped_lhs.parse_as()?, rhs)
                         }
-                        EvaluationIntegerValue::I16(rhs) => {
-                            EvaluationIntegerValuePair::I16(untyped_lhs.parse_as()?, rhs)
+                        ExpressionIntegerValue::I16(rhs) => {
+                            ExpressionIntegerValuePair::I16(untyped_lhs.parse_as()?, rhs)
                         }
-                        EvaluationIntegerValue::I32(rhs) => {
-                            EvaluationIntegerValuePair::I32(untyped_lhs.parse_as()?, rhs)
+                        ExpressionIntegerValue::I32(rhs) => {
+                            ExpressionIntegerValuePair::I32(untyped_lhs.parse_as()?, rhs)
                         }
-                        EvaluationIntegerValue::I64(rhs) => {
-                            EvaluationIntegerValuePair::I64(untyped_lhs.parse_as()?, rhs)
+                        ExpressionIntegerValue::I64(rhs) => {
+                            ExpressionIntegerValuePair::I64(untyped_lhs.parse_as()?, rhs)
                         }
-                        EvaluationIntegerValue::I128(rhs) => {
-                            EvaluationIntegerValuePair::I128(untyped_lhs.parse_as()?, rhs)
+                        ExpressionIntegerValue::I128(rhs) => {
+                            ExpressionIntegerValuePair::I128(untyped_lhs.parse_as()?, rhs)
                         }
-                        EvaluationIntegerValue::Isize(rhs) => {
-                            EvaluationIntegerValuePair::Isize(untyped_lhs.parse_as()?, rhs)
-                        }
-                    },
-                    (lhs, EvaluationIntegerValue::Untyped(untyped_rhs)) => match lhs {
-                        EvaluationIntegerValue::Untyped(untyped_lhs) => {
-                            EvaluationIntegerValuePair::Untyped(untyped_lhs, untyped_rhs)
-                        }
-                        EvaluationIntegerValue::U8(lhs) => {
-                            EvaluationIntegerValuePair::U8(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationIntegerValue::U16(lhs) => {
-                            EvaluationIntegerValuePair::U16(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationIntegerValue::U32(lhs) => {
-                            EvaluationIntegerValuePair::U32(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationIntegerValue::U64(lhs) => {
-                            EvaluationIntegerValuePair::U64(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationIntegerValue::U128(lhs) => {
-                            EvaluationIntegerValuePair::U128(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationIntegerValue::Usize(lhs) => {
-                            EvaluationIntegerValuePair::Usize(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationIntegerValue::I8(lhs) => {
-                            EvaluationIntegerValuePair::I8(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationIntegerValue::I16(lhs) => {
-                            EvaluationIntegerValuePair::I16(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationIntegerValue::I32(lhs) => {
-                            EvaluationIntegerValuePair::I32(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationIntegerValue::I64(lhs) => {
-                            EvaluationIntegerValuePair::I64(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationIntegerValue::I128(lhs) => {
-                            EvaluationIntegerValuePair::I128(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationIntegerValue::Isize(lhs) => {
-                            EvaluationIntegerValuePair::Isize(lhs, untyped_rhs.parse_as()?)
+                        ExpressionIntegerValue::Isize(rhs) => {
+                            ExpressionIntegerValuePair::Isize(untyped_lhs.parse_as()?, rhs)
                         }
                     },
-                    (EvaluationIntegerValue::U8(lhs), EvaluationIntegerValue::U8(rhs)) => {
-                        EvaluationIntegerValuePair::U8(lhs, rhs)
+                    (lhs, ExpressionIntegerValue::Untyped(untyped_rhs)) => match lhs {
+                        ExpressionIntegerValue::Untyped(untyped_lhs) => {
+                            ExpressionIntegerValuePair::Untyped(untyped_lhs, untyped_rhs)
+                        }
+                        ExpressionIntegerValue::U8(lhs) => {
+                            ExpressionIntegerValuePair::U8(lhs, untyped_rhs.parse_as()?)
+                        }
+                        ExpressionIntegerValue::U16(lhs) => {
+                            ExpressionIntegerValuePair::U16(lhs, untyped_rhs.parse_as()?)
+                        }
+                        ExpressionIntegerValue::U32(lhs) => {
+                            ExpressionIntegerValuePair::U32(lhs, untyped_rhs.parse_as()?)
+                        }
+                        ExpressionIntegerValue::U64(lhs) => {
+                            ExpressionIntegerValuePair::U64(lhs, untyped_rhs.parse_as()?)
+                        }
+                        ExpressionIntegerValue::U128(lhs) => {
+                            ExpressionIntegerValuePair::U128(lhs, untyped_rhs.parse_as()?)
+                        }
+                        ExpressionIntegerValue::Usize(lhs) => {
+                            ExpressionIntegerValuePair::Usize(lhs, untyped_rhs.parse_as()?)
+                        }
+                        ExpressionIntegerValue::I8(lhs) => {
+                            ExpressionIntegerValuePair::I8(lhs, untyped_rhs.parse_as()?)
+                        }
+                        ExpressionIntegerValue::I16(lhs) => {
+                            ExpressionIntegerValuePair::I16(lhs, untyped_rhs.parse_as()?)
+                        }
+                        ExpressionIntegerValue::I32(lhs) => {
+                            ExpressionIntegerValuePair::I32(lhs, untyped_rhs.parse_as()?)
+                        }
+                        ExpressionIntegerValue::I64(lhs) => {
+                            ExpressionIntegerValuePair::I64(lhs, untyped_rhs.parse_as()?)
+                        }
+                        ExpressionIntegerValue::I128(lhs) => {
+                            ExpressionIntegerValuePair::I128(lhs, untyped_rhs.parse_as()?)
+                        }
+                        ExpressionIntegerValue::Isize(lhs) => {
+                            ExpressionIntegerValuePair::Isize(lhs, untyped_rhs.parse_as()?)
+                        }
+                    },
+                    (ExpressionIntegerValue::U8(lhs), ExpressionIntegerValue::U8(rhs)) => {
+                        ExpressionIntegerValuePair::U8(lhs, rhs)
                     }
-                    (EvaluationIntegerValue::U16(lhs), EvaluationIntegerValue::U16(rhs)) => {
-                        EvaluationIntegerValuePair::U16(lhs, rhs)
+                    (ExpressionIntegerValue::U16(lhs), ExpressionIntegerValue::U16(rhs)) => {
+                        ExpressionIntegerValuePair::U16(lhs, rhs)
                     }
-                    (EvaluationIntegerValue::U32(lhs), EvaluationIntegerValue::U32(rhs)) => {
-                        EvaluationIntegerValuePair::U32(lhs, rhs)
+                    (ExpressionIntegerValue::U32(lhs), ExpressionIntegerValue::U32(rhs)) => {
+                        ExpressionIntegerValuePair::U32(lhs, rhs)
                     }
-                    (EvaluationIntegerValue::U64(lhs), EvaluationIntegerValue::U64(rhs)) => {
-                        EvaluationIntegerValuePair::U64(lhs, rhs)
+                    (ExpressionIntegerValue::U64(lhs), ExpressionIntegerValue::U64(rhs)) => {
+                        ExpressionIntegerValuePair::U64(lhs, rhs)
                     }
-                    (EvaluationIntegerValue::U128(lhs), EvaluationIntegerValue::U128(rhs)) => {
-                        EvaluationIntegerValuePair::U128(lhs, rhs)
+                    (ExpressionIntegerValue::U128(lhs), ExpressionIntegerValue::U128(rhs)) => {
+                        ExpressionIntegerValuePair::U128(lhs, rhs)
                     }
-                    (EvaluationIntegerValue::Usize(lhs), EvaluationIntegerValue::Usize(rhs)) => {
-                        EvaluationIntegerValuePair::Usize(lhs, rhs)
+                    (ExpressionIntegerValue::Usize(lhs), ExpressionIntegerValue::Usize(rhs)) => {
+                        ExpressionIntegerValuePair::Usize(lhs, rhs)
                     }
-                    (EvaluationIntegerValue::I8(lhs), EvaluationIntegerValue::I8(rhs)) => {
-                        EvaluationIntegerValuePair::I8(lhs, rhs)
+                    (ExpressionIntegerValue::I8(lhs), ExpressionIntegerValue::I8(rhs)) => {
+                        ExpressionIntegerValuePair::I8(lhs, rhs)
                     }
-                    (EvaluationIntegerValue::I16(lhs), EvaluationIntegerValue::I16(rhs)) => {
-                        EvaluationIntegerValuePair::I16(lhs, rhs)
+                    (ExpressionIntegerValue::I16(lhs), ExpressionIntegerValue::I16(rhs)) => {
+                        ExpressionIntegerValuePair::I16(lhs, rhs)
                     }
-                    (EvaluationIntegerValue::I32(lhs), EvaluationIntegerValue::I32(rhs)) => {
-                        EvaluationIntegerValuePair::I32(lhs, rhs)
+                    (ExpressionIntegerValue::I32(lhs), ExpressionIntegerValue::I32(rhs)) => {
+                        ExpressionIntegerValuePair::I32(lhs, rhs)
                     }
-                    (EvaluationIntegerValue::I64(lhs), EvaluationIntegerValue::I64(rhs)) => {
-                        EvaluationIntegerValuePair::I64(lhs, rhs)
+                    (ExpressionIntegerValue::I64(lhs), ExpressionIntegerValue::I64(rhs)) => {
+                        ExpressionIntegerValuePair::I64(lhs, rhs)
                     }
-                    (EvaluationIntegerValue::I128(lhs), EvaluationIntegerValue::I128(rhs)) => {
-                        EvaluationIntegerValuePair::I128(lhs, rhs)
+                    (ExpressionIntegerValue::I128(lhs), ExpressionIntegerValue::I128(rhs)) => {
+                        ExpressionIntegerValuePair::I128(lhs, rhs)
                     }
-                    (EvaluationIntegerValue::Isize(lhs), EvaluationIntegerValue::Isize(rhs)) => {
-                        EvaluationIntegerValuePair::Isize(lhs, rhs)
+                    (ExpressionIntegerValue::Isize(lhs), ExpressionIntegerValue::Isize(rhs)) => {
+                        ExpressionIntegerValuePair::Isize(lhs, rhs)
                     }
                     (left_value, right_value) => {
                         return operation.execution_err(format!("The {} operator cannot infer a common integer operand type from {} and {}. Consider using `as` to cast to matching types.", operation.symbol(), left_value.describe_type(), right_value.describe_type()));
@@ -167,33 +167,33 @@ impl ExpressionValue {
             }
             (ExpressionValue::Float(left), ExpressionValue::Float(right)) => {
                 let float_pair = match (left.value, right.value) {
-                    (EvaluationFloatValue::Untyped(untyped_lhs), rhs) => match rhs {
-                        EvaluationFloatValue::Untyped(untyped_rhs) => {
-                            EvaluationFloatValuePair::Untyped(untyped_lhs, untyped_rhs)
+                    (ExpressionFloatValue::Untyped(untyped_lhs), rhs) => match rhs {
+                        ExpressionFloatValue::Untyped(untyped_rhs) => {
+                            ExpressionFloatValuePair::Untyped(untyped_lhs, untyped_rhs)
                         }
-                        EvaluationFloatValue::F32(rhs) => {
-                            EvaluationFloatValuePair::F32(untyped_lhs.parse_as()?, rhs)
+                        ExpressionFloatValue::F32(rhs) => {
+                            ExpressionFloatValuePair::F32(untyped_lhs.parse_as()?, rhs)
                         }
-                        EvaluationFloatValue::F64(rhs) => {
-                            EvaluationFloatValuePair::F64(untyped_lhs.parse_as()?, rhs)
-                        }
-                    },
-                    (lhs, EvaluationFloatValue::Untyped(untyped_rhs)) => match lhs {
-                        EvaluationFloatValue::Untyped(untyped_lhs) => {
-                            EvaluationFloatValuePair::Untyped(untyped_lhs, untyped_rhs)
-                        }
-                        EvaluationFloatValue::F32(lhs) => {
-                            EvaluationFloatValuePair::F32(lhs, untyped_rhs.parse_as()?)
-                        }
-                        EvaluationFloatValue::F64(lhs) => {
-                            EvaluationFloatValuePair::F64(lhs, untyped_rhs.parse_as()?)
+                        ExpressionFloatValue::F64(rhs) => {
+                            ExpressionFloatValuePair::F64(untyped_lhs.parse_as()?, rhs)
                         }
                     },
-                    (EvaluationFloatValue::F32(lhs), EvaluationFloatValue::F32(rhs)) => {
-                        EvaluationFloatValuePair::F32(lhs, rhs)
+                    (lhs, ExpressionFloatValue::Untyped(untyped_rhs)) => match lhs {
+                        ExpressionFloatValue::Untyped(untyped_lhs) => {
+                            ExpressionFloatValuePair::Untyped(untyped_lhs, untyped_rhs)
+                        }
+                        ExpressionFloatValue::F32(lhs) => {
+                            ExpressionFloatValuePair::F32(lhs, untyped_rhs.parse_as()?)
+                        }
+                        ExpressionFloatValue::F64(lhs) => {
+                            ExpressionFloatValuePair::F64(lhs, untyped_rhs.parse_as()?)
+                        }
+                    },
+                    (ExpressionFloatValue::F32(lhs), ExpressionFloatValue::F32(rhs)) => {
+                        ExpressionFloatValuePair::F32(lhs, rhs)
                     }
-                    (EvaluationFloatValue::F64(lhs), EvaluationFloatValue::F64(rhs)) => {
-                        EvaluationFloatValuePair::F64(lhs, rhs)
+                    (ExpressionFloatValue::F64(lhs), ExpressionFloatValue::F64(rhs)) => {
+                        ExpressionFloatValuePair::F64(lhs, rhs)
                     }
                     (left_value, right_value) => {
                         return operation.execution_err(format!("The {} operator cannot infer a common float operand type from {} and {}. Consider using `as` to cast to matching types.", operation.symbol(), left_value.describe_type(), right_value.describe_type()));
@@ -213,14 +213,14 @@ impl ExpressionValue {
         })
     }
 
-    pub(crate) fn into_integer(self) -> Option<EvaluationInteger> {
+    pub(crate) fn into_integer(self) -> Option<ExpressionInteger> {
         match self {
             ExpressionValue::Integer(value) => Some(value),
             _ => None,
         }
     }
 
-    pub(crate) fn into_bool(self) -> Option<EvaluationBoolean> {
+    pub(crate) fn into_bool(self) -> Option<ExpressionBoolean> {
         match self {
             ExpressionValue::Boolean(value) => Some(value),
             _ => None,
@@ -228,7 +228,7 @@ impl ExpressionValue {
     }
 
     /// The span is used if there isn't already a span available
-    pub(super) fn to_token_tree(&self, fallback_output_span: Span) -> TokenTree {
+    pub(crate) fn to_token_tree(&self, fallback_output_span: Span) -> TokenTree {
         match self {
             Self::Integer(int) => int.to_literal(fallback_output_span).into(),
             Self::Float(float) => float.to_literal(fallback_output_span).into(),
@@ -273,7 +273,7 @@ impl ExpressionValue {
 
     pub(super) fn handle_integer_binary_operation(
         self,
-        right: EvaluationInteger,
+        right: ExpressionInteger,
         operation: &IntegerBinaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         match self {
@@ -292,6 +292,15 @@ impl ExpressionValue {
             ExpressionValue::Char(value) => value.handle_integer_binary_operation(right, operation),
         }
     }
+
+    pub(crate) fn create_range(
+        self,
+        other: Self,
+        range_limits: &syn::RangeLimits,
+    ) -> ExecutionResult<Box<dyn Iterator<Item = ExpressionValue> + '_>> {
+        self.expect_value_pair(range_limits, other)?
+            .create_range(range_limits)
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -303,11 +312,11 @@ pub(super) enum CastTarget {
 }
 
 pub(super) enum EvaluationLiteralPair {
-    Integer(EvaluationIntegerValuePair),
-    Float(EvaluationFloatValuePair),
-    BooleanPair(EvaluationBoolean, EvaluationBoolean),
-    StringPair(EvaluationString, EvaluationString),
-    CharPair(EvaluationChar, EvaluationChar),
+    Integer(ExpressionIntegerValuePair),
+    Float(ExpressionFloatValuePair),
+    BooleanPair(ExpressionBoolean, ExpressionBoolean),
+    StringPair(ExpressionString, ExpressionString),
+    CharPair(ExpressionChar, ExpressionChar),
 }
 
 impl EvaluationLiteralPair {
@@ -322,5 +331,19 @@ impl EvaluationLiteralPair {
             Self::StringPair(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
             Self::CharPair(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
         }
+    }
+
+    pub(super) fn create_range(
+        self,
+        range_limits: &syn::RangeLimits,
+    ) -> ExecutionResult<Box<dyn Iterator<Item = ExpressionValue> + '_>> {
+        Ok(match self {
+            EvaluationLiteralPair::Integer(pair) => return pair.create_range(range_limits),
+            EvaluationLiteralPair::CharPair(left, right) => left.create_range(right, range_limits),
+            _ => {
+                return range_limits
+                    .execution_err("The range must be between two integers or two characters")
+            }
+        })
     }
 }

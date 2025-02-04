@@ -72,7 +72,6 @@ fn test_ignore() {
     }, false);
 }
 
-
 #[test]
 fn test_empty_set() {
     assert_preinterpret_eq!({

@@ -1,14 +1,14 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct EvaluationBoolean {
+pub(crate) struct ExpressionBoolean {
     pub(super) value: bool,
     /// The span of the source code that generated this boolean value.
     /// It may not have a value if generated from a complex expression.
     pub(super) source_span: Option<Span>,
 }
 
-impl EvaluationBoolean {
+impl ExpressionBoolean {
     pub(super) fn for_litbool(lit: syn::LitBool) -> Self {
         Self {
             source_span: Some(lit.span()),
@@ -21,8 +21,10 @@ impl EvaluationBoolean {
         operation: UnaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         let input = self.value;
-        match operation {
-            UnaryOperation::Neg { .. } => operation.unsupported_for_value_type_err("boolean"),
+        Ok(match operation {
+            UnaryOperation::Neg { .. } => {
+                return operation.unsupported_for_value_type_err("boolean")
+            }
             UnaryOperation::Not { .. } => operation.output(!input),
             UnaryOperation::GroupedNoOp { .. } => operation.output(input),
             UnaryOperation::Cast { target, .. } => match target {
@@ -42,16 +44,16 @@ impl EvaluationBoolean {
                 CastTarget::Integer(IntegerKind::U128) => operation.output(input as u128),
                 CastTarget::Integer(IntegerKind::Usize) => operation.output(input as usize),
                 CastTarget::Float(_) | CastTarget::Char => {
-                    operation.execution_err("This cast is not supported")
+                    return operation.execution_err("This cast is not supported")
                 }
                 CastTarget::Boolean => operation.output(self.value),
             },
-        }
+        })
     }
 
     pub(super) fn handle_integer_binary_operation(
         self,
-        _right: EvaluationInteger,
+        _right: ExpressionInteger,
         operation: &IntegerBinaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         match operation {
@@ -69,17 +71,17 @@ impl EvaluationBoolean {
     ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.value;
         let rhs = rhs.value;
-        match operation {
+        Ok(match operation {
             PairedBinaryOperation::Addition { .. }
             | PairedBinaryOperation::Subtraction { .. }
             | PairedBinaryOperation::Multiplication { .. }
             | PairedBinaryOperation::Division { .. } => {
-                operation.unsupported_for_value_type_err("boolean")
+                return operation.unsupported_for_value_type_err("boolean")
             }
             PairedBinaryOperation::LogicalAnd { .. } => operation.output(lhs && rhs),
             PairedBinaryOperation::LogicalOr { .. } => operation.output(lhs || rhs),
             PairedBinaryOperation::Remainder { .. } => {
-                operation.unsupported_for_value_type_err("boolean")
+                return operation.unsupported_for_value_type_err("boolean")
             }
             PairedBinaryOperation::BitXor { .. } => operation.output(lhs ^ rhs),
             PairedBinaryOperation::BitAnd { .. } => operation.output(lhs & rhs),
@@ -90,7 +92,7 @@ impl EvaluationBoolean {
             PairedBinaryOperation::NotEqual { .. } => operation.output(lhs != rhs),
             PairedBinaryOperation::GreaterThanOrEqual { .. } => operation.output(lhs >= rhs),
             PairedBinaryOperation::GreaterThan { .. } => operation.output(lhs & !rhs),
-        }
+        })
     }
 
     pub(super) fn to_ident(&self, fallback_span: Span) -> Ident {
@@ -100,7 +102,7 @@ impl EvaluationBoolean {
 
 impl ToExpressionValue for bool {
     fn to_value(self, source_span: Option<Span>) -> ExpressionValue {
-        ExpressionValue::Boolean(EvaluationBoolean {
+        ExpressionValue::Boolean(ExpressionBoolean {
             value: self,
             source_span,
         })

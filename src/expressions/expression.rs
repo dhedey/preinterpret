@@ -26,8 +26,8 @@ impl SourceExpression {
     pub(crate) fn evaluate(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<EvaluationOutput> {
-        Ok(EvaluationOutput {
+    ) -> ExecutionResult<ExpressionOutput> {
+        Ok(ExpressionOutput {
             value: self.evaluate_to_value(interpreter)?,
             fallback_output_span: self.inner.span_range.join_into_span_else_start(),
         })
@@ -37,8 +37,8 @@ impl SourceExpression {
         &self,
         interpreter: &mut Interpreter,
         fallback_output_span: Span,
-    ) -> ExecutionResult<EvaluationOutput> {
-        Ok(EvaluationOutput {
+    ) -> ExecutionResult<ExpressionOutput> {
+        Ok(ExpressionOutput {
             value: self.evaluate_to_value(interpreter)?,
             fallback_output_span,
         })
@@ -98,7 +98,7 @@ impl Expressionable for Source {
                 UnaryAtom::PrefixUnaryOperation(input.parse()?)
             },
             GrammarPeekMatch::Ident(_) => {
-                let value = ExpressionValue::Boolean(EvaluationBoolean::for_litbool(input.parse()?));
+                let value = ExpressionValue::Boolean(ExpressionBoolean::for_litbool(input.parse()?));
                 UnaryAtom::Leaf(Self::Leaf::Value(value))
             },
             GrammarPeekMatch::Literal(_) => {
@@ -165,8 +165,8 @@ impl Parse<Output> for OutputExpression {
 }
 
 impl OutputExpression {
-    pub(crate) fn evaluate(&self) -> ExecutionResult<EvaluationOutput> {
-        Ok(EvaluationOutput {
+    pub(crate) fn evaluate(&self) -> ExecutionResult<ExpressionOutput> {
+        Ok(ExpressionOutput {
             value: self.evaluate_to_value()?,
             fallback_output_span: self.inner.span_range.join_into_span_else_start(),
         })
@@ -206,7 +206,7 @@ impl Expressionable for Output {
                 return input.parse_err("Square brackets [ .. ] are not supported in an expression")
             }
             OutputPeekMatch::Ident(_) => UnaryAtom::Leaf(ExpressionValue::Boolean(
-                EvaluationBoolean::for_litbool(input.parse()?),
+                ExpressionBoolean::for_litbool(input.parse()?),
             )),
             OutputPeekMatch::Punct(_) => UnaryAtom::PrefixUnaryOperation(input.parse()?),
             OutputPeekMatch::Literal(_) => {

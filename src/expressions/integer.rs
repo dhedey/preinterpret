@@ -1,38 +1,20 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct EvaluationInteger {
-    pub(super) value: EvaluationIntegerValue,
+pub(crate) struct ExpressionInteger {
+    pub(super) value: ExpressionIntegerValue,
     /// The span of the source code that generated this boolean value.
     /// It may not have a value if generated from a complex expression.
     pub(super) source_span: Option<Span>,
 }
 
-impl EvaluationInteger {
+impl ExpressionInteger {
     pub(super) fn for_litint(lit: syn::LitInt) -> ParseResult<Self> {
         let source_span = Some(lit.span());
         Ok(Self {
-            value: EvaluationIntegerValue::for_litint(lit)?,
+            value: ExpressionIntegerValue::for_litint(lit)?,
             source_span,
         })
-    }
-
-    pub(crate) fn try_into_i128(self) -> Option<i128> {
-        match self.value {
-            EvaluationIntegerValue::Untyped(x) => x.parse_fallback().ok(),
-            EvaluationIntegerValue::U8(x) => Some(x.into()),
-            EvaluationIntegerValue::U16(x) => Some(x.into()),
-            EvaluationIntegerValue::U32(x) => Some(x.into()),
-            EvaluationIntegerValue::U64(x) => Some(x.into()),
-            EvaluationIntegerValue::U128(x) => x.try_into().ok(),
-            EvaluationIntegerValue::Usize(x) => x.try_into().ok(),
-            EvaluationIntegerValue::I8(x) => Some(x.into()),
-            EvaluationIntegerValue::I16(x) => Some(x.into()),
-            EvaluationIntegerValue::I32(x) => Some(x.into()),
-            EvaluationIntegerValue::I64(x) => Some(x.into()),
-            EvaluationIntegerValue::I128(x) => Some(x),
-            EvaluationIntegerValue::Isize(x) => x.try_into().ok(),
-        }
     }
 
     pub(super) fn handle_unary_operation(
@@ -40,65 +22,65 @@ impl EvaluationInteger {
         operation: UnaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         match self.value {
-            EvaluationIntegerValue::Untyped(input) => input.handle_unary_operation(&operation),
-            EvaluationIntegerValue::U8(input) => input.handle_unary_operation(&operation),
-            EvaluationIntegerValue::U16(input) => input.handle_unary_operation(&operation),
-            EvaluationIntegerValue::U32(input) => input.handle_unary_operation(&operation),
-            EvaluationIntegerValue::U64(input) => input.handle_unary_operation(&operation),
-            EvaluationIntegerValue::U128(input) => input.handle_unary_operation(&operation),
-            EvaluationIntegerValue::Usize(input) => input.handle_unary_operation(&operation),
-            EvaluationIntegerValue::I8(input) => input.handle_unary_operation(&operation),
-            EvaluationIntegerValue::I16(input) => input.handle_unary_operation(&operation),
-            EvaluationIntegerValue::I32(input) => input.handle_unary_operation(&operation),
-            EvaluationIntegerValue::I64(input) => input.handle_unary_operation(&operation),
-            EvaluationIntegerValue::I128(input) => input.handle_unary_operation(&operation),
-            EvaluationIntegerValue::Isize(input) => input.handle_unary_operation(&operation),
+            ExpressionIntegerValue::Untyped(input) => input.handle_unary_operation(&operation),
+            ExpressionIntegerValue::U8(input) => input.handle_unary_operation(&operation),
+            ExpressionIntegerValue::U16(input) => input.handle_unary_operation(&operation),
+            ExpressionIntegerValue::U32(input) => input.handle_unary_operation(&operation),
+            ExpressionIntegerValue::U64(input) => input.handle_unary_operation(&operation),
+            ExpressionIntegerValue::U128(input) => input.handle_unary_operation(&operation),
+            ExpressionIntegerValue::Usize(input) => input.handle_unary_operation(&operation),
+            ExpressionIntegerValue::I8(input) => input.handle_unary_operation(&operation),
+            ExpressionIntegerValue::I16(input) => input.handle_unary_operation(&operation),
+            ExpressionIntegerValue::I32(input) => input.handle_unary_operation(&operation),
+            ExpressionIntegerValue::I64(input) => input.handle_unary_operation(&operation),
+            ExpressionIntegerValue::I128(input) => input.handle_unary_operation(&operation),
+            ExpressionIntegerValue::Isize(input) => input.handle_unary_operation(&operation),
         }
     }
 
     pub(super) fn handle_integer_binary_operation(
         self,
-        right: EvaluationInteger,
+        right: ExpressionInteger,
         operation: &IntegerBinaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         match self.value {
-            EvaluationIntegerValue::Untyped(input) => {
+            ExpressionIntegerValue::Untyped(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            EvaluationIntegerValue::U8(input) => {
+            ExpressionIntegerValue::U8(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            EvaluationIntegerValue::U16(input) => {
+            ExpressionIntegerValue::U16(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            EvaluationIntegerValue::U32(input) => {
+            ExpressionIntegerValue::U32(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            EvaluationIntegerValue::U64(input) => {
+            ExpressionIntegerValue::U64(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            EvaluationIntegerValue::U128(input) => {
+            ExpressionIntegerValue::U128(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            EvaluationIntegerValue::Usize(input) => {
+            ExpressionIntegerValue::Usize(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            EvaluationIntegerValue::I8(input) => {
+            ExpressionIntegerValue::I8(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            EvaluationIntegerValue::I16(input) => {
+            ExpressionIntegerValue::I16(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            EvaluationIntegerValue::I32(input) => {
+            ExpressionIntegerValue::I32(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            EvaluationIntegerValue::I64(input) => {
+            ExpressionIntegerValue::I64(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            EvaluationIntegerValue::I128(input) => {
+            ExpressionIntegerValue::I128(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            EvaluationIntegerValue::Isize(input) => {
+            ExpressionIntegerValue::Isize(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
         }
@@ -111,7 +93,7 @@ impl EvaluationInteger {
     }
 }
 
-pub(super) enum EvaluationIntegerValuePair {
+pub(super) enum ExpressionIntegerValuePair {
     Untyped(UntypedInteger, UntypedInteger),
     U8(u8, u8),
     U16(u16, u16),
@@ -127,7 +109,7 @@ pub(super) enum EvaluationIntegerValuePair {
     Isize(isize, isize),
 }
 
-impl EvaluationIntegerValuePair {
+impl ExpressionIntegerValuePair {
     pub(super) fn handle_paired_binary_operation(
         self,
         operation: &PairedBinaryOperation,
@@ -147,6 +129,27 @@ impl EvaluationIntegerValuePair {
             Self::I128(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
             Self::Isize(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
         }
+    }
+
+    pub(crate) fn create_range(
+        self,
+        range_limits: &syn::RangeLimits,
+    ) -> ExecutionResult<Box<dyn Iterator<Item = ExpressionValue> + '_>> {
+        Ok(match self {
+            Self::Untyped(lhs, rhs) => return lhs.create_range(rhs, range_limits),
+            Self::U8(lhs, rhs) => lhs.create_range(rhs, range_limits),
+            Self::U16(lhs, rhs) => lhs.create_range(rhs, range_limits),
+            Self::U32(lhs, rhs) => lhs.create_range(rhs, range_limits),
+            Self::U64(lhs, rhs) => lhs.create_range(rhs, range_limits),
+            Self::U128(lhs, rhs) => lhs.create_range(rhs, range_limits),
+            Self::Usize(lhs, rhs) => lhs.create_range(rhs, range_limits),
+            Self::I8(lhs, rhs) => lhs.create_range(rhs, range_limits),
+            Self::I16(lhs, rhs) => lhs.create_range(rhs, range_limits),
+            Self::I32(lhs, rhs) => lhs.create_range(rhs, range_limits),
+            Self::I64(lhs, rhs) => lhs.create_range(rhs, range_limits),
+            Self::I128(lhs, rhs) => lhs.create_range(rhs, range_limits),
+            Self::Isize(lhs, rhs) => lhs.create_range(rhs, range_limits),
+        })
     }
 }
 
@@ -168,7 +171,7 @@ pub(super) enum IntegerKind {
 }
 
 #[derive(Clone)]
-pub(super) enum EvaluationIntegerValue {
+pub(super) enum ExpressionIntegerValue {
     Untyped(UntypedInteger),
     U8(u8),
     U16(u16),
@@ -184,7 +187,7 @@ pub(super) enum EvaluationIntegerValue {
     Isize(isize),
 }
 
-impl EvaluationIntegerValue {
+impl ExpressionIntegerValue {
     pub(super) fn for_litint(lit: syn::LitInt) -> ParseResult<Self> {
         Ok(match lit.suffix() {
             "" => Self::Untyped(UntypedInteger::new_from_lit_int(lit)),
@@ -210,37 +213,37 @@ impl EvaluationIntegerValue {
 
     pub(super) fn describe_type(&self) -> &'static str {
         match self {
-            EvaluationIntegerValue::Untyped(_) => "untyped integer",
-            EvaluationIntegerValue::U8(_) => "u8",
-            EvaluationIntegerValue::U16(_) => "u16",
-            EvaluationIntegerValue::U32(_) => "u32",
-            EvaluationIntegerValue::U64(_) => "u64",
-            EvaluationIntegerValue::U128(_) => "u128",
-            EvaluationIntegerValue::Usize(_) => "usize",
-            EvaluationIntegerValue::I8(_) => "i8",
-            EvaluationIntegerValue::I16(_) => "i16",
-            EvaluationIntegerValue::I32(_) => "i32",
-            EvaluationIntegerValue::I64(_) => "i64",
-            EvaluationIntegerValue::I128(_) => "i128",
-            EvaluationIntegerValue::Isize(_) => "isize",
+            ExpressionIntegerValue::Untyped(_) => "untyped integer",
+            ExpressionIntegerValue::U8(_) => "u8",
+            ExpressionIntegerValue::U16(_) => "u16",
+            ExpressionIntegerValue::U32(_) => "u32",
+            ExpressionIntegerValue::U64(_) => "u64",
+            ExpressionIntegerValue::U128(_) => "u128",
+            ExpressionIntegerValue::Usize(_) => "usize",
+            ExpressionIntegerValue::I8(_) => "i8",
+            ExpressionIntegerValue::I16(_) => "i16",
+            ExpressionIntegerValue::I32(_) => "i32",
+            ExpressionIntegerValue::I64(_) => "i64",
+            ExpressionIntegerValue::I128(_) => "i128",
+            ExpressionIntegerValue::Isize(_) => "isize",
         }
     }
 
     fn to_unspanned_literal(&self) -> Literal {
         match self {
-            EvaluationIntegerValue::Untyped(int) => int.to_unspanned_literal(),
-            EvaluationIntegerValue::U8(int) => Literal::u8_suffixed(*int),
-            EvaluationIntegerValue::U16(int) => Literal::u16_suffixed(*int),
-            EvaluationIntegerValue::U32(int) => Literal::u32_suffixed(*int),
-            EvaluationIntegerValue::U64(int) => Literal::u64_suffixed(*int),
-            EvaluationIntegerValue::U128(int) => Literal::u128_suffixed(*int),
-            EvaluationIntegerValue::Usize(int) => Literal::usize_suffixed(*int),
-            EvaluationIntegerValue::I8(int) => Literal::i8_suffixed(*int),
-            EvaluationIntegerValue::I16(int) => Literal::i16_suffixed(*int),
-            EvaluationIntegerValue::I32(int) => Literal::i32_suffixed(*int),
-            EvaluationIntegerValue::I64(int) => Literal::i64_suffixed(*int),
-            EvaluationIntegerValue::I128(int) => Literal::i128_suffixed(*int),
-            EvaluationIntegerValue::Isize(int) => Literal::isize_suffixed(*int),
+            ExpressionIntegerValue::Untyped(int) => int.to_unspanned_literal(),
+            ExpressionIntegerValue::U8(int) => Literal::u8_suffixed(*int),
+            ExpressionIntegerValue::U16(int) => Literal::u16_suffixed(*int),
+            ExpressionIntegerValue::U32(int) => Literal::u32_suffixed(*int),
+            ExpressionIntegerValue::U64(int) => Literal::u64_suffixed(*int),
+            ExpressionIntegerValue::U128(int) => Literal::u128_suffixed(*int),
+            ExpressionIntegerValue::Usize(int) => Literal::usize_suffixed(*int),
+            ExpressionIntegerValue::I8(int) => Literal::i8_suffixed(*int),
+            ExpressionIntegerValue::I16(int) => Literal::i16_suffixed(*int),
+            ExpressionIntegerValue::I32(int) => Literal::i32_suffixed(*int),
+            ExpressionIntegerValue::I64(int) => Literal::i64_suffixed(*int),
+            ExpressionIntegerValue::I128(int) => Literal::i128_suffixed(*int),
+            ExpressionIntegerValue::Isize(int) => Literal::isize_suffixed(*int),
         }
     }
 }
@@ -266,10 +269,10 @@ impl UntypedInteger {
         operation: &UnaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         let input = self.parse_fallback()?;
-        match operation {
+        Ok(match operation {
             UnaryOperation::Neg { .. } => operation.output(Self::from_fallback(-input)),
             UnaryOperation::Not { .. } => {
-                operation.unsupported_for_value_type_err("untyped integer")
+                return operation.unsupported_for_value_type_err("untyped integer")
             }
             UnaryOperation::GroupedNoOp { .. } => operation.output(self),
             UnaryOperation::Cast { target, .. } => match target {
@@ -294,54 +297,54 @@ impl UntypedInteger {
                 CastTarget::Float(FloatKind::F32) => operation.output(input as f32),
                 CastTarget::Float(FloatKind::F64) => operation.output(input as f64),
                 CastTarget::Boolean | CastTarget::Char => {
-                    operation.execution_err("This cast is not supported")
+                    return operation.execution_err("This cast is not supported")
                 }
             },
-        }
+        })
     }
 
     pub(super) fn handle_integer_binary_operation(
         self,
-        rhs: EvaluationInteger,
+        rhs: ExpressionInteger,
         operation: &IntegerBinaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.parse_fallback()?;
-        match operation {
+        Ok(match operation {
             IntegerBinaryOperation::ShiftLeft { .. } => match rhs.value {
-                EvaluationIntegerValue::Untyped(rhs) => {
+                ExpressionIntegerValue::Untyped(rhs) => {
                     operation.output(lhs << rhs.parse_fallback()?)
                 }
-                EvaluationIntegerValue::U8(rhs) => operation.output(lhs << rhs),
-                EvaluationIntegerValue::U16(rhs) => operation.output(lhs << rhs),
-                EvaluationIntegerValue::U32(rhs) => operation.output(lhs << rhs),
-                EvaluationIntegerValue::U64(rhs) => operation.output(lhs << rhs),
-                EvaluationIntegerValue::U128(rhs) => operation.output(lhs << rhs),
-                EvaluationIntegerValue::Usize(rhs) => operation.output(lhs << rhs),
-                EvaluationIntegerValue::I8(rhs) => operation.output(lhs << rhs),
-                EvaluationIntegerValue::I16(rhs) => operation.output(lhs << rhs),
-                EvaluationIntegerValue::I32(rhs) => operation.output(lhs << rhs),
-                EvaluationIntegerValue::I64(rhs) => operation.output(lhs << rhs),
-                EvaluationIntegerValue::I128(rhs) => operation.output(lhs << rhs),
-                EvaluationIntegerValue::Isize(rhs) => operation.output(lhs << rhs),
+                ExpressionIntegerValue::U8(rhs) => operation.output(lhs << rhs),
+                ExpressionIntegerValue::U16(rhs) => operation.output(lhs << rhs),
+                ExpressionIntegerValue::U32(rhs) => operation.output(lhs << rhs),
+                ExpressionIntegerValue::U64(rhs) => operation.output(lhs << rhs),
+                ExpressionIntegerValue::U128(rhs) => operation.output(lhs << rhs),
+                ExpressionIntegerValue::Usize(rhs) => operation.output(lhs << rhs),
+                ExpressionIntegerValue::I8(rhs) => operation.output(lhs << rhs),
+                ExpressionIntegerValue::I16(rhs) => operation.output(lhs << rhs),
+                ExpressionIntegerValue::I32(rhs) => operation.output(lhs << rhs),
+                ExpressionIntegerValue::I64(rhs) => operation.output(lhs << rhs),
+                ExpressionIntegerValue::I128(rhs) => operation.output(lhs << rhs),
+                ExpressionIntegerValue::Isize(rhs) => operation.output(lhs << rhs),
             },
             IntegerBinaryOperation::ShiftRight { .. } => match rhs.value {
-                EvaluationIntegerValue::Untyped(rhs) => {
+                ExpressionIntegerValue::Untyped(rhs) => {
                     operation.output(lhs >> rhs.parse_fallback()?)
                 }
-                EvaluationIntegerValue::U8(rhs) => operation.output(lhs >> rhs),
-                EvaluationIntegerValue::U16(rhs) => operation.output(lhs >> rhs),
-                EvaluationIntegerValue::U32(rhs) => operation.output(lhs >> rhs),
-                EvaluationIntegerValue::U64(rhs) => operation.output(lhs >> rhs),
-                EvaluationIntegerValue::U128(rhs) => operation.output(lhs >> rhs),
-                EvaluationIntegerValue::Usize(rhs) => operation.output(lhs >> rhs),
-                EvaluationIntegerValue::I8(rhs) => operation.output(lhs >> rhs),
-                EvaluationIntegerValue::I16(rhs) => operation.output(lhs >> rhs),
-                EvaluationIntegerValue::I32(rhs) => operation.output(lhs >> rhs),
-                EvaluationIntegerValue::I64(rhs) => operation.output(lhs >> rhs),
-                EvaluationIntegerValue::I128(rhs) => operation.output(lhs >> rhs),
-                EvaluationIntegerValue::Isize(rhs) => operation.output(lhs >> rhs),
+                ExpressionIntegerValue::U8(rhs) => operation.output(lhs >> rhs),
+                ExpressionIntegerValue::U16(rhs) => operation.output(lhs >> rhs),
+                ExpressionIntegerValue::U32(rhs) => operation.output(lhs >> rhs),
+                ExpressionIntegerValue::U64(rhs) => operation.output(lhs >> rhs),
+                ExpressionIntegerValue::U128(rhs) => operation.output(lhs >> rhs),
+                ExpressionIntegerValue::Usize(rhs) => operation.output(lhs >> rhs),
+                ExpressionIntegerValue::I8(rhs) => operation.output(lhs >> rhs),
+                ExpressionIntegerValue::I16(rhs) => operation.output(lhs >> rhs),
+                ExpressionIntegerValue::I32(rhs) => operation.output(lhs >> rhs),
+                ExpressionIntegerValue::I64(rhs) => operation.output(lhs >> rhs),
+                ExpressionIntegerValue::I128(rhs) => operation.output(lhs >> rhs),
+                ExpressionIntegerValue::Isize(rhs) => operation.output(lhs >> rhs),
             },
-        }
+        })
     }
 
     pub(super) fn handle_paired_binary_operation(
@@ -359,30 +362,40 @@ impl UntypedInteger {
                 rhs
             )
         };
-        match operation {
-            PairedBinaryOperation::Addition { .. } => operation.output_if_some(
-                lhs.checked_add(rhs).map(Self::from_fallback),
-                overflow_error,
-            ),
-            PairedBinaryOperation::Subtraction { .. } => operation.output_if_some(
-                lhs.checked_sub(rhs).map(Self::from_fallback),
-                overflow_error,
-            ),
-            PairedBinaryOperation::Multiplication { .. } => operation.output_if_some(
-                lhs.checked_mul(rhs).map(Self::from_fallback),
-                overflow_error,
-            ),
-            PairedBinaryOperation::Division { .. } => operation.output_if_some(
-                lhs.checked_div(rhs).map(Self::from_fallback),
-                overflow_error,
-            ),
-            PairedBinaryOperation::LogicalAnd { .. } | PairedBinaryOperation::LogicalOr { .. } => {
-                operation.unsupported_for_value_type_err("untyped integer")
+        Ok(match operation {
+            PairedBinaryOperation::Addition { .. } => {
+                return operation.output_if_some(
+                    lhs.checked_add(rhs).map(Self::from_fallback),
+                    overflow_error,
+                )
             }
-            PairedBinaryOperation::Remainder { .. } => operation.output_if_some(
-                lhs.checked_rem(rhs).map(Self::from_fallback),
-                overflow_error,
-            ),
+            PairedBinaryOperation::Subtraction { .. } => {
+                return operation.output_if_some(
+                    lhs.checked_sub(rhs).map(Self::from_fallback),
+                    overflow_error,
+                )
+            }
+            PairedBinaryOperation::Multiplication { .. } => {
+                return operation.output_if_some(
+                    lhs.checked_mul(rhs).map(Self::from_fallback),
+                    overflow_error,
+                )
+            }
+            PairedBinaryOperation::Division { .. } => {
+                return operation.output_if_some(
+                    lhs.checked_div(rhs).map(Self::from_fallback),
+                    overflow_error,
+                )
+            }
+            PairedBinaryOperation::LogicalAnd { .. } | PairedBinaryOperation::LogicalOr { .. } => {
+                return operation.unsupported_for_value_type_err("untyped integer");
+            }
+            PairedBinaryOperation::Remainder { .. } => {
+                return operation.output_if_some(
+                    lhs.checked_rem(rhs).map(Self::from_fallback),
+                    overflow_error,
+                )
+            }
             PairedBinaryOperation::BitXor { .. } => {
                 operation.output(Self::from_fallback(lhs ^ rhs))
             }
@@ -396,7 +409,24 @@ impl UntypedInteger {
             PairedBinaryOperation::NotEqual { .. } => operation.output(lhs != rhs),
             PairedBinaryOperation::GreaterThanOrEqual { .. } => operation.output(lhs >= rhs),
             PairedBinaryOperation::GreaterThan { .. } => operation.output(lhs > rhs),
-        }
+        })
+    }
+
+    pub(super) fn create_range(
+        self,
+        right: Self,
+        range_limits: &syn::RangeLimits,
+    ) -> ExecutionResult<Box<dyn Iterator<Item = ExpressionValue> + '_>> {
+        let left = self.parse_fallback()?;
+        let right = right.parse_fallback()?;
+        Ok(match range_limits {
+            syn::RangeLimits::HalfOpen { .. } => {
+                Box::new((left..right).map(|x| range_limits.output(Self::from_fallback(x))))
+            }
+            syn::RangeLimits::Closed { .. } => {
+                Box::new((left..=right).map(|x| range_limits.output(Self::from_fallback(x))))
+            }
+        })
     }
 
     pub(super) fn from_fallback(value: FallbackInteger) -> Self {
@@ -434,8 +464,8 @@ impl UntypedInteger {
 
 impl ToExpressionValue for UntypedInteger {
     fn to_value(self, source_span: Option<Span>) -> ExpressionValue {
-        ExpressionValue::Integer(EvaluationInteger {
-            value: EvaluationIntegerValue::Untyped(self),
+        ExpressionValue::Integer(ExpressionInteger {
+            value: ExpressionIntegerValue::Untyped(self),
             source_span,
         })
     }
@@ -448,8 +478,8 @@ macro_rules! impl_int_operations_except_unary {
     ) => {$(
         impl ToExpressionValue for $integer_type {
             fn to_value(self, source_span: Option<Span>) -> ExpressionValue {
-                ExpressionValue::Integer(EvaluationInteger {
-                    value: EvaluationIntegerValue::$integer_enum_variant(self),
+                ExpressionValue::Integer(ExpressionInteger {
+                    value: ExpressionIntegerValue::$integer_enum_variant(self),
                     source_span,
                 })
             }
@@ -459,14 +489,14 @@ macro_rules! impl_int_operations_except_unary {
             fn handle_paired_binary_operation(self, rhs: Self, operation: &PairedBinaryOperation) -> ExecutionResult<ExpressionValue> {
                 let lhs = self;
                 let overflow_error = || format!("The {} operation {:?} {} {:?} overflowed", stringify!($integer_type), lhs, operation.symbol(), rhs);
-                match operation {
-                    PairedBinaryOperation::Addition { .. } => operation.output_if_some(lhs.checked_add(rhs), overflow_error),
-                    PairedBinaryOperation::Subtraction { .. } => operation.output_if_some(lhs.checked_sub(rhs), overflow_error),
-                    PairedBinaryOperation::Multiplication { .. } => operation.output_if_some(lhs.checked_mul(rhs), overflow_error),
-                    PairedBinaryOperation::Division { .. } => operation.output_if_some(lhs.checked_div(rhs), overflow_error),
+                Ok(match operation {
+                    PairedBinaryOperation::Addition { .. } => return operation.output_if_some(lhs.checked_add(rhs), overflow_error),
+                    PairedBinaryOperation::Subtraction { .. } => return operation.output_if_some(lhs.checked_sub(rhs), overflow_error),
+                    PairedBinaryOperation::Multiplication { .. } => return operation.output_if_some(lhs.checked_mul(rhs), overflow_error),
+                    PairedBinaryOperation::Division { .. } => return operation.output_if_some(lhs.checked_div(rhs), overflow_error),
                     PairedBinaryOperation::LogicalAnd { .. }
-                    | PairedBinaryOperation::LogicalOr { .. } => operation.unsupported_for_value_type_err(stringify!($integer_type)),
-                    PairedBinaryOperation::Remainder { .. } => operation.output_if_some(lhs.checked_rem(rhs), overflow_error),
+                    | PairedBinaryOperation::LogicalOr { .. } => return operation.unsupported_for_value_type_err(stringify!($integer_type)),
+                    PairedBinaryOperation::Remainder { .. } => return operation.output_if_some(lhs.checked_rem(rhs), overflow_error),
                     PairedBinaryOperation::BitXor { .. } => operation.output(lhs ^ rhs),
                     PairedBinaryOperation::BitAnd { .. } => operation.output(lhs & rhs),
                     PairedBinaryOperation::BitOr { .. } => operation.output(lhs | rhs),
@@ -476,50 +506,68 @@ macro_rules! impl_int_operations_except_unary {
                     PairedBinaryOperation::NotEqual { .. } => operation.output(lhs != rhs),
                     PairedBinaryOperation::GreaterThanOrEqual { .. } => operation.output(lhs >= rhs),
                     PairedBinaryOperation::GreaterThan { .. } => operation.output(lhs > rhs),
-                }
+                })
             }
 
             fn handle_integer_binary_operation(
                 self,
-                rhs: EvaluationInteger,
+                rhs: ExpressionInteger,
                 operation: &IntegerBinaryOperation,
             ) -> ExecutionResult<ExpressionValue> {
                 let lhs = self;
-                match operation {
+                Ok(match operation {
                     IntegerBinaryOperation::ShiftLeft { .. } => {
                         match rhs.value {
-                            EvaluationIntegerValue::Untyped(rhs) => operation.output(lhs << rhs.parse_fallback()?),
-                            EvaluationIntegerValue::U8(rhs) => operation.output(lhs << rhs),
-                            EvaluationIntegerValue::U16(rhs) => operation.output(lhs << rhs),
-                            EvaluationIntegerValue::U32(rhs) => operation.output(lhs << rhs),
-                            EvaluationIntegerValue::U64(rhs) => operation.output(lhs << rhs),
-                            EvaluationIntegerValue::U128(rhs) => operation.output(lhs << rhs),
-                            EvaluationIntegerValue::Usize(rhs) => operation.output(lhs << rhs),
-                            EvaluationIntegerValue::I8(rhs) => operation.output(lhs << rhs),
-                            EvaluationIntegerValue::I16(rhs) => operation.output(lhs << rhs),
-                            EvaluationIntegerValue::I32(rhs) => operation.output(lhs << rhs),
-                            EvaluationIntegerValue::I64(rhs) => operation.output(lhs << rhs),
-                            EvaluationIntegerValue::I128(rhs) => operation.output(lhs << rhs),
-                            EvaluationIntegerValue::Isize(rhs) => operation.output(lhs << rhs),
+                            ExpressionIntegerValue::Untyped(rhs) => operation.output(lhs << rhs.parse_fallback()?),
+                            ExpressionIntegerValue::U8(rhs) => operation.output(lhs << rhs),
+                            ExpressionIntegerValue::U16(rhs) => operation.output(lhs << rhs),
+                            ExpressionIntegerValue::U32(rhs) => operation.output(lhs << rhs),
+                            ExpressionIntegerValue::U64(rhs) => operation.output(lhs << rhs),
+                            ExpressionIntegerValue::U128(rhs) => operation.output(lhs << rhs),
+                            ExpressionIntegerValue::Usize(rhs) => operation.output(lhs << rhs),
+                            ExpressionIntegerValue::I8(rhs) => operation.output(lhs << rhs),
+                            ExpressionIntegerValue::I16(rhs) => operation.output(lhs << rhs),
+                            ExpressionIntegerValue::I32(rhs) => operation.output(lhs << rhs),
+                            ExpressionIntegerValue::I64(rhs) => operation.output(lhs << rhs),
+                            ExpressionIntegerValue::I128(rhs) => operation.output(lhs << rhs),
+                            ExpressionIntegerValue::Isize(rhs) => operation.output(lhs << rhs),
                         }
                     },
                     IntegerBinaryOperation::ShiftRight { .. } => {
                         match rhs.value {
-                            EvaluationIntegerValue::Untyped(rhs) => operation.output(lhs >> rhs.parse_fallback()?),
-                            EvaluationIntegerValue::U8(rhs) => operation.output(lhs >> rhs),
-                            EvaluationIntegerValue::U16(rhs) => operation.output(lhs >> rhs),
-                            EvaluationIntegerValue::U32(rhs) => operation.output(lhs >> rhs),
-                            EvaluationIntegerValue::U64(rhs) => operation.output(lhs >> rhs),
-                            EvaluationIntegerValue::U128(rhs) => operation.output(lhs >> rhs),
-                            EvaluationIntegerValue::Usize(rhs) => operation.output(lhs >> rhs),
-                            EvaluationIntegerValue::I8(rhs) => operation.output(lhs >> rhs),
-                            EvaluationIntegerValue::I16(rhs) => operation.output(lhs >> rhs),
-                            EvaluationIntegerValue::I32(rhs) => operation.output(lhs >> rhs),
-                            EvaluationIntegerValue::I64(rhs) => operation.output(lhs >> rhs),
-                            EvaluationIntegerValue::I128(rhs) => operation.output(lhs >> rhs),
-                            EvaluationIntegerValue::Isize(rhs) => operation.output(lhs >> rhs),
+                            ExpressionIntegerValue::Untyped(rhs) => operation.output(lhs >> rhs.parse_fallback()?),
+                            ExpressionIntegerValue::U8(rhs) => operation.output(lhs >> rhs),
+                            ExpressionIntegerValue::U16(rhs) => operation.output(lhs >> rhs),
+                            ExpressionIntegerValue::U32(rhs) => operation.output(lhs >> rhs),
+                            ExpressionIntegerValue::U64(rhs) => operation.output(lhs >> rhs),
+                            ExpressionIntegerValue::U128(rhs) => operation.output(lhs >> rhs),
+                            ExpressionIntegerValue::Usize(rhs) => operation.output(lhs >> rhs),
+                            ExpressionIntegerValue::I8(rhs) => operation.output(lhs >> rhs),
+                            ExpressionIntegerValue::I16(rhs) => operation.output(lhs >> rhs),
+                            ExpressionIntegerValue::I32(rhs) => operation.output(lhs >> rhs),
+                            ExpressionIntegerValue::I64(rhs) => operation.output(lhs >> rhs),
+                            ExpressionIntegerValue::I128(rhs) => operation.output(lhs >> rhs),
+                            ExpressionIntegerValue::Isize(rhs) => operation.output(lhs >> rhs),
                         }
                     },
+                })
+            }
+        }
+
+        impl HandleCreateRange for $integer_type {
+            fn create_range(
+                self,
+                right: Self,
+                range_limits: &syn::RangeLimits,
+            ) -> Box<dyn Iterator<Item = ExpressionValue> + '_> {
+                let left = self;
+                match range_limits {
+                    syn::RangeLimits::HalfOpen { .. } => {
+                        Box::new((left..right).map(|x| range_limits.output(x)))
+                    },
+                    syn::RangeLimits::Closed { .. } => {
+                        Box::new((left..=right).map(|x| range_limits.output(x)))
+                    }
                 }
             }
         }
@@ -530,11 +578,11 @@ macro_rules! impl_unsigned_unary_operations {
     ($($integer_type:ident),* $(,)?) => {$(
         impl HandleUnaryOperation for $integer_type {
             fn handle_unary_operation(self, operation: &UnaryOperation) -> ExecutionResult<ExpressionValue> {
-                match operation {
+                Ok(match operation {
                     UnaryOperation::GroupedNoOp { .. } => operation.output(self),
                     UnaryOperation::Neg { .. }
                     | UnaryOperation::Not { .. } => {
-                        operation.unsupported_for_value_type_err(stringify!($integer_type))
+                        return operation.unsupported_for_value_type_err(stringify!($integer_type))
                     },
                     UnaryOperation::Cast { target, .. } => match target {
                         CastTarget::Integer(IntegerKind::Untyped) => operation.output(UntypedInteger::from_fallback(self as FallbackInteger)),
@@ -553,9 +601,9 @@ macro_rules! impl_unsigned_unary_operations {
                         CastTarget::Float(FloatKind::Untyped) => operation.output(UntypedFloat::from_fallback(self as FallbackFloat)),
                         CastTarget::Float(FloatKind::F32) => operation.output(self as f32),
                         CastTarget::Float(FloatKind::F64) => operation.output(self as f64),
-                        CastTarget::Boolean | CastTarget::Char => operation.execution_err("This cast is not supported"),
+                        CastTarget::Boolean | CastTarget::Char => return operation.execution_err("This cast is not supported"),
                     }
-                }
+                })
             }
         }
     )*};
@@ -565,11 +613,11 @@ macro_rules! impl_signed_unary_operations {
     ($($integer_type:ident),* $(,)?) => {$(
         impl HandleUnaryOperation for $integer_type {
             fn handle_unary_operation(self, operation: &UnaryOperation) -> ExecutionResult<ExpressionValue> {
-                match operation {
+                Ok(match operation {
                     UnaryOperation::GroupedNoOp { .. } => operation.output(self),
                     UnaryOperation::Neg { .. } => operation.output(-self),
                     UnaryOperation::Not { .. } => {
-                        operation.unsupported_for_value_type_err(stringify!($integer_type))
+                        return operation.unsupported_for_value_type_err(stringify!($integer_type))
                     },
                     UnaryOperation::Cast { target, .. } => match target {
                         CastTarget::Integer(IntegerKind::Untyped) => operation.output(UntypedInteger::from_fallback(self as FallbackInteger)),
@@ -588,9 +636,9 @@ macro_rules! impl_signed_unary_operations {
                         CastTarget::Float(FloatKind::Untyped) => operation.output(UntypedFloat::from_fallback(self as FallbackFloat)),
                         CastTarget::Float(FloatKind::F32) => operation.output(self as f32),
                         CastTarget::Float(FloatKind::F64) => operation.output(self as f64),
-                        CastTarget::Boolean | CastTarget::Char => operation.execution_err("This cast is not supported"),
+                        CastTarget::Boolean | CastTarget::Char => return operation.execution_err("This cast is not supported"),
                     }
-                }
+                })
             }
         }
     )*};
@@ -601,10 +649,10 @@ impl HandleUnaryOperation for u8 {
         self,
         operation: &UnaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
-        match operation {
+        Ok(match operation {
             UnaryOperation::GroupedNoOp { .. } => operation.output(self),
             UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => {
-                operation.unsupported_for_value_type_err("u8")
+                return operation.unsupported_for_value_type_err("u8")
             }
             UnaryOperation::Cast { target, .. } => match target {
                 CastTarget::Integer(IntegerKind::Untyped) => {
@@ -628,9 +676,11 @@ impl HandleUnaryOperation for u8 {
                 CastTarget::Float(FloatKind::F32) => operation.output(self as f32),
                 CastTarget::Float(FloatKind::F64) => operation.output(self as f64),
                 CastTarget::Char => operation.output(self as char),
-                CastTarget::Boolean => operation.execution_err("This cast is not supported"),
+                CastTarget::Boolean => {
+                    return operation.execution_err("This cast is not supported")
+                }
             },
-        }
+        })
     }
 }
 

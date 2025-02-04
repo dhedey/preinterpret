@@ -116,7 +116,7 @@ impl NoOutputCommandDefinition for AssignCommand {
 #[derive(Clone)]
 pub(crate) struct RangeCommand {
     left: SourceExpression,
-    range_limits: RangeLimits,
+    range_limits: syn::RangeLimits,
     right: SourceExpression,
 }
 
@@ -145,95 +145,34 @@ impl StreamCommandDefinition for RangeCommand {
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        let range_span_range = self.range_limits.span_range();
-        let range_span = range_span_range.join_into_span_else_start();
+        let range_limits = self.range_limits;
+        let left = self.left.evaluate_to_value(interpreter)?;
+        let right = self.right.evaluate_to_value(interpreter)?;
 
-        let left = self
-            .left
-            .evaluate(interpreter)?
-            .try_into_i128("The left side of the range must be an i128-compatible integer")?;
-        let right = self
-            .right
-            .evaluate(interpreter)?
-            .try_into_i128("The right side of the range must be an i128-compatible integer")?;
+        let range_iterator = left.create_range(right, &range_limits)?;
 
-        if left > right {
-            return Ok(());
+        let (_, length) = range_iterator.size_hint();
+        match length {
+            Some(length) => {
+                interpreter
+                    .start_iteration_counter(&range_limits)
+                    .add_and_check(length)?;
+            }
+            None => {
+                return range_limits
+                    .execution_err("The range must be between two integers or two characters");
+            }
         }
 
-        let length = self
-            .range_limits
-            .length_of_range(left, right)
-            .ok_or_else(|| {
-                range_span_range.error("The range is too large to be represented as a usize")
-            })?;
-
-        interpreter
-            .start_iteration_counter(&range_span_range)
-            .add_and_check(length)?;
-
-        match self.range_limits {
-            RangeLimits::HalfOpen(_) => {
-                output_range(left..right, range_span, output);
-            }
-            RangeLimits::Closed(_) => {
-                output_range(left..=right, range_span, output);
-            }
-        };
+        let output_span = range_limits.span_range().start();
+        output.extend_raw_tokens(range_iterator.map(|value| {
+            value
+                .to_token_tree(output_span)
+                // We wrap it in a singleton group to ensure that negative
+                // numbers are treated as single items in other stream commands
+                .into_singleton_group(Delimiter::None)
+        }));
 
         Ok(())
-    }
-}
-
-fn output_range(iter: impl Iterator<Item = i128>, span: Span, output: &mut OutputStream) {
-    output.extend_raw_tokens(iter.map(|value| {
-        let literal = Literal::i128_unsuffixed(value).with_span(span);
-        TokenTree::Literal(literal)
-            // We wrap it in a singleton group to ensure that negative
-            // numbers are treated as single items in other stream commands
-            .into_singleton_group(Delimiter::None)
-    }))
-}
-
-// A copy of syn::RangeLimits to avoid needing a `full` dependency on syn
-#[derive(Clone)]
-enum RangeLimits {
-    HalfOpen(Token![..]),
-    Closed(Token![..=]),
-}
-
-impl Parse<Source> for RangeLimits {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
-        if input.peek(Token![..=]) {
-            Ok(RangeLimits::Closed(input.parse()?))
-        } else {
-            Ok(RangeLimits::HalfOpen(input.parse()?))
-        }
-    }
-}
-
-impl ToTokens for RangeLimits {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self {
-            RangeLimits::HalfOpen(token) => token.to_tokens(tokens),
-            RangeLimits::Closed(token) => token.to_tokens(tokens),
-        }
-    }
-}
-
-impl HasSpanRange for RangeLimits {
-    fn span_range(&self) -> SpanRange {
-        self.span_range_from_iterating_over_all_tokens()
-    }
-}
-
-impl RangeLimits {
-    fn length_of_range(&self, left: i128, right: i128) -> Option<usize> {
-        match self {
-            RangeLimits::HalfOpen(_) => usize::try_from(right.checked_sub(left)?).ok(),
-            RangeLimits::Closed(_) => {
-                usize::try_from(right.checked_sub(left)?.checked_add(1)?).ok()
-            }
-        }
     }
 }

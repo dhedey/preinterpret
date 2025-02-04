@@ -123,33 +123,21 @@ enum BinaryPath {
     OnRightBranch { left: ExpressionValue },
 }
 
-pub(crate) struct EvaluationOutput {
+pub(crate) struct ExpressionOutput {
     pub(super) value: ExpressionValue,
     pub(super) fallback_output_span: Span,
 }
 
-impl EvaluationOutput {
+impl ExpressionOutput {
     #[allow(unused)]
-    pub(super) fn into_value(self) -> ExpressionValue {
+    pub(crate) fn into_value(self) -> ExpressionValue {
         self.value
     }
 
     #[allow(unused)]
-    pub(crate) fn expect_integer(self, error_message: &str) -> ExecutionResult<EvaluationInteger> {
+    pub(crate) fn expect_integer(self, error_message: &str) -> ExecutionResult<ExpressionInteger> {
         let error_span = self.span();
         match self.value.into_integer() {
-            Some(integer) => Ok(integer),
-            None => error_span.execution_err(error_message),
-        }
-    }
-
-    pub(crate) fn try_into_i128(self, error_message: &str) -> ExecutionResult<i128> {
-        let error_span = self.span();
-        match self
-            .value
-            .into_integer()
-            .and_then(|integer| integer.try_into_i128())
-        {
             Some(integer) => Ok(integer),
             None => error_span.execution_err(error_message),
         }
@@ -168,7 +156,7 @@ impl EvaluationOutput {
     }
 }
 
-impl HasSpan for EvaluationOutput {
+impl HasSpan for ExpressionOutput {
     fn span(&self) -> Span {
         self.value
             .source_span()
@@ -176,7 +164,7 @@ impl HasSpan for EvaluationOutput {
     }
 }
 
-impl quote::ToTokens for EvaluationOutput {
+impl quote::ToTokens for ExpressionOutput {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         self.to_token_tree().to_tokens(tokens);
     }

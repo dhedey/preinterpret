@@ -1,8 +1,8 @@
 use super::*;
 
 pub(super) trait Operation: HasSpanRange {
-    fn output(&self, output_value: impl ToExpressionValue) -> ExecutionResult<ExpressionValue> {
-        Ok(output_value.to_value(self.source_span_for_output()))
+    fn output(&self, output_value: impl ToExpressionValue) -> ExpressionValue {
+        output_value.to_value(self.source_span_for_output())
     }
 
     fn output_if_some(
@@ -11,7 +11,7 @@ pub(super) trait Operation: HasSpanRange {
         error_message: impl FnOnce() -> String,
     ) -> ExecutionResult<ExpressionValue> {
         match output_value {
-            Some(output_value) => self.output(output_value),
+            Some(output_value) => Ok(self.output(output_value)),
             None => self.execution_err(error_message()),
         }
     }
@@ -27,7 +27,10 @@ pub(super) trait Operation: HasSpanRange {
         )))
     }
 
-    fn source_span_for_output(&self) -> Option<Span>;
+    fn source_span_for_output(&self) -> Option<Span> {
+        None
+    }
+
     fn symbol(&self) -> &'static str;
 }
 
@@ -315,10 +318,6 @@ impl HasSpanRange for BinaryOperation {
 }
 
 impl Operation for BinaryOperation {
-    fn source_span_for_output(&self) -> Option<Span> {
-        None
-    }
-
     fn symbol(&self) -> &'static str {
         match self {
             BinaryOperation::Paired(paired) => paired.symbol(),
@@ -348,10 +347,6 @@ pub(super) enum PairedBinaryOperation {
 }
 
 impl Operation for PairedBinaryOperation {
-    fn source_span_for_output(&self) -> Option<Span> {
-        None
-    }
-
     fn symbol(&self) -> &'static str {
         match self {
             PairedBinaryOperation::Addition { .. } => "+",
@@ -404,10 +399,6 @@ pub(super) enum IntegerBinaryOperation {
 }
 
 impl Operation for IntegerBinaryOperation {
-    fn source_span_for_output(&self) -> Option<Span> {
-        None
-    }
-
     fn symbol(&self) -> &'static str {
         match self {
             IntegerBinaryOperation::ShiftLeft { .. } => "<<",
@@ -434,7 +425,30 @@ pub(super) trait HandleBinaryOperation: Sized {
 
     fn handle_integer_binary_operation(
         self,
-        rhs: EvaluationInteger,
+        rhs: ExpressionInteger,
         operation: &IntegerBinaryOperation,
     ) -> ExecutionResult<ExpressionValue>;
+}
+
+pub(super) trait HandleCreateRange: Sized {
+    fn create_range(
+        self,
+        right: Self,
+        range_limits: &syn::RangeLimits,
+    ) -> Box<dyn Iterator<Item = ExpressionValue> + '_>;
+}
+
+impl Operation for syn::RangeLimits {
+    fn symbol(&self) -> &'static str {
+        match self {
+            syn::RangeLimits::HalfOpen(_) => "..",
+            syn::RangeLimits::Closed(_) => "..=",
+        }
+    }
+}
+
+impl HasSpanRange for syn::RangeLimits {
+    fn span_range(&self) -> SpanRange {
+        self.span_range_from_iterating_over_all_tokens()
+    }
 }

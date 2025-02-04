@@ -80,8 +80,6 @@ Destructuring performs parsing of a token stream. It supports:
 
 ### To come
 
-* `[!is_set! #x]`
-* Support `'a'..'z'` in `[!range! 'a'..'z']`
 * Destructurers => Transformers 
   * Implement pivot to transformers outputting things ... `@[#x = @IDENT]`...
   * Scrap `[!let!]` in favour of `[!parse! #x as #(...)]`
@@ -115,12 +113,14 @@ Destructuring performs parsing of a token stream. It supports:
     * `#(IDENT #x)`
     * `@[#x = @IDENT]`
   * Scrap `#>>x` etc in favour of `@[#x += ...]`
+* `[!is_set! #x]`
 * Support `[!index! ..]`:
   * `[!index! #x[0]]`
   * `[!index! #x[0..3]]`
   * `[!..index! #x[0..3]]` and other things like `[ ..=3]`
   * `[!index! [Hello World][...]]`
   => NB: This isn't in the grammar because of the risk of `#x[0]` wanting to mean `my_arr[0]` rather than "index my variable".
+* Have UntypedInteger have an inner representation of either i128 or literal (and same with float)
 * Add `[!reinterpret! ...]` command for an `eval` style command.
 * Add casts of other integers to char, via `char::from_u32(u32::try_from(x))`
 * TODO check

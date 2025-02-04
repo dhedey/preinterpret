@@ -1,14 +1,14 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct EvaluationString {
+pub(crate) struct ExpressionString {
     pub(super) value: String,
     /// The span of the source code that generated this boolean value.
     /// It may not have a value if generated from a complex expression.
     pub(super) source_span: Option<Span>,
 }
 
-impl EvaluationString {
+impl ExpressionString {
     pub(super) fn for_litstr(lit: syn::LitStr) -> Self {
         Self {
             value: lit.value(),
@@ -20,17 +20,19 @@ impl EvaluationString {
         self,
         operation: UnaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
-        match operation {
+        Ok(match operation {
             UnaryOperation::GroupedNoOp { .. } => operation.output(self.value),
             UnaryOperation::Neg { .. }
             | UnaryOperation::Not { .. }
-            | UnaryOperation::Cast { .. } => operation.unsupported_for_value_type_err("string"),
-        }
+            | UnaryOperation::Cast { .. } => {
+                return operation.unsupported_for_value_type_err("string")
+            }
+        })
     }
 
     pub(super) fn handle_integer_binary_operation(
         self,
-        _right: EvaluationInteger,
+        _right: ExpressionInteger,
         operation: &IntegerBinaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         operation.unsupported_for_value_type_err("string")
@@ -43,7 +45,7 @@ impl EvaluationString {
     ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.value;
         let rhs = rhs.value;
-        match operation {
+        Ok(match operation {
             PairedBinaryOperation::Addition { .. }
             | PairedBinaryOperation::Subtraction { .. }
             | PairedBinaryOperation::Multiplication { .. }
@@ -54,7 +56,7 @@ impl EvaluationString {
             | PairedBinaryOperation::BitXor { .. }
             | PairedBinaryOperation::BitAnd { .. }
             | PairedBinaryOperation::BitOr { .. } => {
-                operation.unsupported_for_value_type_err("string")
+                return operation.unsupported_for_value_type_err("string")
             }
             PairedBinaryOperation::Equal { .. } => operation.output(lhs == rhs),
             PairedBinaryOperation::LessThan { .. } => operation.output(lhs < rhs),
@@ -62,7 +64,7 @@ impl EvaluationString {
             PairedBinaryOperation::NotEqual { .. } => operation.output(lhs != rhs),
             PairedBinaryOperation::GreaterThanOrEqual { .. } => operation.output(lhs >= rhs),
             PairedBinaryOperation::GreaterThan { .. } => operation.output(lhs > rhs),
-        }
+        })
     }
 
     pub(super) fn to_literal(&self, fallback_span: Span) -> Literal {
@@ -72,7 +74,7 @@ impl EvaluationString {
 
 impl ToExpressionValue for String {
     fn to_value(self, source_span: Option<Span>) -> ExpressionValue {
-        ExpressionValue::String(EvaluationString {
+        ExpressionValue::String(ExpressionString {
             value: self,
             source_span,
         })
@@ -81,7 +83,7 @@ impl ToExpressionValue for String {
 
 impl ToExpressionValue for &str {
     fn to_value(self, source_span: Option<Span>) -> ExpressionValue {
-        ExpressionValue::String(EvaluationString {
+        ExpressionValue::String(ExpressionString {
             value: self.to_string(),
             source_span,
         })
