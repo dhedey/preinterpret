@@ -121,8 +121,8 @@ fn test_debug() {
     assert_preinterpret_eq!(
         {
             [!set! #x = Hello (World)]
-            [!debug! #x [!..raw! #test] "and" [!raw! ##] #..x]
+            [!debug! #x [!raw! #test] "and" [!raw! ##] #..x]
         },
-        r###"[!group! Hello (World)] # test "and" [!group! ##] Hello (World)"###
+        r###"[!group! Hello (World)] # test "and" ## Hello (World)"###
     );
 }

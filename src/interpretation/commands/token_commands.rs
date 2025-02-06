@@ -57,10 +57,10 @@ pub(crate) struct GroupCommand {
 }
 
 impl CommandType for GroupCommand {
-    type OutputKind = OutputKindStream;
+    type OutputKind = OutputKindGroupedStream;
 }
 
-impl StreamCommandDefinition for GroupCommand {
+impl GroupedStreamCommandDefinition for GroupCommand {
     const COMMAND_NAME: &'static str = "group";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
@@ -86,23 +86,23 @@ pub(crate) struct IntersperseCommand {
 }
 
 impl CommandType for IntersperseCommand {
-    type OutputKind = OutputKindStream;
+    type OutputKind = OutputKindGroupedStream;
 }
 
 define_field_inputs! {
     IntersperseInputs {
         required: {
-            items: CommandStreamInput = "[Hello World] or #var or [!cmd! ...]",
-            separator: CommandStreamInput = "[,]" ("The token/s to add between each item"),
+            items: SourceStreamInput = "[Hello World] or #var or [!cmd! ...]",
+            separator: SourceStreamInput = "[,]" ("The token/s to add between each item"),
         },
         optional: {
-            add_trailing: CommandValueInput<LitBool> = "false" ("Whether to add the separator after the last item (default: false)"),
-            final_separator: CommandStreamInput = "[or]" ("Define a different final separator (default: same as normal separator)"),
+            add_trailing: SourceValue<LitBool> = "false" ("Whether to add the separator after the last item (default: false)"),
+            final_separator: SourceStreamInput = "[or]" ("Define a different final separator (default: same as normal separator)"),
         }
     }
 }
 
-impl StreamCommandDefinition for IntersperseCommand {
+impl GroupedStreamCommandDefinition for IntersperseCommand {
     const COMMAND_NAME: &'static str = "intersperse";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
@@ -159,8 +159,8 @@ impl StreamCommandDefinition for IntersperseCommand {
 }
 
 struct SeparatorAppender {
-    separator: CommandStreamInput,
-    final_separator: Option<CommandStreamInput>,
+    separator: SourceStreamInput,
+    final_separator: Option<SourceStreamInput>,
     add_trailing: bool,
 }
 
@@ -220,24 +220,24 @@ pub(crate) struct SplitCommand {
 }
 
 impl CommandType for SplitCommand {
-    type OutputKind = OutputKindStream;
+    type OutputKind = OutputKindGroupedStream;
 }
 
 define_field_inputs! {
     SplitInputs {
         required: {
-            stream: CommandStreamInput = "[...] or #var or [!cmd! ...]",
-            separator: CommandStreamInput = "[::]" ("The token/s to split if they match"),
+            stream: SourceStreamInput = "[...] or #var or [!cmd! ...]",
+            separator: SourceStreamInput = "[::]" ("The token/s to split if they match"),
         },
         optional: {
-            drop_empty_start: CommandValueInput<LitBool> = "false" ("If true, a leading separator does not yield in an empty item at the start (default: false)"),
-            drop_empty_middle: CommandValueInput<LitBool> = "false" ("If true, adjacent separators do not yield an empty item between them (default: false)"),
-            drop_empty_end: CommandValueInput<LitBool> = "true" ("If true, a trailing separator does not yield an empty item at the end (default: true)"),
+            drop_empty_start: SourceValue<LitBool> = "false" ("If true, a leading separator does not yield in an empty item at the start (default: false)"),
+            drop_empty_middle: SourceValue<LitBool> = "false" ("If true, adjacent separators do not yield an empty item between them (default: false)"),
+            drop_empty_end: SourceValue<LitBool> = "true" ("If true, a trailing separator does not yield an empty item at the end (default: true)"),
         }
     }
 }
 
-impl StreamCommandDefinition for SplitCommand {
+impl GroupedStreamCommandDefinition for SplitCommand {
     const COMMAND_NAME: &'static str = "split";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
@@ -269,10 +269,14 @@ impl StreamCommandDefinition for SplitCommand {
         };
 
         handle_split(
+            interpreter,
             stream,
             output,
             output_span,
-            separator.into_raw_destructure_stream(),
+            unsafe {
+                // RUST-ANALYZER SAFETY: This is as safe as we can get.
+                separator.parse_as()?
+            },
             drop_empty_start,
             drop_empty_middle,
             drop_empty_end,
@@ -280,11 +284,13 @@ impl StreamCommandDefinition for SplitCommand {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_split(
+    interpreter: &mut Interpreter,
     input: OutputStream,
     output: &mut OutputStream,
     output_span: Span,
-    separator: RawDestructureStream,
+    separator: ExactStream,
     drop_empty_start: bool,
     drop_empty_middle: bool,
     drop_empty_end: bool,
@@ -297,7 +303,15 @@ fn handle_split(
             let mut drop_empty_next = drop_empty_start;
             while !input.is_empty() {
                 let separator_fork = input.fork();
-                if separator.handle_destructure(&separator_fork).is_err() {
+                let mut ignored_transformer_output = OutputStream::new();
+                if separator
+                    .handle_transform(
+                        &separator_fork,
+                        interpreter,
+                        &mut ignored_transformer_output,
+                    )
+                    .is_err()
+                {
                     current_item.push_raw_token_tree(input.parse()?);
                     continue;
                 }
@@ -322,10 +336,10 @@ pub(crate) struct CommaSplitCommand {
 }
 
 impl CommandType for CommaSplitCommand {
-    type OutputKind = OutputKindStream;
+    type OutputKind = OutputKindGroupedStream;
 }
 
-impl StreamCommandDefinition for CommaSplitCommand {
+impl GroupedStreamCommandDefinition for CommaSplitCommand {
     const COMMAND_NAME: &'static str = "comma_split";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
@@ -341,15 +355,21 @@ impl StreamCommandDefinition for CommaSplitCommand {
     ) -> ExecutionResult<()> {
         let output_span = self.input.span_range().join_into_span_else_start();
         let stream = self.input.interpret_to_new_stream(interpreter)?;
-        let separator = {
-            let mut stream = RawDestructureStream::empty();
-            stream.push_item(RawDestructureItem::Punct(
-                Punct::new(',', Spacing::Alone).with_span(output_span),
-            ));
-            stream
-        };
+        let separator = Punct::new(',', Spacing::Alone)
+            .with_span(output_span)
+            .to_token_stream()
+            .source_parse_as()?;
 
-        handle_split(stream, output, output_span, separator, false, false, true)
+        handle_split(
+            interpreter,
+            stream,
+            output,
+            output_span,
+            separator,
+            false,
+            false,
+            true,
+        )
     }
 }
 
@@ -358,7 +378,7 @@ pub(crate) struct ZipCommand {
     inputs: EitherZipInput,
 }
 
-type Streams = CommandValueInput<Grouped<Repeated<CommandStreamInput>>>;
+type Streams = SourceValue<Grouped<Repeated<SourceStreamInput>>>;
 
 #[derive(Clone)]
 enum EitherZipInput {
@@ -372,16 +392,16 @@ define_field_inputs! {
             streams: Streams = r#"([Hello Goodbye] [World Friend])"# ("A group of one or more streams to zip together. The outer brackets are used for the group."),
         },
         optional: {
-            error_on_length_mismatch: CommandValueInput<syn::LitBool> = "true" ("If false, uses shortest stream length, if true, errors on unequal length. Defaults to true."),
+            error_on_length_mismatch: SourceValue<syn::LitBool> = "true" ("If false, uses shortest stream length, if true, errors on unequal length. Defaults to true."),
         }
     }
 }
 
 impl CommandType for ZipCommand {
-    type OutputKind = OutputKindStream;
+    type OutputKind = OutputKindGroupedStream;
 }
 
-impl StreamCommandDefinition for ZipCommand {
+impl GroupedStreamCommandDefinition for ZipCommand {
     const COMMAND_NAME: &'static str = "zip";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {

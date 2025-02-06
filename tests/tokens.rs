@@ -269,9 +269,9 @@ fn complex_cases_for_intersperse_and_input_types() {
     // Grouped variable containing two groups
     assert_preinterpret_eq!({
         [!set! #items = 0 1]
-        [!set! #item_groups = #items #items] // [!GROUP! 0 1] [!GROUP! 0 1]
+        [!set! #item_groups = #items #items] // [!group! 0 1] [!group! 0 1]
         [!string! [!intersperse! {
-            items: #item_groups, // [!GROUP! [!GROUP! 0 1] [!GROUP! 0 1]]
+            items: #item_groups, // [!group! [!group! 0 1] [!group! 0 1]]
             separator: [_],
         }]]
     }, "01_01");

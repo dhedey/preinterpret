@@ -1,0 +1,5 @@
+error: expected World
+ --> tests/compilation_failures/transforming/invalid_content_wrong_ident.rs:4:46
+  |
+4 |     preinterpret!([!let! Hello World = Hello Earth]);
+  |                                              ^^^^^

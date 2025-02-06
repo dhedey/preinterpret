@@ -121,10 +121,10 @@ pub(crate) struct RangeCommand {
 }
 
 impl CommandType for RangeCommand {
-    type OutputKind = OutputKindStream;
+    type OutputKind = OutputKindGroupedStream;
 }
 
-impl StreamCommandDefinition for RangeCommand {
+impl GroupedStreamCommandDefinition for RangeCommand {
     const COMMAND_NAME: &'static str = "range";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {

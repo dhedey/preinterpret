@@ -1,6 +1,0 @@
-error: A flattened input variable is not supported here
-       Occurred whilst parsing (!punct! ...) - Expected (!punct! #x) or (!punct! #>>x) or (!punct!)
- --> tests/compilation_failures/destructuring/destructure_with_punct_flattened_variable.rs:4:35
-  |
-4 |     preinterpret!([!let! (!punct! #..x) = @]);
-  |                                   ^

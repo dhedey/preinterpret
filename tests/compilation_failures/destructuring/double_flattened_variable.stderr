@@ -1,6 +1,0 @@
-error: This cannot follow a flattened destructure match
-       Occurred whilst parsing [!let! ...] - Expected [!let! <destructuring> = ...]
- --> tests/compilation_failures/destructuring/double_flattened_variable.rs:4:31
-  |
-4 |     preinterpret!([!let! #..x #..y = Hello World]);
-  |                               ^

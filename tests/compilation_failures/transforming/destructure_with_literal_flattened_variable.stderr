@@ -1,0 +1,5 @@
+error: Expected (
+ --> tests/compilation_failures/transforming/destructure_with_literal_flattened_variable.rs:4:45
+  |
+4 |     preinterpret!([!let! (!literal! #..x) = "Hello"]);
+  |                                             ^^^^^^^

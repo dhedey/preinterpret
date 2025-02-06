@@ -1,0 +1,5 @@
+error: Expected (
+ --> tests/compilation_failures/transforming/destructure_with_punct_flattened_variable.rs:4:43
+  |
+4 |     preinterpret!([!let! (!punct! #..x) = @]);
+  |                                           ^

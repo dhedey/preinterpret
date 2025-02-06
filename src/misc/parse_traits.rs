@@ -8,18 +8,19 @@ use crate::internal_prelude::*;
 pub(crate) struct Source;
 
 impl ParseBuffer<'_, Source> {
-    pub(crate) fn peek_grammar(&self) -> GrammarPeekMatch {
+    pub(crate) fn peek_grammar(&self) -> SourcePeekMatch {
         detect_preinterpret_grammar(self.cursor())
     }
 }
 
 #[allow(unused)]
-pub(crate) enum GrammarPeekMatch {
+pub(crate) enum SourcePeekMatch {
     Command(Option<CommandOutputKind>),
     GroupedVariable,
     FlattenedVariable,
-    AppendVariableDestructuring,
-    Destructurer(Option<DestructurerKind>),
+    AppendVariableBinding,
+    ExplicitTransformStream,
+    Transformer(Option<TransformerKind>),
     Group(Delimiter),
     Ident(Ident),
     Punct(Punct),
@@ -27,7 +28,7 @@ pub(crate) enum GrammarPeekMatch {
     End,
 }
 
-fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> GrammarPeekMatch {
+fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> SourcePeekMatch {
     // We have to check groups first, so that we handle transparent groups
     // and avoid the self.ignore_none() calls inside cursor
     if let Some((next, delimiter, _, _)) = cursor.any_group() {
@@ -37,7 +38,7 @@ fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> GrammarPeekMatch 
                     if next.punct_matching('!').is_some() {
                         let output_kind =
                             CommandKind::for_ident(&ident).map(|kind| kind.standard_output_kind());
-                        return GrammarPeekMatch::Command(output_kind);
+                        return SourcePeekMatch::Command(output_kind);
                     }
                 }
                 if let Some((first, next)) = next.punct_matching('.') {
@@ -47,18 +48,9 @@ fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> GrammarPeekMatch 
                                 let output_kind = CommandKind::for_ident(&ident).and_then(|kind| {
                                     kind.flattened_output_kind(first.span_range()).ok()
                                 });
-                                return GrammarPeekMatch::Command(output_kind);
+                                return SourcePeekMatch::Command(output_kind);
                             }
                         }
-                    }
-                }
-            }
-        }
-        if delimiter == Delimiter::Parenthesis {
-            if let Some((_, next)) = next.punct_matching('!') {
-                if let Some((ident, next)) = next.ident() {
-                    if next.punct_matching('!').is_some() {
-                        return GrammarPeekMatch::Destructurer(DestructurerKind::for_ident(&ident));
                     }
                 }
             }
@@ -75,42 +67,63 @@ fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> GrammarPeekMatch 
         // So this isn't possible. It's unlikely to matter much, and a user can always do:
         // [!raw! $($tt)*] anyway.
 
-        return GrammarPeekMatch::Group(delimiter);
+        return SourcePeekMatch::Group(delimiter);
     }
     if let Some((_, next)) = cursor.punct_matching('#') {
         if next.ident().is_some() {
-            return GrammarPeekMatch::GroupedVariable;
+            return SourcePeekMatch::GroupedVariable;
         }
         if let Some((_, next)) = next.punct_matching('.') {
             if let Some((_, next)) = next.punct_matching('.') {
                 if next.ident().is_some() {
-                    return GrammarPeekMatch::FlattenedVariable;
+                    return SourcePeekMatch::FlattenedVariable;
                 }
                 if let Some((_, next)) = next.punct_matching('>') {
                     if next.punct_matching('>').is_some() {
-                        return GrammarPeekMatch::AppendVariableDestructuring;
+                        return SourcePeekMatch::AppendVariableBinding;
                     }
                 }
             }
         }
         if let Some((_, next)) = next.punct_matching('>') {
             if next.punct_matching('>').is_some() {
-                return GrammarPeekMatch::AppendVariableDestructuring;
+                return SourcePeekMatch::AppendVariableBinding;
+            }
+        }
+    }
+
+    if let Some((_, next)) = cursor.punct_matching('@') {
+        if let Some((_, _, _)) = next.group_matching(Delimiter::Parenthesis) {
+            // @(...) or @(_ = ...) or @(#x = ...)
+            return SourcePeekMatch::ExplicitTransformStream;
+        }
+        if let Some((ident, _)) = next.ident() {
+            let name = ident.to_string();
+            if name.to_uppercase() == name {
+                return SourcePeekMatch::Transformer(TransformerKind::for_ident(&ident));
+            }
+        }
+        if let Some((_, next, _)) = next.group_matching(Delimiter::Bracket) {
+            if let Some((ident, _)) = next.ident() {
+                let name = ident.to_string();
+                if name.to_uppercase() == name {
+                    return SourcePeekMatch::Transformer(TransformerKind::for_ident(&ident));
+                }
             }
         }
     }
 
     match cursor.token_tree() {
-        Some((TokenTree::Ident(ident), _)) => GrammarPeekMatch::Ident(ident),
-        Some((TokenTree::Punct(punct), _)) => GrammarPeekMatch::Punct(punct),
-        Some((TokenTree::Literal(literal), _)) => GrammarPeekMatch::Literal(literal),
+        Some((TokenTree::Ident(ident), _)) => SourcePeekMatch::Ident(ident),
+        Some((TokenTree::Punct(punct), _)) => SourcePeekMatch::Punct(punct),
+        Some((TokenTree::Literal(literal), _)) => SourcePeekMatch::Literal(literal),
         Some((TokenTree::Group(_), _)) => unreachable!("Already covered above"),
-        None => GrammarPeekMatch::End,
+        None => SourcePeekMatch::End,
     }
 }
 
 // Parsing of already interpreted tokens
-// (e.g. destructuring)
+// (e.g. transforming / destructuring)
 // =====================================
 
 pub(crate) struct Output;

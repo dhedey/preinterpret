@@ -219,7 +219,7 @@ impl<'a, K> ParseStreamStack<'a, K> {
 }
 
 impl ParseStreamStack<'_, Source> {
-    pub(crate) fn peek_grammar(&mut self) -> GrammarPeekMatch {
+    pub(crate) fn peek_grammar(&mut self) -> SourcePeekMatch {
         self.current().peek_grammar()
     }
 }

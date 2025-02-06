@@ -1,8 +1,10 @@
 mod errors;
+mod field_inputs;
 mod parse_traits;
 mod string_conversion;
 
 pub(crate) use errors::*;
+pub(crate) use field_inputs::*;
 pub(crate) use parse_traits::*;
 pub(crate) use string_conversion::*;
 

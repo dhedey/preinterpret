@@ -1,0 +1,5 @@
+error: Expected (
+ --> tests/compilation_failures/transforming/invalid_content_wrong_group.rs:4:35
+  |
+4 |     preinterpret!([!let! (#..x) = [Hello World]]);
+  |                                   ^^^^^^^^^^^^^

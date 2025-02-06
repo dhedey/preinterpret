@@ -1,6 +1,0 @@
-error: Commands which return something are not supported in destructuring positions
-       Occurred whilst parsing [!let! ...] - Expected [!let! <destructuring> = ...]
- --> tests/compilation_failures/destructuring/destructure_with_flattened_command.rs:4:26
-  |
-4 |     preinterpret!([!let! [!..group! Output] = [!group! Output]]);
-  |                          ^

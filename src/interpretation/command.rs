@@ -10,7 +10,7 @@ pub(crate) enum CommandOutputKind {
     Ident,
     FlattenedStream,
     GroupedStream,
-    ControlFlowCodeStream,
+    Stream,
 }
 
 impl CommandOutputKind {
@@ -20,7 +20,7 @@ impl CommandOutputKind {
             CommandOutputKind::None => Err("A command which returns nothing cannot be used directly in expressions.\nConsider wrapping it inside a { } block which returns an expression"),
             CommandOutputKind::Ident => Err("A command which returns idents cannot be used directly in expressions.\nConsider wrapping it inside a { } block which returns an expression"),
             CommandOutputKind::FlattenedStream => Err("A command which returns a flattened stream cannot be used directly in expressions.\nConsider wrapping it inside a { } block which returns an expression"),
-            CommandOutputKind::ControlFlowCodeStream => Err("A control flow command which returns a code stream cannot be used directly in expressions.\nConsider wrapping it inside a { } block which returns an expression"),
+            CommandOutputKind::Stream => Err("A control flow command which returns a code stream cannot be used directly in expressions.\nConsider wrapping it inside a { } block which returns an expression"),
         }
     }
 }
@@ -199,8 +199,8 @@ impl<C: IdentCommandDefinition> CommandInvocationAs<OutputKindIdent> for C {
 // OutputKindStream
 //=================
 
-pub(crate) struct OutputKindStream;
-impl OutputKind for OutputKindStream {
+pub(crate) struct OutputKindGroupedStream;
+impl OutputKind for OutputKindGroupedStream {
     type Output = OutputStream;
 
     fn resolve_standard() -> CommandOutputKind {
@@ -212,8 +212,8 @@ impl OutputKind for OutputKindStream {
     }
 }
 
-pub(crate) trait StreamCommandDefinition:
-    Sized + CommandType<OutputKind = OutputKindStream>
+pub(crate) trait GroupedStreamCommandDefinition:
+    Sized + CommandType<OutputKind = OutputKindGroupedStream>
 {
     const COMMAND_NAME: &'static str;
     fn parse(arguments: CommandArguments) -> ParseResult<Self>;
@@ -224,7 +224,7 @@ pub(crate) trait StreamCommandDefinition:
     ) -> ExecutionResult<()>;
 }
 
-impl<C: StreamCommandDefinition> CommandInvocationAs<OutputKindStream> for C {
+impl<C: GroupedStreamCommandDefinition> CommandInvocationAs<OutputKindGroupedStream> for C {
     fn execute_into(
         self: Box<Self>,
         context: ExecutionContext,
@@ -246,21 +246,22 @@ impl<C: StreamCommandDefinition> CommandInvocationAs<OutputKindStream> for C {
 // OutputKindControlFlow
 //======================
 
-pub(crate) struct OutputKindControlFlow;
-impl OutputKind for OutputKindControlFlow {
+pub(crate) struct OutputKindStreaming;
+impl OutputKind for OutputKindStreaming {
     type Output = ();
 
     fn resolve_standard() -> CommandOutputKind {
-        CommandOutputKind::ControlFlowCodeStream
+        CommandOutputKind::Stream
     }
 
     fn resolve_flattened(error_span_range: SpanRange) -> ParseResult<CommandOutputKind> {
-        error_span_range.parse_err("This command is control flow, so is always flattened and cannot be explicitly flattened. If it needs to be grouped, wrap it in a [!group! ..] command")
+        error_span_range.parse_err("This command always outputs a flattened stream and so cannot be explicitly flattened. If it needs to be grouped, wrap it in a [!group! ..] command")
     }
 }
 
-pub(crate) trait ControlFlowCommandDefinition:
-    Sized + CommandType<OutputKind = OutputKindControlFlow>
+// Control Flow or a command which is unlikely to want grouped output
+pub(crate) trait StreamingCommandDefinition:
+    Sized + CommandType<OutputKind = OutputKindStreaming>
 {
     const COMMAND_NAME: &'static str;
     fn parse(arguments: CommandArguments) -> ParseResult<Self>;
@@ -271,7 +272,7 @@ pub(crate) trait ControlFlowCommandDefinition:
     ) -> ExecutionResult<()>;
 }
 
-impl<C: ControlFlowCommandDefinition> CommandInvocationAs<OutputKindControlFlow> for C {
+impl<C: StreamingCommandDefinition> CommandInvocationAs<OutputKindStreaming> for C {
     fn execute_into(
         self: Box<Self>,
         context: ExecutionContext,
@@ -346,8 +347,8 @@ macro_rules! define_command_kind {
 define_command_kind! {
     // Core Commands
     SetCommand,
-    LetCommand,
     RawCommand,
+    OutputCommand,
     IgnoreCommand,
     SettingsCommand,
     ErrorCommand,
@@ -397,6 +398,10 @@ define_command_kind! {
     SplitCommand,
     CommaSplitCommand,
     ZipCommand,
+
+    // Destructuring Commands
+    ParseCommand,
+    LetCommand,
 }
 
 #[derive(Clone)]

@@ -255,24 +255,6 @@ impl OutputStream {
         output
     }
 
-    pub(crate) fn into_raw_destructure_stream(self) -> RawDestructureStream {
-        let mut output = RawDestructureStream::empty();
-        for segment in self.segments {
-            match segment {
-                OutputSegment::TokenVec(vec) => {
-                    output.append_from_token_stream(vec);
-                }
-                OutputSegment::OutputGroup(delimiter, _, inner) => {
-                    output.push_item(RawDestructureItem::Group(RawDestructureGroup::new(
-                        delimiter,
-                        inner.into_raw_destructure_stream(),
-                    )));
-                }
-            }
-        }
-        output
-    }
-
     pub(crate) fn concat_recursive(self, behaviour: &ConcatBehaviour) -> String {
         fn concat_recursive_interpreted_stream(
             behaviour: &ConcatBehaviour,
@@ -354,6 +336,13 @@ impl OutputStream {
         let mut output = String::new();
         concat_recursive_interpreted_stream(behaviour, &mut output, Spacing::Joint, self);
         output
+    }
+
+    pub(crate) fn into_exact_stream(self) -> ParseResult<ExactStream> {
+        unsafe {
+            // RUST-ANALYZER SAFETY: Can't be any safer than this for now
+            self.parse_as()
+        }
     }
 }
 
@@ -466,7 +455,7 @@ impl From<TokenTree> for OutputStream {
 //
 // There are a few places where we support (or might wish to support) parsing
 // as part of interpretation:
-// * e.g. of a token stream in `CommandValueInput`
+// * e.g. of a token stream in `SourceValue`
 // * e.g. as part of a PARSER, from an OutputStream
 // * e.g. of a variable, as part of incremental parsing (while_parse style loops)
 //

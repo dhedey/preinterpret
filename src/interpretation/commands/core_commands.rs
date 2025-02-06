@@ -117,10 +117,10 @@ pub(crate) struct RawCommand {
 }
 
 impl CommandType for RawCommand {
-    type OutputKind = OutputKindStream;
+    type OutputKind = OutputKindStreaming;
 }
 
-impl StreamCommandDefinition for RawCommand {
+impl StreamingCommandDefinition for RawCommand {
     const COMMAND_NAME: &'static str = "raw";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
@@ -136,6 +136,33 @@ impl StreamCommandDefinition for RawCommand {
     ) -> ExecutionResult<()> {
         output.extend_raw_tokens(self.token_stream);
         Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct OutputCommand {
+    inner: SourceStream,
+}
+
+impl CommandType for OutputCommand {
+    type OutputKind = OutputKindStreaming;
+}
+
+impl StreamingCommandDefinition for OutputCommand {
+    const COMMAND_NAME: &'static str = "output";
+
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
+        Ok(Self {
+            inner: arguments.parse_all_as_source()?,
+        })
+    }
+
+    fn execute(
+        self: Box<Self>,
+        interpreter: &mut Interpreter,
+        output: &mut OutputStream,
+    ) -> ExecutionResult<()> {
+        self.inner.interpret_into(interpreter, output)
     }
 }
 
@@ -173,7 +200,7 @@ define_field_inputs! {
     SettingsInputs {
         required: {},
         optional: {
-            iteration_limit: CommandValueInput<syn::LitInt> = DEFAULT_ITERATION_LIMIT ("The new iteration limit"),
+            iteration_limit: SourceValue<syn::LitInt> = DEFAULT_ITERATION_LIMIT ("The new iteration limit"),
         }
     }
 }
@@ -214,10 +241,10 @@ enum EitherErrorInput {
 define_field_inputs! {
     ErrorInputs {
         required: {
-            message: CommandValueInput<syn::LitStr> = r#""...""# ("The error message to display"),
+            message: SourceValue<syn::LitStr> = r#""...""# ("The error message to display"),
         },
         optional: {
-            spans: CommandStreamInput = "[$abc]" ("An optional [token stream], to determine where to show the error message"),
+            spans: SourceStreamInput = "[$abc]" ("An optional [token stream], to determine where to show the error message"),
         }
     }
 }

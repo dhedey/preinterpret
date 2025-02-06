@@ -59,6 +59,13 @@ impl ParseError {
             other => other,
         }
     }
+
+    pub(crate) fn context(&self) -> Option<&str> {
+        match self {
+            ParseError::Standard(_) => None,
+            ParseError::Contextual(_, context) => Some(context),
+        }
+    }
 }
 
 // Ideally this would be our own enum with Completed / Interrupted variants,

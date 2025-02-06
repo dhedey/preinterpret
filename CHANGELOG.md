@@ -10,10 +10,12 @@
 ### New Commands
 
 * Core commands:
-  * `[!error! ...]` to output a compile error
-  * `[!set! #x += ...]` to performantly add extra characters to the stream 
+  * `[!error! ...]` to output a compile error.
+  * `[!set! #x += ...]` to performantly add extra characters to the stream.
+  * `[!set! _ = ...]` interprets its arguments but then ignores any outputs.
   * `[!debug! ...]` to output its interpreted contents including none-delimited groups. Useful for debugging the content of variables.
-  * `[!void! ...]` interprets its arguments but then ignores any outputs. It can be used inside destructurings.
+  * `[!output! ...]` can be used to just output its interpreted contents. Normally it's a no-op, but it can be useful inside a transformer.
+  * `[!settings! { ... }]` can be used to adjust the iteration limit.
 * Expression commands:
   * `[!evaluate! <expression>]`
   * `[!assign! #x += <expression>]` for `+` and other supported operators
@@ -29,12 +31,10 @@
   * `[!is_empty! #stream]`
   * `[!length! #stream]` which gives the number of token trees in the token stream.
   * `[!group! ...]` which wraps the tokens in a transparent group. Useful with `!for!`.
-  * `[!..group! ...]` which just outputs its contents as-is, useful where the grammar
-    only takes a single item, but we want to output multiple tokens
   * `[!intersperse! { ... }]` which inserts separator tokens between each token tree in a stream.
-  * `[!split! ...]`
-  * `[!comma_split! ...]`
-  * `[!zip! (#countries #flags #capitals)]` which can be used to combine multiple streams together
+  * `[!split! ...]` which can be used to split a stream with a given separating stream.
+  * `[!comma_split! ...]` which can be used to split a stream on `,` tokens.
+  * `[!zip! (#countries #flags #capitals)]` which can be used to combine multiple streams together.
 * Destructuring commands:
   * `[!let! <destructuring> = ...]` does destructuring/parsing (see next section). Note `[!let! #..x = ...]` is equivalent to `[!set! #x = ...]`
 
@@ -56,63 +56,54 @@ Currently supported are:
 
 Expressions behave intuitively as you'd expect from writing regular rust code, except they happen at compile time.
 
-### Destructuring
+### Transforming
 
-Destructuring performs parsing of a token stream. It supports:
+Transforming performs parsing of a token stream, whilst also outputting a stream. The input stream must be parsed in its entirety.
 
-* Explicit punctuation, idents, literals and groups
+Transform streams (or substreams) can be redirected to set variables or append to variables. Commands can also be injected to add to the output.
+
+Inside a transform stream, the following grammar is supported:
+
+* `@(...)`, `@(#x = ...)`, `@(#x += ...)` and `@(_ = ...)` - Explicit transform (sub)streams which either output, set, append or discard its output.
+* Explicit punctuation, idents, literals and groups. These aren't output by default, except directly inside a `@[EXACT ...]` transformer.
 * Variable bindings:
-  * `#x` - Reads a token tree, writes a stream (opposite of `#x`)
-  * `#..x` - Reads a stream, writes a stream (opposite of `#..x`)
+  * `#x` - Reads a token tree, writes its content (opposite of `#x`). Equivalent to `@(#x = @TOKEN_OR_GROUP_CONTENT)`
+  * `#..x` - Reads a stream, writes a stream (opposite of `#..x`).
+    * If it's at the end of the transformer stream, it's equivalent to `@(#x = @REST)`.
+    * If it's followed by a token `T` in the transformer stream, it's equivalent to `@(#x = @[UNTIL T])`
   * `#>>x` - Reads a token tree, appends a token tree (can be read back with `!for! #y in #x { ... }`)
   * `#>>..x` - Reads a token tree, appends a stream (i.e. flatten it if it's a group)
   * `#..>>x` - Reads a stream, appends a group (can be read back with `!for! #y in #x { ... }`)
   * `#..>>..x` - Reads a stream, appends a stream
-* Commands which don't output a value, like `[!set! ...]`
 * Named destructurings:
-  * `(!stream! ...)` (TODO - decide if this is a good name)
-  * `(!ident! ...)`
-  * `(!punct! ...)`
-  * `(!literal! ...)`
-  * `(!group! ...)`
-  * `(!raw! ...)`
-  * `(!content! ...)`
+  * `@IDENT` - Consumes and output any ident.
+  * `@PUNCT` - Consumes and outputs any punctation
+  * `@LITERAL` - Consumes and outputs any literal
+  * `@[GROUP ...]` - Consumes a none-delimited group. Its arguments are used to transform the group's contents.
+  * `@[EXACT ...]` - Interprets its arguments (i.e. variables are substituted, not bound; and command output is gathered) into an "exact match stream". And then expects to consume exactly the same stream from the input. It outputs the parsed stream.
+* Commands: Their output is appended to the transform's output. Useful patterns include:
+  * `@(#inner = ...) [!output! #inner]` - wraps the output in a transparent group
 
 ### To come
 
-* Destructurers => Transformers 
-  * Implement pivot to transformers outputting things ... `@[#x = @IDENT]`...
-  * Scrap `[!let!]` in favour of `[!parse! #x as #(...)]`
+* Destructurers => Transformers
+  * Scrap `[!let!]` in favour of `[!parse! #x as @(_ = ...)]`
   * `@TOKEN_TREE`
+  * `@TOKEN_OR_GROUP_CONTENT` - Literal, Ident, Punct or None-group content.
+  * `@[ANY_GROUP ...]`
   * `@REST`
-  * `@[UNTIL xxxx]`
-  * `@[EXPECT xxxx]` expects the tokens (or source grammar inc variables), and outputs the matched tokens (instead of dropping them as is the default). Replaces `(!content!)`. We should also consider ignoring/unwrapping none-groups to be more permissive? (assuming they're also unwrapped during parsing).
+  * `@[UNTIL xxxx]` - For now - takes a raw stream which is turned into an ExactStream.
   * `@[FIELDS { ... }]` and `@[SUBFIELDS { ... }]`
   * Add ability to add scope to interpreter state (copy on write?) (and commit/revert) and can then add:
     * `@[OPTIONAL ...]` and `@(...)?`
     * `@(REPEATED { ... })` (see below)
+    * Potentially change `@UNTIL` to take a transform stream instead of a raw stream.
     * `[!match! ...]` command
     * `@[ANY { ... }]` (with `#..x` as a catch-all) like the [!match!] command but without arms...
     * `#(..)?`, `#(..)+`, `#(..),+`, `#(..)*`, `#(..),*`
 * Consider:
-  * Destructurer needs to have different syntax. It's too confusingly similar!
-    * Final decision: `@[#x = @IDENT]` because destructurers output (SEE BELOW FOR MOST OF THE WORKING)
-    * Some other ideas considered:
-    * `(>ident> #x)`? `(>fields> {})`? `(>comma_repeated> Hello)`
-      * We can't use `<` otherwise it tries to open brackets and could be confused for rust syntax like: `(<x as y>)`
-      * We need to test it with the auto-formatter in case it really messes it up
-    * `#(>ident #x)` - not bad...
-      * Then we can drop `(!stream!)` as it's just `#( ... )`
-      * We need to test it with the auto-formatter in case it really messes it up
-    * `[>ident (#x)]`
-    * `<ident(#x)>`
-    * `{[ident] #x}`
-    * `(>ident> #x)`
-    * `#IDENT { #x }`
-    * `#IDENT { capture: #x }`
-    * `#(IDENT #x)`
-    * `@[#x = @IDENT]`
-  * Scrap `#>>x` etc in favour of `@[#x += ...]`
+  * If the `[!split!]` command should actually be a transformer?
+  * Scrap `#>>x` etc in favour of `@(#x += ...)`
 * `[!is_set! #x]`
 * Support `[!index! ..]`:
   * `[!index! #x[0]]`
@@ -123,6 +114,7 @@ Destructuring performs parsing of a token stream. It supports:
 * Have UntypedInteger have an inner representation of either i128 or literal (and same with float)
 * Add `[!reinterpret! ...]` command for an `eval` style command.
 * Add casts of other integers to char, via `char::from_u32(u32::try_from(x))`
+* Get rid of needless cloning
 * TODO check
 * Check all `#[allow(unused)]` and remove any which aren't needed
 * Work on book
@@ -144,7 +136,7 @@ Destructuring performs parsing of a token stream. It supports:
 }]
 // NICE
 [!parse! #input as @[REPEATED {
-    item: @(impl @[#trait = @IDENT] for @[#type = @TYPE]),
+    item: @(impl @(#trait = @IDENT) for @(#type = @TYPE)),
     item_output: {
       impl BLAH BLAH {
         ...
@@ -157,7 +149,7 @@ Destructuring performs parsing of a token stream. It supports:
 
 }]
 // MAYBE - probably not though... 
-[!parse_for! #input as @(impl @[#x = @IDENT] for @[#y = @IDENT]),* {
+[!parse_for! #input as @(impl @(#x = @IDENT) for @(#y = @IDENT)),* {
 
 }]
 
@@ -185,14 +177,14 @@ Destructuring performs parsing of a token stream. It supports:
 // * @X shorthand for @[X] for destructurers which can take no input, e.g. IDENT, TOKEN_TREE, TYPE etc
 //   => NOTE: Each destructurer should return just its tokens by default if it has no arguments.
 //   => It can also have its output over-written or other things outputted using e.g. @[TYPE { is_prefixed: X, parts: #(...), output: { #output } }]
-// * #x is shorthand for @[#x = @TOKEN_TREE]
+// * #x is shorthand for @[#x = @TOKEN_OR_GROUP_CONTENT]
 // * #..x) is shorthand for @[#x = @UNTIL_END] and #..x, is shorthand for @[CAPTURE #x = @[UNTIL_TOKEN ,]]
-// * @[_ = ...]
-// * @[#x = @IDENT for @IDENT]
-// * @[#x += @IDENT for @IDENT]
+// * @(_ = ...)
+// * @(#x = impl @IDENT for @IDENT)
+// * @(#x += impl @IDENT for @IDENT)
 // * @[REPEATED { ... }]
 // * Can embed commands to output stuff too
-// * Can output a group with: @[#x = @IDENT for @IDENT] [!group! #..x]
+// * Can output a group with: @(#x = @IDENT for @IDENT) [!output! #x]
 
 // In this model, REPEATED is really clean and looks like this:
 @[REPEATED {
@@ -205,14 +197,14 @@ Destructuring performs parsing of a token stream. It supports:
 }]
 
 // How does optional work?
-// @[#x = @(@IDENT)?]
+// @(#x = @(@IDENT)?)
 // Along with:
 // [!fields! { #x, my_var: #y, #z }]
 // And if some field #z isn't set, it's outputted as null.
 
 // Do we want something like !parse_for!? It needs to execute lazily - how?
 // > Probably by passing some `OnOutput` hook to an output stream method
-[!parse_for! #input as @(impl @[#x = @IDENT] for @[#y = @IDENT]),+ {
+[!parse_for! #input as @(impl @(#x = @IDENT) for @(#y = @IDENT)),+ {
 
 }]
 ```

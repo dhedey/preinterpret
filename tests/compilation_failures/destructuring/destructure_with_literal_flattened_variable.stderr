@@ -1,6 +1,0 @@
-error: A flattened input variable is not supported here
-       Occurred whilst parsing (!literal! ...) - Expected (!literal! #x) or (!literal! #>>x) or (!literal!)
- --> tests/compilation_failures/destructuring/destructure_with_literal_flattened_variable.rs:4:37
-  |
-4 |     preinterpret!([!let! (!literal! #..x) = "Hello"]);
-  |                                     ^

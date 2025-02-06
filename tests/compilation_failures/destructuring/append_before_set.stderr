@@ -1,5 +1,0 @@
-error: The variable #x wasn't already set
- --> tests/compilation_failures/destructuring/append_before_set.rs:4:26
-  |
-4 |     preinterpret!([!let! #>>x = Hello]);
-  |                          ^^^^

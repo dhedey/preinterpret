@@ -74,48 +74,48 @@ impl Expressionable for Source {
 
     fn parse_unary_atom(input: &mut ParseStreamStack<Self>) -> ParseResult<UnaryAtom<Self>> {
         Ok(match input.peek_grammar() {
-            GrammarPeekMatch::Command(Some(output_kind)) => {
+            SourcePeekMatch::Command(Some(output_kind)) => {
                 match output_kind.expression_support() {
                     Ok(()) => UnaryAtom::Leaf(Self::Leaf::Command(input.parse()?)),
                     Err(error_message) => return input.parse_err(error_message),
                 }
             }
-            GrammarPeekMatch::Command(None) => return input.parse_err("Invalid command"),
-            GrammarPeekMatch::GroupedVariable => UnaryAtom::Leaf(Self::Leaf::GroupedVariable(input.parse()?)),
-            GrammarPeekMatch::FlattenedVariable => return input.parse_err("Flattened variables cannot be used directly in expressions. Consider removing the .. or wrapping it inside a command such as [!group! ..] which returns an expression"),
-            GrammarPeekMatch::AppendVariableDestructuring => return input.parse_err("Append variable operations are not supported in an expression"),
-            GrammarPeekMatch::Destructurer(_) => return input.parse_err("Destructurings are not supported in an expression"),
-            GrammarPeekMatch::Group(Delimiter::None | Delimiter::Parenthesis) => {
+            SourcePeekMatch::Command(None) => return input.parse_err("Invalid command"),
+            SourcePeekMatch::GroupedVariable => UnaryAtom::Leaf(Self::Leaf::GroupedVariable(input.parse()?)),
+            SourcePeekMatch::FlattenedVariable => return input.parse_err("Flattened variables cannot be used directly in expressions. Consider removing the .. or wrapping it inside a command such as [!group! ..] which returns an expression"),
+            SourcePeekMatch::AppendVariableBinding => return input.parse_err("Append variable operations are not supported in an expression"),
+            SourcePeekMatch::ExplicitTransformStream | SourcePeekMatch::Transformer(_) => return input.parse_err("Destructurings are not supported in an expression"),
+            SourcePeekMatch::Group(Delimiter::None | Delimiter::Parenthesis) => {
                 let (_, delim_span) = input.parse_and_enter_group()?;
                 UnaryAtom::Group(delim_span)
             },
-            GrammarPeekMatch::Group(Delimiter::Brace) => {
+            SourcePeekMatch::Group(Delimiter::Brace) => {
                 let leaf = SourceExpressionLeaf::CodeBlock(input.parse()?);
                 UnaryAtom::Leaf(leaf)
             }
-            GrammarPeekMatch::Group(Delimiter::Bracket) => return input.parse_err("Square brackets [ .. ] are not supported in an expression"),
-            GrammarPeekMatch::Punct(_) => {
+            SourcePeekMatch::Group(Delimiter::Bracket) => return input.parse_err("Square brackets [ .. ] are not supported in an expression"),
+            SourcePeekMatch::Punct(_) => {
                 UnaryAtom::PrefixUnaryOperation(input.parse()?)
             },
-            GrammarPeekMatch::Ident(_) => {
+            SourcePeekMatch::Ident(_) => {
                 let value = ExpressionValue::Boolean(ExpressionBoolean::for_litbool(input.parse()?));
                 UnaryAtom::Leaf(Self::Leaf::Value(value))
             },
-            GrammarPeekMatch::Literal(_) => {
+            SourcePeekMatch::Literal(_) => {
                 let value = ExpressionValue::for_literal(input.parse()?)?;
                 UnaryAtom::Leaf(Self::Leaf::Value(value))
             },
-            GrammarPeekMatch::End => return input.parse_err("The expression ended in an incomplete state"),
+            SourcePeekMatch::End => return input.parse_err("The expression ended in an incomplete state"),
         })
     }
 
     fn parse_extension(input: &mut ParseStreamStack<Self>) -> ParseResult<NodeExtension> {
         Ok(match input.peek_grammar() {
-            GrammarPeekMatch::Punct(_) => match input.try_parse_or_revert::<BinaryOperation>() {
+            SourcePeekMatch::Punct(_) => match input.try_parse_or_revert::<BinaryOperation>() {
                 Ok(operation) => NodeExtension::BinaryOperation(operation),
                 Err(_) => NodeExtension::NoneMatched,
             },
-            GrammarPeekMatch::Ident(ident) if ident == "as" => {
+            SourcePeekMatch::Ident(ident) if ident == "as" => {
                 let cast_operation =
                     UnaryOperation::for_cast_operation(input.parse()?, input.parse_any_ident()?)?;
                 NodeExtension::PostfixOperation(cast_operation)

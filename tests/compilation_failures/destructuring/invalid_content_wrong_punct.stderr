@@ -1,5 +1,0 @@
-error: expected _
- --> tests/compilation_failures/destructuring/invalid_content_wrong_punct.rs:4:48
-  |
-4 |     preinterpret!([!let! Hello _ World = Hello World]);
-  |                                                ^^^^^

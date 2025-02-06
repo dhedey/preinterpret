@@ -9,10 +9,10 @@ pub(crate) struct IfCommand {
 }
 
 impl CommandType for IfCommand {
-    type OutputKind = OutputKindControlFlow;
+    type OutputKind = OutputKindStreaming;
 }
 
-impl ControlFlowCommandDefinition for IfCommand {
+impl StreamingCommandDefinition for IfCommand {
     const COMMAND_NAME: &'static str = "if";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
@@ -85,10 +85,10 @@ pub(crate) struct WhileCommand {
 }
 
 impl CommandType for WhileCommand {
-    type OutputKind = OutputKindControlFlow;
+    type OutputKind = OutputKindStreaming;
 }
 
-impl ControlFlowCommandDefinition for WhileCommand {
+impl StreamingCommandDefinition for WhileCommand {
     const COMMAND_NAME: &'static str = "while";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
@@ -143,10 +143,10 @@ pub(crate) struct LoopCommand {
 }
 
 impl CommandType for LoopCommand {
-    type OutputKind = OutputKindControlFlow;
+    type OutputKind = OutputKindStreaming;
 }
 
-impl ControlFlowCommandDefinition for LoopCommand {
+impl StreamingCommandDefinition for LoopCommand {
     const COMMAND_NAME: &'static str = "loop";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
@@ -185,18 +185,18 @@ impl ControlFlowCommandDefinition for LoopCommand {
 
 #[derive(Clone)]
 pub(crate) struct ForCommand {
-    parse_place: DestructureUntil<Token![in]>,
+    parse_place: TransformStreamUntilToken<Token![in]>,
     #[allow(unused)]
     in_token: Token![in],
-    input: CommandStreamInput,
+    input: SourceStreamInput,
     loop_code: SourceCodeBlock,
 }
 
 impl CommandType for ForCommand {
-    type OutputKind = OutputKindControlFlow;
+    type OutputKind = OutputKindStreaming;
 }
 
-impl ControlFlowCommandDefinition for ForCommand {
+impl StreamingCommandDefinition for ForCommand {
     const COMMAND_NAME: &'static str = "for";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
@@ -224,8 +224,12 @@ impl ControlFlowCommandDefinition for ForCommand {
 
         for token in stream {
             iteration_counter.increment_and_check()?;
-            self.parse_place
-                .handle_destructure_from_stream(token.into(), interpreter)?;
+            let mut ignored_transformer_output = OutputStream::new();
+            self.parse_place.handle_transform_from_stream(
+                token.into(),
+                interpreter,
+                &mut ignored_transformer_output,
+            )?;
             match self
                 .loop_code
                 .clone()
