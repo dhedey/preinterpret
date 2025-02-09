@@ -3,37 +3,35 @@ use super::*;
 #[derive(Clone)]
 pub(crate) struct ExpressionString {
     pub(super) value: String,
-    /// The span of the source code that generated this boolean value.
-    /// It may not have a value if generated from a complex expression.
-    pub(super) source_span: Option<Span>,
+    /// The span range that generated this value.
+    /// For a complex expression, the start span is the most left part
+    /// of the expression, and the end span is the most right part.
+    pub(super) span_range: SpanRange,
 }
 
 impl ExpressionString {
     pub(super) fn for_litstr(lit: syn::LitStr) -> Self {
         Self {
             value: lit.value(),
-            source_span: Some(lit.span()),
+            span_range: lit.span().span_range(),
         }
     }
 
     pub(super) fn handle_unary_operation(
         self,
-        operation: UnaryOperation,
+        operation: OutputSpanned<UnaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
-        Ok(match operation {
-            UnaryOperation::GroupedNoOp { .. } => operation.output(self.value),
+        match operation.operation {
             UnaryOperation::Neg { .. }
             | UnaryOperation::Not { .. }
-            | UnaryOperation::Cast { .. } => {
-                return operation.unsupported_for_value_type_err("string")
-            }
-        })
+            | UnaryOperation::Cast { .. } => operation.unsupported_for_value_type_err("string"),
+        }
     }
 
     pub(super) fn handle_integer_binary_operation(
         self,
         _right: ExpressionInteger,
-        operation: &IntegerBinaryOperation,
+        operation: OutputSpanned<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         operation.unsupported_for_value_type_err("string")
     }
@@ -41,11 +39,11 @@ impl ExpressionString {
     pub(super) fn handle_paired_binary_operation(
         self,
         rhs: Self,
-        operation: &PairedBinaryOperation,
+        operation: OutputSpanned<PairedBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.value;
         let rhs = rhs.value;
-        Ok(match operation {
+        Ok(match operation.operation {
             PairedBinaryOperation::Addition { .. }
             | PairedBinaryOperation::Subtraction { .. }
             | PairedBinaryOperation::Multiplication { .. }
@@ -67,25 +65,25 @@ impl ExpressionString {
         })
     }
 
-    pub(super) fn to_literal(&self, fallback_span: Span) -> Literal {
-        Literal::string(&self.value).with_span(self.source_span.unwrap_or(fallback_span))
+    pub(super) fn to_literal(&self) -> Literal {
+        Literal::string(&self.value).with_span(self.span_range.join_into_span_else_start())
     }
 }
 
 impl ToExpressionValue for String {
-    fn to_value(self, source_span: Option<Span>) -> ExpressionValue {
+    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
         ExpressionValue::String(ExpressionString {
             value: self,
-            source_span,
+            span_range,
         })
     }
 }
 
 impl ToExpressionValue for &str {
-    fn to_value(self, source_span: Option<Span>) -> ExpressionValue {
+    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
         ExpressionValue::String(ExpressionString {
             value: self.to_string(),
-            source_span,
+            span_range,
         })
     }
 }

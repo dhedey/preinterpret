@@ -22,12 +22,12 @@ impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
 
         loop {
             match next {
-                NextAction::HandleValue(evaluation_value) => {
+                NextAction::HandleValue(value) => {
                     let top_of_stack = match self.operation_stack.pop() {
                         Some(top) => top,
-                        None => return Ok(evaluation_value),
+                        None => return Ok(value),
                     };
-                    next = self.continue_node_evaluation(top_of_stack, evaluation_value)?;
+                    next = self.continue_node_evaluation(top_of_stack, value)?;
                 }
                 NextAction::EnterNode(next_node) => {
                     next = self.begin_node_evaluation(next_node, evaluation_context)?;
@@ -44,6 +44,12 @@ impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
         Ok(match &self.nodes[node_id.0] {
             ExpressionNode::Leaf(leaf) => {
                 NextAction::HandleValue(K::evaluate_leaf(leaf, evaluation_context)?)
+            }
+            ExpressionNode::Grouped { delim_span, inner } => {
+                self.operation_stack.push(EvaluationStackFrame::Group {
+                    span: delim_span.join(),
+                });
+                NextAction::EnterNode(*inner)
             }
             ExpressionNode::UnaryOperation { operation, input } => {
                 self.operation_stack
@@ -72,30 +78,28 @@ impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
     fn continue_node_evaluation(
         &mut self,
         top_of_stack: EvaluationStackFrame,
-        evaluation_value: ExpressionValue,
+        value: ExpressionValue,
     ) -> ExecutionResult<NextAction> {
         Ok(match top_of_stack {
+            EvaluationStackFrame::Group { span } => NextAction::HandleValue(value.with_span(span)),
             EvaluationStackFrame::UnaryOperation { operation } => {
-                let result = operation.evaluate(evaluation_value)?;
-                NextAction::HandleValue(result)
+                NextAction::HandleValue(operation.evaluate(value)?)
             }
             EvaluationStackFrame::BinaryOperation { operation, state } => match state {
                 BinaryPath::OnLeftBranch { right } => {
-                    if let Some(result) = operation.lazy_evaluate(&evaluation_value)? {
+                    if let Some(result) = operation.lazy_evaluate(&value)? {
                         NextAction::HandleValue(result)
                     } else {
                         self.operation_stack
                             .push(EvaluationStackFrame::BinaryOperation {
                                 operation,
-                                state: BinaryPath::OnRightBranch {
-                                    left: evaluation_value,
-                                },
+                                state: BinaryPath::OnRightBranch { left: value },
                             });
                         NextAction::EnterNode(right)
                     }
                 }
                 BinaryPath::OnRightBranch { left } => {
-                    let result = operation.evaluate(left, evaluation_value)?;
+                    let result = operation.evaluate(left, value)?;
                     NextAction::HandleValue(result)
                 }
             },
@@ -109,6 +113,9 @@ enum NextAction {
 }
 
 enum EvaluationStackFrame {
+    Group {
+        span: Span,
+    },
     UnaryOperation {
         operation: UnaryOperation,
     },
@@ -121,51 +128,4 @@ enum EvaluationStackFrame {
 enum BinaryPath {
     OnLeftBranch { right: ExpressionNodeId },
     OnRightBranch { left: ExpressionValue },
-}
-
-pub(crate) struct ExpressionOutput {
-    pub(super) value: ExpressionValue,
-    pub(super) fallback_output_span: Span,
-}
-
-impl ExpressionOutput {
-    #[allow(unused)]
-    pub(crate) fn into_value(self) -> ExpressionValue {
-        self.value
-    }
-
-    #[allow(unused)]
-    pub(crate) fn expect_integer(self, error_message: &str) -> ExecutionResult<ExpressionInteger> {
-        let error_span = self.span();
-        match self.value.into_integer() {
-            Some(integer) => Ok(integer),
-            None => error_span.execution_err(error_message),
-        }
-    }
-
-    pub(crate) fn expect_bool(self, error_message: &str) -> ExecutionResult<bool> {
-        let error_span = self.span();
-        match self.value.into_bool() {
-            Some(boolean) => Ok(boolean.value),
-            None => error_span.execution_err(error_message),
-        }
-    }
-
-    pub(crate) fn to_token_tree(&self) -> TokenTree {
-        self.value.to_token_tree(self.fallback_output_span)
-    }
-}
-
-impl HasSpan for ExpressionOutput {
-    fn span(&self) -> Span {
-        self.value
-            .source_span()
-            .unwrap_or(self.fallback_output_span)
-    }
-}
-
-impl quote::ToTokens for ExpressionOutput {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.to_token_tree().to_tokens(tokens);
-    }
 }

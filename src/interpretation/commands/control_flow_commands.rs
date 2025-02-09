@@ -108,7 +108,7 @@ impl StreamingCommandDefinition for WhileCommand {
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        let mut iteration_counter = interpreter.start_iteration_counter(&self.condition);
+        let mut iteration_counter = interpreter.start_iteration_counter(&self.loop_code);
         loop {
             iteration_counter.increment_and_check()?;
 

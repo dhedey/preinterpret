@@ -1,37 +1,59 @@
 use super::*;
 
 pub(super) trait Operation: HasSpanRange {
-    fn output(&self, output_value: impl ToExpressionValue) -> ExpressionValue {
-        output_value.to_value(self.source_span_for_output())
+    fn with_output_span_range(&self, output_span_range: SpanRange) -> OutputSpanned<'_, Self> {
+        OutputSpanned {
+            output_span_range,
+            operation: self,
+        }
     }
 
-    fn output_if_some(
+    fn symbol(&self) -> &'static str;
+}
+
+pub(super) struct OutputSpanned<'a, T: Operation + ?Sized> {
+    pub(super) output_span_range: SpanRange,
+    pub(super) operation: &'a T,
+}
+
+impl<T: Operation> OutputSpanned<'_, T> {
+    pub(super) fn symbol(&self) -> &'static str {
+        self.operation.symbol()
+    }
+
+    pub(super) fn output(&self, output_value: impl ToExpressionValue) -> ExpressionValue {
+        output_value.to_value(self.output_span_range)
+    }
+
+    pub(super) fn output_if_some(
         &self,
         output_value: Option<impl ToExpressionValue>,
         error_message: impl FnOnce() -> String,
     ) -> ExecutionResult<ExpressionValue> {
         match output_value {
             Some(output_value) => Ok(self.output(output_value)),
-            None => self.execution_err(error_message()),
+            None => self.operation.execution_err(error_message()),
         }
     }
 
-    fn unsupported_for_value_type_err(
+    pub(super) fn unsupported_for_value_type_err(
         &self,
         value_type: &'static str,
     ) -> ExecutionResult<ExpressionValue> {
-        Err(self.execution_error(format!(
+        Err(self.operation.execution_error(format!(
             "The {} operator is not supported for {} values",
-            self.symbol(),
+            self.operation.symbol(),
             value_type,
         )))
     }
+}
 
-    fn source_span_for_output(&self) -> Option<Span> {
-        None
+impl<T: Operation> HasSpanRange for OutputSpanned<'_, T> {
+    fn span_range(&self) -> SpanRange {
+        // This is used for errors of the operation, so should be targetted
+        // to the span range of the _operator_, not the output.
+        self.operation.span_range()
     }
-
-    fn symbol(&self) -> &'static str;
 }
 
 pub(super) enum PrefixUnaryOperation {
@@ -77,9 +99,6 @@ pub(super) enum UnaryOperation {
     Not {
         token: Token![!],
     },
-    GroupedNoOp {
-        span: Span,
-    },
     Cast {
         as_token: Token![as],
         target_ident: Ident,
@@ -124,34 +143,21 @@ impl UnaryOperation {
     }
 
     pub(super) fn evaluate(self, input: ExpressionValue) -> ExecutionResult<ExpressionValue> {
-        input.handle_unary_operation(self)
-    }
-
-    pub(super) fn end_span(&self) -> Span {
-        match self {
-            UnaryOperation::Neg { token } => token.span,
-            UnaryOperation::Not { token } => token.span,
-            UnaryOperation::GroupedNoOp { span } => *span,
-            UnaryOperation::Cast { target_ident, .. } => target_ident.span(),
-        }
+        let mut span_range = input.span_range();
+        match &self {
+            UnaryOperation::Neg { token } => span_range.set_start(token.span),
+            UnaryOperation::Not { token } => span_range.set_start(token.span),
+            UnaryOperation::Cast { target_ident, .. } => span_range.set_end(target_ident.span()),
+        };
+        input.handle_unary_operation(self.with_output_span_range(span_range))
     }
 }
 
 impl Operation for UnaryOperation {
-    fn source_span_for_output(&self) -> Option<Span> {
-        match self {
-            UnaryOperation::Neg { .. } => None,
-            UnaryOperation::Not { .. } => None,
-            UnaryOperation::GroupedNoOp { span } => Some(*span),
-            UnaryOperation::Cast { .. } => None,
-        }
-    }
-
     fn symbol(&self) -> &'static str {
         match self {
             UnaryOperation::Neg { .. } => "-",
             UnaryOperation::Not { .. } => "!",
-            UnaryOperation::GroupedNoOp { .. } => "",
             UnaryOperation::Cast { .. } => "as",
         }
     }
@@ -162,15 +168,16 @@ impl HasSpan for UnaryOperation {
         match self {
             UnaryOperation::Neg { token } => token.span,
             UnaryOperation::Not { token } => token.span,
-            UnaryOperation::GroupedNoOp { span } => *span,
             UnaryOperation::Cast { as_token, .. } => as_token.span,
         }
     }
 }
 
 pub(super) trait HandleUnaryOperation: Sized {
-    fn handle_unary_operation(self, operation: &UnaryOperation)
-        -> ExecutionResult<ExpressionValue>;
+    fn handle_unary_operation(
+        self,
+        operation: OutputSpanned<UnaryOperation>,
+    ) -> ExecutionResult<ExpressionValue>;
 }
 
 #[derive(Clone)]
@@ -293,16 +300,22 @@ impl BinaryOperation {
         left: ExpressionValue,
         right: ExpressionValue,
     ) -> ExecutionResult<ExpressionValue> {
+        let span_range =
+            SpanRange::new_between(left.span_range().start(), right.span_range().end());
         match self {
             BinaryOperation::Paired(operation) => {
                 let value_pair = left.expect_value_pair(operation, right)?;
-                value_pair.handle_paired_binary_operation(operation)
+                value_pair
+                    .handle_paired_binary_operation(operation.with_output_span_range(span_range))
             }
             BinaryOperation::Integer(operation) => {
                 let right = right
                     .into_integer()
                     .ok_or_else(|| self.execution_error("The shift amount must be an integer"))?;
-                left.handle_integer_binary_operation(right, operation)
+                left.handle_integer_binary_operation(
+                    right,
+                    operation.with_output_span_range(span_range),
+                )
             }
         }
     }
@@ -420,13 +433,13 @@ pub(super) trait HandleBinaryOperation: Sized {
     fn handle_paired_binary_operation(
         self,
         rhs: Self,
-        operation: &PairedBinaryOperation,
+        operation: OutputSpanned<PairedBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue>;
 
     fn handle_integer_binary_operation(
         self,
         rhs: ExpressionInteger,
-        operation: &IntegerBinaryOperation,
+        operation: OutputSpanned<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue>;
 }
 
@@ -434,7 +447,7 @@ pub(super) trait HandleCreateRange: Sized {
     fn create_range(
         self,
         right: Self,
-        range_limits: &syn::RangeLimits,
+        range_limits: OutputSpanned<syn::RangeLimits>,
     ) -> Box<dyn Iterator<Item = ExpressionValue> + '_>;
 }
 

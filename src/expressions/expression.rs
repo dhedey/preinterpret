@@ -8,12 +8,6 @@ pub(crate) struct SourceExpression {
     inner: Expression<Source>,
 }
 
-impl HasSpanRange for SourceExpression {
-    fn span_range(&self) -> SpanRange {
-        self.inner.span_range
-    }
-}
-
 impl Parse<Source> for SourceExpression {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         Ok(Self {
@@ -26,29 +20,8 @@ impl SourceExpression {
     pub(crate) fn evaluate(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<ExpressionOutput> {
-        Ok(ExpressionOutput {
-            value: self.evaluate_to_value(interpreter)?,
-            fallback_output_span: self.inner.span_range.join_into_span_else_start(),
-        })
-    }
-
-    pub(crate) fn evaluate_with_span(
-        &self,
-        interpreter: &mut Interpreter,
-        fallback_output_span: Span,
-    ) -> ExecutionResult<ExpressionOutput> {
-        Ok(ExpressionOutput {
-            value: self.evaluate_to_value(interpreter)?,
-            fallback_output_span,
-        })
-    }
-
-    pub(crate) fn evaluate_to_value(
-        &self,
-        interpreter: &mut Interpreter,
     ) -> ExecutionResult<ExpressionValue> {
-        Source::evaluate_to_value(&self.inner, interpreter)
+        Source::evaluate(&self.inner, interpreter)
     }
 }
 
@@ -62,15 +35,6 @@ pub(super) enum SourceExpressionLeaf {
 impl Expressionable for Source {
     type Leaf = SourceExpressionLeaf;
     type EvaluationContext = Interpreter;
-
-    fn leaf_end_span(leaf: &Self::Leaf) -> Option<Span> {
-        match leaf {
-            SourceExpressionLeaf::Command(command) => Some(command.span()),
-            SourceExpressionLeaf::GroupedVariable(variable) => Some(variable.span_range().end()),
-            SourceExpressionLeaf::CodeBlock(code_block) => Some(code_block.span()),
-            SourceExpressionLeaf::Value(value) => value.source_span(),
-        }
-    }
 
     fn parse_unary_atom(input: &mut ParseStreamStack<Self>) -> ParseResult<UnaryAtom<Self>> {
         Ok(match input.peek_grammar() {
@@ -144,7 +108,7 @@ impl Expressionable for Source {
             // RUST-ANALYZER SAFETY: This isn't very safe, as it could have a none-delimited group in it
             interpreted.parse_as::<OutputExpression>()?
         };
-        parsed_expression.evaluate_to_value()
+        parsed_expression.evaluate()
     }
 }
 
@@ -165,25 +129,14 @@ impl Parse<Output> for OutputExpression {
 }
 
 impl OutputExpression {
-    pub(crate) fn evaluate(&self) -> ExecutionResult<ExpressionOutput> {
-        Ok(ExpressionOutput {
-            value: self.evaluate_to_value()?,
-            fallback_output_span: self.inner.span_range.join_into_span_else_start(),
-        })
-    }
-
-    pub(crate) fn evaluate_to_value(&self) -> ExecutionResult<ExpressionValue> {
-        Output::evaluate_to_value(&self.inner, &mut ())
+    pub(crate) fn evaluate(&self) -> ExecutionResult<ExpressionValue> {
+        Output::evaluate(&self.inner, &mut ())
     }
 }
 
 impl Expressionable for Output {
     type Leaf = ExpressionValue;
     type EvaluationContext = ();
-
-    fn leaf_end_span(leaf: &Self::Leaf) -> Option<Span> {
-        leaf.source_span()
-    }
 
     fn evaluate_leaf(
         leaf: &Self::Leaf,
@@ -239,7 +192,6 @@ impl Expressionable for Output {
 
 pub(super) struct Expression<K: Expressionable> {
     pub(super) root: ExpressionNodeId,
-    pub(super) span_range: SpanRange,
     pub(super) nodes: std::rc::Rc<[ExpressionNode<K>]>,
 }
 
@@ -247,7 +199,6 @@ impl<K: Expressionable> Clone for Expression<K> {
     fn clone(&self) -> Self {
         Self {
             root: self.root,
-            span_range: self.span_range,
             nodes: self.nodes.clone(),
         }
     }
@@ -258,6 +209,10 @@ pub(super) struct ExpressionNodeId(pub(super) usize);
 
 pub(super) enum ExpressionNode<K: Expressionable> {
     Leaf(K::Leaf),
+    Grouped {
+        delim_span: DelimSpan,
+        inner: ExpressionNodeId,
+    },
     UnaryOperation {
         operation: UnaryOperation,
         input: ExpressionNodeId,
@@ -273,8 +228,6 @@ pub(super) trait Expressionable: Sized {
     type Leaf;
     type EvaluationContext;
 
-    fn leaf_end_span(leaf: &Self::Leaf) -> Option<Span>;
-
     fn parse_unary_atom(input: &mut ParseStreamStack<Self>) -> ParseResult<UnaryAtom<Self>>;
     fn parse_extension(input: &mut ParseStreamStack<Self>) -> ParseResult<NodeExtension>;
 
@@ -283,7 +236,7 @@ pub(super) trait Expressionable: Sized {
         context: &mut Self::EvaluationContext,
     ) -> ExecutionResult<ExpressionValue>;
 
-    fn evaluate_to_value(
+    fn evaluate(
         expression: &Expression<Self>,
         context: &mut Self::EvaluationContext,
     ) -> ExecutionResult<ExpressionValue> {

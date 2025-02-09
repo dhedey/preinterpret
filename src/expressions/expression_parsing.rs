@@ -4,7 +4,6 @@ pub(super) struct ExpressionParser<'a, K: Expressionable> {
     streams: ParseStreamStack<'a, K>,
     nodes: ExpressionNodes<K>,
     expression_stack: Vec<ExpressionStackFrame>,
-    span_range: SpanRange,
     kind: PhantomData<K>,
 }
 
@@ -14,7 +13,6 @@ impl<'a, K: Expressionable> ExpressionParser<'a, K> {
             streams: ParseStreamStack::new(input),
             nodes: ExpressionNodes::new(),
             expression_stack: Vec::with_capacity(10),
-            span_range: SpanRange::new_single(input.span()),
             kind: PhantomData,
         }
         .run()
@@ -30,22 +28,13 @@ impl<'a, K: Expressionable> ExpressionParser<'a, K> {
                 }
                 WorkItem::TryParseAndApplyExtension { node } => {
                     let extension = K::parse_extension(&mut self.streams)?;
-                    match &extension {
-                        NodeExtension::PostfixOperation(op) => {
-                            self.span_range.set_end(op.end_span());
-                        }
-                        NodeExtension::BinaryOperation(op) => {
-                            self.span_range.set_end(op.span_range().end());
-                        }
-                        NodeExtension::NoneMatched => {}
-                    };
                     self.attempt_extension(node, extension)?
                 }
                 WorkItem::TryApplyAlreadyParsedExtension { node, extension } => {
                     self.attempt_extension(node, extension)?
                 }
                 WorkItem::Finished { root } => {
-                    return Ok(self.nodes.complete(root, self.span_range));
+                    return Ok(self.nodes.complete(root));
                 }
             }
         }
@@ -53,18 +42,11 @@ impl<'a, K: Expressionable> ExpressionParser<'a, K> {
 
     fn extend_with_unary_atom(&mut self, unary_atom: UnaryAtom<K>) -> ParseResult<WorkItem> {
         Ok(match unary_atom {
-            UnaryAtom::Leaf(leaf) => {
-                if let Some(span) = K::leaf_end_span(&leaf) {
-                    self.span_range.set_end(span);
-                }
-                self.add_leaf(leaf)
-            }
+            UnaryAtom::Leaf(leaf) => self.add_leaf(leaf),
             UnaryAtom::Group(delim_span) => {
-                self.span_range.set_end(delim_span.close());
                 self.push_stack_frame(ExpressionStackFrame::Group { delim_span })
             }
             UnaryAtom::PrefixUnaryOperation(operation) => {
-                self.span_range.set_end(operation.span());
                 self.push_stack_frame(ExpressionStackFrame::IncompletePrefixOperation { operation })
             }
         })
@@ -110,11 +92,9 @@ impl<'a, K: Expressionable> ExpressionParser<'a, K> {
                     assert!(matches!(extension, NodeExtension::NoneMatched));
                     self.streams.exit_group();
                     WorkItem::TryParseAndApplyExtension {
-                        node: self.nodes.add_node(ExpressionNode::UnaryOperation {
-                            operation: UnaryOperation::GroupedNoOp {
-                                span: delim_span.join(),
-                            },
-                            input: node,
+                        node: self.nodes.add_node(ExpressionNode::Grouped {
+                            delim_span,
+                            inner: node,
                         }),
                     }
                 }
@@ -182,10 +162,9 @@ impl<K: Expressionable> ExpressionNodes<K> {
         node_id
     }
 
-    pub(super) fn complete(self, root: ExpressionNodeId, span_range: SpanRange) -> Expression<K> {
+    pub(super) fn complete(self, root: ExpressionNodeId) -> Expression<K> {
         Expression {
             root,
-            span_range,
             nodes: self.nodes.into(),
         }
     }
@@ -253,7 +232,6 @@ impl OperatorPrecendence {
 
     fn of_unary_operation(op: &UnaryOperation) -> Self {
         match op {
-            UnaryOperation::GroupedNoOp { .. } => Self::Unambiguous,
             UnaryOperation::Cast { .. } => Self::Cast,
             UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => Self::Prefix,
         }

@@ -86,8 +86,41 @@ Inside a transform stream, the following grammar is supported:
 
 ### To come
 
-* Destructurers => Transformers
-  * Scrap `[!let!]` in favour of `[!parse! #x as @(_ = ...)]`
+* Variable typing (stream / value / object to start with), including an `object` type, like a JS object:
+  * Separate `&mut Output` and `StreamOutput`, `ValueOutput = ExpressionOutput`, `ObjectOutput`
+  * Objects:
+    * Can be destructured with `@{ #hello, world: _, ... }` or read with `#(x.hello)` or `#(x["hello"])`
+    * Debug impl is `[!object! { hello: [!group! BLAH], ["world"]: Hi, }]`
+    * Fields can be lazy (for e.g. exposing functions on syn objects).
+    * They have an input object
+    * (Until we get custom type support into a syn fork), can be embedded into an output stream as a single token - e.g. `PREINTERPRET_OBJECT_2313`
+    (The value can be looked up via a weak reference in the interpreter (as a central location), and the stream owning a reference to it to stop it being dropped). The final conversion to tokens can look up the object in the interpreter, and use its `stream()` function to either output the default
+    stream for the object, or error and suggest fields the user should use instead.
+  * Values:
+    * Can output to an internal stream as `[!group! <content>]` so it can be read by other transformers.
+    * When we parse a `#x` (`@(#x = INFER_TOKEN_TREE)`) binding, it tries to parse a stream as a value before interpreting a `[!group! ...]` as a stream.
+    * Output to final output as unwrapped content
+  * New expression & definition syntax (replaces `[!set!]`??)
+    * `#(#x = [... stream ...])`
+    * `#(#x += [... stream ...])` // += acts like "extend" with a stream LHS
+    * `#(#x += [!group! ...])`
+    * `#(#x = 1 + 2 + 3)` // (Expression) Value
+    * `#(#x += 1)`        // += acts as plus with a value LHS
+    * `#(#x = {})`        // Object
+      * Fields can be read/written to with `#(x.hello)` or `#(x.hello.world)`
+    * `#(#x = xxx {})`    // For some other custom type `xxx`.
+    * `#([ ... stream ... ])`
+    * `#({ a: x, ... })`
+    * `#([ ... stream ... ].length)` ??
+    * `#(let #x = 123; let #y = 123; let #z = {})`...
+    * Support `#(x)` syntax for indexing streams:
+      * `#(x[0])`
+      * `#(x[0..3])`
+      * `#..(x[0..3])` and other things like `[ ..=3]`
+    ... basically - this becomes one big expression.
+      * Equivalent to a `syn::Block` which is a `Vec<Stmt>`
+      * ...where a `Stmt` is either a local `let` binding or an `expression`
+* Destructurers => Transformers cont
   * `@TOKEN_TREE`
   * `@TOKEN_OR_GROUP_CONTENT` - Literal, Ident, Punct or None-group content.
   * `@[ANY_GROUP ...]`
@@ -99,22 +132,20 @@ Inside a transform stream, the following grammar is supported:
     * `@(REPEATED { ... })` (see below)
     * Potentially change `@UNTIL` to take a transform stream instead of a raw stream.
     * `[!match! ...]` command
-    * `@[ANY { ... }]` (with `#..x` as a catch-all) like the [!match!] command but without arms...
+    * `@[MATCH { ... }]` (with `#..x` as a catch-all) with optional arms...
     * `#(..)?`, `#(..)+`, `#(..),+`, `#(..)*`, `#(..),*`
+  * Scrap `[!let!]` in favour of `[!parse! [...] as @(_ = ...)]`
 * Consider:
-  * If the `[!split!]` command should actually be a transformer?
   * Scrap `#>>x` etc in favour of `@(#x += ...)`
+  * Adding all of these: https://veykril.github.io/tlborm/decl-macros/minutiae/fragment-specifiers.html#ty 
+  * If the `[!split!]` command should actually be a transformer?
+  * Adding `!define_macro!`
+  * Adding `!define_command!`
+  * Adding `!define_transformer!`
 * `[!is_set! #x]`
-* Support `[!index! ..]`:
-  * `[!index! #x[0]]`
-  * `[!index! #x[0..3]]`
-  * `[!..index! #x[0..3]]` and other things like `[ ..=3]`
-  * `[!index! [Hello World][...]]`
-  => NB: This isn't in the grammar because of the risk of `#x[0]` wanting to mean `my_arr[0]` rather than "index my variable".
 * Have UntypedInteger have an inner representation of either i128 or literal (and same with float)
-* Add `[!reinterpret! ...]` command for an `eval` style command.
+* Add `[!reinterpret! ...]` command for an `eval` style command, and maybe a `@[REINTERPRET ..]` transformer.
 * Add casts of other integers to char, via `char::from_u32(u32::try_from(x))`
-* Get rid of needless cloning
 * TODO check
 * Check all `#[allow(unused)]` and remove any which aren't needed
 * Work on book
@@ -127,7 +158,91 @@ Inside a transform stream, the following grammar is supported:
     * Those taking some { fields }
     * Those taking some custom syntax, e.g. `!set!`, `!if!`, `!while!` etc
 
-### Destructuring Notes WIP
+### Transformers Revisited
+```rust
+// * The current situation feels unclear/arbitrary/inflexible.
+// * Better would be slightly more explicit.
+//
+// PROPOSAL (subject to the object proposal above):
+// * Four modes:
+//   * Output stream mode
+//     * Outputs stream, does not parse
+//     * Can embed [!commands! ...] and #()
+//       * #([...]) gets appended to the stream
+//   * #( ... ) = Expression mode.
+//     * One or more statements, terminated by ; (except maybe the last)
+//     * Idents mean variables.
+//     * `let #x; let _ = <value>; <value>; if <value> {<statements>} else {}`
+//     * Error not to discard a non-None value with `let _ = <value>`
+//     * Not allowed to parse.
+//     * Only last statement can (optionally) output, with a value model of:
+//       * Leaf(Bool | Int | Float | String)
+//       * Object
+//       * Stream
+//       * None
+//     * The actual type is only known at evaluation time.
+//     * #var is equivalent to #(var)
+//   * @[XXX] or @[hello.world = XXX]
+//     * Can parse; has no output.
+//     * XXX is:
+//       * A named destructurer (possibly taking further input)
+//       * An { .. } object destructurer
+//       * A @(...) transformer stream (output = input)
+//   * @() = Transformer stream
+//     * Can parse
+//     * Its only output is an input stream reference
+//       * ...and only if it's redirected inside a @[x = $(...)]
+//   * [!command! ...]
+//     * Can output but does not parse.
+// * Every transformer or transport stream has a typed output, which is either:
+//   * EITHER just its token tree / token stream (for simple matchers)
+//   * OR an OBJECT with at least two properties:
+//     * input => all matched characters (a slice reference which can be dropped...)
+//       (it might only be possible to performantly capture this after the syn fork)
+//     * stream => A lazy function, used to handle the output when #x is in the final output...
+//               likely `input` or an error depending on the case.
+//   * ... other properties, depending on the TRANSFORMER:
+//     * ITEM might have quite a few
+//     * STREAM has an `output` property (discussed below)
+// * Drop @XXX syntax. Require: @[ ... ] instead, one of:
+//   * @[XXX] or equivalently @[let _ = XXX ...]
+//   * @[let x = XXX] or @[let x = XXX { ... }]
+//   * @[let x.field = XXX ...]
+//   * @[x = XXX]
+//   * @[x.field += IDENT]
+// * Explicit stream: @(...)
+///  * Has an explicit output property via command output, e.g. [!output! ...] which appends both:
+//     * Command output
+//     * Output of inner transformer streams.
+//   * It can be treated as a transformer and its output can be redirected with @[#x = @(...)] syntax.
+//     But, on trying a few examples, we don't want to require such redirection.
+//   * QUESTION: Do we actually use square brackets, i.e. @[#x = ...] (i.e. it's just without the IDENT)
+//   * OR maybe as an explicit [ ... ] stream: @[#x = [...]]
+//   * For inline destructurings (e.g. in for loops), we allow an implicit inner ... stream
+// * EXACT then is just used for some sections where we're reading from variables.
+//
+// EXAMPLE
+#(parsed = [])
+[!parse! [...] as
+  // OPTION 1
+  @(
+    #(let item = {})
+    impl @[item.trait = IDENT] for @[item.type = IDENT]
+    #(parsed += item)
+  ),*
+  // OPTION 2
+  @[COMMA_REPEATED {
+    before: #(let item = {}),
+    item: @(impl @[#(item.trait) = IDENT] for @[#(item.type) = IDENT]),
+    after: #(parsed += item),
+  }]
+]
+[!for! @[{ #trait, #type }] in #(parsed.output) {
+  impl #trait for #type {}
+}]
+
+```
+### Transformer Notes WIP
 ```rust
 // FINAL DESIGN ---
 // ALL THESE CAN BE SUPPORTED:
@@ -143,8 +258,8 @@ Inside a transform stream, the following grammar is supported:
       }
     }
 }]]
-// ALSO NICE - although I don't know how we'd do custom inputs
-[!define_parser! @INPUT = @(impl @IDENT for @IDENT),*]
+// ALSO NICE
+[!define_transformer! @INPUT = @(impl @IDENT for @IDENT),*]
 [!for! (#x #y) in [!parse! #input as @INPUT] {
 
 }]
@@ -152,33 +267,21 @@ Inside a transform stream, the following grammar is supported:
 [!parse_for! #input as @(impl @(#x = @IDENT) for @(#y = @IDENT)),* {
 
 }]
+// WHAT WIZARDRY IS THIS
+[!define_transformer! @[REPEAT_EXACT @[FIELDS {
+  matcher: @(#matcher = $(@REST)),
+  repetitions: @(#repetitions = @LITERAL),
+}]] = @[REINTERPRET [!for! #_ in [!range! 0..#repetitions] { $(#..matcher) }]]]
 
-// What if destructuring could also output something? (nb - OPTION 3 is preferred)
-
-// OPTION 1
-// * #(X ...) would append its output to the output stream, i.e. #(#output += X ...)
-// * #(field: X ...) would append `field: output,` to the output stream.
-// * #(#x = X)
-// * #(void X) outputs nothing
-// * #x and #..x still work in the same way (binding to variables?)
-
-// OPTION 2 - everything explicit
-// * #(void IDENT) outputs nothing
-// * #(+IDENT) appends to #output (effectively it's an opt-in)
-// * #(.field = IDENT) appends `field: ___,` to #output
-// * #(#x = IDENT) sets #x
-// * #(#x += IDENT) extends #x
-// * #(#x.field = IDENT) appends `field: ___,` to #x
-
-// OPTION 3 (preferred) - output by default; use @ for destructurers
+// SYNTAX PREFERENCE - output by default; use @ for destructurers
 // * @( ... ) destructure stream, has an output
 // * @( ... )? optional destructure stream, has an output
 // * Can similarly have @(...),+ which handles a trailing ,
 // * @X shorthand for @[X] for destructurers which can take no input, e.g. IDENT, TOKEN_TREE, TYPE etc
 //   => NOTE: Each destructurer should return just its tokens by default if it has no arguments.
 //   => It can also have its output over-written or other things outputted using e.g. @[TYPE { is_prefixed: X, parts: #(...), output: { #output } }]
-// * #x is shorthand for @[#x = @TOKEN_OR_GROUP_CONTENT]
-// * #..x) is shorthand for @[#x = @UNTIL_END] and #..x, is shorthand for @[CAPTURE #x = @[UNTIL_TOKEN ,]]
+// * #x is shorthand for @(#x = @TOKEN_OR_GROUP_CONTENT)
+// * #..x) is shorthand for @(#x = @REST) and #..x, is shorthand for @(#x = @[UNTIL_TOKEN ,])
 // * @(_ = ...)
 // * @(#x = impl @IDENT for @IDENT)
 // * @(#x += impl @IDENT for @IDENT)
@@ -188,8 +291,8 @@ Inside a transform stream, the following grammar is supported:
 
 // In this model, REPEATED is really clean and looks like this:
 @[REPEATED {
-  item: #(...),            // Captured into #item variable
-  separator?: #(),         // Captured into #separator variable
+  item: @(...),            // Captured into #item variable
+  separator?: @(),         // Captured into #separator variable
   min?: 0,
   max?: 1000000,
   handle_item?: { #item }, // Default is to output the grouped item. #()+ instead uses `{ (#..item) }`
@@ -199,8 +302,9 @@ Inside a transform stream, the following grammar is supported:
 // How does optional work?
 // @(#x = @(@IDENT)?)
 // Along with:
-// [!fields! { #x, my_var: #y, #z }]
+// [!object! { #x, my_var: #y, #z }]
 // And if some field #z isn't set, it's outputted as null.
+// Field access can be with #(variable.field)
 
 // Do we want something like !parse_for!? It needs to execute lazily - how?
 // > Probably by passing some `OnOutput` hook to an output stream method
@@ -210,13 +314,9 @@ Inside a transform stream, the following grammar is supported:
 ```
 
 * Pushed to 0.4:
-  * Map/Field style variable type, like a JS object:
-    * e.g. #x.hello = BLAH
-    * Has a stream-representation as `{ hello: [!group! BLAH], }` but is more performant, and can be destructured with `[@FIELDS { #hello }]` or read with `[!read! #x.hello]` or `[!read! #x["hello"]]`
-    * And can transform output as `#(.hello = @X)` (mixing/matching append output and field output will error)
-    * Debug impl is `[!fields! hello: [!group! BLAH],]`
-    * Can be embedded into an output stream as a fields group
-    * If necessary, can be converted to a stream and parsed back as `{ hello: [!group! BLAH], }`
+  * Get rid of needless cloning of commands/variables etc
+  * Iterator variable type
+  * Trial making `for` lazily read its input somehow? Some callback on `OutputStream` I guess...
   * Fork of syn to:
     * Fix issues in Rust Analyzer
     * Add support for a more general `TokenBuffer`, and ensure that Cursor can work in a backwards-compatible way with that buffer. Support:

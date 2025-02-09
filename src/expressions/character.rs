@@ -3,26 +3,26 @@ use super::*;
 #[derive(Clone)]
 pub(crate) struct ExpressionChar {
     pub(super) value: char,
-    /// The span of the source code that generated this boolean value.
-    /// It may not have a value if generated from a complex expression.
-    pub(super) source_span: Option<Span>,
+    /// The span range that generated this value.
+    /// For a complex expression, the start span is the most left part
+    /// of the expression, and the end span is the most right part.
+    pub(super) span_range: SpanRange,
 }
 
 impl ExpressionChar {
     pub(super) fn for_litchar(lit: syn::LitChar) -> Self {
         Self {
             value: lit.value(),
-            source_span: Some(lit.span()),
+            span_range: lit.span().span_range(),
         }
     }
 
     pub(super) fn handle_unary_operation(
         self,
-        operation: UnaryOperation,
+        operation: OutputSpanned<UnaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         let char = self.value;
-        Ok(match operation {
-            UnaryOperation::GroupedNoOp { .. } => operation.output(char),
+        Ok(match operation.operation {
             UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => {
                 return operation.unsupported_for_value_type_err("char")
             }
@@ -53,16 +53,16 @@ impl ExpressionChar {
     pub(super) fn create_range(
         self,
         right: Self,
-        range_limits: &syn::RangeLimits,
+        range_limits: OutputSpanned<syn::RangeLimits>,
     ) -> Box<dyn Iterator<Item = ExpressionValue> + '_> {
         let left = self.value;
         let right = right.value;
-        match range_limits {
+        match range_limits.operation {
             syn::RangeLimits::HalfOpen { .. } => {
-                Box::new((left..right).map(|x| range_limits.output(x)))
+                Box::new((left..right).map(move |x| range_limits.output(x)))
             }
             syn::RangeLimits::Closed { .. } => {
-                Box::new((left..=right).map(|x| range_limits.output(x)))
+                Box::new((left..=right).map(move |x| range_limits.output(x)))
             }
         }
     }
@@ -70,7 +70,7 @@ impl ExpressionChar {
     pub(super) fn handle_integer_binary_operation(
         self,
         _right: ExpressionInteger,
-        operation: &IntegerBinaryOperation,
+        operation: OutputSpanned<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         operation.unsupported_for_value_type_err("char")
     }
@@ -78,11 +78,11 @@ impl ExpressionChar {
     pub(super) fn handle_paired_binary_operation(
         self,
         rhs: Self,
-        operation: &PairedBinaryOperation,
+        operation: OutputSpanned<PairedBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.value;
         let rhs = rhs.value;
-        Ok(match operation {
+        Ok(match operation.operation {
             PairedBinaryOperation::Addition { .. }
             | PairedBinaryOperation::Subtraction { .. }
             | PairedBinaryOperation::Multiplication { .. }
@@ -104,16 +104,16 @@ impl ExpressionChar {
         })
     }
 
-    pub(super) fn to_literal(&self, fallback_span: Span) -> Literal {
-        Literal::character(self.value).with_span(self.source_span.unwrap_or(fallback_span))
+    pub(super) fn to_literal(&self) -> Literal {
+        Literal::character(self.value).with_span(self.span_range.join_into_span_else_start())
     }
 }
 
 impl ToExpressionValue for char {
-    fn to_value(self, source_span: Option<Span>) -> ExpressionValue {
+    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
         ExpressionValue::Char(ExpressionChar {
             value: self,
-            source_span,
+            span_range,
         })
     }
 }

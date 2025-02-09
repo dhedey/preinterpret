@@ -3,45 +3,45 @@ use super::*;
 #[derive(Clone)]
 pub(crate) struct ExpressionInteger {
     pub(super) value: ExpressionIntegerValue,
-    /// The span of the source code that generated this boolean value.
-    /// It may not have a value if generated from a complex expression.
-    pub(super) source_span: Option<Span>,
+    /// The span range that generated this value.
+    /// For a complex expression, the start span is the most left part
+    /// of the expression, and the end span is the most right part.
+    pub(super) span_range: SpanRange,
 }
 
 impl ExpressionInteger {
     pub(super) fn for_litint(lit: syn::LitInt) -> ParseResult<Self> {
-        let source_span = Some(lit.span());
         Ok(Self {
+            span_range: lit.span().span_range(),
             value: ExpressionIntegerValue::for_litint(lit)?,
-            source_span,
         })
     }
 
     pub(super) fn handle_unary_operation(
         self,
-        operation: UnaryOperation,
+        operation: OutputSpanned<UnaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         match self.value {
-            ExpressionIntegerValue::Untyped(input) => input.handle_unary_operation(&operation),
-            ExpressionIntegerValue::U8(input) => input.handle_unary_operation(&operation),
-            ExpressionIntegerValue::U16(input) => input.handle_unary_operation(&operation),
-            ExpressionIntegerValue::U32(input) => input.handle_unary_operation(&operation),
-            ExpressionIntegerValue::U64(input) => input.handle_unary_operation(&operation),
-            ExpressionIntegerValue::U128(input) => input.handle_unary_operation(&operation),
-            ExpressionIntegerValue::Usize(input) => input.handle_unary_operation(&operation),
-            ExpressionIntegerValue::I8(input) => input.handle_unary_operation(&operation),
-            ExpressionIntegerValue::I16(input) => input.handle_unary_operation(&operation),
-            ExpressionIntegerValue::I32(input) => input.handle_unary_operation(&operation),
-            ExpressionIntegerValue::I64(input) => input.handle_unary_operation(&operation),
-            ExpressionIntegerValue::I128(input) => input.handle_unary_operation(&operation),
-            ExpressionIntegerValue::Isize(input) => input.handle_unary_operation(&operation),
+            ExpressionIntegerValue::Untyped(input) => input.handle_unary_operation(operation),
+            ExpressionIntegerValue::U8(input) => input.handle_unary_operation(operation),
+            ExpressionIntegerValue::U16(input) => input.handle_unary_operation(operation),
+            ExpressionIntegerValue::U32(input) => input.handle_unary_operation(operation),
+            ExpressionIntegerValue::U64(input) => input.handle_unary_operation(operation),
+            ExpressionIntegerValue::U128(input) => input.handle_unary_operation(operation),
+            ExpressionIntegerValue::Usize(input) => input.handle_unary_operation(operation),
+            ExpressionIntegerValue::I8(input) => input.handle_unary_operation(operation),
+            ExpressionIntegerValue::I16(input) => input.handle_unary_operation(operation),
+            ExpressionIntegerValue::I32(input) => input.handle_unary_operation(operation),
+            ExpressionIntegerValue::I64(input) => input.handle_unary_operation(operation),
+            ExpressionIntegerValue::I128(input) => input.handle_unary_operation(operation),
+            ExpressionIntegerValue::Isize(input) => input.handle_unary_operation(operation),
         }
     }
 
     pub(super) fn handle_integer_binary_operation(
         self,
         right: ExpressionInteger,
-        operation: &IntegerBinaryOperation,
+        operation: OutputSpanned<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         match self.value {
             ExpressionIntegerValue::Untyped(input) => {
@@ -86,10 +86,10 @@ impl ExpressionInteger {
         }
     }
 
-    pub(super) fn to_literal(&self, fallback_span: Span) -> Literal {
+    pub(super) fn to_literal(&self) -> Literal {
         self.value
             .to_unspanned_literal()
-            .with_span(self.source_span.unwrap_or(fallback_span))
+            .with_span(self.span_range.join_into_span_else_start())
     }
 }
 
@@ -112,7 +112,7 @@ pub(super) enum ExpressionIntegerValuePair {
 impl ExpressionIntegerValuePair {
     pub(super) fn handle_paired_binary_operation(
         self,
-        operation: &PairedBinaryOperation,
+        operation: OutputSpanned<PairedBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         match self {
             Self::Untyped(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
@@ -133,7 +133,7 @@ impl ExpressionIntegerValuePair {
 
     pub(crate) fn create_range(
         self,
-        range_limits: &syn::RangeLimits,
+        range_limits: OutputSpanned<syn::RangeLimits>,
     ) -> ExecutionResult<Box<dyn Iterator<Item = ExpressionValue> + '_>> {
         Ok(match self {
             Self::Untyped(lhs, rhs) => return lhs.create_range(rhs, range_limits),
@@ -266,15 +266,14 @@ impl UntypedInteger {
 
     pub(super) fn handle_unary_operation(
         self,
-        operation: &UnaryOperation,
+        operation: OutputSpanned<UnaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         let input = self.parse_fallback()?;
-        Ok(match operation {
+        Ok(match operation.operation {
             UnaryOperation::Neg { .. } => operation.output(Self::from_fallback(-input)),
             UnaryOperation::Not { .. } => {
                 return operation.unsupported_for_value_type_err("untyped integer")
             }
-            UnaryOperation::GroupedNoOp { .. } => operation.output(self),
             UnaryOperation::Cast { target, .. } => match target {
                 CastTarget::Integer(IntegerKind::Untyped) => {
                     operation.output(UntypedInteger::from_fallback(input as FallbackInteger))
@@ -306,10 +305,10 @@ impl UntypedInteger {
     pub(super) fn handle_integer_binary_operation(
         self,
         rhs: ExpressionInteger,
-        operation: &IntegerBinaryOperation,
+        operation: OutputSpanned<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.parse_fallback()?;
-        Ok(match operation {
+        Ok(match operation.operation {
             IntegerBinaryOperation::ShiftLeft { .. } => match rhs.value {
                 ExpressionIntegerValue::Untyped(rhs) => {
                     operation.output(lhs << rhs.parse_fallback()?)
@@ -350,7 +349,7 @@ impl UntypedInteger {
     pub(super) fn handle_paired_binary_operation(
         self,
         rhs: Self,
-        operation: &PairedBinaryOperation,
+        operation: OutputSpanned<PairedBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.parse_fallback()?;
         let rhs = rhs.parse_fallback()?;
@@ -362,7 +361,7 @@ impl UntypedInteger {
                 rhs
             )
         };
-        Ok(match operation {
+        Ok(match operation.operation {
             PairedBinaryOperation::Addition { .. } => {
                 return operation.output_if_some(
                     lhs.checked_add(rhs).map(Self::from_fallback),
@@ -415,16 +414,16 @@ impl UntypedInteger {
     pub(super) fn create_range(
         self,
         right: Self,
-        range_limits: &syn::RangeLimits,
+        range_limits: OutputSpanned<syn::RangeLimits>,
     ) -> ExecutionResult<Box<dyn Iterator<Item = ExpressionValue> + '_>> {
         let left = self.parse_fallback()?;
         let right = right.parse_fallback()?;
-        Ok(match range_limits {
+        Ok(match range_limits.operation {
             syn::RangeLimits::HalfOpen { .. } => {
-                Box::new((left..right).map(|x| range_limits.output(Self::from_fallback(x))))
+                Box::new((left..right).map(move |x| range_limits.output(Self::from_fallback(x))))
             }
             syn::RangeLimits::Closed { .. } => {
-                Box::new((left..=right).map(|x| range_limits.output(Self::from_fallback(x))))
+                Box::new((left..=right).map(move |x| range_limits.output(Self::from_fallback(x))))
             }
         })
     }
@@ -463,10 +462,10 @@ impl UntypedInteger {
 }
 
 impl ToExpressionValue for UntypedInteger {
-    fn to_value(self, source_span: Option<Span>) -> ExpressionValue {
+    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
         ExpressionValue::Integer(ExpressionInteger {
             value: ExpressionIntegerValue::Untyped(self),
-            source_span,
+            span_range,
         })
     }
 }
@@ -477,19 +476,19 @@ macro_rules! impl_int_operations_except_unary {
         $($integer_enum_variant:ident($integer_type:ident)),* $(,)?
     ) => {$(
         impl ToExpressionValue for $integer_type {
-            fn to_value(self, source_span: Option<Span>) -> ExpressionValue {
+            fn to_value(self, span_range: SpanRange) -> ExpressionValue {
                 ExpressionValue::Integer(ExpressionInteger {
                     value: ExpressionIntegerValue::$integer_enum_variant(self),
-                    source_span,
+                    span_range,
                 })
             }
         }
 
         impl HandleBinaryOperation for $integer_type {
-            fn handle_paired_binary_operation(self, rhs: Self, operation: &PairedBinaryOperation) -> ExecutionResult<ExpressionValue> {
+            fn handle_paired_binary_operation(self, rhs: Self, operation: OutputSpanned<PairedBinaryOperation>) -> ExecutionResult<ExpressionValue> {
                 let lhs = self;
                 let overflow_error = || format!("The {} operation {:?} {} {:?} overflowed", stringify!($integer_type), lhs, operation.symbol(), rhs);
-                Ok(match operation {
+                Ok(match operation.operation {
                     PairedBinaryOperation::Addition { .. } => return operation.output_if_some(lhs.checked_add(rhs), overflow_error),
                     PairedBinaryOperation::Subtraction { .. } => return operation.output_if_some(lhs.checked_sub(rhs), overflow_error),
                     PairedBinaryOperation::Multiplication { .. } => return operation.output_if_some(lhs.checked_mul(rhs), overflow_error),
@@ -512,10 +511,10 @@ macro_rules! impl_int_operations_except_unary {
             fn handle_integer_binary_operation(
                 self,
                 rhs: ExpressionInteger,
-                operation: &IntegerBinaryOperation,
+                operation: OutputSpanned<IntegerBinaryOperation>,
             ) -> ExecutionResult<ExpressionValue> {
                 let lhs = self;
-                Ok(match operation {
+                Ok(match operation.operation {
                     IntegerBinaryOperation::ShiftLeft { .. } => {
                         match rhs.value {
                             ExpressionIntegerValue::Untyped(rhs) => operation.output(lhs << rhs.parse_fallback()?),
@@ -558,15 +557,15 @@ macro_rules! impl_int_operations_except_unary {
             fn create_range(
                 self,
                 right: Self,
-                range_limits: &syn::RangeLimits,
+                range_limits: OutputSpanned<syn::RangeLimits>,
             ) -> Box<dyn Iterator<Item = ExpressionValue> + '_> {
                 let left = self;
-                match range_limits {
+                match range_limits.operation {
                     syn::RangeLimits::HalfOpen { .. } => {
-                        Box::new((left..right).map(|x| range_limits.output(x)))
+                        Box::new((left..right).map(move |x| range_limits.output(x)))
                     },
                     syn::RangeLimits::Closed { .. } => {
-                        Box::new((left..=right).map(|x| range_limits.output(x)))
+                        Box::new((left..=right).map(move |x| range_limits.output(x)))
                     }
                 }
             }
@@ -577,9 +576,8 @@ macro_rules! impl_int_operations_except_unary {
 macro_rules! impl_unsigned_unary_operations {
     ($($integer_type:ident),* $(,)?) => {$(
         impl HandleUnaryOperation for $integer_type {
-            fn handle_unary_operation(self, operation: &UnaryOperation) -> ExecutionResult<ExpressionValue> {
-                Ok(match operation {
-                    UnaryOperation::GroupedNoOp { .. } => operation.output(self),
+            fn handle_unary_operation(self, operation: OutputSpanned<UnaryOperation>) -> ExecutionResult<ExpressionValue> {
+                Ok(match operation.operation {
                     UnaryOperation::Neg { .. }
                     | UnaryOperation::Not { .. } => {
                         return operation.unsupported_for_value_type_err(stringify!($integer_type))
@@ -612,9 +610,8 @@ macro_rules! impl_unsigned_unary_operations {
 macro_rules! impl_signed_unary_operations {
     ($($integer_type:ident),* $(,)?) => {$(
         impl HandleUnaryOperation for $integer_type {
-            fn handle_unary_operation(self, operation: &UnaryOperation) -> ExecutionResult<ExpressionValue> {
-                Ok(match operation {
-                    UnaryOperation::GroupedNoOp { .. } => operation.output(self),
+            fn handle_unary_operation(self, operation: OutputSpanned<UnaryOperation>) -> ExecutionResult<ExpressionValue> {
+                Ok(match operation.operation {
                     UnaryOperation::Neg { .. } => operation.output(-self),
                     UnaryOperation::Not { .. } => {
                         return operation.unsupported_for_value_type_err(stringify!($integer_type))
@@ -647,10 +644,9 @@ macro_rules! impl_signed_unary_operations {
 impl HandleUnaryOperation for u8 {
     fn handle_unary_operation(
         self,
-        operation: &UnaryOperation,
+        operation: OutputSpanned<UnaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
-        Ok(match operation {
-            UnaryOperation::GroupedNoOp { .. } => operation.output(self),
+        Ok(match operation.operation {
             UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => {
                 return operation.unsupported_for_value_type_err("u8")
             }

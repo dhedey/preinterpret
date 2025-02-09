@@ -102,6 +102,10 @@ impl SpanRange {
         <Self as syn::spanned::Spanned>::span(self)
     }
 
+    pub(crate) fn set_start(&mut self, start: Span) {
+        self.start = start;
+    }
+
     pub(crate) fn set_end(&mut self, end: Span) {
         self.end = end;
     }

@@ -28,7 +28,8 @@ impl ValueCommandDefinition for EvaluateCommand {
     fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree> {
         Ok(self
             .expression
-            .evaluate_with_span(interpreter, self.command_span)?
+            .evaluate(interpreter)?
+            .with_span(self.command_span)
             .to_token_tree())
     }
 }
@@ -105,7 +106,8 @@ impl NoOutputCommandDefinition for AssignCommand {
         };
 
         let output = expression
-            .evaluate_with_span(interpreter, command_span)?
+            .evaluate(interpreter)?
+            .with_span(command_span)
             .to_token_tree();
         variable.set(interpreter, output.into())?;
 
@@ -146,8 +148,8 @@ impl GroupedStreamCommandDefinition for RangeCommand {
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         let range_limits = self.range_limits;
-        let left = self.left.evaluate_to_value(interpreter)?;
-        let right = self.right.evaluate_to_value(interpreter)?;
+        let left = self.left.evaluate(interpreter)?;
+        let right = self.right.evaluate(interpreter)?;
 
         let range_iterator = left.create_range(right, &range_limits)?;
 
@@ -164,10 +166,9 @@ impl GroupedStreamCommandDefinition for RangeCommand {
             }
         }
 
-        let output_span = range_limits.span_range().start();
         output.extend_raw_tokens(range_iterator.map(|value| {
             value
-                .to_token_tree(output_span)
+                .to_token_tree()
                 // We wrap it in a singleton group to ensure that negative
                 // numbers are treated as single items in other stream commands
                 .into_singleton_group(Delimiter::None)

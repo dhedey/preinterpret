@@ -10,7 +10,7 @@ pub(crate) enum ExpressionValue {
 }
 
 pub(super) trait ToExpressionValue: Sized {
-    fn to_value(self, source_span: Option<Span>) -> ExpressionValue;
+    fn to_value(self, span_range: SpanRange) -> ExpressionValue;
 }
 
 impl ExpressionValue {
@@ -227,14 +227,22 @@ impl ExpressionValue {
         }
     }
 
+    pub(crate) fn expect_bool(self, error_message: &str) -> ExecutionResult<bool> {
+        let error_span = self.span_range();
+        match self.into_bool() {
+            Some(boolean) => Ok(boolean.value),
+            None => error_span.execution_err(error_message),
+        }
+    }
+
     /// The span is used if there isn't already a span available
-    pub(crate) fn to_token_tree(&self, fallback_output_span: Span) -> TokenTree {
+    pub(crate) fn to_token_tree(&self) -> TokenTree {
         match self {
-            Self::Integer(int) => int.to_literal(fallback_output_span).into(),
-            Self::Float(float) => float.to_literal(fallback_output_span).into(),
-            Self::Boolean(bool) => bool.to_ident(fallback_output_span).into(),
-            Self::String(string) => string.to_literal(fallback_output_span).into(),
-            Self::Char(char) => char.to_literal(fallback_output_span).into(),
+            Self::Integer(int) => int.to_literal().into(),
+            Self::Float(float) => float.to_literal().into(),
+            Self::Boolean(bool) => bool.to_ident().into(),
+            Self::String(string) => string.to_literal().into(),
+            Self::Char(char) => char.to_literal().into(),
         }
     }
 
@@ -248,19 +256,9 @@ impl ExpressionValue {
         }
     }
 
-    pub(super) fn source_span(&self) -> Option<Span> {
-        match self {
-            Self::Integer(int) => int.source_span,
-            Self::Float(float) => float.source_span,
-            Self::Boolean(bool) => bool.source_span,
-            Self::String(str) => str.source_span,
-            Self::Char(char) => char.source_span,
-        }
-    }
-
     pub(super) fn handle_unary_operation(
         self,
-        operation: UnaryOperation,
+        operation: OutputSpanned<UnaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         match self {
             ExpressionValue::Integer(value) => value.handle_unary_operation(operation),
@@ -274,7 +272,7 @@ impl ExpressionValue {
     pub(super) fn handle_integer_binary_operation(
         self,
         right: ExpressionInteger,
-        operation: &IntegerBinaryOperation,
+        operation: OutputSpanned<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         match self {
             ExpressionValue::Integer(value) => {
@@ -298,8 +296,42 @@ impl ExpressionValue {
         other: Self,
         range_limits: &syn::RangeLimits,
     ) -> ExecutionResult<Box<dyn Iterator<Item = ExpressionValue> + '_>> {
+        let span_range = SpanRange::new_between(self.span_range().start(), self.span_range().end());
         self.expect_value_pair(range_limits, other)?
-            .create_range(range_limits)
+            .create_range(range_limits.with_output_span_range(span_range))
+    }
+
+    fn span_range_mut(&mut self) -> &mut SpanRange {
+        match self {
+            Self::Integer(value) => &mut value.span_range,
+            Self::Float(value) => &mut value.span_range,
+            Self::Boolean(value) => &mut value.span_range,
+            Self::String(value) => &mut value.span_range,
+            Self::Char(value) => &mut value.span_range,
+        }
+    }
+
+    pub(crate) fn with_span(mut self, source_span: Span) -> ExpressionValue {
+        *self.span_range_mut() = source_span.span_range();
+        self
+    }
+}
+
+impl HasSpanRange for ExpressionValue {
+    fn span_range(&self) -> SpanRange {
+        match self {
+            Self::Integer(int) => int.span_range,
+            Self::Float(float) => float.span_range,
+            Self::Boolean(bool) => bool.span_range,
+            Self::String(str) => str.span_range,
+            Self::Char(char) => char.span_range,
+        }
+    }
+}
+
+impl ToTokens for ExpressionValue {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.to_token_tree().to_tokens(tokens);
     }
 }
 
@@ -322,7 +354,7 @@ pub(super) enum EvaluationLiteralPair {
 impl EvaluationLiteralPair {
     pub(super) fn handle_paired_binary_operation(
         self,
-        operation: &PairedBinaryOperation,
+        operation: OutputSpanned<PairedBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         match self {
             Self::Integer(pair) => pair.handle_paired_binary_operation(operation),
@@ -335,7 +367,7 @@ impl EvaluationLiteralPair {
 
     pub(super) fn create_range(
         self,
-        range_limits: &syn::RangeLimits,
+        range_limits: OutputSpanned<syn::RangeLimits>,
     ) -> ExecutionResult<Box<dyn Iterator<Item = ExpressionValue> + '_>> {
         Ok(match self {
             EvaluationLiteralPair::Integer(pair) => return pair.create_range(range_limits),
