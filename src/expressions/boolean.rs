@@ -23,9 +23,7 @@ impl ExpressionBoolean {
     ) -> ExecutionResult<ExpressionValue> {
         let input = self.value;
         Ok(match operation.operation {
-            UnaryOperation::Neg { .. } => {
-                return operation.unsupported_for_value_type_err("boolean")
-            }
+            UnaryOperation::Neg { .. } => return operation.unsupported(self),
             UnaryOperation::Not { .. } => operation.output(!input),
             UnaryOperation::Cast { target, .. } => match target {
                 CastTarget::Integer(IntegerKind::Untyped) => {
@@ -58,9 +56,7 @@ impl ExpressionBoolean {
     ) -> ExecutionResult<ExpressionValue> {
         match operation.operation {
             IntegerBinaryOperation::ShiftLeft { .. }
-            | IntegerBinaryOperation::ShiftRight { .. } => {
-                operation.unsupported_for_value_type_err("boolean")
-            }
+            | IntegerBinaryOperation::ShiftRight { .. } => operation.unsupported(self),
         }
     }
 
@@ -75,14 +71,10 @@ impl ExpressionBoolean {
             PairedBinaryOperation::Addition { .. }
             | PairedBinaryOperation::Subtraction { .. }
             | PairedBinaryOperation::Multiplication { .. }
-            | PairedBinaryOperation::Division { .. } => {
-                return operation.unsupported_for_value_type_err("boolean")
-            }
+            | PairedBinaryOperation::Division { .. } => return operation.unsupported(self),
             PairedBinaryOperation::LogicalAnd { .. } => operation.output(lhs && rhs),
             PairedBinaryOperation::LogicalOr { .. } => operation.output(lhs || rhs),
-            PairedBinaryOperation::Remainder { .. } => {
-                return operation.unsupported_for_value_type_err("boolean")
-            }
+            PairedBinaryOperation::Remainder { .. } => return operation.unsupported(self),
             PairedBinaryOperation::BitXor { .. } => operation.output(lhs ^ rhs),
             PairedBinaryOperation::BitAnd { .. } => operation.output(lhs & rhs),
             PairedBinaryOperation::BitOr { .. } => operation.output(lhs | rhs),
@@ -97,6 +89,12 @@ impl ExpressionBoolean {
 
     pub(super) fn to_ident(&self) -> Ident {
         Ident::new_bool(self.value, self.span_range.join_into_span_else_start())
+    }
+}
+
+impl HasValueType for ExpressionBoolean {
+    fn value_type(&self) -> &'static str {
+        "bool"
     }
 }
 

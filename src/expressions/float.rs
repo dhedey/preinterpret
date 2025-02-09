@@ -55,6 +55,12 @@ impl ExpressionFloat {
     }
 }
 
+impl HasValueType for ExpressionFloat {
+    fn value_type(&self) -> &'static str {
+        self.value.value_type()
+    }
+}
+
 pub(super) enum ExpressionFloatValuePair {
     Untyped(UntypedFloat, UntypedFloat),
     F32(f32, f32),
@@ -95,19 +101,21 @@ impl ExpressionFloatValue {
         })
     }
 
-    pub(super) fn describe_type(&self) -> &'static str {
-        match self {
-            ExpressionFloatValue::Untyped(_) => "untyped float",
-            ExpressionFloatValue::F32(_) => "f32",
-            ExpressionFloatValue::F64(_) => "f64",
-        }
-    }
-
     fn to_unspanned_literal(&self) -> Literal {
         match self {
             ExpressionFloatValue::Untyped(float) => float.to_unspanned_literal(),
             ExpressionFloatValue::F32(float) => Literal::f32_suffixed(*float),
             ExpressionFloatValue::F64(float) => Literal::f64_suffixed(*float),
+        }
+    }
+}
+
+impl HasValueType for ExpressionFloatValue {
+    fn value_type(&self) -> &'static str {
+        match self {
+            ExpressionFloatValue::Untyped(_) => "untyped float",
+            ExpressionFloatValue::F32(_) => "f32",
+            ExpressionFloatValue::F64(_) => "f64",
         }
     }
 }
@@ -142,9 +150,7 @@ impl UntypedFloat {
         let input = self.parse_fallback()?;
         Ok(match operation.operation {
             UnaryOperation::Neg { .. } => operation.output(Self::from_fallback(-input)),
-            UnaryOperation::Not { .. } => {
-                return operation.unsupported_for_value_type_err("untyped float")
-            }
+            UnaryOperation::Not { .. } => return operation.unsupported(self),
             UnaryOperation::Cast { target, .. } => match target {
                 CastTarget::Integer(IntegerKind::Untyped) => {
                     operation.output(UntypedInteger::from_fallback(input as FallbackInteger))
@@ -180,9 +186,7 @@ impl UntypedFloat {
     ) -> ExecutionResult<ExpressionValue> {
         match operation.operation {
             IntegerBinaryOperation::ShiftLeft { .. }
-            | IntegerBinaryOperation::ShiftRight { .. } => {
-                operation.unsupported_for_value_type_err("untyped float")
-            }
+            | IntegerBinaryOperation::ShiftRight { .. } => operation.unsupported(self),
         }
     }
 
@@ -207,16 +211,14 @@ impl UntypedFloat {
                 operation.output(Self::from_fallback(lhs / rhs))
             }
             PairedBinaryOperation::LogicalAnd { .. } | PairedBinaryOperation::LogicalOr { .. } => {
-                return operation.unsupported_for_value_type_err(stringify!($float_type))
+                return operation.unsupported(self)
             }
             PairedBinaryOperation::Remainder { .. } => {
                 operation.output(Self::from_fallback(lhs % rhs))
             }
             PairedBinaryOperation::BitXor { .. }
             | PairedBinaryOperation::BitAnd { .. }
-            | PairedBinaryOperation::BitOr { .. } => {
-                return operation.unsupported_for_value_type_err("untyped float")
-            }
+            | PairedBinaryOperation::BitOr { .. } => return operation.unsupported(self),
             PairedBinaryOperation::Equal { .. } => operation.output(lhs == rhs),
             PairedBinaryOperation::LessThan { .. } => operation.output(lhs < rhs),
             PairedBinaryOperation::LessThanOrEqual { .. } => operation.output(lhs <= rhs),
@@ -259,6 +261,12 @@ impl UntypedFloat {
     }
 }
 
+impl HasValueType for UntypedFloat {
+    fn value_type(&self) -> &'static str {
+        "untyped float"
+    }
+}
+
 impl ToExpressionValue for UntypedFloat {
     fn to_value(self, span_range: SpanRange) -> ExpressionValue {
         ExpressionValue::Float(ExpressionFloat {
@@ -272,6 +280,12 @@ macro_rules! impl_float_operations {
     (
         $($float_enum_variant:ident($float_type:ident)),* $(,)?
     ) => {$(
+        impl HasValueType for $float_type {
+            fn value_type(&self) -> &'static str {
+                stringify!($float_type)
+            }
+        }
+
         impl ToExpressionValue for $float_type {
             fn to_value(self, span_range: SpanRange) -> ExpressionValue {
                 ExpressionValue::Float(ExpressionFloat {
@@ -285,7 +299,7 @@ macro_rules! impl_float_operations {
             fn handle_unary_operation(self, operation: OutputSpanned<UnaryOperation>) -> ExecutionResult<ExpressionValue> {
                 Ok(match operation.operation {
                     UnaryOperation::Neg { .. } => operation.output(-self),
-                    UnaryOperation::Not { .. } => return operation.unsupported_for_value_type_err(stringify!($float_type)),
+                    UnaryOperation::Not { .. } => return operation.unsupported(self),
                     UnaryOperation::Cast { target, .. } => match target {
                         CastTarget::Integer(IntegerKind::Untyped) => operation.output(UntypedInteger::from_fallback(self as FallbackInteger)),
                         CastTarget::Integer(IntegerKind::I8) => operation.output(self as i8),
@@ -322,13 +336,13 @@ macro_rules! impl_float_operations {
                     PairedBinaryOperation::Division { .. } => operation.output(lhs / rhs),
                     PairedBinaryOperation::LogicalAnd { .. }
                     | PairedBinaryOperation::LogicalOr { .. } => {
-                        return operation.unsupported_for_value_type_err(stringify!($float_type))
+                        return operation.unsupported(self)
                     }
                     PairedBinaryOperation::Remainder { .. } => operation.output(lhs % rhs),
                     PairedBinaryOperation::BitXor { .. }
                     | PairedBinaryOperation::BitAnd { .. }
                     | PairedBinaryOperation::BitOr { .. } => {
-                        return operation.unsupported_for_value_type_err(stringify!($float_type))
+                        return operation.unsupported(self)
                     }
                     PairedBinaryOperation::Equal { .. } => operation.output(lhs == rhs),
                     PairedBinaryOperation::LessThan { .. } => operation.output(lhs < rhs),
@@ -346,7 +360,7 @@ macro_rules! impl_float_operations {
             ) -> ExecutionResult<ExpressionValue> {
                 match operation.operation {
                     IntegerBinaryOperation::ShiftLeft { .. } | IntegerBinaryOperation::ShiftRight { .. } => {
-                        operation.unsupported_for_value_type_err(stringify!($float_type))
+                        operation.unsupported(self)
                     },
                 }
             }

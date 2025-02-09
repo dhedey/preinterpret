@@ -36,14 +36,11 @@ impl<T: Operation> OutputSpanned<'_, T> {
         }
     }
 
-    pub(super) fn unsupported_for_value_type_err(
-        &self,
-        value_type: &'static str,
-    ) -> ExecutionResult<ExpressionValue> {
+    pub(super) fn unsupported(&self, value: impl HasValueType) -> ExecutionResult<ExpressionValue> {
         Err(self.operation.execution_error(format!(
             "The {} operator is not supported for {} values",
             self.operation.symbol(),
-            value_type,
+            value.value_type(),
         )))
     }
 }

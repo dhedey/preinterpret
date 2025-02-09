@@ -9,7 +9,7 @@ pub(crate) enum ExpressionValue {
     Char(ExpressionChar),
 }
 
-pub(super) trait ToExpressionValue: Sized {
+pub(crate) trait ToExpressionValue: Sized {
     fn to_value(self, span_range: SpanRange) -> ExpressionValue;
 }
 
@@ -157,7 +157,7 @@ impl ExpressionValue {
                         ExpressionIntegerValuePair::Isize(lhs, rhs)
                     }
                     (left_value, right_value) => {
-                        return operation.execution_err(format!("The {} operator cannot infer a common integer operand type from {} and {}. Consider using `as` to cast to matching types.", operation.symbol(), left_value.describe_type(), right_value.describe_type()));
+                        return operation.execution_err(format!("The {} operator cannot infer a common integer operand type from {} and {}. Consider using `as` to cast to matching types.", operation.symbol(), left_value.value_type(), right_value.value_type()));
                     }
                 };
                 EvaluationLiteralPair::Integer(integer_pair)
@@ -196,7 +196,7 @@ impl ExpressionValue {
                         ExpressionFloatValuePair::F64(lhs, rhs)
                     }
                     (left_value, right_value) => {
-                        return operation.execution_err(format!("The {} operator cannot infer a common float operand type from {} and {}. Consider using `as` to cast to matching types.", operation.symbol(), left_value.describe_type(), right_value.describe_type()));
+                        return operation.execution_err(format!("The {} operator cannot infer a common float operand type from {} and {}. Consider using `as` to cast to matching types.", operation.symbol(), left_value.value_type(), right_value.value_type()));
                     }
                 };
                 EvaluationLiteralPair::Float(float_pair)
@@ -208,7 +208,7 @@ impl ExpressionValue {
                 EvaluationLiteralPair::CharPair(left, right)
             }
             (left, right) => {
-                return operation.execution_err(format!("The {} operator cannot infer a common operand type from {} and {}. Consider using `as` to cast to matching types.", operation.symbol(), left.describe_type(), right.describe_type()));
+                return operation.execution_err(format!("The {} operator cannot infer a common operand type from {} and {}. Consider using `as` to cast to matching types.", operation.symbol(), left.value_type(), right.value_type()));
             }
         })
     }
@@ -246,10 +246,10 @@ impl ExpressionValue {
         }
     }
 
-    pub(super) fn describe_type(&self) -> &'static str {
+    pub(super) fn value_type(&self) -> &'static str {
         match self {
-            Self::Integer(int) => int.value.describe_type(),
-            Self::Float(float) => float.value.describe_type(),
+            Self::Integer(int) => int.value.value_type(),
+            Self::Float(float) => float.value.value_type(),
             Self::Boolean(_) => "bool",
             Self::String(_) => "string",
             Self::Char(_) => "char",
@@ -327,6 +327,10 @@ impl HasSpanRange for ExpressionValue {
             Self::Char(char) => char.span_range,
         }
     }
+}
+
+pub(super) trait HasValueType {
+    fn value_type(&self) -> &'static str;
 }
 
 impl ToTokens for ExpressionValue {

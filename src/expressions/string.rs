@@ -24,7 +24,7 @@ impl ExpressionString {
         match operation.operation {
             UnaryOperation::Neg { .. }
             | UnaryOperation::Not { .. }
-            | UnaryOperation::Cast { .. } => operation.unsupported_for_value_type_err("string"),
+            | UnaryOperation::Cast { .. } => operation.unsupported(self),
         }
     }
 
@@ -33,7 +33,7 @@ impl ExpressionString {
         _right: ExpressionInteger,
         operation: OutputSpanned<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
-        operation.unsupported_for_value_type_err("string")
+        operation.unsupported(self)
     }
 
     pub(super) fn handle_paired_binary_operation(
@@ -53,9 +53,7 @@ impl ExpressionString {
             | PairedBinaryOperation::Remainder { .. }
             | PairedBinaryOperation::BitXor { .. }
             | PairedBinaryOperation::BitAnd { .. }
-            | PairedBinaryOperation::BitOr { .. } => {
-                return operation.unsupported_for_value_type_err("string")
-            }
+            | PairedBinaryOperation::BitOr { .. } => return operation.unsupported(lhs),
             PairedBinaryOperation::Equal { .. } => operation.output(lhs == rhs),
             PairedBinaryOperation::LessThan { .. } => operation.output(lhs < rhs),
             PairedBinaryOperation::LessThanOrEqual { .. } => operation.output(lhs <= rhs),
@@ -67,6 +65,18 @@ impl ExpressionString {
 
     pub(super) fn to_literal(&self) -> Literal {
         Literal::string(&self.value).with_span(self.span_range.join_into_span_else_start())
+    }
+}
+
+impl HasValueType for ExpressionString {
+    fn value_type(&self) -> &'static str {
+        self.value.value_type()
+    }
+}
+
+impl HasValueType for String {
+    fn value_type(&self) -> &'static str {
+        "string"
     }
 }
 

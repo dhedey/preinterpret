@@ -23,3 +23,5 @@ use value::*;
 
 pub(crate) use expression::*;
 pub(crate) use value::*;
+// For some reason Rust-analyzer didn't see it without this explicit export
+pub(crate) use value::ExpressionValue;

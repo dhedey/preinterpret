@@ -93,6 +93,12 @@ impl ExpressionInteger {
     }
 }
 
+impl HasValueType for ExpressionInteger {
+    fn value_type(&self) -> &'static str {
+        self.value.value_type()
+    }
+}
+
 pub(super) enum ExpressionIntegerValuePair {
     Untyped(UntypedInteger, UntypedInteger),
     U8(u8, u8),
@@ -211,24 +217,6 @@ impl ExpressionIntegerValue {
         })
     }
 
-    pub(super) fn describe_type(&self) -> &'static str {
-        match self {
-            ExpressionIntegerValue::Untyped(_) => "untyped integer",
-            ExpressionIntegerValue::U8(_) => "u8",
-            ExpressionIntegerValue::U16(_) => "u16",
-            ExpressionIntegerValue::U32(_) => "u32",
-            ExpressionIntegerValue::U64(_) => "u64",
-            ExpressionIntegerValue::U128(_) => "u128",
-            ExpressionIntegerValue::Usize(_) => "usize",
-            ExpressionIntegerValue::I8(_) => "i8",
-            ExpressionIntegerValue::I16(_) => "i16",
-            ExpressionIntegerValue::I32(_) => "i32",
-            ExpressionIntegerValue::I64(_) => "i64",
-            ExpressionIntegerValue::I128(_) => "i128",
-            ExpressionIntegerValue::Isize(_) => "isize",
-        }
-    }
-
     fn to_unspanned_literal(&self) -> Literal {
         match self {
             ExpressionIntegerValue::Untyped(int) => int.to_unspanned_literal(),
@@ -245,6 +233,32 @@ impl ExpressionIntegerValue {
             ExpressionIntegerValue::I128(int) => Literal::i128_suffixed(*int),
             ExpressionIntegerValue::Isize(int) => Literal::isize_suffixed(*int),
         }
+    }
+}
+
+impl HasValueType for ExpressionIntegerValue {
+    fn value_type(&self) -> &'static str {
+        match self {
+            ExpressionIntegerValue::Untyped(value) => value.value_type(),
+            ExpressionIntegerValue::U8(value) => value.value_type(),
+            ExpressionIntegerValue::U16(value) => value.value_type(),
+            ExpressionIntegerValue::U32(value) => value.value_type(),
+            ExpressionIntegerValue::U64(value) => value.value_type(),
+            ExpressionIntegerValue::U128(value) => value.value_type(),
+            ExpressionIntegerValue::Usize(value) => value.value_type(),
+            ExpressionIntegerValue::I8(value) => value.value_type(),
+            ExpressionIntegerValue::I16(value) => value.value_type(),
+            ExpressionIntegerValue::I32(value) => value.value_type(),
+            ExpressionIntegerValue::I64(value) => value.value_type(),
+            ExpressionIntegerValue::I128(value) => value.value_type(),
+            ExpressionIntegerValue::Isize(value) => value.value_type(),
+        }
+    }
+}
+
+impl HasValueType for UntypedInteger {
+    fn value_type(&self) -> &'static str {
+        "untyped integer"
     }
 }
 
@@ -271,9 +285,7 @@ impl UntypedInteger {
         let input = self.parse_fallback()?;
         Ok(match operation.operation {
             UnaryOperation::Neg { .. } => operation.output(Self::from_fallback(-input)),
-            UnaryOperation::Not { .. } => {
-                return operation.unsupported_for_value_type_err("untyped integer")
-            }
+            UnaryOperation::Not { .. } => return operation.unsupported(self),
             UnaryOperation::Cast { target, .. } => match target {
                 CastTarget::Integer(IntegerKind::Untyped) => {
                     operation.output(UntypedInteger::from_fallback(input as FallbackInteger))
@@ -387,7 +399,7 @@ impl UntypedInteger {
                 )
             }
             PairedBinaryOperation::LogicalAnd { .. } | PairedBinaryOperation::LogicalOr { .. } => {
-                return operation.unsupported_for_value_type_err("untyped integer");
+                return operation.unsupported(self);
             }
             PairedBinaryOperation::Remainder { .. } => {
                 return operation.output_if_some(
@@ -475,6 +487,12 @@ macro_rules! impl_int_operations_except_unary {
     (
         $($integer_enum_variant:ident($integer_type:ident)),* $(,)?
     ) => {$(
+        impl HasValueType for $integer_type {
+            fn value_type(&self) -> &'static str {
+                stringify!($integer_type)
+            }
+        }
+
         impl ToExpressionValue for $integer_type {
             fn to_value(self, span_range: SpanRange) -> ExpressionValue {
                 ExpressionValue::Integer(ExpressionInteger {
@@ -494,7 +512,7 @@ macro_rules! impl_int_operations_except_unary {
                     PairedBinaryOperation::Multiplication { .. } => return operation.output_if_some(lhs.checked_mul(rhs), overflow_error),
                     PairedBinaryOperation::Division { .. } => return operation.output_if_some(lhs.checked_div(rhs), overflow_error),
                     PairedBinaryOperation::LogicalAnd { .. }
-                    | PairedBinaryOperation::LogicalOr { .. } => return operation.unsupported_for_value_type_err(stringify!($integer_type)),
+                    | PairedBinaryOperation::LogicalOr { .. } => return operation.unsupported(self),
                     PairedBinaryOperation::Remainder { .. } => return operation.output_if_some(lhs.checked_rem(rhs), overflow_error),
                     PairedBinaryOperation::BitXor { .. } => operation.output(lhs ^ rhs),
                     PairedBinaryOperation::BitAnd { .. } => operation.output(lhs & rhs),
@@ -580,7 +598,7 @@ macro_rules! impl_unsigned_unary_operations {
                 Ok(match operation.operation {
                     UnaryOperation::Neg { .. }
                     | UnaryOperation::Not { .. } => {
-                        return operation.unsupported_for_value_type_err(stringify!($integer_type))
+                        return operation.unsupported(self)
                     },
                     UnaryOperation::Cast { target, .. } => match target {
                         CastTarget::Integer(IntegerKind::Untyped) => operation.output(UntypedInteger::from_fallback(self as FallbackInteger)),
@@ -614,7 +632,7 @@ macro_rules! impl_signed_unary_operations {
                 Ok(match operation.operation {
                     UnaryOperation::Neg { .. } => operation.output(-self),
                     UnaryOperation::Not { .. } => {
-                        return operation.unsupported_for_value_type_err(stringify!($integer_type))
+                        return operation.unsupported(self)
                     },
                     UnaryOperation::Cast { target, .. } => match target {
                         CastTarget::Integer(IntegerKind::Untyped) => operation.output(UntypedInteger::from_fallback(self as FallbackInteger)),
@@ -648,7 +666,7 @@ impl HandleUnaryOperation for u8 {
     ) -> ExecutionResult<ExpressionValue> {
         Ok(match operation.operation {
             UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => {
-                return operation.unsupported_for_value_type_err("u8")
+                return operation.unsupported(self)
             }
             UnaryOperation::Cast { target, .. } => match target {
                 CastTarget::Integer(IntegerKind::Untyped) => {

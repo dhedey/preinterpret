@@ -24,7 +24,7 @@ impl ExpressionChar {
         let char = self.value;
         Ok(match operation.operation {
             UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => {
-                return operation.unsupported_for_value_type_err("char")
+                return operation.unsupported(self)
             }
             UnaryOperation::Cast { target, .. } => match target {
                 CastTarget::Integer(IntegerKind::Untyped) => {
@@ -43,9 +43,7 @@ impl ExpressionChar {
                 CastTarget::Integer(IntegerKind::U128) => operation.output(char as u128),
                 CastTarget::Integer(IntegerKind::Usize) => operation.output(char as usize),
                 CastTarget::Char => operation.output(char),
-                CastTarget::Boolean | CastTarget::Float(_) => {
-                    return operation.unsupported_for_value_type_err("char")
-                }
+                CastTarget::Boolean | CastTarget::Float(_) => return operation.unsupported(self),
             },
         })
     }
@@ -72,7 +70,7 @@ impl ExpressionChar {
         _right: ExpressionInteger,
         operation: OutputSpanned<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
-        operation.unsupported_for_value_type_err("char")
+        operation.unsupported(self)
     }
 
     pub(super) fn handle_paired_binary_operation(
@@ -92,9 +90,7 @@ impl ExpressionChar {
             | PairedBinaryOperation::Remainder { .. }
             | PairedBinaryOperation::BitXor { .. }
             | PairedBinaryOperation::BitAnd { .. }
-            | PairedBinaryOperation::BitOr { .. } => {
-                return operation.unsupported_for_value_type_err("char")
-            }
+            | PairedBinaryOperation::BitOr { .. } => return operation.unsupported(self),
             PairedBinaryOperation::Equal { .. } => operation.output(lhs == rhs),
             PairedBinaryOperation::LessThan { .. } => operation.output(lhs < rhs),
             PairedBinaryOperation::LessThanOrEqual { .. } => operation.output(lhs <= rhs),
@@ -106,6 +102,12 @@ impl ExpressionChar {
 
     pub(super) fn to_literal(&self) -> Literal {
         Literal::character(self.value).with_span(self.span_range.join_into_span_else_start())
+    }
+}
+
+impl HasValueType for ExpressionChar {
+    fn value_type(&self) -> &'static str {
+        "char"
     }
 }
 
