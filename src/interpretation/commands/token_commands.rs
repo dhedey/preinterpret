@@ -18,7 +18,7 @@ impl ValueCommandDefinition for IsEmptyCommand {
         })
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree> {
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree> {
         let output_span = self.arguments.span_range().join_into_span_else_start();
         let interpreted = self.arguments.interpret_to_new_stream(interpreter)?;
         Ok(Ident::new_bool(interpreted.is_empty(), output_span).into())
@@ -43,7 +43,7 @@ impl ValueCommandDefinition for LengthCommand {
         })
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree> {
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree> {
         let output_span = self.arguments.span_range().join_into_span_else_start();
         let interpreted = self.arguments.interpret_to_new_stream(interpreter)?;
         let length_literal = Literal::usize_unsuffixed(interpreted.len()).with_span(output_span);
@@ -70,7 +70,7 @@ impl GroupedStreamCommandDefinition for GroupCommand {
     }
 
     fn execute(
-        self: Box<Self>,
+        self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -112,7 +112,7 @@ impl GroupedStreamCommandDefinition for IntersperseCommand {
     }
 
     fn execute(
-        self: Box<Self>,
+        self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -247,7 +247,7 @@ impl GroupedStreamCommandDefinition for SplitCommand {
     }
 
     fn execute(
-        self: Box<Self>,
+        self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -349,7 +349,7 @@ impl GroupedStreamCommandDefinition for CommaSplitCommand {
     }
 
     fn execute(
-        self: Box<Self>,
+        self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -425,7 +425,7 @@ impl GroupedStreamCommandDefinition for ZipCommand {
     }
 
     fn execute(
-        self: Box<Self>,
+        self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {

@@ -47,7 +47,7 @@ impl StreamingCommandDefinition for IfCommand {
     }
 
     fn execute(
-        self: Box<Self>,
+        self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -104,7 +104,7 @@ impl StreamingCommandDefinition for WhileCommand {
     }
 
     fn execute(
-        self: Box<Self>,
+        self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -161,7 +161,7 @@ impl StreamingCommandDefinition for LoopCommand {
     }
 
     fn execute(
-        self: Box<Self>,
+        self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -214,7 +214,7 @@ impl StreamingCommandDefinition for ForCommand {
     }
 
     fn execute(
-        self: Box<Self>,
+        self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -264,7 +264,7 @@ impl NoOutputCommandDefinition for ContinueCommand {
         })
     }
 
-    fn execute(self: Box<Self>, _: &mut Interpreter) -> ExecutionResult<()> {
+    fn execute(self, _: &mut Interpreter) -> ExecutionResult<()> {
         ExecutionResult::Err(ExecutionInterrupt::ControlFlow(
             ControlFlowInterrupt::Continue,
             self.span,
@@ -291,7 +291,7 @@ impl NoOutputCommandDefinition for BreakCommand {
         })
     }
 
-    fn execute(self: Box<Self>, _: &mut Interpreter) -> ExecutionResult<()> {
+    fn execute(self, _: &mut Interpreter) -> ExecutionResult<()> {
         ExecutionResult::Err(ExecutionInterrupt::ControlFlow(
             ControlFlowInterrupt::Break,
             self.span,

@@ -5,7 +5,6 @@ use crate::internal_prelude::*;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CommandOutputKind {
     None,
-    /// LiteralOrBool
     Value,
     Ident,
     FlattenedStream,
@@ -43,7 +42,7 @@ struct ExecutionContext<'a> {
 
 trait CommandInvocation {
     fn execute_into(
-        self: Box<Self>,
+        self,
         context: ExecutionContext,
         output: &mut OutputStream,
     ) -> ExecutionResult<()>;
@@ -69,7 +68,7 @@ impl Clone for Box<dyn ClonableCommandInvocation> {
 // implementations, conditioned on an associated type
 trait CommandInvocationAs<T: OutputKind> {
     fn execute_into(
-        self: Box<Self>,
+        self,
         context: ExecutionContext,
         output: &mut OutputStream,
     ) -> ExecutionResult<()>;
@@ -77,7 +76,7 @@ trait CommandInvocationAs<T: OutputKind> {
 
 impl<C: CommandType + CommandInvocationAs<C::OutputKind>> CommandInvocation for C {
     fn execute_into(
-        self: Box<Self>,
+        self,
         context: ExecutionContext,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -107,15 +106,11 @@ pub(crate) trait NoOutputCommandDefinition:
 {
     const COMMAND_NAME: &'static str;
     fn parse(arguments: CommandArguments) -> ParseResult<Self>;
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<()>;
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<()>;
 }
 
 impl<C: NoOutputCommandDefinition> CommandInvocationAs<OutputKindNone> for C {
-    fn execute_into(
-        self: Box<Self>,
-        context: ExecutionContext,
-        _: &mut OutputStream,
-    ) -> ExecutionResult<()> {
+    fn execute_into(self, context: ExecutionContext, _: &mut OutputStream) -> ExecutionResult<()> {
         self.execute(context.interpreter)?;
         Ok(())
     }
@@ -144,12 +139,12 @@ pub(crate) trait ValueCommandDefinition:
 {
     const COMMAND_NAME: &'static str;
     fn parse(arguments: CommandArguments) -> ParseResult<Self>;
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree>;
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree>;
 }
 
 impl<C: ValueCommandDefinition> CommandInvocationAs<OutputKindValue> for C {
     fn execute_into(
-        self: Box<Self>,
+        self,
         context: ExecutionContext,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -181,12 +176,12 @@ pub(crate) trait IdentCommandDefinition:
 {
     const COMMAND_NAME: &'static str;
     fn parse(arguments: CommandArguments) -> ParseResult<Self>;
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<Ident>;
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<Ident>;
 }
 
 impl<C: IdentCommandDefinition> CommandInvocationAs<OutputKindIdent> for C {
     fn execute_into(
-        self: Box<Self>,
+        self,
         context: ExecutionContext,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -218,7 +213,7 @@ pub(crate) trait GroupedStreamCommandDefinition:
     const COMMAND_NAME: &'static str;
     fn parse(arguments: CommandArguments) -> ParseResult<Self>;
     fn execute(
-        self: Box<Self>,
+        self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()>;
@@ -226,7 +221,7 @@ pub(crate) trait GroupedStreamCommandDefinition:
 
 impl<C: GroupedStreamCommandDefinition> CommandInvocationAs<OutputKindGroupedStream> for C {
     fn execute_into(
-        self: Box<Self>,
+        self,
         context: ExecutionContext,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -266,7 +261,7 @@ pub(crate) trait StreamingCommandDefinition:
     const COMMAND_NAME: &'static str;
     fn parse(arguments: CommandArguments) -> ParseResult<Self>;
     fn execute(
-        self: Box<Self>,
+        self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()>;
@@ -274,7 +269,7 @@ pub(crate) trait StreamingCommandDefinition:
 
 impl<C: StreamingCommandDefinition> CommandInvocationAs<OutputKindStreaming> for C {
     fn execute_into(
-        self: Box<Self>,
+        self,
         context: ExecutionContext,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -284,7 +279,7 @@ impl<C: StreamingCommandDefinition> CommandInvocationAs<OutputKindStreaming> for
 
 //=========================
 
-macro_rules! define_command_kind {
+macro_rules! define_command_enums {
     (
         $(
             $command:ident,
@@ -299,10 +294,10 @@ macro_rules! define_command_kind {
         }
 
         impl CommandKind {
-            fn parse_invocation(&self, arguments: CommandArguments) -> ParseResult<Box<dyn ClonableCommandInvocation>> {
+            fn parse_command(&self, arguments: CommandArguments) -> ParseResult<TypedCommand> {
                 Ok(match self {
                     $(
-                        Self::$command => Box::new(
+                        Self::$command => TypedCommand::$command(
                             $command::parse(arguments)?
                         ),
                     )*
@@ -341,10 +336,32 @@ macro_rules! define_command_kind {
                 Self::ALL_KIND_NAMES.join(", ")
             }
         }
+
+        #[allow(clippy::enum_variant_names)]
+        #[derive(Clone)]
+        enum TypedCommand {
+            $(
+                $command($command),
+            )*
+        }
+
+        impl TypedCommand {
+            fn execute_into(
+                self,
+                context: ExecutionContext,
+                output: &mut OutputStream,
+            ) -> ExecutionResult<()> {
+                match self {
+                    $(
+                        Self::$command(command) => <$command as CommandInvocation>::execute_into(command, context, output),
+                    )*
+                }
+            }
+        }
     };
 }
 
-define_command_kind! {
+define_command_enums! {
     // Core Commands
     SetCommand,
     RawCommand,
@@ -406,7 +423,7 @@ define_command_kind! {
 
 #[derive(Clone)]
 pub(crate) struct Command {
-    invocation: Box<dyn ClonableCommandInvocation>,
+    typed: Box<TypedCommand>,
     output_kind: CommandOutputKind,
     source_group_span: DelimSpan,
 }
@@ -438,13 +455,13 @@ impl Parse<Source> for Command {
             )?,
         };
         content.parse::<Token![!]>()?;
-        let invocation = command_kind.parse_invocation(CommandArguments::new(
+        let typed = command_kind.parse_command(CommandArguments::new(
             &content,
             command_name,
             delim_span.join(),
         ))?;
         Ok(Self {
-            invocation,
+            typed: Box::new(typed),
             output_kind,
             source_group_span: delim_span,
         })
@@ -479,6 +496,6 @@ impl Interpret for Command {
             output_kind: self.output_kind,
             delim_span: self.source_group_span,
         };
-        self.invocation.execute_into(context, output)
+        self.typed.execute_into(context, output)
     }
 }

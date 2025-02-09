@@ -25,7 +25,7 @@ impl ValueCommandDefinition for EvaluateCommand {
         )
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree> {
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree> {
         Ok(self
             .expression
             .evaluate(interpreter)?
@@ -77,14 +77,14 @@ impl NoOutputCommandDefinition for AssignCommand {
         )
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         let Self {
             variable,
             operator,
             equals: _,
             expression,
             command_span,
-        } = *self;
+        } = self;
 
         let expression = if let Some(operator) = operator {
             let mut calculation = TokenStream::new();
@@ -143,7 +143,7 @@ impl GroupedStreamCommandDefinition for RangeCommand {
     }
 
     fn execute(
-        self: Box<Self>,
+        self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {

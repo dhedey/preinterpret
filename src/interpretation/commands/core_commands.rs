@@ -83,7 +83,7 @@ impl NoOutputCommandDefinition for SetCommand {
         )
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         match self.arguments {
             SetArguments::SetVariable {
                 variable, content, ..
@@ -130,7 +130,7 @@ impl StreamingCommandDefinition for RawCommand {
     }
 
     fn execute(
-        self: Box<Self>,
+        self,
         _interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -158,7 +158,7 @@ impl StreamingCommandDefinition for OutputCommand {
     }
 
     fn execute(
-        self: Box<Self>,
+        self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -182,7 +182,7 @@ impl NoOutputCommandDefinition for IgnoreCommand {
         Ok(Self)
     }
 
-    fn execute(self: Box<Self>, _interpreter: &mut Interpreter) -> ExecutionResult<()> {
+    fn execute(self, _interpreter: &mut Interpreter) -> ExecutionResult<()> {
         Ok(())
     }
 }
@@ -214,7 +214,7 @@ impl NoOutputCommandDefinition for SettingsCommand {
         })
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         if let Some(limit) = self.inputs.iteration_limit {
             let limit: usize = limit.interpret_to_value(interpreter)?.base10_parse()?;
             interpreter.set_iteration_limit(Some(limit));
@@ -274,7 +274,7 @@ impl NoOutputCommandDefinition for ErrorCommand {
         )
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         let fields = match self.inputs {
             EitherErrorInput::Fields(error_inputs) => error_inputs,
             EitherErrorInput::JustMessage(stream) => {
@@ -350,7 +350,7 @@ impl ValueCommandDefinition for DebugCommand {
         })
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree> {
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree> {
         let span = self.inner.span();
         let debug_string = self
             .inner

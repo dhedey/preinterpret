@@ -73,10 +73,7 @@ macro_rules! define_literal_concat_command {
                 })
             }
 
-            fn execute(
-                self: Box<Self>,
-                interpreter: &mut Interpreter,
-            ) -> ExecutionResult<TokenTree> {
+            fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree> {
                 Ok($output_fn(self.arguments, interpreter, $conversion_fn)?.into())
             }
         }
@@ -105,7 +102,7 @@ macro_rules! define_ident_concat_command {
                 })
             }
 
-            fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<Ident> {
+            fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<Ident> {
                 $output_fn(self.arguments, interpreter, $conversion_fn).into()
             }
         }

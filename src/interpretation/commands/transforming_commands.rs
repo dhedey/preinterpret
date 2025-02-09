@@ -29,7 +29,7 @@ impl StreamingCommandDefinition for ParseCommand {
     }
 
     fn execute(
-        self: Box<Self>,
+        self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -67,7 +67,7 @@ impl NoOutputCommandDefinition for LetCommand {
         )
     }
 
-    fn execute(self: Box<Self>, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         let result_tokens = self.arguments.interpret_to_new_stream(interpreter)?;
         let mut ignored_transformer_output = OutputStream::new();
         self.destructuring.handle_transform_from_stream(
