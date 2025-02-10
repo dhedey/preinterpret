@@ -123,6 +123,17 @@ impl OutputStream {
         self.token_length == 0
     }
 
+    pub(crate) fn coerce_into_value(self, stream_span_range: SpanRange) -> ExpressionValue {
+        let parse_result = unsafe {
+            // RUST-ANALYZER SAFETY: This is actually safe.
+            self.clone().parse_as::<syn::Lit>()
+        };
+        match parse_result {
+            Ok(syn_lit) => ExpressionValue::for_syn_lit(syn_lit),
+            Err(_) => self.to_value(stream_span_range),
+        }
+    }
+
     /// WARNING: With rust-analyzer, this loses transparent groups which have been inserted.
     /// Use only where that doesn't matter: https://github.com/rust-lang/rust-analyzer/issues/18211#issuecomment-2604547032
     ///

@@ -58,7 +58,8 @@ impl Interpret for SourceStreamInput {
                 match command.output_kind() {
                     CommandOutputKind::None
                     | CommandOutputKind::Value
-                    | CommandOutputKind::Ident => {
+                    | CommandOutputKind::Ident
+                    | CommandOutputKind::Literal => {
                         command.execution_err("The command does not output a stream")
                     }
                     CommandOutputKind::FlattenedStream => parse_as_stream_input(

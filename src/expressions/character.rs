@@ -44,6 +44,9 @@ impl ExpressionChar {
                 CastTarget::Integer(IntegerKind::Usize) => operation.output(char as usize),
                 CastTarget::Char => operation.output(char),
                 CastTarget::Boolean | CastTarget::Float(_) => return operation.unsupported(self),
+                CastTarget::Stream => {
+                    operation.output(operation.output(char).into_new_output_stream())
+                }
             },
         })
     }

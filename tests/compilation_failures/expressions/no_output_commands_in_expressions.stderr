@@ -1,7 +1,5 @@
-error: A command which returns nothing cannot be used directly in expressions.
-       Consider wrapping it inside a { } block which returns an expression
-       Occurred whilst parsing [!evaluate! ...] - Expected [!evaluate! ...] containing a valid preinterpret expression
- --> tests/compilation_failures/expressions/no_output_commands_in_expressions.rs:5:25
+error: Unexpected extra tokens. Expected [!evaluate! ...] containing a valid preinterpret expression
+ --> tests/compilation_failures/expressions/no_output_commands_in_expressions.rs:5:40
   |
 5 |         [!evaluate! 5 + [!set! #x = 2] 2]
-  |                         ^
+  |                                        ^

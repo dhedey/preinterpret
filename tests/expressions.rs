@@ -42,7 +42,7 @@ fn test_basic_evaluate_works() {
     assert_preinterpret_eq!([!evaluate! 123 > 456], false);
     assert_preinterpret_eq!(
         {
-            [!set! #six_as_sum = 3 + 3] // The token stream '3 + 3'. They're not evaluated to 6 (yet).
+            [!typed_set! #six_as_sum = 3 + 3]
             [!evaluate! #six_as_sum * #six_as_sum]
         },
         36
@@ -50,26 +50,17 @@ fn test_basic_evaluate_works() {
     assert_preinterpret_eq!(
         {
             [!set! #partial_sum = + 2]
-            // The [!group! ...] constructs an expression from tokens,
-            // which is then interpreted / executed.
-            [!evaluate! [!group! 5 #..partial_sum]]
+            [!debug!
+                // [...] is a token stream, which is not evaluated.
+                [!evaluate! [5 #..partial_sum]]
+                =
+                // !reinterpret! can be used to force an evaluation
+                [!reinterpret! [[!raw! !evaluate!] 5 #..partial_sum]]
+            ]
         },
-        7
+        "5 + 2 = [!group! 7]"
     );
-    assert_preinterpret_eq!(
-        {
-            [!set! #partial_sum = + 2]
-            // A { ... } block is evaluated as an expression after interpretation
-            [!evaluate! { 1 #..partial_sum }]
-        },
-        3
-    );
-    assert_preinterpret_eq!(
-        {
-            [!evaluate! 1 + [!range! 1..2]]
-        },
-        2
-    );
+    assert_preinterpret_eq!([!evaluate! 1 + [!range! 1..2] as int], 2);
     assert_preinterpret_eq!([!evaluate! "hello" == "world"], false);
     assert_preinterpret_eq!([!evaluate! "hello" == "hello"], true);
     assert_preinterpret_eq!([!evaluate! 'A' as u8 == 65], true);
@@ -78,6 +69,10 @@ fn test_basic_evaluate_works() {
     assert_preinterpret_eq!([!evaluate! 'A' == 'B'], false);
     assert_preinterpret_eq!([!evaluate! 'A' < 'B'], true);
     assert_preinterpret_eq!([!evaluate! "Zoo" > "Aardvark"], true);
+    assert_preinterpret_eq!(
+        [!debug! [!evaluate! "Hello" as stream + "World" as stream + (1 + 1) as stream]],
+        r#""Hello" "World" [!group! 2]"#
+    );
 }
 
 #[test]
@@ -102,9 +97,9 @@ fn test_very_long_expression_works() {
         {
             [!settings! {
                 iteration_limit: 100000,
-            }][!evaluate! {
-                0 [!for! #i in [!range! 0..100000] { + 1 }]
             }]
+            [!set! #expression = 0 [!for! #i in [!range! 0..100000] { + 1 }]]
+            [!reinterpret! [[!raw! !evaluate!] #expression]]
         },
         100000
     );
@@ -116,7 +111,7 @@ fn boolean_operators_short_circuit() {
     assert_preinterpret_eq!(
         {
             [!set! #is_lazy = true]
-            [!set! _ = [!evaluate! false && { [!set! #is_lazy = false] true }]]
+            [!set! _ = [!evaluate! false && [!set! #is_lazy = false]]]
             #is_lazy
         },
         true
@@ -125,7 +120,7 @@ fn boolean_operators_short_circuit() {
     assert_preinterpret_eq!(
         {
             [!set! #is_lazy = true]
-            [!set! _ = [!evaluate! true || { [!set! #is_lazy = false] true }]]
+            [!set! _ = [!evaluate! true || [!set! #is_lazy = false]]]
             #is_lazy
         },
         true
@@ -139,13 +134,13 @@ fn assign_works() {
             [!assign! #x = 5 + 5]
             [!debug! #..x]
         },
-        "10"
+        "[!group! 10]"
     );
     assert_preinterpret_eq!(
         {
-            [!set! #x = 8 + 2]      // 8 + 2 (not evaluated)
-            [!assign! #x /= 1 + 1]  // ((8 + 2) / (1 + 1)) => 5
-            [!assign! #x += 2 + #x] // ((10) + 2) => 12
+            [!set! #x = 10]
+            [!assign! #x /= 1 + 1]  // (10 / (1 + 1)) => 5
+            [!assign! #x += 2 + #x] // (5 + (2 + 5)) => 12
             #x
         },
         12
@@ -200,6 +195,6 @@ fn test_range() {
     assert_preinterpret_eq!({ [!string! [!range! 'a'..='f']] }, "abcdef");
     assert_preinterpret_eq!(
         { [!debug! [!..range! -1i8..3i8]] },
-        "[!group! - 1i8] [!group! 0i8] [!group! 1i8] [!group! 2i8]"
+        "[!group! -1i8] [!group! 0i8] [!group! 1i8] [!group! 2i8]"
     );
 }

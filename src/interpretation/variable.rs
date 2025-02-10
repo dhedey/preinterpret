@@ -33,6 +33,19 @@ impl GroupedVariable {
         interpreter.set_variable(self, value)
     }
 
+    pub(crate) fn set_value(
+        &self,
+        interpreter: &mut Interpreter,
+        value: ExpressionValue,
+    ) -> ExecutionResult<()> {
+        let value = {
+            let mut output = OutputStream::new();
+            value.output_to(&mut output);
+            output
+        };
+        interpreter.set_variable(self, value)
+    }
+
     pub(crate) fn get_existing_for_mutation(
         &self,
         interpreter: &Interpreter,
@@ -42,6 +55,18 @@ impl GroupedVariable {
                 self.error(format!("The variable {} wasn't already set", self))
             })?
             .cheap_clone())
+    }
+
+    pub(crate) fn read_as_expression_value(
+        &self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<ExpressionValue> {
+        let value = self
+            .read_existing(interpreter)?
+            .get(self)?
+            .clone()
+            .coerce_into_value(self.span_range());
+        Ok(value)
     }
 
     pub(crate) fn substitute_ungrouped_contents_into(
@@ -147,6 +172,15 @@ impl FlattenedVariable {
             .get(self)?
             .append_cloned_into(output);
         Ok(())
+    }
+
+    pub(crate) fn read_as_expression_value(
+        &self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<ExpressionValue> {
+        let mut output_stream = OutputStream::new();
+        self.substitute_into(interpreter, &mut output_stream)?;
+        Ok(output_stream.to_value(self.span_range()))
     }
 
     fn read_existing<'i>(&self, interpreter: &'i Interpreter) -> ExecutionResult<&'i VariableData> {

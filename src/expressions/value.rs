@@ -2,11 +2,16 @@ use super::*;
 
 #[derive(Clone)]
 pub(crate) enum ExpressionValue {
+    None(SpanRange),
     Integer(ExpressionInteger),
     Float(ExpressionFloat),
     Boolean(ExpressionBoolean),
     String(ExpressionString),
     Char(ExpressionChar),
+    // Unsupported literal is a type here so that we can parse such a token
+    // as a value rather than a stream, and give it better error messages
+    UnsupportedLiteral(UnsupportedLiteral),
+    Stream(ExpressionStream),
 }
 
 pub(crate) trait ToExpressionValue: Sized {
@@ -14,20 +19,37 @@ pub(crate) trait ToExpressionValue: Sized {
 }
 
 impl ExpressionValue {
-    pub(super) fn for_literal(lit: syn::Lit) -> ParseResult<Self> {
+    pub(crate) fn for_literal(literal: Literal) -> Self {
+        // The unwrap should be safe because all Literal should be parsable
+        // as syn::Lit; falling back to syn::Lit::Verbatim if necessary.
+        Self::for_syn_lit(literal.to_token_stream().source_parse_as().unwrap())
+    }
+
+    pub(crate) fn for_syn_lit(lit: syn::Lit) -> Self {
         // https://docs.rs/syn/latest/syn/enum.Lit.html
-        Ok(match lit {
-            Lit::Int(lit) => Self::Integer(ExpressionInteger::for_litint(lit)?),
-            Lit::Float(lit) => Self::Float(ExpressionFloat::for_litfloat(lit)?),
+        match lit {
+            Lit::Int(lit) => match ExpressionInteger::for_litint(&lit) {
+                Ok(int) => Self::Integer(int),
+                Err(_) => Self::UnsupportedLiteral(UnsupportedLiteral {
+                    span_range: lit.span().span_range(),
+                    lit: Lit::Int(lit),
+                }),
+            },
+            Lit::Float(lit) => match ExpressionFloat::for_litfloat(&lit) {
+                Ok(float) => Self::Float(float),
+                Err(_) => Self::UnsupportedLiteral(UnsupportedLiteral {
+                    span_range: lit.span().span_range(),
+                    lit: Lit::Float(lit),
+                }),
+            },
             Lit::Bool(lit) => Self::Boolean(ExpressionBoolean::for_litbool(lit)),
             Lit::Str(lit) => Self::String(ExpressionString::for_litstr(lit)),
             Lit::Char(lit) => Self::Char(ExpressionChar::for_litchar(lit)),
-            other_literal => {
-                return other_literal
-                    .span()
-                    .parse_err("This literal is not supported in preinterpret expressions");
-            }
-        })
+            other => Self::UnsupportedLiteral(UnsupportedLiteral {
+                span_range: other.span().span_range(),
+                lit: other,
+            }),
+        }
     }
 
     pub(super) fn expect_value_pair(
@@ -207,8 +229,11 @@ impl ExpressionValue {
             (ExpressionValue::Char(left), ExpressionValue::Char(right)) => {
                 EvaluationLiteralPair::CharPair(left, right)
             }
+            (ExpressionValue::Stream(left), ExpressionValue::Stream(right)) => {
+                EvaluationLiteralPair::StreamPair(left, right)
+            }
             (left, right) => {
-                return operation.execution_err(format!("The {} operator cannot infer a common operand type from {} and {}. Consider using `as` to cast to matching types.", operation.symbol(), left.value_type(), right.value_type()));
+                return operation.execution_err(format!("Cannot infer common type from {} {} {}. Consider using `as` to cast the operands to matching types.", left.value_type(), operation.symbol(), right.value_type()));
             }
         })
     }
@@ -220,39 +245,21 @@ impl ExpressionValue {
         }
     }
 
-    pub(crate) fn into_bool(self) -> Option<ExpressionBoolean> {
+    pub(crate) fn into_bool(self) -> Result<ExpressionBoolean, &'static str> {
         match self {
-            ExpressionValue::Boolean(value) => Some(value),
-            _ => None,
+            ExpressionValue::Boolean(value) => Ok(value),
+            other => Err(other.value_type()),
         }
     }
 
-    pub(crate) fn expect_bool(self, error_message: &str) -> ExecutionResult<bool> {
+    pub(crate) fn expect_bool(self, place_descriptor: &str) -> ExecutionResult<ExpressionBoolean> {
         let error_span = self.span_range();
         match self.into_bool() {
-            Some(boolean) => Ok(boolean.value),
-            None => error_span.execution_err(error_message),
-        }
-    }
-
-    /// The span is used if there isn't already a span available
-    pub(crate) fn to_token_tree(&self) -> TokenTree {
-        match self {
-            Self::Integer(int) => int.to_literal().into(),
-            Self::Float(float) => float.to_literal().into(),
-            Self::Boolean(bool) => bool.to_ident().into(),
-            Self::String(string) => string.to_literal().into(),
-            Self::Char(char) => char.to_literal().into(),
-        }
-    }
-
-    pub(super) fn value_type(&self) -> &'static str {
-        match self {
-            Self::Integer(int) => int.value.value_type(),
-            Self::Float(float) => float.value.value_type(),
-            Self::Boolean(_) => "bool",
-            Self::String(_) => "string",
-            Self::Char(_) => "char",
+            Ok(boolean) => Ok(boolean),
+            Err(value_type) => error_span.execution_err(format!(
+                "{} must be a boolean, but it is a {}",
+                place_descriptor, value_type,
+            )),
         }
     }
 
@@ -261,11 +268,14 @@ impl ExpressionValue {
         operation: OutputSpanned<UnaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         match self {
+            ExpressionValue::None(_) => operation.unsupported(self),
             ExpressionValue::Integer(value) => value.handle_unary_operation(operation),
             ExpressionValue::Float(value) => value.handle_unary_operation(operation),
             ExpressionValue::Boolean(value) => value.handle_unary_operation(operation),
             ExpressionValue::String(value) => value.handle_unary_operation(operation),
             ExpressionValue::Char(value) => value.handle_unary_operation(operation),
+            ExpressionValue::Stream(value) => value.handle_unary_operation(operation),
+            ExpressionValue::UnsupportedLiteral(value) => operation.unsupported(value),
         }
     }
 
@@ -275,6 +285,7 @@ impl ExpressionValue {
         operation: OutputSpanned<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         match self {
+            ExpressionValue::None(_) => operation.unsupported(self),
             ExpressionValue::Integer(value) => {
                 value.handle_integer_binary_operation(right, operation)
             }
@@ -288,6 +299,10 @@ impl ExpressionValue {
                 value.handle_integer_binary_operation(right, operation)
             }
             ExpressionValue::Char(value) => value.handle_integer_binary_operation(right, operation),
+            ExpressionValue::UnsupportedLiteral(value) => operation.unsupported(value),
+            ExpressionValue::Stream(value) => {
+                value.handle_integer_binary_operation(right, operation)
+            }
         }
     }
 
@@ -303,11 +318,14 @@ impl ExpressionValue {
 
     fn span_range_mut(&mut self) -> &mut SpanRange {
         match self {
+            Self::None(span_range) => span_range,
             Self::Integer(value) => &mut value.span_range,
             Self::Float(value) => &mut value.span_range,
             Self::Boolean(value) => &mut value.span_range,
             Self::String(value) => &mut value.span_range,
             Self::Char(value) => &mut value.span_range,
+            Self::UnsupportedLiteral(value) => &mut value.span_range,
+            Self::Stream(value) => &mut value.span_range,
         }
     }
 
@@ -315,16 +333,74 @@ impl ExpressionValue {
         *self.span_range_mut() = source_span.span_range();
         self
     }
+
+    pub(crate) fn into_new_output_stream(self) -> OutputStream {
+        match self {
+            Self::Stream(value) => value.value,
+            other => {
+                let mut output = OutputStream::new();
+                other.output_to(&mut output);
+                output
+            }
+        }
+    }
+
+    pub(crate) fn output_to(self, output: &mut OutputStream) {
+        match self {
+            Self::None { .. } => {}
+            Self::Integer(value) => {
+                // Grouped so that -1 is interpreted as a single thing, not a punct then a number
+                output.push_grouped(
+                    |inner| Ok(inner.push_literal(value.to_literal())),
+                    Delimiter::None,
+                    value.span_range.join_into_span_else_start(),
+                ).unwrap()
+            },
+            Self::Float(value) => {
+                // Grouped so that -1.0 is interpreted as a single thing, not a punct then a number
+                output.push_grouped(
+                    |inner| Ok(inner.push_literal(value.to_literal())),
+                    Delimiter::None,
+                    value.span_range.join_into_span_else_start(),
+                ).unwrap()
+            }
+            Self::Boolean(value) => output.push_ident(value.to_ident()),
+            Self::String(value) => output.push_literal(value.to_literal()),
+            Self::Char(value) => output.push_literal(value.to_literal()),
+            Self::UnsupportedLiteral(literal) => {
+                output.extend_raw_tokens(literal.lit.into_token_stream())
+            }
+            Self::Stream(value) => value.value.append_into(output),
+        }
+    }
+}
+
+impl HasValueType for ExpressionValue {
+    fn value_type(&self) -> &'static str {
+        match self {
+            Self::None { .. } => "none",
+            Self::Integer(value) => value.value_type(),
+            Self::Float(value) => value.value_type(),
+            Self::Boolean(value) => value.value_type(),
+            Self::String(value) => value.value_type(),
+            Self::Char(value) => value.value_type(),
+            Self::UnsupportedLiteral(value) => value.value_type(),
+            Self::Stream(value) => value.value_type(),
+        }
+    }
 }
 
 impl HasSpanRange for ExpressionValue {
     fn span_range(&self) -> SpanRange {
         match self {
+            Self::None(span_range) => *span_range,
             Self::Integer(int) => int.span_range,
             Self::Float(float) => float.span_range,
             Self::Boolean(bool) => bool.span_range,
             Self::String(str) => str.span_range,
             Self::Char(char) => char.span_range,
+            Self::UnsupportedLiteral(lit) => lit.span_range,
+            Self::Stream(stream) => stream.span_range,
         }
     }
 }
@@ -333,9 +409,15 @@ pub(super) trait HasValueType {
     fn value_type(&self) -> &'static str;
 }
 
-impl ToTokens for ExpressionValue {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.to_token_tree().to_tokens(tokens);
+#[derive(Clone)]
+pub(crate) struct UnsupportedLiteral {
+    lit: syn::Lit,
+    span_range: SpanRange,
+}
+
+impl HasValueType for UnsupportedLiteral {
+    fn value_type(&self) -> &'static str {
+        "unsupported literal"
     }
 }
 
@@ -345,6 +427,7 @@ pub(super) enum CastTarget {
     Float(FloatKind),
     Boolean,
     Char,
+    Stream,
 }
 
 pub(super) enum EvaluationLiteralPair {
@@ -353,6 +436,7 @@ pub(super) enum EvaluationLiteralPair {
     BooleanPair(ExpressionBoolean, ExpressionBoolean),
     StringPair(ExpressionString, ExpressionString),
     CharPair(ExpressionChar, ExpressionChar),
+    StreamPair(ExpressionStream, ExpressionStream),
 }
 
 impl EvaluationLiteralPair {
@@ -366,6 +450,7 @@ impl EvaluationLiteralPair {
             Self::BooleanPair(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
             Self::StringPair(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
             Self::CharPair(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
+            Self::StreamPair(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
         }
     }
 

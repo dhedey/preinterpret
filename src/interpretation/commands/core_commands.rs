@@ -111,6 +111,42 @@ impl NoOutputCommandDefinition for SetCommand {
     }
 }
 
+/// This is temporary until we have a proper implementation of #(...)
+#[derive(Clone)]
+pub(crate) struct TypedSetCommand {
+    variable: GroupedVariable,
+    #[allow(unused)]
+    equals: Token![=],
+    content: SourceExpression,
+}
+
+impl CommandType for TypedSetCommand {
+    type OutputKind = OutputKindNone;
+}
+
+impl NoOutputCommandDefinition for TypedSetCommand {
+    const COMMAND_NAME: &'static str = "typed_set";
+
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
+        arguments.fully_parse_or_error(
+            |input| {
+                Ok(TypedSetCommand {
+                    variable: input.parse()?,
+                    equals: input.parse()?,
+                    content: input.parse()?,
+                })
+            },
+            "Expected [!typed_set! #var1 = <expression>]",
+        )
+    }
+
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        let content = self.content.evaluate(interpreter)?;
+        self.variable.set_value(interpreter, content)?;
+        Ok(())
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct RawCommand {
     token_stream: TokenStream,
@@ -184,6 +220,42 @@ impl NoOutputCommandDefinition for IgnoreCommand {
 
     fn execute(self, _interpreter: &mut Interpreter) -> ExecutionResult<()> {
         Ok(())
+    }
+}
+
+/// This is temporary until we have a proper implementation of #(...)
+#[derive(Clone)]
+pub(crate) struct ReinterpretCommand {
+    content: SourceStream,
+}
+
+impl CommandType for ReinterpretCommand {
+    type OutputKind = OutputKindStreaming;
+}
+
+impl StreamingCommandDefinition for ReinterpretCommand {
+    const COMMAND_NAME: &'static str = "reinterpret";
+
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
+        Ok(Self {
+            content: arguments.parse_all_as_source()?,
+        })
+    }
+
+    fn execute(
+        self,
+        interpreter: &mut Interpreter,
+        output: &mut OutputStream,
+    ) -> ExecutionResult<()> {
+        let command_span = self.content.span();
+        let interpreted = self.content.interpret_to_new_stream(interpreter)?;
+        let source = unsafe {
+            // RUST-ANALYZER-SAFETY - Can't do much better than this
+            interpreted.into_token_stream()
+        };
+        let reparsed_source_stream =
+            source.source_parse_with(|input| SourceStream::parse(input, command_span))?;
+        reparsed_source_stream.interpret_into(interpreter, output)
     }
 }
 
@@ -350,12 +422,12 @@ impl ValueCommandDefinition for DebugCommand {
         })
     }
 
-    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree> {
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue> {
         let span = self.inner.span();
         let debug_string = self
             .inner
             .interpret_to_new_stream(interpreter)?
             .concat_recursive(&ConcatBehaviour::debug());
-        Ok(Literal::string(&debug_string).with_span(span).into())
+        Ok(debug_string.to_value(span.span_range()))
     }
 }

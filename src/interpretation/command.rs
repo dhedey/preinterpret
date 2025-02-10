@@ -7,21 +7,10 @@ pub(crate) enum CommandOutputKind {
     None,
     Value,
     Ident,
+    Literal,
     FlattenedStream,
     GroupedStream,
     Stream,
-}
-
-impl CommandOutputKind {
-    pub(crate) fn expression_support(&self) -> Result<(), &'static str> {
-        match self {
-            CommandOutputKind::Value | CommandOutputKind::GroupedStream => Ok(()),
-            CommandOutputKind::None => Err("A command which returns nothing cannot be used directly in expressions.\nConsider wrapping it inside a { } block which returns an expression"),
-            CommandOutputKind::Ident => Err("A command which returns idents cannot be used directly in expressions.\nConsider wrapping it inside a { } block which returns an expression"),
-            CommandOutputKind::FlattenedStream => Err("A command which returns a flattened stream cannot be used directly in expressions.\nConsider wrapping it inside a { } block which returns an expression"),
-            CommandOutputKind::Stream => Err("A control flow command which returns a code stream cannot be used directly in expressions.\nConsider wrapping it inside a { } block which returns an expression"),
-        }
-    }
 }
 
 pub(crate) trait CommandType {
@@ -46,22 +35,8 @@ trait CommandInvocation {
         context: ExecutionContext,
         output: &mut OutputStream,
     ) -> ExecutionResult<()>;
-}
 
-trait ClonableCommandInvocation: CommandInvocation {
-    fn clone_box(&self) -> Box<dyn ClonableCommandInvocation>;
-}
-
-impl<C: Clone + CommandInvocation + 'static> ClonableCommandInvocation for C {
-    fn clone_box(&self) -> Box<dyn ClonableCommandInvocation> {
-        Box::new(self.clone())
-    }
-}
-
-impl Clone for Box<dyn ClonableCommandInvocation> {
-    fn clone(&self) -> Self {
-        self.clone_box()
-    }
+    fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue>;
 }
 
 // Using the trick for permitting multiple non-overlapping blanket
@@ -72,6 +47,8 @@ trait CommandInvocationAs<T: OutputKind> {
         context: ExecutionContext,
         output: &mut OutputStream,
     ) -> ExecutionResult<()>;
+
+    fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue>;
 }
 
 impl<C: CommandType + CommandInvocationAs<C::OutputKind>> CommandInvocation for C {
@@ -81,6 +58,10 @@ impl<C: CommandType + CommandInvocationAs<C::OutputKind>> CommandInvocation for 
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         <Self as CommandInvocationAs<C::OutputKind>>::execute_into(self, context, output)
+    }
+
+    fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
+        <Self as CommandInvocationAs<C::OutputKind>>::execute_to_value(self, context)
     }
 }
 
@@ -114,6 +95,11 @@ impl<C: NoOutputCommandDefinition> CommandInvocationAs<OutputKindNone> for C {
         self.execute(context.interpreter)?;
         Ok(())
     }
+
+    fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
+        self.execute(context.interpreter)?;
+        Ok(ExpressionValue::None(context.delim_span.span_range()))
+    }
 }
 
 //================
@@ -139,7 +125,7 @@ pub(crate) trait ValueCommandDefinition:
 {
     const COMMAND_NAME: &'static str;
     fn parse(arguments: CommandArguments) -> ParseResult<Self>;
-    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree>;
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue>;
 }
 
 impl<C: ValueCommandDefinition> CommandInvocationAs<OutputKindValue> for C {
@@ -148,8 +134,12 @@ impl<C: ValueCommandDefinition> CommandInvocationAs<OutputKindValue> for C {
         context: ExecutionContext,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        output.push_raw_token_tree(self.execute(context.interpreter)?);
+        self.execute(context.interpreter)?.output_to(output);
         Ok(())
+    }
+
+    fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
+        self.execute(context.interpreter)
     }
 }
 
@@ -187,6 +177,55 @@ impl<C: IdentCommandDefinition> CommandInvocationAs<OutputKindIdent> for C {
     ) -> ExecutionResult<()> {
         output.push_ident(self.execute(context.interpreter)?);
         Ok(())
+    }
+
+    fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
+        let span_range = context.delim_span.span_range();
+        let mut output = OutputStream::new();
+        output.push_ident(self.execute(context.interpreter)?);
+        Ok(output.to_value(span_range))
+    }
+}
+
+//==================
+// OutputKindLiteral
+//==================
+
+pub(crate) struct OutputKindLiteral;
+impl OutputKind for OutputKindLiteral {
+    type Output = Literal;
+
+    fn resolve_standard() -> CommandOutputKind {
+        CommandOutputKind::Literal
+    }
+
+    fn resolve_flattened(error_span_range: SpanRange) -> ParseResult<CommandOutputKind> {
+        error_span_range
+            .parse_err("This command outputs a single literal, so cannot be flattened with ..")
+    }
+}
+
+pub(crate) trait LiteralCommandDefinition:
+    Sized + CommandType<OutputKind = OutputKindLiteral>
+{
+    const COMMAND_NAME: &'static str;
+    fn parse(arguments: CommandArguments) -> ParseResult<Self>;
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<Literal>;
+}
+
+impl<C: LiteralCommandDefinition> CommandInvocationAs<OutputKindLiteral> for C {
+    fn execute_into(
+        self,
+        context: ExecutionContext,
+        output: &mut OutputStream,
+    ) -> ExecutionResult<()> {
+        output.push_literal(self.execute(context.interpreter)?);
+        Ok(())
+    }
+
+    fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
+        let literal = self.execute(context.interpreter)?;
+        Ok(ExpressionValue::for_literal(literal))
     }
 }
 
@@ -235,6 +274,17 @@ impl<C: GroupedStreamCommandDefinition> CommandInvocationAs<OutputKindGroupedStr
             _ => unreachable!(),
         }
     }
+
+    fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
+        let span_range = context.delim_span.span_range();
+        let mut output = OutputStream::new();
+        <Self as CommandInvocationAs<OutputKindGroupedStream>>::execute_into(
+            self,
+            context,
+            &mut output,
+        )?;
+        Ok(output.to_value(span_range))
+    }
 }
 
 //======================
@@ -274,6 +324,17 @@ impl<C: StreamingCommandDefinition> CommandInvocationAs<OutputKindStreaming> for
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         self.execute(context.interpreter, output)
+    }
+
+    fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
+        let span_range = context.delim_span.span_range();
+        let mut output = OutputStream::new();
+        <Self as CommandInvocationAs<OutputKindStreaming>>::execute_into(
+            self,
+            context,
+            &mut output,
+        )?;
+        Ok(output.to_value(span_range))
     }
 }
 
@@ -357,6 +418,14 @@ macro_rules! define_command_enums {
                     )*
                 }
             }
+
+            fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
+                match self {
+                    $(
+                        Self::$command(command) => <$command as CommandInvocation>::execute_to_value(command, context),
+                    )*
+                }
+            }
         }
     };
 }
@@ -364,9 +433,11 @@ macro_rules! define_command_enums {
 define_command_enums! {
     // Core Commands
     SetCommand,
+    TypedSetCommand,
     RawCommand,
     OutputCommand,
     IgnoreCommand,
+    ReinterpretCommand,
     SettingsCommand,
     ErrorCommand,
     DebugCommand,
@@ -476,6 +547,18 @@ impl Command {
     /// Should only be used to swap valid kinds
     pub(crate) unsafe fn set_output_kind(&mut self, output_kind: CommandOutputKind) {
         self.output_kind = output_kind;
+    }
+
+    pub(crate) fn interpret_to_value(
+        self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<ExpressionValue> {
+        let context = ExecutionContext {
+            interpreter,
+            output_kind: self.output_kind,
+            delim_span: self.source_group_span,
+        };
+        self.typed.execute_to_value(context)
     }
 }
 

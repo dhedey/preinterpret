@@ -15,6 +15,7 @@
   * `[!set! _ = ...]` interprets its arguments but then ignores any outputs.
   * `[!debug! ...]` to output its interpreted contents including none-delimited groups. Useful for debugging the content of variables.
   * `[!output! ...]` can be used to just output its interpreted contents. Normally it's a no-op, but it can be useful inside a transformer.
+  * `[!reinterpret! ...]` is like an `eval` command in scripting languages. It takes a stream, and parses/interprets it.
   * `[!settings! { ... }]` can be used to adjust the iteration limit.
 * Expression commands:
   * `[!evaluate! <expression>]`
@@ -43,16 +44,21 @@
 Expressions can be evaluated with `[!evaluate! ...]` and are also used in the `if`, `for` and `while` loops. They operate on literals as values.
 
 Currently supported are:
-* Integer, Float, Bool, String and Char literals
-* The operators: `+ - * / % & | ^`
+* Values Model:
+  * Integer literals
+  * Float literals
+  * Boolean literals
+  * String literals
+  * Char literals
+  * Token streams which look like `[...]` and can be appended with the `+` operator.
+* The numeric operators: `+ - * / % & | ^`
 * The lazy boolean operators: `|| &&`
 * The comparison operators: `== != < > <= >=`
 * The shift operators: `>> <<`
-* Casting with `as` including to untyped integers/floats with `as int` and `as float`
+* Casting with `as` including to untyped integers/floats with `as int` and `as float` and to a stream with `as stream`.
 * () and none-delimited groups for precedence
-* Embedded `#x` grouped variables, whose contents are parsed as an expression
-  and evaluated.
-* `{ ... }` for creating sub-expressions, which are parsed from the resultant token stream.
+* Variables `#x` and flattened variables `#..x`
+* Commands `[!xxx! ...]`
 
 Expressions behave intuitively as you'd expect from writing regular rust code, except they happen at compile time.
 
@@ -86,6 +92,11 @@ Inside a transform stream, the following grammar is supported:
 
 ### To come
 
+* Add basic `ExpressionBlock` support:
+  * `#(xxx)` which can e.g. output a variable as expression
+  * Support multiple statements (where only the last is output, and the rest have to be None):
+    * `#([!set! #x = 2]; 1 + 1)` => evaluate
+  * Change `boolean_operators_short_circuit` test back to use `#()`
 * Variable typing (stream / value / object to start with), including an `object` type, like a JS object:
   * Separate `&mut Output` and `StreamOutput`, `ValueOutput = ExpressionOutput`, `ObjectOutput`
   * Objects:
@@ -97,10 +108,9 @@ Inside a transform stream, the following grammar is supported:
     (The value can be looked up via a weak reference in the interpreter (as a central location), and the stream owning a reference to it to stop it being dropped). The final conversion to tokens can look up the object in the interpreter, and use its `stream()` function to either output the default
     stream for the object, or error and suggest fields the user should use instead.
   * Values:
-    * Can output to an internal stream as `[!group! <content>]` so it can be read by other transformers.
     * When we parse a `#x` (`@(#x = INFER_TOKEN_TREE)`) binding, it tries to parse a stream as a value before interpreting a `[!group! ...]` as a stream.
     * Output to final output as unwrapped content
-  * New expression & definition syntax (replaces `[!set!]`??)
+  * New ExpressionBlock syntax (replaces `[!set!]`??)
     * `#(#x = [... stream ...])`
     * `#(#x += [... stream ...])` // += acts like "extend" with a stream LHS
     * `#(#x += [!group! ...])`
@@ -144,7 +154,7 @@ Inside a transform stream, the following grammar is supported:
   * Adding `!define_transformer!`
 * `[!is_set! #x]`
 * Have UntypedInteger have an inner representation of either i128 or literal (and same with float)
-* Add `[!reinterpret! ...]` command for an `eval` style command, and maybe a `@[REINTERPRET ..]` transformer.
+* Maybe add a `@[REINTERPRET ..]` transformer.
 * Add casts of other integers to char, via `char::from_u32(u32::try_from(x))`
 * TODO check
 * Check all `#[allow(unused)]` and remove any which aren't needed
@@ -194,16 +204,15 @@ Inside a transform stream, the following grammar is supported:
 //       * ...and only if it's redirected inside a @[x = $(...)]
 //   * [!command! ...]
 //     * Can output but does not parse.
-// * Every transformer or transport stream has a typed output, which is either:
-//   * EITHER just its token tree / token stream (for simple matchers)
-//   * OR an OBJECT with at least two properties:
+// * Every transformer has a typed output, which is either:
+//   * EITHER its token stream (for simple matchers)
+//   * OR an #output OBJECT with at least two properties:
 //     * input => all matched characters (a slice reference which can be dropped...)
 //       (it might only be possible to performantly capture this after the syn fork)
 //     * stream => A lazy function, used to handle the output when #x is in the final output...
 //               likely `input` or an error depending on the case.
 //   * ... other properties, depending on the TRANSFORMER:
-//     * ITEM might have quite a few
-//     * STREAM has an `output` property (discussed below)
+//     * e.g. a Rust ITEM might have quite a few (mostly lazy)
 // * Drop @XXX syntax. Require: @[ ... ] instead, one of:
 //   * @[XXX] or equivalently @[let _ = XXX ...]
 //   * @[let x = XXX] or @[let x = XXX { ... }]
@@ -314,9 +323,15 @@ Inside a transform stream, the following grammar is supported:
 ```
 
 * Pushed to 0.4:
-  * Get rid of needless cloning of commands/variables etc
-  * Iterator variable type
-  * Trial making `for` lazily read its input somehow? Some callback on `OutputStream` I guess...
+  * Performance:
+    * Get rid of needless cloning of commands/variables etc
+    * Support `+=` inside expressions to allow appending of token streams
+      * Variable reference would need to be a sub-type of stream
+      * Then `#x += [] + []` could resolve to two variable reference appends and then a return null
+  * Iterators:
+    * Iterator value type (with an inbuilt iteration count / limit check)
+    * Allow `for` lazily reading from iterators
+    * Support unbounded iterators `[!range! xx..]`
   * Fork of syn to:
     * Fix issues in Rust Analyzer
     * Add support for a more general `TokenBuffer`, and ensure that Cursor can work in a backwards-compatible way with that buffer. Support:

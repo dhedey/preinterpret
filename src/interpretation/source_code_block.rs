@@ -1,6 +1,6 @@
 use crate::internal_prelude::*;
 
-/// A group { .. } representing code which can be interpreted
+/// A group `{ ... }` representing code which can be interpreted
 #[derive(Clone)]
 pub(crate) struct SourceCodeBlock {
     delim_span: DelimSpan,

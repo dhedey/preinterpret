@@ -127,6 +127,7 @@ impl UnaryOperation {
             "f64" => CastTarget::Float(FloatKind::F64),
             "bool" => CastTarget::Boolean,
             "char" => CastTarget::Char,
+            "stream" => CastTarget::Stream,
             _ => {
                 return target_ident
                     .parse_err("This type is not supported in preinterpret cast expressions")
@@ -178,7 +179,7 @@ pub(super) trait HandleUnaryOperation: Sized {
 }
 
 #[derive(Clone)]
-pub(super) enum BinaryOperation {
+pub(crate) enum BinaryOperation {
     Paired(PairedBinaryOperation),
     Integer(IntegerBinaryOperation),
 }
@@ -187,7 +188,7 @@ impl SynParse for BinaryOperation {
     fn parse(input: SynParseStream) -> SynResult<Self> {
         // In line with Syn's BinOp, we use peek instead of lookahead
         // ...I assume for slightly increased performance
-        // ...Or becuase 30 alternative options in the error message is too many
+        // ...Or because 30 alternative options in the error message is too many
         if input.peek(Token![+]) {
             Ok(Self::Paired(PairedBinaryOperation::Addition(
                 input.parse()?,
@@ -265,34 +266,26 @@ impl BinaryOperation {
     ) -> ExecutionResult<Option<ExpressionValue>> {
         match self {
             BinaryOperation::Paired(PairedBinaryOperation::LogicalAnd { .. }) => {
-                match left.clone().into_bool() {
-                    Some(bool) => {
-                        if !bool.value {
-                            Ok(Some(ExpressionValue::Boolean(bool)))
-                        } else {
-                            Ok(None)
-                        }
-                    }
-                    None => self.execution_err("The left operand was not a boolean"),
+                let bool = left.clone().expect_bool("The left operand to &&")?;
+                if !bool.value {
+                    Ok(Some(ExpressionValue::Boolean(bool)))
+                } else {
+                    Ok(None)
                 }
             }
             BinaryOperation::Paired(PairedBinaryOperation::LogicalOr { .. }) => {
-                match left.clone().into_bool() {
-                    Some(bool) => {
-                        if bool.value {
-                            Ok(Some(ExpressionValue::Boolean(bool)))
-                        } else {
-                            Ok(None)
-                        }
-                    }
-                    None => self.execution_err("The left operand was not a boolean"),
+                let bool = left.clone().expect_bool("The left operand to ||")?;
+                if bool.value {
+                    Ok(Some(ExpressionValue::Boolean(bool)))
+                } else {
+                    Ok(None)
                 }
             }
             _ => Ok(None),
         }
     }
 
-    pub(super) fn evaluate(
+    pub(crate) fn evaluate(
         &self,
         left: ExpressionValue,
         right: ExpressionValue,
@@ -337,7 +330,7 @@ impl Operation for BinaryOperation {
 }
 
 #[derive(Copy, Clone)]
-pub(super) enum PairedBinaryOperation {
+pub(crate) enum PairedBinaryOperation {
     Addition(Token![+]),
     Subtraction(Token![-]),
     Multiplication(Token![*]),
@@ -403,7 +396,7 @@ impl HasSpanRange for PairedBinaryOperation {
 }
 
 #[derive(Copy, Clone)]
-pub(super) enum IntegerBinaryOperation {
+pub(crate) enum IntegerBinaryOperation {
     ShiftLeft(Token![<<]),
     ShiftRight(Token![>>]),
 }

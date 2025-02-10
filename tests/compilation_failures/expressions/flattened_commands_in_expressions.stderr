@@ -1,7 +1,5 @@
-error: A command which returns a flattened stream cannot be used directly in expressions.
-       Consider wrapping it inside a { } block which returns an expression
-       Occurred whilst parsing [!evaluate! ...] - Expected [!evaluate! ...] containing a valid preinterpret expression
- --> tests/compilation_failures/expressions/flattened_commands_in_expressions.rs:5:25
+error: Cannot infer common type from untyped integer + stream. Consider using `as` to cast the operands to matching types.
+ --> tests/compilation_failures/expressions/flattened_commands_in_expressions.rs:5:23
   |
 5 |         [!evaluate! 5 + [!..range! 1..2]]
-  |                         ^
+  |                       ^

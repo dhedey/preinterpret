@@ -18,10 +18,10 @@ impl ValueCommandDefinition for IsEmptyCommand {
         })
     }
 
-    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree> {
-        let output_span = self.arguments.span_range().join_into_span_else_start();
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue> {
+        let output_span_range = self.arguments.span_range();
         let interpreted = self.arguments.interpret_to_new_stream(interpreter)?;
-        Ok(Ident::new_bool(interpreted.is_empty(), output_span).into())
+        Ok(interpreted.is_empty().to_value(output_span_range))
     }
 }
 
@@ -43,11 +43,10 @@ impl ValueCommandDefinition for LengthCommand {
         })
     }
 
-    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree> {
-        let output_span = self.arguments.span_range().join_into_span_else_start();
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue> {
+        let output_span_range = self.arguments.span_range();
         let interpreted = self.arguments.interpret_to_new_stream(interpreter)?;
-        let length_literal = Literal::usize_unsuffixed(interpreted.len()).with_span(output_span);
-        Ok(length_literal.into())
+        Ok(interpreted.len().to_value(output_span_range))
     }
 }
 

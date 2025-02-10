@@ -19,7 +19,7 @@ fn test_control_flow_compilation_failures() {
 fn test_if() {
     assert_preinterpret_eq!([!if! (1 == 2) { "YES" } !else! { "NO" }], "NO");
     assert_preinterpret_eq!({
-        [!set! #x = 1 == 2]
+        [!set! #x = [!evaluate! 1 == 2]]
         [!if! #x { "YES" } !else! { "NO" }]
     }, "NO");
     assert_preinterpret_eq!({

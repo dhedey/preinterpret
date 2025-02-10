@@ -10,7 +10,7 @@ pub(crate) struct ExpressionInteger {
 }
 
 impl ExpressionInteger {
-    pub(super) fn for_litint(lit: syn::LitInt) -> ParseResult<Self> {
+    pub(super) fn for_litint(lit: &syn::LitInt) -> ParseResult<Self> {
         Ok(Self {
             span_range: lit.span().span_range(),
             value: ExpressionIntegerValue::for_litint(lit)?,
@@ -194,9 +194,9 @@ pub(super) enum ExpressionIntegerValue {
 }
 
 impl ExpressionIntegerValue {
-    pub(super) fn for_litint(lit: syn::LitInt) -> ParseResult<Self> {
+    pub(super) fn for_litint(lit: &syn::LitInt) -> ParseResult<Self> {
         Ok(match lit.suffix() {
-            "" => Self::Untyped(UntypedInteger::new_from_lit_int(lit)),
+            "" => Self::Untyped(UntypedInteger::new_from_lit_int(lit.clone())),
             "u8" => Self::U8(lit.base10_parse()?),
             "u16" => Self::U16(lit.base10_parse()?),
             "u32" => Self::U32(lit.base10_parse()?),
@@ -263,11 +263,11 @@ impl HasValueType for UntypedInteger {
 }
 
 #[derive(Clone)]
-pub(super) struct UntypedInteger(
+pub(crate) struct UntypedInteger(
     /// The span of the literal is ignored, and will be set when converted to an output.
     syn::LitInt,
 );
-pub(super) type FallbackInteger = i128;
+pub(crate) type FallbackInteger = i128;
 
 impl UntypedInteger {
     pub(super) fn new_from_lit_int(lit_int: LitInt) -> Self {
@@ -309,6 +309,9 @@ impl UntypedInteger {
                 CastTarget::Float(FloatKind::F64) => operation.output(input as f64),
                 CastTarget::Boolean | CastTarget::Char => {
                     return operation.execution_err("This cast is not supported")
+                }
+                CastTarget::Stream => {
+                    operation.output(operation.output(self).into_new_output_stream())
                 }
             },
         })
@@ -440,7 +443,7 @@ impl UntypedInteger {
         })
     }
 
-    pub(super) fn from_fallback(value: FallbackInteger) -> Self {
+    pub(crate) fn from_fallback(value: FallbackInteger) -> Self {
         Self::new_from_literal(Literal::i128_unsuffixed(value))
     }
 
@@ -618,6 +621,7 @@ macro_rules! impl_unsigned_unary_operations {
                         CastTarget::Float(FloatKind::F32) => operation.output(self as f32),
                         CastTarget::Float(FloatKind::F64) => operation.output(self as f64),
                         CastTarget::Boolean | CastTarget::Char => return operation.execution_err("This cast is not supported"),
+                        CastTarget::Stream => operation.output(operation.output(self).into_new_output_stream()),
                     }
                 })
             }
@@ -652,6 +656,7 @@ macro_rules! impl_signed_unary_operations {
                         CastTarget::Float(FloatKind::F32) => operation.output(self as f32),
                         CastTarget::Float(FloatKind::F64) => operation.output(self as f64),
                         CastTarget::Boolean | CastTarget::Char => return operation.execution_err("This cast is not supported"),
+                        CastTarget::Stream => operation.output(operation.output(self).into_new_output_stream()),
                     }
                 })
             }
@@ -692,6 +697,9 @@ impl HandleUnaryOperation for u8 {
                 CastTarget::Char => operation.output(self as char),
                 CastTarget::Boolean => {
                     return operation.execution_err("This cast is not supported")
+                }
+                CastTarget::Stream => {
+                    operation.output(operation.output(self).into_new_output_stream())
                 }
             },
         })

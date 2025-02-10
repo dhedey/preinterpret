@@ -1,6 +1,5 @@
-error: number too large to fit in target type
-       Occurred whilst parsing [!evaluate! ...] - Expected [!evaluate! ...] containing a valid preinterpret expression
- --> tests/compilation_failures/expressions/fix_me_negative_max_int_fails.rs:8:22
+error: The - operator is not supported for unsupported literal values
+ --> tests/compilation_failures/expressions/fix_me_negative_max_int_fails.rs:8:21
   |
 8 |         [!evaluate! -128i8]
-  |                      ^^^^^
+  |                     ^

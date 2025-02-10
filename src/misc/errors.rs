@@ -84,12 +84,14 @@ impl<T> ExecutionResultExt<T> for ExecutionResult<T> {
     }
 }
 
+#[derive(Debug)]
 pub(crate) enum ExecutionInterrupt {
     Error(syn::Error),
     DestructureError(ParseError),
     ControlFlow(ControlFlowInterrupt, Span),
 }
 
+#[derive(Debug)]
 pub(crate) enum ControlFlowInterrupt {
     Break,
     Continue,

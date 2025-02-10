@@ -1,22 +1,15 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct ExpressionString {
-    pub(super) value: String,
+pub(crate) struct ExpressionStream {
+    pub(super) value: OutputStream,
     /// The span range that generated this value.
     /// For a complex expression, the start span is the most left part
     /// of the expression, and the end span is the most right part.
     pub(super) span_range: SpanRange,
 }
 
-impl ExpressionString {
-    pub(super) fn for_litstr(lit: syn::LitStr) -> Self {
-        Self {
-            value: lit.value(),
-            span_range: lit.span().span_range(),
-        }
-    }
-
+impl ExpressionStream {
     pub(super) fn handle_unary_operation(
         self,
         operation: OutputSpanned<UnaryOperation>,
@@ -26,10 +19,14 @@ impl ExpressionString {
                 return operation.unsupported(self)
             }
             UnaryOperation::Cast { target, .. } => match target {
-                CastTarget::Stream => {
-                    operation.output(operation.output(self.value).into_new_output_stream())
+                CastTarget::Stream => operation.output(self.value),
+                _ => {
+                    let coerced = self.value.coerce_into_value(self.span_range);
+                    if let ExpressionValue::Stream(_) = &coerced {
+                        return operation.unsupported(coerced);
+                    }
+                    coerced.handle_unary_operation(operation)?
                 }
-                _ => return operation.unsupported(self),
             },
         })
     }
@@ -50,8 +47,12 @@ impl ExpressionString {
         let lhs = self.value;
         let rhs = rhs.value;
         Ok(match operation.operation {
-            PairedBinaryOperation::Addition { .. }
-            | PairedBinaryOperation::Subtraction { .. }
+            PairedBinaryOperation::Addition { .. } => operation.output({
+                let mut stream = lhs;
+                rhs.append_cloned_into(&mut stream);
+                stream
+            }),
+            PairedBinaryOperation::Subtraction { .. }
             | PairedBinaryOperation::Multiplication { .. }
             | PairedBinaryOperation::Division { .. }
             | PairedBinaryOperation::LogicalAnd { .. }
@@ -59,46 +60,33 @@ impl ExpressionString {
             | PairedBinaryOperation::Remainder { .. }
             | PairedBinaryOperation::BitXor { .. }
             | PairedBinaryOperation::BitAnd { .. }
-            | PairedBinaryOperation::BitOr { .. } => return operation.unsupported(lhs),
-            PairedBinaryOperation::Equal { .. } => operation.output(lhs == rhs),
-            PairedBinaryOperation::LessThan { .. } => operation.output(lhs < rhs),
-            PairedBinaryOperation::LessThanOrEqual { .. } => operation.output(lhs <= rhs),
-            PairedBinaryOperation::NotEqual { .. } => operation.output(lhs != rhs),
-            PairedBinaryOperation::GreaterThanOrEqual { .. } => operation.output(lhs >= rhs),
-            PairedBinaryOperation::GreaterThan { .. } => operation.output(lhs > rhs),
+            | PairedBinaryOperation::BitOr { .. }
+            | PairedBinaryOperation::Equal { .. }
+            | PairedBinaryOperation::LessThan { .. }
+            | PairedBinaryOperation::LessThanOrEqual { .. }
+            | PairedBinaryOperation::NotEqual { .. }
+            | PairedBinaryOperation::GreaterThanOrEqual { .. }
+            | PairedBinaryOperation::GreaterThan { .. } => return operation.unsupported(lhs),
         })
-    }
-
-    pub(super) fn to_literal(&self) -> Literal {
-        Literal::string(&self.value).with_span(self.span_range.join_into_span_else_start())
     }
 }
 
-impl HasValueType for ExpressionString {
+impl HasValueType for ExpressionStream {
     fn value_type(&self) -> &'static str {
         self.value.value_type()
     }
 }
 
-impl HasValueType for String {
+impl HasValueType for OutputStream {
     fn value_type(&self) -> &'static str {
-        "string"
+        "stream"
     }
 }
 
-impl ToExpressionValue for String {
+impl ToExpressionValue for OutputStream {
     fn to_value(self, span_range: SpanRange) -> ExpressionValue {
-        ExpressionValue::String(ExpressionString {
+        ExpressionValue::Stream(ExpressionStream {
             value: self,
-            span_range,
-        })
-    }
-}
-
-impl ToExpressionValue for &str {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
-        ExpressionValue::String(ExpressionString {
-            value: self.to_string(),
             span_range,
         })
     }

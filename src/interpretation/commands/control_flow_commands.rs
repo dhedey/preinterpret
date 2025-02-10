@@ -54,18 +54,18 @@ impl StreamingCommandDefinition for IfCommand {
         let evaluated_condition = self
             .condition
             .evaluate(interpreter)?
-            .expect_bool("An if condition must evaluate to a boolean")?;
+            .expect_bool("An if condition")?;
 
-        if evaluated_condition {
+        if evaluated_condition.value {
             return self.true_code.interpret_into(interpreter, output);
         }
 
         for (condition, code) in self.else_ifs {
             let evaluated_condition = condition
                 .evaluate(interpreter)?
-                .expect_bool("An else if condition must evaluate to a boolean")?;
+                .expect_bool("An else if condition")?;
 
-            if evaluated_condition {
+            if evaluated_condition.value {
                 return code.interpret_into(interpreter, output);
             }
         }
@@ -116,9 +116,9 @@ impl StreamingCommandDefinition for WhileCommand {
                 .condition
                 .clone()
                 .evaluate(interpreter)?
-                .expect_bool("An if condition must evaluate to a boolean")?;
+                .expect_bool("A while condition")?;
 
-            if !evaluated_condition {
+            if !evaluated_condition.value {
                 break;
             }
 

@@ -11,7 +11,7 @@ pub(crate) struct ExpressionFloat {
 }
 
 impl ExpressionFloat {
-    pub(super) fn for_litfloat(lit: syn::LitFloat) -> ParseResult<Self> {
+    pub(super) fn for_litfloat(lit: &syn::LitFloat) -> ParseResult<Self> {
         let span_range = lit.span().span_range();
         Ok(Self {
             value: ExpressionFloatValue::for_litfloat(lit)?,
@@ -88,9 +88,9 @@ pub(super) enum ExpressionFloatValue {
 }
 
 impl ExpressionFloatValue {
-    pub(super) fn for_litfloat(lit: syn::LitFloat) -> ParseResult<Self> {
+    pub(super) fn for_litfloat(lit: &syn::LitFloat) -> ParseResult<Self> {
         Ok(match lit.suffix() {
-            "" => Self::Untyped(UntypedFloat::new_from_lit_float(lit)),
+            "" => Self::Untyped(UntypedFloat::new_from_lit_float(lit.clone())),
             "f32" => Self::F32(lit.base10_parse()?),
             "f64" => Self::F64(lit.base10_parse()?),
             suffix => {
@@ -174,6 +174,9 @@ impl UntypedFloat {
                 CastTarget::Float(FloatKind::F64) => operation.output(input),
                 CastTarget::Boolean | CastTarget::Char => {
                     return operation.execution_err("This cast is not supported")
+                }
+                CastTarget::Stream => {
+                    operation.output(operation.output(self).into_new_output_stream())
                 }
             },
         })
@@ -318,6 +321,7 @@ macro_rules! impl_float_operations {
                         CastTarget::Float(FloatKind::F32) => operation.output(self as f32),
                         CastTarget::Float(FloatKind::F64) => operation.output(self as f64),
                         CastTarget::Boolean | CastTarget::Char => return operation.execution_err("This cast is not supported"),
+                        CastTarget::Stream => operation.output(operation.output(self).into_new_output_stream()),
                     }
                 })
             }

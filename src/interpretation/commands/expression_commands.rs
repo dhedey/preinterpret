@@ -25,19 +25,19 @@ impl ValueCommandDefinition for EvaluateCommand {
         )
     }
 
-    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<TokenTree> {
-        Ok(self
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue> {
+        let value = self
             .expression
             .evaluate(interpreter)?
-            .with_span(self.command_span)
-            .to_token_tree())
+            .with_span(self.command_span);
+        Ok(value)
     }
 }
 
 #[derive(Clone)]
 pub(crate) struct AssignCommand {
     variable: GroupedVariable,
-    operator: Option<Punct>,
+    operation: Option<BinaryOperation>,
     #[allow(unused)]
     equals: Token![=],
     expression: SourceExpression,
@@ -56,16 +56,19 @@ impl NoOutputCommandDefinition for AssignCommand {
             |input| {
                 Ok(Self {
                     variable: input.parse()?,
-                    operator: {
+                    operation: {
                         if input.peek(Token![=]) {
                             None
                         } else {
-                            let operator: Punct = input.parse()?;
-                            match operator.as_char() {
+                            let operator_char = match input.cursor().punct() {
+                                Some((operator, _)) => operator.as_char(),
+                                None => 'X',
+                            };
+                            match operator_char {
                                 '+' | '-' | '*' | '/' | '%' | '&' | '|' | '^' => {}
-                                _ => return operator.parse_err("Expected one of + - * / % & | or ^"),
+                                _ => return input.parse_err("Expected one of + - * / % & | or ^"),
                             }
-                            Some(operator)
+                            Some(input.parse()?)
                         }
                     },
                     equals: input.parse()?,
@@ -80,36 +83,21 @@ impl NoOutputCommandDefinition for AssignCommand {
     fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         let Self {
             variable,
-            operator,
+            operation,
             equals: _,
             expression,
             command_span,
         } = self;
 
-        let expression = if let Some(operator) = operator {
-            let mut calculation = TokenStream::new();
-            unsafe {
-                // RUST-ANALYZER SAFETY: Hopefully it won't contain a none-delimited group
-                variable
-                    .interpret_to_new_stream(interpreter)?
-                    .parse_as::<OutputExpression>()?
-                    .evaluate()?
-                    .to_tokens(&mut calculation);
-            };
-            operator.to_tokens(&mut calculation);
-            expression
-                .evaluate(interpreter)?
-                .to_tokens(&mut calculation);
-            calculation.source_parse_as()?
+        let value = if let Some(operation) = operation {
+            let left = variable.read_as_expression_value(interpreter)?;
+            let right = expression.evaluate(interpreter)?;
+            operation.evaluate(left, right)?
         } else {
-            expression
+            expression.evaluate(interpreter)?
         };
 
-        let output = expression
-            .evaluate(interpreter)?
-            .with_span(command_span)
-            .to_token_tree();
-        variable.set(interpreter, output.into())?;
+        variable.set_value(interpreter, value.with_span(command_span))?;
 
         Ok(())
     }
@@ -166,13 +154,9 @@ impl GroupedStreamCommandDefinition for RangeCommand {
             }
         }
 
-        output.extend_raw_tokens(range_iterator.map(|value| {
-            value
-                .to_token_tree()
-                // We wrap it in a singleton group to ensure that negative
-                // numbers are treated as single items in other stream commands
-                .into_singleton_group(Delimiter::None)
-        }));
+        for value in range_iterator {
+            value.output_to(output)
+        }
 
         Ok(())
     }

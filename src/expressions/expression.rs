@@ -11,7 +11,7 @@ pub(crate) struct SourceExpression {
 impl Parse<Source> for SourceExpression {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         Ok(Self {
-            inner: ExpressionParser::parse(input)?,
+            inner: input.parse()?,
         })
     }
 }
@@ -28,7 +28,8 @@ impl SourceExpression {
 pub(super) enum SourceExpressionLeaf {
     Command(Command),
     GroupedVariable(GroupedVariable),
-    CodeBlock(SourceCodeBlock),
+    FlattenedVariable(FlattenedVariable),
+    ExplicitStream(SourceGroup),
     Value(ExpressionValue),
 }
 
@@ -38,38 +39,43 @@ impl Expressionable for Source {
 
     fn parse_unary_atom(input: &mut ParseStreamStack<Self>) -> ParseResult<UnaryAtom<Self>> {
         Ok(match input.peek_grammar() {
-            SourcePeekMatch::Command(Some(output_kind)) => {
-                match output_kind.expression_support() {
-                    Ok(()) => UnaryAtom::Leaf(Self::Leaf::Command(input.parse()?)),
-                    Err(error_message) => return input.parse_err(error_message),
-                }
+            SourcePeekMatch::Command(_) => UnaryAtom::Leaf(Self::Leaf::Command(input.parse()?)),
+            SourcePeekMatch::GroupedVariable => {
+                UnaryAtom::Leaf(Self::Leaf::GroupedVariable(input.parse()?))
             }
-            SourcePeekMatch::Command(None) => return input.parse_err("Invalid command"),
-            SourcePeekMatch::GroupedVariable => UnaryAtom::Leaf(Self::Leaf::GroupedVariable(input.parse()?)),
-            SourcePeekMatch::FlattenedVariable => return input.parse_err("Flattened variables cannot be used directly in expressions. Consider removing the .. or wrapping it inside a command such as [!group! ..] which returns an expression"),
-            SourcePeekMatch::AppendVariableBinding => return input.parse_err("Append variable operations are not supported in an expression"),
-            SourcePeekMatch::ExplicitTransformStream | SourcePeekMatch::Transformer(_) => return input.parse_err("Destructurings are not supported in an expression"),
+            SourcePeekMatch::FlattenedVariable => {
+                UnaryAtom::Leaf(Self::Leaf::FlattenedVariable(input.parse()?))
+            }
+            SourcePeekMatch::AppendVariableBinding => {
+                return input
+                    .parse_err("Append variable operations are not supported in an expression")
+            }
+            SourcePeekMatch::ExplicitTransformStream | SourcePeekMatch::Transformer(_) => {
+                return input.parse_err("Destructurings are not supported in an expression")
+            }
             SourcePeekMatch::Group(Delimiter::None | Delimiter::Parenthesis) => {
                 let (_, delim_span) = input.parse_and_enter_group()?;
                 UnaryAtom::Group(delim_span)
-            },
-            SourcePeekMatch::Group(Delimiter::Brace) => {
-                let leaf = SourceExpressionLeaf::CodeBlock(input.parse()?);
-                UnaryAtom::Leaf(leaf)
             }
-            SourcePeekMatch::Group(Delimiter::Bracket) => return input.parse_err("Square brackets [ .. ] are not supported in an expression"),
-            SourcePeekMatch::Punct(_) => {
-                UnaryAtom::PrefixUnaryOperation(input.parse()?)
-            },
+            SourcePeekMatch::Group(Delimiter::Brace) => {
+                return input.parse_err("Braces { ... } are not supported in an expression")
+            }
+            SourcePeekMatch::Group(Delimiter::Bracket) => {
+                UnaryAtom::Leaf(Self::Leaf::ExplicitStream(input.parse()?))
+            }
+            SourcePeekMatch::Punct(_) => UnaryAtom::PrefixUnaryOperation(input.parse()?),
             SourcePeekMatch::Ident(_) => {
-                let value = ExpressionValue::Boolean(ExpressionBoolean::for_litbool(input.parse()?));
+                let value =
+                    ExpressionValue::Boolean(ExpressionBoolean::for_litbool(input.parse()?));
                 UnaryAtom::Leaf(Self::Leaf::Value(value))
-            },
+            }
             SourcePeekMatch::Literal(_) => {
-                let value = ExpressionValue::for_literal(input.parse()?)?;
+                let value = ExpressionValue::for_syn_lit(input.parse()?);
                 UnaryAtom::Leaf(Self::Leaf::Value(value))
-            },
-            SourcePeekMatch::End => return input.parse_err("The expression ended in an incomplete state"),
+            }
+            SourcePeekMatch::End => {
+                return input.parse_err("The expression ended in an incomplete state")
+            }
         })
     }
 
@@ -92,23 +98,23 @@ impl Expressionable for Source {
         leaf: &Self::Leaf,
         interpreter: &mut Self::EvaluationContext,
     ) -> ExecutionResult<ExpressionValue> {
-        let interpreted = match leaf {
+        Ok(match leaf {
             SourceExpressionLeaf::Command(command) => {
-                command.clone().interpret_to_new_stream(interpreter)?
+                command.clone().interpret_to_value(interpreter)?
             }
             SourceExpressionLeaf::GroupedVariable(grouped_variable) => {
-                grouped_variable.interpret_to_new_stream(interpreter)?
+                grouped_variable.read_as_expression_value(interpreter)?
             }
-            SourceExpressionLeaf::CodeBlock(code_block) => {
-                code_block.clone().interpret_to_new_stream(interpreter)?
+            SourceExpressionLeaf::FlattenedVariable(flattened_variable) => {
+                flattened_variable.read_as_expression_value(interpreter)?
             }
-            SourceExpressionLeaf::Value(value) => return Ok(value.clone()),
-        };
-        let parsed_expression = unsafe {
-            // RUST-ANALYZER SAFETY: This isn't very safe, as it could have a none-delimited group in it
-            interpreted.parse_as::<OutputExpression>()?
-        };
-        parsed_expression.evaluate()
+            SourceExpressionLeaf::ExplicitStream(source_group) => source_group
+                .clone()
+                .into_content()
+                .interpret_to_new_stream(interpreter)?
+                .to_value(source_group.span_range()),
+            SourceExpressionLeaf::Value(value) => value.clone(),
+        })
     }
 }
 
@@ -116,6 +122,7 @@ impl Expressionable for Source {
 // ===========
 
 #[derive(Clone)]
+#[allow(unused)]
 pub(crate) struct OutputExpression {
     inner: Expression<Output>,
 }
@@ -128,6 +135,7 @@ impl Parse<Output> for OutputExpression {
     }
 }
 
+#[allow(unused)]
 impl OutputExpression {
     pub(crate) fn evaluate(&self) -> ExecutionResult<ExpressionValue> {
         Output::evaluate(&self.inner, &mut ())
@@ -163,7 +171,7 @@ impl Expressionable for Output {
             )),
             OutputPeekMatch::Punct(_) => UnaryAtom::PrefixUnaryOperation(input.parse()?),
             OutputPeekMatch::Literal(_) => {
-                UnaryAtom::Leaf(ExpressionValue::for_literal(input.parse()?)?)
+                UnaryAtom::Leaf(ExpressionValue::for_syn_lit(input.parse()?))
             }
             OutputPeekMatch::End => {
                 return input.parse_err("The expression ended in an incomplete state")
@@ -201,6 +209,12 @@ impl<K: Expressionable> Clone for Expression<K> {
             root: self.root,
             nodes: self.nodes.clone(),
         }
+    }
+}
+
+impl<K: Expressionable> Parse<K> for Expression<K> {
+    fn parse(input: ParseStream<K>) -> ParseResult<Self> {
+        ExpressionParser::parse(input)
     }
 }
 

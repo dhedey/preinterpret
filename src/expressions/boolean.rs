@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Clone)]
 pub(crate) struct ExpressionBoolean {
-    pub(super) value: bool,
+    pub(crate) value: bool,
     /// The span range that generated this value.
     /// For a complex expression, the start span is the most left part
     /// of the expression, and the end span is the most right part.
@@ -45,6 +45,9 @@ impl ExpressionBoolean {
                     return operation.execution_err("This cast is not supported")
                 }
                 CastTarget::Boolean => operation.output(self.value),
+                CastTarget::Stream => {
+                    operation.output(operation.output(input).into_new_output_stream())
+                }
             },
         })
     }
