@@ -19,9 +19,9 @@ rust-version = "1.61"
 proc-macro = true
 
 [dependencies]
-proc-macro2 = { version = "1.0" }
-syn = { version = "2.0", default-features = false, features = ["parsing", "derive", "printing", "clone-impls", "full"] }
-quote = { version = "1.0", default-features = false }
+proc-macro2 = { version = "1.0.93" }
+syn = { version = "2.0.98", default-features = false, features = ["parsing", "derive", "printing", "clone-impls", "full"] }
+quote = { version = "1.0.38", default-features = false }
 
 [dev-dependencies]
-trybuild = { version = "1.0.66", features = ["diff"] }
+trybuild = { version = "1.0.103", features = ["diff"] }

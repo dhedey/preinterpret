@@ -55,7 +55,7 @@ fn test_extend() {
                 [!if! (#i <= 3) {
                     [!set! #output += ", "]
                 }]
-                [!assign! #i += 1]
+                #(i += 1)
             }]
             [!string! #output]
         },

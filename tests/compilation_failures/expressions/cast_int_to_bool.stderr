@@ -1,5 +1,5 @@
 error: This cast is not supported
- --> tests/compilation_failures/expressions/cast_int_to_bool.rs:5:23
+ --> tests/compilation_failures/expressions/cast_int_to_bool.rs:5:13
   |
-5 |         [!evaluate! 1 as bool]
-  |                       ^^
+5 |         #(1 as bool)
+  |             ^^

@@ -5,7 +5,8 @@ use crate::internal_prelude::*;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CommandOutputKind {
     None,
-    Value,
+    FlattenedValue,
+    GroupedValue,
     Ident,
     Literal,
     FlattenedStream,
@@ -111,7 +112,7 @@ impl OutputKind for OutputKindValue {
     type Output = TokenTree;
 
     fn resolve_standard() -> CommandOutputKind {
-        CommandOutputKind::Value
+        CommandOutputKind::FlattenedValue
     }
 
     fn resolve_flattened(error_span_range: SpanRange) -> ParseResult<CommandOutputKind> {
@@ -134,7 +135,12 @@ impl<C: ValueCommandDefinition> CommandInvocationAs<OutputKindValue> for C {
         context: ExecutionContext,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        self.execute(context.interpreter)?.output_to(output);
+        let grouping = match context.output_kind {
+            CommandOutputKind::FlattenedValue => Grouping::Flattened,
+            _ => Grouping::Grouped,
+        };
+        self.execute(context.interpreter)?
+            .output_to(grouping, output);
         Ok(())
     }
 
@@ -466,8 +472,6 @@ define_command_enums! {
     InsertSpacesCommand,
 
     // Expression Commands
-    EvaluateCommand,
-    AssignCommand,
     RangeCommand,
 
     // Control flow commands
@@ -548,18 +552,6 @@ impl Command {
     pub(crate) unsafe fn set_output_kind(&mut self, output_kind: CommandOutputKind) {
         self.output_kind = output_kind;
     }
-
-    pub(crate) fn interpret_to_value(
-        self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<ExpressionValue> {
-        let context = ExecutionContext {
-            interpreter,
-            output_kind: self.output_kind,
-            delim_span: self.source_group_span,
-        };
-        self.typed.execute_to_value(context)
-    }
 }
 
 impl HasSpan for Command {
@@ -580,5 +572,21 @@ impl Interpret for Command {
             delim_span: self.source_group_span,
         };
         self.typed.execute_into(context, output)
+    }
+}
+
+impl InterpretToValue for Command {
+    type OutputValue = ExpressionValue;
+
+    fn interpret_to_value(
+        self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<Self::OutputValue> {
+        let context = ExecutionContext {
+            interpreter,
+            output_kind: self.output_kind,
+            delim_span: self.source_group_span,
+        };
+        self.typed.execute_to_value(context)
     }
 }

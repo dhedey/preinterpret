@@ -26,9 +26,16 @@ impl ExpressionString {
                 return operation.unsupported(self)
             }
             UnaryOperation::Cast { target, .. } => match target {
-                CastTarget::Stream => {
-                    operation.output(operation.output(self.value).into_new_output_stream())
-                }
+                CastTarget::Stream => operation.output(
+                    operation
+                        .output(self.value)
+                        .into_new_output_stream(Grouping::Flattened),
+                ),
+                CastTarget::Group => operation.output(
+                    operation
+                        .output(self.value)
+                        .into_new_output_stream(Grouping::Grouped),
+                ),
                 _ => return operation.unsupported(self),
             },
         })

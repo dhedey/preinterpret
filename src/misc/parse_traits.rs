@@ -16,8 +16,8 @@ impl ParseBuffer<'_, Source> {
 #[allow(unused)]
 pub(crate) enum SourcePeekMatch {
     Command(Option<CommandOutputKind>),
-    GroupedVariable,
-    FlattenedVariable,
+    ExpressionBlock(Grouping),
+    Variable(Grouping),
     AppendVariableBinding,
     ExplicitTransformStream,
     Transformer(Option<TransformerKind>),
@@ -71,12 +71,15 @@ fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> SourcePeekMatch {
     }
     if let Some((_, next)) = cursor.punct_matching('#') {
         if next.ident().is_some() {
-            return SourcePeekMatch::GroupedVariable;
+            return SourcePeekMatch::Variable(Grouping::Grouped);
         }
         if let Some((_, next)) = next.punct_matching('.') {
             if let Some((_, next)) = next.punct_matching('.') {
                 if next.ident().is_some() {
-                    return SourcePeekMatch::FlattenedVariable;
+                    return SourcePeekMatch::Variable(Grouping::Flattened);
+                }
+                if next.group_matching(Delimiter::Parenthesis).is_some() {
+                    return SourcePeekMatch::ExpressionBlock(Grouping::Flattened);
                 }
                 if let Some((_, next)) = next.punct_matching('>') {
                     if next.punct_matching('>').is_some() {
@@ -89,6 +92,9 @@ fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> SourcePeekMatch {
             if next.punct_matching('>').is_some() {
                 return SourcePeekMatch::AppendVariableBinding;
             }
+        }
+        if next.group_matching(Delimiter::Parenthesis).is_some() {
+            return SourcePeekMatch::ExpressionBlock(Grouping::Grouped);
         }
     }
 

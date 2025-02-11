@@ -18,8 +18,7 @@
   * `[!reinterpret! ...]` is like an `eval` command in scripting languages. It takes a stream, and parses/interprets it.
   * `[!settings! { ... }]` can be used to adjust the iteration limit.
 * Expression commands:
-  * `[!evaluate! <expression>]`
-  * `[!assign! #x += <expression>]` for `+` and other supported operators
+  * The expression block `#(let x = 123; y /= x; y + 1)` which is discussed in more detail below.
   * `[!range! 0..5]` outputs `0 1 2 3 4`
 * Control flow commands:
   * `[!if! <expression> { ... }]` and `[!if! <expression> { ... } !elif! <expression> { ... } !else! { ... }]`
@@ -41,26 +40,31 @@
 
 ### Expressions
 
-Expressions can be evaluated with `[!evaluate! ...]` and are also used in the `if`, `for` and `while` loops. They operate on literals as values.
+Expressions can be evaluated with `#(...)` and are also used in the `!if!` and `!while!` loop conditions.
 
-Currently supported are:
-* Values Model:
-  * Integer literals
-  * Float literals
-  * Boolean literals
-  * String literals
-  * Char literals
-  * Token streams which look like `[...]` and can be appended with the `+` operator.
+Expressions behave intuitively as you'd expect from writing regular rust code, except they are executed at compile time.
+
+The `#(...)` expression block behaves much like a `{ .. }` block in rust. It supports multiple statements ending with `;` and optionally a final statement.
+Statements are either expressions `EXPR` or `let x = EXPR`, `x = EXPR`, `x += EXPR` for some operator such as `+`.
+
+The following are recognized values:
+* Integer literals, with or without a suffix
+* Float literals, with or without a suffix
+* Boolean literals
+* String literals
+* Char literals
+* Other literals
+* Token streams which are defined as `[...]` and can be appended with the `+` operator.
+
+The following operators are supported:
 * The numeric operators: `+ - * / % & | ^`
 * The lazy boolean operators: `|| &&`
 * The comparison operators: `== != < > <= >=`
 * The shift operators: `>> <<`
-* Casting with `as` including to untyped integers/floats with `as int` and `as float` and to a stream with `as stream`.
+* Casting with `as` including to untyped integers/floats with `as int` and `as float`, to a grouped stream with `as group` and to a flattened stream with `as stream`.
 * () and none-delimited groups for precedence
-* Variables `#x` and flattened variables `#..x`
-* Commands `[!xxx! ...]`
 
-Expressions behave intuitively as you'd expect from writing regular rust code, except they happen at compile time.
+An expression also supports embedding commands `[!xxx! ...]`, other expression blocks, variables and flattened variables. The value type outputted by a command depends on the command.
 
 ### Transforming
 
@@ -73,10 +77,10 @@ Inside a transform stream, the following grammar is supported:
 * `@(...)`, `@(#x = ...)`, `@(#x += ...)` and `@(_ = ...)` - Explicit transform (sub)streams which either output, set, append or discard its output.
 * Explicit punctuation, idents, literals and groups. These aren't output by default, except directly inside a `@[EXACT ...]` transformer.
 * Variable bindings:
-  * `#x` - Reads a token tree, writes its content (opposite of `#x`). Equivalent to `@(#x = @TOKEN_OR_GROUP_CONTENT)`
+  * `#x` - Reads a token tree, writes its content (opposite of `#x`). Equivalent to `@(x = @TOKEN_OR_GROUP_CONTENT)`
   * `#..x` - Reads a stream, writes a stream (opposite of `#..x`).
-    * If it's at the end of the transformer stream, it's equivalent to `@(#x = @REST)`.
-    * If it's followed by a token `T` in the transformer stream, it's equivalent to `@(#x = @[UNTIL T])`
+    * If it's at the end of the transformer stream, it's equivalent to `@(x = @REST)`.
+    * If it's followed by a token `T` in the transformer stream, it's equivalent to `@(x = @[UNTIL T])`
   * `#>>x` - Reads a token tree, appends a token tree (can be read back with `!for! #y in #x { ... }`)
   * `#>>..x` - Reads a token tree, appends a stream (i.e. flatten it if it's a group)
   * `#..>>x` - Reads a stream, appends a group (can be read back with `!for! #y in #x { ... }`)
@@ -88,48 +92,39 @@ Inside a transform stream, the following grammar is supported:
   * `@[GROUP ...]` - Consumes a none-delimited group. Its arguments are used to transform the group's contents.
   * `@[EXACT ...]` - Interprets its arguments (i.e. variables are substituted, not bound; and command output is gathered) into an "exact match stream". And then expects to consume exactly the same stream from the input. It outputs the parsed stream.
 * Commands: Their output is appended to the transform's output. Useful patterns include:
-  * `@(#inner = ...) [!output! #inner]` - wraps the output in a transparent group
+  * `@(inner = ...) [!output! #inner]` - wraps the output in a transparent group
 
 ### To come
 
-* Add basic `ExpressionBlock` support:
-  * `#(xxx)` which can e.g. output a variable as expression
-  * Support multiple statements (where only the last is output, and the rest have to be None):
-    * `#([!set! #x = 2]; 1 + 1)` => evaluate
-  * Change `boolean_operators_short_circuit` test back to use `#()`
+* Complete `ExpressionBlock` support:
+  * Change variables to store expression values
+  * Support `#(x[..])` syntax for indexing streams at read time
+    * Via a post-fix `[...]` operator
+    * `#(x[0])`
+    * `#(x[0..3])` returns a TokenStream
+    * `#(x[0..=3])` returns a TokenStream
+  * Add `+` support for concatenating strings
+  * Create an `enum MarkedVariable { Grouped(GroupedMarkedVariable), Flattened(FlattenedMarkedVariable) }`
+  * Revisit the `SourceStreamInput` abstraction
 * Variable typing (stream / value / object to start with), including an `object` type, like a JS object:
   * Separate `&mut Output` and `StreamOutput`, `ValueOutput = ExpressionOutput`, `ObjectOutput`
   * Objects:
+    * Can be created with `#({ a: x, ... })`
     * Can be destructured with `@{ #hello, world: _, ... }` or read with `#(x.hello)` or `#(x["hello"])`
-    * Debug impl is `[!object! { hello: [!group! BLAH], ["world"]: Hi, }]`
-    * Fields can be lazy (for e.g. exposing functions on syn objects).
+    * Debug impl is `#({ hello: [!group! BLAH], ["world"]: Hi, })`
     * They have an input object
+    * Fields can be read/written to with `#(x.hello)` or `#(x.hello.world)`
     * (Until we get custom type support into a syn fork), can be embedded into an output stream as a single token - e.g. `PREINTERPRET_OBJECT_2313`
     (The value can be looked up via a weak reference in the interpreter (as a central location), and the stream owning a reference to it to stop it being dropped). The final conversion to tokens can look up the object in the interpreter, and use its `stream()` function to either output the default
     stream for the object, or error and suggest fields the user should use instead.
+    * Have `!zip!` support `{ objects }` 
   * Values:
     * When we parse a `#x` (`@(#x = INFER_TOKEN_TREE)`) binding, it tries to parse a stream as a value before interpreting a `[!group! ...]` as a stream.
     * Output to final output as unwrapped content
-  * New ExpressionBlock syntax (replaces `[!set!]`??)
-    * `#(#x = [... stream ...])`
-    * `#(#x += [... stream ...])` // += acts like "extend" with a stream LHS
-    * `#(#x += [!group! ...])`
-    * `#(#x = 1 + 2 + 3)` // (Expression) Value
-    * `#(#x += 1)`        // += acts as plus with a value LHS
-    * `#(#x = {})`        // Object
-      * Fields can be read/written to with `#(x.hello)` or `#(x.hello.world)`
-    * `#(#x = xxx {})`    // For some other custom type `xxx`.
-    * `#([ ... stream ... ])`
-    * `#({ a: x, ... })`
-    * `#([ ... stream ... ].length)` ??
-    * `#(let #x = 123; let #y = 123; let #z = {})`...
-    * Support `#(x)` syntax for indexing streams:
-      * `#(x[0])`
-      * `#(x[0..3])`
-      * `#..(x[0..3])` and other things like `[ ..=3]`
-    ... basically - this becomes one big expression.
-      * Equivalent to a `syn::Block` which is a `Vec<Stmt>`
-      * ...where a `Stmt` is either a local `let` binding or an `expression`
+  * Method calls
+    * Also add support for methods (for e.g. exposing functions on syn objects).
+    * `.len()` on stream
+    * Consider `.map(|<destructurer>| {})`
 * Destructurers => Transformers cont
   * `@TOKEN_TREE`
   * `@TOKEN_OR_GROUP_CONTENT` - Literal, Ident, Punct or None-group content.

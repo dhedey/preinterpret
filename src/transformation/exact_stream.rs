@@ -53,6 +53,7 @@ pub(crate) enum ExactItem {
     ExactCommandOutput(Command),
     ExactGroupedVariableOutput(GroupedVariable),
     ExactFlattenedVariableOutput(FlattenedVariable),
+    ExactExpressionBlock(ExpressionBlock),
     ExactPunct(Punct),
     ExactIdent(Ident),
     ExactLiteral(Literal),
@@ -63,10 +64,13 @@ impl Parse<Source> for ExactItem {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => Self::ExactCommandOutput(input.parse()?),
-            SourcePeekMatch::GroupedVariable => Self::ExactGroupedVariableOutput(input.parse()?),
-            SourcePeekMatch::FlattenedVariable => {
+            SourcePeekMatch::Variable(Grouping::Grouped) => {
+                Self::ExactGroupedVariableOutput(input.parse()?)
+            }
+            SourcePeekMatch::Variable(Grouping::Flattened) => {
                 Self::ExactFlattenedVariableOutput(input.parse()?)
             }
+            SourcePeekMatch::ExpressionBlock(_) => Self::ExactExpressionBlock(input.parse()?),
             SourcePeekMatch::AppendVariableBinding => {
                 return input
                     .parse_err("Append variable bindings are not supported in an EXACT stream")
@@ -123,6 +127,12 @@ impl HandleTransformation for ExactItem {
             }
             ExactItem::ExactFlattenedVariableOutput(flattened_variable) => {
                 flattened_variable
+                    .interpret_to_new_stream(interpreter)?
+                    .into_exact_stream()?
+                    .handle_transform(input, interpreter, output)?;
+            }
+            ExactItem::ExactExpressionBlock(expression_block) => {
+                expression_block
                     .interpret_to_new_stream(interpreter)?
                     .into_exact_stream()?
                     .handle_transform(input, interpreter, output)?;

@@ -38,12 +38,8 @@ impl GroupedVariable {
         interpreter: &mut Interpreter,
         value: ExpressionValue,
     ) -> ExecutionResult<()> {
-        let value = {
-            let mut output = OutputStream::new();
-            value.output_to(&mut output);
-            output
-        };
-        interpreter.set_variable(self, value)
+        // It will be grouped on the way out; not it.
+        interpreter.set_variable(self, value.into_new_output_stream(Grouping::Flattened))
     }
 
     pub(crate) fn get_existing_for_mutation(
@@ -55,18 +51,6 @@ impl GroupedVariable {
                 self.error(format!("The variable {} wasn't already set", self))
             })?
             .cheap_clone())
-    }
-
-    pub(crate) fn read_as_expression_value(
-        &self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<ExpressionValue> {
-        let value = self
-            .read_existing(interpreter)?
-            .get(self)?
-            .clone()
-            .coerce_into_value(self.span_range());
-        Ok(value)
     }
 
     pub(crate) fn substitute_ungrouped_contents_into(
@@ -118,6 +102,22 @@ impl Interpret for &GroupedVariable {
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         self.substitute_grouped_into(interpreter, output)
+    }
+}
+
+impl InterpretToValue for &GroupedVariable {
+    type OutputValue = ExpressionValue;
+
+    fn interpret_to_value(
+        self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<Self::OutputValue> {
+        let value = self
+            .read_existing(interpreter)?
+            .get(self)?
+            .clone()
+            .coerce_into_value(self.span_range());
+        Ok(value)
     }
 }
 
@@ -174,21 +174,12 @@ impl FlattenedVariable {
         Ok(())
     }
 
-    pub(crate) fn read_as_expression_value(
-        &self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<ExpressionValue> {
-        let mut output_stream = OutputStream::new();
-        self.substitute_into(interpreter, &mut output_stream)?;
-        Ok(output_stream.to_value(self.span_range()))
-    }
-
     fn read_existing<'i>(&self, interpreter: &'i Interpreter) -> ExecutionResult<&'i VariableData> {
         interpreter.get_existing_variable_data(
             self,
             || self.error(format!(
                 "The variable {} wasn't set.\nIf this wasn't intended to be a variable, work around this with [!raw! {}]",
-                self,
+                self.variable_name,
                 self,
             )),
         )
@@ -215,6 +206,19 @@ impl Interpret for &FlattenedVariable {
     }
 }
 
+impl InterpretToValue for &FlattenedVariable {
+    type OutputValue = ExpressionValue;
+
+    fn interpret_to_value(
+        self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<Self::OutputValue> {
+        let mut output_stream = OutputStream::new();
+        self.substitute_into(interpreter, &mut output_stream)?;
+        Ok(output_stream.to_value(self.span_range()))
+    }
+}
+
 impl HasSpanRange for FlattenedVariable {
     fn span_range(&self) -> SpanRange {
         SpanRange::new_between(self.marker.span, self.variable_name.span())
@@ -230,5 +234,71 @@ impl HasSpanRange for &FlattenedVariable {
 impl core::fmt::Display for FlattenedVariable {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "#..{}", self.variable_name)
+    }
+}
+
+// An identifier for a variable path in an expression
+#[derive(Clone)]
+pub(crate) struct VariablePath {
+    root: Ident,
+    fields: Vec<(Token![.], Ident)>,
+}
+
+impl Parse<Source> for VariablePath {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+        Ok(Self {
+            root: input.parse()?,
+            fields: {
+                let mut fields = vec![];
+                while input.peek(Token![.]) {
+                    fields.push((input.parse()?, input.parse()?));
+                }
+                fields
+            },
+        })
+    }
+}
+
+impl VariablePath {
+    pub(crate) fn set_value(
+        &self,
+        interpreter: &mut Interpreter,
+        value: ExpressionValue,
+    ) -> ExecutionResult<()> {
+        // It will be grouped on the way out, not in
+        interpreter.set_variable(self, value.into_new_output_stream(Grouping::Flattened))
+    }
+}
+
+impl IsVariable for VariablePath {
+    fn get_name(&self) -> String {
+        self.root.to_string()
+    }
+}
+
+impl HasSpanRange for VariablePath {
+    fn span_range(&self) -> SpanRange {
+        match self.fields.last() {
+            Some((_, ident)) => SpanRange::new_between(self.root.span(), ident.span()),
+            None => self.root.span_range(),
+        }
+    }
+}
+
+impl InterpretToValue for &VariablePath {
+    type OutputValue = ExpressionValue;
+
+    fn interpret_to_value(
+        self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<Self::OutputValue> {
+        let value = interpreter
+            .get_existing_variable_data(self, || {
+                self.error(format!("The variable {} wasn't set.", &self.root,))
+            })?
+            .get(self)?
+            .clone()
+            .coerce_into_value(self.span_range());
+        Ok(value)
     }
 }

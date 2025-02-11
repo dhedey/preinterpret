@@ -16,11 +16,13 @@ impl Parse<Source> for SourceExpression {
     }
 }
 
-impl SourceExpression {
-    pub(crate) fn evaluate(
-        &self,
+impl InterpretToValue for &SourceExpression {
+    type OutputValue = ExpressionValue;
+
+    fn interpret_to_value(
+        self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<ExpressionValue> {
+    ) -> ExecutionResult<Self::OutputValue> {
         Source::evaluate(&self.inner, interpreter)
     }
 }
@@ -29,6 +31,8 @@ pub(super) enum SourceExpressionLeaf {
     Command(Command),
     GroupedVariable(GroupedVariable),
     FlattenedVariable(FlattenedVariable),
+    VariablePath(VariablePath),
+    ExpressionBlock(ExpressionBlock),
     ExplicitStream(SourceGroup),
     Value(ExpressionValue),
 }
@@ -40,11 +44,14 @@ impl Expressionable for Source {
     fn parse_unary_atom(input: &mut ParseStreamStack<Self>) -> ParseResult<UnaryAtom<Self>> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => UnaryAtom::Leaf(Self::Leaf::Command(input.parse()?)),
-            SourcePeekMatch::GroupedVariable => {
+            SourcePeekMatch::Variable(Grouping::Grouped) => {
                 UnaryAtom::Leaf(Self::Leaf::GroupedVariable(input.parse()?))
             }
-            SourcePeekMatch::FlattenedVariable => {
+            SourcePeekMatch::Variable(Grouping::Flattened) => {
                 UnaryAtom::Leaf(Self::Leaf::FlattenedVariable(input.parse()?))
+            }
+            SourcePeekMatch::ExpressionBlock(_) => {
+                UnaryAtom::Leaf(Self::Leaf::ExpressionBlock(input.parse()?))
             }
             SourcePeekMatch::AppendVariableBinding => {
                 return input
@@ -64,11 +71,12 @@ impl Expressionable for Source {
                 UnaryAtom::Leaf(Self::Leaf::ExplicitStream(input.parse()?))
             }
             SourcePeekMatch::Punct(_) => UnaryAtom::PrefixUnaryOperation(input.parse()?),
-            SourcePeekMatch::Ident(_) => {
-                let value =
-                    ExpressionValue::Boolean(ExpressionBoolean::for_litbool(input.parse()?));
-                UnaryAtom::Leaf(Self::Leaf::Value(value))
-            }
+            SourcePeekMatch::Ident(_) => match input.try_parse_or_revert() {
+                Ok(bool) => UnaryAtom::Leaf(Self::Leaf::Value(ExpressionValue::Boolean(
+                    ExpressionBoolean::for_litbool(bool),
+                ))),
+                Err(_) => UnaryAtom::Leaf(Self::Leaf::VariablePath(input.parse()?)),
+            },
             SourcePeekMatch::Literal(_) => {
                 let value = ExpressionValue::for_syn_lit(input.parse()?);
                 UnaryAtom::Leaf(Self::Leaf::Value(value))
@@ -103,10 +111,16 @@ impl Expressionable for Source {
                 command.clone().interpret_to_value(interpreter)?
             }
             SourceExpressionLeaf::GroupedVariable(grouped_variable) => {
-                grouped_variable.read_as_expression_value(interpreter)?
+                grouped_variable.interpret_to_value(interpreter)?
             }
             SourceExpressionLeaf::FlattenedVariable(flattened_variable) => {
-                flattened_variable.read_as_expression_value(interpreter)?
+                flattened_variable.interpret_to_value(interpreter)?
+            }
+            SourceExpressionLeaf::VariablePath(variable_path) => {
+                variable_path.interpret_to_value(interpreter)?
+            }
+            SourceExpressionLeaf::ExpressionBlock(block) => {
+                block.interpret_to_value(interpreter)?
             }
             SourceExpressionLeaf::ExplicitStream(source_group) => source_group
                 .clone()

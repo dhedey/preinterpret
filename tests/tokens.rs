@@ -191,12 +191,12 @@ fn complex_cases_for_intersperse_and_input_types() {
     );
     // The separator is interpreted each time it is included
     assert_preinterpret_eq!({
-        [!set! #i = 0]
+        #(let i = 0)
         [!string! [!intersperse! {
             items: [A B C D E F G],
             separator: [
                 (#i)
-                [!assign! #i += 1]
+                #(i += 1)
             ],
             add_trailing: true,
         }]]

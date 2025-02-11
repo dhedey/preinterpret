@@ -141,7 +141,7 @@ impl NoOutputCommandDefinition for TypedSetCommand {
     }
 
     fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        let content = self.content.evaluate(interpreter)?;
+        let content = self.content.interpret_to_value(interpreter)?;
         self.variable.set_value(interpreter, content)?;
         Ok(())
     }

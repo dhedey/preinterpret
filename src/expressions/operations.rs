@@ -128,6 +128,7 @@ impl UnaryOperation {
             "bool" => CastTarget::Boolean,
             "char" => CastTarget::Char,
             "stream" => CastTarget::Stream,
+            "group" => CastTarget::Group,
             _ => {
                 return target_ident
                     .parse_err("This type is not supported in preinterpret cast expressions")

@@ -17,7 +17,7 @@ pub(crate) trait Interpret: Sized {
     }
 }
 
-pub(crate) trait InterpretValue: Sized {
+pub(crate) trait InterpretToValue: Sized {
     type OutputValue;
 
     fn interpret_to_value(
@@ -26,7 +26,7 @@ pub(crate) trait InterpretValue: Sized {
     ) -> ExecutionResult<Self::OutputValue>;
 }
 
-impl<T: ToTokens> InterpretValue for T {
+impl<T: ToTokens> InterpretToValue for T {
     type OutputValue = Self;
 
     fn interpret_to_value(

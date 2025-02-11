@@ -1,0 +1,5 @@
+error: A statement ending with ; must not return a value. If you wish to explicitly discard the expression's result, use `let _ = ...;`
+ --> tests/compilation_failures/expressions/expression_block_semicolon_expressions_cannot_return_value.rs:6:13
+  |
+6 |             1 + 2 + 3 + 4;
+  |             ^^^^^^^^^^^^^

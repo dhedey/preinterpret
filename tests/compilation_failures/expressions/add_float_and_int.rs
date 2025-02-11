@@ -2,6 +2,6 @@ use preinterpret::*;
 
 fn main() {
     let _ = preinterpret!{
-        [!evaluate! 1.2 + 1]
+        #(1.2 + 1)
     };
 }

@@ -20,6 +20,11 @@ impl ExpressionStream {
             }
             UnaryOperation::Cast { target, .. } => match target {
                 CastTarget::Stream => operation.output(self.value),
+                CastTarget::Group => operation.output(
+                    operation
+                        .output(self.value)
+                        .into_new_output_stream(Grouping::Grouped),
+                ),
                 _ => {
                     let coerced = self.value.coerce_into_value(self.span_range);
                     if let ExpressionValue::Stream(_) = &coerced {

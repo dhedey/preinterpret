@@ -69,11 +69,11 @@ impl ParseUntil {
         }
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_)
-            | SourcePeekMatch::GroupedVariable
-            | SourcePeekMatch::FlattenedVariable
+            | SourcePeekMatch::Variable(_)
             | SourcePeekMatch::Transformer(_)
             | SourcePeekMatch::ExplicitTransformStream
-            | SourcePeekMatch::AppendVariableBinding => {
+            | SourcePeekMatch::AppendVariableBinding
+            | SourcePeekMatch::ExpressionBlock(_) => {
                 return input
                     .span()
                     .parse_err("This cannot follow a flattened variable binding");

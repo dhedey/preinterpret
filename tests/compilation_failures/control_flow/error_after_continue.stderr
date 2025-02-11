@@ -2,9 +2,9 @@ error: And now we error
   --> tests/compilation_failures/control_flow/error_after_continue.rs:4:5
    |
 4  | /     preinterpret!(
-5  | |         [!set! #x = 0]
+5  | |         #(let x = 0)
 6  | |         [!while! true {
-7  | |             [!assign! #x += 1]
+7  | |             #(x += 1)
 ...  |
 17 | |         }]
 18 | |     );

@@ -40,6 +40,7 @@ impl<C> HandleTransformation for TransformSegment<C> {
 pub(crate) enum TransformItem {
     Command(Command),
     Variable(VariableBinding),
+    ExpressionBlock(ExpressionBlock),
     Transformer(Transformer),
     TransformStreamInput(ExplicitTransformStream),
     ExactPunct(Punct),
@@ -58,11 +59,10 @@ impl TransformItem {
     ) -> ParseResult<Self> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => Self::Command(input.parse()?),
-            SourcePeekMatch::GroupedVariable
-            | SourcePeekMatch::FlattenedVariable
-            | SourcePeekMatch::AppendVariableBinding => {
+            SourcePeekMatch::Variable(_) | SourcePeekMatch::AppendVariableBinding => {
                 Self::Variable(VariableBinding::parse_until::<C>(input)?)
             }
+            SourcePeekMatch::ExpressionBlock(_) => Self::ExpressionBlock(input.parse()?),
             SourcePeekMatch::Group(_) => Self::ExactGroup(input.parse()?),
             SourcePeekMatch::ExplicitTransformStream => Self::TransformStreamInput(input.parse()?),
             SourcePeekMatch::Transformer(_) => Self::Transformer(input.parse()?),
@@ -93,6 +93,9 @@ impl HandleTransformation for TransformItem {
             }
             TransformItem::TransformStreamInput(stream) => {
                 stream.handle_transform(input, interpreter, output)?;
+            }
+            TransformItem::ExpressionBlock(block) => {
+                block.interpret_into(interpreter, output)?;
             }
             TransformItem::ExactPunct(punct) => {
                 input.parse_punct_matching(punct.as_char())?;

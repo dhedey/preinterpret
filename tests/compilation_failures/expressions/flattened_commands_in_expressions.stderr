@@ -1,5 +1,5 @@
 error: Cannot infer common type from untyped integer + stream. Consider using `as` to cast the operands to matching types.
- --> tests/compilation_failures/expressions/flattened_commands_in_expressions.rs:5:23
+ --> tests/compilation_failures/expressions/flattened_commands_in_expressions.rs:5:13
   |
-5 |         [!evaluate! 5 + [!..range! 1..2]]
-  |                       ^
+5 |         #(5 + [!..range! 1..2])
+  |             ^

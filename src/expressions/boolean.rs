@@ -45,9 +45,16 @@ impl ExpressionBoolean {
                     return operation.execution_err("This cast is not supported")
                 }
                 CastTarget::Boolean => operation.output(self.value),
-                CastTarget::Stream => {
-                    operation.output(operation.output(input).into_new_output_stream())
-                }
+                CastTarget::Stream => operation.output(
+                    operation
+                        .output(input)
+                        .into_new_output_stream(Grouping::Flattened),
+                ),
+                CastTarget::Group => operation.output(
+                    operation
+                        .output(input)
+                        .into_new_output_stream(Grouping::Grouped),
+                ),
             },
         })
     }

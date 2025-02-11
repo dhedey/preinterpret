@@ -334,36 +334,47 @@ impl ExpressionValue {
         self
     }
 
-    pub(crate) fn into_new_output_stream(self) -> OutputStream {
-        match self {
-            Self::Stream(value) => value.value,
-            other => {
+    pub(crate) fn into_new_output_stream(self, grouping: Grouping) -> OutputStream {
+        match (self, grouping) {
+            (Self::Stream(value), Grouping::Flattened) => value.value,
+            (other, grouping) => {
                 let mut output = OutputStream::new();
-                other.output_to(&mut output);
+                other.output_to(grouping, &mut output);
                 output
             }
         }
     }
 
-    pub(crate) fn output_to(self, output: &mut OutputStream) {
+    pub(crate) fn output_to(self, grouping: Grouping, output: &mut OutputStream) {
+        match grouping {
+            Grouping::Grouped => {
+                // Grouping can be important for different values, to ensure they're read atomically
+                // when the output stream is viewed as an array/iterable, e.g. in a for loop.
+                // * Grouping means -1 is interpreted atomically, rather than as a punct then a number
+                // * Grouping means that a stream is interpreted atomically
+                let span = self.span_range().join_into_span_else_start();
+                output
+                    .push_grouped(
+                        |inner| {
+                            self.output_flattened_to(inner);
+                            Ok(())
+                        },
+                        Delimiter::None,
+                        span,
+                    )
+                    .unwrap()
+            }
+            Grouping::Flattened => {
+                self.output_flattened_to(output);
+            }
+        }
+    }
+
+    fn output_flattened_to(self, output: &mut OutputStream) {
         match self {
             Self::None { .. } => {}
-            Self::Integer(value) => {
-                // Grouped so that -1 is interpreted as a single thing, not a punct then a number
-                output.push_grouped(
-                    |inner| Ok(inner.push_literal(value.to_literal())),
-                    Delimiter::None,
-                    value.span_range.join_into_span_else_start(),
-                ).unwrap()
-            },
-            Self::Float(value) => {
-                // Grouped so that -1.0 is interpreted as a single thing, not a punct then a number
-                output.push_grouped(
-                    |inner| Ok(inner.push_literal(value.to_literal())),
-                    Delimiter::None,
-                    value.span_range.join_into_span_else_start(),
-                ).unwrap()
-            }
+            Self::Integer(value) => output.push_literal(value.to_literal()),
+            Self::Float(value) => output.push_literal(value.to_literal()),
             Self::Boolean(value) => output.push_ident(value.to_ident()),
             Self::String(value) => output.push_literal(value.to_literal()),
             Self::Char(value) => output.push_literal(value.to_literal()),
@@ -373,6 +384,11 @@ impl ExpressionValue {
             Self::Stream(value) => value.value.append_into(output),
         }
     }
+}
+
+pub(crate) enum Grouping {
+    Grouped,
+    Flattened,
 }
 
 impl HasValueType for ExpressionValue {
@@ -428,6 +444,7 @@ pub(super) enum CastTarget {
     Boolean,
     Char,
     Stream,
+    Group,
 }
 
 pub(super) enum EvaluationLiteralPair {

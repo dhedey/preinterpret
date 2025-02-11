@@ -9,6 +9,7 @@ pub(crate) enum SourceValue<T> {
     Command(Command),
     GroupedVariable(GroupedVariable),
     FlattenedVariable(FlattenedVariable),
+    ExpressionBlock(ExpressionBlock),
     Code(SourceCodeBlock),
     Value(T),
 }
@@ -17,8 +18,11 @@ impl<T: Parse<Source>> Parse<Source> for SourceValue<T> {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => Self::Command(input.parse()?),
-            SourcePeekMatch::GroupedVariable => Self::GroupedVariable(input.parse()?),
-            SourcePeekMatch::FlattenedVariable => Self::FlattenedVariable(input.parse()?),
+            SourcePeekMatch::Variable(Grouping::Grouped) => Self::GroupedVariable(input.parse()?),
+            SourcePeekMatch::Variable(Grouping::Flattened) => {
+                Self::FlattenedVariable(input.parse()?)
+            }
+            SourcePeekMatch::ExpressionBlock(_) => Self::ExpressionBlock(input.parse()?),
             SourcePeekMatch::Group(Delimiter::Brace) => Self::Code(input.parse()?),
             SourcePeekMatch::ExplicitTransformStream
             | SourcePeekMatch::AppendVariableBinding
@@ -48,13 +52,14 @@ impl<T: HasSpanRange> HasSpanRange for SourceValue<T> {
             SourceValue::Command(command) => command.span_range(),
             SourceValue::GroupedVariable(variable) => variable.span_range(),
             SourceValue::FlattenedVariable(variable) => variable.span_range(),
+            SourceValue::ExpressionBlock(block) => block.span_range(),
             SourceValue::Code(code) => code.span_range(),
             SourceValue::Value(value) => value.span_range(),
         }
     }
 }
 
-impl<T: InterpretValue<OutputValue = I>, I: Parse<Output>> InterpretValue for SourceValue<T> {
+impl<T: InterpretToValue<OutputValue = I>, I: Parse<Output>> InterpretToValue for SourceValue<T> {
     type OutputValue = I;
 
     fn interpret_to_value(self, interpreter: &mut Interpreter) -> ExecutionResult<I> {
@@ -62,6 +67,7 @@ impl<T: InterpretValue<OutputValue = I>, I: Parse<Output>> InterpretValue for So
             SourceValue::Command(_) => "command output",
             SourceValue::GroupedVariable(_) => "grouped variable output",
             SourceValue::FlattenedVariable(_) => "flattened variable output",
+            SourceValue::ExpressionBlock(_) => "an #(...) expression block",
             SourceValue::Code(_) => "output from the { ... } block",
             SourceValue::Value(_) => "value",
         };
@@ -73,6 +79,7 @@ impl<T: InterpretValue<OutputValue = I>, I: Parse<Output>> InterpretValue for So
             SourceValue::FlattenedVariable(variable) => {
                 variable.interpret_to_new_stream(interpreter)?
             }
+            SourceValue::ExpressionBlock(block) => block.interpret_to_new_stream(interpreter)?,
             SourceValue::Code(code) => code.interpret_to_new_stream(interpreter)?,
             SourceValue::Value(value) => return value.interpret_to_value(interpreter),
         };
@@ -122,9 +129,9 @@ impl<T: Parse<Output>> Parse<Output> for Grouped<T> {
     }
 }
 
-impl<T, I> InterpretValue for Grouped<T>
+impl<T, I> InterpretToValue for Grouped<T>
 where
-    T: InterpretValue<OutputValue = I>,
+    T: InterpretToValue<OutputValue = I>,
 {
     type OutputValue = Grouped<I>;
 
@@ -165,9 +172,9 @@ impl<T: Parse<Output>> Parse<Output> for Repeated<T> {
     }
 }
 
-impl<T, I> InterpretValue for Repeated<T>
+impl<T, I> InterpretToValue for Repeated<T>
 where
-    T: InterpretValue<OutputValue = I>,
+    T: InterpretToValue<OutputValue = I>,
 {
     type OutputValue = Repeated<I>;
 

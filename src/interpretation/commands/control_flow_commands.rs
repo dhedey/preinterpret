@@ -53,7 +53,7 @@ impl StreamingCommandDefinition for IfCommand {
     ) -> ExecutionResult<()> {
         let evaluated_condition = self
             .condition
-            .evaluate(interpreter)?
+            .interpret_to_value(interpreter)?
             .expect_bool("An if condition")?;
 
         if evaluated_condition.value {
@@ -62,7 +62,7 @@ impl StreamingCommandDefinition for IfCommand {
 
         for (condition, code) in self.else_ifs {
             let evaluated_condition = condition
-                .evaluate(interpreter)?
+                .interpret_to_value(interpreter)?
                 .expect_bool("An else if condition")?;
 
             if evaluated_condition.value {
@@ -114,8 +114,7 @@ impl StreamingCommandDefinition for WhileCommand {
 
             let evaluated_condition = self
                 .condition
-                .clone()
-                .evaluate(interpreter)?
+                .interpret_to_value(interpreter)?
                 .expect_bool("A while condition")?;
 
             if !evaluated_condition.value {

@@ -25,8 +25,8 @@ impl Parse<Source> for SourceStreamInput {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => Self::Command(input.parse()?),
-            SourcePeekMatch::GroupedVariable => Self::GroupedVariable(input.parse()?),
-            SourcePeekMatch::FlattenedVariable => Self::FlattenedVariable(input.parse()?),
+            SourcePeekMatch::Variable(Grouping::Grouped) => Self::GroupedVariable(input.parse()?),
+            SourcePeekMatch::Variable(Grouping::Flattened) => Self::FlattenedVariable(input.parse()?),
             SourcePeekMatch::Group(Delimiter::Bracket) => Self::ExplicitStream(input.parse()?),
             SourcePeekMatch::Group(Delimiter::Brace) => Self::Code(input.parse()?),
             _ => input.span()
@@ -57,7 +57,8 @@ impl Interpret for SourceStreamInput {
             SourceStreamInput::Command(mut command) => {
                 match command.output_kind() {
                     CommandOutputKind::None
-                    | CommandOutputKind::Value
+                    | CommandOutputKind::GroupedValue
+                    | CommandOutputKind::FlattenedValue
                     | CommandOutputKind::Ident
                     | CommandOutputKind::Literal => {
                         command.execution_err("The command does not output a stream")
@@ -136,7 +137,7 @@ fn parse_as_stream_input(
     Ok(())
 }
 
-impl InterpretValue for SourceStreamInput {
+impl InterpretToValue for SourceStreamInput {
     type OutputValue = OutputCommandStream;
 
     fn interpret_to_value(

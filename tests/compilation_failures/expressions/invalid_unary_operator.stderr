@@ -1,6 +1,5 @@
 error: Expected ! or -
-       Occurred whilst parsing [!evaluate! ...] - Expected [!evaluate! ...] containing a valid preinterpret expression
- --> tests/compilation_failures/expressions/invalid_unary_operator.rs:5:21
+ --> tests/compilation_failures/expressions/invalid_unary_operator.rs:5:11
   |
-5 |         [!evaluate! ^10]
-  |                     ^
+5 |         #(^10)
+  |           ^

@@ -19,12 +19,11 @@ fn test_control_flow_compilation_failures() {
 fn test_if() {
     assert_preinterpret_eq!([!if! (1 == 2) { "YES" } !else! { "NO" }], "NO");
     assert_preinterpret_eq!({
-        [!set! #x = [!evaluate! 1 == 2]]
+        #(x = 1 == 2)
         [!if! #x { "YES" } !else! { "NO" }]
     }, "NO");
     assert_preinterpret_eq!({
-        [!set! #x = 1]
-        [!set! #y = 2]
+        #(x = 1; y = 2)
         [!if! #x == #y { "YES" } !else! { "NO" }]
     }, "NO");
     assert_preinterpret_eq!({
@@ -51,8 +50,8 @@ fn test_if() {
 #[test]
 fn test_while() {
     assert_preinterpret_eq!({
-        [!set! #x = 0]
-        [!while! #x < 5 { [!assign! #x += 1] }]
+        #(x = 0)
+        [!while! #x < 5 { #(x += 1) }]
         #x
     }, 5);
 }
@@ -61,9 +60,9 @@ fn test_while() {
 fn test_loop_continue_and_break() {
     assert_preinterpret_eq!(
         {
-            [!set! #x = 0]
+            #(x = 0)
             [!loop! {
-                [!assign! #x += 1]
+                #(x += 1)
                 [!if! #x >= 10 { [!break!] }]
             }]
             #x
@@ -74,7 +73,7 @@ fn test_loop_continue_and_break() {
         {
             [!string! [!for! #x in [!range! 65..75] {
                 [!if! #x % 2 == 0 { [!continue!] }]
-                [!evaluate! #x as u8 as char]
+                #(#x as u8 as char)
             }]]
         },
         "ACEGI"
@@ -86,7 +85,7 @@ fn test_for() {
     assert_preinterpret_eq!(
         {
             [!string! [!for! #x in [!range! 65..70] {
-                [!evaluate! #x as u8 as char]
+                #(#x as u8 as char)
             }]]
         },
         "ABCDE"
