@@ -1,4 +1,5 @@
 #![allow(clippy::identity_op)] // https://github.com/rust-lang/rust-clippy/issues/13924
+#![allow(clippy::zero_prefixed_literal)] // https://github.com/rust-lang/rust-clippy/issues/14199
 
 use preinterpret::preinterpret;
 

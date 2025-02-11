@@ -119,7 +119,7 @@ Inside a transform stream, the following grammar is supported:
     stream for the object, or error and suggest fields the user should use instead.
     * Have `!zip!` support `{ objects }` 
   * Values:
-    * When we parse a `#x` (`@(#x = INFER_TOKEN_TREE)`) binding, it tries to parse a stream as a value before interpreting a `[!group! ...]` as a stream.
+    * When we parse a `#x` (`@(x = INFER_TOKEN_TREE)`) binding, it tries to parse a stream as a value before interpreting a `[!group! ...]` as a stream.
     * Output to final output as unwrapped content
   * Method calls
     * Also add support for methods (for e.g. exposing functions on syn objects).
@@ -144,7 +144,7 @@ Inside a transform stream, the following grammar is supported:
   * Scrap `#>>x` etc in favour of `@(#x += ...)`
   * Adding all of these: https://veykril.github.io/tlborm/decl-macros/minutiae/fragment-specifiers.html#ty 
   * If the `[!split!]` command should actually be a transformer?
-  * Adding `!define_macro!`
+  * Adding `preinterpret::macro`
   * Adding `!define_command!`
   * Adding `!define_transformer!`
 * `[!is_set! #x]`
