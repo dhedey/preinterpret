@@ -98,9 +98,6 @@ Inside a transform stream, the following grammar is supported:
 ### To come
 
 * Consider separating an array `[x, y, z]` from a stream `[!stream! ...]` in the value model
-  * Create parsable array value
-  * Add test for casting to stream, and compile error when outputting to stream
-  * Add `+` support for concatenating arrays
   * Revisit the `SourceStreamInput` abstraction - maybe it's replaced with a `SourceExpression` which needs to output a stream?
   * Split outputs an array
   * Intersperse works with either an array or a stream (?)
@@ -108,6 +105,7 @@ Inside a transform stream, the following grammar is supported:
   * We can then consider dropping lots of the `group` wrappers I guess?
   * Then destructuring and parsing become different:
     * Destructuring works over the value model; parsing works over the token stream model.
+    * Parsers can be embedded inside a destructuring
   * Support a CastTarget of Array (only supported for array and stream and iterator)
 * Support `#(x[..])` syntax for indexing arrays and streams at read time
   * Via a post-fix `[...]` operation with high priority
@@ -163,6 +161,7 @@ Inside a transform stream, the following grammar is supported:
 * Put `[!set! ...]` inside an opt-in feature.
 * TODO check
 * Check all `#[allow(unused)]` and remove any which aren't needed
+* Add benches inspired by this: https://github.com/dtolnay/quote/tree/master/benches
 * Work on book
   * Input paradigms:
     * Streams

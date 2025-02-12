@@ -1,4 +1,6 @@
-use preinterpret::*;
+#[path = "helpers/prelude.rs"]
+mod prelude;
+use prelude::*;
 
 preinterpret! {
     [!set! #bytes = 32]

@@ -18,16 +18,23 @@ impl ExpressionArray {
             UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => {
                 return operation.unsupported(self)
             }
-            UnaryOperation::Cast { target, target_ident, .. } => match target {
-                CastTarget::Stream => {
-                    operation.output(self.to_stream_with_grouped_items()?)
-                },
-                CastTarget::Group => {
-                    operation.output(operation.output(self.to_stream_with_grouped_items()?).into_new_output_stream(Grouping::Grouped)?)
-                },
+            UnaryOperation::Cast {
+                target,
+                target_ident,
+                ..
+            } => match target {
+                CastTarget::Stream => operation.output(self.into_stream_with_grouped_items()?),
+                CastTarget::Group => operation.output(
+                    operation
+                        .output(self.into_stream_with_grouped_items()?)
+                        .into_new_output_stream(Grouping::Grouped)?,
+                ),
                 _ => {
                     if self.items.len() == 1 {
-                        self.items.pop().unwrap().handle_unary_operation(operation)?
+                        self.items
+                            .pop()
+                            .unwrap()
+                            .handle_unary_operation(operation)?
                     } else {
                         return operation.execution_err(format!(
                             "Cannot only attempt to cast a singleton array to {} but the array has {} elements",
@@ -40,7 +47,7 @@ impl ExpressionArray {
         })
     }
 
-    fn to_stream_with_grouped_items(self) -> ExecutionResult<OutputStream> {
+    fn into_stream_with_grouped_items(self) -> ExecutionResult<OutputStream> {
         let mut stream = OutputStream::new();
         for item in self.items {
             item.output_to(Grouping::Grouped, &mut stream)?;

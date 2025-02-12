@@ -1,0 +1,5 @@
+error: Arrays cannot be output to a stream. You likely wish to use the !for! command or if you wish to output every element, use `as stream` to cast the array to a stream.
+ --> tests/compilation_failures/expressions/cannot_output_array_to_stream.rs:5:11
+  |
+5 |         #([1, 2, 3])
+  |           ^^^^^^^^^

@@ -305,7 +305,9 @@ impl ExpressionValue {
             }
             ExpressionValue::Char(value) => value.handle_integer_binary_operation(right, operation),
             ExpressionValue::UnsupportedLiteral(value) => operation.unsupported(value),
-            ExpressionValue::Array(value) => value.handle_integer_binary_operation(right, operation),
+            ExpressionValue::Array(value) => {
+                value.handle_integer_binary_operation(right, operation)
+            }
             ExpressionValue::Stream(value) => {
                 value.handle_integer_binary_operation(right, operation)
             }
@@ -346,7 +348,10 @@ impl ExpressionValue {
         self
     }
 
-    pub(crate) fn into_new_output_stream(self, grouping: Grouping) -> ExecutionResult<OutputStream> {
+    pub(crate) fn into_new_output_stream(
+        self,
+        grouping: Grouping,
+    ) -> ExecutionResult<OutputStream> {
         Ok(match (self, grouping) {
             (Self::Stream(value), Grouping::Flattened) => value.value,
             (other, grouping) => {
@@ -357,19 +362,22 @@ impl ExpressionValue {
         })
     }
 
-    pub(crate) fn output_to(&self, grouping: Grouping, output: &mut OutputStream) -> ExecutionResult<()> {
+    pub(crate) fn output_to(
+        &self,
+        grouping: Grouping,
+        output: &mut OutputStream,
+    ) -> ExecutionResult<()> {
         match grouping {
             Grouping::Grouped => {
                 // Grouping can be important for different values, to ensure they're read atomically
                 // when the output stream is viewed as an array/iterable, e.g. in a for loop.
                 // * Grouping means -1 is interpreted atomically, rather than as a punct then a number
                 // * Grouping means that a stream is interpreted atomically
-                output
-                    .push_grouped(
-                        |inner| self.output_flattened_to(inner),
-                        Delimiter::None,
-                        self.span_range().join_into_span_else_start(),
-                    )?;
+                output.push_grouped(
+                    |inner| self.output_flattened_to(inner),
+                    Delimiter::None,
+                    self.span_range().join_into_span_else_start(),
+                )?;
             }
             Grouping::Flattened => {
                 self.output_flattened_to(output)?;
@@ -379,7 +387,7 @@ impl ExpressionValue {
     }
 
     fn output_flattened_to(&self, output: &mut OutputStream) -> ExecutionResult<()> {
-        Ok(match self {
+        match self {
             Self::None { .. } => {}
             Self::Integer(value) => output.push_literal(value.to_literal()),
             Self::Float(value) => output.push_literal(value.to_literal()),
@@ -391,7 +399,8 @@ impl ExpressionValue {
             }
             Self::Array { .. } => return self.execution_err("Arrays cannot be output to a stream. You likely wish to use the !for! command or if you wish to output every element, use `as stream` to cast the array to a stream."),
             Self::Stream(value) => value.value.append_cloned_into(output),
-        })
+        };
+        Ok(())
     }
 
     pub(crate) fn debug(&self) -> String {
@@ -428,7 +437,8 @@ impl ExpressionValue {
             _ => {
                 // This isn't the most efficient, but it's less code and debug doesn't need to be super efficient.
                 let mut stream = OutputStream::new();
-                self.output_flattened_to(&mut stream).expect("Non-composite values should all be able to be outputted to a stream");
+                self.output_flattened_to(&mut stream)
+                    .expect("Non-composite values should all be able to be outputted to a stream");
                 let string_rep = stream.concat_recursive(&ConcatBehaviour::debug());
                 write!(output, "{}", string_rep).unwrap();
             }

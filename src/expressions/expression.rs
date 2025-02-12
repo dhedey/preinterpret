@@ -63,7 +63,14 @@ impl Expressionable for Source {
                 return input.parse_err("Braces { ... } are not supported in an expression")
             }
             SourcePeekMatch::Group(Delimiter::Bracket) => {
-                return input.parse_err("Brackets [ ... ] are not supported in an expression")
+                // This could be handled as parsing a vector of SourceExpressions,
+                // but it's more efficient to handle nested vectors as a single expression
+                // in the expression parser
+                let (_, delim_span) = input.parse_and_enter_group()?;
+                UnaryAtom::Array {
+                    delim_span,
+                    is_empty: input.is_empty(),
+                }
             }
             SourcePeekMatch::Punct(_) => UnaryAtom::PrefixUnaryOperation(input.parse()?),
             SourcePeekMatch::Ident(_) => match input.try_parse_or_revert() {
@@ -84,6 +91,12 @@ impl Expressionable for Source {
 
     fn parse_extension(input: &mut ParseStreamStack<Self>) -> ParseResult<NodeExtension> {
         Ok(match input.peek_grammar() {
+            SourcePeekMatch::Punct(punct) if punct.as_char() == ',' => {
+                NodeExtension::CommaOperator {
+                    comma: input.parse()?,
+                    is_end_of_stream: input.is_empty(),
+                }
+            }
             SourcePeekMatch::Punct(_) => match input.try_parse_or_revert::<BinaryOperation>() {
                 Ok(operation) => NodeExtension::BinaryOperation(operation),
                 Err(_) => NodeExtension::NoneMatched,
@@ -142,7 +155,7 @@ impl<K: Expressionable> Parse<K> for Expression<K> {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) struct ExpressionNodeId(pub(super) usize);
 
 pub(super) enum ExpressionNode<K: Expressionable> {
@@ -150,6 +163,10 @@ pub(super) enum ExpressionNode<K: Expressionable> {
     Grouped {
         delim_span: DelimSpan,
         inner: ExpressionNodeId,
+    },
+    Array {
+        delim_span: DelimSpan,
+        items: Vec<ExpressionNodeId>,
     },
     UnaryOperation {
         operation: UnaryOperation,

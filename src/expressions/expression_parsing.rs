@@ -46,6 +46,22 @@ impl<'a, K: Expressionable> ExpressionParser<'a, K> {
             UnaryAtom::Group(delim_span) => {
                 self.push_stack_frame(ExpressionStackFrame::Group { delim_span })
             }
+            UnaryAtom::Array {
+                delim_span,
+                is_empty,
+            } => {
+                let array_node = self.nodes.add_node(ExpressionNode::Array {
+                    delim_span,
+                    items: Vec::new(),
+                });
+                if is_empty {
+                    self.streams.exit_group();
+                    WorkItem::TryParseAndApplyExtension { node: array_node }
+                } else {
+                    self.push_stack_frame(ExpressionStackFrame::Array { array_node });
+                    WorkItem::RequireUnaryAtom
+                }
+            }
             UnaryAtom::PrefixUnaryOperation(operation) => {
                 self.push_stack_frame(ExpressionStackFrame::IncompletePrefixOperation { operation })
             }
@@ -75,8 +91,33 @@ impl<'a, K: Expressionable> ExpressionParser<'a, K> {
                         operation,
                     })
                 }
-                NodeExtension::NoneMatched => {
-                    panic!("Not possible, as this has minimum precedence")
+                NodeExtension::CommaOperator {
+                    comma,
+                    is_end_of_stream: false,
+                } => {
+                    let top_frame = self
+                        .expression_stack
+                        .last_mut()
+                        .expect("There should always at least be a root");
+                    match top_frame {
+                        ExpressionStackFrame::Array { array_node } => {
+                            match self.nodes.node_mut(*array_node) {
+                                ExpressionNode::Array { items, .. } => {
+                                    items.push(node);
+                                },
+                                _ => unreachable!("Not possible, the array_node always corresponds to an array node"),
+                            }
+                        },
+                        _ => return comma.parse_err("Commas are only permitted inside preinterpret arrays []. Preinterpret arrays [a, b] can be used as a drop-in replacement for rust tuples (a, b)."),
+                    }
+                    WorkItem::RequireUnaryAtom
+                }
+                NodeExtension::CommaOperator {
+                    is_end_of_stream: true,
+                    ..
+                }
+                | NodeExtension::NoneMatched => {
+                    unreachable!("Not possible, as these have minimum precedence")
                 }
             })
         } else {
@@ -97,6 +138,26 @@ impl<'a, K: Expressionable> ExpressionParser<'a, K> {
                             inner: node,
                         }),
                     }
+                }
+                ExpressionStackFrame::Array { array_node } => {
+                    assert!(matches!(
+                        extension,
+                        NodeExtension::NoneMatched
+                            | NodeExtension::CommaOperator {
+                                is_end_of_stream: true,
+                                ..
+                            }
+                    ));
+                    match self.nodes.node_mut(array_node) {
+                        ExpressionNode::Array { items, .. } => {
+                            items.push(node);
+                        }
+                        _ => unreachable!(
+                            "Not possible, the array_node always corresponds to an array node"
+                        ),
+                    }
+                    self.streams.exit_group();
+                    WorkItem::TryParseAndApplyExtension { node: array_node }
                 }
                 ExpressionStackFrame::IncompletePrefixOperation { operation } => {
                     WorkItem::TryApplyAlreadyParsedExtension {
@@ -162,6 +223,14 @@ impl<K: Expressionable> ExpressionNodes<K> {
         node_id
     }
 
+    /// Panics if the node id isn't valid
+    pub(super) fn node_mut(
+        &mut self,
+        ExpressionNodeId(node_id): ExpressionNodeId,
+    ) -> &mut ExpressionNode<K> {
+        self.nodes.get_mut(node_id).unwrap()
+    }
+
     pub(super) fn complete(self, root: ExpressionNodeId) -> Expression<K> {
         Expression {
             root,
@@ -189,6 +258,8 @@ impl<K: Expressionable> ExpressionNodes<K> {
 enum OperatorPrecendence {
     // return, break, closures
     Jump,
+    // In arrays (this is a preinterpret addition)
+    NonTerminalComma,
     /// = += -= *= /= %= &= |= ^= <<= >>=
     Assign,
     // .. ..=
@@ -370,6 +441,10 @@ enum ExpressionStackFrame {
     /// * When the group is opened, we add its inside to the parse stream stack
     /// * When the group is closed, we pop it from the parse stream stack
     Group { delim_span: DelimSpan },
+    /// A marker for the bracketed array.
+    /// * When the array is opened, we add its inside to the parse stream stack
+    /// * When the array is closed, we pop it from the parse stream stack
+    Array { array_node: ExpressionNodeId },
     /// An incomplete unary prefix operation
     /// NB: unary postfix operations such as `as` casting go straight to ExtendableNode
     IncompletePrefixOperation { operation: PrefixUnaryOperation },
@@ -385,6 +460,7 @@ impl ExpressionStackFrame {
         match self {
             ExpressionStackFrame::Root => OperatorPrecendence::MIN,
             ExpressionStackFrame::Group { .. } => OperatorPrecendence::MIN,
+            ExpressionStackFrame::Array { .. } => OperatorPrecendence::MIN,
             ExpressionStackFrame::IncompletePrefixOperation { operation, .. } => {
                 OperatorPrecendence::of_prefix_unary_operation(operation)
             }
@@ -417,12 +493,20 @@ enum WorkItem {
 pub(super) enum UnaryAtom<K: Expressionable> {
     Leaf(K::Leaf),
     Group(DelimSpan),
+    Array {
+        delim_span: DelimSpan,
+        is_empty: bool,
+    },
     PrefixUnaryOperation(PrefixUnaryOperation),
 }
 
 pub(super) enum NodeExtension {
     PostfixOperation(UnaryOperation),
     BinaryOperation(BinaryOperation),
+    CommaOperator {
+        comma: Token![,],
+        is_end_of_stream: bool,
+    },
     NoneMatched,
 }
 
@@ -431,6 +515,14 @@ impl NodeExtension {
         match self {
             NodeExtension::PostfixOperation(op) => OperatorPrecendence::of_unary_operation(op),
             NodeExtension::BinaryOperation(op) => OperatorPrecendence::of_binary_operation(op),
+            NodeExtension::CommaOperator {
+                is_end_of_stream: false,
+                ..
+            } => OperatorPrecendence::NonTerminalComma,
+            NodeExtension::CommaOperator {
+                is_end_of_stream: true,
+                ..
+            } => OperatorPrecendence::MIN,
             NodeExtension::NoneMatched => OperatorPrecendence::MIN,
         }
     }

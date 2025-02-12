@@ -1,13 +1,9 @@
 #![allow(clippy::identity_op)] // https://github.com/rust-lang/rust-clippy/issues/13924
 #![allow(clippy::zero_prefixed_literal)] // https://github.com/rust-lang/rust-clippy/issues/14199
 
-use preinterpret::preinterpret;
-
-macro_rules! assert_preinterpret_eq {
-    ($input:tt, $($output:tt)*) => {
-        assert_eq!(preinterpret!($input), $($output)*);
-    };
-}
+#[path = "helpers/prelude.rs"]
+mod prelude;
+use prelude::*;
 
 #[test]
 #[cfg_attr(miri, ignore = "incompatible with miri")]
@@ -18,24 +14,24 @@ fn test_control_flow_compilation_failures() {
 
 #[test]
 fn test_if() {
-    assert_preinterpret_eq!([!if! (1 == 2) { "YES" } !else! { "NO" }], "NO");
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!([!if! (1 == 2) { "YES" } !else! { "NO" }], "NO");
+    preinterpret_assert_eq!({
         #(x = 1 == 2)
         [!if! #x { "YES" } !else! { "NO" }]
     }, "NO");
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         #(x = 1; y = 2)
         [!if! #x == #y { "YES" } !else! { "NO" }]
     }, "NO");
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         0
         [!if! true { + 1 }]
     }, 1);
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         0
         [!if! false { + 1 }]
     }, 0);
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         [!if! false {
             1
         } !elif! false {
@@ -50,7 +46,7 @@ fn test_if() {
 
 #[test]
 fn test_while() {
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         #(x = 0)
         [!while! #x < 5 { #(x += 1) }]
         #x
@@ -59,7 +55,7 @@ fn test_while() {
 
 #[test]
 fn test_loop_continue_and_break() {
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             #(x = 0)
             [!loop! {
@@ -70,7 +66,7 @@ fn test_loop_continue_and_break() {
         },
         10
     );
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!string! [!for! #x in [!range! 65..75] {
                 [!if! #x % 2 == 0 { [!continue!] }]
@@ -83,7 +79,7 @@ fn test_loop_continue_and_break() {
 
 #[test]
 fn test_for() {
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!string! [!for! #x in [!range! 65..70] {
                 #(#x as u8 as char)
@@ -91,7 +87,7 @@ fn test_for() {
         },
         "ABCDE"
     );
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!string! [!for! (#x,) in [(a,) (b,) (c,)] {
                 #x

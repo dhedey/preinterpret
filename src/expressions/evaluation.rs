@@ -51,6 +51,12 @@ impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
                 });
                 NextAction::EnterNode(*inner)
             }
+            ExpressionNode::Array { delim_span, items } => ArrayStackFrame {
+                span: delim_span.join(),
+                unevaluated_items: items.clone(),
+                evaluated_items: Vec::with_capacity(items.len()),
+            }
+            .next(&mut self.operation_stack),
             ExpressionNode::UnaryOperation { operation, input } => {
                 self.operation_stack
                     .push(EvaluationStackFrame::UnaryOperation {
@@ -85,6 +91,10 @@ impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
             EvaluationStackFrame::UnaryOperation { operation } => {
                 NextAction::HandleValue(operation.evaluate(value)?)
             }
+            EvaluationStackFrame::Array(mut array) => {
+                array.evaluated_items.push(value);
+                array.next(&mut self.operation_stack)
+            }
             EvaluationStackFrame::BinaryOperation { operation, state } => match state {
                 BinaryPath::OnLeftBranch { right } => {
                     if let Some(result) = operation.lazy_evaluate(&value)? {
@@ -116,6 +126,7 @@ enum EvaluationStackFrame {
     Group {
         span: Span,
     },
+    Array(ArrayStackFrame),
     UnaryOperation {
         operation: UnaryOperation,
     },
@@ -123,6 +134,31 @@ enum EvaluationStackFrame {
         operation: BinaryOperation,
         state: BinaryPath,
     },
+}
+
+struct ArrayStackFrame {
+    span: Span,
+    unevaluated_items: Vec<ExpressionNodeId>,
+    evaluated_items: Vec<ExpressionValue>,
+}
+
+impl ArrayStackFrame {
+    fn next(self, operation_stack: &mut Vec<EvaluationStackFrame>) -> NextAction {
+        match self
+            .unevaluated_items
+            .get(self.evaluated_items.len())
+            .cloned()
+        {
+            Some(next) => {
+                operation_stack.push(EvaluationStackFrame::Array(self));
+                NextAction::EnterNode(next)
+            }
+            None => NextAction::HandleValue(ExpressionValue::Array(ExpressionArray {
+                items: self.evaluated_items,
+                span_range: self.span.span_range(),
+            })),
+        }
+    }
 }
 
 enum BinaryPath {

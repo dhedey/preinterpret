@@ -1,10 +1,8 @@
 use preinterpret::preinterpret;
 
-macro_rules! assert_preinterpret_eq {
-    ($input:tt, $($output:tt)*) => {
-        assert_eq!(preinterpret!($input), $($output)*);
-    };
-}
+#[path = "helpers/prelude.rs"]
+mod prelude;
+use prelude::*;
 
 #[test]
 #[cfg_attr(miri, ignore = "incompatible with miri")]
@@ -15,11 +13,11 @@ fn test_core_compilation_failures() {
 
 #[test]
 fn test_set() {
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         [!set! #output = "Hello World!"]
         #output
     }, "Hello World!");
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         [!set! #hello = "Hello"]
         [!set! #world = "World"]
         [!set! #output = #hello " " #world "!"]
@@ -30,7 +28,7 @@ fn test_set() {
 
 #[test]
 fn test_raw() {
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         { [!string! [!raw! #variable and [!command!] are not interpreted or error]] },
         "#variableand[!command!]arenotinterpretedorerror"
     );
@@ -38,7 +36,7 @@ fn test_raw() {
 
 #[test]
 fn test_extend() {
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!set! #variable = "Hello"]
             [!set! #variable += " World!"]
@@ -46,7 +44,7 @@ fn test_extend() {
         },
         "Hello World!"
     );
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             #(i = 1)
             [!set! #output = [!..group!]]
@@ -65,7 +63,7 @@ fn test_extend() {
 
 #[test]
 fn test_ignore() {
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         [!set! #x = false]
         [!ignore! [!set! #x = true] nothing is interpreted. Everything is ignored...]
         #x
@@ -74,18 +72,18 @@ fn test_ignore() {
 
 #[test]
 fn test_empty_set() {
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         [!set! #x]
         [!set! #x += "hello"]
         #x
     }, "hello");
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         [!set! #x, #y]
         [!set! #x += "hello"]
         [!set! #y += "world"]
         [!string! #x " " #y]
     }, "hello world");
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         [!set! #x, #y, #z,]
         [!set! #x += "hello"]
         [!set! #y += "world"]
@@ -95,7 +93,7 @@ fn test_empty_set() {
 
 #[test]
 fn test_discard_set() {
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         [!set! #x = false]
         [!set! _ = [!set! #x = true] things _are_ interpreted, but the result is ignored...]
         #x
@@ -106,7 +104,7 @@ fn test_discard_set() {
 fn test_debug() {
     // It keeps the semantic punctuation spacing intact
     // (e.g. it keeps 'a and >> together)
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         [!debug! [!stream! impl<'a, T> MyStruct<'a, T> {
             pub fn new() -> Self {
                 !($crate::Test::CONSTANT >> 5 > 1)
@@ -118,7 +116,7 @@ fn test_debug() {
     // NOTE: The output code can't be used directly as preinterpret input
     // because it doesn't stick [!raw! ...] around things which could be confused
     // for the preinterpret grammar. Perhaps it could/should in future.
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!set! #x = Hello (World)]
             [!debug! [!stream! #x [!raw! #test] "and" [!raw! ##] #..x]]

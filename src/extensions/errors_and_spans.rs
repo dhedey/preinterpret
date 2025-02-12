@@ -227,6 +227,7 @@ impl_auto_span_range! {
     syn::token::Ne,
     syn::token::Ge,
     syn::token::Gt,
+    syn::token::Comma,
 }
 
 macro_rules! single_span_token {

@@ -1,10 +1,6 @@
-use preinterpret::preinterpret;
-
-macro_rules! assert_preinterpret_eq {
-    ($input:tt, $($output:tt)*) => {
-        assert_eq!(preinterpret!($input), $($output)*);
-    };
-}
+#[path = "helpers/prelude.rs"]
+mod prelude;
+use prelude::*;
 
 #[test]
 #[cfg_attr(miri, ignore = "incompatible with miri")]
@@ -15,18 +11,18 @@ fn test_tokens_compilation_failures() {
 
 #[test]
 fn test_flattened_group_and_is_empty() {
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         [!..group!] "hello" [!..group!] [!..group!]
     }, "hello");
-    assert_preinterpret_eq!([!is_empty!], true);
-    assert_preinterpret_eq!([!is_empty! [!..group!]], true);
-    assert_preinterpret_eq!([!is_empty! [!..group!] [!..group!]], true);
-    assert_preinterpret_eq!([!is_empty! Not Empty], false);
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!([!is_empty!], true);
+    preinterpret_assert_eq!([!is_empty! [!..group!]], true);
+    preinterpret_assert_eq!([!is_empty! [!..group!] [!..group!]], true);
+    preinterpret_assert_eq!([!is_empty! Not Empty], false);
+    preinterpret_assert_eq!({
         [!set! #x =]
         [!is_empty! #..x]
     }, true);
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         [!set! #x =]
         [!set! #x = #x is no longer empty]
         [!is_empty! #x]
@@ -35,16 +31,16 @@ fn test_flattened_group_and_is_empty() {
 
 #[test]
 fn test_length_and_group() {
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         [!length! "hello" World]
     }, 2);
-    assert_preinterpret_eq!({ [!length! ("hello" World)] }, 1);
-    assert_preinterpret_eq!({ [!length! [!group! "hello" World]] }, 1);
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({ [!length! ("hello" World)] }, 1);
+    preinterpret_assert_eq!({ [!length! [!group! "hello" World]] }, 1);
+    preinterpret_assert_eq!({
         [!set! #x = Hello "World" (1 2 3 4 5)]
         [!length! #..x]
     }, 3);
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         [!set! #x = Hello "World" (1 2 3 4 5)]
         [!length! [!group! #..x]]
     }, 1);
@@ -52,7 +48,7 @@ fn test_length_and_group() {
 
 #[test]
 fn test_intersperse() {
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!string![!intersperse! {
                 items: [Hello World],
@@ -61,7 +57,7 @@ fn test_intersperse() {
         },
         "Hello, World"
     );
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!string![!intersperse! {
                 items: [Hello World],
@@ -70,7 +66,7 @@ fn test_intersperse() {
         },
         "Hello_and_World"
     );
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!string![!intersperse! {
                 items: [Hello World],
@@ -80,7 +76,7 @@ fn test_intersperse() {
         },
         "Hello_and_World_and_"
     );
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!string![!intersperse! {
                 items: [The Quick Brown Fox],
@@ -89,7 +85,7 @@ fn test_intersperse() {
         },
         "TheQuickBrownFox"
     );
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!string![!intersperse! {
                 items: [The Quick Brown Fox],
@@ -99,7 +95,7 @@ fn test_intersperse() {
         },
         "The,Quick,Brown,Fox,"
     );
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!string![!intersperse! {
                 items: [Red Green Blue],
@@ -109,7 +105,7 @@ fn test_intersperse() {
         },
         "Red, Green and Blue"
     );
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!string![!intersperse! {
                 items: [Red Green Blue],
@@ -120,7 +116,7 @@ fn test_intersperse() {
         },
         "Red, Green, Blue and "
     );
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!string![!intersperse! {
                 items: [],
@@ -131,7 +127,7 @@ fn test_intersperse() {
         },
         ""
     );
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!string![!intersperse! {
                 items: [SingleItem],
@@ -141,7 +137,7 @@ fn test_intersperse() {
         },
         "SingleItem"
     );
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!string![!intersperse! {
                 items: [SingleItem],
@@ -152,7 +148,7 @@ fn test_intersperse() {
         },
         "SingleItem!"
     );
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!string![!intersperse! {
                 items: [SingleItem],
@@ -167,7 +163,7 @@ fn test_intersperse() {
 #[test]
 fn complex_cases_for_intersperse_and_input_types() {
     // Normal separator is not interpreted if it is unneeded
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!string![!intersperse! {
                 items: [],
@@ -178,7 +174,7 @@ fn complex_cases_for_intersperse_and_input_types() {
         ""
     );
     // Final separator is not interpreted if it is unneeded
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!string![!intersperse! {
                 items: [],
@@ -190,7 +186,7 @@ fn complex_cases_for_intersperse_and_input_types() {
         ""
     );
     // The separator is interpreted each time it is included
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         #(let i = 0)
         [!string! [!intersperse! {
             items: [A B C D E F G],
@@ -202,7 +198,7 @@ fn complex_cases_for_intersperse_and_input_types() {
         }]]
     }, "A(0)B(1)C(2)D(3)E(4)F(5)G(6)");
     // Command can be used for items
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!string![!intersperse! {
                 items: [!range! 0..4],
@@ -212,7 +208,7 @@ fn complex_cases_for_intersperse_and_input_types() {
         "0_1_2_3"
     );
     // Grouped Variable can be used for items
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         [!set! #items = 0 1 2 3]
         [!string! [!intersperse! {
             items: #items,
@@ -220,7 +216,7 @@ fn complex_cases_for_intersperse_and_input_types() {
         }]]
     }, "0_1_2_3");
     // Grouped variable containing flattened command can be used for items
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         [!set! #items = [!..range! 0..4]]
         [!string! [!intersperse! {
             items: #items,
@@ -228,7 +224,7 @@ fn complex_cases_for_intersperse_and_input_types() {
         }]]
     }, "0_1_2_3");
     // Flattened variable containing [ ... ] group
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         [!set! #items = [0 1 2 3]]
         [!string! [!intersperse! {
             items: #..items,
@@ -236,7 +232,7 @@ fn complex_cases_for_intersperse_and_input_types() {
         }]]
     }, "0_1_2_3");
     // Flattened variable containing transparent group
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         [!set! #items = 0 1 2 3]
         [!set! #wrapped_items = #items] // #items is "grouped variable" so outputs [!group! 0 1 2 3]
         [!string! [!intersperse! {
@@ -245,7 +241,7 @@ fn complex_cases_for_intersperse_and_input_types() {
         }]]
     }, "0_1_2_3");
     // { ... } block returning transparent group (from variable)
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         [!set! #items = 0 1 2 3]
         [!string! [!intersperse! {
             items: {
@@ -255,7 +251,7 @@ fn complex_cases_for_intersperse_and_input_types() {
         }]]
     }, "0_1_2_3");
     // { ... } block returning [ ... ] group
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!string![!intersperse! {
                 items: {
@@ -267,7 +263,7 @@ fn complex_cases_for_intersperse_and_input_types() {
         "0_1_2_3"
     );
     // Grouped variable containing two groups
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         [!set! #items = 0 1]
         [!set! #item_groups = #items #items] // [!group! 0 1] [!group! 0 1]
         [!string! [!intersperse! {
@@ -276,7 +272,7 @@ fn complex_cases_for_intersperse_and_input_types() {
         }]]
     }, "01_01");
     // Control stream commands can be used, if they return a valid stream grouping
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!string![!intersperse! {
                 items: [!if! false { [0 1] } !else! { [2 3] }],
@@ -287,7 +283,7 @@ fn complex_cases_for_intersperse_and_input_types() {
     );
     // All inputs can be variables
     // Inputs can be in any order
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         [!set! #people = Anna Barbara Charlie]
         [!set! #separator = ", "]
         [!set! #final_separator = " and "]
@@ -300,7 +296,7 @@ fn complex_cases_for_intersperse_and_input_types() {
         }]]
     }, "Anna, Barbara and Charlie");
     // Add trailing is executed even if it's irrelevant because there are no items
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         [!set! #x = "NOT_EXECUTED"]
         [!intersperse! {
             items: [],
@@ -318,7 +314,7 @@ fn complex_cases_for_intersperse_and_input_types() {
 fn test_split() {
     // Empty separators are allowed, and split on every token
     // In this case, drop_empty_start / drop_empty_end are ignored
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!debug! [!..split! {
                 stream: [A::B],
@@ -328,7 +324,7 @@ fn test_split() {
         "[!stream! [!group! A] [!group! :] [!group! :] [!group! B]]"
     );
     // Double separators are allowed
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!debug! [!..split! {
                 stream: [A::B::C],
@@ -338,7 +334,7 @@ fn test_split() {
         "[!stream! [!group! A] [!group! B] [!group! C]]"
     );
     // Trailing separator is ignored by default
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!debug! [!..split! {
                 stream: [Pizza, Mac and Cheese, Hamburger,],
@@ -348,7 +344,7 @@ fn test_split() {
         "[!stream! [!group! Pizza] [!group! Mac and Cheese] [!group! Hamburger]]"
     );
     // By default, empty groups are included except at the end
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!debug! [!..split! {
                 stream: [::A::B::::C::],
@@ -358,7 +354,7 @@ fn test_split() {
         "[!stream! [!group!] [!group! A] [!group! B] [!group!] [!group! C]]"
     );
     // Stream and separator are both interpreted
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         [!set! #x = ;]
         [!debug! [!..split! {
             stream: [;A;;B;C;D #..x E;],
@@ -369,7 +365,7 @@ fn test_split() {
         }]]
     }, "[!stream! [!group! A] [!group! B] [!group! C] [!group! D] [!group! E]]");
     // Drop empty false works
-    assert_preinterpret_eq!({
+    preinterpret_assert_eq!({
         [!set! #x = ;]
         [!debug! [!..split! {
             stream: [;A;;B;C;D #..x E;],
@@ -380,7 +376,7 @@ fn test_split() {
         }]]
     }, "[!stream! [!group!] [!group! A] [!group!] [!group! B] [!group! C] [!group! D] [!group! E] [!group!]]");
     // Drop empty middle works
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!debug! [!..split! {
                 stream: [;A;;B;;;;E;],
@@ -394,7 +390,7 @@ fn test_split() {
     );
     // Code blocks are only evaluated once
     // (i.e. no "unknown variable B is output in the below")
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!debug! [!..split! {
                 stream: {
@@ -409,7 +405,7 @@ fn test_split() {
 
 #[test]
 fn test_comma_split() {
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         { [!debug! [!..comma_split! Pizza, Mac and Cheese, Hamburger,]] },
         "[!stream! [!group! Pizza] [!group! Mac and Cheese] [!group! Hamburger]]"
     );
@@ -417,11 +413,11 @@ fn test_comma_split() {
 
 #[test]
 fn test_zip() {
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         { [!debug! [!..zip! ([Hello Goodbye] [World Friend])]] },
         "[!stream! (Hello World) (Goodbye Friend)]"
     );
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!set! #countries = France Germany Italy]
             [!set! #flags = "🇫🇷" "🇩🇪" "🇮🇹"]
@@ -432,7 +428,7 @@ fn test_zip() {
         },
         r#"[!stream! [!group! [France "🇫🇷" Paris] [Germany "🇩🇪" Berlin] [Italy "🇮🇹" Rome]]]"#,
     );
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!set! #longer = A B C D]
             [!set! #shorter = 1 2 3]
@@ -444,7 +440,7 @@ fn test_zip() {
         },
         r#"[!stream! [!group! A 1] [!group! B 2] [!group! C 3]]"#,
     );
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!set! #letters = A B C]
             [!set! #numbers = 1 2 3]
@@ -457,7 +453,7 @@ fn test_zip() {
         },
         r#"[!stream! { A 1 } { B 2 } { C 3 }]"#,
     );
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!set! #letters = A B C]
             [!set! #numbers = 1 2 3]
@@ -468,7 +464,7 @@ fn test_zip() {
         },
         r#"[!stream! { A 1 } { B 2 } { C 3 }]"#,
     );
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!set! #letters = A B C]
             [!set! #numbers = 1 2 3]
@@ -481,7 +477,7 @@ fn test_zip() {
 
 #[test]
 fn test_zip_with_for() {
-    assert_preinterpret_eq!(
+    preinterpret_assert_eq!(
         {
             [!set! #countries = France Germany Italy]
             [!set! #flags = "🇫🇷" "🇩🇪" "🇮🇹"]
