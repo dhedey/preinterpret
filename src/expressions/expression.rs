@@ -32,7 +32,6 @@ pub(super) enum SourceExpressionLeaf {
     VariablePath(VariablePath),
     MarkedVariable(MarkedVariable),
     ExpressionBlock(ExpressionBlock),
-    ExplicitStream(SourceGroup),
     Value(ExpressionValue),
 }
 
@@ -66,14 +65,7 @@ impl Expressionable for Source {
             SourcePeekMatch::Group(Delimiter::Bracket) => {
                 return input.parse_err("Brackets [ ... ] are not supported in an expression")
             }
-            SourcePeekMatch::Punct(punct) => {
-                if punct.as_char() == '%' && input.peek2(syn::token::Bracket) {
-                    let _ = input.parse::<Token![%]>()?;
-                    UnaryAtom::Leaf(Self::Leaf::ExplicitStream(input.parse()?))
-                } else {
-                    UnaryAtom::PrefixUnaryOperation(input.parse()?)
-                }
-            }
+            SourcePeekMatch::Punct(_) => UnaryAtom::PrefixUnaryOperation(input.parse()?),
             SourcePeekMatch::Ident(_) => match input.try_parse_or_revert() {
                 Ok(bool) => UnaryAtom::Leaf(Self::Leaf::Value(ExpressionValue::Boolean(
                     ExpressionBoolean::for_litbool(bool),
@@ -122,11 +114,6 @@ impl Expressionable for Source {
             SourceExpressionLeaf::ExpressionBlock(block) => {
                 block.interpret_to_value(interpreter)?
             }
-            SourceExpressionLeaf::ExplicitStream(source_group) => source_group
-                .clone()
-                .into_content()
-                .interpret_to_new_stream(interpreter)?
-                .to_value(source_group.span_range()),
             SourceExpressionLeaf::Value(value) => value.clone(),
         })
     }

@@ -110,7 +110,12 @@ impl Parse<Source> for Statement {
         Ok(match input.cursor().ident() {
             // let or some ident for a variable
             // It may be the start of an assignment.
-            Some((ident, _)) if { let str = ident.to_string(); str != "true" && str != "false" } => {
+            Some((ident, _))
+                if {
+                    let str = ident.to_string();
+                    str != "true" && str != "false"
+                } =>
+            {
                 let forked = input.fork();
                 match forked.call(|input| {
                     let destination = input.parse()?;
@@ -126,7 +131,7 @@ impl Parse<Source> for Statement {
                             equals,
                             expression: input.parse()?,
                         })
-                    },
+                    }
                     Err(_) => Statement::Expression(input.parse()?),
                 }
             }

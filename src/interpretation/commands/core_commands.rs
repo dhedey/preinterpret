@@ -178,16 +178,16 @@ impl StreamingCommandDefinition for RawCommand {
 }
 
 #[derive(Clone)]
-pub(crate) struct OutputCommand {
+pub(crate) struct StreamCommand {
     inner: SourceStream,
 }
 
-impl CommandType for OutputCommand {
+impl CommandType for StreamCommand {
     type OutputKind = OutputKindStreaming;
 }
 
-impl StreamingCommandDefinition for OutputCommand {
-    const COMMAND_NAME: &'static str = "output";
+impl StreamingCommandDefinition for StreamCommand {
+    const COMMAND_NAME: &'static str = "stream";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         Ok(Self {
@@ -427,15 +427,12 @@ impl ValueCommandDefinition for DebugCommand {
                     inner: input.parse()?,
                 })
             },
-            "Expected [!debug! <expression>]. To provide a stream, wrap in %[..]",
+            "Expected [!debug! <expression>]. To provide a stream, use [!debug! [!stream! ...]]",
         )
     }
 
     fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue> {
-        let debug_string = self
-            .inner
-            .interpret_to_value(interpreter)?
-            .debug();
+        let debug_string = self.inner.interpret_to_value(interpreter)?.debug();
         Ok(debug_string.to_value(self.span.span_range()))
     }
 }

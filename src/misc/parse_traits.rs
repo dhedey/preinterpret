@@ -224,7 +224,10 @@ impl<'a, K> ParseBuffer<'a, K> {
         T::parse(self, context)
     }
 
-    pub(crate) fn call<T, F: FnOnce(ParseStream<K>) -> ParseResult<T>>(&self, f: F) -> ParseResult<T> {
+    pub(crate) fn call<T, F: FnOnce(ParseStream<K>) -> ParseResult<T>>(
+        &self,
+        f: F,
+    ) -> ParseResult<T> {
         f(self)
     }
 
@@ -250,7 +253,7 @@ impl<'a, K> ParseBuffer<'a, K> {
     }
 
     pub(crate) fn parse_any_ident(&self) -> ParseResult<Ident> {
-        Ok(self.call(|stream| Ok(Ident::parse_any(&stream.inner)?))?)
+        self.call(|stream| Ok(Ident::parse_any(&stream.inner)?))
     }
 
     pub(crate) fn peek_ident_matching(&self, content: &str) -> bool {

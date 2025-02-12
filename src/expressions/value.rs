@@ -396,14 +396,21 @@ impl ExpressionValue {
         match self {
             ExpressionValue::None { .. } => {
                 write!(output, "None").unwrap();
-            },
+            }
             ExpressionValue::Stream(stream) => {
-                write!(output, "%[{}]", stream.value.clone().concat_recursive(&ConcatBehaviour::debug())).unwrap();
-            },
+                if stream.value.is_empty() {
+                    write!(output, "[!stream!]").unwrap();
+                } else {
+                    let stream = stream.value.clone();
+                    let string_rep = stream.concat_recursive(&ConcatBehaviour::debug());
+                    write!(output, "[!stream! {}]", string_rep).unwrap();
+                }
+            }
             _ => {
                 let mut stream = OutputStream::new();
                 self.output_flattened_to(&mut stream);
-                write!(output, "{}", stream.concat_recursive(&ConcatBehaviour::debug())).unwrap();
+                let string_rep = stream.concat_recursive(&ConcatBehaviour::debug());
+                write!(output, "{}", string_rep).unwrap();
             }
         }
         output

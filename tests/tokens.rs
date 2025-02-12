@@ -325,7 +325,7 @@ fn test_split() {
                 separator: [],
             }]]
         },
-        "%[[!group! A] [!group! :] [!group! :] [!group! B]]"
+        "[!stream! [!group! A] [!group! :] [!group! :] [!group! B]]"
     );
     // Double separators are allowed
     assert_preinterpret_eq!(
@@ -335,7 +335,7 @@ fn test_split() {
                 separator: [::],
             }]]
         },
-        "%[[!group! A] [!group! B] [!group! C]]"
+        "[!stream! [!group! A] [!group! B] [!group! C]]"
     );
     // Trailing separator is ignored by default
     assert_preinterpret_eq!(
@@ -345,7 +345,7 @@ fn test_split() {
                 separator: [,],
             }]]
         },
-        "%[[!group! Pizza] [!group! Mac and Cheese] [!group! Hamburger]]"
+        "[!stream! [!group! Pizza] [!group! Mac and Cheese] [!group! Hamburger]]"
     );
     // By default, empty groups are included except at the end
     assert_preinterpret_eq!(
@@ -355,7 +355,7 @@ fn test_split() {
                 separator: [::],
             }]]
         },
-        "%[[!group!] [!group! A] [!group! B] [!group!] [!group! C]]"
+        "[!stream! [!group!] [!group! A] [!group! B] [!group!] [!group! C]]"
     );
     // Stream and separator are both interpreted
     assert_preinterpret_eq!({
@@ -367,7 +367,7 @@ fn test_split() {
             drop_empty_middle: true,
             drop_empty_end: true,
         }]]
-    }, "%[[!group! A] [!group! B] [!group! C] [!group! D] [!group! E]]");
+    }, "[!stream! [!group! A] [!group! B] [!group! C] [!group! D] [!group! E]]");
     // Drop empty false works
     assert_preinterpret_eq!({
         [!set! #x = ;]
@@ -378,7 +378,7 @@ fn test_split() {
             drop_empty_middle: false,
             drop_empty_end: false,
         }]]
-    }, "%[[!group!] [!group! A] [!group!] [!group! B] [!group! C] [!group! D] [!group! E] [!group!]]");
+    }, "[!stream! [!group!] [!group! A] [!group!] [!group! B] [!group! C] [!group! D] [!group! E] [!group!]]");
     // Drop empty middle works
     assert_preinterpret_eq!(
         {
@@ -390,7 +390,7 @@ fn test_split() {
                 drop_empty_end: false,
             }]]
         },
-        "%[[!group!] [!group! A] [!group! B] [!group! E] [!group!]]"
+        "[!stream! [!group!] [!group! A] [!group! B] [!group! E] [!group!]]"
     );
     // Code blocks are only evaluated once
     // (i.e. no "unknown variable B is output in the below")
@@ -403,7 +403,7 @@ fn test_split() {
                 separator: [#],
             }]]
         },
-        "%[[!group! A] [!group! B] [!group! C]]"
+        "[!stream! [!group! A] [!group! B] [!group! C]]"
     );
 }
 
@@ -411,7 +411,7 @@ fn test_split() {
 fn test_comma_split() {
     assert_preinterpret_eq!(
         { [!debug! [!..comma_split! Pizza, Mac and Cheese, Hamburger,]] },
-        "%[[!group! Pizza] [!group! Mac and Cheese] [!group! Hamburger]]"
+        "[!stream! [!group! Pizza] [!group! Mac and Cheese] [!group! Hamburger]]"
     );
 }
 
@@ -419,7 +419,7 @@ fn test_comma_split() {
 fn test_zip() {
     assert_preinterpret_eq!(
         { [!debug! [!..zip! ([Hello Goodbye] [World Friend])]] },
-        "%[(Hello World) (Goodbye Friend)]"
+        "[!stream! (Hello World) (Goodbye Friend)]"
     );
     assert_preinterpret_eq!(
         {
@@ -430,7 +430,7 @@ fn test_zip() {
                 streams: [#countries #flags #capitals],
             }]]
         },
-        r#"%[[!group! [France "🇫🇷" Paris] [Germany "🇩🇪" Berlin] [Italy "🇮🇹" Rome]]]"#,
+        r#"[!stream! [!group! [France "🇫🇷" Paris] [Germany "🇩🇪" Berlin] [Italy "🇮🇹" Rome]]]"#,
     );
     assert_preinterpret_eq!(
         {
@@ -442,7 +442,7 @@ fn test_zip() {
                 error_on_length_mismatch: false,
             }]]
         },
-        r#"%[[!group! A 1] [!group! B 2] [!group! C 3]]"#,
+        r#"[!stream! [!group! A 1] [!group! B 2] [!group! C 3]]"#,
     );
     assert_preinterpret_eq!(
         {
@@ -455,7 +455,7 @@ fn test_zip() {
                 },
             }]]
         },
-        r#"%[{ A 1 } { B 2 } { C 3 }]"#,
+        r#"[!stream! { A 1 } { B 2 } { C 3 }]"#,
     );
     assert_preinterpret_eq!(
         {
@@ -466,7 +466,7 @@ fn test_zip() {
                 streams: #..combined,
             }]]
         },
-        r#"%[{ A 1 } { B 2 } { C 3 }]"#,
+        r#"[!stream! { A 1 } { B 2 } { C 3 }]"#,
     );
     assert_preinterpret_eq!(
         {
@@ -475,7 +475,7 @@ fn test_zip() {
             [!set! #combined = [#letters #numbers]]
             [!debug! [!..zip! #..combined]]
         },
-        r#"%[[A 1] [B 2] [C 3]]"#,
+        r#"[!stream! [A 1] [B 2] [C 3]]"#,
     );
 }
 

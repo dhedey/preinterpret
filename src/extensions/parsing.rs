@@ -173,6 +173,7 @@ impl<'a, K> ParseStreamStack<'a, K> {
         self.current().peek(token)
     }
 
+    #[allow(unused)]
     pub(crate) fn peek2<T: syn::parse::Peek>(&mut self, token: T) -> bool {
         self.current().peek2(token)
     }

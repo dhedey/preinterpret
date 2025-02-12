@@ -1,5 +1,5 @@
 error: Expected an operator to continue the expression, or ; to mark the end of the expression statement
- --> tests/compilation_failures/expressions/flattened_variables_in_expressions.rs:5:35
+ --> tests/compilation_failures/expressions/flattened_variables_in_expressions.rs:5:43
   |
-5 |         #(partial_sum = %[+ 2]; 5 #..partial_sum)
-  |                                   ^
+5 |         #(partial_sum = [!stream! + 2]; 5 #..partial_sum)
+  |                                           ^

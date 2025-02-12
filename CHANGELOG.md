@@ -14,7 +14,7 @@
   * `[!set! #x += ...]` to performantly add extra characters to the stream.
   * `[!set! _ = ...]` interprets its arguments but then ignores any outputs.
   * `[!debug! ...]` to output its interpreted contents including none-delimited groups. Useful for debugging the content of variables.
-  * `[!output! ...]` can be used to just output its interpreted contents. Normally it's a no-op, but it can be useful inside a transformer.
+  * `[!stream! ...]` can be used to just output its interpreted contents. It's useful to create a stream value inside an expression.
   * `[!reinterpret! ...]` is like an `eval` command in scripting languages. It takes a stream, and parses/interprets it.
   * `[!settings! { ... }]` can be used to adjust the iteration limit.
 * Expression commands:
@@ -93,24 +93,18 @@ Inside a transform stream, the following grammar is supported:
   * `@[GROUP ...]` - Consumes a none-delimited group. Its arguments are used to transform the group's contents.
   * `@[EXACT ...]` - Interprets its arguments (i.e. variables are substituted, not bound; and command output is gathered) into an "exact match stream". And then expects to consume exactly the same stream from the input. It outputs the parsed stream.
 * Commands: Their output is appended to the transform's output. Useful patterns include:
-  * `@(inner = ...) [!output! #inner]` - wraps the output in a transparent group
+  * `@(inner = ...) [!stream! #inner]` - wraps the output in a transparent group
 
 ### To come
 
 * Consider separating an array `[x, y, z]` from a stream `[!stream! ...]` in the value model
-  * Start with new stream syntax: `%[...]`
-```rust
-#(x = [!stream! Hello World])
-#(x = %{Hello World})
-#(x = %[Hello World]) // Prefer this one so far
-#(x = stream { Hello World })
-```
+  * Create array value
+  * Add `+` support for concatenating arrays
   * Revisit the `SourceStreamInput` abstraction - maybe it's replaced with a `SourceExpression` which needs to output a stream?
   * Split outputs an array
   * Intersperse works with either an array or a stream (?)
   * For works only with an array (in future, also an iterator)
   * We can then consider dropping lots of the `group` wrappers I guess?
-  * Add `+` support for concatenating arrays
   * Then destructuring and parsing become different:
     * Destructuring works over the value model; parsing works over the token stream model.
 * Support `#(x[..])` syntax for indexing arrays and streams at read time

@@ -49,9 +49,9 @@ fn test_basic_evaluate_works() {
     assert_expression_eq!(#(123 > 456), false);
     assert_expression_eq!(#(six_as_sum = 3 + 3; #six_as_sum * #six_as_sum), 36);
     assert_expression_eq!(#(
-        partial_sum = %[+ 2];
-        [!debug! %[#(%[5] + partial_sum) =] + [!reinterpret! [!raw! #](5 #..partial_sum)]]
-    ), "%[[!group! 5 + 2] = [!group! 7]]");
+        partial_sum = [!stream! + 2];
+        [!debug! [!stream! #([!stream! 5] + partial_sum) =] + [!reinterpret! [!raw! #](5 #..partial_sum)]]
+    ), "[!stream! [!group! 5 + 2] = [!group! 7]]");
     assert_expression_eq!(#(1 + [!range! 1..2] as int), 2);
     assert_expression_eq!(#("hello" == "world"), false);
     assert_expression_eq!(#("hello" == "hello"), true);
@@ -63,7 +63,7 @@ fn test_basic_evaluate_works() {
     assert_expression_eq!(#("Zoo" > "Aardvark"), true);
     assert_expression_eq!(
         #([!debug! "Hello" as stream + "World" as stream + (1 + 1) as stream + (1 + 1) as group]),
-        r#"%["Hello" "World" 2 [!group! 2]]"#
+        r#"[!stream! "Hello" "World" 2 [!group! 2]]"#
     );
 }
 
@@ -90,7 +90,7 @@ fn test_very_long_expression_works() {
             [!settings! {
                 iteration_limit: 100000,
             }]
-            #(let expression = %[0] + [!for! #i in [!range! 0..100000] { + 1 }])
+            #(let expression = [!stream! 0] + [!for! #i in [!range! 0..100000] { + 1 }])
             [!reinterpret! [!raw! #](#expression)]
         },
         100000
@@ -135,7 +135,7 @@ fn assign_works() {
             let x = 5 + 5;
             [!debug! #..x]
         ),
-        "%[10]"
+        "[!stream! 10]"
     );
     assert_expression_eq!(
         #(
@@ -196,6 +196,6 @@ fn test_range() {
     assert_preinterpret_eq!({ [!string! [!range! 'a'..='f']] }, "abcdef");
     assert_preinterpret_eq!(
         { [!debug! [!..range! -1i8..3i8]] },
-        "%[[!group! -1i8] [!group! 0i8] [!group! 1i8] [!group! 2i8]]"
+        "[!stream! [!group! -1i8] [!group! 0i8] [!group! 1i8] [!group! 2i8]]"
     );
 }

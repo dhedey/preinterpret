@@ -441,7 +441,7 @@ define_command_enums! {
     SetCommand,
     TypedSetCommand,
     RawCommand,
-    OutputCommand,
+    StreamCommand,
     IgnoreCommand,
     ReinterpretCommand,
     SettingsCommand,
