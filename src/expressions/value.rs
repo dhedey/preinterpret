@@ -389,6 +389,25 @@ impl ExpressionValue {
             Self::Stream(value) => value.value.append_cloned_into(output),
         }
     }
+
+    pub(crate) fn debug(&self) -> String {
+        use std::fmt::Write;
+        let mut output = String::new();
+        match self {
+            ExpressionValue::None { .. } => {
+                write!(output, "None").unwrap();
+            },
+            ExpressionValue::Stream(stream) => {
+                write!(output, "%[{}]", stream.value.clone().concat_recursive(&ConcatBehaviour::debug())).unwrap();
+            },
+            _ => {
+                let mut stream = OutputStream::new();
+                self.output_flattened_to(&mut stream);
+                write!(output, "{}", stream.concat_recursive(&ConcatBehaviour::debug())).unwrap();
+            }
+        }
+        output
+    }
 }
 
 pub(crate) enum Grouping {

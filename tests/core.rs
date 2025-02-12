@@ -107,12 +107,12 @@ fn test_debug() {
     // It keeps the semantic punctuation spacing intact
     // (e.g. it keeps 'a and >> together)
     assert_preinterpret_eq!(
-        [!debug! impl<'a, T> MyStruct<'a, T> {
+        [!debug! %[impl<'a, T> MyStruct<'a, T> {
             pub fn new() -> Self {
                 !($crate::Test::CONSTANT >> 5 > 1)
             }
-        }],
-        "impl < 'a , T > MyStruct < 'a , T > { pub fn new () -> Self { ! ($ crate :: Test :: CONSTANT >> 5 > 1) } }"
+        }]],
+        "%[impl < 'a , T > MyStruct < 'a , T > { pub fn new () -> Self { ! ($ crate :: Test :: CONSTANT >> 5 > 1) } }]"
     );
     // It shows transparent groups
     // NOTE: The output code can't be used directly as preinterpret input
@@ -121,8 +121,8 @@ fn test_debug() {
     assert_preinterpret_eq!(
         {
             [!set! #x = Hello (World)]
-            [!debug! #x [!raw! #test] "and" [!raw! ##] #..x]
+            [!debug! %[#x [!raw! #test] "and" [!raw! ##] #..x]]
         },
-        r###"[!group! Hello (World)] # test "and" ## Hello (World)"###
+        r###"%[[!group! Hello (World)] # test "and" ## Hello (World)]"###
     );
 }

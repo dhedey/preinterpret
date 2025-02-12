@@ -64,9 +64,16 @@ impl Expressionable for Source {
                 return input.parse_err("Braces { ... } are not supported in an expression")
             }
             SourcePeekMatch::Group(Delimiter::Bracket) => {
-                UnaryAtom::Leaf(Self::Leaf::ExplicitStream(input.parse()?))
+                return input.parse_err("Brackets [ ... ] are not supported in an expression")
             }
-            SourcePeekMatch::Punct(_) => UnaryAtom::PrefixUnaryOperation(input.parse()?),
+            SourcePeekMatch::Punct(punct) => {
+                if punct.as_char() == '%' && input.peek2(syn::token::Bracket) {
+                    let _ = input.parse::<Token![%]>()?;
+                    UnaryAtom::Leaf(Self::Leaf::ExplicitStream(input.parse()?))
+                } else {
+                    UnaryAtom::PrefixUnaryOperation(input.parse()?)
+                }
+            }
             SourcePeekMatch::Ident(_) => match input.try_parse_or_revert() {
                 Ok(bool) => UnaryAtom::Leaf(Self::Leaf::Value(ExpressionValue::Boolean(
                     ExpressionBoolean::for_litbool(bool),
@@ -121,83 +128,6 @@ impl Expressionable for Source {
                 .interpret_to_new_stream(interpreter)?
                 .to_value(source_group.span_range()),
             SourceExpressionLeaf::Value(value) => value.clone(),
-        })
-    }
-}
-
-// Output
-// ===========
-
-#[derive(Clone)]
-#[allow(unused)]
-pub(crate) struct OutputExpression {
-    inner: Expression<Output>,
-}
-
-impl Parse<Output> for OutputExpression {
-    fn parse(input: ParseStream<Output>) -> ParseResult<Self> {
-        Ok(Self {
-            inner: ExpressionParser::parse(input)?,
-        })
-    }
-}
-
-#[allow(unused)]
-impl OutputExpression {
-    pub(crate) fn evaluate(&self) -> ExecutionResult<ExpressionValue> {
-        Output::evaluate(&self.inner, &mut ())
-    }
-}
-
-impl Expressionable for Output {
-    type Leaf = ExpressionValue;
-    type EvaluationContext = ();
-
-    fn evaluate_leaf(
-        leaf: &Self::Leaf,
-        _: &mut Self::EvaluationContext,
-    ) -> ExecutionResult<ExpressionValue> {
-        Ok(leaf.clone())
-    }
-
-    fn parse_unary_atom(input: &mut ParseStreamStack<Self>) -> ParseResult<UnaryAtom<Self>> {
-        Ok(match input.peek_grammar() {
-            OutputPeekMatch::Group(Delimiter::None | Delimiter::Parenthesis) => {
-                let (_, delim_span) = input.parse_and_enter_group()?;
-                UnaryAtom::Group(delim_span)
-            }
-            OutputPeekMatch::Group(Delimiter::Brace) => {
-                return input
-                    .parse_err("Curly braces are not supported in a re-interpreted expression")
-            }
-            OutputPeekMatch::Group(Delimiter::Bracket) => {
-                return input.parse_err("Square brackets [ .. ] are not supported in an expression")
-            }
-            OutputPeekMatch::Ident(_) => UnaryAtom::Leaf(ExpressionValue::Boolean(
-                ExpressionBoolean::for_litbool(input.parse()?),
-            )),
-            OutputPeekMatch::Punct(_) => UnaryAtom::PrefixUnaryOperation(input.parse()?),
-            OutputPeekMatch::Literal(_) => {
-                UnaryAtom::Leaf(ExpressionValue::for_syn_lit(input.parse()?))
-            }
-            OutputPeekMatch::End => {
-                return input.parse_err("The expression ended in an incomplete state")
-            }
-        })
-    }
-
-    fn parse_extension(input: &mut ParseStreamStack<Self>) -> ParseResult<NodeExtension> {
-        Ok(match input.peek_grammar() {
-            OutputPeekMatch::Punct(_) => match input.try_parse_or_revert::<BinaryOperation>() {
-                Ok(operation) => NodeExtension::BinaryOperation(operation),
-                Err(_) => NodeExtension::NoneMatched,
-            },
-            OutputPeekMatch::Ident(ident) if ident == "as" => {
-                let cast_operation =
-                    UnaryOperation::for_cast_operation(input.parse()?, input.parse_any_ident()?)?;
-                NodeExtension::PostfixOperation(cast_operation)
-            }
-            _ => NodeExtension::NoneMatched,
         })
     }
 }

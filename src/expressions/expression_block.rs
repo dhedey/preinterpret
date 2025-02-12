@@ -107,14 +107,31 @@ pub(crate) enum Statement {
 
 impl Parse<Source> for Statement {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
-        let forked = input.fork();
-        match forked.parse() {
-            Ok(assignment) => {
-                input.advance_to(&forked);
-                Ok(Statement::Assignment(assignment))
+        Ok(match input.cursor().ident() {
+            // let or some ident for a variable
+            // It may be the start of an assignment.
+            Some((ident, _)) if { let str = ident.to_string(); str != "true" && str != "false" } => {
+                let forked = input.fork();
+                match forked.call(|input| {
+                    let destination = input.parse()?;
+                    let equals = input.parse()?;
+                    Ok((destination, equals))
+                }) {
+                    Ok((destination, equals)) => {
+                        input.advance_to(&forked);
+                        // We commit to the fork after successfully parsing the destination and equals.
+                        // This gives better error messages, if there is an error in the expression itself.
+                        Statement::Assignment(AssignmentStatement {
+                            destination,
+                            equals,
+                            expression: input.parse()?,
+                        })
+                    },
+                    Err(_) => Statement::Expression(input.parse()?),
+                }
             }
-            Err(_) => Ok(Statement::Expression(input.parse()?)),
-        }
+            _ => Statement::Expression(input.parse()?),
+        })
     }
 }
 

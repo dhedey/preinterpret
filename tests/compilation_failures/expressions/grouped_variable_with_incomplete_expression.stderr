@@ -1,5 +1,5 @@
 error: Expected an operator to continue the expression, or ; to mark the end of the expression statement
- --> tests/compilation_failures/expressions/grouped_variable_with_incomplete_expression.rs:5:24
+ --> tests/compilation_failures/expressions/grouped_variable_with_incomplete_expression.rs:5:25
   |
-5 |         #(x = [+ 1]; 1 x)
-  |                        ^
+5 |         #(x = %[+ 1]; 1 x)
+  |                         ^

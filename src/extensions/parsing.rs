@@ -168,6 +168,15 @@ impl<'a, K> ParseStreamStack<'a, K> {
         self.current().parse()
     }
 
+    #[allow(unused)]
+    pub(crate) fn peek<T: syn::parse::Peek>(&mut self, token: T) -> bool {
+        self.current().peek(token)
+    }
+
+    pub(crate) fn peek2<T: syn::parse::Peek>(&mut self, token: T) -> bool {
+        self.current().peek2(token)
+    }
+
     pub(crate) fn parse_any_ident(&mut self) -> ParseResult<Ident> {
         self.current().parse_any_ident()
     }
@@ -220,12 +229,6 @@ impl<'a, K> ParseStreamStack<'a, K> {
 
 impl ParseStreamStack<'_, Source> {
     pub(crate) fn peek_grammar(&mut self) -> SourcePeekMatch {
-        self.current().peek_grammar()
-    }
-}
-
-impl ParseStreamStack<'_, Output> {
-    pub(crate) fn peek_grammar(&mut self) -> OutputPeekMatch {
         self.current().peek_grammar()
     }
 }
