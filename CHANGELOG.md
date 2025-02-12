@@ -98,13 +98,13 @@ Inside a transform stream, the following grammar is supported:
 ### To come
 
 * Consider separating an array `[x, y, z]` from a stream `[!stream! ...]` in the value model
+  * Start with new stream syntax: `%[...]`
 ```rust
 #(x = [!stream! Hello World])
 #(x = %{Hello World})
 #(x = %[Hello World]) // Prefer this one so far
 #(x = stream { Hello World })
 ```
-  * Replace `[!output! ...]` with `[!stream! ...]`
   * Revisit the `SourceStreamInput` abstraction - maybe it's replaced with a `SourceExpression` which needs to output a stream?
   * Split outputs an array
   * Intersperse works with either an array or a stream (?)
@@ -120,11 +120,13 @@ Inside a transform stream, the following grammar is supported:
   * `#(x[0..=3])` returns a TokenStream
 * Variable typing (stream / value / object to start with), including an `object` type, like a JS object:
   * Objects:
+    * Backed by an indexmap
     * Can be created with `#({ a: x, ... })`
-    * Can be destructured with `@{ #hello, world: _, ... }` or read with `#(x.hello)` or `#(x["hello"])`
-    * Debug impl is `#({ hello: [!group! BLAH], ["world"]: Hi, })`
+    * Can be read with `#(x.hello)` or `#(x["hello"])`
+    * Debug impl is `#({ hello: [!group! BLAH], ["#world"]: Hi, })`
     * They have an input object
     * Fields can be read/written to with `#(x.hello)` or `#(x.hello.world)`
+    * Can be destructured with `{ hello, world: _, ... }`
     * (Until we get custom type support into a syn fork), can be embedded into an output stream as a single token - e.g. `PREINTERPRET_OBJECT_2313`
     (The value can be looked up via a weak reference in the interpreter (as a central location), and the stream owning a reference to it to stop it being dropped). The final conversion to tokens can look up the object in the interpreter, and use its `stream()` function to either output the default
     stream for the object, or error and suggest fields the user should use instead.
@@ -137,6 +139,8 @@ Inside a transform stream, the following grammar is supported:
   * `.len()` on stream
   * Consider `.map(|<destructurer>| {})`
 * TRANSFORMERS => PARSERS cont
+  * Transformers no longer output
+  * Scrap `#>>x` etc in favour of `@(#x += ...)`
   * `@TOKEN_TREE`
   * `@TOKEN_OR_GROUP_CONTENT` - Literal, Ident, Punct or None-group content.
   * `@[ANY_GROUP ...]`
@@ -152,9 +156,7 @@ Inside a transform stream, the following grammar is supported:
     * `#(..)?`, `#(..)+`, `#(..),+`, `#(..)*`, `#(..),*`
   * Scrap `[!let!]` in favour of `[!parse! [...] as @(_ = ...)]`
 * Consider:
-  * Scrap `#>>x` etc in favour of `@(#x += ...)`
-  * Adding all of these: https://veykril.github.io/tlborm/decl-macros/minutiae/fragment-specifiers.html#ty 
-  * If the `[!split!]` command should actually be a transformer?
+  * Adding all of these: https://veykril.github.io/tlborm/decl-macros/minutiae/fragment-specifiers.html#ty
   * Adding `preinterpret::macro`
   * Adding `!define_command!`
   * Adding `!define_transformer!`

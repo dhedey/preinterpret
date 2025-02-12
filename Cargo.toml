@@ -12,8 +12,9 @@ keywords = ["macros", "declarative-macros", "toolkit", "interpreter", "preproces
 categories = ["development-tools", "compilers"]
 # MSRV 1.56.0 is the start of Edition 2021
 # MSRV 1.61.0 is the current MSRV of syn
+# MRSV 1.63.0 is needed to support RefMut::filter_map
 # If changing this, also update the local-check-msrv.sh script and ci.yml
-rust-version = "1.61"
+rust-version = "1.63"
 
 [lib]
 proc-macro = true
