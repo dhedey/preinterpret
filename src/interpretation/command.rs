@@ -140,8 +140,7 @@ impl<C: ValueCommandDefinition> CommandInvocationAs<OutputKindValue> for C {
             _ => Grouping::Grouped,
         };
         self.execute(context.interpreter)?
-            .output_to(grouping, output);
-        Ok(())
+            .output_to(grouping, output)
     }
 
     fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
@@ -399,7 +398,7 @@ macro_rules! define_command_enums {
             const ALL_KIND_NAMES: &'static [&'static str] = &[$($command::COMMAND_NAME,)*];
 
             pub(crate) fn list_all() -> String {
-                // TODO improve to add an "and" at the end
+                // TODO: Separate by group, and add "and" at the end
                 Self::ALL_KIND_NAMES.join(", ")
             }
         }
@@ -439,7 +438,6 @@ macro_rules! define_command_enums {
 define_command_enums! {
     // Core Commands
     SetCommand,
-    TypedSetCommand,
     RawCommand,
     StreamCommand,
     IgnoreCommand,

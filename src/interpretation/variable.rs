@@ -51,8 +51,7 @@ pub(crate) trait IsVariable: HasSpanRange {
     ) -> ExecutionResult<()> {
         self.read_existing(interpreter)?
             .get(self)?
-            .output_to(grouping, output);
-        Ok(())
+            .output_to(grouping, output)
     }
 
     fn read_existing<'i>(&self, interpreter: &'i Interpreter) -> ExecutionResult<&'i VariableData> {

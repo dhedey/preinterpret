@@ -178,12 +178,12 @@ impl UntypedFloat {
                 CastTarget::Stream => operation.output(
                     operation
                         .output(self)
-                        .into_new_output_stream(Grouping::Flattened),
+                        .into_new_output_stream(Grouping::Flattened)?,
                 ),
                 CastTarget::Group => operation.output(
                     operation
                         .output(self)
-                        .into_new_output_stream(Grouping::Grouped),
+                        .into_new_output_stream(Grouping::Grouped)?,
                 ),
             },
         })
@@ -328,8 +328,8 @@ macro_rules! impl_float_operations {
                         CastTarget::Float(FloatKind::F32) => operation.output(self as f32),
                         CastTarget::Float(FloatKind::F64) => operation.output(self as f64),
                         CastTarget::Boolean | CastTarget::Char => return operation.execution_err("This cast is not supported"),
-                        CastTarget::Stream => operation.output(operation.output(self).into_new_output_stream(Grouping::Flattened)),
-                        CastTarget::Group => operation.output(operation.output(self).into_new_output_stream(Grouping::Grouped)),
+                        CastTarget::Stream => operation.output(operation.output(self).into_new_output_stream(Grouping::Flattened)?),
+                        CastTarget::Group => operation.output(operation.output(self).into_new_output_stream(Grouping::Grouped)?),
                     }
                 })
             }

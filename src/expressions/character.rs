@@ -47,12 +47,12 @@ impl ExpressionChar {
                 CastTarget::Stream => operation.output(
                     operation
                         .output(char)
-                        .into_new_output_stream(Grouping::Flattened),
+                        .into_new_output_stream(Grouping::Flattened)?,
                 ),
                 CastTarget::Group => operation.output(
                     operation
                         .output(char)
-                        .into_new_output_stream(Grouping::Grouped),
+                        .into_new_output_stream(Grouping::Grouped)?,
                 ),
             },
         })

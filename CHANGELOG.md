@@ -98,7 +98,8 @@ Inside a transform stream, the following grammar is supported:
 ### To come
 
 * Consider separating an array `[x, y, z]` from a stream `[!stream! ...]` in the value model
-  * Create array value
+  * Create parsable array value
+  * Add test for casting to stream, and compile error when outputting to stream
   * Add `+` support for concatenating arrays
   * Revisit the `SourceStreamInput` abstraction - maybe it's replaced with a `SourceExpression` which needs to output a stream?
   * Split outputs an array
@@ -107,6 +108,7 @@ Inside a transform stream, the following grammar is supported:
   * We can then consider dropping lots of the `group` wrappers I guess?
   * Then destructuring and parsing become different:
     * Destructuring works over the value model; parsing works over the token stream model.
+  * Support a CastTarget of Array (only supported for array and stream and iterator)
 * Support `#(x[..])` syntax for indexing arrays and streams at read time
   * Via a post-fix `[...]` operation with high priority
   * `#(x[0])` returns the item at that position of the array / OR the value at that position of the stream (using `INFER_TOKEN_TREE`)
@@ -236,20 +238,13 @@ Inside a transform stream, the following grammar is supported:
 // EXAMPLE
 #(parsed = [])
 [!parse! [...] as
-  // OPTION 1
   @(
     #(let item = {})
     impl @[item.trait = IDENT] for @[item.type = IDENT]
-    #(parsed += item)
+    #(parsed.push(item))
   ),*
-  // OPTION 2
-  @[COMMA_REPEATED {
-    before: #(let item = {}),
-    item: @(impl @[#(item.trait) = IDENT] for @[#(item.type) = IDENT]),
-    after: #(parsed += item),
-  }]
 ]
-[!for! @[{ #trait, #type }] in #(parsed.output) {
+[!stream_for! { trait, type } in parsed.output {
   impl #trait for #type {}
 }]
 

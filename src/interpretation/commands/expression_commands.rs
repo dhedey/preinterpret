@@ -53,7 +53,7 @@ impl GroupedStreamCommandDefinition for RangeCommand {
 
         for value in range_iterator {
             // It needs to be grouped so that e.g. -1 is interpreted as a single item, not two separate tokens.
-            value.output_to(Grouping::Grouped, output)
+            value.output_to(Grouping::Grouped, output)?
         }
 
         Ok(())

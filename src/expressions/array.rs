@@ -1,39 +1,51 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct ExpressionStream {
-    pub(crate) value: OutputStream,
+pub(crate) struct ExpressionArray {
+    pub(crate) items: Vec<ExpressionValue>,
     /// The span range that generated this value.
     /// For a complex expression, the start span is the most left part
     /// of the expression, and the end span is the most right part.
     pub(crate) span_range: SpanRange,
 }
 
-impl ExpressionStream {
+impl ExpressionArray {
     pub(super) fn handle_unary_operation(
-        self,
+        mut self,
         operation: OutputSpanned<UnaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         Ok(match operation.operation {
             UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => {
                 return operation.unsupported(self)
             }
-            UnaryOperation::Cast { target, .. } => match target {
-                CastTarget::Stream => operation.output(self.value),
-                CastTarget::Group => operation.output(
-                    operation
-                        .output(self.value)
-                        .into_new_output_stream(Grouping::Grouped)?,
-                ),
+            UnaryOperation::Cast { target, target_ident, .. } => match target {
+                CastTarget::Stream => {
+                    operation.output(self.to_stream_with_grouped_items()?)
+                },
+                CastTarget::Group => {
+                    operation.output(operation.output(self.to_stream_with_grouped_items()?).into_new_output_stream(Grouping::Grouped)?)
+                },
                 _ => {
-                    let coerced = self.value.coerce_into_value(self.span_range);
-                    if let ExpressionValue::Stream(_) = &coerced {
-                        return operation.unsupported(coerced);
+                    if self.items.len() == 1 {
+                        self.items.pop().unwrap().handle_unary_operation(operation)?
+                    } else {
+                        return operation.execution_err(format!(
+                            "Cannot only attempt to cast a singleton array to {} but the array has {} elements",
+                            target_ident,
+                            self.items.len(),
+                        ));
                     }
-                    coerced.handle_unary_operation(operation)?
                 }
             },
         })
+    }
+
+    fn to_stream_with_grouped_items(self) -> ExecutionResult<OutputStream> {
+        let mut stream = OutputStream::new();
+        for item in self.items {
+            item.output_to(Grouping::Grouped, &mut stream)?;
+        }
+        Ok(stream)
     }
 
     pub(super) fn handle_integer_binary_operation(
@@ -49,12 +61,12 @@ impl ExpressionStream {
         rhs: Self,
         operation: OutputSpanned<PairedBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
-        let lhs = self.value;
-        let rhs = rhs.value;
+        let lhs = self.items;
+        let rhs = rhs.items;
         Ok(match operation.operation {
             PairedBinaryOperation::Addition { .. } => operation.output({
                 let mut stream = lhs;
-                rhs.append_cloned_into(&mut stream);
+                stream.extend(rhs);
                 stream
             }),
             PairedBinaryOperation::Subtraction { .. }
@@ -76,22 +88,22 @@ impl ExpressionStream {
     }
 }
 
-impl HasValueType for ExpressionStream {
+impl HasValueType for ExpressionArray {
     fn value_type(&self) -> &'static str {
-        self.value.value_type()
+        self.items.value_type()
     }
 }
 
-impl HasValueType for OutputStream {
+impl HasValueType for Vec<ExpressionValue> {
     fn value_type(&self) -> &'static str {
-        "stream"
+        "array"
     }
 }
 
-impl ToExpressionValue for OutputStream {
+impl ToExpressionValue for Vec<ExpressionValue> {
     fn to_value(self, span_range: SpanRange) -> ExpressionValue {
-        ExpressionValue::Stream(ExpressionStream {
-            value: self,
+        ExpressionValue::Array(ExpressionArray {
+            items: self,
             span_range,
         })
     }

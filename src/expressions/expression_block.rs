@@ -79,7 +79,7 @@ impl Interpret for &ExpressionBlock {
             Some(_) => Grouping::Flattened,
             None => Grouping::Grouped,
         };
-        self.evaluate(interpreter)?.output_to(grouping, output);
+        self.evaluate(interpreter)?.output_to(grouping, output)?;
         Ok(())
     }
 }

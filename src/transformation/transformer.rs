@@ -197,7 +197,7 @@ macro_rules! define_transformers {
             const ALL_KIND_NAMES: &'static [&'static str] = &[$($transformer::TRANSFORMER_NAME,)*];
 
             pub(crate) fn list_all() -> String {
-                // TODO improve to add an "and" at the end
+                // TODO: Add "and" at the end
                 Self::ALL_KIND_NAMES.join(", ")
             }
         }

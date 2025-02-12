@@ -1,3 +1,4 @@
+mod array;
 mod boolean;
 mod character;
 mod evaluation;
@@ -13,6 +14,7 @@ mod value;
 
 // Marked as use for expression sub-modules to use with a `use super::*` statement
 use crate::internal_prelude::*;
+use array::*;
 use boolean::*;
 use character::*;
 use evaluation::*;

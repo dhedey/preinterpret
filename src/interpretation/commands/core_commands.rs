@@ -113,42 +113,6 @@ impl NoOutputCommandDefinition for SetCommand {
     }
 }
 
-/// This is temporary until we have a proper implementation of #(...)
-#[derive(Clone)]
-pub(crate) struct TypedSetCommand {
-    variable: GroupedVariable,
-    #[allow(unused)]
-    equals: Token![=],
-    content: SourceExpression,
-}
-
-impl CommandType for TypedSetCommand {
-    type OutputKind = OutputKindNone;
-}
-
-impl NoOutputCommandDefinition for TypedSetCommand {
-    const COMMAND_NAME: &'static str = "typed_set";
-
-    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
-        arguments.fully_parse_or_error(
-            |input| {
-                Ok(TypedSetCommand {
-                    variable: input.parse()?,
-                    equals: input.parse()?,
-                    content: input.parse()?,
-                })
-            },
-            "Expected [!typed_set! #var1 = <expression>]",
-        )
-    }
-
-    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        let content = self.content.interpret_to_value(interpreter)?;
-        self.variable.set_value(interpreter, content)?;
-        Ok(())
-    }
-}
-
 #[derive(Clone)]
 pub(crate) struct RawCommand {
     token_stream: TokenStream,

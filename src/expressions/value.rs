@@ -11,6 +11,7 @@ pub(crate) enum ExpressionValue {
     // Unsupported literal is a type here so that we can parse such a token
     // as a value rather than a stream, and give it better error messages
     UnsupportedLiteral(UnsupportedLiteral),
+    Array(ExpressionArray),
     Stream(ExpressionStream),
 }
 
@@ -229,6 +230,9 @@ impl ExpressionValue {
             (ExpressionValue::Char(left), ExpressionValue::Char(right)) => {
                 EvaluationLiteralPair::CharPair(left, right)
             }
+            (ExpressionValue::Array(left), ExpressionValue::Array(right)) => {
+                EvaluationLiteralPair::ArrayPair(left, right)
+            }
             (ExpressionValue::Stream(left), ExpressionValue::Stream(right)) => {
                 EvaluationLiteralPair::StreamPair(left, right)
             }
@@ -275,6 +279,7 @@ impl ExpressionValue {
             ExpressionValue::String(value) => value.handle_unary_operation(operation),
             ExpressionValue::Char(value) => value.handle_unary_operation(operation),
             ExpressionValue::Stream(value) => value.handle_unary_operation(operation),
+            ExpressionValue::Array(value) => value.handle_unary_operation(operation),
             ExpressionValue::UnsupportedLiteral(value) => operation.unsupported(value),
         }
     }
@@ -300,6 +305,7 @@ impl ExpressionValue {
             }
             ExpressionValue::Char(value) => value.handle_integer_binary_operation(right, operation),
             ExpressionValue::UnsupportedLiteral(value) => operation.unsupported(value),
+            ExpressionValue::Array(value) => value.handle_integer_binary_operation(right, operation),
             ExpressionValue::Stream(value) => {
                 value.handle_integer_binary_operation(right, operation)
             }
@@ -325,6 +331,7 @@ impl ExpressionValue {
             Self::String(value) => &mut value.span_range,
             Self::Char(value) => &mut value.span_range,
             Self::UnsupportedLiteral(value) => &mut value.span_range,
+            Self::Array(value) => &mut value.span_range,
             Self::Stream(value) => &mut value.span_range,
         }
     }
@@ -339,44 +346,40 @@ impl ExpressionValue {
         self
     }
 
-    pub(crate) fn into_new_output_stream(self, grouping: Grouping) -> OutputStream {
-        match (self, grouping) {
+    pub(crate) fn into_new_output_stream(self, grouping: Grouping) -> ExecutionResult<OutputStream> {
+        Ok(match (self, grouping) {
             (Self::Stream(value), Grouping::Flattened) => value.value,
             (other, grouping) => {
                 let mut output = OutputStream::new();
-                other.output_to(grouping, &mut output);
+                other.output_to(grouping, &mut output)?;
                 output
             }
-        }
+        })
     }
 
-    pub(crate) fn output_to(&self, grouping: Grouping, output: &mut OutputStream) {
+    pub(crate) fn output_to(&self, grouping: Grouping, output: &mut OutputStream) -> ExecutionResult<()> {
         match grouping {
             Grouping::Grouped => {
                 // Grouping can be important for different values, to ensure they're read atomically
                 // when the output stream is viewed as an array/iterable, e.g. in a for loop.
                 // * Grouping means -1 is interpreted atomically, rather than as a punct then a number
                 // * Grouping means that a stream is interpreted atomically
-                let span = self.span_range().join_into_span_else_start();
                 output
                     .push_grouped(
-                        |inner| {
-                            self.output_flattened_to(inner);
-                            Ok(())
-                        },
+                        |inner| self.output_flattened_to(inner),
                         Delimiter::None,
-                        span,
-                    )
-                    .unwrap()
+                        self.span_range().join_into_span_else_start(),
+                    )?;
             }
             Grouping::Flattened => {
-                self.output_flattened_to(output);
+                self.output_flattened_to(output)?;
             }
         }
+        Ok(())
     }
 
-    fn output_flattened_to(&self, output: &mut OutputStream) {
-        match self {
+    fn output_flattened_to(&self, output: &mut OutputStream) -> ExecutionResult<()> {
+        Ok(match self {
             Self::None { .. } => {}
             Self::Integer(value) => output.push_literal(value.to_literal()),
             Self::Float(value) => output.push_literal(value.to_literal()),
@@ -386,13 +389,19 @@ impl ExpressionValue {
             Self::UnsupportedLiteral(literal) => {
                 output.extend_raw_tokens(literal.lit.to_token_stream())
             }
+            Self::Array { .. } => return self.execution_err("Arrays cannot be output to a stream. You likely wish to use the !for! command or if you wish to output every element, use `as stream` to cast the array to a stream."),
             Self::Stream(value) => value.value.append_cloned_into(output),
-        }
+        })
     }
 
     pub(crate) fn debug(&self) -> String {
-        use std::fmt::Write;
         let mut output = String::new();
+        self.debug_to(&mut output);
+        output
+    }
+
+    fn debug_to(&self, output: &mut String) {
+        use std::fmt::Write;
         match self {
             ExpressionValue::None { .. } => {
                 write!(output, "None").unwrap();
@@ -406,14 +415,24 @@ impl ExpressionValue {
                     write!(output, "[!stream! {}]", string_rep).unwrap();
                 }
             }
+            ExpressionValue::Array(array) => {
+                write!(output, "[").unwrap();
+                for (i, item) in array.items.iter().enumerate() {
+                    if i != 0 {
+                        write!(output, ", ").unwrap();
+                    }
+                    item.debug_to(output);
+                }
+                write!(output, "]").unwrap();
+            }
             _ => {
+                // This isn't the most efficient, but it's less code and debug doesn't need to be super efficient.
                 let mut stream = OutputStream::new();
-                self.output_flattened_to(&mut stream);
+                self.output_flattened_to(&mut stream).expect("Non-composite values should all be able to be outputted to a stream");
                 let string_rep = stream.concat_recursive(&ConcatBehaviour::debug());
                 write!(output, "{}", string_rep).unwrap();
             }
         }
-        output
     }
 }
 
@@ -432,6 +451,7 @@ impl HasValueType for ExpressionValue {
             Self::String(value) => value.value_type(),
             Self::Char(value) => value.value_type(),
             Self::UnsupportedLiteral(value) => value.value_type(),
+            Self::Array(value) => value.value_type(),
             Self::Stream(value) => value.value_type(),
         }
     }
@@ -447,6 +467,7 @@ impl HasSpanRange for ExpressionValue {
             Self::String(str) => str.span_range,
             Self::Char(char) => char.span_range,
             Self::UnsupportedLiteral(lit) => lit.span_range,
+            Self::Array(array) => array.span_range,
             Self::Stream(stream) => stream.span_range,
         }
     }
@@ -484,6 +505,7 @@ pub(super) enum EvaluationLiteralPair {
     BooleanPair(ExpressionBoolean, ExpressionBoolean),
     StringPair(ExpressionString, ExpressionString),
     CharPair(ExpressionChar, ExpressionChar),
+    ArrayPair(ExpressionArray, ExpressionArray),
     StreamPair(ExpressionStream, ExpressionStream),
 }
 
@@ -498,6 +520,7 @@ impl EvaluationLiteralPair {
             Self::BooleanPair(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
             Self::StringPair(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
             Self::CharPair(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
+            Self::ArrayPair(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
             Self::StreamPair(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
         }
     }
