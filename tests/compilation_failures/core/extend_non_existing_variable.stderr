@@ -1,4 +1,4 @@
-error: The variable #variable wasn't already set
+error: The variable does not already exist in the current scope
  --> tests/compilation_failures/core/extend_non_existing_variable.rs:5:16
   |
 5 |         [!set! #variable += 2]

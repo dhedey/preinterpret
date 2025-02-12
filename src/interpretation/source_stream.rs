@@ -41,8 +41,7 @@ impl HasSpan for SourceStream {
 #[derive(Clone)]
 pub(crate) enum SourceItem {
     Command(Command),
-    GroupedVariable(GroupedVariable),
-    FlattenedVariable(FlattenedVariable),
+    Variable(MarkedVariable),
     ExpressionBlock(ExpressionBlock),
     SourceGroup(SourceGroup),
     Punct(Punct),
@@ -55,12 +54,7 @@ impl Parse<Source> for SourceItem {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => SourceItem::Command(input.parse()?),
             SourcePeekMatch::Group(_) => SourceItem::SourceGroup(input.parse()?),
-            SourcePeekMatch::Variable(Grouping::Grouped) => {
-                SourceItem::GroupedVariable(input.parse()?)
-            }
-            SourcePeekMatch::Variable(Grouping::Flattened) => {
-                SourceItem::FlattenedVariable(input.parse()?)
-            }
+            SourcePeekMatch::Variable(_) => SourceItem::Variable(input.parse()?),
             SourcePeekMatch::ExpressionBlock(_) => SourceItem::ExpressionBlock(input.parse()?),
             SourcePeekMatch::ExplicitTransformStream | SourcePeekMatch::Transformer(_) => {
                 return input.parse_err("Destructurings are not supported here. If this wasn't intended to be a destructuring, replace @ with [!raw! @]");
@@ -86,10 +80,7 @@ impl Interpret for SourceItem {
             SourceItem::Command(command_invocation) => {
                 command_invocation.interpret_into(interpreter, output)?;
             }
-            SourceItem::GroupedVariable(variable) => {
-                variable.interpret_into(interpreter, output)?;
-            }
-            SourceItem::FlattenedVariable(variable) => {
+            SourceItem::Variable(variable) => {
                 variable.interpret_into(interpreter, output)?;
             }
             SourceItem::ExpressionBlock(block) => {
@@ -110,8 +101,7 @@ impl HasSpanRange for SourceItem {
     fn span_range(&self) -> SpanRange {
         match self {
             SourceItem::Command(command_invocation) => command_invocation.span_range(),
-            SourceItem::FlattenedVariable(variable) => variable.span_range(),
-            SourceItem::GroupedVariable(variable) => variable.span_range(),
+            SourceItem::Variable(variable) => variable.span_range(),
             SourceItem::ExpressionBlock(block) => block.span_range(),
             SourceItem::SourceGroup(group) => group.span_range(),
             SourceItem::Punct(punct) => punct.span_range(),

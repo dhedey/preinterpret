@@ -54,13 +54,14 @@ The following are recognized values:
 * String literals
 * Char literals
 * Other literals
-* Token streams which are defined as `[...]` and can be appended with the `+` operator.
+* Token streams which are defined as `[...]`.
 
 The following operators are supported:
 * The numeric operators: `+ - * / % & | ^`
 * The lazy boolean operators: `|| &&`
 * The comparison operators: `== != < > <= >=`
 * The shift operators: `>> <<`
+* The concatenation operator: `+` can be used to concatenate strings and streams.
 * Casting with `as` including to untyped integers/floats with `as int` and `as float`, to a grouped stream with `as group` and to a flattened stream with `as stream`.
 * () and none-delimited groups for precedence
 
@@ -96,18 +97,28 @@ Inside a transform stream, the following grammar is supported:
 
 ### To come
 
-* Complete `ExpressionBlock` support:
-  * Change variables to store expression values
-  * Support `#(x[..])` syntax for indexing streams at read time
-    * Via a post-fix `[...]` operator
-    * `#(x[0])`
-    * `#(x[0..3])` returns a TokenStream
-    * `#(x[0..=3])` returns a TokenStream
-  * Add `+` support for concatenating strings
-  * Create an `enum MarkedVariable { Grouped(GroupedMarkedVariable), Flattened(FlattenedMarkedVariable) }`
-  * Revisit the `SourceStreamInput` abstraction
+* Consider separating an array `[x, y, z]` from a stream `[!stream! ...]` in the value model
+```rust
+#(x = [!stream! Hello World])
+#(x = %{Hello World})
+#(x = %[Hello World]) // Prefer this one so far
+#(x = stream { Hello World })
+```
+  * Replace `[!output! ...]` with `[!stream! ...]`
+  * Revisit the `SourceStreamInput` abstraction - maybe it's replaced with a `SourceExpression` which needs to output a stream?
+  * Split outputs an array
+  * Intersperse works with either an array or a stream (?)
+  * For works only with an array (in future, also an iterator)
+  * We can then consider dropping lots of the `group` wrappers I guess?
+  * Add `+` support for concatenating arrays
+  * Then destructuring and parsing become different:
+    * Destructuring works over the value model; parsing works over the token stream model.
+* Support `#(x[..])` syntax for indexing arrays and streams at read time
+  * Via a post-fix `[...]` operation with high priority
+  * `#(x[0])` returns the item at that position of the array / OR the value at that position of the stream (using `INFER_TOKEN_TREE`)
+  * `#(x[0..3])` returns a TokenStream
+  * `#(x[0..=3])` returns a TokenStream
 * Variable typing (stream / value / object to start with), including an `object` type, like a JS object:
-  * Separate `&mut Output` and `StreamOutput`, `ValueOutput = ExpressionOutput`, `ObjectOutput`
   * Objects:
     * Can be created with `#({ a: x, ... })`
     * Can be destructured with `@{ #hello, world: _, ... }` or read with `#(x.hello)` or `#(x["hello"])`
@@ -121,11 +132,11 @@ Inside a transform stream, the following grammar is supported:
   * Values:
     * When we parse a `#x` (`@(x = INFER_TOKEN_TREE)`) binding, it tries to parse a stream as a value before interpreting a `[!group! ...]` as a stream.
     * Output to final output as unwrapped content
-  * Method calls
-    * Also add support for methods (for e.g. exposing functions on syn objects).
-    * `.len()` on stream
-    * Consider `.map(|<destructurer>| {})`
-* Destructurers => Transformers cont
+* Method calls
+  * Also add support for methods (for e.g. exposing functions on syn objects).
+  * `.len()` on stream
+  * Consider `.map(|<destructurer>| {})`
+* TRANSFORMERS => PARSERS cont
   * `@TOKEN_TREE`
   * `@TOKEN_OR_GROUP_CONTENT` - Literal, Ident, Punct or None-group content.
   * `@[ANY_GROUP ...]`
@@ -151,6 +162,7 @@ Inside a transform stream, the following grammar is supported:
 * Have UntypedInteger have an inner representation of either i128 or literal (and same with float)
 * Maybe add a `@[REINTERPRET ..]` transformer.
 * Add casts of other integers to char, via `char::from_u32(u32::try_from(x))`
+* Put `[!set! ...]` inside an opt-in feature.
 * TODO check
 * Check all `#[allow(unused)]` and remove any which aren't needed
 * Work on book

@@ -89,18 +89,20 @@ impl NoOutputCommandDefinition for SetCommand {
                 variable, content, ..
             } => {
                 let content = content.interpret_to_new_stream(interpreter)?;
-                variable.set(interpreter, content)?;
+                variable.set_stream(interpreter, content)?;
             }
             SetArguments::ExtendVariable {
                 variable, content, ..
             } => {
                 let variable_data = variable.get_existing_for_mutation(interpreter)?;
-                content
-                    .interpret_into(interpreter, variable_data.get_mut(&variable)?.deref_mut())?;
+                content.interpret_into(
+                    interpreter,
+                    variable_data.get_mut_stream(&variable)?.deref_mut(),
+                )?;
             }
             SetArguments::SetVariablesEmpty { variables } => {
                 for variable in variables {
-                    variable.set(interpreter, OutputStream::new())?;
+                    variable.set_stream(interpreter, OutputStream::new())?;
                 }
             }
             SetArguments::Discard { content, .. } => {

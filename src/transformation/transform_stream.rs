@@ -240,7 +240,7 @@ impl HandleTransformation for ExplicitTransformStream {
             } => {
                 let mut new_output = OutputStream::new();
                 content.handle_transform(input, interpreter, &mut new_output)?;
-                variable.set(interpreter, new_output)?;
+                variable.set_stream(interpreter, new_output)?;
             }
             ExplicitTransformStreamArguments::ExtendToVariable {
                 variable, content, ..
@@ -249,7 +249,7 @@ impl HandleTransformation for ExplicitTransformStream {
                 content.handle_transform(
                     input,
                     interpreter,
-                    variable_data.get_mut(variable)?.deref_mut(),
+                    variable_data.get_mut_stream(variable)?.deref_mut(),
                 )?;
             }
             ExplicitTransformStreamArguments::Discard { content, .. } => {

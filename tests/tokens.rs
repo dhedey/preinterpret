@@ -316,6 +316,17 @@ fn complex_cases_for_intersperse_and_input_types() {
 
 #[test]
 fn test_split() {
+    // Empty separators are allowed, and split on every token
+    // In this case, drop_empty_start / drop_empty_end are ignored
+    assert_preinterpret_eq!(
+        {
+            [!debug! [!..split! {
+                stream: [A::B],
+                separator: [],
+            }]]
+        },
+        "[!group! A] [!group! :] [!group! :] [!group! B]"
+    );
     // Double separators are allowed
     assert_preinterpret_eq!(
         {

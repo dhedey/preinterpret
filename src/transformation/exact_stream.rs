@@ -31,6 +31,12 @@ where
     }
 }
 
+impl<C> ExactSegment<C> {
+    pub(crate) fn len(&self) -> usize {
+        self.inner.len()
+    }
+}
+
 impl<C> HandleTransformation for ExactSegment<C> {
     fn handle_transform(
         &self,
@@ -51,8 +57,7 @@ pub(crate) enum ExactItem {
     TransformStreamInput(ExplicitTransformStream),
     Transformer(Transformer),
     ExactCommandOutput(Command),
-    ExactGroupedVariableOutput(GroupedVariable),
-    ExactFlattenedVariableOutput(FlattenedVariable),
+    ExactVariableOutput(MarkedVariable),
     ExactExpressionBlock(ExpressionBlock),
     ExactPunct(Punct),
     ExactIdent(Ident),
@@ -64,12 +69,7 @@ impl Parse<Source> for ExactItem {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => Self::ExactCommandOutput(input.parse()?),
-            SourcePeekMatch::Variable(Grouping::Grouped) => {
-                Self::ExactGroupedVariableOutput(input.parse()?)
-            }
-            SourcePeekMatch::Variable(Grouping::Flattened) => {
-                Self::ExactFlattenedVariableOutput(input.parse()?)
-            }
+            SourcePeekMatch::Variable(_) => Self::ExactVariableOutput(input.parse()?),
             SourcePeekMatch::ExpressionBlock(_) => Self::ExactExpressionBlock(input.parse()?),
             SourcePeekMatch::AppendVariableBinding => {
                 return input
@@ -119,14 +119,8 @@ impl HandleTransformation for ExactItem {
                     .into_exact_stream()?
                     .handle_transform(input, interpreter, output)?;
             }
-            ExactItem::ExactGroupedVariableOutput(grouped_variable) => {
-                grouped_variable
-                    .interpret_to_new_stream(interpreter)?
-                    .into_exact_stream()?
-                    .handle_transform(input, interpreter, output)?;
-            }
-            ExactItem::ExactFlattenedVariableOutput(flattened_variable) => {
-                flattened_variable
+            ExactItem::ExactVariableOutput(variable) => {
+                variable
                     .interpret_to_new_stream(interpreter)?
                     .into_exact_stream()?
                     .handle_transform(input, interpreter, output)?;

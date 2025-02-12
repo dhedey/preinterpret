@@ -7,8 +7,7 @@ use crate::internal_prelude::*;
 #[derive(Clone)]
 pub(crate) enum SourceValue<T> {
     Command(Command),
-    GroupedVariable(GroupedVariable),
-    FlattenedVariable(FlattenedVariable),
+    Variable(MarkedVariable),
     ExpressionBlock(ExpressionBlock),
     Code(SourceCodeBlock),
     Value(T),
@@ -18,10 +17,7 @@ impl<T: Parse<Source>> Parse<Source> for SourceValue<T> {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => Self::Command(input.parse()?),
-            SourcePeekMatch::Variable(Grouping::Grouped) => Self::GroupedVariable(input.parse()?),
-            SourcePeekMatch::Variable(Grouping::Flattened) => {
-                Self::FlattenedVariable(input.parse()?)
-            }
+            SourcePeekMatch::Variable(_) => Self::Variable(input.parse()?),
             SourcePeekMatch::ExpressionBlock(_) => Self::ExpressionBlock(input.parse()?),
             SourcePeekMatch::Group(Delimiter::Brace) => Self::Code(input.parse()?),
             SourcePeekMatch::ExplicitTransformStream
@@ -50,8 +46,7 @@ impl<T: HasSpanRange> HasSpanRange for SourceValue<T> {
     fn span_range(&self) -> SpanRange {
         match self {
             SourceValue::Command(command) => command.span_range(),
-            SourceValue::GroupedVariable(variable) => variable.span_range(),
-            SourceValue::FlattenedVariable(variable) => variable.span_range(),
+            SourceValue::Variable(variable) => variable.span_range(),
             SourceValue::ExpressionBlock(block) => block.span_range(),
             SourceValue::Code(code) => code.span_range(),
             SourceValue::Value(value) => value.span_range(),
@@ -65,20 +60,14 @@ impl<T: InterpretToValue<OutputValue = I>, I: Parse<Output>> InterpretToValue fo
     fn interpret_to_value(self, interpreter: &mut Interpreter) -> ExecutionResult<I> {
         let descriptor = match self {
             SourceValue::Command(_) => "command output",
-            SourceValue::GroupedVariable(_) => "grouped variable output",
-            SourceValue::FlattenedVariable(_) => "flattened variable output",
+            SourceValue::Variable(_) => "variable output",
             SourceValue::ExpressionBlock(_) => "an #(...) expression block",
             SourceValue::Code(_) => "output from the { ... } block",
             SourceValue::Value(_) => "value",
         };
         let interpreted_stream = match self {
             SourceValue::Command(command) => command.interpret_to_new_stream(interpreter)?,
-            SourceValue::GroupedVariable(variable) => {
-                variable.interpret_to_new_stream(interpreter)?
-            }
-            SourceValue::FlattenedVariable(variable) => {
-                variable.interpret_to_new_stream(interpreter)?
-            }
+            SourceValue::Variable(variable) => variable.interpret_to_new_stream(interpreter)?,
             SourceValue::ExpressionBlock(block) => block.interpret_to_new_stream(interpreter)?,
             SourceValue::Code(code) => code.interpret_to_new_stream(interpreter)?,
             SourceValue::Value(value) => return value.interpret_to_value(interpreter),

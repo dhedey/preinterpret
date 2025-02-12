@@ -24,6 +24,7 @@ fn test_basic_evaluate_works() {
     assert_expression_eq!(#(!!(!!(true))), true);
     assert_expression_eq!(#(1 + 5), 6u8);
     assert_expression_eq!(#(1 + 5), 6i128);
+    assert_expression_eq!(#("Hello" + " " + "World!"), "Hello World!");
     assert_expression_eq!(#(1 + 5u16), 6u16);
     assert_expression_eq!(#(127i8 + (-127i8) + (-127i8)), -127i8);
     assert_expression_eq!(#(3.0 + 3.2), 6.2);
@@ -175,7 +176,7 @@ fn test_range() {
     );
     assert_preinterpret_eq!(
         {
-            [!set! #x = 2]
+            #(x = 2)
             [!string! [!intersperse! {
                 items: [!range! (#x + #x)..=5],
                 separator: [" "],

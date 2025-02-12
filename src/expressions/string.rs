@@ -57,8 +57,8 @@ impl ExpressionString {
         let lhs = self.value;
         let rhs = rhs.value;
         Ok(match operation.operation {
-            PairedBinaryOperation::Addition { .. }
-            | PairedBinaryOperation::Subtraction { .. }
+            PairedBinaryOperation::Addition { .. } => operation.output(lhs + &rhs),
+            PairedBinaryOperation::Subtraction { .. }
             | PairedBinaryOperation::Multiplication { .. }
             | PairedBinaryOperation::Division { .. }
             | PairedBinaryOperation::LogicalAnd { .. }

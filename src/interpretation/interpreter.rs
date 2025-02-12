@@ -12,11 +12,11 @@ pub(crate) struct Interpreter {
 
 #[derive(Clone)]
 pub(crate) struct VariableData {
-    value: Rc<RefCell<OutputStream>>,
+    value: Rc<RefCell<ExpressionValue>>,
 }
 
 impl VariableData {
-    fn new(tokens: OutputStream) -> Self {
+    fn new(tokens: ExpressionValue) -> Self {
         Self {
             value: Rc::new(RefCell::new(tokens)),
         }
@@ -24,8 +24,8 @@ impl VariableData {
 
     pub(crate) fn get<'d>(
         &'d self,
-        variable: &impl IsVariable,
-    ) -> ExecutionResult<Ref<'d, OutputStream>> {
+        variable: &(impl IsVariable + ?Sized),
+    ) -> ExecutionResult<Ref<'d, ExpressionValue>> {
         self.value.try_borrow().map_err(|_| {
             variable
                 .error("The variable cannot be read if it is currently being modified")
@@ -35,8 +35,8 @@ impl VariableData {
 
     pub(crate) fn get_mut<'d>(
         &'d self,
-        variable: &impl IsVariable,
-    ) -> ExecutionResult<RefMut<'d, OutputStream>> {
+        variable: &(impl IsVariable + ?Sized),
+    ) -> ExecutionResult<RefMut<'d, ExpressionValue>> {
         self.value.try_borrow_mut().map_err(|_| {
             variable.execution_error(
                 "The variable cannot be modified if it is already currently being modified",
@@ -44,10 +44,22 @@ impl VariableData {
         })
     }
 
+    pub(crate) fn get_mut_stream<'d>(
+        &'d self,
+        variable: &(impl IsVariable + ?Sized),
+    ) -> ExecutionResult<RefMut<'d, OutputStream>> {
+        let mut_guard = self.get_mut(variable)?;
+        RefMut::filter_map(mut_guard, |mut_guard| match mut_guard {
+            ExpressionValue::Stream(stream) => Some(&mut stream.value),
+            _ => None,
+        })
+        .map_err(|_| variable.execution_error("The variable is not a stream"))
+    }
+
     pub(crate) fn set(
         &self,
-        variable: &impl IsVariable,
-        content: OutputStream,
+        variable: &(impl IsVariable + ?Sized),
+        content: ExpressionValue,
     ) -> ExecutionResult<()> {
         *self.get_mut(variable)? = content;
         Ok(())
@@ -70,15 +82,15 @@ impl Interpreter {
 
     pub(crate) fn set_variable(
         &mut self,
-        variable: &impl IsVariable,
-        tokens: OutputStream,
+        variable: &(impl IsVariable + ?Sized),
+        value: ExpressionValue,
     ) -> ExecutionResult<()> {
         match self.variable_data.entry(variable.get_name()) {
             Entry::Occupied(mut entry) => {
-                entry.get_mut().set(variable, tokens)?;
+                entry.get_mut().set(variable, value)?;
             }
             Entry::Vacant(entry) => {
-                entry.insert(VariableData::new(tokens));
+                entry.insert(VariableData::new(value));
             }
         }
         Ok(())
@@ -86,7 +98,7 @@ impl Interpreter {
 
     pub(crate) fn get_existing_variable_data(
         &self,
-        variable: &impl IsVariable,
+        variable: &(impl IsVariable + ?Sized),
         make_error: impl FnOnce() -> SynError,
     ) -> ExecutionResult<&VariableData> {
         self.variable_data

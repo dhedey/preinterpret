@@ -299,6 +299,17 @@ fn handle_split(
         // Typically the separator won't contain none-delimited groups, so we're OK
         input.parse_with(move |input| {
             let mut current_item = OutputStream::new();
+
+            // Special case separator.len() == 0 to avoid an infinite loop
+            if separator.len() == 0 {
+                while !input.is_empty() {
+                    current_item.push_raw_token_tree(input.parse()?);
+                    let complete_item = core::mem::replace(&mut current_item, OutputStream::new());
+                    output.push_new_group(complete_item, Delimiter::None, output_span);
+                }
+                return Ok(());
+            }
+
             let mut drop_empty_next = drop_empty_start;
             while !input.is_empty() {
                 let separator_fork = input.fork();
@@ -314,14 +325,15 @@ fn handle_split(
                     current_item.push_raw_token_tree(input.parse()?);
                     continue;
                 }
+                // This is guaranteed to progress the parser because the separator is non-empty
                 input.advance_to(&separator_fork);
-                if !(current_item.is_empty() && drop_empty_next) {
+                if !current_item.is_empty() || !drop_empty_next {
                     let complete_item = core::mem::replace(&mut current_item, OutputStream::new());
                     output.push_new_group(complete_item, Delimiter::None, output_span);
                 }
                 drop_empty_next = drop_empty_middle;
             }
-            if !(current_item.is_empty() && drop_empty_end) {
+            if !current_item.is_empty() || !drop_empty_end {
                 output.push_new_group(current_item, Delimiter::None, output_span);
             }
             Ok(())

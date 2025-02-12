@@ -48,11 +48,11 @@ fn test_extend() {
     );
     assert_preinterpret_eq!(
         {
-            [!set! #i = 1]
+            #(i = 1)
             [!set! #output = [!..group!]]
-            [!while! (#i <= 4) {
+            [!while! i <= 4 {
                 [!set! #output += #i]
-                [!if! (#i <= 3) {
+                [!if! i <= 3 {
                     [!set! #output += ", "]
                 }]
                 #(i += 1)

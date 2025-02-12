@@ -15,8 +15,7 @@ use crate::internal_prelude::*;
 #[derive(Clone)]
 pub(crate) enum SourceStreamInput {
     Command(Command),
-    GroupedVariable(GroupedVariable),
-    FlattenedVariable(FlattenedVariable),
+    Variable(MarkedVariable),
     Code(SourceCodeBlock),
     ExplicitStream(SourceGroup),
 }
@@ -25,8 +24,7 @@ impl Parse<Source> for SourceStreamInput {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => Self::Command(input.parse()?),
-            SourcePeekMatch::Variable(Grouping::Grouped) => Self::GroupedVariable(input.parse()?),
-            SourcePeekMatch::Variable(Grouping::Flattened) => Self::FlattenedVariable(input.parse()?),
+            SourcePeekMatch::Variable(_) => Self::Variable(input.parse()?),
             SourcePeekMatch::Group(Delimiter::Bracket) => Self::ExplicitStream(input.parse()?),
             SourcePeekMatch::Group(Delimiter::Brace) => Self::Code(input.parse()?),
             _ => input.span()
@@ -39,8 +37,7 @@ impl HasSpanRange for SourceStreamInput {
     fn span_range(&self) -> SpanRange {
         match self {
             SourceStreamInput::Command(command) => command.span_range(),
-            SourceStreamInput::GroupedVariable(variable) => variable.span_range(),
-            SourceStreamInput::FlattenedVariable(variable) => variable.span_range(),
+            SourceStreamInput::Variable(variable) => variable.span_range(),
             SourceStreamInput::Code(code) => code.span_range(),
             SourceStreamInput::ExplicitStream(group) => group.span_range(),
         }
@@ -88,19 +85,22 @@ impl Interpret for SourceStreamInput {
                     ),
                 }
             }
-            SourceStreamInput::FlattenedVariable(variable) => parse_as_stream_input(
-                &variable,
-                interpreter,
-                || {
-                    format!(
-                        "Expected variable to contain a single [...] group or transparent group from a #variable or stream-output command such as [!group! ...]. Perhaps you want to use {} instead, to use the content of the variable as the stream.",
-                        variable.display_grouped_variable_token(),
+            SourceStreamInput::Variable(MarkedVariable::Flattened(variable)) => {
+                parse_as_stream_input(
+                    &variable,
+                    interpreter,
+                    || {
+                        format!(
+                        "Expected variable to contain a single [...] group or transparent group from a #variable or stream-output command such as [!group! ...]. Perhaps you want to use #{} instead, to use the content of the variable as the stream.",
+                        variable.get_name(),
                     )
-                },
-                output,
-            ),
-            SourceStreamInput::GroupedVariable(variable) => {
-                variable.substitute_ungrouped_contents_into(interpreter, output)
+                    },
+                    output,
+                )
+            }
+            SourceStreamInput::Variable(MarkedVariable::Grouped(variable)) => {
+                // We extract its contents via explicitly using Grouping::Flattened here
+                variable.substitute_into(interpreter, Grouping::Flattened, output)
             }
             SourceStreamInput::Code(code) => parse_as_stream_input(
                 code,

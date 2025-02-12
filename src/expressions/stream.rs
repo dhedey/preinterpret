@@ -2,11 +2,11 @@ use super::*;
 
 #[derive(Clone)]
 pub(crate) struct ExpressionStream {
-    pub(super) value: OutputStream,
+    pub(crate) value: OutputStream,
     /// The span range that generated this value.
     /// For a complex expression, the start span is the most left part
     /// of the expression, and the end span is the most right part.
-    pub(super) span_range: SpanRange,
+    pub(crate) span_range: SpanRange,
 }
 
 impl ExpressionStream {

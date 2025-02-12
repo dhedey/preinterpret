@@ -29,9 +29,8 @@ impl InterpretToValue for &SourceExpression {
 
 pub(super) enum SourceExpressionLeaf {
     Command(Command),
-    GroupedVariable(GroupedVariable),
-    FlattenedVariable(FlattenedVariable),
     VariablePath(VariablePath),
+    MarkedVariable(MarkedVariable),
     ExpressionBlock(ExpressionBlock),
     ExplicitStream(SourceGroup),
     Value(ExpressionValue),
@@ -44,11 +43,8 @@ impl Expressionable for Source {
     fn parse_unary_atom(input: &mut ParseStreamStack<Self>) -> ParseResult<UnaryAtom<Self>> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => UnaryAtom::Leaf(Self::Leaf::Command(input.parse()?)),
-            SourcePeekMatch::Variable(Grouping::Grouped) => {
-                UnaryAtom::Leaf(Self::Leaf::GroupedVariable(input.parse()?))
-            }
-            SourcePeekMatch::Variable(Grouping::Flattened) => {
-                UnaryAtom::Leaf(Self::Leaf::FlattenedVariable(input.parse()?))
+            SourcePeekMatch::Variable(_) => {
+                UnaryAtom::Leaf(Self::Leaf::MarkedVariable(input.parse()?))
             }
             SourcePeekMatch::ExpressionBlock(_) => {
                 UnaryAtom::Leaf(Self::Leaf::ExpressionBlock(input.parse()?))
@@ -110,11 +106,8 @@ impl Expressionable for Source {
             SourceExpressionLeaf::Command(command) => {
                 command.clone().interpret_to_value(interpreter)?
             }
-            SourceExpressionLeaf::GroupedVariable(grouped_variable) => {
-                grouped_variable.interpret_to_value(interpreter)?
-            }
-            SourceExpressionLeaf::FlattenedVariable(flattened_variable) => {
-                flattened_variable.interpret_to_value(interpreter)?
+            SourceExpressionLeaf::MarkedVariable(variable) => {
+                variable.interpret_to_value(interpreter)?
             }
             SourceExpressionLeaf::VariablePath(variable_path) => {
                 variable_path.interpret_to_value(interpreter)?

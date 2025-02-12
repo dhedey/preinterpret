@@ -334,6 +334,11 @@ impl ExpressionValue {
         self
     }
 
+    pub(crate) fn with_span_range(mut self, source_span_range: SpanRange) -> ExpressionValue {
+        *self.span_range_mut() = source_span_range;
+        self
+    }
+
     pub(crate) fn into_new_output_stream(self, grouping: Grouping) -> OutputStream {
         match (self, grouping) {
             (Self::Stream(value), Grouping::Flattened) => value.value,
@@ -345,7 +350,7 @@ impl ExpressionValue {
         }
     }
 
-    pub(crate) fn output_to(self, grouping: Grouping, output: &mut OutputStream) {
+    pub(crate) fn output_to(&self, grouping: Grouping, output: &mut OutputStream) {
         match grouping {
             Grouping::Grouped => {
                 // Grouping can be important for different values, to ensure they're read atomically
@@ -370,7 +375,7 @@ impl ExpressionValue {
         }
     }
 
-    fn output_flattened_to(self, output: &mut OutputStream) {
+    fn output_flattened_to(&self, output: &mut OutputStream) {
         match self {
             Self::None { .. } => {}
             Self::Integer(value) => output.push_literal(value.to_literal()),
@@ -379,9 +384,9 @@ impl ExpressionValue {
             Self::String(value) => output.push_literal(value.to_literal()),
             Self::Char(value) => output.push_literal(value.to_literal()),
             Self::UnsupportedLiteral(literal) => {
-                output.extend_raw_tokens(literal.lit.into_token_stream())
+                output.extend_raw_tokens(literal.lit.to_token_stream())
             }
-            Self::Stream(value) => value.value.append_into(output),
+            Self::Stream(value) => value.value.append_cloned_into(output),
         }
     }
 }
