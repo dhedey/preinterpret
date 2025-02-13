@@ -23,11 +23,8 @@ use float::*;
 use integer::*;
 use operations::*;
 use string::*;
-use value::*;
 
 pub(crate) use expression::*;
 pub(crate) use expression_block::*;
 pub(crate) use stream::*;
 pub(crate) use value::*;
-// For some mysterious reason Rust-analyzer can't resolve this without an explicit export
-pub(crate) use value::ExpressionValue;

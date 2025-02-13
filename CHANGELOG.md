@@ -134,11 +134,13 @@ Inside a transform stream, the following grammar is supported:
     * `[!match! ...]` command
     * `@[MATCH { ... }]` (with `#..x` as a catch-all) with optional arms...
     * `#(..)?`, `#(..)+`, `#(..),+`, `#(..)*`, `#(..),*`
-* Support `#(x[..])` syntax for indexing arrays and streams at read time
+* Support `#(x[..])` syntax for indexing arrays and streams at read time (see https://doc.rust-lang.org/reference/expressions/range-expr.html)
   * Via a post-fix `[..]` operation with high precedence
   * `#(x[0])` returns the item at that position of the array / OR the value at that position of the stream (using `INFER_TOKEN_TREE`)
+  * Consider supporting ranges in the expression tree and range values
   * `#(x[0..3])` returns a TokenStream/Array
   * `#(x[0..=3])` returns a TokenStream/Array
+  * Ditch `[!range! ..]` if it's supported in the expression tree / value
 * Add `..` and `..x` support to the array destructurer
 * Consider:
   * Dropping lots of the `group` wrappers?
