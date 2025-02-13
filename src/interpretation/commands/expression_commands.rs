@@ -33,24 +33,7 @@ impl ValueCommandDefinition for RangeCommand {
         let range_limits = self.range_limits;
         let left = self.left.interpret_to_value(interpreter)?;
         let right = self.right.interpret_to_value(interpreter)?;
-
         let range_iterator = left.create_range(right, &range_limits)?;
-
-        let (_, length) = range_iterator.size_hint();
-        match length {
-            Some(length) => {
-                interpreter
-                    .start_iteration_counter(&range_limits)
-                    .add_and_check(length)?;
-            }
-            None => {
-                return range_limits
-                    .execution_err("The range must be between two integers or two characters");
-            }
-        }
-
-        Ok(range_iterator
-            .collect::<Vec<_>>()
-            .to_value(self.span.span_range()))
+        Ok(range_iterator.to_value(self.span.span_range()))
     }
 }

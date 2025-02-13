@@ -129,11 +129,6 @@ pub(crate) struct IterationCounter<'a, S: HasSpanRange> {
 }
 
 impl<S: HasSpanRange> IterationCounter<'_, S> {
-    pub(crate) fn add_and_check(&mut self, count: usize) -> ExecutionResult<()> {
-        self.count = self.count.wrapping_add(count);
-        self.check()
-    }
-
     pub(crate) fn increment_and_check(&mut self) -> ExecutionResult<()> {
         self.count += 1;
         self.check()

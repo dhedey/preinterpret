@@ -46,16 +46,18 @@ impl ExpressionChar {
                 CastTarget::Boolean | CastTarget::Float(_) => return operation.unsupported(self),
                 CastTarget::String => operation.output(char.to_string()),
                 CastTarget::DebugString => operation.output(format!("{:?}", char)),
-                CastTarget::Stream => operation.output(
-                    operation
-                        .output(char)
-                        .into_new_output_stream(Grouping::Flattened, false)?,
-                ),
-                CastTarget::Group => operation.output(
-                    operation
-                        .output(char)
-                        .into_new_output_stream(Grouping::Grouped, false)?,
-                ),
+                CastTarget::Stream => {
+                    operation.output(operation.output(char).into_new_output_stream(
+                        Grouping::Flattened,
+                        StreamOutputBehaviour::Standard,
+                    )?)
+                }
+                CastTarget::Group => {
+                    operation.output(operation.output(char).into_new_output_stream(
+                        Grouping::Grouped,
+                        StreamOutputBehaviour::Standard,
+                    )?)
+                }
             },
         })
     }
@@ -64,15 +66,16 @@ impl ExpressionChar {
         self,
         right: Self,
         range_limits: OutputSpanned<syn::RangeLimits>,
-    ) -> Box<dyn Iterator<Item = ExpressionValue> + '_> {
+    ) -> Box<dyn CustomExpressionIterator> {
         let left = self.value;
         let right = right.value;
+        let span_range = range_limits.span_range();
         match range_limits.operation {
             syn::RangeLimits::HalfOpen { .. } => {
-                Box::new((left..right).map(move |x| range_limits.output(x)))
+                Box::new((left..right).map(move |x| x.to_value(span_range)))
             }
             syn::RangeLimits::Closed { .. } => {
-                Box::new((left..=right).map(move |x| range_limits.output(x)))
+                Box::new((left..=right).map(move |x| x.to_value(span_range)))
             }
         }
     }

@@ -12,7 +12,7 @@ impl CommandType for IfCommand {
     type OutputKind = OutputKindStream;
 }
 
-impl StreamingCommandDefinition for IfCommand {
+impl StreamCommandDefinition for IfCommand {
     const COMMAND_NAME: &'static str = "if";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
@@ -88,7 +88,7 @@ impl CommandType for WhileCommand {
     type OutputKind = OutputKindStream;
 }
 
-impl StreamingCommandDefinition for WhileCommand {
+impl StreamCommandDefinition for WhileCommand {
     const COMMAND_NAME: &'static str = "while";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
@@ -145,7 +145,7 @@ impl CommandType for LoopCommand {
     type OutputKind = OutputKindStream;
 }
 
-impl StreamingCommandDefinition for LoopCommand {
+impl StreamCommandDefinition for LoopCommand {
     const COMMAND_NAME: &'static str = "loop";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
@@ -195,7 +195,7 @@ impl CommandType for ForCommand {
     type OutputKind = OutputKindStream;
 }
 
-impl StreamingCommandDefinition for ForCommand {
+impl StreamCommandDefinition for ForCommand {
     const COMMAND_NAME: &'static str = "for";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {

@@ -23,18 +23,23 @@ impl ExpressionArray {
                 target_ident,
                 ..
             } => match target {
-                CastTarget::Stream => operation.output(self.into_stream_with_grouped_items()?),
+                CastTarget::Stream => operation.output(self.stream_with_grouped_items()?),
                 CastTarget::Group => operation.output(
                     operation
-                        .output(self.into_stream_with_grouped_items()?)
-                        .into_new_output_stream(Grouping::Grouped, false)?,
+                        .output(self.stream_with_grouped_items()?)
+                        .into_new_output_stream(
+                            Grouping::Grouped,
+                            StreamOutputBehaviour::Standard,
+                        )?,
                 ),
                 CastTarget::String => operation.output({
                     let mut output = String::new();
-                    self.concat_recursive_into(&mut output, &ConcatBehaviour::standard());
+                    self.concat_recursive_into(&mut output, &ConcatBehaviour::standard())?;
                     output
                 }),
-                CastTarget::DebugString => operation.output(self.items).into_debug_string_value(),
+                CastTarget::DebugString => {
+                    operation.output(self.items).into_debug_string_value()?
+                }
                 CastTarget::Boolean
                 | CastTarget::Char
                 | CastTarget::Integer(_)
@@ -56,12 +61,21 @@ impl ExpressionArray {
         })
     }
 
-    pub(crate) fn into_stream_with_grouped_items(self) -> ExecutionResult<OutputStream> {
-        let mut stream = OutputStream::new();
-        for item in self.items {
-            item.output_to(Grouping::Grouped, &mut stream, true)?;
+    fn stream_with_grouped_items(&self) -> ExecutionResult<OutputStream> {
+        let mut output = OutputStream::new();
+        self.output_grouped_items_to(&mut output)?;
+        Ok(output)
+    }
+
+    pub(crate) fn output_grouped_items_to(&self, output: &mut OutputStream) -> ExecutionResult<()> {
+        for item in &self.items {
+            item.output_to(
+                Grouping::Grouped,
+                output,
+                StreamOutputBehaviour::PermitArrays,
+            )?;
         }
-        Ok(stream)
+        Ok(())
     }
 
     pub(super) fn handle_integer_binary_operation(
@@ -103,7 +117,11 @@ impl ExpressionArray {
         })
     }
 
-    pub(crate) fn concat_recursive_into(self, output: &mut String, behaviour: &ConcatBehaviour) {
+    pub(crate) fn concat_recursive_into(
+        self,
+        output: &mut String,
+        behaviour: &ConcatBehaviour,
+    ) -> ExecutionResult<()> {
         if behaviour.output_array_structure {
             output.push('[');
         }
@@ -115,12 +133,13 @@ impl ExpressionArray {
             if !is_first && behaviour.add_space_between_token_trees {
                 output.push(' ');
             }
-            item.concat_recursive_into(output, behaviour);
+            item.concat_recursive_into(output, behaviour)?;
             is_first = false;
         }
         if behaviour.output_array_structure {
             output.push(']');
         }
+        Ok(())
     }
 }
 

@@ -56,10 +56,10 @@ pub(crate) struct GroupCommand {
 }
 
 impl CommandType for GroupCommand {
-    type OutputKind = OutputKindGroupedStream;
+    type OutputKind = OutputKindStream;
 }
 
-impl GroupedStreamCommandDefinition for GroupCommand {
+impl StreamCommandDefinition for GroupCommand {
     const COMMAND_NAME: &'static str = "group";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
@@ -73,9 +73,12 @@ impl GroupedStreamCommandDefinition for GroupCommand {
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        // The grouping happens automatically because a non-flattened
-        // stream command is outputted in a group.
-        self.arguments.interpret_into(interpreter, output)
+        let span = self.arguments.span();
+        output.push_grouped(
+            |inner| self.arguments.interpret_into(interpreter, inner),
+            Delimiter::None,
+            span,
+        )
     }
 }
 

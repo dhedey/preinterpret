@@ -37,20 +37,8 @@ fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> SourcePeekMatch {
                 if let Some((ident, next)) = next.ident() {
                     if next.punct_matching('!').is_some() {
                         let output_kind =
-                            CommandKind::for_ident(&ident).map(|kind| kind.standard_output_kind());
+                            CommandKind::for_ident(&ident).map(|kind| kind.resolve_output_kind());
                         return SourcePeekMatch::Command(output_kind);
-                    }
-                }
-                if let Some((first, next)) = next.punct_matching('.') {
-                    if let Some((_, next)) = next.punct_matching('.') {
-                        if let Some((ident, next)) = next.ident() {
-                            if next.punct_matching('!').is_some() {
-                                let output_kind = CommandKind::for_ident(&ident).and_then(|kind| {
-                                    kind.flattened_output_kind(first.span_range()).ok()
-                                });
-                                return SourcePeekMatch::Command(output_kind);
-                            }
-                        }
                     }
                 }
             }

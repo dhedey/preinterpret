@@ -80,7 +80,7 @@ impl Interpret for &ExpressionBlock {
             None => Grouping::Grouped,
         };
         self.evaluate(interpreter)?
-            .output_to(grouping, output, false)?;
+            .output_to(grouping, output, StreamOutputBehaviour::Standard)?;
         Ok(())
     }
 }

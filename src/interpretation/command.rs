@@ -5,12 +5,12 @@ use crate::internal_prelude::*;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CommandOutputKind {
     None,
-    FlattenedValue,
-    GroupedValue,
+    /// If output to a parent stream, it is flattened
+    Value,
     Ident,
+    /// If output to a parent stream, it is flattened
     Literal,
-    FlattenedStream,
-    GroupedStream,
+    /// If output to a parent stream, it is flattened
     Stream,
 }
 
@@ -20,13 +20,11 @@ pub(crate) trait CommandType {
 
 pub(crate) trait OutputKind {
     type Output;
-    fn resolve_standard() -> CommandOutputKind;
-    fn resolve_flattened(error_span_range: SpanRange) -> ParseResult<CommandOutputKind>;
+    fn resolve_enum_kind() -> CommandOutputKind;
 }
 
 struct ExecutionContext<'a> {
     interpreter: &'a mut Interpreter,
-    output_kind: CommandOutputKind,
     delim_span: DelimSpan,
 }
 
@@ -74,12 +72,8 @@ pub(crate) struct OutputKindNone;
 impl OutputKind for OutputKindNone {
     type Output = ();
 
-    fn resolve_standard() -> CommandOutputKind {
+    fn resolve_enum_kind() -> CommandOutputKind {
         CommandOutputKind::None
-    }
-
-    fn resolve_flattened(error_span_range: SpanRange) -> ParseResult<CommandOutputKind> {
-        error_span_range.parse_err("This command has no output, so cannot be flattened with ..")
     }
 }
 
@@ -111,13 +105,8 @@ pub(crate) struct OutputKindValue;
 impl OutputKind for OutputKindValue {
     type Output = TokenTree;
 
-    fn resolve_standard() -> CommandOutputKind {
-        CommandOutputKind::FlattenedValue
-    }
-
-    fn resolve_flattened(error_span_range: SpanRange) -> ParseResult<CommandOutputKind> {
-        error_span_range
-            .parse_err("This command outputs a single value, so cannot be flattened with ..")
+    fn resolve_enum_kind() -> CommandOutputKind {
+        CommandOutputKind::Value
     }
 }
 
@@ -135,12 +124,11 @@ impl<C: ValueCommandDefinition> CommandInvocationAs<OutputKindValue> for C {
         context: ExecutionContext,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        let grouping = match context.output_kind {
-            CommandOutputKind::FlattenedValue => Grouping::Flattened,
-            _ => Grouping::Grouped,
-        };
-        self.execute(context.interpreter)?
-            .output_to(grouping, output, false)
+        self.execute(context.interpreter)?.output_to(
+            Grouping::Grouped,
+            output,
+            StreamOutputBehaviour::Standard,
+        )
     }
 
     fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
@@ -156,13 +144,8 @@ pub(crate) struct OutputKindIdent;
 impl OutputKind for OutputKindIdent {
     type Output = Ident;
 
-    fn resolve_standard() -> CommandOutputKind {
+    fn resolve_enum_kind() -> CommandOutputKind {
         CommandOutputKind::Ident
-    }
-
-    fn resolve_flattened(error_span_range: SpanRange) -> ParseResult<CommandOutputKind> {
-        error_span_range
-            .parse_err("This command outputs a single ident, so cannot be flattened with ..")
     }
 }
 
@@ -200,13 +183,8 @@ pub(crate) struct OutputKindLiteral;
 impl OutputKind for OutputKindLiteral {
     type Output = Literal;
 
-    fn resolve_standard() -> CommandOutputKind {
+    fn resolve_enum_kind() -> CommandOutputKind {
         CommandOutputKind::Literal
-    }
-
-    fn resolve_flattened(error_span_range: SpanRange) -> ParseResult<CommandOutputKind> {
-        error_span_range
-            .parse_err("This command outputs a single literal, so cannot be flattened with ..")
     }
 }
 
@@ -238,79 +216,17 @@ impl<C: LiteralCommandDefinition> CommandInvocationAs<OutputKindLiteral> for C {
 // OutputKindStream
 //=================
 
-pub(crate) struct OutputKindGroupedStream;
-impl OutputKind for OutputKindGroupedStream {
-    type Output = OutputStream;
-
-    fn resolve_standard() -> CommandOutputKind {
-        CommandOutputKind::GroupedStream
-    }
-
-    fn resolve_flattened(_: SpanRange) -> ParseResult<CommandOutputKind> {
-        Ok(CommandOutputKind::FlattenedStream)
-    }
-}
-
-pub(crate) trait GroupedStreamCommandDefinition:
-    Sized + CommandType<OutputKind = OutputKindGroupedStream>
-{
-    const COMMAND_NAME: &'static str;
-    fn parse(arguments: CommandArguments) -> ParseResult<Self>;
-    fn execute(
-        self,
-        interpreter: &mut Interpreter,
-        output: &mut OutputStream,
-    ) -> ExecutionResult<()>;
-}
-
-impl<C: GroupedStreamCommandDefinition> CommandInvocationAs<OutputKindGroupedStream> for C {
-    fn execute_into(
-        self,
-        context: ExecutionContext,
-        output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
-        match context.output_kind {
-            CommandOutputKind::FlattenedStream => self.execute(context.interpreter, output),
-            CommandOutputKind::GroupedStream => output.push_grouped(
-                |inner| self.execute(context.interpreter, inner),
-                Delimiter::None,
-                context.delim_span.join(),
-            ),
-            _ => unreachable!(),
-        }
-    }
-
-    fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
-        let span_range = context.delim_span.span_range();
-        let mut output = OutputStream::new();
-        <Self as CommandInvocationAs<OutputKindGroupedStream>>::execute_into(
-            self,
-            context,
-            &mut output,
-        )?;
-        Ok(output.to_value(span_range))
-    }
-}
-
-//======================
-// OutputKindControlFlow
-//======================
-
 pub(crate) struct OutputKindStream;
 impl OutputKind for OutputKindStream {
     type Output = ();
 
-    fn resolve_standard() -> CommandOutputKind {
+    fn resolve_enum_kind() -> CommandOutputKind {
         CommandOutputKind::Stream
-    }
-
-    fn resolve_flattened(error_span_range: SpanRange) -> ParseResult<CommandOutputKind> {
-        error_span_range.parse_err("This command always outputs a flattened stream and so cannot be explicitly flattened. If it needs to be grouped, wrap it in a [!group! ..] command")
     }
 }
 
 // Control Flow or a command which is unlikely to want grouped output
-pub(crate) trait StreamingCommandDefinition:
+pub(crate) trait StreamCommandDefinition:
     Sized + CommandType<OutputKind = OutputKindStream>
 {
     const COMMAND_NAME: &'static str;
@@ -322,7 +238,7 @@ pub(crate) trait StreamingCommandDefinition:
     ) -> ExecutionResult<()>;
 }
 
-impl<C: StreamingCommandDefinition> CommandInvocationAs<OutputKindStream> for C {
+impl<C: StreamCommandDefinition> CommandInvocationAs<OutputKindStream> for C {
     fn execute_into(
         self,
         context: ExecutionContext,
@@ -366,18 +282,10 @@ macro_rules! define_command_enums {
                 })
             }
 
-            pub(crate) fn standard_output_kind(&self) -> CommandOutputKind {
+            pub(crate) fn resolve_output_kind(&self) -> CommandOutputKind {
                 match self {
                     $(
-                        Self::$command => <$command as CommandType>::OutputKind::resolve_standard(),
-                    )*
-                }
-            }
-
-            pub(crate) fn flattened_output_kind(&self, error_span_range: SpanRange) -> ParseResult<CommandOutputKind> {
-                match self {
-                    $(
-                        Self::$command => <$command as CommandType>::OutputKind::resolve_flattened(error_span_range),
+                        Self::$command => <$command as CommandType>::OutputKind::resolve_enum_kind(),
                     )*
                 }
             }
@@ -493,7 +401,6 @@ define_command_enums! {
 #[derive(Clone)]
 pub(crate) struct Command {
     typed: Box<TypedCommand>,
-    output_kind: CommandOutputKind,
     source_group_span: DelimSpan,
 }
 
@@ -501,20 +408,9 @@ impl Parse<Source> for Command {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         let (delim_span, content) = input.parse_specific_group(Delimiter::Bracket)?;
         content.parse::<Token![!]>()?;
-        let flattening = if content.peek(Token![.]) {
-            Some(content.parse::<Token![..]>()?)
-        } else {
-            None
-        };
         let command_name = content.parse_any_ident()?;
-        let (command_kind, output_kind) = match CommandKind::for_ident(&command_name) {
-            Some(command_kind) => {
-                let output_kind = match flattening {
-                    Some(flattening) => command_kind.flattened_output_kind(flattening.span_range())?,
-                    None => command_kind.standard_output_kind(),
-                };
-                (command_kind, output_kind)
-            }
+        let command_kind = match CommandKind::for_ident(&command_name) {
+            Some(command_kind) => command_kind,
             None => command_name.span().err(
                 format!(
                     "Expected `[!<command>! ..]`, for <command> one of: {}.\nIf this wasn't intended to be a preinterpret command, you can work around this with [!raw! [!{} ... ]]",
@@ -531,7 +427,6 @@ impl Parse<Source> for Command {
         ))?;
         Ok(Self {
             typed: Box::new(typed),
-            output_kind,
             source_group_span: delim_span,
         })
     }
@@ -551,7 +446,6 @@ impl Interpret for Command {
     ) -> ExecutionResult<()> {
         let context = ExecutionContext {
             interpreter,
-            output_kind: self.output_kind,
             delim_span: self.source_group_span,
         };
         self.typed.execute_into(context, output)
@@ -567,7 +461,6 @@ impl InterpretToValue for Command {
     ) -> ExecutionResult<Self::OutputValue> {
         let context = ExecutionContext {
             interpreter,
-            output_kind: self.output_kind,
             delim_span: self.source_group_span,
         };
         self.typed.execute_to_value(context)

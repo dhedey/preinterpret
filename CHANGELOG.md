@@ -30,11 +30,11 @@
 * Token-stream utility commands:
   * `[!is_empty! #stream]`
   * `[!length! #stream]` which gives the number of token trees in the token stream.
-  * `[!group! ...]` which wraps the tokens in a transparent group. Useful with `!for!`.
+  * `[!group! ...]` which wraps the tokens in a transparent group. Can be useful if using token streams as iteration sources, e.g. in `!for!`.
   * `[!intersperse! { ... }]` which inserts separator tokens between each token tree in a stream.
   * `[!split! ...]` which can be used to split a stream with a given separating stream.
   * `[!comma_split! ...]` which can be used to split a stream on `,` tokens.
-  * `[!zip! (#countries #flags #capitals)]` which can be used to combine multiple streams together.
+  * `[!zip! [#countries #flags #capitals]]` which can be used to combine multiple streams together.
 * Destructuring commands:
   * `[!let! <destructuring> = ...]` does destructuring/parsing (see next section). Note `[!let! #..x = ...]` is equivalent to `[!set! #x = ...]`
 
@@ -97,25 +97,7 @@ Inside a transform stream, the following grammar is supported:
 
 ### To come
 
-* Consider separating an array `[x, y, z]` from a stream `[!stream! ...]` in the value model
-  * Add `as ident` casting and support it for array and stream using concat recursive.
-  * Support an iterator value as:
-    * (Not a real iterator - takes an `interpreter` for its `next(interpreter)` method)
-    * Is an input for for loops
-    * Is an output for zip and intersperse
-    * Supports casting to/from arrays and streams; with an iteration limit
-  * Get rid of `OutputKindGroupedStream` and the `[!..command]` thing
-  * Consider dropping lots of the `group` wrappers?
-  * Then destructuring and parsing become different:
-    * Destructuring works over the value model; parsing works over the token stream model.
-    * Parsers can be embedded inside a destructuring
-  * Add `..` and `..x` support to the array destructurer
-  * Support a CastTarget of Array (only supported for array and stream and iterator)
-* Support `#(x[..])` syntax for indexing arrays and streams at read time
-  * Via a post-fix `[...]` operation with high priority
-  * `#(x[0])` returns the item at that position of the array / OR the value at that position of the stream (using `INFER_TOKEN_TREE`)
-  * `#(x[0..3])` returns a TokenStream
-  * `#(x[0..=3])` returns a TokenStream
+* Scrap `[!let!]` and `[!parse! ..]` in favour of `#(let <destructuring> = #x)`
 * Variable typing (stream / value / object to start with), including an `object` type, like a JS object:
   * Objects:
     * Backed by an indexmap
@@ -152,8 +134,14 @@ Inside a transform stream, the following grammar is supported:
     * `[!match! ...]` command
     * `@[MATCH { ... }]` (with `#..x` as a catch-all) with optional arms...
     * `#(..)?`, `#(..)+`, `#(..),+`, `#(..)*`, `#(..),*`
-  * Scrap `[!let!]` and `[!parse! ..]` in favour of `#(let <destructuring> = #x)`
+* Support `#(x[..])` syntax for indexing arrays and streams at read time
+  * Via a post-fix `[..]` operation with high precedence
+  * `#(x[0])` returns the item at that position of the array / OR the value at that position of the stream (using `INFER_TOKEN_TREE`)
+  * `#(x[0..3])` returns a TokenStream/Array
+  * `#(x[0..=3])` returns a TokenStream/Array
+* Add `..` and `..x` support to the array destructurer
 * Consider:
+  * Dropping lots of the `group` wrappers?
   * Adding all of these: https://veykril.github.io/tlborm/decl-macros/minutiae/fragment-specifiers.html#ty
   * Adding `preinterpret::macro`
   * Adding `!define_command!`
@@ -161,7 +149,10 @@ Inside a transform stream, the following grammar is supported:
 * `[!is_set! #x]`
 * Have UntypedInteger have an inner representation of either i128 or literal (and same with float)
 * Maybe add a `@[REINTERPRET ..]` transformer.
-* Add casts of other integers to char, via `char::from_u32(u32::try_from(x))`
+* CastTarget expansion:
+  * Support a CastTarget of `array` (only supported for array and stream and iterator)
+  * Add `as ident` and `as literal` casting and support it for string, array and stream using concat recursive.
+  * Add casts of other integers to char, via `char::from_u32(u32::try_from(x))`
 * Put `[!set! ...]` inside an opt-in feature.
 * TODO check
 * Check all `#[allow(unused)]` and remove any which aren't needed

@@ -152,7 +152,7 @@ impl ExpressionIntegerValuePair {
     pub(crate) fn create_range(
         self,
         range_limits: OutputSpanned<syn::RangeLimits>,
-    ) -> ExecutionResult<Box<dyn Iterator<Item = ExpressionValue> + '_>> {
+    ) -> ExecutionResult<Box<dyn CustomExpressionIterator>> {
         Ok(match self {
             Self::Untyped(lhs, rhs) => return lhs.create_range(rhs, range_limits),
             Self::U8(lhs, rhs) => lhs.create_range(rhs, range_limits),
@@ -323,17 +323,19 @@ impl UntypedInteger {
                     return operation.execution_err("This cast is not supported")
                 }
                 CastTarget::String => operation.output(input.to_string()),
-                CastTarget::DebugString => operation.output(self).into_debug_string_value(),
-                CastTarget::Stream => operation.output(
-                    operation
-                        .output(self)
-                        .into_new_output_stream(Grouping::Flattened, false)?,
-                ),
-                CastTarget::Group => operation.output(
-                    operation
-                        .output(self)
-                        .into_new_output_stream(Grouping::Grouped, false)?,
-                ),
+                CastTarget::DebugString => operation.output(self).into_debug_string_value()?,
+                CastTarget::Stream => {
+                    operation.output(operation.output(self).into_new_output_stream(
+                        Grouping::Flattened,
+                        StreamOutputBehaviour::Standard,
+                    )?)
+                }
+                CastTarget::Group => {
+                    operation.output(operation.output(self).into_new_output_stream(
+                        Grouping::Grouped,
+                        StreamOutputBehaviour::Standard,
+                    )?)
+                }
             },
         })
     }
@@ -451,15 +453,16 @@ impl UntypedInteger {
         self,
         right: Self,
         range_limits: OutputSpanned<syn::RangeLimits>,
-    ) -> ExecutionResult<Box<dyn Iterator<Item = ExpressionValue> + '_>> {
+    ) -> ExecutionResult<Box<dyn CustomExpressionIterator>> {
         let left = self.parse_fallback()?;
         let right = right.parse_fallback()?;
+        let span_range = range_limits.span_range();
         Ok(match range_limits.operation {
             syn::RangeLimits::HalfOpen { .. } => {
-                Box::new((left..right).map(move |x| range_limits.output(Self::from_fallback(x))))
+                Box::new((left..right).map(move |x| Self::from_fallback(x).to_value(span_range)))
             }
             syn::RangeLimits::Closed { .. } => {
-                Box::new((left..=right).map(move |x| range_limits.output(Self::from_fallback(x))))
+                Box::new((left..=right).map(move |x| Self::from_fallback(x).to_value(span_range)))
             }
         })
     }
@@ -600,14 +603,15 @@ macro_rules! impl_int_operations_except_unary {
                 self,
                 right: Self,
                 range_limits: OutputSpanned<syn::RangeLimits>,
-            ) -> Box<dyn Iterator<Item = ExpressionValue> + '_> {
+            ) -> Box<dyn CustomExpressionIterator> {
                 let left = self;
+                let span_range = range_limits.span_range();
                 match range_limits.operation {
                     syn::RangeLimits::HalfOpen { .. } => {
-                        Box::new((left..right).map(move |x| range_limits.output(x)))
+                        Box::new((left..right).map(move |x| x.to_value(span_range)))
                     },
                     syn::RangeLimits::Closed { .. } => {
-                        Box::new((left..=right).map(move |x| range_limits.output(x)))
+                        Box::new((left..=right).map(move |x| x.to_value(span_range)))
                     }
                 }
             }
@@ -643,9 +647,9 @@ macro_rules! impl_unsigned_unary_operations {
                         CastTarget::Float(FloatKind::F64) => operation.output(self as f64),
                         CastTarget::Boolean | CastTarget::Char => return operation.execution_err("This cast is not supported"),
                         CastTarget::String => operation.output(self.to_string()),
-                        CastTarget::DebugString => operation.output(self).into_debug_string_value(),
-                        CastTarget::Stream => operation.output(operation.output(self).into_new_output_stream(Grouping::Flattened, false)?),
-                        CastTarget::Group => operation.output(operation.output(self).into_new_output_stream(Grouping::Grouped, false)?),
+                        CastTarget::DebugString => operation.output(self).into_debug_string_value()?,
+                        CastTarget::Stream => operation.output(operation.output(self).into_new_output_stream(Grouping::Flattened, StreamOutputBehaviour::Standard)?),
+                        CastTarget::Group => operation.output(operation.output(self).into_new_output_stream(Grouping::Grouped, StreamOutputBehaviour::Standard)?),
                     }
                 })
             }
@@ -681,9 +685,9 @@ macro_rules! impl_signed_unary_operations {
                         CastTarget::Float(FloatKind::F64) => operation.output(self as f64),
                         CastTarget::Boolean | CastTarget::Char => return operation.execution_err("This cast is not supported"),
                         CastTarget::String => operation.output(self.to_string()),
-                        CastTarget::DebugString => operation.output(self).into_debug_string_value(),
-                        CastTarget::Stream => operation.output(operation.output(self).into_new_output_stream(Grouping::Flattened, false)?),
-                        CastTarget::Group => operation.output(operation.output(self).into_new_output_stream(Grouping::Grouped, false)?),
+                        CastTarget::DebugString => operation.output(self).into_debug_string_value()?,
+                        CastTarget::Stream => operation.output(operation.output(self).into_new_output_stream(Grouping::Flattened, StreamOutputBehaviour::Standard)?),
+                        CastTarget::Group => operation.output(operation.output(self).into_new_output_stream(Grouping::Grouped, StreamOutputBehaviour::Standard)?),
                     }
                 })
             }
@@ -726,17 +730,19 @@ impl HandleUnaryOperation for u8 {
                     return operation.execution_err("This cast is not supported")
                 }
                 CastTarget::String => operation.output(self.to_string()),
-                CastTarget::DebugString => operation.output(self).into_debug_string_value(),
-                CastTarget::Stream => operation.output(
-                    operation
-                        .output(self)
-                        .into_new_output_stream(Grouping::Flattened, false)?,
-                ),
-                CastTarget::Group => operation.output(
-                    operation
-                        .output(self)
-                        .into_new_output_stream(Grouping::Grouped, false)?,
-                ),
+                CastTarget::DebugString => operation.output(self).into_debug_string_value()?,
+                CastTarget::Stream => {
+                    operation.output(operation.output(self).into_new_output_stream(
+                        Grouping::Flattened,
+                        StreamOutputBehaviour::Standard,
+                    )?)
+                }
+                CastTarget::Group => {
+                    operation.output(operation.output(self).into_new_output_stream(
+                        Grouping::Grouped,
+                        StreamOutputBehaviour::Standard,
+                    )?)
+                }
             },
         })
     }

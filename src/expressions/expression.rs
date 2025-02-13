@@ -115,7 +115,11 @@ impl Expressionable for Source {
                     _ => {}
                 }
             }
-            SourcePeekMatch::Punct(_) => if let Ok(operation) = input.try_parse_or_revert::<BinaryOperation>() { return Ok(NodeExtension::BinaryOperation(operation)) },
+            SourcePeekMatch::Punct(_) => {
+                if let Ok(operation) = input.try_parse_or_revert::<BinaryOperation>() {
+                    return Ok(NodeExtension::BinaryOperation(operation));
+                }
+            }
             SourcePeekMatch::Ident(ident) if ident == "as" => {
                 let cast_operation =
                     UnaryOperation::for_cast_operation(input.parse()?, input.parse_any_ident()?)?;

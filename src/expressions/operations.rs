@@ -490,7 +490,7 @@ pub(super) trait HandleCreateRange: Sized {
         self,
         right: Self,
         range_limits: OutputSpanned<syn::RangeLimits>,
-    ) -> Box<dyn Iterator<Item = ExpressionValue> + '_>;
+    ) -> Box<dyn CustomExpressionIterator>;
 }
 
 impl Operation for syn::RangeLimits {

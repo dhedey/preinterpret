@@ -23,6 +23,7 @@ enum OutputSegment {
     OutputGroup(Delimiter, Span, OutputStream),
 }
 
+#[derive(Clone)]
 pub(crate) enum OutputTokenTree {
     TokenTree(TokenTree),
     OutputGroup(Delimiter, Span, OutputStream),
@@ -361,6 +362,8 @@ pub(crate) struct ConcatBehaviour {
     pub(crate) output_array_structure: bool,
     pub(crate) unwrap_contents_of_string_like_literals: bool,
     pub(crate) show_none_values: bool,
+    pub(crate) iterator_limit: usize,
+    pub(crate) error_after_iterator_limit: bool,
 }
 
 impl ConcatBehaviour {
@@ -371,6 +374,8 @@ impl ConcatBehaviour {
             output_array_structure: false,
             unwrap_contents_of_string_like_literals: true,
             show_none_values: false,
+            iterator_limit: 1000,
+            error_after_iterator_limit: true,
         }
     }
 
@@ -381,6 +386,8 @@ impl ConcatBehaviour {
             output_array_structure: true,
             unwrap_contents_of_string_like_literals: false,
             show_none_values: true,
+            iterator_limit: 20,
+            error_after_iterator_limit: false,
         }
     }
 

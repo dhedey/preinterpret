@@ -1,5 +1,0 @@
-error: unexpected token
- --> tests/compilation_failures/transforming/destructure_with_flattened_command.rs:4:56
-  |
-4 |     preinterpret!([!let! [!..group! Output] = [!group! Output]]);
-  |                                                        ^^^^^^

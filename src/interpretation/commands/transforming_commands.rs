@@ -12,7 +12,7 @@ impl CommandType for ParseCommand {
     type OutputKind = OutputKindStream;
 }
 
-impl StreamingCommandDefinition for ParseCommand {
+impl StreamCommandDefinition for ParseCommand {
     const COMMAND_NAME: &'static str = "parse";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {

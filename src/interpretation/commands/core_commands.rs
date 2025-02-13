@@ -122,7 +122,7 @@ impl CommandType for RawCommand {
     type OutputKind = OutputKindStream;
 }
 
-impl StreamingCommandDefinition for RawCommand {
+impl StreamCommandDefinition for RawCommand {
     const COMMAND_NAME: &'static str = "raw";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
@@ -150,7 +150,7 @@ impl CommandType for StreamCommand {
     type OutputKind = OutputKindStream;
 }
 
-impl StreamingCommandDefinition for StreamCommand {
+impl StreamCommandDefinition for StreamCommand {
     const COMMAND_NAME: &'static str = "stream";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
@@ -199,7 +199,7 @@ impl CommandType for ReinterpretCommand {
     type OutputKind = OutputKindStream;
 }
 
-impl StreamingCommandDefinition for ReinterpretCommand {
+impl StreamCommandDefinition for ReinterpretCommand {
     const COMMAND_NAME: &'static str = "reinterpret";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
@@ -410,7 +410,7 @@ impl ValueCommandDefinition for DebugCommand {
             .inner
             .interpret_to_value(interpreter)?
             .with_span(self.span)
-            .into_debug_string_value();
+            .into_debug_string_value()?;
         Ok(value)
     }
 }

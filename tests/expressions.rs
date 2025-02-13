@@ -196,5 +196,20 @@ fn test_range() {
         ""
     );
     preinterpret_assert_eq!({ [!string! #([!range! 'a'..='f'] as stream)] }, "abcdef");
-    preinterpret_assert_eq!({ [!debug! [!range! -1i8..3i8]] }, "[-1i8, 0i8, 1i8, 2i8]");
+    preinterpret_assert_eq!(
+        { [!debug! [!range! -1i8..3i8]] },
+        "[<iterator> -1i8, 0i8, 1i8, 2i8]"
+    );
+
+    // Large ranges are allowed, but are subject to limits at iteration time
+    preinterpret_assert_eq!({ [!debug! [!range! 0..10000]] }, "[<iterator> 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, ..<9980 further items>]");
+    preinterpret_assert_eq!(
+        [!for! i in [!range! 0..10000000] {
+            [!if! i == 5 {
+                [!string! #i]
+                [!break!]
+            }]
+        }],
+        "5"
+    );
 }

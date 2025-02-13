@@ -24,13 +24,16 @@ impl ExpressionStream {
                     self.concat_recursive_into(&mut output, &ConcatBehaviour::standard());
                     output
                 }),
-                CastTarget::DebugString => operation.output(self.value).into_debug_string_value(),
+                CastTarget::DebugString => {
+                    operation.output(self.value).into_debug_string_value()?
+                }
                 CastTarget::Stream => operation.output(self.value),
-                CastTarget::Group => operation.output(
-                    operation
-                        .output(self.value)
-                        .into_new_output_stream(Grouping::Grouped, false)?,
-                ),
+                CastTarget::Group => {
+                    operation.output(operation.output(self.value).into_new_output_stream(
+                        Grouping::Grouped,
+                        StreamOutputBehaviour::Standard,
+                    )?)
+                }
                 CastTarget::Boolean
                 | CastTarget::Char
                 | CastTarget::Integer(_)

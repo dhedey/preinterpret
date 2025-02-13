@@ -10,13 +10,13 @@ fn test_tokens_compilation_failures() {
 }
 
 #[test]
-fn test_flattened_group_and_is_empty() {
+fn test_empty_stream_is_empty() {
     preinterpret_assert_eq!({
-        [!..group!] "hello" [!..group!] [!..group!]
+        [!stream!] "hello" [!stream!] [!stream!]
     }, "hello");
     preinterpret_assert_eq!([!is_empty!], true);
-    preinterpret_assert_eq!([!is_empty! [!..group!]], true);
-    preinterpret_assert_eq!([!is_empty! [!..group!] [!..group!]], true);
+    preinterpret_assert_eq!([!is_empty! [!stream!]], true);
+    preinterpret_assert_eq!([!is_empty! [!stream!] [!stream!]], true);
     preinterpret_assert_eq!([!is_empty! Not Empty], false);
     preinterpret_assert_eq!({
         [!set! #x =]
