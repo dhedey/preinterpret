@@ -81,60 +81,71 @@ impl GroupedStreamCommandDefinition for GroupCommand {
 
 #[derive(Clone)]
 pub(crate) struct IntersperseCommand {
+    span: Span,
     inputs: IntersperseInputs,
 }
 
 impl CommandType for IntersperseCommand {
-    type OutputKind = OutputKindGroupedStream;
+    type OutputKind = OutputKindValue;
 }
 
 define_field_inputs! {
     IntersperseInputs {
         required: {
-            items: SourceStreamInput = "[Hello World] or #var or [!cmd! ...]",
-            separator: SourceStreamInput = "[,]" ("The token/s to add between each item"),
+            items: SourceExpression = r#"["Hello", "World"]"# ("An array or stream (by coerced token-tree) to intersperse"),
+            separator: SourceExpression = "[!stream! ,]" ("The value to add between each item"),
         },
         optional: {
-            add_trailing: SourceValue<LitBool> = "false" ("Whether to add the separator after the last item (default: false)"),
-            final_separator: SourceStreamInput = "[or]" ("Define a different final separator (default: same as normal separator)"),
+            add_trailing: SourceExpression = "false" ("Whether to add the separator after the last item (default: false)"),
+            final_separator: SourceExpression = "[!stream! or]" ("Define a different final separator (default: same as normal separator)"),
         }
     }
 }
 
-impl GroupedStreamCommandDefinition for IntersperseCommand {
+impl ValueCommandDefinition for IntersperseCommand {
     const COMMAND_NAME: &'static str = "intersperse";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         Ok(Self {
+            span: arguments.command_span(),
             inputs: arguments.fully_parse_as()?,
         })
     }
 
-    fn execute(
-        self,
-        interpreter: &mut Interpreter,
-        output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
-        let items = self.inputs.items.interpret_to_new_stream(interpreter)?;
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue> {
+        let items = self
+            .inputs
+            .items
+            .interpret_to_value(interpreter)?
+            .expect_any_iterator("The items")?;
+        let output_span_range = self.span.span_range();
         let add_trailing = match self.inputs.add_trailing {
-            Some(add_trailing) => add_trailing.interpret_to_value(interpreter)?.value(),
+            Some(add_trailing) => {
+                add_trailing
+                    .interpret_to_value(interpreter)?
+                    .expect_bool("This parameter")?
+                    .value
+            }
             None => false,
         };
 
-        if items.is_empty() {
-            return Ok(());
-        }
+        let mut output = Vec::new();
+
+        let mut items = items.into_iter().peekable();
+
+        let mut this_item = match items.next() {
+            Some(next) => next,
+            None => return Ok(output.to_value(output_span_range)),
+        };
 
         let mut appender = SeparatorAppender {
-            separator: self.inputs.separator,
-            final_separator: self.inputs.final_separator,
+            separator: &self.inputs.separator,
+            final_separator: self.inputs.final_separator.as_ref(),
             add_trailing,
         };
 
-        let mut items = items.into_iter().peekable();
-        let mut this_item = items.next().unwrap(); // Safe to unwrap as non-empty
         loop {
-            output.push_interpreted_item(this_item);
+            output.push(this_item);
             let next_item = items.next();
             match next_item {
                 Some(next_item) => {
@@ -143,41 +154,46 @@ impl GroupedStreamCommandDefinition for IntersperseCommand {
                     } else {
                         RemainingItemCount::ExactlyOne
                     };
-                    appender.add_separator(interpreter, remaining, output)?;
+                    appender.add_separator(interpreter, remaining, &mut output)?;
                     this_item = next_item;
                 }
                 None => {
-                    appender.add_separator(interpreter, RemainingItemCount::None, output)?;
+                    appender.add_separator(interpreter, RemainingItemCount::None, &mut output)?;
                     break;
                 }
             }
         }
 
-        Ok(())
+        Ok(output.to_value(output_span_range))
     }
 }
 
-struct SeparatorAppender {
-    separator: SourceStreamInput,
-    final_separator: Option<SourceStreamInput>,
+struct SeparatorAppender<'a> {
+    separator: &'a SourceExpression,
+    final_separator: Option<&'a SourceExpression>,
     add_trailing: bool,
 }
 
-impl SeparatorAppender {
+impl SeparatorAppender<'_> {
     fn add_separator(
         &mut self,
         interpreter: &mut Interpreter,
         remaining: RemainingItemCount,
-        output: &mut OutputStream,
+        output: &mut Vec<ExpressionValue>,
     ) -> ExecutionResult<()> {
         match self.separator(remaining) {
-            TrailingSeparator::Normal => self.separator.clone().interpret_into(interpreter, output),
+            TrailingSeparator::Normal => {
+                output.push(self.separator.interpret_to_value(interpreter)?)
+            }
             TrailingSeparator::Final => match self.final_separator.take() {
-                Some(final_separator) => final_separator.interpret_into(interpreter, output),
-                None => self.separator.clone().interpret_into(interpreter, output),
+                Some(final_separator) => {
+                    output.push(final_separator.interpret_to_value(interpreter)?)
+                }
+                None => output.push(self.separator.interpret_to_value(interpreter)?),
             },
-            TrailingSeparator::None => Ok(()),
+            TrailingSeparator::None => {}
         }
+        Ok(())
     }
 
     fn separator(&self, remaining_item_count: RemainingItemCount) -> TrailingSeparator {
@@ -219,24 +235,24 @@ pub(crate) struct SplitCommand {
 }
 
 impl CommandType for SplitCommand {
-    type OutputKind = OutputKindGroupedStream;
+    type OutputKind = OutputKindValue;
 }
 
 define_field_inputs! {
     SplitInputs {
         required: {
-            stream: SourceStreamInput = "[...] or #var or [!cmd! ...]",
-            separator: SourceStreamInput = "[::]" ("The token/s to split if they match"),
+            stream: SourceExpression = "[!stream! ...] or #var" ("The stream-valued expression to split"),
+            separator: SourceExpression = "[!stream! ::]" ("The token/s to split if they match"),
         },
         optional: {
-            drop_empty_start: SourceValue<LitBool> = "false" ("If true, a leading separator does not yield in an empty item at the start (default: false)"),
-            drop_empty_middle: SourceValue<LitBool> = "false" ("If true, adjacent separators do not yield an empty item between them (default: false)"),
-            drop_empty_end: SourceValue<LitBool> = "true" ("If true, a trailing separator does not yield an empty item at the end (default: true)"),
+            drop_empty_start: SourceExpression = "false" ("If true, a leading separator does not yield in an empty item at the start (default: false)"),
+            drop_empty_middle: SourceExpression = "false" ("If true, adjacent separators do not yield an empty item between them (default: false)"),
+            drop_empty_end: SourceExpression = "true" ("If true, a trailing separator does not yield an empty item at the end (default: true)"),
         }
     }
 }
 
-impl GroupedStreamCommandDefinition for SplitCommand {
+impl ValueCommandDefinition for SplitCommand {
     const COMMAND_NAME: &'static str = "split";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
@@ -245,37 +261,52 @@ impl GroupedStreamCommandDefinition for SplitCommand {
         })
     }
 
-    fn execute(
-        self,
-        interpreter: &mut Interpreter,
-        output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
-        let output_span = self.inputs.stream.span_range().join_into_span_else_start();
-        let stream = self.inputs.stream.interpret_to_new_stream(interpreter)?;
-        let separator = self.inputs.separator.interpret_to_new_stream(interpreter)?;
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue> {
+        let stream = self
+            .inputs
+            .stream
+            .interpret_to_value(interpreter)?
+            .expect_stream("The stream input")?;
+
+        let separator = self
+            .inputs
+            .separator
+            .interpret_to_value(interpreter)?
+            .expect_stream("The separator")?
+            .value;
 
         let drop_empty_start = match self.inputs.drop_empty_start {
-            Some(value) => value.interpret_to_value(interpreter)?.value(),
+            Some(value) => {
+                value
+                    .interpret_to_value(interpreter)?
+                    .expect_bool("This parameter")?
+                    .value
+            }
             None => false,
         };
         let drop_empty_middle = match self.inputs.drop_empty_middle {
-            Some(value) => value.interpret_to_value(interpreter)?.value(),
+            Some(value) => {
+                value
+                    .interpret_to_value(interpreter)?
+                    .expect_bool("This parameter")?
+                    .value
+            }
             None => false,
         };
         let drop_empty_end = match self.inputs.drop_empty_end {
-            Some(value) => value.interpret_to_value(interpreter)?.value(),
+            Some(value) => {
+                value
+                    .interpret_to_value(interpreter)?
+                    .expect_bool("This parameter")?
+                    .value
+            }
             None => true,
         };
 
         handle_split(
             interpreter,
             stream,
-            output,
-            output_span,
-            unsafe {
-                // RUST-ANALYZER SAFETY: This is as safe as we can get.
-                separator.parse_as()?
-            },
+            separator.into_exact_stream()?,
             drop_empty_start,
             drop_empty_middle,
             drop_empty_end,
@@ -286,18 +317,18 @@ impl GroupedStreamCommandDefinition for SplitCommand {
 #[allow(clippy::too_many_arguments)]
 fn handle_split(
     interpreter: &mut Interpreter,
-    input: OutputStream,
-    output: &mut OutputStream,
-    output_span: Span,
+    input: ExpressionStream,
     separator: ExactStream,
     drop_empty_start: bool,
     drop_empty_middle: bool,
     drop_empty_end: bool,
-) -> ExecutionResult<()> {
+) -> ExecutionResult<ExpressionValue> {
+    let output_span_range = input.span_range;
     unsafe {
         // RUST-ANALYZER SAFETY: This is as safe as we can get.
         // Typically the separator won't contain none-delimited groups, so we're OK
-        input.parse_with(move |input| {
+        input.value.parse_with(move |input| {
+            let mut output = Vec::new();
             let mut current_item = OutputStream::new();
 
             // Special case separator.len() == 0 to avoid an infinite loop
@@ -305,9 +336,9 @@ fn handle_split(
                 while !input.is_empty() {
                     current_item.push_raw_token_tree(input.parse()?);
                     let complete_item = core::mem::replace(&mut current_item, OutputStream::new());
-                    output.push_new_group(complete_item, Delimiter::None, output_span);
+                    output.push(complete_item.to_value(output_span_range));
                 }
-                return Ok(());
+                return Ok(output.to_value(output_span_range));
             }
 
             let mut drop_empty_next = drop_empty_start;
@@ -329,14 +360,14 @@ fn handle_split(
                 input.advance_to(&separator_fork);
                 if !current_item.is_empty() || !drop_empty_next {
                     let complete_item = core::mem::replace(&mut current_item, OutputStream::new());
-                    output.push_new_group(complete_item, Delimiter::None, output_span);
+                    output.push(complete_item.to_value(output_span_range));
                 }
                 drop_empty_next = drop_empty_middle;
             }
             if !current_item.is_empty() || !drop_empty_end {
-                output.push_new_group(current_item, Delimiter::None, output_span);
+                output.push(current_item.to_value(output_span_range));
             }
-            Ok(())
+            Ok(output.to_value(output_span_range))
         })
     }
 }
@@ -347,10 +378,10 @@ pub(crate) struct CommaSplitCommand {
 }
 
 impl CommandType for CommaSplitCommand {
-    type OutputKind = OutputKindGroupedStream;
+    type OutputKind = OutputKindValue;
 }
 
-impl GroupedStreamCommandDefinition for CommaSplitCommand {
+impl ValueCommandDefinition for CommaSplitCommand {
     const COMMAND_NAME: &'static str = "comma_split";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
@@ -359,28 +390,18 @@ impl GroupedStreamCommandDefinition for CommaSplitCommand {
         })
     }
 
-    fn execute(
-        self,
-        interpreter: &mut Interpreter,
-        output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
-        let output_span = self.input.span_range().join_into_span_else_start();
-        let stream = self.input.interpret_to_new_stream(interpreter)?;
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue> {
+        let output_span_range = self.input.span_range();
+        let stream = ExpressionStream {
+            span_range: output_span_range,
+            value: self.input.interpret_to_new_stream(interpreter)?,
+        };
         let separator = Punct::new(',', Spacing::Alone)
-            .with_span(output_span)
+            .with_span(output_span_range.join_into_span_else_start())
             .to_token_stream()
             .source_parse_as()?;
 
-        handle_split(
-            interpreter,
-            stream,
-            output,
-            output_span,
-            separator,
-            false,
-            false,
-            true,
-        )
+        handle_split(interpreter, stream, separator, false, false, true)
     }
 }
 
@@ -389,30 +410,28 @@ pub(crate) struct ZipCommand {
     inputs: EitherZipInput,
 }
 
-type Streams = SourceValue<Grouped<Repeated<SourceStreamInput>>>;
-
 #[derive(Clone)]
 enum EitherZipInput {
     Fields(ZipInputs),
-    JustStream(Streams),
+    JustStream(SourceExpression),
 }
 
 define_field_inputs! {
     ZipInputs {
         required: {
-            streams: Streams = r#"([Hello Goodbye] [World Friend])"# ("A group of one or more streams to zip together. The outer brackets are used for the group."),
+            streams: SourceExpression = r#"[[!stream! Hello Goodbye] ["World", "Friend"]]"# ("An array of arrays/iterators/streams to zip together."),
         },
         optional: {
-            error_on_length_mismatch: SourceValue<syn::LitBool> = "true" ("If false, uses shortest stream length, if true, errors on unequal length. Defaults to true."),
+            error_on_length_mismatch: SourceExpression = "true" ("If false, uses shortest stream length, if true, errors on unequal length. Defaults to true."),
         }
     }
 }
 
 impl CommandType for ZipCommand {
-    type OutputKind = OutputKindGroupedStream;
+    type OutputKind = OutputKindValue;
 }
 
-impl GroupedStreamCommandDefinition for ZipCommand {
+impl ValueCommandDefinition for ZipCommand {
     const COMMAND_NAME: &'static str = "zip";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
@@ -429,61 +448,78 @@ impl GroupedStreamCommandDefinition for ZipCommand {
                 }
             },
             format!(
-                "Expected [!zip! (#a #b #c)] or [!zip! {}]",
+                "Expected [!zip! [... An array of iterables ...]] or [!zip! {}]",
                 ZipInputs::fields_description()
             ),
         )
     }
 
-    fn execute(
-        self,
-        interpreter: &mut Interpreter,
-        output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
-        let (grouped_streams, error_on_length_mismatch) = match self.inputs {
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue> {
+        let (streams, error_on_length_mismatch) = match self.inputs {
             EitherZipInput::Fields(inputs) => (inputs.streams, inputs.error_on_length_mismatch),
             EitherZipInput::JustStream(streams) => (streams, None),
         };
-        let grouped_streams = grouped_streams.interpret_to_value(interpreter)?;
+        let streams = streams
+            .interpret_to_value(interpreter)?
+            .expect_array("The zip input")?;
+        let output_span_range = streams.span_range;
+        let mut output = Vec::new();
+        let mut iterators = streams
+            .items
+            .into_iter()
+            .map(|x| x.expect_any_iterator("A zip input"))
+            .collect::<Result<Vec<_>, _>>()?;
+
         let error_on_length_mismatch = match error_on_length_mismatch {
-            Some(value) => value.interpret_to_value(interpreter)?.value(),
+            Some(value) => {
+                value
+                    .interpret_to_value(interpreter)?
+                    .expect_bool("This parameter")?
+                    .value
+            }
             None => true,
         };
-        let Grouped {
-            delimiter,
-            delim_span,
-            inner: Repeated { inner: streams },
-        } = grouped_streams;
-        if streams.is_empty() {
-            return delim_span
-                .join()
-                .execution_err("At least one stream is required to zip");
+
+        if iterators.is_empty() {
+            return Ok(output.to_value(output_span_range));
         }
-        let stream_lengths = streams
-            .iter()
-            .map(|stream| stream.stream.len())
-            .collect::<Vec<_>>();
-        let min_stream_length = *stream_lengths.iter().min().unwrap();
+
+        let min_stream_length = iterators.iter().map(|x| x.size_hint().0).min().unwrap();
+
         if error_on_length_mismatch {
-            let max_stream_length = *stream_lengths.iter().max().unwrap();
-            if min_stream_length != max_stream_length {
-                return delim_span.join().execution_err(format!(
+            let max_stream_length = iterators
+                .iter()
+                .map(|x| x.size_hint().1)
+                .max_by(|a, b| match (a, b) {
+                    (None, None) => core::cmp::Ordering::Equal,
+                    (None, Some(_)) => core::cmp::Ordering::Greater,
+                    (Some(_), None) => core::cmp::Ordering::Less,
+                    (Some(a), Some(b)) => a.cmp(b),
+                })
+                .unwrap();
+            if Some(min_stream_length) != max_stream_length {
+                return output_span_range.execution_err(format!(
                     "Streams have different lengths and zip's error_on_length_mismatch is true. The lengths vary from {} to {}",
-                    min_stream_length, max_stream_length
+                    min_stream_length,
+                    match max_stream_length {
+                        Some(max_stream_length) => max_stream_length.to_string(),
+                        None => "unbounded".to_string(),
+                    },
                 ));
             }
         }
-        let mut iters: Vec<_> = streams
-            .into_iter()
-            .map(|stream| stream.stream.into_iter())
-            .collect();
+
+        let mut counter = interpreter.start_iteration_counter(&output_span_range);
+
         for _ in 0..min_stream_length {
-            let mut inner = OutputStream::new();
-            for iter in iters.iter_mut() {
-                inner.push_interpreted_item(iter.next().unwrap());
+            counter.increment_and_check()?;
+            let mut inner = Vec::with_capacity(iterators.len());
+            for iter in iterators.iter_mut() {
+                inner.push(iter.next().unwrap());
             }
-            output.push_new_group(inner, delimiter, delim_span.span());
+            output.push(inner.to_value(output_span_range));
         }
-        Ok(())
+
+        Ok(output.to_value(output_span_range))
     }
 }

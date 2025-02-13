@@ -36,6 +36,15 @@ impl From<OutputTokenTree> for OutputStream {
     }
 }
 
+impl HasSpan for OutputTokenTree {
+    fn span(&self) -> Span {
+        match self {
+            OutputTokenTree::TokenTree(token_tree) => token_tree.span(),
+            OutputTokenTree::OutputGroup(_, span, _) => *span,
+        }
+    }
+}
+
 impl OutputStream {
     pub(crate) fn new() -> Self {
         Self {
@@ -223,30 +232,6 @@ impl OutputStream {
         }
     }
 
-    pub(crate) fn unwrap_singleton_group(
-        self,
-        check_group: impl FnOnce(Delimiter) -> bool,
-        create_error: impl FnOnce() -> SynError,
-    ) -> ParseResult<OutputStream> {
-        let mut item_vec = self.into_item_vec();
-        if item_vec.len() == 1 {
-            match item_vec.pop().unwrap() {
-                OutputTokenTree::OutputGroup(delimiter, _, inner) => {
-                    if check_group(delimiter) {
-                        return Ok(inner);
-                    }
-                }
-                OutputTokenTree::TokenTree(TokenTree::Group(group)) => {
-                    if check_group(group.delimiter()) {
-                        return Ok(Self::raw(group.stream()));
-                    }
-                }
-                _ => {}
-            }
-        }
-        Err(create_error().into())
-    }
-
     pub(crate) fn into_item_vec(self) -> Vec<OutputTokenTree> {
         let mut output = Vec::with_capacity(self.token_length);
         for segment in self.segments {
@@ -267,6 +252,12 @@ impl OutputStream {
     }
 
     pub(crate) fn concat_recursive(self, behaviour: &ConcatBehaviour) -> String {
+        let mut output = String::new();
+        self.concat_recursive_into(&mut output, behaviour);
+        output
+    }
+
+    pub(crate) fn concat_recursive_into(self, output: &mut String, behaviour: &ConcatBehaviour) {
         fn concat_recursive_interpreted_stream(
             behaviour: &ConcatBehaviour,
             output: &mut String,
@@ -344,9 +335,7 @@ impl OutputStream {
             spacing
         }
 
-        let mut output = String::new();
-        concat_recursive_interpreted_stream(behaviour, &mut output, Spacing::Joint, self);
-        output
+        concat_recursive_interpreted_stream(behaviour, output, Spacing::Joint, self);
     }
 
     pub(crate) fn into_exact_stream(self) -> ParseResult<ExactStream> {
@@ -368,34 +357,40 @@ impl IntoIterator for OutputStream {
 
 pub(crate) struct ConcatBehaviour {
     pub(crate) add_space_between_token_trees: bool,
-    pub(crate) output_transparent_group_as_command: bool,
+    pub(crate) output_types_as_commands: bool,
+    pub(crate) output_array_structure: bool,
     pub(crate) unwrap_contents_of_string_like_literals: bool,
+    pub(crate) show_none_values: bool,
 }
 
 impl ConcatBehaviour {
     pub(crate) fn standard() -> Self {
         Self {
             add_space_between_token_trees: false,
-            output_transparent_group_as_command: false,
+            output_types_as_commands: false,
+            output_array_structure: false,
             unwrap_contents_of_string_like_literals: true,
+            show_none_values: false,
         }
     }
 
     pub(crate) fn debug() -> Self {
         Self {
             add_space_between_token_trees: true,
-            output_transparent_group_as_command: true,
+            output_types_as_commands: true,
+            output_array_structure: true,
             unwrap_contents_of_string_like_literals: false,
+            show_none_values: true,
         }
     }
 
-    fn before_token_tree(&self, output: &mut String, spacing: Spacing) {
+    pub(crate) fn before_token_tree(&self, output: &mut String, spacing: Spacing) {
         if self.add_space_between_token_trees && spacing == Spacing::Alone {
             output.push(' ');
         }
     }
 
-    fn handle_literal(&self, output: &mut String, literal: Literal) {
+    pub(crate) fn handle_literal(&self, output: &mut String, literal: Literal) {
         match literal.content_if_string_like() {
             Some(content) if self.unwrap_contents_of_string_like_literals => {
                 output.push_str(&content)
@@ -404,7 +399,7 @@ impl ConcatBehaviour {
         }
     }
 
-    fn wrap_delimiters(
+    pub(crate) fn wrap_delimiters(
         &self,
         output: &mut String,
         delimiter: Delimiter,
@@ -434,7 +429,7 @@ impl ConcatBehaviour {
                 output.push(']');
             }
             Delimiter::None => {
-                if self.output_transparent_group_as_command {
+                if self.output_types_as_commands {
                     if is_empty {
                         output.push_str("[!group!");
                     } else {

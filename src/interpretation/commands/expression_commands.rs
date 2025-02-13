@@ -2,22 +2,24 @@ use crate::internal_prelude::*;
 
 #[derive(Clone)]
 pub(crate) struct RangeCommand {
+    span: Span,
     left: SourceExpression,
     range_limits: syn::RangeLimits,
     right: SourceExpression,
 }
 
 impl CommandType for RangeCommand {
-    type OutputKind = OutputKindGroupedStream;
+    type OutputKind = OutputKindValue;
 }
 
-impl GroupedStreamCommandDefinition for RangeCommand {
+impl ValueCommandDefinition for RangeCommand {
     const COMMAND_NAME: &'static str = "range";
 
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
+                    span: arguments.command_span(),
                     left: input.parse()?,
                     range_limits: input.parse()?,
                     right: input.parse()?,
@@ -27,11 +29,7 @@ impl GroupedStreamCommandDefinition for RangeCommand {
         )
     }
 
-    fn execute(
-        self,
-        interpreter: &mut Interpreter,
-        output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue> {
         let range_limits = self.range_limits;
         let left = self.left.interpret_to_value(interpreter)?;
         let right = self.right.interpret_to_value(interpreter)?;
@@ -51,11 +49,8 @@ impl GroupedStreamCommandDefinition for RangeCommand {
             }
         }
 
-        for value in range_iterator {
-            // It needs to be grouped so that e.g. -1 is interpreted as a single item, not two separate tokens.
-            value.output_to(Grouping::Grouped, output)?
-        }
-
-        Ok(())
+        Ok(range_iterator
+            .collect::<Vec<_>>()
+            .to_value(self.span.span_range()))
     }
 }

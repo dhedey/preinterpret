@@ -9,7 +9,7 @@ pub(crate) struct IfCommand {
 }
 
 impl CommandType for IfCommand {
-    type OutputKind = OutputKindStreaming;
+    type OutputKind = OutputKindStream;
 }
 
 impl StreamingCommandDefinition for IfCommand {
@@ -85,7 +85,7 @@ pub(crate) struct WhileCommand {
 }
 
 impl CommandType for WhileCommand {
-    type OutputKind = OutputKindStreaming;
+    type OutputKind = OutputKindStream;
 }
 
 impl StreamingCommandDefinition for WhileCommand {
@@ -142,7 +142,7 @@ pub(crate) struct LoopCommand {
 }
 
 impl CommandType for LoopCommand {
-    type OutputKind = OutputKindStreaming;
+    type OutputKind = OutputKindStream;
 }
 
 impl StreamingCommandDefinition for LoopCommand {
@@ -184,15 +184,15 @@ impl StreamingCommandDefinition for LoopCommand {
 
 #[derive(Clone)]
 pub(crate) struct ForCommand {
-    parse_place: TransformStreamUntilToken<Token![in]>,
+    destructuring: Destructuring,
     #[allow(unused)]
     in_token: Token![in],
-    input: SourceStreamInput,
+    input: SourceExpression,
     loop_code: SourceCodeBlock,
 }
 
 impl CommandType for ForCommand {
-    type OutputKind = OutputKindStreaming;
+    type OutputKind = OutputKindStream;
 }
 
 impl StreamingCommandDefinition for ForCommand {
@@ -202,13 +202,13 @@ impl StreamingCommandDefinition for ForCommand {
         arguments.fully_parse_or_error(
             |input| {
                 Ok(Self {
-                    parse_place: input.parse()?,
+                    destructuring: input.parse()?,
                     in_token: input.parse()?,
                     input: input.parse()?,
                     loop_code: input.parse()?,
                 })
             },
-            "Expected [!for! #x in [ ... ] { code }]",
+            "Expected [!for! <destructuring> in <iterable expression> { <output stream> }]",
         )
     }
 
@@ -217,18 +217,18 @@ impl StreamingCommandDefinition for ForCommand {
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        let stream = self.input.interpret_to_new_stream(interpreter)?;
+        let array = self
+            .input
+            .interpret_to_value(interpreter)?
+            .expect_any_iterator("The for loop input")?;
 
         let mut iteration_counter = interpreter.start_iteration_counter(&self.in_token);
 
-        for token in stream {
+        for item in array {
             iteration_counter.increment_and_check()?;
-            let mut ignored_transformer_output = OutputStream::new();
-            self.parse_place.handle_transform_from_stream(
-                token.into(),
-                interpreter,
-                &mut ignored_transformer_output,
-            )?;
+
+            self.destructuring.handle_destructure(interpreter, item)?;
+
             match self
                 .loop_code
                 .clone()

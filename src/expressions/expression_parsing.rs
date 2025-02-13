@@ -27,7 +27,10 @@ impl<'a, K: Expressionable> ExpressionParser<'a, K> {
                     self.extend_with_unary_atom(unary_atom)?
                 }
                 WorkItem::TryParseAndApplyExtension { node } => {
-                    let extension = K::parse_extension(&mut self.streams)?;
+                    let extension = K::parse_extension(
+                        &mut self.streams,
+                        self.expression_stack.last().unwrap(),
+                    )?;
                     self.attempt_extension(node, extension)?
                 }
                 WorkItem::TryApplyAlreadyParsedExtension { node, extension } => {
@@ -48,22 +51,27 @@ impl<'a, K: Expressionable> ExpressionParser<'a, K> {
             }
             UnaryAtom::Array {
                 delim_span,
-                is_empty,
+                is_empty: true,
             } => {
-                let array_node = self.nodes.add_node(ExpressionNode::Array {
-                    delim_span,
-                    items: Vec::new(),
-                });
-                if is_empty {
-                    self.streams.exit_group();
-                    WorkItem::TryParseAndApplyExtension { node: array_node }
-                } else {
-                    self.push_stack_frame(ExpressionStackFrame::Array { array_node });
-                    WorkItem::RequireUnaryAtom
+                self.streams.exit_group();
+                WorkItem::TryParseAndApplyExtension {
+                    node: self.nodes.add_node(ExpressionNode::Array {
+                        delim_span,
+                        items: Vec::new(),
+                    }),
                 }
             }
+            UnaryAtom::Array {
+                delim_span,
+                is_empty: false,
+            } => self.push_stack_frame(ExpressionStackFrame::Array {
+                delim_span,
+                items: Vec::new(),
+            }),
             UnaryAtom::PrefixUnaryOperation(operation) => {
-                self.push_stack_frame(ExpressionStackFrame::IncompletePrefixOperation { operation })
+                self.push_stack_frame(ExpressionStackFrame::IncompleteUnaryPrefixOperation {
+                    operation,
+                })
             }
         })
     }
@@ -91,32 +99,16 @@ impl<'a, K: Expressionable> ExpressionParser<'a, K> {
                         operation,
                     })
                 }
-                NodeExtension::CommaOperator {
-                    comma,
-                    is_end_of_stream: false,
-                } => {
-                    let top_frame = self
-                        .expression_stack
-                        .last_mut()
-                        .expect("There should always at least be a root");
-                    match top_frame {
-                        ExpressionStackFrame::Array { array_node } => {
-                            match self.nodes.node_mut(*array_node) {
-                                ExpressionNode::Array { items, .. } => {
-                                    items.push(node);
-                                },
-                                _ => unreachable!("Not possible, the array_node always corresponds to an array node"),
-                            }
-                        },
-                        _ => return comma.parse_err("Commas are only permitted inside preinterpret arrays []. Preinterpret arrays [a, b] can be used as a drop-in replacement for rust tuples (a, b)."),
+                NodeExtension::NonTerminalArrayComma => {
+                    match self.expression_stack.last_mut().unwrap() {
+                        ExpressionStackFrame::Array { items, .. } => {
+                            items.push(node);
+                        }
+                        _ => unreachable!("CommaOperator is only returned under an Array parent."),
                     }
                     WorkItem::RequireUnaryAtom
                 }
-                NodeExtension::CommaOperator {
-                    is_end_of_stream: true,
-                    ..
-                }
-                | NodeExtension::NoneMatched => {
+                NodeExtension::EndOfStream | NodeExtension::NoValidExtensionForCurrentParent => {
                     unreachable!("Not possible, as these have minimum precedence")
                 }
             })
@@ -126,11 +118,15 @@ impl<'a, K: Expressionable> ExpressionParser<'a, K> {
             let parent_stack_frame = self.pop_stack_frame();
             Ok(match parent_stack_frame {
                 ExpressionStackFrame::Root => {
-                    assert!(matches!(extension, NodeExtension::NoneMatched));
+                    assert!(matches!(
+                        extension,
+                        NodeExtension::EndOfStream
+                            | NodeExtension::NoValidExtensionForCurrentParent
+                    ));
                     WorkItem::Finished { root: node }
                 }
                 ExpressionStackFrame::Group { delim_span } => {
-                    assert!(matches!(extension, NodeExtension::NoneMatched));
+                    assert!(matches!(extension, NodeExtension::EndOfStream));
                     self.streams.exit_group();
                     WorkItem::TryParseAndApplyExtension {
                         node: self.nodes.add_node(ExpressionNode::Grouped {
@@ -139,44 +135,33 @@ impl<'a, K: Expressionable> ExpressionParser<'a, K> {
                         }),
                     }
                 }
-                ExpressionStackFrame::Array { array_node } => {
-                    assert!(matches!(
-                        extension,
-                        NodeExtension::NoneMatched
-                            | NodeExtension::CommaOperator {
-                                is_end_of_stream: true,
-                                ..
-                            }
-                    ));
-                    match self.nodes.node_mut(array_node) {
-                        ExpressionNode::Array { items, .. } => {
-                            items.push(node);
-                        }
-                        _ => unreachable!(
-                            "Not possible, the array_node always corresponds to an array node"
-                        ),
-                    }
+                ExpressionStackFrame::Array {
+                    mut items,
+                    delim_span,
+                } => {
+                    assert!(matches!(extension, NodeExtension::EndOfStream));
+                    items.push(node);
                     self.streams.exit_group();
-                    WorkItem::TryParseAndApplyExtension { node: array_node }
-                }
-                ExpressionStackFrame::IncompletePrefixOperation { operation } => {
-                    WorkItem::TryApplyAlreadyParsedExtension {
-                        node: self.nodes.add_node(ExpressionNode::UnaryOperation {
-                            operation: operation.into(),
-                            input: node,
-                        }),
-                        extension,
+                    WorkItem::TryParseAndApplyExtension {
+                        node: self
+                            .nodes
+                            .add_node(ExpressionNode::Array { delim_span, items }),
                     }
+                }
+                ExpressionStackFrame::IncompleteUnaryPrefixOperation { operation } => {
+                    let node = self.nodes.add_node(ExpressionNode::UnaryOperation {
+                        operation: operation.into(),
+                        input: node,
+                    });
+                    extension.into_post_operation_completion_work_item(node)
                 }
                 ExpressionStackFrame::IncompleteBinaryOperation { lhs, operation } => {
-                    WorkItem::TryApplyAlreadyParsedExtension {
-                        node: self.nodes.add_node(ExpressionNode::BinaryOperation {
-                            operation,
-                            left_input: lhs,
-                            right_input: node,
-                        }),
-                        extension,
-                    }
+                    let node = self.nodes.add_node(ExpressionNode::BinaryOperation {
+                        operation,
+                        left_input: lhs,
+                        right_input: node,
+                    });
+                    extension.into_post_operation_completion_work_item(node)
                 }
             })
         }
@@ -221,14 +206,6 @@ impl<K: Expressionable> ExpressionNodes<K> {
         let node_id = ExpressionNodeId(self.nodes.len());
         self.nodes.push(node);
         node_id
-    }
-
-    /// Panics if the node id isn't valid
-    pub(super) fn node_mut(
-        &mut self,
-        ExpressionNodeId(node_id): ExpressionNodeId,
-    ) -> &mut ExpressionNode<K> {
-        self.nodes.get_mut(node_id).unwrap()
     }
 
     pub(super) fn complete(self, root: ExpressionNodeId) -> Expression<K> {
@@ -434,7 +411,7 @@ impl OperatorPrecendence {
 /// ===> Stack: []
 /// ===> WorkItem::Finished(E)
 /// ```
-enum ExpressionStackFrame {
+pub(super) enum ExpressionStackFrame {
     /// A marker for the root of the expression
     Root,
     /// A marker for the parenthesized or transparent group.
@@ -444,10 +421,13 @@ enum ExpressionStackFrame {
     /// A marker for the bracketed array.
     /// * When the array is opened, we add its inside to the parse stream stack
     /// * When the array is closed, we pop it from the parse stream stack
-    Array { array_node: ExpressionNodeId },
+    Array {
+        delim_span: DelimSpan,
+        items: Vec<ExpressionNodeId>,
+    },
     /// An incomplete unary prefix operation
     /// NB: unary postfix operations such as `as` casting go straight to ExtendableNode
-    IncompletePrefixOperation { operation: PrefixUnaryOperation },
+    IncompleteUnaryPrefixOperation { operation: PrefixUnaryOperation },
     /// An incomplete binary operation
     IncompleteBinaryOperation {
         lhs: ExpressionNodeId,
@@ -461,7 +441,7 @@ impl ExpressionStackFrame {
             ExpressionStackFrame::Root => OperatorPrecendence::MIN,
             ExpressionStackFrame::Group { .. } => OperatorPrecendence::MIN,
             ExpressionStackFrame::Array { .. } => OperatorPrecendence::MIN,
-            ExpressionStackFrame::IncompletePrefixOperation { operation, .. } => {
+            ExpressionStackFrame::IncompleteUnaryPrefixOperation { operation, .. } => {
                 OperatorPrecendence::of_prefix_unary_operation(operation)
             }
             ExpressionStackFrame::IncompleteBinaryOperation { operation, .. } => {
@@ -481,6 +461,12 @@ enum WorkItem {
     TryParseAndApplyExtension {
         node: ExpressionNodeId,
     },
+    /// The same as [`WorkItem::TryParseAndApplyExtension`], except that we have already
+    /// parsed the extension, and we are attempting to apply it again.
+    /// This happens if an extension is of lower precedence than an existing unary/binary
+    /// operation, and so we complete the existing operation and try to re-apply the extension
+    /// on the result. For example, the + in `2 * 3 + 4` fails to apply to 3, but can
+    /// then apply to (2 * 3).
     TryApplyAlreadyParsedExtension {
         node: ExpressionNodeId,
         extension: NodeExtension,
@@ -503,11 +489,9 @@ pub(super) enum UnaryAtom<K: Expressionable> {
 pub(super) enum NodeExtension {
     PostfixOperation(UnaryOperation),
     BinaryOperation(BinaryOperation),
-    CommaOperator {
-        comma: Token![,],
-        is_end_of_stream: bool,
-    },
-    NoneMatched,
+    NonTerminalArrayComma,
+    EndOfStream,
+    NoValidExtensionForCurrentParent,
 }
 
 impl NodeExtension {
@@ -515,15 +499,30 @@ impl NodeExtension {
         match self {
             NodeExtension::PostfixOperation(op) => OperatorPrecendence::of_unary_operation(op),
             NodeExtension::BinaryOperation(op) => OperatorPrecendence::of_binary_operation(op),
-            NodeExtension::CommaOperator {
-                is_end_of_stream: false,
-                ..
-            } => OperatorPrecendence::NonTerminalComma,
-            NodeExtension::CommaOperator {
-                is_end_of_stream: true,
-                ..
-            } => OperatorPrecendence::MIN,
-            NodeExtension::NoneMatched => OperatorPrecendence::MIN,
+            NodeExtension::NonTerminalArrayComma => OperatorPrecendence::NonTerminalComma,
+            NodeExtension::EndOfStream => OperatorPrecendence::MIN,
+            NodeExtension::NoValidExtensionForCurrentParent => OperatorPrecendence::MIN,
+        }
+    }
+
+    fn into_post_operation_completion_work_item(self, node: ExpressionNodeId) -> WorkItem {
+        match self {
+            extension @ NodeExtension::PostfixOperation { .. }
+            | extension @ NodeExtension::BinaryOperation { .. }
+            | extension @ NodeExtension::EndOfStream => {
+                WorkItem::TryApplyAlreadyParsedExtension { node, extension }
+            }
+            NodeExtension::NonTerminalArrayComma => {
+                unreachable!("Array comma is only possible on array parent")
+            }
+            NodeExtension::NoValidExtensionForCurrentParent => {
+                // We have to reparse in case the extension is valid for the new parent.
+                // e.g. consider [2 + 3, 4] - initially the peeked comma has a parent of an
+                // incomplete binary operation 2 + 3 which is invalid.
+                // When the binary operation is completed, the comma now gets parsed against
+                // the parent array, which can succeed.
+                WorkItem::TryParseAndApplyExtension { node }
+            }
         }
     }
 }

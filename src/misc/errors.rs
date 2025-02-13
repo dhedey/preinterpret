@@ -2,6 +2,7 @@ use crate::internal_prelude::*;
 
 pub(crate) type ParseResult<T> = core::result::Result<T, ParseError>;
 
+#[allow(unused)]
 pub(crate) trait ParseResultExt<T> {
     /// This is not a `From` because it wants to be explicit
     fn convert_to_final_result(self) -> syn::Result<T>;

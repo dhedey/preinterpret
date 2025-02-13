@@ -60,7 +60,7 @@ fn test_loop_continue_and_break() {
             #(x = 0)
             [!loop! {
                 #(x += 1)
-                [!if! #x >= 10 { [!break!] }]
+                [!if! x >= 10 { [!break!] }]
             }]
             #x
         },
@@ -68,9 +68,9 @@ fn test_loop_continue_and_break() {
     );
     preinterpret_assert_eq!(
         {
-            [!string! [!for! #x in [!range! 65..75] {
-                [!if! #x % 2 == 0 { [!continue!] }]
-                #(#x as u8 as char)
+            [!string! [!for! x in [!range! 65..75] {
+                [!if! x % 2 == 0 { [!continue!] }]
+                #(x as u8 as char)
             }]]
         },
         "ACEGI"
@@ -81,7 +81,7 @@ fn test_loop_continue_and_break() {
 fn test_for() {
     preinterpret_assert_eq!(
         {
-            [!string! [!for! #x in [!range! 65..70] {
+            [!string! [!for! x in [!range! 65..70] {
                 #(#x as u8 as char)
             }]]
         },
@@ -89,7 +89,7 @@ fn test_for() {
     );
     preinterpret_assert_eq!(
         {
-            [!string! [!for! (#x,) in [(a,) (b,) (c,)] {
+            [!string! [!for! @((#x,)) in [!stream! (a,) (b,) (c,)] {
                 #x
                 [!if! [!string! #x] == "b" { [!break!] }]
             }]]

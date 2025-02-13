@@ -57,8 +57,8 @@ fn test_variable_parsing() {
                 #..>>..x // Matches stream and appends it flattened: do you agree ?
             )
             = Why Hello Everyone ([!group! This is an exciting adventure] do you agree?)]
-        [!string! [!intersperse! { items: #x, separator: [_] } ]]
-    }, "Why_HelloEveryone_This_is_an_exciting_adventure_do_you_agree_?");
+        [!debug! #x]
+    }, "[!stream! Why [!group! Hello Everyone] This is an exciting adventure do you agree ?]");
 }
 
 #[test]
@@ -78,8 +78,8 @@ fn test_ident_transformer() {
     preinterpret_assert_eq!({
         [!set! #x =]
         [!let! The quick @(#x += @IDENT) fox jumps @(#x += @IDENT) the lazy dog = The quick brown fox jumps over the lazy dog]
-        [!string! [!intersperse! { items: #x, separator: ["_"] }]]
-    }, "brown_over");
+        [!debug! #x]
+    }, "[!stream! brown over]");
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn test_literal_transformer() {
     preinterpret_assert_eq!({
         [!set! #x]
         [!let! @LITERAL @LITERAL @LITERAL @(#x += @LITERAL) @LITERAL @(#x += @LITERAL @LITERAL) = "Hello" 9 3.4 'c' 41u16 0b1010 r#"123"#]
-        [!debug! #..x]
+        [!debug! #x]
     }, "[!stream! 'c' 0b1010 r#\"123\"#]");
 }
 
@@ -100,18 +100,18 @@ fn test_literal_transformer() {
 fn test_punct_transformer() {
     preinterpret_assert_eq!({
         [!let! The "quick" brown fox "jumps" @(#x = @PUNCT) = The "quick" brown fox "jumps"!]
-        [!debug! #..x]
+        [!debug! #x]
     }, "[!stream! !]");
     // Test for ' which is treated weirdly by syn / rustc
     preinterpret_assert_eq!({
         [!let! The "quick" fox isn 't brown and doesn @(#x = @PUNCT) t "jump" = The "quick" fox isn 't brown and doesn 't "jump"]
-        [!debug! #..x]
+        #(x as debug)
     }, "[!stream! ']");
     // Lots of punctuation, most of it ignored
     preinterpret_assert_eq!({
         [!set! #x =]
         [!let! @PUNCT @PUNCT @PUNCT @PUNCT @(#x += @PUNCT) @PUNCT @PUNCT @PUNCT @PUNCT @PUNCT @(#x += @PUNCT) @PUNCT @PUNCT @PUNCT  = # ! $$ % ^ & * + = | @ : ;]
-        [!debug! #..x]
+        [!debug! #x]
     }, "[!stream! % |]");
 }
 
@@ -119,18 +119,18 @@ fn test_punct_transformer() {
 fn test_group_transformer() {
     preinterpret_assert_eq!({
         [!let! The "quick" @[GROUP brown #x] "jumps" = The "quick" [!group! brown fox] "jumps"]
-        [!debug! #..x]
+        [!debug! #x]
     }, "[!stream! fox]");
     preinterpret_assert_eq!({
         [!set! #x = "hello" "world"]
         [!let! I said @[GROUP #..y]! = I said #x!]
-        [!debug! #..y]
+        [!debug! #y]
     }, "[!stream! \"hello\" \"world\"]");
     // ... which is equivalent to this:
     preinterpret_assert_eq!({
         [!set! #x = "hello" "world"]
         [!let! I said #y! = I said #x!]
-        [!debug! #..y]
+        [!debug! #y]
     }, "[!stream! \"hello\" \"world\"]");
 }
 
@@ -138,8 +138,8 @@ fn test_group_transformer() {
 fn test_none_output_commands_mid_parse() {
     preinterpret_assert_eq!({
         [!let! The "quick" @(#x = @LITERAL) fox [!let! #y = #x] @(#x = @IDENT) = The "quick" "brown" fox jumps]
-        [!string! "#x = " [!debug! #..x] "; #y = "[!debug! #..y]]
-    }, "#x = [!stream! jumps]; #y = [!stream! \"brown\"]");
+        [!string! "#x = " [!debug! x] "; #y = "[!debug! y]]
+    }, "#x = [!stream! jumps]; #y = \"brown\"");
 }
 
 #[test]
@@ -171,13 +171,13 @@ fn test_exact_transformer() {
 fn test_parse_command_and_exact_transformer() {
     // The output stream is additive
     preinterpret_assert_eq!(
-        { [!debug! [!parse! [Hello World] as @(@IDENT @IDENT)]] },
+        { [!debug! [!parse! [!stream! Hello World] with @(@IDENT @IDENT)]] },
         "[!stream! Hello World]"
     );
     // Substreams redirected to a variable are not included in the output
     preinterpret_assert_eq!(
         {
-            [!debug! [!parse! [The quick brown fox] as @(
+            [!debug! [!parse! [!stream! The quick brown fox] with @(
                 @[EXACT The] quick @IDENT @(#x = @IDENT)
             )]]
         },
@@ -189,7 +189,7 @@ fn test_parse_command_and_exact_transformer() {
     // * That EXACT ignores none-delimited groups, to make it more intuitive
     preinterpret_assert_eq!({
         [!set! #x = [!group! fox]]
-        [!debug! [!parse! [The quick brown fox is a fox - right?!] as @(
+        [!debug! [!parse! [!stream! The quick brown fox is a fox - right?!] with @(
             // The outputs are only from the EXACT transformer
             The quick @(_ = @IDENT) @[EXACT #x @(_ = @IDENT a) #..x - right?!]
         )]]

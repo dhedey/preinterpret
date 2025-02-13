@@ -2,14 +2,14 @@ use crate::internal_prelude::*;
 
 #[derive(Clone)]
 pub(crate) struct ParseCommand {
-    input: SourceStreamInput,
+    input: SourceExpression,
     #[allow(unused)]
-    as_token: Token![as],
+    with_token: Ident,
     transformer: ExplicitTransformStream,
 }
 
 impl CommandType for ParseCommand {
-    type OutputKind = OutputKindStreaming;
+    type OutputKind = OutputKindStream;
 }
 
 impl StreamingCommandDefinition for ParseCommand {
@@ -20,11 +20,11 @@ impl StreamingCommandDefinition for ParseCommand {
             |input| {
                 Ok(Self {
                     input: input.parse()?,
-                    as_token: input.parse()?,
+                    with_token: input.parse_ident_matching("with")?,
                     transformer: input.parse()?,
                 })
             },
-            "Expected [!parse! [...] as @(...)] or [!parse! #x as @(...)] where the latter is a transform stream",
+            "Expected [!parse! <stream> with <parser>] where:\n* The <stream> is some stream-valued expression, such as `#x` or `[!stream! ...]`\n* The <parser> is some parser such as @(...)",
         )
     }
 
@@ -33,7 +33,11 @@ impl StreamingCommandDefinition for ParseCommand {
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        let input = self.input.interpret_to_new_stream(interpreter)?;
+        let input = self
+            .input
+            .interpret_to_value(interpreter)?
+            .expect_stream("Parse input")?
+            .value;
         self.transformer
             .handle_transform_from_stream(input, interpreter, output)
     }

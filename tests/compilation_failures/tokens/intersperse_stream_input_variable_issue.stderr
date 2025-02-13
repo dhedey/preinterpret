@@ -1,5 +1,15 @@
-error: Expected variable to contain a single [...] group or transparent group from a #variable or stream-output command such as [!group! ...]. Perhaps you want to use #x instead, to use the content of the variable as the stream.
+error: Remove the .. prefix. Flattened variables are not supported in an expression.
+       Occurred whilst parsing [!intersperse! ...] - Expected: {
+           // An array or stream (by coerced token-tree) to intersperse
+           items: ["Hello", "World"],
+           // The value to add between each item
+           separator: [!stream! ,],
+           // Whether to add the separator after the last item (default: false)
+           add_trailing?: false,
+           // Define a different final separator (default: same as normal separator)
+           final_separator?: [!stream! or],
+       }
  --> tests/compilation_failures/tokens/intersperse_stream_input_variable_issue.rs:7:20
   |
 7 |             items: #..x,
-  |                    ^^^^
+  |                    ^

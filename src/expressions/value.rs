@@ -180,7 +180,7 @@ impl ExpressionValue {
                         ExpressionIntegerValuePair::Isize(lhs, rhs)
                     }
                     (left_value, right_value) => {
-                        return operation.execution_err(format!("The {} operator cannot infer a common integer operand type from {} and {}. Consider using `as` to cast to matching types.", operation.symbol(), left_value.value_type(), right_value.value_type()));
+                        return operation.execution_err(format!("The {} operator cannot infer a common integer operand type from {} and {}. Consider using `as` to cast to matching types.", operation.symbolic_description(), left_value.value_type(), right_value.value_type()));
                     }
                 };
                 EvaluationLiteralPair::Integer(integer_pair)
@@ -219,7 +219,7 @@ impl ExpressionValue {
                         ExpressionFloatValuePair::F64(lhs, rhs)
                     }
                     (left_value, right_value) => {
-                        return operation.execution_err(format!("The {} operator cannot infer a common float operand type from {} and {}. Consider using `as` to cast to matching types.", operation.symbol(), left_value.value_type(), right_value.value_type()));
+                        return operation.execution_err(format!("The {} operator cannot infer a common float operand type from {} and {}. Consider using `as` to cast to matching types.", operation.symbolic_description(), left_value.value_type(), right_value.value_type()));
                     }
                 };
                 EvaluationLiteralPair::Float(float_pair)
@@ -237,7 +237,7 @@ impl ExpressionValue {
                 EvaluationLiteralPair::StreamPair(left, right)
             }
             (left, right) => {
-                return operation.execution_err(format!("Cannot infer common type from {} {} {}. Consider using `as` to cast the operands to matching types.", left.value_type(), operation.symbol(), right.value_type()));
+                return operation.execution_err(format!("Cannot infer common type from {} {} {}. Consider using `as` to cast the operands to matching types.", left.value_type(), operation.symbolic_description(), right.value_type()));
             }
         })
     }
@@ -249,20 +249,75 @@ impl ExpressionValue {
         }
     }
 
-    pub(crate) fn into_bool(self) -> Result<ExpressionBoolean, &'static str> {
+    pub(crate) fn expect_bool(self, place_descriptor: &str) -> ExecutionResult<ExpressionBoolean> {
         match self {
             ExpressionValue::Boolean(value) => Ok(value),
-            other => Err(other.value_type()),
+            other => other.execution_err(format!(
+                "{} must be a boolean, but it is a {}",
+                place_descriptor,
+                other.value_type(),
+            )),
         }
     }
 
-    pub(crate) fn expect_bool(self, place_descriptor: &str) -> ExecutionResult<ExpressionBoolean> {
-        let error_span = self.span_range();
-        match self.into_bool() {
-            Ok(boolean) => Ok(boolean),
-            Err(value_type) => error_span.execution_err(format!(
-                "{} must be a boolean, but it is a {}",
-                place_descriptor, value_type,
+    pub(crate) fn expect_integer(
+        self,
+        place_descriptor: &str,
+    ) -> ExecutionResult<ExpressionInteger> {
+        match self {
+            ExpressionValue::Integer(value) => Ok(value),
+            other => other.execution_err(format!(
+                "{} must be an integer, but it is a {}",
+                place_descriptor,
+                other.value_type(),
+            )),
+        }
+    }
+
+    pub(crate) fn expect_string(self, place_descriptor: &str) -> ExecutionResult<ExpressionString> {
+        match self {
+            ExpressionValue::String(value) => Ok(value),
+            other => other.execution_err(format!(
+                "{} must be a string, but it is a {}",
+                place_descriptor,
+                other.value_type(),
+            )),
+        }
+    }
+
+    pub(crate) fn expect_array(self, place_descriptor: &str) -> ExecutionResult<ExpressionArray> {
+        match self {
+            ExpressionValue::Array(value) => Ok(value),
+            other => other.execution_err(format!(
+                "{} must be an array, but it is a {}",
+                place_descriptor,
+                other.value_type(),
+            )),
+        }
+    }
+
+    pub(crate) fn expect_stream(self, place_descriptor: &str) -> ExecutionResult<ExpressionStream> {
+        match self {
+            ExpressionValue::Stream(value) => Ok(value),
+            other => other.execution_err(format!(
+                "{} must be a stream, but it is a {}",
+                place_descriptor,
+                other.value_type(),
+            )),
+        }
+    }
+
+    pub(crate) fn expect_any_iterator(
+        self,
+        place_descriptor: &str,
+    ) -> ExecutionResult<ExpressionIterator> {
+        match self {
+            ExpressionValue::Array(value) => Ok(ExpressionIterator::new_for_array(value)),
+            ExpressionValue::Stream(value) => Ok(ExpressionIterator::new_for_stream(value)),
+            other => other.execution_err(format!(
+                "{} must be iterable (an array or stream), but it is a {}",
+                place_descriptor,
+                other.value_type(),
             )),
         }
     }
@@ -351,12 +406,13 @@ impl ExpressionValue {
     pub(crate) fn into_new_output_stream(
         self,
         grouping: Grouping,
+        output_arrays: bool,
     ) -> ExecutionResult<OutputStream> {
         Ok(match (self, grouping) {
             (Self::Stream(value), Grouping::Flattened) => value.value,
             (other, grouping) => {
                 let mut output = OutputStream::new();
-                other.output_to(grouping, &mut output)?;
+                other.output_to(grouping, &mut output, output_arrays)?;
                 output
             }
         })
@@ -366,6 +422,7 @@ impl ExpressionValue {
         &self,
         grouping: Grouping,
         output: &mut OutputStream,
+        output_arrays: bool,
     ) -> ExecutionResult<()> {
         match grouping {
             Grouping::Grouped => {
@@ -374,19 +431,23 @@ impl ExpressionValue {
                 // * Grouping means -1 is interpreted atomically, rather than as a punct then a number
                 // * Grouping means that a stream is interpreted atomically
                 output.push_grouped(
-                    |inner| self.output_flattened_to(inner),
+                    |inner| self.output_flattened_to(inner, output_arrays),
                     Delimiter::None,
                     self.span_range().join_into_span_else_start(),
                 )?;
             }
             Grouping::Flattened => {
-                self.output_flattened_to(output)?;
+                self.output_flattened_to(output, output_arrays)?;
             }
         }
         Ok(())
     }
 
-    fn output_flattened_to(&self, output: &mut OutputStream) -> ExecutionResult<()> {
+    fn output_flattened_to(
+        &self,
+        output: &mut OutputStream,
+        output_arrays: bool,
+    ) -> ExecutionResult<()> {
         match self {
             Self::None { .. } => {}
             Self::Integer(value) => output.push_literal(value.to_literal()),
@@ -397,50 +458,51 @@ impl ExpressionValue {
             Self::UnsupportedLiteral(literal) => {
                 output.extend_raw_tokens(literal.lit.to_token_stream())
             }
-            Self::Array { .. } => return self.execution_err("Arrays cannot be output to a stream. You likely wish to use the !for! command or if you wish to output every element, use `as stream` to cast the array to a stream."),
+            Self::Array(array) => {
+                if output_arrays {
+                    for item in &array.items {
+                        item.output_to(Grouping::Grouped, output, output_arrays)?;
+                    }
+                } else {
+                    return self.execution_err("Arrays cannot be output to a stream. You likely wish to use the !for! command or if you wish to output every element, use `#(XXX as stream)` to cast the array to a stream.");
+                }
+            }
             Self::Stream(value) => value.value.append_cloned_into(output),
         };
         Ok(())
     }
 
-    pub(crate) fn debug(&self) -> String {
+    pub(crate) fn into_debug_string_value(self) -> ExpressionValue {
+        let span_range = self.span_range();
+        self.concat_recursive(&ConcatBehaviour::debug())
+            .to_value(span_range)
+    }
+
+    pub(crate) fn concat_recursive(self, behaviour: &ConcatBehaviour) -> String {
         let mut output = String::new();
-        self.debug_to(&mut output);
+        self.concat_recursive_into(&mut output, behaviour);
         output
     }
 
-    fn debug_to(&self, output: &mut String) {
-        use std::fmt::Write;
+    pub(crate) fn concat_recursive_into(self, output: &mut String, behaviour: &ConcatBehaviour) {
         match self {
             ExpressionValue::None { .. } => {
-                write!(output, "None").unwrap();
+                if behaviour.show_none_values {
+                    output.push_str("None");
+                }
             }
             ExpressionValue::Stream(stream) => {
-                if stream.value.is_empty() {
-                    write!(output, "[!stream!]").unwrap();
-                } else {
-                    let stream = stream.value.clone();
-                    let string_rep = stream.concat_recursive(&ConcatBehaviour::debug());
-                    write!(output, "[!stream! {}]", string_rep).unwrap();
-                }
+                stream.concat_recursive_into(output, behaviour);
             }
             ExpressionValue::Array(array) => {
-                write!(output, "[").unwrap();
-                for (i, item) in array.items.iter().enumerate() {
-                    if i != 0 {
-                        write!(output, ", ").unwrap();
-                    }
-                    item.debug_to(output);
-                }
-                write!(output, "]").unwrap();
+                array.concat_recursive_into(output, behaviour);
             }
             _ => {
                 // This isn't the most efficient, but it's less code and debug doesn't need to be super efficient.
                 let mut stream = OutputStream::new();
-                self.output_flattened_to(&mut stream)
+                self.output_flattened_to(&mut stream, false)
                     .expect("Non-composite values should all be able to be outputted to a stream");
-                let string_rep = stream.concat_recursive(&ConcatBehaviour::debug());
-                write!(output, "{}", string_rep).unwrap();
+                stream.concat_recursive_into(output, behaviour);
             }
         }
     }
@@ -499,16 +561,6 @@ impl HasValueType for UnsupportedLiteral {
     }
 }
 
-#[derive(Copy, Clone)]
-pub(super) enum CastTarget {
-    Integer(IntegerKind),
-    Float(FloatKind),
-    Boolean,
-    Char,
-    Stream,
-    Group,
-}
-
 pub(super) enum EvaluationLiteralPair {
     Integer(ExpressionIntegerValuePair),
     Float(ExpressionFloatValuePair),
@@ -547,5 +599,69 @@ impl EvaluationLiteralPair {
                     .execution_err("The range must be between two integers or two characters")
             }
         })
+    }
+}
+
+pub(crate) struct ExpressionIterator {
+    iterator: ExpressionIteratorInner,
+    #[allow(unused)]
+    pub(crate) span_range: SpanRange,
+}
+
+impl ExpressionIterator {
+    pub(crate) fn new_for_array(array: ExpressionArray) -> Self {
+        Self {
+            iterator: ExpressionIteratorInner::Array(array.items.into_iter()),
+            span_range: array.span_range,
+        }
+    }
+
+    pub(crate) fn new_for_stream(stream: ExpressionStream) -> Self {
+        Self {
+            iterator: ExpressionIteratorInner::Stream(stream.value.into_iter()),
+            span_range: stream.span_range,
+        }
+    }
+
+    #[allow(unused)]
+    pub(crate) fn new_custom(
+        iterator: Box<dyn Iterator<Item = ExpressionValue>>,
+        span_range: SpanRange,
+    ) -> Self {
+        Self {
+            iterator: ExpressionIteratorInner::Other(iterator),
+            span_range,
+        }
+    }
+}
+
+enum ExpressionIteratorInner {
+    Array(<Vec<ExpressionValue> as IntoIterator>::IntoIter),
+    Stream(<OutputStream as IntoIterator>::IntoIter),
+    Other(Box<dyn Iterator<Item = ExpressionValue>>),
+}
+
+impl Iterator for ExpressionIterator {
+    type Item = ExpressionValue;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match &mut self.iterator {
+            ExpressionIteratorInner::Array(iter) => iter.next(),
+            ExpressionIteratorInner::Stream(iter) => {
+                let item = iter.next()?;
+                let span = item.span();
+                let stream: OutputStream = item.into();
+                Some(stream.coerce_into_value(span.span_range()))
+            }
+            ExpressionIteratorInner::Other(iter) => iter.next(),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match &self.iterator {
+            ExpressionIteratorInner::Array(iter) => iter.size_hint(),
+            ExpressionIteratorInner::Stream(iter) => iter.size_hint(),
+            ExpressionIteratorInner::Other(iter) => iter.size_hint(),
+        }
     }
 }

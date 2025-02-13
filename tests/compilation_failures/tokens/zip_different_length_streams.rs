@@ -2,6 +2,6 @@ use preinterpret::*;
 
 fn main() {
     preinterpret! {
-        [!zip! ([A B C] [1 2 3 4])]
+        [!zip! [["A", "B", "C"], [1, 2, 3, 4]]]
     }
 }

@@ -1,3 +1,4 @@
+mod destructuring;
 mod exact_stream;
 mod fields;
 mod parse_utilities;
@@ -7,6 +8,7 @@ mod transformer;
 mod transformers;
 mod variable_binding;
 
+pub(crate) use destructuring::*;
 pub(crate) use exact_stream::*;
 #[allow(unused)]
 pub(crate) use fields::*;

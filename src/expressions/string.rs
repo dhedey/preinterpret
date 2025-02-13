@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Clone)]
 pub(crate) struct ExpressionString {
-    pub(super) value: String,
+    pub(crate) value: String,
     /// The span range that generated this value.
     /// For a complex expression, the start span is the most left part
     /// of the expression, and the end span is the most right part.
@@ -29,14 +29,19 @@ impl ExpressionString {
                 CastTarget::Stream => operation.output(
                     operation
                         .output(self.value)
-                        .into_new_output_stream(Grouping::Flattened)?,
+                        .into_new_output_stream(Grouping::Flattened, false)?,
                 ),
                 CastTarget::Group => operation.output(
                     operation
                         .output(self.value)
-                        .into_new_output_stream(Grouping::Grouped)?,
+                        .into_new_output_stream(Grouping::Grouped, false)?,
                 ),
-                _ => return operation.unsupported(self),
+                CastTarget::String => operation.output(self.value),
+                CastTarget::DebugString => operation.output(format!("{:?}", self.value)),
+                CastTarget::Boolean
+                | CastTarget::Char
+                | CastTarget::Integer(_)
+                | CastTarget::Float(_) => return operation.unsupported(self),
             },
         })
     }

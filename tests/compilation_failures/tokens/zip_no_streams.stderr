@@ -1,5 +1,0 @@
-error: At least one stream is required to zip
- --> tests/compilation_failures/tokens/zip_no_streams.rs:5:16
-  |
-5 |         [!zip! ()]
-  |                ^^

@@ -6,8 +6,6 @@ mod interpreted_stream;
 mod interpreter;
 mod source_code_block;
 mod source_stream;
-mod source_stream_input;
-mod source_value;
 mod variable;
 
 pub(crate) use command::*;
@@ -17,6 +15,4 @@ pub(crate) use interpreted_stream::*;
 pub(crate) use interpreter::*;
 pub(crate) use source_code_block::*;
 pub(crate) use source_stream::*;
-pub(crate) use source_stream_input::*;
-pub(crate) use source_value::*;
 pub(crate) use variable::*;

@@ -119,12 +119,6 @@ pub(crate) struct SourceGroup {
     content: SourceStream,
 }
 
-impl SourceGroup {
-    pub(crate) fn into_content(self) -> SourceStream {
-        self.content
-    }
-}
-
 impl Parse<Source> for SourceGroup {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         let (delimiter, delim_span, content) = input.parse_any_group()?;

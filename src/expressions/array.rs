@@ -27,9 +27,18 @@ impl ExpressionArray {
                 CastTarget::Group => operation.output(
                     operation
                         .output(self.into_stream_with_grouped_items()?)
-                        .into_new_output_stream(Grouping::Grouped)?,
+                        .into_new_output_stream(Grouping::Grouped, false)?,
                 ),
-                _ => {
+                CastTarget::String => operation.output({
+                    let mut output = String::new();
+                    self.concat_recursive_into(&mut output, &ConcatBehaviour::standard());
+                    output
+                }),
+                CastTarget::DebugString => operation.output(self.items).into_debug_string_value(),
+                CastTarget::Boolean
+                | CastTarget::Char
+                | CastTarget::Integer(_)
+                | CastTarget::Float(_) => {
                     if self.items.len() == 1 {
                         self.items
                             .pop()
@@ -37,7 +46,7 @@ impl ExpressionArray {
                             .handle_unary_operation(operation)?
                     } else {
                         return operation.execution_err(format!(
-                            "Cannot only attempt to cast a singleton array to {} but the array has {} elements",
+                            "Only a singleton array can be cast to {} but the array has {} elements",
                             target_ident,
                             self.items.len(),
                         ));
@@ -47,10 +56,10 @@ impl ExpressionArray {
         })
     }
 
-    fn into_stream_with_grouped_items(self) -> ExecutionResult<OutputStream> {
+    pub(crate) fn into_stream_with_grouped_items(self) -> ExecutionResult<OutputStream> {
         let mut stream = OutputStream::new();
         for item in self.items {
-            item.output_to(Grouping::Grouped, &mut stream)?;
+            item.output_to(Grouping::Grouped, &mut stream, true)?;
         }
         Ok(stream)
     }
@@ -92,6 +101,32 @@ impl ExpressionArray {
             | PairedBinaryOperation::GreaterThanOrEqual { .. }
             | PairedBinaryOperation::GreaterThan { .. } => return operation.unsupported(lhs),
         })
+    }
+
+    pub(crate) fn concat_recursive_into(self, output: &mut String, behaviour: &ConcatBehaviour) {
+        if behaviour.output_array_structure {
+            output.push('[');
+        }
+        let mut is_first = true;
+        for item in self.items {
+            if !is_first && behaviour.output_array_structure {
+                output.push(',');
+            }
+            if !is_first && behaviour.add_space_between_token_trees {
+                output.push(' ');
+            }
+            item.concat_recursive_into(output, behaviour);
+            is_first = false;
+        }
+        if behaviour.output_array_structure {
+            output.push(']');
+        }
+    }
+}
+
+impl HasSpanRange for ExpressionArray {
+    fn span_range(&self) -> SpanRange {
+        self.span_range
     }
 }
 

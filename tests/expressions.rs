@@ -92,7 +92,7 @@ fn test_very_long_expression_works() {
             [!settings! {
                 iteration_limit: 100000,
             }]
-            #(let expression = [!stream! 0] + [!for! #i in [!range! 0..100000] { + 1 }])
+            #(let expression = [!stream! 0] + [!for! _ in [!range! 0..100000] { + 1 }])
             [!reinterpret! [!raw! #](#expression)]
         },
         100000
@@ -135,9 +135,9 @@ fn assign_works() {
     preinterpret_assert_eq!(
         #(
             let x = 5 + 5;
-            [!debug! #..x]
+            [!debug! #x]
         ),
-        "[!stream! 10]"
+        "10"
     );
     preinterpret_assert_eq!(
         #(
@@ -163,41 +163,38 @@ fn assign_works() {
 #[test]
 fn test_range() {
     preinterpret_assert_eq!(
-        [!string![!intersperse! {
+        #([!intersperse! {
             items: [!range! -2..5],
             separator: [" "],
-        }]],
+        }] as string),
         "-2 -1 0 1 2 3 4"
     );
     preinterpret_assert_eq!(
-        [!string![!intersperse! {
+        #([!intersperse! {
             items: [!range! -2..=5],
-            separator: [" "],
-        }]],
+            separator: " ",
+        }] as stream as string),
         "-2 -1 0 1 2 3 4 5"
     );
     preinterpret_assert_eq!(
         {
             #(x = 2)
-            [!string! [!intersperse! {
+            #([!intersperse! {
                 items: [!range! (#x + #x)..=5],
-                separator: [" "],
-            }]]
+                separator: " ",
+            }] as stream as string)
         },
         "4 5"
     );
     preinterpret_assert_eq!(
         {
-            [!string![!intersperse! {
+            #([!intersperse! {
                 items: [!range! 8..=5],
-                separator: [" "],
-            }]]
+                separator: " ",
+            }] as stream as string)
         },
         ""
     );
-    preinterpret_assert_eq!({ [!string! [!range! 'a'..='f']] }, "abcdef");
-    preinterpret_assert_eq!(
-        { [!debug! [!..range! -1i8..3i8]] },
-        "[!stream! [!group! -1i8] [!group! 0i8] [!group! 1i8] [!group! 2i8]]"
-    );
+    preinterpret_assert_eq!({ [!string! #([!range! 'a'..='f'] as stream)] }, "abcdef");
+    preinterpret_assert_eq!({ [!debug! [!range! -1i8..3i8]] }, "[-1i8, 0i8, 1i8, 2i8]");
 }

@@ -19,13 +19,22 @@ impl ExpressionStream {
                 return operation.unsupported(self)
             }
             UnaryOperation::Cast { target, .. } => match target {
+                CastTarget::String => operation.output({
+                    let mut output = String::new();
+                    self.concat_recursive_into(&mut output, &ConcatBehaviour::standard());
+                    output
+                }),
+                CastTarget::DebugString => operation.output(self.value).into_debug_string_value(),
                 CastTarget::Stream => operation.output(self.value),
                 CastTarget::Group => operation.output(
                     operation
                         .output(self.value)
-                        .into_new_output_stream(Grouping::Grouped)?,
+                        .into_new_output_stream(Grouping::Grouped, false)?,
                 ),
-                _ => {
+                CastTarget::Boolean
+                | CastTarget::Char
+                | CastTarget::Integer(_)
+                | CastTarget::Float(_) => {
                     let coerced = self.value.coerce_into_value(self.span_range);
                     if let ExpressionValue::Stream(_) = &coerced {
                         return operation.unsupported(coerced);
@@ -73,6 +82,20 @@ impl ExpressionStream {
             | PairedBinaryOperation::GreaterThanOrEqual { .. }
             | PairedBinaryOperation::GreaterThan { .. } => return operation.unsupported(lhs),
         })
+    }
+
+    pub(crate) fn concat_recursive_into(self, output: &mut String, behaviour: &ConcatBehaviour) {
+        if behaviour.output_types_as_commands {
+            if self.value.is_empty() {
+                output.push_str("[!stream!]");
+            } else {
+                output.push_str("[!stream! ");
+                self.value.concat_recursive_into(output, behaviour);
+                output.push(']');
+            }
+        } else {
+            self.value.concat_recursive_into(output, behaviour);
+        }
     }
 }
 

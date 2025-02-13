@@ -51,7 +51,7 @@ pub(crate) trait IsVariable: HasSpanRange {
     ) -> ExecutionResult<()> {
         self.read_existing(interpreter)?
             .get(self)?
-            .output_to(grouping, output)
+            .output_to(grouping, output, false)
     }
 
     fn read_existing<'i>(&self, interpreter: &'i Interpreter) -> ExecutionResult<&'i VariableData> {
@@ -110,20 +110,6 @@ impl Interpret for &MarkedVariable {
         match self {
             MarkedVariable::Grouped(variable) => variable.interpret_into(interpreter, output),
             MarkedVariable::Flattened(variable) => variable.interpret_into(interpreter, output),
-        }
-    }
-}
-
-impl InterpretToValue for &MarkedVariable {
-    type OutputValue = ExpressionValue;
-
-    fn interpret_to_value(
-        self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Self::OutputValue> {
-        match self {
-            MarkedVariable::Grouped(variable) => variable.interpret_to_value(interpreter),
-            MarkedVariable::Flattened(variable) => variable.interpret_to_value(interpreter),
         }
     }
 }
@@ -232,20 +218,6 @@ impl Interpret for &FlattenedVariable {
     }
 }
 
-impl InterpretToValue for &FlattenedVariable {
-    type OutputValue = ExpressionValue;
-
-    fn interpret_to_value(
-        self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Self::OutputValue> {
-        // We always output a stream value for a flattened variable
-        Ok(self
-            .interpret_to_new_stream(interpreter)?
-            .to_value(self.span_range()))
-    }
-}
-
 impl HasSpanRange for FlattenedVariable {
     fn span_range(&self) -> SpanRange {
         SpanRange::new_between(self.marker.span, self.variable_name.span())
@@ -309,5 +281,40 @@ impl InterpretToValue for &VariablePath {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<Self::OutputValue> {
         self.get_value(interpreter)
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct VariableDestructuring {
+    name: Ident,
+}
+
+impl Parse<Source> for VariableDestructuring {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+        Ok(Self {
+            name: input.parse()?,
+        })
+    }
+}
+
+impl IsVariable for VariableDestructuring {
+    fn get_name(&self) -> String {
+        self.name.to_string()
+    }
+}
+
+impl HasSpan for VariableDestructuring {
+    fn span(&self) -> Span {
+        self.name.span()
+    }
+}
+
+impl HandleDestructure for VariableDestructuring {
+    fn handle_destructure(
+        &self,
+        interpreter: &mut Interpreter,
+        value: ExpressionValue,
+    ) -> ExecutionResult<()> {
+        self.set_value(interpreter, value)
     }
 }

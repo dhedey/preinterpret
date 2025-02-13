@@ -224,6 +224,16 @@ impl<'a, K> ParseBuffer<'a, K> {
         T::parse(self, context)
     }
 
+    pub fn parse_terminated<T: Parse<K>, P: syn::parse::Parse>(
+        &'a self,
+    ) -> ParseResult<Punctuated<T, P>> {
+        Ok(Punctuated::parse_terminated_with(&self.inner, |inner| {
+            ParseStream::<K>::from(inner)
+                .parse()
+                .map_err(|err| err.convert_to_final_error())
+        })?)
+    }
+
     pub(crate) fn call<T, F: FnOnce(ParseStream<K>) -> ParseResult<T>>(
         &self,
         f: F,

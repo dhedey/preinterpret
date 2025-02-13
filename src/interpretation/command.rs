@@ -140,7 +140,7 @@ impl<C: ValueCommandDefinition> CommandInvocationAs<OutputKindValue> for C {
             _ => Grouping::Grouped,
         };
         self.execute(context.interpreter)?
-            .output_to(grouping, output)
+            .output_to(grouping, output, false)
     }
 
     fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
@@ -296,8 +296,8 @@ impl<C: GroupedStreamCommandDefinition> CommandInvocationAs<OutputKindGroupedStr
 // OutputKindControlFlow
 //======================
 
-pub(crate) struct OutputKindStreaming;
-impl OutputKind for OutputKindStreaming {
+pub(crate) struct OutputKindStream;
+impl OutputKind for OutputKindStream {
     type Output = ();
 
     fn resolve_standard() -> CommandOutputKind {
@@ -311,7 +311,7 @@ impl OutputKind for OutputKindStreaming {
 
 // Control Flow or a command which is unlikely to want grouped output
 pub(crate) trait StreamingCommandDefinition:
-    Sized + CommandType<OutputKind = OutputKindStreaming>
+    Sized + CommandType<OutputKind = OutputKindStream>
 {
     const COMMAND_NAME: &'static str;
     fn parse(arguments: CommandArguments) -> ParseResult<Self>;
@@ -322,7 +322,7 @@ pub(crate) trait StreamingCommandDefinition:
     ) -> ExecutionResult<()>;
 }
 
-impl<C: StreamingCommandDefinition> CommandInvocationAs<OutputKindStreaming> for C {
+impl<C: StreamingCommandDefinition> CommandInvocationAs<OutputKindStream> for C {
     fn execute_into(
         self,
         context: ExecutionContext,
@@ -334,11 +334,7 @@ impl<C: StreamingCommandDefinition> CommandInvocationAs<OutputKindStreaming> for
     fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
         let span_range = context.delim_span.span_range();
         let mut output = OutputStream::new();
-        <Self as CommandInvocationAs<OutputKindStreaming>>::execute_into(
-            self,
-            context,
-            &mut output,
-        )?;
+        <Self as CommandInvocationAs<OutputKindStream>>::execute_into(self, context, &mut output)?;
         Ok(output.to_value(span_range))
     }
 }
@@ -538,17 +534,6 @@ impl Parse<Source> for Command {
             output_kind,
             source_group_span: delim_span,
         })
-    }
-}
-
-impl Command {
-    pub(crate) fn output_kind(&self) -> CommandOutputKind {
-        self.output_kind
-    }
-
-    /// Should only be used to swap valid kinds
-    pub(crate) unsafe fn set_output_kind(&mut self, output_kind: CommandOutputKind) {
-        self.output_kind = output_kind;
     }
 }
 

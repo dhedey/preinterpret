@@ -86,6 +86,18 @@ impl ExpressionInteger {
         }
     }
 
+    pub(crate) fn expect_usize(self) -> ExecutionResult<usize> {
+        Ok(match self.value {
+            ExpressionIntegerValue::Untyped(input) => input.parse_as()?,
+            ExpressionIntegerValue::Usize(input) => input,
+            _ => {
+                return self
+                    .span_range
+                    .execution_err("Expected a usize or untyped integer")
+            }
+        })
+    }
+
     pub(super) fn to_literal(&self) -> Literal {
         self.value
             .to_unspanned_literal()
@@ -310,15 +322,17 @@ impl UntypedInteger {
                 CastTarget::Boolean | CastTarget::Char => {
                     return operation.execution_err("This cast is not supported")
                 }
+                CastTarget::String => operation.output(input.to_string()),
+                CastTarget::DebugString => operation.output(self).into_debug_string_value(),
                 CastTarget::Stream => operation.output(
                     operation
                         .output(self)
-                        .into_new_output_stream(Grouping::Flattened)?,
+                        .into_new_output_stream(Grouping::Flattened, false)?,
                 ),
                 CastTarget::Group => operation.output(
                     operation
                         .output(self)
-                        .into_new_output_stream(Grouping::Grouped)?,
+                        .into_new_output_stream(Grouping::Grouped, false)?,
                 ),
             },
         })
@@ -379,7 +393,7 @@ impl UntypedInteger {
             format!(
                 "The untyped integer operation {:?} {} {:?} overflowed in i128 space",
                 lhs,
-                operation.symbol(),
+                operation.symbolic_description(),
                 rhs
             )
         };
@@ -515,7 +529,7 @@ macro_rules! impl_int_operations_except_unary {
         impl HandleBinaryOperation for $integer_type {
             fn handle_paired_binary_operation(self, rhs: Self, operation: OutputSpanned<PairedBinaryOperation>) -> ExecutionResult<ExpressionValue> {
                 let lhs = self;
-                let overflow_error = || format!("The {} operation {:?} {} {:?} overflowed", stringify!($integer_type), lhs, operation.symbol(), rhs);
+                let overflow_error = || format!("The {} operation {:?} {} {:?} overflowed", stringify!($integer_type), lhs, operation.symbolic_description(), rhs);
                 Ok(match operation.operation {
                     PairedBinaryOperation::Addition { .. } => return operation.output_if_some(lhs.checked_add(rhs), overflow_error),
                     PairedBinaryOperation::Subtraction { .. } => return operation.output_if_some(lhs.checked_sub(rhs), overflow_error),
@@ -628,8 +642,10 @@ macro_rules! impl_unsigned_unary_operations {
                         CastTarget::Float(FloatKind::F32) => operation.output(self as f32),
                         CastTarget::Float(FloatKind::F64) => operation.output(self as f64),
                         CastTarget::Boolean | CastTarget::Char => return operation.execution_err("This cast is not supported"),
-                        CastTarget::Stream => operation.output(operation.output(self).into_new_output_stream(Grouping::Flattened)?),
-                        CastTarget::Group => operation.output(operation.output(self).into_new_output_stream(Grouping::Grouped)?),
+                        CastTarget::String => operation.output(self.to_string()),
+                        CastTarget::DebugString => operation.output(self).into_debug_string_value(),
+                        CastTarget::Stream => operation.output(operation.output(self).into_new_output_stream(Grouping::Flattened, false)?),
+                        CastTarget::Group => operation.output(operation.output(self).into_new_output_stream(Grouping::Grouped, false)?),
                     }
                 })
             }
@@ -664,8 +680,10 @@ macro_rules! impl_signed_unary_operations {
                         CastTarget::Float(FloatKind::F32) => operation.output(self as f32),
                         CastTarget::Float(FloatKind::F64) => operation.output(self as f64),
                         CastTarget::Boolean | CastTarget::Char => return operation.execution_err("This cast is not supported"),
-                        CastTarget::Stream => operation.output(operation.output(self).into_new_output_stream(Grouping::Flattened)?),
-                        CastTarget::Group => operation.output(operation.output(self).into_new_output_stream(Grouping::Grouped)?),
+                        CastTarget::String => operation.output(self.to_string()),
+                        CastTarget::DebugString => operation.output(self).into_debug_string_value(),
+                        CastTarget::Stream => operation.output(operation.output(self).into_new_output_stream(Grouping::Flattened, false)?),
+                        CastTarget::Group => operation.output(operation.output(self).into_new_output_stream(Grouping::Grouped, false)?),
                     }
                 })
             }
@@ -707,15 +725,17 @@ impl HandleUnaryOperation for u8 {
                 CastTarget::Boolean => {
                     return operation.execution_err("This cast is not supported")
                 }
+                CastTarget::String => operation.output(self.to_string()),
+                CastTarget::DebugString => operation.output(self).into_debug_string_value(),
                 CastTarget::Stream => operation.output(
                     operation
                         .output(self)
-                        .into_new_output_stream(Grouping::Flattened)?,
+                        .into_new_output_stream(Grouping::Flattened, false)?,
                 ),
                 CastTarget::Group => operation.output(
                     operation
                         .output(self)
-                        .into_new_output_stream(Grouping::Grouped)?,
+                        .into_new_output_stream(Grouping::Grouped, false)?,
                 ),
             },
         })

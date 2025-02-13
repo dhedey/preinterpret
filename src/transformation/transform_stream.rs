@@ -260,3 +260,16 @@ impl HandleTransformation for ExplicitTransformStream {
         Ok(())
     }
 }
+
+impl HandleDestructure for ExplicitTransformStream {
+    fn handle_destructure(
+        &self,
+        interpreter: &mut Interpreter,
+        value: ExpressionValue,
+    ) -> ExecutionResult<()> {
+        let stream = value.expect_stream("The destructure source")?;
+        let mut discarded = OutputStream::new();
+        self.handle_transform_from_stream(stream.value, interpreter, &mut discarded)?;
+        Ok(())
+    }
+}

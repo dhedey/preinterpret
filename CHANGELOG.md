@@ -98,14 +98,18 @@ Inside a transform stream, the following grammar is supported:
 ### To come
 
 * Consider separating an array `[x, y, z]` from a stream `[!stream! ...]` in the value model
-  * Revisit the `SourceStreamInput` abstraction - maybe it's replaced with a `SourceExpression` which needs to output a stream?
-  * Split outputs an array
-  * Intersperse works with either an array or a stream (?)
-  * For works only with an array (in future, also an iterator)
-  * We can then consider dropping lots of the `group` wrappers I guess?
+  * Add `as ident` casting and support it for array and stream using concat recursive.
+  * Support an iterator value as:
+    * (Not a real iterator - takes an `interpreter` for its `next(interpreter)` method)
+    * Is an input for for loops
+    * Is an output for zip and intersperse
+    * Supports casting to/from arrays and streams; with an iteration limit
+  * Get rid of `OutputKindGroupedStream` and the `[!..command]` thing
+  * Consider dropping lots of the `group` wrappers?
   * Then destructuring and parsing become different:
     * Destructuring works over the value model; parsing works over the token stream model.
     * Parsers can be embedded inside a destructuring
+  * Add `..` and `..x` support to the array destructurer
   * Support a CastTarget of Array (only supported for array and stream and iterator)
 * Support `#(x[..])` syntax for indexing arrays and streams at read time
   * Via a post-fix `[...]` operation with high priority
@@ -148,7 +152,7 @@ Inside a transform stream, the following grammar is supported:
     * `[!match! ...]` command
     * `@[MATCH { ... }]` (with `#..x` as a catch-all) with optional arms...
     * `#(..)?`, `#(..)+`, `#(..),+`, `#(..)*`, `#(..),*`
-  * Scrap `[!let!]` in favour of `[!parse! [...] as @(_ = ...)]`
+  * Scrap `[!let!]` and `[!parse! ..]` in favour of `#(let <destructuring> = #x)`
 * Consider:
   * Adding all of these: https://veykril.github.io/tlborm/decl-macros/minutiae/fragment-specifiers.html#ty
   * Adding `preinterpret::macro`
@@ -321,6 +325,7 @@ Inside a transform stream, the following grammar is supported:
 
 * Pushed to 0.4:
   * Performance:
+    * Use a small-vec optimization in some places
     * Get rid of needless cloning of commands/variables etc
     * Support `+=` inside expressions to allow appending of token streams
       * Variable reference would need to be a sub-type of stream

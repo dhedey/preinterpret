@@ -30,7 +30,7 @@ impl InterpretToValue for &SourceExpression {
 pub(super) enum SourceExpressionLeaf {
     Command(Command),
     VariablePath(VariablePath),
-    MarkedVariable(MarkedVariable),
+    Variable(GroupedVariable),
     ExpressionBlock(ExpressionBlock),
     Value(ExpressionValue),
 }
@@ -42,8 +42,13 @@ impl Expressionable for Source {
     fn parse_unary_atom(input: &mut ParseStreamStack<Self>) -> ParseResult<UnaryAtom<Self>> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => UnaryAtom::Leaf(Self::Leaf::Command(input.parse()?)),
-            SourcePeekMatch::Variable(_) => {
-                UnaryAtom::Leaf(Self::Leaf::MarkedVariable(input.parse()?))
+            SourcePeekMatch::Variable(Grouping::Grouped) => {
+                UnaryAtom::Leaf(Self::Leaf::Variable(input.parse()?))
+            }
+            SourcePeekMatch::Variable(Grouping::Flattened) => {
+                return input.parse_err(
+                    "Remove the .. prefix. Flattened variables are not supported in an expression.",
+                )
             }
             SourcePeekMatch::ExpressionBlock(_) => {
                 UnaryAtom::Leaf(Self::Leaf::ExpressionBlock(input.parse()?))
@@ -69,7 +74,7 @@ impl Expressionable for Source {
                 let (_, delim_span) = input.parse_and_enter_group()?;
                 UnaryAtom::Array {
                     delim_span,
-                    is_empty: input.is_empty(),
+                    is_empty: input.is_current_empty(),
                 }
             }
             SourcePeekMatch::Punct(_) => UnaryAtom::PrefixUnaryOperation(input.parse()?),
@@ -83,31 +88,56 @@ impl Expressionable for Source {
                 let value = ExpressionValue::for_syn_lit(input.parse()?);
                 UnaryAtom::Leaf(Self::Leaf::Value(value))
             }
-            SourcePeekMatch::End => {
-                return input.parse_err("The expression ended in an incomplete state")
-            }
+            SourcePeekMatch::End => return input.parse_err("Expected an expression"),
         })
     }
 
-    fn parse_extension(input: &mut ParseStreamStack<Self>) -> ParseResult<NodeExtension> {
-        Ok(match input.peek_grammar() {
+    fn parse_extension(
+        input: &mut ParseStreamStack<Self>,
+        parent_stack_frame: &ExpressionStackFrame,
+    ) -> ParseResult<NodeExtension> {
+        // We fall through if we have no match
+        match input.peek_grammar() {
             SourcePeekMatch::Punct(punct) if punct.as_char() == ',' => {
-                NodeExtension::CommaOperator {
-                    comma: input.parse()?,
-                    is_end_of_stream: input.is_empty(),
+                match parent_stack_frame {
+                    ExpressionStackFrame::Array { .. } => {
+                        input.parse::<Token![,]>()?;
+                        if input.is_current_empty() {
+                            return Ok(NodeExtension::EndOfStream);
+                        } else {
+                            return Ok(NodeExtension::NonTerminalArrayComma);
+                        }
+                    }
+                    ExpressionStackFrame::Group { .. } => {
+                        return input.parse_err("Commas are only permitted inside preinterpret arrays []. Preinterpret arrays [a, b] can be used as a drop-in replacement for rust tuples (a, b).")
+                    }
+                    // 
+                    _ => {}
                 }
             }
-            SourcePeekMatch::Punct(_) => match input.try_parse_or_revert::<BinaryOperation>() {
-                Ok(operation) => NodeExtension::BinaryOperation(operation),
-                Err(_) => NodeExtension::NoneMatched,
-            },
+            SourcePeekMatch::Punct(_) => if let Ok(operation) = input.try_parse_or_revert::<BinaryOperation>() { return Ok(NodeExtension::BinaryOperation(operation)) },
             SourcePeekMatch::Ident(ident) if ident == "as" => {
                 let cast_operation =
                     UnaryOperation::for_cast_operation(input.parse()?, input.parse_any_ident()?)?;
-                NodeExtension::PostfixOperation(cast_operation)
+                return Ok(NodeExtension::PostfixOperation(cast_operation));
             }
-            _ => NodeExtension::NoneMatched,
-        })
+            SourcePeekMatch::End => return Ok(NodeExtension::EndOfStream),
+            _ => {}
+        };
+        // We are not at the end of the stream, but the tokens which follow are
+        // not a valid extension...
+        match parent_stack_frame {
+            ExpressionStackFrame::Root => Ok(NodeExtension::NoValidExtensionForCurrentParent),
+            ExpressionStackFrame::Group { .. } => input.parse_err("Expected ) or operator"),
+            ExpressionStackFrame::Array { .. } => input.parse_err("Expected comma, ], or operator"),
+            // e.g. I've just matched the true in !true or false || true,
+            // and I want to see if there's an extension (e.g. a cast).
+            // There's nothing matching, so we fall through to an EndOfFrame
+            ExpressionStackFrame::IncompleteUnaryPrefixOperation { .. }
+            | ExpressionStackFrame::IncompleteBinaryOperation { .. } => {
+                Ok(NodeExtension::NoValidExtensionForCurrentParent)
+            }
+        }
     }
 
     fn evaluate_leaf(
@@ -118,9 +148,7 @@ impl Expressionable for Source {
             SourceExpressionLeaf::Command(command) => {
                 command.clone().interpret_to_value(interpreter)?
             }
-            SourceExpressionLeaf::MarkedVariable(variable) => {
-                variable.interpret_to_value(interpreter)?
-            }
+            SourceExpressionLeaf::Variable(variable) => variable.interpret_to_value(interpreter)?,
             SourceExpressionLeaf::VariablePath(variable_path) => {
                 variable_path.interpret_to_value(interpreter)?
             }
@@ -184,7 +212,10 @@ pub(super) trait Expressionable: Sized {
     type EvaluationContext;
 
     fn parse_unary_atom(input: &mut ParseStreamStack<Self>) -> ParseResult<UnaryAtom<Self>>;
-    fn parse_extension(input: &mut ParseStreamStack<Self>) -> ParseResult<NodeExtension>;
+    fn parse_extension(
+        input: &mut ParseStreamStack<Self>,
+        parent_stack_frame: &ExpressionStackFrame,
+    ) -> ParseResult<NodeExtension>;
 
     fn evaluate_leaf(
         leaf: &Self::Leaf,

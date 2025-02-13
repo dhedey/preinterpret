@@ -1,6 +1,0 @@
-error: unexpected token
-       Occurred whilst parsing the output from the { ... } block to a syn::lit::LitBool.
- --> tests/compilation_failures/tokens/intersperse_bool_input_braces_issue.rs:9:22
-  |
-9 |                 true false
-  |                      ^^^^^

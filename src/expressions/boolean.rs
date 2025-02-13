@@ -44,16 +44,18 @@ impl ExpressionBoolean {
                 CastTarget::Float(_) | CastTarget::Char => {
                     return operation.execution_err("This cast is not supported")
                 }
-                CastTarget::Boolean => operation.output(self.value),
+                CastTarget::Boolean => operation.output(input),
+                CastTarget::String => operation.output(input.to_string()),
+                CastTarget::DebugString => operation.output(input.to_string()),
                 CastTarget::Stream => operation.output(
                     operation
                         .output(input)
-                        .into_new_output_stream(Grouping::Flattened)?,
+                        .into_new_output_stream(Grouping::Flattened, false)?,
                 ),
                 CastTarget::Group => operation.output(
                     operation
                         .output(input)
-                        .into_new_output_stream(Grouping::Grouped)?,
+                        .into_new_output_stream(Grouping::Grouped, false)?,
                 ),
             },
         })

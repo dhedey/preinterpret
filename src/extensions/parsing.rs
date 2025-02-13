@@ -168,7 +168,7 @@ impl<'a, K> ParseStreamStack<'a, K> {
         self.current().parse()
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
+    pub(crate) fn is_current_empty(&self) -> bool {
         self.current().is_empty()
     }
 

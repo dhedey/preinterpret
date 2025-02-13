@@ -8,7 +8,7 @@ pub(super) trait Operation: HasSpanRange {
         }
     }
 
-    fn symbol(&self) -> &'static str;
+    fn symbolic_description(&self) -> &'static str;
 }
 
 pub(super) struct OutputSpanned<'a, T: Operation + ?Sized> {
@@ -17,8 +17,8 @@ pub(super) struct OutputSpanned<'a, T: Operation + ?Sized> {
 }
 
 impl<T: Operation> OutputSpanned<'_, T> {
-    pub(super) fn symbol(&self) -> &'static str {
-        self.operation.symbol()
+    pub(super) fn symbolic_description(&self) -> &'static str {
+        self.operation.symbolic_description()
     }
 
     pub(super) fn output(&self, output_value: impl ToExpressionValue) -> ExpressionValue {
@@ -39,7 +39,7 @@ impl<T: Operation> OutputSpanned<'_, T> {
     pub(super) fn unsupported(&self, value: impl HasValueType) -> ExecutionResult<ExpressionValue> {
         Err(self.operation.execution_error(format!(
             "The {} operator is not supported for {} values",
-            self.operation.symbol(),
+            self.operation.symbolic_description(),
             value.value_type(),
         )))
     }
@@ -108,7 +108,45 @@ impl UnaryOperation {
         as_token: Token![as],
         target_ident: Ident,
     ) -> ParseResult<Self> {
-        let target = match target_ident.to_string().as_str() {
+        let target = CastTarget::from_str(target_ident.to_string().as_str()).map_err(|()| {
+            target_ident.parse_error("This type is not supported in cast expressions")
+        })?;
+
+        Ok(Self::Cast {
+            as_token,
+            target,
+            target_ident,
+        })
+    }
+
+    pub(super) fn evaluate(self, input: ExpressionValue) -> ExecutionResult<ExpressionValue> {
+        let mut span_range = input.span_range();
+        match &self {
+            UnaryOperation::Neg { token } => span_range.set_start(token.span),
+            UnaryOperation::Not { token } => span_range.set_start(token.span),
+            UnaryOperation::Cast { target_ident, .. } => span_range.set_end(target_ident.span()),
+        };
+        input.handle_unary_operation(self.with_output_span_range(span_range))
+    }
+}
+
+#[derive(Copy, Clone)]
+pub(super) enum CastTarget {
+    Integer(IntegerKind),
+    Float(FloatKind),
+    Boolean,
+    String,
+    DebugString,
+    Char,
+    Stream,
+    Group,
+}
+
+impl FromStr for CastTarget {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
             "int" | "integer" => CastTarget::Integer(IntegerKind::Untyped),
             "u8" => CastTarget::Integer(IntegerKind::U8),
             "u16" => CastTarget::Integer(IntegerKind::U16),
@@ -129,35 +167,48 @@ impl UnaryOperation {
             "char" => CastTarget::Char,
             "stream" => CastTarget::Stream,
             "group" => CastTarget::Group,
-            _ => {
-                return target_ident
-                    .parse_err("This type is not supported in preinterpret cast expressions")
-            }
-        };
-        Ok(Self::Cast {
-            as_token,
-            target,
-            target_ident,
+            "string" => CastTarget::String,
+            "debug" => CastTarget::DebugString,
+            _ => return Err(()),
         })
     }
+}
 
-    pub(super) fn evaluate(self, input: ExpressionValue) -> ExecutionResult<ExpressionValue> {
-        let mut span_range = input.span_range();
-        match &self {
-            UnaryOperation::Neg { token } => span_range.set_start(token.span),
-            UnaryOperation::Not { token } => span_range.set_start(token.span),
-            UnaryOperation::Cast { target_ident, .. } => span_range.set_end(target_ident.span()),
-        };
-        input.handle_unary_operation(self.with_output_span_range(span_range))
+impl CastTarget {
+    fn symbolic_description(&self) -> &'static str {
+        match self {
+            CastTarget::Integer(IntegerKind::Untyped) => "as int",
+            CastTarget::Integer(IntegerKind::U8) => "as u8",
+            CastTarget::Integer(IntegerKind::U16) => "as u16",
+            CastTarget::Integer(IntegerKind::U32) => "as u32",
+            CastTarget::Integer(IntegerKind::U64) => "as u64",
+            CastTarget::Integer(IntegerKind::U128) => "as u128",
+            CastTarget::Integer(IntegerKind::Usize) => "as usize",
+            CastTarget::Integer(IntegerKind::I8) => "as i8",
+            CastTarget::Integer(IntegerKind::I16) => "as i16",
+            CastTarget::Integer(IntegerKind::I32) => "as i32",
+            CastTarget::Integer(IntegerKind::I64) => "as i64",
+            CastTarget::Integer(IntegerKind::I128) => "as i128",
+            CastTarget::Integer(IntegerKind::Isize) => "as isize",
+            CastTarget::Float(FloatKind::Untyped) => "as float",
+            CastTarget::Float(FloatKind::F32) => "as f32",
+            CastTarget::Float(FloatKind::F64) => "as f64",
+            CastTarget::Boolean => "as bool",
+            CastTarget::String => "as string",
+            CastTarget::DebugString => "as debug",
+            CastTarget::Char => "as char",
+            CastTarget::Stream => "as stream",
+            CastTarget::Group => "as group",
+        }
     }
 }
 
 impl Operation for UnaryOperation {
-    fn symbol(&self) -> &'static str {
+    fn symbolic_description(&self) -> &'static str {
         match self {
             UnaryOperation::Neg { .. } => "-",
             UnaryOperation::Not { .. } => "!",
-            UnaryOperation::Cast { .. } => "as",
+            UnaryOperation::Cast { target, .. } => target.symbolic_description(),
         }
     }
 }
@@ -322,10 +373,10 @@ impl HasSpanRange for BinaryOperation {
 }
 
 impl Operation for BinaryOperation {
-    fn symbol(&self) -> &'static str {
+    fn symbolic_description(&self) -> &'static str {
         match self {
-            BinaryOperation::Paired(paired) => paired.symbol(),
-            BinaryOperation::Integer(integer) => integer.symbol(),
+            BinaryOperation::Paired(paired) => paired.symbolic_description(),
+            BinaryOperation::Integer(integer) => integer.symbolic_description(),
         }
     }
 }
@@ -351,7 +402,7 @@ pub(crate) enum PairedBinaryOperation {
 }
 
 impl Operation for PairedBinaryOperation {
-    fn symbol(&self) -> &'static str {
+    fn symbolic_description(&self) -> &'static str {
         match self {
             PairedBinaryOperation::Addition { .. } => "+",
             PairedBinaryOperation::Subtraction { .. } => "-",
@@ -403,7 +454,7 @@ pub(crate) enum IntegerBinaryOperation {
 }
 
 impl Operation for IntegerBinaryOperation {
-    fn symbol(&self) -> &'static str {
+    fn symbolic_description(&self) -> &'static str {
         match self {
             IntegerBinaryOperation::ShiftLeft { .. } => "<<",
             IntegerBinaryOperation::ShiftRight { .. } => ">>",
@@ -443,7 +494,7 @@ pub(super) trait HandleCreateRange: Sized {
 }
 
 impl Operation for syn::RangeLimits {
-    fn symbol(&self) -> &'static str {
+    fn symbolic_description(&self) -> &'static str {
         match self {
             syn::RangeLimits::HalfOpen(_) => "..",
             syn::RangeLimits::Closed(_) => "..=",

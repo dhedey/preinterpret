@@ -79,7 +79,8 @@ impl Interpret for &ExpressionBlock {
             Some(_) => Grouping::Flattened,
             None => Grouping::Grouped,
         };
-        self.evaluate(interpreter)?.output_to(grouping, output)?;
+        self.evaluate(interpreter)?
+            .output_to(grouping, output, false)?;
         Ok(())
     }
 }
@@ -180,10 +181,13 @@ impl InterpretToValue for &AssignmentStatement {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<Self::OutputValue> {
         match &self.destination {
-            Destination::NewVariable { let_token, path } => {
+            Destination::LetBinding {
+                let_token,
+                destructuring,
+            } => {
                 let value = self.expression.interpret_to_value(interpreter)?;
                 let mut span_range = value.span_range();
-                path.set_value(interpreter, value)?;
+                destructuring.handle_destructure(interpreter, value)?;
                 span_range.set_start(let_token.span);
                 Ok(ExpressionValue::None(span_range))
             }
@@ -200,30 +204,19 @@ impl InterpretToValue for &AssignmentStatement {
                 span_range.set_start(path.span_range().start());
                 Ok(ExpressionValue::None(span_range))
             }
-            Destination::Discarded { let_token, .. } => {
-                let value = self.expression.interpret_to_value(interpreter)?;
-                let mut span_range = value.span_range();
-                span_range.set_start(let_token.span);
-                Ok(ExpressionValue::None(span_range))
-            }
         }
     }
 }
 
 #[derive(Clone)]
 enum Destination {
-    NewVariable {
+    LetBinding {
         let_token: Token![let],
-        path: VariablePath,
+        destructuring: Destructuring,
     },
     ExistingVariable {
         path: VariablePath,
         operation: Option<BinaryOperation>,
-    },
-    Discarded {
-        let_token: Token![let],
-        #[allow(unused)]
-        discarded_token: Token![_],
     },
 }
 
@@ -231,17 +224,10 @@ impl Parse<Source> for Destination {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         if input.peek(Token![let]) {
             let let_token = input.parse()?;
-            if input.peek(Token![_]) {
-                Ok(Self::Discarded {
-                    let_token,
-                    discarded_token: input.parse()?,
-                })
-            } else {
-                Ok(Self::NewVariable {
-                    let_token,
-                    path: input.parse()?,
-                })
-            }
+            Ok(Self::LetBinding {
+                let_token,
+                destructuring: input.parse()?,
+            })
         } else {
             Ok(Self::ExistingVariable {
                 path: input.parse()?,

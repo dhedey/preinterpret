@@ -119,7 +119,7 @@ pub(crate) struct RawCommand {
 }
 
 impl CommandType for RawCommand {
-    type OutputKind = OutputKindStreaming;
+    type OutputKind = OutputKindStream;
 }
 
 impl StreamingCommandDefinition for RawCommand {
@@ -147,7 +147,7 @@ pub(crate) struct StreamCommand {
 }
 
 impl CommandType for StreamCommand {
-    type OutputKind = OutputKindStreaming;
+    type OutputKind = OutputKindStream;
 }
 
 impl StreamingCommandDefinition for StreamCommand {
@@ -196,7 +196,7 @@ pub(crate) struct ReinterpretCommand {
 }
 
 impl CommandType for ReinterpretCommand {
-    type OutputKind = OutputKindStreaming;
+    type OutputKind = OutputKindStream;
 }
 
 impl StreamingCommandDefinition for ReinterpretCommand {
@@ -238,7 +238,7 @@ define_field_inputs! {
     SettingsInputs {
         required: {},
         optional: {
-            iteration_limit: SourceValue<syn::LitInt> = DEFAULT_ITERATION_LIMIT ("The new iteration limit"),
+            iteration_limit: SourceExpression = DEFAULT_ITERATION_LIMIT ("The new iteration limit"),
         }
     }
 }
@@ -254,7 +254,10 @@ impl NoOutputCommandDefinition for SettingsCommand {
 
     fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         if let Some(limit) = self.inputs.iteration_limit {
-            let limit: usize = limit.interpret_to_value(interpreter)?.base10_parse()?;
+            let limit = limit
+                .interpret_to_value(interpreter)?
+                .expect_integer("The iteration limit")?
+                .expect_usize()?;
             interpreter.set_iteration_limit(Some(limit));
         }
         Ok(())
@@ -279,10 +282,10 @@ enum EitherErrorInput {
 define_field_inputs! {
     ErrorInputs {
         required: {
-            message: SourceValue<syn::LitStr> = r#""...""# ("The error message to display"),
+            message: SourceExpression = r#""...""# ("The error message to display"),
         },
         optional: {
-            spans: SourceStreamInput = "[$abc]" ("An optional [token stream], to determine where to show the error message"),
+            spans: SourceExpression = "[!stream! $abc]" ("An optional [token stream], to determine where to show the error message"),
         }
     }
 }
@@ -323,11 +326,18 @@ impl NoOutputCommandDefinition for ErrorCommand {
             }
         };
 
-        let message = fields.message.interpret_to_value(interpreter)?.value();
+        let error_message = fields
+            .message
+            .interpret_to_value(interpreter)?
+            .expect_string("Error message")?
+            .value;
 
         let error_span = match fields.spans {
             Some(spans) => {
-                let error_span_stream = spans.interpret_to_new_stream(interpreter)?;
+                let error_span_stream = spans
+                    .interpret_to_value(interpreter)?
+                    .expect_stream("The error spans")?
+                    .value;
 
                 // Consider the case where preinterpret embeds in a declarative macro, and we have
                 // an error like this:
@@ -366,7 +376,7 @@ impl NoOutputCommandDefinition for ErrorCommand {
             None => Span::call_site().span_range(),
         };
 
-        error_span.execution_err(message)
+        error_span.execution_err(error_message)
     }
 }
 
@@ -396,7 +406,11 @@ impl ValueCommandDefinition for DebugCommand {
     }
 
     fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue> {
-        let debug_string = self.inner.interpret_to_value(interpreter)?.debug();
-        Ok(debug_string.to_value(self.span.span_range()))
+        let value = self
+            .inner
+            .interpret_to_value(interpreter)?
+            .with_span(self.span)
+            .into_debug_string_value();
+        Ok(value)
     }
 }
