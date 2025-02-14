@@ -86,9 +86,7 @@ impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
                 match (left, right) {
                     (None, None) => match range_limits {
                         syn::RangeLimits::HalfOpen(token) => {
-                            let inner = ExpressionRangeInner::RangeFull {
-                                token: *token,
-                            };
+                            let inner = ExpressionRangeInner::RangeFull { token: *token };
                             NextAction::HandleValue(inner.to_value(token.span_range()))
                         }
                         syn::RangeLimits::Closed(_) => {
@@ -105,9 +103,7 @@ impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
                     (Some(left), right) => {
                         self.operation_stack.push(EvaluationStackFrame::Range {
                             range_limits: *range_limits,
-                            state: RangePath::OnLeftBranch {
-                                right: *right,
-                            },
+                            state: RangePath::OnLeftBranch { right: *right },
                         });
                         NextAction::EnterNode(*left)
                     }

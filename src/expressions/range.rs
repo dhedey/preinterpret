@@ -258,11 +258,8 @@ impl IterableExpressionRange<ExpressionValue> {
                         }
                         .resolve(output_span_range)
                     }
-                    _ => {
-                        dots.execution_err(
-                            "The range must be between two integers or two characters",
-                        )
-                    }
+                    _ => dots
+                        .execution_err("The range must be between two integers or two characters"),
                 }
             }
             Self::RangeFrom { start, dots } => {
@@ -328,10 +325,7 @@ impl IterableExpressionRange<ExpressionValue> {
                         dots,
                     }
                     .resolve(output_span_range),
-                    _ => {
-                        dots
-                            .execution_err("The range must be from an integer or a character")
-                    }
+                    _ => dots.execution_err("The range must be from an integer or a character"),
                 }
             }
         }

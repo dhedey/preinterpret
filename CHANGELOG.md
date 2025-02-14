@@ -97,12 +97,11 @@ Inside a transform stream, the following grammar is supported:
 
 ### To come
 
-* Support `#(x[..])` syntax for indexing arrays and streams at read time
+* Support `#(x[..])` syntax for indexing arrays at read time (streams to follow in a separate task below after parsers are updated)
   * Via a post-fix `[..]` operation with high precedence
-  * `#(x[0])` returns the item at that position of the array / OR the value at that position of the stream (using `INFER_TOKEN_TREE`)
-  * Consider supporting ranges in the expression tree and range values
-  * `#(x[0..3])` returns a TokenStream/Array
-  * `#(x[0..=3])` returns a TokenStream/Array
+  * `#(x[0])` returns the item at that position of the array
+  * `#(x[0..3])` returns an array
+  * `#(x[0..=3])` returns an array
 * Variable typing (stream / value / object to start with), including an `object` type, like a JS object:
   * Objects:
     * Backed by an indexmap
@@ -142,6 +141,10 @@ Inside a transform stream, the following grammar is supported:
     * `[!match! ...]` command
     * `@[MATCH { ... }]` (with `#..x` as a catch-all) with optional arms...
     * `#(..)?`, `#(..)+`, `#(..),+`, `#(..)*`, `#(..),*`
+* Support `#(x[..])` syntax for indexing streams
+  * `#(x[0])` returns the item at that position of the array / OR the value at that position of the stream (using `INFER_TOKEN_TREE`)
+  * `#(x[0..3])` returns a TokenStream
+  * `#(x[0..=3])` returns a TokenStream
 * Add `..` and `..x` support to the array destructurer
 * Consider:
   * Dropping lots of the `group` wrappers?
