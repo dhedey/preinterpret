@@ -148,27 +148,6 @@ impl ExpressionIntegerValuePair {
             Self::Isize(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
         }
     }
-
-    pub(crate) fn create_range(
-        self,
-        range_limits: OutputSpanned<syn::RangeLimits>,
-    ) -> ExecutionResult<Box<dyn CustomExpressionIterator>> {
-        Ok(match self {
-            Self::Untyped(lhs, rhs) => return lhs.create_range(rhs, range_limits),
-            Self::U8(lhs, rhs) => lhs.create_range(rhs, range_limits),
-            Self::U16(lhs, rhs) => lhs.create_range(rhs, range_limits),
-            Self::U32(lhs, rhs) => lhs.create_range(rhs, range_limits),
-            Self::U64(lhs, rhs) => lhs.create_range(rhs, range_limits),
-            Self::U128(lhs, rhs) => lhs.create_range(rhs, range_limits),
-            Self::Usize(lhs, rhs) => lhs.create_range(rhs, range_limits),
-            Self::I8(lhs, rhs) => lhs.create_range(rhs, range_limits),
-            Self::I16(lhs, rhs) => lhs.create_range(rhs, range_limits),
-            Self::I32(lhs, rhs) => lhs.create_range(rhs, range_limits),
-            Self::I64(lhs, rhs) => lhs.create_range(rhs, range_limits),
-            Self::I128(lhs, rhs) => lhs.create_range(rhs, range_limits),
-            Self::Isize(lhs, rhs) => lhs.create_range(rhs, range_limits),
-        })
-    }
 }
 
 #[derive(Copy, Clone)]
@@ -449,24 +428,6 @@ impl UntypedInteger {
         })
     }
 
-    pub(super) fn create_range(
-        self,
-        right: Self,
-        range_limits: OutputSpanned<syn::RangeLimits>,
-    ) -> ExecutionResult<Box<dyn CustomExpressionIterator>> {
-        let left = self.parse_fallback()?;
-        let right = right.parse_fallback()?;
-        let span_range = range_limits.span_range();
-        Ok(match range_limits.operation {
-            syn::RangeLimits::HalfOpen { .. } => {
-                Box::new((left..right).map(move |x| Self::from_fallback(x).to_value(span_range)))
-            }
-            syn::RangeLimits::Closed { .. } => {
-                Box::new((left..=right).map(move |x| Self::from_fallback(x).to_value(span_range)))
-            }
-        })
-    }
-
     pub(crate) fn from_fallback(value: FallbackInteger) -> Self {
         Self::new_from_literal(Literal::i128_unsuffixed(value))
     }
@@ -595,25 +556,6 @@ macro_rules! impl_int_operations_except_unary {
                         }
                     },
                 })
-            }
-        }
-
-        impl HandleCreateRange for $integer_type {
-            fn create_range(
-                self,
-                right: Self,
-                range_limits: OutputSpanned<syn::RangeLimits>,
-            ) -> Box<dyn CustomExpressionIterator> {
-                let left = self;
-                let span_range = range_limits.span_range();
-                match range_limits.operation {
-                    syn::RangeLimits::HalfOpen { .. } => {
-                        Box::new((left..right).map(move |x| x.to_value(span_range)))
-                    },
-                    syn::RangeLimits::Closed { .. } => {
-                        Box::new((left..=right).map(move |x| x.to_value(span_range)))
-                    }
-                }
             }
         }
     )*};

@@ -68,7 +68,7 @@ fn test_loop_continue_and_break() {
     );
     preinterpret_assert_eq!(
         {
-            [!string! [!for! x in [!range! 65..75] {
+            [!string! [!for! x in 65..75 {
                 [!if! x % 2 == 0 { [!continue!] }]
                 #(x as u8 as char)
             }]]
@@ -81,7 +81,7 @@ fn test_loop_continue_and_break() {
 fn test_for() {
     preinterpret_assert_eq!(
         {
-            [!string! [!for! x in [!range! 65..70] {
+            [!string! [!for! x in 65..70 {
                 #(#x as u8 as char)
             }]]
         },

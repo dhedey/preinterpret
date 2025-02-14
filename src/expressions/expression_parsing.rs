@@ -36,6 +36,9 @@ impl<'a, K: Expressionable> ExpressionParser<'a, K> {
                 WorkItem::TryApplyAlreadyParsedExtension { node, extension } => {
                     self.attempt_extension(node, extension)?
                 }
+                WorkItem::ContinueRange { lhs, range_limits } => {
+                    self.continue_range(lhs, range_limits)?
+                }
                 WorkItem::Finished { root } => {
                     return Ok(self.nodes.complete(root));
                 }
@@ -73,6 +76,10 @@ impl<'a, K: Expressionable> ExpressionParser<'a, K> {
                     operation,
                 })
             }
+            UnaryAtom::Range(range_limits) => WorkItem::ContinueRange {
+                lhs: None,
+                range_limits,
+            },
         })
     }
 
@@ -108,6 +115,10 @@ impl<'a, K: Expressionable> ExpressionParser<'a, K> {
                     }
                     WorkItem::RequireUnaryAtom
                 }
+                NodeExtension::Range(range_limits) => WorkItem::ContinueRange {
+                    lhs: Some(node),
+                    range_limits,
+                },
                 NodeExtension::EndOfStream | NodeExtension::NoValidExtensionForCurrentParent => {
                     unreachable!("Not possible, as these have minimum precedence")
                 }
@@ -163,7 +174,58 @@ impl<'a, K: Expressionable> ExpressionParser<'a, K> {
                     });
                     extension.into_post_operation_completion_work_item(node)
                 }
+                ExpressionStackFrame::IncompleteRange { lhs, range_limits } => {
+                    let node = self.nodes.add_node(ExpressionNode::Range {
+                        left: lhs,
+                        range_limits,
+                        right: Some(node),
+                    });
+                    extension.into_post_operation_completion_work_item(node)
+                }
             })
+        }
+    }
+
+    fn continue_range(
+        &mut self,
+        lhs: Option<ExpressionNodeId>,
+        range_limits: syn::RangeLimits,
+    ) -> ParseResult<WorkItem> {
+        // See https://doc.rust-lang.org/reference/expressions/range-expr.html
+        match &range_limits {
+            syn::RangeLimits::Closed(_) => {
+                // A closed range requires a right hand side, so we can just
+                // go straight to matching a UnaryAtom for it
+                return Ok(
+                    self.push_stack_frame(ExpressionStackFrame::IncompleteRange {
+                        lhs,
+                        range_limits,
+                    }),
+                );
+            }
+            syn::RangeLimits::HalfOpen(_) => {}
+        }
+        // Otherwise, we have a half-open range, and need to work out whether
+        // we can parse a UnaryAtom to be the right side of the range or whether
+        // it will have no right side.
+        // Some examples of such ranges include: `[3.., 4]`, `[3..]`, `let x = 3..;`,
+        // `(3..).first()` or even `3...first()`
+        let can_parse_unary_atom = {
+            let forked = self.streams.fork_current();
+            let mut forked_stack = ParseStreamStack::new(&forked);
+            K::parse_unary_atom(&mut forked_stack).is_ok()
+        };
+        if can_parse_unary_atom {
+            // A unary atom can be parsed so let's attempt to complete the range with it
+            Ok(self.push_stack_frame(ExpressionStackFrame::IncompleteRange { lhs, range_limits }))
+        } else {
+            // No unary atom can be parsed, so let's complete the range
+            let node = self.nodes.add_node(ExpressionNode::Range {
+                left: lhs,
+                range_limits,
+                right: None,
+            });
+            Ok(WorkItem::TryParseAndApplyExtension { node })
         }
     }
 
@@ -433,6 +495,11 @@ pub(super) enum ExpressionStackFrame {
         lhs: ExpressionNodeId,
         operation: BinaryOperation,
     },
+    /// A range which will be followed by a rhs
+    IncompleteRange {
+        lhs: Option<ExpressionNodeId>,
+        range_limits: syn::RangeLimits,
+    },
 }
 
 impl ExpressionStackFrame {
@@ -441,6 +508,7 @@ impl ExpressionStackFrame {
             ExpressionStackFrame::Root => OperatorPrecendence::MIN,
             ExpressionStackFrame::Group { .. } => OperatorPrecendence::MIN,
             ExpressionStackFrame::Array { .. } => OperatorPrecendence::MIN,
+            ExpressionStackFrame::IncompleteRange { .. } => OperatorPrecendence::Range,
             ExpressionStackFrame::IncompleteUnaryPrefixOperation { operation, .. } => {
                 OperatorPrecendence::of_prefix_unary_operation(operation)
             }
@@ -471,6 +539,11 @@ enum WorkItem {
         node: ExpressionNodeId,
         extension: NodeExtension,
     },
+    /// Range parsing behaviour is quite unique, so we have a special case for it.
+    ContinueRange {
+        lhs: Option<ExpressionNodeId>,
+        range_limits: syn::RangeLimits,
+    },
     Finished {
         root: ExpressionNodeId,
     },
@@ -484,12 +557,14 @@ pub(super) enum UnaryAtom<K: Expressionable> {
         is_empty: bool,
     },
     PrefixUnaryOperation(PrefixUnaryOperation),
+    Range(syn::RangeLimits),
 }
 
 pub(super) enum NodeExtension {
     PostfixOperation(UnaryOperation),
     BinaryOperation(BinaryOperation),
     NonTerminalArrayComma,
+    Range(syn::RangeLimits),
     EndOfStream,
     NoValidExtensionForCurrentParent,
 }
@@ -500,6 +575,7 @@ impl NodeExtension {
             NodeExtension::PostfixOperation(op) => OperatorPrecendence::of_unary_operation(op),
             NodeExtension::BinaryOperation(op) => OperatorPrecendence::of_binary_operation(op),
             NodeExtension::NonTerminalArrayComma => OperatorPrecendence::NonTerminalComma,
+            NodeExtension::Range(_) => OperatorPrecendence::Range,
             NodeExtension::EndOfStream => OperatorPrecendence::MIN,
             NodeExtension::NoValidExtensionForCurrentParent => OperatorPrecendence::MIN,
         }
@@ -507,9 +583,11 @@ impl NodeExtension {
 
     fn into_post_operation_completion_work_item(self, node: ExpressionNodeId) -> WorkItem {
         match self {
-            extension @ NodeExtension::PostfixOperation { .. }
-            | extension @ NodeExtension::BinaryOperation { .. }
-            | extension @ NodeExtension::EndOfStream => {
+            // Extensions are independent of depth, so can be re-used without parsing again.
+            extension @ (NodeExtension::PostfixOperation { .. }
+            | NodeExtension::BinaryOperation { .. }
+            | NodeExtension::Range { .. }
+            | NodeExtension::EndOfStream) => {
                 WorkItem::TryApplyAlreadyParsedExtension { node, extension }
             }
             NodeExtension::NonTerminalArrayComma => {

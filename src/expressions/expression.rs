@@ -77,7 +77,13 @@ impl Expressionable for Source {
                     is_empty: input.is_current_empty(),
                 }
             }
-            SourcePeekMatch::Punct(_) => UnaryAtom::PrefixUnaryOperation(input.parse()?),
+            SourcePeekMatch::Punct(punct) => {
+                if punct.as_char() == '.' {
+                    UnaryAtom::Range(input.parse()?)
+                } else {
+                    UnaryAtom::PrefixUnaryOperation(input.parse()?)
+                }
+            }
             SourcePeekMatch::Ident(_) => match input.try_parse_or_revert() {
                 Ok(bool) => UnaryAtom::Leaf(Self::Leaf::Value(ExpressionValue::Boolean(
                     ExpressionBoolean::for_litbool(bool),
@@ -111,13 +117,16 @@ impl Expressionable for Source {
                     ExpressionStackFrame::Group { .. } => {
                         return input.parse_err("Commas are only permitted inside preinterpret arrays []. Preinterpret arrays [a, b] can be used as a drop-in replacement for rust tuples (a, b).")
                     }
-                    // 
+                    // Fall through for an unmatched extension
                     _ => {}
                 }
             }
             SourcePeekMatch::Punct(_) => {
-                if let Ok(operation) = input.try_parse_or_revert::<BinaryOperation>() {
+                if let Ok(operation) = input.try_parse_or_revert() {
                     return Ok(NodeExtension::BinaryOperation(operation));
+                }
+                if let Ok(range_limits) = input.try_parse_or_revert() {
+                    return Ok(NodeExtension::Range(range_limits));
                 }
             }
             SourcePeekMatch::Ident(ident) if ident == "as" => {
@@ -138,7 +147,8 @@ impl Expressionable for Source {
             // and I want to see if there's an extension (e.g. a cast).
             // There's nothing matching, so we fall through to an EndOfFrame
             ExpressionStackFrame::IncompleteUnaryPrefixOperation { .. }
-            | ExpressionStackFrame::IncompleteBinaryOperation { .. } => {
+            | ExpressionStackFrame::IncompleteBinaryOperation { .. }
+            | ExpressionStackFrame::IncompleteRange { .. } => {
                 Ok(NodeExtension::NoValidExtensionForCurrentParent)
             }
         }
@@ -208,6 +218,11 @@ pub(super) enum ExpressionNode<K: Expressionable> {
         operation: BinaryOperation,
         left_input: ExpressionNodeId,
         right_input: ExpressionNodeId,
+    },
+    Range {
+        left: Option<ExpressionNodeId>,
+        range_limits: syn::RangeLimits,
+        right: Option<ExpressionNodeId>,
     },
 }
 

@@ -78,6 +78,41 @@ impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
                     });
                 NextAction::EnterNode(*left_input)
             }
+            ExpressionNode::Range {
+                left,
+                range_limits,
+                right,
+            } => {
+                match (left, right) {
+                    (None, None) => match range_limits {
+                        syn::RangeLimits::HalfOpen(token) => {
+                            let inner = ExpressionRangeInner::RangeFull {
+                                token: *token,
+                            };
+                            NextAction::HandleValue(inner.to_value(token.span_range()))
+                        }
+                        syn::RangeLimits::Closed(_) => {
+                            unreachable!("A closed range should have been given a right in continue_range(..)")
+                        }
+                    },
+                    (None, Some(right)) => {
+                        self.operation_stack.push(EvaluationStackFrame::Range {
+                            range_limits: *range_limits,
+                            state: RangePath::OnRightBranch { left: None },
+                        });
+                        NextAction::EnterNode(*right)
+                    }
+                    (Some(left), right) => {
+                        self.operation_stack.push(EvaluationStackFrame::Range {
+                            range_limits: *range_limits,
+                            state: RangePath::OnLeftBranch {
+                                right: *right,
+                            },
+                        });
+                        NextAction::EnterNode(*left)
+                    }
+                }
+            }
         })
     }
 
@@ -113,6 +148,66 @@ impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
                     NextAction::HandleValue(result)
                 }
             },
+            EvaluationStackFrame::Range {
+                range_limits,
+                state,
+            } => match (state, range_limits) {
+                (RangePath::OnLeftBranch { right: Some(right) }, range_limits) => {
+                    self.operation_stack.push(EvaluationStackFrame::Range {
+                        range_limits,
+                        state: RangePath::OnRightBranch { left: Some(value) },
+                    });
+                    NextAction::EnterNode(right)
+                }
+                (RangePath::OnLeftBranch { right: None }, syn::RangeLimits::HalfOpen(token)) => {
+                    let inner = ExpressionRangeInner::RangeFrom {
+                        start_inclusive: value,
+                        token,
+                    };
+                    NextAction::HandleValue(inner.to_value(token.span_range()))
+                }
+                (RangePath::OnLeftBranch { right: None }, syn::RangeLimits::Closed(_)) => {
+                    unreachable!(
+                        "A closed range should have been given a right in continue_range(..)"
+                    )
+                }
+                (
+                    RangePath::OnRightBranch { left: Some(left) },
+                    syn::RangeLimits::HalfOpen(token),
+                ) => {
+                    let inner = ExpressionRangeInner::Range {
+                        start_inclusive: left,
+                        token,
+                        end_exclusive: value,
+                    };
+                    NextAction::HandleValue(inner.to_value(token.span_range()))
+                }
+                (
+                    RangePath::OnRightBranch { left: Some(left) },
+                    syn::RangeLimits::Closed(token),
+                ) => {
+                    let inner = ExpressionRangeInner::RangeInclusive {
+                        start_inclusive: left,
+                        token,
+                        end_inclusive: value,
+                    };
+                    NextAction::HandleValue(inner.to_value(token.span_range()))
+                }
+                (RangePath::OnRightBranch { left: None }, syn::RangeLimits::HalfOpen(token)) => {
+                    let inner = ExpressionRangeInner::RangeTo {
+                        token,
+                        end_exclusive: value,
+                    };
+                    NextAction::HandleValue(inner.to_value(token.span_range()))
+                }
+                (RangePath::OnRightBranch { left: None }, syn::RangeLimits::Closed(token)) => {
+                    let inner = ExpressionRangeInner::RangeToInclusive {
+                        token,
+                        end_inclusive: value,
+                    };
+                    NextAction::HandleValue(inner.to_value(token.span_range()))
+                }
+            },
         })
     }
 }
@@ -133,6 +228,10 @@ enum EvaluationStackFrame {
     BinaryOperation {
         operation: BinaryOperation,
         state: BinaryPath,
+    },
+    Range {
+        range_limits: syn::RangeLimits,
+        state: RangePath,
     },
 }
 
@@ -164,4 +263,9 @@ impl ArrayStackFrame {
 enum BinaryPath {
     OnLeftBranch { right: ExpressionNodeId },
     OnRightBranch { left: ExpressionValue },
+}
+
+enum RangePath {
+    OnLeftBranch { right: Option<ExpressionNodeId> },
+    OnRightBranch { left: Option<ExpressionValue> },
 }

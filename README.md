@@ -429,12 +429,6 @@ Incremental parsing using a fork of syn ([see issue](https://github.com/dtolnay/
 
 Forking syn may also allow some parts to be made more performant.
 
-### Possible extension: Better performance via lazy execution
-
-We could tweak some commands to execute lazily. We replace `output: &mut OutputStream` with `output: &mut impl OutputSource` which could either write to the output or be buffered/streamed into other commands.
-
-This could allow things like `[!zip! ...]` or `[!range! ...]` to execute lazily, assuming the consuming command such as `for` read lazily.
-
 ### Possible extension: User-defined commands
 
 * `[!define_command! [!my_command! <ARGUMENTS_DESTRUCTURING>] { <OUTPUT> }]`

@@ -19,7 +19,6 @@
   * `[!settings! { ... }]` can be used to adjust the iteration limit.
 * Expression commands:
   * The expression block `#(let x = 123; y /= x; y + 1)` which is discussed in more detail below.
-  * `[!range! 0..5]` outputs `0 1 2 3 4`
 * Control flow commands:
   * `[!if! <expression> { ... }]` and `[!if! <expression> { ... } !elif! <expression> { ... } !else! { ... }]`
   * `[!while! <expression> { ... }]`
@@ -54,6 +53,7 @@ The following are recognized values:
 * String literals
 * Char literals
 * Other literals
+* Rust [ranges](https://doc.rust-lang.org/reference/expressions/range-expr.html)
 * Token streams which are defined as `[...]`.
 
 The following operators are supported:
@@ -97,7 +97,12 @@ Inside a transform stream, the following grammar is supported:
 
 ### To come
 
-* Scrap `[!let!]` and `[!parse! ..]` in favour of `#(let <destructuring> = #x)`
+* Support `#(x[..])` syntax for indexing arrays and streams at read time
+  * Via a post-fix `[..]` operation with high precedence
+  * `#(x[0])` returns the item at that position of the array / OR the value at that position of the stream (using `INFER_TOKEN_TREE`)
+  * Consider supporting ranges in the expression tree and range values
+  * `#(x[0..3])` returns a TokenStream/Array
+  * `#(x[0..=3])` returns a TokenStream/Array
 * Variable typing (stream / value / object to start with), including an `object` type, like a JS object:
   * Objects:
     * Backed by an indexmap
@@ -117,10 +122,13 @@ Inside a transform stream, the following grammar is supported:
 * Method calls
   * Also add support for methods (for e.g. exposing functions on syn objects).
   * `.len()` on stream
+  * `.push(x)` on array
   * Consider `.map(|<destructurer>| {})`
 * TRANSFORMERS => PARSERS cont
-  * Transformers no longer output
-  * Scrap `#>>x` etc in favour of `@(#x += ...)`
+  * Manually search for transform and rename to parse in folder names and file
+  * Support `@[x = ...]` for individual parsers. Parsers no longer output to a stream past that.
+  * Scrap `[!let!]` and `[!parse! ..]` in favour of `#(let <destructuring> = #x)`
+  * Scrap `#>>x` etc in favour of `@(a = ...) #[x += [a]]`
   * `@TOKEN_TREE`
   * `@TOKEN_OR_GROUP_CONTENT` - Literal, Ident, Punct or None-group content.
   * `@[ANY_GROUP ...]`
@@ -134,13 +142,6 @@ Inside a transform stream, the following grammar is supported:
     * `[!match! ...]` command
     * `@[MATCH { ... }]` (with `#..x` as a catch-all) with optional arms...
     * `#(..)?`, `#(..)+`, `#(..),+`, `#(..)*`, `#(..),*`
-* Support `#(x[..])` syntax for indexing arrays and streams at read time (see https://doc.rust-lang.org/reference/expressions/range-expr.html)
-  * Via a post-fix `[..]` operation with high precedence
-  * `#(x[0])` returns the item at that position of the array / OR the value at that position of the stream (using `INFER_TOKEN_TREE`)
-  * Consider supporting ranges in the expression tree and range values
-  * `#(x[0..3])` returns a TokenStream/Array
-  * `#(x[0..=3])` returns a TokenStream/Array
-  * Ditch `[!range! ..]` if it's supported in the expression tree / value
 * Add `..` and `..x` support to the array destructurer
 * Consider:
   * Dropping lots of the `group` wrappers?
@@ -152,6 +153,7 @@ Inside a transform stream, the following grammar is supported:
 * Have UntypedInteger have an inner representation of either i128 or literal (and same with float)
 * Maybe add a `@[REINTERPRET ..]` transformer.
 * CastTarget expansion:
+  * Add `as iterator` and uncomment the test at the end of `test_range()`
   * Support a CastTarget of `array` (only supported for array and stream and iterator)
   * Add `as ident` and `as literal` casting and support it for string, array and stream using concat recursive.
   * Add casts of other integers to char, via `char::from_u32(u32::try_from(x))`

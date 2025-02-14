@@ -178,7 +178,7 @@ fn complex_cases_for_intersperse_and_input_types() {
     // Command can be used for items
     preinterpret_assert_eq!(
         #([!intersperse! {
-            items: [!range! 0..4],
+            items: 0..4,
             separator: [!stream! _],
         }] as stream as string),
         "0_1_2_3"
@@ -193,7 +193,7 @@ fn complex_cases_for_intersperse_and_input_types() {
     }, "0_1_2_3");
     // Variable containing iterable can be used for items
     preinterpret_assert_eq!({
-        #(let items = [!range! 0..4])
+        #(let items = 0..4)
         #([!intersperse! {
             items: #items,
             separator: [!stream! _],

@@ -373,9 +373,6 @@ define_command_enums! {
     TitleCommand,
     InsertSpacesCommand,
 
-    // Expression Commands
-    RangeCommand,
-
     // Control flow commands
     IfCommand,
     WhileCommand,

@@ -217,6 +217,7 @@ impl_auto_span_range! {
     syn::BinOp,
     syn::UnOp,
     syn::token::DotDot,
+    syn::token::DotDotEq,
     syn::token::Shl,
     syn::token::Shr,
     syn::token::AndAnd,

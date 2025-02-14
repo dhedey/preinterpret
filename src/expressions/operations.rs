@@ -485,14 +485,6 @@ pub(super) trait HandleBinaryOperation: Sized {
     ) -> ExecutionResult<ExpressionValue>;
 }
 
-pub(super) trait HandleCreateRange: Sized {
-    fn create_range(
-        self,
-        right: Self,
-        range_limits: OutputSpanned<syn::RangeLimits>,
-    ) -> Box<dyn CustomExpressionIterator>;
-}
-
 impl Operation for syn::RangeLimits {
     fn symbolic_description(&self) -> &'static str {
         match self {

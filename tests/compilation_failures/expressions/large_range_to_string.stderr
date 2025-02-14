@@ -1,5 +1,5 @@
-error: To protect against infinite loops, only a maximum of 1000 items can be output to a string from an iterator. Try casting `as stream` to avoid this limit. This can't currently be reconfigured with the iteration limit.
- --> tests/compilation_failures/expressions/large_range_to_string.rs:5:11
+error: This type is not supported in cast expressions
+ --> tests/compilation_failures/expressions/large_range_to_string.rs:5:25
   |
-5 |         #([!range! 0..100000] as string)
-  |           ^^^^^^^^^^^^^^^^^^^
+5 |         #((0..10000) as iterator as string)
+  |                         ^^^^^^^^

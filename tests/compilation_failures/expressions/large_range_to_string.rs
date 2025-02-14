@@ -2,6 +2,6 @@ use preinterpret::*;
 
 fn main() {
     let _ = preinterpret!{
-        #([!range! 0..100000] as string)
+        #((0..10000) as iterator as string)
     };
 }

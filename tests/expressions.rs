@@ -42,7 +42,7 @@ fn test_basic_evaluate_works() {
         partial_sum = [!stream! + 2];
         [!debug! [!stream! #([!stream! 5] + partial_sum) =] + [!reinterpret! [!raw! #](5 #..partial_sum)]]
     ), "[!stream! [!group! 5 + 2] = [!group! 7]]");
-    preinterpret_assert_eq!(#(1 + [!range! 1..2] as int), 2);
+    preinterpret_assert_eq!(#(1 + (1..2) as int), 2);
     preinterpret_assert_eq!(#("hello" == "world"), false);
     preinterpret_assert_eq!(#("hello" == "hello"), true);
     preinterpret_assert_eq!(#('A' as u8 == 65), true);
@@ -92,7 +92,7 @@ fn test_very_long_expression_works() {
             [!settings! {
                 iteration_limit: 100000,
             }]
-            #(let expression = [!stream! 0] + [!for! _ in [!range! 0..100000] { + 1 }])
+            #(let expression = [!stream! 0] + [!for! _ in 0..100000 { + 1 }])
             [!reinterpret! [!raw! #](#expression)]
         },
         100000
@@ -164,14 +164,14 @@ fn assign_works() {
 fn test_range() {
     preinterpret_assert_eq!(
         #([!intersperse! {
-            items: [!range! -2..5],
+            items: -2..5,
             separator: [" "],
         }] as string),
         "-2 -1 0 1 2 3 4"
     );
     preinterpret_assert_eq!(
         #([!intersperse! {
-            items: [!range! -2..=5],
+            items: -2..=5,
             separator: " ",
         }] as stream as string),
         "-2 -1 0 1 2 3 4 5"
@@ -180,7 +180,7 @@ fn test_range() {
         {
             #(x = 2)
             #([!intersperse! {
-                items: [!range! (#x + #x)..=5],
+                items: (x + x)..=5,
                 separator: " ",
             }] as stream as string)
         },
@@ -189,22 +189,28 @@ fn test_range() {
     preinterpret_assert_eq!(
         {
             #([!intersperse! {
-                items: [!range! 8..=5],
+                items: 8..=5,
                 separator: " ",
             }] as stream as string)
         },
         ""
     );
-    preinterpret_assert_eq!({ [!string! #([!range! 'a'..='f'] as stream)] }, "abcdef");
+    preinterpret_assert_eq!({ [!string! #(('a'..='f') as stream)] }, "abcdef");
     preinterpret_assert_eq!(
-        { [!debug! [!range! -1i8..3i8]] },
-        "[<iterator> -1i8, 0i8, 1i8, 2i8]"
+        { [!debug! -1i8..3i8] },
+        "-1i8..3i8"
     );
 
     // Large ranges are allowed, but are subject to limits at iteration time
-    preinterpret_assert_eq!({ [!debug! [!range! 0..10000]] }, "[<iterator> 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, ..<9980 further items>]");
+    preinterpret_assert_eq!({ [!debug! 0..10000] }, "0..10000");
+    preinterpret_assert_eq!({ [!debug! ..5 + 5] }, "..10");
+    preinterpret_assert_eq!({ [!debug! ..=9] }, "..=9");
+    preinterpret_assert_eq!({ [!debug! ..] }, "..");
+    preinterpret_assert_eq!({ [!debug![.., ..]] }, "[.., ..]");
+    preinterpret_assert_eq!({ [!debug![..[1, 2..], ..]] }, "[..[1, 2..], ..]");
+    preinterpret_assert_eq!({ [!debug! 4 + 7..=10] }, "11..=10");
     preinterpret_assert_eq!(
-        [!for! i in [!range! 0..10000000] {
+        [!for! i in 0..10000000 {
             [!if! i == 5 {
                 [!string! #i]
                 [!break!]
@@ -212,4 +218,5 @@ fn test_range() {
         }],
         "5"
     );
+    // preinterpret_assert_eq!({ [!debug! 0..10000 as iterator] }, "[<iterator> 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, ..<9980 further items>]");
 }

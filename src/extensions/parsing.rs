@@ -156,6 +156,10 @@ impl<'a, K> ParseStreamStack<'a, K> {
         }
     }
 
+    pub(crate) fn fork_current(&self) -> ParseBuffer<'_, K> {
+        self.current().fork()
+    }
+
     fn current(&self) -> ParseStream<'_, K> {
         self.group_stack.last().unwrap_or(self.base)
     }

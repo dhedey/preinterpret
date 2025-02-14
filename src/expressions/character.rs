@@ -62,24 +62,6 @@ impl ExpressionChar {
         })
     }
 
-    pub(super) fn create_range(
-        self,
-        right: Self,
-        range_limits: OutputSpanned<syn::RangeLimits>,
-    ) -> Box<dyn CustomExpressionIterator> {
-        let left = self.value;
-        let right = right.value;
-        let span_range = range_limits.span_range();
-        match range_limits.operation {
-            syn::RangeLimits::HalfOpen { .. } => {
-                Box::new((left..right).map(move |x| x.to_value(span_range)))
-            }
-            syn::RangeLimits::Closed { .. } => {
-                Box::new((left..=right).map(move |x| x.to_value(span_range)))
-            }
-        }
-    }
-
     pub(super) fn handle_integer_binary_operation(
         self,
         _right: ExpressionInteger,
