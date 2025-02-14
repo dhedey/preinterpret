@@ -29,7 +29,7 @@ impl InterpretToValue for &SourceExpression {
 
 pub(super) enum SourceExpressionLeaf {
     Command(Command),
-    VariablePath(VariablePath),
+    VariablePath(VariableOrField),
     Variable(GroupedVariable),
     ExpressionBlock(ExpressionBlock),
     Value(ExpressionValue),

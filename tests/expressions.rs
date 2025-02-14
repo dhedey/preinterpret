@@ -37,9 +37,9 @@ fn test_basic_evaluate_works() {
     preinterpret_assert_eq!(#(123 != 456), true);
     preinterpret_assert_eq!(#(123 >= 456), false);
     preinterpret_assert_eq!(#(123 > 456), false);
-    preinterpret_assert_eq!(#(six_as_sum = 3 + 3; #six_as_sum * #six_as_sum), 36);
+    preinterpret_assert_eq!(#(let six_as_sum = 3 + 3; #six_as_sum * #six_as_sum), 36);
     preinterpret_assert_eq!(#(
-        partial_sum = [!stream! + 2];
+        let partial_sum = [!stream! + 2];
         [!debug! [!stream! #([!stream! 5] + partial_sum) =] + [!reinterpret! [!raw! #](5 #..partial_sum)]]
     ), "[!stream! [!group! 5 + 2] = [!group! 7]]");
     preinterpret_assert_eq!(#(1 + (1..2) as int), 2);
@@ -122,7 +122,7 @@ fn boolean_operators_short_circuit() {
     // For comparison, the & operator does _not_ short-circuit
     preinterpret_assert_eq!(
         #(
-            is_lazy = true;
+            let is_lazy = true;
             let _ = false & #(is_lazy = false; true);
             #is_lazy
         ),
@@ -178,7 +178,7 @@ fn test_range() {
     );
     preinterpret_assert_eq!(
         {
-            #(x = 2)
+            #(let x = 2)
             #([!intersperse! {
                 items: (x + x)..=5,
                 separator: " ",

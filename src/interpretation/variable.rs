@@ -240,42 +240,31 @@ impl core::fmt::Display for FlattenedVariable {
 
 // An identifier for a variable path in an expression
 #[derive(Clone)]
-pub(crate) struct VariablePath {
-    root: Ident,
-    fields: Vec<(Token![.], Ident)>,
+pub(crate) struct VariableOrField {
+    ident: Ident,
 }
 
-impl Parse<Source> for VariablePath {
+impl Parse<Source> for VariableOrField {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         Ok(Self {
-            root: input.parse()?,
-            fields: {
-                let mut fields = vec![];
-                while input.peek(Token![.]) {
-                    fields.push((input.parse()?, input.parse()?));
-                }
-                fields
-            },
+            ident: input.parse()?,
         })
     }
 }
 
-impl IsVariable for VariablePath {
+impl IsVariable for VariableOrField {
     fn get_name(&self) -> String {
-        self.root.to_string()
+        self.ident.to_string()
     }
 }
 
-impl HasSpanRange for VariablePath {
-    fn span_range(&self) -> SpanRange {
-        match self.fields.last() {
-            Some((_, ident)) => SpanRange::new_between(self.root.span(), ident.span()),
-            None => self.root.span_range(),
-        }
+impl HasSpan for VariableOrField {
+    fn span(&self) -> Span {
+        self.ident.span()
     }
 }
 
-impl InterpretToValue for &VariablePath {
+impl InterpretToValue for &VariableOrField {
     type OutputValue = ExpressionValue;
 
     fn interpret_to_value(
@@ -287,11 +276,11 @@ impl InterpretToValue for &VariablePath {
 }
 
 #[derive(Clone)]
-pub(crate) struct VariableDestructuring {
+pub(crate) struct VariablePattern {
     name: Ident,
 }
 
-impl Parse<Source> for VariableDestructuring {
+impl Parse<Source> for VariablePattern {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         Ok(Self {
             name: input.parse()?,
@@ -299,19 +288,19 @@ impl Parse<Source> for VariableDestructuring {
     }
 }
 
-impl IsVariable for VariableDestructuring {
+impl IsVariable for VariablePattern {
     fn get_name(&self) -> String {
         self.name.to_string()
     }
 }
 
-impl HasSpan for VariableDestructuring {
+impl HasSpan for VariablePattern {
     fn span(&self) -> Span {
         self.name.span()
     }
 }
 
-impl HandleDestructure for VariableDestructuring {
+impl HandleDestructure for VariablePattern {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,

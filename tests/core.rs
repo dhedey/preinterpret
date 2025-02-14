@@ -46,7 +46,7 @@ fn test_extend() {
     );
     preinterpret_assert_eq!(
         {
-            #(i = 1)
+            #(let i = 1)
             [!set! #output =]
             [!while! i <= 4 {
                 [!set! #output += #i]

@@ -102,6 +102,26 @@ Inside a transform stream, the following grammar is supported:
   * `#(x[0])` returns the item at that position of the array
   * `#(x[0..3])` returns an array
   * `#(x[0..=3])` returns an array
+  * ... and `#(x[0] = y)` can be used to set the item
+  * Considering allowing assignments inside an expression
+    * `let XX =` and `YY += y` are actually totally different...
+      * With `let XX =`, `XX` is a _pattern_ and creates new variables.
+      * With `YY += y` we're inside an expression already, and it only works with existing variables. The expression `YY` is converted into a destructuring at execution time.
+      Note that the value side always executes first, before the place is executed.
+    * Test cases:
+```rust
+    // These examples should compile:
+    let mut a = [0; 5];
+    let mut b: u32 = 3;
+    let c;
+    let out = c = (a[2], _) = (4, 5);
+    let out = a[1] += 2;
+    let out = b = 2;
+    // In the below, a = [0, 5], showing the right side executes first
+    let mut a = [0; 2];
+    let mut b = 0;
+    a[b] += { b += 1; 5 };
+```
 * Variable typing (stream / value / object to start with), including an `object` type, like a JS object:
   * Objects:
     * Backed by an indexmap
@@ -119,13 +139,27 @@ Inside a transform stream, the following grammar is supported:
     * When we parse a `#x` (`@(x = INFER_TOKEN_TREE)`) binding, it tries to parse a stream as a value before interpreting a `[!group! ...]` as a stream.
     * Output to final output as unwrapped content
 * Method calls
+  * Mutable methods notes:
+    * They require either:
+      * Reference semantics (e.g. using `Rc<RefCell<X>>` inside Object, Array) with explicit cloning
+      * AND/OR Place semantics (e.g. each type supports being either a value or a reference to a path, so that an operator e.g. `+` can mutate)
+    * I think we want reference semantics for object and array anyway. Unclear for stream.
+      * Ideally we'd arrange it so that `x += ["Hello"] + ["World]` would append Hello and World; but `x += (["Hello"] + ["World])` would behave differently.
+      * I think that means that `+=` becomes an operator inside an expression, and its LHS is a `PlaceValue` (`PlaceValue::Stream` or `PlaceValue::Array`)
   * Also add support for methods (for e.g. exposing functions on syn objects).
   * `.len()` on stream
   * `.push(x)` on array
   * Consider `.map(|<destructurer>| {})`
 * TRANSFORMERS => PARSERS cont
-  * Manually search for transform and rename to parse in folder names and file
-  * Support `@[x = ...]` for individual parsers. Parsers no longer output to a stream past that.
+  * Manually search for transform and rename to parse in folder names and file.
+  * Parsers no longer output to a stream past that.
+    Instead, they act like a `StreamPattern` which needs to:
+    * Define the variables it binds up front `{ x, y }`
+    * Can't mutate any variables in ancestor frames (but can potentially read them)
+```rust,ignore
+@{ x, y }(... destructuring ...)
+```
+  * Support `@[x = ...]` and `@[let x = ...]` for individual parsers.
   * Scrap `[!let!]` and `[!parse! ..]` in favour of `#(let <destructuring> = #x)`
   * Scrap `#>>x` etc in favour of `@(a = ...) #[x += [a]]`
   * `@TOKEN_TREE`
@@ -148,6 +182,7 @@ Inside a transform stream, the following grammar is supported:
 * Add `..` and `..x` support to the array destructurer
 * Consider:
   * Dropping lots of the `group` wrappers?
+  * If any types should have reference semantics instead of clone/value semantics?
   * Adding all of these: https://veykril.github.io/tlborm/decl-macros/minutiae/fragment-specifiers.html#ty
   * Adding `preinterpret::macro`
   * Adding `!define_command!`
@@ -160,7 +195,7 @@ Inside a transform stream, the following grammar is supported:
   * Support a CastTarget of `array` (only supported for array and stream and iterator)
   * Add `as ident` and `as literal` casting and support it for string, array and stream using concat recursive.
   * Add casts of other integers to char, via `char::from_u32(u32::try_from(x))`
-* Put `[!set! ...]` inside an opt-in feature.
+* Put `[!set! ...]` inside an opt-in feature because it's quite confusing.
 * TODO check
 * Check all `#[allow(unused)]` and remove any which aren't needed
 * Add benches inspired by this: https://github.com/dtolnay/quote/tree/master/benches

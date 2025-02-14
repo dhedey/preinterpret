@@ -14,6 +14,12 @@ mod stream;
 mod string;
 mod value;
 
+pub(crate) use expression::*;
+pub(crate) use expression_block::*;
+pub(crate) use iterator::*;
+pub(crate) use stream::*;
+pub(crate) use value::*;
+
 // Marked as use for expression sub-modules to use with a `use super::*` statement
 use crate::internal_prelude::*;
 use array::*;
@@ -26,9 +32,3 @@ use integer::*;
 use operations::*;
 use range::*;
 use string::*;
-
-pub(crate) use expression::*;
-pub(crate) use expression_block::*;
-pub(crate) use iterator::*;
-pub(crate) use stream::*;
-pub(crate) use value::*;

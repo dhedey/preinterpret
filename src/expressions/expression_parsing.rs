@@ -297,7 +297,9 @@ impl<K: Expressionable> ExpressionNodes<K> {
 enum OperatorPrecendence {
     // return, break, closures
     Jump,
-    // In arrays (this is a preinterpret addition)
+    // [PREINTERPRET ADDITION]
+    // Assignment should bind more tightly than arrays.
+    // e.g. [x = 3, 2] should parse as [(x = 3), 2] rather than [x = (3, 2)]
     NonTerminalComma,
     /// = += -= *= /= %= &= |= ^= <<= >>=
     Assign,

@@ -16,11 +16,11 @@ fn test_control_flow_compilation_failures() {
 fn test_if() {
     preinterpret_assert_eq!([!if! (1 == 2) { "YES" } !else! { "NO" }], "NO");
     preinterpret_assert_eq!({
-        #(x = 1 == 2)
+        #(let x = 1 == 2)
         [!if! #x { "YES" } !else! { "NO" }]
     }, "NO");
     preinterpret_assert_eq!({
-        #(x = 1; y = 2)
+        #(let x = 1; let y = 2)
         [!if! #x == #y { "YES" } !else! { "NO" }]
     }, "NO");
     preinterpret_assert_eq!({
@@ -47,7 +47,7 @@ fn test_if() {
 #[test]
 fn test_while() {
     preinterpret_assert_eq!({
-        #(x = 0)
+        #(let x = 0)
         [!while! #x < 5 { #(x += 1) }]
         #x
     }, 5);
@@ -57,7 +57,7 @@ fn test_while() {
 fn test_loop_continue_and_break() {
     preinterpret_assert_eq!(
         {
-            #(x = 0)
+            #(let x = 0)
             [!loop! {
                 #(x += 1)
                 [!if! x >= 10 { [!break!] }]

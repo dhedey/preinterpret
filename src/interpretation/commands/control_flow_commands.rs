@@ -184,7 +184,7 @@ impl StreamCommandDefinition for LoopCommand {
 
 #[derive(Clone)]
 pub(crate) struct ForCommand {
-    destructuring: Destructuring,
+    destructuring: Pattern,
     #[allow(unused)]
     in_token: Token![in],
     input: SourceExpression,

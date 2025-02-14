@@ -9,25 +9,25 @@ pub(crate) trait HandleDestructure {
 }
 
 #[derive(Clone)]
-pub(crate) enum Destructuring {
-    Variable(VariableDestructuring),
-    Array(ArrayDestructuring),
+pub(crate) enum Pattern {
+    Variable(VariablePattern),
+    Array(ArrayPattern),
     Stream(ExplicitTransformStream),
     #[allow(unused)]
     Discarded(Token![_]),
 }
 
-impl Parse<Source> for Destructuring {
+impl Parse<Source> for Pattern {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         let lookahead = input.lookahead1();
         if lookahead.peek(syn::Ident) {
-            Ok(Destructuring::Variable(input.parse()?))
+            Ok(Pattern::Variable(input.parse()?))
         } else if lookahead.peek(syn::token::Bracket) {
-            Ok(Destructuring::Array(input.parse()?))
+            Ok(Pattern::Array(input.parse()?))
         } else if lookahead.peek(Token![@]) {
-            Ok(Destructuring::Stream(input.parse()?))
+            Ok(Pattern::Stream(input.parse()?))
         } else if lookahead.peek(Token![_]) {
-            Ok(Destructuring::Discarded(input.parse()?))
+            Ok(Pattern::Discarded(input.parse()?))
         } else if input.peek(Token![#]) {
             return input.parse_err("Use `var` instead of `#var` in a destructuring");
         } else {
@@ -36,29 +36,29 @@ impl Parse<Source> for Destructuring {
     }
 }
 
-impl HandleDestructure for Destructuring {
+impl HandleDestructure for Pattern {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,
         value: ExpressionValue,
     ) -> ExecutionResult<()> {
         match self {
-            Destructuring::Variable(variable) => variable.handle_destructure(interpreter, value),
-            Destructuring::Array(array) => array.handle_destructure(interpreter, value),
-            Destructuring::Stream(stream) => stream.handle_destructure(interpreter, value),
-            Destructuring::Discarded(_) => Ok(()),
+            Pattern::Variable(variable) => variable.handle_destructure(interpreter, value),
+            Pattern::Array(array) => array.handle_destructure(interpreter, value),
+            Pattern::Stream(stream) => stream.handle_destructure(interpreter, value),
+            Pattern::Discarded(_) => Ok(()),
         }
     }
 }
 
 #[derive(Clone)]
-pub struct ArrayDestructuring {
+pub struct ArrayPattern {
     #[allow(unused)]
     delim_span: DelimSpan,
-    items: Punctuated<Destructuring, Token![,]>,
+    items: Punctuated<Pattern, Token![,]>,
 }
 
-impl Parse<Source> for ArrayDestructuring {
+impl Parse<Source> for ArrayPattern {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         let (delim_span, inner) = input.parse_specific_group(Delimiter::Bracket)?;
         Ok(Self {
@@ -68,7 +68,7 @@ impl Parse<Source> for ArrayDestructuring {
     }
 }
 
-impl HandleDestructure for ArrayDestructuring {
+impl HandleDestructure for ArrayPattern {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,

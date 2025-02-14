@@ -155,6 +155,18 @@ impl InterpretToValue for &Statement {
     }
 }
 
+/// In a rust expression, assignments are allowed in the middle of an expression.
+///
+/// But the following is rather hard to parse in a streaming manner,
+/// due to ambiguity and right-associativity of =
+/// ```rust,ignore
+/// let a;
+/// let b;
+/// // When the = (4,) is revealed, the `(b,)` changes from a value to a destructuring
+/// let out = a = (b,) = (4,);
+/// // When the += 2 is revealed, b changes from a value to a place
+/// let out = b += 2;
+/// ```
 #[derive(Clone)]
 pub(crate) struct AssignmentStatement {
     destination: Destination,
@@ -181,13 +193,10 @@ impl InterpretToValue for &AssignmentStatement {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<Self::OutputValue> {
         match &self.destination {
-            Destination::LetBinding {
-                let_token,
-                destructuring,
-            } => {
+            Destination::LetBinding { let_token, pattern } => {
                 let value = self.expression.interpret_to_value(interpreter)?;
                 let mut span_range = value.span_range();
-                destructuring.handle_destructure(interpreter, value)?;
+                pattern.handle_destructure(interpreter, value)?;
                 span_range.set_start(let_token.span);
                 Ok(ExpressionValue::None(span_range))
             }
@@ -197,6 +206,8 @@ impl InterpretToValue for &AssignmentStatement {
                     let right = self.expression.interpret_to_value(interpreter)?;
                     operation.evaluate(left, right)?
                 } else {
+                    // First, check path already exists
+                    let _ = path.get_value(interpreter)?;
                     self.expression.interpret_to_value(interpreter)?
                 };
                 let mut span_range = value.span_range();
@@ -212,10 +223,10 @@ impl InterpretToValue for &AssignmentStatement {
 enum Destination {
     LetBinding {
         let_token: Token![let],
-        destructuring: Destructuring,
+        pattern: Pattern,
     },
     ExistingVariable {
-        path: VariablePath,
+        path: VariableOrField,
         operation: Option<BinaryOperation>,
     },
 }
@@ -226,7 +237,7 @@ impl Parse<Source> for Destination {
             let let_token = input.parse()?;
             Ok(Self::LetBinding {
                 let_token,
-                destructuring: input.parse()?,
+                pattern: input.parse()?,
             })
         } else {
             Ok(Self::ExistingVariable {

@@ -414,7 +414,7 @@ fn test_zip_with_for() {
     preinterpret_assert_eq!(
         {
             [!set! #countries = France Germany Italy]
-            #(flags = ["🇫🇷", "🇩🇪", "🇮🇹"])
+            #(let flags = ["🇫🇷", "🇩🇪", "🇮🇹"])
             [!set! #capitals = "Paris" "Berlin" "Rome"]
             [!set! #facts = [!for! [country, flag, capital] in [!zip! [countries, flags, capitals]] {
                 [!string! "=> The capital of " #country " is " #capital " and its flag is " #flag]
