@@ -229,6 +229,16 @@ impl_auto_span_range! {
     syn::token::Ge,
     syn::token::Gt,
     syn::token::Comma,
+    syn::token::PlusEq,
+    syn::token::MinusEq,
+    syn::token::StarEq,
+    syn::token::SlashEq,
+    syn::token::PercentEq,
+    syn::token::AndEq,
+    syn::token::OrEq,
+    syn::token::CaretEq,
+    syn::token::ShlEq,
+    syn::token::ShrEq,
 }
 
 macro_rules! single_span_token {

@@ -23,16 +23,28 @@ impl InterpretToValue for &SourceExpression {
         self,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<Self::OutputValue> {
-        Source::evaluate(&self.inner, interpreter)
+        ExpressionEvaluator::new(&self.inner.nodes).evaluate(self.inner.root, interpreter)
     }
 }
 
 pub(super) enum SourceExpressionLeaf {
     Command(Command),
-    VariablePath(VariableOrField),
-    Variable(GroupedVariable),
+    Variable(VariableIdentifier),
+    MarkedVariable(GroupedVariable),
     ExpressionBlock(ExpressionBlock),
     Value(ExpressionValue),
+}
+
+impl HasSpanRange for SourceExpressionLeaf {
+    fn span_range(&self) -> SpanRange {
+        match self {
+            SourceExpressionLeaf::Command(command) => command.span_range(),
+            SourceExpressionLeaf::Variable(variable) => variable.span_range(),
+            SourceExpressionLeaf::MarkedVariable(variable) => variable.span_range(),
+            SourceExpressionLeaf::ExpressionBlock(block) => block.span_range(),
+            SourceExpressionLeaf::Value(value) => value.span_range(),
+        }
+    }
 }
 
 impl Expressionable for Source {
@@ -43,7 +55,7 @@ impl Expressionable for Source {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => UnaryAtom::Leaf(Self::Leaf::Command(input.parse()?)),
             SourcePeekMatch::Variable(Grouping::Grouped) => {
-                UnaryAtom::Leaf(Self::Leaf::Variable(input.parse()?))
+                UnaryAtom::Leaf(Self::Leaf::MarkedVariable(input.parse()?))
             }
             SourcePeekMatch::Variable(Grouping::Flattened) => {
                 return input.parse_err(
@@ -88,7 +100,7 @@ impl Expressionable for Source {
                 Ok(bool) => UnaryAtom::Leaf(Self::Leaf::Value(ExpressionValue::Boolean(
                     ExpressionBoolean::for_litbool(bool),
                 ))),
-                Err(_) => UnaryAtom::Leaf(Self::Leaf::VariablePath(input.parse()?)),
+                Err(_) => UnaryAtom::Leaf(Self::Leaf::Variable(input.parse()?)),
             },
             SourcePeekMatch::Literal(_) => {
                 let value = ExpressionValue::for_syn_lit(input.parse()?);
@@ -123,10 +135,16 @@ impl Expressionable for Source {
             }
             SourcePeekMatch::Punct(_) => {
                 if let Ok(operation) = input.try_parse_or_revert() {
+                    return Ok(NodeExtension::CompoundAssignmentOperation(operation));
+                }
+                if let Ok(operation) = input.try_parse_or_revert() {
                     return Ok(NodeExtension::BinaryOperation(operation));
                 }
                 if let Ok(range_limits) = input.try_parse_or_revert() {
                     return Ok(NodeExtension::Range(range_limits));
+                }
+                if let Ok(eq) = input.try_parse_or_revert() {
+                    return Ok(NodeExtension::AssignmentOperation(eq));
                 }
             }
             SourcePeekMatch::Ident(ident) if ident == "as" => {
@@ -148,7 +166,9 @@ impl Expressionable for Source {
             // There's nothing matching, so we fall through to an EndOfFrame
             ExpressionStackFrame::IncompleteUnaryPrefixOperation { .. }
             | ExpressionStackFrame::IncompleteBinaryOperation { .. }
-            | ExpressionStackFrame::IncompleteRange { .. } => {
+            | ExpressionStackFrame::IncompleteRange { .. }
+            | ExpressionStackFrame::IncompleteAssignment { .. }
+            | ExpressionStackFrame::IncompleteCompoundAssignment { .. } => {
                 Ok(NodeExtension::NoValidExtensionForCurrentParent)
             }
         }
@@ -162,8 +182,10 @@ impl Expressionable for Source {
             SourceExpressionLeaf::Command(command) => {
                 command.clone().interpret_to_value(interpreter)?
             }
-            SourceExpressionLeaf::Variable(variable) => variable.interpret_to_value(interpreter)?,
-            SourceExpressionLeaf::VariablePath(variable_path) => {
+            SourceExpressionLeaf::MarkedVariable(variable) => {
+                variable.interpret_to_value(interpreter)?
+            }
+            SourceExpressionLeaf::Variable(variable_path) => {
                 variable_path.interpret_to_value(interpreter)?
             }
             SourceExpressionLeaf::ExpressionBlock(block) => {
@@ -224,6 +246,31 @@ pub(super) enum ExpressionNode<K: Expressionable> {
         range_limits: syn::RangeLimits,
         right: Option<ExpressionNodeId>,
     },
+    Assignment {
+        assignee: ExpressionNodeId,
+        equals_token: Token![=],
+        value: ExpressionNodeId,
+    },
+    CompoundAssignment {
+        place: ExpressionNodeId,
+        operation: CompoundAssignmentOperation,
+        value: ExpressionNodeId,
+    },
+}
+
+impl ExpressionNode<Source> {
+    pub(super) fn operator_span_range(&self) -> SpanRange {
+        match self {
+            ExpressionNode::Leaf(leaf) => leaf.span_range(),
+            ExpressionNode::Grouped { delim_span, .. } => delim_span.span_range(),
+            ExpressionNode::Array { delim_span, .. } => delim_span.span_range(),
+            ExpressionNode::UnaryOperation { operation, .. } => operation.span_range(),
+            ExpressionNode::BinaryOperation { operation, .. } => operation.span_range(),
+            ExpressionNode::Range { range_limits, .. } => range_limits.span_range(),
+            ExpressionNode::Assignment { equals_token, .. } => equals_token.span_range(),
+            ExpressionNode::CompoundAssignment { operation, .. } => operation.span_range(),
+        }
+    }
 }
 
 pub(super) trait Expressionable: Sized {
@@ -240,11 +287,4 @@ pub(super) trait Expressionable: Sized {
         leaf: &Self::Leaf,
         context: &mut Self::EvaluationContext,
     ) -> ExecutionResult<ExpressionValue>;
-
-    fn evaluate(
-        expression: &Expression<Self>,
-        context: &mut Self::EvaluationContext,
-    ) -> ExecutionResult<ExpressionValue> {
-        ExpressionEvaluator::new(&expression.nodes).evaluate(expression.root, context)
-    }
 }

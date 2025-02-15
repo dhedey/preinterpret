@@ -119,6 +119,18 @@ impl<'a, K: Expressionable> ExpressionParser<'a, K> {
                     lhs: Some(node),
                     range_limits,
                 },
+                NodeExtension::AssignmentOperation(equals_token) => {
+                    self.push_stack_frame(ExpressionStackFrame::IncompleteAssignment {
+                        assignee: node,
+                        equals_token,
+                    })
+                }
+                NodeExtension::CompoundAssignmentOperation(operation) => {
+                    self.push_stack_frame(ExpressionStackFrame::IncompleteCompoundAssignment {
+                        place: node,
+                        operation,
+                    })
+                }
                 NodeExtension::EndOfStream | NodeExtension::NoValidExtensionForCurrentParent => {
                     unreachable!("Not possible, as these have minimum precedence")
                 }
@@ -179,6 +191,25 @@ impl<'a, K: Expressionable> ExpressionParser<'a, K> {
                         left: lhs,
                         range_limits,
                         right: Some(node),
+                    });
+                    extension.into_post_operation_completion_work_item(node)
+                }
+                ExpressionStackFrame::IncompleteAssignment {
+                    assignee,
+                    equals_token,
+                } => {
+                    let node = self.nodes.add_node(ExpressionNode::Assignment {
+                        assignee,
+                        equals_token,
+                        value: node,
+                    });
+                    extension.into_post_operation_completion_work_item(node)
+                }
+                ExpressionStackFrame::IncompleteCompoundAssignment { place, operation } => {
+                    let node = self.nodes.add_node(ExpressionNode::CompoundAssignment {
+                        place,
+                        operation,
+                        value: node,
                     });
                     extension.into_post_operation_completion_work_item(node)
                 }
@@ -497,6 +528,22 @@ pub(super) enum ExpressionStackFrame {
         lhs: ExpressionNodeId,
         operation: BinaryOperation,
     },
+    /// An incomplete assignment operation
+    /// It's left side is an assignee expression, according to the [rust reference].
+    ///
+    /// [rust reference]: https://doc.rust-lang.org/reference/expressions.html#place-expressions-and-value-expressions
+    IncompleteAssignment {
+        assignee: ExpressionNodeId,
+        equals_token: Token![=],
+    },
+    /// An incomplete assignment operation
+    /// It's left side is a place expression, according to the [rust reference].
+    ///
+    /// [rust reference]: https://doc.rust-lang.org/reference/expressions.html#place-expressions-and-value-expressions
+    IncompleteCompoundAssignment {
+        place: ExpressionNodeId,
+        operation: CompoundAssignmentOperation,
+    },
     /// A range which will be followed by a rhs
     IncompleteRange {
         lhs: Option<ExpressionNodeId>,
@@ -511,6 +558,10 @@ impl ExpressionStackFrame {
             ExpressionStackFrame::Group { .. } => OperatorPrecendence::MIN,
             ExpressionStackFrame::Array { .. } => OperatorPrecendence::MIN,
             ExpressionStackFrame::IncompleteRange { .. } => OperatorPrecendence::Range,
+            ExpressionStackFrame::IncompleteAssignment { .. } => OperatorPrecendence::Assign,
+            ExpressionStackFrame::IncompleteCompoundAssignment { .. } => {
+                OperatorPrecendence::Assign
+            }
             ExpressionStackFrame::IncompleteUnaryPrefixOperation { operation, .. } => {
                 OperatorPrecendence::of_prefix_unary_operation(operation)
             }
@@ -567,6 +618,8 @@ pub(super) enum NodeExtension {
     BinaryOperation(BinaryOperation),
     NonTerminalArrayComma,
     Range(syn::RangeLimits),
+    AssignmentOperation(Token![=]),
+    CompoundAssignmentOperation(CompoundAssignmentOperation),
     EndOfStream,
     NoValidExtensionForCurrentParent,
 }
@@ -579,16 +632,21 @@ impl NodeExtension {
             NodeExtension::NonTerminalArrayComma => OperatorPrecendence::NonTerminalComma,
             NodeExtension::Range(_) => OperatorPrecendence::Range,
             NodeExtension::EndOfStream => OperatorPrecendence::MIN,
+            NodeExtension::AssignmentOperation(_) => OperatorPrecendence::Assign,
+            NodeExtension::CompoundAssignmentOperation(_) => OperatorPrecendence::Assign,
             NodeExtension::NoValidExtensionForCurrentParent => OperatorPrecendence::MIN,
         }
     }
 
     fn into_post_operation_completion_work_item(self, node: ExpressionNodeId) -> WorkItem {
         match self {
-            // Extensions are independent of depth, so can be re-used without parsing again.
+            // These extensions are valid/correct for any parent,
+            // so can be re-used without parsing again.
             extension @ (NodeExtension::PostfixOperation { .. }
             | NodeExtension::BinaryOperation { .. }
             | NodeExtension::Range { .. }
+            | NodeExtension::AssignmentOperation { .. }
+            | NodeExtension::CompoundAssignmentOperation { .. }
             | NodeExtension::EndOfStream) => {
                 WorkItem::TryApplyAlreadyParsedExtension { node, extension }
             }

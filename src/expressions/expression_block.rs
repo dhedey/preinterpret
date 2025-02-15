@@ -102,41 +102,16 @@ impl InterpretToValue for &ExpressionBlock {
 
 #[derive(Clone)]
 pub(crate) enum Statement {
-    Assignment(AssignmentStatement),
+    LetStatement(LetStatement),
     Expression(SourceExpression),
 }
 
 impl Parse<Source> for Statement {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
-        Ok(match input.cursor().ident() {
-            // let or some ident for a variable
-            // It may be the start of an assignment.
-            Some((ident, _))
-                if {
-                    let str = ident.to_string();
-                    str != "true" && str != "false"
-                } =>
-            {
-                let forked = input.fork();
-                match forked.call(|input| {
-                    let destination = input.parse()?;
-                    let equals = input.parse()?;
-                    Ok((destination, equals))
-                }) {
-                    Ok((destination, equals)) => {
-                        input.advance_to(&forked);
-                        // We commit to the fork after successfully parsing the destination and equals.
-                        // This gives better error messages, if there is an error in the expression itself.
-                        Statement::Assignment(AssignmentStatement {
-                            destination,
-                            equals,
-                            expression: input.parse()?,
-                        })
-                    }
-                    Err(_) => Statement::Expression(input.parse()?),
-                }
-            }
-            _ => Statement::Expression(input.parse()?),
+        Ok(if input.peek(Token![let]) {
+            Statement::LetStatement(input.parse()?)
+        } else {
+            Statement::Expression(input.parse()?)
         })
     }
 }
@@ -149,7 +124,7 @@ impl InterpretToValue for &Statement {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<Self::OutputValue> {
         match self {
-            Statement::Assignment(assignment) => assignment.interpret_to_value(interpreter),
+            Statement::LetStatement(assignment) => assignment.interpret_to_value(interpreter),
             Statement::Expression(expression) => expression.interpret_to_value(interpreter),
         }
     }
@@ -168,97 +143,42 @@ impl InterpretToValue for &Statement {
 /// let out = b += 2;
 /// ```
 #[derive(Clone)]
-pub(crate) struct AssignmentStatement {
-    destination: Destination,
+pub(crate) struct LetStatement {
+    let_token: Token![let],
+    pattern: Pattern,
     #[allow(unused)]
     equals: Token![=],
     expression: SourceExpression,
 }
 
-impl Parse<Source> for AssignmentStatement {
+impl Parse<Source> for LetStatement {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         Ok(Self {
-            destination: input.parse()?,
+            let_token: input.parse()?,
+            pattern: input.parse()?,
             equals: input.parse()?,
             expression: input.parse()?,
         })
     }
 }
 
-impl InterpretToValue for &AssignmentStatement {
+impl InterpretToValue for &LetStatement {
     type OutputValue = ExpressionValue;
 
     fn interpret_to_value(
         self,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<Self::OutputValue> {
-        match &self.destination {
-            Destination::LetBinding { let_token, pattern } => {
-                let value = self.expression.interpret_to_value(interpreter)?;
-                let mut span_range = value.span_range();
-                pattern.handle_destructure(interpreter, value)?;
-                span_range.set_start(let_token.span);
-                Ok(ExpressionValue::None(span_range))
-            }
-            Destination::ExistingVariable { path, operation } => {
-                let value = if let Some(operation) = operation {
-                    let left = path.interpret_to_value(interpreter)?;
-                    let right = self.expression.interpret_to_value(interpreter)?;
-                    operation.evaluate(left, right)?
-                } else {
-                    // First, check path already exists
-                    let _ = path.get_value(interpreter)?;
-                    self.expression.interpret_to_value(interpreter)?
-                };
-                let mut span_range = value.span_range();
-                path.set_value(interpreter, value)?;
-                span_range.set_start(path.span_range().start());
-                Ok(ExpressionValue::None(span_range))
-            }
-        }
-    }
-}
-
-#[derive(Clone)]
-enum Destination {
-    LetBinding {
-        let_token: Token![let],
-        pattern: Pattern,
-    },
-    ExistingVariable {
-        path: VariableOrField,
-        operation: Option<BinaryOperation>,
-    },
-}
-
-impl Parse<Source> for Destination {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
-        if input.peek(Token![let]) {
-            let let_token = input.parse()?;
-            Ok(Self::LetBinding {
-                let_token,
-                pattern: input.parse()?,
-            })
-        } else {
-            Ok(Self::ExistingVariable {
-                path: input.parse()?,
-                operation: if input.peek(Token![=]) {
-                    None
-                } else {
-                    let operator_char = match input.cursor().punct() {
-                        Some((operator, _)) => operator.as_char(),
-                        None => 'X',
-                    };
-                    match operator_char {
-                        '+' | '-' | '*' | '/' | '%' | '&' | '|' | '^' => {}
-                        _ => {
-                            return input
-                                .parse_err("Expected = or one of += -= *= /= %= &= |= or ^=")
-                        }
-                    }
-                    Some(input.parse()?)
-                },
-            })
-        }
+        let LetStatement {
+            let_token,
+            pattern,
+            expression,
+            ..
+        } = self;
+        let value = expression.interpret_to_value(interpreter)?;
+        let mut span_range = value.span_range();
+        pattern.handle_destructure(interpreter, value)?;
+        span_range.set_start(let_token.span);
+        Ok(ExpressionValue::None(span_range))
     }
 }

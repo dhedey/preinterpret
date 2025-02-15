@@ -5,8 +5,8 @@ pub(super) struct ExpressionEvaluator<'a, K: Expressionable> {
     operation_stack: Vec<EvaluationStackFrame>,
 }
 
-impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
-    pub(super) fn new(nodes: &'a [ExpressionNode<K>]) -> Self {
+impl<'a> ExpressionEvaluator<'a, Source> {
+    pub(super) fn new(nodes: &'a [ExpressionNode<Source>]) -> Self {
         Self {
             nodes,
             operation_stack: Vec::new(),
@@ -16,9 +16,9 @@ impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
     pub(super) fn evaluate(
         mut self,
         root: ExpressionNodeId,
-        evaluation_context: &mut K::EvaluationContext,
+        interpreter: &mut Interpreter,
     ) -> ExecutionResult<ExpressionValue> {
-        let mut next = self.begin_node_evaluation(root, evaluation_context)?;
+        let mut next = self.begin_node_evaluation(root, interpreter)?;
 
         loop {
             match next {
@@ -27,10 +27,10 @@ impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
                         Some(top) => top,
                         None => return Ok(value),
                     };
-                    next = self.continue_node_evaluation(top_of_stack, value)?;
+                    next = self.handle_value(top_of_stack, value, interpreter)?;
                 }
-                NextAction::EnterNode(next_node) => {
-                    next = self.begin_node_evaluation(next_node, evaluation_context)?;
+                NextAction::EnterValueNode(next_node) => {
+                    next = self.begin_node_evaluation(next_node, interpreter)?;
                 }
             }
         }
@@ -39,17 +39,17 @@ impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
     fn begin_node_evaluation(
         &mut self,
         node_id: ExpressionNodeId,
-        evaluation_context: &mut K::EvaluationContext,
+        interpreter: &mut Interpreter,
     ) -> ExecutionResult<NextAction> {
         Ok(match &self.nodes[node_id.0] {
             ExpressionNode::Leaf(leaf) => {
-                NextAction::HandleValue(K::evaluate_leaf(leaf, evaluation_context)?)
+                NextAction::HandleValue(Source::evaluate_leaf(leaf, interpreter)?)
             }
             ExpressionNode::Grouped { delim_span, inner } => {
                 self.operation_stack.push(EvaluationStackFrame::Group {
                     span: delim_span.join(),
                 });
-                NextAction::EnterNode(*inner)
+                NextAction::EnterValueNode(*inner)
             }
             ExpressionNode::Array { delim_span, items } => ArrayStackFrame {
                 span: delim_span.join(),
@@ -62,7 +62,7 @@ impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
                     .push(EvaluationStackFrame::UnaryOperation {
                         operation: operation.clone(),
                     });
-                NextAction::EnterNode(*input)
+                NextAction::EnterValueNode(*input)
             }
             ExpressionNode::BinaryOperation {
                 operation,
@@ -76,7 +76,7 @@ impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
                             right: *right_input,
                         },
                     });
-                NextAction::EnterNode(*left_input)
+                NextAction::EnterValueNode(*left_input)
             }
             ExpressionNode::Range {
                 left,
@@ -98,24 +98,49 @@ impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
                             range_limits: *range_limits,
                             state: RangePath::OnRightBranch { left: None },
                         });
-                        NextAction::EnterNode(*right)
+                        NextAction::EnterValueNode(*right)
                     }
                     (Some(left), right) => {
                         self.operation_stack.push(EvaluationStackFrame::Range {
                             range_limits: *range_limits,
                             state: RangePath::OnLeftBranch { right: *right },
                         });
-                        NextAction::EnterNode(*left)
+                        NextAction::EnterValueNode(*left)
                     }
                 }
+            }
+            ExpressionNode::Assignment {
+                assignee,
+                equals_token,
+                value,
+            } => {
+                self.operation_stack
+                    .push(EvaluationStackFrame::AssignmentValue {
+                        assignee: *assignee,
+                        equals_token: *equals_token,
+                    });
+                NextAction::EnterValueNode(*value)
+            }
+            ExpressionNode::CompoundAssignment {
+                place,
+                operation,
+                value,
+            } => {
+                self.operation_stack
+                    .push(EvaluationStackFrame::CompoundAssignmentValue {
+                        place: *place,
+                        operation: *operation,
+                    });
+                NextAction::EnterValueNode(*value)
             }
         })
     }
 
-    fn continue_node_evaluation(
+    fn handle_value(
         &mut self,
         top_of_stack: EvaluationStackFrame,
         value: ExpressionValue,
+        interpreter: &mut Interpreter,
     ) -> ExecutionResult<NextAction> {
         Ok(match top_of_stack {
             EvaluationStackFrame::Group { span } => NextAction::HandleValue(value.with_span(span)),
@@ -136,7 +161,7 @@ impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
                                 operation,
                                 state: BinaryPath::OnRightBranch { left: value },
                             });
-                        NextAction::EnterNode(right)
+                        NextAction::EnterValueNode(right)
                     }
                 }
                 BinaryPath::OnRightBranch { left } => {
@@ -153,7 +178,7 @@ impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
                         range_limits,
                         state: RangePath::OnRightBranch { left: Some(value) },
                     });
-                    NextAction::EnterNode(right)
+                    NextAction::EnterValueNode(right)
                 }
                 (RangePath::OnLeftBranch { right: None }, syn::RangeLimits::HalfOpen(token)) => {
                     let inner = ExpressionRangeInner::RangeFrom {
@@ -204,13 +229,117 @@ impl<'a, K: Expressionable> ExpressionEvaluator<'a, K> {
                     NextAction::HandleValue(inner.to_value(token.span_range()))
                 }
             },
+            EvaluationStackFrame::AssignmentValue {
+                assignee,
+                equals_token,
+            } => {
+                let span_range =
+                    self.handle_assignment(assignee, equals_token, value, interpreter)?;
+                NextAction::HandleValue(ExpressionValue::None(span_range))
+            }
+            EvaluationStackFrame::CompoundAssignmentValue { place, operation } => {
+                let span_range =
+                    self.handle_compound_assignment(place, operation, value, interpreter)?;
+                NextAction::HandleValue(ExpressionValue::None(span_range))
+            }
         })
     }
+
+    fn handle_assignment(
+        &mut self,
+        assignee: ExpressionNodeId,
+        equals_token: Token![=],
+        value: ExpressionValue,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<SpanRange> {
+        // TODO: When we add place resolution, we likely wish to make use of the execution stack.
+        let assignee = self.resolve_assignee_or_place(assignee)?;
+        Ok(match assignee {
+            Assignee::Place(place) => {
+                let span_range = SpanRange::new_between(
+                    place.variable.span_range().start(),
+                    value.span_range().end(),
+                );
+                place.variable.set_value(interpreter, value)?;
+                span_range
+            }
+            Assignee::CompoundWip => {
+                return equals_token.execution_err("Compound assignment is not yet supported")
+            }
+        })
+    }
+
+    fn handle_compound_assignment(
+        &mut self,
+        place: ExpressionNodeId,
+        operation: CompoundAssignmentOperation,
+        value: ExpressionValue,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<SpanRange> {
+        // TODO: When we add place resolution, we likely wish to make use of the execution stack.
+        let assignee = self.resolve_assignee_or_place(place)?;
+        Ok(match assignee {
+            Assignee::Place(place) => {
+                let span_range = SpanRange::new_between(
+                    place.variable.span_range().start(),
+                    value.span_range().end(),
+                );
+                let left = place.variable.interpret_to_value(interpreter)?;
+                place
+                    .variable
+                    .set_value(interpreter, operation.to_binary().evaluate(left, value)?)?;
+                span_range
+            }
+            Assignee::CompoundWip => {
+                return operation
+                    .execution_err("Compound values are not supported for operation assignment")
+            }
+        })
+    }
+
+    /// See the [rust reference] for a good description of assignee vs place.
+    ///
+    /// [rust reference]: https://doc.rust-lang.org/reference/expressions/assignment-expressions.html#assignee-vs-place
+    fn resolve_assignee_or_place(
+        &self,
+        mut assignee: ExpressionNodeId,
+    ) -> ExecutionResult<Assignee<'a>> {
+        let resolved = loop {
+            match &self.nodes[assignee.0] {
+                ExpressionNode::Leaf(SourceExpressionLeaf::Variable(variable)) => {
+                    break Assignee::Place(Place { variable });
+                }
+                ExpressionNode::Array { .. } => {
+                    break Assignee::CompoundWip;
+                }
+                ExpressionNode::Grouped { inner, .. } => {
+                    assignee = *inner;
+                    continue;
+                }
+                other => {
+                    return other
+                        .operator_span_range()
+                        .execution_err("This type of expression is not supported as an assignee");
+                }
+            };
+        };
+        Ok(resolved)
+    }
+}
+
+enum Assignee<'a> {
+    Place(Place<'a>),
+    CompoundWip, // To come
+}
+
+struct Place<'a> {
+    variable: &'a VariableIdentifier,
+    // To come: Array index, field access, etc.
 }
 
 enum NextAction {
     HandleValue(ExpressionValue),
-    EnterNode(ExpressionNodeId),
+    EnterValueNode(ExpressionNodeId),
 }
 
 enum EvaluationStackFrame {
@@ -229,6 +358,14 @@ enum EvaluationStackFrame {
         range_limits: syn::RangeLimits,
         state: RangePath,
     },
+    AssignmentValue {
+        assignee: ExpressionNodeId,
+        equals_token: Token![=],
+    },
+    CompoundAssignmentValue {
+        place: ExpressionNodeId,
+        operation: CompoundAssignmentOperation,
+    },
 }
 
 struct ArrayStackFrame {
@@ -246,7 +383,7 @@ impl ArrayStackFrame {
         {
             Some(next) => {
                 operation_stack.push(EvaluationStackFrame::Array(self));
-                NextAction::EnterNode(next)
+                NextAction::EnterValueNode(next)
             }
             None => NextAction::HandleValue(ExpressionValue::Array(ExpressionArray {
                 items: self.evaluated_items,

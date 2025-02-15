@@ -1,5 +1,4 @@
 #![allow(clippy::identity_op)] // https://github.com/rust-lang/rust-clippy/issues/13924
-#![allow(clippy::zero_prefixed_literal)] // https://github.com/rust-lang/rust-clippy/issues/14199
 
 #[path = "helpers/prelude.rs"]
 mod prelude;
@@ -48,7 +47,7 @@ fn test_if() {
 fn test_while() {
     preinterpret_assert_eq!({
         #(let x = 0)
-        [!while! #x < 5 { #(x += 1) }]
+        [!while! x < 5 { #(x += 1) }]
         #x
     }, 5);
 }

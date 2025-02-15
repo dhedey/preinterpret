@@ -240,11 +240,11 @@ impl core::fmt::Display for FlattenedVariable {
 
 // An identifier for a variable path in an expression
 #[derive(Clone)]
-pub(crate) struct VariableOrField {
+pub(crate) struct VariableIdentifier {
     ident: Ident,
 }
 
-impl Parse<Source> for VariableOrField {
+impl Parse<Source> for VariableIdentifier {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         Ok(Self {
             ident: input.parse()?,
@@ -252,19 +252,19 @@ impl Parse<Source> for VariableOrField {
     }
 }
 
-impl IsVariable for VariableOrField {
+impl IsVariable for VariableIdentifier {
     fn get_name(&self) -> String {
         self.ident.to_string()
     }
 }
 
-impl HasSpan for VariableOrField {
+impl HasSpan for VariableIdentifier {
     fn span(&self) -> Span {
         self.ident.span()
     }
 }
 
-impl InterpretToValue for &VariableOrField {
+impl InterpretToValue for &VariableIdentifier {
     type OutputValue = ExpressionValue;
 
     fn interpret_to_value(

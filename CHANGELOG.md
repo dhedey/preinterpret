@@ -108,6 +108,19 @@ Inside a transform stream, the following grammar is supported:
       * With `let XX =`, `XX` is a _pattern_ and creates new variables.
       * With `YY += y` we're inside an expression already, and it only works with existing variables. The expression `YY` is converted into a destructuring at execution time.
       Note that the value side always executes first, before the place is executed.
+    * Implementation realisations:
+      * Rust reference very good: https://doc.rust-lang.org/reference/expressions.html#place-expressions-and-value-expressions
+      * For the += operators etc:
+        * The left hand side must resolve to a _single_ VariableData, e.g. `z` or
+          `x.y["z"]`
+        * In the rust reference, this is a "Place Expression"
+        * We will have a `handle_assign_paired_binary_operation(&mut self, operation, other: Self)` (which for value types can resolve to the non-assign version)
+      * For the = operator:
+        * The left hand side will resolve non-Variable expressions, and be effectively
+          left with something which can form a destructuring of the right hand side.
+          e.g. `[x.y, z[x.a][12]] = [1, 2]`
+        * In the rust reference, this is an "Assignee Expression" and is a generalization
+          of place expressions
     * Test cases:
 ```rust
     // These examples should compile:
@@ -121,6 +134,27 @@ Inside a transform stream, the following grammar is supported:
     let mut a = [0; 2];
     let mut b = 0;
     a[b] += { b += 1; 5 };
+    // This works:
+    let (x, y);
+    [x, .., y] = [1, 2, 3, 4]; // x = 1, y = 4
+    // This works...
+    // In other words, the assignee operation is executed incrementally,
+    // The first assignment arr[0] = 1 occurs before being overwritten by
+    // the arr[0] = 5 in the second section.
+    let mut arr = [0; 2];
+    (arr[0], arr[{arr[0] = 5; 1}]) = (1, 1);
+    assert_eq!(arr, [5, 1]);
+    // This doesn't work - two errors:
+    // error[E0308]: mismatched types: expected `[{integer}]`, found `[{integer}; 4]`
+    // error[E0277]: the size for values of type `[{integer}]` cannot be known at compilation time
+    // (it looks like you can't just overwrite array subslices)
+    let arr = [0; 5];
+    arr[1..=4] = [1, 2, 3, 4];
+    // This doesn't work.
+    // error[E0368]: binary assignment operation `+=` cannot be applied to type `({integer}, {integer})`
+    // https://doc.rust-lang.org/error_codes/E0368.html
+    let (a, b) = (1, 1);
+    (a, b) += (1, 2);
 ```
 * Variable typing (stream / value / object to start with), including an `object` type, like a JS object:
   * Objects:

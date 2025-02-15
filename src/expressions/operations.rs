@@ -236,6 +236,18 @@ pub(crate) enum BinaryOperation {
     Integer(IntegerBinaryOperation),
 }
 
+impl From<PairedBinaryOperation> for BinaryOperation {
+    fn from(operation: PairedBinaryOperation) -> Self {
+        Self::Paired(operation)
+    }
+}
+
+impl From<IntegerBinaryOperation> for BinaryOperation {
+    fn from(operation: IntegerBinaryOperation) -> Self {
+        Self::Integer(operation)
+    }
+}
+
 impl SynParse for BinaryOperation {
     fn parse(input: SynParseStream) -> SynResult<Self> {
         // In line with Syn's BinOp, we use peek instead of lookahead
@@ -497,5 +509,149 @@ impl Operation for syn::RangeLimits {
 impl HasSpanRange for syn::RangeLimits {
     fn span_range(&self) -> SpanRange {
         self.span_range_from_iterating_over_all_tokens()
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum CompoundAssignmentOperation {
+    Add(Token![+=]),
+    Sub(Token![-=]),
+    Mul(Token![*=]),
+    Div(Token![/=]),
+    Rem(Token![%=]),
+    BitAnd(Token![&=]),
+    BitOr(Token![|=]),
+    BitXor(Token![^=]),
+    Shl(Token![<<=]),
+    Shr(Token![>>=]),
+}
+
+impl SynParse for CompoundAssignmentOperation {
+    fn parse(input: SynParseStream) -> SynResult<Self> {
+        // In line with Syn's BinOp, we use peek instead of lookahead
+        // ...I assume for slightly increased performance
+        // ...Or because 30 alternative options in the error message is too many
+        if input.peek(Token![+=]) {
+            Ok(Self::Add(input.parse()?))
+        } else if input.peek(Token![-=]) {
+            Ok(Self::Sub(input.parse()?))
+        } else if input.peek(Token![*=]) {
+            Ok(Self::Mul(input.parse()?))
+        } else if input.peek(Token![/=]) {
+            Ok(Self::Div(input.parse()?))
+        } else if input.peek(Token![%=]) {
+            Ok(Self::Rem(input.parse()?))
+        } else if input.peek(Token![&=]) {
+            Ok(Self::BitAnd(input.parse()?))
+        } else if input.peek(Token![|=]) {
+            Ok(Self::BitOr(input.parse()?))
+        } else if input.peek(Token![^=]) {
+            Ok(Self::BitXor(input.parse()?))
+        } else if input.peek(Token![<<=]) {
+            Ok(Self::Shl(input.parse()?))
+        } else if input.peek(Token![>>=]) {
+            Ok(Self::Shr(input.parse()?))
+        } else {
+            Err(input.error("Expected one of += -= *= /= %= &= |= ^= <<= or >>="))
+        }
+    }
+}
+
+impl CompoundAssignmentOperation {
+    pub(crate) fn to_binary(self) -> BinaryOperation {
+        match self {
+            CompoundAssignmentOperation::Add(token) => {
+                let token = create_single_token('+', token.spans[0]);
+                PairedBinaryOperation::Addition(token).into()
+            }
+            CompoundAssignmentOperation::Sub(token) => {
+                let token = create_single_token('-', token.spans[0]);
+                PairedBinaryOperation::Subtraction(token).into()
+            }
+            CompoundAssignmentOperation::Mul(token) => {
+                let token = create_single_token('*', token.spans[0]);
+                PairedBinaryOperation::Multiplication(token).into()
+            }
+            CompoundAssignmentOperation::Div(token) => {
+                let token = create_single_token('/', token.spans[0]);
+                PairedBinaryOperation::Division(token).into()
+            }
+            CompoundAssignmentOperation::Rem(token) => {
+                let token = create_single_token('%', token.spans[0]);
+                PairedBinaryOperation::Remainder(token).into()
+            }
+            CompoundAssignmentOperation::BitAnd(token) => {
+                let token = create_single_token('&', token.spans[0]);
+                PairedBinaryOperation::BitAnd(token).into()
+            }
+            CompoundAssignmentOperation::BitOr(token) => {
+                let token = create_single_token('^', token.spans[0]);
+                PairedBinaryOperation::BitOr(token).into()
+            }
+            CompoundAssignmentOperation::BitXor(token) => {
+                let token = create_single_token('|', token.spans[0]);
+                PairedBinaryOperation::BitXor(token).into()
+            }
+            CompoundAssignmentOperation::Shl(token) => {
+                let token = create_double_token('<', token.spans[0], '<', token.spans[1]);
+                IntegerBinaryOperation::ShiftLeft(token).into()
+            }
+            CompoundAssignmentOperation::Shr(token) => {
+                let token = create_double_token('>', token.spans[0], '>', token.spans[1]);
+                IntegerBinaryOperation::ShiftRight(token).into()
+            }
+        }
+    }
+}
+
+fn create_single_token<T: SynParse>(char: char, span: Span) -> T {
+    let stream = Punct::new(char, Spacing::Alone)
+        .with_span(span)
+        .to_token_stream();
+    T::parse.parse2(stream).unwrap()
+}
+
+fn create_double_token<T: SynParse>(char1: char, span1: Span, char2: char, span2: Span) -> T {
+    let mut stream = TokenStream::new();
+    Punct::new(char1, Spacing::Alone)
+        .with_span(span1)
+        .to_tokens(&mut stream);
+    Punct::new(char2, Spacing::Alone)
+        .with_span(span2)
+        .to_tokens(&mut stream);
+    T::parse.parse2(stream).unwrap()
+}
+
+impl Operation for CompoundAssignmentOperation {
+    fn symbolic_description(&self) -> &'static str {
+        match self {
+            CompoundAssignmentOperation::Add(_) => "+=",
+            CompoundAssignmentOperation::Sub(_) => "-=",
+            CompoundAssignmentOperation::Mul(_) => "*=",
+            CompoundAssignmentOperation::Div(_) => "/=",
+            CompoundAssignmentOperation::Rem(_) => "%=",
+            CompoundAssignmentOperation::BitAnd(_) => "&=",
+            CompoundAssignmentOperation::BitOr(_) => "|=",
+            CompoundAssignmentOperation::BitXor(_) => "^=",
+            CompoundAssignmentOperation::Shl(_) => "<<=",
+            CompoundAssignmentOperation::Shr(_) => ">>=",
+        }
+    }
+}
+
+impl HasSpanRange for CompoundAssignmentOperation {
+    fn span_range(&self) -> SpanRange {
+        match self {
+            CompoundAssignmentOperation::Add(op) => op.span_range(),
+            CompoundAssignmentOperation::Sub(op) => op.span_range(),
+            CompoundAssignmentOperation::Mul(op) => op.span_range(),
+            CompoundAssignmentOperation::Div(op) => op.span_range(),
+            CompoundAssignmentOperation::Rem(op) => op.span_range(),
+            CompoundAssignmentOperation::BitAnd(op) => op.span_range(),
+            CompoundAssignmentOperation::BitOr(op) => op.span_range(),
+            CompoundAssignmentOperation::BitXor(op) => op.span_range(),
+            CompoundAssignmentOperation::Shl(op) => op.span_range(),
+            CompoundAssignmentOperation::Shr(op) => op.span_range(),
+        }
     }
 }
