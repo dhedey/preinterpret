@@ -247,16 +247,16 @@ impl HandleTransformation for ExplicitTransformStream {
             } => {
                 let mut new_output = OutputStream::new();
                 content.handle_transform(input, interpreter, &mut new_output)?;
-                variable.set_stream(interpreter, new_output)?;
+                variable.define(interpreter, new_output);
             }
             ExplicitTransformStreamArguments::ExtendToVariable {
                 variable, content, ..
             } => {
-                let variable_data = variable.get_existing_for_mutation(interpreter)?;
+                let reference = variable.reference(interpreter)?;
                 content.handle_transform(
                     input,
                     interpreter,
-                    variable_data.get_mut_stream()?.deref_mut(),
+                    reference.get_value_stream_mut()?.deref_mut(),
                 )?;
             }
             ExplicitTransformStreamArguments::Discard { content, .. } => {

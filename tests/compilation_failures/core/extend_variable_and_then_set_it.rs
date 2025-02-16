@@ -3,6 +3,6 @@ use preinterpret::*;
 fn main() {
     preinterpret! {
         [!set! #variable = Hello]
-        [!set! #variable += World [!set! #variable = Hello2]]
+        [!set! #variable += World #(variable = [!stream! Hello2])]
     }
 }

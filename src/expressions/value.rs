@@ -556,6 +556,12 @@ impl ExpressionValue {
     }
 }
 
+impl ToExpressionValue for ExpressionValue {
+    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
+        self.with_span_range(span_range)
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(crate) enum StreamOutputBehaviour {
     Standard,

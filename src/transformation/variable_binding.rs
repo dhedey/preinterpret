@@ -178,36 +178,36 @@ impl HandleTransformation for VariableBinding {
         match self {
             VariableBinding::Grouped { .. } => {
                 let content = input.parse::<ParsedTokenTree>()?.into_interpreted();
-                self.set_coerced_stream(interpreter, content)?;
+                self.define_coerced(interpreter, content);
             }
             VariableBinding::Flattened { until, .. } => {
                 let mut content = OutputStream::new();
                 until.handle_parse_into(input, &mut content)?;
-                self.set_coerced_stream(interpreter, content)?;
+                self.define_coerced(interpreter, content);
             }
             VariableBinding::GroupedAppendGrouped { .. } => {
-                let variable_data = self.get_existing_for_mutation(interpreter)?;
+                let reference = self.reference(interpreter)?;
                 input
                     .parse::<ParsedTokenTree>()?
-                    .push_as_token_tree(variable_data.get_mut_stream()?.deref_mut());
+                    .push_as_token_tree(reference.get_value_stream_mut()?.deref_mut());
             }
             VariableBinding::GroupedAppendFlattened { .. } => {
-                let variable_data = self.get_existing_for_mutation(interpreter)?;
+                let reference = self.reference(interpreter)?;
                 input
                     .parse::<ParsedTokenTree>()?
-                    .flatten_into(variable_data.get_mut_stream()?.deref_mut());
+                    .flatten_into(reference.get_value_stream_mut()?.deref_mut());
             }
             VariableBinding::FlattenedAppendGrouped { marker, until, .. } => {
-                let variable_data = self.get_existing_for_mutation(interpreter)?;
-                variable_data.get_mut_stream()?.push_grouped(
+                let reference = self.reference(interpreter)?;
+                reference.get_value_stream_mut()?.push_grouped(
                     |inner| until.handle_parse_into(input, inner),
                     Delimiter::None,
                     marker.span,
                 )?;
             }
             VariableBinding::FlattenedAppendFlattened { until, .. } => {
-                let variable_data = self.get_existing_for_mutation(interpreter)?;
-                until.handle_parse_into(input, variable_data.get_mut_stream()?.deref_mut())?;
+                let reference = self.reference(interpreter)?;
+                until.handle_parse_into(input, reference.get_value_stream_mut()?.deref_mut())?;
             }
         }
         Ok(())

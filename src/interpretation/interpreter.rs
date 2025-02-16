@@ -2,52 +2,44 @@ use crate::internal_prelude::*;
 
 use super::IsVariable;
 use std::cell::*;
-use std::collections::hash_map::Entry;
 use std::rc::Rc;
 
 pub(crate) struct Interpreter {
     config: InterpreterConfig,
-    variable_data: HashMap<String, VariableData>,
+    variable_data: VariableData,
 }
 
 #[derive(Clone)]
-pub(crate) struct VariableData {
-    value: Rc<RefCell<ExpressionValue>>,
-    /// In the store, this is the span range of the original let variable declaration.
-    /// When this is a variable reference, this is the span range of the variable
-    /// which created the reference.
-    span_range: SpanRange,
+pub(crate) struct VariableReference {
+    data: Rc<RefCell<ExpressionValue>>,
+    variable_span_range: SpanRange,
 }
 
-impl VariableData {
-    fn new(tokens: ExpressionValue, span_range: SpanRange) -> Self {
-        Self {
-            value: Rc::new(RefCell::new(tokens)),
-            span_range,
-        }
-    }
-
-    pub(crate) fn get_ref(&self) -> ExecutionResult<Ref<ExpressionValue>> {
-        self.value.try_borrow().map_err(|_| {
+impl VariableReference {
+    pub(crate) fn get_value_ref(&self) -> ExecutionResult<Ref<ExpressionValue>> {
+        self.data.try_borrow().map_err(|_| {
             self.execution_error("The variable cannot be read if it is currently being modified")
         })
     }
 
     // Gets the cloned expression value, setting the span range appropriately
-    pub(crate) fn get_cloned(&self) -> ExecutionResult<ExpressionValue> {
-        Ok(self.get_ref()?.clone().with_span_range(self.span_range))
+    pub(crate) fn get_value_cloned(&self) -> ExecutionResult<ExpressionValue> {
+        Ok(self
+            .get_value_ref()?
+            .clone()
+            .with_span_range(self.variable_span_range))
     }
 
-    pub(crate) fn get_mut(&self) -> ExecutionResult<RefMut<ExpressionValue>> {
-        self.value.try_borrow_mut().map_err(|_| {
+    pub(crate) fn get_value_mut(&self) -> ExecutionResult<RefMut<ExpressionValue>> {
+        self.data.try_borrow_mut().map_err(|_| {
             self.execution_error(
                 "The variable cannot be modified if it is already currently being modified",
             )
         })
     }
 
-    pub(crate) fn get_mut_stream(&self) -> ExecutionResult<RefMut<OutputStream>> {
-        let mut_guard = self.get_mut()?;
+    pub(crate) fn get_value_stream_mut(&self) -> ExecutionResult<RefMut<OutputStream>> {
+        let mut_guard = self.get_value_mut()?;
         RefMut::filter_map(mut_guard, |mut_guard| match mut_guard {
             ExpressionValue::Stream(stream) => Some(&mut stream.value),
             _ => None,
@@ -55,22 +47,15 @@ impl VariableData {
         .map_err(|_| self.execution_error("The variable is not a stream"))
     }
 
-    pub(crate) fn set(&self, content: ExpressionValue) -> ExecutionResult<()> {
-        *self.get_mut()? = content;
+    pub(crate) fn set(&self, content: impl ToExpressionValue) -> ExecutionResult<()> {
+        *self.get_value_mut()? = content.to_value(self.variable_span_range);
         Ok(())
-    }
-
-    pub(crate) fn cheap_clone(&self, span_range: SpanRange) -> Self {
-        Self {
-            value: self.value.clone(),
-            span_range,
-        }
     }
 }
 
-impl HasSpanRange for VariableData {
+impl HasSpanRange for VariableReference {
     fn span_range(&self) -> SpanRange {
-        self.span_range
+        self.variable_span_range
     }
 }
 
@@ -78,36 +63,24 @@ impl Interpreter {
     pub(crate) fn new() -> Self {
         Self {
             config: Default::default(),
-            variable_data: Default::default(),
+            variable_data: VariableData::new(),
         }
     }
 
-    pub(crate) fn set_variable(
+    pub(crate) fn define_variable(
         &mut self,
         variable: &(impl IsVariable + ?Sized),
         value: ExpressionValue,
-    ) -> ExecutionResult<()> {
-        match self.variable_data.entry(variable.get_name()) {
-            Entry::Occupied(mut entry) => {
-                entry.get_mut().set(value)?;
-            }
-            Entry::Vacant(entry) => {
-                entry.insert(VariableData::new(value, variable.span_range()));
-            }
-        }
-        Ok(())
+    ) {
+        self.variable_data.define_variable(variable, value)
     }
 
-    pub(crate) fn get_existing_variable_data(
+    pub(crate) fn get_variable_reference(
         &self,
         variable: &(impl IsVariable + ?Sized),
         make_error: impl FnOnce() -> SynError,
-    ) -> ExecutionResult<VariableData> {
-        let data = self
-            .variable_data
-            .get(&variable.get_name())
-            .ok_or_else(make_error)?;
-        Ok(data.cheap_clone(variable.span_range()))
+    ) -> ExecutionResult<VariableReference> {
+        self.variable_data.get_reference(variable, make_error)
     }
 
     pub(crate) fn start_iteration_counter<'s, S: HasSpanRange>(
@@ -123,6 +96,60 @@ impl Interpreter {
 
     pub(crate) fn set_iteration_limit(&mut self, limit: Option<usize>) {
         self.config.iteration_limit = limit;
+    }
+}
+
+struct VariableData {
+    variable_data: HashMap<String, VariableContent>,
+}
+
+impl VariableData {
+    fn new() -> Self {
+        Self {
+            variable_data: HashMap::new(),
+        }
+    }
+
+    fn define_variable(&mut self, variable: &(impl IsVariable + ?Sized), value: ExpressionValue) {
+        self.variable_data.insert(
+            variable.get_name(),
+            VariableContent::new(value, variable.span_range()),
+        );
+    }
+
+    fn get_reference(
+        &self,
+        variable: &(impl IsVariable + ?Sized),
+        make_error: impl FnOnce() -> SynError,
+    ) -> ExecutionResult<VariableReference> {
+        let reference = self
+            .variable_data
+            .get(&variable.get_name())
+            .ok_or_else(make_error)?
+            .create_reference(variable);
+        Ok(reference)
+    }
+}
+
+struct VariableContent {
+    value: Rc<RefCell<ExpressionValue>>,
+    #[allow(unused)]
+    definition_span_range: SpanRange,
+}
+
+impl VariableContent {
+    fn new(tokens: ExpressionValue, definition_span_range: SpanRange) -> Self {
+        Self {
+            value: Rc::new(RefCell::new(tokens)),
+            definition_span_range,
+        }
+    }
+
+    fn create_reference(&self, variable: &(impl IsVariable + ?Sized)) -> VariableReference {
+        VariableReference {
+            data: self.value.clone(),
+            variable_span_range: variable.span_range(),
+        }
     }
 }
 

@@ -97,11 +97,21 @@ Inside a transform stream, the following grammar is supported:
 
 ### To come
 
+* Merge `GroupedVariable` and `ExpressionBlock` into an `ExplicitExpression`:
+  * Either `#ident` or `#(...)` or `#{ ... }`...
+    the latter defines a new variable stack frame, just like Rust
+  * To avoid confusion (such as below) and teach the user to only include #var where
+    necessary, only expression _blocks_ are allowed in an expression.
+    * Confusion example: `let x; x = #(let x = 123; 5)`. This isn't allowed in normal
+      rust because the inside is a `{ .. }` which defines a new scope.
 * Support `#(x[..])` syntax for indexing arrays at read time (streams to follow in a separate task below after parsers are updated)
   * `#(x[0..3])` returns an array
   * `#(x[0..=3])` returns an array
   * ... and `#(x[0] = y)` can be used to set the item
   * Considering allowing assignments inside an expression
+    * Implementation notes:
+      * Separate `VariableData` and `VariableReference`, separate `let` and `set`
+      * Three separate stacks for various calculations in evaluation
     * `let XX =` and `YY += y` are actually totally different...
       * With `let XX =`, `XX` is a _pattern_ and creates new variables.
       * With `YY += y` we're inside an expression already, and it only works with existing variables. The expression `YY` is converted into a destructuring at execution time.

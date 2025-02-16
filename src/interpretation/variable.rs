@@ -3,46 +3,16 @@ use crate::internal_prelude::*;
 pub(crate) trait IsVariable: HasSpanRange {
     fn get_name(&self) -> String;
 
-    fn set_stream(
-        &self,
-        interpreter: &mut Interpreter,
-        stream: OutputStream,
-    ) -> ExecutionResult<()> {
-        interpreter.set_variable(self, stream.to_value(self.span_range()))
+    fn define(&self, interpreter: &mut Interpreter, value_source: impl ToExpressionValue) {
+        interpreter.define_variable(self, value_source.to_value(self.span_range()))
     }
 
-    fn set_coerced_stream(
-        &self,
-        interpreter: &mut Interpreter,
-        stream: OutputStream,
-    ) -> ExecutionResult<()> {
-        interpreter.set_variable(self, stream.coerce_into_value(self.span_range()))
+    fn define_coerced(&self, interpreter: &mut Interpreter, content: OutputStream) {
+        interpreter.define_variable(self, content.coerce_into_value(self.span_range()))
     }
 
-    fn set_value(
-        &self,
-        interpreter: &mut Interpreter,
-        value: ExpressionValue,
-    ) -> ExecutionResult<()> {
-        interpreter.set_variable(self, value)
-    }
-
-    fn get_existing_for_mutation(
-        &self,
-        interpreter: &Interpreter,
-    ) -> ExecutionResult<VariableData> {
-        Ok(self
-            .read_existing(interpreter)?
-            .cheap_clone(self.span_range()))
-    }
-
-    fn get_value(&self, interpreter: &Interpreter) -> ExecutionResult<ExpressionValue> {
-        let value = self
-            .read_existing(interpreter)?
-            .get_cloned()?
-            .clone()
-            .with_span_range(self.span_range());
-        Ok(value)
+    fn get_cloned_value(&self, interpreter: &Interpreter) -> ExecutionResult<ExpressionValue> {
+        self.reference(interpreter)?.get_value_cloned()
     }
 
     fn substitute_into(
@@ -51,15 +21,15 @@ pub(crate) trait IsVariable: HasSpanRange {
         grouping: Grouping,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        self.read_existing(interpreter)?.get_ref()?.output_to(
+        self.reference(interpreter)?.get_value_ref()?.output_to(
             grouping,
             output,
             StreamOutputBehaviour::Standard,
         )
     }
 
-    fn read_existing(&self, interpreter: &Interpreter) -> ExecutionResult<VariableData> {
-        interpreter.get_existing_variable_data(self, || {
+    fn reference(&self, interpreter: &Interpreter) -> ExecutionResult<VariableReference> {
+        interpreter.get_variable_reference(self, || {
             self.error("The variable does not already exist in the current scope")
         })
     }
@@ -161,7 +131,7 @@ impl InterpretToValue for &GroupedVariable {
         self,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<Self::OutputValue> {
-        self.get_value(interpreter)
+        self.get_cloned_value(interpreter)
     }
 }
 
@@ -273,7 +243,7 @@ impl InterpretToValue for &VariableIdentifier {
         self,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<Self::OutputValue> {
-        self.get_value(interpreter)
+        self.get_cloned_value(interpreter)
     }
 }
 
@@ -308,6 +278,7 @@ impl HandleDestructure for VariablePattern {
         interpreter: &mut Interpreter,
         value: ExpressionValue,
     ) -> ExecutionResult<()> {
-        self.set_value(interpreter, value)
+        self.define(interpreter, value);
+        Ok(())
     }
 }

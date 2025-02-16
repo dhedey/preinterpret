@@ -312,7 +312,9 @@ impl<'a> ExpressionEvaluator<'a, Source> {
             Assignee::Place(place) => {
                 let span_range =
                     SpanRange::new_between(place.span_range().start(), value.span_range().end());
-                let left = place.get_cloned()?.clone();
+                // TODO - replace with handling a compound operation for better performance
+                // of e.g. arrays or streams
+                let left = place.get_value_cloned()?.clone();
                 place.set(operation.to_binary().evaluate(left, value)?)?;
                 NextAction::HandleValue(ExpressionValue::None(span_range))
             }
@@ -334,7 +336,7 @@ impl<'a> ExpressionEvaluator<'a, Source> {
         let resolved = loop {
             match &self.nodes[assignee.0] {
                 ExpressionNode::Leaf(SourceExpressionLeaf::Variable(variable)) => {
-                    break Assignee::Place(variable.read_existing(interpreter)?);
+                    break Assignee::Place(variable.reference(interpreter)?);
                 }
                 ExpressionNode::Index { .. } => {
                     todo!()
@@ -361,7 +363,7 @@ impl<'a> ExpressionEvaluator<'a, Source> {
 }
 
 enum Assignee {
-    Place(VariableData),
+    Place(VariableReference),
     CompoundWip, // To come
 }
 
