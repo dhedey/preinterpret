@@ -98,8 +98,6 @@ Inside a transform stream, the following grammar is supported:
 ### To come
 
 * Support `#(x[..])` syntax for indexing arrays at read time (streams to follow in a separate task below after parsers are updated)
-  * Via a post-fix `[..]` operation with high precedence
-  * `#(x[0])` returns the item at that position of the array
   * `#(x[0..3])` returns an array
   * `#(x[0..=3])` returns an array
   * ... and `#(x[0] = y)` can be used to set the item
@@ -213,7 +211,7 @@ Inside a transform stream, the following grammar is supported:
   * `#(x[0])` returns the item at that position of the array / OR the value at that position of the stream (using `INFER_TOKEN_TREE`)
   * `#(x[0..3])` returns a TokenStream
   * `#(x[0..=3])` returns a TokenStream
-* Add `..` and `..x` support to the array destructurer
+* Add `..` and `.., x` support to the array pattern
 * Consider:
   * Dropping lots of the `group` wrappers?
   * If any types should have reference semantics instead of clone/value semantics?

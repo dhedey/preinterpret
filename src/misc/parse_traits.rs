@@ -325,6 +325,28 @@ impl<'a, K> ParseBuffer<'a, K> {
         )
     }
 
+    pub(crate) fn parse_braces(&self) -> ParseResult<(Braces, ParseBuffer<K>)> {
+        let (delim_span, inner) = self.parse_specific_group(Delimiter::Brace)?;
+        Ok((Braces { delim_span }, inner))
+    }
+
+    pub(crate) fn parse_brackets(&self) -> ParseResult<(Brackets, ParseBuffer<K>)> {
+        let (delim_span, inner) = self.parse_specific_group(Delimiter::Bracket)?;
+        Ok((Brackets { delim_span }, inner))
+    }
+
+    pub(crate) fn parse_parentheses(&self) -> ParseResult<(Parentheses, ParseBuffer<K>)> {
+        let (delim_span, inner) = self.parse_specific_group(Delimiter::Parenthesis)?;
+        Ok((Parentheses { delim_span }, inner))
+    }
+
+    pub(crate) fn parse_transparent_group(
+        &self,
+    ) -> ParseResult<(TransparentDelimiters, ParseBuffer<K>)> {
+        let (delim_span, inner) = self.parse_specific_group(Delimiter::None)?;
+        Ok((TransparentDelimiters { delim_span }, inner))
+    }
+
     pub(crate) fn parse_err<T>(&self, message: impl std::fmt::Display) -> ParseResult<T> {
         Err(self.parse_error(message))
     }

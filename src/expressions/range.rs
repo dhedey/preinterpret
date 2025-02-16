@@ -196,7 +196,7 @@ impl IterableExpressionRange<ExpressionValue> {
                     SpanRange::new_between(start.span_range().start(), end.span_range().end());
                 let pair = start.expect_value_pair(&dots, end)?;
                 match pair {
-                    EvaluationValuePair::Integer(pair) => match pair {
+                    ExpressionValuePair::Integer(pair) => match pair {
                         ExpressionIntegerValuePair::Untyped(start, end) => {
                             IterableExpressionRange::RangeFromTo { start, dots, end }
                                 .resolve(output_span_range)
@@ -250,7 +250,7 @@ impl IterableExpressionRange<ExpressionValue> {
                                 .resolve(output_span_range)
                         }
                     },
-                    EvaluationValuePair::CharPair(start, end) => {
+                    ExpressionValuePair::CharPair(start, end) => {
                         IterableExpressionRange::RangeFromTo {
                             start: start.value,
                             dots,

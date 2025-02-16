@@ -655,3 +655,26 @@ impl HasSpanRange for CompoundAssignmentOperation {
         }
     }
 }
+
+#[derive(Clone)]
+pub(super) struct PropertyAccess {
+    pub(super) dot: Token![.],
+    pub(super) property: Ident,
+}
+
+impl HasSpanRange for PropertyAccess {
+    fn span_range(&self) -> SpanRange {
+        SpanRange::new_between(self.dot.span, self.property.span())
+    }
+}
+
+#[derive(Clone)]
+pub(super) struct IndexAccess {
+    pub(super) brackets: Brackets,
+}
+
+impl HasSpan for IndexAccess {
+    fn span(&self) -> Span {
+        self.brackets.join()
+    }
+}

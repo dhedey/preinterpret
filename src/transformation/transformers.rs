@@ -95,7 +95,7 @@ impl TransformerDefinition for GroupTransformer {
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        let (_, inner) = input.parse_specific_group(Delimiter::None)?;
+        let (_, inner) = input.parse_transparent_group()?;
         self.inner.handle_transform(&inner, interpreter, output)
     }
 }

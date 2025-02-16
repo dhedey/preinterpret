@@ -85,7 +85,7 @@ pub(crate) struct Transformer {
     transformer_token: Token![@],
     instance: NamedTransformer,
     #[allow(unused)]
-    source_group_span: Option<DelimSpan>,
+    source_brackets: Option<Brackets>,
 }
 
 impl Parse<Source> for Transformer {
@@ -96,9 +96,9 @@ impl Parse<Source> for Transformer {
             let ident = input.parse_any_ident()?;
             (ident, None)
         } else if input.peek_specific_group(Delimiter::Bracket) {
-            let (delim_span, content) = input.parse_specific_group(Delimiter::Bracket)?;
+            let (brackets, content) = input.parse_brackets()?;
             let ident = content.parse_any_ident()?;
-            (ident, Some((content, delim_span)))
+            (ident, Some((content, brackets)))
         } else {
             return input.parse_err("Expected @TRANSFORMER or @[TRANSFORMER ...arguments...]");
         };
@@ -114,12 +114,12 @@ impl Parse<Source> for Transformer {
         };
 
         match arguments {
-            Some((buffer, delim_span)) => {
-                let arguments = TransformerArguments::new(&buffer, name, delim_span.join());
+            Some((buffer, brackets)) => {
+                let arguments = TransformerArguments::new(&buffer, name, brackets.join());
                 Ok(Self {
                     transformer_token,
                     instance: transformer_kind.parse_instance(arguments)?,
-                    source_group_span: Some(delim_span),
+                    source_brackets: Some(brackets),
                 })
             }
             None => {
@@ -142,7 +142,7 @@ impl Parse<Source> for Transformer {
                 Ok(Self {
                     transformer_token,
                     instance,
-                    source_group_span: None,
+                    source_brackets: None,
                 })
             }
         }

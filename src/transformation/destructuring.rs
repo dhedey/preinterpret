@@ -54,15 +54,15 @@ impl HandleDestructure for Pattern {
 #[derive(Clone)]
 pub struct ArrayPattern {
     #[allow(unused)]
-    delim_span: DelimSpan,
+    brackets: Brackets,
     items: Punctuated<Pattern, Token![,]>,
 }
 
 impl Parse<Source> for ArrayPattern {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
-        let (delim_span, inner) = input.parse_specific_group(Delimiter::Bracket)?;
+        let (brackets, inner) = input.parse_brackets()?;
         Ok(Self {
-            delim_span,
+            brackets,
             items: inner.parse_terminated()?,
         })
     }

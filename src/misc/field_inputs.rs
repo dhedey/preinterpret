@@ -33,7 +33,7 @@ macro_rules! define_field_inputs {
                     let mut $optional_field: Option<$optional_type> = None;
                 )*
 
-                let (delim_span, content) = input.parse_specific_group(Delimiter::Brace)?;
+                let (braces, content) = input.parse_braces()?;
 
                 while !content.is_empty() {
                     let ident = content.parse_any_ident()?;
@@ -72,7 +72,7 @@ macro_rules! define_field_inputs {
                 )*
 
                 if !missing_fields.is_empty() {
-                    return delim_span.join().parse_err(format!(
+                    return braces.parse_err(format!(
                         "required fields are missing: {}",
                         missing_fields.join(", ")
                     ));

@@ -398,12 +398,12 @@ define_command_enums! {
 #[derive(Clone)]
 pub(crate) struct Command {
     typed: Box<TypedCommand>,
-    source_group_span: DelimSpan,
+    brackets: Brackets,
 }
 
 impl Parse<Source> for Command {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
-        let (delim_span, content) = input.parse_specific_group(Delimiter::Bracket)?;
+        let (brackets, content) = input.parse_brackets()?;
         content.parse::<Token![!]>()?;
         let command_name = content.parse_any_ident()?;
         let command_kind = match CommandKind::for_ident(&command_name) {
@@ -420,18 +420,18 @@ impl Parse<Source> for Command {
         let typed = command_kind.parse_command(CommandArguments::new(
             &content,
             command_name,
-            delim_span.join(),
+            brackets.join(),
         ))?;
         Ok(Self {
             typed: Box::new(typed),
-            source_group_span: delim_span,
+            brackets,
         })
     }
 }
 
 impl HasSpan for Command {
     fn span(&self) -> Span {
-        self.source_group_span.join()
+        self.brackets.join()
     }
 }
 
@@ -443,7 +443,7 @@ impl Interpret for Command {
     ) -> ExecutionResult<()> {
         let context = ExecutionContext {
             interpreter,
-            delim_span: self.source_group_span,
+            delim_span: self.brackets.delim_span,
         };
         self.typed.execute_into(context, output)
     }
@@ -458,7 +458,7 @@ impl InterpretToValue for Command {
     ) -> ExecutionResult<Self::OutputValue> {
         let context = ExecutionContext {
             interpreter,
-            delim_span: self.source_group_span,
+            delim_span: self.brackets.delim_span,
         };
         self.typed.execute_to_value(context)
     }

@@ -13,62 +13,64 @@ pub(crate) struct Interpreter {
 #[derive(Clone)]
 pub(crate) struct VariableData {
     value: Rc<RefCell<ExpressionValue>>,
+    /// In the store, this is the span range of the original let variable declaration.
+    /// When this is a variable reference, this is the span range of the variable
+    /// which created the reference.
+    span_range: SpanRange,
 }
 
 impl VariableData {
-    fn new(tokens: ExpressionValue) -> Self {
+    fn new(tokens: ExpressionValue, span_range: SpanRange) -> Self {
         Self {
             value: Rc::new(RefCell::new(tokens)),
+            span_range,
         }
     }
 
-    pub(crate) fn get<'d>(
-        &'d self,
-        variable: &(impl IsVariable + ?Sized),
-    ) -> ExecutionResult<Ref<'d, ExpressionValue>> {
+    pub(crate) fn get_ref(&self) -> ExecutionResult<Ref<ExpressionValue>> {
         self.value.try_borrow().map_err(|_| {
-            variable
-                .error("The variable cannot be read if it is currently being modified")
-                .into()
+            self.execution_error("The variable cannot be read if it is currently being modified")
         })
     }
 
-    pub(crate) fn get_mut<'d>(
-        &'d self,
-        variable: &(impl IsVariable + ?Sized),
-    ) -> ExecutionResult<RefMut<'d, ExpressionValue>> {
+    // Gets the cloned expression value, setting the span range appropriately
+    pub(crate) fn get_cloned(&self) -> ExecutionResult<ExpressionValue> {
+        Ok(self.get_ref()?.clone().with_span_range(self.span_range))
+    }
+
+    pub(crate) fn get_mut(&self) -> ExecutionResult<RefMut<ExpressionValue>> {
         self.value.try_borrow_mut().map_err(|_| {
-            variable.execution_error(
+            self.execution_error(
                 "The variable cannot be modified if it is already currently being modified",
             )
         })
     }
 
-    pub(crate) fn get_mut_stream<'d>(
-        &'d self,
-        variable: &(impl IsVariable + ?Sized),
-    ) -> ExecutionResult<RefMut<'d, OutputStream>> {
-        let mut_guard = self.get_mut(variable)?;
+    pub(crate) fn get_mut_stream(&self) -> ExecutionResult<RefMut<OutputStream>> {
+        let mut_guard = self.get_mut()?;
         RefMut::filter_map(mut_guard, |mut_guard| match mut_guard {
             ExpressionValue::Stream(stream) => Some(&mut stream.value),
             _ => None,
         })
-        .map_err(|_| variable.execution_error("The variable is not a stream"))
+        .map_err(|_| self.execution_error("The variable is not a stream"))
     }
 
-    pub(crate) fn set(
-        &self,
-        variable: &(impl IsVariable + ?Sized),
-        content: ExpressionValue,
-    ) -> ExecutionResult<()> {
-        *self.get_mut(variable)? = content;
+    pub(crate) fn set(&self, content: ExpressionValue) -> ExecutionResult<()> {
+        *self.get_mut()? = content;
         Ok(())
     }
 
-    pub(crate) fn cheap_clone(&self) -> Self {
+    pub(crate) fn cheap_clone(&self, span_range: SpanRange) -> Self {
         Self {
             value: self.value.clone(),
+            span_range,
         }
+    }
+}
+
+impl HasSpanRange for VariableData {
+    fn span_range(&self) -> SpanRange {
+        self.span_range
     }
 }
 
@@ -87,10 +89,10 @@ impl Interpreter {
     ) -> ExecutionResult<()> {
         match self.variable_data.entry(variable.get_name()) {
             Entry::Occupied(mut entry) => {
-                entry.get_mut().set(variable, value)?;
+                entry.get_mut().set(value)?;
             }
             Entry::Vacant(entry) => {
-                entry.insert(VariableData::new(value));
+                entry.insert(VariableData::new(value, variable.span_range()));
             }
         }
         Ok(())
@@ -100,10 +102,12 @@ impl Interpreter {
         &self,
         variable: &(impl IsVariable + ?Sized),
         make_error: impl FnOnce() -> SynError,
-    ) -> ExecutionResult<&VariableData> {
-        self.variable_data
+    ) -> ExecutionResult<VariableData> {
+        let data = self
+            .variable_data
             .get(&variable.get_name())
-            .ok_or_else(|| make_error().into())
+            .ok_or_else(make_error)?;
+        Ok(data.cheap_clone(variable.span_range()))
     }
 
     pub(crate) fn start_iteration_counter<'s, S: HasSpanRange>(

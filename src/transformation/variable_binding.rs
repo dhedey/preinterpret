@@ -189,17 +189,17 @@ impl HandleTransformation for VariableBinding {
                 let variable_data = self.get_existing_for_mutation(interpreter)?;
                 input
                     .parse::<ParsedTokenTree>()?
-                    .push_as_token_tree(variable_data.get_mut_stream(self)?.deref_mut());
+                    .push_as_token_tree(variable_data.get_mut_stream()?.deref_mut());
             }
             VariableBinding::GroupedAppendFlattened { .. } => {
                 let variable_data = self.get_existing_for_mutation(interpreter)?;
                 input
                     .parse::<ParsedTokenTree>()?
-                    .flatten_into(variable_data.get_mut_stream(self)?.deref_mut());
+                    .flatten_into(variable_data.get_mut_stream()?.deref_mut());
             }
             VariableBinding::FlattenedAppendGrouped { marker, until, .. } => {
                 let variable_data = self.get_existing_for_mutation(interpreter)?;
-                variable_data.get_mut_stream(self)?.push_grouped(
+                variable_data.get_mut_stream()?.push_grouped(
                     |inner| until.handle_parse_into(input, inner),
                     Delimiter::None,
                     marker.span,
@@ -207,7 +207,7 @@ impl HandleTransformation for VariableBinding {
             }
             VariableBinding::FlattenedAppendFlattened { until, .. } => {
                 let variable_data = self.get_existing_for_mutation(interpreter)?;
-                until.handle_parse_into(input, variable_data.get_mut_stream(self)?.deref_mut())?;
+                until.handle_parse_into(input, variable_data.get_mut_stream()?.deref_mut())?;
             }
         }
         Ok(())

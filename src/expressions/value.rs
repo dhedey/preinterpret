@@ -59,7 +59,7 @@ impl ExpressionValue {
         self,
         operation: &impl Operation,
         right: Self,
-    ) -> ExecutionResult<EvaluationValuePair> {
+    ) -> ExecutionResult<ExpressionValuePair> {
         Ok(match (self, right) {
             (ExpressionValue::Integer(left), ExpressionValue::Integer(right)) => {
                 let integer_pair = match (left.value, right.value) {
@@ -185,10 +185,10 @@ impl ExpressionValue {
                         return operation.execution_err(format!("The {} operator cannot infer a common integer operand type from {} and {}. Consider using `as` to cast to matching types.", operation.symbolic_description(), left_value.value_type(), right_value.value_type()));
                     }
                 };
-                EvaluationValuePair::Integer(integer_pair)
+                ExpressionValuePair::Integer(integer_pair)
             }
             (ExpressionValue::Boolean(left), ExpressionValue::Boolean(right)) => {
-                EvaluationValuePair::BooleanPair(left, right)
+                ExpressionValuePair::BooleanPair(left, right)
             }
             (ExpressionValue::Float(left), ExpressionValue::Float(right)) => {
                 let float_pair = match (left.value, right.value) {
@@ -224,19 +224,19 @@ impl ExpressionValue {
                         return operation.execution_err(format!("The {} operator cannot infer a common float operand type from {} and {}. Consider using `as` to cast to matching types.", operation.symbolic_description(), left_value.value_type(), right_value.value_type()));
                     }
                 };
-                EvaluationValuePair::Float(float_pair)
+                ExpressionValuePair::Float(float_pair)
             }
             (ExpressionValue::String(left), ExpressionValue::String(right)) => {
-                EvaluationValuePair::StringPair(left, right)
+                ExpressionValuePair::StringPair(left, right)
             }
             (ExpressionValue::Char(left), ExpressionValue::Char(right)) => {
-                EvaluationValuePair::CharPair(left, right)
+                ExpressionValuePair::CharPair(left, right)
             }
             (ExpressionValue::Array(left), ExpressionValue::Array(right)) => {
-                EvaluationValuePair::ArrayPair(left, right)
+                ExpressionValuePair::ArrayPair(left, right)
             }
             (ExpressionValue::Stream(left), ExpressionValue::Stream(right)) => {
-                EvaluationValuePair::StreamPair(left, right)
+                ExpressionValuePair::StreamPair(left, right)
             }
             (left, right) => {
                 return operation.execution_err(format!("Cannot infer common type from {} {} {}. Consider using `as` to cast the operands to matching types.", left.value_type(), operation.symbolic_description(), right.value_type()));
@@ -377,6 +377,21 @@ impl ExpressionValue {
             ExpressionValue::Iterator(value) => operation.unsupported(value),
             ExpressionValue::Range(value) => operation.unsupported(value),
         }
+    }
+
+    pub(super) fn handle_index_access(
+        self,
+        access: IndexAccess,
+        index: Self,
+    ) -> ExecutionResult<Self> {
+        match self {
+            ExpressionValue::Array(array) => array.handle_index_access(access, index),
+            other => access.execution_err(format!("Cannot index into a {}", other.value_type())),
+        }
+    }
+
+    pub(super) fn handle_property_access(self, access: PropertyAccess) -> ExecutionResult<Self> {
+        access.execution_err("Fields are not supported")
     }
 
     fn span_range_mut(&mut self) -> &mut SpanRange {
@@ -620,7 +635,7 @@ impl HasValueType for UnsupportedLiteral {
     }
 }
 
-pub(super) enum EvaluationValuePair {
+pub(super) enum ExpressionValuePair {
     Integer(ExpressionIntegerValuePair),
     Float(ExpressionFloatValuePair),
     BooleanPair(ExpressionBoolean, ExpressionBoolean),
@@ -630,7 +645,7 @@ pub(super) enum EvaluationValuePair {
     StreamPair(ExpressionStream, ExpressionStream),
 }
 
-impl EvaluationValuePair {
+impl ExpressionValuePair {
     pub(super) fn handle_paired_binary_operation(
         self,
         operation: OutputSpanned<PairedBinaryOperation>,

@@ -79,7 +79,7 @@ impl<T: 'static> FieldsParseDefinition<T> {
             error_span_range: SpanRange,
         ) -> ParseResult<T> {
             let mut builder = new_builder;
-            let (_, content) = input.parse_specific_group(Delimiter::Brace)?;
+            let (_, content) = input.parse_braces()?;
 
             let mut required_field_names: BTreeSet<_> = field_definitions
                 .0

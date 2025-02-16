@@ -137,8 +137,15 @@ impl HandleTransformation for TransformGroup {
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        let (_, inner) = input.parse_specific_group(self.delimiter)?;
-        self.inner.handle_transform(&inner, interpreter, output)
+        // Because `None` is ignored by Syn at parsing time, we can effectively be most permissive by ignoring them.
+        // This removes a bit of a footgun for users.
+        // If they really want to check for a None group, they can embed `@[GROUP ...]` transformer.
+        if self.delimiter == Delimiter::None {
+            self.inner.handle_transform(input, interpreter, output)
+        } else {
+            let (_, inner) = input.parse_specific_group(self.delimiter)?;
+            self.inner.handle_transform(&inner, interpreter, output)
+        }
     }
 }
 
@@ -147,7 +154,7 @@ pub(crate) struct ExplicitTransformStream {
     #[allow(unused)]
     transformer_token: Token![@],
     #[allow(unused)]
-    delim_span: DelimSpan,
+    parentheses: Parentheses,
     arguments: ExplicitTransformStreamArguments,
 }
 
@@ -214,11 +221,11 @@ impl Parse<Source> for ExplicitTransformStreamArguments {
 impl Parse<Source> for ExplicitTransformStream {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         let transformer_token = input.parse()?;
-        let (delim_span, content) = input.parse_specific_group(Delimiter::Parenthesis)?;
+        let (parentheses, content) = input.parse_parentheses()?;
 
         Ok(Self {
             transformer_token,
-            delim_span,
+            parentheses,
             arguments: content.parse()?,
         })
     }
@@ -249,7 +256,7 @@ impl HandleTransformation for ExplicitTransformStream {
                 content.handle_transform(
                     input,
                     interpreter,
-                    variable_data.get_mut_stream(variable)?.deref_mut(),
+                    variable_data.get_mut_stream()?.deref_mut(),
                 )?;
             }
             ExplicitTransformStreamArguments::Discard { content, .. } => {

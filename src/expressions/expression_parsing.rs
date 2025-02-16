@@ -115,6 +115,14 @@ impl<'a, K: Expressionable> ExpressionParser<'a, K> {
                     }
                     WorkItem::RequireUnaryAtom
                 }
+                NodeExtension::Property(access) => WorkItem::TryParseAndApplyExtension {
+                    node: self
+                        .nodes
+                        .add_node(ExpressionNode::Property { node, access }),
+                },
+                NodeExtension::Index(access) => {
+                    self.push_stack_frame(ExpressionStackFrame::IncompleteIndex { node, access })
+                }
                 NodeExtension::Range(range_limits) => WorkItem::ContinueRange {
                     lhs: Some(node),
                     range_limits,
@@ -185,6 +193,19 @@ impl<'a, K: Expressionable> ExpressionParser<'a, K> {
                         right_input: node,
                     });
                     extension.into_post_operation_completion_work_item(node)
+                }
+                ExpressionStackFrame::IncompleteIndex {
+                    node: source,
+                    access,
+                } => {
+                    assert!(matches!(extension, NodeExtension::EndOfStream));
+                    self.streams.exit_group();
+                    let node = self.nodes.add_node(ExpressionNode::Index {
+                        node: source,
+                        access,
+                        index: node,
+                    });
+                    WorkItem::TryParseAndApplyExtension { node }
                 }
                 ExpressionStackFrame::IncompleteRange { lhs, range_limits } => {
                     let node = self.nodes.add_node(ExpressionNode::Range {
@@ -281,7 +302,7 @@ impl<'a, K: Expressionable> ExpressionParser<'a, K> {
     fn parent_precedence(&self) -> OperatorPrecendence {
         self.expression_stack
             .last()
-            .map(|s| s.precedence())
+            .map(|s| s.precedence_to_bind_to_child())
             .unwrap()
     }
 }
@@ -528,6 +549,11 @@ pub(super) enum ExpressionStackFrame {
         lhs: ExpressionNodeId,
         operation: BinaryOperation,
     },
+    /// An incomplete indexing access
+    IncompleteIndex {
+        node: ExpressionNodeId,
+        access: IndexAccess,
+    },
     /// An incomplete assignment operation
     /// It's left side is an assignee expression, according to the [rust reference].
     ///
@@ -552,11 +578,12 @@ pub(super) enum ExpressionStackFrame {
 }
 
 impl ExpressionStackFrame {
-    fn precedence(&self) -> OperatorPrecendence {
+    fn precedence_to_bind_to_child(&self) -> OperatorPrecendence {
         match self {
             ExpressionStackFrame::Root => OperatorPrecendence::MIN,
             ExpressionStackFrame::Group { .. } => OperatorPrecendence::MIN,
             ExpressionStackFrame::Array { .. } => OperatorPrecendence::MIN,
+            ExpressionStackFrame::IncompleteIndex { .. } => OperatorPrecendence::MIN,
             ExpressionStackFrame::IncompleteRange { .. } => OperatorPrecendence::Range,
             ExpressionStackFrame::IncompleteAssignment { .. } => OperatorPrecendence::Assign,
             ExpressionStackFrame::IncompleteCompoundAssignment { .. } => {
@@ -617,6 +644,8 @@ pub(super) enum NodeExtension {
     PostfixOperation(UnaryOperation),
     BinaryOperation(BinaryOperation),
     NonTerminalArrayComma,
+    Property(PropertyAccess),
+    Index(IndexAccess),
     Range(syn::RangeLimits),
     AssignmentOperation(Token![=]),
     CompoundAssignmentOperation(CompoundAssignmentOperation),
@@ -630,6 +659,8 @@ impl NodeExtension {
             NodeExtension::PostfixOperation(op) => OperatorPrecendence::of_unary_operation(op),
             NodeExtension::BinaryOperation(op) => OperatorPrecendence::of_binary_operation(op),
             NodeExtension::NonTerminalArrayComma => OperatorPrecendence::NonTerminalComma,
+            NodeExtension::Property { .. } => OperatorPrecendence::Unambiguous,
+            NodeExtension::Index { .. } => OperatorPrecendence::Unambiguous,
             NodeExtension::Range(_) => OperatorPrecendence::Range,
             NodeExtension::EndOfStream => OperatorPrecendence::MIN,
             NodeExtension::AssignmentOperation(_) => OperatorPrecendence::Assign,
@@ -644,6 +675,8 @@ impl NodeExtension {
             // so can be re-used without parsing again.
             extension @ (NodeExtension::PostfixOperation { .. }
             | NodeExtension::BinaryOperation { .. }
+            | NodeExtension::Property { .. }
+            | NodeExtension::Index { .. }
             | NodeExtension::Range { .. }
             | NodeExtension::AssignmentOperation { .. }
             | NodeExtension::CompoundAssignmentOperation { .. }

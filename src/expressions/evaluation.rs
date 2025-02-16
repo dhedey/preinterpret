@@ -78,6 +78,23 @@ impl<'a> ExpressionEvaluator<'a, Source> {
                     });
                 NextAction::EnterValueNode(*left_input)
             }
+            ExpressionNode::Property { node, access } => {
+                self.operation_stack.push(EvaluationStackFrame::Property {
+                    access: access.clone(),
+                });
+                NextAction::EnterValueNode(*node)
+            }
+            ExpressionNode::Index {
+                node,
+                access,
+                index,
+            } => {
+                self.operation_stack.push(EvaluationStackFrame::Index {
+                    access: access.clone(),
+                    state: IndexPath::OnObjectBranch { index: *index },
+                });
+                NextAction::EnterValueNode(*node)
+            }
             ExpressionNode::Range {
                 left,
                 range_limits,
@@ -169,6 +186,23 @@ impl<'a> ExpressionEvaluator<'a, Source> {
                     NextAction::HandleValue(result)
                 }
             },
+            EvaluationStackFrame::Property { access } => {
+                let result = value.handle_property_access(access)?;
+                NextAction::HandleValue(result)
+            }
+            EvaluationStackFrame::Index { access, state } => match state {
+                IndexPath::OnObjectBranch { index } => {
+                    self.operation_stack.push(EvaluationStackFrame::Index {
+                        access,
+                        state: IndexPath::OnIndexBranch { object: value },
+                    });
+                    NextAction::EnterValueNode(index)
+                }
+                IndexPath::OnIndexBranch { object } => {
+                    let result = object.handle_index_access(access, value)?;
+                    NextAction::HandleValue(result)
+                }
+            },
             EvaluationStackFrame::Range {
                 range_limits,
                 state,
@@ -233,14 +267,12 @@ impl<'a> ExpressionEvaluator<'a, Source> {
                 assignee,
                 equals_token,
             } => {
-                let span_range =
-                    self.handle_assignment(assignee, equals_token, value, interpreter)?;
-                NextAction::HandleValue(ExpressionValue::None(span_range))
+                // TODO: This should be replaced with setting a stack frame for AssignmentResolution
+                self.handle_assignment(assignee, equals_token, value, interpreter)?
             }
             EvaluationStackFrame::CompoundAssignmentValue { place, operation } => {
-                let span_range =
-                    self.handle_compound_assignment(place, operation, value, interpreter)?;
-                NextAction::HandleValue(ExpressionValue::None(span_range))
+                // TODO: This should be replaced with setting a stack frame for CompoundAssignmentResolution
+                self.handle_compound_assignment(place, operation, value, interpreter)?
             }
         })
     }
@@ -251,17 +283,15 @@ impl<'a> ExpressionEvaluator<'a, Source> {
         equals_token: Token![=],
         value: ExpressionValue,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<SpanRange> {
+    ) -> ExecutionResult<NextAction> {
         // TODO: When we add place resolution, we likely wish to make use of the execution stack.
-        let assignee = self.resolve_assignee_or_place(assignee)?;
+        let assignee = self.resolve_assignee_or_place(assignee, interpreter)?;
         Ok(match assignee {
             Assignee::Place(place) => {
-                let span_range = SpanRange::new_between(
-                    place.variable.span_range().start(),
-                    value.span_range().end(),
-                );
-                place.variable.set_value(interpreter, value)?;
-                span_range
+                let span_range =
+                    SpanRange::new_between(place.span_range().start(), value.span_range().end());
+                place.set(value)?;
+                NextAction::HandleValue(ExpressionValue::None(span_range))
             }
             Assignee::CompoundWip => {
                 return equals_token.execution_err("Compound assignment is not yet supported")
@@ -275,20 +305,16 @@ impl<'a> ExpressionEvaluator<'a, Source> {
         operation: CompoundAssignmentOperation,
         value: ExpressionValue,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<SpanRange> {
+    ) -> ExecutionResult<NextAction> {
         // TODO: When we add place resolution, we likely wish to make use of the execution stack.
-        let assignee = self.resolve_assignee_or_place(place)?;
+        let assignee = self.resolve_assignee_or_place(place, interpreter)?;
         Ok(match assignee {
             Assignee::Place(place) => {
-                let span_range = SpanRange::new_between(
-                    place.variable.span_range().start(),
-                    value.span_range().end(),
-                );
-                let left = place.variable.interpret_to_value(interpreter)?;
-                place
-                    .variable
-                    .set_value(interpreter, operation.to_binary().evaluate(left, value)?)?;
-                span_range
+                let span_range =
+                    SpanRange::new_between(place.span_range().start(), value.span_range().end());
+                let left = place.get_cloned()?.clone();
+                place.set(operation.to_binary().evaluate(left, value)?)?;
+                NextAction::HandleValue(ExpressionValue::None(span_range))
             }
             Assignee::CompoundWip => {
                 return operation
@@ -303,11 +329,18 @@ impl<'a> ExpressionEvaluator<'a, Source> {
     fn resolve_assignee_or_place(
         &self,
         mut assignee: ExpressionNodeId,
-    ) -> ExecutionResult<Assignee<'a>> {
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<Assignee> {
         let resolved = loop {
             match &self.nodes[assignee.0] {
                 ExpressionNode::Leaf(SourceExpressionLeaf::Variable(variable)) => {
-                    break Assignee::Place(Place { variable });
+                    break Assignee::Place(variable.read_existing(interpreter)?);
+                }
+                ExpressionNode::Index { .. } => {
+                    todo!()
+                }
+                ExpressionNode::Property { .. } => {
+                    todo!()
                 }
                 ExpressionNode::Array { .. } => {
                     break Assignee::CompoundWip;
@@ -327,14 +360,9 @@ impl<'a> ExpressionEvaluator<'a, Source> {
     }
 }
 
-enum Assignee<'a> {
-    Place(Place<'a>),
+enum Assignee {
+    Place(VariableData),
     CompoundWip, // To come
-}
-
-struct Place<'a> {
-    variable: &'a VariableIdentifier,
-    // To come: Array index, field access, etc.
 }
 
 enum NextAction {
@@ -353,6 +381,13 @@ enum EvaluationStackFrame {
     BinaryOperation {
         operation: BinaryOperation,
         state: BinaryPath,
+    },
+    Property {
+        access: PropertyAccess,
+    },
+    Index {
+        access: IndexAccess,
+        state: IndexPath,
     },
     Range {
         range_limits: syn::RangeLimits,
@@ -396,6 +431,11 @@ impl ArrayStackFrame {
 enum BinaryPath {
     OnLeftBranch { right: ExpressionNodeId },
     OnRightBranch { left: ExpressionValue },
+}
+
+enum IndexPath {
+    OnObjectBranch { index: ExpressionNodeId },
+    OnIndexBranch { object: ExpressionValue },
 }
 
 enum RangePath {

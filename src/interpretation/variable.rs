@@ -31,13 +31,15 @@ pub(crate) trait IsVariable: HasSpanRange {
         &self,
         interpreter: &Interpreter,
     ) -> ExecutionResult<VariableData> {
-        Ok(self.read_existing(interpreter)?.cheap_clone())
+        Ok(self
+            .read_existing(interpreter)?
+            .cheap_clone(self.span_range()))
     }
 
     fn get_value(&self, interpreter: &Interpreter) -> ExecutionResult<ExpressionValue> {
         let value = self
             .read_existing(interpreter)?
-            .get(self)?
+            .get_cloned()?
             .clone()
             .with_span_range(self.span_range());
         Ok(value)
@@ -49,14 +51,14 @@ pub(crate) trait IsVariable: HasSpanRange {
         grouping: Grouping,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        self.read_existing(interpreter)?.get(self)?.output_to(
+        self.read_existing(interpreter)?.get_ref()?.output_to(
             grouping,
             output,
             StreamOutputBehaviour::Standard,
         )
     }
 
-    fn read_existing<'i>(&self, interpreter: &'i Interpreter) -> ExecutionResult<&'i VariableData> {
+    fn read_existing(&self, interpreter: &Interpreter) -> ExecutionResult<VariableData> {
         interpreter.get_existing_variable_data(self, || {
             self.error("The variable does not already exist in the current scope")
         })

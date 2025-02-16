@@ -117,6 +117,29 @@ impl ExpressionArray {
         })
     }
 
+    pub(super) fn handle_index_access(
+        &self,
+        access: IndexAccess,
+        index: ExpressionValue,
+    ) -> ExecutionResult<ExpressionValue> {
+        Ok(match index {
+            ExpressionValue::Integer(int) => {
+                let span_range = int.span_range;
+                let index = int.expect_usize()?;
+                if index < self.items.len() {
+                    self.items[index].clone().with_span(access.span())
+                } else {
+                    return span_range.execution_err(format!(
+                        "Index of {} is out of range of the array length of {}",
+                        index,
+                        self.items.len()
+                    ));
+                }
+            }
+            _ => return index.execution_err("The index must be an integer"),
+        })
+    }
+
     pub(crate) fn concat_recursive_into(
         self,
         output: &mut String,

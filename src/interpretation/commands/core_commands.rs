@@ -95,10 +95,7 @@ impl NoOutputCommandDefinition for SetCommand {
                 variable, content, ..
             } => {
                 let variable_data = variable.get_existing_for_mutation(interpreter)?;
-                content.interpret_into(
-                    interpreter,
-                    variable_data.get_mut_stream(&variable)?.deref_mut(),
-                )?;
+                content.interpret_into(interpreter, variable_data.get_mut_stream()?.deref_mut())?;
             }
             SetArguments::SetVariablesEmpty { variables } => {
                 for variable in variables {

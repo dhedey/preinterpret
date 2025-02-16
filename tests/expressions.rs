@@ -220,3 +220,13 @@ fn test_range() {
     );
     // preinterpret_assert_eq!({ [!debug! 0..10000 as iterator] }, "[<iterator> 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, ..<9980 further items>]");
 }
+
+#[test]
+fn test_indexing() {
+    preinterpret_assert_eq!(
+        #(let x = [1, 2, 3]; x[1]), 2
+    );
+    preinterpret_assert_eq!(
+        #(let x = [1, 2, 3]; x[x[0] + x[x[1] - 1] - 1]), 3
+    );
+}

@@ -116,6 +116,12 @@ impl Expressionable for Source {
     ) -> ParseResult<NodeExtension> {
         // We fall through if we have no match
         match input.peek_grammar() {
+            SourcePeekMatch::Group(Delimiter::Bracket) => {
+                let (_, delim_span) = input.parse_and_enter_group()?;
+                return Ok(NodeExtension::Index(IndexAccess {
+                    brackets: Brackets { delim_span },
+                }));
+            }
             SourcePeekMatch::Punct(punct) if punct.as_char() == ',' => {
                 match parent_stack_frame {
                     ExpressionStackFrame::Array { .. } => {
@@ -133,7 +139,13 @@ impl Expressionable for Source {
                     _ => {}
                 }
             }
-            SourcePeekMatch::Punct(_) => {
+            SourcePeekMatch::Punct(punct) => {
+                if punct.as_char() == '.' && input.peek2(syn::Ident) {
+                    return Ok(NodeExtension::Property(PropertyAccess {
+                        dot: input.parse()?,
+                        property: input.parse()?,
+                    }));
+                }
                 if let Ok(operation) = input.try_parse_or_revert() {
                     return Ok(NodeExtension::CompoundAssignmentOperation(operation));
                 }
@@ -160,7 +172,9 @@ impl Expressionable for Source {
         match parent_stack_frame {
             ExpressionStackFrame::Root => Ok(NodeExtension::NoValidExtensionForCurrentParent),
             ExpressionStackFrame::Group { .. } => input.parse_err("Expected ) or operator"),
-            ExpressionStackFrame::Array { .. } => input.parse_err("Expected comma, ], or operator"),
+            ExpressionStackFrame::Array { .. } | ExpressionStackFrame::IncompleteIndex { .. } => {
+                input.parse_err("Expected comma, ], or operator")
+            }
             // e.g. I've just matched the true in !true or false || true,
             // and I want to see if there's an extension (e.g. a cast).
             // There's nothing matching, so we fall through to an EndOfFrame
@@ -241,6 +255,15 @@ pub(super) enum ExpressionNode<K: Expressionable> {
         left_input: ExpressionNodeId,
         right_input: ExpressionNodeId,
     },
+    Property {
+        node: ExpressionNodeId,
+        access: PropertyAccess,
+    },
+    Index {
+        node: ExpressionNodeId,
+        access: IndexAccess,
+        index: ExpressionNodeId,
+    },
     Range {
         left: Option<ExpressionNodeId>,
         range_limits: syn::RangeLimits,
@@ -264,6 +287,8 @@ impl ExpressionNode<Source> {
             ExpressionNode::Leaf(leaf) => leaf.span_range(),
             ExpressionNode::Grouped { delim_span, .. } => delim_span.span_range(),
             ExpressionNode::Array { delim_span, .. } => delim_span.span_range(),
+            ExpressionNode::Property { access, .. } => access.span_range(),
+            ExpressionNode::Index { access, .. } => access.span_range(),
             ExpressionNode::UnaryOperation { operation, .. } => operation.span_range(),
             ExpressionNode::BinaryOperation { operation, .. } => operation.span_range(),
             ExpressionNode::Range { range_limits, .. } => range_limits.span_range(),

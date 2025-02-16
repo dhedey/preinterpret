@@ -4,7 +4,7 @@ use super::*;
 pub(crate) struct ExpressionBlock {
     marker: Token![#],
     flattening: Option<Token![..]>,
-    delim_span: DelimSpan,
+    parentheses: Parentheses,
     standard_statements: Vec<(Statement, Token![;])>,
     return_statement: Option<Statement>,
 }
@@ -17,7 +17,7 @@ impl Parse<Source> for ExpressionBlock {
         } else {
             None
         };
-        let (delim_span, inner) = input.parse_specific_group(Delimiter::Parenthesis)?;
+        let (parentheses, inner) = input.parse_parentheses()?;
         let mut standard_statements = Vec::new();
         let return_statement = loop {
             if inner.is_empty() {
@@ -35,7 +35,7 @@ impl Parse<Source> for ExpressionBlock {
         Ok(Self {
             marker,
             flattening,
-            delim_span,
+            parentheses,
             standard_statements,
             return_statement,
         })
@@ -44,7 +44,7 @@ impl Parse<Source> for ExpressionBlock {
 
 impl HasSpanRange for ExpressionBlock {
     fn span_range(&self) -> SpanRange {
-        SpanRange::new_between(self.marker.span, self.delim_span.close())
+        SpanRange::new_between(self.marker.span, self.parentheses.close())
     }
 }
 

@@ -179,6 +179,85 @@ impl HasSpan for Literal {
     }
 }
 
+/// [ ... ]
+#[derive(Copy, Clone)]
+pub(crate) struct Brackets {
+    pub(crate) delim_span: DelimSpan,
+}
+
+impl core::ops::Deref for Brackets {
+    type Target = DelimSpan;
+
+    fn deref(&self) -> &Self::Target {
+        &self.delim_span
+    }
+}
+
+impl HasSpan for Brackets {
+    fn span(&self) -> Span {
+        self.delim_span.span()
+    }
+}
+
+/// { ... }
+#[derive(Copy, Clone)]
+pub(crate) struct Braces {
+    pub(crate) delim_span: DelimSpan,
+}
+
+impl core::ops::Deref for Braces {
+    type Target = DelimSpan;
+
+    fn deref(&self) -> &Self::Target {
+        &self.delim_span
+    }
+}
+
+impl HasSpan for Braces {
+    fn span(&self) -> Span {
+        self.delim_span.span()
+    }
+}
+
+/// ( ... )
+#[derive(Copy, Clone)]
+pub(crate) struct Parentheses {
+    pub(crate) delim_span: DelimSpan,
+}
+
+impl core::ops::Deref for Parentheses {
+    type Target = DelimSpan;
+
+    fn deref(&self) -> &Self::Target {
+        &self.delim_span
+    }
+}
+
+impl HasSpan for Parentheses {
+    fn span(&self) -> Span {
+        self.delim_span.span()
+    }
+}
+
+#[derive(Copy, Clone)]
+pub(crate) struct TransparentDelimiters {
+    pub(crate) delim_span: DelimSpan,
+}
+
+impl core::ops::Deref for TransparentDelimiters {
+    type Target = DelimSpan;
+
+    fn deref(&self) -> &Self::Target {
+        &self.delim_span
+    }
+}
+
+impl HasSpan for TransparentDelimiters {
+    fn span(&self) -> Span {
+        self.delim_span.span()
+    }
+}
+
 pub(crate) trait SlowSpanRange {
     /// This name is purposefully very long to discourage use, as it can cause nasty performance issues
     fn span_range_from_iterating_over_all_tokens(&self) -> SpanRange;
@@ -216,6 +295,7 @@ macro_rules! impl_auto_span_range {
 impl_auto_span_range! {
     syn::BinOp,
     syn::UnOp,
+    syn::token::Dot,
     syn::token::DotDot,
     syn::token::DotDotEq,
     syn::token::Shl,

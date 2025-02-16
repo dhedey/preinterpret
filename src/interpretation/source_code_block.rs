@@ -3,21 +3,21 @@ use crate::internal_prelude::*;
 /// A group `{ ... }` representing code which can be interpreted
 #[derive(Clone)]
 pub(crate) struct SourceCodeBlock {
-    delim_span: DelimSpan,
+    braces: Braces,
     inner: SourceStream,
 }
 
 impl Parse<Source> for SourceCodeBlock {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
-        let (delim_span, content) = input.parse_specific_group(Delimiter::Brace)?;
-        let inner = content.parse_with_context(delim_span.join())?;
-        Ok(Self { delim_span, inner })
+        let (braces, content) = input.parse_braces()?;
+        let inner = content.parse_with_context(braces.join())?;
+        Ok(Self { braces, inner })
     }
 }
 
 impl HasSpan for SourceCodeBlock {
     fn span(&self) -> Span {
-        self.delim_span.join()
+        self.braces.span()
     }
 }
 
