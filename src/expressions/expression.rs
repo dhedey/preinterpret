@@ -30,7 +30,6 @@ impl InterpretToValue for &SourceExpression {
 pub(super) enum SourceExpressionLeaf {
     Command(Command),
     Variable(VariableIdentifier),
-    MarkedVariable(GroupedVariable),
     ExpressionBlock(ExpressionBlock),
     Value(ExpressionValue),
 }
@@ -40,7 +39,6 @@ impl HasSpanRange for SourceExpressionLeaf {
         match self {
             SourceExpressionLeaf::Command(command) => command.span_range(),
             SourceExpressionLeaf::Variable(variable) => variable.span_range(),
-            SourceExpressionLeaf::MarkedVariable(variable) => variable.span_range(),
             SourceExpressionLeaf::ExpressionBlock(block) => block.span_range(),
             SourceExpressionLeaf::Value(value) => value.span_range(),
         }
@@ -55,11 +53,13 @@ impl Expressionable for Source {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => UnaryAtom::Leaf(Self::Leaf::Command(input.parse()?)),
             SourcePeekMatch::Variable(Grouping::Grouped) => {
-                UnaryAtom::Leaf(Self::Leaf::MarkedVariable(input.parse()?))
+                return input.parse_err(
+                    "In an expression, the # variable prefix is not allowed. The # prefix should only be used when embedding a variable into an output stream.",
+                )
             }
             SourcePeekMatch::Variable(Grouping::Flattened) => {
                 return input.parse_err(
-                    "Remove the .. prefix. Flattened variables are not supported in an expression.",
+                    "In an expression, the #.. variable prefix is not allowed. The # prefix should only be used when embedding a variable into an output sream.",
                 )
             }
             SourcePeekMatch::ExpressionBlock(_) => {
@@ -195,9 +195,6 @@ impl Expressionable for Source {
         Ok(match leaf {
             SourceExpressionLeaf::Command(command) => {
                 command.clone().interpret_to_value(interpreter)?
-            }
-            SourceExpressionLeaf::MarkedVariable(variable) => {
-                variable.interpret_to_value(interpreter)?
             }
             SourceExpressionLeaf::Variable(variable_path) => {
                 variable_path.interpret_to_value(interpreter)?

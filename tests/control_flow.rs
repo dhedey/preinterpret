@@ -16,11 +16,11 @@ fn test_if() {
     preinterpret_assert_eq!([!if! (1 == 2) { "YES" } !else! { "NO" }], "NO");
     preinterpret_assert_eq!({
         #(let x = 1 == 2)
-        [!if! #x { "YES" } !else! { "NO" }]
+        [!if! x { "YES" } !else! { "NO" }]
     }, "NO");
     preinterpret_assert_eq!({
         #(let x = 1; let y = 2)
-        [!if! #x == #y { "YES" } !else! { "NO" }]
+        [!if! x == y { "YES" } !else! { "NO" }]
     }, "NO");
     preinterpret_assert_eq!({
         0
@@ -81,7 +81,7 @@ fn test_for() {
     preinterpret_assert_eq!(
         {
             [!string! [!for! x in 65..70 {
-                #(#x as u8 as char)
+                #(x as u8 as char)
             }]]
         },
         "ABCDE"

@@ -175,19 +175,11 @@ fn complex_cases_for_intersperse_and_input_types() {
         ),
         "A(0)B(1)C(2)D(3)E(4)F(5)G(6)",
     );
-    // Command can be used for items
-    preinterpret_assert_eq!(
-        #([!intersperse! {
-            items: 0..4,
-            separator: [!stream! _],
-        }] as stream as string),
-        "0_1_2_3"
-    );
     // Variable containing stream be used for items
     preinterpret_assert_eq!({
         [!set! #items = 0 1 2 3]
         #([!intersperse! {
-            items: #items,
+            items: items,
             separator: [!stream! _],
         }] as stream as string)
     }, "0_1_2_3");
@@ -195,7 +187,7 @@ fn complex_cases_for_intersperse_and_input_types() {
     preinterpret_assert_eq!({
         #(let items = 0..4)
         #([!intersperse! {
-            items: #items,
+            items: items,
             separator: [!stream! _],
         }] as stream as string)
     }, "0_1_2_3");
@@ -317,7 +309,7 @@ fn test_split() {
         [!set! #x = ;]
         [!debug! [!split! {
             stream: [!stream! ;A;;B;C;D #..x E;],
-            separator: #x,
+            separator: x,
             drop_empty_start: true,
             drop_empty_middle: true,
             drop_empty_end: true,
@@ -328,7 +320,7 @@ fn test_split() {
         [!set! #x = ;]
         [!debug! [!split! {
             stream: [!stream! ;A;;B;C;D #..x E;],
-            separator: #x,
+            separator: x,
             drop_empty_start: false,
             drop_empty_middle: false,
             drop_empty_end: false,
@@ -371,7 +363,7 @@ fn test_zip() {
             [!set! #flags = "🇫🇷" "🇩🇪" "🇮🇹"]
             [!set! #capitals = "Paris" "Berlin" "Rome"]
             [!debug! [!zip! {
-                streams: [#countries, #flags, #capitals],
+                streams: [countries, flags, capitals],
             }]]
         },
         r#"[["France", "🇫🇷", "Paris"], ["Germany", "🇩🇪", "Berlin"], ["Italy", "🇮🇹", "Rome"]]"#,
@@ -381,7 +373,7 @@ fn test_zip() {
             [!set! #longer = A B C D]
             [!set! #shorter = 1 2 3]
             [!debug! [!zip! {
-                streams: [#longer, #shorter],
+                streams: [longer, shorter],
                 error_on_length_mismatch: false,
             }]]
         },
@@ -392,7 +384,7 @@ fn test_zip() {
             [!set! #letters = A B C]
             #(let numbers = [1, 2, 3])
             [!debug! [!zip! {
-                streams: [#letters, #numbers],
+                streams: [letters, numbers],
             }]]
         },
         r#"[[[!stream! A], 1], [[!stream! B], 2], [[!stream! C], 3]]"#,
@@ -401,8 +393,8 @@ fn test_zip() {
         {
             [!set! #letters = A B C]
             #(let numbers = [1, 2, 3])
-            #(let combined = [#letters, #numbers])
-            [!debug! [!zip! #combined]]
+            #(let combined = [letters, numbers])
+            [!debug! [!zip! combined]]
         },
         r#"[[[!stream! A], 1], [[!stream! B], 2], [[!stream! C], 3]]"#,
     );
@@ -421,7 +413,7 @@ fn test_zip_with_for() {
             }]]
 
             #("The facts are:\n" + [!intersperse! {
-                items: #facts,
+                items: facts,
                 separator: ["\n"],
             }] as string + "\n")
         },

@@ -57,7 +57,7 @@ fn test_variable_parsing() {
                 #..>>..x // Matches stream and appends it flattened: do you agree ?
             )
             = Why Hello Everyone ([!group! This is an exciting adventure] do you agree?)]
-        [!debug! #x]
+        [!debug! x]
     }, "[!stream! Why [!group! Hello Everyone] This is an exciting adventure do you agree ?]");
 }
 
@@ -78,7 +78,7 @@ fn test_ident_transformer() {
     preinterpret_assert_eq!({
         [!set! #x =]
         [!let! The quick @(#x += @IDENT) fox jumps @(#x += @IDENT) the lazy dog = The quick brown fox jumps over the lazy dog]
-        [!debug! #x]
+        [!debug! x]
     }, "[!stream! brown over]");
 }
 
@@ -92,7 +92,7 @@ fn test_literal_transformer() {
     preinterpret_assert_eq!({
         [!set! #x]
         [!let! @LITERAL @LITERAL @LITERAL @(#x += @LITERAL) @LITERAL @(#x += @LITERAL @LITERAL) = "Hello" 9 3.4 'c' 41u16 0b1010 r#"123"#]
-        [!debug! #x]
+        [!debug! x]
     }, "[!stream! 'c' 0b1010 r#\"123\"#]");
 }
 
@@ -100,7 +100,7 @@ fn test_literal_transformer() {
 fn test_punct_transformer() {
     preinterpret_assert_eq!({
         [!let! The "quick" brown fox "jumps" @(#x = @PUNCT) = The "quick" brown fox "jumps"!]
-        [!debug! #x]
+        [!debug! x]
     }, "[!stream! !]");
     // Test for ' which is treated weirdly by syn / rustc
     preinterpret_assert_eq!({
@@ -111,7 +111,7 @@ fn test_punct_transformer() {
     preinterpret_assert_eq!({
         [!set! #x =]
         [!let! @PUNCT @PUNCT @PUNCT @PUNCT @(#x += @PUNCT) @PUNCT @PUNCT @PUNCT @PUNCT @PUNCT @(#x += @PUNCT) @PUNCT @PUNCT @PUNCT  = # ! $$ % ^ & * + = | @ : ;]
-        [!debug! #x]
+        [!debug! x]
     }, "[!stream! % |]");
 }
 
@@ -119,18 +119,18 @@ fn test_punct_transformer() {
 fn test_group_transformer() {
     preinterpret_assert_eq!({
         [!let! The "quick" @[GROUP brown #x] "jumps" = The "quick" [!group! brown fox] "jumps"]
-        [!debug! #x]
+        [!debug! x]
     }, "[!stream! fox]");
     preinterpret_assert_eq!({
         [!set! #x = "hello" "world"]
         [!let! I said @[GROUP #..y]! = I said #x!]
-        [!debug! #y]
+        [!debug! y]
     }, "[!stream! \"hello\" \"world\"]");
     // ... which is equivalent to this:
     preinterpret_assert_eq!({
         [!set! #x = "hello" "world"]
         [!let! I said #y! = I said #x!]
-        [!debug! #y]
+        [!debug! y]
     }, "[!stream! \"hello\" \"world\"]");
 }
 

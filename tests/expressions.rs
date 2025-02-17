@@ -37,7 +37,7 @@ fn test_basic_evaluate_works() {
     preinterpret_assert_eq!(#(123 != 456), true);
     preinterpret_assert_eq!(#(123 >= 456), false);
     preinterpret_assert_eq!(#(123 > 456), false);
-    preinterpret_assert_eq!(#(let six_as_sum = 3 + 3; #six_as_sum * #six_as_sum), 36);
+    preinterpret_assert_eq!(#(let six_as_sum = 3 + 3; six_as_sum * six_as_sum), 36);
     preinterpret_assert_eq!(#(
         let partial_sum = [!stream! + 2];
         [!debug! [!stream! #([!stream! 5] + partial_sum) =] + [!reinterpret! [!raw! #](5 #..partial_sum)]]
@@ -106,7 +106,7 @@ fn boolean_operators_short_circuit() {
         #(
             let is_lazy = true;
             let _ = false && #(is_lazy = false; true);
-            #is_lazy
+            is_lazy
         ),
         true
     );
@@ -115,7 +115,7 @@ fn boolean_operators_short_circuit() {
         #(
             let is_lazy = true;
             let _ = true || #(is_lazy = false; true);
-            #is_lazy
+            is_lazy
         ),
         true
     );
@@ -124,7 +124,7 @@ fn boolean_operators_short_circuit() {
         #(
             let is_lazy = true;
             let _ = false & #(is_lazy = false; true);
-            #is_lazy
+            is_lazy
         ),
         false
     );
@@ -135,7 +135,7 @@ fn assign_works() {
     preinterpret_assert_eq!(
         #(
             let x = 5 + 5;
-            [!debug! #x]
+            [!debug! x]
         ),
         "10"
     );
@@ -143,8 +143,8 @@ fn assign_works() {
         #(
             let x = 10;
             x /= 1 + 1;  // 10 / (1 + 1)
-            x += 2 + #x; // 5 + (2 + 5)
-            #x
+            x += 2 + x; // 5 + (2 + 5)
+            x
         ),
         12
     );
@@ -153,8 +153,8 @@ fn assign_works() {
     preinterpret_assert_eq!(
         #(
             let x = 2;
-            x += #x;
-            #x
+            x += x;
+            x
         ),
         4
     );

@@ -1,8 +1,8 @@
 error: Cannot infer common type from stream != untyped integer. Consider using `as` to cast the operands to matching types.
-  --> tests/compilation_failures/core/error_span_repeat.rs:6:30
+  --> tests/compilation_failures/core/error_span_repeat.rs:6:28
    |
-6  |         [!if! (#input_length != 3) {
-   |                              ^^
+6  |         [!if! input_length != 3 {
+   |                            ^^
 ...
 16 |     assert_input_length_of_3!(42 101 666 1024);
    |     ------------------------------------------ in this macro invocation
