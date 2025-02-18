@@ -106,19 +106,16 @@ Inside a transform stream, the following grammar is supported:
   * Can be destructured with `{ hello, world: _, ... }`
   * Throws if output to a stream
   * Have `!zip!` support `{ objects }`
-* Method calls
-  * Mutable methods notes:
-    * They require either:
-      * Reference semantics (e.g. using `Rc<RefCell<X>>` inside Object, Array) with explicit cloning
-      * AND/OR Place semantics (e.g. each type supports being either a value or a reference to a path, so that an operator e.g. `+` can mutate)
-    * I think we want reference semantics for object and array anyway. Unclear for stream.
-      * Ideally we'd arrange it so that `x += ["Hello"] + ["World]` would append Hello and World; but `x += (["Hello"] + ["World])` would behave differently.
-      * I think that means that `+=` becomes an operator inside an expression, and its LHS is a `PlaceValue` (`PlaceValue::Stream` or `PlaceValue::Array`)
+* Method calls on values
+  * Mutable params notes:
+    * For now we can assume all params are values/clones, no mutable references
   * Also add support for methods (for e.g. exposing functions on syn objects).
   * `.len()` on stream
   * `.push(x)` on array
-  * Consider `.map(|<destructurer>| {})`
+  * Consider `.map(|<pattern>| {})`
 * Introduce interpreter stack frames
+  * Design the data model => is it some kind of linked list of frames?
+  * Add a new frame inside loops
   * Merge `GroupedVariable` and `ExpressionBlock` into an `ExplicitExpression`:
     * Either `#ident` or `#(...)` or `#{ ... }`...
       the latter defines a new variable stack frame, just like Rust
@@ -137,8 +134,7 @@ Inside a transform stream, the following grammar is supported:
       * `@(..)*` returns an array of some output of it's inner thing
       * But things don't output so what does that mean??
       * I think in practice it will be quite an annoying restriction anyway
-  * OLD: Support `@[x = ...]` and `@[let x = ...]` for individual parsers.
-    * CHANGE OF THOUGHT: instead, support `#(x = @IDENT)` where `#` blocks inside parsers can embed @parsers and consume from a parse stream.
+  * Support `#(x = @IDENT)` where `#` blocks inside parsers can embed @parsers and consume from a parse stream.
     * This makes it kinda like a `Parse` implementation code block.
     * This lets us just support variable definitions in expression statements.
   * Don't support `@(x = ...)` - instead we can have `#(x = @[STREAM ...])`
@@ -260,9 +256,12 @@ Inside a transform stream, the following grammar is supported:
 //   * There is still an issue with "what happens to mutated state when a repetition is not possible?"
 //     ... this is also true in a case statement... We need some way to rollback in these cases:
 //     => Easier - Use of efficient-ish immutable data structures, e.g. ImmutableList, Copy-on-write leaf types etc
-//        ... so that we can clone them cheaply (e.g. https://crates.io/crates/im-rc)
-//     => Middle (best?) - Any changes to variables outside the scope of a given refutable parser => it's a fatal error
-//        to parse further until that scope is closed. (this needs to handle nested repetitions)
+//        ... so that we can clone them cheaply (e.g. https://crates.io/crates/im-rc) or even just
+//        some manually written tries/cons-lists
+//     => CoW - We do some kind of copy-on-write - but it still give O(N^2) if we're reverting occasional array.push(..)es
+// [BEST]? => Middle - Any changes to variables outside the scope of a given refutable parser => it's a fatal error
+//        to parse further until that scope is closed. (this needs to handle nested repetitions).
+//       [EASIEST?] OR conversely - at reversion time, we check there have been no changes to variables below that depth in the stack tree (say by recording a "lowest_stack_touched: usize"), and panic if so; and tell people to use `return` instead; or move state changes to the end.
 //     => Hardest - Some kind of storing of diffs / layered stores without any O(N^2) behaviours
 //
 // EXAMPLE (Updated, 17th February)

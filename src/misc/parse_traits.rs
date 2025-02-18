@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 use crate::internal_prelude::*;
 
 // Parsing of source code tokens
@@ -259,7 +257,7 @@ impl<'a, K> ParseBuffer<'a, K> {
     }
 
     pub(crate) fn parse_ident_matching(&self, content: &str) -> ParseResult<Ident> {
-        Ok(self.step(|cursor| {
+        Ok(self.inner.step(|cursor| {
             cursor
                 .ident_matching(content)
                 .ok_or_else(|| cursor.span().error(format!("expected {}", content)))
@@ -271,7 +269,7 @@ impl<'a, K> ParseBuffer<'a, K> {
     }
 
     pub(crate) fn parse_punct_matching(&self, punct: char) -> ParseResult<Punct> {
-        Ok(self.step(|cursor| {
+        Ok(self.inner.step(|cursor| {
             cursor
                 .punct_matching(punct)
                 .ok_or_else(|| cursor.span().error(format!("expected {}", punct)))
@@ -283,7 +281,7 @@ impl<'a, K> ParseBuffer<'a, K> {
     }
 
     pub(crate) fn parse_literal_matching(&self, content: &str) -> ParseResult<Literal> {
-        Ok(self.step(|cursor| {
+        Ok(self.inner.step(|cursor| {
             cursor
                 .literal_matching(content)
                 .ok_or_else(|| cursor.span().error(format!("expected {}", content)))
@@ -292,7 +290,7 @@ impl<'a, K> ParseBuffer<'a, K> {
 
     pub(crate) fn parse_any_group(&self) -> ParseResult<(Delimiter, DelimSpan, ParseBuffer<K>)> {
         use syn::parse::discouraged::AnyDelimiter;
-        let (delimiter, delim_span, parse_buffer) = self.parse_any_delimiter()?;
+        let (delimiter, delim_span, parse_buffer) = self.inner.parse_any_delimiter()?;
         Ok((delimiter, delim_span, parse_buffer.into()))
     }
 
@@ -347,6 +345,13 @@ impl<'a, K> ParseBuffer<'a, K> {
         Ok((TransparentDelimiters { delim_span }, inner))
     }
 
+    pub(crate) fn advance_to(&self, fork: &Self) {
+        self.inner.advance_to(&fork.inner)
+    }
+
+    // ERRORS
+    // ======
+
     pub(crate) fn parse_err<T>(&self, message: impl std::fmt::Display) -> ParseResult<T> {
         Err(self.parse_error(message))
     }
@@ -354,12 +359,37 @@ impl<'a, K> ParseBuffer<'a, K> {
     pub(crate) fn parse_error(&self, message: impl std::fmt::Display) -> ParseError {
         self.span().parse_error(message)
     }
-}
 
-impl<'a, K> Deref for ParseBuffer<'a, K> {
-    type Target = SynParseBuffer<'a>;
+    // Pass-throughs to SynParseBuffer
+    // ===============================
 
-    fn deref(&self) -> &Self::Target {
-        &self.inner
+    pub(crate) fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    pub(crate) fn cursor(&self) -> syn::buffer::Cursor<'a> {
+        self.inner.cursor()
+    }
+
+    pub(crate) fn span(&self) -> Span {
+        self.inner.span()
+    }
+
+    pub(crate) fn peek(&self, token: impl syn::parse::Peek) -> bool {
+        self.inner.peek(token)
+    }
+
+    pub(crate) fn peek2(&self, token: impl syn::parse::Peek) -> bool {
+        self.inner.peek2(token)
+    }
+
+    #[allow(unused)]
+    pub(crate) fn peek3(&self, token: impl syn::parse::Peek) -> bool {
+        self.inner.peek3(token)
+    }
+
+    /// End with `Err(lookahead.error())?`
+    pub(crate) fn lookahead1(&self) -> syn::parse::Lookahead1<'a> {
+        self.inner.lookahead1()
     }
 }
