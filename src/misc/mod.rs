@@ -1,10 +1,12 @@
 mod errors;
 mod field_inputs;
+mod mut_rc_ref_cell;
 mod parse_traits;
 mod string_conversion;
 
 pub(crate) use errors::*;
 pub(crate) use field_inputs::*;
+pub(crate) use mut_rc_ref_cell::*;
 pub(crate) use parse_traits::*;
 pub(crate) use string_conversion::*;
 
