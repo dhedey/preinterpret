@@ -96,21 +96,17 @@ Inside a transform stream, the following grammar is supported:
   * `@(inner = ...) [!stream! #inner]` - wraps the output in a transparent group
 
 ### To come
-* Support `#(x[..])` syntax for indexing arrays at read time (streams to follow in a separate task below after parsers are updated)
-  * `#(x[0..3])` returns an array
-  * `#(x[0..=3])` returns an array
 * Add `..` and `.., x` support to the array pattern, like the place expression.
+* More efficient `+=` etc
 * Objects, like a JS object:
   * Backed by an indexmap (or maybe an immutable `IndexMap` wrapping an `im::HashMap` and `im::Vec` or entry orderings)
   * Can be created with `#({ a: x, ... })`
   * Can be read with `#(x.hello)` or `#(x["hello"])`
   * Debug impl is `#({ hello: [!group! BLAH], ["#world"]: Hi, })`
-  * They have an input object
   * Fields can be read/written to with `#(x.hello)` or `#(x.hello.world)`
+  * Commands have an input object
   * Can be destructured with `{ hello, world: _, ... }`
-  * (Until we get custom type support into a syn fork), can be embedded into an output stream as a single token - e.g. `PREINTERPRET_OBJECT_2313`
-  (The value can be looked up via a weak reference in the interpreter (as a central location), and the stream owning a reference to it to stop it being dropped). The final conversion to tokens can look up the object in the interpreter, and use its `stream()` function to either output the default
-  stream for the object, or error and suggest fields the user should use instead.
+  * Throws if output to a stream
   * Have `!zip!` support `{ objects }`
 * Method calls
   * Mutable methods notes:

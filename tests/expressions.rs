@@ -222,7 +222,7 @@ fn test_range() {
 }
 
 #[test]
-fn test_indexing() {
+fn test_array_indexing() {
     preinterpret_assert_eq!(
         #(let x = [1, 2, 3]; x[1]), 2
     );
@@ -239,6 +239,53 @@ fn test_indexing() {
         ),
         "[2, 0, 2]"
     );
+    // And ranges...
+    preinterpret_assert_eq!(
+        #(
+            let x = [1, 2, 3, 4, 5];
+            x[..] as debug
+        ),
+        "[1, 2, 3, 4, 5]"
+    );
+    preinterpret_assert_eq!(
+        #(
+            let x = [1, 2, 3, 4, 5];
+            x[0..0] as debug
+        ),
+        "[]"
+    );
+    preinterpret_assert_eq!(
+        #(
+            let x = [1, 2, 3, 4, 5];
+            x[2..=2] as debug
+        ),
+        "[3]"
+    );
+    preinterpret_assert_eq!(
+        #(
+            let x = [1, 2, 3, 4, 5];
+            x[..=2] as debug
+        ),
+        "[1, 2, 3]"
+    );
+    preinterpret_assert_eq!(
+        #(
+            let x = [1, 2, 3, 4, 5];
+            x[..4] as debug
+        ),
+        "[1, 2, 3, 4]"
+    );
+    preinterpret_assert_eq!(
+        #(
+            let x = [1, 2, 3, 4, 5];
+            x[2..] as debug
+        ),
+        "[3, 4, 5]"
+    );
+}
+
+#[test]
+fn test_array_destructurings() {
     // And array destructuring
     preinterpret_assert_eq!(
         #(
