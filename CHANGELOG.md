@@ -96,90 +96,22 @@ Inside a transform stream, the following grammar is supported:
   * `@(inner = ...) [!stream! #inner]` - wraps the output in a transparent group
 
 ### To come
-
-* Merge `GroupedVariable` and `ExpressionBlock` into an `ExplicitExpression`:
-  * Either `#ident` or `#(...)` or `#{ ... }`...
-    the latter defines a new variable stack frame, just like Rust
-  * To avoid confusion (such as below) and teach the user to only include #var where
-    necessary, only expression _blocks_ are allowed in an expression.
-    * Confusion example: `let x; x = #(let x = 123; 5)`. This isn't allowed in normal
-      rust because the inside is a `{ .. }` which defines a new scope.
 * Support `#(x[..])` syntax for indexing arrays at read time (streams to follow in a separate task below after parsers are updated)
   * `#(x[0..3])` returns an array
   * `#(x[0..=3])` returns an array
-  * ... and `#(x[0] = y)` can be used to set the item
-  * Considering allowing assignments inside an expression
-    * Implementation notes:
-      * Separate `VariableData` and `VariableReference`, separate `let` and `set`
-      * Three separate stacks for various calculations in evaluation
-    * `let XX =` and `YY += y` are actually totally different...
-      * With `let XX =`, `XX` is a _pattern_ and creates new variables.
-      * With `YY += y` we're inside an expression already, and it only works with existing variables. The expression `YY` is converted into a destructuring at execution time.
-      Note that the value side always executes first, before the place is executed.
-    * Implementation realisations:
-      * Rust reference very good: https://doc.rust-lang.org/reference/expressions.html#place-expressions-and-value-expressions
-      * For the += operators etc:
-        * The left hand side must resolve to a _single_ VariableData, e.g. `z` or
-          `x.y["z"]`
-        * In the rust reference, this is a "Place Expression"
-        * We will have a `handle_assign_paired_binary_operation(&mut self, operation, other: Self)` (which for value types can resolve to the non-assign version)
-      * For the = operator:
-        * The left hand side will resolve non-Variable expressions, and be effectively
-          left with something which can form a destructuring of the right hand side.
-          e.g. `[x.y, z[x.a][12]] = [1, 2]`
-        * In the rust reference, this is an "Assignee Expression" and is a generalization
-          of place expressions
-    * Test cases:
-```rust
-    // These examples should compile:
-    let mut a = [0; 5];
-    let mut b: u32 = 3;
-    let c;
-    let out = c = (a[2], _) = (4, 5);
-    let out = a[1] += 2;
-    let out = b = 2;
-    // In the below, a = [0, 5], showing the right side executes first
-    let mut a = [0; 2];
-    let mut b = 0;
-    a[b] += { b += 1; 5 };
-    // This works:
-    let (x, y);
-    [x, .., y] = [1, 2, 3, 4]; // x = 1, y = 4
-    // This works...
-    // In other words, the assignee operation is executed incrementally,
-    // The first assignment arr[0] = 1 occurs before being overwritten by
-    // the arr[0] = 5 in the second section.
-    let mut arr = [0; 2];
-    (arr[0], arr[{arr[0] = 5; 1}]) = (1, 1);
-    assert_eq!(arr, [5, 1]);
-    // This doesn't work - two errors:
-    // error[E0308]: mismatched types: expected `[{integer}]`, found `[{integer}; 4]`
-    // error[E0277]: the size for values of type `[{integer}]` cannot be known at compilation time
-    // (it looks like you can't just overwrite array subslices)
-    let arr = [0; 5];
-    arr[1..=4] = [1, 2, 3, 4];
-    // This doesn't work.
-    // error[E0368]: binary assignment operation `+=` cannot be applied to type `({integer}, {integer})`
-    // https://doc.rust-lang.org/error_codes/E0368.html
-    let (a, b) = (1, 1);
-    (a, b) += (1, 2);
-```
-* Variable typing (stream / value / object to start with), including an `object` type, like a JS object:
-  * Objects:
-    * Backed by an indexmap
-    * Can be created with `#({ a: x, ... })`
-    * Can be read with `#(x.hello)` or `#(x["hello"])`
-    * Debug impl is `#({ hello: [!group! BLAH], ["#world"]: Hi, })`
-    * They have an input object
-    * Fields can be read/written to with `#(x.hello)` or `#(x.hello.world)`
-    * Can be destructured with `{ hello, world: _, ... }`
-    * (Until we get custom type support into a syn fork), can be embedded into an output stream as a single token - e.g. `PREINTERPRET_OBJECT_2313`
-    (The value can be looked up via a weak reference in the interpreter (as a central location), and the stream owning a reference to it to stop it being dropped). The final conversion to tokens can look up the object in the interpreter, and use its `stream()` function to either output the default
-    stream for the object, or error and suggest fields the user should use instead.
-    * Have `!zip!` support `{ objects }` 
-  * Values:
-    * When we parse a `#x` (`@(x = INFER_TOKEN_TREE)`) binding, it tries to parse a stream as a value before interpreting a `[!group! ...]` as a stream.
-    * Output to final output as unwrapped content
+* Add `..` and `.., x` support to the array pattern, like the place expression.
+* Objects, like a JS object:
+  * Backed by an indexmap (or maybe an immutable `IndexMap` wrapping an `im::HashMap` and `im::Vec` or entry orderings)
+  * Can be created with `#({ a: x, ... })`
+  * Can be read with `#(x.hello)` or `#(x["hello"])`
+  * Debug impl is `#({ hello: [!group! BLAH], ["#world"]: Hi, })`
+  * They have an input object
+  * Fields can be read/written to with `#(x.hello)` or `#(x.hello.world)`
+  * Can be destructured with `{ hello, world: _, ... }`
+  * (Until we get custom type support into a syn fork), can be embedded into an output stream as a single token - e.g. `PREINTERPRET_OBJECT_2313`
+  (The value can be looked up via a weak reference in the interpreter (as a central location), and the stream owning a reference to it to stop it being dropped). The final conversion to tokens can look up the object in the interpreter, and use its `stream()` function to either output the default
+  stream for the object, or error and suggest fields the user should use instead.
+  * Have `!zip!` support `{ objects }`
 * Method calls
   * Mutable methods notes:
     * They require either:
@@ -192,6 +124,14 @@ Inside a transform stream, the following grammar is supported:
   * `.len()` on stream
   * `.push(x)` on array
   * Consider `.map(|<destructurer>| {})`
+* Introduce interpreter stack frames
+  * Merge `GroupedVariable` and `ExpressionBlock` into an `ExplicitExpression`:
+    * Either `#ident` or `#(...)` or `#{ ... }`...
+      the latter defines a new variable stack frame, just like Rust
+    * To avoid confusion (such as below) and teach the user to only include #var where
+      necessary, only expression _blocks_ are allowed in an expression.
+      * Confusion example: `let x; x = #(let x = 123; 5)`. This isn't allowed in normal
+        rust because the inside is a `{ .. }` which defines a new scope.
 * TRANSFORMERS => PARSERS cont
   * Re-read the `Parsers Revisited` section below
   * Manually search for transform and rename to parse in folder names and file.
@@ -242,7 +182,6 @@ Inside a transform stream, the following grammar is supported:
   * `#(x[0])` returns the item at that position of the array / OR the value at that position of the stream (using `INFER_TOKEN_TREE`)
   * `#(x[0..3])` returns a TokenStream
   * `#(x[0..=3])` returns a TokenStream
-* Add `..` and `.., x` support to the array pattern
 * Consider:
   * Moving control flow (`for` and `while`) to the expression side?
   * Dropping lots of the `group` wrappers?

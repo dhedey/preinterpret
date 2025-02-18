@@ -229,4 +229,98 @@ fn test_indexing() {
     preinterpret_assert_eq!(
         #(let x = [1, 2, 3]; x[x[0] + x[x[1] - 1] - 1]), 3
     );
+    // And setting indices...
+    preinterpret_assert_eq!(
+        #(
+            let x = [0, 0, 0];
+            x[0] = 2;
+            (x[1 + 1]) = x[0];
+            x as debug
+        ),
+        "[2, 0, 2]"
+    );
+    // And array destructuring
+    preinterpret_assert_eq!(
+        #(
+            let a = 0; let b = 0; let c = 0;
+            let x = [1, 2, 3, 4, 5];
+            [a, b, _, _, c] = x;
+            [a, b, c] as debug
+        ),
+        "[1, 2, 5]"
+    );
+    preinterpret_assert_eq!(
+        #(
+            let a = 0; let b = 0; let c = 0;
+            let x = [1, 2, 3, 4, 5];
+            [a, b, c, ..] = x;
+            [a, b, c] as debug
+        ),
+        "[1, 2, 3]"
+    );
+    preinterpret_assert_eq!(
+        #(
+            let a = 0; let b = 0; let c = 0;
+            let x = [1, 2, 3, 4, 5];
+            [.., a, b] = x;
+            [a, b, c] as debug
+        ),
+        "[4, 5, 0]"
+    );
+    preinterpret_assert_eq!(
+        #(
+            let a = 0; let b = 0; let c = 0;
+            let x = [1, 2, 3, 4, 5];
+            [a, .., b, c] = x;
+            [a, b, c] as debug
+        ),
+        "[1, 4, 5]"
+    );
+    // Nested places
+    preinterpret_assert_eq!(
+        #(
+            let out = [[0, 0], 0];
+            let a = 0; let b = 0; let c = 0;
+            [out[1], .., out[0][0], out[0][1]] = [1, 2, 3, 4, 5];
+            out as debug
+        ),
+        "[[4, 5], 1]"
+    );
+    // Misc
+    preinterpret_assert_eq!(
+        #(
+            let a = [0, 0, 0, 0, 0];
+            let b = 3;
+            let c = 0;
+            let _ = c = [a[2], _] = [4, 5];
+            let _ = a[1] += 2;
+            let _ = b = 2;
+            [a, b, c] as debug
+        ),
+        "[[0, 2, 4, 0, 0], 2, None]"
+    );
+    // This test demonstrates that the right side executes first.
+    // This aligns with the rust behaviour.
+    preinterpret_assert_eq!(
+        #(
+            let a = [0, 0];
+            let b = 0;
+            a[b] += #(b += 1; 5);
+            a as debug
+        ),
+        "[0, 5]"
+    );
+    // This test demonstrates that the assignee operation is executed
+    // incrementally, to align with the rust behaviour.
+    preinterpret_assert_eq!(
+        #(
+            let arr = [0, 0];
+            let arr2 = [0, 0];
+            // The first assignment arr[0] = 1 occurs before being overwritten
+            // by the arr[0] = 5 in the second index.
+            [arr[0], arr2[#(arr[0] = 5; 1)]] = [1, 1];
+            arr[0]
+        ),
+        5
+    );
 }

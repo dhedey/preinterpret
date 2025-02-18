@@ -88,8 +88,11 @@ impl SpanRange {
         }
     }
 
-    pub(crate) fn new_between(start: Span, end: Span) -> Self {
-        Self { start, end }
+    pub(crate) fn new_between(start: impl HasSpanRange, end: impl HasSpanRange) -> Self {
+        Self {
+            start: start.span_range().start,
+            end: end.span_range().end,
+        }
     }
 
     fn create_error(&self, message: impl std::fmt::Display) -> syn::Error {
@@ -295,6 +298,7 @@ macro_rules! impl_auto_span_range {
 impl_auto_span_range! {
     syn::BinOp,
     syn::UnOp,
+    syn::token::Underscore,
     syn::token::Dot,
     syn::token::DotDot,
     syn::token::DotDotEq,

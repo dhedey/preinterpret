@@ -379,13 +379,20 @@ impl ExpressionValue {
         }
     }
 
-    pub(super) fn handle_index_access(
-        self,
+    pub(super) fn into_indexed(self, access: IndexAccess, index: Self) -> ExecutionResult<Self> {
+        match self {
+            ExpressionValue::Array(array) => array.into_indexed(access, index),
+            other => access.execution_err(format!("Cannot index into a {}", other.value_type())),
+        }
+    }
+
+    pub(crate) fn index_mut(
+        &mut self,
         access: IndexAccess,
         index: Self,
-    ) -> ExecutionResult<Self> {
+    ) -> ExecutionResult<&mut Self> {
         match self {
-            ExpressionValue::Array(array) => array.handle_index_access(access, index),
+            ExpressionValue::Array(array) => array.index_mut(access, index),
             other => access.execution_err(format!("Cannot index into a {}", other.value_type())),
         }
     }

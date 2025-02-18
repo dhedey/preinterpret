@@ -17,6 +17,7 @@ mod value;
 pub(crate) use expression::*;
 pub(crate) use expression_block::*;
 pub(crate) use iterator::*;
+pub(crate) use operations::*;
 pub(crate) use stream::*;
 pub(crate) use value::*;
 
@@ -29,6 +30,5 @@ use evaluation::*;
 use expression_parsing::*;
 use float::*;
 use integer::*;
-use operations::*;
 use range::*;
 use string::*;

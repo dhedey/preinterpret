@@ -1,0 +1,5 @@
+error: Cannot index into a discarded value
+ --> tests/compilation_failures/expressions/index_into_discarded_place.rs:5:12
+  |
+5 |         #(_[0] = 10)
+  |            ^^^

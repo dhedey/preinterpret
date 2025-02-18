@@ -257,16 +257,18 @@ impl HasValueType for UntypedInteger {
 pub(crate) struct UntypedInteger(
     /// The span of the literal is ignored, and will be set when converted to an output.
     syn::LitInt,
+    SpanRange,
 );
 pub(crate) type FallbackInteger = i128;
 
 impl UntypedInteger {
     pub(super) fn new_from_lit_int(lit_int: LitInt) -> Self {
-        Self(lit_int)
+        let span_range = lit_int.span().span_range();
+        Self(lit_int, span_range)
     }
 
     pub(super) fn new_from_literal(literal: Literal) -> Self {
-        Self(syn::LitInt::from(literal))
+        Self::new_from_lit_int(literal.into())
     }
 
     pub(super) fn handle_unary_operation(
@@ -434,7 +436,7 @@ impl UntypedInteger {
 
     pub(super) fn parse_fallback(&self) -> ExecutionResult<FallbackInteger> {
         self.0.base10_digits().parse().map_err(|err| {
-            self.0.span().execution_error(format!(
+            self.1.execution_error(format!(
                 "Could not parse as the default inferred type {}: {}",
                 core::any::type_name::<FallbackInteger>(),
                 err
@@ -448,7 +450,7 @@ impl UntypedInteger {
         N::Err: core::fmt::Display,
     {
         self.0.base10_digits().parse().map_err(|err| {
-            self.0.span().execution_error(format!(
+            self.1.execution_error(format!(
                 "Could not parse as {}: {}",
                 core::any::type_name::<N>(),
                 err
@@ -462,7 +464,8 @@ impl UntypedInteger {
 }
 
 impl ToExpressionValue for UntypedInteger {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
+    fn to_value(mut self, span_range: SpanRange) -> ExpressionValue {
+        self.1 = span_range;
         ExpressionValue::Integer(ExpressionInteger {
             value: ExpressionIntegerValue::Untyped(self),
             span_range,

@@ -189,25 +189,29 @@ impl HandleTransformation for VariableBinding {
                 let reference = self.reference(interpreter)?;
                 input
                     .parse::<ParsedTokenTree>()?
-                    .push_as_token_tree(reference.get_value_stream_mut()?.deref_mut());
+                    .push_as_token_tree(reference.into_mut()?.into_stream()?.value_mut());
             }
             VariableBinding::GroupedAppendFlattened { .. } => {
                 let reference = self.reference(interpreter)?;
                 input
                     .parse::<ParsedTokenTree>()?
-                    .flatten_into(reference.get_value_stream_mut()?.deref_mut());
+                    .flatten_into(reference.into_mut()?.into_stream()?.value_mut());
             }
             VariableBinding::FlattenedAppendGrouped { marker, until, .. } => {
                 let reference = self.reference(interpreter)?;
-                reference.get_value_stream_mut()?.push_grouped(
-                    |inner| until.handle_parse_into(input, inner),
-                    Delimiter::None,
-                    marker.span,
-                )?;
+                reference
+                    .into_mut()?
+                    .into_stream()?
+                    .value_mut()
+                    .push_grouped(
+                        |inner| until.handle_parse_into(input, inner),
+                        Delimiter::None,
+                        marker.span,
+                    )?;
             }
             VariableBinding::FlattenedAppendFlattened { until, .. } => {
                 let reference = self.reference(interpreter)?;
-                until.handle_parse_into(input, reference.get_value_stream_mut()?.deref_mut())?;
+                until.handle_parse_into(input, reference.into_mut()?.into_stream()?.value_mut())?;
             }
         }
         Ok(())

@@ -1,100 +1,297 @@
 use super::*;
 
-pub(super) struct ExpressionEvaluator<'a, K: Expressionable> {
-    nodes: &'a [ExpressionNode<K>],
-    operation_stack: Vec<EvaluationStackFrame>,
+pub(super) use inner::ExpressionEvaluator;
+
+/// This is to hide implementation details to protect the abstraction and make it harder to make mistakes.
+mod inner {
+    use super::*;
+
+    pub(in super::super) struct ExpressionEvaluator<'a, K: Expressionable> {
+        nodes: &'a [ExpressionNode<K>],
+        stacks: Stacks,
+    }
+
+    impl<'a> ExpressionEvaluator<'a, Source> {
+        pub(in super::super) fn new(nodes: &'a [ExpressionNode<Source>]) -> Self {
+            Self {
+                nodes,
+                stacks: Stacks::new(),
+            }
+        }
+
+        pub(in super::super) fn evaluate(
+            mut self,
+            root: ExpressionNodeId,
+            interpreter: &mut Interpreter,
+        ) -> ExecutionResult<ExpressionValue> {
+            let mut next_action = NextActionInner::ReadNodeAsValue(root);
+
+            loop {
+                match self.step(next_action, interpreter)? {
+                    StepResult::Continue(continue_action) => {
+                        next_action = continue_action.0;
+                    }
+                    StepResult::Return(value) => {
+                        return Ok(value);
+                    }
+                }
+            }
+        }
+
+        fn step(
+            &mut self,
+            action: NextActionInner,
+            interpreter: &mut Interpreter,
+        ) -> ExecutionResult<StepResult> {
+            Ok(StepResult::Continue(match action {
+                NextActionInner::ReadNodeAsValue(node) => self.nodes[node.0]
+                    .handle_as_value(interpreter, self.stacks.creator(ReturnMode::Value))?,
+                NextActionInner::HandleReturnedValue(value) => {
+                    let top_of_stack = match self.stacks.value_stack.pop() {
+                        Some(top) => top,
+                        None => {
+                            debug_assert!(self.stacks.assignment_stack.is_empty(), "Evaluation completed with none-empty assignment stack - there's some bug in the ExpressionEvaluator");
+                            debug_assert!(self.stacks.place_stack.is_empty(), "Evaluation completed with none-empty place stack - there's some bug in the ExpressionEvaluator");
+                            return Ok(StepResult::Return(value));
+                        }
+                    };
+                    let next_creator = self.stacks.creator(top_of_stack.ultimate_return_mode());
+                    top_of_stack.handle_value(value, next_creator)?
+                }
+                NextActionInner::ReadNodeAsAssignee(node, value) => self.nodes[node.0]
+                    .handle_as_assignee(
+                        self.nodes,
+                        node,
+                        value,
+                        interpreter,
+                        self.stacks.creator(ReturnMode::AssignmentCompletion),
+                    )?,
+                NextActionInner::HandleAssignmentComplete(assignment_complete) => {
+                    let top_of_stack = match self.stacks.assignment_stack.pop() {
+                        Some(top) => top,
+                        None => unreachable!("Received AssignmentComplete without any assignment stack frames - there's some bug in the ExpressionEvaluator"),
+                    };
+                    let next_creator = self.stacks.creator(top_of_stack.ultimate_return_mode());
+                    top_of_stack.handle_assignment_complete(assignment_complete, next_creator)?
+                }
+                NextActionInner::ReadNodeAsPlace(node) => self.nodes[node.0]
+                    .handle_as_place(interpreter, self.stacks.creator(ReturnMode::Place))?,
+                NextActionInner::HandleReturnedPlace(place) => {
+                    let top_of_stack = match self.stacks.place_stack.pop() {
+                        Some(top) => top,
+                        None => unreachable!("Received Place without any place stack frames - there's some bug in the ExpressionEvaluator"),
+                    };
+                    let next_creator = self.stacks.creator(top_of_stack.ultimate_return_mode());
+                    top_of_stack.handle_place(place, next_creator)?
+                }
+            }))
+        }
+    }
+
+    /// See the [rust reference] for a good description of assignee vs place.
+    ///
+    /// [rust reference]: https://doc.rust-lang.org/reference/expressions/assignment-expressions.html#assignee-vs-place
+    pub(super) struct Stacks {
+        /// The stack of operations which will output a value
+        value_stack: Vec<ValueStackFrame>,
+        /// The stack of operations which will handle an assignment completion
+        assignment_stack: Vec<AssignmentStackFrame>,
+        /// The stack of operations which will output a place
+        place_stack: Vec<PlaceStackFrame>,
+    }
+
+    impl Stacks {
+        pub(super) fn new() -> Self {
+            Self {
+                value_stack: Vec::new(),
+                assignment_stack: Vec::new(),
+                place_stack: Vec::new(),
+            }
+        }
+
+        fn creator(&mut self, return_mode: ReturnMode) -> ActionCreator {
+            ActionCreator {
+                stacks: self,
+                return_mode,
+            }
+        }
+    }
+
+    pub(super) enum StepResult {
+        Continue(NextAction),
+        Return(ExpressionValue),
+    }
+
+    pub(super) struct NextAction(NextActionInner);
+
+    enum NextActionInner {
+        /// Enters an expression node to output a value
+        ReadNodeAsValue(ExpressionNodeId),
+        HandleReturnedValue(ExpressionValue),
+        // Enters an expression node for assignment purposes
+        ReadNodeAsAssignee(ExpressionNodeId, ExpressionValue),
+        HandleAssignmentComplete(AssignmentCompletion),
+        // Enters an expression node to output a place
+        ReadNodeAsPlace(ExpressionNodeId),
+        HandleReturnedPlace(Place),
+    }
+
+    impl From<NextActionInner> for NextAction {
+        fn from(value: NextActionInner) -> Self {
+            Self(value)
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub(super) enum ReturnMode {
+        Value,
+        AssignmentCompletion,
+        Place,
+    }
+
+    pub(super) struct ActionCreator<'a> {
+        stacks: &'a mut Stacks,
+        return_mode: ReturnMode,
+    }
+
+    impl ActionCreator<'_> {
+        pub(super) fn return_value(self, value: ExpressionValue) -> NextAction {
+            debug_assert_eq!(
+                self.return_mode,
+                ReturnMode::Value,
+                "This handler claimed to ultimately return {:?}, but it returned a value",
+                self.return_mode
+            );
+            NextActionInner::HandleReturnedValue(value).into()
+        }
+
+        pub(super) fn read_value_with_handler(
+            self,
+            node: ExpressionNodeId,
+            handler: ValueStackFrame,
+        ) -> NextAction {
+            debug_assert_eq!(
+                handler.ultimate_return_mode(),
+                self.return_mode,
+                "Handler is expected to return {:?}, but claims to ultimately return {:?}",
+                self.return_mode,
+                handler.ultimate_return_mode()
+            );
+            self.stacks.value_stack.push(handler);
+            NextActionInner::ReadNodeAsValue(node).into()
+        }
+
+        pub(super) fn return_place(self, place: Place) -> NextAction {
+            debug_assert_eq!(
+                self.return_mode,
+                ReturnMode::Place,
+                "This handler claimed to ultimately return {:?}, but it returned a place",
+                self.return_mode
+            );
+            NextActionInner::HandleReturnedPlace(place).into()
+        }
+
+        pub(super) fn read_place_with_handler(
+            self,
+            node: ExpressionNodeId,
+            handler: PlaceStackFrame,
+        ) -> NextAction {
+            debug_assert_eq!(
+                handler.ultimate_return_mode(),
+                self.return_mode,
+                "Handler is expected to return {:?}, but claims to ultimately return {:?}",
+                self.return_mode,
+                handler.ultimate_return_mode()
+            );
+            self.stacks.place_stack.push(handler);
+            NextActionInner::ReadNodeAsPlace(node).into()
+        }
+
+        /// The span range should cover from the start of the assignee to the end of the value
+        pub(super) fn return_assignment_completion(self, span_range: SpanRange) -> NextAction {
+            debug_assert_eq!(self.return_mode, ReturnMode::AssignmentCompletion, "This handler claimed to ultimately return {:?}, but it returned an assignment completion", self.return_mode);
+            NextActionInner::HandleAssignmentComplete(AssignmentCompletion { span_range }).into()
+        }
+
+        pub(super) fn handle_assignment_and_return_to(
+            self,
+            node: ExpressionNodeId,
+            value: ExpressionValue,
+            handler: AssignmentStackFrame,
+        ) -> NextAction {
+            debug_assert_eq!(
+                handler.ultimate_return_mode(),
+                self.return_mode,
+                "Handler is expected to return {:?}, but claims to ultimately return {:?}",
+                self.return_mode,
+                handler.ultimate_return_mode()
+            );
+            self.stacks.assignment_stack.push(handler);
+            NextActionInner::ReadNodeAsAssignee(node, value).into()
+        }
+    }
 }
 
-impl<'a> ExpressionEvaluator<'a, Source> {
-    pub(super) fn new(nodes: &'a [ExpressionNode<Source>]) -> Self {
-        Self {
-            nodes,
-            operation_stack: Vec::new(),
-        }
-    }
+use inner::*;
 
-    pub(super) fn evaluate(
-        mut self,
-        root: ExpressionNodeId,
+impl ExpressionNode<Source> {
+    fn handle_as_value(
+        &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<ExpressionValue> {
-        let mut next = self.begin_node_evaluation(root, interpreter)?;
-
-        loop {
-            match next {
-                NextAction::HandleValue(value) => {
-                    let top_of_stack = match self.operation_stack.pop() {
-                        Some(top) => top,
-                        None => return Ok(value),
-                    };
-                    next = self.handle_value(top_of_stack, value, interpreter)?;
-                }
-                NextAction::EnterValueNode(next_node) => {
-                    next = self.begin_node_evaluation(next_node, interpreter)?;
-                }
-            }
-        }
-    }
-
-    fn begin_node_evaluation(
-        &mut self,
-        node_id: ExpressionNodeId,
-        interpreter: &mut Interpreter,
+        next: ActionCreator,
     ) -> ExecutionResult<NextAction> {
-        Ok(match &self.nodes[node_id.0] {
+        Ok(match self {
             ExpressionNode::Leaf(leaf) => {
-                NextAction::HandleValue(Source::evaluate_leaf(leaf, interpreter)?)
+                next.return_value(Source::evaluate_leaf(leaf, interpreter)?)
             }
-            ExpressionNode::Grouped { delim_span, inner } => {
-                self.operation_stack.push(EvaluationStackFrame::Group {
+            ExpressionNode::Grouped { delim_span, inner } => next.read_value_with_handler(
+                *inner,
+                ValueStackFrame::Group {
                     span: delim_span.join(),
-                });
-                NextAction::EnterValueNode(*inner)
-            }
-            ExpressionNode::Array { delim_span, items } => ArrayStackFrame {
+                },
+            ),
+            ExpressionNode::Array { delim_span, items } => ArrayValueStackFrame {
                 span: delim_span.join(),
                 unevaluated_items: items.clone(),
                 evaluated_items: Vec::with_capacity(items.len()),
             }
-            .next(&mut self.operation_stack),
-            ExpressionNode::UnaryOperation { operation, input } => {
-                self.operation_stack
-                    .push(EvaluationStackFrame::UnaryOperation {
-                        operation: operation.clone(),
-                    });
-                NextAction::EnterValueNode(*input)
-            }
+            .next(next),
+            ExpressionNode::UnaryOperation { operation, input } => next.read_value_with_handler(
+                *input,
+                ValueStackFrame::UnaryOperation {
+                    operation: operation.clone(),
+                },
+            ),
             ExpressionNode::BinaryOperation {
                 operation,
                 left_input,
                 right_input,
-            } => {
-                self.operation_stack
-                    .push(EvaluationStackFrame::BinaryOperation {
-                        operation: operation.clone(),
-                        state: BinaryPath::OnLeftBranch {
-                            right: *right_input,
-                        },
-                    });
-                NextAction::EnterValueNode(*left_input)
-            }
-            ExpressionNode::Property { node, access } => {
-                self.operation_stack.push(EvaluationStackFrame::Property {
+            } => next.read_value_with_handler(
+                *left_input,
+                ValueStackFrame::BinaryOperation {
+                    operation: operation.clone(),
+                    state: BinaryPath::OnLeftBranch {
+                        right: *right_input,
+                    },
+                },
+            ),
+            ExpressionNode::Property { node, access } => next.read_value_with_handler(
+                *node,
+                ValueStackFrame::Property {
                     access: access.clone(),
-                });
-                NextAction::EnterValueNode(*node)
-            }
+                },
+            ),
             ExpressionNode::Index {
                 node,
                 access,
                 index,
-            } => {
-                self.operation_stack.push(EvaluationStackFrame::Index {
-                    access: access.clone(),
+            } => next.read_value_with_handler(
+                *node,
+                ValueStackFrame::Index {
+                    access: *access,
                     state: IndexPath::OnObjectBranch { index: *index },
-                });
-                NextAction::EnterValueNode(*node)
-            }
+                },
+            ),
             ExpressionNode::Range {
                 left,
                 range_limits,
@@ -104,279 +301,133 @@ impl<'a> ExpressionEvaluator<'a, Source> {
                     (None, None) => match range_limits {
                         syn::RangeLimits::HalfOpen(token) => {
                             let inner = ExpressionRangeInner::RangeFull { token: *token };
-                            NextAction::HandleValue(inner.to_value(token.span_range()))
+                            next.return_value(inner.to_value(token.span_range()))
                         }
                         syn::RangeLimits::Closed(_) => {
                             unreachable!("A closed range should have been given a right in continue_range(..)")
                         }
                     },
-                    (None, Some(right)) => {
-                        self.operation_stack.push(EvaluationStackFrame::Range {
+                    (None, Some(right)) => next.read_value_with_handler(
+                        *right,
+                        ValueStackFrame::Range {
                             range_limits: *range_limits,
                             state: RangePath::OnRightBranch { left: None },
-                        });
-                        NextAction::EnterValueNode(*right)
-                    }
-                    (Some(left), right) => {
-                        self.operation_stack.push(EvaluationStackFrame::Range {
+                        },
+                    ),
+                    (Some(left), right) => next.read_value_with_handler(
+                        *left,
+                        ValueStackFrame::Range {
                             range_limits: *range_limits,
                             state: RangePath::OnLeftBranch { right: *right },
-                        });
-                        NextAction::EnterValueNode(*left)
-                    }
+                        },
+                    ),
                 }
             }
             ExpressionNode::Assignment {
                 assignee,
                 equals_token,
                 value,
-            } => {
-                self.operation_stack
-                    .push(EvaluationStackFrame::AssignmentValue {
-                        assignee: *assignee,
-                        equals_token: *equals_token,
-                    });
-                NextAction::EnterValueNode(*value)
-            }
+            } => next.read_value_with_handler(
+                *value,
+                ValueStackFrame::HandleValueForAssignment {
+                    assignee: *assignee,
+                    equals_token: *equals_token,
+                },
+            ),
             ExpressionNode::CompoundAssignment {
                 place,
                 operation,
                 value,
-            } => {
-                self.operation_stack
-                    .push(EvaluationStackFrame::CompoundAssignmentValue {
-                        place: *place,
-                        operation: *operation,
-                    });
-                NextAction::EnterValueNode(*value)
-            }
+            } => next.read_value_with_handler(
+                *value,
+                ValueStackFrame::HandleValueForCompoundAssignment {
+                    place: *place,
+                    operation: *operation,
+                },
+            ),
         })
     }
 
-    fn handle_value(
-        &mut self,
-        top_of_stack: EvaluationStackFrame,
-        value: ExpressionValue,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<NextAction> {
-        Ok(match top_of_stack {
-            EvaluationStackFrame::Group { span } => NextAction::HandleValue(value.with_span(span)),
-            EvaluationStackFrame::UnaryOperation { operation } => {
-                NextAction::HandleValue(operation.evaluate(value)?)
-            }
-            EvaluationStackFrame::Array(mut array) => {
-                array.evaluated_items.push(value);
-                array.next(&mut self.operation_stack)
-            }
-            EvaluationStackFrame::BinaryOperation { operation, state } => match state {
-                BinaryPath::OnLeftBranch { right } => {
-                    if let Some(result) = operation.lazy_evaluate(&value)? {
-                        NextAction::HandleValue(result)
-                    } else {
-                        self.operation_stack
-                            .push(EvaluationStackFrame::BinaryOperation {
-                                operation,
-                                state: BinaryPath::OnRightBranch { left: value },
-                            });
-                        NextAction::EnterValueNode(right)
-                    }
-                }
-                BinaryPath::OnRightBranch { left } => {
-                    let result = operation.evaluate(left, value)?;
-                    NextAction::HandleValue(result)
-                }
-            },
-            EvaluationStackFrame::Property { access } => {
-                let result = value.handle_property_access(access)?;
-                NextAction::HandleValue(result)
-            }
-            EvaluationStackFrame::Index { access, state } => match state {
-                IndexPath::OnObjectBranch { index } => {
-                    self.operation_stack.push(EvaluationStackFrame::Index {
-                        access,
-                        state: IndexPath::OnIndexBranch { object: value },
-                    });
-                    NextAction::EnterValueNode(index)
-                }
-                IndexPath::OnIndexBranch { object } => {
-                    let result = object.handle_index_access(access, value)?;
-                    NextAction::HandleValue(result)
-                }
-            },
-            EvaluationStackFrame::Range {
-                range_limits,
-                state,
-            } => match (state, range_limits) {
-                (RangePath::OnLeftBranch { right: Some(right) }, range_limits) => {
-                    self.operation_stack.push(EvaluationStackFrame::Range {
-                        range_limits,
-                        state: RangePath::OnRightBranch { left: Some(value) },
-                    });
-                    NextAction::EnterValueNode(right)
-                }
-                (RangePath::OnLeftBranch { right: None }, syn::RangeLimits::HalfOpen(token)) => {
-                    let inner = ExpressionRangeInner::RangeFrom {
-                        start_inclusive: value,
-                        token,
-                    };
-                    NextAction::HandleValue(inner.to_value(token.span_range()))
-                }
-                (RangePath::OnLeftBranch { right: None }, syn::RangeLimits::Closed(_)) => {
-                    unreachable!(
-                        "A closed range should have been given a right in continue_range(..)"
-                    )
-                }
-                (
-                    RangePath::OnRightBranch { left: Some(left) },
-                    syn::RangeLimits::HalfOpen(token),
-                ) => {
-                    let inner = ExpressionRangeInner::Range {
-                        start_inclusive: left,
-                        token,
-                        end_exclusive: value,
-                    };
-                    NextAction::HandleValue(inner.to_value(token.span_range()))
-                }
-                (
-                    RangePath::OnRightBranch { left: Some(left) },
-                    syn::RangeLimits::Closed(token),
-                ) => {
-                    let inner = ExpressionRangeInner::RangeInclusive {
-                        start_inclusive: left,
-                        token,
-                        end_inclusive: value,
-                    };
-                    NextAction::HandleValue(inner.to_value(token.span_range()))
-                }
-                (RangePath::OnRightBranch { left: None }, syn::RangeLimits::HalfOpen(token)) => {
-                    let inner = ExpressionRangeInner::RangeTo {
-                        token,
-                        end_exclusive: value,
-                    };
-                    NextAction::HandleValue(inner.to_value(token.span_range()))
-                }
-                (RangePath::OnRightBranch { left: None }, syn::RangeLimits::Closed(token)) => {
-                    let inner = ExpressionRangeInner::RangeToInclusive {
-                        token,
-                        end_inclusive: value,
-                    };
-                    NextAction::HandleValue(inner.to_value(token.span_range()))
-                }
-            },
-            EvaluationStackFrame::AssignmentValue {
-                assignee,
-                equals_token,
-            } => {
-                // TODO: This should be replaced with setting a stack frame for AssignmentResolution
-                self.handle_assignment(assignee, equals_token, value, interpreter)?
-            }
-            EvaluationStackFrame::CompoundAssignmentValue { place, operation } => {
-                // TODO: This should be replaced with setting a stack frame for CompoundAssignmentResolution
-                self.handle_compound_assignment(place, operation, value, interpreter)?
-            }
-        })
-    }
-
-    fn handle_assignment(
-        &mut self,
-        assignee: ExpressionNodeId,
-        equals_token: Token![=],
-        value: ExpressionValue,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<NextAction> {
-        // TODO: When we add place resolution, we likely wish to make use of the execution stack.
-        let assignee = self.resolve_assignee_or_place(assignee, interpreter)?;
-        Ok(match assignee {
-            Assignee::Place(place) => {
-                let span_range =
-                    SpanRange::new_between(place.span_range().start(), value.span_range().end());
-                place.set(value)?;
-                NextAction::HandleValue(ExpressionValue::None(span_range))
-            }
-            Assignee::CompoundWip => {
-                return equals_token.execution_err("Compound assignment is not yet supported")
-            }
-        })
-    }
-
-    fn handle_compound_assignment(
-        &mut self,
-        place: ExpressionNodeId,
-        operation: CompoundAssignmentOperation,
-        value: ExpressionValue,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<NextAction> {
-        // TODO: When we add place resolution, we likely wish to make use of the execution stack.
-        let assignee = self.resolve_assignee_or_place(place, interpreter)?;
-        Ok(match assignee {
-            Assignee::Place(place) => {
-                let span_range =
-                    SpanRange::new_between(place.span_range().start(), value.span_range().end());
-                // TODO - replace with handling a compound operation for better performance
-                // of e.g. arrays or streams
-                let left = place.get_value_cloned()?.clone();
-                place.set(operation.to_binary().evaluate(left, value)?)?;
-                NextAction::HandleValue(ExpressionValue::None(span_range))
-            }
-            Assignee::CompoundWip => {
-                return operation
-                    .execution_err("Compound values are not supported for operation assignment")
-            }
-        })
-    }
-
-    /// See the [rust reference] for a good description of assignee vs place.
-    ///
-    /// [rust reference]: https://doc.rust-lang.org/reference/expressions/assignment-expressions.html#assignee-vs-place
-    fn resolve_assignee_or_place(
+    fn handle_as_assignee(
         &self,
-        mut assignee: ExpressionNodeId,
+        nodes: &[ExpressionNode<Source>],
+        self_node_id: ExpressionNodeId,
+        value: ExpressionValue,
+        _: &mut Interpreter,
+        next: ActionCreator,
+    ) -> ExecutionResult<NextAction> {
+        Ok(match self {
+            ExpressionNode::Leaf(SourceExpressionLeaf::Variable(_))
+            | ExpressionNode::Leaf(SourceExpressionLeaf::Discarded(_))
+            | ExpressionNode::Index { .. }
+            | ExpressionNode::Property { .. } => {
+                next.read_place_with_handler(self_node_id, PlaceStackFrame::Assignment { value })
+            }
+            ExpressionNode::Array {
+                delim_span,
+                items: assignee_item_node_ids,
+            } => ArrayAssigneeStackFrame::new(
+                nodes,
+                delim_span.join(),
+                assignee_item_node_ids,
+                value,
+            )?
+            .handle_next(next),
+            ExpressionNode::Grouped { inner, .. } => {
+                next.handle_assignment_and_return_to(*inner, value, AssignmentStackFrame::Grouped)
+            }
+            other => {
+                return other
+                    .operator_span_range()
+                    .execution_err("This type of expression is not supported as an assignee");
+            }
+        })
+    }
+
+    fn handle_as_place(
+        &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Assignee> {
-        let resolved = loop {
-            match &self.nodes[assignee.0] {
-                ExpressionNode::Leaf(SourceExpressionLeaf::Variable(variable)) => {
-                    break Assignee::Place(variable.reference(interpreter)?);
-                }
-                ExpressionNode::Index { .. } => {
-                    todo!()
-                }
-                ExpressionNode::Property { .. } => {
-                    todo!()
-                }
-                ExpressionNode::Array { .. } => {
-                    break Assignee::CompoundWip;
-                }
-                ExpressionNode::Grouped { inner, .. } => {
-                    assignee = *inner;
-                    continue;
-                }
-                other => {
-                    return other
-                        .operator_span_range()
-                        .execution_err("This type of expression is not supported as an assignee");
-                }
-            };
-        };
-        Ok(resolved)
+        next: ActionCreator,
+    ) -> ExecutionResult<NextAction> {
+        Ok(match self {
+            ExpressionNode::Leaf(SourceExpressionLeaf::Variable(variable)) => next.return_place(
+                Place::MutableReference(variable.reference(interpreter)?.into_mut()?),
+            ),
+            ExpressionNode::Leaf(SourceExpressionLeaf::Discarded(token)) => {
+                next.return_place(Place::Discarded(*token))
+            }
+            ExpressionNode::Index {
+                node,
+                access,
+                index,
+            } => next.read_place_with_handler(
+                *node,
+                PlaceStackFrame::Indexed {
+                    access: *access,
+                    index: *index,
+                },
+            ),
+            ExpressionNode::Property { access, .. } => {
+                return access.execution_err("TODO: Not yet supported!")
+            }
+            ExpressionNode::Grouped { inner, .. } => {
+                next.read_place_with_handler(*inner, PlaceStackFrame::Grouped)
+            }
+            other => {
+                return other
+                    .operator_span_range()
+                    .execution_err("This type of expression is not supported as an assignee");
+            }
+        })
     }
 }
 
-enum Assignee {
-    Place(VariableReference),
-    CompoundWip, // To come
-}
-
-enum NextAction {
-    HandleValue(ExpressionValue),
-    EnterValueNode(ExpressionNodeId),
-}
-
-enum EvaluationStackFrame {
+/// Stack frames which need to receive a value to continue their execution.
+enum ValueStackFrame {
     Group {
         span: Span,
     },
-    Array(ArrayStackFrame),
+    Array(ArrayValueStackFrame),
     UnaryOperation {
         operation: UnaryOperation,
     },
@@ -395,34 +446,188 @@ enum EvaluationStackFrame {
         range_limits: syn::RangeLimits,
         state: RangePath,
     },
-    AssignmentValue {
+    HandleValueForAssignment {
         assignee: ExpressionNodeId,
         equals_token: Token![=],
     },
-    CompoundAssignmentValue {
+    HandleValueForCompoundAssignment {
         place: ExpressionNodeId,
         operation: CompoundAssignmentOperation,
     },
+    ResolveIndexedPlace {
+        place: Place,
+        access: IndexAccess,
+    },
 }
 
-struct ArrayStackFrame {
+impl ValueStackFrame {
+    fn ultimate_return_mode(&self) -> ReturnMode {
+        match self {
+            ValueStackFrame::Group { .. } => ReturnMode::Value,
+            ValueStackFrame::Array(_) => ReturnMode::Value,
+            ValueStackFrame::UnaryOperation { .. } => ReturnMode::Value,
+            ValueStackFrame::BinaryOperation { .. } => ReturnMode::Value,
+            ValueStackFrame::Property { .. } => ReturnMode::Value,
+            ValueStackFrame::Index { .. } => ReturnMode::Value,
+            ValueStackFrame::Range { .. } => ReturnMode::Value,
+            ValueStackFrame::HandleValueForAssignment { .. } => ReturnMode::Value,
+            ValueStackFrame::HandleValueForCompoundAssignment { .. } => ReturnMode::Value,
+            ValueStackFrame::ResolveIndexedPlace { .. } => ReturnMode::Place,
+        }
+    }
+
+    fn handle_value(
+        self,
+        value: ExpressionValue,
+        next: ActionCreator,
+    ) -> ExecutionResult<NextAction> {
+        Ok(match self {
+            ValueStackFrame::Group { span } => next.return_value(value.with_span(span)),
+            ValueStackFrame::UnaryOperation { operation } => {
+                next.return_value(operation.evaluate(value)?)
+            }
+            ValueStackFrame::Array(mut array) => {
+                array.evaluated_items.push(value);
+                array.next(next)
+            }
+            ValueStackFrame::BinaryOperation { operation, state } => match state {
+                BinaryPath::OnLeftBranch { right } => {
+                    if let Some(result) = operation.lazy_evaluate(&value)? {
+                        next.return_value(result)
+                    } else {
+                        next.read_value_with_handler(
+                            right,
+                            ValueStackFrame::BinaryOperation {
+                                operation,
+                                state: BinaryPath::OnRightBranch { left: value },
+                            },
+                        )
+                    }
+                }
+                BinaryPath::OnRightBranch { left } => {
+                    next.return_value(operation.evaluate(left, value)?)
+                }
+            },
+            ValueStackFrame::Property { access } => {
+                next.return_value(value.handle_property_access(access)?)
+            }
+            ValueStackFrame::Index { access, state } => match state {
+                IndexPath::OnObjectBranch { index } => next.read_value_with_handler(
+                    index,
+                    ValueStackFrame::Index {
+                        access,
+                        state: IndexPath::OnIndexBranch { object: value },
+                    },
+                ),
+                IndexPath::OnIndexBranch { object } => {
+                    next.return_value(object.into_indexed(access, value)?)
+                }
+            },
+            ValueStackFrame::Range {
+                range_limits,
+                state,
+            } => match (state, range_limits) {
+                (RangePath::OnLeftBranch { right: Some(right) }, range_limits) => next
+                    .read_value_with_handler(
+                        right,
+                        ValueStackFrame::Range {
+                            range_limits,
+                            state: RangePath::OnRightBranch { left: Some(value) },
+                        },
+                    ),
+                (RangePath::OnLeftBranch { right: None }, syn::RangeLimits::HalfOpen(token)) => {
+                    let inner = ExpressionRangeInner::RangeFrom {
+                        start_inclusive: value,
+                        token,
+                    };
+                    next.return_value(inner.to_value(token.span_range()))
+                }
+                (RangePath::OnLeftBranch { right: None }, syn::RangeLimits::Closed(_)) => {
+                    unreachable!(
+                        "A closed range should have been given a right in continue_range(..)"
+                    )
+                }
+                (
+                    RangePath::OnRightBranch { left: Some(left) },
+                    syn::RangeLimits::HalfOpen(token),
+                ) => {
+                    let inner = ExpressionRangeInner::Range {
+                        start_inclusive: left,
+                        token,
+                        end_exclusive: value,
+                    };
+                    next.return_value(inner.to_value(token.span_range()))
+                }
+                (
+                    RangePath::OnRightBranch { left: Some(left) },
+                    syn::RangeLimits::Closed(token),
+                ) => {
+                    let inner = ExpressionRangeInner::RangeInclusive {
+                        start_inclusive: left,
+                        token,
+                        end_inclusive: value,
+                    };
+                    next.return_value(inner.to_value(token.span_range()))
+                }
+                (RangePath::OnRightBranch { left: None }, syn::RangeLimits::HalfOpen(token)) => {
+                    let inner = ExpressionRangeInner::RangeTo {
+                        token,
+                        end_exclusive: value,
+                    };
+                    next.return_value(inner.to_value(token.span_range()))
+                }
+                (RangePath::OnRightBranch { left: None }, syn::RangeLimits::Closed(token)) => {
+                    let inner = ExpressionRangeInner::RangeToInclusive {
+                        token,
+                        end_inclusive: value,
+                    };
+                    next.return_value(inner.to_value(token.span_range()))
+                }
+            },
+            ValueStackFrame::HandleValueForAssignment {
+                assignee,
+                equals_token,
+            } => next.handle_assignment_and_return_to(
+                assignee,
+                value,
+                AssignmentStackFrame::AssignmentRoot { equals_token },
+            ),
+            ValueStackFrame::HandleValueForCompoundAssignment { place, operation } => next
+                .read_place_with_handler(
+                    place,
+                    PlaceStackFrame::CompoundAssignmentRoot { operation, value },
+                ),
+            ValueStackFrame::ResolveIndexedPlace { place, access } => {
+                next.return_place(match place {
+                    Place::MutableReference(reference) => {
+                        Place::MutableReference(reference.resolve_indexed(access, value)?)
+                    }
+                    Place::Discarded(_) => {
+                        return access.execution_err("Cannot index into a discarded value");
+                    }
+                })
+            }
+        })
+    }
+}
+
+struct ArrayValueStackFrame {
     span: Span,
     unevaluated_items: Vec<ExpressionNodeId>,
     evaluated_items: Vec<ExpressionValue>,
 }
 
-impl ArrayStackFrame {
-    fn next(self, operation_stack: &mut Vec<EvaluationStackFrame>) -> NextAction {
+impl ArrayValueStackFrame {
+    fn next(self, action_creator: ActionCreator) -> NextAction {
         match self
             .unevaluated_items
             .get(self.evaluated_items.len())
             .cloned()
         {
             Some(next) => {
-                operation_stack.push(EvaluationStackFrame::Array(self));
-                NextAction::EnterValueNode(next)
+                action_creator.read_value_with_handler(next, ValueStackFrame::Array(self))
             }
-            None => NextAction::HandleValue(ExpressionValue::Array(ExpressionArray {
+            None => action_creator.return_value(ExpressionValue::Array(ExpressionArray {
                 items: self.evaluated_items,
                 span_range: self.span.span_range(),
             })),
@@ -443,4 +648,198 @@ enum IndexPath {
 enum RangePath {
     OnLeftBranch { right: Option<ExpressionNodeId> },
     OnRightBranch { left: Option<ExpressionValue> },
+}
+
+enum AssignmentStackFrame {
+    /// An instruction to return a `None` value to the Value stack
+    AssignmentRoot {
+        #[allow(unused)]
+        equals_token: Token![=],
+    },
+    Grouped,
+    Array(ArrayAssigneeStackFrame),
+}
+
+impl AssignmentStackFrame {
+    fn ultimate_return_mode(&self) -> ReturnMode {
+        match self {
+            AssignmentStackFrame::AssignmentRoot { .. } => ReturnMode::Value,
+            AssignmentStackFrame::Grouped { .. } => ReturnMode::AssignmentCompletion,
+            AssignmentStackFrame::Array { .. } => ReturnMode::AssignmentCompletion,
+        }
+    }
+
+    fn handle_assignment_complete(
+        self,
+        completion: AssignmentCompletion,
+        next: ActionCreator,
+    ) -> ExecutionResult<NextAction> {
+        let AssignmentCompletion { span_range } = completion;
+        Ok(match self {
+            AssignmentStackFrame::AssignmentRoot { .. } => {
+                next.return_value(ExpressionValue::None(span_range))
+            }
+            AssignmentStackFrame::Grouped => next.return_assignment_completion(span_range),
+            AssignmentStackFrame::Array(array) => array.handle_next(next),
+        })
+    }
+}
+
+struct ArrayAssigneeStackFrame {
+    span_range: SpanRange,
+    assignee_stack: Vec<(ExpressionNodeId, ExpressionValue)>,
+}
+
+impl ArrayAssigneeStackFrame {
+    fn new(
+        nodes: &[ExpressionNode<Source>],
+        assignee_span: Span,
+        assignee_item_node_ids: &[ExpressionNodeId],
+        value: ExpressionValue,
+    ) -> ExecutionResult<Self> {
+        let value_items = value.expect_array("The assignee of an array place")?;
+        let span_range = SpanRange::new_between(assignee_span, value_items.span_range.end());
+        let mut has_seen_dot_dot = false;
+        let mut prefix_assignees = Vec::new();
+        let mut suffix_assignees = Vec::new();
+        for node in assignee_item_node_ids.iter() {
+            match nodes[node.0] {
+                ExpressionNode::Range {
+                    left: None,
+                    range_limits: syn::RangeLimits::HalfOpen(_),
+                    right: None,
+                } => {
+                    if has_seen_dot_dot {
+                        return assignee_span
+                            .execution_err("Only one .. is allowed in an array assignee");
+                    }
+                    has_seen_dot_dot = true;
+                }
+                _ => {
+                    if has_seen_dot_dot {
+                        suffix_assignees.push(*node);
+                    } else {
+                        prefix_assignees.push(*node);
+                    }
+                }
+            }
+        }
+        let mut assignee_pairs: Vec<_> = if has_seen_dot_dot {
+            if prefix_assignees.len() + suffix_assignees.len() > value_items.items.len() {
+                return assignee_span.execution_err(
+                    "The number of assignees exceeds the number of items in the array",
+                );
+            }
+            let discarded_count =
+                value_items.items.len() - prefix_assignees.len() - suffix_assignees.len();
+            let assignees = prefix_assignees
+                .into_iter()
+                .map(Some)
+                .chain(std::iter::repeat(None).take(discarded_count))
+                .chain(suffix_assignees.into_iter().map(Some));
+
+            assignees
+                .zip(value_items.items)
+                .filter_map(|(assignee, value)| Some((assignee?, value)))
+                .collect()
+        } else {
+            if prefix_assignees.len() != value_items.items.len() {
+                return assignee_span.execution_err(
+                    "The number of assignees does not equal the number of items in the array",
+                );
+            }
+            prefix_assignees
+                .into_iter()
+                .zip(value_items.items)
+                .collect()
+        };
+        Ok(Self {
+            span_range,
+            assignee_stack: {
+                assignee_pairs.reverse();
+                assignee_pairs
+            },
+        })
+    }
+
+    fn handle_next(mut self, next: ActionCreator) -> NextAction {
+        match self.assignee_stack.pop() {
+            Some((node, value)) => {
+                next.handle_assignment_and_return_to(node, value, AssignmentStackFrame::Array(self))
+            }
+            None => next.return_assignment_completion(self.span_range),
+        }
+    }
+}
+
+struct AssignmentCompletion {
+    span_range: SpanRange,
+}
+
+enum PlaceStackFrame {
+    Assignment {
+        value: ExpressionValue,
+    },
+    CompoundAssignmentRoot {
+        operation: CompoundAssignmentOperation,
+        value: ExpressionValue,
+    },
+    Grouped,
+    Indexed {
+        access: IndexAccess,
+        index: ExpressionNodeId,
+    },
+}
+
+impl PlaceStackFrame {
+    fn ultimate_return_mode(&self) -> ReturnMode {
+        match self {
+            PlaceStackFrame::Assignment { .. } => ReturnMode::AssignmentCompletion,
+            PlaceStackFrame::CompoundAssignmentRoot { .. } => ReturnMode::Value,
+            PlaceStackFrame::Grouped { .. } => ReturnMode::Place,
+            PlaceStackFrame::Indexed { .. } => ReturnMode::Place,
+        }
+    }
+
+    fn handle_place(self, place: Place, next: ActionCreator) -> ExecutionResult<NextAction> {
+        Ok(match self {
+            PlaceStackFrame::Assignment { value } => {
+                let span_range = match place {
+                    Place::MutableReference(mut variable) => {
+                        let span_range =
+                            SpanRange::new_between(variable.span_range(), value.span_range());
+                        variable.set(value);
+                        span_range
+                    }
+                    Place::Discarded(token) => token.span_range(),
+                };
+                next.return_assignment_completion(span_range)
+            }
+            PlaceStackFrame::CompoundAssignmentRoot { operation, value } => {
+                let span_range = match place {
+                    Place::MutableReference(mut variable) => {
+                        let span_range =
+                            SpanRange::new_between(variable.span_range(), value.span_range());
+                        // TODO - replace with handling a compound operation for better performance
+                        // of e.g. arrays or streams
+                        let left = variable.get_value_cloned();
+                        variable.set(operation.to_binary().evaluate(left, value)?);
+                        span_range
+                    }
+                    Place::Discarded(token) => token.span_range(),
+                };
+                next.return_value(ExpressionValue::None(span_range))
+            }
+            PlaceStackFrame::Grouped => next.return_place(place),
+            PlaceStackFrame::Indexed { access, index } => next.read_value_with_handler(
+                index,
+                ValueStackFrame::ResolveIndexedPlace { place, access },
+            ),
+        })
+    }
+}
+
+enum Place {
+    MutableReference(MutableReference<ExpressionValue>),
+    Discarded(Token![_]),
 }

@@ -117,27 +117,42 @@ impl ExpressionArray {
         })
     }
 
-    pub(super) fn handle_index_access(
-        &self,
+    pub(super) fn into_indexed(
+        self,
         access: IndexAccess,
         index: ExpressionValue,
     ) -> ExecutionResult<ExpressionValue> {
-        Ok(match index {
+        let index = self.resolve_valid_index(index)?;
+        let span_range = SpanRange::new_between(self.span_range.start(), access.span());
+        Ok(self.items[index].clone().with_span_range(span_range))
+    }
+
+    pub(super) fn index_mut(
+        &mut self,
+        _access: IndexAccess,
+        index: ExpressionValue,
+    ) -> ExecutionResult<&mut ExpressionValue> {
+        let index = self.resolve_valid_index(index)?;
+        Ok(&mut self.items[index])
+    }
+
+    fn resolve_valid_index(&self, index: ExpressionValue) -> ExecutionResult<usize> {
+        match index {
             ExpressionValue::Integer(int) => {
                 let span_range = int.span_range;
                 let index = int.expect_usize()?;
                 if index < self.items.len() {
-                    self.items[index].clone().with_span(access.span())
+                    Ok(index)
                 } else {
-                    return span_range.execution_err(format!(
+                    span_range.execution_err(format!(
                         "Index of {} is out of range of the array length of {}",
                         index,
                         self.items.len()
-                    ));
+                    ))
                 }
             }
-            _ => return index.execution_err("The index must be an integer"),
-        })
+            _ => index.execution_err("The index must be an integer"),
+        }
     }
 
     pub(crate) fn concat_recursive_into(

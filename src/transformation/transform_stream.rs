@@ -256,7 +256,7 @@ impl HandleTransformation for ExplicitTransformStream {
                 content.handle_transform(
                     input,
                     interpreter,
-                    reference.get_value_stream_mut()?.deref_mut(),
+                    reference.into_mut()?.into_stream()?.value_mut(),
                 )?;
             }
             ExplicitTransformStreamArguments::Discard { content, .. } => {

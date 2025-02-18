@@ -30,6 +30,7 @@ impl InterpretToValue for &SourceExpression {
 pub(super) enum SourceExpressionLeaf {
     Command(Command),
     Variable(VariableIdentifier),
+    Discarded(Token![_]),
     ExpressionBlock(ExpressionBlock),
     Value(ExpressionValue),
 }
@@ -39,6 +40,7 @@ impl HasSpanRange for SourceExpressionLeaf {
         match self {
             SourceExpressionLeaf::Command(command) => command.span_range(),
             SourceExpressionLeaf::Variable(variable) => variable.span_range(),
+            SourceExpressionLeaf::Discarded(token) => token.span_range(),
             SourceExpressionLeaf::ExpressionBlock(block) => block.span_range(),
             SourceExpressionLeaf::Value(value) => value.span_range(),
         }
@@ -96,11 +98,16 @@ impl Expressionable for Source {
                     UnaryAtom::PrefixUnaryOperation(input.parse()?)
                 }
             }
-            SourcePeekMatch::Ident(_) => match input.try_parse_or_revert() {
-                Ok(bool) => UnaryAtom::Leaf(Self::Leaf::Value(ExpressionValue::Boolean(
-                    ExpressionBoolean::for_litbool(bool),
-                ))),
-                Err(_) => UnaryAtom::Leaf(Self::Leaf::Variable(input.parse()?)),
+            SourcePeekMatch::Ident(_) => {
+                if input.peek(Token![_]) {
+                    return Ok(UnaryAtom::Leaf(Self::Leaf::Discarded(input.parse()?)));
+                }
+                match input.try_parse_or_revert() {
+                    Ok(bool) => UnaryAtom::Leaf(Self::Leaf::Value(ExpressionValue::Boolean(
+                        ExpressionBoolean::for_litbool(bool),
+                    ))),
+                    Err(_) => UnaryAtom::Leaf(Self::Leaf::Variable(input.parse()?)),
+                }
             },
             SourcePeekMatch::Literal(_) => {
                 let value = ExpressionValue::for_syn_lit(input.parse()?);
@@ -195,6 +202,9 @@ impl Expressionable for Source {
         Ok(match leaf {
             SourceExpressionLeaf::Command(command) => {
                 command.clone().interpret_to_value(interpreter)?
+            }
+            SourceExpressionLeaf::Discarded(token) => {
+                return token.execution_err("This cannot be used in a value expression");
             }
             SourceExpressionLeaf::Variable(variable_path) => {
                 variable_path.interpret_to_value(interpreter)?

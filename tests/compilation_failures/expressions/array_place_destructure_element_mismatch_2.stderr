@@ -1,0 +1,5 @@
+error: The number of assignees does not equal the number of items in the array
+ --> tests/compilation_failures/expressions/array_place_destructure_element_mismatch_2.rs:5:11
+  |
+5 |         #([_] = [1, 2])
+  |           ^^^

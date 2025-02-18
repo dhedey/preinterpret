@@ -1,6 +1,6 @@
 pub(crate) use core::iter;
 pub(crate) use core::marker::PhantomData;
-pub(crate) use core::ops::DerefMut;
+pub(crate) use core::ops::{Deref, DerefMut};
 pub(crate) use proc_macro2::extra::*;
 pub(crate) use proc_macro2::*;
 pub(crate) use quote::ToTokens;

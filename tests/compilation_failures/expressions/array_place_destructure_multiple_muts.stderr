@@ -1,0 +1,5 @@
+error: The variable cannot be read if it is currently being modified
+ --> tests/compilation_failures/expressions/array_place_destructure_multiple_muts.rs:5:33
+  |
+5 |         #(let arr = [0, 1]; arr[arr[1]] = 3)
+  |                                 ^^^

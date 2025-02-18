@@ -131,16 +131,18 @@ pub(super) enum FloatKind {
 pub(super) struct UntypedFloat(
     /// The span of the literal is ignored, and will be set when converted to an output.
     LitFloat,
+    SpanRange,
 );
 pub(super) type FallbackFloat = f64;
 
 impl UntypedFloat {
     pub(super) fn new_from_lit_float(lit_float: LitFloat) -> Self {
-        Self(lit_float)
+        let span_range = lit_float.span().span_range();
+        Self(lit_float, span_range)
     }
 
     pub(super) fn new_from_literal(literal: Literal) -> Self {
-        Self(syn::LitFloat::from(literal))
+        Self::new_from_lit_float(literal.into())
     }
 
     pub(super) fn handle_unary_operation(
@@ -248,7 +250,7 @@ impl UntypedFloat {
 
     fn parse_fallback(&self) -> ExecutionResult<FallbackFloat> {
         self.0.base10_digits().parse().map_err(|err| {
-            self.0.span().execution_error(format!(
+            self.1.execution_error(format!(
                 "Could not parse as the default inferred type {}: {}",
                 core::any::type_name::<FallbackFloat>(),
                 err
@@ -262,7 +264,7 @@ impl UntypedFloat {
         N::Err: core::fmt::Display,
     {
         self.0.base10_digits().parse().map_err(|err| {
-            self.0.span().execution_error(format!(
+            self.1.execution_error(format!(
                 "Could not parse as {}: {}",
                 core::any::type_name::<N>(),
                 err
@@ -282,7 +284,8 @@ impl HasValueType for UntypedFloat {
 }
 
 impl ToExpressionValue for UntypedFloat {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
+    fn to_value(mut self, span_range: SpanRange) -> ExpressionValue {
+        self.1 = span_range;
         ExpressionValue::Float(ExpressionFloat {
             value: ExpressionFloatValue::Untyped(self),
             span_range,

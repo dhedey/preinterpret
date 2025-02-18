@@ -1,5 +1,5 @@
 use super::*;
- 
+
 /// ## Overview
 ///
 /// Expression parsing is quite complicated, but this is possibly slightly more complicated in some ways than it needs to be.
@@ -7,7 +7,7 @@ use super::*;
 /// and to avoid recursion by making use of an explicit stack frame approach with [`ExpressionStackFrame`]s.
 ///
 /// This allows parsing of very long expressions (e.g. a sum of 1 million terms) without hitting recursion limits.
-/// 
+///
 /// ## Intuition
 ///
 /// You can think of these frames in two ways - as:
@@ -15,7 +15,7 @@ use super::*;
 /// (b) the specifics of a parent operator, which can allow judging if/when an introduced expression with a possible
 ///     extension should either bind to its parent (ignoring the extension for now, and retrying the extension with
 ///     its parent) or bind to the extension itself.
-/// 
+///
 /// ## Examples
 ///
 /// See the rust doc on the [`ExpressionStackFrame`] for further details.
@@ -374,6 +374,11 @@ enum OperatorPrecendence {
     NonTerminalComma,
     /// = += -= *= /= %= &= |= ^= <<= >>=
     Assign,
+    // [PREINTERPRET ADDITION]
+    // By giving assign extensions slightly higher priority than existing assign
+    // frames, this effectively makes them right-associative, so that:
+    // a = b = c parses as a = (b = c) instead of (a = b) = c
+    AssignExtension,
     // .. ..=
     Range,
     // ||
@@ -682,8 +687,8 @@ impl NodeExtension {
             NodeExtension::Index { .. } => OperatorPrecendence::Unambiguous,
             NodeExtension::Range(_) => OperatorPrecendence::Range,
             NodeExtension::EndOfStream => OperatorPrecendence::MIN,
-            NodeExtension::AssignmentOperation(_) => OperatorPrecendence::Assign,
-            NodeExtension::CompoundAssignmentOperation(_) => OperatorPrecendence::Assign,
+            NodeExtension::AssignmentOperation(_) => OperatorPrecendence::AssignExtension,
+            NodeExtension::CompoundAssignmentOperation(_) => OperatorPrecendence::AssignExtension,
             NodeExtension::NoValidExtensionForCurrentParent => OperatorPrecendence::MIN,
         }
     }
