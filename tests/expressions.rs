@@ -239,7 +239,7 @@ fn test_array_indexing() {
         ),
         "[2, 0, 2]"
     );
-    // And ranges...
+    // And ranges in value position
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3, 4, 5];
@@ -285,7 +285,7 @@ fn test_array_indexing() {
 }
 
 #[test]
-fn test_array_destructurings() {
+fn test_array_place_destructurings() {
     // And array destructuring
     preinterpret_assert_eq!(
         #(
@@ -369,5 +369,45 @@ fn test_array_destructurings() {
             arr[0]
         ),
         5
+    );
+}
+
+#[test]
+fn test_array_pattern_destructurings() {
+    // And array destructuring
+    preinterpret_assert_eq!(
+        #(
+            let [a, b, _, _, c] = [1, 2, 3, 4, 5];
+            [a, b, c] as debug
+        ),
+        "[1, 2, 5]"
+    );
+    preinterpret_assert_eq!(
+        #(
+            let [a, b, c, ..] = [1, 2, 3, 4, 5];
+            [a, b, c] as debug
+        ),
+        "[1, 2, 3]"
+    );
+    preinterpret_assert_eq!(
+        #(
+            let [.., a, b] = [1, 2, 3, 4, 5];
+            [a, b] as debug
+        ),
+        "[4, 5]"
+    );
+    preinterpret_assert_eq!(
+        #(
+            let [a, .., b, c] = [1, 2, 3, 4, 5];
+            [a, b, c] as debug
+        ),
+        "[1, 4, 5]"
+    );
+    preinterpret_assert_eq!(
+        #(
+            let [a, .., b, c] = [[1, "a"], 2, 3, 4, 5];
+            [a, b, c] as debug
+        ),
+        r#"[[1, "a"], 4, 5]"#
     );
 }

@@ -96,7 +96,6 @@ Inside a transform stream, the following grammar is supported:
   * `@(inner = ...) [!stream! #inner]` - wraps the output in a transparent group
 
 ### To come
-* Add `..` and `.., x` support to the array pattern, like the place expression.
 * More efficient `+=` etc
 * Objects, like a JS object:
   * Backed by an indexmap (or maybe an immutable `IndexMap` wrapping an `im::HashMap` and `im::Vec` or entry orderings)
@@ -174,7 +173,7 @@ Inside a transform stream, the following grammar is supported:
   handle_separator?: { },  // Default is to not output the separator
 }]
 ```
-* Support `#(x[..])` syntax for indexing streams
+* Support `#(x[..])` syntax for indexing streams, like with arrays
   * `#(x[0])` returns the item at that position of the array / OR the value at that position of the stream (using `INFER_TOKEN_TREE`)
   * `#(x[0..3])` returns a TokenStream
   * `#(x[0..=3])` returns a TokenStream

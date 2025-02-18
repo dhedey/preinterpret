@@ -691,14 +691,15 @@ struct ArrayAssigneeStackFrame {
 }
 
 impl ArrayAssigneeStackFrame {
+    /// See also `ArrayPattern` in `patterns.rs`
     fn new(
         nodes: &[ExpressionNode<Source>],
         assignee_span: Span,
         assignee_item_node_ids: &[ExpressionNodeId],
         value: ExpressionValue,
     ) -> ExecutionResult<Self> {
-        let value_items = value.expect_array("The assignee of an array place")?;
-        let span_range = SpanRange::new_between(assignee_span, value_items.span_range.end());
+        let array = value.expect_array("The assignee of an array place")?;
+        let span_range = SpanRange::new_between(assignee_span, array.span_range.end());
         let mut has_seen_dot_dot = false;
         let mut prefix_assignees = Vec::new();
         let mut suffix_assignees = Vec::new();
@@ -724,14 +725,19 @@ impl ArrayAssigneeStackFrame {
                 }
             }
         }
+
+        let array_length = array.items.len();
+
         let mut assignee_pairs: Vec<_> = if has_seen_dot_dot {
-            if prefix_assignees.len() + suffix_assignees.len() > value_items.items.len() {
-                return assignee_span.execution_err(
-                    "The number of assignees exceeds the number of items in the array",
-                );
+            let total_assignees = prefix_assignees.len() + suffix_assignees.len();
+            if total_assignees > array_length {
+                return assignee_span.execution_err(format!(
+                    "The array has {} items, but the assignee expected at least {}",
+                    array_length, total_assignees,
+                ));
             }
             let discarded_count =
-                value_items.items.len() - prefix_assignees.len() - suffix_assignees.len();
+                array.items.len() - prefix_assignees.len() - suffix_assignees.len();
             let assignees = prefix_assignees
                 .into_iter()
                 .map(Some)
@@ -739,19 +745,18 @@ impl ArrayAssigneeStackFrame {
                 .chain(suffix_assignees.into_iter().map(Some));
 
             assignees
-                .zip(value_items.items)
+                .zip(array.items)
                 .filter_map(|(assignee, value)| Some((assignee?, value)))
                 .collect()
         } else {
-            if prefix_assignees.len() != value_items.items.len() {
-                return assignee_span.execution_err(
-                    "The number of assignees does not equal the number of items in the array",
-                );
+            let total_assignees = prefix_assignees.len();
+            if total_assignees != array_length {
+                return assignee_span.execution_err(format!(
+                    "The array has {} items, but the assignee expected {}",
+                    array_length, total_assignees,
+                ));
             }
-            prefix_assignees
-                .into_iter()
-                .zip(value_items.items)
-                .collect()
+            prefix_assignees.into_iter().zip(array.items).collect()
         };
         Ok(Self {
             span_range,

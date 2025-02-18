@@ -146,14 +146,24 @@ impl ExpressionArray {
         Ok(&mut self.items[index])
     }
 
-    pub(super) fn resolve_valid_index(&self, index: ExpressionValue, is_exclusive: bool) -> ExecutionResult<usize> {
+    pub(super) fn resolve_valid_index(
+        &self,
+        index: ExpressionValue,
+        is_exclusive: bool,
+    ) -> ExecutionResult<usize> {
         match index {
-            ExpressionValue::Integer(int) => self.resolve_valid_index_from_integer(int, is_exclusive),
+            ExpressionValue::Integer(int) => {
+                self.resolve_valid_index_from_integer(int, is_exclusive)
+            }
             _ => index.execution_err("The index must be an integer"),
         }
     }
 
-    fn resolve_valid_index_from_integer(&self, integer: ExpressionInteger, is_exclusive: bool) -> ExecutionResult<usize> {
+    fn resolve_valid_index_from_integer(
+        &self,
+        integer: ExpressionInteger,
+        is_exclusive: bool,
+    ) -> ExecutionResult<usize> {
         let span_range = integer.span_range;
         let index = integer.expect_usize()?;
         if is_exclusive {
@@ -166,16 +176,14 @@ impl ExpressionArray {
                     self.items.len()
                 ))
             }
+        } else if index < self.items.len() {
+            Ok(index)
         } else {
-            if index < self.items.len() {
-                Ok(index)
-            } else {
-                span_range.execution_err(format!(
-                    "Inclusive index of {} must be less than the array length of {}",
-                    index,
-                    self.items.len()
-                ))
-            }
+            span_range.execution_err(format!(
+                "Inclusive index of {} must be less than the array length of {}",
+                index,
+                self.items.len()
+            ))
         }
     }
 

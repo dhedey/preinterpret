@@ -130,18 +130,10 @@ impl InterpretToValue for &Statement {
     }
 }
 
-/// In a rust expression, assignments are allowed in the middle of an expression.
-///
-/// But the following is rather hard to parse in a streaming manner,
-/// due to ambiguity and right-associativity of =
-/// ```rust,ignore
-/// let a;
-/// let b;
-/// // When the = (4,) is revealed, the `(b,)` changes from a value to a destructuring
-/// let out = a = (b,) = (4,);
-/// // When the += 2 is revealed, b changes from a value to a place
-/// let out = b += 2;
-/// ```
+/// Note a `let x = ...;` is very different to `x = ...;` inside an expression.
+/// In the former, `x` is a pattern, and any identifiers creates new variable/bindings.
+/// In the latter, `x` is a place expression, and identifiers can be either place references or
+/// values, e.g. `a.x[y[0]][3] = ...` has `y[0]` evaluated as a value.
 #[derive(Clone)]
 pub(crate) struct LetStatement {
     let_token: Token![let],

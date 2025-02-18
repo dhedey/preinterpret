@@ -55,35 +55,48 @@ impl ExpressionRange {
         Ok(())
     }
 
-    pub(crate) fn resolve_to_index_range(self, array: &ExpressionArray) -> ExecutionResult<std::ops::Range<usize>> {
+    pub(crate) fn resolve_to_index_range(
+        self,
+        array: &ExpressionArray,
+    ) -> ExecutionResult<std::ops::Range<usize>> {
         let mut start = 0;
         let mut end = array.items.len();
         Ok(match *self.inner {
-            ExpressionRangeInner::Range { start_inclusive, end_exclusive, .. } => {
+            ExpressionRangeInner::Range {
+                start_inclusive,
+                end_exclusive,
+                ..
+            } => {
                 start = array.resolve_valid_index(start_inclusive, false)?;
                 end = array.resolve_valid_index(end_exclusive, true)?;
                 start..end
-            },
-            ExpressionRangeInner::RangeFrom { start_inclusive, .. } => {
+            }
+            ExpressionRangeInner::RangeFrom {
+                start_inclusive, ..
+            } => {
                 start = array.resolve_valid_index(start_inclusive, false)?;
                 start..array.items.len()
-            },
+            }
             ExpressionRangeInner::RangeTo { end_exclusive, .. } => {
                 end = array.resolve_valid_index(end_exclusive, true)?;
                 start..end
-            },
+            }
             ExpressionRangeInner::RangeFull { .. } => start..end,
-            ExpressionRangeInner::RangeInclusive { start_inclusive, end_inclusive, .. } => {
+            ExpressionRangeInner::RangeInclusive {
+                start_inclusive,
+                end_inclusive,
+                ..
+            } => {
                 start = array.resolve_valid_index(start_inclusive, false)?;
                 // +1 is safe because it must be < array length.
                 end = array.resolve_valid_index(end_inclusive, false)? + 1;
                 start..end
-            },
+            }
             ExpressionRangeInner::RangeToInclusive { end_inclusive, .. } => {
                 // +1 is safe because it must be < array length.
                 end = array.resolve_valid_index(end_inclusive, false)? + 1;
                 start..end
-            },
+            }
         })
     }
 }
