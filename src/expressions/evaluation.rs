@@ -825,10 +825,9 @@ impl PlaceStackFrame {
                     Place::MutableReference(mut variable) => {
                         let span_range =
                             SpanRange::new_between(variable.span_range(), value.span_range());
-                        // TODO - replace with handling a compound operation for better performance
-                        // of e.g. arrays or streams
-                        let left = variable.get_value_cloned();
-                        variable.set(operation.to_binary().evaluate(left, value)?);
+                        variable
+                            .value_mut()
+                            .handle_compound_assignment(&operation, value, span_range)?;
                         span_range
                     }
                     Place::Discarded(token) => token.span_range(),

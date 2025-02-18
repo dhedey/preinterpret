@@ -347,6 +347,35 @@ impl ExpressionValue {
         }
     }
 
+    pub(super) fn handle_compound_assignment(
+        &mut self,
+        operation: &CompoundAssignmentOperation,
+        right: Self,
+        source_span_range: SpanRange,
+    ) -> ExecutionResult<()> {
+        match (self, operation) {
+            (ExpressionValue::Stream(left_mut), CompoundAssignmentOperation::Add(_)) => {
+                let right = right.expect_stream("The target of += on a stream")?;
+                right.value.append_into(&mut left_mut.value);
+                left_mut.span_range = source_span_range;
+            }
+            (ExpressionValue::Array(left_mut), CompoundAssignmentOperation::Add(_)) => {
+                let mut right = right.expect_array("The target of += on an array")?;
+                left_mut.items.append(&mut right.items);
+                left_mut.span_range = source_span_range;
+            }
+            (left_mut, operation) => {
+                // Fallback to just clone and use the normal operator
+                let left = left_mut.clone();
+                *left_mut = operation
+                    .to_binary()
+                    .evaluate(left, right)?
+                    .with_span_range(source_span_range);
+            }
+        }
+        Ok(())
+    }
+
     pub(super) fn handle_integer_binary_operation(
         self,
         right: ExpressionInteger,

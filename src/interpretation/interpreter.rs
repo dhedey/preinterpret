@@ -188,14 +188,6 @@ impl MutableReference<ExpressionValue> {
         })
     }
 
-    // Gets the cloned expression value, setting the span range appropriately
-    pub(crate) fn get_value_cloned(&self) -> ExpressionValue {
-        self.mut_cell
-            .deref()
-            .clone()
-            .with_span_range(self.span_range)
-    }
-
     pub(crate) fn into_stream(self) -> ExecutionResult<MutableReference<OutputStream>> {
         let stream = self.mut_cell.try_map(|value| match value {
             ExpressionValue::Stream(stream) => Ok(&mut stream.value),

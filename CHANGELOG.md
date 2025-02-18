@@ -96,7 +96,6 @@ Inside a transform stream, the following grammar is supported:
   * `@(inner = ...) [!stream! #inner]` - wraps the output in a transparent group
 
 ### To come
-* More efficient `+=` etc
 * Objects, like a JS object:
   * Backed by an indexmap (or maybe an immutable `IndexMap` wrapping an `im::HashMap` and `im::Vec` or entry orderings)
   * Can be created with `#({ a: x, ... })`
