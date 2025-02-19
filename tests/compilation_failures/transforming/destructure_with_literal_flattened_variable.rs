@@ -1,5 +1,5 @@
 use preinterpret::*;
 
 fn main() {
-    preinterpret!([!let! (!literal! #..x) = "Hello"]);
+    preinterpret!([!let! @(#..x = @LITERAL) = "Hello"]);
 }

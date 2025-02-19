@@ -97,13 +97,10 @@ Inside a transform stream, the following grammar is supported:
 
 ### To come
 * Objects continuation:
-  * Can be place-destructured and pattern-destructured with `{ hello, world: _ }` (note - like JS, fields don't need to be complete!)
-  * Add error tests:
-    * Throws if object is output to a stream
-    * Throws if field names re-used
-    * Invalid object syntax
   * Commands have an input object
+    * We may wish to store idents with the values so we can complain about invalid names?
   * Have `!zip!` support `{ objects }`
+* Support `let x;`
 * Method calls on values
   * Mutable params notes:
     * For now we can assume all params are values/clones, no mutable references
@@ -111,6 +108,8 @@ Inside a transform stream, the following grammar is supported:
   * `.len()` on stream
   * `.push(x)` on array
   * Consider `.map(|<pattern>| {})`
+* Reference equality for streams, objects and arrays
+  * And new `.clone()` method
 * Introduce interpreter stack frames
   * Design the data model => is it some kind of linked list of frames?
   * Add a new frame inside loops
@@ -119,8 +118,7 @@ Inside a transform stream, the following grammar is supported:
       the latter defines a new variable stack frame, just like Rust
     * To avoid confusion (such as below) and teach the user to only include #var where
       necessary, only expression _blocks_ are allowed in an expression.
-      * Confusion example: `let x; x = #(let x = 123; 5)`. This isn't allowed in normal
-        rust because the inside is a `{ .. }` which defines a new scope.
+      * Confusion example: `let x; x = #(let x = 123; 5)`. This isn't allowed in normal rust because the inside is a `{ .. }` which defines a new scope.
 * TRANSFORMERS => PARSERS cont
   * Re-read the `Parsers Revisited` section below
   * Manually search for transform and rename to parse in folder names and file.

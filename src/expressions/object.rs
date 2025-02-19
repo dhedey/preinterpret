@@ -2,7 +2,6 @@ use super::*;
 
 #[derive(Clone)]
 pub(crate) struct ExpressionObject {
-    // TODO: Convert to an IndexMap
     pub(crate) entries: BTreeMap<String, ExpressionValue>,
     /// The span range that generated this value.
     /// For a complex expression, the start span is the most left part
@@ -125,9 +124,9 @@ impl ExpressionObject {
             if syn::parse_str::<Ident>(&key).is_ok() {
                 output.push_str(&key);
             } else {
-                output.push_str("[\"");
-                output.push_str(&key);
-                output.push_str("\"]");
+                output.push('[');
+                output.push_str(format!("{:?}", key).as_str());
+                output.push(']');
             }
             output.push(':');
             if behaviour.add_space_between_token_trees {

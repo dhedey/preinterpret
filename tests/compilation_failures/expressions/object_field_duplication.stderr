@@ -1,0 +1,5 @@
+error: The key hello has already been set
+ --> tests/compilation_failures/expressions/object_field_duplication.rs:5:29
+  |
+5 |         #({ hello: "world", ["hello"]: "world_2" })
+  |                             ^^^^^^^^^

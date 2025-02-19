@@ -1,0 +1,5 @@
+error: Only one .. is allowed in an array pattern
+ --> tests/compilation_failures/expressions/array_pattern_destructure_multiple_dot_dots.rs:5:26
+  |
+5 |         #(let [_, .., _, .., _] = [1, 2, 3, 4])
+  |                          ^^

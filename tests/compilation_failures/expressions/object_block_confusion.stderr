@@ -1,0 +1,5 @@
+error: Expected an object entry (`field,` `field: ..,` or `["field"]: ..,`). If you meant to start a new block, use #{ ... } instead.
+ --> tests/compilation_failures/expressions/object_block_confusion.rs:5:21
+  |
+5 |         #(let x = { 1 + 1 + 1 })
+  |                     ^

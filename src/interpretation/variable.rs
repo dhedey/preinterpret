@@ -249,7 +249,7 @@ impl InterpretToValue for &VariableIdentifier {
 
 #[derive(Clone)]
 pub(crate) struct VariablePattern {
-    name: Ident,
+    pub(crate) name: Ident,
 }
 
 impl Parse<Source> for VariablePattern {

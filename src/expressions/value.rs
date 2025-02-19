@@ -259,9 +259,9 @@ impl ExpressionValue {
         match self {
             ExpressionValue::Boolean(value) => Ok(value),
             other => other.execution_err(format!(
-                "{} must be a boolean, but it is a {}",
+                "{} must be a boolean, but it is {}",
                 place_descriptor,
-                other.value_type(),
+                other.articled_value_type(),
             )),
         }
     }
@@ -273,9 +273,9 @@ impl ExpressionValue {
         match self {
             ExpressionValue::Integer(value) => Ok(value),
             other => other.execution_err(format!(
-                "{} must be an integer, but it is a {}",
+                "{} must be an integer, but it is {}",
                 place_descriptor,
-                other.value_type(),
+                other.articled_value_type(),
             )),
         }
     }
@@ -284,9 +284,9 @@ impl ExpressionValue {
         match self {
             ExpressionValue::String(value) => Ok(value),
             other => other.execution_err(format!(
-                "{} must be a string, but it is a {}",
+                "{} must be a string, but it is {}",
                 place_descriptor,
-                other.value_type(),
+                other.articled_value_type(),
             )),
         }
     }
@@ -295,9 +295,20 @@ impl ExpressionValue {
         match self {
             ExpressionValue::Array(value) => Ok(value),
             other => other.execution_err(format!(
-                "{} must be an array, but it is a {}",
+                "{} must be an array, but it is {}",
                 place_descriptor,
-                other.value_type(),
+                other.articled_value_type(),
+            )),
+        }
+    }
+
+    pub(crate) fn expect_object(self, place_descriptor: &str) -> ExecutionResult<ExpressionObject> {
+        match self {
+            ExpressionValue::Object(value) => Ok(value),
+            other => other.execution_err(format!(
+                "{} must be an object, but it is {}",
+                place_descriptor,
+                other.articled_value_type(),
             )),
         }
     }
@@ -306,9 +317,9 @@ impl ExpressionValue {
         match self {
             ExpressionValue::Stream(value) => Ok(value),
             other => other.execution_err(format!(
-                "{} must be a stream, but it is a {}",
+                "{} must be a stream, but it is {}",
                 place_descriptor,
-                other.value_type(),
+                other.articled_value_type(),
             )),
         }
     }
@@ -323,9 +334,9 @@ impl ExpressionValue {
             ExpressionValue::Iterator(value) => Ok(value),
             ExpressionValue::Range(value) => Ok(ExpressionIterator::new_for_range(value)?),
             other => other.execution_err(format!(
-                "{} must be iterable (an array, stream, range or iterator), but it is a {}",
+                "{} must be iterable (an array, stream, range or iterator), but it is {}",
                 place_descriptor,
-                other.value_type(),
+                other.articled_value_type(),
             )),
         }
     }
@@ -704,6 +715,18 @@ impl HasSpanRange for ExpressionValue {
 
 pub(super) trait HasValueType {
     fn value_type(&self) -> &'static str;
+
+    fn articled_value_type(&self) -> String {
+        let value_type = self.value_type();
+        if value_type.is_empty() {
+            return value_type.to_string();
+        }
+        let first_char = value_type.chars().next().unwrap();
+        match first_char {
+            'a' | 'e' | 'i' | 'o' | 'u' => format!("an {}", value_type),
+            _ => value_type.to_string(),
+        }
+    }
 }
 
 #[derive(Clone)]

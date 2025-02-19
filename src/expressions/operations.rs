@@ -670,7 +670,7 @@ impl HasSpanRange for PropertyAccess {
 
 #[derive(Copy, Clone)]
 pub(crate) struct IndexAccess {
-    pub(super) brackets: Brackets,
+    pub(crate) brackets: Brackets,
 }
 
 impl HasSpan for IndexAccess {

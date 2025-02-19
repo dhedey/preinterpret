@@ -420,10 +420,11 @@ fn test_objects() {
             let b = "Hello";
             let x = { a, hello: 1, ["world"]: 2, b };
             x["x y z"] = 4;
+            x["z\" test"] = {};
             x.y = 5;
             x as debug
         ),
-        r#"{ a: {}, b: "Hello", hello: 1, world: 2, ["x y z"]: 4, y: 5 }"#
+        r#"{ a: {}, b: "Hello", hello: 1, world: 2, ["x y z"]: 4, y: 5, ["z\" test"]: {} }"#
     );
     preinterpret_assert_eq!(
         #(
@@ -442,5 +443,22 @@ fn test_objects() {
             { prop1: 1 }.prop1 as debug
         ),
         r#"1"#
+    );
+    preinterpret_assert_eq!(
+        #(
+            let a = 0;
+            let b = 0;
+            let z = 0;
+            { a, y: [_, b], z } = { a: 1, y: [5, 7] };
+            { a, b, z } as debug
+        ),
+        r#"{ a: 1, b: 7, z: None }"#
+    );
+    preinterpret_assert_eq!(
+        #(
+            let { a, y: [_, b], ["c"]: c, [r#"two "words"#]: x, z } = { a: 1, y: [5, 7], ["two \"words"]: {}, };
+            { a, b, c, x, z } as debug
+        ),
+        r#"{ a: 1, b: 7, c: None, x: {}, z: None }"#
     );
 }

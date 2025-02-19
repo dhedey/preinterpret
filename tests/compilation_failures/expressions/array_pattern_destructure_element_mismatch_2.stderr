@@ -1,0 +1,5 @@
+error: The array has 2 items, but the pattern expected 1
+ --> tests/compilation_failures/expressions/array_pattern_destructure_element_mismatch_2.rs:5:15
+  |
+5 |         #(let [_] = [1, 2])
+  |               ^^^

@@ -1,5 +1,6 @@
-error: Expected (
- --> tests/compilation_failures/transforming/destructure_with_ident_flattened_variable.rs:4:43
+error: Expected #variable
+       Occurred whilst parsing [!let! ...] - Expected [!let! <destructuring> = ...]
+ --> tests/compilation_failures/transforming/destructure_with_ident_flattened_variable.rs:4:28
   |
-4 |     preinterpret!([!let! (!ident! #..x) = Hello]);
-  |                                           ^^^^^
+4 |     preinterpret!([!let! @(#..x = @IDENT) = Hello]);
+  |                            ^

@@ -216,7 +216,7 @@ impl<'a> ExpressionParser<'a, Source> {
                 ExpressionStackFrame::Object {
                     braces,
                     complete_entries,
-                    state: ObjectStackFrameState::EntryIndex(brackets),
+                    state: ObjectStackFrameState::EntryIndex(access),
                 } => {
                     assert!(matches!(extension, NodeExtension::EndOfStream));
                     self.streams.exit_group();
@@ -226,7 +226,7 @@ impl<'a> ExpressionParser<'a, Source> {
                         complete_entries,
                         state: ObjectStackFrameState::EntryValue(
                             ObjectKey::Indexed {
-                                brackets,
+                                access,
                                 index: node,
                             },
                             colon,
@@ -354,6 +354,7 @@ impl<'a> ExpressionParser<'a, Source> {
         braces: Braces,
         mut complete_entries: Vec<(ObjectKey, ExpressionNodeId)>,
     ) -> ParseResult<WorkItem> {
+        const ERROR_MESSAGE: &str = r##"Expected an object entry (`field,` `field: ..,` or `["field"]: ..,`). If you meant to start a new block, use #{ ... } instead."##;
         let state = loop {
             if self.streams.is_current_empty() {
                 self.streams.exit_group();
@@ -370,9 +371,11 @@ impl<'a> ExpressionParser<'a, Source> {
                 } else if self.streams.peek(token::Comma) {
                     self.streams.parse::<Token![,]>()?;
                     // Fall through
-                } else {
+                } else if self.streams.peek(token::Colon) {
                     let colon = self.streams.parse()?;
                     break ObjectStackFrameState::EntryValue(ObjectKey::Identifier(key), colon);
+                } else {
+                    return self.streams.parse_err(ERROR_MESSAGE);
                 }
 
                 let node =
@@ -384,11 +387,11 @@ impl<'a> ExpressionParser<'a, Source> {
                 continue;
             } else if self.streams.peek(token::Bracket) {
                 let (_, delim_span) = self.streams.parse_and_enter_group()?;
-                break ObjectStackFrameState::EntryIndex(Brackets { delim_span });
+                break ObjectStackFrameState::EntryIndex(IndexAccess {
+                    brackets: Brackets { delim_span },
+                });
             } else {
-                return self
-                    .streams
-                    .parse_err("Expected an identifier or indexed key");
+                return self.streams.parse_err(ERROR_MESSAGE);
             }
         };
         Ok(self.push_stack_frame(ExpressionStackFrame::Object {
@@ -711,13 +714,13 @@ pub(super) enum ExpressionStackFrame {
 pub(super) enum ObjectKey {
     Identifier(Ident),
     Indexed {
-        brackets: Brackets,
+        access: IndexAccess,
         index: ExpressionNodeId,
     },
 }
 
 pub(super) enum ObjectStackFrameState {
-    EntryIndex(Brackets),
+    EntryIndex(IndexAccess),
     #[allow(unused)]
     EntryValue(ObjectKey, Token![:]),
 }

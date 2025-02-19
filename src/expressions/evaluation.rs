@@ -256,12 +256,12 @@ impl ExpressionNode<Source> {
                 evaluated_items: Vec::with_capacity(items.len()),
             }
             .next(next),
-            ExpressionNode::Object { braces, entries } => ObjectValueStackFrame {
+            ExpressionNode::Object { braces, entries } => Box::new(ObjectValueStackFrame {
                 span: braces.join(),
                 unevaluated_entries: entries.clone(),
                 evaluated_entries: BTreeMap::new(),
                 pending: None,
-            }
+            })
             .next(next)?,
             ExpressionNode::UnaryOperation { operation, input } => next.read_value_with_handler(
                 *input,
@@ -377,13 +377,19 @@ impl ExpressionNode<Source> {
                 ArrayAssigneeStackFrame::new(nodes, brackets.join(), assignee_item_node_ids, value)?
                     .handle_next(next)
             }
+            ExpressionNode::Object { braces, entries } => Box::new(ObjectAssigneeStackFrame::new(
+                braces.join(),
+                entries,
+                value,
+            )?)
+            .handle_next(next)?,
             ExpressionNode::Grouped { inner, .. } => {
                 next.handle_assignment_and_return_to(*inner, value, AssignmentStackFrame::Grouped)
             }
             other => {
                 return other
                     .operator_span_range()
-                    .execution_err("This type of expression is not supported as an assignee");
+                    .execution_err("This type of expression is not supported as an assignee. You may wish to use `_` to ignore the value.");
             }
         })
     }
@@ -423,7 +429,7 @@ impl ExpressionNode<Source> {
             other => {
                 return other
                     .operator_span_range()
-                    .execution_err("This type of expression is not supported as an assignee");
+                    .execution_err("This type of expression is not supported as here. You may wish to use `_` to ignore the value.");
             }
         })
     }
@@ -435,7 +441,7 @@ enum ValueStackFrame {
         span: Span,
     },
     Array(ArrayValueStackFrame),
-    Object(ObjectValueStackFrame),
+    Object(Box<ObjectValueStackFrame>),
     UnaryOperation {
         operation: UnaryOperation,
     },
@@ -466,6 +472,11 @@ enum ValueStackFrame {
         place: Place,
         access: IndexAccess,
     },
+    ResolveObjectIndexForAssignment {
+        object: Box<ObjectAssigneeStackFrame>,
+        assignee_node: ExpressionNodeId,
+        access: IndexAccess,
+    },
 }
 
 impl ValueStackFrame {
@@ -482,6 +493,9 @@ impl ValueStackFrame {
             ValueStackFrame::HandleValueForAssignment { .. } => ReturnMode::Value,
             ValueStackFrame::HandleValueForCompoundAssignment { .. } => ReturnMode::Value,
             ValueStackFrame::ResolveIndexedPlace { .. } => ReturnMode::Place,
+            ValueStackFrame::ResolveObjectIndexForAssignment { .. } => {
+                ReturnMode::AssignmentCompletion
+            }
         }
     }
 
@@ -615,6 +629,11 @@ impl ValueStackFrame {
                     }
                 })
             }
+            ValueStackFrame::ResolveObjectIndexForAssignment {
+                object,
+                assignee_node,
+                access,
+            } => object.handle_index_value(access, value, assignee_node, next)?,
         })
     }
 }
@@ -652,19 +671,16 @@ struct ObjectValueStackFrame {
 
 impl ObjectValueStackFrame {
     fn handle_value(
-        mut self,
+        mut self: Box<Self>,
         value: ExpressionValue,
         next: ActionCreator,
     ) -> ExecutionResult<NextAction> {
         let pending = self.pending.take();
         Ok(match pending {
-            Some(PendingEntryPath::OnIndexKeyBranch {
-                brackets,
-                value_node,
-            }) => {
+            Some(PendingEntryPath::OnIndexKeyBranch { access, value_node }) => {
                 let key = value.expect_string("An object key")?.value;
                 if self.evaluated_entries.contains_key(&key) {
-                    return brackets.execution_err(format!("The key {} has already been set", key));
+                    return access.execution_err(format!("The key {} has already been set", key));
                 }
                 self.pending = Some(PendingEntryPath::OnValueBranch { key });
                 next.read_value_with_handler(value_node, ValueStackFrame::Object(self))
@@ -679,7 +695,7 @@ impl ObjectValueStackFrame {
         })
     }
 
-    fn next(mut self, action_creator: ActionCreator) -> ExecutionResult<NextAction> {
+    fn next(mut self: Box<Self>, action_creator: ActionCreator) -> ExecutionResult<NextAction> {
         Ok(
             match self
                 .unevaluated_entries
@@ -695,11 +711,8 @@ impl ObjectValueStackFrame {
                     self.pending = Some(PendingEntryPath::OnValueBranch { key });
                     action_creator.read_value_with_handler(node, ValueStackFrame::Object(self))
                 }
-                Some((ObjectKey::Indexed { brackets, index }, value_node)) => {
-                    self.pending = Some(PendingEntryPath::OnIndexKeyBranch {
-                        brackets,
-                        value_node,
-                    });
+                Some((ObjectKey::Indexed { access, index }, value_node)) => {
+                    self.pending = Some(PendingEntryPath::OnIndexKeyBranch { access, value_node });
                     action_creator.read_value_with_handler(index, ValueStackFrame::Object(self))
                 }
                 None => action_creator
@@ -711,7 +724,7 @@ impl ObjectValueStackFrame {
 
 enum PendingEntryPath {
     OnIndexKeyBranch {
-        brackets: Brackets,
+        access: IndexAccess,
         value_node: ExpressionNodeId,
     },
     OnValueBranch {
@@ -742,6 +755,7 @@ enum AssignmentStackFrame {
     },
     Grouped,
     Array(ArrayAssigneeStackFrame),
+    Object(Box<ObjectAssigneeStackFrame>),
 }
 
 impl AssignmentStackFrame {
@@ -750,6 +764,7 @@ impl AssignmentStackFrame {
             AssignmentStackFrame::AssignmentRoot { .. } => ReturnMode::Value,
             AssignmentStackFrame::Grouped { .. } => ReturnMode::AssignmentCompletion,
             AssignmentStackFrame::Array { .. } => ReturnMode::AssignmentCompletion,
+            AssignmentStackFrame::Object { .. } => ReturnMode::AssignmentCompletion,
         }
     }
 
@@ -765,6 +780,7 @@ impl AssignmentStackFrame {
             }
             AssignmentStackFrame::Grouped => next.return_assignment_completion(span_range),
             AssignmentStackFrame::Array(array) => array.handle_next(next),
+            AssignmentStackFrame::Object(object) => object.handle_next(next)?,
         })
     }
 }
@@ -782,7 +798,7 @@ impl ArrayAssigneeStackFrame {
         assignee_item_node_ids: &[ExpressionNodeId],
         value: ExpressionValue,
     ) -> ExecutionResult<Self> {
-        let array = value.expect_array("The assignee of an array place")?;
+        let array = value.expect_array("The value destructured as an array")?;
         let span_range = SpanRange::new_between(assignee_span, array.span_range.end());
         let mut has_seen_dot_dot = false;
         let mut prefix_assignees = Vec::new();
@@ -858,6 +874,88 @@ impl ArrayAssigneeStackFrame {
             }
             None => next.return_assignment_completion(self.span_range),
         }
+    }
+}
+
+struct ObjectAssigneeStackFrame {
+    span_range: SpanRange,
+    entries: BTreeMap<String, ExpressionValue>,
+    already_used_keys: HashSet<String>,
+    unresolved_stack: Vec<(ObjectKey, ExpressionNodeId)>,
+}
+
+impl ObjectAssigneeStackFrame {
+    /// See also `ObjectPattern` in `patterns.rs`
+    fn new(
+        assignee_span: Span,
+        assignee_pairs: &[(ObjectKey, ExpressionNodeId)],
+        value: ExpressionValue,
+    ) -> ExecutionResult<Self> {
+        let object = value.expect_object("The value destructured as an object")?;
+        let span_range = SpanRange::new_between(assignee_span, object.span_range.end());
+
+        Ok(Self {
+            span_range,
+            entries: object.entries,
+            already_used_keys: HashSet::with_capacity(assignee_pairs.len()),
+            unresolved_stack: assignee_pairs.iter().rev().cloned().collect(),
+        })
+    }
+
+    fn handle_index_value(
+        mut self: Box<Self>,
+        access: IndexAccess,
+        index: ExpressionValue,
+        assignee_node: ExpressionNodeId,
+        next: ActionCreator,
+    ) -> ExecutionResult<NextAction> {
+        let key = index.expect_string("An object key")?.value;
+        let value = self.resolve_value(key, access.span_range())?;
+        Ok(next.handle_assignment_and_return_to(
+            assignee_node,
+            value,
+            AssignmentStackFrame::Object(self),
+        ))
+    }
+
+    fn handle_next(mut self: Box<Self>, next: ActionCreator) -> ExecutionResult<NextAction> {
+        Ok(match self.unresolved_stack.pop() {
+            Some((ObjectKey::Identifier(ident), assignee_node)) => {
+                let key = ident.to_string();
+                let value = self.resolve_value(key, ident.span_range())?;
+                next.handle_assignment_and_return_to(
+                    assignee_node,
+                    value,
+                    AssignmentStackFrame::Object(self),
+                )
+            }
+            Some((ObjectKey::Indexed { index, access }, assignee_node)) => next
+                .read_value_with_handler(
+                    index,
+                    ValueStackFrame::ResolveObjectIndexForAssignment {
+                        object: self,
+                        assignee_node,
+                        access,
+                    },
+                ),
+            None => next.return_assignment_completion(self.span_range),
+        })
+    }
+
+    fn resolve_value(
+        &mut self,
+        key: String,
+        span_range: SpanRange,
+    ) -> ExecutionResult<ExpressionValue> {
+        if self.already_used_keys.contains(&key) {
+            return span_range.execution_err(format!("The key `{}` has already used", key));
+        }
+        let value = self
+            .entries
+            .remove(&key)
+            .unwrap_or_else(|| ExpressionValue::None(span_range));
+        self.already_used_keys.insert(key);
+        Ok(value)
     }
 }
 
