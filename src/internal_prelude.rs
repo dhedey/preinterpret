@@ -4,6 +4,7 @@ pub(crate) use core::ops::{Deref, DerefMut};
 pub(crate) use proc_macro2::extra::*;
 pub(crate) use proc_macro2::*;
 pub(crate) use quote::ToTokens;
+pub(crate) use std::collections::BTreeMap;
 pub(crate) use std::{collections::HashMap, str::FromStr};
 pub(crate) use syn::buffer::Cursor;
 pub(crate) use syn::ext::IdentExt as SynIdentExt;

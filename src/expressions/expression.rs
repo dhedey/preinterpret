@@ -79,17 +79,15 @@ impl Expressionable for Source {
                 UnaryAtom::Group(delim_span)
             }
             SourcePeekMatch::Group(Delimiter::Brace) => {
-                return input.parse_err("Braces { ... } are not supported in an expression")
+                let (_, delim_span) = input.parse_and_enter_group()?;
+                UnaryAtom::Object(Braces { delim_span })
             }
             SourcePeekMatch::Group(Delimiter::Bracket) => {
                 // This could be handled as parsing a vector of SourceExpressions,
                 // but it's more efficient to handle nested vectors as a single expression
                 // in the expression parser
                 let (_, delim_span) = input.parse_and_enter_group()?;
-                UnaryAtom::Array {
-                    delim_span,
-                    is_empty: input.is_current_empty(),
-                }
+                UnaryAtom::Array(Brackets { delim_span })
             }
             SourcePeekMatch::Punct(punct) => {
                 if punct.as_char() == '.' {
@@ -139,6 +137,17 @@ impl Expressionable for Source {
                             return Ok(NodeExtension::NonTerminalArrayComma);
                         }
                     }
+                    ExpressionStackFrame::Object {
+                        state: ObjectStackFrameState::EntryValue { .. },
+                        ..
+                    } => {
+                        input.parse::<Token![,]>()?;
+                        if input.is_current_empty() {
+                            return Ok(NodeExtension::EndOfStream);
+                        } else {
+                            return Ok(NodeExtension::NonTerminalObjectValueComma);
+                        }
+                    }
                     ExpressionStackFrame::Group { .. } => {
                         return input.parse_err("Commas are only permitted inside preinterpret arrays []. Preinterpret arrays [a, b] can be used as a drop-in replacement for rust tuples (a, b).")
                     }
@@ -179,9 +188,16 @@ impl Expressionable for Source {
         match parent_stack_frame {
             ExpressionStackFrame::Root => Ok(NodeExtension::NoValidExtensionForCurrentParent),
             ExpressionStackFrame::Group { .. } => input.parse_err("Expected ) or operator"),
-            ExpressionStackFrame::Array { .. } | ExpressionStackFrame::IncompleteIndex { .. } => {
-                input.parse_err("Expected comma, ], or operator")
-            }
+            ExpressionStackFrame::Array { .. } => input.parse_err("Expected comma, ], or operator"),
+            ExpressionStackFrame::IncompleteIndex { .. }
+            | ExpressionStackFrame::Object {
+                state: ObjectStackFrameState::EntryIndex { .. },
+                ..
+            } => input.parse_err("Expected ], or operator"),
+            ExpressionStackFrame::Object {
+                state: ObjectStackFrameState::EntryValue { .. },
+                ..
+            } => input.parse_err("Expected comma, }, or operator"),
             // e.g. I've just matched the true in !true or false || true,
             // and I want to see if there's an extension (e.g. a cast).
             // There's nothing matching, so we fall through to an EndOfFrame
@@ -217,6 +233,12 @@ impl Expressionable for Source {
     }
 }
 
+impl Parse<Source> for Expression<Source> {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+        ExpressionParser::parse(input)
+    }
+}
+
 // Generic
 // =======
 
@@ -234,12 +256,6 @@ impl<K: Expressionable> Clone for Expression<K> {
     }
 }
 
-impl<K: Expressionable> Parse<K> for Expression<K> {
-    fn parse(input: ParseStream<K>) -> ParseResult<Self> {
-        ExpressionParser::parse(input)
-    }
-}
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) struct ExpressionNodeId(pub(super) usize);
 
@@ -250,8 +266,12 @@ pub(super) enum ExpressionNode<K: Expressionable> {
         inner: ExpressionNodeId,
     },
     Array {
-        delim_span: DelimSpan,
+        brackets: Brackets,
         items: Vec<ExpressionNodeId>,
+    },
+    Object {
+        braces: Braces,
+        entries: Vec<(ObjectKey, ExpressionNodeId)>,
     },
     UnaryOperation {
         operation: UnaryOperation,
@@ -293,7 +313,8 @@ impl ExpressionNode<Source> {
         match self {
             ExpressionNode::Leaf(leaf) => leaf.span_range(),
             ExpressionNode::Grouped { delim_span, .. } => delim_span.span_range(),
-            ExpressionNode::Array { delim_span, .. } => delim_span.span_range(),
+            ExpressionNode::Array { brackets, .. } => brackets.span_range(),
+            ExpressionNode::Object { braces, .. } => braces.span_range(),
             ExpressionNode::Property { access, .. } => access.span_range(),
             ExpressionNode::Index { access, .. } => access.span_range(),
             ExpressionNode::UnaryOperation { operation, .. } => operation.span_range(),

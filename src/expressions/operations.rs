@@ -657,9 +657,9 @@ impl HasSpanRange for CompoundAssignmentOperation {
 }
 
 #[derive(Clone)]
-pub(super) struct PropertyAccess {
+pub(crate) struct PropertyAccess {
     pub(super) dot: Token![.],
-    pub(super) property: Ident,
+    pub(crate) property: Ident,
 }
 
 impl HasSpanRange for PropertyAccess {

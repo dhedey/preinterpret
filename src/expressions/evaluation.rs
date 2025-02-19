@@ -250,12 +250,19 @@ impl ExpressionNode<Source> {
                     span: delim_span.join(),
                 },
             ),
-            ExpressionNode::Array { delim_span, items } => ArrayValueStackFrame {
-                span: delim_span.join(),
+            ExpressionNode::Array { brackets, items } => ArrayValueStackFrame {
+                span: brackets.join(),
                 unevaluated_items: items.clone(),
                 evaluated_items: Vec::with_capacity(items.len()),
             }
             .next(next),
+            ExpressionNode::Object { braces, entries } => ObjectValueStackFrame {
+                span: braces.join(),
+                unevaluated_entries: entries.clone(),
+                evaluated_entries: BTreeMap::new(),
+                pending: None,
+            }
+            .next(next)?,
             ExpressionNode::UnaryOperation { operation, input } => next.read_value_with_handler(
                 *input,
                 ValueStackFrame::UnaryOperation {
@@ -364,15 +371,12 @@ impl ExpressionNode<Source> {
                 next.read_place_with_handler(self_node_id, PlaceStackFrame::Assignment { value })
             }
             ExpressionNode::Array {
-                delim_span,
+                brackets,
                 items: assignee_item_node_ids,
-            } => ArrayAssigneeStackFrame::new(
-                nodes,
-                delim_span.join(),
-                assignee_item_node_ids,
-                value,
-            )?
-            .handle_next(next),
+            } => {
+                ArrayAssigneeStackFrame::new(nodes, brackets.join(), assignee_item_node_ids, value)?
+                    .handle_next(next)
+            }
             ExpressionNode::Grouped { inner, .. } => {
                 next.handle_assignment_and_return_to(*inner, value, AssignmentStackFrame::Grouped)
             }
@@ -407,9 +411,12 @@ impl ExpressionNode<Source> {
                     index: *index,
                 },
             ),
-            ExpressionNode::Property { access, .. } => {
-                return access.execution_err("TODO: Not yet supported!")
-            }
+            ExpressionNode::Property { node, access, .. } => next.read_place_with_handler(
+                *node,
+                PlaceStackFrame::PropertyAccess {
+                    access: access.clone(),
+                },
+            ),
             ExpressionNode::Grouped { inner, .. } => {
                 next.read_place_with_handler(*inner, PlaceStackFrame::Grouped)
             }
@@ -428,6 +435,7 @@ enum ValueStackFrame {
         span: Span,
     },
     Array(ArrayValueStackFrame),
+    Object(ObjectValueStackFrame),
     UnaryOperation {
         operation: UnaryOperation,
     },
@@ -465,6 +473,7 @@ impl ValueStackFrame {
         match self {
             ValueStackFrame::Group { .. } => ReturnMode::Value,
             ValueStackFrame::Array(_) => ReturnMode::Value,
+            ValueStackFrame::Object(_) => ReturnMode::Value,
             ValueStackFrame::UnaryOperation { .. } => ReturnMode::Value,
             ValueStackFrame::BinaryOperation { .. } => ReturnMode::Value,
             ValueStackFrame::Property { .. } => ReturnMode::Value,
@@ -490,6 +499,7 @@ impl ValueStackFrame {
                 array.evaluated_items.push(value);
                 array.next(next)
             }
+            ValueStackFrame::Object(object) => object.handle_value(value, next)?,
             ValueStackFrame::BinaryOperation { operation, state } => match state {
                 BinaryPath::OnLeftBranch { right } => {
                     if let Some(result) = operation.lazy_evaluate(&value)? {
@@ -508,9 +518,7 @@ impl ValueStackFrame {
                     next.return_value(operation.evaluate(left, value)?)
                 }
             },
-            ValueStackFrame::Property { access } => {
-                next.return_value(value.handle_property_access(access)?)
-            }
+            ValueStackFrame::Property { access } => next.return_value(value.into_property(access)?),
             ValueStackFrame::Index { access, state } => match state {
                 IndexPath::OnObjectBranch { index } => next.read_value_with_handler(
                     index,
@@ -633,6 +641,82 @@ impl ArrayValueStackFrame {
             })),
         }
     }
+}
+
+struct ObjectValueStackFrame {
+    span: Span,
+    pending: Option<PendingEntryPath>,
+    unevaluated_entries: Vec<(ObjectKey, ExpressionNodeId)>,
+    evaluated_entries: BTreeMap<String, ExpressionValue>,
+}
+
+impl ObjectValueStackFrame {
+    fn handle_value(
+        mut self,
+        value: ExpressionValue,
+        next: ActionCreator,
+    ) -> ExecutionResult<NextAction> {
+        let pending = self.pending.take();
+        Ok(match pending {
+            Some(PendingEntryPath::OnIndexKeyBranch {
+                brackets,
+                value_node,
+            }) => {
+                let key = value.expect_string("An object key")?.value;
+                if self.evaluated_entries.contains_key(&key) {
+                    return brackets.execution_err(format!("The key {} has already been set", key));
+                }
+                self.pending = Some(PendingEntryPath::OnValueBranch { key });
+                next.read_value_with_handler(value_node, ValueStackFrame::Object(self))
+            }
+            Some(PendingEntryPath::OnValueBranch { key }) => {
+                self.evaluated_entries.insert(key, value);
+                self.next(next)?
+            }
+            None => {
+                unreachable!("Should not receive a value without a pending handler set")
+            }
+        })
+    }
+
+    fn next(mut self, action_creator: ActionCreator) -> ExecutionResult<NextAction> {
+        Ok(
+            match self
+                .unevaluated_entries
+                .get(self.evaluated_entries.len())
+                .cloned()
+            {
+                Some((ObjectKey::Identifier(ident), node)) => {
+                    let key = ident.to_string();
+                    if self.evaluated_entries.contains_key(&key) {
+                        return ident
+                            .execution_err(format!("The key {} has already been set", key));
+                    }
+                    self.pending = Some(PendingEntryPath::OnValueBranch { key });
+                    action_creator.read_value_with_handler(node, ValueStackFrame::Object(self))
+                }
+                Some((ObjectKey::Indexed { brackets, index }, value_node)) => {
+                    self.pending = Some(PendingEntryPath::OnIndexKeyBranch {
+                        brackets,
+                        value_node,
+                    });
+                    action_creator.read_value_with_handler(index, ValueStackFrame::Object(self))
+                }
+                None => action_creator
+                    .return_value(self.evaluated_entries.to_value(self.span.span_range())),
+            },
+        )
+    }
+}
+
+enum PendingEntryPath {
+    OnIndexKeyBranch {
+        brackets: Brackets,
+        value_node: ExpressionNodeId,
+    },
+    OnValueBranch {
+        key: String,
+    },
 }
 
 enum BinaryPath {
@@ -790,6 +874,9 @@ enum PlaceStackFrame {
         value: ExpressionValue,
     },
     Grouped,
+    PropertyAccess {
+        access: PropertyAccess,
+    },
     Indexed {
         access: IndexAccess,
         index: ExpressionNodeId,
@@ -802,6 +889,7 @@ impl PlaceStackFrame {
             PlaceStackFrame::Assignment { .. } => ReturnMode::AssignmentCompletion,
             PlaceStackFrame::CompoundAssignmentRoot { .. } => ReturnMode::Value,
             PlaceStackFrame::Grouped { .. } => ReturnMode::Place,
+            PlaceStackFrame::PropertyAccess { .. } => ReturnMode::Place,
             PlaceStackFrame::Indexed { .. } => ReturnMode::Place,
         }
     }
@@ -834,6 +922,15 @@ impl PlaceStackFrame {
                 };
                 next.return_value(ExpressionValue::None(span_range))
             }
+            PlaceStackFrame::PropertyAccess { access } => match place {
+                Place::MutableReference(reference) => {
+                    next.return_place(Place::MutableReference(reference.resolve_property(access)?))
+                }
+                Place::Discarded(underscore) => {
+                    return underscore
+                        .execution_err("Cannot access the property of a discarded value")
+                }
+            },
             PlaceStackFrame::Grouped => next.return_place(place),
             PlaceStackFrame::Indexed { access, index } => next.read_value_with_handler(
                 index,

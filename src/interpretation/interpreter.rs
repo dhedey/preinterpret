@@ -215,6 +215,15 @@ impl MutableReference<ExpressionValue> {
         })
     }
 
+    pub(crate) fn resolve_property(self, access: PropertyAccess) -> ExecutionResult<Self> {
+        let span_range = SpanRange::new_between(self.span_range.start(), access.span_range());
+        let indexed = self.mut_cell.try_map(|value| value.property_mut(access))?;
+        Ok(Self {
+            mut_cell: indexed,
+            span_range,
+        })
+    }
+
     pub(crate) fn set(&mut self, content: impl ToExpressionValue) {
         *self.mut_cell = content.to_value(self.span_range);
     }

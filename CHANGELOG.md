@@ -96,15 +96,13 @@ Inside a transform stream, the following grammar is supported:
   * `@(inner = ...) [!stream! #inner]` - wraps the output in a transparent group
 
 ### To come
-* Objects, like a JS object:
-  * Backed by an indexmap (or maybe an immutable `IndexMap` wrapping an `im::HashMap` and `im::Vec` or entry orderings)
-  * Can be created with `#({ a: x, ... })`
-  * Can be read with `#(x.hello)` or `#(x["hello"])`
-  * Debug impl is `#({ hello: [!group! BLAH], ["#world"]: Hi, })`
-  * Fields can be read/written to with `#(x.hello)` or `#(x.hello.world)`
+* Objects continuation:
+  * Can be place-destructured and pattern-destructured with `{ hello, world: _ }` (note - like JS, fields don't need to be complete!)
+  * Add error tests:
+    * Throws if object is output to a stream
+    * Throws if field names re-used
+    * Invalid object syntax
   * Commands have an input object
-  * Can be destructured with `{ hello, world: _, ... }`
-  * Throws if output to a stream
   * Have `!zip!` support `{ objects }`
 * Method calls on values
   * Mutable params notes:
@@ -172,8 +170,10 @@ Inside a transform stream, the following grammar is supported:
   * `#(x[0])` returns the item at that position of the array / OR the value at that position of the stream (using `INFER_TOKEN_TREE`)
   * `#(x[0..3])` returns a TokenStream
   * `#(x[0..=3])` returns a TokenStream
+* Add `LiteralPattern` (wrapping a `Literal`)
+* Add `Eq` support on composite types and streams
 * Consider:
-  * Moving control flow (`for` and `while`) to the expression side?
+  * Moving control flow (`for` and `while`) to the expression side? Possibly with an `output` auto-variable with `output += [!stream! ...]`
   * Dropping lots of the `group` wrappers?
   * If any types should have reference semantics instead of clone/value semantics?
   * Adding all of these: https://veykril.github.io/tlborm/decl-macros/minutiae/fragment-specifiers.html#ty
@@ -256,7 +256,7 @@ Inside a transform stream, the following grammar is supported:
 //   * There is still an issue with "what happens to mutated state when a repetition is not possible?"
 //     ... this is also true in a case statement... We need some way to rollback in these cases:
 //     => Easier - Use of efficient-ish immutable data structures, e.g. ImmutableList, Copy-on-write leaf types etc
-//        ... so that we can clone them cheaply (e.g. https://crates.io/crates/im-rc) or even just
+//        ... so that we can clone them cheaply (e.g. https://github.com/orium/rpds) or even just
 //        some manually written tries/cons-lists
 //     => CoW - We do some kind of copy-on-write - but it still give O(N^2) if we're reverting occasional array.push(..)es
 // [BEST]? => Middle - Any changes to variables outside the scope of a given refutable parser => it's a fatal error

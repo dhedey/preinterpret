@@ -411,3 +411,36 @@ fn test_array_pattern_destructurings() {
         r#"[[1, "a"], 4, 5]"#
     );
 }
+
+#[test]
+fn test_objects() {
+    preinterpret_assert_eq!(
+        #(
+            let a = {};
+            let b = "Hello";
+            let x = { a, hello: 1, ["world"]: 2, b };
+            x["x y z"] = 4;
+            x.y = 5;
+            x as debug
+        ),
+        r#"{ a: {}, b: "Hello", hello: 1, world: 2, ["x y z"]: 4, y: 5 }"#
+    );
+    preinterpret_assert_eq!(
+        #(
+            { prop1: 1 }["prop1"] as debug
+        ),
+        r#"1"#
+    );
+    preinterpret_assert_eq!(
+        #(
+            { prop1: 1 }["prop2"] as debug
+        ),
+        r#"None"#
+    );
+    preinterpret_assert_eq!(
+        #(
+            { prop1: 1 }.prop1 as debug
+        ),
+        r#"1"#
+    );
+}

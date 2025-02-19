@@ -213,7 +213,7 @@ impl core::fmt::Display for FlattenedVariable {
 // An identifier for a variable path in an expression
 #[derive(Clone)]
 pub(crate) struct VariableIdentifier {
-    ident: Ident,
+    pub(crate) ident: Ident,
 }
 
 impl Parse<Source> for VariableIdentifier {

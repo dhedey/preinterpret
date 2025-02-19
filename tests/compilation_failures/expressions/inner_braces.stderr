@@ -1,5 +1,0 @@
-error: Braces { ... } are not supported in an expression
- --> tests/compilation_failures/expressions/inner_braces.rs:5:12
-  |
-5 |         #(({ true }))
-  |            ^

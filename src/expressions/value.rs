@@ -12,6 +12,7 @@ pub(crate) enum ExpressionValue {
     // as a value rather than a stream, and give it better error messages
     UnsupportedLiteral(UnsupportedLiteral),
     Array(ExpressionArray),
+    Object(ExpressionObject),
     Stream(ExpressionStream),
     Range(ExpressionRange),
     Iterator(ExpressionIterator),
@@ -235,6 +236,9 @@ impl ExpressionValue {
             (ExpressionValue::Array(left), ExpressionValue::Array(right)) => {
                 ExpressionValuePair::ArrayPair(left, right)
             }
+            (ExpressionValue::Object(left), ExpressionValue::Object(right)) => {
+                ExpressionValuePair::ObjectPair(left, right)
+            }
             (ExpressionValue::Stream(left), ExpressionValue::Stream(right)) => {
                 ExpressionValuePair::StreamPair(left, right)
             }
@@ -331,7 +335,13 @@ impl ExpressionValue {
         operation: OutputSpanned<UnaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         match self {
-            ExpressionValue::None(_) => operation.unsupported(self),
+            ExpressionValue::None(_) => match operation.operation {
+                UnaryOperation::Cast {
+                    target: CastTarget::DebugString,
+                    ..
+                } => ExpressionValue::None(operation.output_span_range).into_debug_string_value(),
+                _ => operation.unsupported(self),
+            },
             ExpressionValue::Integer(value) => value.handle_unary_operation(operation),
             ExpressionValue::Float(value) => value.handle_unary_operation(operation),
             ExpressionValue::Boolean(value) => value.handle_unary_operation(operation),
@@ -339,6 +349,7 @@ impl ExpressionValue {
             ExpressionValue::Char(value) => value.handle_unary_operation(operation),
             ExpressionValue::Stream(value) => value.handle_unary_operation(operation),
             ExpressionValue::Array(value) => value.handle_unary_operation(operation),
+            ExpressionValue::Object(value) => value.handle_unary_operation(operation),
             ExpressionValue::Range(range) => {
                 ExpressionIterator::new_for_range(range)?.handle_unary_operation(operation)
             }
@@ -400,6 +411,9 @@ impl ExpressionValue {
             ExpressionValue::Array(value) => {
                 value.handle_integer_binary_operation(right, operation)
             }
+            ExpressionValue::Object(value) => {
+                value.handle_integer_binary_operation(right, operation)
+            }
             ExpressionValue::Stream(value) => {
                 value.handle_integer_binary_operation(right, operation)
             }
@@ -411,6 +425,7 @@ impl ExpressionValue {
     pub(super) fn into_indexed(self, access: IndexAccess, index: Self) -> ExecutionResult<Self> {
         match self {
             ExpressionValue::Array(array) => array.into_indexed(access, index),
+            ExpressionValue::Object(object) => object.into_indexed(access, index),
             other => access.execution_err(format!("Cannot index into a {}", other.value_type())),
         }
     }
@@ -422,12 +437,29 @@ impl ExpressionValue {
     ) -> ExecutionResult<&mut Self> {
         match self {
             ExpressionValue::Array(array) => array.index_mut(access, index),
+            ExpressionValue::Object(object) => object.index_mut(access, index),
             other => access.execution_err(format!("Cannot index into a {}", other.value_type())),
         }
     }
 
-    pub(super) fn handle_property_access(self, access: PropertyAccess) -> ExecutionResult<Self> {
-        access.execution_err("Fields are not supported")
+    pub(crate) fn into_property(self, access: PropertyAccess) -> ExecutionResult<Self> {
+        match self {
+            ExpressionValue::Object(object) => object.into_property(access),
+            other => access.execution_err(format!(
+                "Cannot access properties on a {}",
+                other.value_type()
+            )),
+        }
+    }
+
+    pub(crate) fn property_mut(&mut self, access: PropertyAccess) -> ExecutionResult<&mut Self> {
+        match self {
+            ExpressionValue::Object(object) => object.property_mut(access),
+            other => access.execution_err(format!(
+                "Cannot access properties on a {}",
+                other.value_type()
+            )),
+        }
     }
 
     fn span_range_mut(&mut self) -> &mut SpanRange {
@@ -440,6 +472,7 @@ impl ExpressionValue {
             Self::Char(value) => &mut value.span_range,
             Self::UnsupportedLiteral(value) => &mut value.span_range,
             Self::Array(value) => &mut value.span_range,
+            Self::Object(value) => &mut value.span_range,
             Self::Stream(value) => &mut value.span_range,
             Self::Iterator(value) => &mut value.span_range,
             Self::Range(value) => &mut value.span_range,
@@ -511,6 +544,9 @@ impl ExpressionValue {
             Self::UnsupportedLiteral(literal) => {
                 output.extend_raw_tokens(literal.lit.to_token_stream())
             }
+            Self::Object(_) => {
+                return self.execution_err("Objects cannot be output to a stream");
+            }
             Self::Array(array) => {
                 if behaviour.should_output_arrays() {
                     array.output_grouped_items_to(output)?
@@ -568,6 +604,9 @@ impl ExpressionValue {
             }
             ExpressionValue::Array(array) => {
                 array.concat_recursive_into(output, behaviour)?;
+            }
+            ExpressionValue::Object(object) => {
+                object.concat_recursive_into(output, behaviour)?;
             }
             ExpressionValue::Iterator(iterator) => {
                 iterator.concat_recursive_into(output, behaviour)?;
@@ -628,7 +667,7 @@ pub(crate) enum Grouping {
 impl HasValueType for ExpressionValue {
     fn value_type(&self) -> &'static str {
         match self {
-            Self::None { .. } => "none",
+            Self::None { .. } => "none value",
             Self::Integer(value) => value.value_type(),
             Self::Float(value) => value.value_type(),
             Self::Boolean(value) => value.value_type(),
@@ -636,6 +675,7 @@ impl HasValueType for ExpressionValue {
             Self::Char(value) => value.value_type(),
             Self::UnsupportedLiteral(value) => value.value_type(),
             Self::Array(value) => value.value_type(),
+            Self::Object(value) => value.value_type(),
             Self::Stream(value) => value.value_type(),
             Self::Iterator(value) => value.value_type(),
             Self::Range(value) => value.value_type(),
@@ -654,6 +694,7 @@ impl HasSpanRange for ExpressionValue {
             ExpressionValue::Char(char) => char.span_range,
             ExpressionValue::UnsupportedLiteral(lit) => lit.span_range,
             ExpressionValue::Array(array) => array.span_range,
+            ExpressionValue::Object(object) => object.span_range,
             ExpressionValue::Stream(stream) => stream.span_range,
             ExpressionValue::Iterator(iterator) => iterator.span_range,
             ExpressionValue::Range(iterator) => iterator.span_range,
@@ -684,6 +725,7 @@ pub(super) enum ExpressionValuePair {
     StringPair(ExpressionString, ExpressionString),
     CharPair(ExpressionChar, ExpressionChar),
     ArrayPair(ExpressionArray, ExpressionArray),
+    ObjectPair(ExpressionObject, ExpressionObject),
     StreamPair(ExpressionStream, ExpressionStream),
 }
 
@@ -699,6 +741,7 @@ impl ExpressionValuePair {
             Self::StringPair(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
             Self::CharPair(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
             Self::ArrayPair(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
+            Self::ObjectPair(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
             Self::StreamPair(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
         }
     }
