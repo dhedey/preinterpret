@@ -227,18 +227,18 @@ impl StreamCommandDefinition for ReinterpretCommand {
 
 #[derive(Clone)]
 pub(crate) struct SettingsCommand {
-    inputs: SettingsInputs,
+    inputs: SourceSettingsInputs,
 }
 
 impl CommandType for SettingsCommand {
     type OutputKind = OutputKindNone;
 }
 
-define_field_inputs! {
-    SettingsInputs {
+define_object_arguments! {
+    SourceSettingsInputs => SettingsInputs {
         required: {},
         optional: {
-            iteration_limit: SourceExpression = DEFAULT_ITERATION_LIMIT ("The new iteration limit"),
+            iteration_limit: DEFAULT_ITERATION_LIMIT_STR ("The new iteration limit"),
         }
     }
 }
@@ -253,9 +253,9 @@ impl NoOutputCommandDefinition for SettingsCommand {
     }
 
     fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        if let Some(limit) = self.inputs.iteration_limit {
+        let inputs = self.inputs.interpret_to_value(interpreter)?;
+        if let Some(limit) = inputs.iteration_limit {
             let limit = limit
-                .interpret_to_value(interpreter)?
                 .expect_integer("The iteration limit")?
                 .expect_usize()?;
             interpreter.set_iteration_limit(Some(limit));
@@ -275,17 +275,17 @@ impl CommandType for ErrorCommand {
 
 #[derive(Clone)]
 enum EitherErrorInput {
-    Fields(ErrorInputs),
+    Fields(SourceErrorInputs),
     JustMessage(SourceStream),
 }
 
-define_field_inputs! {
-    ErrorInputs {
+define_object_arguments! {
+    SourceErrorInputs => ErrorInputs {
         required: {
-            message: SourceExpression = r#""...""# ("The error message to display"),
+            message: r#""...""# ("The error message to display"),
         },
         optional: {
-            spans: SourceExpression = "[!stream! $abc]" ("An optional [token stream], to determine where to show the error message"),
+            spans: "[!stream! $abc]" ("An optional [token stream], to determine where to show the error message"),
         }
     }
 }
@@ -310,14 +310,16 @@ impl NoOutputCommandDefinition for ErrorCommand {
             },
             format!(
                 "Expected [!error! \"Expected X, found: \" #world] or [!error! {}]",
-                ErrorInputs::fields_description()
+                SourceErrorInputs::describe_object()
             ),
         )
     }
 
     fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         let fields = match self.inputs {
-            EitherErrorInput::Fields(error_inputs) => error_inputs,
+            EitherErrorInput::Fields(error_inputs) => {
+                error_inputs.interpret_to_value(interpreter)?
+            }
             EitherErrorInput::JustMessage(stream) => {
                 let error_message = stream
                     .interpret_to_new_stream(interpreter)?
@@ -326,18 +328,11 @@ impl NoOutputCommandDefinition for ErrorCommand {
             }
         };
 
-        let error_message = fields
-            .message
-            .interpret_to_value(interpreter)?
-            .expect_string("Error message")?
-            .value;
+        let error_message = fields.message.expect_string("Error message")?.value;
 
         let error_span = match fields.spans {
             Some(spans) => {
-                let error_span_stream = spans
-                    .interpret_to_value(interpreter)?
-                    .expect_stream("The error spans")?
-                    .value;
+                let error_span_stream = spans.expect_stream("The error spans")?.value;
 
                 // Consider the case where preinterpret embeds in a declarative macro, and we have
                 // an error like this:

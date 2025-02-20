@@ -97,8 +97,6 @@ Inside a transform stream, the following grammar is supported:
 
 ### To come
 * Objects continuation:
-  * Commands have an input object
-    * We may wish to store idents with the values so we can complain about invalid names?
   * Have `!zip!` support `{ objects }`
 * Support `let x;`
 * Method calls on values
@@ -174,6 +172,7 @@ Inside a transform stream, the following grammar is supported:
   * Moving control flow (`for` and `while`) to the expression side? Possibly with an `output` auto-variable with `output += [!stream! ...]`
   * Dropping lots of the `group` wrappers?
   * If any types should have reference semantics instead of clone/value semantics?
+  * Supporting anonymous functions, and support them in e.g. `intersperse`
   * Adding all of these: https://veykril.github.io/tlborm/decl-macros/minutiae/fragment-specifiers.html#ty
   * Adding `preinterpret::macro`
   * Adding `!define_command!`

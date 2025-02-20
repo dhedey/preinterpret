@@ -666,7 +666,7 @@ struct ObjectValueStackFrame {
     span: Span,
     pending: Option<PendingEntryPath>,
     unevaluated_entries: Vec<(ObjectKey, ExpressionNodeId)>,
-    evaluated_entries: BTreeMap<String, ExpressionValue>,
+    evaluated_entries: BTreeMap<String, ObjectEntry>,
 }
 
 impl ObjectValueStackFrame {
@@ -682,11 +682,15 @@ impl ObjectValueStackFrame {
                 if self.evaluated_entries.contains_key(&key) {
                     return access.execution_err(format!("The key {} has already been set", key));
                 }
-                self.pending = Some(PendingEntryPath::OnValueBranch { key });
+                self.pending = Some(PendingEntryPath::OnValueBranch {
+                    key,
+                    key_span: access.span(),
+                });
                 next.read_value_with_handler(value_node, ValueStackFrame::Object(self))
             }
-            Some(PendingEntryPath::OnValueBranch { key }) => {
-                self.evaluated_entries.insert(key, value);
+            Some(PendingEntryPath::OnValueBranch { key, key_span }) => {
+                let entry = ObjectEntry { key_span, value };
+                self.evaluated_entries.insert(key, entry);
                 self.next(next)?
             }
             None => {
@@ -708,7 +712,10 @@ impl ObjectValueStackFrame {
                         return ident
                             .execution_err(format!("The key {} has already been set", key));
                     }
-                    self.pending = Some(PendingEntryPath::OnValueBranch { key });
+                    self.pending = Some(PendingEntryPath::OnValueBranch {
+                        key,
+                        key_span: ident.span(),
+                    });
                     action_creator.read_value_with_handler(node, ValueStackFrame::Object(self))
                 }
                 Some((ObjectKey::Indexed { access, index }, value_node)) => {
@@ -729,6 +736,7 @@ enum PendingEntryPath {
     },
     OnValueBranch {
         key: String,
+        key_span: Span,
     },
 }
 
@@ -879,7 +887,7 @@ impl ArrayAssigneeStackFrame {
 
 struct ObjectAssigneeStackFrame {
     span_range: SpanRange,
-    entries: BTreeMap<String, ExpressionValue>,
+    entries: BTreeMap<String, ObjectEntry>,
     already_used_keys: HashSet<String>,
     unresolved_stack: Vec<(ObjectKey, ExpressionNodeId)>,
 }
@@ -910,7 +918,7 @@ impl ObjectAssigneeStackFrame {
         next: ActionCreator,
     ) -> ExecutionResult<NextAction> {
         let key = index.expect_string("An object key")?.value;
-        let value = self.resolve_value(key, access.span_range())?;
+        let value = self.resolve_value(key, access.span())?;
         Ok(next.handle_assignment_and_return_to(
             assignee_node,
             value,
@@ -922,7 +930,7 @@ impl ObjectAssigneeStackFrame {
         Ok(match self.unresolved_stack.pop() {
             Some((ObjectKey::Identifier(ident), assignee_node)) => {
                 let key = ident.to_string();
-                let value = self.resolve_value(key, ident.span_range())?;
+                let value = self.resolve_value(key, ident.span())?;
                 next.handle_assignment_and_return_to(
                     assignee_node,
                     value,
@@ -942,18 +950,15 @@ impl ObjectAssigneeStackFrame {
         })
     }
 
-    fn resolve_value(
-        &mut self,
-        key: String,
-        span_range: SpanRange,
-    ) -> ExecutionResult<ExpressionValue> {
+    fn resolve_value(&mut self, key: String, key_span: Span) -> ExecutionResult<ExpressionValue> {
         if self.already_used_keys.contains(&key) {
-            return span_range.execution_err(format!("The key `{}` has already used", key));
+            return key_span.execution_err(format!("The key `{}` has already used", key));
         }
         let value = self
             .entries
             .remove(&key)
-            .unwrap_or_else(|| ExpressionValue::None(span_range));
+            .map(|entry| entry.value)
+            .unwrap_or_else(|| ExpressionValue::None(key_span.span_range()));
         self.already_used_keys.insert(key);
         Ok(value)
     }

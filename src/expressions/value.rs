@@ -248,6 +248,10 @@ impl ExpressionValue {
         })
     }
 
+    pub(crate) fn is_none(&self) -> bool {
+        matches!(self, ExpressionValue::None(_))
+    }
+
     pub(crate) fn into_integer(self) -> Option<ExpressionInteger> {
         match self {
             ExpressionValue::Integer(value) => Some(value),

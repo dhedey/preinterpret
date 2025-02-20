@@ -5,6 +5,7 @@ pub(crate) use proc_macro2::extra::*;
 pub(crate) use proc_macro2::*;
 pub(crate) use quote::ToTokens;
 pub(crate) use std::{
+    borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
     str::FromStr,
 };

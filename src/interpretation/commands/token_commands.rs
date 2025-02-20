@@ -85,22 +85,22 @@ impl StreamCommandDefinition for GroupCommand {
 #[derive(Clone)]
 pub(crate) struct IntersperseCommand {
     span: Span,
-    inputs: IntersperseInputs,
+    inputs: SourceIntersperseInputs,
 }
 
 impl CommandType for IntersperseCommand {
     type OutputKind = OutputKindValue;
 }
 
-define_field_inputs! {
-    IntersperseInputs {
+define_object_arguments! {
+    SourceIntersperseInputs => IntersperseInputs {
         required: {
-            items: SourceExpression = r#"["Hello", "World"]"# ("An array or stream (by coerced token-tree) to intersperse"),
-            separator: SourceExpression = "[!stream! ,]" ("The value to add between each item"),
+            items: r#"["Hello", "World"]"# ("An array or stream (by coerced token-tree) to intersperse"),
+            separator: "[!stream! ,]" ("The value to add between each item"),
         },
         optional: {
-            add_trailing: SourceExpression = "false" ("Whether to add the separator after the last item (default: false)"),
-            final_separator: SourceExpression = "[!stream! or]" ("Define a different final separator (default: same as normal separator)"),
+            add_trailing: "false" ("Whether to add the separator after the last item (default: false)"),
+            final_separator: "[!stream! or]" ("Define a different final separator (default: same as normal separator)"),
         }
     }
 }
@@ -116,19 +116,11 @@ impl ValueCommandDefinition for IntersperseCommand {
     }
 
     fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue> {
-        let items = self
-            .inputs
-            .items
-            .interpret_to_value(interpreter)?
-            .expect_any_iterator("The items")?;
+        let inputs = self.inputs.interpret_to_value(interpreter)?;
+        let items = inputs.items.expect_any_iterator("The items")?;
         let output_span_range = self.span.span_range();
-        let add_trailing = match self.inputs.add_trailing {
-            Some(add_trailing) => {
-                add_trailing
-                    .interpret_to_value(interpreter)?
-                    .expect_bool("This parameter")?
-                    .value
-            }
+        let add_trailing = match inputs.add_trailing {
+            Some(add_trailing) => add_trailing.expect_bool("This parameter")?.value,
             None => false,
         };
 
@@ -142,8 +134,8 @@ impl ValueCommandDefinition for IntersperseCommand {
         };
 
         let mut appender = SeparatorAppender {
-            separator: &self.inputs.separator,
-            final_separator: self.inputs.final_separator.as_ref(),
+            separator: inputs.separator,
+            final_separator: inputs.final_separator,
             add_trailing,
         };
 
@@ -157,11 +149,11 @@ impl ValueCommandDefinition for IntersperseCommand {
                     } else {
                         RemainingItemCount::ExactlyOne
                     };
-                    appender.add_separator(interpreter, remaining, &mut output)?;
+                    appender.add_separator(remaining, &mut output)?;
                     this_item = next_item;
                 }
                 None => {
-                    appender.add_separator(interpreter, RemainingItemCount::None, &mut output)?;
+                    appender.add_separator(RemainingItemCount::None, &mut output)?;
                     break;
                 }
             }
@@ -171,28 +163,23 @@ impl ValueCommandDefinition for IntersperseCommand {
     }
 }
 
-struct SeparatorAppender<'a> {
-    separator: &'a SourceExpression,
-    final_separator: Option<&'a SourceExpression>,
+struct SeparatorAppender {
+    separator: ExpressionValue,
+    final_separator: Option<ExpressionValue>,
     add_trailing: bool,
 }
 
-impl SeparatorAppender<'_> {
+impl SeparatorAppender {
     fn add_separator(
         &mut self,
-        interpreter: &mut Interpreter,
         remaining: RemainingItemCount,
         output: &mut Vec<ExpressionValue>,
     ) -> ExecutionResult<()> {
         match self.separator(remaining) {
-            TrailingSeparator::Normal => {
-                output.push(self.separator.interpret_to_value(interpreter)?)
-            }
+            TrailingSeparator::Normal => output.push(self.separator.clone()),
             TrailingSeparator::Final => match self.final_separator.take() {
-                Some(final_separator) => {
-                    output.push(final_separator.interpret_to_value(interpreter)?)
-                }
-                None => output.push(self.separator.interpret_to_value(interpreter)?),
+                Some(final_separator) => output.push(final_separator),
+                None => output.push(self.separator.clone()),
             },
             TrailingSeparator::None => {}
         }
@@ -234,23 +221,23 @@ enum TrailingSeparator {
 
 #[derive(Clone)]
 pub(crate) struct SplitCommand {
-    inputs: SplitInputs,
+    inputs: SourceSplitInputs,
 }
 
 impl CommandType for SplitCommand {
     type OutputKind = OutputKindValue;
 }
 
-define_field_inputs! {
-    SplitInputs {
+define_object_arguments! {
+    SourceSplitInputs => SplitInputs {
         required: {
-            stream: SourceExpression = "[!stream! ...] or #var" ("The stream-valued expression to split"),
-            separator: SourceExpression = "[!stream! ::]" ("The token/s to split if they match"),
+            stream: "[!stream! ...] or #var" ("The stream-valued expression to split"),
+            separator: "[!stream! ::]" ("The token/s to split if they match"),
         },
         optional: {
-            drop_empty_start: SourceExpression = "false" ("If true, a leading separator does not yield in an empty item at the start (default: false)"),
-            drop_empty_middle: SourceExpression = "false" ("If true, adjacent separators do not yield an empty item between them (default: false)"),
-            drop_empty_end: SourceExpression = "true" ("If true, a trailing separator does not yield an empty item at the end (default: true)"),
+            drop_empty_start: "false" ("If true, a leading separator does not yield in an empty item at the start (default: false)"),
+            drop_empty_middle: "false" ("If true, adjacent separators do not yield an empty item between them (default: false)"),
+            drop_empty_end: "true" ("If true, a trailing separator does not yield an empty item at the end (default: true)"),
         }
     }
 }
@@ -265,44 +252,21 @@ impl ValueCommandDefinition for SplitCommand {
     }
 
     fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue> {
-        let stream = self
-            .inputs
-            .stream
-            .interpret_to_value(interpreter)?
-            .expect_stream("The stream input")?;
+        let inputs = self.inputs.interpret_to_value(interpreter)?;
+        let stream = inputs.stream.expect_stream("The stream input")?;
 
-        let separator = self
-            .inputs
-            .separator
-            .interpret_to_value(interpreter)?
-            .expect_stream("The separator")?
-            .value;
+        let separator = inputs.separator.expect_stream("The separator")?.value;
 
-        let drop_empty_start = match self.inputs.drop_empty_start {
-            Some(value) => {
-                value
-                    .interpret_to_value(interpreter)?
-                    .expect_bool("This parameter")?
-                    .value
-            }
+        let drop_empty_start = match inputs.drop_empty_start {
+            Some(value) => value.expect_bool("This parameter")?.value,
             None => false,
         };
-        let drop_empty_middle = match self.inputs.drop_empty_middle {
-            Some(value) => {
-                value
-                    .interpret_to_value(interpreter)?
-                    .expect_bool("This parameter")?
-                    .value
-            }
+        let drop_empty_middle = match inputs.drop_empty_middle {
+            Some(value) => value.expect_bool("This parameter")?.value,
             None => false,
         };
-        let drop_empty_end = match self.inputs.drop_empty_end {
-            Some(value) => {
-                value
-                    .interpret_to_value(interpreter)?
-                    .expect_bool("This parameter")?
-                    .value
-            }
+        let drop_empty_end = match inputs.drop_empty_end {
+            Some(value) => value.expect_bool("This parameter")?.value,
             None => true,
         };
 
@@ -415,17 +379,17 @@ pub(crate) struct ZipCommand {
 
 #[derive(Clone)]
 enum EitherZipInput {
-    Fields(ZipInputs),
+    Fields(SourceZipInputs),
     JustStream(SourceExpression),
 }
 
-define_field_inputs! {
-    ZipInputs {
+define_object_arguments! {
+    SourceZipInputs => ZipInputs {
         required: {
-            streams: SourceExpression = r#"[[!stream! Hello Goodbye] ["World", "Friend"]]"# ("An array of arrays/iterators/streams to zip together."),
+            streams: r#"[[!stream! Hello Goodbye] ["World", "Friend"]]"# ("An array of arrays/iterators/streams to zip together."),
         },
         optional: {
-            error_on_length_mismatch: SourceExpression = "true" ("If false, uses shortest stream length, if true, errors on unequal length. Defaults to true."),
+            error_on_length_mismatch: "true" ("If false, uses shortest stream length, if true, errors on unequal length. Defaults to true."),
         }
     }
 }
@@ -452,19 +416,23 @@ impl ValueCommandDefinition for ZipCommand {
             },
             format!(
                 "Expected [!zip! [... An array of iterables ...]] or [!zip! {}]",
-                ZipInputs::fields_description()
+                SourceZipInputs::describe_object()
             ),
         )
     }
 
     fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue> {
         let (streams, error_on_length_mismatch) = match self.inputs {
-            EitherZipInput::Fields(inputs) => (inputs.streams, inputs.error_on_length_mismatch),
-            EitherZipInput::JustStream(streams) => (streams, None),
+            EitherZipInput::Fields(inputs) => {
+                let inputs = inputs.interpret_to_value(interpreter)?;
+                (inputs.streams, inputs.error_on_length_mismatch)
+            }
+            EitherZipInput::JustStream(streams) => {
+                let streams = streams.interpret_to_value(interpreter)?;
+                (streams, None)
+            }
         };
-        let streams = streams
-            .interpret_to_value(interpreter)?
-            .expect_array("The zip input")?;
+        let streams = streams.expect_array("The zip input")?;
         let output_span_range = streams.span_range;
         let mut output = Vec::new();
         let mut iterators = streams
@@ -474,12 +442,7 @@ impl ValueCommandDefinition for ZipCommand {
             .collect::<Result<Vec<_>, _>>()?;
 
         let error_on_length_mismatch = match error_on_length_mismatch {
-            Some(value) => {
-                value
-                    .interpret_to_value(interpreter)?
-                    .expect_bool("This parameter")?
-                    .value
-            }
+            Some(value) => value.expect_bool("This parameter")?.value,
             None => true,
         };
 

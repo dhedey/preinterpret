@@ -1,122 +1,122 @@
-macro_rules! define_field_inputs {
+macro_rules! define_object_arguments {
     (
-        $inputs_type:ident {
+        $source:ident => $validated:ident {
             required: {
                 $(
-                    $required_field:ident: $required_type:ty = $required_example:tt $(($required_description:literal))?
+                    $required_field:ident: $required_example:tt $(($required_description:literal))?
                 ),* $(,)?
             }$(,)?
             optional: {
                 $(
-                    $optional_field:ident: $optional_type:ty = $optional_example:tt $(($optional_description:literal))?
+                    $optional_field:ident: $optional_example:tt $(($optional_description:literal))?
                 ),* $(,)?
             }$(,)?
         }
     ) => {
         #[derive(Clone)]
-        struct $inputs_type {
-            $(
-                $required_field: $required_type,
-            )*
-
-            $(
-                $optional_field: Option<$optional_type>,
-            )*
+        struct $source {
+            inner: SourceExpression,
         }
 
-        impl Parse<Source> for $inputs_type {
+        impl ArgumentsContent for $source {
+            fn error_message() -> String {
+                format!("Expected: {}", Self::describe_object())
+            }
+        }
+
+        impl Parse<Source> for $source {
             fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
-                $(
-                    let mut $required_field: Option<$required_type> = None;
-                )*
-                $(
-                    let mut $optional_field: Option<$optional_type> = None;
-                )*
+                Ok(Self { inner: input.parse()? })
+            }
+        }
 
-                let (braces, content) = input.parse_braces()?;
+        impl InterpretToValue for &$source {
+            type OutputValue = $validated;
 
-                while !content.is_empty() {
-                    let ident = content.parse_any_ident()?;
-                    content.parse::<Token![:]>()?;
-                    match ident.to_string().as_str() {
-                        $(
-                            stringify!($required_field) => {
-                                if $required_field.is_some() {
-                                    return ident.parse_err("duplicate field");
-                                }
-                                $required_field = Some(content.parse()?);
-                            }
-                        )*
-                        $(
-                            stringify!($optional_field) => {
-                                if $optional_field.is_some() {
-                                    return ident.parse_err("duplicate field");
-                                }
-                                $optional_field = Some(content.parse()?);
-                            }
-                        )*
-                        _ => return ident.parse_err("unexpected field"),
-                    }
-                    if !content.is_empty() {
-                        content.parse::<Token![,]>()?;
-                    }
-                }
-
-                #[allow(unused_mut)]
-                let mut missing_fields: Vec<String> = vec![];
-
-                $(
-                    if $required_field.is_none() {
-                        missing_fields.push(stringify!($required_field).to_string());
-                    }
-                )*
-
-                if !missing_fields.is_empty() {
-                    return braces.parse_err(format!(
-                        "required fields are missing: {}",
-                        missing_fields.join(", ")
-                    ));
-                }
-
-                $(
-                    let $required_field = $required_field.unwrap();
-                )*
-
-                Ok(Self {
+            fn interpret_to_value(
+                self,
+                interpreter: &mut Interpreter,
+            ) -> ExecutionResult<Self::OutputValue> {
+                let mut object = self.inner.interpret_to_value(interpreter)?
+                    .expect_object("The arguments")?;
+                object.validate(&$source::validation())?;
+                let span_range = object.span_range;
+                Ok($validated {
                     $(
-                        $required_field,
+                        $required_field: object.remove_or_none(stringify!($required_field), span_range),
                     )*
                     $(
-                        $optional_field,
+                        $optional_field: object.remove_no_none(stringify!($optional_field), span_range),
                     )*
                 })
             }
         }
 
-        impl ArgumentsContent for $inputs_type {
-            fn error_message() -> String {
-                format!("Expected: {}", Self::fields_description())
-            }
+        struct $validated {
+            $(
+                $required_field: ExpressionValue,
+            )*
+            $(
+                $optional_field: Option<ExpressionValue>,
+            )*
         }
 
-        impl $inputs_type {
-            fn fields_description() -> String {
-                use std::fmt::Write;
-                let mut buffer = String::new();
-                buffer.write_str("{\n").unwrap();
-                $(
-                    $(writeln!(buffer, "    // {}", $required_description).unwrap();)?
-                    writeln!(buffer, "    {}: {},", stringify!($required_field), $required_example).unwrap();
-                )*
-                $(
-                    $(writeln!(buffer, "    // {}", $optional_description).unwrap();)?
-                    writeln!(buffer, "    {}?: {},", stringify!($optional_field), $optional_example).unwrap();
-                )*
-                buffer.write_str("}").unwrap();
-                buffer
+        impl $source {
+            fn describe_object() -> String {
+                Self::validation().describe_object()
             }
+
+            fn validation() -> &'static [(&'static str, FieldDefinition)] {
+                &Self::VALIDATION
+            }
+
+            const VALIDATION: [
+                (&'static str, FieldDefinition);
+                count_fields!($($required_field)* $($optional_field)*)
+            ] = [
+                $(
+                    (
+                        stringify!($required_field),
+                        FieldDefinition {
+                            required: true,
+                            description: optional_else!{
+                                { $(Some(std::borrow::Cow::Borrowed($required_description)))? }
+                                { None }
+                            },
+                            example: std::borrow::Cow::Borrowed($required_example),
+                        },
+                    ),
+                )*
+                $(
+                    (
+                        stringify!($optional_field),
+                        FieldDefinition {
+                            required: false,
+                            description: optional_else!{
+                                { $(Some(std::borrow::Cow::Borrowed($optional_description)))? }
+                                { None }
+                            },
+                            example: std::borrow::Cow::Borrowed($optional_example),
+                        },
+                    ),
+                )*
+            ];
         }
     };
 }
 
-pub(crate) use define_field_inputs;
+pub(crate) use define_object_arguments;
+
+macro_rules! count_fields {
+    ($head:tt $($tail:tt)*) => { 1 + count_fields!($($tail)*)};
+    () => { 0 }
+}
+
+pub(crate) use count_fields;
+
+macro_rules! optional_else {
+    ({$($content:tt)+} {$($else:tt)*}) => { $($content)+ };
+    ({} {$($else:tt)*}) => { $($else)* }
+}
+
+pub(crate) use optional_else;

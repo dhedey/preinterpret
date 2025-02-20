@@ -140,41 +140,6 @@ fn test_intersperse() {
 
 #[test]
 fn complex_cases_for_intersperse_and_input_types() {
-    // Normal separator is not interpreted if it is unneeded
-    preinterpret_assert_eq!(
-        #([!intersperse! {
-            items: [!stream!],
-            separator: [!error! { message: "FAIL" }],
-            add_trailing: true,
-        }] as stream as string),
-        ""
-    );
-    // Final separator is not interpreted if it is unneeded
-    preinterpret_assert_eq!(
-        #([!intersperse! {
-            items: [!stream!],
-            separator: [!stream!],
-            final_separator: [!error! { message: "FAIL" }],
-            add_trailing: true,
-        }] as stream as string),
-        ""
-    );
-    // The separator is interpreted each time it is included
-    preinterpret_assert_eq!(
-        #(
-            let i = 0;
-            [!intersperse! {
-                items: [!stream! A B C D E F G],
-                separator: #(
-                    let output = [!stream! (#i)];
-                    i += 1;
-                    output
-                ),
-                add_trailing: true,
-            }] as string
-        ),
-        "A(0)B(1)C(2)D(3)E(4)F(5)G(6)",
-    );
     // Variable containing stream be used for items
     preinterpret_assert_eq!({
         [!set! #items = 0 1 2 3]

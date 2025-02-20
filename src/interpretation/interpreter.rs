@@ -130,6 +130,7 @@ pub(crate) struct InterpreterConfig {
 }
 
 pub(crate) const DEFAULT_ITERATION_LIMIT: usize = 1000;
+pub(crate) const DEFAULT_ITERATION_LIMIT_STR: &str = "1000";
 
 impl Default for InterpreterConfig {
     fn default() -> Self {
