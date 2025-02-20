@@ -1,10 +1,5 @@
 error: Expected an expression
-       Occurred whilst parsing [!zip! ...] - Expected [!zip! [... An array of iterables ...]] or [!zip! {
-           // An array of arrays/iterators/streams to zip together.
-           streams: [[!stream! Hello Goodbye] ["World", "Friend"]],
-           // If false, uses shortest stream length, if true, errors on unequal length. Defaults to true.
-           error_on_length_mismatch?: true,
-       }]
+       Occurred whilst parsing [!zip! ...] - Expected [!zip! [<iter1>, <iter2>, ..]] or [!zip! {{ x: <iter1>, y: <iter2>, .. }}] for <iterN> iterable values of the same length. If you instead want to permit different lengths and truncate to the shortest, use `!zip_truncated!` instead.
  --> tests/compilation_failures/tokens/zip_no_input.rs:5:15
   |
 5 |         [!zip!]

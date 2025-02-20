@@ -327,9 +327,7 @@ fn test_zip() {
             [!set! #countries = "France" "Germany" "Italy"]
             [!set! #flags = "🇫🇷" "🇩🇪" "🇮🇹"]
             [!set! #capitals = "Paris" "Berlin" "Rome"]
-            [!debug! [!zip! {
-                streams: [countries, flags, capitals],
-            }]]
+            [!debug! [!zip! [countries, flags, capitals]]]
         },
         r#"[["France", "🇫🇷", "Paris"], ["Germany", "🇩🇪", "Berlin"], ["Italy", "🇮🇹", "Rome"]]"#,
     );
@@ -337,10 +335,7 @@ fn test_zip() {
         {
             [!set! #longer = A B C D]
             [!set! #shorter = 1 2 3]
-            [!debug! [!zip! {
-                streams: [longer, shorter],
-                error_on_length_mismatch: false,
-            }]]
+            [!debug! [!zip_truncated! [longer, shorter]]]
         },
         r#"[[[!stream! A], 1], [[!stream! B], 2], [[!stream! C], 3]]"#,
     );
@@ -348,9 +343,7 @@ fn test_zip() {
         {
             [!set! #letters = A B C]
             #(let numbers = [1, 2, 3])
-            [!debug! [!zip! {
-                streams: [letters, numbers],
-            }]]
+            [!debug! [!zip! [letters, numbers]]]
         },
         r#"[[[!stream! A], 1], [[!stream! B], 2], [[!stream! C], 3]]"#,
     );
@@ -363,7 +356,17 @@ fn test_zip() {
         },
         r#"[[[!stream! A], 1], [[!stream! B], 2], [[!stream! C], 3]]"#,
     );
+    preinterpret_assert_eq!(
+        {
+            [!set! #letters = A B C]
+            #(let numbers = [1, 2, 3])
+            #(let letter = [letters, numbers])
+            [!debug! [!zip! { number: numbers, letter: letters }]]
+        },
+        r#"[{ letter: [!stream! A], number: 1 }, { letter: [!stream! B], number: 2 }, { letter: [!stream! C], number: 3 }]"#,
+    );
     preinterpret_assert_eq!([!debug![!zip![]]], r#"[]"#,);
+    preinterpret_assert_eq!([!debug![!zip! {}]], r#"[]"#,);
 }
 
 #[test]

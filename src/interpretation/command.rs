@@ -389,6 +389,7 @@ define_command_enums! {
     SplitCommand,
     CommaSplitCommand,
     ZipCommand,
+    ZipTruncatedCommand,
 
     // Destructuring Commands
     ParseCommand,

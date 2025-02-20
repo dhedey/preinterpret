@@ -374,24 +374,7 @@ impl ValueCommandDefinition for CommaSplitCommand {
 
 #[derive(Clone)]
 pub(crate) struct ZipCommand {
-    inputs: EitherZipInput,
-}
-
-#[derive(Clone)]
-enum EitherZipInput {
-    Fields(SourceZipInputs),
-    JustStream(SourceExpression),
-}
-
-define_object_arguments! {
-    SourceZipInputs => ZipInputs {
-        required: {
-            streams: r#"[[!stream! Hello Goodbye] ["World", "Friend"]]"# ("An array of arrays/iterators/streams to zip together."),
-        },
-        optional: {
-            error_on_length_mismatch: "true" ("If false, uses shortest stream length, if true, errors on unequal length. Defaults to true."),
-        }
-    }
+    inputs: SourceExpression,
 }
 
 impl CommandType for ZipCommand {
@@ -404,88 +387,200 @@ impl ValueCommandDefinition for ZipCommand {
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         arguments.fully_parse_or_error(
             |input| {
-                if input.peek(syn::token::Brace) {
-                    Ok(Self {
-                        inputs: EitherZipInput::Fields(input.parse()?),
-                    })
-                } else {
-                    Ok(Self {
-                        inputs: EitherZipInput::JustStream(input.parse()?),
-                    })
-                }
+                Ok(Self {
+                    inputs: input.parse()?,
+                })
             },
-            format!(
-                "Expected [!zip! [... An array of iterables ...]] or [!zip! {}]",
-                SourceZipInputs::describe_object()
-            ),
+            "Expected [!zip! [<iter1>, <iter2>, ..]] or [!zip! {{ x: <iter1>, y: <iter2>, .. }}] for <iterN> iterable values of the same length. If you instead want to permit different lengths and truncate to the shortest, use `!zip_truncated!` instead.",
         )
     }
 
     fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue> {
-        let (streams, error_on_length_mismatch) = match self.inputs {
-            EitherZipInput::Fields(inputs) => {
-                let inputs = inputs.interpret_to_value(interpreter)?;
-                (inputs.streams, inputs.error_on_length_mismatch)
-            }
-            EitherZipInput::JustStream(streams) => {
-                let streams = streams.interpret_to_value(interpreter)?;
-                (streams, None)
-            }
-        };
-        let streams = streams.expect_array("The zip input")?;
-        let output_span_range = streams.span_range;
-        let mut output = Vec::new();
-        let mut iterators = streams
-            .items
-            .into_iter()
-            .map(|x| x.expect_any_iterator("A zip input"))
-            .collect::<Result<Vec<_>, _>>()?;
+        zip_inner(
+            self.inputs.interpret_to_value(interpreter)?,
+            interpreter,
+            true,
+        )
+    }
+}
 
-        let error_on_length_mismatch = match error_on_length_mismatch {
-            Some(value) => value.expect_bool("This parameter")?.value,
-            None => true,
-        };
+#[derive(Clone)]
+pub(crate) struct ZipTruncatedCommand {
+    inputs: SourceExpression,
+}
 
-        if iterators.is_empty() {
-            return Ok(output.to_value(output_span_range));
-        }
+impl CommandType for ZipTruncatedCommand {
+    type OutputKind = OutputKindValue;
+}
 
-        let min_stream_length = iterators.iter().map(|x| x.size_hint().0).min().unwrap();
+impl ValueCommandDefinition for ZipTruncatedCommand {
+    const COMMAND_NAME: &'static str = "zip_truncated";
 
-        if error_on_length_mismatch {
-            let max_stream_length = iterators
-                .iter()
-                .map(|x| x.size_hint().1)
-                .max_by(|a, b| match (a, b) {
-                    (None, None) => core::cmp::Ordering::Equal,
-                    (None, Some(_)) => core::cmp::Ordering::Greater,
-                    (Some(_), None) => core::cmp::Ordering::Less,
-                    (Some(a), Some(b)) => a.cmp(b),
+    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
+        arguments.fully_parse_or_error(
+            |input| {
+                Ok(Self {
+                    inputs: input.parse()?,
                 })
-                .unwrap();
-            if Some(min_stream_length) != max_stream_length {
-                return output_span_range.execution_err(format!(
-                    "Streams have different lengths and zip's error_on_length_mismatch is true. The lengths vary from {} to {}",
-                    min_stream_length,
-                    match max_stream_length {
-                        Some(max_stream_length) => max_stream_length.to_string(),
-                        None => "unbounded".to_string(),
-                    },
-                ));
-            }
-        }
+            },
+            "Expected [!zip_truncated! [<iter1>, <iter2>, ..]] or [!zip_truncated! {{ x: <iter1>, y: <iter2>, .. }}] for <iterN> iterable values of possible different lengths (the shortest length will be used). If you want to ensure the lengths are equal, use `!zip!` instead",
+        )
+    }
 
+    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue> {
+        zip_inner(
+            self.inputs.interpret_to_value(interpreter)?,
+            interpreter,
+            false,
+        )
+    }
+}
+
+fn zip_inner(
+    iterators: ExpressionValue,
+    interpreter: &mut Interpreter,
+    error_on_length_mismatch: bool,
+) -> ExecutionResult<ExpressionValue> {
+    let output_span_range = iterators.span_range();
+    let mut iterators = ZipIterators::from_value(iterators)?;
+    let mut output = Vec::new();
+
+    if iterators.len() == 0 {
+        return Ok(output.to_value(output_span_range));
+    }
+
+    let (min_iterator_min_length, max_iterator_max_length) = iterators.size_hint_range();
+
+    if error_on_length_mismatch && Some(min_iterator_min_length) != max_iterator_max_length {
+        return output_span_range.execution_err(format!(
+            "The iterables have different lengths. The lengths vary from {} to {}. To truncate to the shortest, use `!zip_truncated!` instead of `!zip!",
+            min_iterator_min_length,
+            match max_iterator_max_length {
+                Some(max_max) => max_max.to_string(),
+                None => "unbounded".to_string(),
+            },
+        ));
+    }
+
+    iterators.zip_into(
+        min_iterator_min_length,
+        interpreter,
+        output_span_range,
+        &mut output,
+    )?;
+
+    Ok(output.to_value(output_span_range))
+}
+
+enum ZipIterators {
+    Array(Vec<ExpressionIterator>),
+    Object(Vec<(String, Span, ExpressionIterator)>),
+}
+
+impl ZipIterators {
+    fn from_value(value: ExpressionValue) -> ExecutionResult<Self> {
+        Ok(match value {
+            ExpressionValue::Object(object) => {
+                let span_range = object.span_range;
+                let entries = object
+                    .entries
+                    .into_iter()
+                    .take(101)
+                    .map(|(k, v)| -> ExecutionResult<_> {
+                        Ok((
+                            k,
+                            v.key_span,
+                            v.value.expect_any_iterator("A zip iterator")?,
+                        ))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                if entries.len() == 101 {
+                    return span_range.execution_err("A maximum of 100 iterators are allowed");
+                }
+                ZipIterators::Object(entries)
+            }
+            other => {
+                let span_range = other.span_range();
+                let iterator = other.expect_any_iterator("")
+                    .map_err(|_| span_range.execution_error("Expected an object with iterable values, an array of iterables, or some other iterator of iterables."))?;
+                let vec = iterator
+                    .take(101)
+                    .map(|x| x.expect_any_iterator("A zip iterator"))
+                    .collect::<Result<Vec<_>, _>>()?;
+                if vec.len() == 101 {
+                    return span_range.execution_err("A maximum of 100 iterators are allowed");
+                }
+                ZipIterators::Array(vec)
+            }
+        })
+    }
+
+    /// Panics if called on an empty list of iterators
+    fn size_hint_range(&self) -> (usize, Option<usize>) {
+        let size_hints: Vec<_> = match self {
+            ZipIterators::Array(inner) => inner.iter().map(|x| x.size_hint()).collect(),
+            ZipIterators::Object(inner) => inner.iter().map(|x| x.2.size_hint()).collect(),
+        };
+        let min_min = size_hints.iter().map(|s| s.0).min().unwrap();
+        let max_max = size_hints
+            .iter()
+            .map(|sh| sh.1)
+            .max_by(|a, b| match (a, b) {
+                (None, None) => core::cmp::Ordering::Equal,
+                (None, Some(_)) => core::cmp::Ordering::Greater,
+                (Some(_), None) => core::cmp::Ordering::Less,
+                (Some(a), Some(b)) => a.cmp(b),
+            })
+            .unwrap();
+        (min_min, max_max)
+    }
+
+    fn len(&self) -> usize {
+        match self {
+            ZipIterators::Array(inner) => inner.len(),
+            ZipIterators::Object(inner) => inner.len(),
+        }
+    }
+
+    /// Panics if count is larger than the minimum length of any iterator
+    fn zip_into(
+        &mut self,
+        count: usize,
+        interpreter: &mut Interpreter,
+        output_span_range: SpanRange,
+        output: &mut Vec<ExpressionValue>,
+    ) -> ExecutionResult<()> {
         let mut counter = interpreter.start_iteration_counter(&output_span_range);
 
-        for _ in 0..min_stream_length {
-            counter.increment_and_check()?;
-            let mut inner = Vec::with_capacity(iterators.len());
-            for iter in iterators.iter_mut() {
-                inner.push(iter.next().unwrap());
+        match self {
+            ZipIterators::Array(iterators) => {
+                for _ in 0..count {
+                    counter.increment_and_check()?;
+                    let mut inner = Vec::with_capacity(iterators.len());
+                    for iter in iterators.iter_mut() {
+                        inner.push(iter.next().unwrap());
+                    }
+                    output.push(inner.to_value(output_span_range));
+                }
             }
-            output.push(inner.to_value(output_span_range));
+            ZipIterators::Object(iterators) => {
+                for _ in 0..count {
+                    counter.increment_and_check()?;
+                    let mut inner = BTreeMap::new();
+                    for (key, key_span, iter) in iterators.iter_mut() {
+                        inner.insert(
+                            key.clone(),
+                            ObjectEntry {
+                                key_span: *key_span,
+                                value: iter.next().unwrap(),
+                            },
+                        );
+                    }
+                    output.push(inner.to_value(output_span_range));
+                }
+            }
         }
 
-        Ok(output.to_value(output_span_range))
+        Ok(())
     }
 }
