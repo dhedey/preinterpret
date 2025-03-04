@@ -138,6 +138,11 @@ impl InterpretToValue for &Statement {
 pub(crate) struct LetStatement {
     let_token: Token![let],
     pattern: Pattern,
+    assignment: Option<LetStatementAssignment>,
+}
+
+#[derive(Clone)]
+struct LetStatementAssignment {
     #[allow(unused)]
     equals: Token![=],
     expression: SourceExpression,
@@ -145,12 +150,26 @@ pub(crate) struct LetStatement {
 
 impl Parse<Source> for LetStatement {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
-        Ok(Self {
-            let_token: input.parse()?,
-            pattern: input.parse()?,
-            equals: input.parse()?,
-            expression: input.parse()?,
-        })
+        let let_token = input.parse()?;
+        let pattern = input.parse()?;
+        if input.peek(Token![=]) {
+            Ok(Self {
+                let_token,
+                pattern,
+                assignment: Some(LetStatementAssignment {
+                    equals: input.parse()?,
+                    expression: input.parse()?,
+                }),
+            })
+        } else if input.is_empty() || input.peek(Token![;]) {
+            Ok(Self {
+                let_token,
+                pattern,
+                assignment: None,
+            })
+        } else {
+            input.parse_err("Expected = or ;")
+        }
     }
 }
 
@@ -164,10 +183,12 @@ impl InterpretToValue for &LetStatement {
         let LetStatement {
             let_token,
             pattern,
-            expression,
-            ..
+            assignment,
         } = self;
-        let value = expression.interpret_to_value(interpreter)?;
+        let value = match assignment {
+            Some(assignment) => assignment.expression.interpret_to_value(interpreter)?,
+            None => ExpressionValue::None(let_token.span.span_range()),
+        };
         let mut span_range = value.span_range();
         pattern.handle_destructure(interpreter, value)?;
         span_range.set_start(let_token.span);

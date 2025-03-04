@@ -446,9 +446,9 @@ fn test_objects() {
     );
     preinterpret_assert_eq!(
         #(
-            let a = 0;
-            let b = 0;
-            let z = 0;
+            let a;
+            let b;
+            let z;
             { a, y: [_, b], z } = { a: 1, y: [5, 7] };
             { a, b, z } as debug
         ),

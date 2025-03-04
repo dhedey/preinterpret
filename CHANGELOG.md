@@ -96,9 +96,6 @@ Inside a transform stream, the following grammar is supported:
   * `@(inner = ...) [!stream! #inner]` - wraps the output in a transparent group
 
 ### To come
-* Objects continuation:
-  * Have `!zip!` support `{ objects }`
-* Support `let x;`
 * Method calls on values
   * Mutable params notes:
     * For now we can assume all params are values/clones, no mutable references
@@ -114,8 +111,7 @@ Inside a transform stream, the following grammar is supported:
   * Merge `GroupedVariable` and `ExpressionBlock` into an `ExplicitExpression`:
     * Either `#ident` or `#(...)` or `#{ ... }`...
       the latter defines a new variable stack frame, just like Rust
-    * To avoid confusion (such as below) and teach the user to only include #var where
-      necessary, only expression _blocks_ are allowed in an expression.
+    * To avoid confusion (such as below) and teach the user to only include #var where necessary, only expression _blocks_ are allowed in an expression.
       * Confusion example: `let x; x = #(let x = 123; 5)`. This isn't allowed in normal rust because the inside is a `{ .. }` which defines a new scope.
 * TRANSFORMERS => PARSERS cont
   * Re-read the `Parsers Revisited` section below
