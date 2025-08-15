@@ -83,7 +83,7 @@ impl<'a> ExpressionParser<'a, Source> {
                         }),
                     }
                 } else {
-                    self.push_stack_frame(ExpressionStackFrame::Array {
+                    self.push_stack_frame(ExpressionStackFrame::NonEmptyArray {
                         brackets,
                         items: Vec::new(),
                     })
@@ -125,28 +125,38 @@ impl<'a> ExpressionParser<'a, Source> {
                         operation,
                     })
                 }
-                NodeExtension::NonTerminalArrayComma => {
-                    match self.expression_stack.last_mut().unwrap() {
-                        ExpressionStackFrame::Array { items, .. } => {
+                NodeExtension::NonTerminalComma => {
+                    let next_item = match self.expression_stack.last_mut().unwrap() {
+                        ExpressionStackFrame::NonEmptyMethodCallParametersList { parameters, .. } => {
+                            parameters.push(node);
+                            Some(WorkItem::RequireUnaryAtom)
+                        }
+                        ExpressionStackFrame::NonEmptyArray { items, .. } => {
                             items.push(node);
+                            Some(WorkItem::RequireUnaryAtom)
+                        }
+                        ExpressionStackFrame::NonEmptyObject { .. } => {
+                            None // Placeholder to indicate separate handling below
                         }
                         _ => unreachable!(
-                            "NonTerminalArrayComma is only returned under an Array parent."
+                            "NonTerminalComma is only returned under an Array, Object or MethodCallParametersList parent."
                         ),
-                    }
-                    WorkItem::RequireUnaryAtom
-                }
-                NodeExtension::NonTerminalObjectValueComma => {
-                    match self.expression_stack.pop().unwrap() {
-                        ExpressionStackFrame::Object {
-                            braces,
-                            state: ObjectStackFrameState::EntryValue(key, _),
-                            mut complete_entries,
-                        } => {
-                            complete_entries.push((key, node));
-                            self.continue_object(braces, complete_entries)?
+                    };
+                    match next_item {
+                        Some(item) => item,
+                        None => { // Indicates object
+                            match self.expression_stack.pop().unwrap() {
+                                ExpressionStackFrame::NonEmptyObject {
+                                        braces,
+                                        state: ObjectStackFrameState::EntryValue(key, _),
+                                        mut complete_entries,
+                                } => {
+                                    complete_entries.push((key, node));
+                                    self.continue_object(braces, complete_entries)?
+                                }
+                                _ => unreachable!("This None code path is only reachable under an object"),
+                            }
                         }
-                        _ => unreachable!("NonTerminalObjectValueComma is only returned under an Object EntryValue parent."),
                     }
                 }
                 NodeExtension::Property(access) => WorkItem::TryParseAndApplyExtension {
@@ -154,6 +164,23 @@ impl<'a> ExpressionParser<'a, Source> {
                         .nodes
                         .add_node(ExpressionNode::Property { node, access }),
                 },
+                NodeExtension::MethodCall(method) => {
+                    if self.streams.is_current_empty() {
+                        self.streams.exit_group();
+                        let node = self.nodes.add_node(ExpressionNode::MethodCall {
+                            node,
+                            method,
+                            parameters: Vec::new(),
+                        });
+                        WorkItem::TryParseAndApplyExtension { node }
+                    } else {
+                        self.push_stack_frame(ExpressionStackFrame::NonEmptyMethodCallParametersList {
+                            node,
+                            method,
+                            parameters: Vec::new(),
+                        })
+                    }
+                }
                 NodeExtension::Index(access) => {
                     self.push_stack_frame(ExpressionStackFrame::IncompleteIndex { node, access })
                 }
@@ -173,7 +200,7 @@ impl<'a> ExpressionParser<'a, Source> {
                         operation,
                     })
                 }
-                NodeExtension::EndOfStream | NodeExtension::NoValidExtensionForCurrentParent => {
+                NodeExtension::EndOfStreamOrGroup | NodeExtension::NoValidExtensionForCurrentParent => {
                     unreachable!("Not possible, as these have minimum precedence")
                 }
             })
@@ -185,13 +212,13 @@ impl<'a> ExpressionParser<'a, Source> {
                 ExpressionStackFrame::Root => {
                     assert!(matches!(
                         extension,
-                        NodeExtension::EndOfStream
+                        NodeExtension::EndOfStreamOrGroup
                             | NodeExtension::NoValidExtensionForCurrentParent
                     ));
                     WorkItem::Finished { root: node }
                 }
                 ExpressionStackFrame::Group { delim_span } => {
-                    assert!(matches!(extension, NodeExtension::EndOfStream));
+                    assert!(matches!(extension, NodeExtension::EndOfStreamOrGroup));
                     self.streams.exit_group();
                     WorkItem::TryParseAndApplyExtension {
                         node: self.nodes.add_node(ExpressionNode::Grouped {
@@ -200,11 +227,11 @@ impl<'a> ExpressionParser<'a, Source> {
                         }),
                     }
                 }
-                ExpressionStackFrame::Array {
+                ExpressionStackFrame::NonEmptyArray {
                     mut items,
                     brackets,
                 } => {
-                    assert!(matches!(extension, NodeExtension::EndOfStream));
+                    assert!(matches!(extension, NodeExtension::EndOfStreamOrGroup));
                     items.push(node);
                     self.streams.exit_group();
                     WorkItem::TryParseAndApplyExtension {
@@ -213,15 +240,30 @@ impl<'a> ExpressionParser<'a, Source> {
                             .add_node(ExpressionNode::Array { brackets, items }),
                     }
                 }
-                ExpressionStackFrame::Object {
+                ExpressionStackFrame::NonEmptyMethodCallParametersList {
+                    node: source,
+                    mut parameters,
+                    method,
+                } => {
+                    assert!(matches!(extension, NodeExtension::EndOfStreamOrGroup));
+                    parameters.push(node);
+                    self.streams.exit_group();
+                    let node = self.nodes.add_node(ExpressionNode::MethodCall {
+                        node: source,
+                        method,
+                        parameters,
+                    });
+                    WorkItem::TryParseAndApplyExtension { node }
+                }
+                ExpressionStackFrame::NonEmptyObject {
                     braces,
                     complete_entries,
                     state: ObjectStackFrameState::EntryIndex(access),
                 } => {
-                    assert!(matches!(extension, NodeExtension::EndOfStream));
+                    assert!(matches!(extension, NodeExtension::EndOfStreamOrGroup));
                     self.streams.exit_group();
                     let colon = self.streams.parse()?;
-                    self.expression_stack.push(ExpressionStackFrame::Object {
+                    self.expression_stack.push(ExpressionStackFrame::NonEmptyObject {
                         braces,
                         complete_entries,
                         state: ObjectStackFrameState::EntryValue(
@@ -234,12 +276,12 @@ impl<'a> ExpressionParser<'a, Source> {
                     });
                     WorkItem::RequireUnaryAtom
                 }
-                ExpressionStackFrame::Object {
+                ExpressionStackFrame::NonEmptyObject {
                     braces,
                     complete_entries: mut entries,
                     state: ObjectStackFrameState::EntryValue(key, _),
                 } => {
-                    assert!(matches!(extension, NodeExtension::EndOfStream));
+                    assert!(matches!(extension, NodeExtension::EndOfStreamOrGroup));
                     self.streams.exit_group();
                     entries.push((key, node));
                     let node = self
@@ -266,7 +308,7 @@ impl<'a> ExpressionParser<'a, Source> {
                     node: source,
                     access,
                 } => {
-                    assert!(matches!(extension, NodeExtension::EndOfStream));
+                    assert!(matches!(extension, NodeExtension::EndOfStreamOrGroup));
                     self.streams.exit_group();
                     let node = self.nodes.add_node(ExpressionNode::Index {
                         node: source,
@@ -394,7 +436,7 @@ impl<'a> ExpressionParser<'a, Source> {
                 return self.streams.parse_err(ERROR_MESSAGE);
             }
         };
-        Ok(self.push_stack_frame(ExpressionStackFrame::Object {
+        Ok(self.push_stack_frame(ExpressionStackFrame::NonEmptyObject {
             braces,
             complete_entries,
             state,
@@ -662,17 +704,25 @@ pub(super) enum ExpressionStackFrame {
     /// A marker for the bracketed array.
     /// * When the array is opened, we add its inside to the parse stream stack
     /// * When the array is closed, we pop it from the parse stream stack
-    Array {
+    NonEmptyArray {
         brackets: Brackets,
         items: Vec<ExpressionNodeId>,
     },
     /// A marker for an object literal.
     /// * When the object is opened, we add its inside to the parse stream stack
     /// * When the object is closed, we pop it from the parse stream stack
-    Object {
+    NonEmptyObject {
         braces: Braces,
         complete_entries: Vec<(ObjectKey, ExpressionNodeId)>,
         state: ObjectStackFrameState,
+    },
+    /// A method call with a possibly incomplete list of parameters.
+    /// * When the method parameters list is opened, we add its inside to the parse stream stack
+    /// * When the method parameters list is closed, we pop it from the parse stream stack
+    NonEmptyMethodCallParametersList {
+        node: ExpressionNodeId,
+        method: MethodAccess,
+        parameters: Vec<ExpressionNodeId>,
     },
     /// An incomplete unary prefix operation
     /// NB: unary postfix operations such as `as` casting go straight to ExtendableNode
@@ -730,8 +780,9 @@ impl ExpressionStackFrame {
         match self {
             ExpressionStackFrame::Root => OperatorPrecendence::MIN,
             ExpressionStackFrame::Group { .. } => OperatorPrecendence::MIN,
-            ExpressionStackFrame::Array { .. } => OperatorPrecendence::MIN,
-            ExpressionStackFrame::Object { .. } => OperatorPrecendence::MIN,
+            ExpressionStackFrame::NonEmptyArray { .. } => OperatorPrecendence::MIN,
+            ExpressionStackFrame::NonEmptyObject { .. } => OperatorPrecendence::MIN,
+            ExpressionStackFrame::NonEmptyMethodCallParametersList { .. } => OperatorPrecendence::MIN,
             ExpressionStackFrame::IncompleteIndex { .. } => OperatorPrecendence::MIN,
             ExpressionStackFrame::IncompleteRange { .. } => OperatorPrecendence::Range,
             ExpressionStackFrame::IncompleteAssignment { .. } => OperatorPrecendence::Assign,
@@ -790,14 +841,15 @@ pub(super) enum UnaryAtom<K: Expressionable> {
 pub(super) enum NodeExtension {
     PostfixOperation(UnaryOperation),
     BinaryOperation(BinaryOperation),
-    NonTerminalArrayComma,
-    NonTerminalObjectValueComma,
+    /// Used under Arrays, Objects, and Method Parameter List parents
+    NonTerminalComma,
     Property(PropertyAccess),
+    MethodCall(MethodAccess),
     Index(IndexAccess),
     Range(syn::RangeLimits),
     AssignmentOperation(Token![=]),
     CompoundAssignmentOperation(CompoundAssignmentOperation),
-    EndOfStream,
+    EndOfStreamOrGroup,
     NoValidExtensionForCurrentParent,
 }
 
@@ -806,12 +858,12 @@ impl NodeExtension {
         match self {
             NodeExtension::PostfixOperation(op) => OperatorPrecendence::of_unary_operation(op),
             NodeExtension::BinaryOperation(op) => OperatorPrecendence::of_binary_operation(op),
-            NodeExtension::NonTerminalArrayComma => OperatorPrecendence::NonTerminalComma,
-            NodeExtension::NonTerminalObjectValueComma => OperatorPrecendence::NonTerminalComma,
+            NodeExtension::NonTerminalComma => OperatorPrecendence::NonTerminalComma,
             NodeExtension::Property { .. } => OperatorPrecendence::Unambiguous,
+            NodeExtension::MethodCall { .. } => OperatorPrecendence::Unambiguous,
             NodeExtension::Index { .. } => OperatorPrecendence::Unambiguous,
             NodeExtension::Range(_) => OperatorPrecendence::Range,
-            NodeExtension::EndOfStream => OperatorPrecendence::MIN,
+            NodeExtension::EndOfStreamOrGroup => OperatorPrecendence::MIN,
             NodeExtension::AssignmentOperation(_) => OperatorPrecendence::AssignExtension,
             NodeExtension::CompoundAssignmentOperation(_) => OperatorPrecendence::AssignExtension,
             NodeExtension::NoValidExtensionForCurrentParent => OperatorPrecendence::MIN,
@@ -825,15 +877,16 @@ impl NodeExtension {
             extension @ (NodeExtension::PostfixOperation { .. }
             | NodeExtension::BinaryOperation { .. }
             | NodeExtension::Property { .. }
+            | NodeExtension::MethodCall { .. }
             | NodeExtension::Index { .. }
             | NodeExtension::Range { .. }
             | NodeExtension::AssignmentOperation { .. }
             | NodeExtension::CompoundAssignmentOperation { .. }
-            | NodeExtension::EndOfStream) => {
+            | NodeExtension::EndOfStreamOrGroup) => {
                 WorkItem::TryApplyAlreadyParsedExtension { node, extension }
             }
-            NodeExtension::NonTerminalArrayComma | NodeExtension::NonTerminalObjectValueComma => {
-                unreachable!("Commas is only possible on array or object parent")
+            NodeExtension::NonTerminalComma => {
+                unreachable!("Comma is only possible on method parameter list or array or object parent")
             }
             NodeExtension::NoValidExtensionForCurrentParent => {
                 // We have to reparse in case the extension is valid for the new parent.

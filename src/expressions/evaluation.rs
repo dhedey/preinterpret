@@ -288,6 +288,13 @@ impl ExpressionNode<Source> {
                     access: access.clone(),
                 },
             ),
+            ExpressionNode::MethodCall { node, method, parameters } => next.read_value_with_handler(
+                *node,
+                ValueStackFrame::MethodCall(MethodCallStackFrame::CallerPath {
+                    method: method.clone(),
+                    parameters: parameters.clone(),
+                }),
+            ),
             ExpressionNode::Index {
                 node,
                 access,
@@ -452,6 +459,7 @@ enum ValueStackFrame {
     Property {
         access: PropertyAccess,
     },
+    MethodCall(MethodCallStackFrame),
     Index {
         access: IndexAccess,
         state: IndexPath,
@@ -488,6 +496,7 @@ impl ValueStackFrame {
             ValueStackFrame::UnaryOperation { .. } => ReturnMode::Value,
             ValueStackFrame::BinaryOperation { .. } => ReturnMode::Value,
             ValueStackFrame::Property { .. } => ReturnMode::Value,
+            ValueStackFrame::MethodCall { .. } => ReturnMode::Value,
             ValueStackFrame::Index { .. } => ReturnMode::Value,
             ValueStackFrame::Range { .. } => ReturnMode::Value,
             ValueStackFrame::HandleValueForAssignment { .. } => ReturnMode::Value,
@@ -533,6 +542,7 @@ impl ValueStackFrame {
                 }
             },
             ValueStackFrame::Property { access } => next.return_value(value.into_property(access)?),
+            ValueStackFrame::MethodCall(call) => call.handle_value(value, next)?,
             ValueStackFrame::Index { access, state } => match state {
                 IndexPath::OnObjectBranch { index } => next.read_value_with_handler(
                     index,
@@ -635,6 +645,54 @@ impl ValueStackFrame {
                 access,
             } => object.handle_index_value(access, value, assignee_node, next)?,
         })
+    }
+}
+
+enum MethodCallStackFrame {
+    CallerPath {
+        method: MethodAccess,
+        parameters: Vec<ExpressionNodeId>,
+    },
+    ArgumentsPath {
+        caller: ExpressionValue,
+        method: MethodAccess,
+        unevaluated_parameters: Vec<ExpressionNodeId>,
+        evaluated_parameters: Vec<ExpressionValue>,
+    },
+}
+
+impl MethodCallStackFrame {
+    fn handle_value(self, value: ExpressionValue, action_creator: ActionCreator) -> ExecutionResult<NextAction> {
+        let (caller, method, unevaluated_parameters, evaluated_parameters) = match self {
+            MethodCallStackFrame::CallerPath {
+                method,
+                parameters,
+            } => (value, method, parameters, Vec::new()),
+            MethodCallStackFrame::ArgumentsPath {
+                caller,
+                method,
+                unevaluated_parameters,
+                mut evaluated_parameters,
+            } => {
+                evaluated_parameters.push(value);
+                (caller, method, unevaluated_parameters, evaluated_parameters)
+            }
+        };
+        let next_action = match unevaluated_parameters
+            .get(evaluated_parameters.len())
+            .cloned()
+        {
+            Some(next) => {
+                action_creator.read_value_with_handler(next, ValueStackFrame::MethodCall(MethodCallStackFrame::ArgumentsPath {
+                    caller,
+                    method,
+                    unevaluated_parameters,
+                    evaluated_parameters,
+                }))
+            }
+            None => action_creator.return_value(caller.call_method(method, evaluated_parameters)?),
+        };
+        Ok(next_action)
     }
 }
 

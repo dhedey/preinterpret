@@ -1,3 +1,5 @@
+use syn::token;
+
 use super::*;
 
 // Source
@@ -129,23 +131,17 @@ impl Expressionable for Source {
             }
             SourcePeekMatch::Punct(punct) if punct.as_char() == ',' => {
                 match parent_stack_frame {
-                    ExpressionStackFrame::Array { .. } => {
-                        input.parse::<Token![,]>()?;
-                        if input.is_current_empty() {
-                            return Ok(NodeExtension::EndOfStream);
-                        } else {
-                            return Ok(NodeExtension::NonTerminalArrayComma);
-                        }
-                    }
-                    ExpressionStackFrame::Object {
+                    ExpressionStackFrame::NonEmptyArray { .. }
+                    | ExpressionStackFrame::NonEmptyMethodCallParametersList { .. }
+                    | ExpressionStackFrame::NonEmptyObject {
                         state: ObjectStackFrameState::EntryValue { .. },
                         ..
                     } => {
                         input.parse::<Token![,]>()?;
                         if input.is_current_empty() {
-                            return Ok(NodeExtension::EndOfStream);
+                            return Ok(NodeExtension::EndOfStreamOrGroup);
                         } else {
-                            return Ok(NodeExtension::NonTerminalObjectValueComma);
+                            return Ok(NodeExtension::NonTerminalComma);
                         }
                     }
                     ExpressionStackFrame::Group { .. } => {
@@ -157,9 +153,19 @@ impl Expressionable for Source {
             }
             SourcePeekMatch::Punct(punct) => {
                 if punct.as_char() == '.' && input.peek2(syn::Ident) {
+                    let dot = input.parse()?;
+                    let ident = input.parse()?;
+                    if input.peek(token::Paren) {
+                        let (_, delim_span) = input.parse_and_enter_group()?;
+                        return Ok(NodeExtension::MethodCall(MethodAccess {
+                            dot,
+                            method: ident,
+                            parentheses: Parentheses { delim_span },
+                        }));
+                    }
                     return Ok(NodeExtension::Property(PropertyAccess {
-                        dot: input.parse()?,
-                        property: input.parse()?,
+                        dot,
+                        property: ident,
                     }));
                 }
                 if let Ok(operation) = input.try_parse_or_revert() {
@@ -180,7 +186,7 @@ impl Expressionable for Source {
                     UnaryOperation::for_cast_operation(input.parse()?, input.parse_any_ident()?)?;
                 return Ok(NodeExtension::PostfixOperation(cast_operation));
             }
-            SourcePeekMatch::End => return Ok(NodeExtension::EndOfStream),
+            SourcePeekMatch::End => return Ok(NodeExtension::EndOfStreamOrGroup),
             _ => {}
         };
         // We are not at the end of the stream, but the tokens which follow are
@@ -188,16 +194,19 @@ impl Expressionable for Source {
         match parent_stack_frame {
             ExpressionStackFrame::Root => Ok(NodeExtension::NoValidExtensionForCurrentParent),
             ExpressionStackFrame::Group { .. } => input.parse_err("Expected ) or operator"),
-            ExpressionStackFrame::Array { .. } => input.parse_err("Expected comma, ], or operator"),
+            ExpressionStackFrame::NonEmptyArray { .. } => input.parse_err("Expected comma, ], or operator"),
             ExpressionStackFrame::IncompleteIndex { .. }
-            | ExpressionStackFrame::Object {
+            | ExpressionStackFrame::NonEmptyObject {
                 state: ObjectStackFrameState::EntryIndex { .. },
                 ..
             } => input.parse_err("Expected ], or operator"),
-            ExpressionStackFrame::Object {
+            ExpressionStackFrame::NonEmptyObject {
                 state: ObjectStackFrameState::EntryValue { .. },
                 ..
             } => input.parse_err("Expected comma, }, or operator"),
+            ExpressionStackFrame::NonEmptyMethodCallParametersList { .. } => {
+                input.parse_err("Expected comma, ) or operator")
+            }
             // e.g. I've just matched the true in !true or false || true,
             // and I want to see if there's an extension (e.g. a cast).
             // There's nothing matching, so we fall through to an EndOfFrame
@@ -286,6 +295,11 @@ pub(super) enum ExpressionNode<K: Expressionable> {
         node: ExpressionNodeId,
         access: PropertyAccess,
     },
+    MethodCall {
+        node: ExpressionNodeId,
+        method: MethodAccess,
+        parameters: Vec<ExpressionNodeId>,
+    },
     Index {
         node: ExpressionNodeId,
         access: IndexAccess,
@@ -315,6 +329,7 @@ impl ExpressionNode<Source> {
             ExpressionNode::Grouped { delim_span, .. } => delim_span.span_range(),
             ExpressionNode::Array { brackets, .. } => brackets.span_range(),
             ExpressionNode::Object { braces, .. } => braces.span_range(),
+            ExpressionNode::MethodCall { method, .. } => method.span_range(),
             ExpressionNode::Property { access, .. } => access.span_range(),
             ExpressionNode::Index { access, .. } => access.span_range(),
             ExpressionNode::UnaryOperation { operation, .. } => operation.span_range(),

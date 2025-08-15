@@ -462,3 +462,15 @@ fn test_objects() {
         r#"{ a: 1, b: 7, c: None, x: {}, z: None }"#
     );
 }
+
+
+#[test]
+fn test_method_calls() {
+    preinterpret_assert_eq!(
+        #(
+            let x = [1, 2, 3];
+            x.len() + [!stream! "Hello" world].len()
+        ),
+        2 + 3
+    );
+}

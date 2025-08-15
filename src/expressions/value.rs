@@ -457,6 +457,36 @@ impl ExpressionValue {
         }
     }
 
+    pub(crate) fn call_method(self, method: MethodAccess, parameters: Vec<ExpressionValue>) -> ExecutionResult<Self> {
+        // TODO: Make this more extensible / usable
+        match self {
+            ExpressionValue::Array(array) => match method.method.to_string().as_str() {
+                "len" => {
+                    match parameters.as_slice() {
+                        [] => {}
+                        _ => return method.execution_err(format!("The `len` method does not take parameters")),
+                    }
+                    let len = array.items.len();
+                    return Ok(len.to_value(method.span_range()))
+                }
+                _ => {}
+            }
+            ExpressionValue::Stream(stream) => match method.method.to_string().as_str() {
+                "len" => {
+                    match parameters.as_slice() {
+                        [] => {}
+                        _ => return method.execution_err(format!("The `len` method does not take parameters")),
+                    }
+                    let len = stream.value.len();
+                    return Ok(len.to_value(method.span_range()))
+                }
+                _ => {}
+            }
+            _ => {},
+        }
+        method.execution_err("Methods are not currently supported")
+    }
+
     pub(crate) fn into_property(self, access: PropertyAccess) -> ExecutionResult<Self> {
         match self {
             ExpressionValue::Object(object) => object.into_property(access),

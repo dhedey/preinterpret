@@ -96,13 +96,15 @@ Inside a transform stream, the following grammar is supported:
   * `@(inner = ...) [!stream! #inner]` - wraps the output in a transparent group
 
 ### To come
-* Method calls on values
-  * Mutable params notes:
-    * For now we can assume all params are values/clones, no mutable references
+* Method calls continues
   * Also add support for methods (for e.g. exposing functions on syn objects).
-  * `.len()` on stream
-  * `.push(x)` on array
-  * `.push(x)` on token stream
+  * Add support for &mut methods like `push(..)`... how? unclear.
+    * Maybe the method set-up is derived by calling a method on &ExpressionValue
+      which then tells us whether we want/need self to be a reference, mutable reference, or owned value
+    * Maybe parameters should be some cow-like enum for Value or (variable) Reference?
+    * For now we can assume all non-self parameters are effectively read-only references, no mutability
+    * Then add `.push(x)` on array and stream
+  * Improve support to make it easier to add methods
 * Compare to https://www.reddit.com/r/rust/comments/1j42fgi/media_introducing_eval_macro_a_new_way_to_write 
 * No clone required for testing equality of streams, objects and arrays
   * Some kind of reference support
