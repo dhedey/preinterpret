@@ -11,7 +11,7 @@
 
 * Core commands:
   * `[!error! ...]` to output a compile error.
-  * `[!set! #x += ...]` to performantly add extra characters to the stream.
+  * `[!set! #x += ...]` to performantly add extra characters to a variable's stream.
   * `[!set! _ = ...]` interprets its arguments but then ignores any outputs.
   * `[!debug! ...]` to output its interpreted contents including none-delimited groups. Useful for debugging the content of variables.
   * `[!stream! ...]` can be used to just output its interpreted contents. It's useful to create a stream value inside an expression.
@@ -102,49 +102,58 @@ Inside a transform stream, the following grammar is supported:
   * Also add support for methods (for e.g. exposing functions on syn objects).
   * `.len()` on stream
   * `.push(x)` on array
-  * Consider `.map(|<pattern>| {})`
-* Reference equality for streams, objects and arrays
-  * And new `.clone()` method
+  * `.push(x)` on token stream
+* Compare to https://www.reddit.com/r/rust/comments/1j42fgi/media_introducing_eval_macro_a_new_way_to_write 
+* No clone required for testing equality of streams, objects and arrays
+  * Some kind of reference support
+  * Add new `.clone()` method
 * Introduce interpreter stack frames
+  * Read the `REVERSION` comment in the `Parsers Revisited` section below to consider approaches, which will work with possibly needing
+    to revert state if a parser fails.
   * Design the data model => is it some kind of linked list of frames?
-  * Add a new frame inside loops
+    * If we introduce functions in future, then a reference is a closure, in _lexical_ scope, which is different from stack frames.
+    * We probably don't want to allow closures to start with.
+    * Maybe we simply pass in a lexical parent frame when resolving variable references?
+       * Possibly with some local cache of parent references, so we don't need to re-discover them if they're used multiple times in a loop
+         e.g. `x` in `#(let x = 0; {{{ loop { x++; if x < 10 { break }} }}})`
+  * Add a new frame inside loops, or wherever we see `{ ... }`
   * Merge `GroupedVariable` and `ExpressionBlock` into an `ExplicitExpression`:
     * Either `#ident` or `#(...)` or `#{ ... }`...
       the latter defines a new variable stack frame, just like Rust
     * To avoid confusion (such as below) and teach the user to only include #var where necessary, only expression _blocks_ are allowed in an expression.
       * Confusion example: `let x; x = #(let x = 123; 5)`. This isn't allowed in normal rust because the inside is a `{ .. }` which defines a new scope.
+    * The `#()` syntax can be used in certain places (such as parse streams)
+* Introduce `~(...)` and `r~(...)` streams instead of `[!stream! ...]` and `[!raw! ...]`
+* Support for/while/loop/break/continue inside expressions
+  * And allow them to start with an expression block with `{}` or `#{}` or a stream block with `~{}`
+    QUESTION: Do we require either `#{}` or `~{}`? Maybe! That way we can give a helpful error message.
+  * ... and remove the control flow commands `[!if! ...]` / `[!while! ...]` / `[!break! ...]` / `[!for! ...]`, `[!while! ...]` and `[!loop! ...]`
 * TRANSFORMERS => PARSERS cont
-  * Re-read the `Parsers Revisited` section below
   * Manually search for transform and rename to parse in folder names and file.
   * Parsers no longer output to a stream.
+  * See all of `Parsers Revisited` below!
   * We let `#(let x)` INSIDE a `@(...)` bind to the same scope as its surroundings...
     Now some repetition like `@{..}*` needs to introduce its own scope.
     ==> Annoyingly, a `@(..)*` has to really push/output to an array internally to have good developer experience; which means we need to solve the "relatively performant staged/reverted interpreter state" problem regardless; and putting an artificial limitation on conditional parse streams to not do that doesn't really work. TBC - needs more consideration.
-    ==> Maybe there is an alternative such as:
-      * `@(..)*` returns an array of some output of it's inner thing
-      * But things don't output so what does that mean??
-      * I think in practice it will be quite an annoying restriction anyway
-  * Support `#(x = @IDENT)` where `#` blocks inside parsers can embed @parsers and consume from a parse stream.
-    * This makes it kinda like a `Parse` implementation code block.
-    * This lets us just support variable definitions in expression statements.
   * Don't support `@(x = ...)` - instead we can have `#(x = @[STREAM ...])`
-    * This can capture the original tokens by using `let forked = input.fork()`
-      and then `let end_cursor = input.end();` and then consuming `TokenTree`s
-      from `forked` until `forked.cursor >= end_cursor` (making use of the
-      PartialEq implementation) 
-  * Revisit `parse`
+    * This can capture the original tokens by using `let forked = input.fork()` and then `let end_cursor = input.end();` and then consuming `TokenTree`s
+      from `forked` until `forked.cursor >= end_cursor` (making use of the PartialEq implementation) 
+  * Scrap `[!set!]` in favour of `#(x = ..)` and `#(x += ..)`
   * Scrap `#>>x` etc in favour of `#(a.push(@[XXX]))`
-  * Scrap `[!let!]` in favour of `#(let <destructuring> = #x)`
+  * Scrap `[!let!]` in favour of `#(let <destructuring> = x)`
+* Implement the following named parsers
   * `@TOKEN_TREE`
   * `@TOKEN_OR_GROUP_CONTENT` - Literal, Ident, Punct or None-group content.
   * `@INFER_TOKEN_TREE` - Infers values, falls back to Stream
   * `@[ANY_GROUP ...]`
   * `@REST`
+  * `@[FORK @{ ...parser... }]` the parser block creates a `commit=false` variable, if this is set to `commit=true` then it commits the fork.
+  * `@[PEEK ...]` which does a `@[FORK ...]` internally
   * `@[FIELDS { ... }]` and `@[SUBFIELDS { ... }]`
   * Add ability to add scope to interpreter state (see `Parsers Revisited`) and can then add:
     * `@[OPTIONAL ...]` and `@(...)?`
     * `@[REPEATED { ... }]` (see below)
-    * `@[UNTIL @{...}]` - takes an explicit parse block or parser. Reverts any state change
+    * `@[UNTIL @{...}]` - takes an explicit parse block or parser. Reverts any state change if it doesn't match.
     * `[!match! ...]` command
     * `@[MATCH { ... }]` (with `#..x` as a catch-all) with optional arms...
     * `#(..)?`, `#(..)+`, `#(..),+`, `#(..)*`, `#(..),*`
@@ -172,13 +181,13 @@ Inside a transform stream, the following grammar is supported:
   * Adding all of these: https://veykril.github.io/tlborm/decl-macros/minutiae/fragment-specifiers.html#ty
   * Adding `preinterpret::macro`
   * Adding `!define_command!`
-  * Adding `!define_transformer!`
+  * Adding `!define_parser!`
   * Whether `preinterpret` should start in expression mode?
     => Or whether to have `preinterpet::stream` / `preinterpret::run` / `preinterpret::define_macro` options?
     => Maybe `preinterpret::preinterpret` is marked as deprecated; starts in `stream` mode, and enables `[!set!]`?
 * `[!is_set! #x]`
 * Have UntypedInteger have an inner representation of either i128 or literal (and same with float)
-* Maybe add a `@[REINTERPRET ..]` transformer.
+* Maybe add a `@[REINTERPRET ..]` parser.
 * CastTarget expansion:
   * Add `as iterator` and uncomment the test at the end of `test_range()`
   * Support a CastTarget of `array` using `into_iterator()`.
@@ -201,117 +210,179 @@ Inside a transform stream, the following grammar is supported:
 ### Parsers Revisited
 ```rust
 // PROPOSAL (subject to the object proposal above):
-// * Four modes:
-//   * Output stream mode
-//     * Outputs stream, does not parse
-//     * Can embed [!commands! ...] and #()
-//       * #([...]) gets appended to the stream
-//   * #( ... ) = Expression mode.
-//     * One or more statements, terminated by ; (except maybe the last)
+// * Various modes...
+//   * EXPRESSION MODE
+//     * OPENING SYNTAX:
+//       * #{ ... } or #'name { ... } with a new lexical variable scope
+//       * #( ... ) with no new scope (TBC if we need both - probably)
+//     * CONTEXT:
+//       * Is *not* stream-based - it consists of expressions rather than a stream
+//       * It *may* have a contextual input parse stream
+//     * One or more statements, terminated by ; (except maybe the last, which is returned)
 //     * Idents mean variables.
-//     * `let #x; let _ = <value>; <value>; if <value> {<statements>} else {}`
+//     * `let x; let _ = <value>; <value>; if <value> {<statements>} else {}`
 //     * Error not to discard a non-None value with `let _ = <value>`
-//     * If embedded into a parse stream, it's allowed to parse by embedding parsers, e.g. @[STREAM ...]
-//     * Only last statement can (optionally) output, with a value model of:
+//     * If it has an input parse stream, it's allowed to parse by embedding parsers, e.g. @TOKEN_TREE
+//     * Only the last statement can (optionally) output, with a value model of:
 //       * Leaf(Bool | Int | Float | String)
 //       * Object
 //       * Stream
 //       * None
+//     * (In future we could add breaking from labelled block: https://blog.rust-lang.org/2022/11/03/Rust-1.65.0/#break-from-labeled-blocks)
 //     * The actual type is only known at evaluation time.
 //     * #var is equivalent to #(var)
-//   * Named parser @XXX or @[XXX] or @[XXX <arguments>]
-//     * Can parse; has no output.
-//     * XXX is:
-//       * A named destructurer (possibly taking further input)
-//       * An { .. } object destructurer
-//       * A @(...) transformer stream (output = input)
-//   * @() or @{} = Parse block
-//     * Expression/command outputs are parsed exactly.
-//     * Can return a value with `#(return X)`
-//     * (`@[STREAM ...]` is broadly equivalent, but does output the input stream)
-//     * Its only output is an input stream reference
-//       * ...and only if it's redirected inside a @[x = $(...)]
-//   * [!command! ...]
-//     * Can output but does not parse.
-// * Every named parser has a typed output, which is:
-//   * EITHER its input token stream (for simple matchers, e.g. @IDENT)
-//   * OR an #output OBJECT with at least two properties:
-//     * input => all matched characters (a slice reference which can be dropped...)
-//       (it might only be possible to performantly capture this after the syn fork)
-//     * output_to => A lazy function, used to handle the output when #x is in the final output...
-//               likely `input` or an error depending on the case.
-//     * into_iterator
-//   * ... other properties, depending on the TRANSFORMER:
-//     * e.g. a Rust ITEM might have quite a few (mostly lazy)
+//   * OUTPUT STREAM MODE
+//     * OPENING SYNTAX: ~{ ... } or ~( ... ) or raw stream literal with r~( ... )
+//       * SIDENOTES: I'd have liked to use $, but it clashes with $() repetition syntax inside macro rules
+//       * And % might appear in real code as 1 % (2 + 3)
+//       * But ~ seems to not be used much, and looks a bit like an s. So good enough?
+//     * CONTEXT:
+//       * Can make use of a parent output stream, by concatenating into it. 
+//       * Is stream-based: Anything embedded to it can have their outputs concatenated onto the output stream
+//       * Does *not* have an input parse stream
+//     * Can embed [!commands! ...], #() and #{ ... }, but not parsers
+//       * The output from #([...]) gets appended to the stream; ideally by passing it an optional output stream
+//     * It has a corresponding pattern:
+//      * SYNTAX:
+//        * ~#( .. ) to start in expression mode OR
+//        * ~@( .. ) ~@XXX or ~@[XXX ...] to start with a parser e.g. ~@REST can be used to parse any stream opaquely OR
+//        * r~( .. ) to match a raw stream (it doesn't have a mode!)
+//      * Can be used where patterns can be used, in a let expression or a match arm, e.g.
+//        * let ~#( let x = @IDENT ) = r~(...)
+//        * ~#( ... ) => { ... }
+//      * CONTEXT:
+//         * It implicitly creates a parse-stream for its contents
+//         * It would never have an output stream
+//         * It is the only syntax which can create a parse stream, other than the [!parse! ..] command
+//   * NAMED PARSER
+//     * OPENING SYNTAX: @XXX or @[XXX] or @[XXX <arguments>]
+//     * CONTEXT:
+//       * Is typically *not* stream-based - it may has its own arguments, which are typically a pseudo-object `{  }`
+//       * It has an input parse stream
+//     * Every named parser @XXX has a typed output, which is:
+//       * EITHER its input token stream (for simple matchers, e.g. @IDENT)
+//       * OR an #output OBJECT with at least two properties:
+//         * input => all matched characters (a slice reference which can be dropped...)
+//           (it might only be possible to performantly capture this after the syn fork)
+//           THIS NOTE MIGHT BE RELEVANT, BUT I'M WRITING THIS AFTER 6 MONTHS LACKING CONTEXT:
+//              This can capture the original tokens by using `let forked = input.fork()`
+//              and then `let end_cursor = input.end();` and then consuming `TokenTree`s
+//              from `forked` until `forked.cursor >= end_cursor` (making use of the
+//              PartialEq implementation) 
+//         * output_to => A lazy function, used to handle the output when #x is embedded into a stream output...
+//        likely `input` or an error depending on the case.
+//         * into_iterator
+//       * ... other properties, depending on the parsee:
+//         * e.g. a Rust ITEM might have quite a few (mostly lazy)
+//   * PARSE-STREAM MODE
+//     * OPENING SYNTAX:
+//       * @{ ... } or @'block_name { ... } (as a possibly named block) -- both have variable scoping semantics
+//       * We also support various repetitions such as: @{ ... }? and @{ ... }+ and @{ ... },+ - discussed in next section in more detail
+//       * We likely don't want/need an un-scoped parse stream
+//     * CONTEXT:
+//       * It is stream-based: Any outputs of items in the stream are converted to an exact parse matcher
+//       * Does have an input parse stream which it can mutate
+//     * Expression/command outputs are converted into an exact parse matcher
+//     * RETURN VALUE:
+//       * Parse blocks can return a value with `#(return X)` or `#(return 'block_name X)` else return None
+//       * By contrast, `@[STREAM ...]` works very similarly, but outputs its input stream
+//   * COMMAND
+//     * OPENING SYNTAX: [!command! ...]
+//     * CONTEXT:
+//       * Takes an optional output stream from its parent (for efficiency, if it returns a stream it can instead concat to that)
+//       * May or may not be stream-based depending on the command...
+//       * Does *not* have an input parse stream (I think? Maybe it's needed. TBC)
+//     * Lots of commands can/should probably become functions
+//     * A flexible utility for different kinds of functionality
+//
 // * Repetitions (including optional), e.g. @IDENT,* or @[IDENT ...],* or @{...},*
 //   * Output their contents in a `Repeated` type, with an `items` property, and an into_iterator implementation?
-//   * Transform streams can't be repeated, only transform blocks (because they create a new interpreter frame)
-//   * There is still an issue with "what happens to mutated state when a repetition is not possible?"
-//     ... this is also true in a case statement... We need some way to rollback in these cases:
-//     => Easier - Use of efficient-ish immutable data structures, e.g. ImmutableList, Copy-on-write leaf types etc
-//        ... so that we can clone them cheaply (e.g. https://github.com/orium/rpds) or even just
-//        some manually written tries/cons-lists
-//     => CoW - We do some kind of copy-on-write - but it still give O(N^2) if we're reverting occasional array.push(..)es
-// [BEST]? => Middle - Any changes to variables outside the scope of a given refutable parser => it's a fatal error
+//   * Unscoped parse streams can't be repeated, only parse blocks (because they create a new interpreter frame)
+//   * If we don't move our cursor forward in a loop iteration, it's an error -- this prevents @{}* or @{x?}* causing an infinite loop
+//   * We do *not* support backtracking.
+//     * This avoids most kind of catastrophic backtracking explosions, e.g. (x+x+)+y)
+//     * Things such as @IDENT+ @IDENT will not match `hello world` - this is OK I think
+//     * Instead, we suggest people to use a match statement or something
+//   * There is still an issue of REVERSION - "what happens to external state mutated this iteration repetition when a repetition is not possible?"
+//     * This appears in lots of places:
+//       * In ? or * blocks where an error isn't fatal, but should continue
+//       * In match arms, considering various stream parsers, some of which might fail after mutating state
+//       * In nested * blocks, with different levels of reversion
+//     * But it's only a problem with state lexically captured from a parent block
+//     * We need some way to handle these cases:
+//     (A) Immutable structures - We use efficient-ish immutable data structures, e.g. ImmutableList, Copy-on-write leaf types etc
+//        ... so that we can clone them cheaply (e.g. https://github.com/orium/rpds) or even just some manually written tries/cons-lists
+//     (B) Use CoW/extensions - But naively it still give O(N^2) if we're reverting occasional array.push(..)es
+//        We could possibly add in some tweaks to avoid clones in some special cases (e.g. array.push and array.pop which don't touch a prefix at the start of a frame)
+//     (C) Error on mutate - Any changes to variables outside the scope of a given refutable parser => it's a fatal error
 //        to parse further until that scope is closed. (this needs to handle nested repetitions).
-//       [EASIEST?] OR conversely - at reversion time, we check there have been no changes to variables below that depth in the stack tree (say by recording a "lowest_stack_touched: usize"), and panic if so; and tell people to use `return` instead; or move state changes to the end.
-//     => Hardest - Some kind of storing of diffs / layered stores without any O(N^2) behaviours
+//     (D) Error on revert - at reversion time, we check there have been no changes to variables below that depth in the stack tree
+//        (say by recording a "lowest_stack_touched: usize"), and panic if so; and tell people to use `return` instead; or move state changes to the end.
 //
-// EXAMPLE (Updated, 17th February)
-[!parse! {
-  input: [...],
-  parser: #(
-    let parsed = @{
+//     ==> D might be easiest, most flexible AND most performant... But it might not cover enough use cases.
+//         ... but I think advising people to only mutate lexical-closure'd state at the end, when a parse is confirmed, is reasonably...
+//
+//
+// QUESTION:
+// - What mode do we start in, in v2?
+//   => Possibly expression mode, which could convert to an output with ~{ ... }
+//
+// =========
+// EXAMPLES
+// =========
+
+// EXAMPLE WITH !parse! COMMAND
+#(
+  let parsed = [!parse! {
+    input: r~(
+      impl A for X, impl B for Y
+    ),
+    parser: @{ // This @{ .. }, returns a `Repeated` type with an `into_iterator` over its items
       impl #(let the_trait = @IDENT) for #(let the_type = @IDENT)
       #(return { the_trait, the_type })
     },*
-  ),
-}]
-// EXAMPLE IN PATTERN POSITION
+  }];
+
+  // Assuming we are writing into an output stream (e.g. outputting from the macro),
+  // we can auto-optimize - the last command of the expression block gets to write directly to the stream,
+  // and by extension, each block of the for-loop gets to write directly to the stream
+  for { the_trait, the_type } in parsed ~{
+    impl #the_trait for #the_type {}
+  }
+)
+
+// EXAMPLE WITH STREAM-PARSING-PATTERN
 #(
-  let [!parser! // Takes an expression, which could include a #(...)
-    let parsed = @(
+  let ~#( // Defines a stream pattern, starting in expression mode, and can be used to bind variables
+    let parsed = @{
       #(let item = {})
       impl #(item.the_trait = @IDENT) for #(item.the_type = @IDENT)
       #(return item)
-    )*
-  ] = [...]
-)
+    }
+  ) = r~(...)
 
-[!for! { the_trait, the_type } in parsed {
-  impl #the_trait for #the_type {}
-}]
-// Example inlined:
-[!for! { the_trait, the_type } in [!parse! {
-  input: [...],
-  parser: @( // This is implicitly an expression, which returns a `Repeated` type with an `into_iterator` over its items.
-    impl #(let the_trait = @IDENT) for #(let the_type = @IDENT)
-    #(return { the_trait, the_type })
-  ),*
-}] {
-  impl #the_trait for #the_type {}
-}]
+  for { the_trait, the_type } in parsed ~{
+    impl #the_trait for #the_type {}
+  }
+) 
 
-// Example pre-defined:
-[!parser! @IMPL_ITEM {
-  @(impl);
-  let the_trait = @IDENT;
-  @(for);
-  let the_type = @IDENT;
-  return { the_trait, the_type };
+// Example pre-defined with no arguments:
+[!define_parser! @IMPL_ITEM @{ // Can either start as #{ ... } or @{ ... }
+  impl #(let the_trait = @IDENT) for #(let the_type = @IDENT)
+  #(return { the_trait, the_type })
 }]
-[!for! { the_trait, the_type } in [!parse! { input, parser: @IMPL_ITEM,* }] {
+for { the_trait, the_type } in [!parse! { input, parser: @IMPL_ITEM,* }] ~{
   impl #the_trait for #the_type {}
-}]
+}
 
-// Example pre-defined 2:
-[!parser! @[IMPL_ITEM /* argument parse stream */] {
+// Example pre-defined 2 with arguments:
+[!define_parser! @[IMPL_ITEM /* arguments named-parser or parse-stream */] {
   @(impl #(let the_trait = @IDENT) for #(let the_type = @IDENT));
   { the_trait, the_type }
 }]
-[!for! { the_trait, the_type } in [!parse! { input, parser: @IMPL_ITEM,* }] {
+for { the_trait, the_type } in [!parse! { input, parser: @IMPL_ITEM,* }] ~{
   impl #the_trait for #the_type {}
-}]
+}
 ```
 
 * Pushed to 0.4:
