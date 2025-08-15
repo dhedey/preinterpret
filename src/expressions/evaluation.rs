@@ -132,6 +132,7 @@ mod inner {
         ReadNodeAsAssignee(ExpressionNodeId, ExpressionValue),
         HandleAssignmentComplete(AssignmentCompletion),
         // Enters an expression node to output a place
+        // A place can be thought of as a mutable reference for e.g. a += operation
         ReadNodeAsPlace(ExpressionNodeId),
         HandleReturnedPlace(Place),
     }
@@ -288,6 +289,12 @@ impl ExpressionNode<Source> {
                     access: access.clone(),
                 },
             ),
+            // TODO - we need to instead:
+            // * Resolve the expression value type of the node (e.g. from a & reference to the node)
+            // * For that value type, the method name and arguments, determine if the given method call:
+            //   * Takes a self, &self or &mut self...
+            //   * Whether each parameter is owned, & or &mut
+            // * Read the node and its parameters, and execute the method call
             ExpressionNode::MethodCall { node, method, parameters } => next.read_value_with_handler(
                 *node,
                 ValueStackFrame::MethodCall(MethodCallStackFrame::CallerPath {

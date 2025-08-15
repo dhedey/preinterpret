@@ -96,15 +96,13 @@ Inside a transform stream, the following grammar is supported:
   * `@(inner = ...) [!stream! #inner]` - wraps the output in a transparent group
 
 ### To come
-* Method calls continues
-  * Also add support for methods (for e.g. exposing functions on syn objects).
+* Method calls continued
   * Add support for &mut methods like `push(..)`... how? unclear.
-    * Maybe the method set-up is derived by calling a method on &ExpressionValue
-      which then tells us whether we want/need self to be a reference, mutable reference, or owned value
-    * Maybe parameters should be some cow-like enum for Value or (variable) Reference?
-    * For now we can assume all non-self parameters are effectively read-only references, no mutability
+    * See comment in `evaluation.rs` `handle_as_value` above `ExpressionNode::MethodCall`
+    * Possibly parameters should be some cow-like enum for Value or (variable) Reference?
     * Then add `.push(x)` on array and stream
-  * Improve support to make it easier to add methods
+  * Scrap `#>>x` etc in favour of `#(a.push(@XXX))`
+  * Also improve support to make it easier to add methods on built-in types or (in future) user-designed types
 * Compare to https://www.reddit.com/r/rust/comments/1j42fgi/media_introducing_eval_macro_a_new_way_to_write 
 * No clone required for testing equality of streams, objects and arrays
   * Some kind of reference support
@@ -141,7 +139,6 @@ Inside a transform stream, the following grammar is supported:
     * This can capture the original tokens by using `let forked = input.fork()` and then `let end_cursor = input.end();` and then consuming `TokenTree`s
       from `forked` until `forked.cursor >= end_cursor` (making use of the PartialEq implementation) 
   * Scrap `[!set!]` in favour of `#(x = ..)` and `#(x += ..)`
-  * Scrap `#>>x` etc in favour of `#(a.push(@[XXX]))`
   * Scrap `[!let!]` in favour of `#(let <destructuring> = x)`
 * Implement the following named parsers
   * `@TOKEN_TREE`
