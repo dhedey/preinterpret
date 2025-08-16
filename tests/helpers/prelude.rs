@@ -3,6 +3,7 @@
 #![allow(unused_imports, unused_macros)]
 pub use preinterpret::*;
 
+#[allow(dead_code)] // This is used only when ui tests are running
 pub(crate) fn should_run_ui_tests() -> bool {
     // Nightly has different outputs for some tests
     // And as of https://github.com/rust-lang/rust/pull/144609 both beta and nightly do
