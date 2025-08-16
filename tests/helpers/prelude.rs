@@ -10,7 +10,7 @@ pub(crate) fn should_run_ui_tests() -> bool {
     // So we only run these tests on stable or in local developer environments.
     match option_env!("TEST_RUST_MODE") {
         Some("nightly") | Some("beta") => false,
-        _ => true,              // Default case: run the tests
+        _ => true, // Default case: run the tests
     }
 }
 
