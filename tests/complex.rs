@@ -18,6 +18,10 @@ preinterpret! {
 #[test]
 #[cfg_attr(miri, ignore = "incompatible with miri")]
 fn test_complex_compilation_failures() {
+    if !should_run_ui_tests() {
+        // Some of the outputs are different on nightly, so don't test these
+        return;
+    }
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/compilation_failures/complex/*.rs");
 }

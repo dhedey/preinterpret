@@ -5,6 +5,10 @@ use prelude::*;
 #[test]
 #[cfg_attr(miri, ignore = "incompatible with miri")]
 fn test_expression_compilation_failures() {
+    if !should_run_ui_tests() {
+        // Some of the outputs are different on nightly, so don't test these
+        return;
+    }
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/compilation_failures/expressions/*.rs");
 }

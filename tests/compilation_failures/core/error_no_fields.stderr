@@ -1,12 +1,12 @@
 error: Expected 102 to equal 64
   --> tests/compilation_failures/core/error_no_fields.rs:4:44
    |
- 4 |       ($input1:literal, $input2:literal) => {preinterpret!{
+4  |       ($input1:literal, $input2:literal) => {preinterpret!{
    |  ____________________________________________^
- 5 | |         [!if! ($input1 != $input2) {
- 6 | |             [!error! "Expected " $input1 " to equal " $input2]
- 7 | |         }]
- 8 | |     }};
+5  | |         [!if! ($input1 != $input2) {
+6  | |             [!error! "Expected " $input1 " to equal " $input2]
+7  | |         }]
+8  | |     }};
    | |_____^
 ...
 12 |       assert_literals_eq!(102, 64);

@@ -5,7 +5,7 @@ use prelude::*;
 #[test]
 #[cfg_attr(miri, ignore = "incompatible with miri")]
 fn test_transfoming_compilation_failures() {
-    if option_env!("TEST_RUST_MODE") == Some("nightly") {
+    if !should_run_ui_tests() {
         // Some of the outputs are different on nightly, so don't test these
         return;
     }
