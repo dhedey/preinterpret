@@ -109,7 +109,7 @@ mod inner {
             }
         }
 
-        fn creator(&mut self, return_mode: ReturnMode) -> ActionCreator {
+        fn creator(&mut self, return_mode: ReturnMode) -> ActionCreator<'_> {
             ActionCreator {
                 stacks: self,
                 return_mode,
@@ -295,7 +295,11 @@ impl ExpressionNode<Source> {
             //   * Takes a self, &self or &mut self...
             //   * Whether each parameter is owned, & or &mut
             // * Read the node and its parameters, and execute the method call
-            ExpressionNode::MethodCall { node, method, parameters } => next.read_value_with_handler(
+            ExpressionNode::MethodCall {
+                node,
+                method,
+                parameters,
+            } => next.read_value_with_handler(
                 *node,
                 ValueStackFrame::MethodCall(MethodCallStackFrame::CallerPath {
                     method: method.clone(),
@@ -669,12 +673,15 @@ enum MethodCallStackFrame {
 }
 
 impl MethodCallStackFrame {
-    fn handle_value(self, value: ExpressionValue, action_creator: ActionCreator) -> ExecutionResult<NextAction> {
+    fn handle_value(
+        self,
+        value: ExpressionValue,
+        action_creator: ActionCreator,
+    ) -> ExecutionResult<NextAction> {
         let (caller, method, unevaluated_parameters, evaluated_parameters) = match self {
-            MethodCallStackFrame::CallerPath {
-                method,
-                parameters,
-            } => (value, method, parameters, Vec::new()),
+            MethodCallStackFrame::CallerPath { method, parameters } => {
+                (value, method, parameters, Vec::new())
+            }
             MethodCallStackFrame::ArgumentsPath {
                 caller,
                 method,
@@ -689,14 +696,15 @@ impl MethodCallStackFrame {
             .get(evaluated_parameters.len())
             .cloned()
         {
-            Some(next) => {
-                action_creator.read_value_with_handler(next, ValueStackFrame::MethodCall(MethodCallStackFrame::ArgumentsPath {
+            Some(next) => action_creator.read_value_with_handler(
+                next,
+                ValueStackFrame::MethodCall(MethodCallStackFrame::ArgumentsPath {
                     caller,
                     method,
                     unevaluated_parameters,
                     evaluated_parameters,
-                }))
-            }
+                }),
+            ),
             None => action_creator.return_value(caller.call_method(method, evaluated_parameters)?),
         };
         Ok(next_action)
@@ -835,7 +843,7 @@ impl AssignmentStackFrame {
     fn ultimate_return_mode(&self) -> ReturnMode {
         match self {
             AssignmentStackFrame::AssignmentRoot { .. } => ReturnMode::Value,
-            AssignmentStackFrame::Grouped { .. } => ReturnMode::AssignmentCompletion,
+            AssignmentStackFrame::Grouped => ReturnMode::AssignmentCompletion,
             AssignmentStackFrame::Array { .. } => ReturnMode::AssignmentCompletion,
             AssignmentStackFrame::Object { .. } => ReturnMode::AssignmentCompletion,
         }
@@ -1056,7 +1064,7 @@ impl PlaceStackFrame {
         match self {
             PlaceStackFrame::Assignment { .. } => ReturnMode::AssignmentCompletion,
             PlaceStackFrame::CompoundAssignmentRoot { .. } => ReturnMode::Value,
-            PlaceStackFrame::Grouped { .. } => ReturnMode::Place,
+            PlaceStackFrame::Grouped => ReturnMode::Place,
             PlaceStackFrame::PropertyAccess { .. } => ReturnMode::Place,
             PlaceStackFrame::Indexed { .. } => ReturnMode::Place,
         }

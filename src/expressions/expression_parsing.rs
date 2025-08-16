@@ -144,17 +144,20 @@ impl<'a> ExpressionParser<'a, Source> {
                     };
                     match next_item {
                         Some(item) => item,
-                        None => { // Indicates object
+                        None => {
+                            // Indicates object
                             match self.expression_stack.pop().unwrap() {
                                 ExpressionStackFrame::NonEmptyObject {
-                                        braces,
-                                        state: ObjectStackFrameState::EntryValue(key, _),
-                                        mut complete_entries,
+                                    braces,
+                                    state: ObjectStackFrameState::EntryValue(key, _),
+                                    mut complete_entries,
                                 } => {
                                     complete_entries.push((key, node));
                                     self.continue_object(braces, complete_entries)?
                                 }
-                                _ => unreachable!("This None code path is only reachable under an object"),
+                                _ => unreachable!(
+                                    "This None code path is only reachable under an object"
+                                ),
                             }
                         }
                     }
@@ -174,11 +177,13 @@ impl<'a> ExpressionParser<'a, Source> {
                         });
                         WorkItem::TryParseAndApplyExtension { node }
                     } else {
-                        self.push_stack_frame(ExpressionStackFrame::NonEmptyMethodCallParametersList {
-                            node,
-                            method,
-                            parameters: Vec::new(),
-                        })
+                        self.push_stack_frame(
+                            ExpressionStackFrame::NonEmptyMethodCallParametersList {
+                                node,
+                                method,
+                                parameters: Vec::new(),
+                            },
+                        )
                     }
                 }
                 NodeExtension::Index(access) => {
@@ -200,7 +205,8 @@ impl<'a> ExpressionParser<'a, Source> {
                         operation,
                     })
                 }
-                NodeExtension::EndOfStreamOrGroup | NodeExtension::NoValidExtensionForCurrentParent => {
+                NodeExtension::EndOfStreamOrGroup
+                | NodeExtension::NoValidExtensionForCurrentParent => {
                     unreachable!("Not possible, as these have minimum precedence")
                 }
             })
@@ -263,17 +269,18 @@ impl<'a> ExpressionParser<'a, Source> {
                     assert!(matches!(extension, NodeExtension::EndOfStreamOrGroup));
                     self.streams.exit_group();
                     let colon = self.streams.parse()?;
-                    self.expression_stack.push(ExpressionStackFrame::NonEmptyObject {
-                        braces,
-                        complete_entries,
-                        state: ObjectStackFrameState::EntryValue(
-                            ObjectKey::Indexed {
-                                access,
-                                index: node,
-                            },
-                            colon,
-                        ),
-                    });
+                    self.expression_stack
+                        .push(ExpressionStackFrame::NonEmptyObject {
+                            braces,
+                            complete_entries,
+                            state: ObjectStackFrameState::EntryValue(
+                                ObjectKey::Indexed {
+                                    access,
+                                    index: node,
+                                },
+                                colon,
+                            ),
+                        });
                     WorkItem::RequireUnaryAtom
                 }
                 ExpressionStackFrame::NonEmptyObject {
@@ -782,7 +789,9 @@ impl ExpressionStackFrame {
             ExpressionStackFrame::Group { .. } => OperatorPrecendence::MIN,
             ExpressionStackFrame::NonEmptyArray { .. } => OperatorPrecendence::MIN,
             ExpressionStackFrame::NonEmptyObject { .. } => OperatorPrecendence::MIN,
-            ExpressionStackFrame::NonEmptyMethodCallParametersList { .. } => OperatorPrecendence::MIN,
+            ExpressionStackFrame::NonEmptyMethodCallParametersList { .. } => {
+                OperatorPrecendence::MIN
+            }
             ExpressionStackFrame::IncompleteIndex { .. } => OperatorPrecendence::MIN,
             ExpressionStackFrame::IncompleteRange { .. } => OperatorPrecendence::Range,
             ExpressionStackFrame::IncompleteAssignment { .. } => OperatorPrecendence::Assign,
@@ -886,7 +895,9 @@ impl NodeExtension {
                 WorkItem::TryApplyAlreadyParsedExtension { node, extension }
             }
             NodeExtension::NonTerminalComma => {
-                unreachable!("Comma is only possible on method parameter list or array or object parent")
+                unreachable!(
+                    "Comma is only possible on method parameter list or array or object parent"
+                )
             }
             NodeExtension::NoValidExtensionForCurrentParent => {
                 // We have to reparse in case the extension is valid for the new parent.

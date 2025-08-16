@@ -288,7 +288,9 @@ impl<'a, K> ParseBuffer<'a, K> {
         })?)
     }
 
-    pub(crate) fn parse_any_group(&self) -> ParseResult<(Delimiter, DelimSpan, ParseBuffer<K>)> {
+    pub(crate) fn parse_any_group(
+        &self,
+    ) -> ParseResult<(Delimiter, DelimSpan, ParseBuffer<'_, K>)> {
         use syn::parse::discouraged::AnyDelimiter;
         let (delimiter, delim_span, parse_buffer) = self.inner.parse_any_delimiter()?;
         Ok((delimiter, delim_span, parse_buffer.into()))
@@ -302,7 +304,7 @@ impl<'a, K> ParseBuffer<'a, K> {
         &self,
         matching: impl FnOnce(Delimiter) -> bool,
         expected_message: impl FnOnce() -> String,
-    ) -> ParseResult<(DelimSpan, ParseBuffer<K>)> {
+    ) -> ParseResult<(DelimSpan, ParseBuffer<'_, K>)> {
         let error_span = match self.parse_any_group() {
             Ok((delimiter, delim_span, inner)) if matching(delimiter) => {
                 return Ok((delim_span, inner));
@@ -316,31 +318,31 @@ impl<'a, K> ParseBuffer<'a, K> {
     pub(crate) fn parse_specific_group(
         &self,
         expected_delimiter: Delimiter,
-    ) -> ParseResult<(DelimSpan, ParseBuffer<K>)> {
+    ) -> ParseResult<(DelimSpan, ParseBuffer<'_, K>)> {
         self.parse_group_matching(
             |delimiter| delimiter == expected_delimiter,
             || format!("Expected {}", expected_delimiter.description_of_open()),
         )
     }
 
-    pub(crate) fn parse_braces(&self) -> ParseResult<(Braces, ParseBuffer<K>)> {
+    pub(crate) fn parse_braces(&self) -> ParseResult<(Braces, ParseBuffer<'_, K>)> {
         let (delim_span, inner) = self.parse_specific_group(Delimiter::Brace)?;
         Ok((Braces { delim_span }, inner))
     }
 
-    pub(crate) fn parse_brackets(&self) -> ParseResult<(Brackets, ParseBuffer<K>)> {
+    pub(crate) fn parse_brackets(&self) -> ParseResult<(Brackets, ParseBuffer<'_, K>)> {
         let (delim_span, inner) = self.parse_specific_group(Delimiter::Bracket)?;
         Ok((Brackets { delim_span }, inner))
     }
 
-    pub(crate) fn parse_parentheses(&self) -> ParseResult<(Parentheses, ParseBuffer<K>)> {
+    pub(crate) fn parse_parentheses(&self) -> ParseResult<(Parentheses, ParseBuffer<'_, K>)> {
         let (delim_span, inner) = self.parse_specific_group(Delimiter::Parenthesis)?;
         Ok((Parentheses { delim_span }, inner))
     }
 
     pub(crate) fn parse_transparent_group(
         &self,
-    ) -> ParseResult<(TransparentDelimiters, ParseBuffer<K>)> {
+    ) -> ParseResult<(TransparentDelimiters, ParseBuffer<'_, K>)> {
         let (delim_span, inner) = self.parse_specific_group(Delimiter::None)?;
         Ok((TransparentDelimiters { delim_span }, inner))
     }

@@ -35,7 +35,7 @@ impl Parse<Source> for Pattern {
         } else if lookahead.peek(Token![..]) {
             Ok(Pattern::DotDot(input.parse()?))
         } else if input.peek(Token![#]) {
-            return input.parse_err("Use `var` instead of `#var` in a destructuring");
+            input.parse_err("Use `var` instead of `#var` in a destructuring")
         } else {
             Err(lookahead.error().into())
         }

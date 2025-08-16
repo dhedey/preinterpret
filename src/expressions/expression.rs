@@ -194,7 +194,9 @@ impl Expressionable for Source {
         match parent_stack_frame {
             ExpressionStackFrame::Root => Ok(NodeExtension::NoValidExtensionForCurrentParent),
             ExpressionStackFrame::Group { .. } => input.parse_err("Expected ) or operator"),
-            ExpressionStackFrame::NonEmptyArray { .. } => input.parse_err("Expected comma, ], or operator"),
+            ExpressionStackFrame::NonEmptyArray { .. } => {
+                input.parse_err("Expected comma, ], or operator")
+            }
             ExpressionStackFrame::IncompleteIndex { .. }
             | ExpressionStackFrame::NonEmptyObject {
                 state: ObjectStackFrameState::EntryIndex { .. },

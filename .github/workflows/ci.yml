@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  RUSTFLAGS: -Dwarnings
+  RUSTFLAGS: -Dwarnings # Deny warnings - i.e. warnings cause build errors
 
 jobs:
   test:

@@ -457,32 +457,42 @@ impl ExpressionValue {
         }
     }
 
-    pub(crate) fn call_method(self, method: MethodAccess, parameters: Vec<ExpressionValue>) -> ExecutionResult<Self> {
+    pub(crate) fn call_method(
+        self,
+        method: MethodAccess,
+        parameters: Vec<ExpressionValue>,
+    ) -> ExecutionResult<Self> {
         // TODO: Make this more extensible / usable
         match self {
-            ExpressionValue::Array(array) => match method.method.to_string().as_str() {
-                "len" => {
+            ExpressionValue::Array(array) => {
+                if method.method.to_string().as_str() == "len" {
                     match parameters.as_slice() {
                         [] => {}
-                        _ => return method.execution_err(format!("The `len` method does not take parameters")),
+                        _ => {
+                            return method.execution_err(
+                                "The `len` method does not take parameters".to_string(),
+                            )
+                        }
                     }
                     let len = array.items.len();
-                    return Ok(len.to_value(method.span_range()))
+                    return Ok(len.to_value(method.span_range()));
                 }
-                _ => {}
             }
-            ExpressionValue::Stream(stream) => match method.method.to_string().as_str() {
-                "len" => {
+            ExpressionValue::Stream(stream) => {
+                if method.method.to_string().as_str() == "len" {
                     match parameters.as_slice() {
                         [] => {}
-                        _ => return method.execution_err(format!("The `len` method does not take parameters")),
+                        _ => {
+                            return method.execution_err(
+                                "The `len` method does not take parameters".to_string(),
+                            )
+                        }
                     }
                     let len = stream.value.len();
-                    return Ok(len.to_value(method.span_range()))
+                    return Ok(len.to_value(method.span_range()));
                 }
-                _ => {}
             }
-            _ => {},
+            _ => {}
         }
         method.execution_err("Methods are not currently supported")
     }

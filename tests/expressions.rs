@@ -463,7 +463,6 @@ fn test_objects() {
     );
 }
 
-
 #[test]
 fn test_method_calls() {
     preinterpret_assert_eq!(

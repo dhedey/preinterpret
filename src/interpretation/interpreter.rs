@@ -147,7 +147,7 @@ pub(crate) struct VariableReference {
 }
 
 impl VariableReference {
-    pub(crate) fn get_value_ref(&self) -> ExecutionResult<Ref<ExpressionValue>> {
+    pub(crate) fn get_value_ref(&self) -> ExecutionResult<Ref<'_, ExpressionValue>> {
         self.data.try_borrow().map_err(|_| {
             self.execution_error("The variable cannot be read if it is currently being modified")
         })
