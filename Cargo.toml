@@ -25,4 +25,4 @@ syn = { version = "2.0.98", default-features = false, features = ["parsing", "de
 quote = { version = "1.0.38", default-features = false }
 
 [dev-dependencies]
-trybuild = { version = "1.0.103", features = ["diff"] }
+trybuild = { version = "1.0.110", features = ["diff"] }
