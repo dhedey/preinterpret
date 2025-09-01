@@ -61,11 +61,11 @@ impl ExpressionObject {
     pub(super) fn into_indexed(
         mut self,
         access: IndexAccess,
-        index: ExpressionValue,
+        index: &ExpressionValue,
     ) -> ExecutionResult<ExpressionValue> {
         let span_range = SpanRange::new_between(self.span_range, access.span_range());
-        let key = index.expect_string("An object key")?.value;
-        Ok(self.remove_or_none(&key, span_range))
+        let key = index.expect_str("An object key")?;
+        Ok(self.remove_or_none(key, span_range))
     }
 
     pub(super) fn into_property(
@@ -101,7 +101,7 @@ impl ExpressionObject {
         }
     }
 
-    pub(super) fn index_mut(
+    pub(super) fn index_mut_with_autocreate(
         &mut self,
         access: IndexAccess,
         index: ExpressionValue,
@@ -110,11 +110,31 @@ impl ExpressionObject {
         Ok(self.mut_entry_or_create(key, access.span()))
     }
 
+    pub(super) fn index_ref(
+        &self,
+        access: IndexAccess,
+        index: &ExpressionValue,
+    ) -> ExecutionResult<&ExpressionValue> {
+        let key = index.expect_str("An object key")?;
+        let entry = self.entries.get(key).ok_or_else(|| {
+            access.execution_error(format!("The object does not have a field named `{}`", key))
+        })?;
+        Ok(&entry.value)
+    }
+
     pub(super) fn property_mut(
         &mut self,
         access: PropertyAccess,
     ) -> ExecutionResult<&mut ExpressionValue> {
         Ok(self.mut_entry_or_create(access.property.to_string(), access.property.span()))
+    }
+
+    pub(super) fn property_ref(&self, access: PropertyAccess) -> ExecutionResult<&ExpressionValue> {
+        let key = access.property.to_string();
+        let entry = self.entries.get(&key).ok_or_else(|| {
+            access.execution_error(format!("The object does not have a field named `{}`", key))
+        })?;
+        Ok(&entry.value)
     }
 
     fn mut_entry_or_create(&mut self, key: String, key_span: Span) -> &mut ExpressionValue {

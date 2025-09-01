@@ -97,7 +97,7 @@ impl NoOutputCommandDefinition for SetCommand {
                 let variable_data = variable.reference(interpreter)?;
                 content.interpret_into(
                     interpreter,
-                    variable_data.into_mut()?.into_stream()?.value_mut(),
+                    variable_data.into_mut()?.into_stream()?.as_mut(),
                 )?;
             }
             SetArguments::SetVariablesEmpty { variables } => {

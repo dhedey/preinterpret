@@ -86,10 +86,10 @@ impl ExpressionInteger {
         }
     }
 
-    pub(crate) fn expect_usize(self) -> ExecutionResult<usize> {
-        Ok(match self.value {
+    pub(crate) fn expect_usize(&self) -> ExecutionResult<usize> {
+        Ok(match &self.value {
             ExpressionIntegerValue::Untyped(input) => input.parse_as()?,
-            ExpressionIntegerValue::Usize(input) => input,
+            ExpressionIntegerValue::Usize(input) => *input,
             _ => {
                 return self
                     .span_range

@@ -120,7 +120,7 @@ impl ExpressionArray {
     pub(super) fn into_indexed(
         mut self,
         access: IndexAccess,
-        index: ExpressionValue,
+        index: &ExpressionValue,
     ) -> ExecutionResult<ExpressionValue> {
         let span_range = SpanRange::new_between(self.span_range, access);
         Ok(match index {
@@ -140,15 +140,24 @@ impl ExpressionArray {
     pub(super) fn index_mut(
         &mut self,
         _access: IndexAccess,
-        index: ExpressionValue,
+        index: &ExpressionValue,
     ) -> ExecutionResult<&mut ExpressionValue> {
         let index = self.resolve_valid_index(index, false)?;
         Ok(&mut self.items[index])
     }
 
+    pub(super) fn index_ref(
+        &self,
+        _access: IndexAccess,
+        index: &ExpressionValue,
+    ) -> ExecutionResult<&ExpressionValue> {
+        let index = self.resolve_valid_index(index, false)?;
+        Ok(&self.items[index])
+    }
+
     pub(super) fn resolve_valid_index(
         &self,
-        index: ExpressionValue,
+        index: &ExpressionValue,
         is_exclusive: bool,
     ) -> ExecutionResult<usize> {
         match index {
@@ -161,7 +170,7 @@ impl ExpressionArray {
 
     fn resolve_valid_index_from_integer(
         &self,
-        integer: ExpressionInteger,
+        integer: &ExpressionInteger,
         is_exclusive: bool,
     ) -> ExecutionResult<usize> {
         let span_range = integer.span_range;

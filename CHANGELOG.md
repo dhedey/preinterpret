@@ -97,10 +97,25 @@ Inside a transform stream, the following grammar is supported:
 
 ### To come
 * Method calls continued
-  * Add support for &mut methods like `push(..)`... how? unclear.
-    * See comment in `evaluation.rs` `handle_as_value` above `ExpressionNode::MethodCall`
-    * Possibly parameters should be some cow-like enum for Value or (variable) Reference?
-    * Then add `.push(x)` on array and stream
+  * Add support for &mut methods like `push(..)`...
+    * WIP: Finish the late binding / TODOs in the evaluation module
+    * WIP: Add in basic method resolution, even if just with hardcoded strings for now!
+    * CHALLENGE: Given a.b(c,d,e) we need to resolve:
+      * What method / code to use
+      * Whether a, c, d and e should be resolved as &, &mut or owned
+    * SOLUTION:
+      * We change `evaluation.rs` to start by:
+        * Resolving a value's reference path as a `MutRef | SharedRef` at the same time (basically taking a `MutRef` if we can)... We probably want value resolution to take a `ValueOwnership::Any|Owned|MutRef|SharedRef` to guide this process.
+        * We'll need to back-propogate through places, so will also need to support `SharedRef`
+        in `Place` and have a `PlaceOwnership::Any|MutRef|SharedRef`
+          => e.g. if we're resolving `x.add(arr[3])` and want to read `arr[3]` as a shared reference.
+          => or if we're resolve `arr[3].to_string()` we want to read `arr[3]` as `LateBound` and then resolve to shared.
+      * Existing resolutions likely convert to an `Owned`, possibly via a clone... Although some of these can be fixed too.
+      * When resolving a method call, we start by requesting a `PermittedValueKind::Any` for `a` and then getting a `&a` from the`Owned | MutRef | SharedRef`; and alongside the name `b`, and possibly # of arguments, we resolve a method definition (or error)
+      * The method definition tells us whether we need `a` to be `Owned | MutRef | SharedRef`, and similarly for each argument. And the type of `&a` should tell us whether
+      it is copy (i.e. can be transparently cloned from a ref to an owned if needed)
+      * We can then resolve the correct value for each argument, and execute the method.
+    * Then we can add `.push(x)` on array and stream
   * Scrap `#>>x` etc in favour of `#(a.push(@XXX))`
   * Also improve support to make it easier to add methods on built-in types or (in future) user-designed types
 * Compare to https://www.reddit.com/r/rust/comments/1j42fgi/media_introducing_eval_macro_a_new_way_to_write 

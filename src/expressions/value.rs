@@ -284,7 +284,32 @@ impl ExpressionValue {
         }
     }
 
+    pub(crate) fn expect_str(&self, place_descriptor: &str) -> ExecutionResult<&str> {
+        match self {
+            ExpressionValue::String(value) => Ok(&value.value),
+            other => other.execution_err(format!(
+                "{} must be a string, but it is {}",
+                place_descriptor,
+                other.articled_value_type(),
+            )),
+        }
+    }
+
     pub(crate) fn expect_string(self, place_descriptor: &str) -> ExecutionResult<ExpressionString> {
+        match self {
+            ExpressionValue::String(value) => Ok(value),
+            other => other.execution_err(format!(
+                "{} must be a string, but it is {}",
+                place_descriptor,
+                other.articled_value_type(),
+            )),
+        }
+    }
+
+    pub(crate) fn ref_expect_string(
+        &self,
+        place_descriptor: &str,
+    ) -> ExecutionResult<&ExpressionString> {
         match self {
             ExpressionValue::String(value) => Ok(value),
             other => other.execution_err(format!(
@@ -437,7 +462,7 @@ impl ExpressionValue {
         }
     }
 
-    pub(super) fn into_indexed(self, access: IndexAccess, index: Self) -> ExecutionResult<Self> {
+    pub(super) fn into_indexed(self, access: IndexAccess, index: &Self) -> ExecutionResult<Self> {
         match self {
             ExpressionValue::Array(array) => array.into_indexed(access, index),
             ExpressionValue::Object(object) => object.into_indexed(access, index),
@@ -445,14 +470,22 @@ impl ExpressionValue {
         }
     }
 
-    pub(crate) fn index_mut(
+    pub(crate) fn index_mut_with_autocreate(
         &mut self,
         access: IndexAccess,
         index: Self,
     ) -> ExecutionResult<&mut Self> {
         match self {
-            ExpressionValue::Array(array) => array.index_mut(access, index),
-            ExpressionValue::Object(object) => object.index_mut(access, index),
+            ExpressionValue::Array(array) => array.index_mut(access, &index),
+            ExpressionValue::Object(object) => object.index_mut_with_autocreate(access, index),
+            other => access.execution_err(format!("Cannot index into a {}", other.value_type())),
+        }
+    }
+
+    pub(crate) fn index_ref(&self, access: IndexAccess, index: &Self) -> ExecutionResult<&Self> {
+        match self {
+            ExpressionValue::Array(array) => array.index_ref(access, index),
+            ExpressionValue::Object(object) => object.index_ref(access, index),
             other => access.execution_err(format!("Cannot index into a {}", other.value_type())),
         }
     }
@@ -510,6 +543,16 @@ impl ExpressionValue {
     pub(crate) fn property_mut(&mut self, access: PropertyAccess) -> ExecutionResult<&mut Self> {
         match self {
             ExpressionValue::Object(object) => object.property_mut(access),
+            other => access.execution_err(format!(
+                "Cannot access properties on a {}",
+                other.value_type()
+            )),
+        }
+    }
+
+    pub(crate) fn property_ref(&self, access: PropertyAccess) -> ExecutionResult<&Self> {
+        match self {
+            ExpressionValue::Object(object) => object.property_ref(access),
             other => access.execution_err(format!(
                 "Cannot access properties on a {}",
                 other.value_type()

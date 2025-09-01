@@ -56,12 +56,12 @@ impl ExpressionRange {
     }
 
     pub(crate) fn resolve_to_index_range(
-        self,
+        &self,
         array: &ExpressionArray,
     ) -> ExecutionResult<std::ops::Range<usize>> {
         let mut start = 0;
         let mut end = array.items.len();
-        Ok(match *self.inner {
+        Ok(match &*self.inner {
             ExpressionRangeInner::Range {
                 start_inclusive,
                 end_exclusive,
