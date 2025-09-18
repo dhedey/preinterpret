@@ -1,4 +1,6 @@
-#![allow(unused)] // TODO: Remove when values are properly late-bound
+#![allow(unused)] use crate::expressions::evaluation::type_resolution::{ResolvedMethod, ResolvedTypeDetails};
+
+// TODO: Remove when values are properly late-bound
 use super::*;
 
 /// # Late Binding
@@ -15,25 +17,62 @@ pub(crate) enum ResolvedValue {
     /// This has been requested as an owned value.
     Owned(ExpressionValue),
     /// This has been requested as a mutable reference.
-    Mutable(MutableValueReference),
+    Mutable(MutableValue),
     /// This has been requested as a shared reference.
     Shared {
-        shared_ref: SharedValueReference,
+        shared_ref: SharedValue,
         reason_not_mutable: Option<syn::Error>,
     },
 }
 
 impl ResolvedValue {
     /// The requirement is just for error messages, and should be "A <xyz>", and will be filled like:
-    /// "{usage} must to be an owned value, but it is a reference to a non-copyable value kind"
+    /// "{usage} expects an owned value, but receives a reference..."
     pub(crate) fn into_owned_value(self, usage: &str) -> ExecutionResult<ExpressionValue> {
         let reference = match self {
             ResolvedValue::Owned(value) => return Ok(value),
             ResolvedValue::Shared { .. } | ResolvedValue::Mutable { .. } => self.as_ref(),
         };
-        // TODO: Add check that the value's type supports Auto-Clone (kinda like copy)
-        // reference.type_ref().assert_auto_clone(usage)?;
+        if !reference.kind().supports_transparent_cloning() {
+            return reference.execution_err(format!(
+                "{} expects an owned value, but receives a reference and {} does not support transparent cloning. You may wish to use .clone() explicitly.",
+                usage,
+                reference.articled_value_type(),
+            ));
+        }
         Ok(reference.clone())
+    }
+
+    /// The requirement is just for error messages, and should be "A <xyz>", and will be filled like:
+    /// "{usage} expects an owned value, but receives a reference..."
+    pub(crate) fn into_mutable_reference(self, usage: &str) -> ExecutionResult<MutableValue> {
+        Ok(match self {
+            // It might be a bug if a user calls a mutable method on a floating owned value,
+            // but it might be annoying to force them to do `.as_mut()` everywhere.
+            // Let's leave this as-is for now.
+            ResolvedValue::Owned(value) => MutableValue::new_from_owned(value),
+            ResolvedValue::Mutable(reference) => reference,
+            ResolvedValue::Shared { shared_ref, reason_not_mutable: Some(reason_not_mutable), } => return shared_ref.execution_err(format!(
+                "{} expects a mutable reference, but only receives a shared reference because {reason_not_mutable}.",
+                usage
+            )),
+            ResolvedValue::Shared { shared_ref, reason_not_mutable: None, } => return shared_ref.execution_err(format!(
+                "{} expects a mutable reference, but only receives a shared reference.",
+                usage
+            )),
+        })
+    }
+
+    pub(crate) fn into_shared_reference(self) -> SharedValue {
+        match self {
+            ResolvedValue::Owned(value) => SharedValue::new_from_owned(value),
+            ResolvedValue::Mutable(reference) => reference.to_shared(),
+            ResolvedValue::Shared { shared_ref, .. } => shared_ref,
+        }
+    }
+
+    pub(crate) fn kind(&self) -> ValueKind {
+        self.as_value_ref().kind()
     }
 
     pub(crate) fn as_value_ref(&self) -> &ExpressionValue {
@@ -60,6 +99,12 @@ impl ResolvedValue {
                 reason_not_mutable: None,
             } => shared_ref.execution_err("Cannot get a mutable reference: Unknown reason"),
         }
+    }
+}
+
+impl HasSpanRange for ResolvedValue {
+    fn span_range(&self) -> SpanRange {
+        self.as_value_ref().span_range()
     }
 }
 
@@ -443,7 +488,7 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
         let value = item.expect_owned_value();
-        Ok(context.return_owned_value(value.into_property(self.access)?))
+        Ok(context.return_owned_value(value.into_property(&self.access)?))
     }
 }
 
@@ -729,14 +774,17 @@ impl EvaluationFrame for CompoundAssignmentBuilder {
 
 pub(super) struct MethodCallBuilder {
     method: MethodAccess,
-    unevaluated_parameters_stack: Vec<ExpressionNodeId>,
-    evaluated_parameters: Vec<ExpressionValue>,
+    unevaluated_parameters_stack: Vec<(ExpressionNodeId, RequestedValueOwnership)>,
+    evaluated_parameters: Vec<ResolvedValue>,
     state: MethodCallPath,
 }
 
 enum MethodCallPath {
     CallerPath,
-    ArgumentsPath { caller: ExpressionValue },
+    ArgumentsPath {
+        caller: ResolvedValue,
+        method: ResolvedMethod,
+    },
 }
 
 impl MethodCallBuilder {
@@ -748,13 +796,15 @@ impl MethodCallBuilder {
     ) -> NextAction {
         let frame = Self {
             method,
-            unevaluated_parameters_stack: parameters.iter().rev().cloned().collect(),
+            unevaluated_parameters_stack: parameters.iter().rev()
+                .map(|x| {
+                    // This is just a placeholder - we'll fix it up shortly
+                    (*x, RequestedValueOwnership::LateBound)
+                }).collect(),
             evaluated_parameters: Vec::with_capacity(parameters.len()),
             state: MethodCallPath::CallerPath,
         };
-        // TODO: Change to resolve the caller as LateBound, in order to resolve the ownership for the
-        // caller and parameters based on the method signature
-        context.handle_node_as_value(frame, caller, RequestedValueOwnership::Owned)
+        context.handle_node_as_value(frame, caller, RequestedValueOwnership::LateBound)
     }
 }
 
@@ -770,27 +820,35 @@ impl EvaluationFrame for MethodCallBuilder {
         context: ValueContext,
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
+        // Handle expected item based on current state
         match self.state {
             MethodCallPath::CallerPath => {
-                let caller = item.expect_owned_value();
-                self.state = MethodCallPath::ArgumentsPath { caller };
+                let caller = item.expect_any_value();
+                let method = caller.kind().resolve_method(&self.method, self.unevaluated_parameters_stack.len())?;
+                assert!(method.ownerships().len() == self.unevaluated_parameters_stack.len(), "The method resolution should ensure the argument count is correct");
+                let argument_ownerships_stack = method.ownerships().iter().rev();
+                for ((_, requested_ownership), ownership) in self.unevaluated_parameters_stack.iter_mut().zip(argument_ownerships_stack) {
+                    *requested_ownership = *ownership;
+                }
+                self.state = MethodCallPath::ArgumentsPath { caller, method, };
             }
             MethodCallPath::ArgumentsPath { .. } => {
-                let argument = item.expect_owned_value();
+                let argument = item.expect_any_value();
                 self.evaluated_parameters.push(argument);
             }
         };
+        // Now plan the next action
         Ok(match self.unevaluated_parameters_stack.pop() {
-            Some(parameter) => {
-                context.handle_node_as_value(self, parameter, RequestedValueOwnership::Owned)
+            Some((parameter, ownership)) => {
+                context.handle_node_as_value(self, parameter, ownership)
             }
             None => {
-                let caller = match self.state {
+                let (caller, method) = match self.state {
                     MethodCallPath::CallerPath => unreachable!("Already updated above"),
-                    MethodCallPath::ArgumentsPath { caller } => caller,
+                    MethodCallPath::ArgumentsPath { caller, method } => (caller, method),
                 };
-                context
-                    .return_owned_value(caller.call_method(self.method, self.evaluated_parameters)?)
+                let output = method.execute(caller, self.evaluated_parameters, self.method.span_range())?;
+                context.return_any_value(output)
             }
         })
     }

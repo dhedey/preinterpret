@@ -70,7 +70,7 @@ impl ExpressionObject {
 
     pub(super) fn into_property(
         mut self,
-        access: PropertyAccess,
+        access: &PropertyAccess,
     ) -> ExecutionResult<ExpressionValue> {
         let span_range = SpanRange::new_between(self.span_range, access.span_range());
         let key = access.property.to_string();
@@ -124,12 +124,12 @@ impl ExpressionObject {
 
     pub(super) fn property_mut(
         &mut self,
-        access: PropertyAccess,
+        access: &PropertyAccess,
     ) -> ExecutionResult<&mut ExpressionValue> {
         Ok(self.mut_entry_or_create(access.property.to_string(), access.property.span()))
     }
 
-    pub(super) fn property_ref(&self, access: PropertyAccess) -> ExecutionResult<&ExpressionValue> {
+    pub(super) fn property_ref(&self, access: &PropertyAccess) -> ExecutionResult<&ExpressionValue> {
         let key = access.property.to_string();
         let entry = self.entries.get(&key).ok_or_else(|| {
             access.execution_error(format!("The object does not have a field named `{}`", key))

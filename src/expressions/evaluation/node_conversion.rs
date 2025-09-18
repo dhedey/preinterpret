@@ -52,7 +52,6 @@ impl ExpressionNode<Source> {
                 operation,
                 value,
             } => CompoundAssignmentBuilder::start(context, *place, *operation, *value),
-            // TODO - Change this to follow outline in changelog
             ExpressionNode::MethodCall {
                 node,
                 method,

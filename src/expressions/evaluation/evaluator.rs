@@ -106,12 +106,12 @@ impl NextAction {
         NextActionInner::HandleReturnedItem(EvaluationItem::OwnedValue(value)).into()
     }
 
-    pub(super) fn return_mutable(mut_ref: MutableValueReference) -> Self {
+    pub(super) fn return_mutable(mut_ref: MutableValue) -> Self {
         NextActionInner::HandleReturnedItem(EvaluationItem::MutableReference { mut_ref }).into()
     }
 
     pub(super) fn return_shared(
-        shared_ref: SharedValueReference,
+        shared_ref: SharedValue,
         reason_not_mutable: Option<syn::Error>,
     ) -> Self {
         NextActionInner::HandleReturnedItem(EvaluationItem::SharedReference {
@@ -142,13 +142,13 @@ impl From<NextActionInner> for NextAction {
 pub(super) enum EvaluationItem {
     OwnedValue(ExpressionValue),
     SharedReference {
-        shared_ref: SharedValueReference,
+        shared_ref: SharedValue,
         /// This is only populated if we request a "late bound" reference, and fail to resolve
         /// a mutable reference.
         reason_not_mutable: Option<syn::Error>,
     },
     MutableReference {
-        mut_ref: MutableValueReference,
+        mut_ref: MutableValue,
     },
     AssignmentCompletion(AssignmentCompletion),
 }
@@ -158,6 +158,21 @@ impl EvaluationItem {
         match self {
             EvaluationItem::OwnedValue(value) => value,
             _ => panic!("expect_owned_value() called on a non-owned-value EvaluationItem"),
+        }
+    }
+
+    pub(super) fn expect_any_value(self) -> ResolvedValue {
+        match self {
+            EvaluationItem::OwnedValue(value) => ResolvedValue::Owned(value),
+            EvaluationItem::MutableReference { mut_ref } => ResolvedValue::Mutable(mut_ref),
+            EvaluationItem::SharedReference {
+                shared_ref,
+                ..
+            } => ResolvedValue::Shared {
+                shared_ref: shared_ref,
+                reason_not_mutable: None,
+            },
+            _ => panic!("expect_any_value() called on a non-value EvaluationItem"),
         }
     }
 
@@ -175,7 +190,7 @@ impl EvaluationItem {
         }
     }
 
-    pub(super) fn expect_shared_ref(self) -> SharedValueReference {
+    pub(super) fn expect_shared_ref(self) -> SharedValue {
         match self {
             EvaluationItem::SharedReference { shared_ref, .. } => shared_ref,
             _ => {
@@ -184,7 +199,7 @@ impl EvaluationItem {
         }
     }
 
-    pub(super) fn expect_mutable_ref(self) -> MutableValueReference {
+    pub(super) fn expect_mutable_ref(self) -> MutableValue {
         match self {
             EvaluationItem::MutableReference { mut_ref } => mut_ref,
             _ => panic!("expect_mutable_place() called on a non-mutable-place EvaluationItem"),
@@ -322,6 +337,17 @@ impl<'a> Context<'a, ValueType> {
         self.request
     }
 
+    pub(super) fn return_any_value(self, value: ResolvedValue) -> NextAction {
+        match value {
+            ResolvedValue::Owned(value) => self.return_owned_value(value),
+            ResolvedValue::Mutable(mut_ref) => self.return_mut_ref(mut_ref),
+            ResolvedValue::Shared {
+                shared_ref,
+                reason_not_mutable,
+            } => self.return_ref(shared_ref, reason_not_mutable),
+        }
+    }
+
     pub(super) fn return_owned_value(self, value: ExpressionValue) -> NextAction {
         match self.request {
             RequestedValueOwnership::LateBound | RequestedValueOwnership::Owned => {
@@ -336,7 +362,7 @@ impl<'a> Context<'a, ValueType> {
         }
     }
 
-    pub(super) fn return_mut_ref(self, mut_ref: MutableValueReference) -> NextAction {
+    pub(super) fn return_mut_ref(self, mut_ref: MutableValue) -> NextAction {
         match self.request {
             RequestedValueOwnership::LateBound
             | RequestedValueOwnership::MutableReference => NextAction::return_mutable(mut_ref),
@@ -347,7 +373,7 @@ impl<'a> Context<'a, ValueType> {
 
     pub(super) fn return_ref(
         self,
-        shared_ref: SharedValueReference,
+        shared_ref: SharedValue,
         reason_not_mutable: Option<syn::Error>,
     ) -> NextAction {
         match self.request {
@@ -390,7 +416,7 @@ impl<'a> Context<'a, PlaceType> {
         }
     }
 
-    pub(super) fn return_mutable(self, mut_ref: MutableValueReference) -> NextAction {
+    pub(super) fn return_mutable(self, mut_ref: MutableValue) -> NextAction {
         match self.request {
             RequestedPlaceOwnership::LateBound
             | RequestedPlaceOwnership::MutableReference => NextAction::return_mutable(mut_ref),
@@ -400,7 +426,7 @@ impl<'a> Context<'a, PlaceType> {
 
     pub(super) fn return_shared(
         self,
-        shared_ref: SharedValueReference,
+        shared_ref: SharedValue,
         reason_not_mutable: Option<syn::Error>,
     ) -> NextAction {
         match self.request {

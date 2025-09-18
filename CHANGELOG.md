@@ -118,7 +118,14 @@ Inside a transform stream, the following grammar is supported:
     * Then we can add `.push(x)` on array and stream
   * Scrap `#>>x` etc in favour of `#(a.push(@XXX))`
   * Also improve support to make it easier to add methods on built-in types or (in future) user-designed types
-* Compare to https://www.reddit.com/r/rust/comments/1j42fgi/media_introducing_eval_macro_a_new_way_to_write 
+* Compare to https://www.reddit.com/r/rust/comments/1j42fgi/media_introducing_eval_macro_a_new_way_to_write i.e. https://crates.io/crates/crabtime - thoughts on crabtime:
+ => Looks great!
+ => Why don't they use a cheap hash of the code as a cache key?
+    - The cachability is a big win compared to preinterpret (although preinterpret is faster on first run)
+ => I can't imagine the span-chasing / error messages are great, because everything is translated to/from strings between the processes
+    ... I wonder if there's any way to improve this?  Plausibly you could use the proc-macro bridge encoding scheme as per https://blog.jetbrains.com/rust/2022/07/07/procedural-macros-under-the-hood-part-ii/ to send handles onwards, or even delegate directly somehow?
+    - The spans are better in preinterpret
+ => Parsing isn't really a thing - they're not going after full macro stuff, probably wise 
 * No clone required for testing equality of streams, objects and arrays
   * Some kind of reference support
   * Add new `.clone()` method

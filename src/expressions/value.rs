@@ -248,6 +248,23 @@ impl ExpressionValue {
         })
     }
 
+    pub(crate) fn kind(&self) -> ValueKind {
+        match self {
+            ExpressionValue::None(_) => ValueKind::None,
+            ExpressionValue::Integer(_) => ValueKind::Integer,
+            ExpressionValue::Float(_) => ValueKind::Float,
+            ExpressionValue::Boolean(_) => ValueKind::Boolean,
+            ExpressionValue::String(_) => ValueKind::String,
+            ExpressionValue::Char(_) => ValueKind::Char,
+            ExpressionValue::Array(_) => ValueKind::Array,
+            ExpressionValue::Object(_) => ValueKind::Object,
+            ExpressionValue::Stream(_) => ValueKind::Stream,
+            ExpressionValue::Range(_) => ValueKind::Range,
+            ExpressionValue::Iterator(_) => ValueKind::Iterator,
+            ExpressionValue::UnsupportedLiteral(_) => ValueKind::UnsupportedLiteral,
+        }
+    }
+
     pub(crate) fn is_none(&self) -> bool {
         matches!(self, ExpressionValue::None(_))
     }
@@ -490,47 +507,7 @@ impl ExpressionValue {
         }
     }
 
-    pub(crate) fn call_method(
-        self,
-        method: MethodAccess,
-        parameters: Vec<ExpressionValue>,
-    ) -> ExecutionResult<Self> {
-        // TODO: Make this more extensible / usable
-        match self {
-            ExpressionValue::Array(array) => {
-                if method.method.to_string().as_str() == "len" {
-                    match parameters.as_slice() {
-                        [] => {}
-                        _ => {
-                            return method.execution_err(
-                                "The `len` method does not take parameters".to_string(),
-                            )
-                        }
-                    }
-                    let len = array.items.len();
-                    return Ok(len.to_value(method.span_range()));
-                }
-            }
-            ExpressionValue::Stream(stream) => {
-                if method.method.to_string().as_str() == "len" {
-                    match parameters.as_slice() {
-                        [] => {}
-                        _ => {
-                            return method.execution_err(
-                                "The `len` method does not take parameters".to_string(),
-                            )
-                        }
-                    }
-                    let len = stream.value.len();
-                    return Ok(len.to_value(method.span_range()));
-                }
-            }
-            _ => {}
-        }
-        method.execution_err("Methods are not currently supported")
-    }
-
-    pub(crate) fn into_property(self, access: PropertyAccess) -> ExecutionResult<Self> {
+    pub(crate) fn into_property(self, access: &PropertyAccess) -> ExecutionResult<Self> {
         match self {
             ExpressionValue::Object(object) => object.into_property(access),
             other => access.execution_err(format!(
@@ -540,7 +517,7 @@ impl ExpressionValue {
         }
     }
 
-    pub(crate) fn property_mut(&mut self, access: PropertyAccess) -> ExecutionResult<&mut Self> {
+    pub(crate) fn property_mut(&mut self, access: &PropertyAccess) -> ExecutionResult<&mut Self> {
         match self {
             ExpressionValue::Object(object) => object.property_mut(access),
             other => access.execution_err(format!(
@@ -550,7 +527,7 @@ impl ExpressionValue {
         }
     }
 
-    pub(crate) fn property_ref(&self, access: PropertyAccess) -> ExecutionResult<&Self> {
+    pub(crate) fn property_ref(&self, access: &PropertyAccess) -> ExecutionResult<&Self> {
         match self {
             ExpressionValue::Object(object) => object.property_ref(access),
             other => access.execution_err(format!(
@@ -672,11 +649,13 @@ impl ExpressionValue {
         Ok(())
     }
 
+    pub(crate) fn into_debug_string(self) -> ExecutionResult<String> {
+        self.concat_recursive(&ConcatBehaviour::debug())
+    }
+
     pub(crate) fn into_debug_string_value(self) -> ExecutionResult<ExpressionValue> {
         let span_range = self.span_range();
-        let value = self
-            .concat_recursive(&ConcatBehaviour::debug())?
-            .to_value(span_range);
+        let value = self.into_debug_string()?.to_value(span_range);
         Ok(value)
     }
 
@@ -811,7 +790,7 @@ pub(super) trait HasValueType {
         let first_char = value_type.chars().next().unwrap();
         match first_char {
             'a' | 'e' | 'i' | 'o' | 'u' => format!("an {}", value_type),
-            _ => value_type.to_string(),
+            _ => format!("a {}", value_type),
         }
     }
 }

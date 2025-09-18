@@ -18,10 +18,10 @@ use super::*;
 /// So instead, we take the most powerful access we can have for `x[a]`, and convert it later.
 pub(super) enum Place {
     MutableReference {
-        mut_ref: MutableValueReference,
+        mut_ref: MutableValue,
     },
     SharedReference {
-        shared_ref: SharedValueReference,
+        shared_ref: SharedValue,
         reason_not_mutable: Option<syn::Error>,
     },
 }

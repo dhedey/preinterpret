@@ -29,6 +29,29 @@ impl<T: 'static> MutSubRcRefCell<T, T> {
 }
 
 impl<T: 'static, U: 'static> MutSubRcRefCell<T, U> {
+    pub(crate) fn to_shared(self) -> SharedSubRcRefCell<T, U> {
+        let ptr = self.ref_mut.deref() as *const U;
+        drop(self.ref_mut);
+        // SAFETY:
+        // - The pointer was previously a reference, so it is safe to deference it here
+        //   (the pointer is pointing into the Rc<RefCell<...>> which hasn't moved)
+        // - All our invariants for SharedSubRcRefCell / MutSubRcRefCell are maintained
+        unsafe {
+            // The unwrap cannot panic because we just held a mutable borrow, we're not in Sync land, so no-one else can have a borrow.
+            SharedSubRcRefCell::new(self.pointed_at).unwrap().map(|_| &*ptr)
+        }
+    }
+
+    pub(crate) fn map<V>(
+        self,
+        f: impl FnOnce(&mut U) -> &mut V,
+    ) -> MutSubRcRefCell<T, V> {
+        MutSubRcRefCell {
+            ref_mut: RefMut::map(self.ref_mut, f),
+            pointed_at: self.pointed_at,
+        }
+    }
+
     pub(crate) fn try_map<V, E>(
         self,
         f: impl FnOnce(&mut U) -> Result<&mut V, E>,
@@ -84,14 +107,21 @@ impl<T: 'static> SharedSubRcRefCell<T, T> {
             // SAFETY: We must ensure that this lifetime lives as long as the
             // reference to pointed_at (i.e. the RefCell).
             // This is guaranteed by the fact that the only time we drop the RefCell
-            // is when we drop the MutRcRefCell, and we ensure that the RefMut is dropped first.
+            // is when we drop the SharedSubRcRefCell, and we ensure that the Ref is dropped first.
             shared_ref: unsafe { std::mem::transmute::<Ref<'_, T>, Ref<'static, T>>(shared_ref) },
-            pointed_at,
+            pointed_at: pointed_at,
         })
     }
 }
 
 impl<T: 'static, U: 'static> SharedSubRcRefCell<T, U> {
+    pub(crate) fn map<V>(self, f: impl FnOnce(&U) -> &V) -> SharedSubRcRefCell<T, V> {
+        SharedSubRcRefCell {
+            shared_ref: Ref::map(self.shared_ref, f),
+            pointed_at: self.pointed_at,
+        }
+    }
+
     pub(crate) fn try_map<V, E>(
         self,
         f: impl FnOnce(&U) -> Result<&V, E>,

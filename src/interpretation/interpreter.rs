@@ -161,12 +161,12 @@ impl VariableReference {
             .with_span_range(self.variable_span_range))
     }
 
-    pub(crate) fn into_mut(self) -> ExecutionResult<MutableValueReference> {
-        MutableValueReference::new_from_variable(self)
+    pub(crate) fn into_mut(self) -> ExecutionResult<MutableValue> {
+        MutableValue::new_from_variable(self)
     }
 
-    pub(crate) fn into_shared(self) -> ExecutionResult<SharedValueReference> {
-        SharedValueReference::new_from_variable(self)
+    pub(crate) fn into_shared(self) -> ExecutionResult<SharedValue> {
+        SharedValue::new_from_variable(self)
     }
 }
 
@@ -176,7 +176,8 @@ impl HasSpanRange for VariableReference {
     }
 }
 
-pub(crate) type MutableValueReference = MutableSubPlace<ExpressionValue>;
+pub(crate) type CapturedMut<T> = MutableSubPlace<T>;
+pub(crate) type MutableValue = MutableSubPlace<ExpressionValue>;
 
 /// A mutable reference to a value inside a variable; along with a span of the whole access.
 /// For example, for `x.y[4]`, this captures both:
@@ -185,6 +186,45 @@ pub(crate) type MutableValueReference = MutableSubPlace<ExpressionValue>;
 pub(crate) struct MutableSubPlace<T: 'static> {
     mut_cell: MutSubRcRefCell<ExpressionValue, T>,
     span_range: SpanRange,
+}
+
+impl<T> MutableSubPlace<T> {
+    pub(crate) fn to_shared(self) -> SharedSubPlace<T> {
+        SharedSubPlace {
+            shared_cell: self.mut_cell.to_shared(),
+            span_range: self.span_range,
+        }
+    }
+
+    pub(crate) fn map<V>(
+        self,
+        value_map: impl for<'a> FnOnce(&'a mut T) -> &'a mut V,
+    ) -> MutableSubPlace<V> {
+        MutableSubPlace {
+            mut_cell: self.mut_cell.map(value_map),
+            span_range: self.span_range,
+        }
+    }
+
+    pub(crate) fn try_map<V>(
+        self,
+        value_map: impl for<'a, 'b> FnOnce(&'a mut T, &'b SpanRange) -> ExecutionResult<&'a mut V>,
+    ) -> ExecutionResult<MutableSubPlace<V>> {
+        Ok(MutableSubPlace {
+            mut_cell: self.mut_cell.try_map(|value| value_map(value, &self.span_range))?,
+            span_range: self.span_range,
+        })
+    }
+
+    pub(crate) fn update_span_range(
+        self, 
+        span_range_map: impl FnOnce(SpanRange) -> SpanRange,
+    ) -> Self {
+        Self {
+            mut_cell: self.mut_cell,
+            span_range: span_range_map(self.span_range),
+        }
+    }
 }
 
 impl MutableSubPlace<ExpressionValue> {
@@ -209,16 +249,14 @@ impl MutableSubPlace<ExpressionValue> {
     }
 
     pub(crate) fn into_stream(self) -> ExecutionResult<MutableSubPlace<OutputStream>> {
-        let stream = self.mut_cell.try_map(|value| match value {
-            ExpressionValue::Stream(stream) => Ok(&mut stream.value),
-            _ => self
-                .span_range
-                .execution_err("The variable is not a stream"),
-        })?;
-        Ok(MutableSubPlace {
-            mut_cell: stream,
-            span_range: self.span_range,
-        })
+        self.try_map(
+            |value, span_range| {
+                match value {
+                    ExpressionValue::Stream(stream) => Ok(&mut stream.value),
+                    _ => span_range.execution_err("The variable is not a stream"),
+                }
+            },
+        )
     }
 
     pub(crate) fn resolve_indexed_with_autocreate(
@@ -226,22 +264,15 @@ impl MutableSubPlace<ExpressionValue> {
         access: IndexAccess,
         index: ExpressionValue,
     ) -> ExecutionResult<Self> {
-        let indexed = self
-            .mut_cell
-            .try_map(|value| value.index_mut_with_autocreate(access, index))?;
-        Ok(Self {
-            mut_cell: indexed,
-            span_range: SpanRange::new_between(self.span_range.start(), access.span()),
-        })
+        self
+            .update_span_range(|span_range| SpanRange::new_between(span_range, access.span_range()))
+            .try_map(|value, _| value.index_mut_with_autocreate(access, index))
     }
 
     pub(crate) fn resolve_property(self, access: PropertyAccess) -> ExecutionResult<Self> {
-        let span_range = SpanRange::new_between(self.span_range.start(), access.span_range());
-        let indexed = self.mut_cell.try_map(|value| value.property_mut(access))?;
-        Ok(Self {
-            mut_cell: indexed,
-            span_range,
-        })
+        self
+            .update_span_range(|span_range| SpanRange::new_between(span_range, access.span_range()))
+            .try_map(|value, _| value.property_mut(&access))
     }
 
     pub(crate) fn set(&mut self, content: impl ToExpressionValue) {
@@ -276,7 +307,22 @@ impl WithSpanExt for MutableSubPlace<ExpressionValue> {
     }
 }
 
-pub(crate) type SharedValueReference = SharedSubPlace<ExpressionValue>;
+impl<T> Deref for MutableSubPlace<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.mut_cell
+    }
+}
+
+impl<T> DerefMut for MutableSubPlace<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.mut_cell
+    }
+}
+
+pub(crate) type CapturedRef<T> = SharedSubPlace<T>;
+pub(crate) type SharedValue = SharedSubPlace<ExpressionValue>;
 
 /// A mutable reference to a value inside a variable; along with a span of the whole access.
 /// For example, for `x.y[4]`, this captures both:
@@ -285,6 +331,38 @@ pub(crate) type SharedValueReference = SharedSubPlace<ExpressionValue>;
 pub(crate) struct SharedSubPlace<T: 'static> {
     shared_cell: SharedSubRcRefCell<ExpressionValue, T>,
     span_range: SpanRange,
+}
+
+impl<T> SharedSubPlace<T> {
+    pub(crate) fn try_map<V>(
+        self,
+        value_map: impl for<'a, 'b> FnOnce(&'a T, &'b SpanRange) -> ExecutionResult<&'a V>,
+    ) -> ExecutionResult<SharedSubPlace<V>> {
+        Ok(SharedSubPlace {
+            shared_cell: self.shared_cell.try_map(|value| value_map(value, &self.span_range))?,
+            span_range: self.span_range,
+        })
+    }
+
+    pub(crate) fn map<V>(
+        self,
+        value_map: impl FnOnce(&T) -> &V,
+    ) -> ExecutionResult<SharedSubPlace<V>> {
+        Ok(SharedSubPlace {
+            shared_cell: self.shared_cell.map(value_map),
+            span_range: self.span_range,
+        })
+    }
+
+    pub(crate) fn update_span_range(
+        self, 
+        span_range_map: impl FnOnce(SpanRange) -> SpanRange,
+    ) -> Self {
+        Self {
+            shared_cell: self.shared_cell,
+            span_range: span_range_map(self.span_range),
+        }
+    }
 }
 
 impl SharedSubPlace<ExpressionValue> {
@@ -313,29 +391,28 @@ impl SharedSubPlace<ExpressionValue> {
         access: IndexAccess,
         index: &ExpressionValue,
     ) -> ExecutionResult<Self> {
-        let indexed = self
-            .shared_cell
-            .try_map(|value| value.index_ref(access, index))?;
-        Ok(Self {
-            shared_cell: indexed,
-            span_range: SpanRange::new_between(self.span_range.start(), access.span()),
-        })
+        self
+            .update_span_range(|old_span| SpanRange::new_between(old_span, access))
+            .try_map(|value, _| value.index_ref(access, index))
     }
 
     pub(crate) fn resolve_property(self, access: PropertyAccess) -> ExecutionResult<Self> {
-        let span_range = SpanRange::new_between(self.span_range.start(), access.span_range());
-        let indexed = self
-            .shared_cell
-            .try_map(|value| value.property_ref(access))?;
-        Ok(Self {
-            shared_cell: indexed,
-            span_range,
-        })
+        self
+            .update_span_range(|old_span| SpanRange::new_between(old_span, access.span_range()))
+            .try_map(|value, _| value.property_ref(&access))
     }
 }
 
 impl<T> AsRef<T> for SharedSubPlace<T> {
     fn as_ref(&self) -> &T {
+        &self.shared_cell
+    }
+}
+
+impl<T> Deref for SharedSubPlace<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
         &self.shared_cell
     }
 }
@@ -346,7 +423,7 @@ impl<T: 'static> HasSpanRange for SharedSubPlace<T> {
     }
 }
 
-impl WithSpanExt for SharedSubPlace<ExpressionValue> {
+impl<T: 'static> WithSpanExt for SharedSubPlace<T> {
     fn with_span(self, span: Span) -> Self {
         Self {
             shared_cell: self.shared_cell,

@@ -65,6 +65,12 @@ impl<T: HasSpan + ?Sized> HasSpanRange for T {
     }
 }
 
+impl HasSpanRange for &SpanRange {
+    fn span_range(&self) -> SpanRange {
+        **self
+    }
+}
+
 /// [`syn::spanned`] is potentially unexpectedly expensive, and has the
 /// limitation that it uses [`proc_macro::Span::join`] and falls back to the
 /// span of the first token when not available.
