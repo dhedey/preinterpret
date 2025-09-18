@@ -1,3 +1,4 @@
+#![allow(unused)] // TODO: Remove when places are properly late-bound
 use crate::internal_prelude::*;
 use std::cell::*;
 use std::rc::Rc;
@@ -29,7 +30,7 @@ impl<T: 'static> MutSubRcRefCell<T, T> {
 }
 
 impl<T: 'static, U: 'static> MutSubRcRefCell<T, U> {
-    pub(crate) fn to_shared(self) -> SharedSubRcRefCell<T, U> {
+    pub(crate) fn into_shared(self) -> SharedSubRcRefCell<T, U> {
         let ptr = self.ref_mut.deref() as *const U;
         drop(self.ref_mut);
         // SAFETY:
@@ -38,14 +39,13 @@ impl<T: 'static, U: 'static> MutSubRcRefCell<T, U> {
         // - All our invariants for SharedSubRcRefCell / MutSubRcRefCell are maintained
         unsafe {
             // The unwrap cannot panic because we just held a mutable borrow, we're not in Sync land, so no-one else can have a borrow.
-            SharedSubRcRefCell::new(self.pointed_at).unwrap().map(|_| &*ptr)
+            SharedSubRcRefCell::new(self.pointed_at)
+                .unwrap()
+                .map(|_| &*ptr)
         }
     }
 
-    pub(crate) fn map<V>(
-        self,
-        f: impl FnOnce(&mut U) -> &mut V,
-    ) -> MutSubRcRefCell<T, V> {
+    pub(crate) fn map<V>(self, f: impl FnOnce(&mut U) -> &mut V) -> MutSubRcRefCell<T, V> {
         MutSubRcRefCell {
             ref_mut: RefMut::map(self.ref_mut, f),
             pointed_at: self.pointed_at,
@@ -109,7 +109,7 @@ impl<T: 'static> SharedSubRcRefCell<T, T> {
             // This is guaranteed by the fact that the only time we drop the RefCell
             // is when we drop the SharedSubRcRefCell, and we ensure that the Ref is dropped first.
             shared_ref: unsafe { std::mem::transmute::<Ref<'_, T>, Ref<'static, T>>(shared_ref) },
-            pointed_at: pointed_at,
+            pointed_at,
         })
     }
 }

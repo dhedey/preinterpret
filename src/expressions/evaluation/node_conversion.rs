@@ -8,7 +8,40 @@ impl ExpressionNode<Source> {
     ) -> ExecutionResult<NextAction> {
         Ok(match self {
             ExpressionNode::Leaf(leaf) => {
-                context.return_owned_value(Source::evaluate_leaf(leaf, interpreter)?)
+                match leaf {
+                    SourceExpressionLeaf::Command(command) => {
+                        // TODO: Allow returning reference
+                        context.return_owned_value(command.clone().interpret_to_value(interpreter)?)
+                    }
+                    SourceExpressionLeaf::Discarded(token) => {
+                        return token.execution_err("This cannot be used in a value expression");
+                    }
+                    SourceExpressionLeaf::Variable(variable_path) => {
+                        // TODO: Allow block to return reference
+                        let variable_ref = variable_path.reference(interpreter)?;
+                        match context.requested_ownership() {
+                            RequestedValueOwnership::LateBound => {
+                                context.return_any_place(variable_ref.into_late_bound()?)
+                            }
+                            RequestedValueOwnership::SharedReference => {
+                                context.return_ref(variable_ref.into_shared()?, None)
+                            }
+                            RequestedValueOwnership::MutableReference => {
+                                context.return_mut_ref(variable_ref.into_mut()?)
+                            }
+                            RequestedValueOwnership::Owned => {
+                                // TODO: Change this but fix tests which are breaking
+                                // context.return_owned_value(variable_ref.get_value_transparently_cloned()?)
+                                context.return_owned_value(variable_ref.get_value_cloned()?)
+                            }
+                        }
+                    }
+                    SourceExpressionLeaf::ExpressionBlock(block) => {
+                        // TODO: Allow block to return reference
+                        context.return_owned_value(block.interpret_to_value(interpreter)?)
+                    }
+                    SourceExpressionLeaf::Value(value) => context.return_owned_value(value.clone()),
+                }
             }
             ExpressionNode::Grouped { delim_span, inner } => {
                 GroupBuilder::start(context, delim_span, *inner)
@@ -103,18 +136,7 @@ impl ExpressionNode<Source> {
                 let variable_ref = variable.reference(interpreter)?;
                 match context.requested_ownership() {
                     RequestedPlaceOwnership::LateBound => {
-                        match variable_ref.into_mut() {
-                            Ok(place) => context.return_mutable(place),
-                            Err(ExecutionInterrupt::Error(reason_not_mutable)) => {
-                                // If we get an error with a mutable and shared reference, a mutable reference must already exist.
-                                // We can just propogate the error from taking the shared reference, it should be good enough.
-                                let shared_place =
-                                    variable.reference(interpreter)?.into_shared()?;
-                                context.return_shared(shared_place, Some(reason_not_mutable))
-                            }
-                            // Propogate any other errors, these shouldn't happen mind
-                            Err(err) => Err(err)?,
-                        }
+                        context.return_any(variable_ref.into_late_bound()?)
                     }
                     RequestedPlaceOwnership::SharedReference => {
                         context.return_shared(variable_ref.into_shared()?, None)

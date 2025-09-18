@@ -1,31 +1,6 @@
 #![allow(unused)] // TODO: Remove when places are properly late-bound
 use super::*;
 
-/// A rough equivalent of a Rust place (lvalue), as per:
-/// https://doc.rust-lang.org/reference/expressions.html#place-expressions-and-value-expressions
-///
-/// In preinterpret, references are (currently) only to variables, or sub-values of variables.
-///
-/// # Late Binding
-///
-/// Sometimes, a value which can be accessed, but we don't yet know *how* we need to access it.
-/// In this case, we attempt to load it as a Mutable place, and failing that, as a Shared place.
-///
-/// ## Example of requirement
-/// For example, if we have `x[a].y(z)`, we first need to resolve the type of `x[a]` to know
-/// whether `x[a]` takes a shared reference, mutable reference or an owned value.
-///
-/// So instead, we take the most powerful access we can have for `x[a]`, and convert it later.
-pub(super) enum Place {
-    MutableReference {
-        mut_ref: MutableValue,
-    },
-    SharedReference {
-        shared_ref: SharedValue,
-        reason_not_mutable: Option<syn::Error>,
-    },
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum RequestedPlaceOwnership {
     LateBound,

@@ -129,7 +129,10 @@ impl ExpressionObject {
         Ok(self.mut_entry_or_create(access.property.to_string(), access.property.span()))
     }
 
-    pub(super) fn property_ref(&self, access: &PropertyAccess) -> ExecutionResult<&ExpressionValue> {
+    pub(super) fn property_ref(
+        &self,
+        access: &PropertyAccess,
+    ) -> ExecutionResult<&ExpressionValue> {
         let key = access.property.to_string();
         let entry = self.entries.get(&key).ok_or_else(|| {
             access.execution_error(format!("The object does not have a field named `{}`", key))

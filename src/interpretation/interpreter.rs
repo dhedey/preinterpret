@@ -1,3 +1,4 @@
+#![allow(unused)] // TODO: Remove when places are properly late-bound
 use crate::internal_prelude::*;
 
 use super::IsVariable;
@@ -154,6 +155,14 @@ impl VariableReference {
     }
 
     // Gets the cloned expression value, setting the span range appropriately
+    pub(crate) fn get_value_transparently_cloned(&self) -> ExecutionResult<ExpressionValue> {
+        Ok(self
+            .get_value_ref()?
+            .try_transparent_clone()?
+            .with_span_range(self.variable_span_range))
+    }
+
+    // Gets the cloned expression value, setting the span range appropriately
     pub(crate) fn get_value_cloned(&self) -> ExecutionResult<ExpressionValue> {
         Ok(self
             .get_value_ref()?
@@ -168,6 +177,48 @@ impl VariableReference {
     pub(crate) fn into_shared(self) -> ExecutionResult<SharedValue> {
         SharedValue::new_from_variable(self)
     }
+
+    pub(crate) fn into_late_bound(self) -> ExecutionResult<Place> {
+        match self.clone().into_mut() {
+            Ok(value) => Ok(Place::MutableReference { mut_ref: value }),
+            Err(ExecutionInterrupt::Error(reason_not_mutable)) => {
+                // If we get an error with a mutable and shared reference, a mutable reference must already exist.
+                // We can just propogate the error from taking the shared reference, it should be good enough.
+                let value = self.into_shared()?;
+                Ok(Place::SharedReference {
+                    shared_ref: value,
+                    reason_not_mutable: Some(reason_not_mutable),
+                })
+            }
+            // Propogate any other errors, these shouldn't happen mind
+            Err(err) => Err(err),
+        }
+    }
+}
+
+/// A rough equivalent of a Rust place (lvalue), as per:
+/// https://doc.rust-lang.org/reference/expressions.html#place-expressions-and-value-expressions
+///
+/// In preinterpret, references are (currently) only to variables, or sub-values of variables.
+///
+/// # Late Binding
+///
+/// Sometimes, a value which can be accessed, but we don't yet know *how* we need to access it.
+/// In this case, we attempt to load it as a Mutable place, and failing that, as a Shared place.
+///
+/// ## Example of requirement
+/// For example, if we have `x[a].y(z)`, we first need to resolve the type of `x[a]` to know
+/// whether `x[a]` takes a shared reference, mutable reference or an owned value.
+///
+/// So instead, we take the most powerful access we can have for `x[a]`, and convert it later.
+pub(crate) enum Place {
+    MutableReference {
+        mut_ref: MutableValue,
+    },
+    SharedReference {
+        shared_ref: SharedValue,
+        reason_not_mutable: Option<syn::Error>,
+    },
 }
 
 impl HasSpanRange for VariableReference {
@@ -189,9 +240,9 @@ pub(crate) struct MutableSubPlace<T: 'static> {
 }
 
 impl<T> MutableSubPlace<T> {
-    pub(crate) fn to_shared(self) -> SharedSubPlace<T> {
+    pub(crate) fn into_shared(self) -> SharedSubPlace<T> {
         SharedSubPlace {
-            shared_cell: self.mut_cell.to_shared(),
+            shared_cell: self.mut_cell.into_shared(),
             span_range: self.span_range,
         }
     }
@@ -211,13 +262,15 @@ impl<T> MutableSubPlace<T> {
         value_map: impl for<'a, 'b> FnOnce(&'a mut T, &'b SpanRange) -> ExecutionResult<&'a mut V>,
     ) -> ExecutionResult<MutableSubPlace<V>> {
         Ok(MutableSubPlace {
-            mut_cell: self.mut_cell.try_map(|value| value_map(value, &self.span_range))?,
+            mut_cell: self
+                .mut_cell
+                .try_map(|value| value_map(value, &self.span_range))?,
             span_range: self.span_range,
         })
     }
 
     pub(crate) fn update_span_range(
-        self, 
+        self,
         span_range_map: impl FnOnce(SpanRange) -> SpanRange,
     ) -> Self {
         Self {
@@ -249,14 +302,10 @@ impl MutableSubPlace<ExpressionValue> {
     }
 
     pub(crate) fn into_stream(self) -> ExecutionResult<MutableSubPlace<OutputStream>> {
-        self.try_map(
-            |value, span_range| {
-                match value {
-                    ExpressionValue::Stream(stream) => Ok(&mut stream.value),
-                    _ => span_range.execution_err("The variable is not a stream"),
-                }
-            },
-        )
+        self.try_map(|value, span_range| match value {
+            ExpressionValue::Stream(stream) => Ok(&mut stream.value),
+            _ => span_range.execution_err("The variable is not a stream"),
+        })
     }
 
     pub(crate) fn resolve_indexed_with_autocreate(
@@ -264,14 +313,12 @@ impl MutableSubPlace<ExpressionValue> {
         access: IndexAccess,
         index: ExpressionValue,
     ) -> ExecutionResult<Self> {
-        self
-            .update_span_range(|span_range| SpanRange::new_between(span_range, access.span_range()))
+        self.update_span_range(|span_range| SpanRange::new_between(span_range, access.span_range()))
             .try_map(|value, _| value.index_mut_with_autocreate(access, index))
     }
 
     pub(crate) fn resolve_property(self, access: PropertyAccess) -> ExecutionResult<Self> {
-        self
-            .update_span_range(|span_range| SpanRange::new_between(span_range, access.span_range()))
+        self.update_span_range(|span_range| SpanRange::new_between(span_range, access.span_range()))
             .try_map(|value, _| value.property_mut(&access))
     }
 
@@ -339,7 +386,9 @@ impl<T> SharedSubPlace<T> {
         value_map: impl for<'a, 'b> FnOnce(&'a T, &'b SpanRange) -> ExecutionResult<&'a V>,
     ) -> ExecutionResult<SharedSubPlace<V>> {
         Ok(SharedSubPlace {
-            shared_cell: self.shared_cell.try_map(|value| value_map(value, &self.span_range))?,
+            shared_cell: self
+                .shared_cell
+                .try_map(|value| value_map(value, &self.span_range))?,
             span_range: self.span_range,
         })
     }
@@ -355,7 +404,7 @@ impl<T> SharedSubPlace<T> {
     }
 
     pub(crate) fn update_span_range(
-        self, 
+        self,
         span_range_map: impl FnOnce(SpanRange) -> SpanRange,
     ) -> Self {
         Self {
@@ -391,14 +440,12 @@ impl SharedSubPlace<ExpressionValue> {
         access: IndexAccess,
         index: &ExpressionValue,
     ) -> ExecutionResult<Self> {
-        self
-            .update_span_range(|old_span| SpanRange::new_between(old_span, access))
+        self.update_span_range(|old_span| SpanRange::new_between(old_span, access))
             .try_map(|value, _| value.index_ref(access, index))
     }
 
     pub(crate) fn resolve_property(self, access: PropertyAccess) -> ExecutionResult<Self> {
-        self
-            .update_span_range(|old_span| SpanRange::new_between(old_span, access.span_range()))
+        self.update_span_range(|old_span| SpanRange::new_between(old_span, access.span_range()))
             .try_map(|value, _| value.property_ref(&access))
     }
 }

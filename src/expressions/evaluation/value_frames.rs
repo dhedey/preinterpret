@@ -1,6 +1,4 @@
-#![allow(unused)] use crate::expressions::evaluation::type_resolution::{ResolvedMethod, ResolvedTypeDetails};
-
-// TODO: Remove when values are properly late-bound
+#![allow(unused)] // TODO: Remove when places are properly late-bound
 use super::*;
 
 /// # Late Binding
@@ -26,47 +24,33 @@ pub(crate) enum ResolvedValue {
 }
 
 impl ResolvedValue {
-    /// The requirement is just for error messages, and should be "A <xyz>", and will be filled like:
-    /// "{usage} expects an owned value, but receives a reference..."
-    pub(crate) fn into_owned_value(self, usage: &str) -> ExecutionResult<ExpressionValue> {
+    pub(crate) fn into_owned_value(self) -> ExecutionResult<ExpressionValue> {
         let reference = match self {
             ResolvedValue::Owned(value) => return Ok(value),
             ResolvedValue::Shared { .. } | ResolvedValue::Mutable { .. } => self.as_ref(),
         };
-        if !reference.kind().supports_transparent_cloning() {
-            return reference.execution_err(format!(
-                "{} expects an owned value, but receives a reference and {} does not support transparent cloning. You may wish to use .clone() explicitly.",
-                usage,
-                reference.articled_value_type(),
-            ));
-        }
-        Ok(reference.clone())
+        reference.try_transparent_clone()
     }
 
     /// The requirement is just for error messages, and should be "A <xyz>", and will be filled like:
     /// "{usage} expects an owned value, but receives a reference..."
-    pub(crate) fn into_mutable_reference(self, usage: &str) -> ExecutionResult<MutableValue> {
+    pub(crate) fn into_mutable_reference(self) -> ExecutionResult<MutableValue> {
         Ok(match self {
-            // It might be a bug if a user calls a mutable method on a floating owned value,
-            // but it might be annoying to force them to do `.as_mut()` everywhere.
-            // Let's leave this as-is for now.
-            ResolvedValue::Owned(value) => MutableValue::new_from_owned(value),
+            ResolvedValue::Owned(value) => {
+                return value.execution_err("A mutable reference is required, but an owned value was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.as_mut()` to get a mutable reference.".to_string())
+            },
             ResolvedValue::Mutable(reference) => reference,
             ResolvedValue::Shared { shared_ref, reason_not_mutable: Some(reason_not_mutable), } => return shared_ref.execution_err(format!(
-                "{} expects a mutable reference, but only receives a shared reference because {reason_not_mutable}.",
-                usage
+                "A mutable reference is required, but only a shared reference was received because {reason_not_mutable}."
             )),
-            ResolvedValue::Shared { shared_ref, reason_not_mutable: None, } => return shared_ref.execution_err(format!(
-                "{} expects a mutable reference, but only receives a shared reference.",
-                usage
-            )),
+            ResolvedValue::Shared { shared_ref, reason_not_mutable: None, } => return shared_ref.execution_err("A mutable reference is required, but only a shared reference was received.".to_string()),
         })
     }
 
     pub(crate) fn into_shared_reference(self) -> SharedValue {
         match self {
             ResolvedValue::Owned(value) => SharedValue::new_from_owned(value),
-            ResolvedValue::Mutable(reference) => reference.to_shared(),
+            ResolvedValue::Mutable(reference) => reference.into_shared(),
             ResolvedValue::Shared { shared_ref, .. } => shared_ref,
         }
     }
@@ -775,15 +759,14 @@ impl EvaluationFrame for CompoundAssignmentBuilder {
 pub(super) struct MethodCallBuilder {
     method: MethodAccess,
     unevaluated_parameters_stack: Vec<(ExpressionNodeId, RequestedValueOwnership)>,
-    evaluated_parameters: Vec<ResolvedValue>,
     state: MethodCallPath,
 }
 
 enum MethodCallPath {
     CallerPath,
     ArgumentsPath {
-        caller: ResolvedValue,
-        method: ResolvedMethod,
+        method: MethodInterface,
+        evaluated_arguments_including_caller: Vec<ResolvedValue>,
     },
 }
 
@@ -796,12 +779,14 @@ impl MethodCallBuilder {
     ) -> NextAction {
         let frame = Self {
             method,
-            unevaluated_parameters_stack: parameters.iter().rev()
+            unevaluated_parameters_stack: parameters
+                .iter()
+                .rev()
                 .map(|x| {
                     // This is just a placeholder - we'll fix it up shortly
                     (*x, RequestedValueOwnership::LateBound)
-                }).collect(),
-            evaluated_parameters: Vec::with_capacity(parameters.len()),
+                })
+                .collect(),
             state: MethodCallPath::CallerPath,
         };
         context.handle_node_as_value(frame, caller, RequestedValueOwnership::LateBound)
@@ -824,17 +809,40 @@ impl EvaluationFrame for MethodCallBuilder {
         match self.state {
             MethodCallPath::CallerPath => {
                 let caller = item.expect_any_value();
-                let method = caller.kind().resolve_method(&self.method, self.unevaluated_parameters_stack.len())?;
-                assert!(method.ownerships().len() == self.unevaluated_parameters_stack.len(), "The method resolution should ensure the argument count is correct");
-                let argument_ownerships_stack = method.ownerships().iter().rev();
-                for ((_, requested_ownership), ownership) in self.unevaluated_parameters_stack.iter_mut().zip(argument_ownerships_stack) {
+                let method = caller
+                    .kind()
+                    .resolve_method(&self.method, self.unevaluated_parameters_stack.len())?;
+                assert!(
+                    method.ownerships().len() == 1 + self.unevaluated_parameters_stack.len(),
+                    "The method resolution should ensure the argument count is correct"
+                );
+
+                // We skip 1 to ignore the caller
+                let argument_ownerships_stack = method.ownerships().iter().skip(1).rev();
+                for ((_, requested_ownership), ownership) in self
+                    .unevaluated_parameters_stack
+                    .iter_mut()
+                    .zip(argument_ownerships_stack)
+                {
                     *requested_ownership = *ownership;
                 }
-                self.state = MethodCallPath::ArgumentsPath { caller, method, };
+
+                self.state = MethodCallPath::ArgumentsPath {
+                    evaluated_arguments_including_caller: {
+                        let mut params =
+                            Vec::with_capacity(1 + self.unevaluated_parameters_stack.len());
+                        params.push(caller);
+                        params
+                    },
+                    method,
+                };
             }
-            MethodCallPath::ArgumentsPath { .. } => {
+            MethodCallPath::ArgumentsPath {
+                evaluated_arguments_including_caller: ref mut evaluated_parameters_including_caller,
+                ..
+            } => {
                 let argument = item.expect_any_value();
-                self.evaluated_parameters.push(argument);
+                evaluated_parameters_including_caller.push(argument);
             }
         };
         // Now plan the next action
@@ -843,11 +851,14 @@ impl EvaluationFrame for MethodCallBuilder {
                 context.handle_node_as_value(self, parameter, ownership)
             }
             None => {
-                let (caller, method) = match self.state {
+                let (arguments, method) = match self.state {
                     MethodCallPath::CallerPath => unreachable!("Already updated above"),
-                    MethodCallPath::ArgumentsPath { caller, method } => (caller, method),
+                    MethodCallPath::ArgumentsPath {
+                        evaluated_arguments_including_caller,
+                        method,
+                    } => (evaluated_arguments_including_caller, method),
                 };
-                let output = method.execute(caller, self.evaluated_parameters, self.method.span_range())?;
+                let output = method.execute(arguments, self.method.span_range())?;
                 context.return_any_value(output)
             }
         })

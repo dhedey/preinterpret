@@ -165,11 +165,8 @@ impl EvaluationItem {
         match self {
             EvaluationItem::OwnedValue(value) => ResolvedValue::Owned(value),
             EvaluationItem::MutableReference { mut_ref } => ResolvedValue::Mutable(mut_ref),
-            EvaluationItem::SharedReference {
+            EvaluationItem::SharedReference { shared_ref, .. } => ResolvedValue::Shared {
                 shared_ref,
-                ..
-            } => ResolvedValue::Shared {
-                shared_ref: shared_ref,
                 reason_not_mutable: None,
             },
             _ => panic!("expect_any_value() called on a non-value EvaluationItem"),
@@ -342,6 +339,16 @@ impl<'a> Context<'a, ValueType> {
             ResolvedValue::Owned(value) => self.return_owned_value(value),
             ResolvedValue::Mutable(mut_ref) => self.return_mut_ref(mut_ref),
             ResolvedValue::Shared {
+                shared_ref,
+                reason_not_mutable,
+            } => self.return_ref(shared_ref, reason_not_mutable),
+        }
+    }
+
+    pub(super) fn return_any_place(self, value: Place) -> NextAction {
+        match value {
+            Place::MutableReference { mut_ref } => self.return_mut_ref(mut_ref),
+            Place::SharedReference {
                 shared_ref,
                 reason_not_mutable,
             } => self.return_ref(shared_ref, reason_not_mutable),

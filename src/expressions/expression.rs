@@ -221,27 +221,6 @@ impl Expressionable for Source {
             }
         }
     }
-
-    fn evaluate_leaf(
-        leaf: &Self::Leaf,
-        interpreter: &mut Self::EvaluationContext,
-    ) -> ExecutionResult<ExpressionValue> {
-        Ok(match leaf {
-            SourceExpressionLeaf::Command(command) => {
-                command.clone().interpret_to_value(interpreter)?
-            }
-            SourceExpressionLeaf::Discarded(token) => {
-                return token.execution_err("This cannot be used in a value expression");
-            }
-            SourceExpressionLeaf::Variable(variable_path) => {
-                variable_path.interpret_to_value(interpreter)?
-            }
-            SourceExpressionLeaf::ExpressionBlock(block) => {
-                block.interpret_to_value(interpreter)?
-            }
-            SourceExpressionLeaf::Value(value) => value.clone(),
-        })
-    }
 }
 
 impl Parse<Source> for Expression<Source> {
@@ -352,9 +331,4 @@ pub(super) trait Expressionable: Sized {
         input: &mut ParseStreamStack<Self>,
         parent_stack_frame: &ExpressionStackFrame,
     ) -> ParseResult<NodeExtension>;
-
-    fn evaluate_leaf(
-        leaf: &Self::Leaf,
-        context: &mut Self::EvaluationContext,
-    ) -> ExecutionResult<ExpressionValue>;
 }

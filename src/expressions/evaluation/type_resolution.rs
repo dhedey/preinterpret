@@ -1,17 +1,168 @@
-#![allow(unused)] // TODO: Remove when type resolution is implemented
+#![allow(unused)] // TODO: Remove when places are properly late-bound
 use super::*;
 
-pub(super) trait ResolvedTypeDetails {
+#[macro_use]
+mod macros {
+    macro_rules! handle_arg_mapping {
+        // No more args
+        ([$(,)?] [$($bindings:tt)*]) => {
+            $($bindings)*
+        };
+        // By shared reference
+        ([$arg:ident : &$ty:ty, $($rest:tt)*] [$($bindings:tt)*]) => {
+            handle_arg_mapping!([$($rest)*] [
+                $($bindings)*
+                let $arg: &$ty = <$ty as ResolvableArgument>::resolve_from_ref($arg.as_ref())?;
+            ])
+        };
+        // By captured shared reference (i.e. can return a sub-reference from it)
+        ([$arg:ident : CapturedRef<$ty:ty>, $($rest:tt)*] [$($bindings:tt)*]) => {
+            handle_arg_mapping!([$($rest)*] [
+                $($bindings)*
+                let tmp = $arg.into_shared_reference();
+                let $arg: CapturedRef<$ty> = tmp.try_map(|value, _| <$ty as ResolvableArgument>::resolve_from_ref(value))?;
+            ])
+        };
+        // SharedValue is an alias for CapturedRef<ExpressionValue>
+        ([$arg:ident : SharedValue, $($rest:tt)*] [$($bindings:tt)*]) => {
+            handle_arg_mapping!([$($rest)*] [
+                $($bindings)*
+                let $arg = $arg.into_shared_reference();
+            ])
+        };
+        // By mutable reference
+        ([$arg:ident : &mut $ty:ty, $($rest:tt)*] [$($bindings:tt)*]) => {
+            handle_arg_mapping!([$($rest)*] [
+                $($bindings)*
+                let mut tmp = $arg.into_mutable_reference()?;
+                let $arg: &mut $ty = <$ty as ResolvableArgument>::resolve_from_mut(tmp.as_mut())?;
+            ])
+        };
+        // By captured mutable reference (i.e. can return a sub-reference from it)
+        ([$arg:ident : CapturedMut<$ty:ty>, $($rest:tt)*] [$($bindings:tt)*]) => {
+            handle_arg_mapping!([$($rest)*] [
+                $($bindings)*
+                let mut tmp = $arg.into_mutable_reference()?;
+                let $arg: CapturedMut<$ty> = tmp.try_map(|value, _| <$ty as ResolvableArgument>::resolve_from_mut(value))?;
+            ])
+        };
+        // MutableValue is an alias for CapturedMut<ExpressionValue>
+        ([$arg:ident : MutableValue, $($rest:tt)*] [$($bindings:tt)*]) => {
+            handle_arg_mapping!([$($rest)*] [
+                $($bindings)*
+                let $arg = $arg.into_mutable_reference()?;
+            ])
+        };
+        // By value
+        ([$arg:ident : $ty:ty, $($rest:tt)*] [$($bindings:tt)*]) => {
+            handle_arg_mapping!([$($rest)*] [
+                $($bindings)*
+                let tmp = $arg.into_owned_value()?;
+                let $arg: $ty = <$ty as ResolvableArgument>::resolve_from_owned(tmp)?;
+            ])
+        };
+    }
+
+    macro_rules! handle_arg_ownerships {
+        // No more args
+        ([$(,)?] [$($outputs:tt)*]) => {
+            vec![$($outputs)*]
+        };
+        // By shared reference
+        ([$arg:ident : &$ty:ty, $($rest:tt)*] [$($outputs:tt)*]) => {
+            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::SharedReference,])
+        };
+        // By captured shared reference (i.e. can return a sub-reference from it)
+        ([$arg:ident : CapturedRef<$ty:ty>, $($rest:tt)*] [$($outputs:tt)*]) => {
+            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::SharedReference,])
+        };
+        // SharedValue is an alias for CapturedRef<ExpressionValue>
+        ([$arg:ident : SharedValue, $($rest:tt)*] [$($outputs:tt)*]) => {
+            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::SharedReference,])
+        };
+        // By mutable reference
+        ([$arg:ident : &mut $ty:ty, $($rest:tt)*] [$($outputs:tt)*]) => {
+            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::MutableReference,])
+        };
+        // By captured mutable reference (i.e. can return a sub-reference from it)
+        ([$arg:ident : CapturedMut<$ty:ty>, $($rest:tt)*] [$($outputs:tt)*]) => {
+            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::MutableReference,])
+        };
+        // MutableValue is an alias for CapturedMut<ExpressionValue>
+        ([$arg:ident : MutableValue, $($rest:tt)*] [$($outputs:tt)*]) => {
+            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::MutableReference,])
+        };
+        // By value
+        ([$arg:ident : $ty:ty, $($rest:tt)*] [$($outputs:tt)*]) => {
+            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::Owned,])
+        };
+    }
+
+    macro_rules! count {
+        () => { 0 };
+        ($head:tt $($tail:tt)*) => { 1 + count!($($tail)*) };
+    }
+
+    // Creating an inner method vastly improves IDE support when writing the method body
+    macro_rules! handle_define_inner_method {
+        ($method_name:ident [$($arg:ident : $ty:ty),* $(,)?] $body:block $output_ty:ty) => {
+            fn $method_name($($arg: $ty),*) -> ExecutionResult<$output_ty> {
+                $body
+            }
+        };
+    }
+
+    macro_rules! handle_arg_separation {
+        ([$($arg:ident : $ty:ty),* $(,)?], $all_arguments:ident, $output_span_range:ident) => {
+            const LEN: usize = count!($($arg)*);
+            let Ok([
+                $($arg,)*
+            ]) = <[ResolvedValue; LEN]>::try_from($all_arguments) else {
+                return $output_span_range.execution_err(format!("Expected {LEN} argument/s"));
+            };
+        };
+    }
+
+    macro_rules! handle_call_inner_method {
+        ($method_name:ident [$($arg:ident : $ty:ty),* $(,)?]) => {
+            $method_name($($arg),*)
+        };
+    }
+
+    macro_rules! wrap_method {
+        (($($args:tt)*) -> ExecutionResult<$output_ty:ty> $body:block) => {
+            MethodInterface {
+                method: Box::new(move |
+                    all_arguments: Vec<ResolvedValue>,
+                    output_span_range: SpanRange,
+                | -> ExecutionResult<ResolvedValue> {
+                    handle_define_inner_method!(inner_method [$($args)*] $body $output_ty);
+                    handle_arg_separation!([$($args)*], all_arguments, output_span_range);
+                    handle_arg_mapping!([$($args)*,] []);
+                    let output: ExecutionResult<$output_ty> = handle_call_inner_method!(inner_method [$($args)*]);
+                    <$output_ty as ResolvableOutput>::to_resolved_value(output?, output_span_range)
+                }),
+                argument_ownerships: handle_arg_ownerships!([$($args)*,] []),
+            }
+        };
+    }
+}
+
+pub(crate) trait ResolvedTypeDetails {
     /// This should be true for types which users expect to have value
     /// semantics, but false for mutable types / types with reference
     /// semantics.
-    /// 
+    ///
     /// This indicates if an &x can be converted to an x via cloning
     /// when doing method resolution.
     fn supports_transparent_cloning(&self) -> bool;
 
     /// Resolves a method for this resolved type with the given arguments.
-    fn resolve_method(&self, method: &MethodAccess, num_arguments: usize) -> ExecutionResult<ResolvedMethod>;
+    fn resolve_method(
+        &self,
+        method: &MethodAccess,
+        num_arguments: usize,
+    ) -> ExecutionResult<MethodInterface>;
 
     // TODO: Eventually we can migrate operations under this umbrella too
     // fn resolve_unary_operation(&self, operation: UnaryOperation) -> ExecutionResult<ResolvedMethod>;
@@ -52,80 +203,108 @@ impl ResolvedTypeDetails for ValueKind {
         }
     }
 
-    fn resolve_method(&self, method: &MethodAccess, num_arguments: usize) -> ExecutionResult<ResolvedMethod> {
+    fn resolve_method(
+        &self,
+        method: &MethodAccess,
+        num_arguments: usize,
+    ) -> ExecutionResult<MethodInterface> {
         let method_name = method.method.to_string();
-        match (self, method_name.as_str(), num_arguments) {
-            // (ValueKind::Array, "len", 0) => Ok(ResolvedMethod::new(array_len)),
-            // (ValueKind::Stream, "len", 0) => Ok(ResolvedMethod::new(stream_len)),
-            _ => method.execution_err(format!("{self:?} has no method `{method_name}` with {num_arguments} arguments")),
-        }
+        let method = match (self, method_name.as_str(), num_arguments) {
+            (_, "clone", 0) => {
+                wrap_method! {(this: &ExpressionValue) -> ExecutionResult<ExpressionValue> {
+                    Ok(this.clone())
+                }}
+            }
+            (_, "as_mut", 0) => {
+                wrap_method! {(this: ExpressionValue) -> ExecutionResult<MutableValue> {
+                    Ok(MutableValue::new_from_owned(this))
+                }}
+            }
+            (_, "debug", 0) => wrap_method! {(this: &ExpressionValue) -> ExecutionResult<String> {
+                this.clone().into_debug_string()
+            }},
+            (ValueKind::Array, "len", 0) => {
+                wrap_method! {(this: &ExpressionArray) -> ExecutionResult<usize> {
+                    Ok(this.items.len())
+                }}
+            }
+            (ValueKind::Array, "push", 1) => {
+                wrap_method! {(this: &mut ExpressionArray, item: ExpressionValue) -> ExecutionResult<()> {
+                    this.items.push(item);
+                    Ok(())
+                }}
+            }
+            (ValueKind::Stream, "len", 0) => {
+                wrap_method! {(this: &ExpressionStream) -> ExecutionResult<usize> {
+                    Ok(this.value.len())
+                }}
+            }
+            _ => {
+                return method.execution_err(format!(
+                    "{self:?} has no method `{method_name}` with {num_arguments} arguments"
+                ))
+            }
+        };
+        Ok(method)
     }
 }
 
-
-pub(super) struct ResolvedMethod {
-    method: WrappedMethod,
+pub(crate) struct MethodInterface {
+    method: Box<(dyn Fn(Vec<ResolvedValue>, SpanRange) -> ExecutionResult<ResolvedValue>)>,
     argument_ownerships: Vec<RequestedValueOwnership>,
 }
 
-impl ResolvedMethod {
-    // fn new<SelfType, Arguments, Output>(
-    //     method: fn(SelfType, Arguments) -> ExecutionResult<Output>,
-    // ) -> Self
-    // where
-    //     SelfType: ResolvableArgument + 'static,
-    //     Arguments: ResolvableArguments + 'static,
-    //     Output: ResolvableOutput + 'static,
-    // {
-    //     // TODO - Find some way of avoiding creating a new box for each method call (e.g. using a cache)
-    //     // Could also consider using a GAT by upgrading to Rust 1.65
-    //     Self {
-    //         method: Box::new(move |
-    //             self_value: ResolvedValue,
-    //             arguments: Vec<ResolvedValue>,
-    //             output_span_range: SpanRange,
-    //         | -> ExecutionResult<ResolvedValue> {
-    //             SelfType::run_resolved(self_value, |self_value| {
-    //                 Arguments::run_with_arguments(arguments, |arguments| {
-    //                     method(self_value, arguments)?.to_value(output_span_range)
-    //                 }, output_span_range)
-    //             })
-    //         }),
-    //         argument_ownerships: Arguments::ownerships(),
-    //     }
-    // }
-
+impl MethodInterface {
     pub fn execute(
         &self,
-        object: ResolvedValue,
-        parameters: Vec<ResolvedValue>,
-        span_range: SpanRange
+        arguments: Vec<ResolvedValue>,
+        span_range: SpanRange,
     ) -> ExecutionResult<ResolvedValue> {
-        (self.method)(object, parameters, span_range)
+        (self.method)(arguments, span_range)
     }
 
-    pub fn ownerships(&self) -> &[RequestedValueOwnership] {
+    pub(super) fn ownerships(&self) -> &[RequestedValueOwnership] {
         &self.argument_ownerships
     }
 }
 
-fn array_len(self_value: &ExpressionArray, arguments: ()) -> ExecutionResult<usize> {
-    Ok(self_value.items.len())
-}
+use outputs::*;
 
-fn stream_len(self_value: &ExpressionStream, arguments: ()) -> ExecutionResult<usize> {
-    Ok(self_value.value.len())
-}
+mod outputs {
+    use super::*;
 
-type WrappedMethod = Box<(dyn Fn(ResolvedValue, Vec<ResolvedValue>, SpanRange) -> ExecutionResult<ResolvedValue>)>;
-/*
-trait ResolvableOutput {
-    fn to_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue>;
-}
+    #[diagnostic::on_unimplemented(
+        message = "`ResolvableOutput` is not implemented for `{Self}`",
+        note = "`ResolvableOutput` is not implemented for `CapturedRef<X>` or `CapturedMut<X>` unless `X` is `ExpressionValue`. If we wish to change this, we'd need to have some way to represent some kind of `ExpressionReference`, i.e. a `Typed<CapturedRef<..>>` rather than a `CapturedRef<Typed<..>>`"
+    )]
+    pub(crate) trait ResolvableOutput {
+        fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue>;
+    }
 
-impl<T: ToExpressionValue> ResolvableOutput for T {
-    fn to_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue> {
-        Ok(ResolvedValue::Owned(self.to_value(output_span_range)))
+    impl ResolvableOutput for CapturedRef<ExpressionValue> {
+        fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue> {
+            Ok(ResolvedValue::Shared {
+                shared_ref: self.update_span_range(|_| output_span_range),
+                reason_not_mutable: Some(syn::Error::new(
+                    output_span_range.join_into_span_else_start(),
+                    "It was output from a method a captured shared reference",
+                )),
+            })
+        }
+    }
+
+    impl ResolvableOutput for CapturedMut<ExpressionValue> {
+        fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue> {
+            Ok(ResolvedValue::Mutable(
+                self.update_span_range(|_| output_span_range),
+            ))
+        }
+    }
+
+    impl<T: ToExpressionValue> ResolvableOutput for T {
+        fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue> {
+            Ok(ResolvedValue::Owned(self.to_value(output_span_range)))
+        }
     }
 }
 
@@ -134,293 +313,149 @@ use arguments::*;
 mod arguments {
     use super::*;
 
-    // FRAMEWORK TO DO DISJOINT TRAIT IMPLEMENTATIONS
-
-    pub(super) trait ResolvableArgument: Sized {
-        fn run_resolved<O>(value: ResolvedValue, inner: impl FnOnce(Self) -> ExecutionResult<O>) -> ExecutionResult<O>;
-        fn resolve<O>(value: ResolvedValue) -> ExecutionResult<O>;
-        fn ownership() -> RequestedValueOwnership;
+    pub(crate) trait ResolveAs<T> {
+        fn resolve_as(self) -> ExecutionResult<T>;
     }
 
-    pub(super) trait ResolvableArguments: Sized {
-        fn run_with_arguments<O>(value: Vec<ResolvedValue>, inner: impl FnOnce(Self) -> ExecutionResult<O>, arguments_span: SpanRange) -> ExecutionResult<O>;
-        fn ownerships() -> Vec<RequestedValueOwnership>;
-    }
-
-    impl ResolvableArguments for () {
-        fn run_with_arguments<O>(value: Vec<ResolvedValue>, inner: impl FnOnce(Self) -> ExecutionResult<O>, arguments_span: SpanRange) -> ExecutionResult<O> {
-            let Ok([
-                // No arguments
-            ]) = <[ResolvedValue; 0]>::try_from(value) else {
-                return arguments_span.execution_err("Expected 0 arguments");
-            };
-            inner((
-                // No arguments
-            ))
-        }
-        
-        fn ownerships() -> Vec<RequestedValueOwnership> {
-            vec![]
+    impl<T: ResolvableArgument> ResolveAs<T> for ExpressionValue {
+        fn resolve_as(self) -> ExecutionResult<T> {
+            T::resolve_from_owned(self)
         }
     }
 
-    impl <T: ResolvableArgument> ResolvableArguments for (T,) {
-        fn run_with_arguments<O>(value: Vec<ResolvedValue>, inner: impl FnOnce(Self) -> ExecutionResult<O>, arguments_span: SpanRange) -> ExecutionResult<O> {
-            let Ok([
-                value0,
-            ]) = <[ResolvedValue; 1]>::try_from(value) else {
-                return arguments_span.execution_err("Expected 1 argument");
-            };
-
-            T::run_resolved(value0, |value0| {
-                // Further nesting...
-                inner((value0,))
-            })
-        }
-        
-        fn ownerships() -> Vec<RequestedValueOwnership> {
-            vec![T::ownership()]
+    impl<'a, T: ResolvableArgument> ResolveAs<&'a T> for &'a ExpressionValue {
+        fn resolve_as(self) -> ExecutionResult<&'a T> {
+            T::resolve_from_ref(self)
         }
     }
 
-    // TODO: Add more tuples, maybe using a macro to generate them
-
-    trait ArgumentKind {}
-    struct ArgumentKindOwned;
-    impl ArgumentKind for ArgumentKindOwned {}
-    struct ArgumentKindDisposedRef;
-    impl ArgumentKind for ArgumentKindDisposedRef {}
-    struct ArgumentKindCapturedRef;
-    impl ArgumentKind for ArgumentKindCapturedRef {}
-    struct ArgumentKindDisposedRefMut;
-    impl ArgumentKind for ArgumentKindDisposedRefMut {}
-    struct ArgumentKindCapturedRefMut;
-    impl ArgumentKind for ArgumentKindCapturedRefMut {}
-
-    trait InferredArgumentType: Sized {
-        type ArgumentKind: ArgumentKind;
-    }
-
-    trait ResolvableArgumentAs<K: ArgumentKind>: Sized {
-        fn run_with_argument<O>(value: ResolvedValue, inner: impl FnOnce(Self) -> ExecutionResult<O>) -> ExecutionResult<O>;
-        fn ownership() -> RequestedValueOwnership;
-    }
-
-    impl<T: InferredArgumentType + ResolvableArgumentAs<<T as InferredArgumentType>::ArgumentKind>> ResolvableArgument for T {        
-        fn run_resolved<O>(value: ResolvedValue, inner: impl FnOnce(Self) -> ExecutionResult<O>) -> ExecutionResult<O> {
-            <T as ResolvableArgumentAs<<T as InferredArgumentType>::ArgumentKind>>::run_with_argument(value, inner)
-        }
-        
-        fn ownership() -> RequestedValueOwnership {
-            <T as ResolvableArgumentAs<<T as InferredArgumentType>::ArgumentKind>>::ownership()
+    impl<'a, T: ResolvableArgument> ResolveAs<&'a mut T> for &'a mut ExpressionValue {
+        fn resolve_as(self) -> ExecutionResult<&'a mut T> {
+            T::resolve_from_mut(self)
         }
     }
 
-    // TODO:
-    // The automatic conversion of &XXX in a method into this might just not be feasible; because stacked borrows go from
-    // out to in; and here we want to go from in (the arguments of an inner method) to out.
-    // Instead, we might need to use a macro-based approach rather than just leveraging the type system.
-
-    // trait ResolvableRef
-    //     where for<'a> &'a Self: InferredArgumentType<ArgumentKind = ArgumentKindDisposedRef>
-    // {
-    //     fn resolve_from_value<'a>(value: &'a ExpressionValue) -> ExecutionResult<&'a Self>;
-    // }
-
-    // impl<'o, T: ResolvableRef> ResolvableArgumentAs<ArgumentKindDisposedRef> for &'o T
-    //     where for<'a> &'a T: InferredArgumentType<ArgumentKind = ArgumentKindDisposedRef>
-    // {
-    //     fn run_with_argument<O>(value: ResolvedValue, inner: impl FnOnce(Self) -> ExecutionResult<O>) -> ExecutionResult<O> {
-    //         let output = {
-    //             let value = value.as_value_ref();
-
-    //             let output = inner(
-    //                 // This needs to be 'o to match Self and work with the callback to match up with the defined function...
-    //                 // But then this implies that 'o is smaller than this function call, which doesn't work.
-    //                 <T as ResolvableRef>::resolve_from_value(value)?
-    //             )?;
-    //             output
-    //         };
-    //         Ok(output)
-    //         // let mut value = value.as_value_ref();
-    //         // inner(
-    //         //     <T as ResolvableRef<'_>>::resolve_from_value(value)?
-    //         // )
-    //     }
-
-    //     fn ownership() -> RequestedValueOwnership {
-    //         RequestedValueOwnership::SharedReference
-    //     }
-    // }
-
-    trait ResolvableRef<'a>: InferredArgumentType<ArgumentKind = ArgumentKindDisposedRef>
-    {
-        fn resolve_from_value(value: &'a ExpressionValue) -> ExecutionResult<Self>;
+    pub(crate) trait ResolvableArgument: Sized {
+        fn resolve_from_owned(value: ExpressionValue) -> ExecutionResult<Self>;
+        fn resolve_from_ref(value: &ExpressionValue) -> ExecutionResult<&Self>;
+        fn resolve_from_mut(value: &mut ExpressionValue) -> ExecutionResult<&mut Self>;
     }
 
-    impl<'a, T: ResolvableRef<'a>> ResolvableArgumentAs<ArgumentKindDisposedRef> for T {
-        fn run_with_argument<O>(value: ResolvedValue, inner: impl FnOnce(Self) -> ExecutionResult<O>) -> ExecutionResult<O> {
-            let mut value = value.as_value_ref();
-            inner(
-                <T as ResolvableRef<'_>>::resolve_from_value(value)?
-            )
+    impl ResolvableArgument for ExpressionValue {
+        fn resolve_from_owned(value: ExpressionValue) -> ExecutionResult<Self> {
+            Ok(value)
         }
 
-        fn ownership() -> RequestedValueOwnership {
-            RequestedValueOwnership::SharedReference
+        fn resolve_from_ref(value: &ExpressionValue) -> ExecutionResult<&Self> {
+            Ok(value)
         }
-    }
 
-    trait ResolvableCapturedRef: InferredArgumentType<ArgumentKind = ArgumentKindCapturedRef> {
-        fn resolve_from_value(value: SharedValue) -> ExecutionResult<Self>;
-    }
-
-    impl<'a, T: ResolvableCapturedRef> ResolvableArgumentAs<ArgumentKindCapturedRef> for T {
-        fn run_with_argument<O>(value: ResolvedValue, inner: impl FnOnce(Self) -> ExecutionResult<O>) -> ExecutionResult<O> {
-            let mut value = value.into_shared_reference();
-            inner(
-                <T as ResolvableCapturedRef>::resolve_from_value(value)?
-            )
-        }
-        
-        fn ownership() -> RequestedValueOwnership {
-            RequestedValueOwnership::SharedReference
-        }
-    }
-
-    trait ResolvableMutRef<'a>: InferredArgumentType<ArgumentKind = ArgumentKindDisposedRefMut> {
-        fn resolve_from_value(value: &'a mut ExpressionValue) -> ExecutionResult<Self>;
-    }
-
-    impl<T: for<'a> ResolvableMutRef<'a>> ResolvableArgumentAs<ArgumentKindDisposedRefMut> for T {
-        fn run_with_argument<O>(value: ResolvedValue, inner: impl FnOnce(Self) -> ExecutionResult<O>) -> ExecutionResult<O> {
-            let mut value = value.into_mutable_reference("This argument")?;
-            inner(
-                <T as ResolvableMutRef<'_>>::resolve_from_value(value.as_mut())?
-            )
-        }
-        
-        fn ownership() -> RequestedValueOwnership {
-            RequestedValueOwnership::MutableReference
-        }
-    }
-
-    trait ResolvableCapturedMutRef: InferredArgumentType<ArgumentKind = ArgumentKindCapturedRefMut> {
-        fn resolve_from_value(value: MutableValue) -> ExecutionResult<Self>;
-    }
-
-    impl<T: ResolvableCapturedMutRef> ResolvableArgumentAs<ArgumentKindCapturedRefMut> for T {
-        fn run_with_argument<O>(value: ResolvedValue, inner: impl FnOnce(Self) -> ExecutionResult<O>) -> ExecutionResult<O> {
-            let mut value = value.into_mutable_reference("This argument")?;
-            inner(
-                <T as ResolvableCapturedMutRef>::resolve_from_value(value)?
-            )
-        }
-        
-        fn ownership() -> RequestedValueOwnership {
-            RequestedValueOwnership::MutableReference
-        }
-    }
-
-    trait ResolvableOwned: InferredArgumentType<ArgumentKind = ArgumentKindOwned> {
-        fn resolve_from_value(value: ExpressionValue) -> ExecutionResult<Self>;
-    }
-
-    impl<T: ResolvableOwned> ResolvableArgumentAs<ArgumentKindOwned> for T {
-        fn run_with_argument<O>(value: ResolvedValue, inner: impl FnOnce(Self) -> ExecutionResult<O>) -> ExecutionResult<O> {
-            let mut value = value.into_owned_value("This argument")?;
-            inner(
-                <T as ResolvableOwned>::resolve_from_value(value)?
-            )
-        }
-        
-        fn ownership() -> RequestedValueOwnership {
-            RequestedValueOwnership::Owned
-        }
-    }
-
-    // IMPLEMENTATIONS
-
-    impl InferredArgumentType for &'_ ExpressionValue {
-        type ArgumentKind = ArgumentKindDisposedRef;
-    }
-
-    impl<'a> ResolvableRef<'a> for &'a ExpressionValue {
-        fn resolve_from_value(value: &'a ExpressionValue) -> ExecutionResult<Self> {
+        fn resolve_from_mut(value: &mut ExpressionValue) -> ExecutionResult<&mut Self> {
             Ok(value)
         }
     }
 
-    impl<T> InferredArgumentType for SharedSubPlace<T> {
-        type ArgumentKind = ArgumentKindCapturedRef;
-    }
+    macro_rules! impl_resolvable_argument_for {
+        (($value:ident) -> $type:ty $body:block) => {
+            impl ResolvableArgument for $type {
+                fn resolve_from_owned($value: ExpressionValue) -> ExecutionResult<Self> {
+                    $body
+                }
 
-    impl<T> ResolvableCapturedRef for SharedSubPlace<T>
-        where 
-            for<'a> &'a T: ResolvableRef<'a>,
-    {
-        fn resolve_from_value(value: SharedValue) -> ExecutionResult<Self> {
-            value.resolve_internally_mapped(|value| <&'_ T as ResolvableRef<'_>>::resolve_from_value(value))
-        }
-    }
+                fn resolve_from_ref($value: &ExpressionValue) -> ExecutionResult<&Self> {
+                    $body
+                }
 
-    impl InferredArgumentType for &'_ mut ExpressionValue {
-        type ArgumentKind = ArgumentKindDisposedRefMut;
-    }
-
-    impl<'a> ResolvableMutRef<'a> for &'a mut ExpressionValue {
-        fn resolve_from_value(value: &'a mut ExpressionValue) -> ExecutionResult<Self> {
-            Ok(value)
-        }
-    }
-
-    impl<T> InferredArgumentType for MutableSubPlace<T> {
-        type ArgumentKind = ArgumentKindCapturedRefMut;
-    }
-
-    impl<T> ResolvableCapturedMutRef for MutableSubPlace<T>
-        where 
-            for<'a> &'a mut T: ResolvableMutRef<'a>,
-    {
-        fn resolve_from_value(value: MutableValue) -> ExecutionResult<Self> {
-            value.resolve_internally_mapped(|value, _| <&'_ mut T as ResolvableMutRef<'_>>::resolve_from_value(value))
-        }
-    }
-
-    impl InferredArgumentType for ExpressionValue {
-        type ArgumentKind = ArgumentKindOwned;
-    }
-
-    impl ResolvableOwned for ExpressionValue {
-        fn resolve_from_value(value: ExpressionValue) -> ExecutionResult<Self> {
-            Ok(value)
-        }
-    }
-
-    impl InferredArgumentType for &'_ ExpressionArray {
-        type ArgumentKind = ArgumentKindDisposedRef;
-    }
-
-    impl<'a> ResolvableRef<'a> for &'a ExpressionArray {
-        fn resolve_from_value(value: &'a ExpressionValue) -> ExecutionResult<Self> {
-            match value {
-                ExpressionValue::Array(arr) => Ok(arr),
-                _ => value.execution_err("Expected array"),
+                fn resolve_from_mut($value: &mut ExpressionValue) -> ExecutionResult<&mut Self> {
+                    $body
+                }
             }
-        }
+        };
     }
 
-    impl InferredArgumentType for &'_ ExpressionStream {
-        type ArgumentKind = ArgumentKindDisposedRef;
-    }
+    pub(crate) use impl_resolvable_argument_for;
 
-    impl<'a> ResolvableRef<'a> for &'a ExpressionStream {
-        fn resolve_from_value(value: &'a ExpressionValue) -> ExecutionResult<Self> {
-            match value {
-                ExpressionValue::Stream(stream) => Ok(stream),
-                _ => value.execution_err("Expected stream"),
-            }
+    impl_resolvable_argument_for! {(value) -> ExpressionInteger {
+        match value {
+            ExpressionValue::Integer(value) => Ok(value),
+            _ => value.execution_err("Expected integer"),
         }
-    }
+    }}
+
+    impl_resolvable_argument_for! {(value) -> u8 {
+        match value {
+            ExpressionValue::Integer(ExpressionInteger { value: ExpressionIntegerValue::U8(x), ..}) => Ok(x),
+            _ => value.execution_err("Expected u8"),
+        }
+    }}
+
+    impl_resolvable_argument_for! {(value) -> usize {
+        match value {
+            ExpressionValue::Integer(ExpressionInteger { value: ExpressionIntegerValue::Usize(x), ..}) => Ok(x),
+            _ => value.execution_err("Expected usize"),
+        }
+    }}
+
+    impl_resolvable_argument_for! {(value) -> ExpressionFloat {
+        match value {
+            ExpressionValue::Float(value) => Ok(value),
+            _ => value.execution_err("Expected float"),
+        }
+    }}
+
+    impl_resolvable_argument_for! {(value) -> ExpressionBoolean {
+        match value {
+            ExpressionValue::Boolean(value) => Ok(value),
+            _ => value.execution_err("Expected boolean"),
+        }
+    }}
+
+    impl_resolvable_argument_for! {(value) -> ExpressionString {
+        match value {
+            ExpressionValue::String(value) => Ok(value),
+            _ => value.execution_err("Expected string"),
+        }
+    }}
+
+    impl_resolvable_argument_for! {(value) -> ExpressionChar {
+        match value {
+            ExpressionValue::Char(value) => Ok(value),
+            _ => value.execution_err("Expected char"),
+        }
+    }}
+
+    impl_resolvable_argument_for! {(value) -> ExpressionArray {
+        match value {
+            ExpressionValue::Array(value) => Ok(value),
+            _ => value.execution_err("Expected array"),
+        }
+    }}
+
+    impl_resolvable_argument_for! {(value) -> ExpressionObject {
+        match value {
+            ExpressionValue::Object(value) => Ok(value),
+            _ => value.execution_err("Expected object"),
+        }
+    }}
+
+    impl_resolvable_argument_for! {(value) -> ExpressionStream {
+        match value {
+            ExpressionValue::Stream(value) => Ok(value),
+            _ => value.execution_err("Expected stream"),
+        }
+    }}
+
+    impl_resolvable_argument_for! {(value) -> ExpressionRange {
+        match value {
+            ExpressionValue::Range(value) => Ok(value),
+            _ => value.execution_err("Expected range"),
+        }
+    }}
+
+    impl_resolvable_argument_for! {(value) -> ExpressionIterator {
+        match value {
+            ExpressionValue::Iterator(value) => Ok(value),
+            _ => value.execution_err("Expected iterator"),
+        }
+    }}
 }
- */

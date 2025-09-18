@@ -22,6 +22,12 @@ pub(crate) trait ToExpressionValue: Sized {
     fn to_value(self, span_range: SpanRange) -> ExpressionValue;
 }
 
+impl ToExpressionValue for () {
+    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
+        ExpressionValue::None(span_range)
+    }
+}
+
 impl ExpressionValue {
     pub(crate) fn for_literal(literal: Literal) -> Self {
         // The unwrap should be safe because all Literal should be parsable
@@ -54,6 +60,16 @@ impl ExpressionValue {
                 lit: other,
             }),
         }
+    }
+
+    pub(crate) fn try_transparent_clone(&self) -> ExecutionResult<ExpressionValue> {
+        if !self.kind().supports_transparent_cloning() {
+            return self.execution_err(format!(
+                "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .clone() explicitly.",
+                self.articled_value_type()
+            ));
+        }
+        Ok(self.clone())
     }
 
     pub(super) fn expect_value_pair(

@@ -476,4 +476,24 @@ fn test_method_calls() {
         ),
         2 + 3
     );
+
+    preinterpret_assert_eq!(
+        #(
+            let x = [1, 2, 3];
+            x.push(5);
+            x.push(2);
+            x.debug()
+        ),
+        "[1, 2, 3, 5, 2]"
+    );
+    // Push returns None
+    preinterpret_assert_eq!(
+        #([1, 2, 3].as_mut().push(4).debug()),
+        "None"
+    );
+    // Converting to mut and then to shared works
+    preinterpret_assert_eq!(
+        #([].as_mut().len().debug()),
+        "0usize"
+    );
 }
