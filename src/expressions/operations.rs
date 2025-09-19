@@ -136,7 +136,6 @@ pub(super) enum CastTarget {
     Float(FloatKind),
     Boolean,
     String,
-    DebugString,
     Char,
     Stream,
     Group,
@@ -168,7 +167,6 @@ impl FromStr for CastTarget {
             "stream" => CastTarget::Stream,
             "group" => CastTarget::Group,
             "string" => CastTarget::String,
-            "debug" => CastTarget::DebugString,
             _ => return Err(()),
         })
     }
@@ -195,7 +193,6 @@ impl CastTarget {
             CastTarget::Float(FloatKind::F64) => "as f64",
             CastTarget::Boolean => "as bool",
             CastTarget::String => "as string",
-            CastTarget::DebugString => "as debug",
             CastTarget::Char => "as char",
             CastTarget::Stream => "as stream",
             CastTarget::Group => "as group",

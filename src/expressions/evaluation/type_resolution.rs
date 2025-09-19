@@ -1,4 +1,5 @@
-#![allow(unused)] use std::mem;
+#![allow(unused)]
+use std::mem;
 
 // TODO[unused-clearup]
 use super::*;
@@ -238,8 +239,14 @@ impl ResolvedTypeDetails for ValueKind {
                     Ok(MutableValue::new_from_owned(this))
                 }}
             }
-            (_, "debug", 0) => wrap_method! {(this: &ExpressionValue) -> ExecutionResult<String> {
-                this.clone().into_debug_string()
+            (_, "debug_string", 0) => {
+                wrap_method! {(this: &ExpressionValue) -> ExecutionResult<String> {
+                    this.clone().into_debug_string()
+                }}
+            }
+            (_, "debug", 0) => wrap_method! {(this: SharedValue) -> ExecutionResult<String> {
+                let message = this.clone().into_debug_string()?;
+                this.execution_err(message)
             }},
             (ValueKind::Array, "len", 0) => {
                 wrap_method! {(this: &ExpressionArray) -> ExecutionResult<usize> {

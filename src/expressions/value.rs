@@ -62,13 +62,17 @@ impl ExpressionValue {
         }
     }
 
-    pub(crate) fn try_transparent_clone(&self, new_span_range: SpanRange) -> ExecutionResult<ExpressionValue> {
-        if !self.kind().supports_transparent_cloning() {
-            return new_span_range.execution_err(format!(
-                "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .take() or .clone() explicitly.",
-                self.articled_value_type()
-            ));
-        }
+    pub(crate) fn try_transparent_clone(
+        &self,
+        new_span_range: SpanRange,
+    ) -> ExecutionResult<ExpressionValue> {
+        // TODO[auto-cloning]:
+        // if !self.kind().supports_transparent_cloning() {
+        //     return new_span_range.execution_err(format!(
+        //         "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .take() or .clone() explicitly.",
+        //         self.articled_value_type()
+        //     ));
+        // }
         Ok(self.clone().with_span_range(new_span_range))
     }
 
@@ -408,13 +412,7 @@ impl ExpressionValue {
         operation: OutputSpanned<UnaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         match self {
-            ExpressionValue::None(_) => match operation.operation {
-                UnaryOperation::Cast {
-                    target: CastTarget::DebugString,
-                    ..
-                } => ExpressionValue::None(operation.output_span_range).into_debug_string_value(),
-                _ => operation.unsupported(self),
-            },
+            ExpressionValue::None(_) => operation.unsupported(self),
             ExpressionValue::Integer(value) => value.handle_unary_operation(operation),
             ExpressionValue::Float(value) => value.handle_unary_operation(operation),
             ExpressionValue::Boolean(value) => value.handle_unary_operation(operation),
@@ -667,12 +665,6 @@ impl ExpressionValue {
 
     pub(crate) fn into_debug_string(self) -> ExecutionResult<String> {
         self.concat_recursive(&ConcatBehaviour::debug())
-    }
-
-    pub(crate) fn into_debug_string_value(self) -> ExecutionResult<ExpressionValue> {
-        let span_range = self.span_range();
-        let value = self.into_debug_string()?.to_value(span_range);
-        Ok(value)
     }
 
     pub(crate) fn concat_recursive(self, behaviour: &ConcatBehaviour) -> ExecutionResult<String> {

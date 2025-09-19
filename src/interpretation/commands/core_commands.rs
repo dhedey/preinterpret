@@ -374,38 +374,3 @@ impl NoOutputCommandDefinition for ErrorCommand {
         error_span.execution_err(error_message)
     }
 }
-
-#[derive(Clone)]
-pub(crate) struct DebugCommand {
-    span: Span,
-    inner: SourceExpression,
-}
-
-impl CommandType for DebugCommand {
-    type OutputKind = OutputKindValue;
-}
-
-impl ValueCommandDefinition for DebugCommand {
-    const COMMAND_NAME: &'static str = "debug";
-
-    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
-        arguments.fully_parse_or_error(
-            |input| {
-                Ok(Self {
-                    span: arguments.command_span(),
-                    inner: input.parse()?,
-                })
-            },
-            "Expected [!debug! <expression>]. To provide a stream, use [!debug! [!stream! ...]]",
-        )
-    }
-
-    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue> {
-        let value = self
-            .inner
-            .interpret_to_value(interpreter)?
-            .with_span(self.span)
-            .into_debug_string_value()?;
-        Ok(value)
-    }
-}

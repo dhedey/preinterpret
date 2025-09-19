@@ -175,7 +175,6 @@ impl UntypedFloat {
                 CastTarget::Float(FloatKind::F32) => operation.output(input as f32),
                 CastTarget::Float(FloatKind::F64) => operation.output(input),
                 CastTarget::String => operation.output(input.to_string()),
-                CastTarget::DebugString => operation.output(self).into_debug_string_value()?,
                 CastTarget::Boolean | CastTarget::Char => {
                     return operation.execution_err("This cast is not supported")
                 }
@@ -335,7 +334,6 @@ macro_rules! impl_float_operations {
                         CastTarget::Float(FloatKind::F32) => operation.output(self as f32),
                         CastTarget::Float(FloatKind::F64) => operation.output(self as f64),
                         CastTarget::String => operation.output(self.to_string()),
-                        CastTarget::DebugString => operation.output(self).into_debug_string_value()?,
                         CastTarget::Boolean | CastTarget::Char => return operation.execution_err("This cast is not supported"),
                         CastTarget::Stream => operation.output(operation.output(self).into_new_output_stream(Grouping::Flattened, StreamOutputBehaviour::Standard)?),
                         CastTarget::Group => operation.output(operation.output(self).into_new_output_stream(Grouping::Grouped, StreamOutputBehaviour::Standard)?),

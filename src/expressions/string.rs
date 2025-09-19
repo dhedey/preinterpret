@@ -39,7 +39,6 @@ impl ExpressionString {
                     )?)
                 }
                 CastTarget::String => operation.output(self.value),
-                CastTarget::DebugString => operation.output(format!("{:?}", self.value)),
                 CastTarget::Boolean
                 | CastTarget::Char
                 | CastTarget::Integer(_)

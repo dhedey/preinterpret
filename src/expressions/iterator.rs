@@ -67,9 +67,6 @@ impl ExpressionIterator {
                     self.concat_recursive_into(&mut output, &ConcatBehaviour::standard())?;
                     output
                 }),
-                CastTarget::DebugString => {
-                    operation.output(self.iterator).into_debug_string_value()?
-                }
                 CastTarget::Boolean
                 | CastTarget::Char
                 | CastTarget::Integer(_)

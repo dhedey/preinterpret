@@ -57,7 +57,7 @@ fn test_variable_parsing() {
                 #..>>..x // Matches stream and appends it flattened: do you agree ?
             )
             = Why Hello Everyone ([!group! This is an exciting adventure] do you agree?)]
-        [!debug! x]
+        #(x.debug_string())
     }, "[!stream! Why [!group! Hello Everyone] This is an exciting adventure do you agree ?]");
 }
 
@@ -78,7 +78,7 @@ fn test_ident_transformer() {
     preinterpret_assert_eq!({
         [!set! #x =]
         [!let! The quick @(#x += @IDENT) fox jumps @(#x += @IDENT) the lazy dog = The quick brown fox jumps over the lazy dog]
-        [!debug! x]
+        #(x.debug_string())
     }, "[!stream! brown over]");
 }
 
@@ -92,7 +92,7 @@ fn test_literal_transformer() {
     preinterpret_assert_eq!({
         [!set! #x]
         [!let! @LITERAL @LITERAL @LITERAL @(#x += @LITERAL) @LITERAL @(#x += @LITERAL @LITERAL) = "Hello" 9 3.4 'c' 41u16 0b1010 r#"123"#]
-        [!debug! x]
+        #(x.debug_string())
     }, "[!stream! 'c' 0b1010 r#\"123\"#]");
 }
 
@@ -100,18 +100,18 @@ fn test_literal_transformer() {
 fn test_punct_transformer() {
     preinterpret_assert_eq!({
         [!let! The "quick" brown fox "jumps" @(#x = @PUNCT) = The "quick" brown fox "jumps"!]
-        [!debug! x]
+        #(x.debug_string())
     }, "[!stream! !]");
     // Test for ' which is treated weirdly by syn / rustc
     preinterpret_assert_eq!({
         [!let! The "quick" fox isn 't brown and doesn @(#x = @PUNCT) t "jump" = The "quick" fox isn 't brown and doesn 't "jump"]
-        #(x as debug)
+        #(x.debug_string())
     }, "[!stream! ']");
     // Lots of punctuation, most of it ignored
     preinterpret_assert_eq!({
         [!set! #x =]
         [!let! @PUNCT @PUNCT @PUNCT @PUNCT @(#x += @PUNCT) @PUNCT @PUNCT @PUNCT @PUNCT @PUNCT @(#x += @PUNCT) @PUNCT @PUNCT @PUNCT  = # ! $$ % ^ & * + = | @ : ;]
-        [!debug! x]
+        #(x.debug_string())
     }, "[!stream! % |]");
 }
 
@@ -119,18 +119,18 @@ fn test_punct_transformer() {
 fn test_group_transformer() {
     preinterpret_assert_eq!({
         [!let! The "quick" @[GROUP brown #x] "jumps" = The "quick" [!group! brown fox] "jumps"]
-        [!debug! x]
+        #(x.debug_string())
     }, "[!stream! fox]");
     preinterpret_assert_eq!({
         [!set! #x = "hello" "world"]
         [!let! I said @[GROUP #..y]! = I said #x!]
-        [!debug! y]
+        #(y.debug_string())
     }, "[!stream! \"hello\" \"world\"]");
     // ... which is equivalent to this:
     preinterpret_assert_eq!({
         [!set! #x = "hello" "world"]
         [!let! I said #y! = I said #x!]
-        [!debug! y]
+        #(y.debug_string())
     }, "[!stream! \"hello\" \"world\"]");
 }
 
@@ -138,7 +138,7 @@ fn test_group_transformer() {
 fn test_none_output_commands_mid_parse() {
     preinterpret_assert_eq!({
         [!let! The "quick" @(#x = @LITERAL) fox [!let! #y = #x] @(#x = @IDENT) = The "quick" "brown" fox jumps]
-        [!string! "#x = " [!debug! x] "; #y = "[!debug! y]]
+        [!string! "#x = " #(x.debug_string()) "; #y = "#(y.debug_string())]
     }, "#x = [!stream! jumps]; #y = \"brown\"");
 }
 
@@ -171,27 +171,30 @@ fn test_exact_transformer() {
 fn test_parse_command_and_exact_transformer() {
     // The output stream is additive
     preinterpret_assert_eq!(
-        { [!debug! [!parse! [!stream! Hello World] with @(@IDENT @IDENT)]] },
+        #([!parse! [!stream! Hello World] with @(@IDENT @IDENT)].debug_string()),
         "[!stream! Hello World]"
     );
     // Substreams redirected to a variable are not included in the output
     preinterpret_assert_eq!(
-        {
-            [!debug! [!parse! [!stream! The quick brown fox] with @(
+        #(
+            [!parse! [!stream! The quick brown fox] with @(
                 @[EXACT The] quick @IDENT @(#x = @IDENT)
-            )]]
-        },
+            )].debug_string()
+        ),
         "[!stream! The brown]"
     );
     // This tests that:
     // * Can nest EXACT and transform streams
     // * Can discard output with @(_ = ...)
     // * That EXACT ignores none-delimited groups, to make it more intuitive
-    preinterpret_assert_eq!({
-        [!set! #x = [!group! fox]]
-        [!debug! [!parse! [!stream! The quick brown fox is a fox - right?!] with @(
-            // The outputs are only from the EXACT transformer
-            The quick @(_ = @IDENT) @[EXACT #x @(_ = @IDENT a) #..x - right?!]
-        )]]
-    }, "[!stream! fox fox - right ?!]");
+    preinterpret_assert_eq!(
+        #(
+            [!set! #x = [!group! fox]];
+            [!parse! [!stream! The quick brown fox is a fox - right?!] with @(
+                // The outputs are only from the EXACT transformer
+                The quick @(_ = @IDENT) @[EXACT #x @(_ = @IDENT a) #..x - right?!]
+            )].debug_string()
+        ),
+        "[!stream! fox fox - right ?!]"
+    );
 }

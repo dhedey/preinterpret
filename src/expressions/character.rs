@@ -45,7 +45,6 @@ impl ExpressionChar {
                 CastTarget::Char => operation.output(char),
                 CastTarget::Boolean | CastTarget::Float(_) => return operation.unsupported(self),
                 CastTarget::String => operation.output(char.to_string()),
-                CastTarget::DebugString => operation.output(format!("{:?}", char)),
                 CastTarget::Stream => {
                     operation.output(operation.output(char).into_new_output_stream(
                         Grouping::Flattened,

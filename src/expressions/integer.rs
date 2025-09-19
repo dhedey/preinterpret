@@ -304,7 +304,6 @@ impl UntypedInteger {
                     return operation.execution_err("This cast is not supported")
                 }
                 CastTarget::String => operation.output(input.to_string()),
-                CastTarget::DebugString => operation.output(self).into_debug_string_value()?,
                 CastTarget::Stream => {
                     operation.output(operation.output(self).into_new_output_stream(
                         Grouping::Flattened,
@@ -592,7 +591,6 @@ macro_rules! impl_unsigned_unary_operations {
                         CastTarget::Float(FloatKind::F64) => operation.output(self as f64),
                         CastTarget::Boolean | CastTarget::Char => return operation.execution_err("This cast is not supported"),
                         CastTarget::String => operation.output(self.to_string()),
-                        CastTarget::DebugString => operation.output(self).into_debug_string_value()?,
                         CastTarget::Stream => operation.output(operation.output(self).into_new_output_stream(Grouping::Flattened, StreamOutputBehaviour::Standard)?),
                         CastTarget::Group => operation.output(operation.output(self).into_new_output_stream(Grouping::Grouped, StreamOutputBehaviour::Standard)?),
                     }
@@ -630,7 +628,6 @@ macro_rules! impl_signed_unary_operations {
                         CastTarget::Float(FloatKind::F64) => operation.output(self as f64),
                         CastTarget::Boolean | CastTarget::Char => return operation.execution_err("This cast is not supported"),
                         CastTarget::String => operation.output(self.to_string()),
-                        CastTarget::DebugString => operation.output(self).into_debug_string_value()?,
                         CastTarget::Stream => operation.output(operation.output(self).into_new_output_stream(Grouping::Flattened, StreamOutputBehaviour::Standard)?),
                         CastTarget::Group => operation.output(operation.output(self).into_new_output_stream(Grouping::Grouped, StreamOutputBehaviour::Standard)?),
                     }
@@ -675,7 +672,6 @@ impl HandleUnaryOperation for u8 {
                     return operation.execution_err("This cast is not supported")
                 }
                 CastTarget::String => operation.output(self.to_string()),
-                CastTarget::DebugString => operation.output(self).into_debug_string_value()?,
                 CastTarget::Stream => {
                     operation.output(operation.output(self).into_new_output_stream(
                         Grouping::Flattened,

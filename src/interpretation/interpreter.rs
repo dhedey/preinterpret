@@ -155,8 +155,7 @@ impl VariableReference {
 
     // Gets the cloned expression value, setting the span range appropriately
     pub(crate) fn get_value_transparently_cloned(&self) -> ExecutionResult<ExpressionValue> {
-        self
-            .get_value_ref()?
+        self.get_value_ref()?
             .try_transparent_clone(self.variable_span_range)
     }
 

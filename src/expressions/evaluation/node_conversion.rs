@@ -28,9 +28,8 @@ impl ExpressionNode<Source> {
                             RequestedValueOwnership::MutableReference => {
                                 context.return_mut_ref(variable_ref.into_mut()?)
                             }
-                            RequestedValueOwnership::Owned => {
-                                context.return_owned_value(variable_ref.get_value_transparently_cloned()?)
-                            }
+                            RequestedValueOwnership::Owned => context
+                                .return_owned_value(variable_ref.get_value_transparently_cloned()?),
                         }
                     }
                     SourceExpressionLeaf::ExpressionBlock(block) => {

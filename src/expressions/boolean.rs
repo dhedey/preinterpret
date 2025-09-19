@@ -46,7 +46,6 @@ impl ExpressionBoolean {
                 }
                 CastTarget::Boolean => operation.output(input),
                 CastTarget::String => operation.output(input.to_string()),
-                CastTarget::DebugString => operation.output(input.to_string()),
                 CastTarget::Stream => {
                     operation.output(operation.output(input).into_new_output_stream(
                         Grouping::Flattened,

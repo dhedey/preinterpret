@@ -348,7 +348,6 @@ define_command_enums! {
     ReinterpretCommand,
     SettingsCommand,
     ErrorCommand,
-    DebugCommand,
 
     // Concat & Type Convert Commands
     StringCommand,

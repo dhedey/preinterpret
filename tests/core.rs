@@ -109,11 +109,13 @@ fn test_debug() {
     // It keeps the semantic punctuation spacing intact
     // (e.g. it keeps 'a and >> together)
     preinterpret_assert_eq!(
-        [!debug! [!stream! impl<'a, T> MyStruct<'a, T> {
-            pub fn new() -> Self {
-                !($crate::Test::CONSTANT >> 5 > 1)
-            }
-        }]],
+        #(
+            [!stream! impl<'a, T> MyStruct<'a, T> {
+                pub fn new() -> Self {
+                    !($crate::Test::CONSTANT >> 5 > 1)
+                }
+            }].debug_string()
+        ),
         "[!stream! impl < 'a , T > MyStruct < 'a , T > { pub fn new () -> Self { ! ($ crate :: Test :: CONSTANT >> 5 > 1) } }]"
     );
     // It shows transparent groups
@@ -121,10 +123,10 @@ fn test_debug() {
     // because it doesn't stick [!raw! ...] around things which could be confused
     // for the preinterpret grammar. Perhaps it could/should in future.
     preinterpret_assert_eq!(
-        {
-            [!set! #x = Hello (World)]
-            [!debug! [!stream! #x [!raw! #test] "and" [!raw! ##] #..x]]
-        },
+        #(
+            let x = [!stream! Hello (World)];
+            [!stream! #x [!raw! #test] "and" [!raw! ##] #..x].debug_string()
+        ),
         r###"[!stream! [!group! Hello (World)] # test "and" ## Hello (World)]"###
     );
 }

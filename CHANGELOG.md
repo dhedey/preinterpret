@@ -13,7 +13,6 @@
   * `[!error! ...]` to output a compile error.
   * `[!set! #x += ...]` to performantly add extra characters to a variable's stream.
   * `[!set! _ = ...]` interprets its arguments but then ignores any outputs.
-  * `[!debug! ...]` to output its interpreted contents including none-delimited groups. Useful for debugging the content of variables.
   * `[!stream! ...]` can be used to just output its interpreted contents. It's useful to create a stream value inside an expression.
   * `[!reinterpret! ...]` is like an `eval` command in scripting languages. It takes a stream, and parses/interprets it.
   * `[!settings! { ... }]` can be used to adjust the iteration limit.
@@ -65,6 +64,16 @@ The following operators are supported:
 * Casting with `as` including to untyped integers/floats with `as int` and `as float`, to a grouped stream with `as group` and to a flattened stream with `as stream`.
 * () and none-delimited groups for precedence
 
+The following methods are supported:
+* On all values:
+  * `.clone()` - converts a reference to a mutable value. You will be told in an error if this is needed.
+  * `.as_mut()` - converts an owned value to a mutable value. You will be told in an error if this is needed.
+  * `.take()` - takes the value from a mutable reference, and replaces it with `None`. Useful instead of cloning.
+  * `.debug()` - a debugging aid whilst writing code. Causes a compile error with the content of the value. Equivalent to `[!error! #(x.debug_string())]`
+  * `.debug_string()` - returns the value's contents as a string for debugging purposes
+* On arrays: `len()` and `push()`
+* On streams: `len()`
+
 An expression also supports embedding commands `[!xxx! ...]`, other expression blocks, variables and flattened variables. The value type outputted by a command depends on the command.
 
 ### Transforming
@@ -97,12 +106,13 @@ Inside a transform stream, the following grammar is supported:
 
 ### To come
 * Method calls continued
-  * Replace `as debug` and `[!debug! ..]` with `.debug()`
+  * Add `debug_error()`
   * Add support for `RequestedValueOwnership::SharedOrOwned` (CoW behaviour)
-    and equivalent `SharedOrOwned<T>`. This can be used for utilities like `debug()`
+    and equivalent `SharedOrOwned<T>`. This can be used to create a `OwnedOrCloned<X>` parameter for utilities like `debug()` which is more performant
   * Scrap `#>>x` etc in favour of `#(x.push(@TOKEN))`
   * TODO[access-refactor]
   * TODO[range-refactor] & some kind of more thought through typed reference support - e.g. slices, mutable arrays?
+  * Re-enable TODO[auto-cloning]
   * TODO[operation-refactor]
   * No clone required for testing equality of streams, objects and arrays
   * Add better way of defining methods once / lazily, and binding them to
@@ -148,7 +158,7 @@ Inside a transform stream, the following grammar is supported:
 * Implement the following named parsers
   * `@TOKEN_TREE`
   * `@TOKEN_OR_GROUP_CONTENT` - Literal, Ident, Punct or None-group content.
-  * `@INFER_TOKEN_TREE` - Infers values, falls back to Stream
+  * `@INFER_TOKEN_TREE` - Infers parsing as a value, falls back to Stream
   * `@[ANY_GROUP ...]`
   * `@REST`
   * `@[FORK @{ ...parser... }]` the parser block creates a `commit=false` variable, if this is set to `commit=true` then it commits the fork.

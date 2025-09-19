@@ -441,7 +441,7 @@ Other boolean commands could be possible, similar to numeric commands:
 * `[!tokens_eq! #foo #bar]` outputs `true` if `#foo` and `#bar` are exactly the same token tree, via structural equality. For example:
   * `[!tokens_eq! (3 4) (3   4)]` outputs `true` because the token stream ignores spacing.
   * `[!tokens_eq! 1u64 1]` outputs `false` because these are different literals.
-  * This can be effectively done already with `#([!debug! #x] == [!debug! #y])`
+  * This can be effectively done already with `#(x.debug_string() == y.debug_string())`
 * `[!str_split! { input: Value<LitStr>, separator: Value<LitStr>, }]`
 * `[!str_contains! "needle" [!string! haystack]]` expects two string literals, and outputs `true` if the first string is a substring of the second string.
 

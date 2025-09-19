@@ -21,25 +21,18 @@ impl ExpressionObject {
         self,
         operation: OutputSpanned<UnaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
-        Ok(match operation.operation {
-            UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => {
-                return operation.unsupported(self)
-            }
+        match operation.operation {
+            UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => operation.unsupported(self),
             UnaryOperation::Cast { target, .. } => match target {
-                CastTarget::DebugString => {
-                    operation.output(self.entries).into_debug_string_value()?
-                }
                 CastTarget::String
                 | CastTarget::Stream
                 | CastTarget::Group
                 | CastTarget::Boolean
                 | CastTarget::Char
                 | CastTarget::Integer(_)
-                | CastTarget::Float(_) => {
-                    return operation.unsupported(self);
-                }
+                | CastTarget::Float(_) => operation.unsupported(self),
             },
-        })
+        }
     }
 
     pub(super) fn handle_integer_binary_operation(

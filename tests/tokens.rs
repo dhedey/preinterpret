@@ -235,77 +235,83 @@ fn test_split() {
     // Empty separators are allowed, and split on every token
     // In this case, drop_empty_start / drop_empty_end are ignored
     preinterpret_assert_eq!(
-        {
-            [!debug![!split! {
+        #(
+            [!split! {
                 stream: [!stream! A::B],
                 separator: [!stream!],
-            }]]
-        },
+            }].debug_string()
+        ),
         "[[!stream! A], [!stream! :], [!stream! :], [!stream! B]]"
     );
     // Double separators are allowed
     preinterpret_assert_eq!(
-        {
-            [!debug![!split! {
+        #(
+            [!split! {
                 stream: [!stream! A::B::C],
                 separator: [!stream! ::],
-            }]]
-        },
+            }].debug_string()
+        ),
         "[[!stream! A], [!stream! B], [!stream! C]]"
     );
     // Trailing separator is ignored by default
     preinterpret_assert_eq!(
-        {
-            [!debug![!split! {
+        #(
+            [!split! {
                 stream: [!stream! Pizza, Mac and Cheese, Hamburger,],
                 separator: [!stream! ,],
-            }]]
-        },
+            }].debug_string()
+        ),
         "[[!stream! Pizza], [!stream! Mac and Cheese], [!stream! Hamburger]]"
     );
     // By default, empty groups are included except at the end
     preinterpret_assert_eq!(
-        {
-            [!debug![!split! {
+        #(
+            ([!split! {
                 stream: [!stream! ::A::B::::C::],
                 separator: [!stream! ::],
-            }] as stream]
-        },
+            }] as stream).debug_string()
+        ),
         "[!stream! [!group!] [!group! A] [!group! B] [!group!] [!group! C]]"
     );
     // Stream and separator are both interpreted
-    preinterpret_assert_eq!({
-        [!set! #x = ;]
-        [!debug! [!split! {
-            stream: [!stream! ;A;;B;C;D #..x E;],
-            separator: x,
-            drop_empty_start: true,
-            drop_empty_middle: true,
-            drop_empty_end: true,
-        }] as stream]
-    }, "[!stream! [!group! A] [!group! B] [!group! C] [!group! D] [!group! E]]");
+    preinterpret_assert_eq!(
+        #(
+            let x = [!stream! ;];
+            ([!split! {
+                stream: [!stream! ;A;;B;C;D #..x E;],
+                separator: x,
+                drop_empty_start: true,
+                drop_empty_middle: true,
+                drop_empty_end: true,
+            }] as stream).debug_string()
+        ),
+        "[!stream! [!group! A] [!group! B] [!group! C] [!group! D] [!group! E]]");
     // Drop empty false works
-    preinterpret_assert_eq!({
-        [!set! #x = ;]
-        [!debug! [!split! {
-            stream: [!stream! ;A;;B;C;D #..x E;],
-            separator: x,
-            drop_empty_start: false,
-            drop_empty_middle: false,
-            drop_empty_end: false,
-        }] as stream]
-    }, "[!stream! [!group!] [!group! A] [!group!] [!group! B] [!group! C] [!group! D] [!group! E] [!group!]]");
+    preinterpret_assert_eq!(
+        #(
+            let x = [!stream! ;];
+            let output = [!split! {
+                stream: [!stream! ;A;;B;C;D #..x E;],
+                separator: x,
+                drop_empty_start: false,
+                drop_empty_middle: false,
+                drop_empty_end: false,
+            }] as stream;
+            output.debug_string()
+        ),
+        "[!stream! [!group!] [!group! A] [!group!] [!group! B] [!group! C] [!group! D] [!group! E] [!group!]]"
+    );
     // Drop empty middle works
     preinterpret_assert_eq!(
-        {
-            [!debug![!split! {
+        #(
+            [!split! {
                 stream: [!stream! ;A;;B;;;;E;],
                 separator: [!stream! ;],
                 drop_empty_start: false,
                 drop_empty_middle: true,
                 drop_empty_end: false,
-            }]]
-        },
+            }].debug_string()
+        ),
         "[[!stream!], [!stream! A], [!stream! B], [!stream! E], [!stream!]]"
     );
 }
@@ -313,7 +319,7 @@ fn test_split() {
 #[test]
 fn test_comma_split() {
     preinterpret_assert_eq!(
-        { [!debug! [!comma_split! Pizza, Mac and Cheese, Hamburger,]] },
+        #([!comma_split! Pizza, Mac and Cheese, Hamburger,].debug_string()),
         "[[!stream! Pizza], [!stream! Mac and Cheese], [!stream! Hamburger]]"
     );
 }
@@ -321,56 +327,53 @@ fn test_comma_split() {
 #[test]
 fn test_zip() {
     preinterpret_assert_eq!(
-        [!debug![
-            !zip! [[!stream! Hello "Goodbye"], ["World", "Friend"]]
-        ]],
+        #([!zip! [[!stream! Hello "Goodbye"], ["World", "Friend"]]].debug_string()),
         r#"[[[!stream! Hello], "World"], ["Goodbye", "Friend"]]"#,
     );
     preinterpret_assert_eq!(
-        {
-            [!set! #countries = "France" "Germany" "Italy"]
-            [!set! #flags = "🇫🇷" "🇩🇪" "🇮🇹"]
-            [!set! #capitals = "Paris" "Berlin" "Rome"]
-            [!debug! [!zip! [countries, flags, capitals]]]
-        },
+        #(
+            let countries = [!stream! "France" "Germany" "Italy"];
+            let flags = [!stream! "🇫🇷" "🇩🇪" "🇮🇹"];
+            let capitals = [!stream! "Paris" "Berlin" "Rome"];
+            [!zip! [countries, flags, capitals]].debug_string()
+        ),
         r#"[["France", "🇫🇷", "Paris"], ["Germany", "🇩🇪", "Berlin"], ["Italy", "🇮🇹", "Rome"]]"#,
     );
     preinterpret_assert_eq!(
-        {
-            [!set! #longer = A B C D]
-            [!set! #shorter = 1 2 3]
-            [!debug! [!zip_truncated! [longer, shorter]]]
-        },
+        #(
+            let longer = [!stream! A B C D];
+            let shorter = [1, 2, 3];
+            [!zip_truncated! [longer, shorter]].debug_string()
+        ),
         r#"[[[!stream! A], 1], [[!stream! B], 2], [[!stream! C], 3]]"#,
     );
     preinterpret_assert_eq!(
-        {
-            [!set! #letters = A B C]
-            #(let numbers = [1, 2, 3])
-            [!debug! [!zip! [letters, numbers]]]
-        },
+        #(
+            let letters = [!stream! A B C];
+            let numbers = [1, 2, 3];
+            [!zip! [letters, numbers]].debug_string()
+        ),
         r#"[[[!stream! A], 1], [[!stream! B], 2], [[!stream! C], 3]]"#,
     );
     preinterpret_assert_eq!(
-        {
-            [!set! #letters = A B C]
-            #(let numbers = [1, 2, 3])
-            #(let combined = [letters, numbers])
-            [!debug! [!zip! combined]]
-        },
+        #(
+            let letters = [!stream! A B C];
+            let numbers = [1, 2, 3];
+            let combined = [letters, numbers];
+            [!zip! combined].debug_string()
+        ),
         r#"[[[!stream! A], 1], [[!stream! B], 2], [[!stream! C], 3]]"#,
     );
     preinterpret_assert_eq!(
-        {
-            [!set! #letters = A B C]
-            #(let numbers = [1, 2, 3])
-            #(let letter = [letters, numbers])
-            [!debug! [!zip! { number: numbers, letter: letters }]]
-        },
+        #(
+            [!set! #letters = A B C];
+            let numbers = [1, 2, 3];
+            [!zip! { number: numbers, letter: letters }].debug_string()
+        ),
         r#"[{ letter: [!stream! A], number: 1 }, { letter: [!stream! B], number: 2 }, { letter: [!stream! C], number: 3 }]"#,
     );
-    preinterpret_assert_eq!([!debug![!zip![]]], r#"[]"#,);
-    preinterpret_assert_eq!([!debug![!zip! {}]], r#"[]"#,);
+    preinterpret_assert_eq!(#([!zip![]].debug_string()), r#"[]"#);
+    preinterpret_assert_eq!(#([!zip! {}].debug_string()), r#"[]"#);
 }
 
 #[test]
@@ -380,9 +383,10 @@ fn test_zip_with_for() {
             [!set! #countries = France Germany Italy]
             #(let flags = ["🇫🇷", "🇩🇪", "🇮🇹"])
             [!set! #capitals = "Paris" "Berlin" "Rome"]
-            [!set! #facts = [!for! [country, flag, capital] in [!zip! [countries, flags, capitals]] {
-                [!string! "=> The capital of " #country " is " #capital " and its flag is " #flag]
-            }]]
+            #(let facts = [])
+            [!for! [country, flag, capital] in [!zip! [countries, flags, capitals]] {
+                #(facts.push([!string! "=> The capital of " #country " is " #capital " and its flag is " #flag]))
+            }]
 
             #("The facts are:\n" + [!intersperse! {
                 items: facts,
