@@ -1,4 +1,3 @@
-#![allow(unused)] // TODO: Remove when places are properly late-bound
 use crate::internal_prelude::*;
 use std::cell::*;
 use std::rc::Rc;

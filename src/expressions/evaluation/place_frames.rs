@@ -1,4 +1,4 @@
-#![allow(unused)] // TODO: Remove when places are properly late-bound
+#![allow(unused)] // TODO[unused-clearup]
 use super::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

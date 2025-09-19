@@ -1,4 +1,6 @@
-#![allow(unused)] // TODO: Remove when places are properly late-bound
+#![allow(unused)] use std::mem;
+
+// TODO[unused-clearup]
 use super::*;
 
 #[macro_use]
@@ -9,56 +11,56 @@ mod macros {
             $($bindings)*
         };
         // By shared reference
-        ([$arg:ident : &$ty:ty, $($rest:tt)*] [$($bindings:tt)*]) => {
+        ([$($arg_part:ident)+ : &$ty:ty, $($rest:tt)*] [$($bindings:tt)*]) => {
             handle_arg_mapping!([$($rest)*] [
                 $($bindings)*
-                let $arg: &$ty = <$ty as ResolvableArgument>::resolve_from_ref($arg.as_ref())?;
+                let handle_arg_name!($($arg_part)+): &$ty = <$ty as ResolvableArgument>::resolve_from_ref(handle_arg_name!($($arg_part)+).as_ref())?;
             ])
         };
         // By captured shared reference (i.e. can return a sub-reference from it)
-        ([$arg:ident : CapturedRef<$ty:ty>, $($rest:tt)*] [$($bindings:tt)*]) => {
+        ([$($arg_part:ident)+ : CapturedRef<$ty:ty>, $($rest:tt)*] [$($bindings:tt)*]) => {
             handle_arg_mapping!([$($rest)*] [
                 $($bindings)*
-                let tmp = $arg.into_shared_reference();
-                let $arg: CapturedRef<$ty> = tmp.try_map(|value, _| <$ty as ResolvableArgument>::resolve_from_ref(value))?;
+                let tmp = handle_arg_name!($($arg_part)+).into_shared_reference();
+                let handle_arg_name!($($arg_part)+): CapturedRef<$ty> = tmp.try_map(|value, _| <$ty as ResolvableArgument>::resolve_from_ref(value))?;
             ])
         };
         // SharedValue is an alias for CapturedRef<ExpressionValue>
-        ([$arg:ident : SharedValue, $($rest:tt)*] [$($bindings:tt)*]) => {
+        ([$($arg_part:ident)+ : SharedValue, $($rest:tt)*] [$($bindings:tt)*]) => {
             handle_arg_mapping!([$($rest)*] [
                 $($bindings)*
-                let $arg = $arg.into_shared_reference();
+                let handle_arg_name!($($arg_part)+) = handle_arg_name!($($arg_part)+).into_shared_reference();
             ])
         };
         // By mutable reference
-        ([$arg:ident : &mut $ty:ty, $($rest:tt)*] [$($bindings:tt)*]) => {
+        ([$($arg_part:ident)+ : &mut $ty:ty, $($rest:tt)*] [$($bindings:tt)*]) => {
             handle_arg_mapping!([$($rest)*] [
                 $($bindings)*
-                let mut tmp = $arg.into_mutable_reference()?;
-                let $arg: &mut $ty = <$ty as ResolvableArgument>::resolve_from_mut(tmp.as_mut())?;
+                let mut tmp = handle_arg_name!($($arg_part)+).into_mutable_reference()?;
+                let handle_arg_name!($($arg_part)+): &mut $ty = <$ty as ResolvableArgument>::resolve_from_mut(tmp.as_mut())?;
             ])
         };
         // By captured mutable reference (i.e. can return a sub-reference from it)
-        ([$arg:ident : CapturedMut<$ty:ty>, $($rest:tt)*] [$($bindings:tt)*]) => {
+        ([$($arg_part:ident)+ : CapturedMut<$ty:ty>, $($rest:tt)*] [$($bindings:tt)*]) => {
             handle_arg_mapping!([$($rest)*] [
                 $($bindings)*
-                let mut tmp = $arg.into_mutable_reference()?;
-                let $arg: CapturedMut<$ty> = tmp.try_map(|value, _| <$ty as ResolvableArgument>::resolve_from_mut(value))?;
+                let mut tmp = handle_arg_name!($($arg_part)+).into_mutable_reference()?;
+                let handle_arg_name!($($arg_part)+): CapturedMut<$ty> = tmp.try_map(|value, _| <$ty as ResolvableArgument>::resolve_from_mut(value))?;
             ])
         };
         // MutableValue is an alias for CapturedMut<ExpressionValue>
-        ([$arg:ident : MutableValue, $($rest:tt)*] [$($bindings:tt)*]) => {
+        ([$($arg_part:ident)+ : MutableValue, $($rest:tt)*] [$($bindings:tt)*]) => {
             handle_arg_mapping!([$($rest)*] [
                 $($bindings)*
-                let $arg = $arg.into_mutable_reference()?;
+                let handle_arg_name!($($arg_part)+) = handle_arg_name!($($arg_part)+).into_mutable_reference()?;
             ])
         };
         // By value
-        ([$arg:ident : $ty:ty, $($rest:tt)*] [$($bindings:tt)*]) => {
+        ([$($arg_part:ident)+ : $ty:ty, $($rest:tt)*] [$($bindings:tt)*]) => {
             handle_arg_mapping!([$($rest)*] [
                 $($bindings)*
-                let tmp = $arg.into_owned_value()?;
-                let $arg: $ty = <$ty as ResolvableArgument>::resolve_from_owned(tmp)?;
+                let tmp = handle_arg_name!($($arg_part)+).into_owned_value()?;
+                let handle_arg_name!($($arg_part)+): $ty = <$ty as ResolvableArgument>::resolve_from_owned(tmp)?;
             ])
         };
     }
@@ -69,31 +71,31 @@ mod macros {
             vec![$($outputs)*]
         };
         // By shared reference
-        ([$arg:ident : &$ty:ty, $($rest:tt)*] [$($outputs:tt)*]) => {
+        ([$($arg_part:ident)+ : &$ty:ty, $($rest:tt)*] [$($outputs:tt)*]) => {
             handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::SharedReference,])
         };
         // By captured shared reference (i.e. can return a sub-reference from it)
-        ([$arg:ident : CapturedRef<$ty:ty>, $($rest:tt)*] [$($outputs:tt)*]) => {
+        ([$($arg_part:ident)+ : CapturedRef<$ty:ty>, $($rest:tt)*] [$($outputs:tt)*]) => {
             handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::SharedReference,])
         };
         // SharedValue is an alias for CapturedRef<ExpressionValue>
-        ([$arg:ident : SharedValue, $($rest:tt)*] [$($outputs:tt)*]) => {
+        ([$($arg_part:ident)+ : SharedValue, $($rest:tt)*] [$($outputs:tt)*]) => {
             handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::SharedReference,])
         };
         // By mutable reference
-        ([$arg:ident : &mut $ty:ty, $($rest:tt)*] [$($outputs:tt)*]) => {
+        ([$($arg_part:ident)+ : &mut $ty:ty, $($rest:tt)*] [$($outputs:tt)*]) => {
             handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::MutableReference,])
         };
         // By captured mutable reference (i.e. can return a sub-reference from it)
-        ([$arg:ident : CapturedMut<$ty:ty>, $($rest:tt)*] [$($outputs:tt)*]) => {
+        ([$($arg_part:ident)+ : CapturedMut<$ty:ty>, $($rest:tt)*] [$($outputs:tt)*]) => {
             handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::MutableReference,])
         };
         // MutableValue is an alias for CapturedMut<ExpressionValue>
-        ([$arg:ident : MutableValue, $($rest:tt)*] [$($outputs:tt)*]) => {
+        ([$($arg_part:ident)+ : MutableValue, $($rest:tt)*] [$($outputs:tt)*]) => {
             handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::MutableReference,])
         };
         // By value
-        ([$arg:ident : $ty:ty, $($rest:tt)*] [$($outputs:tt)*]) => {
+        ([$($arg_part:ident)+ : $ty:ty, $($rest:tt)*] [$($outputs:tt)*]) => {
             handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::Owned,])
         };
     }
@@ -105,18 +107,28 @@ mod macros {
 
     // Creating an inner method vastly improves IDE support when writing the method body
     macro_rules! handle_define_inner_method {
-        ($method_name:ident [$($arg:ident : $ty:ty),* $(,)?] $body:block $output_ty:ty) => {
-            fn $method_name($($arg: $ty),*) -> ExecutionResult<$output_ty> {
+        // The $arg_part+ allows for mut x in the argument list
+        ($method_name:ident [$($($arg_part:ident)+ : $ty:ty),* $(,)?] $body:block $output_ty:ty) => {
+            fn $method_name($($($arg_part)+: $ty),*) -> ExecutionResult<$output_ty> {
                 $body
             }
         };
     }
 
+    macro_rules! handle_arg_name {
+        (mut $name:ident) => {
+            $name
+        };
+        ($name:ident) => {
+            $name
+        };
+    }
+
     macro_rules! handle_arg_separation {
-        ([$($arg:ident : $ty:ty),* $(,)?], $all_arguments:ident, $output_span_range:ident) => {
-            const LEN: usize = count!($($arg)*);
+        ([$($($arg_part:ident)+ : $ty:ty),* $(,)?], $all_arguments:ident, $output_span_range:ident) => {
+            const LEN: usize = count!($($ty)*);
             let Ok([
-                $($arg,)*
+                $(handle_arg_name!($($arg_part)+),)*
             ]) = <[ResolvedValue; LEN]>::try_from($all_arguments) else {
                 return $output_span_range.execution_err(format!("Expected {LEN} argument/s"));
             };
@@ -124,8 +136,8 @@ mod macros {
     }
 
     macro_rules! handle_call_inner_method {
-        ($method_name:ident [$($arg:ident : $ty:ty),* $(,)?]) => {
-            $method_name($($arg),*)
+        ($method_name:ident [$($($arg_part:ident)+ : $ty:ty),* $(,)?]) => {
+            $method_name($(handle_arg_name!($($arg_part)+)),*)
         };
     }
 
@@ -164,7 +176,7 @@ pub(crate) trait ResolvedTypeDetails {
         num_arguments: usize,
     ) -> ExecutionResult<MethodInterface>;
 
-    // TODO: Eventually we can migrate operations under this umbrella too
+    // TODO[operation-refactor]: Eventually we can migrate operations under this umbrella too
     // fn resolve_unary_operation(&self, operation: UnaryOperation) -> ExecutionResult<ResolvedMethod>;
     // fn resolve_binary_operation(&self, operation: BinaryOperation) -> ExecutionResult<ResolvedMethod>;
 }
@@ -213,6 +225,12 @@ impl ResolvedTypeDetails for ValueKind {
             (_, "clone", 0) => {
                 wrap_method! {(this: &ExpressionValue) -> ExecutionResult<ExpressionValue> {
                     Ok(this.clone())
+                }}
+            }
+            (_, "take", 0) => {
+                wrap_method! {(mut this: MutableValue) -> ExecutionResult<ExpressionValue> {
+                    let span_range = this.span_range();
+                    Ok(mem::replace(this.deref_mut(), ExpressionValue::None(span_range)))
                 }}
             }
             (_, "as_mut", 0) => {

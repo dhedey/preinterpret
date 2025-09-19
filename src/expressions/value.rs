@@ -62,14 +62,14 @@ impl ExpressionValue {
         }
     }
 
-    pub(crate) fn try_transparent_clone(&self) -> ExecutionResult<ExpressionValue> {
+    pub(crate) fn try_transparent_clone(&self, new_span_range: SpanRange) -> ExecutionResult<ExpressionValue> {
         if !self.kind().supports_transparent_cloning() {
-            return self.execution_err(format!(
-                "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .clone() explicitly.",
+            return new_span_range.execution_err(format!(
+                "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .take() or .clone() explicitly.",
                 self.articled_value_type()
             ));
         }
-        Ok(self.clone())
+        Ok(self.clone().with_span_range(new_span_range))
     }
 
     pub(super) fn expect_value_pair(

@@ -10,14 +10,13 @@ impl ExpressionNode<Source> {
             ExpressionNode::Leaf(leaf) => {
                 match leaf {
                     SourceExpressionLeaf::Command(command) => {
-                        // TODO: Allow returning reference
+                        // TODO[interpret_to_value]: Allow command to return a reference
                         context.return_owned_value(command.clone().interpret_to_value(interpreter)?)
                     }
                     SourceExpressionLeaf::Discarded(token) => {
                         return token.execution_err("This cannot be used in a value expression");
                     }
                     SourceExpressionLeaf::Variable(variable_path) => {
-                        // TODO: Allow block to return reference
                         let variable_ref = variable_path.reference(interpreter)?;
                         match context.requested_ownership() {
                             RequestedValueOwnership::LateBound => {
@@ -30,14 +29,12 @@ impl ExpressionNode<Source> {
                                 context.return_mut_ref(variable_ref.into_mut()?)
                             }
                             RequestedValueOwnership::Owned => {
-                                // TODO: Change this but fix tests which are breaking
-                                // context.return_owned_value(variable_ref.get_value_transparently_cloned()?)
-                                context.return_owned_value(variable_ref.get_value_cloned()?)
+                                context.return_owned_value(variable_ref.get_value_transparently_cloned()?)
                             }
                         }
                     }
                     SourceExpressionLeaf::ExpressionBlock(block) => {
-                        // TODO: Allow block to return reference
+                        // TODO[interpret_to_value]: Allow block to return reference
                         context.return_owned_value(block.interpret_to_value(interpreter)?)
                     }
                     SourceExpressionLeaf::Value(value) => context.return_owned_value(value.clone()),

@@ -496,4 +496,13 @@ fn test_method_calls() {
         #([].as_mut().len().debug()),
         "0usize"
     );
+    preinterpret_assert_eq!(
+        #(
+            let x = [1, 2, 3];
+            let y = x.take();
+            // x is now None
+            x.debug() + " - " + y.debug()
+        ),
+        "None - [1, 2, 3]"
+    );
 }

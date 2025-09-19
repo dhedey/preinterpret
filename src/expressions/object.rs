@@ -201,8 +201,6 @@ impl ExpressionObject {
         Ok(())
     }
 
-    // TODO: Make ObjectValidation a trait, and have it implemented by the static
-    // define_field_inputs! macro
     pub(crate) fn validate(&self, validation: &impl ObjectValidate) -> ExecutionResult<()> {
         let mut missing_fields = Vec::new();
         for (field_name, _) in validation.required_fields() {
@@ -276,7 +274,7 @@ impl ToExpressionValue for BTreeMap<String, ObjectEntry> {
     }
 }
 
-#[allow(unused)]
+#[allow(unused)] // TODO[unused-clearup]
 pub(crate) struct ObjectValidation {
     // Should ideally be an indexmap
     fields: Vec<(String, FieldDefinition)>,

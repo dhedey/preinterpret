@@ -1,4 +1,4 @@
-#![allow(unused)] // TODO: Remove when places are properly late-bound
+#![allow(unused)] // TODO[unused-clearup]
 use super::*;
 
 /// # Late Binding
@@ -29,7 +29,7 @@ impl ResolvedValue {
             ResolvedValue::Owned(value) => return Ok(value),
             ResolvedValue::Shared { .. } | ResolvedValue::Mutable { .. } => self.as_ref(),
         };
-        reference.try_transparent_clone()
+        reference.try_transparent_clone(self.span_range())
     }
 
     /// The requirement is just for error messages, and should be "A <xyz>", and will be filled like:
@@ -359,7 +359,7 @@ impl UnaryOperationBuilder {
         input: ExpressionNodeId,
     ) -> NextAction {
         let frame = Self { operation };
-        // TODO: Change to be LateBound to resolve what it actually should be
+        // TODO[operation-refactor]: Change to be LateBound to resolve what it actually should be
         context.handle_node_as_value(frame, input, RequestedValueOwnership::Owned)
     }
 }
@@ -402,7 +402,7 @@ impl BinaryOperationBuilder {
             operation,
             state: BinaryPath::OnLeftBranch { right },
         };
-        // TODO: Change to be LateBound to resolve what it actually should be
+        // TODO[operation-refactor]: Change to be LateBound to resolve what it actually should be
         context.handle_node_as_value(frame, left, RequestedValueOwnership::Owned)
     }
 }
@@ -429,7 +429,7 @@ impl EvaluationFrame for BinaryOperationBuilder {
                     context.handle_node_as_value(
                         self,
                         right,
-                        // TODO: Change to late bound as the operation may dictate what ownership it needs for its right operand
+                        // TODO[operation-refactor]: Change to late bound as the operation may dictate what ownership it needs for its right operand
                         RequestedValueOwnership::Owned,
                     )
                 }
@@ -453,7 +453,7 @@ impl ValuePropertyAccessBuilder {
         node: ExpressionNodeId,
     ) -> NextAction {
         let frame = Self { access };
-        // TODO: Change to propagate context from value, and not always clone!
+        // TODO[access-refactor]: Change to propagate context from value, and not always clone!
         let ownership = RequestedValueOwnership::Owned;
         context.handle_node_as_value(frame, node, ownership)
     }
@@ -497,7 +497,7 @@ impl ValueIndexAccessBuilder {
             access,
             state: IndexPath::OnSourceBranch { index },
         };
-        // TODO: Change to propagate context from value, and not always clone
+        // TODO[access-refactor]: Change to propagate context from value, and not always clone
         context.handle_node_as_value(frame, source, RequestedValueOwnership::Owned)
     }
 }
@@ -594,7 +594,7 @@ impl EvaluationFrame for RangeBuilder {
         context: ValueContext,
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
-        // TODO: Change to not always clone the value
+        // TODO[range-refactor]: Change to not always clone the value
         let value = item.expect_owned_value();
         Ok(match (self.state, self.range_limits) {
             (RangePath::OnLeftBranch { right: Some(right) }, _) => {
@@ -738,7 +738,7 @@ impl EvaluationFrame for CompoundAssignmentBuilder {
             CompoundAssignmentPath::OnValueBranch { place } => {
                 let value = item.expect_owned_value();
                 self.state = CompoundAssignmentPath::OnPlaceBranch { value };
-                // TODO: Resolve as LateBound, and then convert to what is needed based on the operation
+                // TODO[assignment-refactor]: Resolve as LateBound, and then convert to what is needed based on the operation
                 context.handle_node_as_place(self, place, RequestedPlaceOwnership::MutableReference)
             }
             CompoundAssignmentPath::OnPlaceBranch { value } => {

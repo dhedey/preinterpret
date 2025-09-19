@@ -97,41 +97,25 @@ Inside a transform stream, the following grammar is supported:
 
 ### To come
 * Method calls continued
-  * Add support for &mut methods like `push(..)`...
-    * WIP: Finish the late binding / TODOs in the evaluation module
-    * WIP: Add in basic method resolution, even if just with hardcoded strings for now!
-    * CHALLENGE: Given a.b(c,d,e) we need to resolve:
-      * What method / code to use
-      * Whether a, c, d and e should be resolved as &, &mut or owned
-    * SOLUTION:
-      * We change `evaluation.rs` to start by:
-        * Resolving a value's reference path as a `MutRef | SharedRef` at the same time (basically taking a `MutRef` if we can)... We probably want value resolution to take a `ValueOwnership::Any|Owned|MutRef|SharedRef` to guide this process.
-        * We'll need to back-propogate through places, so will also need to support `SharedRef`
-        in `Place` and have a `PlaceOwnership::Any|MutRef|SharedRef`
-          => e.g. if we're resolving `x.add(arr[3])` and want to read `arr[3]` as a shared reference.
-          => or if we're resolve `arr[3].to_string()` we want to read `arr[3]` as `LateBound` and then resolve to shared.
-      * Existing resolutions likely convert to an `Owned`, possibly via a clone... Although some of these can be fixed too.
-      * When resolving a method call, we start by requesting a `PermittedValueKind::Any` for `a` and then getting a `&a` from the`Owned | MutRef | SharedRef`; and alongside the name `b`, and possibly # of arguments, we resolve a method definition (or error)
-      * The method definition tells us whether we need `a` to be `Owned | MutRef | SharedRef`, and similarly for each argument. And the type of `&a` should tell us whether
-      it is copy (i.e. can be transparently cloned from a ref to an owned if needed)
-      * We can then resolve the correct value for each argument, and execute the method.
-    * Then we can add `.push(x)` on array and stream
-  * Scrap `#>>x` etc in favour of `#(a.push(@XXX))`
-  * Also improve support to make it easier to add methods on built-in types or (in future) user-designed types
-* Compare to https://www.reddit.com/r/rust/comments/1j42fgi/media_introducing_eval_macro_a_new_way_to_write i.e. https://crates.io/crates/crabtime - thoughts on crabtime:
- => Looks great!
- => Why don't they use a cheap hash of the code as a cache key?
-    - The cachability is a big win compared to preinterpret (although preinterpret is faster on first run)
- => I can't imagine the span-chasing / error messages are great, because everything is translated to/from strings between the processes
-    ... I wonder if there's any way to improve this?  Plausibly you could use the proc-macro bridge encoding scheme as per https://blog.jetbrains.com/rust/2022/07/07/procedural-macros-under-the-hood-part-ii/ to send handles onwards, or even delegate directly somehow?
-    - The spans are better in preinterpret
- => Parsing isn't really a thing - they're not going after full macro stuff, probably wise 
-* No clone required for testing equality of streams, objects and arrays
-  * Some kind of reference support
-  * Add new `.clone()` method
+  * Replace `as debug` and `[!debug! ..]` with `.debug()`
+  * Add support for `RequestedValueOwnership::SharedOrOwned` (CoW behaviour)
+    and equivalent `SharedOrOwned<T>`. This can be used for utilities like `debug()`
+  * Scrap `#>>x` etc in favour of `#(x.push(@TOKEN))`
+  * TODO[access-refactor]
+  * TODO[range-refactor] & some kind of more thought through typed reference support - e.g. slices, mutable arrays?
+  * TODO[operation-refactor]
+  * No clone required for testing equality of streams, objects and arrays
+  * Add better way of defining methods once / lazily, and binding them to
+    an object type. 
+* Consider:
+  * Changing evaluation to allow `ResolvedValue` (i.e. allow references)
+  * Removing span range from value:
+    * Moving it to an `ResolvedValue::OwnedValue` and `OwnedValue(Value, SpanRange)`
+    * Using `EvaluationError` (without a span!) inside the calculation, and adding the span in the evaluator (nb. it may still need to be able to propogate an `ExecutionInterrupt` internally)
+  * Using ResolvedValue in place of ExpressionValue e.g. inside arrays
+* Introduce `~(...)` and `r~(...)` streams instead of `[!stream! ...]` and `[!raw! ...]`
 * Introduce interpreter stack frames
-  * Read the `REVERSION` comment in the `Parsers Revisited` section below to consider approaches, which will work with possibly needing
-    to revert state if a parser fails.
+  * Read the `REVERSION` comment in the `Parsers Revisited` section below to consider approaches, which will work with possibly needing to revert state if a parser fails.
   * Design the data model => is it some kind of linked list of frames?
     * If we introduce functions in future, then a reference is a closure, in _lexical_ scope, which is different from stack frames.
     * We probably don't want to allow closures to start with.
@@ -145,7 +129,6 @@ Inside a transform stream, the following grammar is supported:
     * To avoid confusion (such as below) and teach the user to only include #var where necessary, only expression _blocks_ are allowed in an expression.
       * Confusion example: `let x; x = #(let x = 123; 5)`. This isn't allowed in normal rust because the inside is a `{ .. }` which defines a new scope.
     * The `#()` syntax can be used in certain places (such as parse streams)
-* Introduce `~(...)` and `r~(...)` streams instead of `[!stream! ...]` and `[!raw! ...]`
 * Support for/while/loop/break/continue inside expressions
   * And allow them to start with an expression block with `{}` or `#{}` or a stream block with `~{}`
     QUESTION: Do we require either `#{}` or `~{}`? Maybe! That way we can give a helpful error message.
@@ -189,9 +172,17 @@ Inside a transform stream, the following grammar is supported:
 }]
 ```
 * Support `#(x[..])` syntax for indexing streams, like with arrays
-  * `#(x[0])` returns the item at that position of the array / OR the value at that position of the stream (using `INFER_TOKEN_TREE`)
+  * `#(x[0])` returns the value at that position of the stream (using `INFER_TOKEN_TREE`)
   * `#(x[0..3])` returns a TokenStream
   * `#(x[0..=3])` returns a TokenStream
+* Compare to https://www.reddit.com/r/rust/comments/1j42fgi/media_introducing_eval_macro_a_new_way_to_write i.e. https://crates.io/crates/crabtime - thoughts on crabtime:
+ => Looks great!
+ => Why don't they use a cheap hash of the code as a cache key?
+    - The cachability is a big win compared to preinterpret (although preinterpret is faster on first run)
+ => I can't imagine the span-chasing / error messages are great, because everything is translated to/from strings between the processes
+    ... I wonder if there's any way to improve this?  Plausibly you could use the proc-macro bridge encoding scheme as per https://blog.jetbrains.com/rust/2022/07/07/procedural-macros-under-the-hood-part-ii/ to send handles onwards, or even delegate directly somehow?
+    - The spans are better in preinterpret
+ => Parsing isn't really a thing - they're not going after full macro stuff, probably wise 
 * Add `LiteralPattern` (wrapping a `Literal`)
 * Add `Eq` support on composite types and streams
 * Consider:
@@ -326,7 +317,7 @@ Inside a transform stream, the following grammar is supported:
 //     * Instead, we suggest people to use a match statement or something
 //   * There is still an issue of REVERSION - "what happens to external state mutated this iteration repetition when a repetition is not possible?"
 //     * This appears in lots of places:
-//       * In ? or * blocks where an error isn't fatal, but should continue
+//       * In ? or * blocks where a greedy parse attempt isn't fatal, but should continue
 //       * In match arms, considering various stream parsers, some of which might fail after mutating state
 //       * In nested * blocks, with different levels of reversion
 //     * But it's only a problem with state lexically captured from a parent block
@@ -339,6 +330,8 @@ Inside a transform stream, the following grammar is supported:
 //        to parse further until that scope is closed. (this needs to handle nested repetitions).
 //     (D) Error on revert - at reversion time, we check there have been no changes to variables below that depth in the stack tree
 //        (say by recording a "lowest_stack_touched: usize"), and panic if so; and tell people to use `return` instead; or move state changes to the end.
+//        We could even prevent parsing in a conditional block after the reversion.
+//        [!Brilliant!] We could introduce a @[REQUIRE  ] which takes the parent conditional block out of conditional mode and makes it a hard error instead. This could dramatically improve error messages, and allow parsing after mutation :). (Ideally they'd be some way of applying it to a specific conditional block, but I think parent is good enough)
 //
 //     ==> D might be easiest, most flexible AND most performant... But it might not cover enough use cases.
 //         ... but I think advising people to only mutate lexical-closure'd state at the end, when a parse is confirmed, is reasonably...
@@ -406,38 +399,36 @@ for { the_trait, the_type } in [!parse! { input, parser: @IMPL_ITEM,* }] ~{
 }
 ```
 
-* Pushed to 0.4:
-  * Performance:
-    * Use a small-vec optimization in some places
-    * Get rid of needless cloning of commands/variables etc
-    * Support `+=` inside expressions to allow appending of token streams
-      * Variable reference would need to be a sub-type of stream
-      * Then `#x += [] + []` could resolve to two variable reference appends and then a return null
-  * Iterators:
-    * Iterator value type (with an inbuilt iteration count / limit check)
-    * Allow `for` lazily reading from iterators
-    * Support unbounded iterators `[!range! xx..]`
-  * Fork of syn to:
-    * Fix issues in Rust Analyzer
-    * Add support for a more general `TokenBuffer`, and ensure that Cursor can work in a backwards-compatible way with that buffer. Support:
-      * Storing a length
-      * Embedding tokens directly without putting them into a `Group`
-      * Possibling embedding a reference to a slice buffer inside a group
-      * Ability to parse to a TokenBuffer or TokenBufferSlice
-      * Possibly allowing some kind of embedding of Tokens whichcan be converted into a TokenStream.
-      * Currently, `ParseBuffer` stores `unexpected` and has drop glue which is a hacky abstraction. We'll need to think of an alternative. Perhaps we change `ParseBuffer` to operate on top of a `TokenBuffer` ??
-    * Allow variables to use CoW semantics. Variables can be Owned(ParseBuffer) or `Slice(ParseBufferSlice), where a ParseBufferSlice is some form of reference counting to a ParseBufferCore, and a FromLocation and ToLocation which are assumed to be at the same level.
-    * Permit `[!parse_while! (!stream! ...) from #x { ... }]`
-    * Fix `any_punct()` to ignore none groups
-    * Groups can either be:
-      * Raw Groups
-      * Or created groups, where we store `DelimSpan` for re-parsing and accessing the open/close delimiters (this will let us improve `invalid_content_wrong_group`)
-    * In future - improve performance of some other parts of syn
-    * Better error messages
-      * See e.g. invalid_content_too_short where ideally the error message would be on the last token in the stream. Perhaps End gets a span from the previous error?
-      * See e.g. invalid_content_too_long where `unexpected token` is quite vague.
-      Maybe we can't sensibly do better though...
-  * Further syn parsings (e.g. item, fields, etc)
+### Pushed to 0.4:
+* Performance:
+  * Use a small-vec optimization in some places
+  * Get rid of needless cloning of commands/variables etc
+  * Avoid needless token stream clones: Have `x += y` take `y` as OwnedOrRef, and either handles it as owned or shared reference (by first cloning)
+* Iterators:
+  * Iterator value type (with an inbuilt iteration count / limit check)
+  * Allow `for` lazily reading from iterators
+  * Support unbounded iterators `[!range! xx..]`
+* Fork of syn to:
+  * Fix issues in Rust Analyzer
+  * Add support for a more general `TokenBuffer`, and ensure that Cursor can work in a backwards-compatible way with that buffer. Support:
+    * Storing a length
+    * Embedding tokens directly without putting them into a `Group`
+    * Possibling embedding a reference to a slice buffer inside a group
+    * Ability to parse to a TokenBuffer or TokenBufferSlice
+    * Possibly allowing some kind of embedding of Tokens whichcan be converted into a TokenStream.
+    * Currently, `ParseBuffer` stores `unexpected` and has drop glue which is a hacky abstraction. We'll need to think of an alternative. Perhaps we change `ParseBuffer` to operate on top of a `TokenBuffer` ??
+  * Allow variables to use CoW semantics. Variables can be Owned(ParseBuffer) or `Slice(ParseBufferSlice), where a ParseBufferSlice is some form of reference counting to a ParseBufferCore, and a FromLocation and ToLocation which are assumed to be at the same level.
+  * Permit `[!parse_while! (!stream! ...) from #x { ... }]`
+  * Fix `any_punct()` to ignore none groups
+  * Groups can either be:
+    * Raw Groups
+    * Or created groups, where we store `DelimSpan` for re-parsing and accessing the open/close delimiters (this will let us improve `invalid_content_wrong_group`)
+  * In future - improve performance of some other parts of syn
+  * Better error messages
+    * See e.g. invalid_content_too_short where ideally the error message would be on the last token in the stream. Perhaps End gets a span from the previous error?
+    * See e.g. invalid_content_too_long where `unexpected token` is quite vague.
+    Maybe we can't sensibly do better though...
+* Further syn parsings (e.g. item, fields, etc)
 
 # Major Version 0.2
 

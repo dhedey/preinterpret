@@ -1,4 +1,3 @@
-#![allow(unused)] // TODO: Remove when places are properly late-bound
 use crate::internal_prelude::*;
 
 use super::IsVariable;
@@ -156,10 +155,9 @@ impl VariableReference {
 
     // Gets the cloned expression value, setting the span range appropriately
     pub(crate) fn get_value_transparently_cloned(&self) -> ExecutionResult<ExpressionValue> {
-        Ok(self
+        self
             .get_value_ref()?
-            .try_transparent_clone()?
-            .with_span_range(self.variable_span_range))
+            .try_transparent_clone(self.variable_span_range)
     }
 
     // Gets the cloned expression value, setting the span range appropriately
@@ -247,6 +245,7 @@ impl<T> MutableSubPlace<T> {
         }
     }
 
+    #[allow(unused)]
     pub(crate) fn map<V>(
         self,
         value_map: impl for<'a> FnOnce(&'a mut T) -> &'a mut V,
@@ -393,6 +392,7 @@ impl<T> SharedSubPlace<T> {
         })
     }
 
+    #[allow(unused)]
     pub(crate) fn map<V>(
         self,
         value_map: impl FnOnce(&T) -> &V,
