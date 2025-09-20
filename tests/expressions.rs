@@ -478,7 +478,6 @@ fn test_method_calls() {
         ),
         2 + 3
     );
-
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3];
@@ -506,5 +505,14 @@ fn test_method_calls() {
             x.debug_string() + " - " + y.debug_string()
         ),
         "None - [1, 2, 3]"
+    );
+    preinterpret_assert_eq!(
+        #(
+            let a = "a";
+            let b = "b";
+            a.swap(b);
+            [!string! #a " - " #b]
+        ),
+        "b - a"
     );
 }

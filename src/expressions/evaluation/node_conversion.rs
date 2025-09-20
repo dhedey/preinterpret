@@ -11,7 +11,7 @@ impl ExpressionNode<Source> {
                 match leaf {
                     SourceExpressionLeaf::Command(command) => {
                         // TODO[interpret_to_value]: Allow command to return a reference
-                        context.return_owned(command.clone().interpret_to_value(interpreter)?)
+                        context.return_owned(command.clone().interpret_to_value(interpreter)?)?
                     }
                     SourceExpressionLeaf::Discarded(token) => {
                         return token.execution_err("This cannot be used in a value expression");
@@ -30,22 +30,22 @@ impl ExpressionNode<Source> {
                                 context.return_mutable(variable_ref.into_mut()?)
                             }
                             RequestedValueOwnership::Owned => {
-                                context.return_owned(variable_ref.into_transparently_cloned()?)
+                                context.return_owned(variable_ref.into_transparently_cloned()?)?
                             }
                         }
                     }
                     SourceExpressionLeaf::ExpressionBlock(block) => {
                         // TODO[interpret_to_value]: Allow block to return reference
-                        context.return_owned(block.interpret_to_value(interpreter)?)
+                        context.return_owned(block.interpret_to_value(interpreter)?)?
                     }
-                    SourceExpressionLeaf::Value(value) => context.return_owned(value.clone()),
+                    SourceExpressionLeaf::Value(value) => context.return_owned(value.clone())?,
                 }
             }
             ExpressionNode::Grouped { delim_span, inner } => {
                 GroupBuilder::start(context, delim_span, *inner)
             }
             ExpressionNode::Array { brackets, items } => {
-                ArrayBuilder::start(context, brackets, items)
+                ArrayBuilder::start(context, brackets, items)?
             }
             ExpressionNode::Object { braces, entries } => {
                 ObjectBuilder::start(context, braces, entries)?
@@ -72,7 +72,7 @@ impl ExpressionNode<Source> {
                 left,
                 range_limits,
                 right,
-            } => RangeBuilder::start(context, left, range_limits, right),
+            } => RangeBuilder::start(context, left, range_limits, right)?,
             ExpressionNode::Assignment {
                 assignee,
                 equals_token,

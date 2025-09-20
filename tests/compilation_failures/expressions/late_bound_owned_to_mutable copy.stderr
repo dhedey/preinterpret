@@ -1,0 +1,5 @@
+error: A mutable reference is required, but an owned value was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.as_mut()` to get a mutable reference.
+ --> tests/compilation_failures/expressions/late_bound_owned_to_mutable copy.rs:7:13
+  |
+7 |             "b".swap(a);
+  |             ^^^

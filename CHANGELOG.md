@@ -106,13 +106,20 @@ Inside a transform stream, the following grammar is supported:
 
 ### To come
 * Method calls continued
+  * Create `CopyOnWrite<..>` in `bindings.rs`, add `CopyOnWriteValue` support to `wrap_method!` and change it so that `debug_string` takes CowValue
+    * ... maybe we just use `CopyOnWriteValue` everywhere instead of `OwnedValue`??
+  * Check if we actually need `RequestedPlaceOwnership::SharedReference` or `RequestedPlaceOwnership::LateBound` and potentially remove them if not
   * Consider how to align:
     *  `ResolvedValue::into_mutable` (used by LateBound Owned => Mutable Arg; such as a method object)
     *  `context::return_owned` (used by Owned returned when Mutable requested,
     such as a method argument)
-  * Create `CopyOnWrite<..>` in `bindings.rs`, add `CopyOnWriteValue` support to `wrap_method!` and change it so that `debug_string` takes CowValue
+    * CURRENTLY WE HAVE:
+      * Mapping "context.return_shared(X)" => requested kind
+      * Late bound method arguments => needed argument
+    * PERHAPS WE HAVE:
+      * Late bound => Resolve similar to context.return_X
+      * In method call, we do expect/assert it's the right type
   * Add tests for TODO[access-refactor] (i.e. changing places to resolve correctly)
-  * Check if we actually need `RequestedPlaceOwnership::SharedReference` or `RequestedPlaceOwnership::LateBound` and potentially remove them if not
   * Add more impl_resolvable_argument_for
   * Scrap `#>>x` etc in favour of `#(x.push(@TOKEN))`
   * TODO[range-refactor] & some kind of more thought through typed reference support - e.g. slices, mutable slices?

@@ -1,3 +1,8 @@
+//! A preinterpret place frame is just used for the target of an assignment.
+//! The name is inspired by Rust places, but it is a subtly different concept.
+//! 
+//! They're similar to mutable references, but behave slightly differently:
+//! * They can create entries in objects, e.g. `x["new_key"] = value``
 #![allow(unused)] // TODO[unused-clearup]
 use super::*;
 
@@ -107,8 +112,8 @@ impl EvaluationFrame for PlaceIndexer {
             PlaceIndexerPath::IndexPath { place } => {
                 let index = item.expect_shared();
                 match place {
-                    Place::Mutable { mutable: mut_ref } => context
-                        .return_mutable(mut_ref.resolve_indexed(self.access, &index, true)?),
+                    Place::Mutable { mutable } => context
+                        .return_mutable(mutable.resolve_indexed(self.access, &index, true)?),
                     Place::Shared {
                         shared,
                         reason_not_mutable,

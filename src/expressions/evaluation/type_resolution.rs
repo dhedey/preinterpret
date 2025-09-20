@@ -240,6 +240,11 @@ impl ResolvedTypeDetails for ValueKind {
                 let message = this.clone().into_debug_string()?;
                 this.execution_err(message)
             }},
+            // Mostly just a test of mutable values
+            (_, "swap", 1) => wrap_method! {(mut a: MutableValue, mut b: MutableValue) -> ExecutionResult<()> {
+                mem::swap(a.deref_mut(), b.deref_mut());
+                Ok(())
+            }},
             (ValueKind::Array, "len", 0) => {
                 wrap_method! {(this: Shared<ExpressionArray>) -> ExecutionResult<usize> {
                     Ok(this.items.len())
