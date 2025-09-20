@@ -39,7 +39,7 @@ impl<C> HandleTransformation for TransformSegment<C> {
 #[derive(Clone)]
 pub(crate) enum TransformItem {
     Command(Command),
-    Variable(VariableBinding),
+    Variable(VariableParserKind),
     ExpressionBlock(ExpressionBlock),
     Transformer(Transformer),
     TransformStreamInput(ExplicitTransformStream),
@@ -59,8 +59,8 @@ impl TransformItem {
     ) -> ParseResult<Self> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => Self::Command(input.parse()?),
-            SourcePeekMatch::Variable(_) | SourcePeekMatch::AppendVariableBinding => {
-                Self::Variable(VariableBinding::parse_until::<C>(input)?)
+            SourcePeekMatch::Variable(_) | SourcePeekMatch::AppendVariableParser => {
+                Self::Variable(VariableParserKind::parse_until::<C>(input)?)
             }
             SourcePeekMatch::ExpressionBlock(_) => Self::ExpressionBlock(input.parse()?),
             SourcePeekMatch::Group(_) => Self::ExactGroup(input.parse()?),
@@ -252,7 +252,7 @@ impl HandleTransformation for ExplicitTransformStream {
             ExplicitTransformStreamArguments::ExtendToVariable {
                 variable, content, ..
             } => {
-                let reference = variable.reference(interpreter)?;
+                let reference = variable.binding(interpreter)?;
                 content.handle_transform(
                     input,
                     interpreter,

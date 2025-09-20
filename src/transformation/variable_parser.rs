@@ -11,7 +11,7 @@ use crate::internal_prelude::*;
 /// * `#..>>..x` - Reads a stream, appends a stream
 #[derive(Clone)]
 #[allow(unused)]
-pub(crate) enum VariableBinding {
+pub(crate) enum VariableParserKind {
     /// #x - Reads a token tree, writes a stream (opposite of #x)
     Grouped { marker: Token![#], name: Ident },
     /// #..x - Reads a stream, writes a stream (opposite of #..x)
@@ -53,10 +53,10 @@ pub(crate) enum VariableBinding {
     },
 }
 
-impl VariableBinding {
+impl VariableParserKind {
     #[allow(unused)]
     pub(crate) fn parse_only_unflattened_input(input: ParseStream<Source>) -> ParseResult<Self> {
-        let variable: VariableBinding = Self::parse_until::<UntilEnd>(input)?;
+        let variable: VariableParserKind = Self::parse_until::<UntilEnd>(input)?;
         if variable.is_flattened_input() {
             return variable
                 .span_range()
@@ -129,46 +129,46 @@ impl VariableBinding {
     }
 }
 
-impl IsVariable for VariableBinding {
+impl IsVariable for VariableParserKind {
     fn get_name(&self) -> String {
         let name_ident = match self {
-            VariableBinding::Grouped { name, .. } => name,
-            VariableBinding::Flattened { name, .. } => name,
-            VariableBinding::GroupedAppendGrouped { name, .. } => name,
-            VariableBinding::GroupedAppendFlattened { name, .. } => name,
-            VariableBinding::FlattenedAppendGrouped { name, .. } => name,
-            VariableBinding::FlattenedAppendFlattened { name, .. } => name,
+            VariableParserKind::Grouped { name, .. } => name,
+            VariableParserKind::Flattened { name, .. } => name,
+            VariableParserKind::GroupedAppendGrouped { name, .. } => name,
+            VariableParserKind::GroupedAppendFlattened { name, .. } => name,
+            VariableParserKind::FlattenedAppendGrouped { name, .. } => name,
+            VariableParserKind::FlattenedAppendFlattened { name, .. } => name,
         };
         name_ident.to_string()
     }
 }
 
-impl HasSpanRange for VariableBinding {
+impl HasSpanRange for VariableParserKind {
     fn span_range(&self) -> SpanRange {
         let (marker, name) = match self {
-            VariableBinding::Grouped { marker, name, .. } => (marker, name),
-            VariableBinding::Flattened { marker, name, .. } => (marker, name),
-            VariableBinding::GroupedAppendGrouped { marker, name, .. } => (marker, name),
-            VariableBinding::GroupedAppendFlattened { marker, name, .. } => (marker, name),
-            VariableBinding::FlattenedAppendGrouped { marker, name, .. } => (marker, name),
-            VariableBinding::FlattenedAppendFlattened { marker, name, .. } => (marker, name),
+            VariableParserKind::Grouped { marker, name, .. } => (marker, name),
+            VariableParserKind::Flattened { marker, name, .. } => (marker, name),
+            VariableParserKind::GroupedAppendGrouped { marker, name, .. } => (marker, name),
+            VariableParserKind::GroupedAppendFlattened { marker, name, .. } => (marker, name),
+            VariableParserKind::FlattenedAppendGrouped { marker, name, .. } => (marker, name),
+            VariableParserKind::FlattenedAppendFlattened { marker, name, .. } => (marker, name),
         };
         SpanRange::new_between(marker.span, name.span())
     }
 }
 
-impl VariableBinding {
+impl VariableParserKind {
     pub(crate) fn is_flattened_input(&self) -> bool {
         matches!(
             self,
-            VariableBinding::Flattened { .. }
-                | VariableBinding::FlattenedAppendGrouped { .. }
-                | VariableBinding::FlattenedAppendFlattened { .. }
+            VariableParserKind::Flattened { .. }
+                | VariableParserKind::FlattenedAppendGrouped { .. }
+                | VariableParserKind::FlattenedAppendFlattened { .. }
         )
     }
 }
 
-impl HandleTransformation for VariableBinding {
+impl HandleTransformation for VariableParserKind {
     fn handle_transform(
         &self,
         input: ParseStream<Output>,
@@ -176,37 +176,37 @@ impl HandleTransformation for VariableBinding {
         _: &mut OutputStream,
     ) -> ExecutionResult<()> {
         match self {
-            VariableBinding::Grouped { .. } => {
+            VariableParserKind::Grouped { .. } => {
                 let content = input.parse::<ParsedTokenTree>()?.into_interpreted();
                 self.define_coerced(interpreter, content);
             }
-            VariableBinding::Flattened { until, .. } => {
+            VariableParserKind::Flattened { until, .. } => {
                 let mut content = OutputStream::new();
                 until.handle_parse_into(input, &mut content)?;
                 self.define_coerced(interpreter, content);
             }
-            VariableBinding::GroupedAppendGrouped { .. } => {
-                let reference = self.reference(interpreter)?;
+            VariableParserKind::GroupedAppendGrouped { .. } => {
+                let reference = self.binding(interpreter)?;
                 input
                     .parse::<ParsedTokenTree>()?
                     .push_as_token_tree(reference.into_mut()?.into_stream()?.as_mut());
             }
-            VariableBinding::GroupedAppendFlattened { .. } => {
-                let reference = self.reference(interpreter)?;
+            VariableParserKind::GroupedAppendFlattened { .. } => {
+                let reference = self.binding(interpreter)?;
                 input
                     .parse::<ParsedTokenTree>()?
                     .flatten_into(reference.into_mut()?.into_stream()?.as_mut());
             }
-            VariableBinding::FlattenedAppendGrouped { marker, until, .. } => {
-                let reference = self.reference(interpreter)?;
+            VariableParserKind::FlattenedAppendGrouped { marker, until, .. } => {
+                let reference = self.binding(interpreter)?;
                 reference.into_mut()?.into_stream()?.as_mut().push_grouped(
                     |inner| until.handle_parse_into(input, inner),
                     Delimiter::None,
                     marker.span,
                 )?;
             }
-            VariableBinding::FlattenedAppendFlattened { until, .. } => {
-                let reference = self.reference(interpreter)?;
+            VariableParserKind::FlattenedAppendFlattened { until, .. } => {
+                let reference = self.binding(interpreter)?;
                 until.handle_parse_into(input, reference.into_mut()?.into_stream()?.as_mut())?;
             }
         }

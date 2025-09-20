@@ -90,6 +90,7 @@ fn test_expression_precedence() {
 }
 
 #[test]
+#[allow(clippy::zero_prefixed_literal)]
 fn test_very_long_expression_works() {
     preinterpret_assert_eq!(
         {
@@ -247,42 +248,42 @@ fn test_array_indexing() {
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3, 4, 5];
-            x[..].debug_string()
+            x.take()[..].debug_string()
         ),
         "[1, 2, 3, 4, 5]"
     );
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3, 4, 5];
-            x[0..0].debug_string()
+            x.take()[0..0].debug_string()
         ),
         "[]"
     );
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3, 4, 5];
-            x[2..=2].debug_string()
+            x.take()[2..=2].debug_string()
         ),
         "[3]"
     );
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3, 4, 5];
-            x[..=2].debug_string()
+            x.take()[..=2].debug_string()
         ),
         "[1, 2, 3]"
     );
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3, 4, 5];
-            x[..4].debug_string()
+            x.take()[..4].debug_string()
         ),
         "[1, 2, 3, 4]"
     );
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3, 4, 5];
-            x[2..].debug_string()
+            x.take()[2..].debug_string()
         ),
         "[3, 4, 5]"
     );
@@ -295,7 +296,7 @@ fn test_array_place_destructurings() {
         #(
             let a = 0; let b = 0; let c = 0;
             let x = [1, 2, 3, 4, 5];
-            [a, b, _, _, c] = x;
+            [a, b, _, _, c] = x.take();
             [a, b, c].debug_string()
         ),
         "[1, 2, 5]"
@@ -304,7 +305,7 @@ fn test_array_place_destructurings() {
         #(
             let a = 0; let b = 0; let c = 0;
             let x = [1, 2, 3, 4, 5];
-            [a, b, c, ..] = x;
+            [a, b, c, ..] = x.take();
             [a, b, c].debug_string()
         ),
         "[1, 2, 3]"
@@ -313,7 +314,7 @@ fn test_array_place_destructurings() {
         #(
             let a = 0; let b = 0; let c = 0;
             let x = [1, 2, 3, 4, 5];
-            [.., a, b] = x;
+            [.., a, b] = x.take();
             [a, b, c].debug_string()
         ),
         "[4, 5, 0]"
@@ -322,7 +323,7 @@ fn test_array_place_destructurings() {
         #(
             let a = 0; let b = 0; let c = 0;
             let x = [1, 2, 3, 4, 5];
-            [a, .., b, c] = x;
+            [a, .., b, c] = x.take();
             [a, b, c].debug_string()
         ),
         "[1, 4, 5]"
@@ -347,7 +348,7 @@ fn test_array_place_destructurings() {
             let _ = c = [a[2], _] = [4, 5];
             let _ = a[1] += 2;
             let _ = b = 2;
-            [a, b, c].debug_string()
+            [a.take(), b, c].debug_string()
         ),
         "[[0, 2, 4, 0, 0], 2, None]"
     );
@@ -411,7 +412,7 @@ fn test_array_pattern_destructurings() {
     preinterpret_assert_eq!(
         #(
             let [a, .., b, c] = [[1, "a"], 2, 3, 4, 5];
-            [a, b, c].debug_string()
+            [a.take(), b, c].debug_string()
         ),
         r#"[[1, "a"], 4, 5]"#
     );
@@ -423,7 +424,7 @@ fn test_objects() {
         #(
             let a = {};
             let b = "Hello";
-            let x = { a, hello: 1, ["world"]: 2, b };
+            let x = { a: a.clone(), hello: 1, ["world"]: 2, b };
             x["x y z"] = 4;
             x["z\" test"] = {};
             x.y = 5;
@@ -462,7 +463,7 @@ fn test_objects() {
     preinterpret_assert_eq!(
         #(
             let { a, y: [_, b], ["c"]: c, [r#"two "words"#]: x, z } = { a: 1, y: [5, 7], ["two \"words"]: {}, };
-            { a, b, c, x, z }.debug_string()
+            { a, b, c, x: x.take(), z }.debug_string()
         ),
         r#"{ a: 1, b: 7, c: None, x: {}, z: None }"#
     );

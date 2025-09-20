@@ -140,6 +140,12 @@ impl ToTokens for SpanRange {
     }
 }
 
+impl From<Span> for SpanRange {
+    fn from(span: Span) -> Self {
+        Self::new_single(span)
+    }
+}
+
 impl HasSpanRange for SpanRange {
     fn span_range(&self) -> SpanRange {
         *self

@@ -11,32 +11,34 @@ impl ExpressionNode<Source> {
                 match leaf {
                     SourceExpressionLeaf::Command(command) => {
                         // TODO[interpret_to_value]: Allow command to return a reference
-                        context.return_owned_value(command.clone().interpret_to_value(interpreter)?)
+                        context.return_owned(command.clone().interpret_to_value(interpreter)?)
                     }
                     SourceExpressionLeaf::Discarded(token) => {
                         return token.execution_err("This cannot be used in a value expression");
                     }
                     SourceExpressionLeaf::Variable(variable_path) => {
-                        let variable_ref = variable_path.reference(interpreter)?;
+                        let variable_ref = variable_path.binding(interpreter)?;
                         match context.requested_ownership() {
                             RequestedValueOwnership::LateBound => {
-                                context.return_any_place(variable_ref.into_late_bound()?)
+                                context.return_any_place(variable_ref.into_late_bound()?)?
                             }
-                            RequestedValueOwnership::SharedReference => {
-                                context.return_ref(variable_ref.into_shared()?, None)
+                            RequestedValueOwnership::Shared
+                            | RequestedValueOwnership::CopyOnWrite => {
+                                context.return_shared(variable_ref.into_shared()?, None)?
                             }
-                            RequestedValueOwnership::MutableReference => {
-                                context.return_mut_ref(variable_ref.into_mut()?)
+                            RequestedValueOwnership::Mutable => {
+                                context.return_mutable(variable_ref.into_mut()?)
                             }
-                            RequestedValueOwnership::Owned => context
-                                .return_owned_value(variable_ref.get_value_transparently_cloned()?),
+                            RequestedValueOwnership::Owned => {
+                                context.return_owned(variable_ref.into_transparently_cloned()?)
+                            }
                         }
                     }
                     SourceExpressionLeaf::ExpressionBlock(block) => {
                         // TODO[interpret_to_value]: Allow block to return reference
-                        context.return_owned_value(block.interpret_to_value(interpreter)?)
+                        context.return_owned(block.interpret_to_value(interpreter)?)
                     }
-                    SourceExpressionLeaf::Value(value) => context.return_owned_value(value.clone()),
+                    SourceExpressionLeaf::Value(value) => context.return_owned(value.clone()),
                 }
             }
             ExpressionNode::Grouped { delim_span, inner } => {
@@ -129,15 +131,15 @@ impl ExpressionNode<Source> {
     ) -> ExecutionResult<NextAction> {
         Ok(match self {
             ExpressionNode::Leaf(SourceExpressionLeaf::Variable(variable)) => {
-                let variable_ref = variable.reference(interpreter)?;
+                let variable_ref = variable.binding(interpreter)?;
                 match context.requested_ownership() {
                     RequestedPlaceOwnership::LateBound => {
                         context.return_any(variable_ref.into_late_bound()?)
                     }
-                    RequestedPlaceOwnership::SharedReference => {
+                    RequestedPlaceOwnership::Shared => {
                         context.return_shared(variable_ref.into_shared()?, None)
                     }
-                    RequestedPlaceOwnership::MutableReference => {
+                    RequestedPlaceOwnership::Mutable => {
                         context.return_mutable(variable_ref.into_mut()?)
                     }
                 }

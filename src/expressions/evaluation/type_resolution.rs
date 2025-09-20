@@ -11,57 +11,49 @@ mod macros {
         ([$(,)?] [$($bindings:tt)*]) => {
             $($bindings)*
         };
-        // By shared reference
-        ([$($arg_part:ident)+ : &$ty:ty, $($rest:tt)*] [$($bindings:tt)*]) => {
-            handle_arg_mapping!([$($rest)*] [
-                $($bindings)*
-                let handle_arg_name!($($arg_part)+): &$ty = <$ty as ResolvableArgument>::resolve_from_ref(handle_arg_name!($($arg_part)+).as_ref())?;
-            ])
-        };
         // By captured shared reference (i.e. can return a sub-reference from it)
-        ([$($arg_part:ident)+ : CapturedRef<$ty:ty>, $($rest:tt)*] [$($bindings:tt)*]) => {
+        ([$($arg_part:ident)+ : Shared<$ty:ty>, $($rest:tt)*] [$($bindings:tt)*]) => {
             handle_arg_mapping!([$($rest)*] [
                 $($bindings)*
-                let tmp = handle_arg_name!($($arg_part)+).into_shared_reference();
-                let handle_arg_name!($($arg_part)+): CapturedRef<$ty> = tmp.try_map(|value, _| <$ty as ResolvableArgument>::resolve_from_ref(value))?;
+                let tmp = handle_arg_name!($($arg_part)+).into_shared();
+                let handle_arg_name!($($arg_part)+): Shared<$ty> = tmp.try_map(|value, _| <$ty as ResolvableArgument>::resolve_from_ref(value))?;
             ])
         };
-        // SharedValue is an alias for CapturedRef<ExpressionValue>
+        // SharedValue is an alias for Shared<ExpressionValue>
         ([$($arg_part:ident)+ : SharedValue, $($rest:tt)*] [$($bindings:tt)*]) => {
             handle_arg_mapping!([$($rest)*] [
                 $($bindings)*
-                let handle_arg_name!($($arg_part)+) = handle_arg_name!($($arg_part)+).into_shared_reference();
-            ])
-        };
-        // By mutable reference
-        ([$($arg_part:ident)+ : &mut $ty:ty, $($rest:tt)*] [$($bindings:tt)*]) => {
-            handle_arg_mapping!([$($rest)*] [
-                $($bindings)*
-                let mut tmp = handle_arg_name!($($arg_part)+).into_mutable_reference()?;
-                let handle_arg_name!($($arg_part)+): &mut $ty = <$ty as ResolvableArgument>::resolve_from_mut(tmp.as_mut())?;
+                let handle_arg_name!($($arg_part)+) = handle_arg_name!($($arg_part)+).into_shared();
             ])
         };
         // By captured mutable reference (i.e. can return a sub-reference from it)
-        ([$($arg_part:ident)+ : CapturedMut<$ty:ty>, $($rest:tt)*] [$($bindings:tt)*]) => {
+        ([$($arg_part:ident)+ : Mutable<$ty:ty>, $($rest:tt)*] [$($bindings:tt)*]) => {
             handle_arg_mapping!([$($rest)*] [
                 $($bindings)*
-                let mut tmp = handle_arg_name!($($arg_part)+).into_mutable_reference()?;
-                let handle_arg_name!($($arg_part)+): CapturedMut<$ty> = tmp.try_map(|value, _| <$ty as ResolvableArgument>::resolve_from_mut(value))?;
+                let mut tmp = handle_arg_name!($($arg_part)+).into_mutable()?;
+                let handle_arg_name!($($arg_part)+): Mutable<$ty> = tmp.try_map(|value, _| <$ty as ResolvableArgument>::resolve_from_mut(value))?;
             ])
         };
-        // MutableValue is an alias for CapturedMut<ExpressionValue>
+        // MutableValue is an alias for Mutable<ExpressionValue>
         ([$($arg_part:ident)+ : MutableValue, $($rest:tt)*] [$($bindings:tt)*]) => {
             handle_arg_mapping!([$($rest)*] [
                 $($bindings)*
-                let handle_arg_name!($($arg_part)+) = handle_arg_name!($($arg_part)+).into_mutable_reference()?;
+                let handle_arg_name!($($arg_part)+) = handle_arg_name!($($arg_part)+).into_mutable()?;
             ])
         };
         // By value
-        ([$($arg_part:ident)+ : $ty:ty, $($rest:tt)*] [$($bindings:tt)*]) => {
+        ([$($arg_part:ident)+ : Owned<$ty:ty>, $($rest:tt)*] [$($bindings:tt)*]) => {
             handle_arg_mapping!([$($rest)*] [
                 $($bindings)*
-                let tmp = handle_arg_name!($($arg_part)+).into_owned_value()?;
-                let handle_arg_name!($($arg_part)+): $ty = <$ty as ResolvableArgument>::resolve_from_owned(tmp)?;
+                let tmp = handle_arg_name!($($arg_part)+).into_owned()?;
+                let handle_arg_name!($($arg_part)+): $ty = tmp.try_map(|value, _| <$ty as ResolvableArgument>::resolve_from_owned(value))?;
+            ])
+        };
+        // By value
+        ([$($arg_part:ident)+ : OwnedValue, $($rest:tt)*] [$($bindings:tt)*]) => {
+            handle_arg_mapping!([$($rest)*] [
+                $($bindings)*
+                let handle_arg_name!($($arg_part)+) = handle_arg_name!($($arg_part)+).into_owned()?;
             ])
         };
     }
@@ -71,32 +63,28 @@ mod macros {
         ([$(,)?] [$($outputs:tt)*]) => {
             vec![$($outputs)*]
         };
-        // By shared reference
-        ([$($arg_part:ident)+ : &$ty:ty, $($rest:tt)*] [$($outputs:tt)*]) => {
-            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::SharedReference,])
-        };
         // By captured shared reference (i.e. can return a sub-reference from it)
-        ([$($arg_part:ident)+ : CapturedRef<$ty:ty>, $($rest:tt)*] [$($outputs:tt)*]) => {
-            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::SharedReference,])
+        ([$($arg_part:ident)+ : Shared<$ty:ty>, $($rest:tt)*] [$($outputs:tt)*]) => {
+            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::Shared,])
         };
-        // SharedValue is an alias for CapturedRef<ExpressionValue>
+        // SharedValue is an alias for Shared<ExpressionValue>
         ([$($arg_part:ident)+ : SharedValue, $($rest:tt)*] [$($outputs:tt)*]) => {
-            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::SharedReference,])
-        };
-        // By mutable reference
-        ([$($arg_part:ident)+ : &mut $ty:ty, $($rest:tt)*] [$($outputs:tt)*]) => {
-            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::MutableReference,])
+            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::Shared,])
         };
         // By captured mutable reference (i.e. can return a sub-reference from it)
-        ([$($arg_part:ident)+ : CapturedMut<$ty:ty>, $($rest:tt)*] [$($outputs:tt)*]) => {
-            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::MutableReference,])
+        ([$($arg_part:ident)+ : Mutable<$ty:ty>, $($rest:tt)*] [$($outputs:tt)*]) => {
+            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::Mutable,])
         };
-        // MutableValue is an alias for CapturedMut<ExpressionValue>
+        // MutableValue is an alias for Mutable<ExpressionValue>
         ([$($arg_part:ident)+ : MutableValue, $($rest:tt)*] [$($outputs:tt)*]) => {
-            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::MutableReference,])
+            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::Mutable,])
         };
         // By value
-        ([$($arg_part:ident)+ : $ty:ty, $($rest:tt)*] [$($outputs:tt)*]) => {
+        ([$($arg_part:ident)+ : Owned<$ty:ty>, $($rest:tt)*] [$($outputs:tt)*]) => {
+            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::Owned,])
+        };
+        // By value
+        ([$($arg_part:ident)+ : OwnedValue, $($rest:tt)*] [$($outputs:tt)*]) => {
             handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::Owned,])
         };
     }
@@ -163,8 +151,8 @@ mod macros {
 
 pub(crate) trait ResolvedTypeDetails {
     /// This should be true for types which users expect to have value
-    /// semantics, but false for mutable types / types with reference
-    /// semantics.
+    /// semantics, but false for types which are expensive to clone or
+    /// are expected to have reference semantics.
     ///
     /// This indicates if an &x can be converted to an x via cloning
     /// when doing method resolution.
@@ -205,12 +193,16 @@ impl ResolvedTypeDetails for ValueKind {
             ValueKind::Integer => true,
             ValueKind::Float => true,
             ValueKind::Boolean => true,
+            // Strings are value-like, so it makes sense to transparently clone them
             ValueKind::String => true,
             ValueKind::Char => true,
             ValueKind::UnsupportedLiteral => false,
             ValueKind::Array => false,
             ValueKind::Object => false,
-            ValueKind::Stream => false,
+            // It's super common to want to embed a stream in another stream
+            // Having to embed it as #(type_name.clone()) instead of
+            // #type_name would be awkward
+            ValueKind::Stream => true,
             ValueKind::Range => true,
             ValueKind::Iterator => false,
         }
@@ -224,7 +216,7 @@ impl ResolvedTypeDetails for ValueKind {
         let method_name = method.method.to_string();
         let method = match (self, method_name.as_str(), num_arguments) {
             (_, "clone", 0) => {
-                wrap_method! {(this: &ExpressionValue) -> ExecutionResult<ExpressionValue> {
+                wrap_method! {(this: SharedValue) -> ExecutionResult<ExpressionValue> {
                     Ok(this.clone())
                 }}
             }
@@ -235,12 +227,12 @@ impl ResolvedTypeDetails for ValueKind {
                 }}
             }
             (_, "as_mut", 0) => {
-                wrap_method! {(this: ExpressionValue) -> ExecutionResult<MutableValue> {
+                wrap_method! {(this: OwnedValue) -> ExecutionResult<MutableValue> {
                     Ok(MutableValue::new_from_owned(this))
                 }}
             }
             (_, "debug_string", 0) => {
-                wrap_method! {(this: &ExpressionValue) -> ExecutionResult<String> {
+                wrap_method! {(this: SharedValue) -> ExecutionResult<String> {
                     this.clone().into_debug_string()
                 }}
             }
@@ -249,18 +241,18 @@ impl ResolvedTypeDetails for ValueKind {
                 this.execution_err(message)
             }},
             (ValueKind::Array, "len", 0) => {
-                wrap_method! {(this: &ExpressionArray) -> ExecutionResult<usize> {
+                wrap_method! {(this: Shared<ExpressionArray>) -> ExecutionResult<usize> {
                     Ok(this.items.len())
                 }}
             }
             (ValueKind::Array, "push", 1) => {
-                wrap_method! {(this: &mut ExpressionArray, item: ExpressionValue) -> ExecutionResult<()> {
-                    this.items.push(item);
+                wrap_method! {(mut this: Mutable<ExpressionArray>, item: OwnedValue) -> ExecutionResult<()> {
+                    this.items.push(item.into());
                     Ok(())
                 }}
             }
             (ValueKind::Stream, "len", 0) => {
-                wrap_method! {(this: &ExpressionStream) -> ExecutionResult<usize> {
+                wrap_method! {(this: Shared<ExpressionStream>) -> ExecutionResult<usize> {
                     Ok(this.value.len())
                 }}
             }
@@ -300,16 +292,16 @@ mod outputs {
 
     #[diagnostic::on_unimplemented(
         message = "`ResolvableOutput` is not implemented for `{Self}`",
-        note = "`ResolvableOutput` is not implemented for `CapturedRef<X>` or `CapturedMut<X>` unless `X` is `ExpressionValue`. If we wish to change this, we'd need to have some way to represent some kind of `ExpressionReference`, i.e. a `Typed<CapturedRef<..>>` rather than a `CapturedRef<Typed<..>>`"
+        note = "`ResolvableOutput` is not implemented for `Shared<X>` or `Mutable<X>` unless `X` is `ExpressionValue`. If we wish to change this, we'd need to have some way to represent some kind of `ExpressionReference`, i.e. a `Typed<Shared<..>>` rather than a `Shared<Typed<..>>`"
     )]
     pub(crate) trait ResolvableOutput {
         fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue>;
     }
 
-    impl ResolvableOutput for CapturedRef<ExpressionValue> {
+    impl ResolvableOutput for Shared<ExpressionValue> {
         fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue> {
             Ok(ResolvedValue::Shared {
-                shared_ref: self.update_span_range(|_| output_span_range),
+                shared: self.update_span_range(|_| output_span_range),
                 reason_not_mutable: Some(syn::Error::new(
                     output_span_range.join_into_span_else_start(),
                     "It was output from a method a captured shared reference",
@@ -318,7 +310,7 @@ mod outputs {
         }
     }
 
-    impl ResolvableOutput for CapturedMut<ExpressionValue> {
+    impl ResolvableOutput for Mutable<ExpressionValue> {
         fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue> {
             Ok(ResolvedValue::Mutable(
                 self.update_span_range(|_| output_span_range),
@@ -326,14 +318,24 @@ mod outputs {
         }
     }
 
+    impl ResolvableOutput for Owned<ExpressionValue> {
+        fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue> {
+            Ok(ResolvedValue::Owned(
+                self.update_span_range(|_| output_span_range),
+            ))
+        }
+    }
+
     impl<T: ToExpressionValue> ResolvableOutput for T {
         fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue> {
-            Ok(ResolvedValue::Owned(self.to_value(output_span_range)))
+            Ok(ResolvedValue::Owned(
+                self.to_value(output_span_range).into(),
+            ))
         }
     }
 }
 
-use arguments::*;
+pub(crate) use arguments::*;
 
 mod arguments {
     use super::*;
@@ -441,6 +443,15 @@ mod arguments {
             _ => value.execution_err("Expected string"),
         }
     }}
+
+    impl<'a> ResolveAs<&'a str> for &'a ExpressionValue {
+        fn resolve_as(self) -> ExecutionResult<&'a str> {
+            match self {
+                ExpressionValue::String(s) => Ok(&s.value),
+                _ => self.execution_err("Expected string"),
+            }
+        }
+    }
 
     impl_resolvable_argument_for! {(value) -> ExpressionChar {
         match value {

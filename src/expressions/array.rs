@@ -136,20 +136,38 @@ impl ExpressionArray {
 
     pub(super) fn index_mut(
         &mut self,
-        _access: IndexAccess,
+        access: IndexAccess,
         index: &ExpressionValue,
     ) -> ExecutionResult<&mut ExpressionValue> {
-        let index = self.resolve_valid_index(index, false)?;
-        Ok(&mut self.items[index])
+        Ok(match index {
+            ExpressionValue::Integer(integer) => {
+                let index = self.resolve_valid_index_from_integer(integer, false)?;
+                &mut self.items[index]
+            }
+            ExpressionValue::Range(..) => {
+                // Temporary until we add slice types - we error here
+                return access.execution_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]");
+            }
+            _ => return index.execution_err("The index must be an integer or a range"),
+        })
     }
 
     pub(super) fn index_ref(
         &self,
-        _access: IndexAccess,
+        access: IndexAccess,
         index: &ExpressionValue,
     ) -> ExecutionResult<&ExpressionValue> {
-        let index = self.resolve_valid_index(index, false)?;
-        Ok(&self.items[index])
+        Ok(match index {
+            ExpressionValue::Integer(integer) => {
+                let index = self.resolve_valid_index_from_integer(integer, false)?;
+                &self.items[index]
+            }
+            ExpressionValue::Range(..) => {
+                // Temporary until we add slice types - we error here
+                return access.execution_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]");
+            }
+            _ => return index.execution_err("The index must be an integer or a range"),
+        })
     }
 
     pub(super) fn resolve_valid_index(

@@ -69,7 +69,7 @@ impl Expressionable for Source {
             SourcePeekMatch::ExpressionBlock(_) => {
                 UnaryAtom::Leaf(Self::Leaf::ExpressionBlock(input.parse()?))
             }
-            SourcePeekMatch::AppendVariableBinding => {
+            SourcePeekMatch::AppendVariableParser => {
                 return input
                     .parse_err("Append variable operations are not supported in an expression")
             }

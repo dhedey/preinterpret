@@ -72,7 +72,7 @@ impl ParseUntil {
             | SourcePeekMatch::Variable(_)
             | SourcePeekMatch::Transformer(_)
             | SourcePeekMatch::ExplicitTransformStream
-            | SourcePeekMatch::AppendVariableBinding
+            | SourcePeekMatch::AppendVariableParser
             | SourcePeekMatch::ExpressionBlock(_) => {
                 return input
                     .span()

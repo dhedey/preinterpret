@@ -1,3 +1,4 @@
+mod bindings;
 mod command;
 mod command_arguments;
 mod commands;
@@ -8,6 +9,9 @@ mod source_code_block;
 mod source_stream;
 mod variable;
 
+// Marked as use for expression sub-modules to use with a `use super::*` statement
+use crate::internal_prelude::*;
+pub(crate) use bindings::*;
 pub(crate) use command::*;
 pub(crate) use command_arguments::*;
 pub(crate) use interpret_traits::*;

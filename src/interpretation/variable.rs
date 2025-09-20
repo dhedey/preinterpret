@@ -12,7 +12,10 @@ pub(crate) trait IsVariable: HasSpanRange {
     }
 
     fn get_cloned_value(&self, interpreter: &Interpreter) -> ExecutionResult<ExpressionValue> {
-        self.reference(interpreter)?.get_value_cloned()
+        Ok(self
+            .binding(interpreter)?
+            .into_expensively_cloned()?
+            .into())
     }
 
     fn substitute_into(
@@ -21,15 +24,15 @@ pub(crate) trait IsVariable: HasSpanRange {
         grouping: Grouping,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        self.reference(interpreter)?.get_value_ref()?.output_to(
+        self.binding(interpreter)?.into_shared()?.output_to(
             grouping,
             output,
             StreamOutputBehaviour::Standard,
         )
     }
 
-    fn reference(&self, interpreter: &Interpreter) -> ExecutionResult<VariableReference> {
-        interpreter.get_variable_reference(self, || {
+    fn binding(&self, interpreter: &Interpreter) -> ExecutionResult<VariableBinding> {
+        interpreter.resolve_variable_binding(self, || {
             self.error("The variable does not already exist in the current scope")
         })
     }

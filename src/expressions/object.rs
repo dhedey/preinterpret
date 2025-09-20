@@ -94,13 +94,14 @@ impl ExpressionObject {
         }
     }
 
-    pub(super) fn index_mut_with_autocreate(
+    pub(super) fn index_mut(
         &mut self,
         access: IndexAccess,
-        index: ExpressionValue,
+        index: &ExpressionValue,
+        auto_create: bool,
     ) -> ExecutionResult<&mut ExpressionValue> {
-        let key = index.expect_string("An object key")?.value;
-        Ok(self.mut_entry_or_create(key, access.span()))
+        let index: &str = index.resolve_as()?;
+        self.mut_entry(index.to_string(), access.span(), auto_create)
     }
 
     pub(super) fn index_ref(
@@ -118,8 +119,13 @@ impl ExpressionObject {
     pub(super) fn property_mut(
         &mut self,
         access: &PropertyAccess,
+        auto_create: bool,
     ) -> ExecutionResult<&mut ExpressionValue> {
-        Ok(self.mut_entry_or_create(access.property.to_string(), access.property.span()))
+        self.mut_entry(
+            access.property.to_string(),
+            access.property.span(),
+            auto_create,
+        )
     }
 
     pub(super) fn property_ref(
@@ -133,19 +139,31 @@ impl ExpressionObject {
         Ok(&entry.value)
     }
 
-    fn mut_entry_or_create(&mut self, key: String, key_span: Span) -> &mut ExpressionValue {
+    fn mut_entry(
+        &mut self,
+        key: String,
+        key_span: Span,
+        auto_create: bool,
+    ) -> ExecutionResult<&mut ExpressionValue> {
         use std::collections::btree_map::*;
-        match self.entries.entry(key) {
+        Ok(match self.entries.entry(key) {
             Entry::Occupied(entry) => &mut entry.into_mut().value,
             Entry::Vacant(entry) => {
-                &mut entry
-                    .insert(ObjectEntry {
-                        key_span,
-                        value: ExpressionValue::None(key_span.span_range()),
-                    })
-                    .value
+                if auto_create {
+                    &mut entry
+                        .insert(ObjectEntry {
+                            key_span,
+                            value: ExpressionValue::None(key_span.span_range()),
+                        })
+                        .value
+                } else {
+                    return key_span.execution_err(format!(
+                        "No property found for key `{}`",
+                        entry.into_key()
+                    ));
+                }
             }
-        }
+        })
     }
 
     pub(crate) fn concat_recursive_into(

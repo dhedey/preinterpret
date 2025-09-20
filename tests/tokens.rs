@@ -204,8 +204,8 @@ fn complex_cases_for_intersperse_and_input_types() {
             let final_separator = [" and "];
             let add_trailing = false;
             [!intersperse! {
-                separator: separator,
-                final_separator: final_separator,
+                separator: separator.take(),
+                final_separator: final_separator.take(),
                 add_trailing: add_trailing,
                 items: people,
             }] as string
@@ -343,7 +343,7 @@ fn test_zip() {
         #(
             let longer = [!stream! A B C D];
             let shorter = [1, 2, 3];
-            [!zip_truncated! [longer, shorter]].debug_string()
+            [!zip_truncated! [longer, shorter.take()]].debug_string()
         ),
         r#"[[[!stream! A], 1], [[!stream! B], 2], [[!stream! C], 3]]"#,
     );
@@ -351,7 +351,7 @@ fn test_zip() {
         #(
             let letters = [!stream! A B C];
             let numbers = [1, 2, 3];
-            [!zip! [letters, numbers]].debug_string()
+            [!zip! [letters, numbers.take()]].debug_string()
         ),
         r#"[[[!stream! A], 1], [[!stream! B], 2], [[!stream! C], 3]]"#,
     );
@@ -359,8 +359,8 @@ fn test_zip() {
         #(
             let letters = [!stream! A B C];
             let numbers = [1, 2, 3];
-            let combined = [letters, numbers];
-            [!zip! combined].debug_string()
+            let combined = [letters, numbers.take()];
+            [!zip! combined.take()].debug_string()
         ),
         r#"[[[!stream! A], 1], [[!stream! B], 2], [[!stream! C], 3]]"#,
     );
@@ -368,7 +368,7 @@ fn test_zip() {
         #(
             [!set! #letters = A B C];
             let numbers = [1, 2, 3];
-            [!zip! { number: numbers, letter: letters }].debug_string()
+            [!zip! { number: numbers.take(), letter: letters }].debug_string()
         ),
         r#"[{ letter: [!stream! A], number: 1 }, { letter: [!stream! B], number: 2 }, { letter: [!stream! C], number: 3 }]"#,
     );
@@ -384,12 +384,12 @@ fn test_zip_with_for() {
             #(let flags = ["🇫🇷", "🇩🇪", "🇮🇹"])
             [!set! #capitals = "Paris" "Berlin" "Rome"]
             #(let facts = [])
-            [!for! [country, flag, capital] in [!zip! [countries, flags, capitals]] {
+            [!for! [country, flag, capital] in [!zip! [countries, flags.take(), capitals]] {
                 #(facts.push([!string! "=> The capital of " #country " is " #capital " and its flag is " #flag]))
             }]
 
             #("The facts are:\n" + [!intersperse! {
-                items: facts,
+                items: facts.take(),
                 separator: ["\n"],
             }] as string + "\n")
         },

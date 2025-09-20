@@ -94,7 +94,7 @@ impl NoOutputCommandDefinition for SetCommand {
             SetArguments::ExtendVariable {
                 variable, content, ..
             } => {
-                let variable_data = variable.reference(interpreter)?;
+                let variable_data = variable.binding(interpreter)?;
                 content.interpret_into(
                     interpreter,
                     variable_data.into_mut()?.into_stream()?.as_mut(),

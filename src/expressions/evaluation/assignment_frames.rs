@@ -40,7 +40,7 @@ impl PlaceAssigner {
         value: ExpressionValue,
     ) -> NextAction {
         let frame = Self { value };
-        context.handle_node_as_place(frame, place, RequestedPlaceOwnership::MutableReference)
+        context.handle_node_as_place(frame, place, RequestedPlaceOwnership::Mutable)
     }
 }
 
@@ -56,7 +56,7 @@ impl EvaluationFrame for PlaceAssigner {
         context: AssignmentContext,
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
-        let mut mutable_place = item.expect_mutable_ref();
+        let mut mutable_place = item.expect_mutable();
         let value = self.value;
         let span_range = SpanRange::new_between(mutable_place.span_range(), value.span_range());
         mutable_place.set(value);
@@ -285,7 +285,7 @@ impl ObjectBasedAssigner {
                     self,
                     index,
                     // This only needs to be read-only, as we are just using it to work out which field/s to assign
-                    RequestedValueOwnership::SharedReference,
+                    RequestedValueOwnership::Shared,
                 )
             }
             None => context.return_assignment_completion(self.span_range),
@@ -323,7 +323,7 @@ impl EvaluationFrame for Box<ObjectBasedAssigner> {
                 assignee_node,
                 access,
             } => {
-                let index_place = item.expect_shared_ref();
+                let index_place = item.expect_shared();
                 self.handle_index_value(context, access, index_place.as_ref(), assignee_node)
             }
             ObjectAssignmentState::WaitingForSubassignment => {

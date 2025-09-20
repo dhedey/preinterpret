@@ -59,7 +59,7 @@ impl Parse<Source> for SourceItem {
             SourcePeekMatch::ExplicitTransformStream | SourcePeekMatch::Transformer(_) => {
                 return input.parse_err("Destructurings are not supported here. If this wasn't intended to be a destructuring, replace @ with [!raw! @]");
             }
-            SourcePeekMatch::AppendVariableBinding => {
+            SourcePeekMatch::AppendVariableParser => {
                 return input.parse_err("Destructurings are not supported here.");
             }
             SourcePeekMatch::Punct(_) => SourceItem::Punct(input.parse_any_punct()?),

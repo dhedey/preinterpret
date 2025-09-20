@@ -4,8 +4,8 @@ use super::*;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum RequestedPlaceOwnership {
     LateBound,
-    SharedReference,
-    MutableReference,
+    Shared,
+    Mutable,
 }
 
 /// Handlers which return a Place
@@ -100,20 +100,20 @@ impl EvaluationFrame for PlaceIndexer {
                 let place = item.expect_any_place();
                 self.state = PlaceIndexerPath::IndexPath { place };
                 // If we do my_obj["my_key"] = 1 then the "my_key" place is created,
-                // so mutable reference indexing takes an owned index.
-                context.handle_node_as_value(self, index, RequestedValueOwnership::Owned)
+                // so mutable reference indexing takes an owned index...
+                // But we auto-clone the key in that case, so we can still pass a shared ref
+                context.handle_node_as_value(self, index, RequestedValueOwnership::Shared)
             }
             PlaceIndexerPath::IndexPath { place } => {
-                let index = item.expect_owned_value();
+                let index = item.expect_shared();
                 match place {
-                    Place::MutableReference { mut_ref } => context.return_mutable(
-                        mut_ref.resolve_indexed_with_autocreate(self.access, index)?,
-                    ),
-                    Place::SharedReference {
-                        shared_ref,
+                    Place::Mutable { mutable: mut_ref } => context
+                        .return_mutable(mut_ref.resolve_indexed(self.access, &index, true)?),
+                    Place::Shared {
+                        shared,
                         reason_not_mutable,
                     } => context.return_shared(
-                        shared_ref.resolve_indexed(self.access, &index)?,
+                        shared.resolve_indexed(self.access, &index)?,
                         reason_not_mutable,
                     ),
                 }
@@ -152,16 +152,13 @@ impl EvaluationFrame for PlacePropertyAccessor {
     ) -> ExecutionResult<NextAction> {
         let place = item.expect_any_place();
         Ok(match place {
-            Place::MutableReference { mut_ref } => {
-                context.return_mutable(mut_ref.resolve_property(self.access)?)
+            Place::Mutable { mutable } => {
+                context.return_mutable(mutable.resolve_property(&self.access, true)?)
             }
-            Place::SharedReference {
-                shared_ref,
+            Place::Shared {
+                shared,
                 reason_not_mutable,
-            } => context.return_shared(
-                shared_ref.resolve_property(self.access)?,
-                reason_not_mutable,
-            ),
+            } => context.return_shared(shared.resolve_property(&self.access)?, reason_not_mutable),
         })
     }
 }

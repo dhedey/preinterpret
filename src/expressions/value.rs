@@ -66,13 +66,12 @@ impl ExpressionValue {
         &self,
         new_span_range: SpanRange,
     ) -> ExecutionResult<ExpressionValue> {
-        // TODO[auto-cloning]:
-        // if !self.kind().supports_transparent_cloning() {
-        //     return new_span_range.execution_err(format!(
-        //         "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .take() or .clone() explicitly.",
-        //         self.articled_value_type()
-        //     ));
-        // }
+        if !self.kind().supports_transparent_cloning() {
+            return new_span_range.execution_err(format!(
+                "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .take() or .clone() explicitly.",
+                self.articled_value_type()
+            ));
+        }
         Ok(self.clone().with_span_range(new_span_range))
     }
 
@@ -493,7 +492,7 @@ impl ExpressionValue {
         }
     }
 
-    pub(super) fn into_indexed(self, access: IndexAccess, index: &Self) -> ExecutionResult<Self> {
+    pub(crate) fn into_indexed(self, access: IndexAccess, index: &Self) -> ExecutionResult<Self> {
         match self {
             ExpressionValue::Array(array) => array.into_indexed(access, index),
             ExpressionValue::Object(object) => object.into_indexed(access, index),
@@ -501,14 +500,15 @@ impl ExpressionValue {
         }
     }
 
-    pub(crate) fn index_mut_with_autocreate(
+    pub(crate) fn index_mut(
         &mut self,
         access: IndexAccess,
-        index: Self,
+        index: &Self,
+        auto_create: bool,
     ) -> ExecutionResult<&mut Self> {
         match self {
-            ExpressionValue::Array(array) => array.index_mut(access, &index),
-            ExpressionValue::Object(object) => object.index_mut_with_autocreate(access, index),
+            ExpressionValue::Array(array) => array.index_mut(access, index),
+            ExpressionValue::Object(object) => object.index_mut(access, index, auto_create),
             other => access.execution_err(format!("Cannot index into a {}", other.value_type())),
         }
     }
@@ -531,9 +531,13 @@ impl ExpressionValue {
         }
     }
 
-    pub(crate) fn property_mut(&mut self, access: &PropertyAccess) -> ExecutionResult<&mut Self> {
+    pub(crate) fn property_mut(
+        &mut self,
+        access: &PropertyAccess,
+        auto_create: bool,
+    ) -> ExecutionResult<&mut Self> {
         match self {
-            ExpressionValue::Object(object) => object.property_mut(access),
+            ExpressionValue::Object(object) => object.property_mut(access, auto_create),
             other => access.execution_err(format!(
                 "Cannot access properties on a {}",
                 other.value_type()
@@ -566,11 +570,6 @@ impl ExpressionValue {
             Self::Iterator(value) => &mut value.span_range,
             Self::Range(value) => &mut value.span_range,
         }
-    }
-
-    pub(crate) fn with_span(mut self, source_span: Span) -> ExpressionValue {
-        *self.span_range_mut() = source_span.span_range();
-        self
     }
 
     pub(crate) fn with_span_range(mut self, source_span_range: SpanRange) -> ExpressionValue {

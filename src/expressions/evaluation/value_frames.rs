@@ -13,45 +13,43 @@ use super::*;
 /// So instead, we take the most powerful access we can have, and convert it later.
 pub(crate) enum ResolvedValue {
     /// This has been requested as an owned value.
-    Owned(ExpressionValue),
+    Owned(OwnedValue),
     /// This has been requested as a mutable reference.
     Mutable(MutableValue),
     /// This has been requested as a shared reference.
     Shared {
-        shared_ref: SharedValue,
+        shared: SharedValue,
         reason_not_mutable: Option<syn::Error>,
     },
 }
 
 impl ResolvedValue {
-    pub(crate) fn into_owned_value(self) -> ExecutionResult<ExpressionValue> {
-        let reference = match self {
-            ResolvedValue::Owned(value) => return Ok(value),
-            ResolvedValue::Shared { .. } | ResolvedValue::Mutable { .. } => self.as_ref(),
-        };
-        reference.try_transparent_clone(self.span_range())
+    pub(crate) fn into_owned(self) -> ExecutionResult<OwnedValue> {
+        match self {
+            ResolvedValue::Owned(value) => Ok(value),
+            ResolvedValue::Shared { shared, .. } => shared.transparent_clone(),
+            ResolvedValue::Mutable(mutable) => mutable.transparent_clone(),
+        }
     }
 
-    /// The requirement is just for error messages, and should be "A <xyz>", and will be filled like:
-    /// "{usage} expects an owned value, but receives a reference..."
-    pub(crate) fn into_mutable_reference(self) -> ExecutionResult<MutableValue> {
+    pub(crate) fn into_mutable(self) -> ExecutionResult<MutableValue> {
         Ok(match self {
             ResolvedValue::Owned(value) => {
                 return value.execution_err("A mutable reference is required, but an owned value was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.as_mut()` to get a mutable reference.".to_string())
             },
             ResolvedValue::Mutable(reference) => reference,
-            ResolvedValue::Shared { shared_ref, reason_not_mutable: Some(reason_not_mutable), } => return shared_ref.execution_err(format!(
+            ResolvedValue::Shared { shared, reason_not_mutable: Some(reason_not_mutable), } => return shared.execution_err(format!(
                 "A mutable reference is required, but only a shared reference was received because {reason_not_mutable}."
             )),
-            ResolvedValue::Shared { shared_ref, reason_not_mutable: None, } => return shared_ref.execution_err("A mutable reference is required, but only a shared reference was received.".to_string()),
+            ResolvedValue::Shared { shared, reason_not_mutable: None, } => return shared.execution_err("A mutable reference is required, but only a shared reference was received.".to_string()),
         })
     }
 
-    pub(crate) fn into_shared_reference(self) -> SharedValue {
+    pub(crate) fn into_shared(self) -> SharedValue {
         match self {
             ResolvedValue::Owned(value) => SharedValue::new_from_owned(value),
             ResolvedValue::Mutable(reference) => reference.into_shared(),
-            ResolvedValue::Shared { shared_ref, .. } => shared_ref,
+            ResolvedValue::Shared { shared, .. } => shared,
         }
     }
 
@@ -61,27 +59,27 @@ impl ResolvedValue {
 
     pub(crate) fn as_value_ref(&self) -> &ExpressionValue {
         match self {
-            ResolvedValue::Owned(value) => value,
-            ResolvedValue::Mutable(reference) => reference.as_ref(),
-            ResolvedValue::Shared { shared_ref, .. } => shared_ref.as_ref(),
+            ResolvedValue::Owned(owned) => owned.as_ref(),
+            ResolvedValue::Mutable(mutable) => mutable.as_ref(),
+            ResolvedValue::Shared { shared, .. } => shared.as_ref(),
         }
     }
 
     pub(crate) fn as_value_mut(&mut self) -> ExecutionResult<&mut ExpressionValue> {
         match self {
-            ResolvedValue::Owned(value) => Ok(value),
+            ResolvedValue::Owned(value) => Ok(value.as_mut()),
             ResolvedValue::Mutable(reference) => Ok(reference.as_mut()),
             ResolvedValue::Shared {
-                shared_ref,
+                shared,
                 reason_not_mutable: Some(reason_not_mutable),
-            } => shared_ref.execution_err(format!(
+            } => shared.execution_err(format!(
                 "Cannot get a mutable reference: {}",
                 reason_not_mutable
             )),
             ResolvedValue::Shared {
-                shared_ref,
+                shared,
                 reason_not_mutable: None,
-            } => shared_ref.execution_err("Cannot get a mutable reference: Unknown reason"),
+            } => shared.execution_err("Cannot get a mutable reference: Unknown reason"),
         }
     }
 }
@@ -98,10 +96,10 @@ impl WithSpanExt for ResolvedValue {
             ResolvedValue::Owned(value) => ResolvedValue::Owned(value.with_span(span)),
             ResolvedValue::Mutable(reference) => ResolvedValue::Mutable(reference.with_span(span)),
             ResolvedValue::Shared {
-                shared_ref,
+                shared,
                 reason_not_mutable,
             } => ResolvedValue::Shared {
-                shared_ref: shared_ref.with_span(span),
+                shared: shared.with_span(span),
                 reason_not_mutable,
             },
         }
@@ -114,12 +112,54 @@ impl AsRef<ExpressionValue> for ResolvedValue {
     }
 }
 
+pub(crate) enum CowValue {
+    /// This has been requested as an owned value.
+    Owned(OwnedValue),
+    /// This has been requested as a mutable reference.
+    Shared(SharedValue),
+}
+
+impl CowValue {
+    pub(crate) fn into_owned(self) -> ExecutionResult<OwnedValue> {
+        match self {
+            CowValue::Owned(owned) => Ok(owned),
+            // A CoW value is used in place of a mutable reference.
+            CowValue::Shared(shared) => shared.transparent_clone(),
+        }
+    }
+
+    pub(crate) fn kind(&self) -> ValueKind {
+        self.as_value_ref().kind()
+    }
+
+    pub(crate) fn as_value_ref(&self) -> &ExpressionValue {
+        match self {
+            CowValue::Owned(owned) => owned.as_ref(),
+            CowValue::Shared(shared) => shared.as_ref(),
+        }
+    }
+}
+
+impl HasSpanRange for CowValue {
+    fn span_range(&self) -> SpanRange {
+        self.as_value_ref().span_range()
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum RequestedValueOwnership {
-    LateBound,
+    /// Receives an Owned value (or an error!)
     Owned,
-    SharedReference,
-    MutableReference,
+    /// Receives a Shared Reference
+    Shared,
+    /// Receives a Mutable Reference (or an error!)
+    Mutable,
+    /// Receives any of Owned, SharedReference or MutableReference, depending on what
+    /// is available.
+    /// This can then be used to resolve the value kind, and use the correct one.
+    LateBound,
+    /// Receives either a SharedReference or Owned.
+    CopyOnWrite,
 }
 
 /// Handlers which return a Value
@@ -189,7 +229,7 @@ impl EvaluationFrame for GroupBuilder {
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
         let inner = item.expect_owned_value();
-        Ok(context.return_owned_value(inner.with_span(self.span)))
+        Ok(context.return_owned(inner.update_span_range(|_| self.span.into())))
     }
 }
 
@@ -220,7 +260,7 @@ impl ArrayBuilder {
             .cloned()
         {
             Some(next) => context.handle_node_as_value(self, next, RequestedValueOwnership::Owned),
-            None => context.return_owned_value(ExpressionValue::Array(ExpressionArray {
+            None => context.return_owned(ExpressionValue::Array(ExpressionArray {
                 items: self.evaluated_items,
                 span_range: self.span.span_range(),
             })),
@@ -241,7 +281,7 @@ impl EvaluationFrame for ArrayBuilder {
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
         let value = item.expect_owned_value();
-        self.evaluated_items.push(value);
+        self.evaluated_items.push(value.into_inner());
         Ok(self.next(context))
     }
 }
@@ -302,8 +342,9 @@ impl ObjectBuilder {
                     self.pending = Some(PendingEntryPath::OnIndexKeyBranch { access, value_node });
                     context.handle_node_as_value(self, index, RequestedValueOwnership::Owned)
                 }
-                None => context
-                    .return_owned_value(self.evaluated_entries.to_value(self.span.span_range())),
+                None => {
+                    context.return_owned(self.evaluated_entries.to_value(self.span.span_range()))
+                }
             },
         )
     }
@@ -325,7 +366,7 @@ impl EvaluationFrame for Box<ObjectBuilder> {
         Ok(match pending {
             Some(PendingEntryPath::OnIndexKeyBranch { access, value_node }) => {
                 let value = item.expect_owned_value();
-                let key = value.expect_string("An object key")?.value;
+                let key = value.into_inner().expect_string("An object key")?.value;
                 if self.evaluated_entries.contains_key(&key) {
                     return access.execution_err(format!("The key {} has already been set", key));
                 }
@@ -336,7 +377,7 @@ impl EvaluationFrame for Box<ObjectBuilder> {
                 context.handle_node_as_value(self, value_node, RequestedValueOwnership::Owned)
             }
             Some(PendingEntryPath::OnValueBranch { key, key_span }) => {
-                let value = item.expect_owned_value();
+                let value = item.expect_owned_value().into_inner();
                 let entry = ObjectEntry { key_span, value };
                 self.evaluated_entries.insert(key, entry);
                 self.next(context)?
@@ -376,8 +417,8 @@ impl EvaluationFrame for UnaryOperationBuilder {
         context: ValueContext,
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
-        let value = item.expect_owned_value();
-        Ok(context.return_owned_value(self.operation.evaluate(value)?))
+        let value = item.expect_owned_value().into_inner();
+        Ok(context.return_owned(self.operation.evaluate(value)?))
     }
 }
 
@@ -421,9 +462,9 @@ impl EvaluationFrame for BinaryOperationBuilder {
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
             BinaryPath::OnLeftBranch { right } => {
-                let value = item.expect_owned_value();
+                let value = item.expect_owned_value().into_inner();
                 if let Some(result) = self.operation.lazy_evaluate(&value)? {
-                    context.return_owned_value(result)
+                    context.return_owned(result)
                 } else {
                     self.state = BinaryPath::OnRightBranch { left: value };
                     context.handle_node_as_value(
@@ -435,8 +476,8 @@ impl EvaluationFrame for BinaryOperationBuilder {
                 }
             }
             BinaryPath::OnRightBranch { left } => {
-                let value = item.expect_owned_value();
-                context.return_owned_value(self.operation.evaluate(left, value)?)
+                let value = item.expect_owned_value().into_inner();
+                context.return_owned(self.operation.evaluate(left, value)?)
             }
         })
     }
@@ -453,8 +494,13 @@ impl ValuePropertyAccessBuilder {
         node: ExpressionNodeId,
     ) -> NextAction {
         let frame = Self { access };
-        // TODO[access-refactor]: Change to propagate context from value, and not always clone!
-        let ownership = RequestedValueOwnership::Owned;
+        let ownership = match context.requested_ownership() {
+            // If we need an owned value, we can try resolving a reference and
+            // clone the outputted value if needed - which can be much cheaper.
+            // e.g. `let x = arr[0]` only copies `arr[0]` instead of the whole array.
+            RequestedValueOwnership::Owned => RequestedValueOwnership::CopyOnWrite,
+            other => other,
+        };
         context.handle_node_as_value(frame, node, ownership)
     }
 }
@@ -471,8 +517,24 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
         context: ValueContext,
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
-        let value = item.expect_owned_value();
-        Ok(context.return_owned_value(value.into_property(&self.access)?))
+        let value = item.expect_any_value();
+        Ok(match value {
+            ResolvedValue::Owned(value) => {
+                let output = value.resolve_property(&self.access)?;
+                context.return_owned(output)
+            }
+            ResolvedValue::Mutable(mutable) => {
+                let output = mutable.resolve_property(&self.access, false)?;
+                context.return_mutable(output)
+            }
+            ResolvedValue::Shared {
+                shared,
+                reason_not_mutable,
+            } => {
+                let output = shared.resolve_property(&self.access)?;
+                context.return_shared(output, reason_not_mutable)?
+            }
+        })
     }
 }
 
@@ -483,7 +545,7 @@ pub(super) struct ValueIndexAccessBuilder {
 
 enum IndexPath {
     OnSourceBranch { index: ExpressionNodeId },
-    OnIndexBranch { object: ExpressionValue },
+    OnIndexBranch { source: ResolvedValue },
 }
 
 impl ValueIndexAccessBuilder {
@@ -497,8 +559,14 @@ impl ValueIndexAccessBuilder {
             access,
             state: IndexPath::OnSourceBranch { index },
         };
-        // TODO[access-refactor]: Change to propagate context from value, and not always clone
-        context.handle_node_as_value(frame, source, RequestedValueOwnership::Owned)
+        let ownership = match context.requested_ownership() {
+            // If we need an owned value, we can try resolving a reference and
+            // clone the outputted value if needed - which can be much cheaper.
+            // e.g. `let x = obj.xyz` only copies `obj.xyz` instead of the whole object.
+            RequestedValueOwnership::Owned => RequestedValueOwnership::CopyOnWrite,
+            other => other,
+        };
+        context.handle_node_as_value(frame, source, ownership)
     }
 }
 
@@ -516,18 +584,37 @@ impl EvaluationFrame for ValueIndexAccessBuilder {
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
             IndexPath::OnSourceBranch { index } => {
-                let value = item.expect_owned_value();
-                self.state = IndexPath::OnIndexBranch { object: value };
+                let value = item.expect_any_value();
+                self.state = IndexPath::OnIndexBranch { source: value };
                 context.handle_node_as_value(
                     self,
                     index,
-                    // We can use a &index for reading values from our array
-                    RequestedValueOwnership::SharedReference,
+                    // This is a value, so we are _accessing it_ and can't create values
+                    // (that's only possible in a place!) - therefore we don't need an owned key,
+                    // and can use &index for reading values from our array
+                    RequestedValueOwnership::Shared,
                 )
             }
-            IndexPath::OnIndexBranch { object } => {
-                let value = item.expect_shared_ref();
-                context.return_owned_value(object.into_indexed(self.access, value.as_ref())?)
+            IndexPath::OnIndexBranch { source } => {
+                let index = item.expect_shared();
+                let is_range = matches!(index.kind(), ValueKind::Range);
+                match source {
+                    ResolvedValue::Owned(value) => {
+                        let output = value.resolve_indexed(self.access, index.as_ref())?;
+                        context.return_owned(output)
+                    }
+                    ResolvedValue::Mutable(mutable) => {
+                        let output = mutable.resolve_indexed(self.access, index.as_ref(), false)?;
+                        context.return_mutable(output)
+                    }
+                    ResolvedValue::Shared {
+                        shared,
+                        reason_not_mutable,
+                    } => {
+                        let output = shared.resolve_indexed(self.access, index.as_ref())?;
+                        context.return_shared(output, reason_not_mutable)?
+                    }
+                }
             }
         })
     }
@@ -554,7 +641,7 @@ impl RangeBuilder {
             (None, None) => match range_limits {
                 syn::RangeLimits::HalfOpen(token) => {
                     let inner = ExpressionRangeInner::RangeFull { token: *token };
-                    context.return_owned_value(inner.to_value(token.span_range()))
+                    context.return_owned(inner.to_value(token.span_range()))
                 }
                 syn::RangeLimits::Closed(_) => {
                     unreachable!(
@@ -595,7 +682,7 @@ impl EvaluationFrame for RangeBuilder {
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
         // TODO[range-refactor]: Change to not always clone the value
-        let value = item.expect_owned_value();
+        let value = item.expect_owned_value().into_inner();
         Ok(match (self.state, self.range_limits) {
             (RangePath::OnLeftBranch { right: Some(right) }, _) => {
                 self.state = RangePath::OnRightBranch { left: Some(value) };
@@ -606,7 +693,7 @@ impl EvaluationFrame for RangeBuilder {
                     start_inclusive: value,
                     token,
                 };
-                context.return_owned_value(inner.to_value(token.span_range()))
+                context.return_owned(inner.to_value(token.span_range()))
             }
             (RangePath::OnLeftBranch { right: None }, syn::RangeLimits::Closed(_)) => {
                 unreachable!("A closed range should have been given a right in continue_range(..)")
@@ -617,7 +704,7 @@ impl EvaluationFrame for RangeBuilder {
                     token,
                     end_exclusive: value,
                 };
-                context.return_owned_value(inner.to_value(token.span_range()))
+                context.return_owned(inner.to_value(token.span_range()))
             }
             (RangePath::OnRightBranch { left: Some(left) }, syn::RangeLimits::Closed(token)) => {
                 let inner = ExpressionRangeInner::RangeInclusive {
@@ -625,21 +712,21 @@ impl EvaluationFrame for RangeBuilder {
                     token,
                     end_inclusive: value,
                 };
-                context.return_owned_value(inner.to_value(token.span_range()))
+                context.return_owned(inner.to_value(token.span_range()))
             }
             (RangePath::OnRightBranch { left: None }, syn::RangeLimits::HalfOpen(token)) => {
                 let inner = ExpressionRangeInner::RangeTo {
                     token,
                     end_exclusive: value,
                 };
-                context.return_owned_value(inner.to_value(token.span_range()))
+                context.return_owned(inner.to_value(token.span_range()))
             }
             (RangePath::OnRightBranch { left: None }, syn::RangeLimits::Closed(token)) => {
                 let inner = ExpressionRangeInner::RangeToInclusive {
                     token,
                     end_inclusive: value,
                 };
-                context.return_owned_value(inner.to_value(token.span_range()))
+                context.return_owned(inner.to_value(token.span_range()))
             }
         })
     }
@@ -685,13 +772,13 @@ impl EvaluationFrame for AssignmentBuilder {
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
             AssignmentPath::OnValueBranch { assignee } => {
-                let value = item.expect_owned_value();
+                let value = item.expect_owned_value().into_inner();
                 self.state = AssignmentPath::OnAwaitingAssignment;
                 context.handle_node_as_assignment(self, assignee, value)
             }
             AssignmentPath::OnAwaitingAssignment => {
                 let AssignmentCompletion { span_range } = item.expect_assignment_complete();
-                context.return_owned_value(ExpressionValue::None(span_range))
+                context.return_owned(ExpressionValue::None(span_range))
             }
         })
     }
@@ -736,21 +823,18 @@ impl EvaluationFrame for CompoundAssignmentBuilder {
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
             CompoundAssignmentPath::OnValueBranch { place } => {
-                let value = item.expect_owned_value();
+                let value = item.expect_owned_value().into_inner();
                 self.state = CompoundAssignmentPath::OnPlaceBranch { value };
                 // TODO[assignment-refactor]: Resolve as LateBound, and then convert to what is needed based on the operation
-                context.handle_node_as_place(self, place, RequestedPlaceOwnership::MutableReference)
+                context.handle_node_as_place(self, place, RequestedPlaceOwnership::Mutable)
             }
             CompoundAssignmentPath::OnPlaceBranch { value } => {
-                let mut mutable_reference = item.expect_mutable_ref();
-                let span_range =
-                    SpanRange::new_between(mutable_reference.span_range(), value.span_range());
-                mutable_reference.as_mut().handle_compound_assignment(
-                    &self.operation,
-                    value,
-                    span_range,
-                )?;
-                context.return_owned_value(ExpressionValue::None(span_range))
+                let mut mutable = item.expect_mutable();
+                let span_range = SpanRange::new_between(mutable.span_range(), value.span_range());
+                mutable
+                    .as_mut()
+                    .handle_compound_assignment(&self.operation, value, span_range)?;
+                context.return_owned(ExpressionValue::None(span_range))
             }
         })
     }
@@ -859,7 +943,7 @@ impl EvaluationFrame for MethodCallBuilder {
                     } => (evaluated_arguments_including_caller, method),
                 };
                 let output = method.execute(arguments, self.method.span_range())?;
-                context.return_any_value(output)
+                context.return_any_value(output)?
             }
         })
     }
