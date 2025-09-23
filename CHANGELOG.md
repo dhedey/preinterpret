@@ -107,8 +107,11 @@ Inside a transform stream, the following grammar is supported:
 ### To come
 * Method calls continued
   * Create `CopyOnWrite<..>` in `bindings.rs`, add `CopyOnWriteValue` support to `wrap_method!` and change it so that `debug_string` takes CowValue
-    * ... maybe we just use `CopyOnWriteValue` everywhere instead of `OwnedValue`??
-  * Check if we actually need `RequestedPlaceOwnership::SharedReference` or `RequestedPlaceOwnership::LateBound` and potentially remove them if not
+Loo    * ... maybe we just use `CopyOnWriteValue` everywhere instead of `OwnedValue`?
+      => The main issue is if it interferes with taking mutable
+    references, but it's possibly OK, would need to see if it's a confusing problem in practice... (e.g. `let b = a[0]; a.push(1)` if `b` is a reference to `a[0]` then this is a problem when we push to `a`)
+      => If a mutable reference is created and there are pending references, the variable data RefCell could be replaced with a cloned value and then mutated... But this can be more expensive, because e.g. `let b = a[0]; a.push(1)` results in the whole array `a` being copied in the `CoW` case; but only the `a[0]` being cloned in the "clone on assign" case.
+      => Assignments are Owned/Cloned as currently
   * Consider how to align:
     *  `ResolvedValue::into_mutable` (used by LateBound Owned => Mutable Arg; such as a method object)
     *  `context::return_owned` (used by Owned returned when Mutable requested,
@@ -117,6 +120,7 @@ Inside a transform stream, the following grammar is supported:
       * Mapping "context.return_shared(X)" => requested kind
       * Late bound method arguments => needed argument
     * PERHAPS WE HAVE:
+      * EvaluationItem has Owned/Shared/Mutable/CopyOnWrite/LateBound variants
       * Late bound => Resolve similar to context.return_X
       * In method call, we do expect/assert it's the right type
   * Add tests for TODO[access-refactor] (i.e. changing places to resolve correctly)

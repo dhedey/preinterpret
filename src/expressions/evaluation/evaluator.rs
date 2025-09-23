@@ -59,12 +59,12 @@ impl<'a> ExpressionEvaluator<'a, Source> {
                     node,
                     value,
                 )?,
-            NextActionInner::ReadNodeAsPlace(node, ownership) => self.nodes[node.0]
+            NextActionInner::ReadNodeAsPlace(node) => self.nodes[node.0]
                 .handle_as_place(
                     interpreter,
                     Context {
                         stack: &mut self.stack,
-                        request: ownership,
+                        request: (),
                     },
                 )?,
             NextActionInner::HandleReturnedItem(item) => {
@@ -127,10 +127,13 @@ enum NextActionInner {
     /// Enters an expression node to output a value
     ReadNodeAsValue(ExpressionNodeId, RequestedValueOwnership),
     // Enters an expression node for assignment purposes
+    // This covers atomic assignments (to places) and composite assignments
+    // (similar to patterns but for existing values/reassignments)
+    // let a = ["x", "y"]; let b; [a[1], .. b] = [1, 2, 3, 4]
     ReadNodeAsAssignee(ExpressionNodeId, ExpressionValue),
-    // Enters an expression node to output a place (a location in memory)
-    // A place can be thought of as a mutable reference for e.g. a += operation
-    ReadNodeAsPlace(ExpressionNodeId, RequestedPlaceOwnership),
+    // Enters an expression node to output a place (a source for an atomic assignment)
+    // e.g. the a[1] in a[1] = "4"
+    ReadNodeAsPlace(ExpressionNodeId),
     HandleReturnedItem(EvaluationItem),
 }
 
@@ -182,19 +185,19 @@ impl EvaluationItem {
         }
     }
 
-    pub(super) fn expect_any_place(self) -> Place {
-        match self {
-            EvaluationItem::Mutable { mutable } => Place::Mutable { mutable },
-            EvaluationItem::Shared {
-                shared,
-                reason_not_mutable,
-            } => Place::Shared {
-                shared,
-                reason_not_mutable,
-            },
-            _ => panic!("expect_any_place() called on a non-place EvaluationItem"),
-        }
-    }
+    // pub(super) fn expect_any_late_bound_value(self) -> LateBoundValue {
+    //     match self {
+    //         EvaluationItem::Mutable { mutable } => LateBoundValue::Mutable { mutable },
+    //         EvaluationItem::Shared {
+    //             shared,
+    //             reason_not_mutable,
+    //         } => LateBoundValue::Shared {
+    //             shared,
+    //             reason_not_mutable,
+    //         },
+    //         _ => panic!("expect_any_place() called on a non-place EvaluationItem"),
+    //     }
+    // }
 
     pub(super) fn expect_shared(self) -> SharedValue {
         match self {
@@ -212,6 +215,10 @@ impl EvaluationItem {
         }
     }
 
+    pub(super) fn expect_place(self) -> MutableValue {
+        self.expect_mutable()
+    }
+
     pub(super) fn expect_assignment_complete(self) -> AssignmentCompletion {
         match self {
             EvaluationItem::AssignmentCompletion(completion) => completion,
@@ -227,7 +234,7 @@ impl EvaluationItem {
 /// [rust reference]: https://doc.rust-lang.org/reference/expressions.html#place-expressions-and-value-expressions
 pub(super) enum AnyEvaluationHandler {
     Value(AnyValueFrame, RequestedValueOwnership),
-    Place(AnyPlaceFrame, RequestedPlaceOwnership),
+    Place(AnyPlaceFrame),
     Assignment(AnyAssignmentFrame),
 }
 
@@ -245,10 +252,10 @@ impl AnyEvaluationHandler {
                 },
                 item,
             ),
-            AnyEvaluationHandler::Place(handler, ownership) => handler.handle_item(
+            AnyEvaluationHandler::Place(handler) => handler.handle_item(
                 Context {
                     stack,
-                    request: ownership,
+                    request: (),
                 },
                 item,
             ),
@@ -281,12 +288,11 @@ impl<'a, T: EvaluationItemType> Context<'a, T> {
         self,
         handler: H,
         node: ExpressionNodeId,
-        requested_ownership: RequestedPlaceOwnership,
     ) -> NextAction {
         self.stack
             .handlers
             .push(T::into_unkinded_handler(handler.into_any(), self.request));
-        NextActionInner::ReadNodeAsPlace(node, requested_ownership).into()
+        NextActionInner::ReadNodeAsPlace(node).into()
     }
 
     pub(super) fn handle_node_as_assignment<H: EvaluationFrame<ReturnType = T>>(
@@ -354,10 +360,10 @@ impl<'a> Context<'a, ValueType> {
         })
     }
 
-    pub(super) fn return_any_place(self, value: Place) -> ExecutionResult<NextAction> {
+    pub(super) fn return_late_bound(self, value: LateBoundValue) -> ExecutionResult<NextAction> {
         Ok(match value {
-            Place::Mutable { mutable } => self.return_mutable(mutable),
-            Place::Shared {
+            LateBoundValue::Mutable { mutable } => self.return_mutable(mutable),
+            LateBoundValue::Shared {
                 shared,
                 reason_not_mutable,
             } => self.return_shared(shared, reason_not_mutable)?,
@@ -413,50 +419,20 @@ pub(super) struct PlaceType;
 pub(super) type PlaceContext<'a> = Context<'a, PlaceType>;
 
 impl EvaluationItemType for PlaceType {
-    type RequestConstraints = RequestedPlaceOwnership;
+    type RequestConstraints = ();
     type AnyHandler = AnyPlaceFrame;
 
     fn into_unkinded_handler(
         handler: Self::AnyHandler,
-        request: Self::RequestConstraints,
+        (): Self::RequestConstraints,
     ) -> AnyEvaluationHandler {
-        AnyEvaluationHandler::Place(handler, request)
+        AnyEvaluationHandler::Place(handler)
     }
 }
 
 impl<'a> Context<'a, PlaceType> {
-    pub(super) fn requested_ownership(&self) -> RequestedPlaceOwnership {
-        self.request
-    }
-
-    pub(super) fn return_any(self, place: Place) -> NextAction {
-        match place {
-            Place::Mutable { mutable } => self.return_mutable(mutable),
-            Place::Shared {
-                shared,
-                reason_not_mutable,
-            } => self.return_shared(shared, reason_not_mutable),
-        }
-    }
-
-    pub(super) fn return_mutable(self, mutable: MutableValue) -> NextAction {
-        match self.request {
-            RequestedPlaceOwnership::LateBound
-            | RequestedPlaceOwnership::Mutable => NextAction::return_mutable(mutable),
-            RequestedPlaceOwnership::Shared => panic!("Returning a mutable reference should only be used when the requested ownership is mutable or late-bound"),
-        }
-    }
-
-    pub(super) fn return_shared(
-        self,
-        shared: SharedValue,
-        reason_not_mutable: Option<syn::Error>,
-    ) -> NextAction {
-        match self.request {
-            RequestedPlaceOwnership::LateBound
-            | RequestedPlaceOwnership::Shared => NextAction::return_shared(shared, reason_not_mutable),
-            RequestedPlaceOwnership::Mutable => panic!("Returning a shared reference should only be used when the requested ownership is shared or late-bound"),
-        }
+    pub(super) fn return_place(self, place: MutableValue) -> NextAction {
+        NextAction::return_mutable(place)
     }
 }
 

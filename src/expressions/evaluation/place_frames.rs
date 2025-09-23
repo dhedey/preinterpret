@@ -2,16 +2,12 @@
 //! The name is inspired by Rust places, but it is a subtly different concept.
 //! 
 //! They're similar to mutable references, but behave slightly differently:
-//! * They can create entries in objects, e.g. `x["new_key"] = value``
+//! * They can create entries in objects, e.g. `x["new_key"] = value`
+//! 
+//! Realistically, perhaps they should just be moved to be value frames taking
+//! mutable references.
 #![allow(unused)] // TODO[unused-clearup]
 use super::*;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum RequestedPlaceOwnership {
-    LateBound,
-    Shared,
-    Mutable,
-}
 
 /// Handlers which return a Place
 pub(super) enum AnyPlaceFrame {
@@ -41,8 +37,7 @@ pub(super) struct PlaceGrouper(PrivateUnit);
 impl PlaceGrouper {
     pub(super) fn start(context: PlaceContext, inner: ExpressionNodeId) -> NextAction {
         let frame = Self(PrivateUnit);
-        let ownership = context.requested_ownership();
-        context.handle_node_as_place(frame, inner, ownership)
+        context.handle_node_as_place(frame, inner)
     }
 }
 
@@ -58,7 +53,7 @@ impl EvaluationFrame for PlaceGrouper {
         context: PlaceContext,
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
-        Ok(context.return_any(item.expect_any_place()))
+        Ok(context.return_place(item.expect_place()))
     }
 }
 
@@ -69,7 +64,7 @@ pub(super) struct PlaceIndexer {
 
 enum PlaceIndexerPath {
     PlacePath { index: ExpressionNodeId },
-    IndexPath { place: Place },
+    IndexPath { place: MutableValue },
 }
 
 impl PlaceIndexer {
@@ -83,8 +78,7 @@ impl PlaceIndexer {
             access,
             state: PlaceIndexerPath::PlacePath { index },
         };
-        let ownership = context.requested_ownership();
-        context.handle_node_as_place(frame, source, ownership)
+        context.handle_node_as_place(frame, source)
     }
 }
 
@@ -102,7 +96,7 @@ impl EvaluationFrame for PlaceIndexer {
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
             PlaceIndexerPath::PlacePath { index } => {
-                let place = item.expect_any_place();
+                let place = item.expect_place();
                 self.state = PlaceIndexerPath::IndexPath { place };
                 // If we do my_obj["my_key"] = 1 then the "my_key" place is created,
                 // so mutable reference indexing takes an owned index...
@@ -111,17 +105,8 @@ impl EvaluationFrame for PlaceIndexer {
             }
             PlaceIndexerPath::IndexPath { place } => {
                 let index = item.expect_shared();
-                match place {
-                    Place::Mutable { mutable } => context
-                        .return_mutable(mutable.resolve_indexed(self.access, &index, true)?),
-                    Place::Shared {
-                        shared,
-                        reason_not_mutable,
-                    } => context.return_shared(
-                        shared.resolve_indexed(self.access, &index)?,
-                        reason_not_mutable,
-                    ),
-                }
+                let output = place.resolve_indexed(self.access, &index, true)?;
+                context.return_place(output)
             }
         })
     }
@@ -138,8 +123,7 @@ impl PlacePropertyAccessor {
         access: PropertyAccess,
     ) -> NextAction {
         let frame = Self { access };
-        let requested_ownership = context.requested_ownership();
-        context.handle_node_as_place(frame, source, requested_ownership)
+        context.handle_node_as_place(frame, source)
     }
 }
 
@@ -155,15 +139,8 @@ impl EvaluationFrame for PlacePropertyAccessor {
         context: PlaceContext,
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
-        let place = item.expect_any_place();
-        Ok(match place {
-            Place::Mutable { mutable } => {
-                context.return_mutable(mutable.resolve_property(&self.access, true)?)
-            }
-            Place::Shared {
-                shared,
-                reason_not_mutable,
-            } => context.return_shared(shared.resolve_property(&self.access)?, reason_not_mutable),
-        })
+        let place = item.expect_place();
+        let output = place.resolve_property(&self.access, true)?;
+        Ok(context.return_place(output))
     }
 }

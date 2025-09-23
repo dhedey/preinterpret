@@ -52,14 +52,14 @@ impl VariableBinding {
         SharedValue::new_from_variable(self)
     }
 
-    pub(crate) fn into_late_bound(self) -> ExecutionResult<Place> {
+    pub(crate) fn into_late_bound(self) -> ExecutionResult<LateBoundValue> {
         match self.clone().into_mut() {
-            Ok(value) => Ok(Place::Mutable { mutable: value }),
+            Ok(value) => Ok(LateBoundValue::Mutable { mutable: value }),
             Err(ExecutionInterrupt::Error(reason_not_mutable)) => {
                 // If we get an error with a mutable and shared reference, a mutable reference must already exist.
                 // We can just propogate the error from taking the shared reference, it should be good enough.
                 let value = self.into_shared()?;
-                Ok(Place::Shared {
+                Ok(LateBoundValue::Shared {
                     shared: value,
                     reason_not_mutable: Some(reason_not_mutable),
                 })
@@ -70,22 +70,15 @@ impl VariableBinding {
     }
 }
 
-/// A rough equivalent of a Rust place (lvalue), as per:
-/// https://doc.rust-lang.org/reference/expressions.html#place-expressions-and-value-expressions
-///
-/// In preinterpret, references are (currently) only to variables, or sub-values of variables.
-///
-/// # Late Binding
-///
 /// Sometimes, a value which can be accessed, but we don't yet know *how* we need to access it.
 /// In this case, we attempt to load it as a Mutable place, and failing that, as a Shared place.
 ///
 /// ## Example of requirement
-/// For example, if we have `x[a].y(z)`, we first need to resolve the type of `x[a]` to know
-/// whether `x[a]` takes a shared reference, mutable reference or an owned value.
+/// For example, if we have `x[a].method()`, we first need to resolve the type of `x[a]` to know
+/// whether the method needs `x[a]` to be a shared reference, mutable reference or an owned value.
 ///
 /// So instead, we take the most powerful access we can have for `x[a]`, and convert it later.
-pub(crate) enum Place {
+pub(crate) enum LateBoundValue {
     Mutable {
         mutable: MutableValue,
     },

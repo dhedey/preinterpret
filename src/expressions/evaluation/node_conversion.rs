@@ -20,7 +20,7 @@ impl ExpressionNode<Source> {
                         let variable_ref = variable_path.binding(interpreter)?;
                         match context.requested_ownership() {
                             RequestedValueOwnership::LateBound => {
-                                context.return_any_place(variable_ref.into_late_bound()?)?
+                                context.return_late_bound(variable_ref.into_late_bound()?)?
                             }
                             RequestedValueOwnership::Shared
                             | RequestedValueOwnership::CopyOnWrite => {
@@ -132,17 +132,7 @@ impl ExpressionNode<Source> {
         Ok(match self {
             ExpressionNode::Leaf(SourceExpressionLeaf::Variable(variable)) => {
                 let variable_ref = variable.binding(interpreter)?;
-                match context.requested_ownership() {
-                    RequestedPlaceOwnership::LateBound => {
-                        context.return_any(variable_ref.into_late_bound()?)
-                    }
-                    RequestedPlaceOwnership::Shared => {
-                        context.return_shared(variable_ref.into_shared()?, None)
-                    }
-                    RequestedPlaceOwnership::Mutable => {
-                        context.return_mutable(variable_ref.into_mut()?)
-                    }
-                }
+                context.return_place(variable_ref.into_mut()?)
             }
             ExpressionNode::Index {
                 node,

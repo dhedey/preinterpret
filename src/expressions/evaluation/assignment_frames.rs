@@ -40,7 +40,7 @@ impl PlaceAssigner {
         value: ExpressionValue,
     ) -> NextAction {
         let frame = Self { value };
-        context.handle_node_as_place(frame, place, RequestedPlaceOwnership::Mutable)
+        context.handle_node_as_place(frame, place)
     }
 }
 
