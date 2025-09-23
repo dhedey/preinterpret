@@ -163,10 +163,10 @@ impl EvaluationItem {
         }
     }
 
-    pub(super) fn expect_cow_value(self) -> CowValue {
+    pub(super) fn expect_copy_on_write_value(self) -> CopyOnWriteValue {
         match self {
-            EvaluationItem::Owned(value) => CowValue::Owned(value),
-            EvaluationItem::Shared { shared, .. } => CowValue::Shared(shared),
+            EvaluationItem::Owned(value) => CopyOnWrite::Owned(value),
+            EvaluationItem::Shared { shared, .. } => CopyOnWrite::Shared(shared),
             _ => panic!("expect_cow_value() called on a non-cow-value EvaluationItem"),
         }
     }

@@ -489,3 +489,47 @@ impl<T: 'static> WithSpanExt for Shared<T> {
         }
     }
 }
+
+/// Copy-on-write value that can be either owned or shared
+pub(crate) enum CopyOnWrite<T: 'static> {
+    /// An owned value that can be used directly
+    Owned(Owned<T>),
+    /// A shared reference that may need to be cloned if mutation is required
+    Shared(Shared<T>),
+}
+
+impl<T: 'static> CopyOnWrite<T> {
+    /// Gets a shared reference to the value
+    pub(crate) fn as_ref(&self) -> &T {
+        match self {
+            CopyOnWrite::Owned(owned) => owned.as_ref(),
+            CopyOnWrite::Shared(shared) => shared.as_ref(),
+        }
+    }
+}
+
+impl CopyOnWrite<ExpressionValue> {
+    /// Converts to owned, cloning if necessary
+    pub(crate) fn into_owned(self) -> ExecutionResult<OwnedValue> {
+        match self {
+            CopyOnWrite::Owned(owned) => Ok(owned),
+            CopyOnWrite::Shared(shared) => shared.transparent_clone(),
+        }
+    }
+
+    /// Converts to shared reference
+    pub(crate) fn into_shared(self) -> SharedValue {
+        match self {
+            CopyOnWrite::Owned(owned) => SharedValue::new_from_owned(owned),
+            CopyOnWrite::Shared(shared) => shared,
+        }
+    }
+}
+
+impl<T: 'static + HasSpanRange> HasSpanRange for CopyOnWrite<T> {
+    fn span_range(&self) -> SpanRange {
+        self.as_ref().span_range()
+    }
+}
+
+pub(crate) type CopyOnWriteValue = CopyOnWrite<ExpressionValue>;

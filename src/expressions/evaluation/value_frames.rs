@@ -112,39 +112,7 @@ impl AsRef<ExpressionValue> for ResolvedValue {
     }
 }
 
-pub(crate) enum CowValue {
-    /// This has been requested as an owned value.
-    Owned(OwnedValue),
-    /// This has been requested as a mutable reference.
-    Shared(SharedValue),
-}
-
-impl CowValue {
-    pub(crate) fn into_owned(self) -> ExecutionResult<OwnedValue> {
-        match self {
-            CowValue::Owned(owned) => Ok(owned),
-            // A CoW value is used in place of a mutable reference.
-            CowValue::Shared(shared) => shared.transparent_clone(),
-        }
-    }
-
-    pub(crate) fn kind(&self) -> ValueKind {
-        self.as_value_ref().kind()
-    }
-
-    pub(crate) fn as_value_ref(&self) -> &ExpressionValue {
-        match self {
-            CowValue::Owned(owned) => owned.as_ref(),
-            CowValue::Shared(shared) => shared.as_ref(),
-        }
-    }
-}
-
-impl HasSpanRange for CowValue {
-    fn span_range(&self) -> SpanRange {
-        self.as_value_ref().span_range()
-    }
-}
+pub(crate) use crate::interpretation::CopyOnWriteValue;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum RequestedValueOwnership {
