@@ -241,10 +241,12 @@ impl ResolvedTypeDetails for ValueKind {
                 this.execution_err(message)
             }},
             // Mostly just a test of mutable values
-            (_, "swap", 1) => wrap_method! {(mut a: MutableValue, mut b: MutableValue) -> ExecutionResult<()> {
-                mem::swap(a.deref_mut(), b.deref_mut());
-                Ok(())
-            }},
+            (_, "swap", 1) => {
+                wrap_method! {(mut a: MutableValue, mut b: MutableValue) -> ExecutionResult<()> {
+                    mem::swap(a.deref_mut(), b.deref_mut());
+                    Ok(())
+                }}
+            }
             (ValueKind::Array, "len", 0) => {
                 wrap_method! {(this: Shared<ExpressionArray>) -> ExecutionResult<usize> {
                     Ok(this.items.len())

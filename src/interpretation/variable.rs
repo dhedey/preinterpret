@@ -12,10 +12,7 @@ pub(crate) trait IsVariable: HasSpanRange {
     }
 
     fn get_cloned_value(&self, interpreter: &Interpreter) -> ExecutionResult<ExpressionValue> {
-        Ok(self
-            .binding(interpreter)?
-            .into_expensively_cloned()?
-            .into())
+        Ok(self.binding(interpreter)?.into_expensively_cloned()?.into())
     }
 
     fn substitute_into(

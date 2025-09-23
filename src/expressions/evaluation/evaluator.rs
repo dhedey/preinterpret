@@ -59,14 +59,13 @@ impl<'a> ExpressionEvaluator<'a, Source> {
                     node,
                     value,
                 )?,
-            NextActionInner::ReadNodeAsPlace(node) => self.nodes[node.0]
-                .handle_as_place(
-                    interpreter,
-                    Context {
-                        stack: &mut self.stack,
-                        request: (),
-                    },
-                )?,
+            NextActionInner::ReadNodeAsPlace(node) => self.nodes[node.0].handle_as_place(
+                interpreter,
+                Context {
+                    stack: &mut self.stack,
+                    request: (),
+                },
+            )?,
             NextActionInner::HandleReturnedItem(item) => {
                 let top_of_stack = match self.stack.handlers.pop() {
                     Some(top) => top,
@@ -107,8 +106,7 @@ impl NextAction {
     }
 
     pub(super) fn return_mutable(mutable: MutableValue) -> Self {
-        NextActionInner::HandleReturnedItem(EvaluationItem::Mutable { mutable })
-            .into()
+        NextActionInner::HandleReturnedItem(EvaluationItem::Mutable { mutable }).into()
     }
 
     pub(super) fn return_shared(
@@ -187,15 +185,13 @@ impl EvaluationItem {
 
     // pub(super) fn expect_any_late_bound_value(self) -> LateBoundValue {
     //     match self {
-    //         EvaluationItem::Mutable { mutable } => LateBoundValue::Mutable { mutable },
-    //         EvaluationItem::Shared {
+    //         EvaluationItem::Owned(owned) => LateBoundValue::Owned(owned),
+    //         EvaluationItem::Mutable { mutable } => LateBoundValue::Mutable(mutable),
+    //         EvaluationItem::Shared { shared, .. } => LateBoundValue::Shared(LateBoundSharedValue {
     //             shared,
-    //             reason_not_mutable,
-    //         } => LateBoundValue::Shared {
-    //             shared,
-    //             reason_not_mutable,
-    //         },
-    //         _ => panic!("expect_any_place() called on a non-place EvaluationItem"),
+    //             reason_not_mutable: syn::Error::new(shared.span_range().join_into_span_else_start(), "Converted from shared reference"),
+    //         }),
+    //         _ => panic!("expect_any_late_bound_value() called on a non-value EvaluationItem"),
     //     }
     // }
 
@@ -252,13 +248,9 @@ impl AnyEvaluationHandler {
                 },
                 item,
             ),
-            AnyEvaluationHandler::Place(handler) => handler.handle_item(
-                Context {
-                    stack,
-                    request: (),
-                },
-                item,
-            ),
+            AnyEvaluationHandler::Place(handler) => {
+                handler.handle_item(Context { stack, request: () }, item)
+            }
             AnyEvaluationHandler::Assignment(handler) => {
                 handler.handle_item(Context { stack, request: () }, item)
             }
@@ -362,11 +354,11 @@ impl<'a> Context<'a, ValueType> {
 
     pub(super) fn return_late_bound(self, value: LateBoundValue) -> ExecutionResult<NextAction> {
         Ok(match value {
-            LateBoundValue::Mutable { mutable } => self.return_mutable(mutable),
-            LateBoundValue::Shared {
-                shared,
-                reason_not_mutable,
-            } => self.return_shared(shared, reason_not_mutable)?,
+            LateBoundValue::Owned(owned) => self.return_owned(owned)?,
+            LateBoundValue::Mutable(mutable) => self.return_mutable(mutable),
+            LateBoundValue::Shared(shared_value) => {
+                self.return_shared(shared_value.shared, Some(shared_value.reason_not_mutable))?
+            }
         })
     }
 
@@ -381,7 +373,7 @@ impl<'a> Context<'a, ValueType> {
             }
             RequestedValueOwnership::Mutable => {
                 // This aligns with ResolveValue::into_mutable
-                return value.execution_err("A mutable reference is required, but an owned value was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.as_mut()` to get a mutable reference.")
+                return value.execution_err("A mutable reference is required, but an owned value was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.as_mut()` to get a mutable reference.");
             }
         })
     }

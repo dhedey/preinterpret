@@ -254,17 +254,21 @@ impl ArrayBuilder {
     }
 
     pub(super) fn next(self, context: ValueContext) -> ExecutionResult<NextAction> {
-        Ok(match self
-            .unevaluated_items
-            .get(self.evaluated_items.len())
-            .cloned()
-        {
-            Some(next) => context.handle_node_as_value(self, next, RequestedValueOwnership::Owned),
-            None => context.return_owned(ExpressionValue::Array(ExpressionArray {
-                items: self.evaluated_items,
-                span_range: self.span.span_range(),
-            }))?,
-        })
+        Ok(
+            match self
+                .unevaluated_items
+                .get(self.evaluated_items.len())
+                .cloned()
+            {
+                Some(next) => {
+                    context.handle_node_as_value(self, next, RequestedValueOwnership::Owned)
+                }
+                None => context.return_owned(ExpressionValue::Array(ExpressionArray {
+                    items: self.evaluated_items,
+                    span_range: self.span.span_range(),
+                }))?,
+            },
+        )
     }
 }
 

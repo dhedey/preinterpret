@@ -54,15 +54,15 @@ impl VariableBinding {
 
     pub(crate) fn into_late_bound(self) -> ExecutionResult<LateBoundValue> {
         match self.clone().into_mut() {
-            Ok(value) => Ok(LateBoundValue::Mutable { mutable: value }),
+            Ok(value) => Ok(LateBoundValue::Mutable(value)),
             Err(ExecutionInterrupt::Error(reason_not_mutable)) => {
                 // If we get an error with a mutable and shared reference, a mutable reference must already exist.
                 // We can just propogate the error from taking the shared reference, it should be good enough.
-                let value = self.into_shared()?;
-                Ok(LateBoundValue::Shared {
-                    shared: value,
-                    reason_not_mutable: Some(reason_not_mutable),
-                })
+                let shared = self.into_shared()?;
+                Ok(LateBoundValue::Shared(LateBoundSharedValue::new(
+                    shared,
+                    reason_not_mutable,
+                )))
             }
             // Propogate any other errors, these shouldn't happen mind
             Err(err) => Err(err),
@@ -70,8 +70,25 @@ impl VariableBinding {
     }
 }
 
-/// Sometimes, a value which can be accessed, but we don't yet know *how* we need to access it.
-/// In this case, we attempt to load it as a Mutable place, and failing that, as a Shared place.
+/// A shared value where mutable access failed for a specific reason
+pub(crate) struct LateBoundSharedValue {
+    pub(crate) shared: SharedValue,
+    pub(crate) reason_not_mutable: syn::Error,
+}
+
+impl LateBoundSharedValue {
+    pub(crate) fn new(shared: SharedValue, reason_not_mutable: syn::Error) -> Self {
+        Self {
+            shared,
+            reason_not_mutable,
+        }
+    }
+}
+
+/// Universal value type that can resolve to any concrete ownership type.
+///
+/// Sometimes, a value can be accessed, but we don't yet know *how* we need to access it.
+/// In this case, we attempt to load it with the most powerful access we can have, and convert it later.
 ///
 /// ## Example of requirement
 /// For example, if we have `x[a].method()`, we first need to resolve the type of `x[a]` to know
@@ -79,13 +96,12 @@ impl VariableBinding {
 ///
 /// So instead, we take the most powerful access we can have for `x[a]`, and convert it later.
 pub(crate) enum LateBoundValue {
-    Mutable {
-        mutable: MutableValue,
-    },
-    Shared {
-        shared: SharedValue,
-        reason_not_mutable: Option<syn::Error>,
-    },
+    /// An owned value that can be converted to any ownership type
+    Owned(OwnedValue),
+    /// A mutable reference
+    Mutable(MutableValue),
+    /// A shared reference where mutable access failed for a specific reason
+    Shared(LateBoundSharedValue),
 }
 
 impl HasSpanRange for VariableBinding {

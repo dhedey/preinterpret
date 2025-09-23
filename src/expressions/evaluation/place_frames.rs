@@ -1,9 +1,9 @@
 //! A preinterpret place frame is just used for the target of an assignment.
 //! The name is inspired by Rust places, but it is a subtly different concept.
-//! 
+//!
 //! They're similar to mutable references, but behave slightly differently:
 //! * They can create entries in objects, e.g. `x["new_key"] = value`
-//! 
+//!
 //! Realistically, perhaps they should just be moved to be value frames taking
 //! mutable references.
 #![allow(unused)] // TODO[unused-clearup]

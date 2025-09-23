@@ -61,6 +61,7 @@ The expression system (newer feature) provides advanced capabilities like mathem
 
 Tests are located in the `tests/` directory and use trybuild for testing compilation failures. The CI runs tests on stable, beta, and nightly Rust versions with warnings treated as errors.
 
-## Git Strategy
+## Commit Strategy
 
-Use the conventional commits pattern for commit message prefixes.
+* Run `style-fix.sh` before committing
+* Use the conventional commits pattern for commit message prefixes.
