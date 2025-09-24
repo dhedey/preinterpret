@@ -141,15 +141,19 @@ impl ResolvedValueOwnership {
         copy_on_write: CopyOnWriteValue,
     ) -> ExecutionResult<ResolvedValue> {
         match self {
-            ResolvedValueOwnership::Owned => Ok(ResolvedValue::Owned(copy_on_write.into_owned_transparently()?)),
-            ResolvedValueOwnership::Shared => Ok(ResolvedValue::Shared(copy_on_write.into_shared())),
+            ResolvedValueOwnership::Owned => Ok(ResolvedValue::Owned(
+                copy_on_write.into_owned_transparently()?,
+            )),
+            ResolvedValueOwnership::Shared => {
+                Ok(ResolvedValue::Shared(copy_on_write.into_shared()))
+            }
             ResolvedValueOwnership::Mutable => {
                 if copy_on_write.acts_as_shared_reference() {
                     copy_on_write.execution_err("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone().as_mut()` to get a mutable reference.")
                 } else {
                     copy_on_write.execution_err("A mutable reference is required, but an owned value was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.as_mut()` to get a mutable reference.")
                 }
-            },
+            }
             ResolvedValueOwnership::CopyOnWrite => Ok(ResolvedValue::CopyOnWrite(copy_on_write)),
         }
     }

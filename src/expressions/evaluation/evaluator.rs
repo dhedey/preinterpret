@@ -158,17 +158,20 @@ impl From<NextActionInner> for NextAction {
 }
 
 pub(super) enum EvaluationItem {
-    // These mirror RequestedValueOwnership exactly
+    // Value items - these mirror RequestedValueOwnership exactly
+    LateBound(LateBoundValue),
     Owned(OwnedValue),
     Shared(SharedValue),
     Mutable(MutableValue), // Mutable reference to a value
-    LateBound(LateBoundValue),
     CopyOnWrite(CopyOnWriteValue),
 
     // Place items (for assignment targets)
-    Place(MutableValue), // A place that can be assigned to (distinct from Mutable)
+    // Note that places are handled subtly differently than a mutable value,
+    // for example with a place, x["a"] creates an entry if it doesn't exist,
+    // whereas with a mutable value it would return None without creating the entry.
+    Place(MutableValue),
 
-    // Non-value items
+    // Assignment items
     AssignmentCompletion(AssignmentCompletion),
 }
 
