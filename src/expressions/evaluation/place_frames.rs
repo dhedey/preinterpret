@@ -101,7 +101,7 @@ impl EvaluationFrame for PlaceIndexer {
                 // If we do my_obj["my_key"] = 1 then the "my_key" place is created,
                 // so mutable reference indexing takes an owned index...
                 // But we auto-clone the key in that case, so we can still pass a shared ref
-                context.handle_node_as_value(self, index, RequestedValueOwnership::Shared)
+                context.handle_node_as_shared(self, index)
             }
             PlaceIndexerPath::IndexPath { place } => {
                 let index = item.expect_shared();

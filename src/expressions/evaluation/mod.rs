@@ -11,4 +11,4 @@ pub(super) use evaluator::ExpressionEvaluator;
 use evaluator::*;
 use place_frames::*;
 pub(super) use type_resolution::*;
-use value_frames::*;
+pub(crate) use value_frames::*;

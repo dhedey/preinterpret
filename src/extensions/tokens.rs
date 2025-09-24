@@ -65,6 +65,16 @@ impl LiteralExt for Literal {
     }
 }
 
+pub(crate) trait WithSpanRangeExt {
+    fn with_span_range(self, span_range: SpanRange) -> Self;
+}
+
+impl<T: WithSpanRangeExt> WithSpanExt for T {
+    fn with_span(self, span: Span) -> Self {
+        self.with_span_range(SpanRange::new_single(span))
+    }
+}
+
 pub(crate) trait WithSpanExt {
     fn with_span(self, span: Span) -> Self;
 }

@@ -114,6 +114,13 @@ impl<T: 'static> SharedSubRcRefCell<T, T> {
 }
 
 impl<T: 'static, U: 'static> SharedSubRcRefCell<T, U> {
+    pub(crate) fn clone(this: &SharedSubRcRefCell<T, U>) -> Self {
+        Self {
+            shared_ref: Ref::clone(&this.shared_ref),
+            pointed_at: Rc::clone(&this.pointed_at),
+        }
+    }
+
     pub(crate) fn map<V>(self, f: impl FnOnce(&U) -> &V) -> SharedSubRcRefCell<T, V> {
         SharedSubRcRefCell {
             shared_ref: Ref::map(self.shared_ref, f),
@@ -145,6 +152,7 @@ impl<T: 'static, U: 'static> SharedSubRcRefCell<T, U> {
 
 impl<T: 'static, U: 'static> Deref for SharedSubRcRefCell<T, U> {
     type Target = U;
+
     fn deref(&self) -> &U {
         &self.shared_ref
     }

@@ -15,7 +15,7 @@ mod macros {
         ([$($arg_part:ident)+ : Shared<$ty:ty>, $($rest:tt)*] [$($bindings:tt)*]) => {
             handle_arg_mapping!([$($rest)*] [
                 $($bindings)*
-                let tmp = handle_arg_name!($($arg_part)+).into_shared();
+                let tmp = handle_arg_name!($($arg_part)+).expect_shared();
                 let handle_arg_name!($($arg_part)+): Shared<$ty> = tmp.try_map(|value, _| <$ty as ResolvableArgument>::resolve_from_ref(value))?;
             ])
         };
@@ -23,14 +23,14 @@ mod macros {
         ([$($arg_part:ident)+ : SharedValue, $($rest:tt)*] [$($bindings:tt)*]) => {
             handle_arg_mapping!([$($rest)*] [
                 $($bindings)*
-                let handle_arg_name!($($arg_part)+) = handle_arg_name!($($arg_part)+).into_shared();
+                let handle_arg_name!($($arg_part)+) = handle_arg_name!($($arg_part)+).expect_shared();
             ])
         };
         // By captured mutable reference (i.e. can return a sub-reference from it)
         ([$($arg_part:ident)+ : Mutable<$ty:ty>, $($rest:tt)*] [$($bindings:tt)*]) => {
             handle_arg_mapping!([$($rest)*] [
                 $($bindings)*
-                let mut tmp = handle_arg_name!($($arg_part)+).into_mutable()?;
+                let mut tmp = handle_arg_name!($($arg_part)+).expect_mutable();
                 let handle_arg_name!($($arg_part)+): Mutable<$ty> = tmp.try_map(|value, _| <$ty as ResolvableArgument>::resolve_from_mut(value))?;
             ])
         };
@@ -38,14 +38,21 @@ mod macros {
         ([$($arg_part:ident)+ : MutableValue, $($rest:tt)*] [$($bindings:tt)*]) => {
             handle_arg_mapping!([$($rest)*] [
                 $($bindings)*
-                let handle_arg_name!($($arg_part)+) = handle_arg_name!($($arg_part)+).into_mutable()?;
+                let handle_arg_name!($($arg_part)+) = handle_arg_name!($($arg_part)+).expect_mutable();
+            ])
+        };
+        // By copy-on-write
+        ([$($arg_part:ident)+ : CopyOnWriteValue, $($rest:tt)*] [$($bindings:tt)*]) => {
+            handle_arg_mapping!([$($rest)*] [
+                $($bindings)*
+                let handle_arg_name!($($arg_part)+) = handle_arg_name!($($arg_part)+).expect_copy_on_write();
             ])
         };
         // By value
         ([$($arg_part:ident)+ : Owned<$ty:ty>, $($rest:tt)*] [$($bindings:tt)*]) => {
             handle_arg_mapping!([$($rest)*] [
                 $($bindings)*
-                let tmp = handle_arg_name!($($arg_part)+).into_owned()?;
+                let tmp = handle_arg_name!($($arg_part)+).expect_owned();
                 let handle_arg_name!($($arg_part)+): $ty = tmp.try_map(|value, _| <$ty as ResolvableArgument>::resolve_from_owned(value))?;
             ])
         };
@@ -53,7 +60,7 @@ mod macros {
         ([$($arg_part:ident)+ : OwnedValue, $($rest:tt)*] [$($bindings:tt)*]) => {
             handle_arg_mapping!([$($rest)*] [
                 $($bindings)*
-                let handle_arg_name!($($arg_part)+) = handle_arg_name!($($arg_part)+).into_owned()?;
+                let handle_arg_name!($($arg_part)+) = handle_arg_name!($($arg_part)+).expect_owned();
             ])
         };
     }
@@ -65,27 +72,35 @@ mod macros {
         };
         // By captured shared reference (i.e. can return a sub-reference from it)
         ([$($arg_part:ident)+ : Shared<$ty:ty>, $($rest:tt)*] [$($outputs:tt)*]) => {
-            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::Shared,])
+            handle_arg_ownerships!([$($rest)*] [$($outputs)* ResolvedValueOwnership::Shared,])
         };
         // SharedValue is an alias for Shared<ExpressionValue>
         ([$($arg_part:ident)+ : SharedValue, $($rest:tt)*] [$($outputs:tt)*]) => {
-            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::Shared,])
+            handle_arg_ownerships!([$($rest)*] [$($outputs)* ResolvedValueOwnership::Shared,])
         };
         // By captured mutable reference (i.e. can return a sub-reference from it)
         ([$($arg_part:ident)+ : Mutable<$ty:ty>, $($rest:tt)*] [$($outputs:tt)*]) => {
-            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::Mutable,])
+            handle_arg_ownerships!([$($rest)*] [$($outputs)* ResolvedValueOwnership::Mutable,])
         };
         // MutableValue is an alias for Mutable<ExpressionValue>
         ([$($arg_part:ident)+ : MutableValue, $($rest:tt)*] [$($outputs:tt)*]) => {
-            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::Mutable,])
+            handle_arg_ownerships!([$($rest)*] [$($outputs)* ResolvedValueOwnership::Mutable,])
+        };
+        // By copy-on-write
+        ([$($arg_part:ident)+ : CopyOnWrite<$ty:ty>, $($rest:tt)*] [$($outputs:tt)*]) => {
+            handle_arg_ownerships!([$($rest)*] [$($outputs)* ResolvedValueOwnership::CopyOnWrite,])
+        };
+        // By value
+        ([$($arg_part:ident)+ : CopyOnWriteValue, $($rest:tt)*] [$($outputs:tt)*]) => {
+            handle_arg_ownerships!([$($rest)*] [$($outputs)* ResolvedValueOwnership::CopyOnWrite,])
         };
         // By value
         ([$($arg_part:ident)+ : Owned<$ty:ty>, $($rest:tt)*] [$($outputs:tt)*]) => {
-            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::Owned,])
+            handle_arg_ownerships!([$($rest)*] [$($outputs)* ResolvedValueOwnership::Owned,])
         };
         // By value
         ([$($arg_part:ident)+ : OwnedValue, $($rest:tt)*] [$($outputs:tt)*]) => {
-            handle_arg_ownerships!([$($rest)*] [$($outputs)* RequestedValueOwnership::Owned,])
+            handle_arg_ownerships!([$($rest)*] [$($outputs)* ResolvedValueOwnership::Owned,])
         };
     }
 
@@ -216,8 +231,8 @@ impl ResolvedTypeDetails for ValueKind {
         let method_name = method.method.to_string();
         let method = match (self, method_name.as_str(), num_arguments) {
             (_, "clone", 0) => {
-                wrap_method! {(this: SharedValue) -> ExecutionResult<ExpressionValue> {
-                    Ok(this.clone())
+                wrap_method! {(this: CopyOnWriteValue) -> ExecutionResult<OwnedValue> {
+                    Ok(this.into_owned_infallible())
                 }}
             }
             (_, "take", 0) => {
@@ -231,14 +246,21 @@ impl ResolvedTypeDetails for ValueKind {
                     Ok(MutableValue::new_from_owned(this))
                 }}
             }
-            (_, "debug_string", 0) => {
-                wrap_method! {(this: SharedValue) -> ExecutionResult<String> {
-                    this.clone().into_debug_string()
+            (_, "as_ref", 0) => {
+                wrap_method! {(this: SharedValue) -> ExecutionResult<SharedValue> {
+                    Ok(this)
                 }}
             }
-            (_, "debug", 0) => wrap_method! {(this: SharedValue) -> ExecutionResult<String> {
-                let message = this.clone().into_debug_string()?;
-                this.execution_err(message)
+            (_, "debug_string", 0) => {
+                wrap_method! {(this: CopyOnWriteValue) -> ExecutionResult<String> {
+                    this.into_owned_infallible().into_inner().into_debug_string()
+                }}
+            }
+            (_, "debug", 0) => wrap_method! {(this: CopyOnWriteValue) -> ExecutionResult<String> {
+                let value = this.into_owned_infallible();
+                let span_range = value.span_range();
+                let message = value.into_inner().into_debug_string()?;
+                span_range.execution_err(message)
             }},
             // Mostly just a test of mutable values
             (_, "swap", 1) => {
@@ -275,7 +297,7 @@ impl ResolvedTypeDetails for ValueKind {
 
 pub(crate) struct MethodInterface {
     method: Box<(dyn Fn(Vec<ResolvedValue>, SpanRange) -> ExecutionResult<ResolvedValue>)>,
-    argument_ownerships: Vec<RequestedValueOwnership>,
+    argument_ownerships: Vec<ResolvedValueOwnership>,
 }
 
 impl MethodInterface {
@@ -287,7 +309,7 @@ impl MethodInterface {
         (self.method)(arguments, span_range)
     }
 
-    pub(super) fn ownerships(&self) -> &[RequestedValueOwnership] {
+    pub(super) fn ownerships(&self) -> &[ResolvedValueOwnership] {
         &self.argument_ownerships
     }
 }
@@ -307,13 +329,9 @@ mod outputs {
 
     impl ResolvableOutput for Shared<ExpressionValue> {
         fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue> {
-            Ok(ResolvedValue::Shared {
-                shared: self.update_span_range(|_| output_span_range),
-                reason_not_mutable: Some(syn::Error::new(
-                    output_span_range.join_into_span_else_start(),
-                    "It was output from a method a captured shared reference",
-                )),
-            })
+            Ok(ResolvedValue::Shared(
+                self.update_span_range(|_| output_span_range),
+            ))
         }
     }
 

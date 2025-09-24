@@ -106,37 +106,28 @@ Inside a transform stream, the following grammar is supported:
 
 ### To come
 * Method calls continued
-  * Create `CopyOnWrite<..>` in `bindings.rs`, add `CopyOnWriteValue` support to `wrap_method!` and change it so that `debug_string` takes CowValue
-Loo    * ... maybe we just use `CopyOnWriteValue` everywhere instead of `OwnedValue`?
-      => The main issue is if it interferes with taking mutable
-    references, but it's possibly OK, would need to see if it's a confusing problem in practice... (e.g. `let b = a[0]; a.push(1)` if `b` is a reference to `a[0]` then this is a problem when we push to `a`)
-      => If a mutable reference is created and there are pending references, the variable data RefCell could be replaced with a cloned value and then mutated... But this can be more expensive, because e.g. `let b = a[0]; a.push(1)` results in the whole array `a` being copied in the `CoW` case; but only the `a[0]` being cloned in the "clone on assign" case.
-      => Assignments are Owned/Cloned as currently
-  * Consider how to align:
-    *  `ResolvedValue::into_mutable` (used by LateBound Owned => Mutable Arg; such as a method object)
-    *  `context::return_owned` (used by Owned returned when Mutable requested,
-    such as a method argument)
-    * CURRENTLY WE HAVE:
-      * Mapping "context.return_shared(X)" => requested kind
-      * Late bound method arguments => needed argument
-    * PERHAPS WE HAVE:
-      * EvaluationItem has Owned/Shared/Mutable/CopyOnWrite/LateBound variants
-      * Late bound => Resolve similar to context.return_X
-      * In method call, we do expect/assert it's the right type
+  * Scrap `#>>x` etc in favour of `#(x.push(@TOKEN))`
   * Add tests for TODO[access-refactor] (i.e. changing places to resolve correctly)
   * Add more impl_resolvable_argument_for
-  * Scrap `#>>x` etc in favour of `#(x.push(@TOKEN))`
   * TODO[range-refactor] & some kind of more thought through typed reference support - e.g. slices, mutable slices?
   * TODO[operation-refactor]
     * Including no clone required for testing equality of streams, objects and arrays
-  * Add better way of defining methods once / lazily, and binding them to
-    an object type. 
+  * Add better way of defining methods once / lazily, and binding them to an object type. 
 * Consider:
-  * Changing evaluation to allow `ResolvedValue` (i.e. allow references)
   * Removing span range from value:
-    * Moving it to an `OwnedValue` or `Owned<T>`
+    * Moving it to a binding such as `Owned<T>` etc
     * Using `EvaluationError` (without a span!) inside the calculation, and adding the span in the evaluator (nb. it may still need to be able to propogate an `ExecutionInterrupt` internally)
-  * Using ResolvedValue in place of ExpressionValue e.g. inside arrays
+  * Do we want some kind of slice object?
+    * We can make `ExpressionValue` deref into `ExpressionRef`, e.g. `ExpressionRef::Array(<slice>)`
+    * Then we can make `SharedValue(Ref<ExpressionRef>)`, which can be constructed from a `Ref<ExpressionValue>` with a map!
+    * And similarly `MutableValue(RefMut<ExpressionRefMut>)`
+  * Using ResolvedValue in place of ExpressionValue e.g. inside arrays / objects, so that we can destructure `let (x, y) = (a, b)` without clone/take
+    * But then we end up with nested references which can be confusing!
+    * CONCLUSION: Maybe we don't want this - to destructure it needs to be owned anyway?
+  * Consider TODO[interpret-to-value] and whether to expand to `ResolvedValue` or `CopyOnWriteValue` instead of `OwnedValue`?
+    => The main issue is if it interferes with taking mutable references, but it's possibly OK, would need to see if it's a confusing problem in practice... (e.g. `let b = a[0]; a.push(1)` if `b` is a reference to `a[0]` then this is a problem when we push to `a`)
+    => If a mutable reference is created and there are pending references, the variable data RefCell could be replaced with a cloned value and then mutated... But this can be more expensive, because e.g. `let b = a[0]; a.push(1)` results in the whole array `a` being copied in the `CoW` case; but only the `a[0]` being cloned in the "clone on assign" case.
+    => Maybe we just stick to assignments being Owned/Cloned as currently
 * Introduce `~(...)` and `r~(...)` streams instead of `[!stream! ...]` and `[!raw! ...]`
 * Introduce interpreter stack frames
   * Read the `REVERSION` comment in the `Parsers Revisited` section below to consider approaches, which will work with possibly needing to revert state if a parser fails.

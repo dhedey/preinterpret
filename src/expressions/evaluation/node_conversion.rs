@@ -22,23 +22,27 @@ impl ExpressionNode<Source> {
                             RequestedValueOwnership::LateBound => {
                                 context.return_late_bound(variable_ref.into_late_bound()?)?
                             }
-                            RequestedValueOwnership::Shared
-                            | RequestedValueOwnership::CopyOnWrite => {
-                                context.return_shared(variable_ref.into_shared()?, None)?
-                            }
-                            RequestedValueOwnership::Mutable => {
-                                context.return_mutable(variable_ref.into_mut()?)
-                            }
-                            RequestedValueOwnership::Owned => {
-                                context.return_owned(variable_ref.into_transparently_cloned()?)?
-                            }
+                            RequestedValueOwnership::Concrete(ownership) => match ownership {
+                                ResolvedValueOwnership::Owned
+                                | ResolvedValueOwnership::CopyOnWrite
+                                | ResolvedValueOwnership::Shared => {
+                                    context.return_shared(variable_ref.into_shared()?)?
+                                }
+                                ResolvedValueOwnership::Mutable => {
+                                    context.return_mutable(variable_ref.into_mut()?)?
+                                }
+                            },
                         }
                     }
                     SourceExpressionLeaf::ExpressionBlock(block) => {
                         // TODO[interpret_to_value]: Allow block to return reference
                         context.return_owned(block.interpret_to_value(interpreter)?)?
                     }
-                    SourceExpressionLeaf::Value(value) => context.return_owned(value.clone())?,
+                    SourceExpressionLeaf::Value(value) => {
+                        // We return a freely clonable CopyOnWrite in order to delay the clone of the literal if it's not necessary
+                        let value = CopyOnWrite::shared_in_place_of_owned(Shared::clone(value));
+                        context.return_copy_on_write(value)?
+                    }
                 }
             }
             ExpressionNode::Grouped { delim_span, inner } => {

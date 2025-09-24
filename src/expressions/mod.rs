@@ -15,6 +15,7 @@ mod stream;
 mod string;
 mod value;
 
+pub(crate) use evaluation::*;
 pub(crate) use expression::*;
 pub(crate) use expression_block::*;
 pub(crate) use iterator::*;
@@ -28,7 +29,6 @@ use crate::internal_prelude::*;
 use array::*;
 use boolean::*;
 use character::*;
-use evaluation::*;
 use expression_parsing::*;
 use float::*;
 use integer::*;
