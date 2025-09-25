@@ -319,10 +319,29 @@ impl ResolvedTypeDetails for ValueKind {
         Ok(method)
     }
 
-    fn get_unary_operation_method(&self, _operation: &UnaryOperation) -> Option<MethodInterface> {
-        // TODO[operation-refactor]: Implement method resolution for unary operations
-        // For now, return None to always fallback to legacy system
-        None
+    fn get_unary_operation_method(&self, operation: &UnaryOperation) -> Option<MethodInterface> {
+        match (self, operation) {
+            (ValueKind::Boolean, UnaryOperation::Not { .. }) => {
+                Some(wrap_method! {(this: Owned<bool>) -> ExecutionResult<bool> {
+                    // This method is being used instead of the legacy handle_unary_operation!
+                    Ok(!this.into_inner())
+                }})
+            }
+            (_, UnaryOperation::Not { .. }) => {
+                // Provide a helpful error for ! on non-boolean values
+                Some(wrap_method! {(this: CopyOnWriteValue) -> ExecutionResult<bool> {
+                    Err(this.as_ref().span_range().execution_error(format!(
+                        "The ! operator is not supported for {}",
+                        this.as_ref().value_type()
+                    )))
+                }})
+            }
+            _ => {
+                // TODO[operation-refactor]: Implement more unary operations
+                // For now, return None to fallback to legacy system for unimplemented operations
+                None
+            }
+        }
     }
 
     fn get_binary_operation_operand_ownerships(
@@ -475,6 +494,27 @@ mod arguments {
         };
     }
 
+    macro_rules! impl_delegated_resolvable_argument_for {
+        (($value:ident: $delegate:ty) -> $type:ty { $expr:expr }) => {
+            impl ResolvableArgument for $type {
+                fn resolve_from_owned(input_value: ExpressionValue) -> ExecutionResult<Self> {
+                    let $value: $delegate = input_value.resolve_as()?;
+                    Ok($expr)
+                }
+
+                fn resolve_from_ref(input_value: &ExpressionValue) -> ExecutionResult<&Self> {
+                    let $value: &$delegate = input_value.resolve_as()?;
+                    Ok(&$expr)
+                }
+
+                fn resolve_from_mut(input_value: &mut ExpressionValue) -> ExecutionResult<&mut Self> {
+                    let $value: &mut $delegate = input_value.resolve_as()?;
+                    Ok(&mut $expr)
+                }
+            }
+        };
+    }
+
     pub(crate) use impl_resolvable_argument_for;
 
     impl_resolvable_argument_for! {(value) -> ExpressionInteger {
@@ -511,6 +551,8 @@ mod arguments {
             _ => value.execution_err("Expected boolean"),
         }
     }}
+
+    impl_delegated_resolvable_argument_for! {(value: ExpressionBoolean) -> bool { value.value }}
 
     impl_resolvable_argument_for! {(value) -> ExpressionString {
         match value {

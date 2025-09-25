@@ -24,7 +24,9 @@ impl ExpressionBoolean {
         let input = self.value;
         Ok(match operation.operation {
             UnaryOperation::Neg { .. } => return operation.unsupported(self),
-            UnaryOperation::Not { .. } => operation.output(!input),
+            UnaryOperation::Not { .. } => {
+                panic!("Boolean ! operation should go through new method system, not legacy handle_unary_operation")
+            },
             UnaryOperation::Cast { target, .. } => match target {
                 CastTarget::Integer(IntegerKind::Untyped) => {
                     operation.output(UntypedInteger::from_fallback(input as FallbackInteger))
