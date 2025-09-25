@@ -128,7 +128,7 @@ impl ResolvedValueOwnership {
             LateBoundValue::CopyOnWrite(copy_on_write) => {
                 self.map_from_copy_on_write(copy_on_write)
             }
-            LateBoundValue::Mutable(mutable) => self.map_from_mutable(mutable),
+            LateBoundValue::Mutable(mutable) => self.map_from_mutable_inner(mutable, true),
             LateBoundValue::Shared(late_bound_shared) => self
                 .map_from_shared_with_error_reason(late_bound_shared.shared, |_| {
                     late_bound_shared.reason_not_mutable.into()
@@ -181,8 +181,16 @@ impl ResolvedValueOwnership {
     }
 
     pub(crate) fn map_from_mutable(&self, mutable: MutableValue) -> ExecutionResult<ResolvedValue> {
+        self.map_from_mutable_inner(mutable, false)
+    }
+
+    fn map_from_mutable_inner(&self, mutable: MutableValue, is_late_bound: bool) -> ExecutionResult<ResolvedValue> {
         match self {
-            ResolvedValueOwnership::Owned => mutable.execution_err("An owned value is required, but a mutable reference was received. This indicates a possible bug. If this was intended, use `.take()` or `.clone()` to get an owned value."),
+            ResolvedValueOwnership::Owned => if is_late_bound {
+                Ok(ResolvedValue::Owned(mutable.transparent_clone()?))
+            } else {
+                mutable.execution_err("An owned value is required, but a mutable reference was received. This indicates a possible bug. If this was intended, use `.take()` or `.clone()` to get an owned value.")
+            },
             ResolvedValueOwnership::CopyOnWrite => Ok(ResolvedValue::CopyOnWrite(CopyOnWrite::shared_in_place_of_shared(mutable.into_shared()))),
             ResolvedValueOwnership::Mutable => Ok(ResolvedValue::Mutable(mutable)),
             ResolvedValueOwnership::Shared => Ok(ResolvedValue::Shared(mutable.into_shared())),
@@ -439,8 +447,8 @@ impl UnaryOperationBuilder {
         input: ExpressionNodeId,
     ) -> NextAction {
         let frame = Self { operation };
-        // TODO[operation-refactor]: Change to be LateBound to resolve what it actually should be
-        context.handle_node_as_owned(frame, input)
+        // Use late-bound evaluation to allow method resolution to determine ownership requirements
+        context.handle_node_as_late_bound(frame, input)
     }
 }
 
@@ -456,7 +464,22 @@ impl EvaluationFrame for UnaryOperationBuilder {
         context: ValueContext,
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
-        let value = item.expect_owned().into_inner();
+        let late_bound_value = item.expect_late_bound();
+
+        // Try method resolution first
+        if let Some(method) = late_bound_value.as_ref().kind().get_unary_operation_method(&self.operation) {
+            // TODO[operation-refactor]: Use proper span range from operation
+            let span_range = late_bound_value.as_ref().span_range();
+
+            // Use the method's ownership requirements to resolve the late-bound value
+            let resolved_value = method.ownerships()[0].map_from_late_bound(late_bound_value)?;
+            let result = method.execute(vec![resolved_value], span_range)?;
+            return context.return_resolved_value(result);
+        }
+
+        // Fallback to legacy system - convert to owned for legacy evaluation
+        let owned_value = ResolvedValueOwnership::Owned.map_from_late_bound(late_bound_value)?;
+        let value = owned_value.expect_owned().into_inner();
         context.return_owned(self.operation.evaluate(value)?)
     }
 }
@@ -468,7 +491,7 @@ pub(super) struct BinaryOperationBuilder {
 
 enum BinaryPath {
     OnLeftBranch { right: ExpressionNodeId },
-    OnRightBranch { left: ExpressionValue },
+    OnRightBranch { left: ResolvedValue, right_ownership: ResolvedValueOwnership },
 }
 
 impl BinaryOperationBuilder {
@@ -482,8 +505,8 @@ impl BinaryOperationBuilder {
             operation,
             state: BinaryPath::OnLeftBranch { right },
         };
-        // TODO[operation-refactor]: Change to be LateBound to resolve what it actually should be
-        context.handle_node_as_owned(frame, left)
+        // Use late-bound evaluation to allow method resolution to determine ownership requirements
+        context.handle_node_as_late_bound(frame, left)
     }
 }
 
@@ -501,18 +524,38 @@ impl EvaluationFrame for BinaryOperationBuilder {
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
             BinaryPath::OnLeftBranch { right } => {
-                let value = item.expect_owned().into_inner();
-                if let Some(result) = self.operation.lazy_evaluate(&value)? {
+                let left_late_bound = item.expect_late_bound();
+
+                // Check for lazy evaluation first (short-circuit operators)
+                let left_value = left_late_bound.as_ref();
+                if let Some(result) = self.operation.lazy_evaluate(left_value)? {
                     context.return_owned(result)?
                 } else {
-                    self.state = BinaryPath::OnRightBranch { left: value };
-                    // TODO[operation-refactor]: Change to late bound as the operation may dictate what ownership it needs for its right operand
-                    context.handle_node_as_owned(self, right)
+                    // Try method resolution based on left operand's kind and resolve left operand immediately
+                    let (left_ownership, right_ownership) = left_late_bound.as_ref().kind().get_binary_operation_operand_ownerships(&self.operation).unwrap_or((ResolvedValueOwnership::Owned, ResolvedValueOwnership::Owned));
+
+                    self.state = BinaryPath::OnRightBranch { left: left_ownership.map_from_late_bound(left_late_bound)?, right_ownership };
+                    // Request right operand with the determined ownership
+                    context.handle_node_as_any_value(self, right, RequestedValueOwnership::Concrete(right_ownership))
                 }
             }
-            BinaryPath::OnRightBranch { left } => {
-                let value = item.expect_owned().into_inner();
-                context.return_owned(self.operation.evaluate(left, value)?)?
+            BinaryPath::OnRightBranch { left, right_ownership } => {
+                let right = item.expect_resolved_value();
+                let right_kind = right.as_ref().kind();
+
+                // Try method resolution first (we already determined this during left evaluation)
+                if let Some(method) = left.as_ref().kind().get_binary_operation_method(&self.operation, right_kind) {
+                    // TODO[operation-refactor]: Use proper span range from operation
+                    let span_range = SpanRange::new_between(left.as_ref().span_range().start(), right.as_ref().span_range().end());
+
+                    // Left operand is already resolved, right operand is provided
+                    let result = method.execute(vec![left, right], span_range)?;
+                    return context.return_resolved_value(result);
+                }
+
+                let left = left.expect_owned().into_inner();
+                let right = right.expect_owned().into_inner();
+                context.return_owned(self.operation.evaluate(left, right)?)?
             }
         })
     }

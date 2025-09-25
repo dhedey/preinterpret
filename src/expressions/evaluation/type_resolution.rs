@@ -180,9 +180,23 @@ pub(crate) trait ResolvedTypeDetails {
         num_arguments: usize,
     ) -> ExecutionResult<MethodInterface>;
 
-    // TODO[operation-refactor]: Eventually we can migrate operations under this umbrella too
-    // fn resolve_unary_operation(&self, operation: UnaryOperation) -> ExecutionResult<ResolvedMethod>;
-    // fn resolve_binary_operation(&self, operation: BinaryOperation) -> ExecutionResult<ResolvedMethod>;
+    /// Resolves a unary operation as a method interface for this type.
+    /// Returns None if the operation should fallback to the legacy system.
+    fn get_unary_operation_method(&self, operation: &UnaryOperation) -> Option<MethodInterface>;
+
+    /// Powers the operand ownership resolution for binary operations.
+    fn get_binary_operation_operand_ownerships(
+        &self,
+        _operation: &BinaryOperation,
+    ) -> Option<(ResolvedValueOwnership, ResolvedValueOwnership)>;
+
+    /// Resolves a binary operation as a method interface for this type.
+    /// Returns None if the operation should fallback to the legacy system.
+    fn get_binary_operation_method(
+        &self,
+        operation: &BinaryOperation,
+        right_kind: ValueKind,
+    ) -> Option<MethodInterface>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -303,6 +317,31 @@ impl ResolvedTypeDetails for ValueKind {
             }
         };
         Ok(method)
+    }
+
+    fn get_unary_operation_method(&self, _operation: &UnaryOperation) -> Option<MethodInterface> {
+        // TODO[operation-refactor]: Implement method resolution for unary operations
+        // For now, return None to always fallback to legacy system
+        None
+    }
+
+    fn get_binary_operation_operand_ownerships(
+        &self,
+        _operation: &BinaryOperation,
+    ) -> Option<(ResolvedValueOwnership, ResolvedValueOwnership)> {
+        // TODO[operation-refactor]: Implement method resolution for binary operations
+        // For now, return None to always fallback to legacy system
+        None
+    }
+
+    fn get_binary_operation_method(
+        &self,
+        _operation: &BinaryOperation,
+        _right_kind: ValueKind,
+    ) -> Option<MethodInterface> {
+        // TODO[operation-refactor]: Implement method resolution for binary operations
+        // For now, return None to always fallback to legacy system
+        None
     }
 }
 
