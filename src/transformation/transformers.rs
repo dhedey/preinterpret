@@ -1,4 +1,85 @@
-use crate::internal_prelude::*;
+use super::*;
+
+#[derive(Clone)]
+pub(crate) struct TokenTreeTransformer;
+
+impl TransformerDefinition for TokenTreeTransformer {
+    const TRANSFORMER_NAME: &'static str = "TOKEN_TREE";
+
+    fn parse(arguments: TransformerArguments) -> ParseResult<Self> {
+        arguments.fully_parse_or_error(|_| Ok(Self), "Expected @TOKEN_TREE or @[TOKEN_TREE]")
+    }
+
+    fn handle_transform(
+        &self,
+        input: ParseStream<Output>,
+        _: &mut Interpreter,
+        output: &mut OutputStream,
+    ) -> ExecutionResult<()> {
+        output.push_raw_token_tree(input.parse::<TokenTree>()?);
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct RestTransformer;
+
+impl TransformerDefinition for RestTransformer {
+    const TRANSFORMER_NAME: &'static str = "REST";
+
+    fn parse(arguments: TransformerArguments) -> ParseResult<Self> {
+        arguments.fully_parse_or_error(|_| Ok(Self), "Expected @REST or @[REST]")
+    }
+
+    fn handle_transform(
+        &self,
+        input: ParseStream<Output>,
+        _: &mut Interpreter,
+        output: &mut OutputStream,
+    ) -> ExecutionResult<()> {
+        ParseUntil::End.handle_parse_into(input, output)
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct UntilTransformer {
+    until: ParseUntil,
+}
+
+impl TransformerDefinition for UntilTransformer {
+    const TRANSFORMER_NAME: &'static str = "UNTIL";
+
+    fn parse(arguments: TransformerArguments) -> ParseResult<Self> {
+        arguments.fully_parse_or_error(|input| {
+            let next: TokenTree = input.parse()?;
+            let until = match next {
+                TokenTree::Group(group) => {
+                    if !group.stream().is_empty() {
+                        return group
+                            .span()
+                            .parse_err("UNTIL only matches until the open of the group. So the group must be empty to indicate this.");
+                    }
+                    ParseUntil::Group(group.delimiter())
+                }
+                TokenTree::Ident(ident) => ParseUntil::Ident(ident),
+                TokenTree::Punct(punct) => ParseUntil::Punct(punct),
+                TokenTree::Literal(literal) => ParseUntil::Literal(literal),
+            };
+            Ok(Self {
+                until,
+            })
+        }, "Expected @[UNTIL x] where x is an ident, punct, literal or empty group such as ()")
+    }
+
+    fn handle_transform(
+        &self,
+        input: ParseStream<Output>,
+        _: &mut Interpreter,
+        output: &mut OutputStream,
+    ) -> ExecutionResult<()> {
+        self.until.handle_parse_into(input, output)
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct IdentTransformer;

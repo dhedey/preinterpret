@@ -1,4 +1,4 @@
-error: This cannot follow a flattened variable binding
+error: This cannot follow a parser that consumes unbounded input
        Occurred whilst parsing [!let! ...] - Expected [!let! <destructuring> = ...]
  --> tests/compilation_failures/transforming/double_flattened_variable.rs:4:31
   |

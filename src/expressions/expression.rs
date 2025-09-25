@@ -69,10 +69,6 @@ impl Expressionable for Source {
             SourcePeekMatch::ExpressionBlock(_) => {
                 UnaryAtom::Leaf(Self::Leaf::ExpressionBlock(input.parse()?))
             }
-            SourcePeekMatch::AppendVariableParser => {
-                return input
-                    .parse_err("Append variable operations are not supported in an expression")
-            }
             SourcePeekMatch::ExplicitTransformStream | SourcePeekMatch::Transformer(_) => {
                 return input.parse_err("Destructurings are not supported in an expression")
             }

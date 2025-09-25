@@ -2,7 +2,9 @@ use crate::internal_prelude::*;
 
 pub(crate) trait TransformerDefinition: Clone {
     const TRANSFORMER_NAME: &'static str;
+
     fn parse(arguments: TransformerArguments) -> ParseResult<Self>;
+
     fn handle_transform(
         &self,
         input: ParseStream<Output>,
@@ -223,6 +225,9 @@ macro_rules! define_transformers {
 }
 
 define_transformers! {
+    TokenTreeTransformer,
+    UntilTransformer,
+    RestTransformer,
     IdentTransformer,
     LiteralTransformer,
     PunctTransformer,

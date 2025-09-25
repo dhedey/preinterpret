@@ -59,7 +59,7 @@ impl TransformItem {
     ) -> ParseResult<Self> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => Self::Command(input.parse()?),
-            SourcePeekMatch::Variable(_) | SourcePeekMatch::AppendVariableParser => {
+            SourcePeekMatch::Variable(_) => {
                 Self::Variable(VariableParserKind::parse_until::<C>(input)?)
             }
             SourcePeekMatch::ExpressionBlock(_) => Self::ExpressionBlock(input.parse()?),

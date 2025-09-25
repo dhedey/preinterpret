@@ -53,7 +53,7 @@ mod macros {
             handle_arg_mapping!([$($rest)*] [
                 $($bindings)*
                 let tmp = handle_arg_name!($($arg_part)+).expect_owned();
-                let handle_arg_name!($($arg_part)+): $ty = tmp.try_map(|value, _| <$ty as ResolvableArgument>::resolve_from_owned(value))?;
+                let handle_arg_name!($($arg_part)+): Owned<$ty> = tmp.try_map(|value, _| <$ty as ResolvableArgument>::resolve_from_owned(value))?;
             ])
         };
         // By value
@@ -283,6 +283,11 @@ impl ResolvedTypeDetails for ValueKind {
             (ValueKind::Stream, "len", 0) => {
                 wrap_method! {(this: Shared<ExpressionStream>) -> ExecutionResult<usize> {
                     Ok(this.value.len())
+                }}
+            }
+            (ValueKind::Stream, "flatten", 0) => {
+                wrap_method! {(this: Owned<ExpressionStream>) -> ExecutionResult<TokenStream> {
+                    Ok(this.into_inner().value.into_token_stream_removing_any_transparent_groups())
                 }}
             }
             _ => {

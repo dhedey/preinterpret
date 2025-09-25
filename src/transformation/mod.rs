@@ -8,6 +8,7 @@ mod transformer;
 mod transformers;
 mod variable_parser;
 
+use crate::internal_prelude::*;
 pub(crate) use exact_stream::*;
 #[allow(unused)]
 pub(crate) use fields::*;

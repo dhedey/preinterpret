@@ -91,14 +91,13 @@ Inside a transform stream, the following grammar is supported:
   * `#..x` - Reads a stream, writes a stream (opposite of `#..x`).
     * If it's at the end of the transformer stream, it's equivalent to `@(x = @REST)`.
     * If it's followed by a token `T` in the transformer stream, it's equivalent to `@(x = @[UNTIL T])`
-  * `#>>x` - Reads a token tree, appends a token tree (can be read back with `!for! #y in #x { ... }`)
-  * `#>>..x` - Reads a token tree, appends a stream (i.e. flatten it if it's a group)
-  * `#..>>x` - Reads a stream, appends a group (can be read back with `!for! #y in #x { ... }`)
-  * `#..>>..x` - Reads a stream, appends a stream
+
 * Named destructurings:
   * `@IDENT` - Consumes and output any ident.
   * `@PUNCT` - Consumes and outputs any punctation
   * `@LITERAL` - Consumes and outputs any literal
+  * `@REST` - Consumes the rest of the input, until the end of the stream or group
+  * `@[UNTIL x]` - Consumes the rest of the input, until the end of stream OR until token `x`. `x` can be a group like `()` which matches the opening bracket `(`. 
   * `@[GROUP ...]` - Consumes a none-delimited group. Its arguments are used to transform the group's contents.
   * `@[EXACT ...]` - Interprets its arguments (i.e. variables are substituted, not bound; and command output is gathered) into an "exact match stream". And then expects to consume exactly the same stream from the input. It outputs the parsed stream.
 * Commands: Their output is appended to the transform's output. Useful patterns include:
@@ -106,7 +105,6 @@ Inside a transform stream, the following grammar is supported:
 
 ### To come
 * Method calls continued
-  * Scrap `#>>x` etc in favour of `#(x.push(@TOKEN))`
   * Add tests for TODO[access-refactor] (i.e. changing places to resolve correctly)
   * Add more impl_resolvable_argument_for
   * TODO[range-refactor] & some kind of more thought through typed reference support - e.g. slices, mutable slices?
@@ -152,20 +150,19 @@ Inside a transform stream, the following grammar is supported:
   * Manually search for transform and rename to parse in folder names and file.
   * Parsers no longer output to a stream.
   * See all of `Parsers Revisited` below!
+  * Remove `#x` and `#..x` as variable binding / parsers, instead use `#(let x = @TOKEN_TREE.flatten())` / `#(let x = @REST)`
   * We let `#(let x)` INSIDE a `@(...)` bind to the same scope as its surroundings...
     Now some repetition like `@{..}*` needs to introduce its own scope.
     ==> Annoyingly, a `@(..)*` has to really push/output to an array internally to have good developer experience; which means we need to solve the "relatively performant staged/reverted interpreter state" problem regardless; and putting an artificial limitation on conditional parse streams to not do that doesn't really work. TBC - needs more consideration.
-  * Don't support `@(x = ...)` - instead we can have `#(x = @[STREAM ...])`
+  * Don't support `@(#x = ...)` - instead we can have `#(let x = @[STREAM ...])`
     * This can capture the original tokens by using `let forked = input.fork()` and then `let end_cursor = input.end();` and then consuming `TokenTree`s
       from `forked` until `forked.cursor >= end_cursor` (making use of the PartialEq implementation) 
   * Scrap `[!set!]` in favour of `#(x = ..)` and `#(x += ..)`
   * Scrap `[!let!]` in favour of `#(let <destructuring> = x)`
 * Implement the following named parsers
-  * `@TOKEN_TREE`
-  * `@TOKEN_OR_GROUP_CONTENT` - Literal, Ident, Punct or None-group content.
-  * `@INFER_TOKEN_TREE` - Infers parsing as a value, falls back to Stream
+  * `@TOKEN_OR_GROUP_CONTENT` - Literal, Ident, Punct or None-group content (using `ParsedTokenTree`) - (do we need this?)
+  * `@INFER_TOKEN_TREE` - Infers parsing as a value, falls back to Stream - OR maybe we just do `@TOKEN_TREE.infer()` - possibly this should also strip none-groups
   * `@[ANY_GROUP ...]`
-  * `@REST`
   * `@[FORK @{ ...parser... }]` the parser block creates a `commit=false` variable, if this is set to `commit=true` then it commits the fork.
   * `@[PEEK ...]` which does a `@[FORK ...]` internally
   * `@[FIELDS { ... }]` and `@[SUBFIELDS { ... }]`

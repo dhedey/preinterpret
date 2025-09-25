@@ -50,15 +50,26 @@ fn test_variable_parsing() {
     preinterpret_assert_eq!({
         [!set! #x =]
         [!let!
-            #>>x         // Matches one tt and appends it: Why
-            #..>>x       // Matches stream until (, appends it grouped: [!group! Hello Everyone]
+            // #>>x - Matches one tt ...and appends it as-is: Why
+            @(#a = @TOKEN_TREE)
+            #(x += a)
+            // #>>x - Matches one tt...and appends it as-is: [!group! it is fun to be here]
+            @(#b = @TOKEN_TREE)
+            #(x += b)
+            // #..>>x - Matches stream until (, appends it grouped: [!group! Hello Everyone]
+            @(#c = @[UNTIL ()])
+            #(x += [!group! #..c])
             (
-                #>>..x   // Matches one tt and appends it flattened: This is an exciting adventure
-                #..>>..x // Matches stream and appends it flattened: do you agree ?
+                // #>>..x - Matches one tt... and appends it flattened: This is an exciting adventure
+                @(#c = @TOKEN_TREE)
+                #(x += c.take().flatten())
+                // #..>>..x - Matches stream until end, and appends it flattened: do you agree ?
+                @(#c = @REST)
+                #(x += c.take().flatten())
             )
-            = Why Hello Everyone ([!group! This is an exciting adventure] do you agree?)]
+            = Why [!group! it is fun to be here] Hello Everyone ([!group! This is an exciting adventure] do you agree?)]
         #(x.debug_string())
-    }, "[!stream! Why [!group! Hello Everyone] This is an exciting adventure do you agree ?]");
+    }, "[!stream! Why [!group! it is fun to be here] [!group! Hello Everyone] This is an exciting adventure do you agree ?]");
 }
 
 #[test]
@@ -161,8 +172,7 @@ fn test_exact_transformer() {
     }, true);
     // EXACT is evaluated at execution time
     preinterpret_assert_eq!({
-        [!set! #x =]
-        [!let! The #>>..x fox is #>>..x. It 's super @[EXACT #..x]. = The brown fox is brown. It 's super brown brown.]
+        [!let! The @(#a = @TOKEN_TREE) fox is @(#b = @TOKEN_TREE). It 's super @[EXACT #a #b]. = The brown fox is brown. It 's super brown brown.]
         true
     }, true);
 }

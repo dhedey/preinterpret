@@ -1,5 +1,0 @@
-error: The variable does not already exist in the current scope
- --> tests/compilation_failures/transforming/append_before_set.rs:4:26
-  |
-4 |     preinterpret!([!let! #>>x = Hello]);
-  |                          ^^^^

@@ -119,3 +119,9 @@ impl ToExpressionValue for OutputStream {
         })
     }
 }
+
+impl ToExpressionValue for TokenStream {
+    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
+        OutputStream::raw(self).to_value(span_range)
+    }
+}
