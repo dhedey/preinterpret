@@ -141,7 +141,7 @@ fn test_group_transformer() {
     preinterpret_assert_eq!({
         [!set! #x = "hello" "world"]
         [!let! I said @(#y = @TOKEN_TREE)! = I said #x!]
-        #(y.debug_string())
+        #(y.take().flatten().debug_string())
     }, "[!stream! \"hello\" \"world\"]");
 }
 
