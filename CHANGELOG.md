@@ -86,17 +86,12 @@ Inside a transform stream, the following grammar is supported:
 
 * `@(...)`, `@(#x = ...)`, `@(#x += ...)` and `@(_ = ...)` - Explicit transform (sub)streams which either output, set, append or discard its output.
 * Explicit punctuation, idents, literals and groups. These aren't output by default, except directly inside a `@[EXACT ...]` transformer.
-* Variable bindings:
-  * `#x` - Reads a token tree, writes its content (opposite of `#x`). Equivalent to `@(x = @TOKEN_OR_GROUP_CONTENT)`
-  * `#..x` - Reads a stream, writes a stream (opposite of `#..x`).
-    * If it's at the end of the transformer stream, it's equivalent to `@(x = @REST)`.
-    * If it's followed by a token `T` in the transformer stream, it's equivalent to `@(x = @[UNTIL T])`
 
 * Named destructurings:
   * `@IDENT` - Consumes and output any ident.
   * `@PUNCT` - Consumes and outputs any punctation
   * `@LITERAL` - Consumes and outputs any literal
-  * `@REST` - Consumes the rest of the input, until the end of the stream or group
+  * `@REST` - Consumes the rest of the input, until the end of the stream or content of the current group
   * `@[UNTIL x]` - Consumes the rest of the input, until the end of stream OR until token `x`. `x` can be a group like `()` which matches the opening bracket `(`. 
   * `@[GROUP ...]` - Consumes a none-delimited group. Its arguments are used to transform the group's contents.
   * `@[EXACT ...]` - Interprets its arguments (i.e. variables are substituted, not bound; and command output is gathered) into an "exact match stream". And then expects to consume exactly the same stream from the input. It outputs the parsed stream.
@@ -160,8 +155,10 @@ Inside a transform stream, the following grammar is supported:
   * Scrap `[!set!]` in favour of `#(x = ..)` and `#(x += ..)`
   * Scrap `[!let!]` in favour of `#(let <destructuring> = x)`
 * Implement the following named parsers
+  * Consider if `@LITERAL` should infer to a value
   * `@TOKEN_OR_GROUP_CONTENT` - Literal, Ident, Punct or None-group content (using `ParsedTokenTree`) - (do we need this?)
   * `@INFER_TOKEN_TREE` - Infers parsing as a value, falls back to Stream - OR maybe we just do `@TOKEN_TREE.infer()` - possibly this should also strip none-groups
+  * `@INTEGER`
   * `@[ANY_GROUP ...]`
   * `@[FORK @{ ...parser... }]` the parser block creates a `commit=false` variable, if this is set to `commit=true` then it commits the fork.
   * `@[PEEK ...]` which does a `@[FORK ...]` internally

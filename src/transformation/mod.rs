@@ -6,7 +6,6 @@ mod transform_stream;
 mod transformation_traits;
 mod transformer;
 mod transformers;
-mod variable_parser;
 
 use crate::internal_prelude::*;
 pub(crate) use exact_stream::*;
@@ -18,4 +17,3 @@ pub(crate) use transform_stream::*;
 pub(crate) use transformation_traits::*;
 pub(crate) use transformer::*;
 pub(crate) use transformers::*;
-pub(crate) use variable_parser::*;

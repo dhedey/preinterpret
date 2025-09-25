@@ -290,6 +290,12 @@ impl ResolvedTypeDetails for ValueKind {
                     Ok(this.into_inner().value.into_token_stream_removing_any_transparent_groups())
                 }}
             }
+            (ValueKind::Stream, "infer", 0) => {
+                wrap_method! {(this: Owned<ExpressionStream>) -> ExecutionResult<ExpressionValue> {
+                    let span_range = this.span_range();
+                    Ok(this.into_inner().value.coerce_into_value(span_range))
+                }}
+            }
             _ => {
                 return method.execution_err(format!(
                     "{self:?} has no method `{method_name}` with {num_arguments} arguments"

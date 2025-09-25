@@ -61,6 +61,7 @@ pub(crate) enum ParseUntil {
 
 impl ParseUntil {
     /// Peeks the next token, to discover what we should parse next
+    #[allow(unused)]
     pub(crate) fn peek_flatten_limit<C: StopCondition<Source>>(
         input: ParseStream<Source>,
     ) -> ParseResult<ParseUntil> {

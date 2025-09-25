@@ -92,7 +92,8 @@ fn test_for() {
     );
     preinterpret_assert_eq!(
         {
-            [!string! [!for! @((#x,)) in [!stream! (a,) (b,) (c,)] {
+            [!string!
+            [!for! @((@(#x = @IDENT),)) in [!stream! (a,) (b,) (c,)] {
                 #x
                 [!if! [!string! #x] == "b" { [!break!] }]
             }]]

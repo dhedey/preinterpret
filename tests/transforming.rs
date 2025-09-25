@@ -16,35 +16,35 @@ fn test_transfoming_compilation_failures() {
 #[test]
 fn test_variable_parsing() {
     preinterpret_assert_eq!({
-        [!let! <Hello #inner World> = <Hello Beautiful World>]
+        [!let! <Hello @(#inner = @IDENT) World> = <Hello Beautiful World>]
         [!string! #inner]
     }, "Beautiful");
     preinterpret_assert_eq!({
-        [!let! #..inner = <Hello Beautiful World>]
+        [!let! @(#inner = @REST) = <Hello Beautiful World>]
         [!string! #inner]
     }, "<HelloBeautifulWorld>");
     preinterpret_assert_eq!({
-        [!let! #..x = Hello => World]
+        [!let! @(#x = @REST) = Hello => World]
         [!string! #x]
     }, "Hello=>World");
     preinterpret_assert_eq!({
-        [!let! Hello #..x!! = Hello => World!!]
+        [!let! Hello @(#x = @[UNTIL !])!! = Hello => World!!]
         [!string! #x]
     }, "=>World");
     preinterpret_assert_eq!({
-        [!let! Hello #..x World = Hello => World]
+        [!let! Hello @(#x = @[UNTIL World]) World = Hello => World]
         [!string! #x]
     }, "=>");
     preinterpret_assert_eq!({
-        [!let! Hello #..x World = Hello And Welcome To The Wonderful World]
+        [!let! Hello @(#x = @[UNTIL World]) World = Hello And Welcome To The Wonderful World]
         [!string! #x]
     }, "AndWelcomeToTheWonderful");
     preinterpret_assert_eq!({
-        [!let! Hello #..x "World"! = Hello World And Welcome To The Wonderful "World"!]
+        [!let! Hello @(#x = @[UNTIL "World"]) "World"! = Hello World And Welcome To The Wonderful "World"!]
         [!string! #x]
     }, "WorldAndWelcomeToTheWonderful");
     preinterpret_assert_eq!({
-        [!let! #..x (#..y) = Why Hello (World)]
+        [!let! @(#x = @[UNTIL ()]) (@(#y = @[REST])) = Why Hello (World)]
         [!string! "#x = " #x "; #y = " #y]
     }, "#x = WhyHello; #y = World");
     preinterpret_assert_eq!({
@@ -129,18 +129,18 @@ fn test_punct_transformer() {
 #[test]
 fn test_group_transformer() {
     preinterpret_assert_eq!({
-        [!let! The "quick" @[GROUP brown #x] "jumps" = The "quick" [!group! brown fox] "jumps"]
+        [!let! The "quick" @[GROUP brown @(#x = @TOKEN_TREE)] "jumps" = The "quick" [!group! brown fox] "jumps"]
         #(x.debug_string())
     }, "[!stream! fox]");
     preinterpret_assert_eq!({
         [!set! #x = "hello" "world"]
-        [!let! I said @[GROUP #..y]! = I said #x!]
+        [!let! I said @[GROUP @(#y = @REST)]! = I said #x!]
         #(y.debug_string())
     }, "[!stream! \"hello\" \"world\"]");
     // ... which is equivalent to this:
     preinterpret_assert_eq!({
         [!set! #x = "hello" "world"]
-        [!let! I said #y! = I said #x!]
+        [!let! I said @(#y = @TOKEN_TREE)! = I said #x!]
         #(y.debug_string())
     }, "[!stream! \"hello\" \"world\"]");
 }
@@ -148,7 +148,7 @@ fn test_group_transformer() {
 #[test]
 fn test_none_output_commands_mid_parse() {
     preinterpret_assert_eq!({
-        [!let! The "quick" @(#x = @LITERAL) fox [!let! #y = #x] @(#x = @IDENT) = The "quick" "brown" fox jumps]
+        [!let! The "quick" @(#x = @LITERAL) fox #(let y = x.take().infer()) @(#x = @IDENT) = The "quick" "brown" fox jumps]
         [!string! "#x = " #(x.debug_string()) "; #y = "#(y.debug_string())]
     }, "#x = [!stream! jumps]; #y = \"brown\"");
 }

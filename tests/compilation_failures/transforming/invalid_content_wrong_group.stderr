@@ -1,5 +1,5 @@
 error: Expected (
- --> tests/compilation_failures/transforming/invalid_content_wrong_group.rs:4:35
+ --> tests/compilation_failures/transforming/invalid_content_wrong_group.rs:4:36
   |
-4 |     preinterpret!([!let! (#..x) = [Hello World]]);
-  |                                   ^^^^^^^^^^^^^
+4 |     preinterpret!([!let! (@REST) = [Hello World]]);
+  |                                    ^^^^^^^^^^^^^

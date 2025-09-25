@@ -7,6 +7,7 @@ pub(crate) trait IsVariable: HasSpanRange {
         interpreter.define_variable(self, value_source.to_value(self.span_range()))
     }
 
+    #[allow(unused)]
     fn define_coerced(&self, interpreter: &mut Interpreter, content: OutputStream) {
         interpreter.define_variable(self, content.coerce_into_value(self.span_range()))
     }
