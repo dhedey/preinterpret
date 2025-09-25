@@ -105,6 +105,19 @@ Inside a transform stream, the following grammar is supported:
   * TODO[range-refactor] & some kind of more thought through typed reference support - e.g. slices, mutable slices?
   * TODO[operation-refactor]
     * Including no clone required for testing equality of streams, objects and arrays
+    * Todo list:
+      * Phase 1: Infrastructure Setup
+        * Add `get_unary_operation_method()` and `get_binary_operation_method()` to `ValueKind`
+        * Create fallback mechanism in `UnaryOperationBuilder::handle_item` and `BinaryOperationBuilder::handle_item`
+        * Operations first try method resolution, fallback to current `handle_*_operation` methods
+      * Phase 2: UnaryOperation Migration (start here - simpler than binary operations)
+        * Add method resolution for `-`, `!`, and `as` operations in `ValueKind` implementations
+        * Test with gradual rollout per value type (integers first, then others)
+        * Each operation becomes a `MethodInterface` that works with `Owned<T>`, `Shared<&T>`, etc.
+      * Phase 3: BinaryOperation Migration
+        * Add binary operation method resolution with type coercion/matching logic
+        * Migrate operators incrementally: `+`, `-`, `*`, `/`, `%`, `==`, `!=`, etc.
+        * Handle argument type compatibility (e.g., `i32 + u8` -> common type resolution)
   * Add better way of defining methods once / lazily, and binding them to an object type. 
 * Consider:
   * Removing span range from value:
