@@ -111,6 +111,14 @@ impl HasValueType for ExpressionInteger {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct IntegerTypeData;
+
+impl MethodResolutionTarget for IntegerTypeData {
+    type Parent = ValueTypeData;
+    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+}
+
 pub(super) enum ExpressionIntegerValuePair {
     Untyped(UntypedInteger, UntypedInteger),
     U8(u8, u8),
@@ -150,8 +158,8 @@ impl ExpressionIntegerValuePair {
     }
 }
 
-#[derive(Copy, Clone)]
-pub(super) enum IntegerKind {
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub(crate) enum IntegerKind {
     Untyped,
     I8,
     I16,
@@ -165,6 +173,39 @@ pub(super) enum IntegerKind {
     U64,
     U128,
     Usize,
+}
+
+impl IntegerKind {
+    pub(super) fn method_resolver(&self) -> &'static dyn MethodResolver {
+        static UNTYPED: UntypedIntegerTypeData = UntypedIntegerTypeData;
+        static I8: I8TypeData = I8TypeData;
+        static I16: I16TypeData = I16TypeData;
+        static I32: I32TypeData = I32TypeData;
+        static I64: I64TypeData = I64TypeData;
+        static I128: I128TypeData = I128TypeData;
+        static ISIZE: IsizeTypeData = IsizeTypeData;
+        static U8: U8TypeData = U8TypeData;
+        static U16: U16TypeData = U16TypeData;
+        static U32: U32TypeData = U32TypeData;
+        static U64: U64TypeData = U64TypeData;
+        static U128: U128TypeData = U128TypeData;
+        static USIZE: UsizeTypeData = UsizeTypeData;
+        match self {
+            IntegerKind::Untyped => &UNTYPED,
+            IntegerKind::I8 => &I8,
+            IntegerKind::I16 => &I16,
+            IntegerKind::I32 => &I32,
+            IntegerKind::I64 => &I64,
+            IntegerKind::I128 => &I128,
+            IntegerKind::Isize => &ISIZE,
+            IntegerKind::U8 => &U8,
+            IntegerKind::U16 => &U16,
+            IntegerKind::U32 => &U32,
+            IntegerKind::U64 => &U64,
+            IntegerKind::U128 => &U128,
+            IntegerKind::Usize => &USIZE,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -182,6 +223,26 @@ pub(super) enum ExpressionIntegerValue {
     I64(i64),
     I128(i128),
     Isize(isize),
+}
+
+impl ExpressionIntegerValue {
+    pub(super) fn kind(&self) -> IntegerKind {
+        match self {
+            Self::Untyped(_) => IntegerKind::Untyped,
+            Self::U8(_) => IntegerKind::U8,
+            Self::U16(_) => IntegerKind::U16,
+            Self::U32(_) => IntegerKind::U32,
+            Self::U64(_) => IntegerKind::U64,
+            Self::U128(_) => IntegerKind::U128,
+            Self::Usize(_) => IntegerKind::Usize,
+            Self::I8(_) => IntegerKind::I8,
+            Self::I16(_) => IntegerKind::I16,
+            Self::I32(_) => IntegerKind::I32,
+            Self::I64(_) => IntegerKind::I64,
+            Self::I128(_) => IntegerKind::I128,
+            Self::Isize(_) => IntegerKind::Isize,
+        }
+    }
 }
 
 impl ExpressionIntegerValue {
@@ -277,7 +338,9 @@ impl UntypedInteger {
     ) -> ExecutionResult<ExpressionValue> {
         let input = self.parse_fallback()?;
         Ok(match operation.operation {
-            UnaryOperation::Neg { .. } => operation.output(Self::from_fallback(-input)),
+            UnaryOperation::Neg { .. } => {
+                panic!("Integer - operation should go through new method system, not legacy handle_unary_operation")
+            }
             UnaryOperation::Not { .. } => return operation.unsupported(self),
             UnaryOperation::Cast { target, .. } => match target {
                 CastTarget::Integer(IntegerKind::Untyped) => {
@@ -472,11 +535,60 @@ impl ToExpressionValue for UntypedInteger {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct UntypedIntegerTypeData;
+
+impl MethodResolutionTarget for UntypedIntegerTypeData {
+    type Parent = IntegerTypeData;
+    const PARENT: Option<Self::Parent> = Some(IntegerTypeData);
+
+    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<MethodInterface> {
+        Some(match operation {
+            UnaryOperation::Neg { .. } => {
+                wrap_method!((this: Owned<UntypedInteger>) -> ExecutionResult<UntypedInteger> {
+                    let (value, span_range) = this.deconstruct();
+                    let input = value.parse_fallback()?;
+                    match input.checked_neg() {
+                        Some(negated) => Ok(UntypedInteger::from_fallback(negated)),
+                        None => span_range.execution_err("Negating this value would overflow in i128 space"),
+                    }
+                })
+            }
+            _ => return None,
+        })
+    }
+}
+
 // We have to use a macro because we don't have checked xx traits :(
 macro_rules! impl_int_operations_except_unary {
     (
-        $($integer_enum_variant:ident($integer_type:ident)),* $(,)?
+        $($integer_type_data:ident: $(-$signed_only:ident)? $integer_enum_variant:ident($integer_type:ident)),* $(,)?
     ) => {$(
+        #[derive(Clone, Copy)]
+        pub(crate) struct $integer_type_data;
+
+        impl MethodResolutionTarget for $integer_type_data {
+            type Parent = IntegerTypeData;
+            const PARENT: Option<Self::Parent> = Some(IntegerTypeData);
+
+            #[allow(unreachable_code)]
+            fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<MethodInterface> {
+                Some(match operation {
+                    $(
+                        UnaryOperation::Neg { .. } => wrap_method!((this: Owned<$integer_type>) -> ExecutionResult<$integer_type> {
+                            ignore_all!($signed_only); // Make it so that it is only defined for signed types
+                            let (value, span_range) = this.deconstruct();
+                            match value.checked_neg() {
+                                Some(negated) => Ok(negated),
+                                None => span_range.execution_err("Negating this value would overflow"),
+                            }
+                        }),
+                    )?
+                    _ => return None,
+                })
+            }
+        }
+
         impl HasValueType for $integer_type {
             fn value_type(&self) -> &'static str {
                 stringify!($integer_type)
@@ -605,7 +717,9 @@ macro_rules! impl_signed_unary_operations {
         impl HandleUnaryOperation for $integer_type {
             fn handle_unary_operation(self, operation: OutputSpanned<UnaryOperation>) -> ExecutionResult<ExpressionValue> {
                 Ok(match operation.operation {
-                    UnaryOperation::Neg { .. } => operation.output(-self),
+                    UnaryOperation::Neg { .. } => {
+                        panic!("Integer - operation should go through new method system, not legacy handle_unary_operation")
+                    },
                     UnaryOperation::Not { .. } => {
                         return operation.unsupported(self)
                     },
@@ -690,18 +804,18 @@ impl HandleUnaryOperation for u8 {
 }
 
 impl_int_operations_except_unary!(
-    U8(u8),
-    U16(u16),
-    U32(u32),
-    U64(u64),
-    U128(u128),
-    Usize(usize),
-    I8(i8),
-    I16(i16),
-    I32(i32),
-    I64(i64),
-    I128(i128),
-    Isize(isize),
+    U8TypeData: U8(u8),
+    U16TypeData: U16(u16),
+    U32TypeData: U32(u32),
+    U64TypeData: U64(u64),
+    U128TypeData: U128(u128),
+    UsizeTypeData: Usize(usize),
+    I8TypeData: -signed I8(i8),
+    I16TypeData: -signed I16(i16),
+    I32TypeData: -signed I32(i32),
+    I64TypeData: -signed I64(i64),
+    I128TypeData: -signed I128(i128),
+    IsizeTypeData: -signed Isize(isize),
 );
 
 // U8 has a char cast so is handled separately

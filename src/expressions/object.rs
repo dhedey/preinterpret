@@ -285,6 +285,14 @@ impl ToExpressionValue for BTreeMap<String, ObjectEntry> {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct ObjectTypeData;
+
+impl MethodResolutionTarget for ObjectTypeData {
+    type Parent = ValueTypeData;
+    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+}
+
 #[allow(unused)] // TODO[unused-clearup]
 pub(crate) struct ObjectValidation {
     // Should ideally be an indexmap

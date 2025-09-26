@@ -227,3 +227,11 @@ impl Iterator for ExpressionIterator {
         }
     }
 }
+
+#[derive(Clone, Copy)]
+pub(crate) struct IteratorTypeData;
+
+impl MethodResolutionTarget for IteratorTypeData {
+    type Parent = ValueTypeData;
+    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+}

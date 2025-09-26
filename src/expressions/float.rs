@@ -61,6 +61,14 @@ impl HasValueType for ExpressionFloat {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct FloatTypeData;
+
+impl MethodResolutionTarget for FloatTypeData {
+    type Parent = ValueTypeData;
+    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+}
+
 pub(super) enum ExpressionFloatValuePair {
     Untyped(UntypedFloat, UntypedFloat),
     F32(f32, f32),
@@ -88,6 +96,14 @@ pub(super) enum ExpressionFloatValue {
 }
 
 impl ExpressionFloatValue {
+    pub(super) fn kind(&self) -> FloatKind {
+        match self {
+            Self::Untyped(_) => FloatKind::Untyped,
+            Self::F32(_) => FloatKind::F32,
+            Self::F64(_) => FloatKind::F64,
+        }
+    }
+
     pub(super) fn for_litfloat(lit: &syn::LitFloat) -> ParseResult<Self> {
         Ok(match lit.suffix() {
             "" => Self::Untyped(UntypedFloat::new_from_lit_float(lit.clone())),
@@ -120,11 +136,24 @@ impl HasValueType for ExpressionFloatValue {
     }
 }
 
-#[derive(Copy, Clone)]
-pub(super) enum FloatKind {
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub(crate) enum FloatKind {
     Untyped,
     F32,
     F64,
+}
+
+impl FloatKind {
+    pub(super) fn method_resolver(&self) -> &'static dyn MethodResolver {
+        static UNTYPED: UntypedFloatTypeData = UntypedFloatTypeData;
+        static F32: F32TypeData = F32TypeData;
+        static F64: F64TypeData = F64TypeData;
+        match self {
+            FloatKind::Untyped => &UNTYPED,
+            FloatKind::F32 => &F32,
+            FloatKind::F64 => &F64,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -151,7 +180,9 @@ impl UntypedFloat {
     ) -> ExecutionResult<ExpressionValue> {
         let input = self.parse_fallback()?;
         Ok(match operation.operation {
-            UnaryOperation::Neg { .. } => operation.output(Self::from_fallback(-input)),
+            UnaryOperation::Neg { .. } => {
+                panic!("Float - operation should go through new method system, not legacy handle_unary_operation")
+            }
             UnaryOperation::Not { .. } => return operation.unsupported(self),
             UnaryOperation::Cast { target, .. } => match target {
                 CastTarget::Integer(IntegerKind::Untyped) => {
@@ -247,7 +278,7 @@ impl UntypedFloat {
         Self::new_from_literal(Literal::f64_unsuffixed(value))
     }
 
-    fn parse_fallback(&self) -> ExecutionResult<FallbackFloat> {
+    pub(super) fn parse_fallback(&self) -> ExecutionResult<FallbackFloat> {
         self.0.base10_digits().parse().map_err(|err| {
             self.1.execution_error(format!(
                 "Could not parse as the default inferred type {}: {}",
@@ -292,10 +323,47 @@ impl ToExpressionValue for UntypedFloat {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct UntypedFloatTypeData;
+
+impl MethodResolutionTarget for UntypedFloatTypeData {
+    type Parent = FloatTypeData;
+    const PARENT: Option<Self::Parent> = Some(FloatTypeData);
+
+    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<MethodInterface> {
+        Some(match operation {
+            UnaryOperation::Neg { .. } => {
+                wrap_method!((this: Owned<UntypedFloat>) -> ExecutionResult<UntypedFloat> {
+                    let input = this.into_inner().parse_fallback()?;
+                    Ok(UntypedFloat::from_fallback(-input))
+                })
+            }
+            _ => return None,
+        })
+    }
+}
+
 macro_rules! impl_float_operations {
     (
-        $($float_enum_variant:ident($float_type:ident)),* $(,)?
+        $($type_data:ident: $float_enum_variant:ident($float_type:ident)),* $(,)?
     ) => {$(
+        #[derive(Clone, Copy)]
+        pub(crate) struct $type_data;
+
+        impl MethodResolutionTarget for $type_data {
+            type Parent = FloatTypeData;
+            const PARENT: Option<Self::Parent> = Some(FloatTypeData);
+
+            fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<MethodInterface> {
+                Some(match operation {
+                    UnaryOperation::Neg { .. } => wrap_method!((this: Owned<$float_type>) -> ExecutionResult<$float_type> {
+                        Ok(-this.into_inner())
+                    }),
+                    _ => return None,
+                })
+            }
+        }
+
         impl HasValueType for $float_type {
             fn value_type(&self) -> &'static str {
                 stringify!($float_type)
@@ -314,7 +382,9 @@ macro_rules! impl_float_operations {
         impl HandleUnaryOperation for $float_type {
             fn handle_unary_operation(self, operation: OutputSpanned<UnaryOperation>) -> ExecutionResult<ExpressionValue> {
                 Ok(match operation.operation {
-                    UnaryOperation::Neg { .. } => operation.output(-self),
+                    UnaryOperation::Neg { .. } => {
+                        panic!("Float - operation should go through new method system, not legacy handle_unary_operation")
+                    },
                     UnaryOperation::Not { .. } => return operation.unsupported(self),
                     UnaryOperation::Cast { target, .. } => match target {
                         CastTarget::Integer(IntegerKind::Untyped) => operation.output(UntypedInteger::from_fallback(self as FallbackInteger)),
@@ -386,4 +456,4 @@ macro_rules! impl_float_operations {
         }
     )*};
 }
-impl_float_operations!(F32(f32), F64(f64));
+impl_float_operations!(F32TypeData: F32(f32), F64TypeData: F64(f64));

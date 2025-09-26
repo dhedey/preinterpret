@@ -125,3 +125,30 @@ impl ToExpressionValue for TokenStream {
         OutputStream::raw(self).to_value(span_range)
     }
 }
+
+#[derive(Clone, Copy)]
+pub(crate) struct StreamTypeData;
+
+impl MethodResolutionTarget for StreamTypeData {
+    type Parent = ValueTypeData;
+    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+
+    fn resolve_own_method(method_name: &str) -> Option<MethodInterface> {
+        define_method_matcher! {
+            (match method_name on Self)
+
+            fn len(this: Shared<ExpressionStream>) -> ExecutionResult<usize> {
+                Ok(this.value.len())
+            }
+
+            fn flatten(this: Owned<ExpressionStream>) -> ExecutionResult<TokenStream> {
+                Ok(this.into_inner().value.into_token_stream_removing_any_transparent_groups())
+            }
+
+            fn infer(this: Owned<ExpressionStream>) -> ExecutionResult<ExpressionValue> {
+                let span_range = this.span_range();
+                Ok(this.into_inner().value.coerce_into_value(span_range))
+            }
+        }
+    }
+}

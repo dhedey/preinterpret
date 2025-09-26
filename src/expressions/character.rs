@@ -115,3 +115,11 @@ impl ToExpressionValue for char {
         })
     }
 }
+
+#[derive(Clone, Copy)]
+pub(crate) struct CharTypeData;
+
+impl MethodResolutionTarget for CharTypeData {
+    type Parent = ValueTypeData;
+    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+}

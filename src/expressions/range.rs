@@ -219,6 +219,14 @@ impl ToExpressionValue for ExpressionRangeInner {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct RangeTypeData;
+
+impl MethodResolutionTarget for RangeTypeData {
+    type Parent = ValueTypeData;
+    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+}
+
 pub(super) enum IterableExpressionRange<T> {
     // start <= x < end OR start <= x <= end
     RangeFromTo {

@@ -13,6 +13,7 @@ mod operations;
 mod range;
 mod stream;
 mod string;
+mod type_resolution;
 mod value;
 
 pub(crate) use evaluation::*;
@@ -34,3 +35,4 @@ use float::*;
 use integer::*;
 use range::*;
 use string::*;
+use type_resolution::*;

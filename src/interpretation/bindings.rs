@@ -177,6 +177,10 @@ impl<T> Owned<T> {
         Self { inner, span_range }
     }
 
+    pub(crate) fn deconstruct(self) -> (T, SpanRange) {
+        (self.inner, self.span_range)
+    }
+
     pub(crate) fn into_inner(self) -> T {
         self.inner
     }
@@ -653,12 +657,12 @@ impl<T: 'static + HasSpanRange> HasSpanRange for CopyOnWrite<T> {
 
 pub(crate) type CopyOnWriteValue = CopyOnWrite<ExpressionValue>;
 
-impl CopyOnWriteValue {
-    pub(crate) fn map_any(
+impl<T> CopyOnWrite<T> {
+    pub(crate) fn map_any<O>(
         self,
-        map_shared: impl FnOnce(SharedValue) -> ExecutionResult<SharedValue>,
-        map_owned: impl FnOnce(OwnedValue) -> ExecutionResult<OwnedValue>,
-    ) -> ExecutionResult<Self> {
+        map_shared: impl FnOnce(Shared<T>) -> ExecutionResult<Shared<O>>,
+        map_owned: impl FnOnce(Owned<T>) -> ExecutionResult<Owned<O>>,
+    ) -> ExecutionResult<CopyOnWrite<O>> {
         let inner = match self.inner {
             CopyOnWriteInner::Owned(owned) => CopyOnWriteInner::Owned(map_owned(owned)?),
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
@@ -668,6 +672,6 @@ impl CopyOnWriteValue {
                 CopyOnWriteInner::SharedWithTransparentCloning(map_shared(shared)?)
             }
         };
-        Ok(Self { inner })
+        Ok(CopyOnWrite { inner })
     }
 }

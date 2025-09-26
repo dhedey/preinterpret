@@ -184,14 +184,22 @@ impl ResolvedValueOwnership {
         self.map_from_mutable_inner(mutable, false)
     }
 
-    fn map_from_mutable_inner(&self, mutable: MutableValue, is_late_bound: bool) -> ExecutionResult<ResolvedValue> {
+    fn map_from_mutable_inner(
+        &self,
+        mutable: MutableValue,
+        is_late_bound: bool,
+    ) -> ExecutionResult<ResolvedValue> {
         match self {
-            ResolvedValueOwnership::Owned => if is_late_bound {
-                Ok(ResolvedValue::Owned(mutable.transparent_clone()?))
-            } else {
-                mutable.execution_err("An owned value is required, but a mutable reference was received. This indicates a possible bug. If this was intended, use `.take()` or `.clone()` to get an owned value.")
-            },
-            ResolvedValueOwnership::CopyOnWrite => Ok(ResolvedValue::CopyOnWrite(CopyOnWrite::shared_in_place_of_shared(mutable.into_shared()))),
+            ResolvedValueOwnership::Owned => {
+                if is_late_bound {
+                    Ok(ResolvedValue::Owned(mutable.transparent_clone()?))
+                } else {
+                    mutable.execution_err("An owned value is required, but a mutable reference was received. This indicates a possible bug. If this was intended, use `.take()` or `.clone()` to get an owned value.")
+                }
+            }
+            ResolvedValueOwnership::CopyOnWrite => Ok(ResolvedValue::CopyOnWrite(
+                CopyOnWrite::shared_in_place_of_shared(mutable.into_shared()),
+            )),
             ResolvedValueOwnership::Mutable => Ok(ResolvedValue::Mutable(mutable)),
             ResolvedValueOwnership::Shared => Ok(ResolvedValue::Shared(mutable.into_shared())),
         }
@@ -467,12 +475,17 @@ impl EvaluationFrame for UnaryOperationBuilder {
         let late_bound_value = item.expect_late_bound();
 
         // Try method resolution first
-        if let Some(method) = late_bound_value.as_ref().kind().get_unary_operation_method(&self.operation) {
+        if let Some(method) = late_bound_value
+            .as_ref()
+            .kind()
+            .resolve_unary_operation(&self.operation)
+        {
             // TODO[operation-refactor]: Use proper span range from operation
             let span_range = late_bound_value.as_ref().span_range();
 
             // Use the method's ownership requirements to resolve the late-bound value
-            let resolved_value = method.ownerships()[0].map_from_late_bound(late_bound_value)?;
+            let resolved_value =
+                method.argument_ownerships()[0].map_from_late_bound(late_bound_value)?;
             let result = method.execute(vec![resolved_value], span_range)?;
             return context.return_resolved_value(result);
         }
@@ -490,8 +503,13 @@ pub(super) struct BinaryOperationBuilder {
 }
 
 enum BinaryPath {
-    OnLeftBranch { right: ExpressionNodeId },
-    OnRightBranch { left: ResolvedValue, right_ownership: ResolvedValueOwnership },
+    OnLeftBranch {
+        right: ExpressionNodeId,
+    },
+    OnRightBranch {
+        left: ResolvedValue,
+        method: Option<MethodInterface>,
+    },
 }
 
 impl BinaryOperationBuilder {
@@ -532,21 +550,44 @@ impl EvaluationFrame for BinaryOperationBuilder {
                     context.return_owned(result)?
                 } else {
                     // Try method resolution based on left operand's kind and resolve left operand immediately
-                    let (left_ownership, right_ownership) = left_late_bound.as_ref().kind().get_binary_operation_operand_ownerships(&self.operation).unwrap_or((ResolvedValueOwnership::Owned, ResolvedValueOwnership::Owned));
+                    let method = left_late_bound
+                        .as_ref()
+                        .kind()
+                        .resolve_binary_operation(&self.operation);
 
-                    self.state = BinaryPath::OnRightBranch { left: left_ownership.map_from_late_bound(left_late_bound)?, right_ownership };
-                    // Request right operand with the determined ownership
-                    context.handle_node_as_any_value(self, right, RequestedValueOwnership::Concrete(right_ownership))
+                    let (left_ownership, right_ownership) = if let Some(method) = &method {
+                        let ownerships = method.argument_ownerships();
+                        assert_eq!(
+                            ownerships.len(),
+                            2,
+                            "Binary operation methods must have exactly two ownerships"
+                        );
+                        (ownerships[0], ownerships[1])
+                    } else {
+                        // Fallback to legacy system - use owned values for legacy evaluation
+                        (ResolvedValueOwnership::Owned, ResolvedValueOwnership::Owned)
+                    };
+                    let left = left_ownership.map_from_late_bound(left_late_bound)?;
+
+                    self.state = BinaryPath::OnRightBranch { left, method };
+                    context.handle_node_as_any_value(
+                        self,
+                        right,
+                        RequestedValueOwnership::Concrete(right_ownership),
+                    )
                 }
             }
-            BinaryPath::OnRightBranch { left, right_ownership } => {
+            BinaryPath::OnRightBranch { left, method } => {
                 let right = item.expect_resolved_value();
                 let right_kind = right.as_ref().kind();
 
                 // Try method resolution first (we already determined this during left evaluation)
-                if let Some(method) = left.as_ref().kind().get_binary_operation_method(&self.operation, right_kind) {
+                if let Some(method) = method {
                     // TODO[operation-refactor]: Use proper span range from operation
-                    let span_range = SpanRange::new_between(left.as_ref().span_range().start(), right.as_ref().span_range().end());
+                    let span_range = SpanRange::new_between(
+                        left.as_ref().span_range().start(),
+                        right.as_ref().span_range().end(),
+                    );
 
                     // Left operand is already resolved, right operand is provided
                     let result = method.execute(vec![left, right], span_range)?;
@@ -942,15 +983,30 @@ impl EvaluationFrame for MethodCallBuilder {
                 let method = caller
                     .as_ref()
                     .kind()
-                    .resolve_method(&self.method, self.unevaluated_parameters_stack.len())?;
-                assert!(
-                    method.ownerships().len() == 1 + self.unevaluated_parameters_stack.len(),
-                    "The method resolution should ensure the argument count is correct"
-                );
-                let caller = method.ownerships()[0].map_from_late_bound(caller)?;
+                    .resolve_method(self.method.method.to_string().as_str());
+                let method = match method {
+                    Some(m) => m,
+                    None => {
+                        return self.method.method.execution_err(format!(
+                            "The method {} does not exist on {}",
+                            self.method.method,
+                            caller.as_ref().articled_value_type(),
+                        ))
+                    }
+                };
+                if method.argument_ownerships().len() != 1 + self.unevaluated_parameters_stack.len()
+                {
+                    return self.method.method.execution_err(format!(
+                        "The method {} expects {} arguments, but {} were provided",
+                        self.method.method,
+                        method.argument_ownerships().len() - 1,
+                        self.unevaluated_parameters_stack.len()
+                    ));
+                }
+                let caller = method.argument_ownerships()[0].map_from_late_bound(caller)?;
 
                 // We skip 1 to ignore the caller
-                let argument_ownerships_stack = method.ownerships().iter().skip(1).rev();
+                let argument_ownerships_stack = method.argument_ownerships().iter().skip(1).rev();
                 for ((_, requested_ownership), ownership) in self
                     .unevaluated_parameters_stack
                     .iter_mut()

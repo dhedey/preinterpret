@@ -263,3 +263,26 @@ impl ToExpressionValue for Vec<ExpressionValue> {
         })
     }
 }
+
+#[derive(Clone, Copy)]
+pub(crate) struct ArrayTypeData;
+
+impl MethodResolutionTarget for ArrayTypeData {
+    type Parent = ValueTypeData;
+    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+
+    fn resolve_own_method(method_name: &str) -> Option<MethodInterface> {
+        define_method_matcher! {
+            (match method_name on Self)
+
+            fn len(this: Shared<ExpressionArray>) -> ExecutionResult<usize> {
+                Ok(this.items.len())
+            }
+
+            fn push(mut this: Mutable<ExpressionArray>, item: OwnedValue) -> ExecutionResult<()> {
+                this.items.push(item.into());
+                Ok(())
+            }
+        }
+    }
+}

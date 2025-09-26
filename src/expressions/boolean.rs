@@ -26,7 +26,7 @@ impl ExpressionBoolean {
             UnaryOperation::Neg { .. } => return operation.unsupported(self),
             UnaryOperation::Not { .. } => {
                 panic!("Boolean ! operation should go through new method system, not legacy handle_unary_operation")
-            },
+            }
             UnaryOperation::Cast { target, .. } => match target {
                 CastTarget::Integer(IntegerKind::Untyped) => {
                     operation.output(UntypedInteger::from_fallback(input as FallbackInteger))
@@ -118,6 +118,25 @@ impl ToExpressionValue for bool {
         ExpressionValue::Boolean(ExpressionBoolean {
             value: self,
             span_range,
+        })
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct BooleanTypeData;
+
+impl MethodResolutionTarget for BooleanTypeData {
+    type Parent = ValueTypeData;
+    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+
+    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<MethodInterface> {
+        Some(match operation {
+            UnaryOperation::Not { .. } => {
+                wrap_method!((this: Owned<bool>) -> ExecutionResult<bool> {
+                    Ok(!this.into_inner())
+                })
+            }
+            _ => return None,
         })
     }
 }
