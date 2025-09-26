@@ -71,6 +71,12 @@ impl VariableBinding {
     }
 }
 
+impl HasSpanRange for VariableBinding {
+    fn span_range(&self) -> SpanRange {
+        self.variable_span_range
+    }
+}
+
 /// A shared value where mutable access failed for a specific reason
 pub(crate) struct LateBoundSharedValue {
     pub(crate) shared: SharedValue,
@@ -83,16 +89,6 @@ impl LateBoundSharedValue {
             shared,
             reason_not_mutable,
         }
-    }
-}
-
-#[allow(unused)]
-impl LateBoundValue {
-    pub(crate) fn resolve(
-        self,
-        ownership: ResolvedValueOwnership,
-    ) -> ExecutionResult<ResolvedValue> {
-        ownership.map_from_late_bound(self)
     }
 }
 
@@ -118,6 +114,13 @@ pub(crate) enum LateBoundValue {
 }
 
 impl LateBoundValue {
+    pub(crate) fn resolve(
+        self,
+        ownership: ResolvedValueOwnership,
+    ) -> ExecutionResult<ResolvedValue> {
+        ownership.map_from_late_bound(self)
+    }
+
     pub(crate) fn map_any(
         self,
         map_shared: impl FnOnce(SharedValue) -> ExecutionResult<SharedValue>,
@@ -152,9 +155,9 @@ impl AsRef<ExpressionValue> for LateBoundValue {
     }
 }
 
-impl HasSpanRange for VariableBinding {
+impl HasSpanRange for LateBoundValue {
     fn span_range(&self) -> SpanRange {
-        self.variable_span_range
+        self.as_ref().span_range()
     }
 }
 
@@ -237,6 +240,12 @@ impl OwnedValue {
     }
 }
 
+impl<T: ToExpressionValue> Owned<T> {
+    pub(crate) fn into_value(self) -> ExpressionValue {
+        self.inner.to_value(self.span_range)
+    }
+}
+
 impl<T> HasSpanRange for Owned<T> {
     fn span_range(&self) -> SpanRange {
         self.span_range
@@ -246,6 +255,20 @@ impl<T> HasSpanRange for Owned<T> {
 impl From<OwnedValue> for ExpressionValue {
     fn from(value: OwnedValue) -> Self {
         value.inner
+    }
+}
+
+impl Deref for OwnedValue {
+    type Target = ExpressionValue;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for OwnedValue {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }
 

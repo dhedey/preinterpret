@@ -119,14 +119,36 @@ impl UnaryOperation {
         })
     }
 
-    pub(super) fn evaluate(self, input: ExpressionValue) -> ExecutionResult<ExpressionValue> {
-        let mut span_range = input.span_range();
-        match &self {
-            UnaryOperation::Neg { token } => span_range.set_start(token.span),
-            UnaryOperation::Not { token } => span_range.set_start(token.span),
-            UnaryOperation::Cast { target_ident, .. } => span_range.set_end(target_ident.span()),
+    pub(super) fn output_span_range(&self, mut operand_span_range: SpanRange) -> SpanRange {
+        match self {
+            UnaryOperation::Neg { token } => operand_span_range.set_start(token.span),
+            UnaryOperation::Not { token } => operand_span_range.set_start(token.span),
+            UnaryOperation::Cast { target_ident, .. } => {
+                operand_span_range.set_end(target_ident.span())
+            }
         };
-        input.handle_unary_operation(self.with_output_span_range(span_range))
+        operand_span_range
+    }
+
+    pub(super) fn evaluate(self, input: ExpressionValue) -> ExecutionResult<ExpressionValue> {
+        let output_span_range = self.output_span_range(input.span_range());
+        input.handle_unary_operation(self.with_output_span_range(output_span_range))
+    }
+
+    pub(super) fn new_evaluate<T: ToExpressionValue>(
+        &self,
+        input: Owned<T>,
+    ) -> ExecutionResult<ResolvedValue> {
+        let input = input.map(|v, span_range| v.to_value(*span_range));
+        let kind = input.kind();
+        let method = kind.resolve_unary_operation(self).ok_or_else(|| {
+            self.execution_error(format!(
+                "The {} operator is not supported for {} values",
+                self.symbolic_description(),
+                input.value_type(),
+            ))
+        })?;
+        method.execute(ResolvedValue::Owned(input), self)
     }
 }
 

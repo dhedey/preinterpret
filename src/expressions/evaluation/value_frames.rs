@@ -475,18 +475,13 @@ impl EvaluationFrame for UnaryOperationBuilder {
         let late_bound_value = item.expect_late_bound();
 
         // Try method resolution first
-        if let Some(method) = late_bound_value
+        if let Some(interface) = late_bound_value
             .as_ref()
             .kind()
             .resolve_unary_operation(&self.operation)
         {
-            // TODO[operation-refactor]: Use proper span range from operation
-            let span_range = late_bound_value.as_ref().span_range();
-
-            // Use the method's ownership requirements to resolve the late-bound value
-            let resolved_value =
-                method.argument_ownerships()[0].map_from_late_bound(late_bound_value)?;
-            let result = method.execute(vec![resolved_value], span_range)?;
+            let resolved_value = late_bound_value.resolve(interface.argument_ownership())?;
+            let result = interface.execute(resolved_value, &self.operation)?;
             return context.return_resolved_value(result);
         }
 

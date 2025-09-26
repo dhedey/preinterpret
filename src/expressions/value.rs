@@ -95,7 +95,10 @@ impl MethodResolver for ValueKind {
         self.method_resolver().resolve_method(method_name)
     }
 
-    fn resolve_unary_operation(&self, operation: &UnaryOperation) -> Option<MethodInterface> {
+    fn resolve_unary_operation(
+        &self,
+        operation: &UnaryOperation,
+    ) -> Option<UnaryOperationInterface> {
         self.method_resolver().resolve_unary_operation(operation)
     }
 
@@ -157,6 +160,30 @@ impl MethodResolutionTarget for ValueTypeData {
                 core::mem::swap(a.deref_mut(), b.deref_mut());
             }
         }
+    }
+
+    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+        Some(match operation {
+            UnaryOperation::Cast { target, .. } => match target {
+                CastTarget::String => {
+                    wrap_unary!((input: ExpressionValue) -> ExecutionResult<String> {
+                        input.concat_recursive(&ConcatBehaviour::standard())
+                    })
+                }
+                CastTarget::Stream => {
+                    wrap_unary!((input: ExpressionValue) -> ExecutionResult<OutputStream> {
+                        input.into_new_output_stream(Grouping::Flattened, StreamOutputBehaviour::PermitArrays)
+                    })
+                }
+                CastTarget::Group => {
+                    wrap_unary!((input: ExpressionValue) -> ExecutionResult<OutputStream> {
+                        input.into_new_output_stream(Grouping::Grouped, StreamOutputBehaviour::PermitArrays)
+                    })
+                }
+                _ => return None,
+            },
+            _ => return None,
+        })
     }
 }
 
@@ -553,20 +580,10 @@ impl ExpressionValue {
         operation: OutputSpanned<UnaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         match self {
-            ExpressionValue::None(_) => operation.unsupported(self),
             ExpressionValue::Integer(value) => value.handle_unary_operation(operation),
             ExpressionValue::Float(value) => value.handle_unary_operation(operation),
-            ExpressionValue::Boolean(value) => value.handle_unary_operation(operation),
-            ExpressionValue::String(value) => value.handle_unary_operation(operation),
             ExpressionValue::Char(value) => value.handle_unary_operation(operation),
-            ExpressionValue::Stream(value) => value.handle_unary_operation(operation),
-            ExpressionValue::Array(value) => value.handle_unary_operation(operation),
-            ExpressionValue::Object(value) => value.handle_unary_operation(operation),
-            ExpressionValue::Range(range) => {
-                ExpressionIterator::new_for_range(range)?.handle_unary_operation(operation)
-            }
-            ExpressionValue::UnsupportedLiteral(value) => operation.unsupported(value),
-            ExpressionValue::Iterator(value) => value.handle_unary_operation(operation),
+            _ => operation.unsupported(self),
         }
     }
 

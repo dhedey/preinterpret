@@ -4,13 +4,36 @@ use std::mem;
 // TODO[unused-clearup]
 use super::*;
 
+pub(crate) struct UnaryOperationInterface {
+    pub method: fn(ResolvedValue, &UnaryOperation, SpanRange) -> ExecutionResult<ResolvedValue>,
+    pub argument_ownership: ResolvedValueOwnership,
+}
+
+impl UnaryOperationInterface {
+    pub(crate) fn execute(
+        &self,
+        input: ResolvedValue,
+        operation: &UnaryOperation,
+    ) -> ExecutionResult<ResolvedValue> {
+        let output_span_range = operation.output_span_range(input.span_range());
+        (self.method)(input, operation, output_span_range)
+    }
+
+    pub(crate) fn argument_ownership(&self) -> ResolvedValueOwnership {
+        self.argument_ownership
+    }
+}
+
 pub(crate) trait MethodResolver {
     /// Resolves a unary operation as a method interface for this type.
     fn resolve_method(&self, method_name: &str) -> Option<MethodInterface>;
 
     /// Resolves a unary operation as a method interface for this type.
     /// Returns None if the operation should fallback to the legacy system.
-    fn resolve_unary_operation(&self, operation: &UnaryOperation) -> Option<MethodInterface>;
+    fn resolve_unary_operation(
+        &self,
+        operation: &UnaryOperation,
+    ) -> Option<UnaryOperationInterface>;
 
     /// Resolves a binary operation as a method interface for this type.
     /// Returns None if the operation should fallback to the legacy system.
@@ -25,7 +48,10 @@ impl<T: MethodResolutionTarget> MethodResolver for T {
         }
     }
 
-    fn resolve_unary_operation(&self, operation: &UnaryOperation) -> Option<MethodInterface> {
+    fn resolve_unary_operation(
+        &self,
+        operation: &UnaryOperation,
+    ) -> Option<UnaryOperationInterface> {
         match Self::resolve_own_unary_operation(operation) {
             Some(method) => Some(method),
             None => Self::PARENT.and_then(|p| p.resolve_unary_operation(operation)),
@@ -52,7 +78,7 @@ pub(crate) trait MethodResolutionTarget {
 
     /// Resolves a unary operation as a method interface for this type.
     /// Returns None if the operation should fallback to the legacy system.
-    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<MethodInterface> {
+    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
         None
     }
 
@@ -70,6 +96,15 @@ mod macros {
 
     macro_rules! ignore_all {
         ($($_:tt)*) => {};
+    }
+
+    macro_rules! if_empty {
+        ([] [$($output:tt)*]) => {
+            $($output)*
+        };
+        ([$($input:tt)+] [$($output:tt)*]) => {
+            $($input)*
+        };
     }
 
     macro_rules! handle_arg_mapping {
@@ -248,22 +283,21 @@ mod macros {
                     <$ty3 as FromResolved>::OWNERSHIP,
                 ],
             }
-        };
-        // TODO: Add back in if needed (e.g. if wanting to support variadic functions)
-        // ($method_name:ident ($($args:tt)*)) => {
-        //     MethodInterface::ArityAny {
-        //         method: |
-        //             all_arguments: Vec<ResolvedValue>,
-        //             output_span_range: SpanRange,
-        //         | -> ExecutionResult<ResolvedValue> {
-        //             handle_arg_separation!([$($args)*], all_arguments, output_span_range);
-        //             handle_arg_mapping!([$($args)*,] []);
-        //             let output = handle_call_inner_method!(inner_method [$($args)*]);
-        //             ResolvableOutput::to_resolved_value(output, output_span_range)
-        //         },
-        //         argument_ownership: handle_arg_ownerships!([$($args)*,] []),
-        //     }
-        // };
+        }; // TODO: Add back in if needed (e.g. if wanting to support variadic functions)
+           // ($method_name:ident ($($args:tt)*)) => {
+           //     MethodInterface::ArityAny {
+           //         method: |
+           //             all_arguments: Vec<ResolvedValue>,
+           //             output_span_range: SpanRange,
+           //         | -> ExecutionResult<ResolvedValue> {
+           //             handle_arg_separation!([$($args)*], all_arguments, output_span_range);
+           //             handle_arg_mapping!([$($args)*,] []);
+           //             let output = handle_call_inner_method!(inner_method [$($args)*]);
+           //             ResolvableOutput::to_resolved_value(output, output_span_range)
+           //         },
+           //         argument_ownership: handle_arg_ownerships!([$($args)*,] []),
+           //     }
+           // };
     }
 
     // NOTE: We use function pointers here rather than generics to avoid monomorphization bloat.
@@ -354,10 +388,26 @@ mod macros {
         }
     }
 
+    macro_rules! wrap_unary {
+        ($([$(Op=$operation:ident$(,)?)? $(Span=$output_span_range:ident$(,)?)?])?($($args:tt)*) $(-> $output_ty:ty)? $body:block) => {{
+            fn inner_method($($args)*, if_empty!([$($($operation)?)?][_operation]): &UnaryOperation, if_empty!([$($($output_span_range)?)?][_output_span_range]): SpanRange) $(-> $output_ty)? {
+                $body
+            }
+            UnaryOperationInterface {
+                #[allow(unused_variables)]
+                method: |a, operation, output_span_range| {
+                    let typed_input = <handle_first_arg_type!($($args)*,) as FromResolved>::from_resolved(a)?;
+                    inner_method(typed_input, operation, output_span_range).to_resolved_value(output_span_range)
+                },
+                argument_ownership: <handle_first_arg_type!($($args)*,) as FromResolved>::OWNERSHIP,
+            }
+        }};
+    }
+
     pub(crate) use {
         count, define_method_matcher, handle_arg_mapping, handle_arg_name, handle_arg_ownerships,
         handle_arg_separation, handle_call_inner_method, handle_correct_arity,
-        handle_first_arg_type, ignore_all, wrap_method,
+        handle_first_arg_type, if_empty, ignore_all, wrap_method, wrap_unary,
     };
 }
 
@@ -459,6 +509,12 @@ mod outputs {
         fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue>;
     }
 
+    impl ResolvableOutput for ResolvedValue {
+        fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue> {
+            Ok(self.with_span_range(output_span_range))
+        }
+    }
+
     impl ResolvableOutput for Shared<ExpressionValue> {
         fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue> {
             Ok(ResolvedValue::Shared(
@@ -475,18 +531,19 @@ mod outputs {
         }
     }
 
-    impl ResolvableOutput for Owned<ExpressionValue> {
-        fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue> {
-            Ok(ResolvedValue::Owned(
-                self.update_span_range(|_| output_span_range),
-            ))
-        }
-    }
-
     impl<T: ToExpressionValue> ResolvableOutput for T {
         fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue> {
             Ok(ResolvedValue::Owned(
                 self.to_value(output_span_range).into(),
+            ))
+        }
+    }
+
+    impl<T: ToExpressionValue> ResolvableOutput for Owned<T> {
+        fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue> {
+            Ok(ResolvedValue::Owned(
+                self.map(|f, _| f.to_value(output_span_range))
+                    .with_span_range(output_span_range),
             ))
         }
     }
@@ -509,7 +566,7 @@ mod arguments {
         fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self>;
     }
 
-    impl<T: ResolvableArgument> FromResolved for Owned<T> {
+    impl<T: ResolvableArgumentOwned> FromResolved for Owned<T> {
         type ValueType = T::ValueType;
         const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Owned;
 
@@ -520,7 +577,7 @@ mod arguments {
         }
     }
 
-    impl<T: ResolvableArgument> FromResolved for Shared<T> {
+    impl<T: ResolvableArgumentShared> FromResolved for Shared<T> {
         type ValueType = T::ValueType;
         const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Shared;
 
@@ -529,7 +586,7 @@ mod arguments {
         }
     }
 
-    impl<T: ResolvableArgument> FromResolved for Mutable<T> {
+    impl<T: ResolvableArgumentMutable> FromResolved for Mutable<T> {
         type ValueType = T::ValueType;
         const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Mutable;
 
@@ -540,7 +597,7 @@ mod arguments {
         }
     }
 
-    impl<T: ResolvableArgument> FromResolved for T {
+    impl<T: ResolvableArgumentOwned> FromResolved for T {
         type ValueType = T::ValueType;
         const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Owned;
 
@@ -549,7 +606,7 @@ mod arguments {
         }
     }
 
-    impl<T: ResolvableArgument> FromResolved for CopyOnWrite<T> {
+    impl<T: ResolvableArgumentOwned + ResolvableArgumentShared> FromResolved for CopyOnWrite<T> {
         type ValueType = T::ValueType;
         const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::CopyOnWrite;
 
@@ -564,19 +621,19 @@ mod arguments {
         fn resolve_as(self) -> ExecutionResult<T>;
     }
 
-    impl<T: ResolvableArgument> ResolveAs<T> for ExpressionValue {
+    impl<T: ResolvableArgumentOwned> ResolveAs<T> for ExpressionValue {
         fn resolve_as(self) -> ExecutionResult<T> {
             T::resolve_from_owned(self)
         }
     }
 
-    impl<'a, T: ResolvableArgument> ResolveAs<&'a T> for &'a ExpressionValue {
+    impl<'a, T: ResolvableArgumentShared> ResolveAs<&'a T> for &'a ExpressionValue {
         fn resolve_as(self) -> ExecutionResult<&'a T> {
             T::resolve_from_ref(self)
         }
     }
 
-    impl<'a, T: ResolvableArgument> ResolveAs<&'a mut T> for &'a mut ExpressionValue {
+    impl<'a, T: ResolvableArgumentMutable> ResolveAs<&'a mut T> for &'a mut ExpressionValue {
         fn resolve_as(self) -> ExecutionResult<&'a mut T> {
             T::resolve_from_mut(self)
         }
@@ -584,17 +641,24 @@ mod arguments {
 
     pub(crate) trait ResolvableArgument: Sized {
         type ValueType: MethodResolutionTarget;
+    }
 
+    pub(crate) trait ResolvableArgumentOwned: ResolvableArgument {
         fn resolve_from_owned(value: ExpressionValue) -> ExecutionResult<Self>;
-        fn resolve_from_ref(value: &ExpressionValue) -> ExecutionResult<&Self>;
-        fn resolve_from_mut(value: &mut ExpressionValue) -> ExecutionResult<&mut Self>;
-
         fn resolve_owned(value: Owned<ExpressionValue>) -> ExecutionResult<Owned<Self>> {
             value.try_map(|v, _| Self::resolve_from_owned(v))
         }
+    }
+
+    pub(crate) trait ResolvableArgumentShared: ResolvableArgument {
+        fn resolve_from_ref(value: &ExpressionValue) -> ExecutionResult<&Self>;
         fn resolve_shared(value: Shared<ExpressionValue>) -> ExecutionResult<Shared<Self>> {
             value.try_map(|v, _| Self::resolve_from_ref(v))
         }
+    }
+
+    pub(crate) trait ResolvableArgumentMutable: ResolvableArgument {
+        fn resolve_from_mut(value: &mut ExpressionValue) -> ExecutionResult<&mut Self>;
         fn resolve_mutable(value: Mutable<ExpressionValue>) -> ExecutionResult<Mutable<Self>> {
             value.try_map(|v, _| Self::resolve_from_mut(v))
         }
@@ -602,15 +666,18 @@ mod arguments {
 
     impl ResolvableArgument for ExpressionValue {
         type ValueType = ValueTypeData;
-
+    }
+    impl ResolvableArgumentOwned for ExpressionValue {
         fn resolve_from_owned(value: ExpressionValue) -> ExecutionResult<Self> {
             Ok(value)
         }
-
+    }
+    impl ResolvableArgumentShared for ExpressionValue {
         fn resolve_from_ref(value: &ExpressionValue) -> ExecutionResult<&Self> {
             Ok(value)
         }
-
+    }
+    impl ResolvableArgumentMutable for ExpressionValue {
         fn resolve_from_mut(value: &mut ExpressionValue) -> ExecutionResult<&mut Self> {
             Ok(value)
         }
@@ -620,15 +687,21 @@ mod arguments {
         ($value_type:ty, ($value:ident) -> $type:ty $body:block) => {
             impl ResolvableArgument for $type {
                 type ValueType = $value_type;
+            }
 
+            impl ResolvableArgumentOwned for $type {
                 fn resolve_from_owned($value: ExpressionValue) -> ExecutionResult<Self> {
                     $body
                 }
+            }
 
+            impl ResolvableArgumentShared for $type {
                 fn resolve_from_ref($value: &ExpressionValue) -> ExecutionResult<&Self> {
                     $body
                 }
+            }
 
+            impl ResolvableArgumentMutable for $type {
                 fn resolve_from_mut($value: &mut ExpressionValue) -> ExecutionResult<&mut Self> {
                     $body
                 }
@@ -640,17 +713,23 @@ mod arguments {
         ($value_type:ty, ($value:ident: $delegate:ty) -> $type:ty { $expr:expr }) => {
             impl ResolvableArgument for $type {
                 type ValueType = $value_type;
+            }
 
+            impl ResolvableArgumentOwned for $type {
                 fn resolve_from_owned(input_value: ExpressionValue) -> ExecutionResult<Self> {
                     let $value: $delegate = input_value.resolve_as()?;
                     Ok($expr)
                 }
+            }
 
+            impl ResolvableArgumentShared for $type {
                 fn resolve_from_ref(input_value: &ExpressionValue) -> ExecutionResult<&Self> {
                     let $value: &$delegate = input_value.resolve_as()?;
                     Ok(&$expr)
                 }
+            }
 
+            impl ResolvableArgumentMutable for $type {
                 fn resolve_from_mut(
                     input_value: &mut ExpressionValue,
                 ) -> ExecutionResult<&mut Self> {
@@ -686,6 +765,18 @@ mod arguments {
                 ExpressionValue::Integer(value) => Ok(value),
                 _ => value.execution_err("Expected integer"),
             }
+        }
+    }
+    pub(crate) struct UntypedIntegerFallback(pub i128);
+
+    impl ResolvableArgument for UntypedIntegerFallback {
+        type ValueType = UntypedIntegerTypeData;
+    }
+
+    impl ResolvableArgumentOwned for UntypedIntegerFallback {
+        fn resolve_from_owned(input_value: ExpressionValue) -> ExecutionResult<Self> {
+            let value: UntypedInteger = input_value.resolve_as()?;
+            Ok(UntypedIntegerFallback(value.parse_fallback()?))
         }
     }
 
@@ -869,6 +960,11 @@ mod arguments {
             }
         }
     }
+
+    impl_delegated_resolvable_argument_for!(
+        StringTypeData,
+        (value: ExpressionString) -> String { value.value }
+    );
 
     impl<'a> ResolveAs<&'a str> for &'a ExpressionValue {
         fn resolve_as(self) -> ExecutionResult<&'a str> {

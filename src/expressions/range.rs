@@ -225,6 +225,20 @@ pub(crate) struct RangeTypeData;
 impl MethodResolutionTarget for RangeTypeData {
     type Parent = ValueTypeData;
     const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+
+    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+        Some(match operation {
+            UnaryOperation::Cast { .. }
+                if IteratorTypeData::resolve_own_unary_operation(operation).is_some() =>
+            {
+                wrap_unary!([Op=operation](this: Owned<ExpressionRange>) -> ExecutionResult<ResolvedValue> {
+                    let this_iterator = this.try_map(|this, _| ExpressionIterator::new_for_range(this))?;
+                    operation.new_evaluate(this_iterator)
+                })
+            }
+            _ => return None,
+        })
+    }
 }
 
 pub(super) enum IterableExpressionRange<T> {

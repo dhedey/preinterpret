@@ -40,49 +40,6 @@ impl ExpressionIterator {
         }
     }
 
-    pub(super) fn handle_unary_operation(
-        self,
-        operation: OutputSpanned<UnaryOperation>,
-    ) -> ExecutionResult<ExpressionValue> {
-        Ok(match operation.operation {
-            UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => {
-                return operation.unsupported(self)
-            }
-            UnaryOperation::Cast {
-                target,
-                target_ident,
-                ..
-            } => match target {
-                CastTarget::Stream => operation.output(self.into_stream_with_grouped_items()?),
-                CastTarget::Group => operation.output(
-                    operation
-                        .output(self.into_stream_with_grouped_items()?)
-                        .into_new_output_stream(
-                            Grouping::Grouped,
-                            StreamOutputBehaviour::Standard,
-                        )?,
-                ),
-                CastTarget::String => operation.output({
-                    let mut output = String::new();
-                    self.concat_recursive_into(&mut output, &ConcatBehaviour::standard())?;
-                    output
-                }),
-                CastTarget::Boolean
-                | CastTarget::Char
-                | CastTarget::Integer(_)
-                | CastTarget::Float(_) => match self.singleton_value() {
-                    Some(value) => value.handle_unary_operation(operation)?,
-                    None => {
-                        return operation.execution_err(format!(
-                            "Only an iterator with one item can be cast to {}",
-                            target_ident,
-                        ))
-                    }
-                },
-            },
-        })
-    }
-
     pub(crate) fn singleton_value(mut self) -> Option<ExpressionValue> {
         let first = self.next()?;
         if self.next().is_none() {
@@ -90,12 +47,6 @@ impl ExpressionIterator {
         } else {
             None
         }
-    }
-
-    fn into_stream_with_grouped_items(self) -> ExecutionResult<OutputStream> {
-        let mut output = OutputStream::new();
-        self.output_grouped_items_to(&mut output)?;
-        Ok(output)
     }
 
     pub(super) fn output_grouped_items_to(self, output: &mut OutputStream) -> ExecutionResult<()> {
@@ -174,6 +125,15 @@ impl ToExpressionValue for Box<dyn CustomExpressionIterator> {
     }
 }
 
+impl ToExpressionValue for ExpressionIterator {
+    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
+        ExpressionValue::Iterator(ExpressionIterator {
+            iterator: self.iterator,
+            span_range,
+        })
+    }
+}
+
 impl HasValueType for ExpressionIterator {
     fn value_type(&self) -> &'static str {
         "iterator"
@@ -234,4 +194,25 @@ pub(crate) struct IteratorTypeData;
 impl MethodResolutionTarget for IteratorTypeData {
     type Parent = ValueTypeData;
     const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+
+    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+        Some(match operation {
+            UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => return None,
+            UnaryOperation::Cast { target, .. } => match target {
+                CastTarget::Boolean
+                | CastTarget::Char
+                | CastTarget::Integer(_)
+                | CastTarget::Float(_) => {
+                    wrap_unary!([Op=operation](this: Owned<ExpressionIterator>) -> ExecutionResult<ResolvedValue> {
+                        let (this, input_span_range) = this.deconstruct();
+                        match this.singleton_value() {
+                            Some(value) => operation.new_evaluate(Owned::new(value, input_span_range)),
+                            None => input_span_range.execution_err("Only an iterator with one item can be cast to this value")
+                        }
+                    })
+                }
+                _ => return None,
+            },
+        })
+    }
 }

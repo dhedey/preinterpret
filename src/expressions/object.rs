@@ -17,24 +17,6 @@ pub(crate) struct ObjectEntry {
 }
 
 impl ExpressionObject {
-    pub(super) fn handle_unary_operation(
-        self,
-        operation: OutputSpanned<UnaryOperation>,
-    ) -> ExecutionResult<ExpressionValue> {
-        match operation.operation {
-            UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => operation.unsupported(self),
-            UnaryOperation::Cast { target, .. } => match target {
-                CastTarget::String
-                | CastTarget::Stream
-                | CastTarget::Group
-                | CastTarget::Boolean
-                | CastTarget::Char
-                | CastTarget::Integer(_)
-                | CastTarget::Float(_) => operation.unsupported(self),
-            },
-        }
-    }
-
     pub(super) fn handle_integer_binary_operation(
         self,
         _right: ExpressionInteger,

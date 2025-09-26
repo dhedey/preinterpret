@@ -10,41 +10,6 @@ pub(crate) struct ExpressionStream {
 }
 
 impl ExpressionStream {
-    pub(super) fn handle_unary_operation(
-        self,
-        operation: OutputSpanned<UnaryOperation>,
-    ) -> ExecutionResult<ExpressionValue> {
-        Ok(match operation.operation {
-            UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => {
-                return operation.unsupported(self)
-            }
-            UnaryOperation::Cast { target, .. } => match target {
-                CastTarget::String => operation.output({
-                    let mut output = String::new();
-                    self.concat_recursive_into(&mut output, &ConcatBehaviour::standard());
-                    output
-                }),
-                CastTarget::Stream => operation.output(self.value),
-                CastTarget::Group => {
-                    operation.output(operation.output(self.value).into_new_output_stream(
-                        Grouping::Grouped,
-                        StreamOutputBehaviour::Standard,
-                    )?)
-                }
-                CastTarget::Boolean
-                | CastTarget::Char
-                | CastTarget::Integer(_)
-                | CastTarget::Float(_) => {
-                    let coerced = self.value.coerce_into_value(self.span_range);
-                    if let ExpressionValue::Stream(_) = &coerced {
-                        return operation.unsupported(coerced);
-                    }
-                    coerced.handle_unary_operation(operation)?
-                }
-            },
-        })
-    }
-
     pub(super) fn handle_integer_binary_operation(
         self,
         _right: ExpressionInteger,
@@ -150,5 +115,28 @@ impl MethodResolutionTarget for StreamTypeData {
                 Ok(this.into_inner().value.coerce_into_value(span_range))
             }
         }
+    }
+
+    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+        Some(match operation {
+            UnaryOperation::Cast {
+                target:
+                    CastTarget::Boolean
+                    | CastTarget::Char
+                    | CastTarget::Integer(_)
+                    | CastTarget::Float(_),
+                ..
+            } => {
+                wrap_unary!([Op=operation](this: Owned<ExpressionStream>) -> ExecutionResult<ResolvedValue> {
+                    let (this, span_range) = this.deconstruct();
+                    let coerced = this.value.coerce_into_value(span_range);
+                    if let ExpressionValue::Stream(_) = &coerced {
+                        return span_range.execution_err("The stream could not be coerced into a single value");
+                    }
+                    operation.new_evaluate(coerced.into())
+                })
+            }
+            _ => return None,
+        })
     }
 }

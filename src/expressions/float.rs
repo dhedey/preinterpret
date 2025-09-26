@@ -330,14 +330,64 @@ impl MethodResolutionTarget for UntypedFloatTypeData {
     type Parent = FloatTypeData;
     const PARENT: Option<Self::Parent> = Some(FloatTypeData);
 
-    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<MethodInterface> {
+    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
         Some(match operation {
             UnaryOperation::Neg { .. } => {
-                wrap_method!((this: Owned<UntypedFloat>) -> ExecutionResult<UntypedFloat> {
+                wrap_unary!((this: Owned<UntypedFloat>) -> ExecutionResult<UntypedFloat> {
                     let input = this.into_inner().parse_fallback()?;
                     Ok(UntypedFloat::from_fallback(-input))
                 })
             }
+            UnaryOperation::Cast { target, .. } => match target {
+                CastTarget::Float(FloatKind::Untyped) => {
+                    wrap_unary!((this: Owned<UntypedFloat>) -> ExecutionResult<UntypedFloat> {
+                        let input = this.into_inner().parse_fallback()?;
+                        Ok(UntypedFloat::from_fallback(input))
+                    })
+                }
+                CastTarget::Float(FloatKind::F32) => {
+                    wrap_unary!((this: Owned<UntypedFloat>) -> ExecutionResult<f32> {
+                        let input = this.into_inner().parse_fallback()?;
+                        Ok(input as f32)
+                    })
+                }
+                CastTarget::Float(FloatKind::F64) => {
+                    wrap_unary!((this: Owned<UntypedFloat>) -> ExecutionResult<f64> {
+                        let input = this.into_inner().parse_fallback()?;
+                        Ok(input)
+                    })
+                }
+                CastTarget::String => {
+                    wrap_unary!((this: Owned<UntypedFloat>) -> ExecutionResult<String> {
+                        let input = this.into_inner().parse_fallback()?;
+                        Ok(input.to_string())
+                    })
+                }
+                CastTarget::Stream => {
+                    wrap_unary!((this: Owned<UntypedFloat>) -> ExecutionResult<ExpressionValue> {
+                        use proc_macro2::Span;
+                        let input = this.into_inner().parse_fallback()?;
+                        let span_range = SpanRange::new_single(Span::call_site());
+                        Ok(UntypedFloat::from_fallback(input).to_value(span_range).into_new_output_stream(
+                            super::value::Grouping::Flattened,
+                            super::value::StreamOutputBehaviour::Standard,
+                        )?.to_value(span_range))
+                    })
+                }
+                CastTarget::Group => {
+                    wrap_unary!((this: Owned<UntypedFloat>) -> ExecutionResult<ExpressionValue> {
+                        use proc_macro2::Span;
+                        let input = this.into_inner().parse_fallback()?;
+                        let span_range = SpanRange::new_single(Span::call_site());
+                        Ok(UntypedFloat::from_fallback(input).to_value(span_range).into_new_output_stream(
+                            super::value::Grouping::Grouped,
+                            super::value::StreamOutputBehaviour::Standard,
+                        )?.to_value(span_range))
+                    })
+                }
+                // Integer casts - delegate to legacy system for now
+                CastTarget::Integer(_) | CastTarget::Boolean | CastTarget::Char => return None,
+            },
             _ => return None,
         })
     }
@@ -354,11 +404,16 @@ macro_rules! impl_float_operations {
             type Parent = FloatTypeData;
             const PARENT: Option<Self::Parent> = Some(FloatTypeData);
 
-            fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<MethodInterface> {
+            fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
-                    UnaryOperation::Neg { .. } => wrap_method!((this: Owned<$float_type>) -> ExecutionResult<$float_type> {
+                    UnaryOperation::Neg { .. } => wrap_unary!((this: Owned<$float_type>) -> ExecutionResult<$float_type> {
                         Ok(-this.into_inner())
                     }),
+                    UnaryOperation::Cast { .. } => {
+                        // For now, fallback to legacy for casting
+                        // TODO: Implement comprehensive float casting
+                        return None;
+                    }
                     _ => return None,
                 })
             }
