@@ -182,16 +182,6 @@ mod macros {
         ($head:tt $($tail:tt)*) => { 1 + count!($($tail)*) };
     }
 
-    // Creating an inner method vastly improves IDE support when writing the method body
-    macro_rules! handle_define_inner_method {
-        // The $arg_part+ allows for mut x in the argument list
-        ($method_name:ident [$($args:tt)*] $body:block $output_ty:ty) => {
-            fn $method_name($($args)*) -> $output_ty {
-                $body
-            }
-        };
-    }
-
     macro_rules! handle_arg_name {
         (mut $name:ident) => {
             $name
@@ -219,13 +209,13 @@ mod macros {
     }
 
     macro_rules! handle_correct_arity {
-        ($method_name:ident ($(,)?) -> $output_ty:ty) => {
+        ($method_name:ident ($(,)?)) => {
             MethodInterface::Arity0 {
                 method: |a, output_span_range| apply_fn0($method_name, a, output_span_range),
                 argument_ownership: [],
             }
         };
-        ($method_name:ident ($($arg_part:ident)+ : $ty:ty $(,)?) -> $output_ty:ty) => {
+        ($method_name:ident ($($arg_part:ident)+ : $ty:ty $(,)?)) => {
             MethodInterface::Arity1 {
                 method: |a, output_span_range| apply_fn1($method_name, a, output_span_range),
                 argument_ownership: [<$ty as FromResolved>::OWNERSHIP],
@@ -234,7 +224,7 @@ mod macros {
         ($method_name:ident (
             $($arg_part1:ident)+ : $ty1:ty,
             $($arg_part2:ident)+ : $ty2:ty $(,)?
-        ) -> $output_ty:ty) => {
+        )) => {
             MethodInterface::Arity2 {
                 method: |a, b, output_span_range| apply_fn2($method_name, a, b, output_span_range),
                 argument_ownership: [
@@ -247,7 +237,7 @@ mod macros {
             $($arg_part1:ident)+ : $ty1:ty,
             $($arg_part2:ident)+ : $ty2:ty,
             $($arg_part3:ident)+ : $ty3:ty $(,)?
-        ) -> $output_ty:ty) => {
+        )) => {
             MethodInterface::Arity3 {
                 method: |a, b, c, output_span_range| {
                     apply_fn3($method_name, a, b, c, output_span_range)
@@ -258,21 +248,22 @@ mod macros {
                     <$ty3 as FromResolved>::OWNERSHIP,
                 ],
             }
-        }; // TODO: Add back in if needed (e.g. if wanting to support variadic functions)
-           // ($method_name:ident ($($args:tt)*) -> $output_ty:ty) => {
-           //     MethodInterface::ArityAny {
-           //         method: |
-           //             all_arguments: Vec<ResolvedValue>,
-           //             output_span_range: SpanRange,
-           //         | -> ExecutionResult<ResolvedValue> {
-           //             handle_arg_separation!([$($args)*], all_arguments, output_span_range);
-           //             handle_arg_mapping!([$($args)*,] []);
-           //             let output = handle_call_inner_method!(inner_method [$($args)*]);
-           //             <$output_ty as ResolvableOutput>::to_resolved_value(output, output_span_range)
-           //         },
-           //         argument_ownership: handle_arg_ownerships!([$($args)*,] []),
-           //     }
-           // };
+        };
+        // TODO: Add back in if needed (e.g. if wanting to support variadic functions)
+        // ($method_name:ident ($($args:tt)*)) => {
+        //     MethodInterface::ArityAny {
+        //         method: |
+        //             all_arguments: Vec<ResolvedValue>,
+        //             output_span_range: SpanRange,
+        //         | -> ExecutionResult<ResolvedValue> {
+        //             handle_arg_separation!([$($args)*], all_arguments, output_span_range);
+        //             handle_arg_mapping!([$($args)*,] []);
+        //             let output = handle_call_inner_method!(inner_method [$($args)*]);
+        //             ResolvableOutput::to_resolved_value(output, output_span_range)
+        //         },
+        //         argument_ownership: handle_arg_ownerships!([$($args)*,] []),
+        //     }
+        // };
     }
 
     // NOTE: We use function pointers here rather than generics to avoid monomorphization bloat.
@@ -336,11 +327,11 @@ mod macros {
     }
 
     macro_rules! wrap_method {
-        (($($args:tt)*) -> $output_ty:ty $body:block) => {{
-            fn inner_method($($args)*) -> $output_ty {
+        (($($args:tt)*) $(-> $output_ty:ty)? $body:block) => {{
+            fn inner_method($($args)*) $(-> $output_ty)? {
                 $body
             }
-            handle_correct_arity!(inner_method($($args)*) -> $output_ty)
+            handle_correct_arity!(inner_method($($args)*))
         }};
     }
 
@@ -348,7 +339,7 @@ mod macros {
         (
             (match $var_method_name:ident on $self:ident)
             $(
-                fn $method_name:ident($($args:tt)*) -> $output_ty:ty $body:block
+                fn $method_name:ident($($args:tt)*) $(-> $output_ty:ty)? $body:block
             )*
         ) => {
             $(
@@ -356,7 +347,7 @@ mod macros {
             )*
             Some(match $var_method_name {
                 $(
-                    stringify!($method_name) => wrap_method!(($($args)*) -> $output_ty $body),
+                    stringify!($method_name) => wrap_method!(($($args)*) $(-> $output_ty)? $body),
                 )*
                 _ => return None,
             })
@@ -366,7 +357,7 @@ mod macros {
     pub(crate) use {
         count, define_method_matcher, handle_arg_mapping, handle_arg_name, handle_arg_ownerships,
         handle_arg_separation, handle_call_inner_method, handle_correct_arity,
-        handle_define_inner_method, handle_first_arg_type, ignore_all, wrap_method,
+        handle_first_arg_type, ignore_all, wrap_method,
     };
 }
 
