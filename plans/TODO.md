@@ -1,10 +1,37 @@
-# TODO List
+# 1.0 Todo List
 
 This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 
 ## High priority
 
 * Create `preinterpret::stream` and `preinterpret::run` and replace `preinterpret_assert_eq` with `run_assert_eq` / `stream_assert_eq`
+* Add benches somehow...
+  * Taking a look at https://github.com/dtolnay/quote/tree/master/benches - the benches don't test the right thing for us:
+  * It's built to run two ways - as an executable, and a proc-macro library. When `main.rs` runs:
+    * It triggers `quote_benchmark::run_quote_benchmark!(_)` which runs itself as a proc-macro, i.e. via compiling `lib.rs`
+    * In `lib.rs`, `crate::benchmark` resolves to creating the `run_quote_benchmark` proc-macro, which internally has a call to `quote!`
+      This call happens during compilation time, leaving `timer::time("macro", ..)` to actually time the `proc_macro::TokenStream::from` invocation
+    * And then the `main()` runs in `main.rs` which calls `lib::quote` which is created by `crate::benchmark!` looping back to wrap it in the `quote` function defined in `main.rs`, and returns the `proc_macro2::TokenStream`.
+  * Basically, the benchmarks both test how long the outputted code takes to execute, not how long the `quote!` invocation itself takes (which is harder, because that happens at compile time)....
+  * For us, we can split up the time into:
+    * (One-off compilation of the whole preinterpret crate)
+    * Invocation overhead per macro (partially unknowable), quite small
+    * Execution of the macro:
+      * Conversion to token stream v2 (if it's anything)
+      * Parsing
+      * Execution
+      * Conversion back to normal token stream (if it's anything)
+    * We can create an optional `bench` feature which creates a `stream_bench` macro which tries to do the following things 1000 times:
+      * Conversion
+      * Parsing
+      * Execution
+      * Conversion back
+    * And returns a tuple of the four averages `(a, b, c, d)` - then we can execute this / record this somewhere, and keep track of it over time.
+
+## (Interpreted) Stream Literals
+
+* Introduce `%[..]` and `%raw[..]` instead of `[!stream! ...]` and `[!raw! ...]`
+* Replace `[!set!]` with `#(let x = %[ ... ])`
 
 ## Method Calls
 
@@ -64,12 +91,7 @@ fn resolve_own_binary_operation(operation: &BinaryOperation) -> Option<MethodInt
 
 * We can add a `spanned(%[..])` method which overrides the span of the binding (it'll have to return a `NoOverrideSpanOwned<ExpressionValue>` which has different handling in the `ToResolvedValue` trait)
 
-# (Interpreted) Stream Literals
-
-* Introduce `%[..]` and `%raw[..]` instead of `[!stream! ...]` and `[!raw! ...]`
-* Replace `[!set!]` with `#(let x = %[ ... ])`
-
-# Control flow expressions (ideally requires Stream Literals)
+## Control flow expressions (ideally requires Stream Literals)
 
 Create the following expressions:
 * Blocks `{}`
@@ -104,12 +126,12 @@ Create the following expressions:
 * Spans are only kept from source inside streams, otherwise it refers to a binding
 * At execution time, there needs to be some link between scope and stack frame
 
-# Attempt Expression (requires Scopes & Blocks)
+## Attempt Expression (requires Scopes & Blocks)
 
 See @./2025-09-vision.md
 
 
-# Parser Changes
+## Parser Changes
 
 First, read the @./2025-09-vision.md
 
@@ -149,7 +171,7 @@ First, read the @./2025-09-vision.md
 }) { <block> }]
 ```
 
-# Utility methods
+## Utility methods
 
 Implement the following. (NB - do we need to add support for )
 
@@ -162,17 +184,17 @@ Implement the following. (NB - do we need to add support for )
 * Strings:
   * `error(%[span])`
 
-# Error improvements
+## Error improvements
 
 * Distinguish a runtime error from a coding error (e.g. parse error, or "no method of type")
   * The latter should not be caught by `attempt` blocks
 * If method resolution fails, perhaps we try finding a method with that name on other types
 
-# Coding challenges
+## Coding challenges
 
 Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` docs) to ensure that the language is sufficiently comprehensive to use in practice.
 
-# Final considerations
+## Final considerations
 
 * Should `preinterpret` should start in expression mode?
   => Or whether to have `preinterpet::stream` / `preinterpret::run` options?
@@ -189,39 +211,17 @@ Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` doc
   * Add casts of any integer to char, via `char::from_u32(u32::try_from(x))`
 * TODO check
 * Check all `#[allow(unused)]` and remove any which aren't needed
-* Add benches somehow...
-  * Taking a look at https://github.com/dtolnay/quote/tree/master/benches - the benches don't test the right thing for us:
-  * It's built to run two ways - as an executable, and a proc-macro library. When `main.rs` runs:
-    * It triggers `quote_benchmark::run_quote_benchmark!(_)` which runs itself as a proc-macro, i.e. via compiling `lib.rs`
-    * In `lib.rs`, `crate::benchmark` resolves to creating the `run_quote_benchmark` proc-macro, which internally has a call to `quote!`
-      This call happens during compilation time, leaving `timer::time("macro", ..)` to actually time the `proc_macro::TokenStream::from` invocation
-    * And then the `main()` runs in `main.rs` which calls `lib::quote` which is created by `crate::benchmark!` looping back to wrap it in the `quote` function defined in `main.rs`, and returns the `proc_macro2::TokenStream`.
-  * Basically, the benchmarks both test how long the outputted code takes to execute, not how long the `quote!` invocation itself takes (which is harder, because that happens at compile time)....
-  * For us, we can split up the time into:
-    * (One-off compilation of the whole preinterpret crate)
-    * Invocation overhead per macro (partially unknowable), quite small
-    * Execution of the macro:
-      * Conversion to token stream v2 (if it's anything)
-      * Parsing
-      * Execution
-      * Conversion back to normal token stream (if it's anything)
-    * We can create an optional `bench` feature which creates a `stream_bench` macro which tries to do the following things 1000 times:
-      * Conversion
-      * Parsing
-      * Execution
-      * Conversion back
-    * And returns a tuple of the four averages `(a, b, c, d)` - then we can execute this / record this somewhere, and keep track of it over time.
 
 NB: `define_command`, `define_parser`, and parsing of Rust code pushed to v1.1
 
-# Finish converting all commands to expressions
+## Finish converting all commands to expressions
 
 E.G.
 * `#(%[#x #y].ident_lower_camel())`
 * `preinterpret.settings({..})` (`preinterpret` is available as a variable pre-bound on the root frame)
 * .. possibly keep the v0.2 commands in `deprecated` mode?
 
-# Write book / Docs
+## Write book / Docs
 
 * Introduction
   * A Rust-like interpreted language with JS-like value types, built for code-generation
@@ -248,12 +248,12 @@ And then we need to:
 * Update the README to point to the book
 * Update the module docstring to point to the book.
 
-# Write marketing materials
+## Write marketing materials
 
 * Publish v1.0
 * Flashy infographic like `crabtime` with some examples.
 
-# Stream-return optimizations [OPTIONAL]
+## Stream-return optimizations [OPTIONAL]
 
 Expression evaluation can come with a `OutputStyle::AppendToStream(&mut OutputStream)` rather than a `OutputStyle::OwnedValue`.
 
@@ -271,7 +271,7 @@ This means that this is low-clone:
 #(for i in 0..100 { %[println!("Hello world!");] })
 ```
 
-# Value expansions [OPTIONAL]
+## Value expansions [OPTIONAL]
 
 Consider:
 * Do we want some kind of slice object? (see `TODO[range-refactor]`)
@@ -290,3 +290,36 @@ Consider:
     * `#(x[0])` returns the value at that position of the stream (using `INFER_TOKEN_TREE`)
     * `#(x[0..3])` returns a TokenStream
     * `#(x[0..=3])` returns a TokenStream
+
+
+--------------------------------------------------------------------------------
+
+# Descoped for 1.0
+
+* Performance:
+  * Use a small-vec optimization in some places
+  * Get rid of needless cloning of commands/variables etc
+  * Avoid needless token stream clones: Have `x += y` take `y` as OwnedOrRef, and either handles it as owned or shared reference (by first cloning)
+* User-defined functions and parsers
+* Parsers:
+  * Fuller rust syntax parsing: all of https://veykril.github.io/tlborm/decl-macros/minutiae/fragment-specifiers.html#ty and more from syn (e.g. item, fields, etc)
+* Fork of syn to:
+  * Fix issues in Rust Analyzer
+  * Add support for a more general `TokenBuffer`, and ensure that Cursor can work in a backwards-compatible way with that buffer. Support:
+    * Storing a length
+    * Embedding tokens directly without putting them into a `Group`
+    * Possibling embedding a reference to a slice buffer inside a group
+    * Ability to parse to a TokenBuffer or TokenBufferSlice
+    * Possibly allowing some kind of embedding of Tokens whichcan be converted into a TokenStream.
+    * Currently, `ParseBuffer` stores `unexpected` and has drop glue which is a hacky abstraction. We'll need to think of an alternative. Perhaps we change `ParseBuffer` to operate on top of a `TokenBuffer` ??
+  * Allow variables to use CoW semantics. Variables can be Owned(ParseBuffer) or `Slice(ParseBufferSlice), where a ParseBufferSlice is some form of reference counting to a ParseBufferCore, and a FromLocation and ToLocation which are assumed to be at the same level.
+  * Permit `[!parse_while! (!stream! ...) from #x { ... }]`
+  * Fix `any_punct()` to ignore none groups
+  * Groups can either be:
+    * Raw Groups
+    * Or created groups, where we store `DelimSpan` for re-parsing and accessing the open/close delimiters (this will let us improve `invalid_content_wrong_group`)
+  * In future - improve performance of some other parts of syn
+  * Better error messages
+    * See e.g. invalid_content_too_short where ideally the error message would be on the last token in the stream. Perhaps End gets a span from the previous error?
+    * See e.g. invalid_content_too_long where `unexpected token` is quite vague.
+    Maybe we can't sensibly do better though...

@@ -89,7 +89,7 @@ impl From<PrefixUnaryOperation> for UnaryOperation {
 }
 
 #[derive(Clone)]
-pub(super) enum UnaryOperation {
+pub(crate) enum UnaryOperation {
     Neg {
         token: Token![-],
     },
@@ -147,7 +147,7 @@ impl UnaryOperation {
 }
 
 #[derive(Copy, Clone)]
-pub(super) enum CastTarget {
+pub(crate) enum CastTarget {
     Integer(IntegerKind),
     Float(FloatKind),
     Boolean,

@@ -12,7 +12,7 @@ Preinterpret is a Rust procedural macro crate that provides the `preinterpret!` 
 
 ## Plans and Tasks
 
-There are various files in the `./plans` folder, the "current vision" is `2025-09-vision.md` and the "todo list" is `1_0-todo-list.md`.
+There are various files in the `./plans` folder, the "current vision" is `2025-09-vision.md` and the "todo list" is `TODO.md`.
 
 ## Architecture
 

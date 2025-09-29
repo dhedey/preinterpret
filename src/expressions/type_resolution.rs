@@ -4,7 +4,7 @@ use std::mem;
 // TODO[unused-clearup]
 use super::*;
 
-pub(super) struct UnaryOperationInterface {
+pub(crate) struct UnaryOperationInterface {
     pub method: fn(ResolvedValue, &UnaryOperation, SpanRange) -> ExecutionResult<ResolvedValue>,
     pub argument_ownership: ResolvedValueOwnership,
 }
