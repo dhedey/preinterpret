@@ -66,7 +66,7 @@ impl<T: MethodResolutionTarget> MethodResolver for T {
     }
 }
 
-pub(super) trait MethodResolutionTarget {
+pub(crate) trait MethodResolutionTarget {
     type Parent: MethodResolutionTarget;
     const PARENT: Option<Self::Parent>;
 
