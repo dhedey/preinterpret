@@ -15,13 +15,13 @@
 //! * Run ./style-fix.sh
 //! -->
 //!
-//! This crate provides the `preinterpret!` macro, which works as a simple pre-processor to the token stream. It takes inspiration from and effectively combines the [quote](https://crates.io/crates/quote), [paste](https://crates.io/crates/paste) and [syn](https://crates.io/crates/syn) crates, to empower code generation authors and declarative macro writers, bringing:
+//! This crate provides the `stream!` macro, which works as a simple pre-processor to the token stream. It takes inspiration from and effectively combines the [quote](https://crates.io/crates/quote), [paste](https://crates.io/crates/paste) and [syn](https://crates.io/crates/syn) crates, to empower code generation authors and declarative macro writers, bringing:
 //!
 //! * **Heightened [readability](#readability)** - quote-like variable definition and substitution make it easier to work with code generation code.
 //! * **Heightened [expressivity](#expressivity)** - a toolkit of simple commands reduce boilerplate, and mitigate the need to build custom procedural macros in some cases.
 //! * **Heightened [simplicity](#simplicity)** - helping developers avoid the confusing corners [[1](https://veykril.github.io/tlborm/decl-macros/patterns/callbacks.html), [2](https://github.com/rust-lang/rust/issues/96184#issue-1207293401), [3](https://veykril.github.io/tlborm/decl-macros/minutiae/metavar-and-expansion.html), [4](https://veykril.github.io/tlborm/decl-macros/patterns/push-down-acc.html)] of declarative macro land.
 //!
-//! The `preinterpret!` macro can be used inside the output of a declarative macro, or by itself, functioning as a mini code generation tool all of its own.
+//! The `stream!` macro can be used inside the output of a declarative macro, or by itself, functioning as a mini code generation tool all of its own.
 //!
 //! ```toml
 //! [dependencies]
@@ -48,7 +48,7 @@
 //!         $vis:vis struct $type_name:ident {
 //!             $($field_name:ident: $inner_type:ident),* $(,)?
 //!         }
-//!     ) => {preinterpret::preinterpret! {
+//!     ) => {preinterpret::stream! {
 //!         [!set! #type_name = [!ident! My $type_name]]
 //!         
 //!         $(#[$attributes])*
@@ -101,7 +101,7 @@
 //! For example:
 //!
 //! ```rust
-//! preinterpret::preinterpret! {
+//! preinterpret::stream! {
 //!     [!set! #type_name = [!ident! HelloWorld]]
 //!
 //!     struct #type_name;
@@ -192,7 +192,7 @@
 //!             // Arbitrary (non-const) type generics
 //!             < $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? $( = $deflt:tt)? ),+ >
 //!         )?
-//!     } => {preinterpret::preinterpret!{
+//!     } => {preinterpret::stream!{
 //!         [!set! #impl_generics = $(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)?]
 //!         [!set! #type_generics = $(< $( $lt ),+ >)?]
 //!         [!set! #my_type = $type_name #type_generics]
@@ -221,7 +221,7 @@
 //! macro_rules! create_struct_and_getters {
 //!     (
 //!         $name:ident { $($field:ident),* $(,)? }
-//!     ) => {preinterpret::preinterpret!{
+//!     ) => {preinterpret::stream!{
 //!         // Define a struct with the given fields
 //!         pub struct $name {
 //!             $(
@@ -251,7 +251,7 @@
 //! macro_rules! count_idents {
 //!     {
 //!         $($item: ident),*
-//!     } => {preinterpret::preinterpret!{
+//!     } => {preinterpret::stream!{
 //!         [!set! #current_index = 0usize]
 //!         $(
 //!             [!ignore! $item] // Loop over the items, but don't output them
@@ -266,7 +266,7 @@
 //! To quickly explain how this works, imagine we evaluate `count_idents!(a, b, c)`. As `count_idents!` is the most outer macro, it runs first, and expands into the following token stream:
 //!
 //! ```rust
-//! let count = preinterpret::preinterpret!{
+//! let count = preinterpret::stream!{
 //!   [!set! #current_index = 0usize]
 //!   [!ignore! a]
 //!   [!set! #current_index = #current_index + 1]
@@ -279,7 +279,7 @@
 //! };
 //! ```
 //!
-//! Now the `preinterpret!` macro runs, resulting in `#count` equal to the token stream `0usize + 1 + 1 + 1`.
+//! Now the `stream!` macro runs, resulting in `#count` equal to the token stream `0usize + 1 + 1 + 1`.
 //! This will be improved in future releases by adding support for mathematical operations on integer literals.
 //!
 //! ### Simplicity
@@ -325,7 +325,7 @@
 //! macro_rules! impl_new_type {
 //!     {
 //!         $vis:vis $my_type:ident($my_inner_type:ty)
-//!     } => {preinterpret::preinterpret!{
+//!     } => {preinterpret::stream!{
 //!         #[xyz(as_type = [!string! $my_inner_type])]
 //!         $vis struct $my_type($my_inner_type);
 //!     }}
@@ -379,7 +379,7 @@
 //! // =================================================
 //!
 //! // A simple macro can just take a token stream as input
-//! preinterpret::preinterpret! {
+//! preinterpret::stream! {
 //!     [!macro_rules! my_macro!(#input) {
 //!         [!for! (#trait for #type) in (#input) {
 //!             impl #trait for #type
@@ -394,7 +394,7 @@
 //! // It can also parse its input in the declaration.
 //! // Repeated sections have to be captured as a stream, and delegated to explicit lazy [!for! ...] binding.
 //! // This enforces a more procedural code style, and gives clearer compiler errors.
-//! preinterpret::preinterpret! {
+//! preinterpret::stream! {
 //!     [!macro_rules! multi_impl_super_duper!(
 //!         #type_list,
 //!         ImplOptions [!FIELDS! {
@@ -484,7 +484,7 @@
 //!
 //! ```rust,ignore
 //! // Hypothetical future syntax - not yet implemented!
-//! preinterpret::preinterpret!{
+//! preinterpret::stream!{
 //!     [!set! #i = 0]
 //!     [!label! loop]
 //!     const [!ident! AB #i]: u8 = 0;
@@ -519,31 +519,17 @@ mod transformation;
 
 use internal_prelude::*;
 
-/// Runs a simple interpeter over the token stream, allowing for variable assignment and substitution,
-/// and a toolkit of commands to simplify code generation.
-///
-/// Commands look like `[!command! arguments as token stream here]` and can be nested.
-///
-/// ## Command cheat sheet
-/// * `[!set! #foo = ...]` set a variable to the provided token stream
-/// * `#foo` outputs the variable's saved token stream
-/// * `[!ident! ...]` outputs an ident from parsing the concatenated token stream
-/// * `[!ident_camel! ...]` outputs an UpperCamelCased ident from parsing the concatenated token stream
-/// * `[!ident_snake! ...]` outputs a lower_snake_cased ident from parsing the concatenated token stream
-/// * `[!ident_upper_snake! ...]` outputs an UPPER_SNAKE_CASED ident from parsing the concatenated token stream
-/// * `[!string! ...]` outputs the concatenated token stream
-/// * `[!literal! ..]` outputs a literal from parsing the concatenated token stream
-/// * `#[doc = [!string! "My documentation is for " #my_type "."]]` can be used to create documentation strings
+/// Interpets its input as a preinterpret stream.
 ///
 /// See the [crate-level documentation](crate) for full details.
 #[proc_macro]
-pub fn preinterpret(token_stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    preinterpret_internal(proc_macro2::TokenStream::from(token_stream))
+pub fn stream(token_stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    preinterpret_stream_internal(proc_macro2::TokenStream::from(token_stream))
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }
 
-fn preinterpret_internal(input: TokenStream) -> SynResult<TokenStream> {
+fn preinterpret_stream_internal(input: TokenStream) -> SynResult<TokenStream> {
     let mut interpreter = Interpreter::new();
 
     let interpretation_stream = input
@@ -552,6 +538,37 @@ fn preinterpret_internal(input: TokenStream) -> SynResult<TokenStream> {
 
     let interpreted_stream = interpretation_stream
         .interpret_to_new_stream(&mut interpreter)
+        .convert_to_final_result()?;
+
+    unsafe {
+        // RUST-ANALYZER-SAFETY: This might drop transparent groups in the output of
+        // rust-analyzer. There's not much we can do here...
+        Ok(interpreted_stream.into_token_stream())
+    }
+}
+
+/// Interpets its input as a preinterpret expression block, which should return a token stream.
+///
+/// See the [crate-level documentation](crate) for full details.
+#[proc_macro]
+pub fn run(token_stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    preinterpret_run_internal(proc_macro2::TokenStream::from(token_stream))
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
+}
+
+fn preinterpret_run_internal(input: TokenStream) -> SynResult<TokenStream> {
+    let mut interpreter = Interpreter::new();
+
+    let block_content = input
+        .source_parse_with(ExpressionBlockContent::parse)
+        .convert_to_final_result()?;
+
+    let interpreted_stream = block_content
+        .evaluate(&mut interpreter, Span::call_site().into())
+        .and_then(|x| {
+            x.into_new_output_stream(Grouping::Flattened, StreamOutputBehaviour::PermitArrays)
+        })
         .convert_to_final_result()?;
 
     unsafe {

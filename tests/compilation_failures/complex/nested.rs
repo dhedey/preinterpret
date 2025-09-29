@@ -1,7 +1,7 @@
 use preinterpret::*;
 
 fn main() {
-    preinterpret!([!if! true {
+    stream!([!if! true {
         [!if! true {
             [!if! true {
                 [!error! {

@@ -1,5 +1,5 @@
 use preinterpret::*;
 
 fn main() {
-    preinterpret!([!while! true {}]);
+    stream!([!while! true {}]);
 }

@@ -184,6 +184,106 @@ Implement the following. (NB - do we need to add support for )
 * Strings:
   * `error(%[span])`
 
+## Repeat output bindings
+
+* Use case: Easily create the below code, similar to a procedural macro. Notably creating tuples of all sizes
+* We need maps or repeats. A simple join isn't enough for . Consider alternatives to the below syntax.
+  * Option 0: Do nothing. Use `for x in A..Z { let ident = x.ident(); $[x,] }`
+  * Option 1: `%*(#generics,)` or `%(#generics),` like declarative macros.
+    * All the variable bindings in the repeat must refer to arrays or streams (i.e. iterables) of the same length, similar to proc macros.
+    * BUT sadly we'll often have arrays of objects, so we really want to map e.g. `arr[i].x`
+  * Option 2: Python style iterator comprehension `#(%[x,] for x in generics)` using a `for` extension
+              ... actually we already have this kinda with the for expression returning a list `for x in A..Z { x.ident() }`
+  * Option 3: Specific methods for this `#(generics.join(%[,]))` and `#(generics.trailing_join(%[,]))`
+  * Option 4: Map methods
+
+Option 0 - Do nothing
+```rust
+// Impls `MyTrait` for tuples of size 0 to 10
+preinterpret::run! {
+  for N in 0..10 {
+    let comma_separated_types = %[];
+    for name in 'A'..'Z'.take(N) {
+      let ident = name.ident();
+      comma_separated_types += %[#ident,];
+    }
+    %[
+      impl<#comma_separated_types> MyTrait for (#comma_separated_types) {}
+    ]
+  }
+}
+```
+Or even, with for expressions returning arrays:
+```rust
+// Impls `MyTrait` for tuples of size 0 to 10
+preinterpret::run! {
+  for N in 0..10 {
+    let comma_separated_types = (for name in 'A'..'Z'.take(N) { name.ident() }).join(%[,]);
+    %[
+      impl<#comma_separated_types> MyTrait for (#comma_separated_types) {}
+    ]
+  }
+}
+```
+
+Option 1 - Output repeat syntax, like declarative macros output binding
+```rust
+// Impls `MyTrait` for tuples of size 0 to 10
+preinterpret::run! {
+  for N in 0..10 {
+    let types = %[A B C D E F G H I J K L M N O P Q R S T].take(N);
+    %[
+        impl<%,*(#types)> MyTrait for (%*(#types,)) {}
+    ]
+  }
+}
+```
+
+Option 2 - Python-style for comprehensions? (or rust-style one-line for expressions)
+```rust
+// Impls `MyTrait` for tuples of size 0 to 10
+preinterpret::run! {
+  for N in 0..10 {
+    let type_params = [x.ident() for x in A..Z.take(N)];
+    // OR type_params = for x in A..Z { x.ident() }
+    let tuple = %[( #(%[#x,] for x in type_params) )];
+    let generics = %[< #(%[#x,] for x in type_params) >];
+    %[
+        impl#generics MyTrait for #tuple {}
+    ]
+  }
+}
+```
+
+Option 3 - Explicit methods
+```rust
+// Impls `MyTrait` for tuples of size 0 to 10
+preinterpret::run! {
+  for N in 0..10 {
+    let type_params = %[A B C D E F G H I J K L M N].take(N);
+    %[
+        impl <#(type_params.join(%[,]))> MyTrait for (#(type_params.trailing_join(%[,]))) {}
+    ]
+  }
+}
+```
+
+
+Option 4 - Maps:
+```rust
+// Impls `MyTrait` for tuples of size 0 to 10
+preinterpret::run! {
+  for N in 0..10 {
+    let idents = A..Z.take(N).map(|x| x.ident());
+    let type_params = %[< #(idents.map(|x| %[#x,])) >];
+    let tuple = %[( #(idents.map(|x| %[#x,])) )];
+    %[
+        impl #type_params MyTrait for #tuple {}
+    ]
+  }
+}
+```
+
 ## Error improvements
 
 * Distinguish a runtime error from a coding error (e.g. parse error, or "no method of type")

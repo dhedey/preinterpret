@@ -39,7 +39,7 @@ impl<C> HandleTransformation for TransformSegment<C> {
 #[derive(Clone)]
 pub(crate) enum TransformItem {
     Command(Command),
-    ExpressionBlock(ExpressionBlock),
+    ExpressionBlock(EmbeddedExpression),
     Transformer(Transformer),
     TransformStreamInput(ExplicitTransformStream),
     ExactPunct(Punct),

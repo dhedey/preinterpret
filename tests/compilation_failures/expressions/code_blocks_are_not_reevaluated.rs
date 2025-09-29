@@ -1,7 +1,7 @@
 use preinterpret::*;
 
 fn main() {
-    let _ = preinterpret!{
+    let _ = stream!{
         #(
             let indirect = [!raw! [!error! "This was a re-evaluation"]];
             // We don't get a re-evaluation. Instead, we get a parse error, because we end up

@@ -2,7 +2,7 @@
 mod prelude;
 use prelude::*;
 
-preinterpret! {
+preinterpret::stream! {
     [!set! #bytes = 32]
     [!set! #postfix = Hello World #bytes]
     [!set! #some_symbols = and some symbols such as [!raw! #] and #123]

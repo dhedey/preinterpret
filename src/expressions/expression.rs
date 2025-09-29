@@ -33,7 +33,7 @@ pub(super) enum SourceExpressionLeaf {
     Command(Command),
     Variable(VariableIdentifier),
     Discarded(Token![_]),
-    ExpressionBlock(ExpressionBlock),
+    ExpressionBlock(EmbeddedExpression),
     Value(SharedValue),
 }
 

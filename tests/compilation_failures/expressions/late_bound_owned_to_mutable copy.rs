@@ -1,7 +1,7 @@
 use preinterpret::*;
 
 fn main() {
-    let _ = preinterpret!{
+    let _ = stream!{
         #(
             let a = "a";
             "b".swap(a);

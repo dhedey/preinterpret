@@ -1,7 +1,7 @@
 // This file is imported into lots of different integration test files, each of which is considered as a separate crates / compilation unit.
 // Some of these exports aren't used by all integration test files, so we need to suppress the warnings.
 #![allow(unused_imports, unused_macros)]
-pub use preinterpret::*;
+pub(crate) use preinterpret::*;
 
 #[allow(dead_code)] // This is used only when ui tests are running
 pub(crate) fn should_run_ui_tests() -> bool {
@@ -16,10 +16,10 @@ pub(crate) fn should_run_ui_tests() -> bool {
 
 macro_rules! preinterpret_assert_eq {
     (#($($input:tt)*), $($output:tt)*) => {
-        assert_eq!(preinterpret!(#($($input)*)), $($output)*);
+        assert_eq!(preinterpret::run!($($input)*), $($output)*);
     };
     ($input:tt, $($output:tt)*) => {
-        assert_eq!(preinterpret!($input), $($output)*);
+        assert_eq!(preinterpret::stream!($input), $($output)*);
     };
 }
 

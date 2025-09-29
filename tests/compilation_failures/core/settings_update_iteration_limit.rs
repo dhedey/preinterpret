@@ -1,7 +1,7 @@
 use preinterpret::*;
 
 fn main() {
-    preinterpret!{
+    stream!{
         [!settings! { iteration_limit: 5 }]
         [!loop! {}]
     };

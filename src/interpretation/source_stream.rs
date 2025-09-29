@@ -42,7 +42,7 @@ impl HasSpan for SourceStream {
 pub(crate) enum SourceItem {
     Command(Command),
     Variable(MarkedVariable),
-    ExpressionBlock(ExpressionBlock),
+    ExpressionBlock(EmbeddedExpression),
     SourceGroup(SourceGroup),
     Punct(Punct),
     Ident(Ident),

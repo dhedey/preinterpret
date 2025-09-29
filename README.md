@@ -15,13 +15,15 @@ If updating this readme, please ensure that the lib.rs rustdoc is also updated:
 * Run ./style-fix.sh
 -->
 
-This crate provides the `preinterpret!` macro, which works as a simple pre-processor to the token stream. It takes inspiration from and effectively combines the [quote](https://crates.io/crates/quote), [paste](https://crates.io/crates/paste) and [syn](https://crates.io/crates/syn) crates, to empower code generation authors and declarative macro writers, bringing:
+This crate takes the pain out of Rust code generation. It provides the `stream!` and `run!` macros which execute a simple but clear and powerful Rust-inspired interpreted language.
+
+It takes inspiration from and effectively combines the [quote](https://crates.io/crates/quote), [paste](https://crates.io/crates/paste) and [syn](https://crates.io/crates/syn) crates, to empower code generation authors and declarative macro writers, bringing:
 
 * **Heightened [readability](#readability)** - quote-like variable definition and substitution make it easier to work with code generation code.
 * **Heightened [expressivity](#expressivity)** - a toolkit of simple commands reduce boilerplate, and mitigate the need to build custom procedural macros in some cases.
 * **Heightened [simplicity](#simplicity)** - helping developers avoid the confusing corners [[1](https://veykril.github.io/tlborm/decl-macros/patterns/callbacks.html), [2](https://github.com/rust-lang/rust/issues/96184#issue-1207293401), [3](https://veykril.github.io/tlborm/decl-macros/minutiae/metavar-and-expansion.html), [4](https://veykril.github.io/tlborm/decl-macros/patterns/push-down-acc.html)] of declarative macro land.
 
-The `preinterpret!` macro can be used inside the output of a declarative macro, or by itself, functioning as a mini code generation tool all of its own.
+The `stream!:run!` macro can be used inside the output of a declarative macro, or by itself, functioning as a mini code generation tool all of its own.
 
 ```toml
 [dependencies]
@@ -48,7 +50,7 @@ macro_rules! create_my_type {
         $vis:vis struct $type_name:ident {
             $($field_name:ident: $inner_type:ident),* $(,)?
         }
-    ) => {preinterpret::preinterpret! {
+    ) => {preinterpret::stream! {
         [!set! #type_name = [!ident! My $type_name]]
         
         $(#[$attributes])*
@@ -101,7 +103,7 @@ In other words, you typically want to replace `[< ... >]` with `[!ident! ...]`, 
 For example:
 
 ```rust
-preinterpret::preinterpret! {
+preinterpret::stream! {
     [!set! #type_name = [!ident! HelloWorld]]
 
     struct #type_name;
@@ -192,7 +194,7 @@ macro_rules! impl_marker_traits {
             // Arbitrary (non-const) type generics
             < $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? $( = $deflt:tt)? ),+ >
         )?
-    } => {preinterpret::preinterpret!{
+    } => {preinterpret::stream!{
         [!set! #impl_generics = $(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)?]
         [!set! #type_generics = $(< $( $lt ),+ >)?]
         [!set! #my_type = $type_name #type_generics]
@@ -221,7 +223,7 @@ For example:
 macro_rules! create_struct_and_getters {
     (
         $name:ident { $($field:ident),* $(,)? }
-    ) => {preinterpret::preinterpret!{
+    ) => {preinterpret::stream!{
         // Define a struct with the given fields
         pub struct $name {
             $(
@@ -251,7 +253,7 @@ For example:
 macro_rules! count_idents {
     {
         $($item: ident),*
-    } => {preinterpret::preinterpret!{
+    } => {preinterpret::stream!{
         [!set! #current_index = 0usize]
         $(
             [!ignore! $item] // Loop over the items, but don't output them
@@ -266,7 +268,7 @@ macro_rules! count_idents {
 To quickly explain how this works, imagine we evaluate `count_idents!(a, b, c)`. As `count_idents!` is the most outer macro, it runs first, and expands into the following token stream:
 
 ```rust
-let count = preinterpret::preinterpret!{
+let count = preinterpret::stream!{
   [!set! #current_index = 0usize]
   [!ignore! a]
   [!set! #current_index = #current_index + 1]
@@ -279,7 +281,7 @@ let count = preinterpret::preinterpret!{
 };
 ```
 
-Now the `preinterpret!` macro runs, resulting in `#count` equal to the token stream `0usize + 1 + 1 + 1`.
+Now the `stream!` macro runs, resulting in `#count` equal to the token stream `0usize + 1 + 1 + 1`.
 This will be improved in future releases by adding support for mathematical operations on integer literals.
 
 ### Simplicity
@@ -325,7 +327,7 @@ Preinterpret is more explicit about types, and doesn't have these issues:
 macro_rules! impl_new_type {
     {
         $vis:vis $my_type:ident($my_inner_type:ty)
-    } => {preinterpret::preinterpret!{
+    } => {preinterpret::stream!{
         #[xyz(as_type = [!string! $my_inner_type])]
         $vis struct $my_type($my_inner_type);
     }}
@@ -377,7 +379,7 @@ And then we can end up with syntax like the following:
 // =================================================
 
 // A simple macro can just take a token stream as input
-preinterpret::preinterpret! {
+preinterpret::stream! {
     [!macro_rules! my_macro!(#input) {
         [!parse_loop! #input as (#trait for #type), {
             impl #trait for #type
@@ -392,7 +394,7 @@ my_macro!(
 // It can also parse its input in the declaration.
 // Repeated sections have to be captured as a stream, and delegated to explicit lazy [!for! ...] binding.
 // This enforces a more procedural code style, and gives clearer compiler errors.
-preinterpret::preinterpret! {
+preinterpret::stream! {
     [!macro_rules! multi_impl_super_duper!(
         #type_list,
         ImplOptions [!FIELDS! {

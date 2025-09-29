@@ -58,7 +58,7 @@ pub(crate) enum ExactItem {
     Transformer(Transformer),
     ExactCommandOutput(Command),
     ExactVariableOutput(MarkedVariable),
-    ExactExpressionBlock(ExpressionBlock),
+    ExactExpressionBlock(EmbeddedExpression),
     ExactPunct(Punct),
     ExactIdent(Ident),
     ExactLiteral(Literal),

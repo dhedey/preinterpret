@@ -1,5 +1,5 @@
 error: unexpected token
- --> tests/compilation_failures/transforming/invalid_content_too_long.rs:4:51
+ --> tests/compilation_failures/transforming/invalid_content_too_long.rs:4:45
   |
-4 |     preinterpret!([!let! Hello World = Hello World!!!]);
-  |                                                   ^
+4 |     stream!([!let! Hello World = Hello World!!!]);
+  |                                             ^

@@ -75,9 +75,9 @@ fn test_variable_parsing() {
 #[test]
 fn test_explicit_transform_stream() {
     // It's not very exciting
-    preinterpret!([!let! @(Hello World) = Hello World]);
-    preinterpret!([!let! Hello @(World) = Hello World]);
-    preinterpret!([!let! @(Hello @(World)) = Hello World]);
+    preinterpret::stream!([!let! @(Hello World) = Hello World]);
+    preinterpret::stream!([!let! Hello @(World) = Hello World]);
+    preinterpret::stream!([!let! @(Hello @(World)) = Hello World]);
 }
 
 #[test]

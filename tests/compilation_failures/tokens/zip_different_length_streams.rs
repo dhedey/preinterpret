@@ -1,7 +1,7 @@
 use preinterpret::*;
 
 fn main() {
-    preinterpret! {
+    stream! {
         [!zip! [["A", "B", "C"], [1, 2, 3, 4]]]
     }
 }

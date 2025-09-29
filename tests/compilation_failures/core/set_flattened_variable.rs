@@ -1,7 +1,7 @@
 use preinterpret::*;
 
 fn main() {
-    preinterpret! {
+    stream! {
         [!set! #..variable = 1]
     }
 }
