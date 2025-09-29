@@ -17,50 +17,6 @@ impl ExpressionChar {
         }
     }
 
-    pub(super) fn handle_unary_operation(
-        self,
-        operation: OutputSpanned<UnaryOperation>,
-    ) -> ExecutionResult<ExpressionValue> {
-        let char = self.value;
-        Ok(match operation.operation {
-            UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => {
-                return operation.unsupported(self)
-            }
-            UnaryOperation::Cast { target, .. } => match target {
-                CastTarget::Integer(IntegerKind::Untyped) => {
-                    operation.output(UntypedInteger::from_fallback(char as FallbackInteger))
-                }
-                CastTarget::Integer(IntegerKind::I8) => operation.output(char as i8),
-                CastTarget::Integer(IntegerKind::I16) => operation.output(char as i16),
-                CastTarget::Integer(IntegerKind::I32) => operation.output(char as i32),
-                CastTarget::Integer(IntegerKind::I64) => operation.output(char as i64),
-                CastTarget::Integer(IntegerKind::I128) => operation.output(char as i128),
-                CastTarget::Integer(IntegerKind::Isize) => operation.output(char as isize),
-                CastTarget::Integer(IntegerKind::U8) => operation.output(char as u8),
-                CastTarget::Integer(IntegerKind::U16) => operation.output(char as u16),
-                CastTarget::Integer(IntegerKind::U32) => operation.output(char as u32),
-                CastTarget::Integer(IntegerKind::U64) => operation.output(char as u64),
-                CastTarget::Integer(IntegerKind::U128) => operation.output(char as u128),
-                CastTarget::Integer(IntegerKind::Usize) => operation.output(char as usize),
-                CastTarget::Char => operation.output(char),
-                CastTarget::Boolean | CastTarget::Float(_) => return operation.unsupported(self),
-                CastTarget::String => operation.output(char.to_string()),
-                CastTarget::Stream => {
-                    operation.output(operation.output(char).into_new_output_stream(
-                        Grouping::Flattened,
-                        StreamOutputBehaviour::Standard,
-                    )?)
-                }
-                CastTarget::Group => {
-                    operation.output(operation.output(char).into_new_output_stream(
-                        Grouping::Grouped,
-                        StreamOutputBehaviour::Standard,
-                    )?)
-                }
-            },
-        })
-    }
-
     pub(super) fn handle_integer_binary_operation(
         self,
         _right: ExpressionInteger,
@@ -122,4 +78,88 @@ pub(crate) struct CharTypeData;
 impl MethodResolutionTarget for CharTypeData {
     type Parent = ValueTypeData;
     const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+
+    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+        Some(match operation {
+            UnaryOperation::Cast { target, .. } => match target {
+                CastTarget::Integer(IntegerKind::Untyped) => {
+                    wrap_unary!((input: char) -> UntypedInteger {
+                        UntypedInteger::from_fallback(input as FallbackInteger)
+                    })
+                }
+                CastTarget::Integer(IntegerKind::I8) => {
+                    wrap_unary!((input: char) -> i8 {
+                        input as i8
+                    })
+                }
+                CastTarget::Integer(IntegerKind::I16) => {
+                    wrap_unary!((input: char) -> i16 {
+                        input as i16
+                    })
+                }
+                CastTarget::Integer(IntegerKind::I32) => {
+                    wrap_unary!((input: char) -> i32 {
+                        input as i32
+                    })
+                }
+                CastTarget::Integer(IntegerKind::I64) => {
+                    wrap_unary!((input: char) -> i64 {
+                        input as i64
+                    })
+                }
+                CastTarget::Integer(IntegerKind::I128) => {
+                    wrap_unary!((input: char) -> i128 {
+                        input as i128
+                    })
+                }
+                CastTarget::Integer(IntegerKind::Isize) => {
+                    wrap_unary!((input: char) -> isize {
+                        input as isize
+                    })
+                }
+                CastTarget::Integer(IntegerKind::U8) => {
+                    wrap_unary!((input: char) -> u8 {
+                        input as u8
+                    })
+                }
+                CastTarget::Integer(IntegerKind::U16) => {
+                    wrap_unary!((input: char) -> u16 {
+                        input as u16
+                    })
+                }
+                CastTarget::Integer(IntegerKind::U32) => {
+                    wrap_unary!((input: char) -> u32 {
+                        input as u32
+                    })
+                }
+                CastTarget::Integer(IntegerKind::U64) => {
+                    wrap_unary!((input: char) -> u64 {
+                        input as u64
+                    })
+                }
+                CastTarget::Integer(IntegerKind::U128) => {
+                    wrap_unary!((input: char) -> u128 {
+                        input as u128
+                    })
+                }
+                CastTarget::Integer(IntegerKind::Usize) => {
+                    wrap_unary!((input: char) -> usize {
+                        input as usize
+                    })
+                }
+                CastTarget::Char => {
+                    wrap_unary!((input: char) -> char {
+                        input
+                    })
+                }
+                CastTarget::String => {
+                    wrap_unary!((input: char) -> String {
+                        input.to_string()
+                    })
+                }
+                _ => return None,
+            },
+            _ => return None,
+        })
+    }
 }

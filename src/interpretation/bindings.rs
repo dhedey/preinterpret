@@ -144,6 +144,14 @@ impl LateBoundValue {
     }
 }
 
+impl Deref for LateBoundValue {
+    type Target = ExpressionValue;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_ref()
+    }
+}
+
 impl AsRef<ExpressionValue> for LateBoundValue {
     fn as_ref(&self) -> &ExpressionValue {
         match self {
@@ -243,6 +251,14 @@ impl OwnedValue {
 impl<T: ToExpressionValue> Owned<T> {
     pub(crate) fn into_value(self) -> ExpressionValue {
         self.inner.to_value(self.span_range)
+    }
+
+    pub(crate) fn into_owned_value(self) -> OwnedValue {
+        let span_range = self.span_range;
+        Owned {
+            inner: self.into_value(),
+            span_range,
+        }
     }
 }
 

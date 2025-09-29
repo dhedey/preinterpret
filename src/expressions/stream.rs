@@ -133,7 +133,7 @@ impl MethodResolutionTarget for StreamTypeData {
                     if let ExpressionValue::Stream(_) = &coerced {
                         return span_range.execution_err("The stream could not be coerced into a single value");
                     }
-                    operation.new_evaluate(coerced.into())
+                    operation.evaluate(coerced.into())
                 })
             }
             _ => return None,

@@ -19,17 +19,6 @@ impl ExpressionFloat {
         })
     }
 
-    pub(super) fn handle_unary_operation(
-        self,
-        operation: OutputSpanned<UnaryOperation>,
-    ) -> ExecutionResult<ExpressionValue> {
-        match self.value {
-            ExpressionFloatValue::Untyped(input) => input.handle_unary_operation(operation),
-            ExpressionFloatValue::F32(input) => input.handle_unary_operation(operation),
-            ExpressionFloatValue::F64(input) => input.handle_unary_operation(operation),
-        }
-    }
-
     pub(super) fn handle_integer_binary_operation(
         self,
         right: ExpressionInteger,
@@ -174,57 +163,6 @@ impl UntypedFloat {
         Self::new_from_lit_float(literal.into())
     }
 
-    pub(super) fn handle_unary_operation(
-        self,
-        operation: OutputSpanned<UnaryOperation>,
-    ) -> ExecutionResult<ExpressionValue> {
-        let input = self.parse_fallback()?;
-        Ok(match operation.operation {
-            UnaryOperation::Neg { .. } => {
-                panic!("Float - operation should go through new method system, not legacy handle_unary_operation")
-            }
-            UnaryOperation::Not { .. } => return operation.unsupported(self),
-            UnaryOperation::Cast { target, .. } => match target {
-                CastTarget::Integer(IntegerKind::Untyped) => {
-                    operation.output(UntypedInteger::from_fallback(input as FallbackInteger))
-                }
-                CastTarget::Integer(IntegerKind::I8) => operation.output(input as i8),
-                CastTarget::Integer(IntegerKind::I16) => operation.output(input as i16),
-                CastTarget::Integer(IntegerKind::I32) => operation.output(input as i32),
-                CastTarget::Integer(IntegerKind::I64) => operation.output(input as i64),
-                CastTarget::Integer(IntegerKind::I128) => operation.output(input as i128),
-                CastTarget::Integer(IntegerKind::Isize) => operation.output(input as isize),
-                CastTarget::Integer(IntegerKind::U8) => operation.output(input as u8),
-                CastTarget::Integer(IntegerKind::U16) => operation.output(input as u16),
-                CastTarget::Integer(IntegerKind::U32) => operation.output(input as u32),
-                CastTarget::Integer(IntegerKind::U64) => operation.output(input as u64),
-                CastTarget::Integer(IntegerKind::U128) => operation.output(input as u128),
-                CastTarget::Integer(IntegerKind::Usize) => operation.output(input as usize),
-                CastTarget::Float(FloatKind::Untyped) => {
-                    operation.output(UntypedFloat::from_fallback(input as FallbackFloat))
-                }
-                CastTarget::Float(FloatKind::F32) => operation.output(input as f32),
-                CastTarget::Float(FloatKind::F64) => operation.output(input),
-                CastTarget::String => operation.output(input.to_string()),
-                CastTarget::Boolean | CastTarget::Char => {
-                    return operation.execution_err("This cast is not supported")
-                }
-                CastTarget::Stream => {
-                    operation.output(operation.output(self).into_new_output_stream(
-                        Grouping::Flattened,
-                        StreamOutputBehaviour::Standard,
-                    )?)
-                }
-                CastTarget::Group => {
-                    operation.output(operation.output(self).into_new_output_stream(
-                        Grouping::Grouped,
-                        StreamOutputBehaviour::Standard,
-                    )?)
-                }
-            },
-        })
-    }
-
     pub(super) fn handle_integer_binary_operation(
         self,
         _rhs: ExpressionInteger,
@@ -333,60 +271,97 @@ impl MethodResolutionTarget for UntypedFloatTypeData {
     fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
         Some(match operation {
             UnaryOperation::Neg { .. } => {
-                wrap_unary!((this: Owned<UntypedFloat>) -> ExecutionResult<UntypedFloat> {
-                    let input = this.into_inner().parse_fallback()?;
-                    Ok(UntypedFloat::from_fallback(-input))
+                wrap_unary!((input: UntypedFloatFallback) -> UntypedFloat {
+                    UntypedFloat::from_fallback(-input.0)
                 })
             }
             UnaryOperation::Cast { target, .. } => match target {
+                CastTarget::Integer(IntegerKind::Untyped) => {
+                    wrap_unary!((input: UntypedFloatFallback) -> UntypedInteger {
+                        UntypedInteger::from_fallback(input.0 as FallbackInteger)
+                    })
+                }
+                CastTarget::Integer(IntegerKind::I8) => {
+                    wrap_unary!((input: UntypedFloatFallback) -> i8 {
+                        input.0 as i8
+                    })
+                }
+                CastTarget::Integer(IntegerKind::I16) => {
+                    wrap_unary!((input: UntypedFloatFallback) -> i16 {
+                        input.0 as i16
+                    })
+                }
+                CastTarget::Integer(IntegerKind::I32) => {
+                    wrap_unary!((input: UntypedFloatFallback) -> i32 {
+                        input.0 as i32
+                    })
+                }
+                CastTarget::Integer(IntegerKind::I64) => {
+                    wrap_unary!((input: UntypedFloatFallback) -> i64 {
+                        input.0 as i64
+                    })
+                }
+                CastTarget::Integer(IntegerKind::I128) => {
+                    wrap_unary!((input: UntypedFloatFallback) -> i128 {
+                        input.0 as i128
+                    })
+                }
+                CastTarget::Integer(IntegerKind::Isize) => {
+                    wrap_unary!((input: UntypedFloatFallback) -> isize {
+                        input.0 as isize
+                    })
+                }
+                CastTarget::Integer(IntegerKind::U8) => {
+                    wrap_unary!((input: UntypedFloatFallback) -> u8 {
+                        input.0 as u8
+                    })
+                }
+                CastTarget::Integer(IntegerKind::U16) => {
+                    wrap_unary!((input: UntypedFloatFallback) -> u16 {
+                        input.0 as u16
+                    })
+                }
+                CastTarget::Integer(IntegerKind::U32) => {
+                    wrap_unary!((input: UntypedFloatFallback) -> u32 {
+                        input.0 as u32
+                    })
+                }
+                CastTarget::Integer(IntegerKind::U64) => {
+                    wrap_unary!((input: UntypedFloatFallback) -> u64 {
+                        input.0 as u64
+                    })
+                }
+                CastTarget::Integer(IntegerKind::U128) => {
+                    wrap_unary!((input: UntypedFloatFallback) -> u128 {
+                        input.0 as u128
+                    })
+                }
+                CastTarget::Integer(IntegerKind::Usize) => {
+                    wrap_unary!((input: UntypedFloatFallback) -> usize {
+                        input.0 as usize
+                    })
+                }
                 CastTarget::Float(FloatKind::Untyped) => {
-                    wrap_unary!((this: Owned<UntypedFloat>) -> ExecutionResult<UntypedFloat> {
-                        let input = this.into_inner().parse_fallback()?;
-                        Ok(UntypedFloat::from_fallback(input))
+                    wrap_unary!((input: UntypedFloatFallback) -> UntypedFloat {
+                        UntypedFloat::from_fallback(input.0)
                     })
                 }
                 CastTarget::Float(FloatKind::F32) => {
-                    wrap_unary!((this: Owned<UntypedFloat>) -> ExecutionResult<f32> {
-                        let input = this.into_inner().parse_fallback()?;
-                        Ok(input as f32)
+                    wrap_unary!((input: UntypedFloatFallback) -> f32 {
+                        input.0 as f32
                     })
                 }
                 CastTarget::Float(FloatKind::F64) => {
-                    wrap_unary!((this: Owned<UntypedFloat>) -> ExecutionResult<f64> {
-                        let input = this.into_inner().parse_fallback()?;
-                        Ok(input)
+                    wrap_unary!((input: UntypedFloatFallback) -> f64 {
+                        input.0
                     })
                 }
                 CastTarget::String => {
-                    wrap_unary!((this: Owned<UntypedFloat>) -> ExecutionResult<String> {
-                        let input = this.into_inner().parse_fallback()?;
-                        Ok(input.to_string())
+                    wrap_unary!((input: UntypedFloatFallback) -> String {
+                        input.0.to_string()
                     })
                 }
-                CastTarget::Stream => {
-                    wrap_unary!((this: Owned<UntypedFloat>) -> ExecutionResult<ExpressionValue> {
-                        use proc_macro2::Span;
-                        let input = this.into_inner().parse_fallback()?;
-                        let span_range = SpanRange::new_single(Span::call_site());
-                        Ok(UntypedFloat::from_fallback(input).to_value(span_range).into_new_output_stream(
-                            super::value::Grouping::Flattened,
-                            super::value::StreamOutputBehaviour::Standard,
-                        )?.to_value(span_range))
-                    })
-                }
-                CastTarget::Group => {
-                    wrap_unary!((this: Owned<UntypedFloat>) -> ExecutionResult<ExpressionValue> {
-                        use proc_macro2::Span;
-                        let input = this.into_inner().parse_fallback()?;
-                        let span_range = SpanRange::new_single(Span::call_site());
-                        Ok(UntypedFloat::from_fallback(input).to_value(span_range).into_new_output_stream(
-                            super::value::Grouping::Grouped,
-                            super::value::StreamOutputBehaviour::Standard,
-                        )?.to_value(span_range))
-                    })
-                }
-                // Integer casts - delegate to legacy system for now
-                CastTarget::Integer(_) | CastTarget::Boolean | CastTarget::Char => return None,
+                _ => return None,
             },
             _ => return None,
         })
@@ -409,10 +384,93 @@ macro_rules! impl_float_operations {
                     UnaryOperation::Neg { .. } => wrap_unary!((this: Owned<$float_type>) -> ExecutionResult<$float_type> {
                         Ok(-this.into_inner())
                     }),
-                    UnaryOperation::Cast { .. } => {
-                        // For now, fallback to legacy for casting
-                        // TODO: Implement comprehensive float casting
-                        return None;
+                    UnaryOperation::Cast { target, .. } => match target {
+                        CastTarget::Integer(IntegerKind::Untyped) => {
+                            wrap_unary!((input: $float_type) -> UntypedInteger {
+                                UntypedInteger::from_fallback(input as FallbackInteger)
+                            })
+                        }
+                        CastTarget::Integer(IntegerKind::I8) => {
+                            wrap_unary!((input: $float_type) -> i8 {
+                                input as i8
+                            })
+                        }
+                        CastTarget::Integer(IntegerKind::I16) => {
+                            wrap_unary!((input: $float_type) -> i16 {
+                                input as i16
+                            })
+                        }
+                        CastTarget::Integer(IntegerKind::I32) => {
+                            wrap_unary!((input: $float_type) -> i32 {
+                                input as i32
+                            })
+                        }
+                        CastTarget::Integer(IntegerKind::I64) => {
+                            wrap_unary!((input: $float_type) -> i64 {
+                                input as i64
+                            })
+                        }
+                        CastTarget::Integer(IntegerKind::I128) => {
+                            wrap_unary!((input: $float_type) -> i128 {
+                                input as i128
+                            })
+                        }
+                        CastTarget::Integer(IntegerKind::Isize) => {
+                            wrap_unary!((input: $float_type) -> isize {
+                                input as isize
+                            })
+                        }
+                        CastTarget::Integer(IntegerKind::U8) => {
+                            wrap_unary!((input: $float_type) -> u8 {
+                                input as u8
+                            })
+                        }
+                        CastTarget::Integer(IntegerKind::U16) => {
+                            wrap_unary!((input: $float_type) -> u16 {
+                                input as u16
+                            })
+                        }
+                        CastTarget::Integer(IntegerKind::U32) => {
+                            wrap_unary!((input: $float_type) -> u32 {
+                                input as u32
+                            })
+                        }
+                        CastTarget::Integer(IntegerKind::U64) => {
+                            wrap_unary!((input: $float_type) -> u64 {
+                                input as u64
+                            })
+                        }
+                        CastTarget::Integer(IntegerKind::U128) => {
+                            wrap_unary!((input: $float_type) -> u128 {
+                                input as u128
+                            })
+                        }
+                        CastTarget::Integer(IntegerKind::Usize) => {
+                            wrap_unary!((input: $float_type) -> usize {
+                                input as usize
+                            })
+                        }
+                        CastTarget::Float(FloatKind::Untyped) => {
+                            wrap_unary!((input: $float_type) -> UntypedFloat {
+                                UntypedFloat::from_fallback(input as FallbackFloat)
+                            })
+                        }
+                        CastTarget::Float(FloatKind::F32) => {
+                            wrap_unary!((input: $float_type) -> f32 {
+                                input as f32
+                            })
+                        }
+                        CastTarget::Float(FloatKind::F64) => {
+                            wrap_unary!((input: $float_type) -> f64 {
+                                input as f64
+                            })
+                        }
+                        CastTarget::String => {
+                            wrap_unary!((input: $float_type) -> String {
+                                input.to_string()
+                            })
+                        }
+                        _ => return None,
                     }
                     _ => return None,
                 })
@@ -434,38 +492,6 @@ macro_rules! impl_float_operations {
             }
         }
 
-        impl HandleUnaryOperation for $float_type {
-            fn handle_unary_operation(self, operation: OutputSpanned<UnaryOperation>) -> ExecutionResult<ExpressionValue> {
-                Ok(match operation.operation {
-                    UnaryOperation::Neg { .. } => {
-                        panic!("Float - operation should go through new method system, not legacy handle_unary_operation")
-                    },
-                    UnaryOperation::Not { .. } => return operation.unsupported(self),
-                    UnaryOperation::Cast { target, .. } => match target {
-                        CastTarget::Integer(IntegerKind::Untyped) => operation.output(UntypedInteger::from_fallback(self as FallbackInteger)),
-                        CastTarget::Integer(IntegerKind::I8) => operation.output(self as i8),
-                        CastTarget::Integer(IntegerKind::I16) => operation.output(self as i16),
-                        CastTarget::Integer(IntegerKind::I32) => operation.output(self as i32),
-                        CastTarget::Integer(IntegerKind::I64) => operation.output(self as i64),
-                        CastTarget::Integer(IntegerKind::I128) => operation.output(self as i128),
-                        CastTarget::Integer(IntegerKind::Isize) => operation.output(self as isize),
-                        CastTarget::Integer(IntegerKind::U8) => operation.output(self as u8),
-                        CastTarget::Integer(IntegerKind::U16) => operation.output(self as u16),
-                        CastTarget::Integer(IntegerKind::U32) => operation.output(self as u32),
-                        CastTarget::Integer(IntegerKind::U64) => operation.output(self as u64),
-                        CastTarget::Integer(IntegerKind::U128) => operation.output(self as u128),
-                        CastTarget::Integer(IntegerKind::Usize) => operation.output(self as usize),
-                        CastTarget::Float(FloatKind::Untyped) => operation.output(UntypedFloat::from_fallback(self as FallbackFloat)),
-                        CastTarget::Float(FloatKind::F32) => operation.output(self as f32),
-                        CastTarget::Float(FloatKind::F64) => operation.output(self as f64),
-                        CastTarget::String => operation.output(self.to_string()),
-                        CastTarget::Boolean | CastTarget::Char => return operation.execution_err("This cast is not supported"),
-                        CastTarget::Stream => operation.output(operation.output(self).into_new_output_stream(Grouping::Flattened, StreamOutputBehaviour::Standard)?),
-                        CastTarget::Group => operation.output(operation.output(self).into_new_output_stream(Grouping::Grouped, StreamOutputBehaviour::Standard)?),
-                    }
-                })
-            }
-        }
 
         impl HandleBinaryOperation for $float_type {
             fn handle_paired_binary_operation(self, rhs: Self, operation: OutputSpanned<PairedBinaryOperation>) -> ExecutionResult<ExpressionValue> {

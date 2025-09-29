@@ -130,18 +130,12 @@ impl UnaryOperation {
         operand_span_range
     }
 
-    pub(super) fn evaluate(self, input: ExpressionValue) -> ExecutionResult<ExpressionValue> {
-        let output_span_range = self.output_span_range(input.span_range());
-        input.handle_unary_operation(self.with_output_span_range(output_span_range))
-    }
-
-    pub(super) fn new_evaluate<T: ToExpressionValue>(
+    pub(super) fn evaluate<T: ToExpressionValue>(
         &self,
         input: Owned<T>,
     ) -> ExecutionResult<ResolvedValue> {
-        let input = input.map(|v, span_range| v.to_value(*span_range));
-        let kind = input.kind();
-        let method = kind.resolve_unary_operation(self).ok_or_else(|| {
+        let input = input.into_owned_value();
+        let method = input.kind().resolve_unary_operation(self).ok_or_else(|| {
             self.execution_error(format!(
                 "The {} operator is not supported for {} values",
                 self.symbolic_description(),
@@ -240,13 +234,6 @@ impl HasSpan for UnaryOperation {
             UnaryOperation::Cast { as_token, .. } => as_token.span,
         }
     }
-}
-
-pub(super) trait HandleUnaryOperation: Sized {
-    fn handle_unary_operation(
-        self,
-        operation: OutputSpanned<UnaryOperation>,
-    ) -> ExecutionResult<ExpressionValue>;
 }
 
 #[derive(Clone)]

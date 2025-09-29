@@ -566,7 +566,7 @@ mod arguments {
         fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self>;
     }
 
-    impl<T: ResolvableArgumentOwned> FromResolved for Owned<T> {
+    impl<T: ResolvableArgumentOwned + ResolvableArgumentTarget> FromResolved for Owned<T> {
         type ValueType = T::ValueType;
         const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Owned;
 
@@ -577,7 +577,7 @@ mod arguments {
         }
     }
 
-    impl<T: ResolvableArgumentShared> FromResolved for Shared<T> {
+    impl<T: ResolvableArgumentShared + ResolvableArgumentTarget> FromResolved for Shared<T> {
         type ValueType = T::ValueType;
         const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Shared;
 
@@ -586,7 +586,7 @@ mod arguments {
         }
     }
 
-    impl<T: ResolvableArgumentMutable> FromResolved for Mutable<T> {
+    impl<T: ResolvableArgumentMutable + ResolvableArgumentTarget> FromResolved for Mutable<T> {
         type ValueType = T::ValueType;
         const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Mutable;
 
@@ -597,7 +597,7 @@ mod arguments {
         }
     }
 
-    impl<T: ResolvableArgumentOwned> FromResolved for T {
+    impl<T: ResolvableArgumentOwned + ResolvableArgumentTarget> FromResolved for T {
         type ValueType = T::ValueType;
         const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Owned;
 
@@ -606,7 +606,9 @@ mod arguments {
         }
     }
 
-    impl<T: ResolvableArgumentOwned + ResolvableArgumentShared> FromResolved for CopyOnWrite<T> {
+    impl<T: ResolvableArgumentOwned + ResolvableArgumentShared + ResolvableArgumentTarget>
+        FromResolved for CopyOnWrite<T>
+    {
         type ValueType = T::ValueType;
         const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::CopyOnWrite;
 
@@ -639,32 +641,32 @@ mod arguments {
         }
     }
 
-    pub(crate) trait ResolvableArgument: Sized {
+    pub(crate) trait ResolvableArgumentTarget {
         type ValueType: MethodResolutionTarget;
     }
 
-    pub(crate) trait ResolvableArgumentOwned: ResolvableArgument {
+    pub(crate) trait ResolvableArgumentOwned: Sized {
         fn resolve_from_owned(value: ExpressionValue) -> ExecutionResult<Self>;
         fn resolve_owned(value: Owned<ExpressionValue>) -> ExecutionResult<Owned<Self>> {
             value.try_map(|v, _| Self::resolve_from_owned(v))
         }
     }
 
-    pub(crate) trait ResolvableArgumentShared: ResolvableArgument {
+    pub(crate) trait ResolvableArgumentShared: Sized {
         fn resolve_from_ref(value: &ExpressionValue) -> ExecutionResult<&Self>;
         fn resolve_shared(value: Shared<ExpressionValue>) -> ExecutionResult<Shared<Self>> {
             value.try_map(|v, _| Self::resolve_from_ref(v))
         }
     }
 
-    pub(crate) trait ResolvableArgumentMutable: ResolvableArgument {
+    pub(crate) trait ResolvableArgumentMutable: Sized {
         fn resolve_from_mut(value: &mut ExpressionValue) -> ExecutionResult<&mut Self>;
         fn resolve_mutable(value: Mutable<ExpressionValue>) -> ExecutionResult<Mutable<Self>> {
             value.try_map(|v, _| Self::resolve_from_mut(v))
         }
     }
 
-    impl ResolvableArgument for ExpressionValue {
+    impl ResolvableArgumentTarget for ExpressionValue {
         type ValueType = ValueTypeData;
     }
     impl ResolvableArgumentOwned for ExpressionValue {
@@ -685,7 +687,7 @@ mod arguments {
 
     macro_rules! impl_resolvable_argument_for {
         ($value_type:ty, ($value:ident) -> $type:ty $body:block) => {
-            impl ResolvableArgument for $type {
+            impl ResolvableArgumentTarget for $type {
                 type ValueType = $value_type;
             }
 
@@ -711,7 +713,7 @@ mod arguments {
 
     macro_rules! impl_delegated_resolvable_argument_for {
         ($value_type:ty, ($value:ident: $delegate:ty) -> $type:ty { $expr:expr }) => {
-            impl ResolvableArgument for $type {
+            impl ResolvableArgumentTarget for $type {
                 type ValueType = $value_type;
             }
 
@@ -767,9 +769,27 @@ mod arguments {
             }
         }
     }
-    pub(crate) struct UntypedIntegerFallback(pub i128);
 
-    impl ResolvableArgument for UntypedIntegerFallback {
+    pub(crate) struct MaybeTypedInt<X>(X);
+
+    impl<X: ResolvableArgumentOwned + FromStr> ResolvableArgumentOwned for MaybeTypedInt<X>
+    where
+        X::Err: core::fmt::Display,
+    {
+        fn resolve_from_owned(value: ExpressionValue) -> ExecutionResult<Self> {
+            Ok(Self(match value {
+                ExpressionValue::Integer(ExpressionInteger {
+                    value: ExpressionIntegerValue::Untyped(x),
+                    ..
+                }) => x.parse_as()?,
+                _ => value.resolve_as()?,
+            }))
+        }
+    }
+
+    pub(crate) struct UntypedIntegerFallback(pub FallbackInteger);
+
+    impl ResolvableArgumentTarget for UntypedIntegerFallback {
         type ValueType = UntypedIntegerTypeData;
     }
 
@@ -921,6 +941,19 @@ mod arguments {
         }
     }
 
+    pub(crate) struct UntypedFloatFallback(pub FallbackFloat);
+
+    impl ResolvableArgumentTarget for UntypedFloatFallback {
+        type ValueType = UntypedFloatTypeData;
+    }
+
+    impl ResolvableArgumentOwned for UntypedFloatFallback {
+        fn resolve_from_owned(input_value: ExpressionValue) -> ExecutionResult<Self> {
+            let value: UntypedFloat = input_value.resolve_as()?;
+            Ok(UntypedFloatFallback(value.parse_fallback()?))
+        }
+    }
+
     impl_resolvable_argument_for! {
         UntypedFloatTypeData,
         (value) -> UntypedFloat {
@@ -984,6 +1017,11 @@ mod arguments {
             }
         }
     }
+
+    impl_delegated_resolvable_argument_for!(
+        CharTypeData,
+        (value: ExpressionChar) -> char { value.value }
+    );
 
     impl_resolvable_argument_for! {
         ArrayTypeData,

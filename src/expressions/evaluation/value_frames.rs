@@ -39,23 +39,19 @@ impl ResolvedValue {
         }
     }
 
-    pub(crate) fn kind(&self) -> ValueKind {
-        self.as_value_ref().kind()
-    }
-
     pub(crate) fn as_value_ref(&self) -> &ExpressionValue {
-        match self {
-            ResolvedValue::Owned(owned) => owned.as_ref(),
-            ResolvedValue::Mutable(mutable) => mutable.as_ref(),
-            ResolvedValue::Shared(shared) => shared.as_ref(),
-            ResolvedValue::CopyOnWrite(copy_on_write) => copy_on_write.as_ref(),
-        }
+        self.as_ref()
     }
 }
 
 impl HasSpanRange for ResolvedValue {
     fn span_range(&self) -> SpanRange {
-        self.as_value_ref().span_range()
+        match self {
+            ResolvedValue::Owned(owned) => owned.span_range(),
+            ResolvedValue::CopyOnWrite(copy_on_write) => copy_on_write.span_range(),
+            ResolvedValue::Mutable(mutable) => mutable.span_range(),
+            ResolvedValue::Shared(shared) => shared.span_range(),
+        }
     }
 }
 
@@ -76,9 +72,22 @@ impl WithSpanRangeExt for ResolvedValue {
     }
 }
 
+impl Deref for ResolvedValue {
+    type Target = ExpressionValue;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_ref()
+    }
+}
+
 impl AsRef<ExpressionValue> for ResolvedValue {
     fn as_ref(&self) -> &ExpressionValue {
-        self.as_value_ref()
+        match self {
+            ResolvedValue::Owned(owned) => owned.as_ref(),
+            ResolvedValue::Mutable(mutable) => mutable.as_ref(),
+            ResolvedValue::Shared(shared) => shared.as_ref(),
+            ResolvedValue::CopyOnWrite(copy_on_write) => copy_on_write.as_ref(),
+        }
     }
 }
 
@@ -473,22 +482,19 @@ impl EvaluationFrame for UnaryOperationBuilder {
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
         let late_bound_value = item.expect_late_bound();
+        let operand_kind = late_bound_value.kind();
 
         // Try method resolution first
-        if let Some(interface) = late_bound_value
-            .as_ref()
-            .kind()
-            .resolve_unary_operation(&self.operation)
-        {
+        if let Some(interface) = operand_kind.resolve_unary_operation(&self.operation) {
             let resolved_value = late_bound_value.resolve(interface.argument_ownership())?;
             let result = interface.execute(resolved_value, &self.operation)?;
             return context.return_resolved_value(result);
         }
-
-        // Fallback to legacy system - convert to owned for legacy evaluation
-        let owned_value = ResolvedValueOwnership::Owned.map_from_late_bound(late_bound_value)?;
-        let value = owned_value.expect_owned().into_inner();
-        context.return_owned(self.operation.evaluate(value)?)
+        self.operation.execution_err(format!(
+            "The {} operator is not supported for {} values",
+            self.operation.symbolic_description(),
+            late_bound_value.value_type(),
+        ))
     }
 }
 

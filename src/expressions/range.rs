@@ -233,7 +233,7 @@ impl MethodResolutionTarget for RangeTypeData {
             {
                 wrap_unary!([Op=operation](this: Owned<ExpressionRange>) -> ExecutionResult<ResolvedValue> {
                     let this_iterator = this.try_map(|this, _| ExpressionIterator::new_for_range(this))?;
-                    operation.new_evaluate(this_iterator)
+                    operation.evaluate(this_iterator)
                 })
             }
             _ => return None,

@@ -575,18 +575,6 @@ impl ExpressionValue {
         }
     }
 
-    pub(super) fn handle_unary_operation(
-        self,
-        operation: OutputSpanned<UnaryOperation>,
-    ) -> ExecutionResult<ExpressionValue> {
-        match self {
-            ExpressionValue::Integer(value) => value.handle_unary_operation(operation),
-            ExpressionValue::Float(value) => value.handle_unary_operation(operation),
-            ExpressionValue::Char(value) => value.handle_unary_operation(operation),
-            _ => operation.unsupported(self),
-        }
-    }
-
     pub(super) fn handle_compound_assignment(
         &mut self,
         operation: &CompoundAssignmentOperation,

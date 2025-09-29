@@ -206,7 +206,7 @@ impl MethodResolutionTarget for IteratorTypeData {
                     wrap_unary!([Op=operation](this: Owned<ExpressionIterator>) -> ExecutionResult<ResolvedValue> {
                         let (this, input_span_range) = this.deconstruct();
                         match this.singleton_value() {
-                            Some(value) => operation.new_evaluate(Owned::new(value, input_span_range)),
+                            Some(value) => operation.evaluate(Owned::new(value, input_span_range)),
                             None => input_span_range.execution_err("Only an iterator with one item can be cast to this value")
                         }
                     })
