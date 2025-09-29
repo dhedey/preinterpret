@@ -15,17 +15,19 @@
 //! * Run ./style-fix.sh
 //! -->
 //!
-//! This crate provides the `stream!` macro, which works as a simple pre-processor to the token stream. It takes inspiration from and effectively combines the [quote](https://crates.io/crates/quote), [paste](https://crates.io/crates/paste) and [syn](https://crates.io/crates/syn) crates, to empower code generation authors and declarative macro writers, bringing:
+//! Preinterpret takes the pain out of Rust code generation. The [preinterpret](https://crates.io/crates/preinterpret) crate provides the `stream!` and `run!` macros which execute a simple but clear and powerful Rust-inspired interpreted language.
+//!
+//! It takes inspiration from and effectively combines the [quote](https://crates.io/crates/quote), [paste](https://crates.io/crates/paste) and [syn](https://crates.io/crates/syn) crates, to empower code generation authors and declarative macro writers, bringing:
 //!
 //! * **Heightened [readability](#readability)** - quote-like variable definition and substitution make it easier to work with code generation code.
 //! * **Heightened [expressivity](#expressivity)** - a toolkit of simple commands reduce boilerplate, and mitigate the need to build custom procedural macros in some cases.
 //! * **Heightened [simplicity](#simplicity)** - helping developers avoid the confusing corners [[1](https://veykril.github.io/tlborm/decl-macros/patterns/callbacks.html), [2](https://github.com/rust-lang/rust/issues/96184#issue-1207293401), [3](https://veykril.github.io/tlborm/decl-macros/minutiae/metavar-and-expansion.html), [4](https://veykril.github.io/tlborm/decl-macros/patterns/push-down-acc.html)] of declarative macro land.
 //!
-//! The `stream!` macro can be used inside the output of a declarative macro, or by itself, functioning as a mini code generation tool all of its own.
+//! The `stream!` or `run!` macros can be used inside the output of a declarative macro, or by itself, functioning as a mini code generation tool all of its own.
 //!
 //! ```toml
 //! [dependencies]
-//! preinterpret = "0.2"
+//! preinterpret = "0.3"
 //! ```
 //!
 //! ## User Guide
