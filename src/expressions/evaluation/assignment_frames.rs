@@ -56,7 +56,7 @@ impl EvaluationFrame for PlaceAssigner {
         context: AssignmentContext,
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
-        let mut mutable_place = item.expect_mutable();
+        let mut mutable_place = item.expect_place();
         let value = self.value;
         let span_range = SpanRange::new_between(mutable_place.span_range(), value.span_range());
         mutable_place.set(value);
@@ -89,7 +89,7 @@ impl EvaluationFrame for GroupedAssigner {
         context: AssignmentContext,
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
-        let AssignmentCompletion { span_range } = item.expect_assignment_complete();
+        let AssignmentCompletion { span_range } = item.expect_assignment_completion();
         Ok(context.return_assignment_completion(span_range))
     }
 }
@@ -207,7 +207,7 @@ impl EvaluationFrame for ArrayBasedAssigner {
         context: AssignmentContext,
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
-        let AssignmentCompletion { .. } = item.expect_assignment_complete();
+        let AssignmentCompletion { .. } = item.expect_assignment_completion();
         Ok(self.handle_next(context))
     }
 }
@@ -281,12 +281,8 @@ impl ObjectBasedAssigner {
                     assignee_node,
                     access,
                 };
-                context.handle_node_as_value(
-                    self,
-                    index,
-                    // This only needs to be read-only, as we are just using it to work out which field/s to assign
-                    RequestedValueOwnership::Shared,
-                )
+                // This only needs to be read-only, as we are just using it to work out which field/s to assign
+                context.handle_node_as_shared(self, index)
             }
             None => context.return_assignment_completion(self.span_range),
         })
@@ -327,7 +323,7 @@ impl EvaluationFrame for Box<ObjectBasedAssigner> {
                 self.handle_index_value(context, access, index_place.as_ref(), assignee_node)
             }
             ObjectAssignmentState::WaitingForSubassignment => {
-                let AssignmentCompletion { .. } = item.expect_assignment_complete();
+                let AssignmentCompletion { .. } = item.expect_assignment_completion();
                 self.handle_next(context)
             }
         }

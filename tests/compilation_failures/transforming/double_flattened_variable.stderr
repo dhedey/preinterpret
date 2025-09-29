@@ -1,6 +1,7 @@
-error: This cannot follow a flattened variable binding
-       Occurred whilst parsing [!let! ...] - Expected [!let! <destructuring> = ...]
- --> tests/compilation_failures/transforming/double_flattened_variable.rs:4:31
+error: unexpected end of input, expected token tree
+ --> tests/compilation_failures/transforming/double_flattened_variable.rs:4:5
   |
-4 |     preinterpret!([!let! #..x #..y = Hello World]);
-  |                               ^
+4 |     preinterpret!([!let! @REST @TOKEN_TREE = Hello World]);
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the macro `preinterpret` (in Nightly builds, run with -Z macro-backtrace for more info)

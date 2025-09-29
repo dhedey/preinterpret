@@ -89,7 +89,7 @@ impl From<PrefixUnaryOperation> for UnaryOperation {
 }
 
 #[derive(Clone)]
-pub(super) enum UnaryOperation {
+pub(crate) enum UnaryOperation {
     Neg {
         token: Token![-],
     },
@@ -119,19 +119,35 @@ impl UnaryOperation {
         })
     }
 
-    pub(super) fn evaluate(self, input: ExpressionValue) -> ExecutionResult<ExpressionValue> {
-        let mut span_range = input.span_range();
-        match &self {
-            UnaryOperation::Neg { token } => span_range.set_start(token.span),
-            UnaryOperation::Not { token } => span_range.set_start(token.span),
-            UnaryOperation::Cast { target_ident, .. } => span_range.set_end(target_ident.span()),
+    pub(super) fn output_span_range(&self, mut operand_span_range: SpanRange) -> SpanRange {
+        match self {
+            UnaryOperation::Neg { token } => operand_span_range.set_start(token.span),
+            UnaryOperation::Not { token } => operand_span_range.set_start(token.span),
+            UnaryOperation::Cast { target_ident, .. } => {
+                operand_span_range.set_end(target_ident.span())
+            }
         };
-        input.handle_unary_operation(self.with_output_span_range(span_range))
+        operand_span_range
+    }
+
+    pub(super) fn evaluate<T: ToExpressionValue>(
+        &self,
+        input: Owned<T>,
+    ) -> ExecutionResult<ResolvedValue> {
+        let input = input.into_owned_value();
+        let method = input.kind().resolve_unary_operation(self).ok_or_else(|| {
+            self.execution_error(format!(
+                "The {} operator is not supported for {} values",
+                self.symbolic_description(),
+                input.value_type(),
+            ))
+        })?;
+        method.execute(ResolvedValue::Owned(input), self)
     }
 }
 
 #[derive(Copy, Clone)]
-pub(super) enum CastTarget {
+pub(crate) enum CastTarget {
     Integer(IntegerKind),
     Float(FloatKind),
     Boolean,
@@ -218,13 +234,6 @@ impl HasSpan for UnaryOperation {
             UnaryOperation::Cast { as_token, .. } => as_token.span,
         }
     }
-}
-
-pub(super) trait HandleUnaryOperation: Sized {
-    fn handle_unary_operation(
-        self,
-        operation: OutputSpanned<UnaryOperation>,
-    ) -> ExecutionResult<ExpressionValue>;
 }
 
 #[derive(Clone)]

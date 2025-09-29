@@ -16,49 +16,60 @@ fn test_transfoming_compilation_failures() {
 #[test]
 fn test_variable_parsing() {
     preinterpret_assert_eq!({
-        [!let! <Hello #inner World> = <Hello Beautiful World>]
+        [!let! <Hello @(#inner = @IDENT) World> = <Hello Beautiful World>]
         [!string! #inner]
     }, "Beautiful");
     preinterpret_assert_eq!({
-        [!let! #..inner = <Hello Beautiful World>]
+        [!let! @(#inner = @REST) = <Hello Beautiful World>]
         [!string! #inner]
     }, "<HelloBeautifulWorld>");
     preinterpret_assert_eq!({
-        [!let! #..x = Hello => World]
+        [!let! @(#x = @REST) = Hello => World]
         [!string! #x]
     }, "Hello=>World");
     preinterpret_assert_eq!({
-        [!let! Hello #..x!! = Hello => World!!]
+        [!let! Hello @(#x = @[UNTIL !])!! = Hello => World!!]
         [!string! #x]
     }, "=>World");
     preinterpret_assert_eq!({
-        [!let! Hello #..x World = Hello => World]
+        [!let! Hello @(#x = @[UNTIL World]) World = Hello => World]
         [!string! #x]
     }, "=>");
     preinterpret_assert_eq!({
-        [!let! Hello #..x World = Hello And Welcome To The Wonderful World]
+        [!let! Hello @(#x = @[UNTIL World]) World = Hello And Welcome To The Wonderful World]
         [!string! #x]
     }, "AndWelcomeToTheWonderful");
     preinterpret_assert_eq!({
-        [!let! Hello #..x "World"! = Hello World And Welcome To The Wonderful "World"!]
+        [!let! Hello @(#x = @[UNTIL "World"]) "World"! = Hello World And Welcome To The Wonderful "World"!]
         [!string! #x]
     }, "WorldAndWelcomeToTheWonderful");
     preinterpret_assert_eq!({
-        [!let! #..x (#..y) = Why Hello (World)]
+        [!let! @(#x = @[UNTIL ()]) (@(#y = @[REST])) = Why Hello (World)]
         [!string! "#x = " #x "; #y = " #y]
     }, "#x = WhyHello; #y = World");
     preinterpret_assert_eq!({
         [!set! #x =]
         [!let!
-            #>>x         // Matches one tt and appends it: Why
-            #..>>x       // Matches stream until (, appends it grouped: [!group! Hello Everyone]
+            // #>>x - Matches one tt ...and appends it as-is: Why
+            @(#a = @TOKEN_TREE)
+            #(x += a)
+            // #>>x - Matches one tt...and appends it as-is: [!group! it is fun to be here]
+            @(#b = @TOKEN_TREE)
+            #(x += b)
+            // #..>>x - Matches stream until (, appends it grouped: [!group! Hello Everyone]
+            @(#c = @[UNTIL ()])
+            #(x += [!group! #..c])
             (
-                #>>..x   // Matches one tt and appends it flattened: This is an exciting adventure
-                #..>>..x // Matches stream and appends it flattened: do you agree ?
+                // #>>..x - Matches one tt... and appends it flattened: This is an exciting adventure
+                @(#c = @TOKEN_TREE)
+                #(x += c.take().flatten())
+                // #..>>..x - Matches stream until end, and appends it flattened: do you agree ?
+                @(#c = @REST)
+                #(x += c.take().flatten())
             )
-            = Why Hello Everyone ([!group! This is an exciting adventure] do you agree?)]
+            = Why [!group! it is fun to be here] Hello Everyone ([!group! This is an exciting adventure] do you agree?)]
         #(x.debug_string())
-    }, "[!stream! Why [!group! Hello Everyone] This is an exciting adventure do you agree ?]");
+    }, "[!stream! Why [!group! it is fun to be here] [!group! Hello Everyone] This is an exciting adventure do you agree ?]");
 }
 
 #[test]
@@ -118,26 +129,26 @@ fn test_punct_transformer() {
 #[test]
 fn test_group_transformer() {
     preinterpret_assert_eq!({
-        [!let! The "quick" @[GROUP brown #x] "jumps" = The "quick" [!group! brown fox] "jumps"]
+        [!let! The "quick" @[GROUP brown @(#x = @TOKEN_TREE)] "jumps" = The "quick" [!group! brown fox] "jumps"]
         #(x.debug_string())
     }, "[!stream! fox]");
     preinterpret_assert_eq!({
         [!set! #x = "hello" "world"]
-        [!let! I said @[GROUP #..y]! = I said #x!]
+        [!let! I said @[GROUP @(#y = @REST)]! = I said #x!]
         #(y.debug_string())
     }, "[!stream! \"hello\" \"world\"]");
     // ... which is equivalent to this:
     preinterpret_assert_eq!({
         [!set! #x = "hello" "world"]
-        [!let! I said #y! = I said #x!]
-        #(y.debug_string())
+        [!let! I said @(#y = @TOKEN_TREE)! = I said #x!]
+        #(y.take().flatten().debug_string())
     }, "[!stream! \"hello\" \"world\"]");
 }
 
 #[test]
 fn test_none_output_commands_mid_parse() {
     preinterpret_assert_eq!({
-        [!let! The "quick" @(#x = @LITERAL) fox [!let! #y = #x] @(#x = @IDENT) = The "quick" "brown" fox jumps]
+        [!let! The "quick" @(#x = @LITERAL) fox #(let y = x.take().infer()) @(#x = @IDENT) = The "quick" "brown" fox jumps]
         [!string! "#x = " #(x.debug_string()) "; #y = "#(y.debug_string())]
     }, "#x = [!stream! jumps]; #y = \"brown\"");
 }
@@ -161,8 +172,7 @@ fn test_exact_transformer() {
     }, true);
     // EXACT is evaluated at execution time
     preinterpret_assert_eq!({
-        [!set! #x =]
-        [!let! The #>>..x fox is #>>..x. It 's super @[EXACT #..x]. = The brown fox is brown. It 's super brown brown.]
+        [!let! The @(#a = @TOKEN_TREE) fox is @(#b = @TOKEN_TREE). It 's super @[EXACT #a #b]. = The brown fox is brown. It 's super brown brown.]
         true
     }, true);
 }

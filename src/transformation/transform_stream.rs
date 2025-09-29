@@ -39,7 +39,6 @@ impl<C> HandleTransformation for TransformSegment<C> {
 #[derive(Clone)]
 pub(crate) enum TransformItem {
     Command(Command),
-    Variable(VariableParserKind),
     ExpressionBlock(ExpressionBlock),
     Transformer(Transformer),
     TransformStreamInput(ExplicitTransformStream),
@@ -59,9 +58,7 @@ impl TransformItem {
     ) -> ParseResult<Self> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => Self::Command(input.parse()?),
-            SourcePeekMatch::Variable(_) | SourcePeekMatch::AppendVariableParser => {
-                Self::Variable(VariableParserKind::parse_until::<C>(input)?)
-            }
+            SourcePeekMatch::Variable(_) => return input.parse_err("Variable bindings are not supported here. #x can be inverted with @(#x = @TOKEN_TREE.flatten()) and #..x with @(#x = @REST) or @(#x = @[UNTIL ..])"),
             SourcePeekMatch::ExpressionBlock(_) => Self::ExpressionBlock(input.parse()?),
             SourcePeekMatch::Group(_) => Self::ExactGroup(input.parse()?),
             SourcePeekMatch::ExplicitTransformStream => Self::TransformStreamInput(input.parse()?),
@@ -82,9 +79,6 @@ impl HandleTransformation for TransformItem {
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         match self {
-            TransformItem::Variable(variable) => {
-                variable.handle_transform(input, interpreter, output)?;
-            }
             TransformItem::Command(command) => {
                 command.clone().interpret_into(interpreter, output)?;
             }

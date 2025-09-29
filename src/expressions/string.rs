@@ -17,36 +17,6 @@ impl ExpressionString {
         }
     }
 
-    pub(super) fn handle_unary_operation(
-        self,
-        operation: OutputSpanned<UnaryOperation>,
-    ) -> ExecutionResult<ExpressionValue> {
-        Ok(match operation.operation {
-            UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => {
-                return operation.unsupported(self)
-            }
-            UnaryOperation::Cast { target, .. } => match target {
-                CastTarget::Stream => {
-                    operation.output(operation.output(self.value).into_new_output_stream(
-                        Grouping::Flattened,
-                        StreamOutputBehaviour::Standard,
-                    )?)
-                }
-                CastTarget::Group => {
-                    operation.output(operation.output(self.value).into_new_output_stream(
-                        Grouping::Grouped,
-                        StreamOutputBehaviour::Standard,
-                    )?)
-                }
-                CastTarget::String => operation.output(self.value),
-                CastTarget::Boolean
-                | CastTarget::Char
-                | CastTarget::Integer(_)
-                | CastTarget::Float(_) => return operation.unsupported(self),
-            },
-        })
-    }
-
     pub(super) fn handle_integer_binary_operation(
         self,
         _right: ExpressionInteger,
@@ -113,6 +83,28 @@ impl ToExpressionValue for &str {
         ExpressionValue::String(ExpressionString {
             value: self.to_string(),
             span_range,
+        })
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct StringTypeData;
+
+impl MethodResolutionTarget for StringTypeData {
+    type Parent = ValueTypeData;
+    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+
+    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+        Some(match operation {
+            UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => return None,
+            UnaryOperation::Cast { target, .. } => match target {
+                CastTarget::String => {
+                    wrap_unary!((this: String) -> String {
+                        this
+                    })
+                }
+                _ => return None,
+            },
         })
     }
 }

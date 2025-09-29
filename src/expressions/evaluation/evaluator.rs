@@ -19,8 +19,10 @@ impl<'a> ExpressionEvaluator<'a, Source> {
         root: ExpressionNodeId,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<ExpressionValue> {
-        let mut next_action =
-            NextActionInner::ReadNodeAsValue(root, RequestedValueOwnership::Owned);
+        let mut next_action = NextActionInner::ReadNodeAsValue(
+            root,
+            RequestedValueOwnership::Concrete(ResolvedValueOwnership::Owned),
+        );
 
         loop {
             match self.step(next_action, interpreter)? {
@@ -59,20 +61,19 @@ impl<'a> ExpressionEvaluator<'a, Source> {
                     node,
                     value,
                 )?,
-            NextActionInner::ReadNodeAsPlace(node) => self.nodes[node.0]
-                .handle_as_place(
-                    interpreter,
-                    Context {
-                        stack: &mut self.stack,
-                        request: (),
-                    },
-                )?,
+            NextActionInner::ReadNodeAsPlace(node) => self.nodes[node.0].handle_as_place(
+                interpreter,
+                Context {
+                    stack: &mut self.stack,
+                    request: (),
+                },
+            )?,
             NextActionInner::HandleReturnedItem(item) => {
                 let top_of_stack = match self.stack.handlers.pop() {
                     Some(top) => top,
                     None => {
                         // This aligns with the request for an owned value in evaluate
-                        return Ok(StepResult::Return(item.expect_owned_value().into_inner()));
+                        return Ok(StepResult::Return(item.expect_owned().into_inner()));
                     }
                 };
                 top_of_stack.handle_item(&mut self.stack, item)?
@@ -107,19 +108,32 @@ impl NextAction {
     }
 
     pub(super) fn return_mutable(mutable: MutableValue) -> Self {
-        NextActionInner::HandleReturnedItem(EvaluationItem::Mutable { mutable })
-            .into()
+        NextActionInner::HandleReturnedItem(EvaluationItem::Mutable(mutable)).into()
     }
 
-    pub(super) fn return_shared(
-        shared: SharedValue,
-        reason_not_mutable: Option<syn::Error>,
-    ) -> Self {
-        NextActionInner::HandleReturnedItem(EvaluationItem::Shared {
-            shared,
-            reason_not_mutable,
-        })
-        .into()
+    pub(super) fn return_shared(shared: SharedValue) -> Self {
+        NextActionInner::HandleReturnedItem(EvaluationItem::Shared(shared)).into()
+    }
+
+    pub(super) fn return_copy_on_write(copy_on_write: CopyOnWriteValue) -> Self {
+        NextActionInner::HandleReturnedItem(EvaluationItem::CopyOnWrite(copy_on_write)).into()
+    }
+
+    pub(super) fn return_resolved_value(resolved: ResolvedValue) -> Self {
+        match resolved {
+            ResolvedValue::Owned(owned) => Self::return_owned(owned),
+            ResolvedValue::Mutable(mutable) => Self::return_mutable(mutable),
+            ResolvedValue::Shared(shared) => Self::return_shared(shared),
+            ResolvedValue::CopyOnWrite(copy_on_write) => Self::return_copy_on_write(copy_on_write),
+        }
+    }
+
+    pub(super) fn return_late_bound(late_bound: LateBoundValue) -> Self {
+        NextActionInner::HandleReturnedItem(EvaluationItem::LateBound(late_bound)).into()
+    }
+
+    pub(super) fn return_place(place: MutableValue) -> Self {
+        NextActionInner::HandleReturnedItem(EvaluationItem::Place(place)).into()
     }
 }
 
@@ -144,88 +158,103 @@ impl From<NextActionInner> for NextAction {
 }
 
 pub(super) enum EvaluationItem {
+    // Value items - these mirror RequestedValueOwnership exactly
+    LateBound(LateBoundValue),
     Owned(OwnedValue),
-    Shared {
-        shared: SharedValue,
-        /// This is only populated if we request a "late bound" reference, and fail to resolve
-        /// a mutable reference.
-        reason_not_mutable: Option<syn::Error>,
-    },
-    Mutable {
-        mutable: MutableValue,
-    },
+    Shared(SharedValue),
+    Mutable(MutableValue), // Mutable reference to a value
+    CopyOnWrite(CopyOnWriteValue),
+
+    // Place items (for assignment targets)
+    // Note that places are handled subtly differently than a mutable value,
+    // for example with a place, x["a"] creates an entry if it doesn't exist,
+    // whereas with a mutable value it would return None without creating the entry.
+    Place(MutableValue),
+
+    // Assignment items
     AssignmentCompletion(AssignmentCompletion),
 }
 
 impl EvaluationItem {
-    pub(super) fn expect_owned_value(self) -> OwnedValue {
+    pub(super) fn expect_owned(self) -> OwnedValue {
         match self {
             EvaluationItem::Owned(value) => value,
-            _ => panic!("expect_owned_value() called on a non-owned-value EvaluationItem"),
+            _ => panic!("expect_owned() called on non-owned EvaluationItem"),
         }
     }
-
-    pub(super) fn expect_cow_value(self) -> CowValue {
-        match self {
-            EvaluationItem::Owned(value) => CowValue::Owned(value),
-            EvaluationItem::Shared { shared, .. } => CowValue::Shared(shared),
-            _ => panic!("expect_cow_value() called on a non-cow-value EvaluationItem"),
-        }
-    }
-
-    pub(super) fn expect_any_value(self) -> ResolvedValue {
-        match self {
-            EvaluationItem::Owned(value) => ResolvedValue::Owned(value),
-            EvaluationItem::Mutable { mutable } => ResolvedValue::Mutable(mutable),
-            EvaluationItem::Shared { shared, .. } => ResolvedValue::Shared {
-                shared,
-                reason_not_mutable: None,
-            },
-            _ => panic!("expect_any_value() called on a non-value EvaluationItem"),
-        }
-    }
-
-    // pub(super) fn expect_any_late_bound_value(self) -> LateBoundValue {
-    //     match self {
-    //         EvaluationItem::Mutable { mutable } => LateBoundValue::Mutable { mutable },
-    //         EvaluationItem::Shared {
-    //             shared,
-    //             reason_not_mutable,
-    //         } => LateBoundValue::Shared {
-    //             shared,
-    //             reason_not_mutable,
-    //         },
-    //         _ => panic!("expect_any_place() called on a non-place EvaluationItem"),
-    //     }
-    // }
 
     pub(super) fn expect_shared(self) -> SharedValue {
         match self {
-            EvaluationItem::Shared { shared, .. } => shared,
-            _ => {
-                panic!("expect_shared() called on a non-shared-reference EvaluationItem")
-            }
+            EvaluationItem::Shared(shared) => shared,
+            _ => panic!("expect_shared() called on non-shared EvaluationItem"),
         }
     }
 
     pub(super) fn expect_mutable(self) -> MutableValue {
         match self {
-            EvaluationItem::Mutable { mutable } => mutable,
-            _ => panic!("expect_mutable() called on a non-mutable-place EvaluationItem"),
+            EvaluationItem::Mutable(mutable) => mutable,
+            _ => panic!("expect_mutable() called on non-mutable EvaluationItem"),
+        }
+    }
+
+    pub(super) fn expect_late_bound(self) -> LateBoundValue {
+        match self {
+            EvaluationItem::LateBound(late_bound) => late_bound,
+            _ => panic!("expect_late_bound() called on non-late-bound EvaluationItem"),
+        }
+    }
+
+    pub(super) fn expect_copy_on_write(self) -> CopyOnWriteValue {
+        match self {
+            EvaluationItem::CopyOnWrite(cow) => cow,
+            _ => panic!("expect_copy_on_write() called on non-copy-on-write EvaluationItem"),
+        }
+    }
+
+    pub(super) fn expect_assignment_completion(self) -> AssignmentCompletion {
+        match self {
+            EvaluationItem::AssignmentCompletion(completion) => completion,
+            _ => panic!(
+                "expect_assignment_completion() called on non-assignment-completion EvaluationItem"
+            ),
+        }
+    }
+
+    pub(super) fn expect_resolved_value(self) -> ResolvedValue {
+        match self {
+            EvaluationItem::Owned(value) => ResolvedValue::Owned(value),
+            EvaluationItem::Mutable(mutable) => ResolvedValue::Mutable(mutable),
+            EvaluationItem::Shared(shared) => ResolvedValue::Shared(shared),
+            EvaluationItem::CopyOnWrite(copy_on_write) => ResolvedValue::CopyOnWrite(copy_on_write),
+            _ => panic!("expect_resolved_value() called on non-value EvaluationItem"),
         }
     }
 
     pub(super) fn expect_place(self) -> MutableValue {
-        self.expect_mutable()
+        match self {
+            EvaluationItem::Place(place) => place,
+            _ => panic!("expect_place() called on non-place EvaluationItem"),
+        }
     }
 
-    pub(super) fn expect_assignment_complete(self) -> AssignmentCompletion {
-        match self {
-            EvaluationItem::AssignmentCompletion(completion) => completion,
-            _ => panic!(
-                "expect_assignment_complete() called on a non-assignment-completion EvaluationItem"
-            ),
-        }
+    pub(super) fn expect_any_value_and_map(
+        self,
+        map_shared: impl FnOnce(SharedValue) -> ExecutionResult<SharedValue>,
+        map_mutable: impl FnOnce(MutableValue) -> ExecutionResult<MutableValue>,
+        map_owned: impl FnOnce(OwnedValue) -> ExecutionResult<OwnedValue>,
+    ) -> ExecutionResult<EvaluationItem> {
+        Ok(match self {
+            EvaluationItem::LateBound(late_bound) => {
+                EvaluationItem::LateBound(late_bound.map_any(map_shared, map_mutable, map_owned)?)
+            }
+            EvaluationItem::Owned(value) => EvaluationItem::Owned(map_owned(value)?),
+            EvaluationItem::Mutable(mutable) => EvaluationItem::Mutable(map_mutable(mutable)?),
+            EvaluationItem::Shared(shared) => EvaluationItem::Shared(map_shared(shared)?),
+            EvaluationItem::CopyOnWrite(cow) => {
+                EvaluationItem::CopyOnWrite(cow.map_any(map_shared, map_owned)?)
+            }
+            _ => panic!("expect_any_value_and_map() called on non-value EvaluationItem"),
+        })
     }
 }
 
@@ -252,13 +281,9 @@ impl AnyEvaluationHandler {
                 },
                 item,
             ),
-            AnyEvaluationHandler::Place(handler) => handler.handle_item(
-                Context {
-                    stack,
-                    request: (),
-                },
-                item,
-            ),
+            AnyEvaluationHandler::Place(handler) => {
+                handler.handle_item(Context { stack, request: () }, item)
+            }
             AnyEvaluationHandler::Assignment(handler) => {
                 handler.handle_item(Context { stack, request: () }, item)
             }
@@ -272,7 +297,63 @@ pub(super) struct Context<'a, T: EvaluationItemType> {
 }
 
 impl<'a, T: EvaluationItemType> Context<'a, T> {
-    pub(super) fn handle_node_as_value<H: EvaluationFrame<ReturnType = T>>(
+    pub(super) fn handle_node_as_owned<H: EvaluationFrame<ReturnType = T>>(
+        self,
+        handler: H,
+        node: ExpressionNodeId,
+    ) -> NextAction {
+        self.handle_node_as_any_value(
+            handler,
+            node,
+            RequestedValueOwnership::Concrete(ResolvedValueOwnership::Owned),
+        )
+    }
+
+    pub(super) fn handle_node_as_copy_on_write<H: EvaluationFrame<ReturnType = T>>(
+        self,
+        handler: H,
+        node: ExpressionNodeId,
+    ) -> NextAction {
+        self.handle_node_as_any_value(
+            handler,
+            node,
+            RequestedValueOwnership::Concrete(ResolvedValueOwnership::CopyOnWrite),
+        )
+    }
+
+    pub(super) fn handle_node_as_shared<H: EvaluationFrame<ReturnType = T>>(
+        self,
+        handler: H,
+        node: ExpressionNodeId,
+    ) -> NextAction {
+        self.handle_node_as_any_value(
+            handler,
+            node,
+            RequestedValueOwnership::Concrete(ResolvedValueOwnership::Shared),
+        )
+    }
+
+    pub(super) fn handle_node_as_mutable<H: EvaluationFrame<ReturnType = T>>(
+        self,
+        handler: H,
+        node: ExpressionNodeId,
+    ) -> NextAction {
+        self.handle_node_as_any_value(
+            handler,
+            node,
+            RequestedValueOwnership::Concrete(ResolvedValueOwnership::Mutable),
+        )
+    }
+
+    pub(super) fn handle_node_as_late_bound<H: EvaluationFrame<ReturnType = T>>(
+        self,
+        handler: H,
+        node: ExpressionNodeId,
+    ) -> NextAction {
+        self.handle_node_as_any_value(handler, node, RequestedValueOwnership::LateBound)
+    }
+
+    pub(super) fn handle_node_as_any_value<H: EvaluationFrame<ReturnType = T>>(
         self,
         handler: H,
         node: ExpressionNodeId,
@@ -349,67 +430,85 @@ impl<'a> Context<'a, ValueType> {
         self.request
     }
 
-    pub(super) fn return_any_value(self, value: ResolvedValue) -> ExecutionResult<NextAction> {
+    pub(super) fn return_late_bound(
+        self,
+        late_bound: LateBoundValue,
+    ) -> ExecutionResult<NextAction> {
+        Ok(match self.request {
+            RequestedValueOwnership::LateBound => NextAction::return_late_bound(late_bound),
+            RequestedValueOwnership::Concrete(_) => {
+                panic!("Returning a late-bound reference when concrete ownership was requested")
+            }
+        })
+    }
+
+    pub(super) fn return_resolved_value(self, value: ResolvedValue) -> ExecutionResult<NextAction> {
         Ok(match value {
             ResolvedValue::Owned(owned) => self.return_owned(owned)?,
-            ResolvedValue::Mutable(mutable) => self.return_mutable(mutable),
-            ResolvedValue::Shared {
-                shared,
-                reason_not_mutable,
-            } => self.return_shared(shared, reason_not_mutable)?,
-        })
-    }
-
-    pub(super) fn return_late_bound(self, value: LateBoundValue) -> ExecutionResult<NextAction> {
-        Ok(match value {
-            LateBoundValue::Mutable { mutable } => self.return_mutable(mutable),
-            LateBoundValue::Shared {
-                shared,
-                reason_not_mutable,
-            } => self.return_shared(shared, reason_not_mutable)?,
-        })
-    }
-
-    pub(super) fn return_owned(self, value: impl Into<OwnedValue>) -> ExecutionResult<NextAction> {
-        let value = value.into();
-        Ok(match self.request {
-            RequestedValueOwnership::LateBound
-            | RequestedValueOwnership::CopyOnWrite
-            | RequestedValueOwnership::Owned => NextAction::return_owned(value),
-            RequestedValueOwnership::Shared => {
-                NextAction::return_shared(Shared::new_from_owned(value), None)
-            }
-            RequestedValueOwnership::Mutable => {
-                // This aligns with ResolveValue::into_mutable
-                return value.execution_err("A mutable reference is required, but an owned value was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.as_mut()` to get a mutable reference.")
+            ResolvedValue::Mutable(mutable) => self.return_mutable(mutable)?,
+            ResolvedValue::Shared(shared) => self.return_shared(shared)?,
+            ResolvedValue::CopyOnWrite(copy_on_write) => {
+                self.return_copy_on_write(copy_on_write)?
             }
         })
     }
 
-    pub(super) fn return_mutable(self, mutable: MutableValue) -> NextAction {
-        match self.request {
-            RequestedValueOwnership::LateBound
-            | RequestedValueOwnership::Mutable => NextAction::return_mutable(mutable),
-            RequestedValueOwnership::Owned
-            | RequestedValueOwnership::CopyOnWrite
-            | RequestedValueOwnership::Shared => panic!("Returning a mutable reference should only be used when the requested ownership is mutable or late-bound"),
+    pub(super) fn return_item(self, value: EvaluationItem) -> ExecutionResult<NextAction> {
+        match value {
+            EvaluationItem::Owned(owned) => self.return_owned(owned),
+            EvaluationItem::Shared(shared) => self.return_shared(shared),
+            EvaluationItem::Mutable(mutable) => self.return_mutable(mutable),
+            EvaluationItem::LateBound(late_bound_value) => self.return_late_bound(late_bound_value),
+            EvaluationItem::CopyOnWrite(copy_on_write) => self.return_copy_on_write(copy_on_write),
+            EvaluationItem::Place { .. } | EvaluationItem::AssignmentCompletion { .. } => {
+                panic!("Returning a non-value item from a value context")
+            }
         }
     }
 
-    pub(super) fn return_shared(
-        self,
-        shared: SharedValue,
-        reason_not_mutable: Option<syn::Error>,
-    ) -> ExecutionResult<NextAction> {
+    /// This method doesn't panic. It's always safe to return an owned value, as it can be converted to any other ownership type.
+    pub(super) fn return_owned(self, value: impl Into<OwnedValue>) -> ExecutionResult<NextAction> {
+        let value = value.into();
         Ok(match self.request {
-            RequestedValueOwnership::LateBound
-            | RequestedValueOwnership::CopyOnWrite
-            | RequestedValueOwnership::Shared => NextAction::return_shared(shared, reason_not_mutable),
-            RequestedValueOwnership::Owned => {
-                // This can happen if a requested of "Owned" was mapped to "CopyOnWrite"
-                NextAction::return_owned(shared.transparent_clone()?)
+            RequestedValueOwnership::LateBound => {
+                NextAction::return_late_bound(LateBoundValue::Owned(value))
             }
-            RequestedValueOwnership::Mutable => panic!("Returning a reference should only be used when the requested ownership is shared or late-bound"),
+            RequestedValueOwnership::Concrete(requested) => {
+                NextAction::return_resolved_value(requested.map_from_owned(value)?)
+            }
+        })
+    }
+
+    pub(super) fn return_copy_on_write(self, cow: CopyOnWriteValue) -> ExecutionResult<NextAction> {
+        Ok(match self.request {
+            RequestedValueOwnership::LateBound => {
+                NextAction::return_late_bound(LateBoundValue::CopyOnWrite(cow))
+            }
+            RequestedValueOwnership::Concrete(requested) => {
+                NextAction::return_resolved_value(requested.map_from_copy_on_write(cow)?)
+            }
+        })
+    }
+
+    pub(super) fn return_mutable(self, mutable: MutableValue) -> ExecutionResult<NextAction> {
+        Ok(match self.request {
+            RequestedValueOwnership::LateBound => {
+                NextAction::return_late_bound(LateBoundValue::Mutable(mutable))
+            }
+            RequestedValueOwnership::Concrete(requested) => {
+                NextAction::return_resolved_value(requested.map_from_mutable(mutable)?)
+            }
+        })
+    }
+
+    pub(super) fn return_shared(self, shared: SharedValue) -> ExecutionResult<NextAction> {
+        Ok(match self.request {
+            RequestedValueOwnership::LateBound => {
+                panic!("Returning a shared reference when late-bound was requested")
+            }
+            RequestedValueOwnership::Concrete(requested) => {
+                NextAction::return_resolved_value(requested.map_from_shared(shared)?)
+            }
         })
     }
 }
@@ -432,7 +531,7 @@ impl EvaluationItemType for PlaceType {
 
 impl<'a> Context<'a, PlaceType> {
     pub(super) fn return_place(self, place: MutableValue) -> NextAction {
-        NextAction::return_mutable(place)
+        NextAction::return_place(place)
     }
 }
 

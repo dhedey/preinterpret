@@ -34,7 +34,7 @@ pub(super) enum SourceExpressionLeaf {
     Variable(VariableIdentifier),
     Discarded(Token![_]),
     ExpressionBlock(ExpressionBlock),
-    Value(ExpressionValue),
+    Value(SharedValue),
 }
 
 impl HasSpanRange for SourceExpressionLeaf {
@@ -69,10 +69,6 @@ impl Expressionable for Source {
             SourcePeekMatch::ExpressionBlock(_) => {
                 UnaryAtom::Leaf(Self::Leaf::ExpressionBlock(input.parse()?))
             }
-            SourcePeekMatch::AppendVariableParser => {
-                return input
-                    .parse_err("Append variable operations are not supported in an expression")
-            }
             SourcePeekMatch::ExplicitTransformStream | SourcePeekMatch::Transformer(_) => {
                 return input.parse_err("Destructurings are not supported in an expression")
             }
@@ -103,15 +99,15 @@ impl Expressionable for Source {
                     return Ok(UnaryAtom::Leaf(Self::Leaf::Discarded(input.parse()?)));
                 }
                 match input.try_parse_or_revert() {
-                    Ok(bool) => UnaryAtom::Leaf(Self::Leaf::Value(ExpressionValue::Boolean(
+                    Ok(bool) => UnaryAtom::Leaf(Self::Leaf::Value(SharedValue::new_from_owned(ExpressionValue::Boolean(
                         ExpressionBoolean::for_litbool(bool),
-                    ))),
+                    ).into()))),
                     Err(_) => UnaryAtom::Leaf(Self::Leaf::Variable(input.parse()?)),
                 }
             },
             SourcePeekMatch::Literal(_) => {
                 let value = ExpressionValue::for_syn_lit(input.parse()?);
-                UnaryAtom::Leaf(Self::Leaf::Value(value))
+                UnaryAtom::Leaf(Self::Leaf::Value(SharedValue::new_from_owned(value.into())))
             }
             SourcePeekMatch::End => return input.parse_err("Expected an expression"),
         })

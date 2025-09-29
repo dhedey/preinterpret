@@ -61,6 +61,7 @@ pub(crate) enum ParseUntil {
 
 impl ParseUntil {
     /// Peeks the next token, to discover what we should parse next
+    #[allow(unused)]
     pub(crate) fn peek_flatten_limit<C: StopCondition<Source>>(
         input: ParseStream<Source>,
     ) -> ParseResult<ParseUntil> {
@@ -72,11 +73,11 @@ impl ParseUntil {
             | SourcePeekMatch::Variable(_)
             | SourcePeekMatch::Transformer(_)
             | SourcePeekMatch::ExplicitTransformStream
-            | SourcePeekMatch::AppendVariableParser
             | SourcePeekMatch::ExpressionBlock(_) => {
+                // TODO: Potentially improve this to allow the peek to get information to aid the parse
                 return input
                     .span()
-                    .parse_err("This cannot follow a flattened variable binding");
+                    .parse_err("This cannot follow a parser that consumes unbounded input");
             }
             SourcePeekMatch::Group(delimiter) => ParseUntil::Group(delimiter),
             SourcePeekMatch::Ident(ident) => ParseUntil::Ident(ident),

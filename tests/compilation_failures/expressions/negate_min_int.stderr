@@ -1,0 +1,5 @@
+error: Negating this value would overflow
+ --> tests/compilation_failures/expressions/negate_min_int.rs:5:12
+  |
+5 |         #(-(-127i8 - 1))
+  |            ^^^^^^^^^^^^

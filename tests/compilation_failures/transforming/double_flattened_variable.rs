@@ -1,5 +1,5 @@
 use preinterpret::*;
 
 fn main() {
-    preinterpret!([!let! #..x #..y = Hello World]);
+    preinterpret!([!let! @REST @TOKEN_TREE = Hello World]);
 }

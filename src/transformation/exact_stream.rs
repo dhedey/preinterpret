@@ -71,10 +71,6 @@ impl Parse<Source> for ExactItem {
             SourcePeekMatch::Command(_) => Self::ExactCommandOutput(input.parse()?),
             SourcePeekMatch::Variable(_) => Self::ExactVariableOutput(input.parse()?),
             SourcePeekMatch::ExpressionBlock(_) => Self::ExactExpressionBlock(input.parse()?),
-            SourcePeekMatch::AppendVariableParser => {
-                return input
-                    .parse_err("Append variable bindings are not supported in an EXACT stream")
-            }
             SourcePeekMatch::ExplicitTransformStream => Self::TransformStreamInput(input.parse()?),
             SourcePeekMatch::Transformer(_) => Self::Transformer(input.parse()?),
             SourcePeekMatch::Group(_) => Self::ExactGroup(input.parse()?),

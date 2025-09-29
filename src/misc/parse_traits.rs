@@ -16,7 +16,6 @@ pub(crate) enum SourcePeekMatch {
     Command(Option<CommandOutputKind>),
     ExpressionBlock(Grouping),
     Variable(Grouping),
-    AppendVariableParser,
     ExplicitTransformStream,
     Transformer(Option<TransformerKind>),
     Group(Delimiter),
@@ -67,16 +66,6 @@ fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> SourcePeekMatch {
                 if next.group_matching(Delimiter::Parenthesis).is_some() {
                     return SourcePeekMatch::ExpressionBlock(Grouping::Flattened);
                 }
-                if let Some((_, next)) = next.punct_matching('>') {
-                    if next.punct_matching('>').is_some() {
-                        return SourcePeekMatch::AppendVariableParser;
-                    }
-                }
-            }
-        }
-        if let Some((_, next)) = next.punct_matching('>') {
-            if next.punct_matching('>').is_some() {
-                return SourcePeekMatch::AppendVariableParser;
             }
         }
         if next.group_matching(Delimiter::Parenthesis).is_some() {

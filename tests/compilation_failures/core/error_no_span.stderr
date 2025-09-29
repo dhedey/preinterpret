@@ -1,13 +1,13 @@
 error: Expected 102 to equal 64
   --> tests/compilation_failures/core/error_no_span.rs:4:47
    |
-4  |       ($input1:literal and $input2:literal) => {preinterpret!{
+ 4 |       ($input1:literal and $input2:literal) => {preinterpret!{
    |  _______________________________________________^
-5  | |         [!if! ($input1 != $input2) {
-6  | |             [!error! {
-7  | |                 message: [!string! "Expected " $input1 " to equal " $input2],
-8  | |             }]
-9  | |         }]
+ 5 | |         [!if! ($input1 != $input2) {
+ 6 | |             [!error! {
+ 7 | |                 message: [!string! "Expected " $input1 " to equal " $input2],
+ 8 | |             }]
+ 9 | |         }]
 10 | |     }};
    | |_____^
 ...

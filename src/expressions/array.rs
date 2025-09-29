@@ -10,60 +10,6 @@ pub(crate) struct ExpressionArray {
 }
 
 impl ExpressionArray {
-    pub(super) fn handle_unary_operation(
-        mut self,
-        operation: OutputSpanned<UnaryOperation>,
-    ) -> ExecutionResult<ExpressionValue> {
-        Ok(match operation.operation {
-            UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => {
-                return operation.unsupported(self)
-            }
-            UnaryOperation::Cast {
-                target,
-                target_ident,
-                ..
-            } => match target {
-                CastTarget::Stream => operation.output(self.stream_with_grouped_items()?),
-                CastTarget::Group => operation.output(
-                    operation
-                        .output(self.stream_with_grouped_items()?)
-                        .into_new_output_stream(
-                            Grouping::Grouped,
-                            StreamOutputBehaviour::Standard,
-                        )?,
-                ),
-                CastTarget::String => operation.output({
-                    let mut output = String::new();
-                    self.concat_recursive_into(&mut output, &ConcatBehaviour::standard())?;
-                    output
-                }),
-                CastTarget::Boolean
-                | CastTarget::Char
-                | CastTarget::Integer(_)
-                | CastTarget::Float(_) => {
-                    if self.items.len() == 1 {
-                        self.items
-                            .pop()
-                            .unwrap()
-                            .handle_unary_operation(operation)?
-                    } else {
-                        return operation.execution_err(format!(
-                            "Only a singleton array can be cast to {} but the array has {} elements",
-                            target_ident,
-                            self.items.len(),
-                        ));
-                    }
-                }
-            },
-        })
-    }
-
-    fn stream_with_grouped_items(&self) -> ExecutionResult<OutputStream> {
-        let mut output = OutputStream::new();
-        self.output_grouped_items_to(&mut output)?;
-        Ok(output)
-    }
-
     pub(crate) fn output_grouped_items_to(&self, output: &mut OutputStream) -> ExecutionResult<()> {
         for item in &self.items {
             item.output_to(
@@ -260,6 +206,55 @@ impl ToExpressionValue for Vec<ExpressionValue> {
         ExpressionValue::Array(ExpressionArray {
             items: self,
             span_range,
+        })
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct ArrayTypeData;
+
+impl MethodResolutionTarget for ArrayTypeData {
+    type Parent = ValueTypeData;
+    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+
+    fn resolve_own_method(method_name: &str) -> Option<MethodInterface> {
+        define_method_matcher! {
+            (match method_name on Self)
+
+            fn len(this: Shared<ExpressionArray>) -> ExecutionResult<usize> {
+                Ok(this.items.len())
+            }
+
+            fn push(mut this: Mutable<ExpressionArray>, item: OwnedValue) -> ExecutionResult<()> {
+                this.items.push(item.into());
+                Ok(())
+            }
+        }
+    }
+
+    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+        Some(match operation {
+            UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => return None,
+            UnaryOperation::Cast { target, .. } => match target {
+                CastTarget::Boolean
+                | CastTarget::Char
+                | CastTarget::Integer(_)
+                | CastTarget::Float(_) => {
+                    wrap_unary!([Op=operation](this: Owned<ExpressionArray>) -> ExecutionResult<ResolvedValue> {
+                        let (mut this, _) = this.deconstruct();
+                        let length = this.items.len();
+                        if length == 1 {
+                            operation.evaluate(this.items.pop().unwrap().into())
+                        } else {
+                            operation.execution_err(format!(
+                                "Only a singleton array can be cast to this value but the array has {} elements",
+                                length,
+                            ))
+                        }
+                    })
+                }
+                _ => return None,
+            },
         })
     }
 }

@@ -17,24 +17,6 @@ pub(crate) struct ObjectEntry {
 }
 
 impl ExpressionObject {
-    pub(super) fn handle_unary_operation(
-        self,
-        operation: OutputSpanned<UnaryOperation>,
-    ) -> ExecutionResult<ExpressionValue> {
-        match operation.operation {
-            UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => operation.unsupported(self),
-            UnaryOperation::Cast { target, .. } => match target {
-                CastTarget::String
-                | CastTarget::Stream
-                | CastTarget::Group
-                | CastTarget::Boolean
-                | CastTarget::Char
-                | CastTarget::Integer(_)
-                | CastTarget::Float(_) => operation.unsupported(self),
-            },
-        }
-    }
-
     pub(super) fn handle_integer_binary_operation(
         self,
         _right: ExpressionInteger,
@@ -283,6 +265,14 @@ impl ToExpressionValue for BTreeMap<String, ObjectEntry> {
             span_range,
         })
     }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct ObjectTypeData;
+
+impl MethodResolutionTarget for ObjectTypeData {
+    type Parent = ValueTypeData;
+    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
 }
 
 #[allow(unused)] // TODO[unused-clearup]

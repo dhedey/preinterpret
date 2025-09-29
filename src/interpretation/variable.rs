@@ -7,14 +7,18 @@ pub(crate) trait IsVariable: HasSpanRange {
         interpreter.define_variable(self, value_source.to_value(self.span_range()))
     }
 
+    #[allow(unused)]
     fn define_coerced(&self, interpreter: &mut Interpreter, content: OutputStream) {
         interpreter.define_variable(self, content.coerce_into_value(self.span_range()))
     }
 
-    fn get_cloned_value(&self, interpreter: &Interpreter) -> ExecutionResult<ExpressionValue> {
+    fn get_transparently_cloned_value(
+        &self,
+        interpreter: &Interpreter,
+    ) -> ExecutionResult<ExpressionValue> {
         Ok(self
             .binding(interpreter)?
-            .into_expensively_cloned()?
+            .into_transparently_cloned()?
             .into())
     }
 
@@ -134,7 +138,7 @@ impl InterpretToValue for &GroupedVariable {
         self,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<Self::OutputValue> {
-        self.get_cloned_value(interpreter)
+        self.get_transparently_cloned_value(interpreter)
     }
 }
 
@@ -246,7 +250,7 @@ impl InterpretToValue for &VariableIdentifier {
         self,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<Self::OutputValue> {
-        self.get_cloned_value(interpreter)
+        self.get_transparently_cloned_value(interpreter)
     }
 }
 

@@ -18,6 +18,175 @@ pub(crate) enum ExpressionValue {
     Iterator(ExpressionIterator),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ValueKind {
+    None,
+    Integer(IntegerKind),
+    Float(FloatKind),
+    Boolean,
+    String,
+    Char,
+    UnsupportedLiteral,
+    Array,
+    Object,
+    Stream,
+    Range,
+    Iterator,
+}
+
+impl ValueKind {
+    fn method_resolver(&self) -> &'static dyn MethodResolver {
+        static NONE: NoneTypeData = NoneTypeData;
+        static BOOLEAN: BooleanTypeData = BooleanTypeData;
+        static STRING: StringTypeData = StringTypeData;
+        static CHAR: CharTypeData = CharTypeData;
+        static UNSUPPORTED_LITERAL: UnsupportedLiteralTypeData = UnsupportedLiteralTypeData;
+        static ARRAY: ArrayTypeData = ArrayTypeData;
+        static OBJECT: ObjectTypeData = ObjectTypeData;
+        static STREAM: StreamTypeData = StreamTypeData;
+        static RANGE: RangeTypeData = RangeTypeData;
+        static ITERATOR: IteratorTypeData = IteratorTypeData;
+        match self {
+            ValueKind::None => &NONE,
+            ValueKind::Integer(kind) => kind.method_resolver(),
+            ValueKind::Float(kind) => kind.method_resolver(),
+            ValueKind::Boolean => &BOOLEAN,
+            ValueKind::String => &STRING,
+            ValueKind::Char => &CHAR,
+            ValueKind::UnsupportedLiteral => &UNSUPPORTED_LITERAL,
+            ValueKind::Array => &ARRAY,
+            ValueKind::Object => &OBJECT,
+            ValueKind::Stream => &STREAM,
+            ValueKind::Range => &RANGE,
+            ValueKind::Iterator => &ITERATOR,
+        }
+    }
+
+    /// This should be true for types which users expect to have value
+    /// semantics, but false for types which are expensive to clone or
+    /// are expected to have reference semantics.
+    ///
+    /// This indicates if an &x can be converted to an x via cloning
+    /// when doing method resolution.
+    fn supports_transparent_cloning(&self) -> bool {
+        match self {
+            ValueKind::None => true,
+            ValueKind::Integer(_) => true,
+            ValueKind::Float(_) => true,
+            ValueKind::Boolean => true,
+            // Strings are value-like, so it makes sense to transparently clone them
+            ValueKind::String => true,
+            ValueKind::Char => true,
+            ValueKind::UnsupportedLiteral => false,
+            ValueKind::Array => false,
+            ValueKind::Object => false,
+            // It's super common to want to embed a stream in another stream
+            // Having to embed it as #(type_name.clone()) instead of
+            // #type_name would be awkward
+            ValueKind::Stream => true,
+            ValueKind::Range => true,
+            ValueKind::Iterator => false,
+        }
+    }
+}
+
+impl MethodResolver for ValueKind {
+    fn resolve_method(&self, method_name: &str) -> Option<MethodInterface> {
+        self.method_resolver().resolve_method(method_name)
+    }
+
+    fn resolve_unary_operation(
+        &self,
+        operation: &UnaryOperation,
+    ) -> Option<UnaryOperationInterface> {
+        self.method_resolver().resolve_unary_operation(operation)
+    }
+
+    fn resolve_binary_operation(&self, operation: &BinaryOperation) -> Option<MethodInterface> {
+        self.method_resolver().resolve_binary_operation(operation)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct NoneTypeData;
+
+impl MethodResolutionTarget for NoneTypeData {
+    type Parent = ValueTypeData;
+    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct ValueTypeData;
+
+impl MethodResolutionTarget for ValueTypeData {
+    type Parent = ValueTypeData; // Irrelevant placeholder
+    const PARENT: Option<Self::Parent> = None;
+
+    fn resolve_own_method(method_name: &str) -> Option<MethodInterface> {
+        define_method_matcher! {
+            (match method_name on Self)
+
+            fn clone(this: CopyOnWriteValue) -> OwnedValue {
+                this.into_owned_infallible()
+            }
+
+            fn take(mut this: MutableValue) -> ExpressionValue {
+                let span_range = this.span_range();
+                core::mem::replace(this.deref_mut(), ExpressionValue::None(span_range))
+            }
+
+            fn as_mut(this: OwnedValue) -> MutableValue {
+                MutableValue::new_from_owned(this)
+            }
+
+            // NOTE:
+            // All value types can be coerced into SharedValue as an input, so this method does actually do something
+            fn as_ref(this: SharedValue) -> SharedValue {
+                this
+            }
+
+            fn debug_string(this: CopyOnWriteValue) -> ExecutionResult<String> {
+                this.into_owned_infallible().into_inner().into_debug_string()
+            }
+
+            fn debug(this: CopyOnWriteValue) -> ExecutionResult<()> {
+                let value = this.into_owned_infallible();
+                let span_range = value.span_range();
+                let message = value.into_inner().into_debug_string()?;
+                span_range.execution_err(message)
+            }
+
+            fn swap(mut a: MutableValue, mut b: MutableValue) -> () {
+                core::mem::swap(a.deref_mut(), b.deref_mut());
+            }
+        }
+    }
+
+    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+        Some(match operation {
+            UnaryOperation::Cast { target, .. } => match target {
+                CastTarget::String => {
+                    wrap_unary!((input: ExpressionValue) -> ExecutionResult<String> {
+                        input.concat_recursive(&ConcatBehaviour::standard())
+                    })
+                }
+                CastTarget::Stream => {
+                    wrap_unary!((input: ExpressionValue) -> ExecutionResult<OutputStream> {
+                        input.into_new_output_stream(Grouping::Flattened, StreamOutputBehaviour::PermitArrays)
+                    })
+                }
+                CastTarget::Group => {
+                    wrap_unary!((input: ExpressionValue) -> ExecutionResult<OutputStream> {
+                        input.into_new_output_stream(Grouping::Grouped, StreamOutputBehaviour::PermitArrays)
+                    })
+                }
+                _ => return None,
+            },
+            _ => return None,
+        })
+    }
+}
+
 pub(crate) trait ToExpressionValue: Sized {
     fn to_value(self, span_range: SpanRange) -> ExpressionValue;
 }
@@ -270,8 +439,8 @@ impl ExpressionValue {
     pub(crate) fn kind(&self) -> ValueKind {
         match self {
             ExpressionValue::None(_) => ValueKind::None,
-            ExpressionValue::Integer(_) => ValueKind::Integer,
-            ExpressionValue::Float(_) => ValueKind::Float,
+            ExpressionValue::Integer(integer) => ValueKind::Integer(integer.value.kind()),
+            ExpressionValue::Float(float) => ValueKind::Float(float.value.kind()),
             ExpressionValue::Boolean(_) => ValueKind::Boolean,
             ExpressionValue::String(_) => ValueKind::String,
             ExpressionValue::Char(_) => ValueKind::Char,
@@ -403,28 +572,6 @@ impl ExpressionValue {
                 place_descriptor,
                 other.articled_value_type(),
             )),
-        }
-    }
-
-    pub(super) fn handle_unary_operation(
-        self,
-        operation: OutputSpanned<UnaryOperation>,
-    ) -> ExecutionResult<ExpressionValue> {
-        match self {
-            ExpressionValue::None(_) => operation.unsupported(self),
-            ExpressionValue::Integer(value) => value.handle_unary_operation(operation),
-            ExpressionValue::Float(value) => value.handle_unary_operation(operation),
-            ExpressionValue::Boolean(value) => value.handle_unary_operation(operation),
-            ExpressionValue::String(value) => value.handle_unary_operation(operation),
-            ExpressionValue::Char(value) => value.handle_unary_operation(operation),
-            ExpressionValue::Stream(value) => value.handle_unary_operation(operation),
-            ExpressionValue::Array(value) => value.handle_unary_operation(operation),
-            ExpressionValue::Object(value) => value.handle_unary_operation(operation),
-            ExpressionValue::Range(range) => {
-                ExpressionIterator::new_for_range(range)?.handle_unary_operation(operation)
-            }
-            ExpressionValue::UnsupportedLiteral(value) => operation.unsupported(value),
-            ExpressionValue::Iterator(value) => value.handle_unary_operation(operation),
         }
     }
 
@@ -812,6 +959,14 @@ impl HasValueType for UnsupportedLiteral {
     fn value_type(&self) -> &'static str {
         "unsupported literal"
     }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct UnsupportedLiteralTypeData;
+
+impl MethodResolutionTarget for UnsupportedLiteralTypeData {
+    type Parent = ValueTypeData;
+    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
 }
 
 pub(super) enum ExpressionValuePair {

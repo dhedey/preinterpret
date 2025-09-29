@@ -17,51 +17,6 @@ impl ExpressionBoolean {
         }
     }
 
-    pub(super) fn handle_unary_operation(
-        self,
-        operation: OutputSpanned<UnaryOperation>,
-    ) -> ExecutionResult<ExpressionValue> {
-        let input = self.value;
-        Ok(match operation.operation {
-            UnaryOperation::Neg { .. } => return operation.unsupported(self),
-            UnaryOperation::Not { .. } => operation.output(!input),
-            UnaryOperation::Cast { target, .. } => match target {
-                CastTarget::Integer(IntegerKind::Untyped) => {
-                    operation.output(UntypedInteger::from_fallback(input as FallbackInteger))
-                }
-                CastTarget::Integer(IntegerKind::I8) => operation.output(input as i8),
-                CastTarget::Integer(IntegerKind::I16) => operation.output(input as i16),
-                CastTarget::Integer(IntegerKind::I32) => operation.output(input as i32),
-                CastTarget::Integer(IntegerKind::I64) => operation.output(input as i64),
-                CastTarget::Integer(IntegerKind::I128) => operation.output(input as i128),
-                CastTarget::Integer(IntegerKind::Isize) => operation.output(input as isize),
-                CastTarget::Integer(IntegerKind::U8) => operation.output(input as u8),
-                CastTarget::Integer(IntegerKind::U16) => operation.output(input as u16),
-                CastTarget::Integer(IntegerKind::U32) => operation.output(input as u32),
-                CastTarget::Integer(IntegerKind::U64) => operation.output(input as u64),
-                CastTarget::Integer(IntegerKind::U128) => operation.output(input as u128),
-                CastTarget::Integer(IntegerKind::Usize) => operation.output(input as usize),
-                CastTarget::Float(_) | CastTarget::Char => {
-                    return operation.execution_err("This cast is not supported")
-                }
-                CastTarget::Boolean => operation.output(input),
-                CastTarget::String => operation.output(input.to_string()),
-                CastTarget::Stream => {
-                    operation.output(operation.output(input).into_new_output_stream(
-                        Grouping::Flattened,
-                        StreamOutputBehaviour::Standard,
-                    )?)
-                }
-                CastTarget::Group => {
-                    operation.output(operation.output(input).into_new_output_stream(
-                        Grouping::Grouped,
-                        StreamOutputBehaviour::Standard,
-                    )?)
-                }
-            },
-        })
-    }
-
     pub(super) fn handle_integer_binary_operation(
         self,
         _right: ExpressionInteger,
@@ -116,6 +71,103 @@ impl ToExpressionValue for bool {
         ExpressionValue::Boolean(ExpressionBoolean {
             value: self,
             span_range,
+        })
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct BooleanTypeData;
+
+impl MethodResolutionTarget for BooleanTypeData {
+    type Parent = ValueTypeData;
+    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+
+    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+        Some(match operation {
+            UnaryOperation::Not { .. } => {
+                wrap_unary!((this: Owned<bool>) -> ExecutionResult<bool> {
+                    Ok(!this.into_inner())
+                })
+            }
+            UnaryOperation::Cast { target, .. } => match target {
+                CastTarget::Integer(IntegerKind::Untyped) => {
+                    wrap_unary!((input: bool) -> UntypedInteger {
+                        UntypedInteger::from_fallback(input as FallbackInteger)
+                    })
+                }
+                CastTarget::Integer(IntegerKind::I8) => {
+                    wrap_unary!((input: bool) -> i8 {
+                        input as i8
+                    })
+                }
+                CastTarget::Integer(IntegerKind::I16) => {
+                    wrap_unary!((input: bool) -> i16 {
+                        input as i16
+                    })
+                }
+                CastTarget::Integer(IntegerKind::I32) => {
+                    wrap_unary!((input: bool) -> i32 {
+                        input as i32
+                    })
+                }
+                CastTarget::Integer(IntegerKind::I64) => {
+                    wrap_unary!((input: bool) -> i64 {
+                        input as i64
+                    })
+                }
+                CastTarget::Integer(IntegerKind::I128) => {
+                    wrap_unary!((input: bool) -> i128 {
+                        input as i128
+                    })
+                }
+                CastTarget::Integer(IntegerKind::Isize) => {
+                    wrap_unary!((input: bool) -> isize {
+                        input as isize
+                    })
+                }
+                CastTarget::Integer(IntegerKind::U8) => {
+                    wrap_unary!((input: bool) -> u8 {
+                        input as u8
+                    })
+                }
+                CastTarget::Integer(IntegerKind::U16) => {
+                    wrap_unary!((input: bool) -> u16 {
+                        input as u16
+                    })
+                }
+                CastTarget::Integer(IntegerKind::U32) => {
+                    wrap_unary!((input: bool) -> u32 {
+                        input as u32
+                    })
+                }
+                CastTarget::Integer(IntegerKind::U64) => {
+                    wrap_unary!((input: bool) -> u64 {
+                        input as u64
+                    })
+                }
+                CastTarget::Integer(IntegerKind::U128) => {
+                    wrap_unary!((input: bool) -> u128 {
+                        input as u128
+                    })
+                }
+                CastTarget::Integer(IntegerKind::Usize) => {
+                    wrap_unary!((input: bool) -> usize {
+                        input as usize
+                    })
+                }
+                CastTarget::Boolean => {
+                    wrap_unary!((input: bool) -> bool {
+                        input
+                    })
+                }
+                CastTarget::String => {
+                    wrap_unary!((input: bool) -> String {
+                        input.to_string()
+                    })
+                }
+                _ => return None,
+            },
+            _ => return None,
         })
     }
 }
