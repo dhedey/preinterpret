@@ -10,6 +10,10 @@ Preinterpret is a Rust procedural macro crate that provides the `preinterpret!` 
 - Commands for concatenation, case conversion, and token manipulation like `[!ident! ...]`, `[!string! ...]`, `[!ident_snake! ...]`
 - Control flow and parsing capabilities
 
+## Plans and Tasks
+
+There are various files in the `./plans` folder, the "current vision" is `2025-09-vision.md` and the "todo list" is `1_0-todo-list.md`.
+
 ## Architecture
 
 The codebase is organized into several main modules:
