@@ -4,13 +4,13 @@ use std::mem;
 // TODO[unused-clearup]
 use super::*;
 
-pub(crate) struct UnaryOperationInterface {
+pub(super) struct UnaryOperationInterface {
     pub method: fn(ResolvedValue, &UnaryOperation, SpanRange) -> ExecutionResult<ResolvedValue>,
     pub argument_ownership: ResolvedValueOwnership,
 }
 
 impl UnaryOperationInterface {
-    pub(crate) fn execute(
+    pub(super) fn execute(
         &self,
         input: ResolvedValue,
         operation: &UnaryOperation,
@@ -19,12 +19,12 @@ impl UnaryOperationInterface {
         (self.method)(input, operation, output_span_range)
     }
 
-    pub(crate) fn argument_ownership(&self) -> ResolvedValueOwnership {
+    pub(super) fn argument_ownership(&self) -> ResolvedValueOwnership {
         self.argument_ownership
     }
 }
 
-pub(crate) trait MethodResolver {
+pub(super) trait MethodResolver {
     /// Resolves a unary operation as a method interface for this type.
     fn resolve_method(&self, method_name: &str) -> Option<MethodInterface>;
 
@@ -66,7 +66,7 @@ impl<T: MethodResolutionTarget> MethodResolver for T {
     }
 }
 
-pub(crate) trait MethodResolutionTarget {
+pub(super) trait MethodResolutionTarget {
     type Parent: MethodResolutionTarget;
     const PARENT: Option<Self::Parent>;
 
