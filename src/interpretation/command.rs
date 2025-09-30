@@ -342,7 +342,6 @@ macro_rules! define_command_enums {
 define_command_enums! {
     // Core Commands
     SetCommand,
-    RawCommand,
     StreamCommand,
     IgnoreCommand,
     ReinterpretCommand,
@@ -410,7 +409,7 @@ impl Parse<Source> for Command {
             Some(command_kind) => command_kind,
             None => command_name.span().err(
                 format!(
-                    "Expected `[!<command>! ..]`, for <command> one of: {}.\nIf this wasn't intended to be a preinterpret command, you can work around this with [!raw! [!{} ... ]]",
+                    "Expected `[!<command>! ..]`, for <command> one of: {}.\nIf this wasn't intended to be a preinterpret command, you can work around this with #..(%raw[[!{} ... ]])",
                     CommandKind::list_all(),
                     command_name,
                 ),

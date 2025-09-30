@@ -26,10 +26,16 @@ impl Parse<Source> for Pattern {
         } else if lookahead.peek(syn::token::Bracket) {
             Ok(Pattern::Array(input.parse()?))
         } else if lookahead.peek(Token![%]) {
-            if input.peek2(syn::token::Brace) {
+            let (_, next) = input.cursor().punct_matching('%').unwrap();
+            if next.group_matching(Delimiter::Brace).is_some() {
                 Ok(Pattern::Object(input.parse()?))
-            } else if input.peek2(syn::token::Bracket) {
+            } else if next.group_matching(Delimiter::Bracket).is_some() {
                 Ok(Pattern::Stream(input.parse()?))
+            } else if next.ident_matching("raw").is_some() {
+                // TODO: Check this is the correct syntax once implemented!
+                input.parse_err(
+                    "Use `%[@[EXACT(%raw[...])]]` to match a raw stream literal pattern`",
+                )
             } else {
                 input.parse_err("Expected a pattern, such as an object pattern `%{ ... }` or stream pattern `%[ ... ]`")
             }

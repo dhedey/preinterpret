@@ -108,8 +108,9 @@ impl Parse<Source> for Transformer {
         let transformer_kind = match TransformerKind::for_ident(&name) {
             Some(transformer_kind) => transformer_kind,
             None => name.span().err(
+                // TODO: Check the EXACT guidance is still correct
                 format!(
-                    "Expected `@NAME` or `@[NAME ...arguments...]` for NAME one of: {}.\nIf this wasn't intended to be a named transformer, you can work around this by replacing the @ with @(_ = @[EXACT [!raw! @]])",
+                    "Expected `@NAME` or `@[NAME ...arguments...]` for NAME one of: {}.\nIf this wasn't intended to be a named transformer, you can work around this by replacing the @ with @[EXACT(%raw[@])]",
                     TransformerKind::list_all(),
                 ),
             )?,

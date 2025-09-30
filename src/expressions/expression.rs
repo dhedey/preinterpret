@@ -116,7 +116,7 @@ impl Expressionable for Source {
                 let value = ExpressionValue::for_syn_lit(input.parse()?);
                 UnaryAtom::Leaf(Self::Leaf::Value(SharedValue::new_from_owned(value.into())))
             },
-            SourcePeekMatch::StreamLiteral => {
+            SourcePeekMatch::StreamLiteral(_) => {
                 UnaryAtom::Leaf(Self::Leaf::StreamLiteral(input.parse()?))
             }
             SourcePeekMatch::ObjectLiteral => {

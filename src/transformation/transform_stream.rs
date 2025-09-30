@@ -66,7 +66,7 @@ impl TransformItem {
             SourcePeekMatch::Punct(_) => Self::ExactPunct(input.parse_any_punct()?),
             SourcePeekMatch::Literal(_) => Self::ExactLiteral(input.parse()?),
             SourcePeekMatch::Ident(_) => Self::ExactIdent(input.parse_any_ident()?),
-            SourcePeekMatch::StreamLiteral => return input.parse_err("Stream literals are not supported here. Remove the %[..] wrapper."),
+            SourcePeekMatch::StreamLiteral(_) => return input.parse_err("Stream literals are not supported here. Remove the %[..] wrapper."),
             SourcePeekMatch::ObjectLiteral => return input.parse_err("Object literals are not supported here."),
             SourcePeekMatch::End => return input.parse_err("Unexpected end"),
         })

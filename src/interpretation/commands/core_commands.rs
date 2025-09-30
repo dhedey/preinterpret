@@ -114,34 +114,6 @@ impl NoOutputCommandDefinition for SetCommand {
 }
 
 #[derive(Clone)]
-pub(crate) struct RawCommand {
-    token_stream: TokenStream,
-}
-
-impl CommandType for RawCommand {
-    type OutputKind = OutputKindStream;
-}
-
-impl StreamCommandDefinition for RawCommand {
-    const COMMAND_NAME: &'static str = "raw";
-
-    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
-        Ok(Self {
-            token_stream: arguments.read_all_as_raw_token_stream(),
-        })
-    }
-
-    fn execute(
-        self,
-        _interpreter: &mut Interpreter,
-        output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
-        output.extend_raw_tokens(self.token_stream);
-        Ok(())
-    }
-}
-
-#[derive(Clone)]
 pub(crate) struct StreamCommand {
     inner: SourceStream,
 }

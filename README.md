@@ -37,7 +37,7 @@ Preinterpret works with its own very simple language, with two pieces of syntax:
 * **Commands**: `[!command_name! input token stream...]` take an input token stream and output a token stream. There are a number of commands which cover a toolkit of useful functions.
 * **Variables**: `[!set! #var_name = token stream...]` defines a variable, and `#var_name` substitutes the variable into another command or the output.
 
-Commands can be nested intuitively. The input of all commands (except `[!raw! ...]`) are first interpreted before the command itself executes.
+Commands can be nested intuitively. In general, the input of commands are first interpreted before the command itself executes.
 
 ### Declarative macro example
 

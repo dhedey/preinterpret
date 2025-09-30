@@ -93,6 +93,8 @@ fn test_for() {
     preinterpret_assert_eq!(
         {
             [!string!
+            // A stream is iterated token-tree by token-tree
+            // So we can match each value with a stream pattern matching each `(X,)`
             [!for! %[(@(#x = @IDENT),)] in %[(a,) (b,) (c,)] {
                 #x
                 [!if! [!string! #x] == "b" { [!break!] }]

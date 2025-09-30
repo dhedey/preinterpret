@@ -44,7 +44,7 @@ fn test_basic_evaluate_works() {
     preinterpret_assert_eq!(#(let six_as_sum = 3 + 3; six_as_sum * six_as_sum), 36);
     preinterpret_assert_eq!(#(
         let partial_sum = [!stream! + 2];
-        ([!stream! #([!stream! 5] + partial_sum) =] + [!reinterpret! [!raw! #](5 #..partial_sum)]).debug_string()
+        ([!stream! #([!stream! 5] + partial_sum) =] + [!reinterpret! #..(%raw[#])(5 #..partial_sum)]).debug_string()
     ), "[!stream! [!group! 5 + 2] = [!group! 7]]");
     preinterpret_assert_eq!(#(1 + (1..2) as int), 2);
     preinterpret_assert_eq!(#("hello" == "world"), false);
@@ -99,7 +99,7 @@ fn test_very_long_expression_works() {
                 iteration_limit: 100000,
             }]
             #(let expression = [!stream! 0] + [!for! _ in 0..100000 { + 1 }])
-            [!reinterpret! [!raw! #](#expression)]
+            [!reinterpret! #..(%raw[#])(#..expression)]
         },
         100000
     );

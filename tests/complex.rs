@@ -5,8 +5,8 @@ use prelude::*;
 preinterpret::stream! {
     [!set! #bytes = 32]
     [!set! #postfix = Hello World #bytes]
-    [!set! #some_symbols = and some symbols such as [!raw! #] and #123]
-    [!set! #MyRawVar = [!raw! Test no #str [!ident! replacement]]]
+    [!set! #some_symbols = and some symbols such as #..(%raw[#]) and #123]
+    [!set! #MyRawVar = #..(%raw[Test no #str [!ident! replacement]])]
     [!ignore! non - sensical !code :D - ignored (!)]
     struct MyStruct;
     type [!ident! X "Boo" [!string! Hello 1] #postfix] = MyStruct;

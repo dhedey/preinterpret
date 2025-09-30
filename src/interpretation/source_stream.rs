@@ -59,12 +59,12 @@ impl Parse<Source> for SourceItem {
                 SourceItem::EmbeddedExpression(input.parse()?)
             }
             SourcePeekMatch::ExplicitTransformStream | SourcePeekMatch::Transformer(_) => {
-                return input.parse_err("Destructurings are not supported here. If this wasn't intended to be a destructuring, replace @ with [!raw! @]");
+                return input.parse_err("Destructurings are not supported here. If this wasn't intended to be a destructuring, replace @ with #..(%raw[@])");
             }
             SourcePeekMatch::Punct(_) => SourceItem::Punct(input.parse_any_punct()?),
             SourcePeekMatch::Ident(_) => SourceItem::Ident(input.parse_any_ident()?),
             SourcePeekMatch::Literal(_) => SourceItem::Literal(input.parse()?),
-            SourcePeekMatch::StreamLiteral => return input.parse_err("Stream literals are only supported in an expression context, not a stream context."),
+            SourcePeekMatch::StreamLiteral(_) => return input.parse_err("Stream literals are only supported in an expression context, not a stream context."),
             SourcePeekMatch::ObjectLiteral => return input.parse_err("Object literals are only supported in an expression context, not a stream context."),
             SourcePeekMatch::End => return input.parse_err("Expected some item."),
         })

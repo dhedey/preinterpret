@@ -2,6 +2,11 @@
 
 ## 1.0.0
 
+This moves preinterpet to an expression-based language, inspired by Rust, but with some twists to make writing code generation code quicker:
+* Token streams as a native feature
+* Flexible Javascript-like objects/arrays
+* New expressions such as `attempt { .. }` for trying alternatives
+
 ### Variable Expansions
 
 * `#x` now outputs the contents of `x` in a transparent group.
@@ -46,6 +51,9 @@ The `#(...)` expression block behaves much like a `{ .. }` block in rust. It sup
 Statements are either expressions `EXPR` or `let x = EXPR`, `x = EXPR`, `x += EXPR` for some operator such as `+`.
 
 The following are recognized values:
+* Object literals `%{ x: "Hello", y, ["z"]: "World" }` behave similarly to Javascript objects.
+* Token stream literals `%[...]` take any token stream, and support embedding `#variables` or `#(<..expressions..>)` inside them.
+* Raw token stream literals `%raw[...]` are used to capture raw tokens, and are not interpreted (e.g. `#` has no special meaning).
 * Integer literals, with or without a suffix
 * Float literals, with or without a suffix
 * Boolean literals

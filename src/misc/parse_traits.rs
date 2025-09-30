@@ -22,7 +22,7 @@ pub(crate) enum SourcePeekMatch {
     Ident(Ident),
     Punct(Punct),
     Literal(Literal),
-    StreamLiteral,
+    StreamLiteral(StreamLiteralKind),
     ObjectLiteral,
     End,
 }
@@ -52,7 +52,7 @@ fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> SourcePeekMatch {
         // => A $literal or $($literal)* _is_ outputted in a group...
         //
         // So this isn't possible. It's unlikely to matter much, and a user can always do:
-        // [!raw! $($tt)*] anyway.
+        // #(%raw[$($tt)*]) anyway.
 
         return SourcePeekMatch::Group(delimiter);
     }
@@ -76,8 +76,13 @@ fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> SourcePeekMatch {
     }
 
     if let Some((_, next)) = cursor.punct_matching('%') {
+        if let Some((_, next)) = next.ident_matching("raw") {
+            if next.group_matching(Delimiter::Bracket).is_some() {
+                return SourcePeekMatch::StreamLiteral(StreamLiteralKind::Raw);
+            }
+        }
         if next.group_matching(Delimiter::Bracket).is_some() {
-            return SourcePeekMatch::StreamLiteral;
+            return SourcePeekMatch::StreamLiteral(StreamLiteralKind::Regular);
         }
         if next.group_matching(Delimiter::Brace).is_some() {
             return SourcePeekMatch::ObjectLiteral;

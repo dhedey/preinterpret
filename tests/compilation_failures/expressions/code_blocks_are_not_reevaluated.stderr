@@ -1,5 +1,5 @@
 error: expected one of `(`, `[`, or `{`, found `"This was a re-evaluation"`
- --> tests/compilation_failures/expressions/code_blocks_are_not_reevaluated.rs:6:44
+ --> tests/compilation_failures/expressions/code_blocks_are_not_reevaluated.rs:6:42
   |
-6 |             let indirect = [!raw! [!error! "This was a re-evaluation"]];
-  |                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^ expected one of `(`, `[`, or `{`
+6 |             let indirect = %raw[[!error! "This was a re-evaluation"]];
+  |                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^ expected one of `(`, `[`, or `{`

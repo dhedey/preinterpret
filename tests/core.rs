@@ -31,7 +31,7 @@ fn test_set() {
 #[test]
 fn test_raw() {
     preinterpret_assert_eq!(
-        { [!string! [!raw! #variable and [!command!] are not interpreted or error]] },
+        { [!string! #..(%raw[#variable and [!command!] are not interpreted or error])] },
         "#variableand[!command!]arenotinterpretedorerror"
     );
 }
@@ -117,13 +117,13 @@ fn test_debug() {
         "[!stream! impl < 'a , T > MyStruct < 'a , T > { pub fn new () -> Self { ! ($ crate :: Test :: CONSTANT >> 5 > 1) } }]"
     );
     // It shows transparent groups
-    // NOTE: The output code can't be used directly as preinterpret input
-    // because it doesn't stick [!raw! ...] around things which could be confused
+    // NOTE: The output of debug_string() can't be used directly as preinterpret input
+    // because it doesn't stick %raw[#test] around things which could be confused
     // for the preinterpret grammar. Perhaps it could/should in future.
     preinterpret_assert_eq!(
         #(
             let x = [!stream! Hello (World)];
-            [!stream! #x [!raw! #test] "and" [!raw! ##] #..x].debug_string()
+            [!stream! #x #..(%raw[#test]) "and" #..(%raw[##]) #..x].debug_string()
         ),
         r###"[!stream! [!group! Hello (World)] # test "and" ## Hello (World)]"###
     );

@@ -157,7 +157,7 @@ fn test_none_output_commands_mid_parse() {
 fn test_raw_content_in_exact_transformer() {
     preinterpret_assert_eq!({
         [!set! #x = true]
-        [!let! The @[EXACT [!raw! #x]] = The [!raw! #] x]
+        [!let! The @[EXACT #..(%raw[#x])] = The #..(%raw[#]) x]
         #x
     }, true);
 }
