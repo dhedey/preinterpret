@@ -27,7 +27,7 @@ The `stream!` or `run!` macros can be used inside the output of a declarative ma
 
 ```toml
 [dependencies]
-preinterpret = "0.3"
+preinterpret = "0.2"
 ```
 
 ## User Guide

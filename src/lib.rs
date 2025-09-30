@@ -27,7 +27,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! preinterpret = "0.3"
+//! preinterpret = "0.2"
 //! ```
 //!
 //! ## User Guide
