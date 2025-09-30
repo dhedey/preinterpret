@@ -55,7 +55,9 @@ impl Parse<Source> for SourceItem {
             SourcePeekMatch::Command(_) => SourceItem::Command(input.parse()?),
             SourcePeekMatch::Group(_) => SourceItem::SourceGroup(input.parse()?),
             SourcePeekMatch::Variable(_) => SourceItem::Variable(input.parse()?),
-            SourcePeekMatch::EmbeddedExpression(_) => SourceItem::EmbeddedExpression(input.parse()?),
+            SourcePeekMatch::EmbeddedExpression(_) => {
+                SourceItem::EmbeddedExpression(input.parse()?)
+            }
             SourcePeekMatch::ExplicitTransformStream | SourcePeekMatch::Transformer(_) => {
                 return input.parse_err("Destructurings are not supported here. If this wasn't intended to be a destructuring, replace @ with [!raw! @]");
             }
