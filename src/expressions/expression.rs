@@ -66,7 +66,7 @@ impl Expressionable for Source {
                     "In an expression, the #.. variable prefix is not allowed. The # prefix should only be used when embedding a variable into an output sream.",
                 )
             }
-            SourcePeekMatch::ExpressionBlock(_) => {
+            SourcePeekMatch::EmbeddedExpression(_) => {
                 UnaryAtom::Leaf(Self::Leaf::EmbeddedExpression(input.parse()?))
             }
             SourcePeekMatch::ExplicitTransformStream | SourcePeekMatch::Transformer(_) => {

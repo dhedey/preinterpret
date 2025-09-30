@@ -70,7 +70,7 @@ impl Parse<Source> for ExactItem {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => Self::ExactCommandOutput(input.parse()?),
             SourcePeekMatch::Variable(_) => Self::ExactVariableOutput(input.parse()?),
-            SourcePeekMatch::ExpressionBlock(_) => Self::ExactEmbeddedExpression(input.parse()?),
+            SourcePeekMatch::EmbeddedExpression(_) => Self::ExactEmbeddedExpression(input.parse()?),
             SourcePeekMatch::ExplicitTransformStream => Self::TransformStreamInput(input.parse()?),
             SourcePeekMatch::Transformer(_) => Self::Transformer(input.parse()?),
             SourcePeekMatch::Group(_) => Self::ExactGroup(input.parse()?),

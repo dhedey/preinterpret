@@ -69,10 +69,15 @@ fn resolve_own_binary_operation(operation: &BinaryOperation) -> Option<MethodInt
 
 Create the following expressions:
 * Blocks `{}`
+  * These should be in the expression parser...
+  * ... and remove EmbeddedExpressions inside expressions
+  * ... and make object literals either `({ a: b })` OR `{{ a: x, b: y }}` OR `object { a: y }` OR `%{ a: 1, b: 2 }` possibly the latter two are least likely to be confused in the grammar.
   * ... and move `let` statement to replace `[!let!]`
 * `if`, `else`
 * `for`, `while`, `loop`
   * These return an array of values from each iteration (possibly with an optimization to skip if the value will be ignored)
+  * If it's as a statement, it doesn't need a semi-colon. If it's as an expression, (e.g. `let x = for ...;`) then it does.
+  * Improve the "missing semicolon" warning to warn that the semi-colon was likely missing from the previous line end.
 * `continue`
 * `break`
   * Can be used to return a value from a `loop` expression. If present, the loop changes to not return an array

@@ -59,7 +59,7 @@ impl TransformItem {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => Self::Command(input.parse()?),
             SourcePeekMatch::Variable(_) => return input.parse_err("Variable bindings are not supported here. #x can be inverted with @(#x = @TOKEN_TREE.flatten()) and #..x with @(#x = @REST) or @(#x = @[UNTIL ..])"),
-            SourcePeekMatch::ExpressionBlock(_) => Self::EmbeddedExpression(input.parse()?),
+            SourcePeekMatch::EmbeddedExpression(_) => Self::EmbeddedExpression(input.parse()?),
             SourcePeekMatch::Group(_) => Self::ExactGroup(input.parse()?),
             SourcePeekMatch::ExplicitTransformStream => Self::TransformStreamInput(input.parse()?),
             SourcePeekMatch::Transformer(_) => Self::Transformer(input.parse()?),
