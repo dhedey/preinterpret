@@ -521,7 +521,7 @@ mod transformation;
 
 use internal_prelude::*;
 
-/// Interpets its input as a preinterpret stream.
+/// Interprets its input as a preinterpret stream.
 ///
 /// See the [crate-level documentation](crate) for full details.
 #[proc_macro]
@@ -549,7 +549,7 @@ fn preinterpret_stream_internal(input: TokenStream) -> SynResult<TokenStream> {
     }
 }
 
-/// Interpets its input as a preinterpret expression block, which should return a token stream.
+/// Interprets its input as a preinterpret expression block, which should return a token stream.
 ///
 /// See the [crate-level documentation](crate) for full details.
 #[proc_macro]
@@ -580,7 +580,7 @@ fn preinterpret_run_internal(input: TokenStream) -> SynResult<TokenStream> {
     }
 }
 
-/// Interpets its input as a preinterpret expression block, which should return a token stream.
+/// Interprets its input as a preinterpret expression block, which should return a token stream.
 ///
 /// See the [crate-level documentation](crate) for full details.
 #[cfg(feature = "benchmark")]
@@ -629,7 +629,10 @@ mod benchmarking {
             block_content
                 .evaluate(&mut interpreter, Span::call_site().into())
                 .and_then(|x| {
-                    x.into_new_output_stream(Grouping::Flattened, StreamOutputBehaviour::PermitArrays)
+                    x.into_new_output_stream(
+                        Grouping::Flattened,
+                        StreamOutputBehaviour::PermitArrays,
+                    )
                 })
                 .convert_to_final_result()
         });
@@ -650,7 +653,9 @@ mod benchmarking {
             output_duration.as_micros()
         );
 
-        Ok(TokenStream::from_iter([TokenTree::Literal(Literal::string(output.as_str()))]))
+        Ok(TokenStream::from_iter([TokenTree::Literal(
+            Literal::string(output.as_str()),
+        )]))
     }
 }
 

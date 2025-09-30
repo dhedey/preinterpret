@@ -39,7 +39,7 @@ impl<C> HandleTransformation for TransformSegment<C> {
 #[derive(Clone)]
 pub(crate) enum TransformItem {
     Command(Command),
-    ExpressionBlock(EmbeddedExpression),
+    EmbeddedExpression(EmbeddedExpression),
     Transformer(Transformer),
     TransformStreamInput(ExplicitTransformStream),
     ExactPunct(Punct),
@@ -59,7 +59,7 @@ impl TransformItem {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => Self::Command(input.parse()?),
             SourcePeekMatch::Variable(_) => return input.parse_err("Variable bindings are not supported here. #x can be inverted with @(#x = @TOKEN_TREE.flatten()) and #..x with @(#x = @REST) or @(#x = @[UNTIL ..])"),
-            SourcePeekMatch::ExpressionBlock(_) => Self::ExpressionBlock(input.parse()?),
+            SourcePeekMatch::ExpressionBlock(_) => Self::EmbeddedExpression(input.parse()?),
             SourcePeekMatch::Group(_) => Self::ExactGroup(input.parse()?),
             SourcePeekMatch::ExplicitTransformStream => Self::TransformStreamInput(input.parse()?),
             SourcePeekMatch::Transformer(_) => Self::Transformer(input.parse()?),
@@ -88,7 +88,7 @@ impl HandleTransformation for TransformItem {
             TransformItem::TransformStreamInput(stream) => {
                 stream.handle_transform(input, interpreter, output)?;
             }
-            TransformItem::ExpressionBlock(block) => {
+            TransformItem::EmbeddedExpression(block) => {
                 block.interpret_into(interpreter, output)?;
             }
             TransformItem::ExactPunct(punct) => {

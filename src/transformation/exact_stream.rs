@@ -58,7 +58,7 @@ pub(crate) enum ExactItem {
     Transformer(Transformer),
     ExactCommandOutput(Command),
     ExactVariableOutput(MarkedVariable),
-    ExactExpressionBlock(EmbeddedExpression),
+    ExactEmbeddedExpression(EmbeddedExpression),
     ExactPunct(Punct),
     ExactIdent(Ident),
     ExactLiteral(Literal),
@@ -70,7 +70,7 @@ impl Parse<Source> for ExactItem {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => Self::ExactCommandOutput(input.parse()?),
             SourcePeekMatch::Variable(_) => Self::ExactVariableOutput(input.parse()?),
-            SourcePeekMatch::ExpressionBlock(_) => Self::ExactExpressionBlock(input.parse()?),
+            SourcePeekMatch::ExpressionBlock(_) => Self::ExactEmbeddedExpression(input.parse()?),
             SourcePeekMatch::ExplicitTransformStream => Self::TransformStreamInput(input.parse()?),
             SourcePeekMatch::Transformer(_) => Self::Transformer(input.parse()?),
             SourcePeekMatch::Group(_) => Self::ExactGroup(input.parse()?),
@@ -121,7 +121,7 @@ impl HandleTransformation for ExactItem {
                     .into_exact_stream()?
                     .handle_transform(input, interpreter, output)?;
             }
-            ExactItem::ExactExpressionBlock(expression_block) => {
+            ExactItem::ExactEmbeddedExpression(expression_block) => {
                 expression_block
                     .interpret_to_new_stream(interpreter)?
                     .into_exact_stream()?

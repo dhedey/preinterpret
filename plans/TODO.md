@@ -281,6 +281,8 @@ Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` doc
 * CastTarget expansion:
   * The `as int` operator is not supported for string values
   * The `as char` operator is not supported for untyped integer values
+  * The `<range> as array`, `<iterator> as array` and `<stream> as array` - possibly on an Iterator type?
+  * And `object` can be iterated as `[key, value]`?
   * Add `as iterator` and uncomment the test at the end of `test_range()`
   * Support a CastTarget of `array` using `into_iterator()`.
   * Add `as ident` and `as literal` casting and support it for string, array and stream using concat recursive.

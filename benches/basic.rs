@@ -10,9 +10,7 @@ macro_rules! benchmark {
 }
 
 fn main() {
-    benchmark!("Trivial Sum", {
-        1 + 1 + 1
-    });
+    benchmark!("Trivial Sum", { 1 + 1 + 1 });
     benchmark!("For loop adding up 1000 times", {
         let output = 0;
         let _ = [!for! i in 1..=1000 { output += i }];
