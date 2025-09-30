@@ -6,7 +6,7 @@ error: Expected:
            spans?: [!stream! $abc],
        }
        The following required field/s are missing: message
- --> tests/compilation_failures/core/error_invalid_structure.rs:4:28
+ --> tests/compilation_failures/core/error_invalid_structure.rs:4:22
   |
-4 |     preinterpret!([!error! { }]);
-  |                            ^^^
+4 |     stream!([!error! { }]);
+  |                      ^^^

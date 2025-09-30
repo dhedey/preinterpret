@@ -19,6 +19,14 @@ rust-version = "1.63"
 [lib]
 proc-macro = true
 
+[[bench]]
+name = "basic"
+harness = false
+required-features = ["benchmark"]
+
+[features]
+benchmark = [] # For internal use only
+
 [dependencies]
 proc-macro2 = { version = "1.0.93" }
 syn = { version = "2.0.98", default-features = false, features = ["parsing", "derive", "printing", "clone-impls", "full"] }

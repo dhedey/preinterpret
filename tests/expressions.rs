@@ -71,6 +71,7 @@ fn test_basic_evaluate_works() {
         #(("Hello" as stream + "World" as stream + (1 + 1) as stream + (1 + 1) as group).debug_string()),
         r#"[!stream! "Hello" "World" 2 [!group! 2]]"#
     );
+    assert_eq!(run!(let x = 1; x + 2), 3);
 }
 
 #[test]

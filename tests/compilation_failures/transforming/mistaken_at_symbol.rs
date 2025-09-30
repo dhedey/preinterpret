@@ -3,7 +3,7 @@ use preinterpret::*;
 struct I;
 
 fn main() {
-    preinterpret!(
+    stream!(
         match I {
             x @ I => x,
         }

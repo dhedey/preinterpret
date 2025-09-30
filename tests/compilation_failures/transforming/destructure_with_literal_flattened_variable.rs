@@ -1,5 +1,5 @@
 use preinterpret::*;
 
 fn main() {
-    preinterpret!([!let! @(#..x = @LITERAL) = "Hello"]);
+    stream!([!let! @(#..x = @LITERAL) = "Hello"]);
 }

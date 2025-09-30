@@ -1,5 +1,5 @@
 use preinterpret::*;
 
 fn main() {
-    preinterpret!([!let! [!group! Output] = [!group! Output]]);
+    stream!([!let! [!group! Output] = [!group! Output]]);
 }

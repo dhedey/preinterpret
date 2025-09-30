@@ -2,32 +2,6 @@
 
 This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 
-## High priority
-
-* Create `preinterpret::stream` and `preinterpret::run` and replace `preinterpret_assert_eq` with `run_assert_eq` / `stream_assert_eq`
-* Add benches somehow...
-  * Taking a look at https://github.com/dtolnay/quote/tree/master/benches - the benches don't test the right thing for us:
-  * It's built to run two ways - as an executable, and a proc-macro library. When `main.rs` runs:
-    * It triggers `quote_benchmark::run_quote_benchmark!(_)` which runs itself as a proc-macro, i.e. via compiling `lib.rs`
-    * In `lib.rs`, `crate::benchmark` resolves to creating the `run_quote_benchmark` proc-macro, which internally has a call to `quote!`
-      This call happens during compilation time, leaving `timer::time("macro", ..)` to actually time the `proc_macro::TokenStream::from` invocation
-    * And then the `main()` runs in `main.rs` which calls `lib::quote` which is created by `crate::benchmark!` looping back to wrap it in the `quote` function defined in `main.rs`, and returns the `proc_macro2::TokenStream`.
-  * Basically, the benchmarks both test how long the outputted code takes to execute, not how long the `quote!` invocation itself takes (which is harder, because that happens at compile time)....
-  * For us, we can split up the time into:
-    * (One-off compilation of the whole preinterpret crate)
-    * Invocation overhead per macro (partially unknowable), quite small
-    * Execution of the macro:
-      * Conversion to token stream v2 (if it's anything)
-      * Parsing
-      * Execution
-      * Conversion back to normal token stream (if it's anything)
-    * We can create an optional `bench` feature which creates a `stream_bench` macro which tries to do the following things 1000 times:
-      * Conversion
-      * Parsing
-      * Execution
-      * Conversion back
-    * And returns a tuple of the four averages `(a, b, c, d)` - then we can execute this / record this somewhere, and keep track of it over time.
-
 ## (Interpreted) Stream Literals
 
 * Introduce `%[..]` and `%raw[..]` instead of `[!stream! ...]` and `[!raw! ...]`
@@ -95,10 +69,15 @@ fn resolve_own_binary_operation(operation: &BinaryOperation) -> Option<MethodInt
 
 Create the following expressions:
 * Blocks `{}`
+  * These should be in the expression parser...
+  * ... and remove EmbeddedExpressions inside expressions
+  * ... and make object literals either `({ a: b })` OR `{{ a: x, b: y }}` OR `object { a: y }` OR `%{ a: 1, b: 2 }` possibly the latter two are least likely to be confused in the grammar.
   * ... and move `let` statement to replace `[!let!]`
 * `if`, `else`
 * `for`, `while`, `loop`
   * These return an array of values from each iteration (possibly with an optimization to skip if the value will be ignored)
+  * If it's as a statement, it doesn't need a semi-colon. If it's as an expression, (e.g. `let x = for ...;`) then it does.
+  * Improve the "missing semicolon" warning to warn that the semi-colon was likely missing from the previous line end.
 * `continue`
 * `break`
   * Can be used to return a value from a `loop` expression. If present, the loop changes to not return an array
@@ -184,6 +163,106 @@ Implement the following. (NB - do we need to add support for )
 * Strings:
   * `error(%[span])`
 
+## Repeat output bindings
+
+* Use case: Easily create the below code, similar to a procedural macro. Notably creating tuples of all sizes
+* We need maps or repeats. A simple join isn't enough for . Consider alternatives to the below syntax.
+  * Option 0: Do nothing. Use `for x in A..Z { let ident = x.ident(); $[x,] }`
+  * Option 1: `%*(#generics,)` or `%(#generics),` like declarative macros.
+    * All the variable bindings in the repeat must refer to arrays or streams (i.e. iterables) of the same length, similar to proc macros.
+    * BUT sadly we'll often have arrays of objects, so we really want to map e.g. `arr[i].x`
+  * Option 2: Python style iterator comprehension `#(%[x,] for x in generics)` using a `for` extension
+              ... actually we already have this kinda with the for expression returning a list `for x in A..Z { x.ident() }`
+  * Option 3: Specific methods for this `#(generics.join(%[,]))` and `#(generics.trailing_join(%[,]))`
+  * Option 4: Map methods
+
+Option 0 - Do nothing
+```rust
+// Impls `MyTrait` for tuples of size 0 to 10
+preinterpret::run! {
+  for N in 0..=10 {
+    let comma_separated_types = %[];
+    for name in 'A'..'Z'.take(N) {
+      let ident = name.ident();
+      comma_separated_types += %[#ident,];
+    }
+    %[
+      impl<#comma_separated_types> MyTrait for (#comma_separated_types) {}
+    ]
+  }
+}
+```
+Or even, with for expressions returning arrays:
+```rust
+// Impls `MyTrait` for tuples of size 0 to 10
+preinterpret::run! {
+  for N in 0..=10 {
+    let comma_separated_types = (for name in 'A'..'Z'.take(N) { name.ident() }).join(%[,]);
+    %[
+      impl<#comma_separated_types> MyTrait for (#comma_separated_types) {}
+    ]
+  }
+}
+```
+
+Option 1 - Output repeat syntax, like declarative macros output binding
+```rust
+// Impls `MyTrait` for tuples of size 0 to 10
+preinterpret::run! {
+  for N in 0..=10 {
+    let types = %[A B C D E F G H I J K L M N O P Q R S T].take(N);
+    %[
+        impl<%,*(#types)> MyTrait for (%*(#types,)) {}
+    ]
+  }
+}
+```
+
+Option 2 - Python-style for comprehensions? (or rust-style one-line for expressions)
+```rust
+// Impls `MyTrait` for tuples of size 0 to 10
+preinterpret::run! {
+  for N in 0..=10 {
+    let type_params = [x.ident() for x in A..Z.take(N)];
+    // OR type_params = for x in A..Z { x.ident() }
+    let tuple = %[( #(%[#x,] for x in type_params) )];
+    let generics = %[< #(%[#x,] for x in type_params) >];
+    %[
+        impl#generics MyTrait for #tuple {}
+    ]
+  }
+}
+```
+
+Option 3 - Explicit methods
+```rust
+// Impls `MyTrait` for tuples of size 0 to 10
+preinterpret::run! {
+  for N in 0..=10 {
+    let type_params = %[A B C D E F G H I J K L M N].take(N);
+    %[
+        impl <#(type_params.join(%[,]))> MyTrait for (#(type_params.trailing_join(%[,]))) {}
+    ]
+  }
+}
+```
+
+
+Option 4 - Maps:
+```rust
+// Impls `MyTrait` for tuples of size 0 to 10
+preinterpret::run! {
+  for N in 0..=10 {
+    let idents = A..Z.take(N).map(|x| x.ident());
+    let type_params = %[< #(idents.map(|x| %[#x,])) >];
+    let tuple = %[( #(idents.map(|x| %[#x,])) )];
+    %[
+        impl #type_params MyTrait for #tuple {}
+    ]
+  }
+}
+```
+
 ## Error improvements
 
 * Distinguish a runtime error from a coding error (e.g. parse error, or "no method of type")
@@ -205,6 +284,10 @@ Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` doc
 * Add `Eq` support on composite types and streams
 * Have UntypedInteger have an inner representation of either i128 or literal (and same with float)
 * CastTarget expansion:
+  * The `as int` operator is not supported for string values
+  * The `as char` operator is not supported for untyped integer values
+  * The `<range> as array`, `<iterator> as array` and `<stream> as array` - possibly on an Iterator type?
+  * And `object` can be iterated as `[key, value]`?
   * Add `as iterator` and uncomment the test at the end of `test_range()`
   * Support a CastTarget of `array` using `into_iterator()`.
   * Add `as ident` and `as literal` casting and support it for string, array and stream using concat recursive.

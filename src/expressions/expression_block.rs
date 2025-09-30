@@ -1,15 +1,14 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct ExpressionBlock {
+pub(crate) struct EmbeddedExpression {
     marker: Token![#],
     flattening: Option<Token![..]>,
     parentheses: Parentheses,
-    standard_statements: Vec<(Statement, Token![;])>,
-    return_statement: Option<Statement>,
+    content: ExpressionBlockContent,
 }
 
-impl Parse<Source> for ExpressionBlock {
+impl Parse<Source> for EmbeddedExpression {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         let marker = input.parse()?;
         let flattening = if input.peek(Token![..]) {
@@ -18,58 +17,32 @@ impl Parse<Source> for ExpressionBlock {
             None
         };
         let (parentheses, inner) = input.parse_parentheses()?;
-        let mut standard_statements = Vec::new();
-        let return_statement = loop {
-            if inner.is_empty() {
-                break None;
-            }
-            let statement = inner.parse()?;
-            if inner.is_empty() {
-                break Some(statement);
-            } else if inner.peek(Token![;]) {
-                standard_statements.push((statement, inner.parse()?));
-            } else {
-                return inner.parse_err("Expected an operator to continue the expression, or ; to mark the end of the expression statement");
-            }
-        };
+        let content = inner.parse()?;
         Ok(Self {
             marker,
             flattening,
             parentheses,
-            standard_statements,
-            return_statement,
+            content,
         })
     }
 }
 
-impl HasSpanRange for ExpressionBlock {
+impl HasSpanRange for EmbeddedExpression {
     fn span_range(&self) -> SpanRange {
         SpanRange::new_between(self.marker.span, self.parentheses.close())
     }
 }
 
-impl ExpressionBlock {
+impl EmbeddedExpression {
     pub(crate) fn evaluate(
         &self,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<ExpressionValue> {
-        let output_span_range = self.span_range();
-        for (statement, ..) in &self.standard_statements {
-            let value = statement.interpret_to_value(interpreter)?;
-            match value {
-                ExpressionValue::None { .. } => {},
-                other_value => return other_value.execution_err("A statement ending with ; must not return a value. If you wish to explicitly discard the expression's result, use `let _ = ...;`"),
-            }
-        }
-        if let Some(return_statement) = &self.return_statement {
-            return_statement.interpret_to_value(interpreter)
-        } else {
-            Ok(ExpressionValue::None(output_span_range))
-        }
+        self.content.evaluate(interpreter, self.span_range())
     }
 }
 
-impl Interpret for &ExpressionBlock {
+impl Interpret for &EmbeddedExpression {
     fn interpret_into(
         self,
         interpreter: &mut Interpreter,
@@ -85,7 +58,7 @@ impl Interpret for &ExpressionBlock {
     }
 }
 
-impl InterpretToValue for &ExpressionBlock {
+impl InterpretToValue for &EmbeddedExpression {
     type OutputValue = ExpressionValue;
 
     fn interpret_to_value(
@@ -97,6 +70,56 @@ impl InterpretToValue for &ExpressionBlock {
                 .execution_err("Flattening is not supported when outputting as a value");
         }
         self.evaluate(interpreter)
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct ExpressionBlockContent {
+    standard_statements: Vec<(Statement, Token![;])>,
+    return_statement: Option<Statement>,
+}
+
+impl Parse<Source> for ExpressionBlockContent {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+        let mut standard_statements = Vec::new();
+        let return_statement = loop {
+            if input.is_empty() {
+                break None;
+            }
+            let statement = input.parse()?;
+            if input.is_empty() {
+                break Some(statement);
+            } else if input.peek(Token![;]) {
+                standard_statements.push((statement, input.parse()?));
+            } else {
+                return input.parse_err("Expected an operator to continue the expression, or ; to mark the end of the expression statement");
+            }
+        };
+        Ok(Self {
+            standard_statements,
+            return_statement,
+        })
+    }
+}
+
+impl ExpressionBlockContent {
+    pub(crate) fn evaluate(
+        &self,
+        interpreter: &mut Interpreter,
+        output_span_range: SpanRange,
+    ) -> ExecutionResult<ExpressionValue> {
+        for (statement, ..) in &self.standard_statements {
+            let value = statement.interpret_to_value(interpreter)?;
+            match value {
+                ExpressionValue::None { .. } => {},
+                other_value => return other_value.execution_err("A statement ending with ; must not return a value. If you wish to explicitly discard the expression's result, use `let _ = ...;`"),
+            }
+        }
+        if let Some(return_statement) = &self.return_statement {
+            return_statement.interpret_to_value(interpreter)
+        } else {
+            Ok(ExpressionValue::None(output_span_range))
+        }
     }
 }
 

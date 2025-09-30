@@ -1,7 +1,7 @@
 use preinterpret::*;
 
 fn main() {
-    preinterpret! {
+    stream! {
         [!set! #x = 1 2]
         [!intersperse! {
             items: #..x,

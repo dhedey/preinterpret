@@ -33,7 +33,7 @@ pub(super) enum SourceExpressionLeaf {
     Command(Command),
     Variable(VariableIdentifier),
     Discarded(Token![_]),
-    ExpressionBlock(ExpressionBlock),
+    EmbeddedExpression(EmbeddedExpression),
     Value(SharedValue),
 }
 
@@ -43,7 +43,7 @@ impl HasSpanRange for SourceExpressionLeaf {
             SourceExpressionLeaf::Command(command) => command.span_range(),
             SourceExpressionLeaf::Variable(variable) => variable.span_range(),
             SourceExpressionLeaf::Discarded(token) => token.span_range(),
-            SourceExpressionLeaf::ExpressionBlock(block) => block.span_range(),
+            SourceExpressionLeaf::EmbeddedExpression(block) => block.span_range(),
             SourceExpressionLeaf::Value(value) => value.span_range(),
         }
     }
@@ -66,8 +66,8 @@ impl Expressionable for Source {
                     "In an expression, the #.. variable prefix is not allowed. The # prefix should only be used when embedding a variable into an output sream.",
                 )
             }
-            SourcePeekMatch::ExpressionBlock(_) => {
-                UnaryAtom::Leaf(Self::Leaf::ExpressionBlock(input.parse()?))
+            SourcePeekMatch::EmbeddedExpression(_) => {
+                UnaryAtom::Leaf(Self::Leaf::EmbeddedExpression(input.parse()?))
             }
             SourcePeekMatch::ExplicitTransformStream | SourcePeekMatch::Transformer(_) => {
                 return input.parse_err("Destructurings are not supported in an expression")

@@ -1,5 +1,5 @@
 error: unexpected token
- --> tests/compilation_failures/transforming/destructure_with_outputting_command.rs:4:54
+ --> tests/compilation_failures/transforming/destructure_with_outputting_command.rs:4:48
   |
-4 |     preinterpret!([!let! [!group! Output] = [!group! Output]]);
-  |                                                      ^^^^^^
+4 |     stream!([!let! [!group! Output] = [!group! Output]]);
+  |                                                ^^^^^^

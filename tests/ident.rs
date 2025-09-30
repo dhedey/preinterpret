@@ -1,10 +1,8 @@
-use preinterpret::preinterpret;
-
 macro_rules! my_assert_ident_eq {
     ($input:tt, $check:ident) => {{
         assert_eq!(
             {
-                let preinterpret!($input) = 1;
+                let preinterpret::stream!($input) = 1;
                 $check
             },
             1
