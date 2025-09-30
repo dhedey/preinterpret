@@ -3,7 +3,7 @@ use preinterpret::*;
 macro_rules! assert_is_100 {
     ($input:literal) => {stream!{
         [!if! ($input != 100) {
-            [!error! {
+            [!error! %{
                 message: [!string! "Expected 100, got " $input],
                 spans: [!stream! $input],
             }]

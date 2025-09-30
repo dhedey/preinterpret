@@ -35,6 +35,7 @@ pub(super) enum SourceExpressionLeaf {
     Discarded(Token![_]),
     EmbeddedExpression(EmbeddedExpression),
     Value(SharedValue),
+    StreamLiteral(StreamLiteral),
 }
 
 impl HasSpanRange for SourceExpressionLeaf {
@@ -45,6 +46,7 @@ impl HasSpanRange for SourceExpressionLeaf {
             SourceExpressionLeaf::Discarded(token) => token.span_range(),
             SourceExpressionLeaf::EmbeddedExpression(block) => block.span_range(),
             SourceExpressionLeaf::Value(value) => value.span_range(),
+            SourceExpressionLeaf::StreamLiteral(stream) => stream.span_range(),
         }
     }
 }
@@ -78,7 +80,12 @@ impl Expressionable for Source {
             }
             SourcePeekMatch::Group(Delimiter::Brace) => {
                 let (_, delim_span) = input.parse_and_enter_group()?;
-                UnaryAtom::Object(Braces { delim_span })
+                if let Some((_, next)) = input.cursor().ident() {
+                    if next.punct_matching(':').is_some() || next.punct_matching(',').is_some() {
+                        return delim_span.open().parse_err("An object literal must be prefixed with %, e.g. `%{ field: 1 }`. Without such a prefix, { .. } defines a block.`");
+                    }
+                }
+                return delim_span.parse_err("Blocks are not yet supported in expressions")?;
             }
             SourcePeekMatch::Group(Delimiter::Bracket) => {
                 // This could be handled as parsing a vector of SourceExpressions,
@@ -108,6 +115,14 @@ impl Expressionable for Source {
             SourcePeekMatch::Literal(_) => {
                 let value = ExpressionValue::for_syn_lit(input.parse()?);
                 UnaryAtom::Leaf(Self::Leaf::Value(SharedValue::new_from_owned(value.into())))
+            },
+            SourcePeekMatch::StreamLiteral => {
+                UnaryAtom::Leaf(Self::Leaf::StreamLiteral(input.parse()?))
+            }
+            SourcePeekMatch::ObjectLiteral => {
+                let _: Token![%] = input.parse()?;
+                let (_, delim_span) = input.parse_and_enter_group()?;
+                UnaryAtom::Object(Braces { delim_span })
             }
             SourcePeekMatch::End => return input.parse_err("Expected an expression"),
         })

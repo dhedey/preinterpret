@@ -22,6 +22,8 @@ pub(crate) enum SourcePeekMatch {
     Ident(Ident),
     Punct(Punct),
     Literal(Literal),
+    StreamLiteral,
+    ObjectLiteral,
     End,
 }
 
@@ -73,6 +75,15 @@ fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> SourcePeekMatch {
         }
     }
 
+    if let Some((_, next)) = cursor.punct_matching('%') {
+        if next.group_matching(Delimiter::Bracket).is_some() {
+            return SourcePeekMatch::StreamLiteral;
+        }
+        if next.group_matching(Delimiter::Brace).is_some() {
+            return SourcePeekMatch::ObjectLiteral;
+        }
+    }
+
     if let Some((_, next)) = cursor.punct_matching('@') {
         if let Some((_, _, _)) = next.group_matching(Delimiter::Parenthesis) {
             // @(...) or @(_ = ...) or @(#x = ...)
@@ -121,7 +132,7 @@ impl ParseBuffer<'_, Output> {
     }
 }
 
-#[allow(unused)]
+#[allow(unused)] // The values are unused
 pub(crate) enum OutputPeekMatch {
     Group(Delimiter),
     Ident(Ident),

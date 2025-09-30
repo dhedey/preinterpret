@@ -140,3 +140,55 @@ impl MethodResolutionTarget for StreamTypeData {
         })
     }
 }
+
+#[derive(Clone)]
+pub(crate) struct StreamLiteral {
+    #[allow(unused)]
+    pub(crate) prefix: Token![%],
+    pub(crate) brackets: Brackets,
+    pub(crate) content: SourceStream,
+}
+
+impl Parse<Source> for StreamLiteral {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+        let prefix = input.parse()?;
+        let (brackets, inner) = input.parse_brackets()?;
+        let content = inner.parse_with_context(brackets.span())?;
+        Ok(Self {
+            prefix,
+            brackets,
+            content,
+        })
+    }
+}
+
+impl Interpret for StreamLiteral {
+    fn interpret_into(
+        self,
+        interpreter: &mut Interpreter,
+        output: &mut OutputStream,
+    ) -> ExecutionResult<()> {
+        self.content.interpret_into(interpreter, output)
+    }
+}
+
+impl HasSpanRange for StreamLiteral {
+    fn span_range(&self) -> SpanRange {
+        SpanRange::new_between(self.prefix.span, self.brackets.span())
+    }
+}
+
+impl InterpretToValue for StreamLiteral {
+    type OutputValue = ExpressionValue;
+
+    fn interpret_to_value(
+        self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<Self::OutputValue> {
+        let span_range = self.span_range();
+        Ok(self
+            .content
+            .interpret_to_new_stream(interpreter)?
+            .to_value(span_range))
+    }
+}

@@ -1,5 +1,5 @@
 error: In an expression, the #.. variable prefix is not allowed. The # prefix should only be used when embedding a variable into an output sream.
-       Occurred whilst parsing [!intersperse! ...] - Expected: {
+       Occurred whilst parsing [!intersperse! ...] - Expected: %{
            // An array or stream (by coerced token-tree) to intersperse
            items: ["Hello", "World"],
            // The value to add between each item

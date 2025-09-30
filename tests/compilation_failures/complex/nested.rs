@@ -4,7 +4,7 @@ fn main() {
     stream!([!if! true {
         [!if! true {
             [!if! true {
-                [!error! {
+                [!error! %{
                     // Missing message
                 }]
             }]

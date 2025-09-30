@@ -296,7 +296,7 @@ impl NoOutputCommandDefinition for ErrorCommand {
     fn parse(arguments: CommandArguments) -> ParseResult<Self> {
         arguments.fully_parse_or_error(
             |input| {
-                if input.peek(syn::token::Brace) {
+                if input.peek_punct_matching('%') {
                     Ok(Self {
                         inputs: EitherErrorInput::Fields(input.parse()?),
                     })

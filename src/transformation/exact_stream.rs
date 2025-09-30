@@ -54,7 +54,7 @@ impl<C> HandleTransformation for ExactSegment<C> {
 /// This must match item-by-item.
 #[derive(Clone)]
 pub(crate) enum ExactItem {
-    TransformStreamInput(ExplicitTransformStream),
+    TransformStreamInput(StreamParser),
     Transformer(Transformer),
     ExactCommandOutput(Command),
     ExactVariableOutput(MarkedVariable),
@@ -77,6 +77,8 @@ impl Parse<Source> for ExactItem {
             SourcePeekMatch::Ident(_) => Self::ExactIdent(input.parse_any_ident()?),
             SourcePeekMatch::Punct(_) => Self::ExactPunct(input.parse_any_punct()?),
             SourcePeekMatch::Literal(_) => Self::ExactLiteral(input.parse()?),
+            SourcePeekMatch::StreamLiteral => return input.parse_err("Stream literals are only supported in an expression context, not a parser context."),
+            SourcePeekMatch::ObjectLiteral => return input.parse_err("Object literals are only supported in an expression context, not a parser context."),
             SourcePeekMatch::End => return input.parse_err("Unexpected end"),
         })
     }

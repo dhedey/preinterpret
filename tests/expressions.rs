@@ -95,7 +95,7 @@ fn test_expression_precedence() {
 fn test_very_long_expression_works() {
     preinterpret_assert_eq!(
         {
-            [!settings! {
+            [!settings! %{
                 iteration_limit: 100000,
             }]
             #(let expression = [!stream! 0] + [!for! _ in 0..100000 { + 1 }])
@@ -169,14 +169,14 @@ fn assign_works() {
 #[test]
 fn test_range() {
     preinterpret_assert_eq!(
-        #([!intersperse! {
+        #([!intersperse! %{
             items: -2..5,
             separator: [" "],
         }] as string),
         "-2 -1 0 1 2 3 4"
     );
     preinterpret_assert_eq!(
-        #([!intersperse! {
+        #([!intersperse! %{
             items: -2..=5,
             separator: " ",
         }] as stream as string),
@@ -185,7 +185,7 @@ fn test_range() {
     preinterpret_assert_eq!(
         {
             #(let x = 2)
-            #([!intersperse! {
+            #([!intersperse! %{
                 items: (x + x)..=5,
                 separator: " ",
             }] as stream as string)
@@ -194,7 +194,7 @@ fn test_range() {
     );
     preinterpret_assert_eq!(
         {
-            #([!intersperse! {
+            #([!intersperse! %{
                 items: 8..=5,
                 separator: " ",
             }] as stream as string)
@@ -423,11 +423,11 @@ fn test_array_pattern_destructurings() {
 fn test_objects() {
     preinterpret_assert_eq!(
         #(
-            let a = {};
+            let a = %{};
             let b = "Hello";
-            let x = { a: a.clone(), hello: 1, ["world"]: 2, b };
+            let x = %{ a: a.clone(), hello: 1, ["world"]: 2, b };
             x["x y z"] = 4;
-            x["z\" test"] = {};
+            x["z\" test"] = %{};
             x.y = 5;
             x.debug_string()
         ),
@@ -435,19 +435,19 @@ fn test_objects() {
     );
     preinterpret_assert_eq!(
         #(
-            { prop1: 1 }["prop1"].debug_string()
+            %{ prop1: 1 }["prop1"].debug_string()
         ),
         r#"1"#
     );
     preinterpret_assert_eq!(
         #(
-            { prop1: 1 }["prop2"].debug_string()
+            %{ prop1: 1 }["prop2"].debug_string()
         ),
         r#"None"#
     );
     preinterpret_assert_eq!(
         #(
-            { prop1: 1 }.prop1.debug_string()
+            %{ prop1: 1 }.prop1.debug_string()
         ),
         r#"1"#
     );
@@ -456,15 +456,15 @@ fn test_objects() {
             let a;
             let b;
             let z;
-            { a, y: [_, b], z } = { a: 1, y: [5, 7] };
-            { a, b, z }.debug_string()
+            %{ a, y: [_, b], z } = %{ a: 1, y: [5, 7] };
+            %{ a, b, z }.debug_string()
         ),
         r#"{ a: 1, b: 7, z: None }"#
     );
     preinterpret_assert_eq!(
         #(
-            let { a, y: [_, b], ["c"]: c, [r#"two "words"#]: x, z } = { a: 1, y: [5, 7], ["two \"words"]: {}, };
-            { a, b, c, x: x.take(), z }.debug_string()
+            let %{ a, y: [_, b], ["c"]: c, [r#"two "words"#]: x, z } = %{ a: 1, y: [5, 7], ["two \"words"]: %{}, };
+            %{ a, b, c, x: x.take(), z }.debug_string()
         ),
         r#"{ a: 1, b: 7, c: None, x: {}, z: None }"#
     );

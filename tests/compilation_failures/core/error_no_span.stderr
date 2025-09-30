@@ -4,7 +4,7 @@ error: Expected 102 to equal 64
  4 |       ($input1:literal and $input2:literal) => {stream!{
    |  _______________________________________________^
  5 | |         [!if! ($input1 != $input2) {
- 6 | |             [!error! {
+ 6 | |             [!error! %{
  7 | |                 message: [!string! "Expected " $input1 " to equal " $input2],
  8 | |             }]
  9 | |         }]

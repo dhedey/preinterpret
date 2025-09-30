@@ -41,7 +41,7 @@ pub(crate) enum TransformItem {
     Command(Command),
     EmbeddedExpression(EmbeddedExpression),
     Transformer(Transformer),
-    TransformStreamInput(ExplicitTransformStream),
+    TransformStreamInput(StreamParser),
     ExactPunct(Punct),
     ExactIdent(Ident),
     ExactLiteral(Literal),
@@ -66,6 +66,8 @@ impl TransformItem {
             SourcePeekMatch::Punct(_) => Self::ExactPunct(input.parse_any_punct()?),
             SourcePeekMatch::Literal(_) => Self::ExactLiteral(input.parse()?),
             SourcePeekMatch::Ident(_) => Self::ExactIdent(input.parse_any_ident()?),
+            SourcePeekMatch::StreamLiteral => return input.parse_err("Stream literals are not supported here. Remove the %[..] wrapper."),
+            SourcePeekMatch::ObjectLiteral => return input.parse_err("Object literals are not supported here."),
             SourcePeekMatch::End => return input.parse_err("Unexpected end"),
         })
     }
@@ -144,16 +146,40 @@ impl HandleTransformation for TransformGroup {
 }
 
 #[derive(Clone)]
-pub(crate) struct ExplicitTransformStream {
+pub(crate) struct StreamParser {
     #[allow(unused)]
     transformer_token: Token![@],
     #[allow(unused)]
     parentheses: Parentheses,
-    arguments: ExplicitTransformStreamArguments,
+    content: StreamParserContent,
+}
+
+impl Parse<Source> for StreamParser {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+        let transformer_token = input.parse()?;
+        let (parentheses, content) = input.parse_parentheses()?;
+
+        Ok(Self {
+            transformer_token,
+            parentheses,
+            content: content.parse()?,
+        })
+    }
+}
+
+impl HandleTransformation for StreamParser {
+    fn handle_transform(
+        &self,
+        input: ParseStream<Output>,
+        interpreter: &mut Interpreter,
+        output: &mut OutputStream,
+    ) -> ExecutionResult<()> {
+        self.content.handle_transform(input, interpreter, output)
+    }
 }
 
 #[derive(Clone)]
-pub(crate) enum ExplicitTransformStreamArguments {
+pub(crate) enum StreamParserContent {
     Output {
         content: TransformStream,
     },
@@ -178,7 +204,7 @@ pub(crate) enum ExplicitTransformStreamArguments {
     },
 }
 
-impl Parse<Source> for ExplicitTransformStreamArguments {
+impl Parse<Source> for StreamParserContent {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         if input.peek(Token![_]) {
             return Ok(Self::Discard {
@@ -212,38 +238,25 @@ impl Parse<Source> for ExplicitTransformStreamArguments {
     }
 }
 
-impl Parse<Source> for ExplicitTransformStream {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
-        let transformer_token = input.parse()?;
-        let (parentheses, content) = input.parse_parentheses()?;
-
-        Ok(Self {
-            transformer_token,
-            parentheses,
-            arguments: content.parse()?,
-        })
-    }
-}
-
-impl HandleTransformation for ExplicitTransformStream {
+impl HandleTransformation for StreamParserContent {
     fn handle_transform(
         &self,
         input: ParseStream<Output>,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        match &self.arguments {
-            ExplicitTransformStreamArguments::Output { content } => {
+        match self {
+            StreamParserContent::Output { content } => {
                 content.handle_transform(input, interpreter, output)?;
             }
-            ExplicitTransformStreamArguments::StoreToVariable {
+            StreamParserContent::StoreToVariable {
                 variable, content, ..
             } => {
                 let mut new_output = OutputStream::new();
                 content.handle_transform(input, interpreter, &mut new_output)?;
                 variable.define(interpreter, new_output);
             }
-            ExplicitTransformStreamArguments::ExtendToVariable {
+            StreamParserContent::ExtendToVariable {
                 variable, content, ..
             } => {
                 let reference = variable.binding(interpreter)?;
@@ -253,24 +266,11 @@ impl HandleTransformation for ExplicitTransformStream {
                     reference.into_mut()?.into_stream()?.as_mut(),
                 )?;
             }
-            ExplicitTransformStreamArguments::Discard { content, .. } => {
+            StreamParserContent::Discard { content, .. } => {
                 let mut discarded = OutputStream::new();
                 content.handle_transform(input, interpreter, &mut discarded)?;
             }
         }
-        Ok(())
-    }
-}
-
-impl HandleDestructure for ExplicitTransformStream {
-    fn handle_destructure(
-        &self,
-        interpreter: &mut Interpreter,
-        value: ExpressionValue,
-    ) -> ExecutionResult<()> {
-        let stream = value.expect_stream("The destructure source")?;
-        let mut discarded = OutputStream::new();
-        self.handle_transform_from_stream(stream.value, interpreter, &mut discarded)?;
         Ok(())
     }
 }

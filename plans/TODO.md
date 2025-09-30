@@ -4,8 +4,10 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 
 ## (Interpreted) Stream Literals
 
-* Introduce `%[..]` and `%raw[..]` instead of `[!stream! ...]` and `[!raw! ...]`
-* Replace `[!set!]` with `#(let x = %[ ... ])`
+* Introduce `%[..]` and the corresponding pattern
+* Introduce `%{}` instead of `{}` and the corresponding pattern
+* Introduce `%raw[..]` (we don't need such a pattern, as it'll be equal to `@[EXACT(%raw[...])`, but perhaps we should advise of this)
+* Remove `[!stream! ...]` and `[!raw! ...]`, and replace `[!set!]` with `#(let x = %[ ... ])`
 
 ## Method Calls
 

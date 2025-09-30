@@ -43,6 +43,10 @@ impl ExpressionNode<Source> {
                         let value = CopyOnWrite::shared_in_place_of_owned(Shared::clone(value));
                         context.return_copy_on_write(value)?
                     }
+                    SourceExpressionLeaf::StreamLiteral(stream_literal) => {
+                        let value = stream_literal.clone().interpret_to_value(interpreter)?;
+                        context.return_owned(value)?
+                    }
                 }
             }
             ExpressionNode::Grouped { delim_span, inner } => {

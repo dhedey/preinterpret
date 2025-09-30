@@ -1,15 +1,15 @@
 error: Expected:
-       {
+       %{
            // The error message to display
            message: "...",
            // An optional [token stream], to determine where to show the error message
            spans?: [!stream! $abc],
        }
        The following required field/s are missing: message
- --> tests/compilation_failures/complex/nested.rs:7:26
+ --> tests/compilation_failures/complex/nested.rs:7:27
   |
-7 |                   [!error! {
-  |  __________________________^
+7 |                   [!error! %{
+  |  ___________________________^
 8 | |                     // Missing message
 9 | |                 }]
   | |_________________^

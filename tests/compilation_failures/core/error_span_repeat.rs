@@ -4,7 +4,7 @@ macro_rules! assert_input_length_of_3 {
     ($($input:literal)+) => {stream!{
         [!set! #input_length = [!length! $($input)+]];
         [!if! input_length != 3 {
-            [!error! {
+            [!error! %{
                 message: [!string! "Expected 3 inputs, got " #input_length],
                 spans: [!stream! $($input)+],
             }]

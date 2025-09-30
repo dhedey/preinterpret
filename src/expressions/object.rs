@@ -309,7 +309,7 @@ pub(crate) trait ObjectValidate {
     fn describe_object(&self) -> String {
         use std::fmt::Write;
         let mut buffer = String::new();
-        buffer.write_str("{\n").unwrap();
+        buffer.write_str("%{\n").unwrap();
         for (key, definition) in self.all_fields() {
             if let Some(description) = &definition.description {
                 writeln!(buffer, "    // {}", description).unwrap();

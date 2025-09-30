@@ -13,8 +13,7 @@ pub(crate) enum Pattern {
     Variable(VariablePattern),
     Array(ArrayPattern),
     Object(ObjectPattern),
-    Stream(ExplicitTransformStream),
-    DotDot(Token![..]),
+    Stream(StreamPattern),
     #[allow(unused)]
     Discarded(Token![_]),
 }
@@ -26,14 +25,16 @@ impl Parse<Source> for Pattern {
             Ok(Pattern::Variable(input.parse()?))
         } else if lookahead.peek(syn::token::Bracket) {
             Ok(Pattern::Array(input.parse()?))
-        } else if lookahead.peek(syn::token::Brace) {
-            Ok(Pattern::Object(input.parse()?))
-        } else if lookahead.peek(Token![@]) {
-            Ok(Pattern::Stream(input.parse()?))
+        } else if lookahead.peek(Token![%]) {
+            if input.peek2(syn::token::Brace) {
+                Ok(Pattern::Object(input.parse()?))
+            } else if input.peek2(syn::token::Bracket) {
+                Ok(Pattern::Stream(input.parse()?))
+            } else {
+                input.parse_err("Expected a pattern, such as an object pattern `%{ ... }` or stream pattern `%[ ... ]`")
+            }
         } else if lookahead.peek(Token![_]) {
             Ok(Pattern::Discarded(input.parse()?))
-        } else if lookahead.peek(Token![..]) {
-            Ok(Pattern::DotDot(input.parse()?))
         } else if input.peek(Token![#]) {
             input.parse_err("Use `var` instead of `#var` in a destructuring")
         } else {
@@ -53,7 +54,6 @@ impl HandleDestructure for Pattern {
             Pattern::Array(array) => array.handle_destructure(interpreter, value),
             Pattern::Object(object) => object.handle_destructure(interpreter, value),
             Pattern::Stream(stream) => stream.handle_destructure(interpreter, value),
-            Pattern::DotDot(token) => token.execution_err("This cannot be used here"),
             Pattern::Discarded(_) => Ok(()),
         }
     }
@@ -63,7 +63,7 @@ impl HandleDestructure for Pattern {
 pub struct ArrayPattern {
     #[allow(unused)]
     brackets: Brackets,
-    items: Punctuated<Pattern, Token![,]>,
+    items: Punctuated<PatternOrDotDot, Token![,]>,
 }
 
 impl Parse<Source> for ArrayPattern {
@@ -89,13 +89,13 @@ impl HandleDestructure for ArrayPattern {
         let mut suffix_assignees = Vec::new();
         for pattern in self.items.iter() {
             match pattern {
-                Pattern::DotDot(dot_dot) => {
+                PatternOrDotDot::DotDot(dot_dot) => {
                     if has_seen_dot_dot {
                         return dot_dot.execution_err("Only one .. is allowed in an array pattern");
                     }
                     has_seen_dot_dot = true;
                 }
-                _ => {
+                PatternOrDotDot::Pattern(pattern) => {
                     if has_seen_dot_dot {
                         suffix_assignees.push(pattern);
                     } else {
@@ -144,7 +144,25 @@ impl HandleDestructure for ArrayPattern {
 }
 
 #[derive(Clone)]
+enum PatternOrDotDot {
+    Pattern(Pattern),
+    DotDot(Token![..]),
+}
+
+impl Parse<Source> for PatternOrDotDot {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+        if input.peek(Token![..]) {
+            Ok(PatternOrDotDot::DotDot(input.parse()?))
+        } else {
+            Ok(PatternOrDotDot::Pattern(input.parse()?))
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct ObjectPattern {
+    #[allow(unused)]
+    prefix: Token![%],
     #[allow(unused)]
     braces: Braces,
     entries: Punctuated<ObjectEntry, Token![,]>,
@@ -152,8 +170,10 @@ pub struct ObjectPattern {
 
 impl Parse<Source> for ObjectPattern {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+        let prefix = input.parse()?;
         let (braces, inner) = input.parse_braces()?;
         Ok(Self {
+            prefix,
             braces,
             entries: inner.parse_terminated()?,
         })
@@ -250,5 +270,40 @@ impl Parse<Source> for ObjectEntry {
         } else {
             input.parse_err("Expected `property: <pattern>` or `[\"property\"]: <pattern>`")
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct StreamPattern {
+    #[allow(unused)]
+    prefix: Token![%],
+    #[allow(unused)]
+    brackets: Brackets,
+    content: TransformStream,
+}
+
+impl Parse<Source> for StreamPattern {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+        let prefix = input.parse()?;
+        let (brackets, inner) = input.parse_brackets()?;
+        Ok(Self {
+            prefix,
+            brackets,
+            content: inner.parse()?,
+        })
+    }
+}
+
+impl HandleDestructure for StreamPattern {
+    fn handle_destructure(
+        &self,
+        interpreter: &mut Interpreter,
+        value: ExpressionValue,
+    ) -> ExecutionResult<()> {
+        let stream = value.expect_stream("The destructure source")?;
+        let mut discarded = OutputStream::new();
+        self.content
+            .handle_transform_from_stream(stream.value, interpreter, &mut discarded)?;
+        Ok(())
     }
 }

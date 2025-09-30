@@ -5,7 +5,7 @@ pub(crate) struct ParseCommand {
     input: SourceExpression,
     #[allow(unused)]
     with_token: Ident,
-    transformer: ExplicitTransformStream,
+    transformer: StreamParser,
 }
 
 impl CommandType for ParseCommand {

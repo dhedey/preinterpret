@@ -160,8 +160,12 @@ impl<'a, K> ParseStreamStack<'a, K> {
         self.current().fork()
     }
 
-    fn current(&self) -> ParseStream<'_, K> {
+    pub(crate) fn current(&self) -> ParseStream<'_, K> {
         self.group_stack.last().unwrap_or(self.base)
+    }
+
+    pub(crate) fn cursor(&self) -> Cursor<'_> {
+        self.current().cursor()
     }
 
     pub(crate) fn parse_err<T>(&self, message: impl std::fmt::Display) -> ParseResult<T> {

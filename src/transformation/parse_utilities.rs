@@ -73,7 +73,9 @@ impl ParseUntil {
             | SourcePeekMatch::Variable(_)
             | SourcePeekMatch::Transformer(_)
             | SourcePeekMatch::ExplicitTransformStream
-            | SourcePeekMatch::EmbeddedExpression(_) => {
+            | SourcePeekMatch::EmbeddedExpression(_)
+            | SourcePeekMatch::StreamLiteral
+            | SourcePeekMatch::ObjectLiteral => {
                 // TODO: Potentially improve this to allow the peek to get information to aid the parse
                 return input
                     .span()
