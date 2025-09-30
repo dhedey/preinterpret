@@ -7,7 +7,7 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 - [x] Introduce `%[..]` and the corresponding pattern
 - [x] Introduce `%{}` instead of `{}` and the corresponding pattern
 - [x] Introduce `%raw[..]` (we don't need such a pattern, as it'll be equal to `@[EXACT(%raw[...])`, but perhaps we should advise of this)
-- [ ] Remove `[!raw! ...]` and replace with `#..(%raw[...])`
+- [x] Remove `[!raw! ...]` and replace with `#..(%raw[...])`
 - [ ] Remove auto-grouping from `#()` and `#..` bindings. Instead have a `group()` method on streams. Search for all `#..` to remove.
 - [ ] Remove `[!stream! ...]` and replace with `#(%[...])`
 - [ ] Remove `[!set!]` and replace with `#(let x = %[ ... ])`

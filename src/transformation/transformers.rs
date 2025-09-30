@@ -186,6 +186,14 @@ pub(crate) struct ExactTransformer {
     stream: ExactStream,
 }
 
+// TODO:
+// - Change so that it takes a stream value, i.e. `@[EXACT(%[...])]` and returns
+//   the exact parsed stream.
+// - Search for EXACT and make sure all the comments recommending it are correct
+// - Make it so that when interpreting its contents, it removes any contextual parser
+//   This will avoid confusion with the order of execution of any embedded parsers.
+//   (i.e. they'd run before the EXACT transformer, which is not what people would expect)
+//   We can advise that they use separate EXACT transformer segments if necessary.
 impl TransformerDefinition for ExactTransformer {
     const TRANSFORMER_NAME: &'static str = "EXACT";
 
