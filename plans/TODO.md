@@ -2,32 +2,6 @@
 
 This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 
-## High priority
-
-* Create `preinterpret::stream` and `preinterpret::run` and replace `preinterpret_assert_eq` with `run_assert_eq` / `stream_assert_eq`
-* Add benches somehow...
-  * Taking a look at https://github.com/dtolnay/quote/tree/master/benches - the benches don't test the right thing for us:
-  * It's built to run two ways - as an executable, and a proc-macro library. When `main.rs` runs:
-    * It triggers `quote_benchmark::run_quote_benchmark!(_)` which runs itself as a proc-macro, i.e. via compiling `lib.rs`
-    * In `lib.rs`, `crate::benchmark` resolves to creating the `run_quote_benchmark` proc-macro, which internally has a call to `quote!`
-      This call happens during compilation time, leaving `timer::time("macro", ..)` to actually time the `proc_macro::TokenStream::from` invocation
-    * And then the `main()` runs in `main.rs` which calls `lib::quote` which is created by `crate::benchmark!` looping back to wrap it in the `quote` function defined in `main.rs`, and returns the `proc_macro2::TokenStream`.
-  * Basically, the benchmarks both test how long the outputted code takes to execute, not how long the `quote!` invocation itself takes (which is harder, because that happens at compile time)....
-  * For us, we can split up the time into:
-    * (One-off compilation of the whole preinterpret crate)
-    * Invocation overhead per macro (partially unknowable), quite small
-    * Execution of the macro:
-      * Conversion to token stream v2 (if it's anything)
-      * Parsing
-      * Execution
-      * Conversion back to normal token stream (if it's anything)
-    * We can create an optional `bench` feature which creates a `stream_bench` macro which tries to do the following things 1000 times:
-      * Conversion
-      * Parsing
-      * Execution
-      * Conversion back
-    * And returns a tuple of the four averages `(a, b, c, d)` - then we can execute this / record this somewhere, and keep track of it over time.
-
 ## (Interpreted) Stream Literals
 
 * Introduce `%[..]` and `%raw[..]` instead of `[!stream! ...]` and `[!raw! ...]`
@@ -201,7 +175,7 @@ Option 0 - Do nothing
 ```rust
 // Impls `MyTrait` for tuples of size 0 to 10
 preinterpret::run! {
-  for N in 0..10 {
+  for N in 0..=10 {
     let comma_separated_types = %[];
     for name in 'A'..'Z'.take(N) {
       let ident = name.ident();
@@ -217,7 +191,7 @@ Or even, with for expressions returning arrays:
 ```rust
 // Impls `MyTrait` for tuples of size 0 to 10
 preinterpret::run! {
-  for N in 0..10 {
+  for N in 0..=10 {
     let comma_separated_types = (for name in 'A'..'Z'.take(N) { name.ident() }).join(%[,]);
     %[
       impl<#comma_separated_types> MyTrait for (#comma_separated_types) {}
@@ -230,7 +204,7 @@ Option 1 - Output repeat syntax, like declarative macros output binding
 ```rust
 // Impls `MyTrait` for tuples of size 0 to 10
 preinterpret::run! {
-  for N in 0..10 {
+  for N in 0..=10 {
     let types = %[A B C D E F G H I J K L M N O P Q R S T].take(N);
     %[
         impl<%,*(#types)> MyTrait for (%*(#types,)) {}
@@ -243,7 +217,7 @@ Option 2 - Python-style for comprehensions? (or rust-style one-line for expressi
 ```rust
 // Impls `MyTrait` for tuples of size 0 to 10
 preinterpret::run! {
-  for N in 0..10 {
+  for N in 0..=10 {
     let type_params = [x.ident() for x in A..Z.take(N)];
     // OR type_params = for x in A..Z { x.ident() }
     let tuple = %[( #(%[#x,] for x in type_params) )];
@@ -259,7 +233,7 @@ Option 3 - Explicit methods
 ```rust
 // Impls `MyTrait` for tuples of size 0 to 10
 preinterpret::run! {
-  for N in 0..10 {
+  for N in 0..=10 {
     let type_params = %[A B C D E F G H I J K L M N].take(N);
     %[
         impl <#(type_params.join(%[,]))> MyTrait for (#(type_params.trailing_join(%[,]))) {}
@@ -273,7 +247,7 @@ Option 4 - Maps:
 ```rust
 // Impls `MyTrait` for tuples of size 0 to 10
 preinterpret::run! {
-  for N in 0..10 {
+  for N in 0..=10 {
     let idents = A..Z.take(N).map(|x| x.ident());
     let type_params = %[< #(idents.map(|x| %[#x,])) >];
     let tuple = %[( #(idents.map(|x| %[#x,])) )];
@@ -305,6 +279,8 @@ Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` doc
 * Add `Eq` support on composite types and streams
 * Have UntypedInteger have an inner representation of either i128 or literal (and same with float)
 * CastTarget expansion:
+  * The `as int` operator is not supported for string values
+  * The `as char` operator is not supported for untyped integer values
   * Add `as iterator` and uncomment the test at the end of `test_range()`
   * Support a CastTarget of `array` using `into_iterator()`.
   * Add `as ident` and `as literal` casting and support it for string, array and stream using concat recursive.

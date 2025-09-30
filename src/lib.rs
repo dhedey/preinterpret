@@ -580,6 +580,80 @@ fn preinterpret_run_internal(input: TokenStream) -> SynResult<TokenStream> {
     }
 }
 
+/// Interpets its input as a preinterpret expression block, which should return a token stream.
+///
+/// See the [crate-level documentation](crate) for full details.
+#[cfg(feature = "benchmark")]
+#[proc_macro]
+pub fn benchmark_run(token_stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    benchmarking::benchmark_run(proc_macro2::TokenStream::from(token_stream))
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
+}
+
+#[cfg(feature = "benchmark")]
+mod benchmarking {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    fn timed<T>(f: impl Fn() -> T) -> (T, Duration) {
+        const WARMUP: u32 = 100;
+        const REPEATS: u32 = 1000;
+        for _ in 0..WARMUP {
+            let _ = f();
+        }
+        let mut i = 0;
+        let start = Instant::now();
+        let output = loop {
+            let output = f();
+            if i >= REPEATS {
+                break output;
+            }
+            i += 1;
+        };
+        let duration = start.elapsed() / REPEATS;
+        (output, duration)
+    }
+
+    pub(super) fn benchmark_run(input: TokenStream) -> SynResult<TokenStream> {
+        let (block_content, parse_duration) = timed(|| {
+            input
+                .clone()
+                .source_parse_with(ExpressionBlockContent::parse)
+                .convert_to_final_result()
+        });
+        let block_content = block_content?;
+
+        let (interpreted_stream, eval_duration) = timed(|| {
+            let mut interpreter = Interpreter::new();
+            block_content
+                .evaluate(&mut interpreter, Span::call_site().into())
+                .and_then(|x| {
+                    x.into_new_output_stream(Grouping::Flattened, StreamOutputBehaviour::PermitArrays)
+                })
+                .convert_to_final_result()
+        });
+        let interpreted_stream = interpreted_stream?;
+
+        let (_, output_duration) = timed(|| {
+            unsafe {
+                // RUST-ANALYZER-SAFETY: This might drop transparent groups in the output of
+                // rust-analyzer. There's not much we can do here...
+                interpreted_stream.clone().into_token_stream()
+            }
+        });
+
+        let output = format!(
+            "- Parsing    | {: >5}ns\n- Evaluation | {: >5}ns\n- Output     | {: >5}ns",
+            parse_duration.as_micros(),
+            eval_duration.as_micros(),
+            output_duration.as_micros()
+        );
+
+        Ok(TokenStream::from_iter([TokenTree::Literal(Literal::string(output.as_str()))]))
+    }
+}
+
 // This is the recommended way to run the doc tests in the readme
 #[doc = include_str!("../README.md")]
 #[cfg(doctest)] // Don't actually export this!
