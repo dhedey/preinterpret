@@ -35,7 +35,7 @@
 //! Preinterpret works with its own very simple language, with two pieces of syntax:
 //!
 //! * **Commands**: `[!command_name! input token stream...]` take an input token stream and output a token stream. There are a number of commands which cover a toolkit of useful functions.
-//! * **Variables**: `[!set! #var_name = token stream...]` defines a variable, and `#var_name` substitutes the variable into another command or the output.
+//! * **Variables**: `#(let var_name = %[token stream...];)` defines a variable, and `#var_name` substitutes the variable into another command or the output.
 //!
 //! Commands can be nested intuitively. In general, the input of commands are first interpreted before the command itself executes.
 //!
@@ -51,7 +51,7 @@
 //!             $($field_name:ident: $inner_type:ident),* $(,)?
 //!         }
 //!     ) => {preinterpret::stream! {
-//!         [!set! #type_name = [!ident! My $type_name]]
+//!         #(let type_name = %[[!ident! My $type_name];)]
 //!         
 //!         $(#[$attributes])*
 //!         $vis struct #type_name {
@@ -104,7 +104,7 @@
 //!
 //! ```rust
 //! preinterpret::stream! {
-//!     [!set! #type_name = [!ident! HelloWorld]]
+//!     #(let type_name = %[[!ident! HelloWorld];)]
 //!
 //!     struct #type_name;
 //!
@@ -122,7 +122,7 @@
 //!
 //! ### Special commands
 //!
-//! * `[!set! #foo = Hello]` followed by `[!set! #foo = #bar(World)]` sets the variable `#foo` to the token stream `Hello` and `#bar` to the token stream `Hello(World)`, and outputs no tokens. Using `#foo` or `#bar` later on will output the current value in the corresponding variable.
+//! * `#(let foo = %[Hello];)` followed by `#(let foo = %[#bar(World)];)` sets the variable `#foo` to the token stream `Hello` and `#bar` to the token stream `Hello(World)`, and outputs no tokens. Using `#foo` or `#bar` later on will output the current value in the corresponding variable.
 //! * `[!raw! abc #abc [!ident! test]]` outputs its contents as-is, without any interpretation, giving the token stream `abc #abc [!ident! test]`.
 //! * `[!ignore! $foo]` ignores all of its content and outputs no tokens. It is useful to make a declarative macro loop over a meta-variable without outputting it into the resulting stream.
 //!
@@ -195,9 +195,9 @@
 //!             < $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? $( = $deflt:tt)? ),+ >
 //!         )?
 //!     } => {preinterpret::stream!{
-//!         [!set! #impl_generics = $(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)?]
-//!         [!set! #type_generics = $(< $( $lt ),+ >)?]
-//!         [!set! #my_type = $type_name #type_generics]
+//!         #(let impl_generics = %[$(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)?];)
+//!         #(let type_generics = %[$(< $( $lt ),+ >)?];)
+//!         #(let my_type = %[$type_name #type_generics];)
 //!
 //!         $(
 //!             // Output each marker trait for the type
@@ -254,12 +254,12 @@
 //!     {
 //!         $($item: ident),*
 //!     } => {preinterpret::stream!{
-//!         [!set! #current_index = 0usize]
+//!         #(let current_index = %[0usize];)
 //!         $(
 //!             [!ignore! $item] // Loop over the items, but don't output them
-//!             [!set! #current_index = #current_index + 1]
+//!             #(let current_index = %[#current_index + 1];)
 //!         )*
-//!         [!set! #count = #current_index]
+//!         #(let count = %[#current_index];)
 //!         #count
 //!     }}
 //! }
@@ -269,14 +269,14 @@
 //!
 //! ```rust
 //! let count = preinterpret::stream!{
-//!   [!set! #current_index = 0usize]
+//!   #(let current_index = %[0usize];)
 //!   [!ignore! a]
-//!   [!set! #current_index = #current_index + 1]
+//!   #(let current_index = %[#current_index + 1];)
 //!   [!ignore! = b]
-//!   [!set! #current_index = #current_index + 1]
+//!   #(let current_index = %[#current_index + 1];)
 //!   [!ignore! = c]
-//!   [!set! #current_index = #current_index + 1]
-//!   [!set! #count = #current_index]
+//!   #(let current_index = %[#current_index + 1];)
+//!   #(let count = %[#current_index];)
 //!   #count
 //! };
 //! ```
@@ -431,7 +431,7 @@
 //!
 //! We also support the following assignment commands:
 //!
-//! * `[!increment! #i]` is shorthand for `[!set! #i = [!add! #i 1]]` and outputs no tokens.
+//! * `[!increment! #i]` is shorthand for `#(let i = %[[!add! #i 1];)]` and outputs no tokens.
 //!
 //! Even better - we could even support calculator-style expression interpretation:
 //!
@@ -487,7 +487,7 @@
 //! ```rust,ignore
 //! // Hypothetical future syntax - not yet implemented!
 //! preinterpret::stream!{
-//!     [!set! #i = 0]
+//!     #(let i = %[0];)
 //!     [!label! loop]
 //!     const [!ident! AB #i]: u8 = 0;
 //!     [!increment! #i]

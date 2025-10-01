@@ -14,16 +14,16 @@ fn test_core_compilation_failures() {
 }
 
 #[test]
-fn test_set() {
+fn test_simple_let() {
     preinterpret_assert_eq!({
-        [!set! #output = "Hello World!"]
+        #(let output = %["Hello World!"];)
         #output
     }, "Hello World!");
     preinterpret_assert_eq!({
-        [!set! #hello = "Hello"]
-        [!set! #world = "World"]
-        [!set! #output = #hello " " #world "!"]
-        [!set! #output = [!string! #output]]
+        #(let hello = %["Hello"];)
+        #(let world = %["World"];)
+        #(let output = %[#hello " " #world "!"];)
+        #(let output = [!string! #output];)
         #output
     }, "Hello World!");
 }
@@ -40,8 +40,8 @@ fn test_raw() {
 fn test_extend() {
     preinterpret_assert_eq!(
         {
-            [!set! #variable = "Hello"]
-            [!set! #variable += " World!"]
+            #(let variable = %["Hello"];)
+            #(variable += %[" World!"];)
             [!string! #variable]
         },
         "Hello World!"
@@ -51,9 +51,9 @@ fn test_extend() {
             #(let i = 1)
             [!set! #output =]
             [!while! i <= 4 {
-                [!set! #output += #i]
+                #(output += %[#i];)
                 [!if! i <= 3 {
-                    [!set! #output += ", "]
+                    #(output += %[", "];)
                 }]
                 #(i += 1)
             }]
@@ -66,8 +66,8 @@ fn test_extend() {
 #[test]
 fn test_ignore() {
     preinterpret_assert_eq!({
-        [!set! #x = false]
-        [!ignore! [!set! #x = true] nothing is interpreted. Everything is ignored...]
+        #(let x = %[false];)
+        [!ignore! #(let x = %[true];) nothing is interpreted. Everything is ignored...]
         #x
     }, false);
 }
@@ -76,19 +76,19 @@ fn test_ignore() {
 fn test_empty_set() {
     preinterpret_assert_eq!({
         [!set! #x]
-        [!set! #x += "hello"]
+        #(x += %["hello"];)
         #x
     }, "hello");
     preinterpret_assert_eq!({
         [!set! #x, #y]
-        [!set! #x += "hello"]
-        [!set! #y += "world"]
+        #(x += %["hello"];)
+        #(y += %["world"];)
         [!string! #x " " #y]
     }, "hello world");
     preinterpret_assert_eq!({
         [!set! #x, #y, #z,]
-        [!set! #x += "hello"]
-        [!set! #y += "world"]
+        #(x += %["hello"];)
+        #(y += %["world"];)
         [!string! #x " " #y #z]
     }, "hello world");
 }
@@ -96,8 +96,8 @@ fn test_empty_set() {
 #[test]
 fn test_discard_set() {
     preinterpret_assert_eq!({
-        [!set! #x = false]
-        [!set! _ = [!set! #x = true] things _are_ interpreted, but the result is ignored...]
+        #(let x = %[false];)
+        #(let _ = %[#(let x = %[true];) things _are_ interpreted, but the result is ignored...];)
         #x
     }, true);
 }

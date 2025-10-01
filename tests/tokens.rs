@@ -28,7 +28,7 @@ fn test_empty_stream_is_empty() {
     }, true);
     preinterpret_assert_eq!({
         [!set! #x =]
-        [!set! #x = #x is no longer empty]
+        #(let x = %[#x is no longer empty];)
         [!is_empty! #x]
     }, false);
 }
@@ -41,11 +41,11 @@ fn test_length_and_group() {
     preinterpret_assert_eq!({ [!length! ("hello" World)] }, 1);
     preinterpret_assert_eq!({ [!length! [!group! "hello" World]] }, 1);
     preinterpret_assert_eq!({
-        [!set! #x = Hello "World" (1 2 3 4 5)]
+        #(let x = %[Hello "World" (1 2 3 4 5)];)
         [!length! #x]
     }, 3);
     preinterpret_assert_eq!({
-        [!set! #x = Hello "World" (1 2 3 4 5)]
+        #(let x = %[Hello "World" (1 2 3 4 5)];)
         [!length! #(x.group())]
     }, 1);
 }
@@ -158,7 +158,7 @@ fn test_intersperse() {
 fn complex_cases_for_intersperse_and_input_types() {
     // Variable containing stream be used for items
     preinterpret_assert_eq!({
-        [!set! #items = 0 1 2 3]
+        #(let items = %[0 1 2 3];)
         #([!intersperse! %{
             items,
             separator: %[_],
@@ -174,7 +174,7 @@ fn complex_cases_for_intersperse_and_input_types() {
     }, "0_1_2_3");
     // #(...) block returning token stream (from variable)
     preinterpret_assert_eq!({
-        [!set! #items = 0 1 2 3]
+        #(let items = %[0 1 2 3];)
         #([!intersperse! %{
             items,
             separator: ["_"],
@@ -378,7 +378,7 @@ fn test_zip() {
     );
     preinterpret_assert_eq!(
         #(
-            [!set! #letters = A B C];
+            #(let letters = %[A B C];);
             let numbers = [1, 2, 3];
             [!zip! %{ number: numbers.take(), letter: letters }].debug_string()
         ),
@@ -392,9 +392,9 @@ fn test_zip() {
 fn test_zip_with_for() {
     preinterpret_assert_eq!(
         {
-            [!set! #countries = France Germany Italy]
+            #(let countries = %[France Germany Italy];)
             #(let flags = ["🇫🇷", "🇩🇪", "🇮🇹"])
-            [!set! #capitals = "Paris" "Berlin" "Rome"]
+            #(let capitals = %["Paris" "Berlin" "Rome"];)
             #(let facts = [])
             [!for! [country, flag, capital] in [!zip! [countries, flags.take(), capitals]] {
                 #(facts.push([!string! "=> The capital of " #country " is " #capital " and its flag is " #flag]))

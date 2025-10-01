@@ -11,7 +11,7 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 - [x] Remove `#..` because it's confusing and remove grouping from `#`. Instead have a `group()` method on streams. Search for all `#..` to remove. In future, perhaps `@EXPR` could add a group around it at a parser layer.
 - [ ] Allow %[], %raw[] and %group[] directly in token streams, and search for all `#(%group` and `#(%raw` to amend.
 - [x] Remove `[!stream! ...]` and replace with `%[...]`
-- [ ] Remove `[!set!]` and replace with `#(let x = %[ ... ])`
+- [x] Remove `[!set!]` and replace with `#(let x = %[ ... ])`
 - [ ] Remove `[!ignore!]` and replace with `#(let _ = %[ ... ])`
 - [ ] Add `%group[]` and remove `as group` and `[!group ..]`
 - [ ] Fix the to_debug_string to add `%raw[..]` around punct groups including `#` or `%`

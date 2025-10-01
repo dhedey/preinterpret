@@ -517,3 +517,33 @@ fn test_method_calls() {
         "b - a"
     );
 }
+
+#[test]
+fn stream_append_can_use_self_in_appender() {
+    // These tests *can* be broken if we wish, but we should
+    // decide which way to go before v1 and fix it
+    assert_eq!(
+        run! {
+            let variable = %[Hello];
+            variable += %[World #variable];
+            variable.debug_string()
+        },
+        "%[Hello World Hello]"
+    );
+    assert_eq!(
+        run! {
+            let variable = %[Hello];
+            variable += %[World #(variable += %[!];)];
+            variable.debug_string()
+        },
+        "%[Hello ! World]"
+    );
+    assert_eq!(
+        run! {
+            let variable = %[Hello];
+            variable += %[World #(variable = %[Hello2];)];
+            variable.debug_string()
+        },
+        "%[Hello2 World]"
+    );
+}

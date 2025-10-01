@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Preinterpret is a Rust procedural macro crate that provides macros which form a code generation toolkit that simplifies declarative macro development. It combines functionality from quote, paste, and syn crates to enable:
 
-- Variable definition and substitution with `[!set! #var = ...]` and `#var`
+- Variable definition and substitution with `#(let var = %[...];)` and `#var`
 - Commands for concatenation, case conversion, and token manipulation like `[!ident! ...]`, `[!string! ...]`, `[!ident_snake! ...]`
 - Control flow and parsing capabilities
 

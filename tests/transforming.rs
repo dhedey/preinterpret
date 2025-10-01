@@ -156,7 +156,7 @@ fn test_none_output_commands_mid_parse() {
 #[test]
 fn test_raw_content_in_exact_transformer() {
     preinterpret_assert_eq!({
-        [!set! #x = true]
+        #(let x = %[true];)
         [!let! The @[EXACT #(%raw[#x])] = The %raw[#] x]
         #x
     }, true);
@@ -202,7 +202,7 @@ fn test_parse_command_and_exact_transformer() {
     // * That EXACT ignores none-delimited groups, to make it more intuitive
     preinterpret_assert_eq!(
         #(
-            [!set! #x = [!group! fox]];
+            let x = %[[!group! fox]];
             [!parse! %[The quick brown fox is a fox - right?!] with @(
                 // The outputs are only from the EXACT transformer
                 The quick @(_ = @IDENT) @[EXACT #x @(_ = @IDENT a) #x - right?!]

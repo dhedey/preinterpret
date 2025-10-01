@@ -16,8 +16,8 @@ This moves preinterpet to an expression-based language, inspired by Rust, but wi
 
 * Core commands:
   * `[!error! ...]` to output a compile error.
-  * `[!set! #x += ...]` to performantly add extra characters to a variable's stream.
-  * `[!set! _ = ...]` interprets its arguments but then ignores any outputs.
+  * `#(x += %[...];)` to performantly add extra characters to a variable's stream.
+  * `#(let _ = %[...];)` interprets its arguments but then ignores any outputs.
   * `%[...]` can be used to just output its interpreted contents. It's useful to create a stream value inside an expression.
   * `[!reinterpret! ...]` is like an `eval` command in scripting languages. It takes a stream, and parses/interprets it.
   * `[!settings! { ... }]` can be used to adjust the iteration limit.

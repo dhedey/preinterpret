@@ -2,6 +2,6 @@ use preinterpret::*;
 
 fn main() {
     stream! {
-        [!set! #variable += 2]
+        #(variable += %[2];)
     }
 }

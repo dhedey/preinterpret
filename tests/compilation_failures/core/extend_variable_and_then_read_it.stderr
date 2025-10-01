@@ -1,5 +1,0 @@
-error: The variable cannot be read as it is already being modified
- --> tests/compilation_failures/core/extend_variable_and_then_read_it.rs:6:35
-  |
-6 |         [!set! #variable += World #variable]
-  |                                   ^^^^^^^^^
