@@ -23,11 +23,11 @@ fn test_empty_stream_is_empty() {
     preinterpret_assert_eq!([!is_empty! %[] %[]], true);
     preinterpret_assert_eq!([!is_empty! Not Empty], false);
     preinterpret_assert_eq!({
-        [!set! #x =]
+        #(let x = %[];)
         [!is_empty! #x]
     }, true);
     preinterpret_assert_eq!({
-        [!set! #x =]
+        #(let x = %[];)
         #(let x = %[#x is no longer empty];)
         [!is_empty! #x]
     }, false);

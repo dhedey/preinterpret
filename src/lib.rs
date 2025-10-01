@@ -51,7 +51,7 @@
 //!             $($field_name:ident: $inner_type:ident),* $(,)?
 //!         }
 //!     ) => {preinterpret::stream! {
-//!         #(let type_name = %[[!ident! My $type_name];)]
+//!         #(let type_name = %[[!ident! My $type_name]];)
 //!         
 //!         $(#[$attributes])*
 //!         $vis struct #type_name {
@@ -104,7 +104,7 @@
 //!
 //! ```rust
 //! preinterpret::stream! {
-//!     #(let type_name = %[[!ident! HelloWorld];)]
+//!     #(let type_name = %[[!ident! HelloWorld]];)
 //!
 //!     struct #type_name;
 //!
@@ -124,7 +124,7 @@
 //!
 //! * `#(let foo = %[Hello];)` followed by `#(let foo = %[#bar(World)];)` sets the variable `#foo` to the token stream `Hello` and `#bar` to the token stream `Hello(World)`, and outputs no tokens. Using `#foo` or `#bar` later on will output the current value in the corresponding variable.
 //! * `[!raw! abc #abc [!ident! test]]` outputs its contents as-is, without any interpretation, giving the token stream `abc #abc [!ident! test]`.
-//! * `[!ignore! $foo]` ignores all of its content and outputs no tokens. It is useful to make a declarative macro loop over a meta-variable without outputting it into the resulting stream.
+//! * `let _ = %raw[$foo]` ignores all content inside `[...]` and outputs no tokens. It is useful to make a declarative macro loop over a meta-variable without outputting it into the resulting stream.
 //!
 //! ### Concatenate and convert commands
 //!
@@ -245,44 +245,6 @@
 //!   MyStruct { hello, world }
 //! }
 //! ```
-//!
-//! Variable assignment works intuitively with the `* + ?` expansion operators, allowing basic procedural logic, such as creation of loop counts and indices before [meta-variables](https://github.com/rust-lang/rust/issues/83527) are stabilized.
-//!
-//! For example:
-//! ```rust
-//! macro_rules! count_idents {
-//!     {
-//!         $($item: ident),*
-//!     } => {preinterpret::stream!{
-//!         #(let current_index = %[0usize];)
-//!         $(
-//!             [!ignore! $item] // Loop over the items, but don't output them
-//!             #(let current_index = %[#current_index + 1];)
-//!         )*
-//!         #(let count = %[#current_index];)
-//!         #count
-//!     }}
-//! }
-//! ```
-//!
-//! To quickly explain how this works, imagine we evaluate `count_idents!(a, b, c)`. As `count_idents!` is the most outer macro, it runs first, and expands into the following token stream:
-//!
-//! ```rust
-//! let count = preinterpret::stream!{
-//!   #(let current_index = %[0usize];)
-//!   [!ignore! a]
-//!   #(let current_index = %[#current_index + 1];)
-//!   [!ignore! = b]
-//!   #(let current_index = %[#current_index + 1];)
-//!   [!ignore! = c]
-//!   #(let current_index = %[#current_index + 1];)
-//!   #(let count = %[#current_index];)
-//!   #count
-//! };
-//! ```
-//!
-//! Now the `stream!` macro runs, resulting in `#count` equal to the token stream `0usize + 1 + 1 + 1`.
-//! This will be improved in future releases by adding support for mathematical operations on integer literals.
 //!
 //! ### Simplicity
 //!

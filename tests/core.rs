@@ -49,7 +49,7 @@ fn test_extend() {
     preinterpret_assert_eq!(
         {
             #(let i = 1)
-            [!set! #output =]
+            #(let output = %[];)
             [!while! i <= 4 {
                 #(output += %[#i];)
                 [!if! i <= 3 {
@@ -67,7 +67,8 @@ fn test_extend() {
 fn test_ignore() {
     preinterpret_assert_eq!({
         #(let x = %[false];)
-        [!ignore! #(let x = %[true];) nothing is interpreted. Everything is ignored...]
+        // Using `let _ = %raw[...]` effectively acts as ignoring any tokens.
+        #(let _ = %raw[#(let x = %[true];) nothing is interpreted. Everything is ignored...])
         #x
     }, false);
 }
@@ -75,18 +76,21 @@ fn test_ignore() {
 #[test]
 fn test_empty_set() {
     preinterpret_assert_eq!({
-        [!set! #x]
+        #(let x = %[];)
         #(x += %["hello"];)
         #x
     }, "hello");
     preinterpret_assert_eq!({
-        [!set! #x, #y]
+        #(let x = %[];)
+        #(let y = %[];)
         #(x += %["hello"];)
         #(y += %["world"];)
         [!string! #x " " #y]
     }, "hello world");
     preinterpret_assert_eq!({
-        [!set! #x, #y, #z,]
+        #(let x = %[];)
+        #(let y = %[];)
+        #(let z = %[];)
         #(x += %["hello"];)
         #(y += %["world"];)
         [!string! #x " " #y #z]

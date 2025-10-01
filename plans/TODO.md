@@ -12,7 +12,7 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 - [ ] Allow %[], %raw[] and %group[] directly in token streams, and search for all `#(%group` and `#(%raw` to amend.
 - [x] Remove `[!stream! ...]` and replace with `%[...]`
 - [x] Remove `[!set!]` and replace with `#(let x = %[ ... ])`
-- [ ] Remove `[!ignore!]` and replace with `#(let _ = %[ ... ])`
+- [x] Remove `[!ignore!]` and replace with `#(let _ = %[ ... ])`
 - [ ] Add `%group[]` and remove `as group` and `[!group ..]`
 - [ ] Fix the to_debug_string to add `%raw[..]` around punct groups including `#` or `%`
 - [ ] Remove `ParseUntil`
@@ -286,10 +286,6 @@ preinterpret::run! {
 Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` docs) to ensure that the language is sufficiently comprehensive to use in practice.
 
 ## Final considerations
-
-* Should `preinterpret` should start in expression mode?
-  => Or whether to have `preinterpet::stream` / `preinterpret::run` options?
-  => Maybe `preinterpret::preinterpret` is marked as deprecated; starts in `stream` mode, and enables `[!set!]`?
 
 * Add `preinterpret::macro` - can this be a declarative macro? Would be slightly more efficient, as it just needs to wrap a call to `preinterpret::stream` or `preinterpret::run`...
 * Add `LiteralPattern` (wrapping a `Literal`)

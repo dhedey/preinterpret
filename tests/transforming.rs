@@ -48,7 +48,7 @@ fn test_variable_parsing() {
         [!string! "#x = " #x "; #y = " #y]
     }, "#x = WhyHello; #y = World");
     preinterpret_assert_eq!({
-        [!set! #x =]
+        #(let x = %[];)
         [!let!
             // #>>x - Matches one tt ...and appends it as-is: Why
             @(#a = @TOKEN_TREE)
@@ -87,7 +87,7 @@ fn test_ident_transformer() {
         [!string! #x]
     }, "brown");
     preinterpret_assert_eq!({
-        [!set! #x =]
+        #(let x = %[];)
         [!let! The quick @(#x += @IDENT) fox jumps @(#x += @IDENT) the lazy dog = The quick brown fox jumps over the lazy dog]
         #(x.debug_string())
     }, "%[brown over]");
@@ -101,7 +101,7 @@ fn test_literal_transformer() {
     }, "brown");
     // Lots of literals
     preinterpret_assert_eq!({
-        [!set! #x]
+        #(let x = %[];)
         [!let! @LITERAL @LITERAL @LITERAL @(#x += @LITERAL) @LITERAL @(#x += @LITERAL @LITERAL) = "Hello" 9 3.4 'c' 41u16 0b1010 r#"123"#]
         #(x.debug_string())
     }, "%['c' 0b1010 r#\"123\"#]");
@@ -120,7 +120,7 @@ fn test_punct_transformer() {
     }, "%[']");
     // Lots of punctuation, most of it ignored
     preinterpret_assert_eq!({
-        [!set! #x =]
+        #(let x = %[];)
         [!let! @PUNCT @PUNCT @PUNCT @PUNCT @(#x += @PUNCT) @PUNCT @PUNCT @PUNCT @PUNCT @PUNCT @(#x += @PUNCT) @PUNCT @PUNCT @PUNCT  = # ! $$ % ^ & * + = | @ : ;]
         #(x.debug_string())
     }, "%[% |]");
