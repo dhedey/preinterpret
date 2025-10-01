@@ -16,7 +16,7 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 - [x] Add `%group[]` and remove `as group` and `[!group! ..]`
 - [x] Remove `[!let!]` and replace with `#(let %[..] = %[..])`
 - [x] Remove `StopCondition`
-- [ ] Fix the to_debug_string to add `%raw[..]` around punct groups including `#` or `%`
+- [x] Fix the to_debug_string to add `%raw[..]` around punct groups including `#` or `%`
 - [ ] Fix grammar-peeking of none-groups so that e.g. `[!reinterpret! %group[#]var_name]` works
 - [ ] Simplify the EXACT parser
 

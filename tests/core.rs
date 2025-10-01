@@ -120,15 +120,12 @@ fn test_debug() {
         ),
         "%[impl < 'a , T > MyStruct < 'a , T > { pub fn new () -> Self { ! ($ crate :: Test :: CONSTANT >> 5 > 1) } }]"
     );
-    // It shows transparent groups
-    // NOTE: The output of debug_string() can't be used directly as preinterpret input
-    // because it doesn't stick %raw[#test] around things which could be confused
-    // for the preinterpret grammar. Perhaps it could/should in future.
+    // It shows transparent groups, and uses #raw when needed
     preinterpret_assert_eq!(
         #(
             let x = %[Hello (World)];
-            %[#(x.group()) %raw[#test] "and" %raw[##] #x].debug_string()
+            %[#(x.group()) %raw[#test] "and" %raw[##] #x (3 %raw[%] 2)].debug_string()
         ),
-        r###"%[%group[Hello (World)] # test "and" ## Hello (World)]"###
+        r###"%[%group[Hello (World)] %raw[#] test "and" %raw[#]%raw[#] Hello (World) (3 %raw[%] 2)]"###
     );
 }

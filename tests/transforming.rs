@@ -32,7 +32,7 @@ fn test_variable_parsing() {
         [!string! #x]
     }, "=>World");
     preinterpret_assert_eq!({
-        #(let %[@(#x = @[UNTIL World]) World] = %[Hello => World];)
+        #(let %[Hello @(#x = @[UNTIL World]) World] = %[Hello => World];)
         [!string! #x]
     }, "=>");
     preinterpret_assert_eq!({
@@ -143,7 +143,7 @@ fn test_punct_transformer() {
             let %[@PUNCT @PUNCT @PUNCT @PUNCT @(#x += @PUNCT) @PUNCT @PUNCT @PUNCT @PUNCT @PUNCT @(#x += @PUNCT) @PUNCT @PUNCT @PUNCT] = %[# ! $$ % ^ & * + = | @ : ;];
             x.debug_string()
         },
-        "%[% |]"
+        "%[%raw[%] |]"
     );
 }
 

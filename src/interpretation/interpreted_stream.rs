@@ -324,7 +324,21 @@ impl OutputStream {
                         Spacing::Alone
                     }
                     TokenTree::Punct(punct) => {
-                        output.push(punct.as_char());
+                        let char = punct.as_char();
+                        // This conversion captures ~#% as ~%raw[#]%raw[%] rather than the
+                        // more accurate %raw[~#%] which also captures the correct punct spacing.
+                        // To do this properly would require lookahead which require quite a big
+                        // logic change! So I've opted to ignore it for now...
+                        // * Debug string isn't expected to be used for re-parsing
+                        // * Even if it were, the specific spacing isn't used/relevant
+                        //   for any known grammar
+                        if behaviour.use_value_literal_syntax && (char == '#' || char == '%') {
+                            output.push_str("%raw[");
+                            output.push(char);
+                            output.push(']');
+                        } else {
+                            output.push(char);
+                        }
                         punct.spacing()
                     }
                     TokenTree::Ident(ident) => {
@@ -358,7 +372,7 @@ impl IntoIterator for OutputStream {
 
 pub(crate) struct ConcatBehaviour {
     pub(crate) add_space_between_token_trees: bool,
-    pub(crate) output_types_as_commands: bool,
+    pub(crate) use_value_literal_syntax: bool,
     pub(crate) output_array_structure: bool,
     pub(crate) unwrap_contents_of_string_like_literals: bool,
     pub(crate) show_none_values: bool,
@@ -370,7 +384,7 @@ impl ConcatBehaviour {
     pub(crate) fn standard() -> Self {
         Self {
             add_space_between_token_trees: false,
-            output_types_as_commands: false,
+            use_value_literal_syntax: false,
             output_array_structure: false,
             unwrap_contents_of_string_like_literals: true,
             show_none_values: false,
@@ -382,7 +396,7 @@ impl ConcatBehaviour {
     pub(crate) fn debug() -> Self {
         Self {
             add_space_between_token_trees: true,
-            output_types_as_commands: true,
+            use_value_literal_syntax: true,
             output_array_structure: true,
             unwrap_contents_of_string_like_literals: false,
             show_none_values: true,
@@ -436,7 +450,7 @@ impl ConcatBehaviour {
                 output.push(']');
             }
             Delimiter::None => {
-                if self.output_types_as_commands {
+                if self.use_value_literal_syntax {
                     output.push_str("%group[");
                     inner(output);
                     output.push(']');

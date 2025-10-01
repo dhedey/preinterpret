@@ -1,5 +1,0 @@
-error: Expected ! or -
- --> tests/compilation_failures/transforming/invalid_content_wrong_group.rs:4:27
-  |
-4 |     run!(let %[(@REST)] = %let[[Hello World]]);
-  |                           ^
