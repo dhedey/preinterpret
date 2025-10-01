@@ -49,7 +49,7 @@ impl<T: PeekableToken<K>, K> StopCondition<K> for UntilToken<T> {
 }
 
 /// Designed to automatically discover (via peeking) the next token, to limit the extent of a
-/// match such as `#..x`.
+/// match such as `@REST`.
 #[derive(Clone)]
 pub(crate) enum ParseUntil {
     End,
@@ -70,10 +70,10 @@ impl ParseUntil {
         }
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_)
-            | SourcePeekMatch::Variable(_)
+            | SourcePeekMatch::EmbeddedVariable
             | SourcePeekMatch::Transformer(_)
             | SourcePeekMatch::ExplicitTransformStream
-            | SourcePeekMatch::EmbeddedExpression(_)
+            | SourcePeekMatch::EmbeddedExpression
             | SourcePeekMatch::StreamLiteral(_)
             | SourcePeekMatch::ObjectLiteral => {
                 // TODO: Potentially improve this to allow the peek to get information to aid the parse

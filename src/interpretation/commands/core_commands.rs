@@ -9,17 +9,17 @@ pub(crate) struct SetCommand {
 #[derive(Clone)]
 enum SetArguments {
     SetVariable {
-        variable: GroupedVariable,
+        variable: EmbeddedVariable,
         equals: Token![=],
         content: SourceStream,
     },
     ExtendVariable {
-        variable: GroupedVariable,
+        variable: EmbeddedVariable,
         plus_equals: Token![+=],
         content: SourceStream,
     },
     SetVariablesEmpty {
-        variables: Vec<GroupedVariable>,
+        variables: Vec<EmbeddedVariable>,
     },
     Discard {
         discard: Token![_],

@@ -553,6 +553,34 @@ mod outputs {
             self?.to_resolved_value(output_span_range)
         }
     }
+
+    pub trait StreamAppender {
+        fn append(self, output: &mut OutputStream) -> ExecutionResult<()>;
+    }
+    impl<F: FnOnce(&mut OutputStream) -> ExecutionResult<()>> StreamAppender for F {
+        fn append(self, output: &mut OutputStream) -> ExecutionResult<()> {
+            self(output)
+        }
+    }
+
+    pub(crate) struct StreamOutput<T: StreamAppender>(T);
+    impl<F: FnOnce(&mut OutputStream) -> ExecutionResult<()>> StreamOutput<F> {
+        pub fn new(appender: F) -> Self {
+            Self(appender)
+        }
+    }
+    impl<T: StreamAppender> From<T> for StreamOutput<T> {
+        fn from(value: T) -> Self {
+            Self(value)
+        }
+    }
+    impl<T: StreamAppender> ResolvableOutput for StreamOutput<T> {
+        fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue> {
+            let mut output = OutputStream::new();
+            self.0.append(&mut output)?;
+            output.to_resolved_value(output_span_range)
+        }
+    }
 }
 
 pub(crate) use arguments::*;

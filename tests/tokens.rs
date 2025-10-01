@@ -24,7 +24,7 @@ fn test_empty_stream_is_empty() {
     preinterpret_assert_eq!([!is_empty! Not Empty], false);
     preinterpret_assert_eq!({
         [!set! #x =]
-        [!is_empty! #..x]
+        [!is_empty! #x]
     }, true);
     preinterpret_assert_eq!({
         [!set! #x =]
@@ -42,12 +42,24 @@ fn test_length_and_group() {
     preinterpret_assert_eq!({ [!length! [!group! "hello" World]] }, 1);
     preinterpret_assert_eq!({
         [!set! #x = Hello "World" (1 2 3 4 5)]
-        [!length! #..x]
+        [!length! #x]
     }, 3);
     preinterpret_assert_eq!({
         [!set! #x = Hello "World" (1 2 3 4 5)]
-        [!length! [!group! #..x]]
+        [!length! #(x.group())]
     }, 1);
+}
+
+#[test]
+fn test_output_array_to_stream() {
+    let x = run! {
+        let arr_contents = [1, %[,], 2];
+        %[
+            [#arr_contents]
+        ]
+    };
+    assert_eq!(x[0], 1);
+    assert_eq!(x[1], 2);
 }
 
 #[test]
@@ -179,7 +191,7 @@ fn complex_cases_for_intersperse_and_input_types() {
     // Stream containing two groups
     preinterpret_assert_eq!(
         #(
-            let items = [!stream! 0 1];
+            let items = %[0 1] as group;
             [!intersperse! %{
                 items: [!stream! #items #items], // [!stream! [!group! 0 1] [!group! 0 1]]
                 separator: [!stream! _],
@@ -263,13 +275,13 @@ fn test_split() {
         ),
         "[[!stream! Pizza], [!stream! Mac and Cheese], [!stream! Hamburger]]"
     );
-    // By default, empty groups are included except at the end
+    // When using stream_grouped(), empty groups are included except at the end
     preinterpret_assert_eq!(
         #(
-            ([!split! %{
-                stream: [!stream! ::A::B::::C::],
-                separator: [!stream! ::],
-            }] as stream).debug_string()
+            [!split! %{
+                stream: %[::A::B::::C::],
+                separator: %[::],
+            }].stream_grouped().debug_string()
         ),
         "[!stream! [!group!] [!group! A] [!group! B] [!group!] [!group! C]]"
     );
@@ -277,13 +289,13 @@ fn test_split() {
     preinterpret_assert_eq!(
         #(
             let x = [!stream! ;];
-            ([!split! %{
-                stream: [!stream! ;A;;B;C;D #..x E;],
+            [!split! %{
+                stream: [!stream! ;A;;B;C;D #x E;],
                 separator: x,
                 drop_empty_start: true,
                 drop_empty_middle: true,
                 drop_empty_end: true,
-            }] as stream).debug_string()
+            }].stream_grouped().debug_string()
         ),
         "[!stream! [!group! A] [!group! B] [!group! C] [!group! D] [!group! E]]");
     // Drop empty false works
@@ -291,12 +303,12 @@ fn test_split() {
         #(
             let x = [!stream! ;];
             let output = [!split! %{
-                stream: [!stream! ;A;;B;C;D #..x E;],
+                stream: [!stream! ;A;;B;C;D #x E;],
                 separator: x,
                 drop_empty_start: false,
                 drop_empty_middle: false,
                 drop_empty_end: false,
-            }] as stream;
+            }].stream_grouped();
             output.debug_string()
         ),
         "[!stream! [!group!] [!group! A] [!group!] [!group! B] [!group! C] [!group! D] [!group! E] [!group!]]"

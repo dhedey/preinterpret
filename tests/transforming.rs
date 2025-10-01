@@ -58,7 +58,7 @@ fn test_variable_parsing() {
             #(x += b)
             // #..>>x - Matches stream until (, appends it grouped: [!group! Hello Everyone]
             @(#c = @[UNTIL ()])
-            #(x += [!group! #..c])
+            #(x += c.group())
             (
                 // #>>..x - Matches one tt... and appends it flattened: This is an exciting adventure
                 @(#c = @TOKEN_TREE)
@@ -133,13 +133,13 @@ fn test_group_transformer() {
         #(x.debug_string())
     }, "[!stream! fox]");
     preinterpret_assert_eq!({
-        [!set! #x = "hello" "world"]
+        #(let x = %["hello" "world"].group();)
         [!let! I said @[GROUP @(#y = @REST)]! = I said #x!]
         #(y.debug_string())
     }, "[!stream! \"hello\" \"world\"]");
     // ... which is equivalent to this:
     preinterpret_assert_eq!({
-        [!set! #x = "hello" "world"]
+        #(let x = %["hello" "world"].group();)
         [!let! I said @(#y = @TOKEN_TREE)! = I said #x!]
         #(y.take().flatten().debug_string())
     }, "[!stream! \"hello\" \"world\"]");
@@ -157,7 +157,7 @@ fn test_none_output_commands_mid_parse() {
 fn test_raw_content_in_exact_transformer() {
     preinterpret_assert_eq!({
         [!set! #x = true]
-        [!let! The @[EXACT #..(%raw[#x])] = The #..(%raw[#]) x]
+        [!let! The @[EXACT #(%raw[#x])] = The #(%raw[#]) x]
         #x
     }, true);
 }
@@ -165,11 +165,14 @@ fn test_raw_content_in_exact_transformer() {
 #[test]
 fn test_exact_transformer() {
     // EXACT works
-    preinterpret_assert_eq!({
-        [!set! #x = true]
-        [!let! The @[EXACT #..x] = The true]
-        #x
-    }, true);
+    assert_eq!(
+        run!(
+            let x = %[true];
+            let %[The @[EXACT #x]] = %[The true];
+            x
+        ),
+        true
+    );
     // EXACT is evaluated at execution time
     preinterpret_assert_eq!({
         [!let! The @(#a = @TOKEN_TREE) fox is @(#b = @TOKEN_TREE). It 's super @[EXACT #a #b]. = The brown fox is brown. It 's super brown brown.]
@@ -202,7 +205,7 @@ fn test_parse_command_and_exact_transformer() {
             [!set! #x = [!group! fox]];
             [!parse! [!stream! The quick brown fox is a fox - right?!] with @(
                 // The outputs are only from the EXACT transformer
-                The quick @(_ = @IDENT) @[EXACT #x @(_ = @IDENT a) #..x - right?!]
+                The quick @(_ = @IDENT) @[EXACT #x @(_ = @IDENT a) #x - right?!]
             )].debug_string()
         ),
         "[!stream! fox fox - right ?!]"

@@ -14,8 +14,8 @@ impl ParseBuffer<'_, Source> {
 #[allow(unused)]
 pub(crate) enum SourcePeekMatch {
     Command(Option<CommandOutputKind>),
-    EmbeddedExpression(Grouping),
-    Variable(Grouping),
+    EmbeddedExpression,
+    EmbeddedVariable,
     ExplicitTransformStream,
     Transformer(Option<TransformerKind>),
     Group(Delimiter),
@@ -58,20 +58,10 @@ fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> SourcePeekMatch {
     }
     if let Some((_, next)) = cursor.punct_matching('#') {
         if next.ident().is_some() {
-            return SourcePeekMatch::Variable(Grouping::Grouped);
-        }
-        if let Some((_, next)) = next.punct_matching('.') {
-            if let Some((_, next)) = next.punct_matching('.') {
-                if next.ident().is_some() {
-                    return SourcePeekMatch::Variable(Grouping::Flattened);
-                }
-                if next.group_matching(Delimiter::Parenthesis).is_some() {
-                    return SourcePeekMatch::EmbeddedExpression(Grouping::Flattened);
-                }
-            }
+            return SourcePeekMatch::EmbeddedVariable;
         }
         if next.group_matching(Delimiter::Parenthesis).is_some() {
-            return SourcePeekMatch::EmbeddedExpression(Grouping::Grouped);
+            return SourcePeekMatch::EmbeddedExpression;
         }
     }
 

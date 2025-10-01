@@ -1,5 +1,5 @@
 error: Expected an operator to continue the expression, or ; to mark the end of the expression statement
- --> tests/compilation_failures/expressions/grouped_variable_with_incomplete_expression.rs:5:33
+ --> tests/compilation_failures/expressions/variable_with_incomplete_expression.rs:5:33
   |
 5 |         #(x = [!stream! + 1]; 1 x)
   |                                 ^

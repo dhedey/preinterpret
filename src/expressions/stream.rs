@@ -114,6 +114,8 @@ impl MethodResolutionTarget for StreamTypeData {
                 let span_range = this.span_range();
                 Ok(this.into_inner().value.coerce_into_value(span_range))
             }
+
+            // NB - group is found at the ExpressionValue level
         }
     }
 

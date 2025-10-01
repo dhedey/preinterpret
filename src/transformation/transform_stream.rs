@@ -49,17 +49,14 @@ pub(crate) enum TransformItem {
 }
 
 impl TransformItem {
-    /// We provide a stop condition so that some of the items can know when to stop consuming greedily -
-    /// notably the flattened command. This allows [!let! #..x = Hello => World] to parse as setting
-    /// `x` to `Hello => World` rather than having `#..x` peeking to see it is "up to =" and then only
-    /// parsing `Hello` into `x`.
+    // TODO: REMOVE
     pub(crate) fn parse_until<C: StopCondition<Source>>(
         input: ParseStream<Source>,
     ) -> ParseResult<Self> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => Self::Command(input.parse()?),
-            SourcePeekMatch::Variable(_) => return input.parse_err("Variable bindings are not supported here. #x can be inverted with @(#x = @TOKEN_TREE.flatten()) and #..x with @(#x = @REST) or @(#x = @[UNTIL ..])"),
-            SourcePeekMatch::EmbeddedExpression(_) => Self::EmbeddedExpression(input.parse()?),
+            SourcePeekMatch::EmbeddedVariable => return input.parse_err("Variable bindings are not supported here. #(x.group()) can be inverted with @(#x = @TOKEN_TREE.flatten()). #x can't necessarily be inverted because its contents are flattened, although @(#x = @REST) or @(#x = @[UNTIL ..]) may work in some instances"),
+            SourcePeekMatch::EmbeddedExpression => Self::EmbeddedExpression(input.parse()?),
             SourcePeekMatch::Group(_) => Self::ExactGroup(input.parse()?),
             SourcePeekMatch::ExplicitTransformStream => Self::TransformStreamInput(input.parse()?),
             SourcePeekMatch::Transformer(_) => Self::Transformer(input.parse()?),
@@ -184,13 +181,13 @@ pub(crate) enum StreamParserContent {
         content: TransformStream,
     },
     StoreToVariable {
-        variable: GroupedVariable,
+        variable: EmbeddedVariable,
         #[allow(unused)]
         equals: Token![=],
         content: TransformStream,
     },
     ExtendToVariable {
-        variable: GroupedVariable,
+        variable: EmbeddedVariable,
         #[allow(unused)]
         plus_equals: Token![+=],
         content: TransformStream,

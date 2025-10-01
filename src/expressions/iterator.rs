@@ -49,18 +49,18 @@ impl ExpressionIterator {
         }
     }
 
-    pub(super) fn output_grouped_items_to(self, output: &mut OutputStream) -> ExecutionResult<()> {
+    pub(super) fn output_items_to(
+        self,
+        output: &mut OutputStream,
+        grouping: Grouping,
+    ) -> ExecutionResult<()> {
         const LIMIT: usize = 10_000;
         let span_range = self.span_range;
         for (i, item) in self.enumerate() {
             if i > LIMIT {
                 return span_range.execution_err(format!("Only a maximum of {} items can be output to a stream from an iterator, to protect you from infinite loops. This can't currently be reconfigured with the iteration limit.", LIMIT));
             }
-            item.output_to(
-                Grouping::Grouped,
-                output,
-                StreamOutputBehaviour::PermitArrays,
-            )?;
+            item.output_to(grouping, output)?;
         }
         Ok(())
     }

@@ -50,10 +50,9 @@ impl Interpret for &EmbeddedExpression {
     ) -> ExecutionResult<()> {
         let grouping = match self.flattening {
             Some(_) => Grouping::Flattened,
-            None => Grouping::Grouped,
+            None => Grouping::Flattened,
         };
-        self.evaluate(interpreter)?
-            .output_to(grouping, output, StreamOutputBehaviour::Standard)?;
+        self.evaluate(interpreter)?.output_to(grouping, output)?;
         Ok(())
     }
 }

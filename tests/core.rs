@@ -31,7 +31,7 @@ fn test_set() {
 #[test]
 fn test_raw() {
     preinterpret_assert_eq!(
-        { [!string! #..(%raw[#variable and [!command!] are not interpreted or error])] },
+        { [!string! #(%raw[#variable and [!command!] are not interpreted or error])] },
         "#variableand[!command!]arenotinterpretedorerror"
     );
 }
@@ -122,8 +122,8 @@ fn test_debug() {
     // for the preinterpret grammar. Perhaps it could/should in future.
     preinterpret_assert_eq!(
         #(
-            let x = [!stream! Hello (World)];
-            [!stream! #x #..(%raw[#test]) "and" #..(%raw[##]) #..x].debug_string()
+            let x = %[Hello (World)];
+            [!stream! #(x.group()) #(%raw[#test]) "and" #(%raw[##]) #x].debug_string()
         ),
         r###"[!stream! [!group! Hello (World)] # test "and" ## Hello (World)]"###
     );

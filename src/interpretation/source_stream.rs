@@ -41,7 +41,7 @@ impl HasSpan for SourceStream {
 #[derive(Clone)]
 pub(crate) enum SourceItem {
     Command(Command),
-    Variable(MarkedVariable),
+    Variable(EmbeddedVariable),
     EmbeddedExpression(EmbeddedExpression),
     SourceGroup(SourceGroup),
     Punct(Punct),
@@ -54,12 +54,12 @@ impl Parse<Source> for SourceItem {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => SourceItem::Command(input.parse()?),
             SourcePeekMatch::Group(_) => SourceItem::SourceGroup(input.parse()?),
-            SourcePeekMatch::Variable(_) => SourceItem::Variable(input.parse()?),
-            SourcePeekMatch::EmbeddedExpression(_) => {
+            SourcePeekMatch::EmbeddedVariable => SourceItem::Variable(input.parse()?),
+            SourcePeekMatch::EmbeddedExpression => {
                 SourceItem::EmbeddedExpression(input.parse()?)
             }
             SourcePeekMatch::ExplicitTransformStream | SourcePeekMatch::Transformer(_) => {
-                return input.parse_err("Destructurings are not supported here. If this wasn't intended to be a destructuring, replace @ with #..(%raw[@])");
+                return input.parse_err("Destructurings are not supported here. If this wasn't intended to be a destructuring, replace @ with #(%raw[@])");
             }
             SourcePeekMatch::Punct(_) => SourceItem::Punct(input.parse_any_punct()?),
             SourcePeekMatch::Ident(_) => SourceItem::Ident(input.parse_any_ident()?),

@@ -1,5 +1,5 @@
 error: unexpected end of input, expected token tree
- --> tests/compilation_failures/transforming/double_flattened_variable.rs:4:5
+ --> tests/compilation_failures/transforming/parser_after_rest.rs:4:5
   |
 4 |     stream!([!let! @REST @TOKEN_TREE = Hello World]);
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

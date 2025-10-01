@@ -10,13 +10,13 @@ pub(crate) struct ExpressionArray {
 }
 
 impl ExpressionArray {
-    pub(crate) fn output_grouped_items_to(&self, output: &mut OutputStream) -> ExecutionResult<()> {
+    pub(crate) fn output_items_to(
+        &self,
+        output: &mut OutputStream,
+        grouping: Grouping,
+    ) -> ExecutionResult<()> {
         for item in &self.items {
-            item.output_to(
-                Grouping::Grouped,
-                output,
-                StreamOutputBehaviour::PermitArrays,
-            )?;
+            item.output_to(grouping, output)?;
         }
         Ok(())
     }
@@ -228,6 +228,10 @@ impl MethodResolutionTarget for ArrayTypeData {
             fn push(mut this: Mutable<ExpressionArray>, item: OwnedValue) -> ExecutionResult<()> {
                 this.items.push(item.into());
                 Ok(())
+            }
+
+            fn stream_grouped(this: ExpressionArray) -> StreamOutput<impl StreamAppender> {
+                StreamOutput::new(move |stream| this.output_items_to(stream, Grouping::Grouped))
             }
         }
     }

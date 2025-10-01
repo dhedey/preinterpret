@@ -159,6 +159,18 @@ impl MethodResolutionTarget for ValueTypeData {
             fn swap(mut a: MutableValue, mut b: MutableValue) -> () {
                 core::mem::swap(a.deref_mut(), b.deref_mut());
             }
+
+            fn stream(input: ExpressionValue) -> ExecutionResult<OutputStream> {
+                input.into_new_output_stream(Grouping::Flattened)
+            }
+
+            fn group(input: ExpressionValue) -> ExecutionResult<OutputStream> {
+                input.into_new_output_stream(Grouping::Grouped)
+            }
+
+            fn string(input: ExpressionValue) -> ExecutionResult<String> {
+                input.concat_recursive(&ConcatBehaviour::standard())
+            }
         }
     }
 
@@ -172,12 +184,12 @@ impl MethodResolutionTarget for ValueTypeData {
                 }
                 CastTarget::Stream => {
                     wrap_unary!((input: ExpressionValue) -> ExecutionResult<OutputStream> {
-                        input.into_new_output_stream(Grouping::Flattened, StreamOutputBehaviour::PermitArrays)
+                        input.into_new_output_stream(Grouping::Flattened)
                     })
                 }
                 CastTarget::Group => {
                     wrap_unary!((input: ExpressionValue) -> ExecutionResult<OutputStream> {
-                        input.into_new_output_stream(Grouping::Grouped, StreamOutputBehaviour::PermitArrays)
+                        input.into_new_output_stream(Grouping::Grouped)
                     })
                 }
                 _ => return None,
@@ -727,13 +739,12 @@ impl ExpressionValue {
     pub(crate) fn into_new_output_stream(
         self,
         grouping: Grouping,
-        behaviour: StreamOutputBehaviour,
     ) -> ExecutionResult<OutputStream> {
         Ok(match (self, grouping) {
             (Self::Stream(value), Grouping::Flattened) => value.value,
             (other, grouping) => {
                 let mut output = OutputStream::new();
-                other.output_to(grouping, &mut output, behaviour)?;
+                other.output_to(grouping, &mut output)?;
                 output
             }
         })
@@ -743,7 +754,6 @@ impl ExpressionValue {
         &self,
         grouping: Grouping,
         output: &mut OutputStream,
-        behaviour: StreamOutputBehaviour,
     ) -> ExecutionResult<()> {
         match grouping {
             Grouping::Grouped => {
@@ -752,23 +762,19 @@ impl ExpressionValue {
                 // * Grouping means -1 is interpreted atomically, rather than as a punct then a number
                 // * Grouping means that a stream is interpreted atomically
                 output.push_grouped(
-                    |inner| self.output_flattened_to(inner, behaviour),
+                    |inner| self.output_flattened_to(inner),
                     Delimiter::None,
                     self.span_range().join_into_span_else_start(),
                 )?;
             }
             Grouping::Flattened => {
-                self.output_flattened_to(output, behaviour)?;
+                self.output_flattened_to(output)?;
             }
         }
         Ok(())
     }
 
-    fn output_flattened_to(
-        &self,
-        output: &mut OutputStream,
-        behaviour: StreamOutputBehaviour,
-    ) -> ExecutionResult<()> {
+    fn output_flattened_to(&self, output: &mut OutputStream) -> ExecutionResult<()> {
         match self {
             Self::None { .. } => {}
             Self::Integer(value) => output.push_literal(value.to_literal()),
@@ -782,28 +788,14 @@ impl ExpressionValue {
             Self::Object(_) => {
                 return self.execution_err("Objects cannot be output to a stream");
             }
-            Self::Array(array) => {
-                if behaviour.should_output_arrays() {
-                    array.output_grouped_items_to(output)?
-                } else {
-                    return self.execution_err("Arrays cannot be output to a stream. You likely wish to use the !for! command or if you wish to output every element, use `#(XXX as stream)` to cast the array to a stream.");
-                }
-            }
+            Self::Array(array) => array.output_items_to(output, Grouping::Flattened)?,
             Self::Stream(value) => value.value.append_cloned_into(output),
-            Self::Iterator(iterator) => {
-                if behaviour.should_output_iterators() {
-                    iterator.clone().output_grouped_items_to(output)?
-                } else {
-                    return self.execution_err("Iterators cannot be output to a stream. You likely wish to use the !for! command or if you wish to output every element, use `#(XXX as stream)` to cast the iterator to a stream.");
-                }
-            }
+            Self::Iterator(iterator) => iterator
+                .clone()
+                .output_items_to(output, Grouping::Flattened)?,
             Self::Range(range) => {
                 let iterator = ExpressionIterator::new_for_range(range.clone())?;
-                if behaviour.should_output_iterators() {
-                    iterator.output_grouped_items_to(output)?
-                } else {
-                    return self.execution_err("Iterators cannot be output to a stream. You likely wish to use the !for! command or if you wish to output every element, use `#(XXX as stream)` to cast the iterator to a stream.");
-                }
+                iterator.output_items_to(output, Grouping::Flattened)?
             }
         };
         Ok(())
@@ -853,7 +845,7 @@ impl ExpressionValue {
             | ExpressionValue::String(_) => {
                 // This isn't the most efficient, but it's less code and debug doesn't need to be super efficient.
                 let mut stream = OutputStream::new();
-                self.output_flattened_to(&mut stream, StreamOutputBehaviour::Standard)
+                self.output_flattened_to(&mut stream)
                     .expect("Non-composite values should all be able to be outputted to a stream");
                 stream.concat_recursive_into(output, behaviour);
             }
@@ -868,28 +860,7 @@ impl ToExpressionValue for ExpressionValue {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) enum StreamOutputBehaviour {
-    Standard,
-    PermitArrays,
-}
-
-impl StreamOutputBehaviour {
-    pub(super) fn should_output_arrays(&self) -> bool {
-        match self {
-            Self::Standard => false,
-            Self::PermitArrays => true,
-        }
-    }
-
-    pub(super) fn should_output_iterators(&self) -> bool {
-        match self {
-            Self::Standard => false,
-            Self::PermitArrays => true,
-        }
-    }
-}
-
+#[derive(Copy, Clone)]
 pub(crate) enum Grouping {
     Grouped,
     Flattened,

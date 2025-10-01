@@ -9,8 +9,8 @@ This moves preinterpet to an expression-based language, inspired by Rust, but wi
 
 ### Variable Expansions
 
-* `#x` now outputs the contents of `x` in a transparent group.
-* `#..x` outputs the contents of `x` "flattened" directly to the output stream.
+* `#x` outputs the contents of `x`.
+* `#(x.group())` outputs the contents of `x` in a transparent group.
 
 ### New Commands
 
@@ -39,7 +39,7 @@ This moves preinterpet to an expression-based language, inspired by Rust, but wi
   * `[!comma_split! ...]` which can be used to split a stream on `,` tokens.
   * `[!zip! [#countries #flags #capitals]]` which can be used to combine multiple streams together.
 * Destructuring commands:
-  * `[!let! <destructuring> = ...]` does destructuring/parsing (see next section). Note `[!let! #..x = ...]` is equivalent to `[!set! #x = ...]`
+  * `[!let! <destructuring> = ...]` does destructuring with patterns similar to Rust. Supported patterns include array, object destructurings `[..]`, `%{ a, b }`, and stream parsing `%[..]`.
 
 ### Expressions
 

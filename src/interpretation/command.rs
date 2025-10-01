@@ -124,11 +124,8 @@ impl<C: ValueCommandDefinition> CommandInvocationAs<OutputKindValue> for C {
         context: ExecutionContext,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        self.execute(context.interpreter)?.output_to(
-            Grouping::Grouped,
-            output,
-            StreamOutputBehaviour::Standard,
-        )
+        self.execute(context.interpreter)?
+            .output_to(Grouping::Grouped, output)
     }
 
     fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
@@ -409,7 +406,7 @@ impl Parse<Source> for Command {
             Some(command_kind) => command_kind,
             None => command_name.span().err(
                 format!(
-                    "Expected `[!<command>! ..]`, for <command> one of: {}.\nIf this wasn't intended to be a preinterpret command, you can work around this with #..(%raw[[!{} ... ]])",
+                    "Expected `[!<command>! ..]`, for <command> one of: {}.\nIf this wasn't intended to be a preinterpret command, you can work around this with #(%raw[[!{} ... ]])",
                     CommandKind::list_all(),
                     command_name,
                 ),

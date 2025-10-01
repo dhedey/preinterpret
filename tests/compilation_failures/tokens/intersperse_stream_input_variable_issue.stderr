@@ -1,4 +1,4 @@
-error: In an expression, the #.. variable prefix is not allowed. The # prefix should only be used when embedding a variable into an output sream.
+error: In an expression, the # variable prefix is not allowed. The # prefix should only be used when embedding a variable into an output stream.
        Occurred whilst parsing [!intersperse! ...] - Expected: %{
            // An array or stream (by coerced token-tree) to intersperse
            items: ["Hello", "World"],
@@ -11,5 +11,5 @@ error: In an expression, the #.. variable prefix is not allowed. The # prefix sh
        }
  --> tests/compilation_failures/tokens/intersperse_stream_input_variable_issue.rs:7:20
   |
-7 |             items: #..x,
+7 |             items: #x,
   |                    ^
