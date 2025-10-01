@@ -1,26 +1,5 @@
 use crate::internal_prelude::*;
 
-#[derive(Clone)]
-pub(crate) struct IgnoreCommand;
-
-impl CommandType for IgnoreCommand {
-    type OutputKind = OutputKindNone;
-}
-
-impl NoOutputCommandDefinition for IgnoreCommand {
-    const COMMAND_NAME: &'static str = "ignore";
-
-    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
-        // Avoid a syn parse error by reading all the tokens
-        let _ = arguments.read_all_as_raw_token_stream();
-        Ok(Self)
-    }
-
-    fn execute(self, _interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        Ok(())
-    }
-}
-
 /// This is temporary until we have a proper implementation of #(...)
 #[derive(Clone)]
 pub(crate) struct ReinterpretCommand {
