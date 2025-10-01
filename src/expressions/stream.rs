@@ -52,9 +52,9 @@ impl ExpressionStream {
     pub(crate) fn concat_recursive_into(self, output: &mut String, behaviour: &ConcatBehaviour) {
         if behaviour.output_types_as_commands {
             if self.value.is_empty() {
-                output.push_str("[!stream!]");
+                output.push_str("%[]");
             } else {
-                output.push_str("[!stream! ");
+                output.push_str("%[");
                 self.value.concat_recursive_into(output, behaviour);
                 output.push(']');
             }

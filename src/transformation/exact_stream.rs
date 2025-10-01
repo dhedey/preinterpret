@@ -77,8 +77,12 @@ impl Parse<Source> for ExactItem {
             SourcePeekMatch::Ident(_) => Self::ExactIdent(input.parse_any_ident()?),
             SourcePeekMatch::Punct(_) => Self::ExactPunct(input.parse_any_punct()?),
             SourcePeekMatch::Literal(_) => Self::ExactLiteral(input.parse()?),
-            SourcePeekMatch::StreamLiteral(_) => return input.parse_err("Stream literals are only supported in an expression context, not a parser context."),
-            SourcePeekMatch::ObjectLiteral => return input.parse_err("Object literals are only supported in an expression context, not a parser context."),
+            SourcePeekMatch::StreamLiteral(_) => {
+                return input.parse_err("Stream literals are not supported here.")
+            }
+            SourcePeekMatch::ObjectLiteral => {
+                return input.parse_err("Object literals are not supported here.")
+            }
             SourcePeekMatch::End => return input.parse_err("Unexpected end"),
         })
     }

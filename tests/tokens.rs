@@ -16,11 +16,11 @@ fn test_tokens_compilation_failures() {
 #[test]
 fn test_empty_stream_is_empty() {
     preinterpret_assert_eq!({
-        [!stream!] "hello" [!stream!] [!stream!]
+        %[] "hello" %[] %[]
     }, "hello");
     preinterpret_assert_eq!([!is_empty!], true);
-    preinterpret_assert_eq!([!is_empty! [!stream!]], true);
-    preinterpret_assert_eq!([!is_empty! [!stream!] [!stream!]], true);
+    preinterpret_assert_eq!([!is_empty! %[]], true);
+    preinterpret_assert_eq!([!is_empty! %[] %[]], true);
     preinterpret_assert_eq!([!is_empty! Not Empty], false);
     preinterpret_assert_eq!({
         [!set! #x =]
@@ -66,80 +66,80 @@ fn test_output_array_to_stream() {
 fn test_intersperse() {
     preinterpret_assert_eq!(
         #([!intersperse! %{
-            items: [!stream! Hello World],
+            items: %[Hello World],
             separator: [", "],
         }] as string),
         "Hello, World"
     );
     preinterpret_assert_eq!(
         #([!intersperse! %{
-            items: [!stream! Hello World],
-            separator: [!stream! _ "and" _],
+            items: %[Hello World],
+            separator: %[_ "and" _],
         }] as stream as string),
         "Hello_and_World"
     );
     preinterpret_assert_eq!(
         #([!intersperse! %{
-            items: [!stream! Hello World],
-            separator: [!stream! _ "and" _],
+            items: %[Hello World],
+            separator: %[_ "and" _],
             add_trailing: true,
         }] as stream as string),
         "Hello_and_World_and_"
     );
     preinterpret_assert_eq!(
         #([!intersperse! %{
-            items: [!stream! The Quick Brown Fox],
-            separator: [!stream!],
+            items: %[The Quick Brown Fox],
+            separator: %[],
         }] as stream as string),
         "TheQuickBrownFox"
     );
     preinterpret_assert_eq!(
         #([!intersperse! %{
-            items: [!stream! The Quick Brown Fox],
-            separator: [!stream! ,],
+            items: %[The Quick Brown Fox],
+            separator: %[,],
             add_trailing: true,
         }] as stream as string),
         "The,Quick,Brown,Fox,"
     );
     preinterpret_assert_eq!(
         #([!intersperse! %{
-            items: [!stream! Red Green Blue],
-            separator: [!stream! ", "],
-            final_separator: [!stream! " and "],
+            items: %[Red Green Blue],
+            separator: %[", "],
+            final_separator: %[" and "],
         }] as stream as string),
         "Red, Green and Blue"
     );
     preinterpret_assert_eq!(
         #([!intersperse! %{
-                items: [!stream! Red Green Blue],
-                separator: [!stream! ", "],
+                items: %[Red Green Blue],
+                separator: %[", "],
                 add_trailing: true,
-                final_separator: [!stream! " and "],
+                final_separator: %[" and "],
         }] as stream as string),
         "Red, Green, Blue and "
     );
     preinterpret_assert_eq!(
         #([!intersperse! %{
-            items: [!stream!],
-            separator: [!stream! ", "],
+            items: %[],
+            separator: %[", "],
             add_trailing: true,
-            final_separator: [!stream! " and "],
+            final_separator: %[" and "],
         }] as stream as string),
         ""
     );
     preinterpret_assert_eq!(
         #([!intersperse! %{
-            items: [!stream! SingleItem],
-            separator: [!stream! ","],
-            final_separator: [!stream! "!"],
+            items: %[SingleItem],
+            separator: %[","],
+            final_separator: %["!"],
         }] as stream as string),
         "SingleItem"
     );
     preinterpret_assert_eq!(
         #([!intersperse! %{
-            items: [!stream! SingleItem],
-            separator: [!stream! ","],
-            final_separator: [!stream! "!"],
+            items: %[SingleItem],
+            separator: %[","],
+            final_separator: %["!"],
             add_trailing: true,
         }] as stream as string),
         "SingleItem!"
@@ -161,7 +161,7 @@ fn complex_cases_for_intersperse_and_input_types() {
         [!set! #items = 0 1 2 3]
         #([!intersperse! %{
             items,
-            separator: [!stream! _],
+            separator: %[_],
         }] as stream as string)
     }, "0_1_2_3");
     // Variable containing iterable can be used for items
@@ -169,7 +169,7 @@ fn complex_cases_for_intersperse_and_input_types() {
         #(let items = 0..4)
         #([!intersperse! %{
             items,
-            separator: [!stream! _],
+            separator: %[_],
         }] as stream as string)
     }, "0_1_2_3");
     // #(...) block returning token stream (from variable)
@@ -193,8 +193,8 @@ fn complex_cases_for_intersperse_and_input_types() {
         #(
             let items = %[0 1] as group;
             [!intersperse! %{
-                items: [!stream! #items #items], // [!stream! [!group! 0 1] [!group! 0 1]]
-                separator: [!stream! _],
+                items: %[#items #items], // %[[!group! 0 1] [!group! 0 1]]
+                separator: %[_],
             }] as string
         ),
         "01_01",
@@ -203,7 +203,7 @@ fn complex_cases_for_intersperse_and_input_types() {
     preinterpret_assert_eq!(
         #([!intersperse! %{
             items: [!if! false { 0 1 } !else! { 2 3 }],
-            separator: [!stream! _],
+            separator: %[_],
         }] as stream as string),
         "2_3"
     );
@@ -211,7 +211,7 @@ fn complex_cases_for_intersperse_and_input_types() {
     // Inputs can be in any order
     preinterpret_assert_eq!(
         #(
-            let people = [!stream! Anna Barbara Charlie];
+            let people = %[Anna Barbara Charlie];
             let separator = [", "];
             let final_separator = [" and "];
             let add_trailing = false;
@@ -249,31 +249,31 @@ fn test_split() {
     preinterpret_assert_eq!(
         #(
             [!split! %{
-                stream: [!stream! A::B],
-                separator: [!stream!],
+                stream: %[A::B],
+                separator: %[],
             }].debug_string()
         ),
-        "[[!stream! A], [!stream! :], [!stream! :], [!stream! B]]"
+        "[%[A], %[:], %[:], %[B]]"
     );
     // Double separators are allowed
     preinterpret_assert_eq!(
         #(
             [!split! %{
-                stream: [!stream! A::B::C],
-                separator: [!stream! ::],
+                stream: %[A::B::C],
+                separator: %[::],
             }].debug_string()
         ),
-        "[[!stream! A], [!stream! B], [!stream! C]]"
+        "[%[A], %[B], %[C]]"
     );
     // Trailing separator is ignored by default
     preinterpret_assert_eq!(
         #(
             [!split! %{
-                stream: [!stream! Pizza, Mac and Cheese, Hamburger,],
-                separator: [!stream! ,],
+                stream: %[Pizza, Mac and Cheese, Hamburger,],
+                separator: %[,],
             }].debug_string()
         ),
-        "[[!stream! Pizza], [!stream! Mac and Cheese], [!stream! Hamburger]]"
+        "[%[Pizza], %[Mac and Cheese], %[Hamburger]]"
     );
     // When using stream_grouped(), empty groups are included except at the end
     preinterpret_assert_eq!(
@@ -283,27 +283,27 @@ fn test_split() {
                 separator: %[::],
             }].stream_grouped().debug_string()
         ),
-        "[!stream! [!group!] [!group! A] [!group! B] [!group!] [!group! C]]"
+        "%[[!group!] [!group! A] [!group! B] [!group!] [!group! C]]"
     );
     // Stream and separator are both interpreted
     preinterpret_assert_eq!(
         #(
-            let x = [!stream! ;];
+            let x = %[;];
             [!split! %{
-                stream: [!stream! ;A;;B;C;D #x E;],
+                stream: %[;A;;B;C;D #x E;],
                 separator: x,
                 drop_empty_start: true,
                 drop_empty_middle: true,
                 drop_empty_end: true,
             }].stream_grouped().debug_string()
         ),
-        "[!stream! [!group! A] [!group! B] [!group! C] [!group! D] [!group! E]]");
+        "%[[!group! A] [!group! B] [!group! C] [!group! D] [!group! E]]");
     // Drop empty false works
     preinterpret_assert_eq!(
         #(
-            let x = [!stream! ;];
+            let x = %[;];
             let output = [!split! %{
-                stream: [!stream! ;A;;B;C;D #x E;],
+                stream: %[;A;;B;C;D #x E;],
                 separator: x,
                 drop_empty_start: false,
                 drop_empty_middle: false,
@@ -311,20 +311,20 @@ fn test_split() {
             }].stream_grouped();
             output.debug_string()
         ),
-        "[!stream! [!group!] [!group! A] [!group!] [!group! B] [!group! C] [!group! D] [!group! E] [!group!]]"
+        "%[[!group!] [!group! A] [!group!] [!group! B] [!group! C] [!group! D] [!group! E] [!group!]]"
     );
     // Drop empty middle works
     preinterpret_assert_eq!(
         #(
             [!split! %{
-                stream: [!stream! ;A;;B;;;;E;],
-                separator: [!stream! ;],
+                stream: %[;A;;B;;;;E;],
+                separator: %[;],
                 drop_empty_start: false,
                 drop_empty_middle: true,
                 drop_empty_end: false,
             }].debug_string()
         ),
-        "[[!stream!], [!stream! A], [!stream! B], [!stream! E], [!stream!]]"
+        "[%[], %[A], %[B], %[E], %[]]"
     );
 }
 
@@ -332,49 +332,49 @@ fn test_split() {
 fn test_comma_split() {
     preinterpret_assert_eq!(
         #([!comma_split! Pizza, Mac and Cheese, Hamburger,].debug_string()),
-        "[[!stream! Pizza], [!stream! Mac and Cheese], [!stream! Hamburger]]"
+        "[%[Pizza], %[Mac and Cheese], %[Hamburger]]"
     );
 }
 
 #[test]
 fn test_zip() {
     preinterpret_assert_eq!(
-        #([!zip! [[!stream! Hello "Goodbye"], ["World", "Friend"]]].debug_string()),
-        r#"[[[!stream! Hello], "World"], ["Goodbye", "Friend"]]"#,
+        #([!zip! [%[Hello "Goodbye"], ["World", "Friend"]]].debug_string()),
+        r#"[[%[Hello], "World"], ["Goodbye", "Friend"]]"#,
     );
     preinterpret_assert_eq!(
         #(
-            let countries = [!stream! "France" "Germany" "Italy"];
-            let flags = [!stream! "🇫🇷" "🇩🇪" "🇮🇹"];
-            let capitals = [!stream! "Paris" "Berlin" "Rome"];
+            let countries = %["France" "Germany" "Italy"];
+            let flags = %["🇫🇷" "🇩🇪" "🇮🇹"];
+            let capitals = %["Paris" "Berlin" "Rome"];
             [!zip! [countries, flags, capitals]].debug_string()
         ),
         r#"[["France", "🇫🇷", "Paris"], ["Germany", "🇩🇪", "Berlin"], ["Italy", "🇮🇹", "Rome"]]"#,
     );
     preinterpret_assert_eq!(
         #(
-            let longer = [!stream! A B C D];
+            let longer = %[A B C D];
             let shorter = [1, 2, 3];
             [!zip_truncated! [longer, shorter.take()]].debug_string()
         ),
-        r#"[[[!stream! A], 1], [[!stream! B], 2], [[!stream! C], 3]]"#,
+        r#"[[%[A], 1], [%[B], 2], [%[C], 3]]"#,
     );
     preinterpret_assert_eq!(
         #(
-            let letters = [!stream! A B C];
+            let letters = %[A B C];
             let numbers = [1, 2, 3];
             [!zip! [letters, numbers.take()]].debug_string()
         ),
-        r#"[[[!stream! A], 1], [[!stream! B], 2], [[!stream! C], 3]]"#,
+        r#"[[%[A], 1], [%[B], 2], [%[C], 3]]"#,
     );
     preinterpret_assert_eq!(
         #(
-            let letters = [!stream! A B C];
+            let letters = %[A B C];
             let numbers = [1, 2, 3];
             let combined = [letters, numbers.take()];
             [!zip! combined.take()].debug_string()
         ),
-        r#"[[[!stream! A], 1], [[!stream! B], 2], [[!stream! C], 3]]"#,
+        r#"[[%[A], 1], [%[B], 2], [%[C], 3]]"#,
     );
     preinterpret_assert_eq!(
         #(
@@ -382,7 +382,7 @@ fn test_zip() {
             let numbers = [1, 2, 3];
             [!zip! %{ number: numbers.take(), letter: letters }].debug_string()
         ),
-        r#"[{ letter: [!stream! A], number: 1 }, { letter: [!stream! B], number: 2 }, { letter: [!stream! C], number: 3 }]"#,
+        r#"[{ letter: %[A], number: 1 }, { letter: %[B], number: 2 }, { letter: %[C], number: 3 }]"#,
     );
     preinterpret_assert_eq!(#([!zip![]].debug_string()), r#"[]"#);
     preinterpret_assert_eq!(#([!zip! %{}].debug_string()), r#"[]"#);

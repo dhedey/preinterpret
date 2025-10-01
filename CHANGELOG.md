@@ -18,7 +18,7 @@ This moves preinterpet to an expression-based language, inspired by Rust, but wi
   * `[!error! ...]` to output a compile error.
   * `[!set! #x += ...]` to performantly add extra characters to a variable's stream.
   * `[!set! _ = ...]` interprets its arguments but then ignores any outputs.
-  * `[!stream! ...]` can be used to just output its interpreted contents. It's useful to create a stream value inside an expression.
+  * `%[...]` can be used to just output its interpreted contents. It's useful to create a stream value inside an expression.
   * `[!reinterpret! ...]` is like an `eval` command in scripting languages. It takes a stream, and parses/interprets it.
   * `[!settings! { ... }]` can be used to adjust the iteration limit.
 * Expression commands:
@@ -104,7 +104,7 @@ Inside a transform stream, the following grammar is supported:
   * `@[GROUP ...]` - Consumes a none-delimited group. Its arguments are used to transform the group's contents.
   * `@[EXACT ...]` - Interprets its arguments (i.e. variables are substituted, not bound; and command output is gathered) into an "exact match stream". And then expects to consume exactly the same stream from the input. It outputs the parsed stream.
 * Commands: Their output is appended to the transform's output. Useful patterns include:
-  * `@(inner = ...) [!stream! #inner]` - wraps the output in a transparent group
+  * If `@(inner = ...)` then `inner.group()` - wraps the output in a transparent group
 
 # Major Version 0.2
 

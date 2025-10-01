@@ -3,11 +3,13 @@ mod prelude;
 use prelude::*;
 
 preinterpret::stream! {
-    [!set! #bytes = 32]
-    [!set! #postfix = Hello World #bytes]
-    [!set! #some_symbols = and some symbols such as #(%raw[#]) and #123]
-    [!set! #MyRawVar = #(%raw[Test no #str [!ident! replacement]])]
-    [!ignore! non - sensical !code :D - ignored (!)]
+    #(
+        let bytes = 32;
+        let postfix = %[Hello World #bytes];
+        let some_symbols = %[and some symbols such as %raw[#] and #123];
+        let MyRawVar = %raw[Test no #str [!ident! replacement]];
+        let _ = %raw[non - sensical !code :D - ignored (!)];
+    )
     struct MyStruct;
     type [!ident! X "Boo" [!string! Hello 1] #postfix] = MyStruct;
     const NUM: u32 = [!literal! 1337u #bytes];

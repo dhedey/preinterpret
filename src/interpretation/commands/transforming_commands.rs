@@ -24,7 +24,7 @@ impl StreamCommandDefinition for ParseCommand {
                     transformer: input.parse()?,
                 })
             },
-            "Expected [!parse! <stream> with <parser>] where:\n* The <stream> is some stream-valued expression, such as `#x` or `[!stream! ...]`\n* The <parser> is some parser such as @(...)",
+            "Expected [!parse! <stream> with <parser>] where:\n* The <stream> is some stream-valued expression, such as `#x` or `%[...]`\n* The <parser> is some parser such as @(...)",
         )
     }
 

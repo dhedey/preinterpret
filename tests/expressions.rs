@@ -44,8 +44,8 @@ fn test_basic_evaluate_works() {
     preinterpret_assert_eq!(#(let six_as_sum = 3 + 3; six_as_sum * six_as_sum), 36);
     preinterpret_assert_eq!(#(
         let partial_sum = %[+ 2];
-        %[#(%[5] + partial_sum) = [!reinterpret! #(%raw[#])(5 #partial_sum)]].debug_string()
-    ), "[!stream! 5 + 2 = 7]");
+        %[#(%[5] + partial_sum) = [!reinterpret! %raw[#](5 #partial_sum)]].debug_string()
+    ), "%[5 + 2 = 7]");
     preinterpret_assert_eq!(#(1 + (1..2) as int), 2);
     preinterpret_assert_eq!(#("hello" == "world"), false);
     preinterpret_assert_eq!(#("hello" == "hello"), true);
@@ -57,7 +57,7 @@ fn test_basic_evaluate_works() {
     preinterpret_assert_eq!(#("Zoo" > "Aardvark"), true);
     preinterpret_assert_eq!(
         #(("Hello" as stream + "World" as stream + (1 + 1) as stream + (1 + 1) as group).debug_string()),
-        r#"[!stream! "Hello" "World" 2 [!group! 2]]"#
+        r#"%["Hello" "World" 2 [!group! 2]]"#
     );
     preinterpret_assert_eq!(
         #([1, 2, 1 + 2, 4].debug_string()),
@@ -69,7 +69,7 @@ fn test_basic_evaluate_works() {
     );
     preinterpret_assert_eq!(
         #(("Hello" as stream + "World" as stream + (1 + 1) as stream + (1 + 1) as group).debug_string()),
-        r#"[!stream! "Hello" "World" 2 [!group! 2]]"#
+        r#"%["Hello" "World" 2 [!group! 2]]"#
     );
     assert_eq!(run!(let x = 1; x + 2), 3);
 }
@@ -98,8 +98,8 @@ fn test_very_long_expression_works() {
             [!settings! %{
                 iteration_limit: 100000,
             }]
-            #(let expression = [!stream! 0] + [!for! _ in 0..100000 { + 1 }])
-            [!reinterpret! #(%raw[#])(#expression)]
+            #(let expression = %[0] + [!for! _ in 0..100000 { + 1 }])
+            [!reinterpret! %raw[#](#expression)]
         },
         100000
     );
@@ -475,7 +475,7 @@ fn test_method_calls() {
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3];
-            x.len() + [!stream! "Hello" world].len()
+            x.len() + %["Hello" world].len()
         ),
         2 + 3
     );

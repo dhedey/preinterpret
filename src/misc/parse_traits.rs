@@ -52,7 +52,7 @@ fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> SourcePeekMatch {
         // => A $literal or $($literal)* _is_ outputted in a group...
         //
         // So this isn't possible. It's unlikely to matter much, and a user can always do:
-        // #(%raw[$($tt)*]) anyway.
+        // %raw[$($tt)*] anyway.
 
         return SourcePeekMatch::Group(delimiter);
     }

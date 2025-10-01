@@ -30,8 +30,8 @@ fn test_set() {
 
 #[test]
 fn test_raw() {
-    preinterpret_assert_eq!(
-        { [!string! #(%raw[#variable and [!command!] are not interpreted or error])] },
+    assert_eq!(
+        run!(%raw[#variable and [!command!] are not interpreted or error].string()),
         "#variableand[!command!]arenotinterpretedorerror"
     );
 }
@@ -108,13 +108,13 @@ fn test_debug() {
     // (e.g. it keeps 'a and >> together)
     preinterpret_assert_eq!(
         #(
-            [!stream! impl<'a, T> MyStruct<'a, T> {
+            %[impl<'a, T> MyStruct<'a, T> {
                 pub fn new() -> Self {
                     !($crate::Test::CONSTANT >> 5 > 1)
                 }
             }].debug_string()
         ),
-        "[!stream! impl < 'a , T > MyStruct < 'a , T > { pub fn new () -> Self { ! ($ crate :: Test :: CONSTANT >> 5 > 1) } }]"
+        "%[impl < 'a , T > MyStruct < 'a , T > { pub fn new () -> Self { ! ($ crate :: Test :: CONSTANT >> 5 > 1) } }]"
     );
     // It shows transparent groups
     // NOTE: The output of debug_string() can't be used directly as preinterpret input
@@ -123,8 +123,8 @@ fn test_debug() {
     preinterpret_assert_eq!(
         #(
             let x = %[Hello (World)];
-            [!stream! #(x.group()) #(%raw[#test]) "and" #(%raw[##]) #x].debug_string()
+            %[#(x.group()) %raw[#test] "and" %raw[##] #x].debug_string()
         ),
-        r###"[!stream! [!group! Hello (World)] # test "and" ## Hello (World)]"###
+        r###"%[[!group! Hello (World)] # test "and" ## Hello (World)]"###
     );
 }

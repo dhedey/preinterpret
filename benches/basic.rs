@@ -17,7 +17,7 @@ fn main() {
         output
     });
     benchmark!("For loop concatenating to stream 1000 tokens", {
-        let output = [!stream!];
+        let output = %[];
         let _ = [!for! i in 1..=1000 { output.push(i); }];
         output
     });
@@ -27,7 +27,7 @@ fn main() {
     benchmark!("Simple tuple impls", {
         [!for! N in 0..=10 {
             #(
-                let comma_separated_types = [!stream!];
+                let comma_separated_types = %[];
                 let i = 0;
                 let _ = [!for! name in 'A'..'Z' {
                     #(
@@ -35,7 +35,7 @@ fn main() {
                             [!break!];
                         }];
                         let ident = [!ident! name];
-                        comma_separated_types += [!stream! #ident,];
+                        comma_separated_types += %[#ident,];
                         i += 1;
                     )
                 }];

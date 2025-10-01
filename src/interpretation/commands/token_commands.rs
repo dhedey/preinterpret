@@ -96,11 +96,11 @@ define_object_arguments! {
     SourceIntersperseInputs => IntersperseInputs {
         required: {
             items: r#"["Hello", "World"]"# ("An array or stream (by coerced token-tree) to intersperse"),
-            separator: "[!stream! ,]" ("The value to add between each item"),
+            separator: "%[,]" ("The value to add between each item"),
         },
         optional: {
             add_trailing: "false" ("Whether to add the separator after the last item (default: false)"),
-            final_separator: "[!stream! or]" ("Define a different final separator (default: same as normal separator)"),
+            final_separator: "%[or]" ("Define a different final separator (default: same as normal separator)"),
         }
     }
 }
@@ -231,8 +231,8 @@ impl CommandType for SplitCommand {
 define_object_arguments! {
     SourceSplitInputs => SplitInputs {
         required: {
-            stream: "[!stream! ...] or #var" ("The stream-valued expression to split"),
-            separator: "[!stream! ::]" ("The token/s to split if they match"),
+            stream: "%[...] or #var" ("The stream-valued expression to split"),
+            separator: "%[::]" ("The token/s to split if they match"),
         },
         optional: {
             drop_empty_start: "false" ("If true, a leading separator does not yield in an empty item at the start (default: false)"),

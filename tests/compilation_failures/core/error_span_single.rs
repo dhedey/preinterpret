@@ -5,7 +5,7 @@ macro_rules! assert_is_100 {
         [!if! ($input != 100) {
             [!error! %{
                 message: [!string! "Expected 100, got " $input],
-                spans: [!stream! $input],
+                spans: %[$input],
             }]
         }]
     }};

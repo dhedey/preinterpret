@@ -114,33 +114,6 @@ impl NoOutputCommandDefinition for SetCommand {
 }
 
 #[derive(Clone)]
-pub(crate) struct StreamCommand {
-    inner: SourceStream,
-}
-
-impl CommandType for StreamCommand {
-    type OutputKind = OutputKindStream;
-}
-
-impl StreamCommandDefinition for StreamCommand {
-    const COMMAND_NAME: &'static str = "stream";
-
-    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
-        Ok(Self {
-            inner: arguments.parse_all_as_source()?,
-        })
-    }
-
-    fn execute(
-        self,
-        interpreter: &mut Interpreter,
-        output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
-        self.inner.interpret_into(interpreter, output)
-    }
-}
-
-#[derive(Clone)]
 pub(crate) struct IgnoreCommand;
 
 impl CommandType for IgnoreCommand {
@@ -257,7 +230,7 @@ define_object_arguments! {
             message: r#""...""# ("The error message to display"),
         },
         optional: {
-            spans: "[!stream! $abc]" ("An optional [token stream], to determine where to show the error message"),
+            spans: "%[$abc]" ("An optional [token stream], to determine where to show the error message"),
         }
     }
 }

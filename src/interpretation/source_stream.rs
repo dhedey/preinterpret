@@ -47,6 +47,7 @@ pub(crate) enum SourceItem {
     Punct(Punct),
     Ident(Ident),
     Literal(Literal),
+    StreamLiteral(StreamLiteral),
 }
 
 impl Parse<Source> for SourceItem {
@@ -59,12 +60,12 @@ impl Parse<Source> for SourceItem {
                 SourceItem::EmbeddedExpression(input.parse()?)
             }
             SourcePeekMatch::ExplicitTransformStream | SourcePeekMatch::Transformer(_) => {
-                return input.parse_err("Destructurings are not supported here. If this wasn't intended to be a destructuring, replace @ with #(%raw[@])");
+                return input.parse_err("Destructurings are not supported here. If this wasn't intended to be a destructuring, replace @ with %raw[@]");
             }
             SourcePeekMatch::Punct(_) => SourceItem::Punct(input.parse_any_punct()?),
             SourcePeekMatch::Ident(_) => SourceItem::Ident(input.parse_any_ident()?),
             SourcePeekMatch::Literal(_) => SourceItem::Literal(input.parse()?),
-            SourcePeekMatch::StreamLiteral(_) => return input.parse_err("Stream literals are only supported in an expression context, not a stream context."),
+            SourcePeekMatch::StreamLiteral(_) => SourceItem::StreamLiteral(input.parse()?),
             SourcePeekMatch::ObjectLiteral => return input.parse_err("Object literals are only supported in an expression context, not a stream context."),
             SourcePeekMatch::End => return input.parse_err("Expected some item."),
         })
@@ -93,6 +94,9 @@ impl Interpret for SourceItem {
             SourceItem::Punct(punct) => output.push_punct(punct),
             SourceItem::Ident(ident) => output.push_ident(ident),
             SourceItem::Literal(literal) => output.push_literal(literal),
+            SourceItem::StreamLiteral(stream_literal) => {
+                stream_literal.interpret_into(interpreter, output)?
+            }
         }
         Ok(())
     }
@@ -108,6 +112,7 @@ impl HasSpanRange for SourceItem {
             SourceItem::Punct(punct) => punct.span_range(),
             SourceItem::Ident(ident) => ident.span_range(),
             SourceItem::Literal(literal) => literal.span_range(),
+            SourceItem::StreamLiteral(stream_literal) => stream_literal.span_range(),
         }
     }
 }

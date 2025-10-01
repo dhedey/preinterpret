@@ -5,7 +5,7 @@ macro_rules! assert_literals_eq {
         [!if! ($input1 != $input2) {
             [!error! %{
                 message: [!string! "Expected " $input1 " to equal " $input2],
-                spans: [!stream! $input1, $input2],
+                spans: %[$input1, $input2],
             }]
         }]
     }};

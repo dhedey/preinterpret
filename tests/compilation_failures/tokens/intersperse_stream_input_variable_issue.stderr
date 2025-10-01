@@ -3,11 +3,11 @@ error: In an expression, the # variable prefix is not allowed. The # prefix shou
            // An array or stream (by coerced token-tree) to intersperse
            items: ["Hello", "World"],
            // The value to add between each item
-           separator: [!stream! ,],
+           separator: %[,],
            // Whether to add the separator after the last item (default: false)
            add_trailing?: false,
            // Define a different final separator (default: same as normal separator)
-           final_separator?: [!stream! or],
+           final_separator?: %[or],
        }
  --> tests/compilation_failures/tokens/intersperse_stream_input_variable_issue.rs:7:20
   |
