@@ -33,7 +33,7 @@ This moves preinterpet to an expression-based language, inspired by Rust, but wi
 * Token-stream utility commands:
   * `[!is_empty! #stream]`
   * `[!length! #stream]` which gives the number of token trees in the token stream.
-  * `[!group! ...]` which wraps the tokens in a transparent group. Can be useful if using token streams as iteration sources, e.g. in `!for!`.
+  * `%group[...]` which wraps the tokens in a transparent group. Can be useful if using token streams as iteration sources, e.g. in `!for!`.
   * `[!intersperse! { ... }]` which inserts separator tokens between each token tree in a stream.
   * `[!split! ...]` which can be used to split a stream with a given separating stream.
   * `[!comma_split! ...]` which can be used to split a stream on `,` tokens.
@@ -69,7 +69,7 @@ The following operators are supported:
 * The comparison operators: `== != < > <= >=`
 * The shift operators: `>> <<`
 * The concatenation operator: `+` can be used to concatenate strings and streams.
-* Casting with `as` including to untyped integers/floats with `as int` and `as float`, to a grouped stream with `as group` and to a flattened stream with `as stream`.
+* Casting with `as` including to untyped integers/floats with `as int` and `as float` and to a flattened stream with `as stream`.
 * () and none-delimited groups for precedence
 
 The following methods are supported:

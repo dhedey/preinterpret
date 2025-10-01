@@ -129,6 +129,6 @@ fn test_debug() {
             let x = %[Hello (World)];
             %[#(x.group()) %raw[#test] "and" %raw[##] #x].debug_string()
         ),
-        r###"%[[!group! Hello (World)] # test "and" ## Hello (World)]"###
+        r###"%[%group[Hello (World)] # test "and" ## Hello (World)]"###
     );
 }

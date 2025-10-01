@@ -147,24 +147,29 @@ impl MethodResolutionTarget for StreamTypeData {
 pub(crate) enum StreamLiteral {
     Regular(RegularStreamLiteral),
     Raw(RawStreamLiteral),
+    Grouped(GroupedStreamLiteral),
+    // We're missing a grouped raw, but that can be achieved with %group[%raw[...]]
 }
 
 #[derive(Copy, Clone)]
 pub(crate) enum StreamLiteralKind {
     Regular,
     Raw,
+    Grouped,
 }
 
 impl Parse<Source> for StreamLiteral {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         if let Some((_, next)) = input.cursor().punct_matching('%') {
-            if next.ident_matching("raw").is_some() {
-                return Ok(StreamLiteral::Raw(input.parse()?));
-            } else if next.group_matching(Delimiter::Bracket).is_some() {
+            if next.group_matching(Delimiter::Bracket).is_some() {
                 return Ok(StreamLiteral::Regular(input.parse()?));
+            } else if next.ident_matching("raw").is_some() {
+                return Ok(StreamLiteral::Raw(input.parse()?));
+            } else if next.ident_matching("group").is_some() {
+                return Ok(StreamLiteral::Grouped(input.parse()?));
             }
         }
-        input.parse_err("Expected `%[..]` or `%raw[..]` to start a stream literal")
+        input.parse_err("Expected `%[..]`, `%raw[..]` or `%group[..]` to start a stream literal")
     }
 }
 
@@ -177,6 +182,7 @@ impl Interpret for StreamLiteral {
         match self {
             StreamLiteral::Regular(lit) => lit.interpret_into(interpreter, output),
             StreamLiteral::Raw(lit) => lit.interpret_into(interpreter, output),
+            StreamLiteral::Grouped(lit) => lit.interpret_into(interpreter, output),
         }
     }
 }
@@ -186,6 +192,7 @@ impl HasSpanRange for StreamLiteral {
         match self {
             StreamLiteral::Regular(lit) => lit.span_range(),
             StreamLiteral::Raw(lit) => lit.span_range(),
+            StreamLiteral::Grouped(lit) => lit.span_range(),
         }
     }
 }
@@ -200,6 +207,7 @@ impl InterpretToValue for StreamLiteral {
         match self {
             StreamLiteral::Regular(lit) => lit.interpret_to_value(interpreter),
             StreamLiteral::Raw(lit) => lit.interpret_to_value(interpreter),
+            StreamLiteral::Grouped(lit) => lit.interpret_to_value(interpreter),
         }
     }
 }
@@ -250,7 +258,6 @@ impl InterpretToValue for RegularStreamLiteral {
     ) -> ExecutionResult<Self::OutputValue> {
         let span_range = self.span_range();
         Ok(self
-            .content
             .interpret_to_new_stream(interpreter)?
             .to_value(span_range))
     }
@@ -307,5 +314,63 @@ impl InterpretToValue for RawStreamLiteral {
         let span_range = self.span_range();
         let value = self.content.to_value(span_range);
         Ok(value)
+    }
+}
+
+#[derive(Clone)]
+#[allow(unused)]
+pub(crate) struct GroupedStreamLiteral {
+    prefix: Token![%],
+    group: Ident,
+    brackets: Brackets,
+    content: SourceStream,
+}
+
+impl Parse<Source> for GroupedStreamLiteral {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+        let prefix = input.parse()?;
+        let group = input.parse_ident_matching("group")?;
+        let (brackets, inner) = input.parse_brackets()?;
+        let content = inner.parse_with_context(brackets.span())?;
+        Ok(Self {
+            prefix,
+            group,
+            brackets,
+            content,
+        })
+    }
+}
+
+impl Interpret for GroupedStreamLiteral {
+    fn interpret_into(
+        self,
+        interpreter: &mut Interpreter,
+        output: &mut OutputStream,
+    ) -> ExecutionResult<()> {
+        output.push_grouped(
+            |inner| self.content.interpret_into(interpreter, inner),
+            Delimiter::None,
+            self.brackets.span(),
+        )
+    }
+}
+
+impl HasSpanRange for GroupedStreamLiteral {
+    fn span_range(&self) -> SpanRange {
+        SpanRange::new_between(self.prefix.span, self.brackets.span())
+    }
+}
+
+impl InterpretToValue for GroupedStreamLiteral {
+    type OutputValue = ExpressionValue;
+
+    fn interpret_to_value(
+        self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<Self::OutputValue> {
+        let span_range = self.span_range();
+        Ok(self
+            .interpret_to_new_stream(interpreter)?
+            .to_value(span_range))
     }
 }

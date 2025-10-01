@@ -39,7 +39,7 @@ fn test_length_and_group() {
         [!length! "hello" World]
     }, 2);
     preinterpret_assert_eq!({ [!length! ("hello" World)] }, 1);
-    preinterpret_assert_eq!({ [!length! [!group! "hello" World]] }, 1);
+    preinterpret_assert_eq!({ [!length! %group["hello" World]] }, 1);
     preinterpret_assert_eq!({
         #(let x = %[Hello "World" (1 2 3 4 5)];)
         [!length! #x]
@@ -191,9 +191,9 @@ fn complex_cases_for_intersperse_and_input_types() {
     // Stream containing two groups
     preinterpret_assert_eq!(
         #(
-            let items = %[0 1] as group;
+            let items = %group[0 1];
             [!intersperse! %{
-                items: %[#items #items], // %[[!group! 0 1] [!group! 0 1]]
+                items: %[#items #items], // %[%group[0 1] %group[0 1]]
                 separator: %[_],
             }] as string
         ),
@@ -283,7 +283,7 @@ fn test_split() {
                 separator: %[::],
             }].stream_grouped().debug_string()
         ),
-        "%[[!group!] [!group! A] [!group! B] [!group!] [!group! C]]"
+        "%[%group[] %group[A] %group[B] %group[] %group[C]]"
     );
     // Stream and separator are both interpreted
     preinterpret_assert_eq!(
@@ -297,7 +297,7 @@ fn test_split() {
                 drop_empty_end: true,
             }].stream_grouped().debug_string()
         ),
-        "%[[!group! A] [!group! B] [!group! C] [!group! D] [!group! E]]");
+        "%[%group[A] %group[B] %group[C] %group[D] %group[E]]");
     // Drop empty false works
     preinterpret_assert_eq!(
         #(
@@ -311,7 +311,7 @@ fn test_split() {
             }].stream_grouped();
             output.debug_string()
         ),
-        "%[[!group!] [!group! A] [!group!] [!group! B] [!group! C] [!group! D] [!group! E] [!group!]]"
+        "%[%group[] %group[A] %group[] %group[B] %group[C] %group[D] %group[E] %group[]]"
     );
     // Drop empty middle works
     preinterpret_assert_eq!(

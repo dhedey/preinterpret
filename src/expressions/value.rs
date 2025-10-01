@@ -187,11 +187,6 @@ impl MethodResolutionTarget for ValueTypeData {
                         input.into_new_output_stream(Grouping::Flattened)
                     })
                 }
-                CastTarget::Group => {
-                    wrap_unary!((input: ExpressionValue) -> ExecutionResult<OutputStream> {
-                        input.into_new_output_stream(Grouping::Grouped)
-                    })
-                }
                 _ => return None,
             },
             _ => return None,

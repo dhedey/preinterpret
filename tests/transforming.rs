@@ -53,10 +53,10 @@ fn test_variable_parsing() {
             // #>>x - Matches one tt ...and appends it as-is: Why
             @(#a = @TOKEN_TREE)
             #(x += a)
-            // #>>x - Matches one tt...and appends it as-is: [!group! it is fun to be here]
+            // #>>x - Matches one tt...and appends it as-is: %group[it is fun to be here]
             @(#b = @TOKEN_TREE)
             #(x += b)
-            // #..>>x - Matches stream until (, appends it grouped: [!group! Hello Everyone]
+            // #..>>x - Matches stream until (, appends it grouped: %group[Hello Everyone]
             @(#c = @[UNTIL ()])
             #(x += c.group())
             (
@@ -67,9 +67,9 @@ fn test_variable_parsing() {
                 @(#c = @REST)
                 #(x += c.take().flatten())
             )
-            = Why [!group! it is fun to be here] Hello Everyone ([!group! This is an exciting adventure] do you agree?)]
+            = Why %group[it is fun to be here] Hello Everyone (%group[This is an exciting adventure] do you agree?)]
         #(x.debug_string())
-    }, "%[Why [!group! it is fun to be here] [!group! Hello Everyone] This is an exciting adventure do you agree ?]");
+    }, "%[Why %group[it is fun to be here] %group[Hello Everyone] This is an exciting adventure do you agree ?]");
 }
 
 #[test]
@@ -129,7 +129,7 @@ fn test_punct_transformer() {
 #[test]
 fn test_group_transformer() {
     preinterpret_assert_eq!({
-        [!let! The "quick" @[GROUP brown @(#x = @TOKEN_TREE)] "jumps" = The "quick" [!group! brown fox] "jumps"]
+        [!let! The "quick" @[GROUP brown @(#x = @TOKEN_TREE)] "jumps" = The "quick" %group[brown fox] "jumps"]
         #(x.debug_string())
     }, "%[fox]");
     preinterpret_assert_eq!({
@@ -202,7 +202,7 @@ fn test_parse_command_and_exact_transformer() {
     // * That EXACT ignores none-delimited groups, to make it more intuitive
     preinterpret_assert_eq!(
         #(
-            let x = %[[!group! fox]];
+            let x = %[%group[fox]];
             [!parse! %[The quick brown fox is a fox - right?!] with @(
                 // The outputs are only from the EXACT transformer
                 The quick @(_ = @IDENT) @[EXACT #x @(_ = @IDENT a) #x - right?!]

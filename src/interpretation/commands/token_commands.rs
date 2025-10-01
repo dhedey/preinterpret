@@ -51,38 +51,6 @@ impl ValueCommandDefinition for LengthCommand {
 }
 
 #[derive(Clone)]
-pub(crate) struct GroupCommand {
-    arguments: SourceStream,
-}
-
-impl CommandType for GroupCommand {
-    type OutputKind = OutputKindStream;
-}
-
-impl StreamCommandDefinition for GroupCommand {
-    const COMMAND_NAME: &'static str = "group";
-
-    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
-        Ok(Self {
-            arguments: arguments.parse_all_as_source()?,
-        })
-    }
-
-    fn execute(
-        self,
-        interpreter: &mut Interpreter,
-        output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
-        let span = self.arguments.span();
-        output.push_grouped(
-            |inner| self.arguments.interpret_into(interpreter, inner),
-            Delimiter::None,
-            span,
-        )
-    }
-}
-
-#[derive(Clone)]
 pub(crate) struct IntersperseCommand {
     span: Span,
     inputs: SourceIntersperseInputs,

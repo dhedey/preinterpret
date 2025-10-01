@@ -1,0 +1,6 @@
+error: Stream literals are not supported here. Use an EXACT parser instead.
+       Occurred whilst parsing [!let! ...] - Expected [!let! <destructuring> = ...]
+ --> tests/compilation_failures/transforming/destructure_with_group_stream_pattern.rs:4:20
+  |
+4 |     stream!([!let! %group[Output] = %group[Output]]);
+  |                    ^

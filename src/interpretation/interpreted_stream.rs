@@ -437,11 +437,7 @@ impl ConcatBehaviour {
             }
             Delimiter::None => {
                 if self.output_types_as_commands {
-                    if is_empty {
-                        output.push_str("[!group!");
-                    } else {
-                        output.push_str("[!group! ");
-                    }
+                    output.push_str("%group[");
                     inner(output);
                     output.push(']');
                 } else {

@@ -376,7 +376,6 @@ define_command_enums! {
     // Token Commands
     IsEmptyCommand,
     LengthCommand,
-    GroupCommand,
     IntersperseCommand,
     SplitCommand,
     CommaSplitCommand,

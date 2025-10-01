@@ -127,7 +127,7 @@ impl DelimiterExt for Delimiter {
             Delimiter::Parenthesis => "(",
             Delimiter::Brace => "{",
             Delimiter::Bracket => "[",
-            Delimiter::None => "start of transparent group, from a grouped #variable substitution or stream-based command such as [!group! ...]",
+            Delimiter::None => "start of transparent group, from a grouped macro $variable substitution or preinterpret %group[...] literal",
         }
     }
 
@@ -136,7 +136,7 @@ impl DelimiterExt for Delimiter {
             Delimiter::Parenthesis => "(...)",
             Delimiter::Brace => "{ ... }",
             Delimiter::Bracket => "[...]",
-            Delimiter::None => "transparent group, from a grouped #variable substitution or stream-based command such as [!group! ...]",
+            Delimiter::None => "transparent group, from a grouped macro $variable substitution or preinterpret %group[...] literal",
         }
     }
 }

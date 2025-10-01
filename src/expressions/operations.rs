@@ -154,7 +154,6 @@ pub(crate) enum CastTarget {
     String,
     Char,
     Stream,
-    Group,
 }
 
 impl FromStr for CastTarget {
@@ -181,7 +180,6 @@ impl FromStr for CastTarget {
             "bool" => CastTarget::Boolean,
             "char" => CastTarget::Char,
             "stream" => CastTarget::Stream,
-            "group" => CastTarget::Group,
             "string" => CastTarget::String,
             _ => return Err(()),
         })
@@ -211,7 +209,6 @@ impl CastTarget {
             CastTarget::String => "as string",
             CastTarget::Char => "as char",
             CastTarget::Stream => "as stream",
-            CastTarget::Group => "as group",
         }
     }
 }

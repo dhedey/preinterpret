@@ -56,8 +56,8 @@ fn test_basic_evaluate_works() {
     preinterpret_assert_eq!(#('A' < 'B'), true);
     preinterpret_assert_eq!(#("Zoo" > "Aardvark"), true);
     preinterpret_assert_eq!(
-        #(("Hello" as stream + "World" as stream + (1 + 1) as stream + (1 + 1) as group).debug_string()),
-        r#"%["Hello" "World" 2 [!group! 2]]"#
+        #(("Hello" as stream + "World" as stream + (1 + 1) as stream + (1 + 1).group() + [1 + 2].group() + %group[1 + 2 + 3]).debug_string()),
+        r#"%["Hello" "World" 2 %group[2] %group[3] %group[1 + 2 + 3]]"#
     );
     preinterpret_assert_eq!(
         #([1, 2, 1 + 2, 4].debug_string()),
@@ -68,8 +68,8 @@ fn test_basic_evaluate_works() {
         "[8, [5], [[6, 7]], 123]"
     );
     preinterpret_assert_eq!(
-        #(("Hello" as stream + "World" as stream + (1 + 1) as stream + (1 + 1) as group).debug_string()),
-        r#"%["Hello" "World" 2 [!group! 2]]"#
+        #(("Hello" as stream + "World" as stream + (1 + 1) as stream + (1 + 1).group()).debug_string()),
+        r#"%["Hello" "World" 2 %group[2]]"#
     );
     assert_eq!(run!(let x = 1; x + 2), 3);
 }
