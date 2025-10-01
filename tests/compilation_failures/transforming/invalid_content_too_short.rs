@@ -1,5 +1,5 @@
 use preinterpret::*;
 
 fn main() {
-    stream!([!let! Hello World = Hello]);
+    run!(let %[Hello World] = %[Hello]);
 }

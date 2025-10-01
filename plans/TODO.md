@@ -14,7 +14,7 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 - [x] Remove `[!set!]` and replace with `#(let x = %[ ... ])`
 - [x] Remove `[!ignore!]` and replace with `#(let _ = %[ ... ])`
 - [x] Add `%group[]` and remove `as group` and `[!group! ..]`
-- [ ] Remove `[!let!]` and replace with `#(let %[..] = %[..])`
+- [x] Remove `[!let!]` and replace with `#(let %[..] = %[..])`
 - [ ] Fix the to_debug_string to add `%raw[..]` around punct groups including `#` or `%`
 - [ ] Remove `ParseUntil`
 - [ ] Fix grammar-peeking of none-groups so that e.g. `[!reinterpret! %group[#]var_name]` works
@@ -82,10 +82,8 @@ fn resolve_own_binary_operation(operation: &BinaryOperation) -> Option<MethodInt
 
 Create the following expressions:
 * Blocks `{}`
-  * These should be in the expression parser...
+  * These should be in the expression parser (maybe)...
   * ... and remove EmbeddedExpressions inside expressions
-  * ... and make object literals either `({ a: b })` OR `{{ a: x, b: y }}` OR `object { a: y }` OR `%{ a: 1, b: 2 }` possibly the latter two are least likely to be confused in the grammar.
-  * ... and move `let` statement to replace `[!let!]`
 * `if`, `else`
 * `for`, `while`, `loop`
   * These return an array of values from each iteration (possibly with an optimization to skip if the value will be ignored)

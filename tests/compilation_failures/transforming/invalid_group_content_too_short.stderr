@@ -1,5 +1,5 @@
 error: expected !
- --> tests/compilation_failures/transforming/invalid_group_content_too_short.rs:4:52
+ --> tests/compilation_failures/transforming/invalid_group_content_too_short.rs:4:51
   |
-4 |     stream!([!let! Group: (Hello World!!) = Group: (Hello World)]);
-  |                                                    ^^^^^^^^^^^^^
+4 |     run!(let %[Group: (Hello World!!)] = %[Group: (Hello World)]);
+  |                                                   ^^^^^^^^^^^^^

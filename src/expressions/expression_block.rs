@@ -91,7 +91,7 @@ impl Parse<Source> for ExpressionBlockContent {
             } else if input.peek(Token![;]) {
                 standard_statements.push((statement, input.parse()?));
             } else {
-                return input.parse_err("Expected an operator to continue the expression, or ; to mark the end of the expression statement");
+                return input.parse_err("Invalid statement continuation. Possibly the previous statement is missing a semicolon?");
             }
         };
         Ok(Self {

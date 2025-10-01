@@ -1,5 +1,5 @@
 error: Expected start of transparent group, from a grouped macro $variable substitution or preinterpret %group[...] literal
- --> tests/compilation_failures/transforming/invalid_content_wrong_group_2.rs:4:37
+ --> tests/compilation_failures/transforming/invalid_content_wrong_group_2.rs:4:36
   |
-4 |     stream!([!let! @[GROUP @REST] = [Hello World]]);
-  |                                     ^^^^^^^^^^^^^
+4 |     run!(let %[@[GROUP @REST]] = %[[Hello World]]);
+  |                                    ^^^^^^^^^^^^^

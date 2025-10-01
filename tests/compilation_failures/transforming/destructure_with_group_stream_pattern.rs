@@ -1,5 +1,5 @@
 use preinterpret::*;
 
 fn main() {
-    stream!([!let! %group[Output] = %group[Output]]);
+    run!(let %group[Output] = %group[Output];)
 }

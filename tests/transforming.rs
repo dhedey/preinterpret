@@ -16,40 +16,40 @@ fn test_transfoming_compilation_failures() {
 #[test]
 fn test_variable_parsing() {
     preinterpret_assert_eq!({
-        [!let! <Hello @(#inner = @IDENT) World> = <Hello Beautiful World>]
+        #(let %[<Hello @(#inner = @IDENT) World>] = %[<Hello Beautiful World>];)
         [!string! #inner]
     }, "Beautiful");
     preinterpret_assert_eq!({
-        [!let! @(#inner = @REST) = <Hello Beautiful World>]
+        #(let %[@(#inner = @REST)] = %[<Hello Beautiful World>];)
         [!string! #inner]
     }, "<HelloBeautifulWorld>");
     preinterpret_assert_eq!({
-        [!let! @(#x = @REST) = Hello => World]
+        #(let %[@(#x = @REST)] = %[Hello => World];)
         [!string! #x]
     }, "Hello=>World");
     preinterpret_assert_eq!({
-        [!let! Hello @(#x = @[UNTIL !])!! = Hello => World!!]
+        #(let %[Hello @(#x = @[UNTIL !])!!] = %[Hello => World!!];)
         [!string! #x]
     }, "=>World");
     preinterpret_assert_eq!({
-        [!let! Hello @(#x = @[UNTIL World]) World = Hello => World]
+        #(let %[@(#x = @[UNTIL World]) World] = %[Hello => World];)
         [!string! #x]
     }, "=>");
     preinterpret_assert_eq!({
-        [!let! Hello @(#x = @[UNTIL World]) World = Hello And Welcome To The Wonderful World]
+        #(let %[Hello @(#x = @[UNTIL World]) World] = %[Hello And Welcome To The Wonderful World];)
         [!string! #x]
     }, "AndWelcomeToTheWonderful");
     preinterpret_assert_eq!({
-        [!let! Hello @(#x = @[UNTIL "World"]) "World"! = Hello World And Welcome To The Wonderful "World"!]
+        #(let %[Hello @(#x = @[UNTIL "World"]) "World"] = %[Hello World And Welcome To The Wonderful "World"];)
         [!string! #x]
     }, "WorldAndWelcomeToTheWonderful");
     preinterpret_assert_eq!({
-        [!let! @(#x = @[UNTIL ()]) (@(#y = @[REST])) = Why Hello (World)]
+        #(let %[@(#x = @[UNTIL ()]) (@(#y = @[REST]))] = %[Why Hello (World)];)
         [!string! "#x = " #x "; #y = " #y]
     }, "#x = WhyHello; #y = World");
     preinterpret_assert_eq!({
         #(let x = %[];)
-        [!let!
+        #(let %[
             // #>>x - Matches one tt ...and appends it as-is: Why
             @(#a = @TOKEN_TREE)
             #(x += a)
@@ -67,7 +67,7 @@ fn test_variable_parsing() {
                 @(#c = @REST)
                 #(x += c.take().flatten())
             )
-            = Why %group[it is fun to be here] Hello Everyone (%group[This is an exciting adventure] do you agree?)]
+        ] = %[Why %group[it is fun to be here] Hello Everyone (%group[This is an exciting adventure] do you agree?)];)
         #(x.debug_string())
     }, "%[Why %group[it is fun to be here] %group[Hello Everyone] This is an exciting adventure do you agree ?]");
 }
@@ -75,91 +75,127 @@ fn test_variable_parsing() {
 #[test]
 fn test_explicit_transform_stream() {
     // It's not very exciting
-    preinterpret::stream!([!let! @(Hello World) = Hello World]);
-    preinterpret::stream!([!let! Hello @(World) = Hello World]);
-    preinterpret::stream!([!let! @(Hello @(World)) = Hello World]);
+    preinterpret::run!(let %[@(Hello World)] = %[Hello World]);
+    preinterpret::run!(let %[Hello @(World)] = %[Hello World]);
+    preinterpret::run!(let %[@(Hello @(World))] = %[Hello World]);
 }
 
 #[test]
 fn test_ident_transformer() {
-    preinterpret_assert_eq!({
-        [!let! The "quick" @(#x = @IDENT) fox "jumps" = The "quick" brown fox "jumps"]
-        [!string! #x]
-    }, "brown");
-    preinterpret_assert_eq!({
-        #(let x = %[];)
-        [!let! The quick @(#x += @IDENT) fox jumps @(#x += @IDENT) the lazy dog = The quick brown fox jumps over the lazy dog]
-        #(x.debug_string())
-    }, "%[brown over]");
+    assert_eq!(
+        run! {
+            let %[The "quick" @(#x = @IDENT) fox "jumps"] = %[The "quick" brown fox "jumps"];
+            x.string()
+        },
+        "brown"
+    );
+    assert_eq!(
+        run! {
+            let x = %[];
+            let %[The quick @(#x += @IDENT) fox jumps @(#x += @IDENT) the lazy dog] = %[The quick brown fox jumps over the lazy dog];
+            x.debug_string()
+        },
+        "%[brown over]"
+    );
 }
 
 #[test]
 fn test_literal_transformer() {
-    preinterpret_assert_eq!({
-        [!let! The "quick" @(#x = @LITERAL) fox "jumps" = The "quick" "brown" fox "jumps"]
-        #x
-    }, "brown");
+    assert_eq!(
+        run! {
+            let %[The "quick" @(#x = @LITERAL) fox "jumps"] = %[The "quick" "brown" fox "jumps"];
+            x
+        },
+        "brown"
+    );
     // Lots of literals
-    preinterpret_assert_eq!({
-        #(let x = %[];)
-        [!let! @LITERAL @LITERAL @LITERAL @(#x += @LITERAL) @LITERAL @(#x += @LITERAL @LITERAL) = "Hello" 9 3.4 'c' 41u16 0b1010 r#"123"#]
-        #(x.debug_string())
-    }, "%['c' 0b1010 r#\"123\"#]");
+    assert_eq!(
+        run! {
+            let x = %[];
+            let %[@LITERAL @LITERAL @LITERAL @(#x += @LITERAL) @LITERAL @(#x += @LITERAL @LITERAL)] = %["Hello" 9 3.4 'c' 41u16 0b1010 r#"123"#];
+            x.debug_string()
+        },
+        "%['c' 0b1010 r#\"123\"#]"
+    );
 }
 
 #[test]
 fn test_punct_transformer() {
-    preinterpret_assert_eq!({
-        [!let! The "quick" brown fox "jumps" @(#x = @PUNCT) = The "quick" brown fox "jumps"!]
-        #(x.debug_string())
-    }, "%[!]");
+    assert_eq!(
+        run! {
+            let %[The "quick" brown fox "jumps" @(#x = @PUNCT)] = %[The "quick" brown fox "jumps"!];
+            x.debug_string()
+        },
+        "%[!]"
+    );
     // Test for ' which is treated weirdly by syn / rustc
-    preinterpret_assert_eq!({
-        [!let! The "quick" fox isn 't brown and doesn @(#x = @PUNCT) t "jump" = The "quick" fox isn 't brown and doesn 't "jump"]
-        #(x.debug_string())
-    }, "%[']");
+    assert_eq!(
+        run! {
+            let %[The "quick" fox isn 't brown and doesn @(#x = @PUNCT) t "jump"] = %[The "quick" fox isn 't brown and doesn 't "jump"];
+            x.debug_string()
+        },
+        "%[']"
+    );
     // Lots of punctuation, most of it ignored
-    preinterpret_assert_eq!({
-        #(let x = %[];)
-        [!let! @PUNCT @PUNCT @PUNCT @PUNCT @(#x += @PUNCT) @PUNCT @PUNCT @PUNCT @PUNCT @PUNCT @(#x += @PUNCT) @PUNCT @PUNCT @PUNCT  = # ! $$ % ^ & * + = | @ : ;]
-        #(x.debug_string())
-    }, "%[% |]");
+    assert_eq!(
+        run! {
+            let x = %[];
+            let %[@PUNCT @PUNCT @PUNCT @PUNCT @(#x += @PUNCT) @PUNCT @PUNCT @PUNCT @PUNCT @PUNCT @(#x += @PUNCT) @PUNCT @PUNCT @PUNCT] = %[# ! $$ % ^ & * + = | @ : ;];
+            x.debug_string()
+        },
+        "%[% |]"
+    );
 }
 
 #[test]
 fn test_group_transformer() {
-    preinterpret_assert_eq!({
-        [!let! The "quick" @[GROUP brown @(#x = @TOKEN_TREE)] "jumps" = The "quick" %group[brown fox] "jumps"]
-        #(x.debug_string())
-    }, "%[fox]");
-    preinterpret_assert_eq!({
-        #(let x = %["hello" "world"].group();)
-        [!let! I said @[GROUP @(#y = @REST)]! = I said #x!]
-        #(y.debug_string())
-    }, "%[\"hello\" \"world\"]");
+    assert_eq!(
+        run! {
+            let %[The "quick" @[GROUP brown @(#x = @TOKEN_TREE)] "jumps"] = %[The "quick" %group[brown fox] "jumps"];
+            x.debug_string()
+        },
+        "%[fox]"
+    );
+    assert_eq!(
+        run! {
+            let x = %["hello" "world"].group();
+            let %[I said @[GROUP @(#y = @REST)]!] = %[I said #x!];
+            y.debug_string()
+        },
+        "%[\"hello\" \"world\"]"
+    );
     // ... which is equivalent to this:
-    preinterpret_assert_eq!({
-        #(let x = %["hello" "world"].group();)
-        [!let! I said @(#y = @TOKEN_TREE)! = I said #x!]
-        #(y.take().flatten().debug_string())
-    }, "%[\"hello\" \"world\"]");
+    assert_eq!(
+        run! {
+            let x = %["hello" "world"].group();
+            let %[I said @(#y = @TOKEN_TREE)!] = %[I said #x!];
+            y.take().flatten().debug_string()
+        },
+        "%[\"hello\" \"world\"]"
+    );
 }
 
 #[test]
 fn test_none_output_commands_mid_parse() {
-    preinterpret_assert_eq!({
-        [!let! The "quick" @(#x = @LITERAL) fox #(let y = x.take().infer()) @(#x = @IDENT) = The "quick" "brown" fox jumps]
-        [!string! "#x = " #(x.debug_string()) "; #y = "#(y.debug_string())]
-    }, "#x = %[jumps]; #y = \"brown\"");
+    assert_eq!(
+        run! {
+            let %[The "quick" @(#x = @LITERAL) fox #(let y = x.take().infer()) @(#x = @IDENT)] = %[The "quick" "brown" fox jumps];
+            ["#x = ", x.debug_string(), "; #y = ", y.debug_string()].string()
+        },
+        "#x = %[jumps]; #y = \"brown\""
+    );
 }
 
 #[test]
 fn test_raw_content_in_exact_transformer() {
-    preinterpret_assert_eq!({
-        #(let x = %[true];)
-        [!let! The @[EXACT #(%raw[#x])] = The %raw[#] x]
-        #x
-    }, true);
+    assert_eq!(
+        run! {
+            let x = %[true];
+            let %[The @[EXACT #(%raw[#x])]] = %[The %raw[#] x];
+            x
+        },
+        true
+    );
 }
 
 #[test]
@@ -174,10 +210,13 @@ fn test_exact_transformer() {
         true
     );
     // EXACT is evaluated at execution time
-    preinterpret_assert_eq!({
-        [!let! The @(#a = @TOKEN_TREE) fox is @(#b = @TOKEN_TREE). It 's super @[EXACT #a #b]. = The brown fox is brown. It 's super brown brown.]
+    assert_eq!(
+        run! {
+            let %[The @(#a = @TOKEN_TREE) fox is @(#b = @TOKEN_TREE). It 's super @[EXACT #a #b].] = %[The brown fox is brown. It 's super brown brown.];
+            true
+        },
         true
-    }, true);
+    );
 }
 
 #[test]

@@ -1,5 +1,5 @@
 error: expected World
- --> tests/compilation_failures/transforming/invalid_content_wrong_ident.rs:4:40
+ --> tests/compilation_failures/transforming/invalid_content_wrong_ident.rs:4:39
   |
-4 |     stream!([!let! Hello World = Hello Earth]);
-  |                                        ^^^^^
+4 |     run!(let %[Hello World] = %[Hello Earth]);
+  |                                       ^^^^^

@@ -384,7 +384,6 @@ define_command_enums! {
 
     // Destructuring Commands
     ParseCommand,
-    LetCommand,
 }
 
 #[derive(Clone)]

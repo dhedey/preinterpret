@@ -38,8 +38,6 @@ This moves preinterpet to an expression-based language, inspired by Rust, but wi
   * `[!split! ...]` which can be used to split a stream with a given separating stream.
   * `[!comma_split! ...]` which can be used to split a stream on `,` tokens.
   * `[!zip! [#countries #flags #capitals]]` which can be used to combine multiple streams together.
-* Destructuring commands:
-  * `[!let! <destructuring> = ...]` does destructuring with patterns similar to Rust. Supported patterns include array, object destructurings `[..]`, `%{ a, b }`, and stream parsing `%[..]`.
 
 ### Expressions
 
@@ -48,7 +46,11 @@ Expressions can be evaluated with `#(...)` and are also used in the `!if!` and `
 Expressions behave intuitively as you'd expect from writing regular rust code, except they are executed at compile time.
 
 The `#(...)` expression block behaves much like a `{ .. }` block in rust. It supports multiple statements ending with `;` and optionally a final statement.
+
 Statements are either expressions `EXPR` or `let x = EXPR`, `x = EXPR`, `x += EXPR` for some operator such as `+`.
+
+Assigment:
+* `let <pattern> = <value>` which supports patterns include ignore (`_`), array destructurings (`[a, b, ..]`), object destructurings `{ a: x, b, .. }`, and stream parsing `%[..]`.
 
 The following are recognized values:
 * Object literals `%{ x: "Hello", y, ["z"]: "World" }` behave similarly to Javascript objects.

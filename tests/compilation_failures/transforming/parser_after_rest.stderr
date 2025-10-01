@@ -1,7 +1,7 @@
 error: unexpected end of input, expected token tree
  --> tests/compilation_failures/transforming/parser_after_rest.rs:4:5
   |
-4 |     stream!([!let! @REST @TOKEN_TREE = Hello World]);
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+4 |     run!(let %[@REST @TOKEN_TREE] = %[Hello World]);
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = note: this error originates in the macro `stream` (in Nightly builds, run with -Z macro-backtrace for more info)
+  = note: this error originates in the macro `run` (in Nightly builds, run with -Z macro-backtrace for more info)
