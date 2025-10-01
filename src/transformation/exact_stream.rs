@@ -6,38 +6,31 @@ use crate::internal_prelude::*;
 // It differs in two ways:
 // * Commands and Outputs are interpreted, and then matched from the parse stream
 // * Each consumed item is output as-is
-
-pub(crate) type ExactStream = ExactSegment<UntilEnd>;
-
 #[derive(Clone)]
-pub(crate) struct ExactSegment<C> {
-    stop_condition: PhantomData<C>,
+pub(crate) struct ExactStream {
     inner: Vec<ExactItem>,
 }
 
-impl<C: StopCondition<K>, K> Parse<K> for ExactSegment<C>
+impl<K> Parse<K> for ExactStream
 where
     ExactItem: Parse<K>,
 {
     fn parse(input: ParseStream<K>) -> ParseResult<Self> {
         let mut inner = vec![];
-        while !C::should_stop(input) {
+        while !input.is_empty() {
             inner.push(ExactItem::parse(input)?);
         }
-        Ok(Self {
-            stop_condition: PhantomData,
-            inner,
-        })
+        Ok(Self { inner })
     }
 }
 
-impl<C> ExactSegment<C> {
+impl ExactStream {
     pub(crate) fn len(&self) -> usize {
         self.inner.len()
     }
 }
 
-impl<C> HandleTransformation for ExactSegment<C> {
+impl HandleTransformation for ExactStream {
     fn handle_transform(
         &self,
         input: ParseStream<Output>,

@@ -1,53 +1,5 @@
 use crate::internal_prelude::*;
 
-/// Designed to instruct the parser to stop parsing when a certain condition is met
-pub(crate) trait StopCondition<K>: Clone {
-    fn should_stop(input: ParseStream<K>) -> bool;
-}
-
-#[derive(Clone)]
-pub(crate) struct UntilEnd;
-impl<K> StopCondition<K> for UntilEnd {
-    fn should_stop(input: ParseStream<K>) -> bool {
-        input.is_empty()
-    }
-}
-
-pub(crate) trait PeekableToken<K>: Clone {
-    fn peek(input: ParseStream<K>) -> bool;
-}
-
-// This is going through such pain to ensure we stay in the public API of syn
-// We'd like to be able to use `input.peek::<T>()` for some syn::token::Token
-// but that's just not an API they support for some reason
-macro_rules! impl_peekable_token {
-    ($(Token![$token:tt]),* $(,)?) => {
-        $(
-            impl<K> PeekableToken<K> for Token![$token] {
-                fn peek(input: ParseStream<K>) -> bool {
-                    input.peek(Token![$token])
-                }
-            }
-        )*
-    };
-}
-
-impl_peekable_token! {
-    Token![=],
-    Token![in],
-}
-
-#[derive(Clone)]
-pub(crate) struct UntilToken<T> {
-    token: PhantomData<T>,
-}
-
-impl<T: PeekableToken<K>, K> StopCondition<K> for UntilToken<T> {
-    fn should_stop(input: ParseStream<K>) -> bool {
-        input.is_empty() || T::peek(input)
-    }
-}
-
 /// Designed to automatically discover (via peeking) the next token, to limit the extent of a
 /// match such as `@REST`.
 #[derive(Clone)]
@@ -60,35 +12,6 @@ pub(crate) enum ParseUntil {
 }
 
 impl ParseUntil {
-    /// Peeks the next token, to discover what we should parse next
-    #[allow(unused)]
-    pub(crate) fn peek_flatten_limit<C: StopCondition<Source>>(
-        input: ParseStream<Source>,
-    ) -> ParseResult<ParseUntil> {
-        if C::should_stop(input) {
-            return Ok(ParseUntil::End);
-        }
-        Ok(match input.peek_grammar() {
-            SourcePeekMatch::Command(_)
-            | SourcePeekMatch::EmbeddedVariable
-            | SourcePeekMatch::Transformer(_)
-            | SourcePeekMatch::ExplicitTransformStream
-            | SourcePeekMatch::EmbeddedExpression
-            | SourcePeekMatch::StreamLiteral(_)
-            | SourcePeekMatch::ObjectLiteral => {
-                // TODO: Potentially improve this to allow the peek to get information to aid the parse
-                return input
-                    .span()
-                    .parse_err("This cannot follow a parser that consumes unbounded input");
-            }
-            SourcePeekMatch::Group(delimiter) => ParseUntil::Group(delimiter),
-            SourcePeekMatch::Ident(ident) => ParseUntil::Ident(ident),
-            SourcePeekMatch::Literal(literal) => ParseUntil::Literal(literal),
-            SourcePeekMatch::Punct(punct) => ParseUntil::Punct(punct),
-            SourcePeekMatch::End => ParseUntil::End,
-        })
-    }
-
     pub(crate) fn handle_parse_into(
         &self,
         input: ParseStream<Output>,

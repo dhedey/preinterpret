@@ -1,28 +1,21 @@
 use crate::internal_prelude::*;
 
-pub(crate) type TransformStream = TransformSegment<UntilEnd>;
-pub(crate) type TransformStreamUntilToken<T> = TransformSegment<UntilToken<T>>;
-
 #[derive(Clone)]
-pub(crate) struct TransformSegment<C> {
-    stop_condition: PhantomData<C>,
+pub(crate) struct TransformStream {
     inner: Vec<TransformItem>,
 }
 
-impl<C: StopCondition<Source>> Parse<Source> for TransformSegment<C> {
+impl Parse<Source> for TransformStream {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         let mut inner = vec![];
-        while !C::should_stop(input) {
-            inner.push(TransformItem::parse_until::<C>(input)?);
+        while !input.is_empty() {
+            inner.push(input.parse()?);
         }
-        Ok(Self {
-            stop_condition: PhantomData,
-            inner,
-        })
+        Ok(Self { inner })
     }
 }
 
-impl<C> HandleTransformation for TransformSegment<C> {
+impl HandleTransformation for TransformStream {
     fn handle_transform(
         &self,
         input: ParseStream<Output>,
@@ -48,11 +41,8 @@ pub(crate) enum TransformItem {
     ExactGroup(TransformGroup),
 }
 
-impl TransformItem {
-    // TODO: REMOVE
-    pub(crate) fn parse_until<C: StopCondition<Source>>(
-        input: ParseStream<Source>,
-    ) -> ParseResult<Self> {
+impl Parse<Source> for TransformItem {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => Self::Command(input.parse()?),
             SourcePeekMatch::EmbeddedVariable => return input.parse_err("Variable bindings are not supported here. #(x.group()) can be inverted with @(#x = @TOKEN_TREE.flatten()). #x can't necessarily be inverted because its contents are flattened, although @(#x = @REST) or @(#x = @[UNTIL ..]) may work in some instances"),
