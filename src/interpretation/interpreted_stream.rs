@@ -353,12 +353,31 @@ impl OutputStream {
         concat_recursive_interpreted_stream(behaviour, output, Spacing::Joint, self);
     }
 
-    pub(crate) fn into_exact_stream(self) -> ParseResult<ExactStream> {
-        unsafe {
-            // RUST-ANALYZER SAFETY: Can't be any safer than this for now
-            self.parse_as()
-        }
+    pub(crate) fn parse_exact_match(
+        &self,
+        input: ParseStream<Output>,
+        interpreter: &mut Interpreter,
+        output: &mut OutputStream,
+    ) -> ExecutionResult<()> {
+        handle_parsing_exact_output_match(input, interpreter, self, output)
     }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = OutputTokenTreeRef<'_>> {
+        self.segments.iter().flat_map(|segment| match segment {
+            OutputSegment::TokenVec(vec) => {
+                EitherIterator::Left(vec.iter().map(OutputTokenTreeRef::TokenTree))
+            }
+            OutputSegment::OutputGroup(delimiter, span, inner) => EitherIterator::Right(
+                [OutputTokenTreeRef::OutputGroup(*delimiter, *span, inner)].into_iter(),
+            ),
+        })
+    }
+}
+
+pub(crate) enum OutputTokenTreeRef<'a> {
+    TokenTree(&'a TokenTree),
+    #[allow(unused)]
+    OutputGroup(Delimiter, Span, &'a OutputStream),
 }
 
 impl IntoIterator for OutputStream {

@@ -116,27 +116,6 @@ fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> SourcePeekMatch {
 
 pub(crate) struct Output;
 
-impl ParseBuffer<'_, Output> {
-    pub(crate) fn peek_grammar(&self) -> OutputPeekMatch {
-        match self.cursor().token_tree() {
-            Some((TokenTree::Ident(ident), _)) => OutputPeekMatch::Ident(ident),
-            Some((TokenTree::Punct(punct), _)) => OutputPeekMatch::Punct(punct),
-            Some((TokenTree::Literal(literal), _)) => OutputPeekMatch::Literal(literal),
-            Some((TokenTree::Group(group), _)) => OutputPeekMatch::Group(group.delimiter()),
-            None => OutputPeekMatch::End,
-        }
-    }
-}
-
-#[allow(unused)] // The values are unused
-pub(crate) enum OutputPeekMatch {
-    Group(Delimiter),
-    Ident(Ident),
-    Punct(Punct),
-    Literal(Literal),
-    End,
-}
-
 // Generic parsing
 // ===============
 

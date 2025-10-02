@@ -241,7 +241,7 @@ impl ValueCommandDefinition for SplitCommand {
         handle_split(
             interpreter,
             stream,
-            separator.into_exact_stream()?,
+            separator,
             drop_empty_start,
             drop_empty_middle,
             drop_empty_end,
@@ -253,7 +253,7 @@ impl ValueCommandDefinition for SplitCommand {
 fn handle_split(
     interpreter: &mut Interpreter,
     input: ExpressionStream,
-    separator: ExactStream,
+    separator: OutputStream,
     drop_empty_start: bool,
     drop_empty_middle: bool,
     drop_empty_end: bool,
@@ -267,7 +267,7 @@ fn handle_split(
             let mut current_item = OutputStream::new();
 
             // Special case separator.len() == 0 to avoid an infinite loop
-            if separator.len() == 0 {
+            if separator.is_empty() {
                 while !input.is_empty() {
                     current_item.push_raw_token_tree(input.parse()?);
                     let complete_item = core::mem::replace(&mut current_item, OutputStream::new());
@@ -281,7 +281,7 @@ fn handle_split(
                 let separator_fork = input.fork();
                 let mut ignored_transformer_output = OutputStream::new();
                 if separator
-                    .handle_transform(
+                    .parse_exact_match(
                         &separator_fork,
                         interpreter,
                         &mut ignored_transformer_output,
@@ -326,15 +326,17 @@ impl ValueCommandDefinition for CommaSplitCommand {
     }
 
     fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue> {
+        let comma_span = self.input.span();
         let output_span_range = self.input.span_range();
         let stream = ExpressionStream {
             span_range: output_span_range,
             value: self.input.interpret_to_new_stream(interpreter)?,
         };
-        let separator = Punct::new(',', Spacing::Alone)
-            .with_span(output_span_range.join_into_span_else_start())
-            .to_token_stream()
-            .source_parse_as()?;
+        let separator = {
+            let mut output = OutputStream::new();
+            output.push_punct(Punct::new(',', Spacing::Alone).with_span(comma_span));
+            output
+        };
 
         handle_split(interpreter, stream, separator, false, false, true)
     }

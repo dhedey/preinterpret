@@ -19,7 +19,7 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 - [x] Fix the to_debug_string to add `%raw[..]` around punct groups including `#` or `%`
 - [x] Fix grammar-peeking of none-groups so that e.g. `[!reinterpret! %group[#]var_name]` works
 - [x] `4usize.string()` should return `4` but `debug_string` should return 4usize
-- [ ] Simplify the EXACT parser
+- [x] Simplify the EXACT parser
 - [ ] Rename methods to be more rustlike - is it to_string, to_X?
 
 ## Span changes

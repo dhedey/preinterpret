@@ -32,9 +32,13 @@ impl Parse<Source> for Pattern {
             } else if next.group_matching(Delimiter::Bracket).is_some() {
                 Ok(Pattern::Stream(input.parse()?))
             } else if next.ident_matching("raw").is_some() {
-                // TODO: Check this is the correct syntax once implemented!
                 input.parse_err(
-                    "Use `%[@[EXACT(%raw[...])]]` to match a raw stream literal pattern`",
+                    "Use `%[@[EXACT(%raw[...])]]` to match `%raw[...]` stream literal content",
+                )
+            } else if next.ident_matching("group").is_some() {
+                // TODO[parsers]: Check this is the correct syntax once implemented!
+                input.parse_err(
+                    "Use `%[@[GROUP ...]]` to match `%group[...]` stream literal content",
                 )
             } else {
                 input.parse_err("Expected a pattern, such as an object pattern `%{ ... }` or stream pattern `%[ ... ]`")

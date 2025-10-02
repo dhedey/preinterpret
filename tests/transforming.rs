@@ -191,7 +191,7 @@ fn test_raw_content_in_exact_transformer() {
     assert_eq!(
         run! {
             let x = %[true];
-            let %[The @[EXACT #(%raw[#x])]] = %[The %raw[#] x];
+            let %[The @[EXACT(%raw[#x])]] = %[The %raw[#] x];
             x
         },
         true
@@ -204,7 +204,7 @@ fn test_exact_transformer() {
     assert_eq!(
         run!(
             let x = %[true];
-            let %[The @[EXACT #x]] = %[The true];
+            let %[The @[EXACT(%[#x])]] = %[The true];
             x
         ),
         true
@@ -212,7 +212,7 @@ fn test_exact_transformer() {
     // EXACT is evaluated at execution time
     assert_eq!(
         run! {
-            let %[The @(#a = @TOKEN_TREE) fox is @(#b = @TOKEN_TREE). It 's super @[EXACT #a #b].] = %[The brown fox is brown. It 's super brown brown.];
+            let %[The @(#a = @TOKEN_TREE) fox is @(#b = @TOKEN_TREE). It 's super @[EXACT(%[#a #b])].] = %[The brown fox is brown. It 's super brown brown.];
             true
         },
         true
@@ -230,7 +230,7 @@ fn test_parse_command_and_exact_transformer() {
     preinterpret_assert_eq!(
         #(
             [!parse! %[The quick brown fox] with @(
-                @[EXACT The] quick @IDENT @(#x = @IDENT)
+                @[EXACT(%[The])] quick @IDENT @(#x = @IDENT)
             )].debug_string()
         ),
         "%[The brown]"
@@ -244,7 +244,7 @@ fn test_parse_command_and_exact_transformer() {
             let x = %[%group[fox]];
             [!parse! %[The quick brown fox is a fox - right?!] with @(
                 // The outputs are only from the EXACT transformer
-                The quick @(_ = @IDENT) @[EXACT #x @(_ = @IDENT a) #x - right?!]
+                The quick @(_ = @IDENT) @[EXACT(%[#x])] @(_ = @IDENT a) @[EXACT(%[#x - right?!])]
             )].debug_string()
         ),
         "%[fox fox - right ?!]"

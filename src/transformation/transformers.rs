@@ -183,28 +183,23 @@ impl TransformerDefinition for GroupTransformer {
 
 #[derive(Clone)]
 pub(crate) struct ExactTransformer {
-    stream: ExactStream,
+    _parentheses: Parentheses,
+    stream: SourceExpression,
 }
 
-// TODO:
-// - Change so that it takes a stream value, i.e. `@[EXACT(%[...])]` and returns
-//   the exact parsed stream.
-// - Search for EXACT and make sure all the comments recommending it are correct
-// - Make it so that when interpreting its contents, it removes any contextual parser
-//   This will avoid confusion with the order of execution of any embedded parsers.
-//   (i.e. they'd run before the EXACT transformer, which is not what people would expect)
-//   We can advise that they use separate EXACT transformer segments if necessary.
 impl TransformerDefinition for ExactTransformer {
     const TRANSFORMER_NAME: &'static str = "EXACT";
 
     fn parse(arguments: TransformerArguments) -> ParseResult<Self> {
         arguments.fully_parse_or_error(
             |input| {
+                let (parentheses, inner) = input.parse_parentheses()?;
                 Ok(Self {
-                    stream: ExactStream::parse(input)?,
+                    _parentheses: parentheses,
+                    stream: inner.parse()?,
                 })
             },
-            "Expected @[EXACT ... interpretable input to be matched exactly ...]",
+            "Expected @[EXACT(%[...<stream contents to match exactly>...])]",
         )
     }
 
@@ -214,6 +209,12 @@ impl TransformerDefinition for ExactTransformer {
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        self.stream.handle_transform(input, interpreter, output)
+        // TODO[parsers]: Ensure that no contextual parser is available when interpreting
+        // To save confusion about parse order.
+        let stream = self
+            .stream
+            .interpret_to_value(interpreter)?
+            .expect_stream("Input to the EXACT parser")?;
+        stream.value.parse_exact_match(input, interpreter, output)
     }
 }

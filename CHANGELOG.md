@@ -104,7 +104,7 @@ Inside a transform stream, the following grammar is supported:
   * `@REST` - Consumes the rest of the input, until the end of the stream or content of the current group
   * `@[UNTIL x]` - Consumes the rest of the input, until the end of stream OR until token `x`. `x` can be a group like `()` which matches the opening bracket `(`. 
   * `@[GROUP ...]` - Consumes a none-delimited group. Its arguments are used to transform the group's contents.
-  * `@[EXACT ...]` - Interprets its arguments (i.e. variables are substituted, not bound; and command output is gathered) into an "exact match stream". And then expects to consume exactly the same stream from the input. It outputs the parsed stream.
+  * `@[EXACT(%[..])]` - Takes an input stream expression. Expects to consume exactly that stream from the output (ignoring none-groups). It outputs the parsed stream.
 * Commands: Their output is appended to the transform's output. Useful patterns include:
   * If `@(inner = ...)` then `inner.group()` - wraps the output in a transparent group
 
