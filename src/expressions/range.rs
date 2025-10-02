@@ -231,9 +231,9 @@ impl MethodResolutionTarget for RangeTypeData {
             UnaryOperation::Cast { .. }
                 if IteratorTypeData::resolve_own_unary_operation(operation).is_some() =>
             {
-                wrap_unary!([Op=operation](this: Owned<ExpressionRange>) -> ExecutionResult<ResolvedValue> {
+                wrap_unary!([context](this: Owned<ExpressionRange>) -> ExecutionResult<ResolvedValue> {
                     let this_iterator = this.try_map(|this, _| ExpressionIterator::new_for_range(this))?;
-                    operation.evaluate(this_iterator)
+                    context.operation.evaluate(this_iterator)
                 })
             }
             _ => return None,

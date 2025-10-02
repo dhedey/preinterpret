@@ -90,7 +90,7 @@ impl ExpressionStream {
         // transparent groups (as of Jan 2025), so gets it right without this flattening:
         // https://github.com/rust-lang/rust-analyzer/issues/18211
 
-        let error_span_stream = self.value.into_token_stream_removing_any_transparent_groups();
+        let error_span_stream = self.value.to_token_stream_removing_any_transparent_groups();
         if error_span_stream.is_empty() {
             None
         } else {
@@ -142,7 +142,7 @@ impl MethodResolutionTarget for StreamTypeData {
             }
 
             fn flatten(this: Owned<ExpressionStream>) -> ExecutionResult<TokenStream> {
-                Ok(this.into_inner().value.into_token_stream_removing_any_transparent_groups())
+                Ok(this.into_inner().value.to_token_stream_removing_any_transparent_groups())
             }
 
             fn infer(this: Owned<ExpressionStream>) -> ExecutionResult<ExpressionValue> {
@@ -164,7 +164,27 @@ impl MethodResolutionTarget for StreamTypeData {
                 }
             }
 
-            // NB - group is found at the ExpressionValue level
+            [context] fn reinterpret_as_run(this: Owned<ExpressionStream>) -> ExecutionResult<ExpressionValue> {
+                let source = unsafe {
+                    // RUST-ANALYZER-SAFETY - We can't do any better than this, and we're about to parse it as source code,
+                    // which handles groups/missing groups reasonably well (see tests)
+                    this.into_inner().value.into_token_stream()
+                };
+                let reparsed = source.source_parse_as::<ExpressionBlockContent>()?;
+                reparsed.evaluate(context.interpreter, context.output_span_range)
+            }
+
+            [context] fn reinterpret_as_stream(this: Owned<ExpressionStream>) -> ExecutionResult<OutputStream> {
+                let source = unsafe {
+                    // RUST-ANALYZER-SAFETY - We can't do any better than this, and we're about to parse it as source code,
+                    // which handles groups/missing groups reasonably well (see tests)
+                    this.into_inner().value.into_token_stream()
+                };
+                let reparsed_source_stream = source.source_parse_with(|input| SourceStream::parse(input, context.output_span_range.start()))?;
+                // NB: We can't use a StreamOutput here, because it can't capture the Interpreter
+                //     without some lifetime shenanigans.
+                reparsed_source_stream.interpret_to_new_stream(context.interpreter)
+            }
         }
     }
 
@@ -178,13 +198,13 @@ impl MethodResolutionTarget for StreamTypeData {
                     | CastTarget::Float(_),
                 ..
             } => {
-                wrap_unary!([Op=operation](this: Owned<ExpressionStream>) -> ExecutionResult<ResolvedValue> {
+                wrap_unary!([context](this: Owned<ExpressionStream>) -> ExecutionResult<ResolvedValue> {
                     let (this, span_range) = this.deconstruct();
                     let coerced = this.value.coerce_into_value(span_range);
                     if let ExpressionValue::Stream(_) = &coerced {
                         return span_range.execution_err("The stream could not be coerced into a single value");
                     }
-                    operation.evaluate(coerced.into())
+                    context.operation.evaluate(coerced.into())
                 })
             }
             _ => return None,

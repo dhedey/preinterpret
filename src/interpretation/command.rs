@@ -338,7 +338,6 @@ macro_rules! define_command_enums {
 
 define_command_enums! {
     // Core Commands
-    ReinterpretCommand,
     SettingsCommand,
 
     // Concat & Type Convert Commands

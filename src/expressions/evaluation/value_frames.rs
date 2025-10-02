@@ -538,7 +538,7 @@ impl EvaluationFrame for BinaryOperationBuilder {
 
     fn handle_item(
         mut self,
-        context: ValueContext,
+        mut context: ValueContext,
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
@@ -591,7 +591,11 @@ impl EvaluationFrame for BinaryOperationBuilder {
                     );
 
                     // Left operand is already resolved, right operand is provided
-                    let result = method.execute(vec![left, right], span_range)?;
+                    let call_context = MethodCallContext {
+                        output_span_range: span_range,
+                        interpreter: context.interpreter(),
+                    };
+                    let result = method.execute(vec![left, right], call_context)?;
                     return context.return_resolved_value(result);
                 }
 
@@ -974,7 +978,7 @@ impl EvaluationFrame for MethodCallBuilder {
 
     fn handle_item(
         mut self,
-        context: ValueContext,
+        mut context: ValueContext,
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
         // Handle expected item based on current state
@@ -1049,7 +1053,11 @@ impl EvaluationFrame for MethodCallBuilder {
                         method,
                     } => (evaluated_arguments_including_caller, method),
                 };
-                let output = method.execute(arguments, self.method.span_range())?;
+                let call_context = MethodCallContext {
+                    output_span_range: self.method.span_range(),
+                    interpreter: context.interpreter(),
+                };
+                let output = method.execute(arguments, call_context)?;
                 context.return_resolved_value(output)?
             }
         })

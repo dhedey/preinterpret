@@ -21,12 +21,11 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 - [x] `4usize.string()` should return `4` but `debug_string` should return 4usize
 - [x] Simplify the EXACT parser
 - [x] Migrate `ErrorCommand`
-- [ ] Migrate `ReinterpretCommand`
+- [x] Migrate `ReinterpretCommand`
 - [ ] Migrate the `Concat & Type Convert Commands` and `Concat & String Convert Commands`, and decide on method names for e.g. `string()`
   * `.to_literal()`, `.concat()`, `.to_ident()`, `.to_ident_camel()`, `.to_ident_snake()`, `.to_ident_upper_snake()`
   * String: `.to_lowercase()` <- maybe shouldn't concat, others can: `.to_snake_case()`, `.capitalize()` etc
   * Conversions: `.to_string()`, `.to_stream()`, `.to_group()`, `.to_debug_string()`
-- [ ] Rename methods to be more rustlike - is it to_string, to_X?
 
 ## Span changes
 

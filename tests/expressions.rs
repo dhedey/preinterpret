@@ -44,7 +44,7 @@ fn test_basic_evaluate_works() {
     preinterpret_assert_eq!(#(let six_as_sum = 3 + 3; six_as_sum * six_as_sum), 36);
     preinterpret_assert_eq!(#(
         let partial_sum = %[+ 2];
-        %[#(%[5] + partial_sum) = [!reinterpret! %raw[#](5 #partial_sum)]].debug_string()
+        %[#(%[5] + partial_sum) %[=] %raw[#](5 #partial_sum)].reinterpret_as_stream().debug_string()
     ), "%[5 + 2 = 7]");
     preinterpret_assert_eq!(#(1 + (1..2) as int), 2);
     preinterpret_assert_eq!(#("hello" == "world"), false);
@@ -95,28 +95,28 @@ fn test_reinterpret() {
     assert_eq!(
         run!(
             let method = [!ident! "lower_camel"];
-            [!reinterpret! [!#method! Hello World]]
+            %[[!#method! Hello World]].reinterpret_as_stream()
         ),
         "helloWorld"
     );
     assert_eq!(
         run!(
             let method = [!ident! "lower_camel"];
-            [!reinterpret! [%raw[!]#method! Hello World]]
+            %[[%raw[!]#method! Hello World]].reinterpret_as_stream()
         ),
         "helloWorld"
     );
     assert_eq!(
         run!(
             let method = [!ident! "lower_camel"];
-            [!reinterpret! [%group[!]#method! Hello World]]
+            %[[%group[!]#method! Hello World]].reinterpret_as_stream()
         ),
         "helloWorld"
     );
     assert_eq!(
         run!(
             let my_variable = "the answer";
-            [!reinterpret! #(my_variable)]
+            %[%raw[#]my_variable].reinterpret_as_stream()
         ),
         "the answer"
     );
@@ -124,18 +124,17 @@ fn test_reinterpret() {
     assert_eq!(
         run!(
             let my_variable = "the answer";
-            [!reinterpret! %group[#]my_variable]
+            %[%group[#]my_variable].reinterpret_as_stream()
         ),
         "the answer"
     );
     // ... but they are otherwise preserved
     assert_eq!(
         run!(
-            let my_variable = "the answer";
             // * If the %group is preserved, then content has a stream length of 1 (the group)
             // * If the %group is removed, then content has a stream length of 2 ("Hello" and "World")
             let content = %[%group["Hello" "World"]];
-            [!reinterpret! %raw[#](%raw[%][#content].len())]
+            %[%raw[%][#content].len()].reinterpret_as_run()
         ),
         1
     );
@@ -144,7 +143,7 @@ fn test_reinterpret() {
     assert_eq!(
         run!(
             let my_variable = "before";
-            let _ = [!reinterpret! #(my_variable = "updated";)];
+            %[my_variable = "updated";].reinterpret_as_run();
             my_variable
         ),
         "updated"
@@ -152,7 +151,7 @@ fn test_reinterpret() {
     // TODO[scopes]: Uncomment when scopes are implemented
     // assert_eq!(run!(
     //     let my_variable = "before";
-    //     let _ = [!reinterpret! #(let my_variable = "replaced";)];
+    //     %[let my_variable = "replaced";].reinterpret_as_run();
     //     my_variable
     // ), "before");
 }
@@ -160,13 +159,13 @@ fn test_reinterpret() {
 #[test]
 #[allow(clippy::zero_prefixed_literal)]
 fn test_very_long_expression_works() {
-    preinterpret_assert_eq!(
-        {
+    assert_eq!(
+        run! {
             [!settings! %{
                 iteration_limit: 100000,
-            }]
-            #(let expression = %[0] + [!for! _ in 0..100000 { + 1 }])
-            [!reinterpret! %raw[#](#expression)]
+            }];
+            let expression = [!for! _ in 0..100000 { 1 + }] + %[0];
+            expression.reinterpret_as_run()
         },
         100000
     );

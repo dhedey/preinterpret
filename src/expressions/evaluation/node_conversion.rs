@@ -3,21 +3,21 @@ use super::*;
 impl ExpressionNode<Source> {
     pub(super) fn handle_as_value(
         &self,
-        interpreter: &mut Interpreter,
-        context: Context<ValueType>,
+        mut context: Context<ValueType>,
     ) -> ExecutionResult<NextAction> {
         Ok(match self {
             ExpressionNode::Leaf(leaf) => {
                 match leaf {
                     SourceExpressionLeaf::Command(command) => {
                         // TODO[interpret_to_value]: Allow command to return a reference
-                        context.return_owned(command.clone().interpret_to_value(interpreter)?)?
+                        let value = command.clone().interpret_to_value(context.interpreter())?;
+                        context.return_owned(value)?
                     }
                     SourceExpressionLeaf::Discarded(token) => {
                         return token.execution_err("This cannot be used in a value expression");
                     }
                     SourceExpressionLeaf::Variable(variable_path) => {
-                        let variable_ref = variable_path.binding(interpreter)?;
+                        let variable_ref = variable_path.binding(context.interpreter())?;
                         match context.requested_ownership() {
                             RequestedValueOwnership::LateBound => {
                                 context.return_late_bound(variable_ref.into_late_bound()?)?
@@ -36,7 +36,8 @@ impl ExpressionNode<Source> {
                     }
                     SourceExpressionLeaf::EmbeddedExpression(block) => {
                         // TODO[interpret_to_value]: Allow block to return reference
-                        context.return_owned(block.interpret_to_value(interpreter)?)?
+                        let value = block.interpret_to_value(context.interpreter())?;
+                        context.return_owned(value)?
                     }
                     SourceExpressionLeaf::Value(value) => {
                         // We return a freely clonable CopyOnWrite in order to delay the clone of the literal if it's not necessary
@@ -44,7 +45,9 @@ impl ExpressionNode<Source> {
                         context.return_copy_on_write(value)?
                     }
                     SourceExpressionLeaf::StreamLiteral(stream_literal) => {
-                        let value = stream_literal.clone().interpret_to_value(interpreter)?;
+                        let value = stream_literal
+                            .clone()
+                            .interpret_to_value(context.interpreter())?;
                         context.return_owned(value)?
                     }
                 }
@@ -101,7 +104,6 @@ impl ExpressionNode<Source> {
 
     pub(super) fn handle_as_assignee(
         &self,
-        _: &mut Interpreter,
         context: AssignmentContext,
         nodes: &[ExpressionNode<Source>],
         self_node_id: ExpressionNodeId,
@@ -132,14 +134,10 @@ impl ExpressionNode<Source> {
         })
     }
 
-    pub(super) fn handle_as_place(
-        &self,
-        interpreter: &mut Interpreter,
-        context: PlaceContext,
-    ) -> ExecutionResult<NextAction> {
+    pub(super) fn handle_as_place(&self, mut context: PlaceContext) -> ExecutionResult<NextAction> {
         Ok(match self {
             ExpressionNode::Leaf(SourceExpressionLeaf::Variable(variable)) => {
-                let variable_ref = variable.binding(interpreter)?;
+                let variable_ref = variable.binding(context.interpreter())?;
                 context.return_place(variable_ref.into_mut()?)
             }
             ExpressionNode::Index {

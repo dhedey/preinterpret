@@ -197,7 +197,7 @@ impl OutputStream {
         }
     }
 
-    pub(crate) fn into_token_stream_removing_any_transparent_groups(&self) -> TokenStream {
+    pub(crate) fn to_token_stream_removing_any_transparent_groups(&self) -> TokenStream {
         let mut output = TokenStream::new();
         self.append_to_token_stream_without_transparent_groups(&mut output);
         output

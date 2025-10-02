@@ -246,13 +246,13 @@ mod macros {
     macro_rules! handle_correct_arity {
         ($method_name:ident ($(,)?)) => {
             MethodInterface::Arity0 {
-                method: |a, output_span_range| apply_fn0($method_name, a, output_span_range),
+                method: |context| apply_fn0($method_name, context),
                 argument_ownership: [],
             }
         };
         ($method_name:ident ($($arg_part:ident)+ : $ty:ty $(,)?)) => {
             MethodInterface::Arity1 {
-                method: |a, output_span_range| apply_fn1($method_name, a, output_span_range),
+                method: |context, a| apply_fn1($method_name, a, context),
                 argument_ownership: [<$ty as FromResolved>::OWNERSHIP],
             }
         };
@@ -261,7 +261,7 @@ mod macros {
             $($arg_part2:ident)+ : $ty2:ty $(,)?
         )) => {
             MethodInterface::Arity2 {
-                method: |a, b, output_span_range| apply_fn2($method_name, a, b, output_span_range),
+                method: |context, a, b| apply_fn2($method_name, a, b, context),
                 argument_ownership: [
                     <$ty1 as FromResolved>::OWNERSHIP,
                     <$ty2 as FromResolved>::OWNERSHIP,
@@ -274,9 +274,7 @@ mod macros {
             $($arg_part3:ident)+ : $ty3:ty $(,)?
         )) => {
             MethodInterface::Arity3 {
-                method: |a, b, c, output_span_range| {
-                    apply_fn3($method_name, a, b, c, output_span_range)
-                },
+                method: |context, a, b, c| apply_fn3($method_name, a, b, c, context),
                 argument_ownership: [
                     <$ty1 as FromResolved>::OWNERSHIP,
                     <$ty2 as FromResolved>::OWNERSHIP,
@@ -287,13 +285,13 @@ mod macros {
            // ($method_name:ident ($($args:tt)*)) => {
            //     MethodInterface::ArityAny {
            //         method: |
+           //             context: MethodCallContext,
            //             all_arguments: Vec<ResolvedValue>,
-           //             output_span_range: SpanRange,
            //         | -> ExecutionResult<ResolvedValue> {
-           //             handle_arg_separation!([$($args)*], all_arguments, output_span_range);
+           //             handle_arg_separation!([$($args)*], all_arguments, context);
            //             handle_arg_mapping!([$($args)*,] []);
            //             let output = handle_call_inner_method!(inner_method [$($args)*]);
-           //             ResolvableOutput::to_resolved_value(output, output_span_range)
+           //             ResolvableOutput::to_resolved_value(output, context.output_span_range)
            //         },
            //         argument_ownership: handle_arg_ownerships!([$($args)*,] []),
            //     }
@@ -304,47 +302,50 @@ mod macros {
     // This means that we only need to compile the mapping glue combination once for each (A, B) -> C combination
 
     pub(crate) fn apply_fn0<R>(
-        f: fn() -> R,
-        output_span_range: SpanRange,
+        f: fn(MethodCallContext) -> R,
+        context: MethodCallContext,
     ) -> ExecutionResult<ResolvedValue>
     where
         R: ResolvableOutput,
     {
-        f().to_resolved_value(output_span_range)
+        let output_span_range = context.output_span_range;
+        f(context).to_resolved_value(output_span_range)
     }
 
     pub(crate) fn apply_fn1<A, R>(
-        f: fn(A) -> R,
+        f: fn(MethodCallContext, A) -> R,
         a: ResolvedValue,
-        output_span_range: SpanRange,
+        context: MethodCallContext,
     ) -> ExecutionResult<ResolvedValue>
     where
         A: FromResolved,
         R: ResolvableOutput,
     {
-        f(A::from_resolved(a)?).to_resolved_value(output_span_range)
+        let output_span_range = context.output_span_range;
+        f(context, A::from_resolved(a)?).to_resolved_value(output_span_range)
     }
 
     pub(crate) fn apply_fn2<A, B, C>(
-        f: fn(A, B) -> C,
+        f: fn(MethodCallContext, A, B) -> C,
         a: ResolvedValue,
         b: ResolvedValue,
-        output_span_range: SpanRange,
+        context: MethodCallContext,
     ) -> ExecutionResult<ResolvedValue>
     where
         A: FromResolved,
         B: FromResolved,
         C: ResolvableOutput,
     {
-        f(A::from_resolved(a)?, B::from_resolved(b)?).to_resolved_value(output_span_range)
+        let output_span_range = context.output_span_range;
+        f(context, A::from_resolved(a)?, B::from_resolved(b)?).to_resolved_value(output_span_range)
     }
 
     pub(crate) fn apply_fn3<A, B, C, R>(
-        f: fn(A, B, C) -> R,
+        f: fn(MethodCallContext, A, B, C) -> R,
         a: ResolvedValue,
         b: ResolvedValue,
         c: ResolvedValue,
-        output_span_range: SpanRange,
+        context: MethodCallContext,
     ) -> ExecutionResult<ResolvedValue>
     where
         A: FromResolved,
@@ -352,7 +353,9 @@ mod macros {
         C: FromResolved,
         R: ResolvableOutput,
     {
+        let output_span_range = context.output_span_range;
         f(
+            context,
             A::from_resolved(a)?,
             B::from_resolved(b)?,
             C::from_resolved(c)?,
@@ -361,19 +364,24 @@ mod macros {
     }
 
     macro_rules! wrap_method {
-        (($($args:tt)*) $(-> $output_ty:ty)? $body:block) => {{
-            fn inner_method($($args)*) $(-> $output_ty)? {
+        ($([$context:ident])? ($($args:tt)*) $(-> $output_ty:ty)? $body:block) => {{
+            fn inner_method(if_empty!([$($context)?][_context]): MethodCallContext, $($args)*) $(-> $output_ty)? {
                 $body
             }
             handle_correct_arity!(inner_method($($args)*))
         }};
     }
 
+    pub(crate) struct MethodCallContext<'a> {
+        pub interpreter: &'a mut Interpreter,
+        pub output_span_range: SpanRange,
+    }
+
     macro_rules! define_method_matcher {
         (
             (match $var_method_name:ident on $self:ident)
             $(
-                fn $method_name:ident($($args:tt)*) $(-> $output_ty:ty)? $body:block
+                $([$context:ident])? fn $method_name:ident($($args:tt)*) $(-> $output_ty:ty)? $body:block
             )*
         ) => {
             $(
@@ -381,7 +389,7 @@ mod macros {
             )*
             Some(match $var_method_name {
                 $(
-                    stringify!($method_name) => wrap_method!(($($args)*) $(-> $output_ty)? $body),
+                    stringify!($method_name) => wrap_method!($([$context])? ($($args)*) $(-> $output_ty)? $body),
                 )*
                 _ => return None,
             })
@@ -389,19 +397,25 @@ mod macros {
     }
 
     macro_rules! wrap_unary {
-        ($([$(Op=$operation:ident$(,)?)? $(Span=$output_span_range:ident$(,)?)?])?($($args:tt)*) $(-> $output_ty:ty)? $body:block) => {{
-            fn inner_method($($args)*, if_empty!([$($($operation)?)?][_operation]): &UnaryOperation, if_empty!([$($($output_span_range)?)?][_output_span_range]): SpanRange) $(-> $output_ty)? {
+        ($([$context:ident])?($($args:tt)*) $(-> $output_ty:ty)? $body:block) => {{
+            fn inner_method(if_empty!([$($context)?][_context]): UnaryOperationCallContext, $($args)*) $(-> $output_ty)? {
                 $body
             }
             UnaryOperationInterface {
                 #[allow(unused_variables)]
                 method: |a, operation, output_span_range| {
                     let typed_input = <handle_first_arg_type!($($args)*,) as FromResolved>::from_resolved(a)?;
-                    inner_method(typed_input, operation, output_span_range).to_resolved_value(output_span_range)
+                    let context = UnaryOperationCallContext { operation, output_span_range };
+                    inner_method(context, typed_input).to_resolved_value(output_span_range)
                 },
                 argument_ownership: <handle_first_arg_type!($($args)*,) as FromResolved>::OWNERSHIP,
             }
         }};
+    }
+
+    pub(crate) struct UnaryOperationCallContext<'a> {
+        pub operation: &'a UnaryOperation,
+        pub output_span_range: SpanRange,
     }
 
     pub(crate) use {
@@ -413,28 +427,29 @@ mod macros {
 
 pub(crate) enum MethodInterface {
     Arity0 {
-        method: fn(SpanRange) -> ExecutionResult<ResolvedValue>,
+        method: fn(MethodCallContext) -> ExecutionResult<ResolvedValue>,
         argument_ownership: [ResolvedValueOwnership; 0],
     },
     Arity1 {
-        method: fn(ResolvedValue, SpanRange) -> ExecutionResult<ResolvedValue>,
+        method: fn(MethodCallContext, ResolvedValue) -> ExecutionResult<ResolvedValue>,
         argument_ownership: [ResolvedValueOwnership; 1],
     },
     Arity2 {
-        method: fn(ResolvedValue, ResolvedValue, SpanRange) -> ExecutionResult<ResolvedValue>,
+        method:
+            fn(MethodCallContext, ResolvedValue, ResolvedValue) -> ExecutionResult<ResolvedValue>,
         argument_ownership: [ResolvedValueOwnership; 2],
     },
     Arity3 {
         method: fn(
+            MethodCallContext,
             ResolvedValue,
             ResolvedValue,
             ResolvedValue,
-            SpanRange,
         ) -> ExecutionResult<ResolvedValue>,
         argument_ownership: [ResolvedValueOwnership; 3],
     },
     ArityAny {
-        method: fn(Vec<ResolvedValue>, SpanRange) -> ExecutionResult<ResolvedValue>,
+        method: fn(MethodCallContext, Vec<ResolvedValue>) -> ExecutionResult<ResolvedValue>,
         argument_ownership: Vec<ResolvedValueOwnership>,
     },
 }
@@ -443,34 +458,42 @@ impl MethodInterface {
     pub(crate) fn execute(
         &self,
         arguments: Vec<ResolvedValue>,
-        span_range: SpanRange,
+        context: MethodCallContext,
     ) -> ExecutionResult<ResolvedValue> {
         match self {
             MethodInterface::Arity0 { method, .. } => {
                 if !arguments.is_empty() {
-                    return span_range.execution_err("Expected 0 arguments");
+                    return context
+                        .output_span_range
+                        .execution_err("Expected 0 arguments");
                 }
-                method(span_range)
+                method(context)
             }
             MethodInterface::Arity1 { method, .. } => {
                 match <[ResolvedValue; 1]>::try_from(arguments) {
-                    Ok([a]) => method(a, span_range),
-                    Err(_) => span_range.execution_err("Expected 1 argument"),
+                    Ok([a]) => method(context, a),
+                    Err(_) => context
+                        .output_span_range
+                        .execution_err("Expected 1 argument"),
                 }
             }
             MethodInterface::Arity2 { method, .. } => {
                 match <[ResolvedValue; 2]>::try_from(arguments) {
-                    Ok([a, b]) => method(a, b, span_range),
-                    Err(_) => span_range.execution_err("Expected 2 arguments"),
+                    Ok([a, b]) => method(context, a, b),
+                    Err(_) => context
+                        .output_span_range
+                        .execution_err("Expected 2 arguments"),
                 }
             }
             MethodInterface::Arity3 { method, .. } => {
                 match <[ResolvedValue; 3]>::try_from(arguments) {
-                    Ok([a, b, c]) => method(a, b, c, span_range),
-                    Err(_) => span_range.execution_err("Expected 3 arguments"),
+                    Ok([a, b, c]) => method(context, a, b, c),
+                    Err(_) => context
+                        .output_span_range
+                        .execution_err("Expected 3 arguments"),
                 }
             }
-            MethodInterface::ArityAny { method, .. } => method(arguments, span_range),
+            MethodInterface::ArityAny { method, .. } => method(context, arguments),
         }
     }
 

@@ -244,13 +244,13 @@ impl MethodResolutionTarget for ArrayTypeData {
                 | CastTarget::Char
                 | CastTarget::Integer(_)
                 | CastTarget::Float(_) => {
-                    wrap_unary!([Op=operation](this: Owned<ExpressionArray>) -> ExecutionResult<ResolvedValue> {
+                    wrap_unary!([context](this: Owned<ExpressionArray>) -> ExecutionResult<ResolvedValue> {
                         let (mut this, _) = this.deconstruct();
                         let length = this.items.len();
                         if length == 1 {
-                            operation.evaluate(this.items.pop().unwrap().into())
+                            context.operation.evaluate(this.items.pop().unwrap().into())
                         } else {
-                            operation.execution_err(format!(
+                            context.operation.execution_err(format!(
                                 "Only a singleton array can be cast to this value but the array has {} elements",
                                 length,
                             ))
