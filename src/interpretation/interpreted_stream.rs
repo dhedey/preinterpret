@@ -197,14 +197,14 @@ impl OutputStream {
         }
     }
 
-    pub(crate) fn into_token_stream_removing_any_transparent_groups(self) -> TokenStream {
+    pub(crate) fn into_token_stream_removing_any_transparent_groups(&self) -> TokenStream {
         let mut output = TokenStream::new();
         self.append_to_token_stream_without_transparent_groups(&mut output);
         output
     }
 
-    fn append_to_token_stream_without_transparent_groups(self, output: &mut TokenStream) {
-        for segment in self.segments {
+    fn append_to_token_stream_without_transparent_groups(&self, output: &mut TokenStream) {
+        for segment in self.segments.iter() {
             match segment {
                 OutputSegment::TokenVec(vec) => {
                     for token in vec {
@@ -212,11 +212,13 @@ impl OutputStream {
                             TokenTree::Group(group) if group.delimiter() == Delimiter::None => {
                                 output.extend(group.stream().flatten_transparent_groups());
                             }
-                            other => output.extend(iter::once(other)),
+                            other => output.extend(iter::once(other.clone())),
                         }
                     }
                 }
                 OutputSegment::OutputGroup(delimiter, span, interpreted_stream) => {
+                    let delimiter = *delimiter;
+                    let span = *span;
                     if delimiter == Delimiter::None {
                         interpreted_stream
                             .append_to_token_stream_without_transparent_groups(output);

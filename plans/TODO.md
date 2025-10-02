@@ -20,7 +20,7 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 - [x] Fix grammar-peeking of none-groups so that e.g. `[!reinterpret! %group[#]var_name]` works
 - [x] `4usize.string()` should return `4` but `debug_string` should return 4usize
 - [x] Simplify the EXACT parser
-- [ ] Migrate `ErrorCommand`
+- [x] Migrate `ErrorCommand`
 - [ ] Migrate `ReinterpretCommand`
 - [ ] Migrate the `Concat & Type Convert Commands` and `Concat & String Convert Commands`, and decide on method names for e.g. `string()`
   * `.to_literal()`, `.concat()`, `.to_ident()`, `.to_ident_camel()`, `.to_ident_snake()`, `.to_ident_upper_snake()`

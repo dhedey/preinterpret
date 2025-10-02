@@ -2,12 +2,12 @@ use preinterpret::*;
 
 macro_rules! assert_input_length_of_3 {
     ($($input:literal)+) => {stream!{
-        #(let input_length = [!length! $($input)+];)
+        #(
+            let input = %raw[$($input)+];
+            let input_length = input.len();
+        )
         [!if! input_length != 3 {
-            [!error! %{
-                message: [!string! "Expected 3 inputs, got " #input_length],
-                spans: %[$($input)+],
-            }]
+            #(input.error(%["Expected 3 inputs, got " #input_length].string()))
         }]
     }};
 }

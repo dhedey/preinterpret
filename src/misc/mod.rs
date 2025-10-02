@@ -12,6 +12,8 @@ pub(crate) use mut_rc_ref_cell::*;
 pub(crate) use parse_traits::*;
 pub(crate) use string_conversion::*;
 
+use crate::internal_prelude::*;
+
 #[allow(unused)]
 pub(crate) fn print_if_slow<T>(
     inner: impl FnOnce() -> T,
@@ -28,4 +30,13 @@ pub(crate) fn print_if_slow<T>(
         println!("{}", print_message(&output, elapsed));
     }
     output
+}
+
+// Equivalent to `!` but stable in our MSRV
+pub(crate) enum Never {}
+
+impl ToExpressionValue for Never {
+    fn to_value(self, _span_range: SpanRange) -> ExpressionValue {
+        match self {}
+    }
 }

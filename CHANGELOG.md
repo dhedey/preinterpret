@@ -15,8 +15,14 @@ This moves preinterpet to an expression-based language, inspired by Rust, but wi
 ### New Commands
 
 * Core commands:
-  * `[!error! ...]` to output a compile error.
-  * `#(x += %[...];)` to performantly add extra characters to a variable's stream.
+  * Creating errors:
+    * `%[].error("Error Message")` to output a compile error at the macro call site
+    * `%[_].error("Error Message")` to output a compile error at the given line
+    * `%[$token].error("Error Message")` to output a compile error at the span of the tokens
+    * `%[].assert(<condition>, <message>)` to assert the condition is true, else output a compile error at the macro call site
+    * `%[_].assert(<condition>, <message>)` to assert the condition is true, else output a compile error at the given line
+    * `%[$token].assert(<condition>, <message>)` to assert the condition is true, else output a compile error at the span of the tokens
+  * `#(x += %[...];)` to add extra tokens to a variable's stream.
   * `#(let _ = %[...];)` interprets its arguments but then ignores any outputs.
   * `%[...]` can be used to just output its interpreted contents. It's useful to create a stream value inside an expression.
   * `[!reinterpret! ...]` is like an `eval` command in scripting languages. It takes a stream, and parses/interprets it.
@@ -79,8 +85,8 @@ The following methods are supported:
   * `.clone()` - converts a reference to a mutable value. You will be told in an error if this is needed.
   * `.as_mut()` - converts an owned value to a mutable value. You will be told in an error if this is needed.
   * `.take()` - takes the value from a mutable reference, and replaces it with `None`. Useful instead of cloning.
-  * `.debug()` - a debugging aid whilst writing code. Causes a compile error with the content of the value. Equivalent to `[!error! #(x.debug_string())]`
-  * `.debug_string()` - returns the value's contents as a string for debugging purposes
+  * `.debug()` - a debugging aid whilst writing code. Causes a compile error with the content of the value. Roughly equivalent to `%[_].error(x.to_debug_string())`
+  * `.to_debug_string()` - returns the value's contents as a string for debugging purposes
 * On arrays: `len()` and `push()`
 * On streams: `len()`
 

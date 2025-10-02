@@ -340,7 +340,6 @@ define_command_enums! {
     // Core Commands
     ReinterpretCommand,
     SettingsCommand,
-    ErrorCommand,
 
     // Concat & Type Convert Commands
     StringCommand,

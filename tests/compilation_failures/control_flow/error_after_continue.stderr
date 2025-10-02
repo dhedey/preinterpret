@@ -1,13 +1,5 @@
 error: And now we error
-  --> tests/compilation_failures/control_flow/error_after_continue.rs:4:5
+  --> tests/compilation_failures/control_flow/error_after_continue.rs:13:21
    |
- 4 | /     stream!(
- 5 | |         #(let x = 0)
- 6 | |         [!while! true {
- 7 | |             #(x += 1)
-...  |
-17 | |         }]
-18 | |     );
-   | |_____^
-   |
-   = note: this error originates in the macro `stream` (in Nightly builds, run with -Z macro-backtrace for more info)
+13 |                 #(%[_].error("And now we error"))
+   |                     ^

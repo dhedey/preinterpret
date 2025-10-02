@@ -62,6 +62,41 @@ impl ExpressionStream {
             self.value.concat_recursive_into(output, behaviour);
         }
     }
+
+    pub(crate) fn resolve_content_span_range(&self) -> Option<SpanRange> {
+        // Consider the case where preinterpret embeds in a declarative macro, and we have
+        // an error like this:
+        // %[$input].error("Expected 100, got " + %[$input].debug_string())
+        //
+        // In cases like this, rustc wraps $input in a transparent group, which means that
+        // the span of that group is the span of the tokens "$input" in the definition of the
+        // declarative macro. This is not what we want. We want the span of the tokens which
+        // were fed into $input in the declarative macro.
+        //
+        // The simplest solution here is to get rid of all transparent groups, to get back to the
+        // source spans.
+        //
+        // Once this workstream with macro diagnostics is stabilised:
+        // https://github.com/rust-lang/rust/issues/54140#issuecomment-802701867
+        //
+        // Then we can revisit this and do something better, and include all spans as separate spans
+        // in the error message, which will allow a user to trace an error through N different layers
+        // of macros.
+        //
+        // (Possibly we can try to join spans together, and if they don't join, they become separate
+        // spans which get printed to the error message).
+        //
+        // Coincidentally, rust analyzer currently does not properly support
+        // transparent groups (as of Jan 2025), so gets it right without this flattening:
+        // https://github.com/rust-lang/rust-analyzer/issues/18211
+
+        let error_span_stream = self.value.into_token_stream_removing_any_transparent_groups();
+        if error_span_stream.is_empty() {
+            None
+        } else {
+            Some(error_span_stream.span_range_from_iterating_over_all_tokens())
+        }
+    }
 }
 
 impl HasValueType for ExpressionStream {
@@ -113,6 +148,20 @@ impl MethodResolutionTarget for StreamTypeData {
             fn infer(this: Owned<ExpressionStream>) -> ExecutionResult<ExpressionValue> {
                 let span_range = this.span_range();
                 Ok(this.into_inner().value.coerce_into_value(span_range))
+            }
+
+            fn error(this: Shared<ExpressionStream>, message: Shared<String>) -> ExecutionResult<Never> {
+                let error_span_range = this.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
+                error_span_range.execution_err(message.as_str())
+            }
+
+            fn assert(this: Shared<ExpressionStream>, condition: bool, message: Shared<String>) -> ExecutionResult<()> {
+                if condition {
+                    Ok(())
+                } else {
+                    let error_span_range = this.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
+                    error_span_range.execution_err(message.as_str())
+                }
             }
 
             // NB - group is found at the ExpressionValue level

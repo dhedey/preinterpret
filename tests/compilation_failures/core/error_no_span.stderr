@@ -4,14 +4,12 @@ error: Expected 102 to equal 64
  4 |       ($input1:literal and $input2:literal) => {stream!{
    |  _______________________________________________^
  5 | |         [!if! ($input1 != $input2) {
- 6 | |             [!error! %{
- 7 | |                 message: [!string! "Expected " $input1 " to equal " $input2],
- 8 | |             }]
- 9 | |         }]
-10 | |     }};
+ 6 | |             #(%[].error(%["Expected " $input1 " to equal " $input2].string()))
+ 7 | |         }]
+ 8 | |     }};
    | |_____^
 ...
-14 |       assert_literals_eq_no_spans!(102 and 64);
+12 |       assert_literals_eq_no_spans!(102 and 64);
    |       ---------------------------------------- in this macro invocation
    |
    = note: this error originates in the macro `stream` which comes from the expansion of the macro `assert_literals_eq_no_spans` (in Nightly builds, run with -Z macro-backtrace for more info)
