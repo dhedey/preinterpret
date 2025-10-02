@@ -91,6 +91,73 @@ fn test_expression_precedence() {
 }
 
 #[test]
+fn test_reinterpret() {
+    assert_eq!(
+        run!(
+            let method = [!ident! "lower_camel"];
+            [!reinterpret! [!#method! Hello World]]
+        ),
+        "helloWorld"
+    );
+    assert_eq!(
+        run!(
+            let method = [!ident! "lower_camel"];
+            [!reinterpret! [%raw[!]#method! Hello World]]
+        ),
+        "helloWorld"
+    );
+    assert_eq!(
+        run!(
+            let method = [!ident! "lower_camel"];
+            [!reinterpret! [%group[!]#method! Hello World]]
+        ),
+        "helloWorld"
+    );
+    assert_eq!(
+        run!(
+            let my_variable = "the answer";
+            [!reinterpret! #(my_variable)]
+        ),
+        "the answer"
+    );
+    // Transparent groups are transparently ignored when detecting preinterpret grammar
+    assert_eq!(
+        run!(
+            let my_variable = "the answer";
+            [!reinterpret! %group[#]my_variable]
+        ),
+        "the answer"
+    );
+    // ... but they are otherwise preserved
+    assert_eq!(
+        run!(
+            let my_variable = "the answer";
+            // * If the %group is preserved, then content has a stream length of 1 (the group)
+            // * If the %group is removed, then content has a stream length of 2 ("Hello" and "World")
+            let content = %[%group["Hello" "World"]];
+            [!reinterpret! %raw[#](%raw[%][#content].len())]
+        ),
+        1
+    );
+    // Expect reinterpret to run in its own scope, inside the parent scope.
+    // So it can't create variables in the parent scope, but it can change them
+    assert_eq!(
+        run!(
+            let my_variable = "before";
+            let _ = [!reinterpret! #(my_variable = "updated";)];
+            my_variable
+        ),
+        "updated"
+    );
+    // TODO[scopes]: Uncomment when scopes are implemented
+    // assert_eq!(run!(
+    //     let my_variable = "before";
+    //     let _ = [!reinterpret! #(let my_variable = "replaced";)];
+    //     my_variable
+    // ), "before");
+}
+
+#[test]
 #[allow(clippy::zero_prefixed_literal)]
 fn test_very_long_expression_works() {
     preinterpret_assert_eq!(

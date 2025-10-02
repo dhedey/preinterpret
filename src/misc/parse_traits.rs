@@ -28,34 +28,6 @@ pub(crate) enum SourcePeekMatch {
 }
 
 fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> SourcePeekMatch {
-    // We have to check groups first, so that we handle transparent groups
-    // and avoid the self.ignore_none() calls inside cursor
-    if let Some((next, delimiter, _, _)) = cursor.any_group() {
-        if delimiter == Delimiter::Bracket {
-            if let Some((_, next)) = next.punct_matching('!') {
-                if let Some((ident, next)) = next.ident() {
-                    if next.punct_matching('!').is_some() {
-                        let output_kind =
-                            CommandKind::for_ident(&ident).map(|kind| kind.resolve_output_kind());
-                        return SourcePeekMatch::Command(output_kind);
-                    }
-                }
-            }
-        }
-
-        // Ideally we'd like to detect $($tt)* substitutions from macros and interpret them as
-        // a Raw (uninterpreted) group, because typically that's what a user would typically intend.
-        //
-        // You'd think mapping a Delimiter::None to a GrammarPeekMatch::RawGroup would be a good way
-        // of doing this, but unfortunately this behaviour is very arbitrary and not in a helpful way:
-        // => A $tt or $($tt)* is not grouped...
-        // => A $literal or $($literal)* _is_ outputted in a group...
-        //
-        // So this isn't possible. It's unlikely to matter much, and a user can always do:
-        // %raw[$($tt)*] anyway.
-
-        return SourcePeekMatch::Group(delimiter);
-    }
     if let Some((_, next)) = cursor.punct_matching('#') {
         if next.ident().is_some() {
             return SourcePeekMatch::EmbeddedVariable;
@@ -101,6 +73,32 @@ fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> SourcePeekMatch {
                 }
             }
         }
+    }
+
+    if let Some((next, delimiter, _, _)) = cursor.any_group() {
+        if delimiter == Delimiter::Bracket {
+            if let Some((_, next)) = next.punct_matching('!') {
+                if let Some((ident, next)) = next.ident() {
+                    if next.punct_matching('!').is_some() {
+                        let output_kind =
+                            CommandKind::for_ident(&ident).map(|kind| kind.resolve_output_kind());
+                        return SourcePeekMatch::Command(output_kind);
+                    }
+                }
+            }
+        }
+
+        // Ideally we'd like to detect $($tt)* substitutions from macros and interpret them as
+        // a Raw (uninterpreted) group, because typically that's what a user would typically intend.
+        //
+        // You'd think mapping a Delimiter::None to a GrammarPeekMatch::RawGroup would be a good way
+        // of doing this, but unfortunately this behaviour is very arbitrary and not in a helpful way:
+        // => A $tt or $($tt)* is not grouped...
+        // => A $literal or $($literal)* _is_ outputted in a group...
+        //
+        // So this isn't possible. It's unlikely to matter much, and a user can always do:
+        // %raw[$($tt)*] anyway.
+        return SourcePeekMatch::Group(delimiter);
     }
 
     match cursor.token_tree() {

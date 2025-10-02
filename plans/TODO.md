@@ -17,8 +17,25 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 - [x] Remove `[!let!]` and replace with `#(let %[..] = %[..])`
 - [x] Remove `StopCondition`
 - [x] Fix the to_debug_string to add `%raw[..]` around punct groups including `#` or `%`
-- [ ] Fix grammar-peeking of none-groups so that e.g. `[!reinterpret! %group[#]var_name]` works
+- [x] Fix grammar-peeking of none-groups so that e.g. `[!reinterpret! %group[#]var_name]` works
 - [ ] Simplify the EXACT parser
+- [ ] 4usize.string() should return 4 but debug_string should return 4usize
+- [ ] Rename to be more rustlike - is it to_string, to_X?
+
+## Span changes
+
+* Remove span range from value:
+    * Move it to a binding such as `Owned<T>` etc
+    * Possibly can use `EvaluationError` (without a span!) inside a calculation, and adding the span in the evaluator (nb. it may still need to be able to propogate an `ExecutionInterrupt` internally)
+* Except streams, which keep spans on literals/groups.
+    * If someone wants to keep a value's span, they can keep it in a stream and coerce it; or store it as a tuple of a value with its span `[value, %[value]]`
+* Bindings such as `Owned<X>` have a span, which:
+    * Typically refers to the span of the preinterpret code that created the value/binding
+    * In some cases (e.g. source literals) it can refer to a source span
+    * And we can add a `spanned(%[..])` method which overrides the span of the binding (it'll have to return a `OwnedFixedSpan<ExpressionValue>` which has different handling)
+    * We can have a `bool.assert(message, span?)`
+
+* We can add a `spanned(%[..])` method which overrides the span of the binding (it'll have to return a `NoOverrideSpanOwned<ExpressionValue>` which has different handling in the `ToResolvedValue` trait)
 
 ## Method Calls
 
@@ -63,21 +80,6 @@ fn resolve_own_binary_operation(operation: &BinaryOperation) -> Option<MethodInt
 }
 ```
 
-## Span changes
-
-* Remove span range from value:
-    * Move it to a binding such as `Owned<T>` etc
-    * Possibly can use `EvaluationError` (without a span!) inside a calculation, and adding the span in the evaluator (nb. it may still need to be able to propogate an `ExecutionInterrupt` internally)
-* Except streams, which keep spans on literals/groups.
-    * If someone wants to keep a value's span, they can keep it in a stream and coerce it; or store it as a tuple of a value with its span `[value, %[value]]`
-* Bindings such as `Owned<X>` have a span, which:
-    * Typically refers to the span of the preinterpret code that created the value/binding
-    * In some cases (e.g. source literals) it can refer to a source span
-    * And we can add a `spanned(%[..])` method which overrides the span of the binding (it'll have to return a `OwnedFixedSpan<ExpressionValue>` which has different handling)
-    * We can have a `bool.assert(message, span?)`
-
-* We can add a `spanned(%[..])` method which overrides the span of the binding (it'll have to return a `NoOverrideSpanOwned<ExpressionValue>` which has different handling in the `ToResolvedValue` trait)
-
 ## Control flow expressions (ideally requires Stream Literals)
 
 Create the following expressions:
@@ -115,6 +117,7 @@ Create the following expressions:
   * Each let expression
 * Spans are only kept from source inside streams, otherwise it refers to a binding
 * At execution time, there needs to be some link between scope and stack frame
+* Fix `TODO[scopes]`
 
 ## Attempt Expression (requires Scopes & Blocks)
 
