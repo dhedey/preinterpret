@@ -107,17 +107,19 @@ impl MethodResolver for ValueKind {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct NoneTypeData;
-
-impl MethodResolutionTarget for NoneTypeData {
-    type Parent = ValueTypeData;
-    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+define_interface! {
+    struct NoneTypeData,
+    parent: ValueTypeData,
+    pub(crate) mod none_interface {
+        pub(crate) mod methods {}
+        pub(crate) mod unary_operations {}
+        interface_items {}
+    }
 }
 
 define_interface! {
     struct ValueTypeData,
-    parent: ValueTypeData, // Irrelevant placeholder
+    parent: ValueTypeData,
     pub(crate) mod value_interface {
         pub(crate) mod methods {
             fn clone(this: CopyOnWriteValue) -> OwnedValue {
@@ -923,12 +925,14 @@ impl HasValueType for UnsupportedLiteral {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct UnsupportedLiteralTypeData;
-
-impl MethodResolutionTarget for UnsupportedLiteralTypeData {
-    type Parent = ValueTypeData;
-    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+define_interface! {
+    struct UnsupportedLiteralTypeData,
+    parent: ValueTypeData,
+    pub(crate) mod unsupported_literal_interface {
+        pub(crate) mod methods {}
+        pub(crate) mod unary_operations {}
+        interface_items {}
+    }
 }
 
 pub(super) enum ExpressionValuePair {

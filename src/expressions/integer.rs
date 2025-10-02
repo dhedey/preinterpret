@@ -682,7 +682,6 @@ macro_rules! impl_int_operations {
                     }
                 }
                 interface_items {
-                    #[allow(unreachable_code)]
                     fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                         Some(match operation {
                             $(
