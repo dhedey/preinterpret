@@ -5,7 +5,7 @@ use std::mem;
 use super::*;
 
 pub(crate) struct UnaryOperationInterface {
-    pub method: fn(ResolvedValue, &UnaryOperation, SpanRange) -> ExecutionResult<ResolvedValue>,
+    pub method: fn(UnaryOperationCallContext, ResolvedValue) -> ExecutionResult<ResolvedValue>,
     pub argument_ownership: ResolvedValueOwnership,
 }
 
@@ -16,7 +16,13 @@ impl UnaryOperationInterface {
         operation: &UnaryOperation,
     ) -> ExecutionResult<ResolvedValue> {
         let output_span_range = operation.output_span_range(input.span_range());
-        (self.method)(input, operation, output_span_range)
+        (self.method)(
+            UnaryOperationCallContext {
+                operation,
+                output_span_range,
+            },
+            input,
+        )
     }
 
     pub(super) fn argument_ownership(&self) -> ResolvedValueOwnership {
@@ -107,104 +113,6 @@ mod macros {
         };
     }
 
-    macro_rules! handle_arg_mapping {
-        // No more args
-        ([$(,)?] [$($bindings:tt)*]) => {
-            $($bindings)*
-        };
-        // By captured shared reference (i.e. can return a sub-reference from it)
-        ([$($arg_part:ident)+ : Shared<$ty:ty>, $($rest:tt)*] [$($bindings:tt)*]) => {
-            handle_arg_mapping!([$($rest)*] [
-                $($bindings)*
-                let tmp = handle_arg_name!($($arg_part)+).expect_shared();
-                let handle_arg_name!($($arg_part)+): Shared<$ty> = tmp.try_map(|value, _| <$ty as ResolvableArgument>::resolve_from_ref(value))?;
-            ])
-        };
-        // SharedValue is an alias for Shared<ExpressionValue>
-        ([$($arg_part:ident)+ : SharedValue, $($rest:tt)*] [$($bindings:tt)*]) => {
-            handle_arg_mapping!([$($rest)*] [
-                $($bindings)*
-                let handle_arg_name!($($arg_part)+) = handle_arg_name!($($arg_part)+).expect_shared();
-            ])
-        };
-        // By captured mutable reference (i.e. can return a sub-reference from it)
-        ([$($arg_part:ident)+ : Mutable<$ty:ty>, $($rest:tt)*] [$($bindings:tt)*]) => {
-            handle_arg_mapping!([$($rest)*] [
-                $($bindings)*
-                let tmp = handle_arg_name!($($arg_part)+).expect_mutable();
-                let handle_arg_name!($($arg_part)+): Mutable<$ty> = tmp.try_map(|value, _| <$ty as ResolvableArgument>::resolve_from_mut(value))?;
-            ])
-        };
-        // MutableValue is an alias for Mutable<ExpressionValue>
-        ([$($arg_part:ident)+ : MutableValue, $($rest:tt)*] [$($bindings:tt)*]) => {
-            handle_arg_mapping!([$($rest)*] [
-                $($bindings)*
-                let handle_arg_name!($($arg_part)+) = handle_arg_name!($($arg_part)+).expect_mutable();
-            ])
-        };
-        // By copy-on-write
-        ([$($arg_part:ident)+ : CopyOnWriteValue, $($rest:tt)*] [$($bindings:tt)*]) => {
-            handle_arg_mapping!([$($rest)*] [
-                $($bindings)*
-                let handle_arg_name!($($arg_part)+) = handle_arg_name!($($arg_part)+).expect_copy_on_write();
-            ])
-        };
-        // By value
-        ([$($arg_part:ident)+ : Owned<$ty:ty>, $($rest:tt)*] [$($bindings:tt)*]) => {
-            handle_arg_mapping!([$($rest)*] [
-                $($bindings)*
-                let tmp = handle_arg_name!($($arg_part)+).expect_owned();
-                let handle_arg_name!($($arg_part)+): Owned<$ty> = tmp.try_map(|value, _| <$ty as ResolvableArgument>::resolve_from_owned(value))?;
-            ])
-        };
-        // By value
-        ([$($arg_part:ident)+ : OwnedValue, $($rest:tt)*] [$($bindings:tt)*]) => {
-            handle_arg_mapping!([$($rest)*] [
-                $($bindings)*
-                let handle_arg_name!($($arg_part)+) = handle_arg_name!($($arg_part)+).expect_owned();
-            ])
-        };
-    }
-
-    macro_rules! handle_arg_ownerships {
-        // No more args
-        ([$(,)?] [$($outputs:tt)*]) => {
-            vec![$($outputs)*]
-        };
-        // By captured shared reference (i.e. can return a sub-reference from it)
-        ([$($arg_part:ident)+ : Shared<$ty:ty>, $($rest:tt)*] [$($outputs:tt)*]) => {
-            handle_arg_ownerships!([$($rest)*] [$($outputs)* ResolvedValueOwnership::Shared,])
-        };
-        // SharedValue is an alias for Shared<ExpressionValue>
-        ([$($arg_part:ident)+ : SharedValue, $($rest:tt)*] [$($outputs:tt)*]) => {
-            handle_arg_ownerships!([$($rest)*] [$($outputs)* ResolvedValueOwnership::Shared,])
-        };
-        // By captured mutable reference (i.e. can return a sub-reference from it)
-        ([$($arg_part:ident)+ : Mutable<$ty:ty>, $($rest:tt)*] [$($outputs:tt)*]) => {
-            handle_arg_ownerships!([$($rest)*] [$($outputs)* ResolvedValueOwnership::Mutable,])
-        };
-        // MutableValue is an alias for Mutable<ExpressionValue>
-        ([$($arg_part:ident)+ : MutableValue, $($rest:tt)*] [$($outputs:tt)*]) => {
-            handle_arg_ownerships!([$($rest)*] [$($outputs)* ResolvedValueOwnership::Mutable,])
-        };
-        // By copy-on-write
-        ([$($arg_part:ident)+ : CopyOnWrite<$ty:ty>, $($rest:tt)*] [$($outputs:tt)*]) => {
-            handle_arg_ownerships!([$($rest)*] [$($outputs)* ResolvedValueOwnership::CopyOnWrite,])
-        };
-        // By value
-        ([$($arg_part:ident)+ : CopyOnWriteValue, $($rest:tt)*] [$($outputs:tt)*]) => {
-            handle_arg_ownerships!([$($rest)*] [$($outputs)* ResolvedValueOwnership::CopyOnWrite,])
-        };
-        // By value
-        ([$($arg_part:ident)+ : Owned<$ty:ty>, $($rest:tt)*] [$($outputs:tt)*]) => {
-            handle_arg_ownerships!([$($rest)*] [$($outputs)* ResolvedValueOwnership::Owned,])
-        };
-        // By value
-        ([$($arg_part:ident)+ : OwnedValue, $($rest:tt)*] [$($outputs:tt)*]) => {
-            handle_arg_ownerships!([$($rest)*] [$($outputs)* ResolvedValueOwnership::Owned,])
-        };
-    }
-
     macro_rules! handle_first_arg_type {
         // By value
         ($($arg_part:ident)+ : $type:ty, $($rest:tt)*) => {
@@ -217,49 +125,23 @@ mod macros {
         ($head:tt $($tail:tt)*) => { 1 + count!($($tail)*) };
     }
 
-    macro_rules! handle_arg_name {
-        (mut $name:ident) => {
-            $name
-        };
-        ($name:ident) => {
-            $name
-        };
-    }
-
-    macro_rules! handle_arg_separation {
-        ([$($($arg_part:ident)+ : $ty:ty),* $(,)?], $all_arguments:ident, $output_span_range:ident) => {
-            const LEN: usize = count!($($ty)*);
-            let Ok([
-                $(handle_arg_name!($($arg_part)+),)*
-            ]) = <[ResolvedValue; LEN]>::try_from($all_arguments) else {
-                return $output_span_range.execution_err(format!("Expected {LEN} argument/s"));
-            };
-        };
-    }
-
-    macro_rules! handle_call_inner_method {
-        ($method_name:ident [$($($arg_part:ident)+ : $ty:ty),* $(,)?]) => {
-            $method_name($(handle_arg_name!($($arg_part)+)),*)
-        };
-    }
-
-    macro_rules! handle_correct_arity {
-        ($method_name:ident ($(,)?)) => {
+    macro_rules! create_method_interface {
+        ($method_name:path[$(,)?]) => {
             MethodInterface::Arity0 {
                 method: |context| apply_fn0($method_name, context),
                 argument_ownership: [],
             }
         };
-        ($method_name:ident ($($arg_part:ident)+ : $ty:ty $(,)?)) => {
+        ($method_name:path[$($arg_part:ident)+ : $ty:ty $(,)?]) => {
             MethodInterface::Arity1 {
                 method: |context, a| apply_fn1($method_name, a, context),
                 argument_ownership: [<$ty as FromResolved>::OWNERSHIP],
             }
         };
-        ($method_name:ident (
+        ($method_name:path[
             $($arg_part1:ident)+ : $ty1:ty,
             $($arg_part2:ident)+ : $ty2:ty $(,)?
-        )) => {
+        ]) => {
             MethodInterface::Arity2 {
                 method: |context, a, b| apply_fn2($method_name, a, b, context),
                 argument_ownership: [
@@ -268,11 +150,11 @@ mod macros {
                 ],
             }
         };
-        ($method_name:ident (
+        ($method_name:path[
             $($arg_part1:ident)+ : $ty1:ty,
             $($arg_part2:ident)+ : $ty2:ty,
             $($arg_part3:ident)+ : $ty3:ty $(,)?
-        )) => {
+        ]) => {
             MethodInterface::Arity3 {
                 method: |context, a, b, c| apply_fn3($method_name, a, b, c, context),
                 argument_ownership: [
@@ -281,21 +163,7 @@ mod macros {
                     <$ty3 as FromResolved>::OWNERSHIP,
                 ],
             }
-        }; // TODO: Add back in if needed (e.g. if wanting to support variadic functions)
-           // ($method_name:ident ($($args:tt)*)) => {
-           //     MethodInterface::ArityAny {
-           //         method: |
-           //             context: MethodCallContext,
-           //             all_arguments: Vec<ResolvedValue>,
-           //         | -> ExecutionResult<ResolvedValue> {
-           //             handle_arg_separation!([$($args)*], all_arguments, context);
-           //             handle_arg_mapping!([$($args)*,] []);
-           //             let output = handle_call_inner_method!(inner_method [$($args)*]);
-           //             ResolvableOutput::to_resolved_value(output, context.output_span_range)
-           //         },
-           //         argument_ownership: handle_arg_ownerships!([$($args)*,] []),
-           //     }
-           // };
+        };
     }
 
     // NOTE: We use function pointers here rather than generics to avoid monomorphization bloat.
@@ -363,12 +231,34 @@ mod macros {
         .to_resolved_value(output_span_range)
     }
 
+    macro_rules! create_unary_interface {
+        ($method_name:path[$($arg_part:ident)+ : $ty:ty $(,)?]) => {
+            UnaryOperationInterface {
+                method: |context, a| apply_unary_fn($method_name, a, context),
+                argument_ownership: <$ty as FromResolved>::OWNERSHIP,
+            }
+        };
+    }
+
+    pub(crate) fn apply_unary_fn<A, R>(
+        f: fn(UnaryOperationCallContext, A) -> R,
+        a: ResolvedValue,
+        context: UnaryOperationCallContext,
+    ) -> ExecutionResult<ResolvedValue>
+    where
+        A: FromResolved,
+        R: ResolvableOutput,
+    {
+        let output_span_range = context.output_span_range;
+        f(context, A::from_resolved(a)?).to_resolved_value(output_span_range)
+    }
+
     macro_rules! wrap_method {
         ($([$context:ident])? ($($args:tt)*) $(-> $output_ty:ty)? $body:block) => {{
             fn inner_method(if_empty!([$($context)?][_context]): MethodCallContext, $($args)*) $(-> $output_ty)? {
                 $body
             }
-            handle_correct_arity!(inner_method($($args)*))
+            create_method_interface!(inner_method[$($args)*])
         }};
     }
 
@@ -401,15 +291,7 @@ mod macros {
             fn inner_method(if_empty!([$($context)?][_context]): UnaryOperationCallContext, $($args)*) $(-> $output_ty)? {
                 $body
             }
-            UnaryOperationInterface {
-                #[allow(unused_variables)]
-                method: |a, operation, output_span_range| {
-                    let typed_input = <handle_first_arg_type!($($args)*,) as FromResolved>::from_resolved(a)?;
-                    let context = UnaryOperationCallContext { operation, output_span_range };
-                    inner_method(context, typed_input).to_resolved_value(output_span_range)
-                },
-                argument_ownership: <handle_first_arg_type!($($args)*,) as FromResolved>::OWNERSHIP,
-            }
+            create_unary_interface!(inner_method[$($args)*])
         }};
     }
 
@@ -418,10 +300,118 @@ mod macros {
         pub output_span_range: SpanRange,
     }
 
+    macro_rules! define_interface {
+        (
+            struct $type_data:ident,
+            parent: $parent_type_data:ident,
+            $mod_vis:vis mod $mod_name:ident {
+                $mod_methods_vis:vis mod methods {
+                    $(
+                        $([$method_context:ident])? fn $method_name:ident($($method_args:tt)*) $(-> $method_output_ty:ty)? $method_body:block
+                    )*
+                }
+                $mod_unary_operations_vis:vis mod unary_operations {
+                    $(
+                        $([$unary_context:ident])? fn $unary_name:ident($($unary_args:tt)*) $(-> $unary_output_ty:ty)? $unary_body:block
+                    )*
+                }
+                interface_items {
+                    $($items:item)*
+                }
+            }
+        ) => {
+            #[derive(Clone, Copy)]
+            pub(crate) struct $type_data;
+
+            $mod_vis mod $mod_name {
+                use super::*;
+
+                $mod_vis const fn parent() -> Option<$parent_type_data> {
+                    // Type ids aren't const, and strings aren't const-comparable, but I can use this work-around:
+                    // https://internals.rust-lang.org/t/why-i-cannot-compare-two-static-str-s-in-a-const-context/17726/2
+                    const OWN_TYPE_NAME: &'static [u8] = stringify!($type_data).as_bytes();
+                    const PARENT_TYPE_NAME: &'static [u8] = stringify!($parent_type_data).as_bytes();
+                    match PARENT_TYPE_NAME {
+                        OWN_TYPE_NAME => None,
+                        _ => Some($parent_type_data),
+                    }
+                }
+
+                #[allow(unused)]
+                fn asserts() {
+                    $(
+                        $type_data::assert_first_argument::<handle_first_arg_type!($($method_args)*,)>();
+                    )*
+                    $(
+                        $type_data::assert_first_argument::<handle_first_arg_type!($($unary_args)*,)>();
+                    )*
+                }
+
+                $mod_methods_vis mod methods {
+                    #[allow(unused)]
+                    use super::*;
+                    $(
+                        pub(crate) fn $method_name(if_empty!([$($method_context)?][_context]): MethodCallContext, $($method_args)*) $(-> $method_output_ty)? {
+                            $method_body
+                        }
+                    )*
+                }
+
+                $mod_methods_vis mod method_definitions {
+                    #[allow(unused)]
+                    use super::*;
+                    $(
+                        $mod_methods_vis fn $method_name() -> MethodInterface {
+                            create_method_interface!(methods::$method_name[$($method_args)*])
+                        }
+                    )*
+                }
+
+                $mod_unary_operations_vis mod unary_operations {
+                    #[allow(unused)]
+                    use super::*;
+                    $(
+                        $mod_unary_operations_vis fn $unary_name(if_empty!([$($unary_context)?][_context]): UnaryOperationCallContext, $($unary_args)*) $(-> $unary_output_ty)? {
+                            $unary_body
+                        }
+                    )*
+                }
+
+                $mod_unary_operations_vis mod unary_definitions {
+                    #[allow(unused)]
+                    use super::*;
+                    $(
+                        $mod_unary_operations_vis fn $unary_name() -> UnaryOperationInterface {
+                            create_unary_interface!(unary_operations::$unary_name[$($unary_args)*])
+                        }
+                    )*
+                }
+
+                impl MethodResolutionTarget for $type_data {
+                    type Parent = $parent_type_data;
+                    const PARENT: Option<Self::Parent> = $mod_name::parent();
+
+                    #[allow(unreachable_code)]
+                    fn resolve_own_method(method_name: &str) -> Option<MethodInterface> {
+                        Some(match method_name {
+                            $(
+                                stringify!($method_name) => method_definitions::$method_name(),
+                            )*
+                            _ => return None,
+                        })
+                    }
+
+                    // Pass through resolve_own_unary_operation until there's a better way to define them
+                    $($items)*
+                }
+            }
+        }
+    }
+
     pub(crate) use {
-        count, define_method_matcher, handle_arg_mapping, handle_arg_name, handle_arg_ownerships,
-        handle_arg_separation, handle_call_inner_method, handle_correct_arity,
-        handle_first_arg_type, if_empty, ignore_all, wrap_method, wrap_unary,
+        count, create_method_interface, create_unary_interface, define_interface,
+        define_method_matcher, handle_first_arg_type, if_empty, ignore_all, wrap_method,
+        wrap_unary,
     };
 }
 

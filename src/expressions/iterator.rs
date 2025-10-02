@@ -188,31 +188,34 @@ impl Iterator for ExpressionIterator {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct IteratorTypeData;
-
-impl MethodResolutionTarget for IteratorTypeData {
-    type Parent = ValueTypeData;
-    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
-
-    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
-        Some(match operation {
-            UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => return None,
-            UnaryOperation::Cast { target, .. } => match target {
-                CastTarget::Boolean
-                | CastTarget::Char
-                | CastTarget::Integer(_)
-                | CastTarget::Float(_) => {
-                    wrap_unary!([context](this: Owned<ExpressionIterator>) -> ExecutionResult<ResolvedValue> {
-                        let (this, input_span_range) = this.deconstruct();
-                        match this.singleton_value() {
-                            Some(value) => context.operation.evaluate(Owned::new(value, input_span_range)),
-                            None => input_span_range.execution_err("Only an iterator with one item can be cast to this value")
-                        }
-                    })
+define_interface! {
+    struct IteratorTypeData,
+    parent: ValueTypeData,
+    pub(crate) mod iterator_interface {
+        pub(crate) mod methods {
+        }
+        pub(crate) mod unary_operations {
+            [context] fn cast_singleton_to_value(this: Owned<ExpressionIterator>) -> ExecutionResult<ResolvedValue> {
+                let (this, input_span_range) = this.deconstruct();
+                match this.singleton_value() {
+                    Some(value) => context.operation.evaluate(Owned::new(value, input_span_range)),
+                    None => input_span_range.execution_err("Only an iterator with one item can be cast to this value")
                 }
-                _ => return None,
-            },
-        })
+            }
+        }
+        interface_items {
+            fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+                Some(match operation {
+                    UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => return None,
+                    UnaryOperation::Cast { target, .. } => match target {
+                        CastTarget::Boolean
+                        | CastTarget::Char
+                        | CastTarget::Integer(_)
+                        | CastTarget::Float(_) => unary_definitions::cast_singleton_to_value(),
+                        _ => return None,
+                    },
+                })
+            }
+        }
     }
 }

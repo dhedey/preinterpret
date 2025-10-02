@@ -87,24 +87,27 @@ impl ToExpressionValue for &str {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct StringTypeData;
-
-impl MethodResolutionTarget for StringTypeData {
-    type Parent = ValueTypeData;
-    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
-
-    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
-        Some(match operation {
-            UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => return None,
-            UnaryOperation::Cast { target, .. } => match target {
-                CastTarget::String => {
-                    wrap_unary!((this: String) -> String {
-                        this
-                    })
-                }
-                _ => return None,
-            },
-        })
+define_interface! {
+    struct StringTypeData,
+    parent: ValueTypeData,
+    pub(crate) mod string_interface {
+        pub(crate) mod methods {
+        }
+        pub(crate) mod unary_operations {
+            fn cast_to_string(this: String) -> String {
+                this
+            }
+        }
+        interface_items {
+            fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+                Some(match operation {
+                    UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => return None,
+                    UnaryOperation::Cast { target, .. } => match target {
+                        CastTarget::String => unary_definitions::cast_to_string(),
+                        _ => return None,
+                    },
+                })
+            }
+        }
     }
 }

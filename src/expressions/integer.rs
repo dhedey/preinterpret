@@ -90,12 +90,17 @@ impl HasValueType for ExpressionInteger {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct IntegerTypeData;
-
-impl MethodResolutionTarget for IntegerTypeData {
-    type Parent = ValueTypeData;
-    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+define_interface! {
+    struct IntegerTypeData,
+    parent: ValueTypeData,
+    pub(crate) mod integer_interface {
+        pub(crate) mod methods {
+        }
+        pub(crate) mod unary_operations {
+        }
+        interface_items {
+        }
+    }
 }
 
 pub(super) enum ExpressionIntegerValuePair {

@@ -115,17 +115,11 @@ impl MethodResolutionTarget for NoneTypeData {
     const PARENT: Option<Self::Parent> = Some(ValueTypeData);
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct ValueTypeData;
-
-impl MethodResolutionTarget for ValueTypeData {
-    type Parent = ValueTypeData; // Irrelevant placeholder
-    const PARENT: Option<Self::Parent> = None;
-
-    fn resolve_own_method(method_name: &str) -> Option<MethodInterface> {
-        define_method_matcher! {
-            (match method_name on Self)
-
+define_interface! {
+    struct ValueTypeData,
+    parent: ValueTypeData, // Irrelevant placeholder
+    pub(crate) mod value_interface {
+        pub(crate) mod methods {
             fn clone(this: CopyOnWriteValue) -> OwnedValue {
                 this.into_owned_infallible()
             }
@@ -172,25 +166,27 @@ impl MethodResolutionTarget for ValueTypeData {
                 input.concat_recursive(&ConcatBehaviour::standard())
             }
         }
-    }
+        pub(crate) mod unary_operations {
+            fn cast_to_string(input: ExpressionValue) -> ExecutionResult<String> {
+                input.concat_recursive(&ConcatBehaviour::standard())
+            }
 
-    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
-        Some(match operation {
-            UnaryOperation::Cast { target, .. } => match target {
-                CastTarget::String => {
-                    wrap_unary!((input: ExpressionValue) -> ExecutionResult<String> {
-                        input.concat_recursive(&ConcatBehaviour::standard())
-                    })
-                }
-                CastTarget::Stream => {
-                    wrap_unary!((input: ExpressionValue) -> ExecutionResult<OutputStream> {
-                        input.into_new_output_stream(Grouping::Flattened)
-                    })
-                }
-                _ => return None,
-            },
-            _ => return None,
-        })
+            fn cast_to_stream(input: ExpressionValue) -> ExecutionResult<OutputStream> {
+                input.into_new_output_stream(Grouping::Flattened)
+            }
+        }
+        interface_items {
+            fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+                Some(match operation {
+                    UnaryOperation::Cast { target, .. } => match target {
+                        CastTarget::String => unary_definitions::cast_to_string(),
+                        CastTarget::Stream => unary_definitions::cast_to_stream(),
+                        _ => return None,
+                    },
+                    _ => return None,
+                })
+            }
+        }
     }
 }
 

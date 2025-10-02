@@ -219,25 +219,30 @@ impl ToExpressionValue for ExpressionRangeInner {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct RangeTypeData;
-
-impl MethodResolutionTarget for RangeTypeData {
-    type Parent = ValueTypeData;
-    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
-
-    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
-        Some(match operation {
-            UnaryOperation::Cast { .. }
-                if IteratorTypeData::resolve_own_unary_operation(operation).is_some() =>
-            {
-                wrap_unary!([context](this: Owned<ExpressionRange>) -> ExecutionResult<ResolvedValue> {
-                    let this_iterator = this.try_map(|this, _| ExpressionIterator::new_for_range(this))?;
-                    context.operation.evaluate(this_iterator)
+define_interface! {
+    struct RangeTypeData,
+    parent: ValueTypeData,
+    pub(crate) mod range_interface {
+        pub(crate) mod methods {
+        }
+        pub(crate) mod unary_operations {
+            [context] fn cast_via_iterator(this: Owned<ExpressionRange>) -> ExecutionResult<ResolvedValue> {
+                let this_iterator = this.try_map(|this, _| ExpressionIterator::new_for_range(this))?;
+                context.operation.evaluate(this_iterator)
+            }
+        }
+        interface_items {
+            fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+                Some(match operation {
+                    UnaryOperation::Cast { .. }
+                        if IteratorTypeData::resolve_own_unary_operation(operation).is_some() =>
+                    {
+                        unary_definitions::cast_via_iterator()
+                    }
+                    _ => return None,
                 })
             }
-            _ => return None,
-        })
+        }
     }
 }
 

@@ -126,17 +126,11 @@ impl ToExpressionValue for TokenStream {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct StreamTypeData;
-
-impl MethodResolutionTarget for StreamTypeData {
-    type Parent = ValueTypeData;
-    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
-
-    fn resolve_own_method(method_name: &str) -> Option<MethodInterface> {
-        define_method_matcher! {
-            (match method_name on Self)
-
+define_interface! {
+    struct StreamTypeData,
+    parent: ValueTypeData,
+    pub(crate) mod stream_interface {
+        pub(crate) mod methods {
             fn len(this: Shared<ExpressionStream>) -> ExecutionResult<usize> {
                 Ok(this.value.len())
             }
@@ -186,29 +180,31 @@ impl MethodResolutionTarget for StreamTypeData {
                 reparsed_source_stream.interpret_to_new_stream(context.interpreter)
             }
         }
-    }
-
-    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
-        Some(match operation {
-            UnaryOperation::Cast {
-                target:
-                    CastTarget::Boolean
-                    | CastTarget::Char
-                    | CastTarget::Integer(_)
-                    | CastTarget::Float(_),
-                ..
-            } => {
-                wrap_unary!([context](this: Owned<ExpressionStream>) -> ExecutionResult<ResolvedValue> {
-                    let (this, span_range) = this.deconstruct();
-                    let coerced = this.value.coerce_into_value(span_range);
-                    if let ExpressionValue::Stream(_) = &coerced {
-                        return span_range.execution_err("The stream could not be coerced into a single value");
-                    }
-                    context.operation.evaluate(coerced.into())
+        pub(crate) mod unary_operations {
+            [context] fn cast_to_value(this: Owned<ExpressionStream>) -> ExecutionResult<ResolvedValue> {
+                let (this, span_range) = this.deconstruct();
+                let coerced = this.value.coerce_into_value(span_range);
+                if let ExpressionValue::Stream(_) = &coerced {
+                    return span_range.execution_err("The stream could not be coerced into a single value");
+                }
+                context.operation.evaluate(coerced.into())
+            }
+        }
+        interface_items {
+            fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+                Some(match operation {
+                    UnaryOperation::Cast {
+                        target:
+                            CastTarget::Boolean
+                            | CastTarget::Char
+                            | CastTarget::Integer(_)
+                            | CastTarget::Float(_),
+                        ..
+                    } => unary_definitions::cast_to_value(),
+                    _ => return None,
                 })
             }
-            _ => return None,
-        })
+        }
     }
 }
 

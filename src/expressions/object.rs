@@ -267,12 +267,17 @@ impl ToExpressionValue for BTreeMap<String, ObjectEntry> {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct ObjectTypeData;
-
-impl MethodResolutionTarget for ObjectTypeData {
-    type Parent = ValueTypeData;
-    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+define_interface! {
+    struct ObjectTypeData,
+    parent: ValueTypeData,
+    pub(crate) mod object_interface {
+        pub(crate) mod methods {
+        }
+        pub(crate) mod unary_operations {
+        }
+        interface_items {
+        }
+    }
 }
 
 #[allow(unused)] // TODO[unused-clearup]

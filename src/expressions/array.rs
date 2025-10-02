@@ -210,17 +210,11 @@ impl ToExpressionValue for Vec<ExpressionValue> {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct ArrayTypeData;
-
-impl MethodResolutionTarget for ArrayTypeData {
-    type Parent = ValueTypeData;
-    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
-
-    fn resolve_own_method(method_name: &str) -> Option<MethodInterface> {
-        define_method_matcher! {
-            (match method_name on Self)
-
+define_interface! {
+    struct ArrayTypeData,
+    parent: ValueTypeData,
+    pub(crate) mod array_interface {
+        pub(crate) mod methods {
             fn len(this: Shared<ExpressionArray>) -> ExecutionResult<usize> {
                 Ok(this.items.len())
             }
@@ -234,31 +228,33 @@ impl MethodResolutionTarget for ArrayTypeData {
                 StreamOutput::new(move |stream| this.output_items_to(stream, Grouping::Grouped))
             }
         }
-    }
-
-    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
-        Some(match operation {
-            UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => return None,
-            UnaryOperation::Cast { target, .. } => match target {
-                CastTarget::Boolean
-                | CastTarget::Char
-                | CastTarget::Integer(_)
-                | CastTarget::Float(_) => {
-                    wrap_unary!([context](this: Owned<ExpressionArray>) -> ExecutionResult<ResolvedValue> {
-                        let (mut this, _) = this.deconstruct();
-                        let length = this.items.len();
-                        if length == 1 {
-                            context.operation.evaluate(this.items.pop().unwrap().into())
-                        } else {
-                            context.operation.execution_err(format!(
-                                "Only a singleton array can be cast to this value but the array has {} elements",
-                                length,
-                            ))
-                        }
-                    })
+        pub(crate) mod unary_operations {
+            [context] fn cast_to_numeric(this: Owned<ExpressionArray>) -> ExecutionResult<ResolvedValue> {
+                let (mut this, _) = this.deconstruct();
+                let length = this.items.len();
+                if length == 1 {
+                    context.operation.evaluate(this.items.pop().unwrap().into())
+                } else {
+                    context.operation.execution_err(format!(
+                        "Only a singleton array can be cast to this value but the array has {} elements",
+                        length,
+                    ))
                 }
-                _ => return None,
-            },
-        })
+            }
+        }
+        interface_items {
+            fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+                Some(match operation {
+                    UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => return None,
+                    UnaryOperation::Cast { target, .. } => match target {
+                        CastTarget::Boolean
+                        | CastTarget::Char
+                        | CastTarget::Integer(_)
+                        | CastTarget::Float(_) => unary_definitions::cast_to_numeric(),
+                        _ => return None,
+                    },
+                })
+            }
+        }
     }
 }
