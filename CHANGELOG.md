@@ -10,7 +10,7 @@ This moves preinterpet to an expression-based language, inspired by Rust, but wi
 ### Variable Expansions
 
 * `#x` outputs the contents of `x`.
-* `#(x.group())` outputs the contents of `x` in a transparent group.
+* `#(x.to_group())` outputs the contents of `x` in a transparent group.
 
 ### New Commands
 
@@ -113,7 +113,7 @@ Inside a transform stream, the following grammar is supported:
   * `@[GROUP ...]` - Consumes a none-delimited group. Its arguments are used to transform the group's contents.
   * `@[EXACT(%[..])]` - Takes an input stream expression. Expects to consume exactly that stream from the output (ignoring none-groups). It outputs the parsed stream.
 * Commands: Their output is appended to the transform's output. Useful patterns include:
-  * If `@(inner = ...)` then `inner.group()` - wraps the output in a transparent group
+  * If `@(inner = ...)` then `inner.to_group()` - wraps the output in a transparent group
 
 # Major Version 0.2
 

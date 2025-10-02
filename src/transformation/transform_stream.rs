@@ -45,7 +45,7 @@ impl Parse<Source> for TransformItem {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => Self::Command(input.parse()?),
-            SourcePeekMatch::EmbeddedVariable => return input.parse_err("Variable bindings are not supported here. #(x.group()) can be inverted with @(#x = @TOKEN_TREE.flatten()). #x can't necessarily be inverted because its contents are flattened, although @(#x = @REST) or @(#x = @[UNTIL ..]) may work in some instances"),
+            SourcePeekMatch::EmbeddedVariable => return input.parse_err("Variable bindings are not supported here. #(x.to_group()) can be inverted with @(#x = @TOKEN_TREE.flatten()). #x can't necessarily be inverted because its contents are flattened, although @(#x = @REST) or @(#x = @[UNTIL ..]) may work in some instances"),
             SourcePeekMatch::EmbeddedExpression => Self::EmbeddedExpression(input.parse()?),
             SourcePeekMatch::Group(_) => Self::ExactGroup(input.parse()?),
             SourcePeekMatch::ExplicitTransformStream => Self::TransformStreamInput(input.parse()?),

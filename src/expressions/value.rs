@@ -141,8 +141,8 @@ define_interface! {
                 this
             }
 
-            fn debug_string(this: CopyOnWriteValue) -> ExecutionResult<String> {
-                this.into_owned_infallible().into_inner().into_debug_string()
+            fn swap(mut a: MutableValue, mut b: MutableValue) -> () {
+                core::mem::swap(a.deref_mut(), b.deref_mut());
             }
 
             fn debug(this: CopyOnWriteValue) -> ExecutionResult<()> {
@@ -152,19 +152,19 @@ define_interface! {
                 span_range.execution_err(message)
             }
 
-            fn swap(mut a: MutableValue, mut b: MutableValue) -> () {
-                core::mem::swap(a.deref_mut(), b.deref_mut());
+            fn to_debug_string(this: CopyOnWriteValue) -> ExecutionResult<String> {
+                this.into_owned_infallible().into_inner().into_debug_string()
             }
 
-            fn stream(input: ExpressionValue) -> ExecutionResult<OutputStream> {
+            fn to_stream(input: ExpressionValue) -> ExecutionResult<OutputStream> {
                 input.into_new_output_stream(Grouping::Flattened)
             }
 
-            fn group(input: ExpressionValue) -> ExecutionResult<OutputStream> {
+            fn to_group(input: ExpressionValue) -> ExecutionResult<OutputStream> {
                 input.into_new_output_stream(Grouping::Grouped)
             }
 
-            fn string(input: SharedValue) -> ExecutionResult<String> {
+            fn to_string(input: SharedValue) -> ExecutionResult<String> {
                 input.concat_recursive(&ConcatBehaviour::standard())
             }
         }

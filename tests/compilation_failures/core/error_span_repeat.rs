@@ -7,7 +7,7 @@ macro_rules! assert_input_length_of_3 {
             let input_length = input.len();
         )
         [!if! input_length != 3 {
-            #(input.error(%["Expected 3 inputs, got " #input_length].string()))
+            #(input.error(%["Expected 3 inputs, got " #input_length].to_string()))
         }]
     }};
 }

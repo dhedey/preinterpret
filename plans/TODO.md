@@ -18,14 +18,14 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 - [x] Remove `StopCondition`
 - [x] Fix the to_debug_string to add `%raw[..]` around punct groups including `#` or `%`
 - [x] Fix grammar-peeking of none-groups so that e.g. `[!reinterpret! %group[#]var_name]` works
-- [x] `4usize.string()` should return `4` but `debug_string` should return 4usize
+- [x] `4usize.to_string()` should return `4` but `debug_string` should return 4usize
 - [x] Simplify the EXACT parser
 - [x] Migrate `ErrorCommand`
 - [x] Migrate `ReinterpretCommand`
+- [x] Fix naming of `.string()` etc to `.to_string()`, `.to_stream()`, `.to_group()`, `.to_debug_string()`
 - [ ] Migrate the `Concat & Type Convert Commands` and `Concat & String Convert Commands`, and decide on method names for e.g. `string()`
   * `.to_literal()`, `.concat()`, `.to_ident()`, `.to_ident_camel()`, `.to_ident_snake()`, `.to_ident_upper_snake()`
   * String: `.to_lowercase()` <- maybe shouldn't concat, others can: `.to_snake_case()`, `.capitalize()` etc
-  * Conversions: `.to_string()`, `.to_stream()`, `.to_group()`, `.to_debug_string()`
 
 ## Span changes
 

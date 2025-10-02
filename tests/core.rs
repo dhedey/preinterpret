@@ -31,7 +31,7 @@ fn test_simple_let() {
 #[test]
 fn test_raw() {
     assert_eq!(
-        run!(%raw[#variable and [!command!] are not interpreted or error].string()),
+        run!(%raw[#variable and [!command!] are not interpreted or error].to_string()),
         "#variableand[!command!]arenotinterpretedorerror"
     );
 }
@@ -116,7 +116,7 @@ fn test_debug() {
                 pub fn new() -> Self {
                     !($crate::Test::CONSTANT >> 5 > 1)
                 }
-            }].debug_string()
+            }].to_debug_string()
         ),
         "%[impl < 'a , T > MyStruct < 'a , T > { pub fn new () -> Self { ! ($ crate :: Test :: CONSTANT >> 5 > 1) } }]"
     );
@@ -124,7 +124,7 @@ fn test_debug() {
     preinterpret_assert_eq!(
         #(
             let x = %[Hello (World)];
-            %[#(x.group()) %raw[#test] "and" %raw[##] #x (3 %raw[%] 2)].debug_string()
+            %[#(x.to_group()) %raw[#test] "and" %raw[##] #x (3 %raw[%] 2)].to_debug_string()
         ),
         r###"%[%group[Hello (World)] %raw[#] test "and" %raw[#]%raw[#] Hello (World) (3 %raw[%] 2)]"###
     );

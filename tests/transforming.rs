@@ -58,7 +58,7 @@ fn test_variable_parsing() {
             #(x += b)
             // #..>>x - Matches stream until (, appends it grouped: %group[Hello Everyone]
             @(#c = @[UNTIL ()])
-            #(x += c.group())
+            #(x += c.to_group())
             (
                 // #>>..x - Matches one tt... and appends it flattened: This is an exciting adventure
                 @(#c = @TOKEN_TREE)
@@ -68,7 +68,7 @@ fn test_variable_parsing() {
                 #(x += c.take().flatten())
             )
         ] = %[Why %group[it is fun to be here] Hello Everyone (%group[This is an exciting adventure] do you agree?)];)
-        #(x.debug_string())
+        #(x.to_debug_string())
     }, "%[Why %group[it is fun to be here] %group[Hello Everyone] This is an exciting adventure do you agree ?]");
 }
 
@@ -85,7 +85,7 @@ fn test_ident_transformer() {
     assert_eq!(
         run! {
             let %[The "quick" @(#x = @IDENT) fox "jumps"] = %[The "quick" brown fox "jumps"];
-            x.string()
+            x.to_string()
         },
         "brown"
     );
@@ -93,7 +93,7 @@ fn test_ident_transformer() {
         run! {
             let x = %[];
             let %[The quick @(#x += @IDENT) fox jumps @(#x += @IDENT) the lazy dog] = %[The quick brown fox jumps over the lazy dog];
-            x.debug_string()
+            x.to_debug_string()
         },
         "%[brown over]"
     );
@@ -113,7 +113,7 @@ fn test_literal_transformer() {
         run! {
             let x = %[];
             let %[@LITERAL @LITERAL @LITERAL @(#x += @LITERAL) @LITERAL @(#x += @LITERAL @LITERAL)] = %["Hello" 9 3.4 'c' 41u16 0b1010 r#"123"#];
-            x.debug_string()
+            x.to_debug_string()
         },
         "%['c' 0b1010 r#\"123\"#]"
     );
@@ -124,7 +124,7 @@ fn test_punct_transformer() {
     assert_eq!(
         run! {
             let %[The "quick" brown fox "jumps" @(#x = @PUNCT)] = %[The "quick" brown fox "jumps"!];
-            x.debug_string()
+            x.to_debug_string()
         },
         "%[!]"
     );
@@ -132,7 +132,7 @@ fn test_punct_transformer() {
     assert_eq!(
         run! {
             let %[The "quick" fox isn 't brown and doesn @(#x = @PUNCT) t "jump"] = %[The "quick" fox isn 't brown and doesn 't "jump"];
-            x.debug_string()
+            x.to_debug_string()
         },
         "%[']"
     );
@@ -141,7 +141,7 @@ fn test_punct_transformer() {
         run! {
             let x = %[];
             let %[@PUNCT @PUNCT @PUNCT @PUNCT @(#x += @PUNCT) @PUNCT @PUNCT @PUNCT @PUNCT @PUNCT @(#x += @PUNCT) @PUNCT @PUNCT @PUNCT] = %[# ! $$ % ^ & * + = | @ : ;];
-            x.debug_string()
+            x.to_debug_string()
         },
         "%[%raw[%] |]"
     );
@@ -152,24 +152,24 @@ fn test_group_transformer() {
     assert_eq!(
         run! {
             let %[The "quick" @[GROUP brown @(#x = @TOKEN_TREE)] "jumps"] = %[The "quick" %group[brown fox] "jumps"];
-            x.debug_string()
+            x.to_debug_string()
         },
         "%[fox]"
     );
     assert_eq!(
         run! {
-            let x = %["hello" "world"].group();
+            let x = %["hello" "world"].to_group();
             let %[I said @[GROUP @(#y = @REST)]!] = %[I said #x!];
-            y.debug_string()
+            y.to_debug_string()
         },
         "%[\"hello\" \"world\"]"
     );
     // ... which is equivalent to this:
     assert_eq!(
         run! {
-            let x = %["hello" "world"].group();
+            let x = %["hello" "world"].to_group();
             let %[I said @(#y = @TOKEN_TREE)!] = %[I said #x!];
-            y.take().flatten().debug_string()
+            y.take().flatten().to_debug_string()
         },
         "%[\"hello\" \"world\"]"
     );
@@ -180,7 +180,7 @@ fn test_none_output_commands_mid_parse() {
     assert_eq!(
         run! {
             let %[The "quick" @(#x = @LITERAL) fox #(let y = x.take().infer()) @(#x = @IDENT)] = %[The "quick" "brown" fox jumps];
-            ["#x = ", x.debug_string(), "; #y = ", y.debug_string()].string()
+            ["#x = ", x.to_debug_string(), "; #y = ", y.to_debug_string()].to_string()
         },
         "#x = %[jumps]; #y = \"brown\""
     );
@@ -223,7 +223,7 @@ fn test_exact_transformer() {
 fn test_parse_command_and_exact_transformer() {
     // The output stream is additive
     preinterpret_assert_eq!(
-        #([!parse! %[Hello World] with @(@IDENT @IDENT)].debug_string()),
+        #([!parse! %[Hello World] with @(@IDENT @IDENT)].to_debug_string()),
         "%[Hello World]"
     );
     // Substreams redirected to a variable are not included in the output
@@ -231,7 +231,7 @@ fn test_parse_command_and_exact_transformer() {
         #(
             [!parse! %[The quick brown fox] with @(
                 @[EXACT(%[The])] quick @IDENT @(#x = @IDENT)
-            )].debug_string()
+            )].to_debug_string()
         ),
         "%[The brown]"
     );
@@ -245,7 +245,7 @@ fn test_parse_command_and_exact_transformer() {
             [!parse! %[The quick brown fox is a fox - right?!] with @(
                 // The outputs are only from the EXACT transformer
                 The quick @(_ = @IDENT) @[EXACT(%[#x])] @(_ = @IDENT a) @[EXACT(%[#x - right?!])]
-            )].debug_string()
+            )].to_debug_string()
         ),
         "%[fox fox - right ?!]"
     );

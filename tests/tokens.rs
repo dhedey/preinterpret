@@ -46,7 +46,7 @@ fn test_length_and_group() {
     }, 3);
     preinterpret_assert_eq!({
         #(let x = %[Hello "World" (1 2 3 4 5)];)
-        [!length! #(x.group())]
+        [!length! #(x.to_group())]
     }, 1);
 }
 
@@ -251,7 +251,7 @@ fn test_split() {
             [!split! %{
                 stream: %[A::B],
                 separator: %[],
-            }].debug_string()
+            }].to_debug_string()
         ),
         "[%[A], %[:], %[:], %[B]]"
     );
@@ -261,7 +261,7 @@ fn test_split() {
             [!split! %{
                 stream: %[A::B::C],
                 separator: %[::],
-            }].debug_string()
+            }].to_debug_string()
         ),
         "[%[A], %[B], %[C]]"
     );
@@ -271,7 +271,7 @@ fn test_split() {
             [!split! %{
                 stream: %[Pizza, Mac and Cheese, Hamburger,],
                 separator: %[,],
-            }].debug_string()
+            }].to_debug_string()
         ),
         "[%[Pizza], %[Mac and Cheese], %[Hamburger]]"
     );
@@ -281,7 +281,7 @@ fn test_split() {
             [!split! %{
                 stream: %[::A::B::::C::],
                 separator: %[::],
-            }].stream_grouped().debug_string()
+            }].stream_grouped().to_debug_string()
         ),
         "%[%group[] %group[A] %group[B] %group[] %group[C]]"
     );
@@ -295,7 +295,7 @@ fn test_split() {
                 drop_empty_start: true,
                 drop_empty_middle: true,
                 drop_empty_end: true,
-            }].stream_grouped().debug_string()
+            }].stream_grouped().to_debug_string()
         ),
         "%[%group[A] %group[B] %group[C] %group[D] %group[E]]");
     // Drop empty false works
@@ -309,7 +309,7 @@ fn test_split() {
                 drop_empty_middle: false,
                 drop_empty_end: false,
             }].stream_grouped();
-            output.debug_string()
+            output.to_debug_string()
         ),
         "%[%group[] %group[A] %group[] %group[B] %group[C] %group[D] %group[E] %group[]]"
     );
@@ -322,7 +322,7 @@ fn test_split() {
                 drop_empty_start: false,
                 drop_empty_middle: true,
                 drop_empty_end: false,
-            }].debug_string()
+            }].to_debug_string()
         ),
         "[%[], %[A], %[B], %[E], %[]]"
     );
@@ -331,7 +331,7 @@ fn test_split() {
 #[test]
 fn test_comma_split() {
     preinterpret_assert_eq!(
-        #([!comma_split! Pizza, Mac and Cheese, Hamburger,].debug_string()),
+        #([!comma_split! Pizza, Mac and Cheese, Hamburger,].to_debug_string()),
         "[%[Pizza], %[Mac and Cheese], %[Hamburger]]"
     );
 }
@@ -339,7 +339,7 @@ fn test_comma_split() {
 #[test]
 fn test_zip() {
     preinterpret_assert_eq!(
-        #([!zip! [%[Hello "Goodbye"], ["World", "Friend"]]].debug_string()),
+        #([!zip! [%[Hello "Goodbye"], ["World", "Friend"]]].to_debug_string()),
         r#"[[%[Hello], "World"], ["Goodbye", "Friend"]]"#,
     );
     preinterpret_assert_eq!(
@@ -347,7 +347,7 @@ fn test_zip() {
             let countries = %["France" "Germany" "Italy"];
             let flags = %["🇫🇷" "🇩🇪" "🇮🇹"];
             let capitals = %["Paris" "Berlin" "Rome"];
-            [!zip! [countries, flags, capitals]].debug_string()
+            [!zip! [countries, flags, capitals]].to_debug_string()
         ),
         r#"[["France", "🇫🇷", "Paris"], ["Germany", "🇩🇪", "Berlin"], ["Italy", "🇮🇹", "Rome"]]"#,
     );
@@ -355,7 +355,7 @@ fn test_zip() {
         #(
             let longer = %[A B C D];
             let shorter = [1, 2, 3];
-            [!zip_truncated! [longer, shorter.take()]].debug_string()
+            [!zip_truncated! [longer, shorter.take()]].to_debug_string()
         ),
         r#"[[%[A], 1], [%[B], 2], [%[C], 3]]"#,
     );
@@ -363,7 +363,7 @@ fn test_zip() {
         #(
             let letters = %[A B C];
             let numbers = [1, 2, 3];
-            [!zip! [letters, numbers.take()]].debug_string()
+            [!zip! [letters, numbers.take()]].to_debug_string()
         ),
         r#"[[%[A], 1], [%[B], 2], [%[C], 3]]"#,
     );
@@ -372,7 +372,7 @@ fn test_zip() {
             let letters = %[A B C];
             let numbers = [1, 2, 3];
             let combined = [letters, numbers.take()];
-            [!zip! combined.take()].debug_string()
+            [!zip! combined.take()].to_debug_string()
         ),
         r#"[[%[A], 1], [%[B], 2], [%[C], 3]]"#,
     );
@@ -380,12 +380,12 @@ fn test_zip() {
         #(
             #(let letters = %[A B C];);
             let numbers = [1, 2, 3];
-            [!zip! %{ number: numbers.take(), letter: letters }].debug_string()
+            [!zip! %{ number: numbers.take(), letter: letters }].to_debug_string()
         ),
         r#"[{ letter: %[A], number: 1 }, { letter: %[B], number: 2 }, { letter: %[C], number: 3 }]"#,
     );
-    preinterpret_assert_eq!(#([!zip![]].debug_string()), r#"[]"#);
-    preinterpret_assert_eq!(#([!zip! %{}].debug_string()), r#"[]"#);
+    preinterpret_assert_eq!(#([!zip![]].to_debug_string()), r#"[]"#);
+    preinterpret_assert_eq!(#([!zip! %{}].to_debug_string()), r#"[]"#);
 }
 
 #[test]

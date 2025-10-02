@@ -66,7 +66,7 @@ impl ExpressionStream {
     pub(crate) fn resolve_content_span_range(&self) -> Option<SpanRange> {
         // Consider the case where preinterpret embeds in a declarative macro, and we have
         // an error like this:
-        // %[$input].error("Expected 100, got " + %[$input].debug_string())
+        // %[$input].error("Expected 100, got " + %[$input].to_debug_string())
         //
         // In cases like this, rustc wraps $input in a transparent group, which means that
         // the span of that group is the span of the tokens "$input" in the definition of the
