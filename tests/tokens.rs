@@ -18,36 +18,53 @@ fn test_empty_stream_is_empty() {
     preinterpret_assert_eq!({
         %[] "hello" %[] %[]
     }, "hello");
-    preinterpret_assert_eq!([!is_empty!], true);
-    preinterpret_assert_eq!([!is_empty! %[]], true);
-    preinterpret_assert_eq!([!is_empty! %[] %[]], true);
-    preinterpret_assert_eq!([!is_empty! Not Empty], false);
-    preinterpret_assert_eq!({
-        #(let x = %[];)
-        [!is_empty! #x]
-    }, true);
-    preinterpret_assert_eq!({
-        #(let x = %[];)
-        #(let x = %[#x is no longer empty];)
-        [!is_empty! #x]
-    }, false);
+    assert_eq!(run!(%[].is_empty()), true);
+    assert_eq!(run!(%[%[]].is_empty()), true);
+    assert_eq!(run!(%[%[] %[]].is_empty()), true);
+    assert_eq!(run!(%[Not Empty].is_empty()), false);
+    assert_eq!(run!(%[%group[]].is_empty()), false);
+    assert_eq!(run!(%group[].is_empty()), false);
+    assert_eq!(
+        run! {
+            let x = %[];
+            x.is_empty()
+        },
+        true
+    );
+    assert_eq!(
+        run! {
+            let x = %[];
+            let x = %[#x is no longer empty];
+            x.is_empty()
+        },
+        false
+    );
 }
 
 #[test]
 fn test_length_and_group() {
-    preinterpret_assert_eq!({
-        [!length! "hello" World]
-    }, 2);
-    preinterpret_assert_eq!({ [!length! ("hello" World)] }, 1);
-    preinterpret_assert_eq!({ [!length! %group["hello" World]] }, 1);
-    preinterpret_assert_eq!({
-        #(let x = %[Hello "World" (1 2 3 4 5)];)
-        [!length! #x]
-    }, 3);
-    preinterpret_assert_eq!({
-        #(let x = %[Hello "World" (1 2 3 4 5)];)
-        [!length! #(x.to_group())]
-    }, 1);
+    assert_eq!(
+        run! {
+            %["hello" World].len()
+        },
+        2
+    );
+    assert_eq!(run! { %[("hello" World)].len() }, 1);
+    assert_eq!(run! { %[%group["hello" World]].len() }, 1);
+    assert_eq!(
+        run! {
+            let x = %[Hello "World" (1 2 3 4 5)];
+            x.len()
+        },
+        3
+    );
+    assert_eq!(
+        run! {
+            let x = %[Hello "World" (1 2 3 4 5)];
+            x.to_group().len()
+        },
+        1
+    );
 }
 
 #[test]

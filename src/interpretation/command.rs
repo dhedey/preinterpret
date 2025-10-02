@@ -273,8 +273,6 @@ define_command_enums! {
     BreakCommand,
 
     // Token Commands
-    IsEmptyCommand,
-    LengthCommand,
     IntersperseCommand,
     SplitCommand,
     CommaSplitCommand,

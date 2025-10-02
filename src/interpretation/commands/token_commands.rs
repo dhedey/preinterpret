@@ -1,56 +1,6 @@
 use crate::internal_prelude::*;
 
 #[derive(Clone)]
-pub(crate) struct IsEmptyCommand {
-    arguments: SourceStream,
-}
-
-impl CommandType for IsEmptyCommand {
-    type OutputKind = OutputKindValue;
-}
-
-impl ValueCommandDefinition for IsEmptyCommand {
-    const COMMAND_NAME: &'static str = "is_empty";
-
-    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
-        Ok(Self {
-            arguments: arguments.parse_all_as_source()?,
-        })
-    }
-
-    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue> {
-        let output_span_range = self.arguments.span_range();
-        let interpreted = self.arguments.interpret_to_new_stream(interpreter)?;
-        Ok(interpreted.is_empty().to_value(output_span_range))
-    }
-}
-
-#[derive(Clone)]
-pub(crate) struct LengthCommand {
-    arguments: SourceStream,
-}
-
-impl CommandType for LengthCommand {
-    type OutputKind = OutputKindValue;
-}
-
-impl ValueCommandDefinition for LengthCommand {
-    const COMMAND_NAME: &'static str = "length";
-
-    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
-        Ok(Self {
-            arguments: arguments.parse_all_as_source()?,
-        })
-    }
-
-    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue> {
-        let output_span_range = self.arguments.span_range();
-        let interpreted = self.arguments.interpret_to_new_stream(interpreter)?;
-        Ok(interpreted.len().to_value(output_span_range))
-    }
-}
-
-#[derive(Clone)]
 pub(crate) struct IntersperseCommand {
     span: Span,
     inputs: SourceIntersperseInputs,

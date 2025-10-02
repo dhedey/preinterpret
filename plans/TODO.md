@@ -23,9 +23,13 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 - [x] Migrate `ErrorCommand`
 - [x] Migrate `ReinterpretCommand`
 - [x] Fix naming of `.string()` etc to `.to_string()`, `.to_stream()`, `.to_group()`, `.to_debug_string()`
-- [ ] Migrate the `Concat & Type Convert Commands` and `Concat & String Convert Commands`, and decide on method names for e.g. `string()`
+- [x] Migrate the `Concat & Type Convert Commands` and `Concat & String Convert Commands`, and decide on method names for e.g. `string()`
   * `.to_literal()`, `.concat()`, `.to_ident()`, `.to_ident_camel()`, `.to_ident_snake()`, `.to_ident_upper_snake()`
   * String: `.to_lowercase()` <- maybe shouldn't concat, others can: `.to_snake_case()`, `.capitalize()` etc
+- [x] Migrate `!is_empty!` and `!length!`
+- [ ] Migrate `!intersperse!`
+- [ ] Migrate `!split!` and `!comma_split!`
+- [ ] Migrate `!zip!` and `!zip_truncated!`
 
 ## Span changes
 

@@ -131,17 +131,21 @@ define_interface! {
     parent: ValueTypeData,
     pub(crate) mod stream_interface {
         pub(crate) mod methods {
-            fn len(this: Shared<ExpressionStream>) -> ExecutionResult<usize> {
-                Ok(this.value.len())
+            fn len(this: Ref<OutputStream>) -> ExecutionResult<usize> {
+                Ok(this.len())
             }
 
-            fn flatten(this: Owned<ExpressionStream>) -> ExecutionResult<TokenStream> {
-                Ok(this.into_inner().value.to_token_stream_removing_any_transparent_groups())
+            fn is_empty(this: Ref<OutputStream>) -> bool {
+                this.is_empty()
             }
 
-            fn infer(this: Owned<ExpressionStream>) -> ExecutionResult<ExpressionValue> {
-                let span_range = this.span_range();
-                Ok(this.into_inner().value.coerce_into_value(span_range))
+            fn flatten(this: OutputStream) -> ExecutionResult<TokenStream> {
+                Ok(this.to_token_stream_removing_any_transparent_groups())
+            }
+
+            fn infer(this: Owned<OutputStream>) -> ExecutionResult<ExpressionValue> {
+                let (this, span_range) = this.deconstruct();
+                Ok(this.coerce_into_value(span_range))
             }
 
             // STRING-BASED CONVERSION METHODS
