@@ -468,241 +468,259 @@ impl ToExpressionValue for UntypedInteger {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct UntypedIntegerTypeData;
+define_interface! {
+    struct UntypedIntegerTypeData,
+    parent: IntegerTypeData,
+    pub(crate) mod untyped_integer_interface {
+        pub(crate) mod methods {
+        }
+        pub(crate) mod unary_operations {
+            fn neg(this: Owned<UntypedInteger>) -> ExecutionResult<UntypedInteger> {
+                let (value, span_range) = this.deconstruct();
+                let input = value.parse_fallback()?;
+                match input.checked_neg() {
+                    Some(negated) => Ok(UntypedInteger::from_fallback(negated)),
+                    None => span_range.execution_err("Negating this value would overflow in i128 space"),
+                }
+            }
 
-impl MethodResolutionTarget for UntypedIntegerTypeData {
-    type Parent = IntegerTypeData;
-    const PARENT: Option<Self::Parent> = Some(IntegerTypeData);
+            fn cast_to_untyped_integer(input: UntypedIntegerFallback) -> UntypedInteger {
+                UntypedInteger::from_fallback(input.0)
+            }
 
-    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
-        Some(match operation {
-            UnaryOperation::Neg { .. } => {
-                wrap_unary!((this: Owned<UntypedInteger>) -> ExecutionResult<UntypedInteger> {
-                    let (value, span_range) = this.deconstruct();
-                    let input = value.parse_fallback()?;
-                    match input.checked_neg() {
-                        Some(negated) => Ok(UntypedInteger::from_fallback(negated)),
-                        None => span_range.execution_err("Negating this value would overflow in i128 space"),
-                    }
+            fn cast_to_i8(input: UntypedIntegerFallback) -> i8 {
+                input.0 as i8
+            }
+
+            fn cast_to_i16(input: UntypedIntegerFallback) -> i16 {
+                input.0 as i16
+            }
+
+            fn cast_to_i32(input: UntypedIntegerFallback) -> i32 {
+                input.0 as i32
+            }
+
+            fn cast_to_i64(input: UntypedIntegerFallback) -> i64 {
+                input.0 as i64
+            }
+
+            fn cast_to_i128(input: UntypedIntegerFallback) -> i128 {
+                input.0
+            }
+
+            fn cast_to_isize(input: UntypedIntegerFallback) -> isize {
+                input.0 as isize
+            }
+
+            fn cast_to_u8(input: UntypedIntegerFallback) -> u8 {
+                input.0 as u8
+            }
+
+            fn cast_to_u16(input: UntypedIntegerFallback) -> u16 {
+                input.0 as u16
+            }
+
+            fn cast_to_u32(input: UntypedIntegerFallback) -> u32 {
+                input.0 as u32
+            }
+
+            fn cast_to_u64(input: UntypedIntegerFallback) -> u64 {
+                input.0 as u64
+            }
+
+            fn cast_to_u128(input: UntypedIntegerFallback) -> u128 {
+                input.0 as u128
+            }
+
+            fn cast_to_usize(input: UntypedIntegerFallback) -> usize {
+                input.0 as usize
+            }
+
+            fn cast_to_untyped_float(input: UntypedIntegerFallback) -> UntypedFloat {
+                UntypedFloat::from_fallback(input.0 as FallbackFloat)
+            }
+
+            fn cast_to_f32(input: UntypedIntegerFallback) -> f32 {
+                input.0 as f32
+            }
+
+            fn cast_to_f64(input: UntypedIntegerFallback) -> f64 {
+                input.0 as f64
+            }
+
+            fn cast_to_string(input: UntypedIntegerFallback) -> String {
+                input.0.to_string()
+            }
+        }
+        interface_items {
+            fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+                Some(match operation {
+                    UnaryOperation::Neg { .. } => unary_definitions::neg(),
+                    UnaryOperation::Cast { target, .. } => match target {
+                        CastTarget::Integer(IntegerKind::Untyped) => unary_definitions::cast_to_untyped_integer(),
+                        CastTarget::Integer(IntegerKind::I8) => unary_definitions::cast_to_i8(),
+                        CastTarget::Integer(IntegerKind::I16) => unary_definitions::cast_to_i16(),
+                        CastTarget::Integer(IntegerKind::I32) => unary_definitions::cast_to_i32(),
+                        CastTarget::Integer(IntegerKind::I64) => unary_definitions::cast_to_i64(),
+                        CastTarget::Integer(IntegerKind::I128) => unary_definitions::cast_to_i128(),
+                        CastTarget::Integer(IntegerKind::Isize) => unary_definitions::cast_to_isize(),
+                        CastTarget::Integer(IntegerKind::U8) => unary_definitions::cast_to_u8(),
+                        CastTarget::Integer(IntegerKind::U16) => unary_definitions::cast_to_u16(),
+                        CastTarget::Integer(IntegerKind::U32) => unary_definitions::cast_to_u32(),
+                        CastTarget::Integer(IntegerKind::U64) => unary_definitions::cast_to_u64(),
+                        CastTarget::Integer(IntegerKind::U128) => unary_definitions::cast_to_u128(),
+                        CastTarget::Integer(IntegerKind::Usize) => unary_definitions::cast_to_usize(),
+                        CastTarget::Float(FloatKind::Untyped) => unary_definitions::cast_to_untyped_float(),
+                        CastTarget::Float(FloatKind::F32) => unary_definitions::cast_to_f32(),
+                        CastTarget::Float(FloatKind::F64) => unary_definitions::cast_to_f64(),
+                        CastTarget::String => unary_definitions::cast_to_string(),
+                        _ => return None,
+                    },
+                    _ => return None,
                 })
             }
-            UnaryOperation::Cast { target, .. } => match target {
-                CastTarget::Integer(IntegerKind::Untyped) => {
-                    wrap_unary!((input: UntypedIntegerFallback) -> UntypedInteger {
-                        UntypedInteger::from_fallback(input.0)
-                    })
-                }
-                CastTarget::Integer(IntegerKind::I8) => {
-                    wrap_unary!((input: UntypedIntegerFallback) -> i8 {
-                        input.0 as i8
-                    })
-                }
-                CastTarget::Integer(IntegerKind::I16) => {
-                    wrap_unary!((input: UntypedIntegerFallback) -> i16 {
-                        input.0 as i16
-                    })
-                }
-                CastTarget::Integer(IntegerKind::I32) => {
-                    wrap_unary!((input: UntypedIntegerFallback) -> i32 {
-                        input.0 as i32
-                    })
-                }
-                CastTarget::Integer(IntegerKind::I64) => {
-                    wrap_unary!((input: UntypedIntegerFallback) -> i64 {
-                        input.0 as i64
-                    })
-                }
-                CastTarget::Integer(IntegerKind::I128) => {
-                    wrap_unary!((input: UntypedIntegerFallback) -> i128 {
-                        input.0
-                    })
-                }
-                CastTarget::Integer(IntegerKind::Isize) => {
-                    wrap_unary!((input: UntypedIntegerFallback) -> isize {
-                        input.0 as isize
-                    })
-                }
-                CastTarget::Integer(IntegerKind::U8) => {
-                    wrap_unary!((input: UntypedIntegerFallback) -> u8 {
-                        input.0 as u8
-                    })
-                }
-                CastTarget::Integer(IntegerKind::U16) => {
-                    wrap_unary!((input: UntypedIntegerFallback) -> u16 {
-                        input.0 as u16
-                    })
-                }
-                CastTarget::Integer(IntegerKind::U32) => {
-                    wrap_unary!((input: UntypedIntegerFallback) -> u32 {
-                        input.0 as u32
-                    })
-                }
-                CastTarget::Integer(IntegerKind::U64) => {
-                    wrap_unary!((input: UntypedIntegerFallback) -> u64 {
-                        input.0 as u64
-                    })
-                }
-                CastTarget::Integer(IntegerKind::U128) => {
-                    wrap_unary!((input: UntypedIntegerFallback) -> u128 {
-                        input.0 as u128
-                    })
-                }
-                CastTarget::Integer(IntegerKind::Usize) => {
-                    wrap_unary!((input: UntypedIntegerFallback) -> usize {
-                        input.0 as usize
-                    })
-                }
-                CastTarget::Float(FloatKind::Untyped) => {
-                    wrap_unary!((input: UntypedIntegerFallback) -> UntypedFloat {
-                        UntypedFloat::from_fallback(input.0 as FallbackFloat)
-                    })
-                }
-                CastTarget::Float(FloatKind::F32) => {
-                    wrap_unary!((input: UntypedIntegerFallback) -> f32 {
-                        input.0 as f32
-                    })
-                }
-                CastTarget::Float(FloatKind::F64) => {
-                    wrap_unary!((input: UntypedIntegerFallback) -> f64 {
-                        input.0 as f64
-                    })
-                }
-                CastTarget::String => {
-                    wrap_unary!((input: UntypedIntegerFallback) -> String {
-                        input.0.to_string()
-                    })
-                }
-                _ => return None,
-            },
-            _ => return None,
-        })
+        }
     }
 }
 
 // We have to use a macro because we don't have checked xx traits :(
 macro_rules! impl_int_operations {
     (
-        $($integer_type_data:ident: [$(CharCast[$($char_cast:ident)*],)?$(Signed[$($signed:ident)*],)?] $integer_enum_variant:ident($integer_type:ident)),* $(,)?
+        $($integer_type_data:ident mod $mod_name:ident: [$(CharCast[$char_cast:ident],)?$(Signed[$signed:ident],)?] $integer_enum_variant:ident($integer_type:ident)),* $(,)?
     ) => {$(
-        #[derive(Clone, Copy)]
-        pub(crate) struct $integer_type_data;
-
-        impl MethodResolutionTarget for $integer_type_data {
-            type Parent = IntegerTypeData;
-            const PARENT: Option<Self::Parent> = Some(IntegerTypeData);
-
-            #[allow(unreachable_code)]
-            fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
-                Some(match operation {
+        define_interface! {
+            struct $integer_type_data,
+            parent: IntegerTypeData,
+            pub(crate) mod $mod_name {
+                pub(crate) mod methods {
+                }
+                pub(crate) mod unary_operations {
                     $(
-                        UnaryOperation::Neg { .. } => wrap_unary!((this: Owned<$integer_type>) -> ExecutionResult<$integer_type> {
-                            ignore_all!($($signed)*); // Make it so that it is only defined for signed types
+                        fn neg(this: Owned<$integer_type>) -> ExecutionResult<$integer_type> {
+                            ignore_all!($signed); // Include only for signed types
                             let (value, span_range) = this.deconstruct();
                             match value.checked_neg() {
                                 Some(negated) => Ok(negated),
                                 None => span_range.execution_err("Negating this value would overflow"),
                             }
-                        }),
+                        }
                     )?
-                    UnaryOperation::Cast { target, .. } => match target {
-                        $(
-                            CastTarget::Char => {
-                                wrap_unary!((input: $integer_type) -> char {
-                                    ignore_all!($($char_cast)*); // Make it so that it is only defined for opted-in types
-                                    input as char
-                                })
-                            }
-                        )?
-                        CastTarget::Integer(IntegerKind::Untyped) => {
-                            wrap_unary!((input: $integer_type) -> UntypedInteger {
-                                UntypedInteger::from_fallback(input as FallbackInteger)
-                            })
+
+                    $(
+                        fn cast_to_char(input: $integer_type) -> char {
+                            ignore_all!($char_cast); // Include only for types with CharCast
+                            input as char
                         }
-                        CastTarget::Integer(IntegerKind::I8) => {
-                            wrap_unary!((input: $integer_type) -> i8 {
-                                input as i8
-                            })
-                        }
-                        CastTarget::Integer(IntegerKind::I16) => {
-                            wrap_unary!((input: $integer_type) -> i16 {
-                                input as i16
-                            })
-                        }
-                        CastTarget::Integer(IntegerKind::I32) => {
-                            wrap_unary!((input: $integer_type) -> i32 {
-                                input as i32
-                            })
-                        }
-                        CastTarget::Integer(IntegerKind::I64) => {
-                            wrap_unary!((input: $integer_type) -> i64 {
-                                input as i64
-                            })
-                        }
-                        CastTarget::Integer(IntegerKind::I128) => {
-                            wrap_unary!((input: $integer_type) -> i128 {
-                                input as i128
-                            })
-                        }
-                        CastTarget::Integer(IntegerKind::Isize) => {
-                            wrap_unary!((input: $integer_type) -> isize {
-                                input as isize
-                            })
-                        }
-                        CastTarget::Integer(IntegerKind::U8) => {
-                            wrap_unary!((input: $integer_type) -> u8 {
-                                input as u8
-                            })
-                        }
-                        CastTarget::Integer(IntegerKind::U16) => {
-                            wrap_unary!((input: $integer_type) -> u16 {
-                                input as u16
-                            })
-                        }
-                        CastTarget::Integer(IntegerKind::U32) => {
-                            wrap_unary!((input: $integer_type) -> u32 {
-                                input as u32
-                            })
-                        }
-                        CastTarget::Integer(IntegerKind::U64) => {
-                            wrap_unary!((input: $integer_type) -> u64 {
-                                input as u64
-                            })
-                        }
-                        CastTarget::Integer(IntegerKind::U128) => {
-                            wrap_unary!((input: $integer_type) -> u128 {
-                                input as u128
-                            })
-                        }
-                        CastTarget::Integer(IntegerKind::Usize) => {
-                            wrap_unary!((input: $integer_type) -> usize {
-                                input as usize
-                            })
-                        }
-                        CastTarget::Float(FloatKind::Untyped) => {
-                            wrap_unary!((input: $integer_type) -> UntypedFloat {
-                                UntypedFloat::from_fallback(input as FallbackFloat)
-                            })
-                        }
-                        CastTarget::Float(FloatKind::F32) => {
-                            wrap_unary!((input: $integer_type) -> f32 {
-                                input as f32
-                            })
-                        }
-                        CastTarget::Float(FloatKind::F64) => {
-                            wrap_unary!((input: $integer_type) -> f64 {
-                                input as f64
-                            })
-                        }
-                        CastTarget::String => {
-                            wrap_unary!((input: $integer_type) -> String {
-                                input.to_string()
-                            })
-                        }
-                        _ => return None,
+                    )?
+
+                    fn cast_to_untyped_integer(input: $integer_type) -> UntypedInteger {
+                        UntypedInteger::from_fallback(input as FallbackInteger)
                     }
-                    _ => return None,
-                })
+
+                    fn cast_to_i8(input: $integer_type) -> i8 {
+                        input as i8
+                    }
+
+                    fn cast_to_i16(input: $integer_type) -> i16 {
+                        input as i16
+                    }
+
+                    fn cast_to_i32(input: $integer_type) -> i32 {
+                        input as i32
+                    }
+
+                    fn cast_to_i64(input: $integer_type) -> i64 {
+                        input as i64
+                    }
+
+                    fn cast_to_i128(input: $integer_type) -> i128 {
+                        input as i128
+                    }
+
+                    fn cast_to_isize(input: $integer_type) -> isize {
+                        input as isize
+                    }
+
+                    fn cast_to_u8(input: $integer_type) -> u8 {
+                        input as u8
+                    }
+
+                    fn cast_to_u16(input: $integer_type) -> u16 {
+                        input as u16
+                    }
+
+                    fn cast_to_u32(input: $integer_type) -> u32 {
+                        input as u32
+                    }
+
+                    fn cast_to_u64(input: $integer_type) -> u64 {
+                        input as u64
+                    }
+
+                    fn cast_to_u128(input: $integer_type) -> u128 {
+                        input as u128
+                    }
+
+                    fn cast_to_usize(input: $integer_type) -> usize {
+                        input as usize
+                    }
+
+                    fn cast_to_untyped_float(input: $integer_type) -> UntypedFloat {
+                        UntypedFloat::from_fallback(input as FallbackFloat)
+                    }
+
+                    fn cast_to_f32(input: $integer_type) -> f32 {
+                        input as f32
+                    }
+
+                    fn cast_to_f64(input: $integer_type) -> f64 {
+                        input as f64
+                    }
+
+                    fn cast_to_string(input: $integer_type) -> String {
+                        input.to_string()
+                    }
+                }
+                interface_items {
+                    #[allow(unreachable_code)]
+                    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+                        Some(match operation {
+                            $(
+                                UnaryOperation::Neg { .. } => {
+                                    ignore_all!($signed); // Only include for signed types
+                                    unary_definitions::neg()
+                                }
+                            )?
+                            UnaryOperation::Cast { target, .. } => match target {
+                                $(
+                                    CastTarget::Char => {
+                                        ignore_all!($char_cast); // Only include for types with CharCast
+                                        unary_definitions::cast_to_char()
+                                    }
+                                )?
+                                CastTarget::Integer(IntegerKind::Untyped) => unary_definitions::cast_to_untyped_integer(),
+                                CastTarget::Integer(IntegerKind::I8) => unary_definitions::cast_to_i8(),
+                                CastTarget::Integer(IntegerKind::I16) => unary_definitions::cast_to_i16(),
+                                CastTarget::Integer(IntegerKind::I32) => unary_definitions::cast_to_i32(),
+                                CastTarget::Integer(IntegerKind::I64) => unary_definitions::cast_to_i64(),
+                                CastTarget::Integer(IntegerKind::I128) => unary_definitions::cast_to_i128(),
+                                CastTarget::Integer(IntegerKind::Isize) => unary_definitions::cast_to_isize(),
+                                CastTarget::Integer(IntegerKind::U8) => unary_definitions::cast_to_u8(),
+                                CastTarget::Integer(IntegerKind::U16) => unary_definitions::cast_to_u16(),
+                                CastTarget::Integer(IntegerKind::U32) => unary_definitions::cast_to_u32(),
+                                CastTarget::Integer(IntegerKind::U64) => unary_definitions::cast_to_u64(),
+                                CastTarget::Integer(IntegerKind::U128) => unary_definitions::cast_to_u128(),
+                                CastTarget::Integer(IntegerKind::Usize) => unary_definitions::cast_to_usize(),
+                                CastTarget::Float(FloatKind::Untyped) => unary_definitions::cast_to_untyped_float(),
+                                CastTarget::Float(FloatKind::F32) => unary_definitions::cast_to_f32(),
+                                CastTarget::Float(FloatKind::F64) => unary_definitions::cast_to_f64(),
+                                CastTarget::String => unary_definitions::cast_to_string(),
+                                _ => return None,
+                            }
+                            _ => return None,
+                        })
+                    }
+                }
             }
         }
 
@@ -793,16 +811,16 @@ macro_rules! impl_int_operations {
 }
 
 impl_int_operations!(
-    U8TypeData: [CharCast[],] U8(u8),
-    U16TypeData: [] U16(u16),
-    U32TypeData: [] U32(u32),
-    U64TypeData: [] U64(u64),
-    U128TypeData: [] U128(u128),
-    UsizeTypeData: [] Usize(usize),
-    I8TypeData: [Signed[],] I8(i8),
-    I16TypeData: [Signed[],] I16(i16),
-    I32TypeData: [Signed[],] I32(i32),
-    I64TypeData: [Signed[],] I64(i64),
-    I128TypeData: [Signed[],] I128(i128),
-    IsizeTypeData: [Signed[],] Isize(isize),
+    U8TypeData mod u8_interface: [CharCast[yes],] U8(u8),
+    U16TypeData mod u16_interface: [] U16(u16),
+    U32TypeData mod u32_interface: [] U32(u32),
+    U64TypeData mod u64_interface: [] U64(u64),
+    U128TypeData mod u128_interface: [] U128(u128),
+    UsizeTypeData mod usize_interface: [] Usize(usize),
+    I8TypeData mod i8_interface: [Signed[yes],] I8(i8),
+    I16TypeData mod i16_interface: [Signed[yes],] I16(i16),
+    I32TypeData mod i32_interface: [Signed[yes],] I32(i32),
+    I64TypeData mod i64_interface: [Signed[yes],] I64(i64),
+    I128TypeData mod i128_interface: [Signed[yes],] I128(i128),
+    IsizeTypeData mod isize_interface: [Signed[yes],] Isize(isize),
 );
