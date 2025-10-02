@@ -397,7 +397,7 @@ fn test_zip_with_for() {
             #(let capitals = %["Paris" "Berlin" "Rome"];)
             #(let facts = [])
             [!for! [country, flag, capital] in [!zip! [countries, flags.take(), capitals]] {
-                #(facts.push([!string! "=> The capital of " #country " is " #capital " and its flag is " #flag]))
+                #(facts.push(%["=> The capital of " #country " is " #capital " and its flag is " #flag].to_string()))
             }]
 
             #("The facts are:\n" + [!intersperse! %{

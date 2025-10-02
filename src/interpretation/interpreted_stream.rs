@@ -54,6 +54,25 @@ impl OutputStream {
         }
     }
 
+    pub(crate) fn new_with(
+        appender: impl FnOnce(&mut Self) -> ExecutionResult<()>,
+    ) -> ExecutionResult<Self> {
+        let mut stream = Self::new();
+        appender(&mut stream)?;
+        Ok(stream)
+    }
+
+    #[allow(unused)]
+    pub(crate) fn new_grouped(
+        appender: impl FnOnce(&mut Self) -> ExecutionResult<()>,
+        delimiter: Delimiter,
+        span: Span,
+    ) -> ExecutionResult<Self> {
+        let mut stream = Self::new();
+        stream.push_grouped(appender, delimiter, span)?;
+        Ok(stream)
+    }
+
     pub(crate) fn raw(token_stream: TokenStream) -> Self {
         let mut new = Self::new();
         new.extend_raw_tokens(token_stream);
@@ -254,7 +273,7 @@ impl OutputStream {
         output
     }
 
-    pub(crate) fn concat_recursive(self, behaviour: &ConcatBehaviour) -> String {
+    pub(crate) fn concat_recursive(&self, behaviour: &ConcatBehaviour) -> String {
         let mut output = String::new();
         self.concat_recursive_into(&mut output, behaviour);
         output

@@ -757,7 +757,7 @@ impl ExpressionValue {
                 output.push_grouped(
                     |inner| self.output_flattened_to(inner),
                     Delimiter::None,
-                    self.span_range().join_into_span_else_start(),
+                    self.span_from_join_else_start(),
                 )?;
             }
             Grouping::Flattened => {

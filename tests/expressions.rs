@@ -94,22 +94,22 @@ fn test_expression_precedence() {
 fn test_reinterpret() {
     assert_eq!(
         run!(
-            let method = [!ident! "lower_camel"];
-            %[[!#method! Hello World]].reinterpret_as_stream()
+            let method = "to_lower_camel_case".to_ident();
+            %["Hello World".#method()].reinterpret_as_run()
         ),
         "helloWorld"
     );
     assert_eq!(
         run!(
-            let method = [!ident! "lower_camel"];
-            %[[%raw[!]#method! Hello World]].reinterpret_as_stream()
+            let method = "to_lower_camel_case".to_ident();
+            %[%raw[%][Hello World].to_string().#method()].reinterpret_as_run()
         ),
         "helloWorld"
     );
     assert_eq!(
         run!(
-            let method = [!ident! "lower_camel"];
-            %[[%group[!]#method! Hello World]].reinterpret_as_stream()
+            let method = "to_lower_camel_case".to_ident();
+            %[%group[%][Hello World].to_string().#method()].reinterpret_as_run()
         ),
         "helloWorld"
     );
@@ -267,7 +267,7 @@ fn test_range() {
         },
         ""
     );
-    preinterpret_assert_eq!({ [!string! #(('a'..='f') as stream)] }, "abcdef");
+    preinterpret_assert_eq!(#((('a'..='f') as stream).to_string()), "abcdef");
     preinterpret_assert_eq!(
         #((-1i8..3i8).to_debug_string()),
         "-1i8..3i8"
@@ -284,7 +284,7 @@ fn test_range() {
     preinterpret_assert_eq!(
         [!for! i in 0..10000000 {
             [!if! i == 5 {
-                [!string! #i]
+                #(i.to_string())
                 [!break!]
             }]
         }],
@@ -578,7 +578,7 @@ fn test_method_calls() {
             let a = "a";
             let b = "b";
             a.swap(b);
-            [!string! #a " - " #b]
+            %[#a " - " #b].to_string()
         ),
         "b - a"
     );

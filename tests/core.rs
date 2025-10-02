@@ -19,13 +19,16 @@ fn test_simple_let() {
         #(let output = %["Hello World!"];)
         #output
     }, "Hello World!");
-    preinterpret_assert_eq!({
-        #(let hello = %["Hello"];)
-        #(let world = %["World"];)
-        #(let output = %[#hello " " #world "!"];)
-        #(let output = [!string! #output];)
-        #output
-    }, "Hello World!");
+    assert_eq!(
+        run! {
+            let hello = %["Hello"];
+            let world = %["World"];
+            let output = %[#hello " " #world "!"];
+            let output = output.to_string();
+            output
+        },
+        "Hello World!"
+    );
 }
 
 #[test]
@@ -38,26 +41,26 @@ fn test_raw() {
 
 #[test]
 fn test_extend() {
-    preinterpret_assert_eq!(
-        {
-            #(let variable = %["Hello"];)
-            #(variable += %[" World!"];)
-            [!string! #variable]
+    assert_eq!(
+        run! {
+            let variable = %["Hello"];
+            variable += %[" World!"];
+            variable.to_debug_string()
         },
-        "Hello World!"
+        r#"%["Hello" " World!"]"#,
     );
-    preinterpret_assert_eq!(
-        {
-            #(let i = 1)
-            #(let output = %[];)
-            [!while! i <= 4 {
+    assert_eq!(
+        run! {
+            let i = 1;
+            let output = %[];
+            let _ = [!while! i <= 4 {
                 #(output += %[#i];)
                 [!if! i <= 3 {
                     #(output += %[", "];)
                 }]
                 #(i += 1)
-            }]
-            [!string! #output]
+            }];
+            output.to_string()
         },
         "1, 2, 3, 4"
     );
@@ -65,67 +68,82 @@ fn test_extend() {
 
 #[test]
 fn test_ignore() {
-    preinterpret_assert_eq!({
-        #(let x = %[false];)
-        // Using `let _ = %raw[...]` effectively acts as ignoring any tokens.
-        #(let _ = %raw[#(let x = %[true];) nothing is interpreted. Everything is ignored...])
-        #x
-    }, false);
+    assert_eq!(
+        run! {
+            let x = %[false];
+            // Using `let _ = %raw[...]` effectively acts as ignoring any tokens.
+            let _ = %raw[#(let x = %[true];) nothing is interpreted. Everything is ignored...];
+            x
+        },
+        false
+    );
 }
 
 #[test]
 fn test_empty_set() {
-    preinterpret_assert_eq!({
-        #(let x = %[];)
-        #(x += %["hello"];)
-        #x
-    }, "hello");
-    preinterpret_assert_eq!({
-        #(let x = %[];)
-        #(let y = %[];)
-        #(x += %["hello"];)
-        #(y += %["world"];)
-        [!string! #x " " #y]
-    }, "hello world");
-    preinterpret_assert_eq!({
-        #(let x = %[];)
-        #(let y = %[];)
-        #(let z = %[];)
-        #(x += %["hello"];)
-        #(y += %["world"];)
-        [!string! #x " " #y #z]
-    }, "hello world");
+    assert_eq!(
+        run! {
+            let x = %[];
+            x += %["hello"];
+            x
+        },
+        "hello"
+    );
+    assert_eq!(
+        run! {
+            let x = %[];
+            let y = %[];
+            x += %["hello"];
+            y += %["world"];
+            %[#x " " #y].to_string()
+        },
+        "hello world"
+    );
+    assert_eq!(
+        run! {
+            let x = %[];
+            let y = %[];
+            let z = %[];
+            x += %["hello"];
+            y += %["world"];
+            %[#x " " #y #z].to_string()
+        },
+        "hello world"
+    );
 }
 
 #[test]
 fn test_discard_set() {
-    preinterpret_assert_eq!({
-        #(let x = %[false];)
-        #(let _ = %[#(let x = %[true];) things _are_ interpreted, but the result is ignored...];)
-        #x
-    }, true);
+    assert_eq!(
+        run! {
+            let x = %[false];
+            let _ = %[#(let x = %[true];) things _are_ interpreted, but the result is ignored...];
+            x
+        },
+        true
+    );
 }
 
 #[test]
 fn test_debug() {
     // It keeps the semantic punctuation spacing intact
     // (e.g. it keeps 'a and >> together)
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!{
             %[impl<'a, T> MyStruct<'a, T> {
                 pub fn new() -> Self {
                     !($crate::Test::CONSTANT >> 5 > 1)
                 }
             }].to_debug_string()
-        ),
+        },
         "%[impl < 'a , T > MyStruct < 'a , T > { pub fn new () -> Self { ! ($ crate :: Test :: CONSTANT >> 5 > 1) } }]"
     );
     // It shows transparent groups, and uses #raw when needed
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run! {
             let x = %[Hello (World)];
             %[#(x.to_group()) %raw[#test] "and" %raw[##] #x (3 %raw[%] 2)].to_debug_string()
-        ),
+        },
         r###"%[%group[Hello (World)] %raw[#] test "and" %raw[#]%raw[#] Hello (World) (3 %raw[%] 2)]"###
     );
 }

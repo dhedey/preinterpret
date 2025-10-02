@@ -92,6 +92,97 @@ define_interface! {
     parent: ValueTypeData,
     pub(crate) mod string_interface {
         pub(crate) mod methods {
+            // ==================
+            // CONVERSION METHODS
+            // ==================
+            [context] fn to_ident(this: SpannedRef<str>) -> ExecutionResult<Ident> {
+                let str = &*this;
+                let ident = parse_str::<Ident>(str)
+                    .map_err(|err| this.error(format!("`{}` is not a valid ident: {:?}", str, err)))?
+                    .with_span(context.span_from_join_else_start());
+                Ok(ident)
+            }
+
+            [context] fn to_ident_camel(this: SpannedRef<str>) -> ExecutionResult<Ident> {
+                let str = string_conversion::to_upper_camel_case(&this);
+                let ident = parse_str::<Ident>(&str)
+                    .map_err(|err| this.error(format!("`{}` is not a valid ident: {:?}", str, err)))?
+                    .with_span(context.span_from_join_else_start());
+                Ok(ident)
+            }
+
+            [context] fn to_ident_snake(this: SpannedRef<str>) -> ExecutionResult<Ident> {
+                let str = string_conversion::to_lower_snake_case(&this);
+                let ident = parse_str::<Ident>(&str)
+                    .map_err(|err| this.error(format!("`{}` is not a valid ident: {:?}", str, err)))?
+                    .with_span(context.span_from_join_else_start());
+                Ok(ident)
+            }
+
+            [context] fn to_ident_upper_snake(this: SpannedRef<str>) -> ExecutionResult<Ident> {
+                let str = string_conversion::to_upper_snake_case(&this);
+                let ident = parse_str::<Ident>(&str)
+                    .map_err(|err| this.error(format!("`{}` is not a valid ident: {:?}", str, err)))?
+                    .with_span(context.span_from_join_else_start());
+                Ok(ident)
+            }
+
+            [context] fn to_literal(this: SpannedRef<str>) -> ExecutionResult<Literal> {
+                let str = &*this;
+                let literal = Literal::from_str(str)
+                    .map_err(|err| {
+                        this.error(format!("`{}` is not a valid literal: {:?}", str, err))
+                    })?
+                    .with_span(context.span_from_join_else_start());
+                Ok(literal)
+            }
+
+            // ======================
+            // STRING RESHAPE METHODS
+            // ======================
+            fn to_uppercase(this: Ref<str>) -> String {
+                string_conversion::to_uppercase(&this)
+            }
+
+            fn to_lowercase(this: Ref<str>) -> String {
+                string_conversion::to_lowercase(&this)
+            }
+
+            fn to_lower_snake_case(this: Ref<str>) -> String {
+                string_conversion::to_lower_snake_case(&this)
+            }
+
+            fn to_upper_snake_case(this: Ref<str>) -> String {
+                string_conversion::to_upper_snake_case(&this)
+            }
+
+            fn to_kebab_case(this: Ref<str>) -> String {
+                string_conversion::to_lower_kebab_case(&this)
+            }
+
+            fn to_lower_camel_case(this: Ref<str>) -> String {
+                string_conversion::to_lower_camel_case(&this)
+            }
+
+            fn to_upper_camel_case(this: Ref<str>) -> String {
+                string_conversion::to_upper_camel_case(&this)
+            }
+
+            fn capitalize(this: Ref<str>) -> String {
+                string_conversion::capitalize(&this)
+            }
+
+            fn decapitalize(this: Ref<str>) -> String {
+                string_conversion::decapitalize(&this)
+            }
+
+            fn to_title_case(this: Ref<str>) -> String {
+                string_conversion::title_case(&this)
+            }
+
+            fn insert_spaces(this: Ref<str>) -> String {
+                string_conversion::insert_spaces_between_words(&this)
+            }
         }
         pub(crate) mod unary_operations {
             fn cast_to_string(this: String) -> String {

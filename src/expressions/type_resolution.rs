@@ -267,6 +267,12 @@ mod macros {
         pub output_span_range: SpanRange,
     }
 
+    impl<'a> HasSpanRange for MethodCallContext<'a> {
+        fn span_range(&self) -> SpanRange {
+            self.output_span_range
+        }
+    }
+
     macro_rules! define_method_matcher {
         (
             (match $var_method_name:ident on $self:ident)
@@ -567,6 +573,22 @@ mod outputs {
         }
     }
 
+    impl ResolvableOutput for Ident {
+        fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue> {
+            let stream = OutputStream::new_with(|stream| {
+                let _: () = stream.push_ident(self);
+                Ok(())
+            })?;
+            stream.to_resolved_value(output_span_range)
+        }
+    }
+
+    impl ResolvableOutput for Literal {
+        fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue> {
+            ExpressionValue::for_literal(self).to_resolved_value(output_span_range)
+        }
+    }
+
     pub trait StreamAppender {
         fn append(self, output: &mut OutputStream) -> ExecutionResult<()>;
     }
@@ -618,7 +640,7 @@ mod arguments {
         }
     }
 
-    impl<T: ResolvableArgumentShared + ResolvableArgumentTarget> FromResolved for Shared<T> {
+    impl<T: ResolvableArgumentShared + ResolvableArgumentTarget + ?Sized> FromResolved for Shared<T> {
         type ValueType = T::ValueType;
         const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Shared;
 
@@ -627,7 +649,33 @@ mod arguments {
         }
     }
 
-    impl<T: ResolvableArgumentMutable + ResolvableArgumentTarget> FromResolved for Mutable<T> {
+    impl<T: 'static + ?Sized> FromResolved for Ref<'static, T>
+    where
+        Shared<T>: FromResolved,
+    {
+        type ValueType = <Shared<T> as FromResolved>::ValueType;
+
+        const OWNERSHIP: ResolvedValueOwnership = <Shared<T> as FromResolved>::OWNERSHIP;
+
+        fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
+            Ok(Shared::<T>::from_resolved(value)?.into())
+        }
+    }
+
+    impl<T: 'static + ?Sized> FromResolved for SpannedRef<'static, T>
+    where
+        Shared<T>: FromResolved,
+    {
+        type ValueType = <Shared<T> as FromResolved>::ValueType;
+
+        const OWNERSHIP: ResolvedValueOwnership = <Shared<T> as FromResolved>::OWNERSHIP;
+
+        fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
+            Ok(Shared::<T>::from_resolved(value)?.into())
+        }
+    }
+
+    impl<T: ResolvableArgumentMutable + ResolvableArgumentTarget + ?Sized> FromResolved for Mutable<T> {
         type ValueType = T::ValueType;
         const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Mutable;
 
@@ -635,6 +683,32 @@ mod arguments {
             value
                 .expect_mutable()
                 .try_map(|v, _| T::resolve_from_mut(v))
+        }
+    }
+
+    impl<T: 'static + ?Sized> FromResolved for SpannedRefMut<'static, T>
+    where
+        Mutable<T>: FromResolved,
+    {
+        type ValueType = <Mutable<T> as FromResolved>::ValueType;
+
+        const OWNERSHIP: ResolvedValueOwnership = <Mutable<T> as FromResolved>::OWNERSHIP;
+
+        fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
+            Ok(Mutable::<T>::from_resolved(value)?.into())
+        }
+    }
+
+    impl<T: 'static + ?Sized> FromResolved for RefMut<'static, T>
+    where
+        Mutable<T>: FromResolved,
+    {
+        type ValueType = <Mutable<T> as FromResolved>::ValueType;
+
+        const OWNERSHIP: ResolvedValueOwnership = <Mutable<T> as FromResolved>::OWNERSHIP;
+
+        fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
+            Ok(Mutable::<T>::from_resolved(value)?.into())
         }
     }
 
@@ -647,16 +721,19 @@ mod arguments {
         }
     }
 
-    impl<T: ResolvableArgumentOwned + ResolvableArgumentShared + ResolvableArgumentTarget>
-        FromResolved for CopyOnWrite<T>
+    impl<T: ResolvableArgumentShared + ResolvableArgumentTarget + ToOwned> FromResolved
+        for CopyOnWrite<T>
+    where
+        T::Owned: ResolvableArgumentOwned,
     {
         type ValueType = T::ValueType;
         const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::CopyOnWrite;
 
         fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
-            value
-                .expect_copy_on_write()
-                .map_any(T::resolve_shared, T::resolve_owned)
+            value.expect_copy_on_write().map_any(
+                T::resolve_shared,
+                <T::Owned as ResolvableArgumentOwned>::resolve_owned,
+            )
         }
     }
 
@@ -693,14 +770,14 @@ mod arguments {
         }
     }
 
-    pub(crate) trait ResolvableArgumentShared: Sized {
+    pub(crate) trait ResolvableArgumentShared {
         fn resolve_from_ref(value: &ExpressionValue) -> ExecutionResult<&Self>;
         fn resolve_shared(value: Shared<ExpressionValue>) -> ExecutionResult<Shared<Self>> {
             value.try_map(|v, _| Self::resolve_from_ref(v))
         }
     }
 
-    pub(crate) trait ResolvableArgumentMutable: Sized {
+    pub(crate) trait ResolvableArgumentMutable {
         fn resolve_from_mut(value: &mut ExpressionValue) -> ExecutionResult<&mut Self>;
         fn resolve_mutable(value: Mutable<ExpressionValue>) -> ExecutionResult<Mutable<Self>> {
             value.try_map(|v, _| Self::resolve_from_mut(v))
@@ -1040,6 +1117,19 @@ mod arguments {
         (value: ExpressionString) -> String { value.value }
     );
 
+    impl ResolvableArgumentTarget for str {
+        type ValueType = StringTypeData;
+    }
+
+    impl ResolvableArgumentShared for str {
+        fn resolve_from_ref(value: &ExpressionValue) -> ExecutionResult<&Self> {
+            match value {
+                ExpressionValue::String(s) => Ok(s.value.as_str()),
+                _ => value.execution_err("Expected string"),
+            }
+        }
+    }
+
     impl<'a> ResolveAs<&'a str> for &'a ExpressionValue {
         fn resolve_as(self) -> ExecutionResult<&'a str> {
             match self {
@@ -1093,6 +1183,11 @@ mod arguments {
             }
         }
     }
+
+    impl_delegated_resolvable_argument_for!(
+        StreamTypeData,
+        (value: ExpressionStream) -> OutputStream { value.value }
+    );
 
     impl_resolvable_argument_for! {
         RangeTypeData,

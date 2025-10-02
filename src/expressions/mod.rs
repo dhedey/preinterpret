@@ -23,6 +23,7 @@ pub(crate) use iterator::*;
 pub(crate) use object::*;
 pub(crate) use operations::*;
 pub(crate) use stream::*;
+pub(crate) use type_resolution::*;
 pub(crate) use value::*;
 
 // Marked as use for expression sub-modules to use with a `use super::*` statement
@@ -35,4 +36,3 @@ use float::*;
 use integer::*;
 use range::*;
 use string::*;
-use type_resolution::*;

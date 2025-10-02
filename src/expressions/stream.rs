@@ -144,6 +144,37 @@ define_interface! {
                 Ok(this.into_inner().value.coerce_into_value(span_range))
             }
 
+            // STRING-BASED CONVERSION METHODS
+            // ===============================
+
+            [context] fn to_ident(this: SpannedRef<OutputStream>) -> ExecutionResult<Ident> {
+                let string = this.concat_recursive(&ConcatBehaviour::standard());
+                string_interface::methods::to_ident(context, string.as_str().spanned(this.span_range()))
+            }
+
+            [context] fn to_ident_camel(this: SpannedRef<OutputStream>) -> ExecutionResult<Ident> {
+                let string = this.concat_recursive(&ConcatBehaviour::standard());
+                string_interface::methods::to_ident_camel(context, string.as_str().spanned(this.span_range()))
+            }
+
+            [context] fn to_ident_snake(this: SpannedRef<OutputStream>) -> ExecutionResult<Ident> {
+                let string = this.concat_recursive(&ConcatBehaviour::standard());
+                string_interface::methods::to_ident_snake(context, string.as_str().spanned(this.span_range()))
+            }
+
+            [context] fn to_ident_upper_snake(this: SpannedRef<OutputStream>) -> ExecutionResult<Ident> {
+                let string = this.concat_recursive(&ConcatBehaviour::standard());
+                string_interface::methods::to_ident_upper_snake(context, string.as_str().spanned(this.span_range()))
+            }
+
+            [context] fn to_literal(this: SpannedRef<OutputStream>) -> ExecutionResult<Literal> {
+                let string = this.concat_recursive(&ConcatBehaviour::literal());
+                string_interface::methods::to_literal(context, string.as_str().spanned(this.span_range()))
+            }
+
+            // CORE METHODS
+            // ============
+
             fn error(this: Shared<ExpressionStream>, message: Shared<String>) -> ExecutionResult<Never> {
                 let error_span_range = this.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
                 error_span_range.execution_err(message.as_str())

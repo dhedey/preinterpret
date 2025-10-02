@@ -15,41 +15,65 @@ fn test_transfoming_compilation_failures() {
 
 #[test]
 fn test_variable_parsing() {
-    preinterpret_assert_eq!({
-        #(let %[<Hello @(#inner = @IDENT) World>] = %[<Hello Beautiful World>];)
-        [!string! #inner]
-    }, "Beautiful");
-    preinterpret_assert_eq!({
-        #(let %[@(#inner = @REST)] = %[<Hello Beautiful World>];)
-        [!string! #inner]
-    }, "<HelloBeautifulWorld>");
-    preinterpret_assert_eq!({
-        #(let %[@(#x = @REST)] = %[Hello => World];)
-        [!string! #x]
-    }, "Hello=>World");
-    preinterpret_assert_eq!({
-        #(let %[Hello @(#x = @[UNTIL !])!!] = %[Hello => World!!];)
-        [!string! #x]
-    }, "=>World");
-    preinterpret_assert_eq!({
-        #(let %[Hello @(#x = @[UNTIL World]) World] = %[Hello => World];)
-        [!string! #x]
-    }, "=>");
-    preinterpret_assert_eq!({
-        #(let %[Hello @(#x = @[UNTIL World]) World] = %[Hello And Welcome To The Wonderful World];)
-        [!string! #x]
-    }, "AndWelcomeToTheWonderful");
-    preinterpret_assert_eq!({
-        #(let %[Hello @(#x = @[UNTIL "World"]) "World"] = %[Hello World And Welcome To The Wonderful "World"];)
-        [!string! #x]
-    }, "WorldAndWelcomeToTheWonderful");
-    preinterpret_assert_eq!({
-        #(let %[@(#x = @[UNTIL ()]) (@(#y = @[REST]))] = %[Why Hello (World)];)
-        [!string! "#x = " #x "; #y = " #y]
-    }, "#x = WhyHello; #y = World");
-    preinterpret_assert_eq!({
-        #(let x = %[];)
-        #(let %[
+    assert_eq!(
+        run! {
+            let %[<Hello @(#inner = @IDENT) World>] = %[<Hello Beautiful World>];
+            inner.to_debug_string()
+        },
+        "%[Beautiful]"
+    );
+    assert_eq!(
+        run! {
+            let %[@(#inner = @REST)] = %[<Hello Beautiful World>];
+            inner.to_debug_string()
+        },
+        "%[< Hello Beautiful World >]"
+    );
+    assert_eq!(
+        run! {
+            let %[@(#x = @REST)] = %[Hello => World];
+            x.to_debug_string()
+        },
+        "%[Hello => World]"
+    );
+    assert_eq!(
+        run! {
+            let %[Hello @(#x = @[UNTIL !])!!] = %[Hello => World!!];
+            x.to_debug_string()
+        },
+        "%[=> World]"
+    );
+    assert_eq!(
+        run! {
+            let %[Hello @(#x = @[UNTIL World]) World] = %[Hello => World];
+            x.to_debug_string()
+        },
+        "%[=>]"
+    );
+    assert_eq!(
+        run! {
+            let %[Hello @(#x = @[UNTIL World]) World] = %[Hello And Welcome To The Wonderful World];
+            x.to_debug_string()
+        },
+        "%[And Welcome To The Wonderful]"
+    );
+    assert_eq!(
+        run! {
+            let %[Hello @(#x = @[UNTIL "World"]) "World"] = %[Hello World And Welcome To The Wonderful "World"];
+            x.to_debug_string()
+        },
+        "%[World And Welcome To The Wonderful]"
+    );
+    assert_eq!(
+        run! {
+            let %[@(#x = @[UNTIL ()]) (@(#y = @[REST]))] = %[Why Hello (World)];
+            %["#x = " #x "; #y = " #y].to_string()
+        },
+        "#x = WhyHello; #y = World"
+    );
+    assert_eq!(run!{
+        let x = %[];
+        let %[
             // #>>x - Matches one tt ...and appends it as-is: Why
             @(#a = @TOKEN_TREE)
             #(x += a)
@@ -67,8 +91,8 @@ fn test_variable_parsing() {
                 @(#c = @REST)
                 #(x += c.take().flatten())
             )
-        ] = %[Why %group[it is fun to be here] Hello Everyone (%group[This is an exciting adventure] do you agree?)];)
-        #(x.to_debug_string())
+        ] = %[Why %group[it is fun to be here] Hello Everyone (%group[This is an exciting adventure] do you agree?)];
+        x.to_debug_string()
     }, "%[Why %group[it is fun to be here] %group[Hello Everyone] This is an exciting adventure do you agree ?]");
 }
 

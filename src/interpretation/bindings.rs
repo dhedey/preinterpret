@@ -1,5 +1,6 @@
 use super::*;
 
+use std::borrow::{Borrow, ToOwned};
 use std::cell::*;
 use std::rc::Rc;
 
@@ -316,12 +317,12 @@ pub(crate) type MutableValue = Mutable<ExpressionValue>;
 /// For example, for `x.y[4]`, this captures both:
 /// * The mutable reference to the location under `x`
 /// * The lexical span of the tokens `x.y[4]`
-pub(crate) struct Mutable<T: 'static> {
-    mut_cell: MutSubRcRefCell<ExpressionValue, T>,
-    span_range: SpanRange,
+pub(crate) struct Mutable<T: 'static + ?Sized> {
+    pub(super) mut_cell: MutSubRcRefCell<ExpressionValue, T>,
+    pub(super) span_range: SpanRange,
 }
 
-impl<T> Mutable<T> {
+impl<T: ?Sized> Mutable<T> {
     pub(crate) fn into_shared(self) -> Shared<T> {
         Shared {
             shared_cell: self.mut_cell.into_shared(),
@@ -330,7 +331,7 @@ impl<T> Mutable<T> {
     }
 
     #[allow(unused)]
-    pub(crate) fn map<V>(
+    pub(crate) fn map<V: ?Sized>(
         self,
         value_map: impl for<'a> FnOnce(&'a mut T) -> &'a mut V,
     ) -> Mutable<V> {
@@ -340,7 +341,7 @@ impl<T> Mutable<T> {
         }
     }
 
-    pub(crate) fn try_map<V>(
+    pub(crate) fn try_map<V: ?Sized>(
         self,
         value_map: impl for<'a, 'b> FnOnce(&'a mut T, &'b SpanRange) -> ExecutionResult<&'a mut V>,
     ) -> ExecutionResult<Mutable<V>> {
@@ -421,19 +422,19 @@ impl Mutable<ExpressionValue> {
     }
 }
 
-impl<T> AsMut<T> for Mutable<T> {
+impl<T: ?Sized> AsMut<T> for Mutable<T> {
     fn as_mut(&mut self) -> &mut T {
         &mut self.mut_cell
     }
 }
 
-impl<T> AsRef<T> for Mutable<T> {
+impl<T: ?Sized> AsRef<T> for Mutable<T> {
     fn as_ref(&self) -> &T {
         &self.mut_cell
     }
 }
 
-impl<T: 'static> HasSpanRange for Mutable<T> {
+impl<T: 'static + ?Sized> HasSpanRange for Mutable<T> {
     fn span_range(&self) -> SpanRange {
         self.span_range
     }
@@ -448,7 +449,7 @@ impl WithSpanRangeExt for Mutable<ExpressionValue> {
     }
 }
 
-impl<T> Deref for Mutable<T> {
+impl<T: ?Sized> Deref for Mutable<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -456,7 +457,7 @@ impl<T> Deref for Mutable<T> {
     }
 }
 
-impl<T> DerefMut for Mutable<T> {
+impl<T: ?Sized> DerefMut for Mutable<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.mut_cell
     }
@@ -470,13 +471,13 @@ pub(crate) type SharedValue = Shared<ExpressionValue>;
 /// For example, for `x.y[4]`, this captures both:
 /// * The mutable reference to the location under `x`
 /// * The lexical span of the tokens `x.y[4]`
-pub(crate) struct Shared<T: 'static> {
-    shared_cell: SharedSubRcRefCell<ExpressionValue, T>,
-    span_range: SpanRange,
+pub(crate) struct Shared<T: 'static + ?Sized> {
+    pub(super) shared_cell: SharedSubRcRefCell<ExpressionValue, T>,
+    pub(super) span_range: SpanRange,
 }
 
 #[allow(unused)]
-impl<T> Shared<T> {
+impl<T: ?Sized> Shared<T> {
     pub(crate) fn clone(this: &Shared<T>) -> Self {
         Self {
             shared_cell: SharedSubRcRefCell::clone(&this.shared_cell),
@@ -484,7 +485,7 @@ impl<T> Shared<T> {
         }
     }
 
-    pub(crate) fn try_map<V>(
+    pub(crate) fn try_map<V: ?Sized>(
         self,
         value_map: impl for<'a, 'b> FnOnce(&'a T, &'b SpanRange) -> ExecutionResult<&'a V>,
     ) -> ExecutionResult<Shared<V>> {
@@ -496,7 +497,10 @@ impl<T> Shared<T> {
         })
     }
 
-    pub(crate) fn map<V>(self, value_map: impl FnOnce(&T) -> &V) -> ExecutionResult<Shared<V>> {
+    pub(crate) fn map<V: ?Sized>(
+        self,
+        value_map: impl FnOnce(&T) -> &V,
+    ) -> ExecutionResult<Shared<V>> {
         Ok(Shared {
             shared_cell: self.shared_cell.map(value_map),
             span_range: self.span_range,
@@ -560,13 +564,13 @@ impl Shared<ExpressionValue> {
     }
 }
 
-impl<T> AsRef<T> for Shared<T> {
+impl<T: ?Sized> AsRef<T> for Shared<T> {
     fn as_ref(&self) -> &T {
         &self.shared_cell
     }
 }
 
-impl<T> Deref for Shared<T> {
+impl<T: ?Sized> Deref for Shared<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -574,13 +578,13 @@ impl<T> Deref for Shared<T> {
     }
 }
 
-impl<T: 'static> HasSpanRange for Shared<T> {
+impl<T: ?Sized> HasSpanRange for Shared<T> {
     fn span_range(&self) -> SpanRange {
         self.span_range
     }
 }
 
-impl<T: 'static> WithSpanRangeExt for Shared<T> {
+impl<T: ?Sized> WithSpanRangeExt for Shared<T> {
     fn with_span_range(self, span_range: SpanRange) -> Self {
         Self {
             shared_cell: self.shared_cell,
@@ -590,13 +594,13 @@ impl<T: 'static> WithSpanRangeExt for Shared<T> {
 }
 
 /// Copy-on-write value that can be either owned or shared
-pub(crate) struct CopyOnWrite<T: 'static> {
+pub(crate) struct CopyOnWrite<T: 'static + ToOwned + ?Sized> {
     inner: CopyOnWriteInner<T>,
 }
 
-enum CopyOnWriteInner<T: 'static> {
+enum CopyOnWriteInner<T: 'static + ToOwned + ?Sized> {
     /// An owned value that can be used directly
-    Owned(Owned<T>),
+    Owned(Owned<T::Owned>),
     /// For use when the CopyOnWrite value effectively represents the owned value (post-clone).
     /// In this case, returning a Cow is just an optimization and we can always clone infallibly.
     SharedWithInfallibleCloning(Shared<T>),
@@ -605,7 +609,7 @@ enum CopyOnWriteInner<T: 'static> {
     SharedWithTransparentCloning(Shared<T>),
 }
 
-impl<T: 'static> CopyOnWrite<T> {
+impl<T: 'static + ToOwned + ?Sized> CopyOnWrite<T> {
     pub(crate) fn shared_in_place_of_owned(shared: Shared<T>) -> Self {
         Self {
             inner: CopyOnWriteInner::SharedWithInfallibleCloning(shared),
@@ -618,18 +622,9 @@ impl<T: 'static> CopyOnWrite<T> {
         }
     }
 
-    pub(crate) fn owned(owned: Owned<T>) -> Self {
+    pub(crate) fn owned(owned: Owned<T::Owned>) -> Self {
         Self {
             inner: CopyOnWriteInner::Owned(owned),
-        }
-    }
-
-    /// Gets a shared reference to the value
-    pub(crate) fn as_ref(&self) -> &T {
-        match &self.inner {
-            CopyOnWriteInner::Owned(owned) => owned.as_ref(),
-            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => shared.as_ref(),
-            CopyOnWriteInner::SharedWithTransparentCloning(shared) => shared.as_ref(),
         }
     }
 
@@ -638,6 +633,31 @@ impl<T: 'static> CopyOnWrite<T> {
             CopyOnWriteInner::Owned { .. } => false,
             CopyOnWriteInner::SharedWithInfallibleCloning { .. } => false,
             CopyOnWriteInner::SharedWithTransparentCloning { .. } => true,
+        }
+    }
+}
+
+impl<T: ?Sized + ToOwned> AsRef<T> for CopyOnWrite<T>
+// Why isn's this needed? It's somehow now needed on the CoW implementation either
+// where
+//     T::Owned: Borrow<T>,
+{
+    fn as_ref(&self) -> &T {
+        self
+    }
+}
+
+impl<T: ?Sized + ToOwned> Deref for CopyOnWrite<T>
+where
+    T::Owned: Borrow<T>,
+{
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        match self.inner {
+            CopyOnWriteInner::Owned(ref owned) => owned.as_ref().borrow(),
+            CopyOnWriteInner::SharedWithInfallibleCloning(ref shared) => shared.as_ref(),
+            CopyOnWriteInner::SharedWithTransparentCloning(ref shared) => shared.as_ref(),
         }
     }
 }
@@ -671,7 +691,7 @@ impl CopyOnWrite<ExpressionValue> {
     }
 }
 
-impl<T> WithSpanRangeExt for CopyOnWrite<T> {
+impl<T: ?Sized + ToOwned> WithSpanRangeExt for CopyOnWrite<T> {
     fn with_span_range(self, span_range: SpanRange) -> Self {
         let inner = match self.inner {
             CopyOnWriteInner::Owned(owned) => {
@@ -688,19 +708,23 @@ impl<T> WithSpanRangeExt for CopyOnWrite<T> {
     }
 }
 
-impl<T: 'static + HasSpanRange> HasSpanRange for CopyOnWrite<T> {
+impl<T: ToOwned + ?Sized> HasSpanRange for CopyOnWrite<T> {
     fn span_range(&self) -> SpanRange {
-        self.as_ref().span_range()
+        match self.inner {
+            CopyOnWriteInner::Owned(ref owned) => owned.span_range(),
+            CopyOnWriteInner::SharedWithInfallibleCloning(ref shared) => shared.span_range(),
+            CopyOnWriteInner::SharedWithTransparentCloning(ref shared) => shared.span_range(),
+        }
     }
 }
 
 pub(crate) type CopyOnWriteValue = CopyOnWrite<ExpressionValue>;
 
-impl<T> CopyOnWrite<T> {
-    pub(crate) fn map_any<O>(
+impl<T: ToOwned + ?Sized> CopyOnWrite<T> {
+    pub(crate) fn map_any<O: ToOwned + ?Sized>(
         self,
         map_shared: impl FnOnce(Shared<T>) -> ExecutionResult<Shared<O>>,
-        map_owned: impl FnOnce(Owned<T>) -> ExecutionResult<Owned<O>>,
+        map_owned: impl FnOnce(Owned<T::Owned>) -> ExecutionResult<Owned<O::Owned>>,
     ) -> ExecutionResult<CopyOnWrite<O>> {
         let inner = match self.inner {
             CopyOnWriteInner::Owned(owned) => CopyOnWriteInner::Owned(map_owned(owned)?),
