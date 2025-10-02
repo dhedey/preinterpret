@@ -40,7 +40,7 @@ fn concat_into_literal(
     let output_span = input.span();
     let concatenated = input
         .interpret_to_new_stream(interpreter)?
-        .concat_recursive(&ConcatBehaviour::standard());
+        .concat_recursive(&ConcatBehaviour::literal());
     let value = conversion_fn(&concatenated);
     let literal = Literal::from_str(&value)
         .map_err(|err| {

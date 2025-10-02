@@ -1,4 +1,4 @@
-error: Expected 3 inputs, got 4usize
+error: Expected 3 inputs, got 4
   --> tests/compilation_failures/core/error_span_repeat.rs:16:31
    |
 16 |     assert_input_length_of_3!(42 101 666 1024);
