@@ -168,7 +168,7 @@ impl MethodResolutionTarget for ValueTypeData {
                 input.into_new_output_stream(Grouping::Grouped)
             }
 
-            fn string(input: ExpressionValue) -> ExecutionResult<String> {
+            fn string(input: SharedValue) -> ExecutionResult<String> {
                 input.concat_recursive(&ConcatBehaviour::standard())
             }
         }
@@ -800,14 +800,14 @@ impl ExpressionValue {
         self.concat_recursive(&ConcatBehaviour::debug())
     }
 
-    pub(crate) fn concat_recursive(self, behaviour: &ConcatBehaviour) -> ExecutionResult<String> {
+    pub(crate) fn concat_recursive(&self, behaviour: &ConcatBehaviour) -> ExecutionResult<String> {
         let mut output = String::new();
         self.concat_recursive_into(&mut output, behaviour)?;
         Ok(output)
     }
 
     pub(crate) fn concat_recursive_into(
-        self,
+        &self,
         output: &mut String,
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {

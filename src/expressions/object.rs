@@ -149,7 +149,7 @@ impl ExpressionObject {
     }
 
     pub(crate) fn concat_recursive_into(
-        self,
+        &self,
         output: &mut String,
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
@@ -164,15 +164,15 @@ impl ExpressionObject {
             }
         }
         let mut is_first = true;
-        for (key, entry) in self.entries {
+        for (key, entry) in self.entries.iter() {
             if !is_first && behaviour.output_array_structure {
                 output.push(',');
             }
             if !is_first && behaviour.add_space_between_token_trees {
                 output.push(' ');
             }
-            if syn::parse_str::<Ident>(&key).is_ok() {
-                output.push_str(&key);
+            if syn::parse_str::<Ident>(key).is_ok() {
+                output.push_str(key);
             } else {
                 output.push('[');
                 output.push_str(format!("{:?}", key).as_str());

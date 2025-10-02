@@ -11,11 +11,11 @@ pub(crate) struct ExpressionRange {
 
 impl ExpressionRange {
     pub(crate) fn concat_recursive_into(
-        self,
+        &self,
         output: &mut String,
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
-        match *self.inner {
+        match &*self.inner {
             ExpressionRangeInner::Range {
                 start_inclusive,
                 end_exclusive,

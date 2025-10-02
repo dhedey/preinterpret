@@ -258,15 +258,15 @@ impl OutputStream {
         output
     }
 
-    pub(crate) fn concat_recursive_into(self, output: &mut String, behaviour: &ConcatBehaviour) {
+    pub(crate) fn concat_recursive_into(&self, output: &mut String, behaviour: &ConcatBehaviour) {
         fn concat_recursive_interpreted_stream(
             behaviour: &ConcatBehaviour,
             output: &mut String,
             prefix_spacing: Spacing,
-            stream: OutputStream,
+            stream: &OutputStream,
         ) {
             let mut spacing = prefix_spacing;
-            for segment in stream.segments {
+            for segment in stream.segments.iter() {
                 spacing = match segment {
                     OutputSegment::TokenVec(vec) => {
                         concat_recursive_token_stream(behaviour, output, spacing, vec)
@@ -275,7 +275,7 @@ impl OutputStream {
                         behaviour.before_token_tree(output, spacing);
                         behaviour.wrap_delimiters(
                             output,
-                            delimiter,
+                            *delimiter,
                             interpreted_stream.is_empty(),
                             |output| {
                                 concat_recursive_interpreted_stream(
@@ -292,14 +292,15 @@ impl OutputStream {
             }
         }
 
-        fn concat_recursive_token_stream(
+        fn concat_recursive_token_stream<T: core::borrow::Borrow<TokenTree>>(
             behaviour: &ConcatBehaviour,
             output: &mut String,
             prefix_spacing: Spacing,
-            token_stream: impl IntoIterator<Item = TokenTree>,
+            token_stream: impl IntoIterator<Item = T>,
         ) -> Spacing {
             let mut spacing = prefix_spacing;
             for token_tree in token_stream.into_iter() {
+                let token_tree = token_tree.borrow();
                 behaviour.before_token_tree(output, spacing);
                 spacing = match token_tree {
                     TokenTree::Literal(literal) => {
@@ -446,7 +447,7 @@ impl ConcatBehaviour {
         }
     }
 
-    pub(crate) fn handle_literal(&self, output: &mut String, literal: Literal) {
+    pub(crate) fn handle_literal(&self, output: &mut String, literal: &Literal) {
         match literal.content_if_string_like() {
             Some(content) if self.unwrap_contents_of_string_like_literals => {
                 output.push_str(&content)

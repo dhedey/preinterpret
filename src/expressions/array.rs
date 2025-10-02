@@ -158,7 +158,7 @@ impl ExpressionArray {
     }
 
     pub(crate) fn concat_recursive_into(
-        self,
+        &self,
         output: &mut String,
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
@@ -166,7 +166,7 @@ impl ExpressionArray {
             output.push('[');
         }
         let mut is_first = true;
-        for item in self.items {
+        for item in self.items.iter() {
             if !is_first && behaviour.output_array_structure {
                 output.push(',');
             }

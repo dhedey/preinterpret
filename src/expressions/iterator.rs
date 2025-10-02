@@ -66,7 +66,7 @@ impl ExpressionIterator {
     }
 
     pub(crate) fn concat_recursive_into(
-        self,
+        &self,
         output: &mut String,
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
@@ -75,7 +75,7 @@ impl ExpressionIterator {
         }
         let max = self.size_hint().1;
         let span_range = self.span_range;
-        for (i, item) in self.enumerate() {
+        for (i, item) in self.clone().enumerate() {
             if i >= behaviour.iterator_limit {
                 if behaviour.error_after_iterator_limit {
                     return span_range.execution_err(format!("To protect against infinite loops, only a maximum of {} items can be output to a string from an iterator. Try casting `as stream` to avoid this limit. This can't currently be reconfigured with the iteration limit.", behaviour.iterator_limit));
