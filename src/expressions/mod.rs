@@ -16,6 +16,7 @@ mod string;
 mod type_resolution;
 mod value;
 
+pub(crate) use array::*;
 pub(crate) use evaluation::*;
 pub(crate) use expression::*;
 pub(crate) use expression_block::*;
@@ -28,7 +29,6 @@ pub(crate) use value::*;
 
 // Marked as use for expression sub-modules to use with a `use super::*` statement
 use crate::internal_prelude::*;
-use array::*;
 use boolean::*;
 use character::*;
 use expression_parsing::*;

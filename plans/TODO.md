@@ -27,9 +27,10 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
   * `.to_literal()`, `.concat()`, `.to_ident()`, `.to_ident_camel()`, `.to_ident_snake()`, `.to_ident_upper_snake()`
   * String: `.to_lowercase()` <- maybe shouldn't concat, others can: `.to_snake_case()`, `.capitalize()` etc
 - [x] Migrate `!is_empty!` and `!length!`
+- [x] Migrate `!zip!` and `!zip_truncated!`
+- [ ] Implement some kind of support for variable length methods (or fudge it for now?)
 - [ ] Migrate `!intersperse!`
 - [ ] Migrate `!split!` and `!comma_split!`
-- [ ] Migrate `!zip!` and `!zip_truncated!`
 
 ## Span changes
 

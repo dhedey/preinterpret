@@ -128,7 +128,7 @@ impl ToExpressionValue for TokenStream {
 
 define_interface! {
     struct StreamTypeData,
-    parent: ValueTypeData,
+    parent: IterableTypeData,
     pub(crate) mod stream_interface {
         pub(crate) mod methods {
             fn len(this: Ref<OutputStream>) -> ExecutionResult<usize> {

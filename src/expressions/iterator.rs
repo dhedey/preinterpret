@@ -1,5 +1,45 @@
 use super::*;
 
+define_interface! {
+    struct IterableTypeData,
+    parent: ValueTypeData,
+    pub(crate) mod object_interface {
+        pub(crate) mod methods {
+            [context] fn zip(this: IterableValue) -> ExecutionResult<ExpressionArray> {
+                ZipIterators::new_from_iterable(this, context.span_range())?.run_zip(context.interpreter, true)
+            }
+
+            [context] fn zip_truncated(this: IterableValue) -> ExecutionResult<ExpressionArray> {
+                ZipIterators::new_from_iterable(this, context.span_range())?.run_zip(context.interpreter, false)
+            }
+        }
+        pub(crate) mod unary_operations {
+        }
+        interface_items {
+        }
+    }
+}
+
+pub(crate) enum IterableValue {
+    Iterator(ExpressionIterator),
+    Array(ExpressionArray),
+    Stream(ExpressionStream),
+    Object(ExpressionObject),
+    Range(ExpressionRange),
+}
+
+impl IterableValue {
+    pub(crate) fn into_iterator(self) -> ExecutionResult<ExpressionIterator> {
+        Ok(match self {
+            IterableValue::Array(value) => ExpressionIterator::new_for_array(value),
+            IterableValue::Stream(value) => ExpressionIterator::new_for_stream(value),
+            IterableValue::Iterator(value) => value,
+            IterableValue::Range(value) => ExpressionIterator::new_for_range(value)?,
+            IterableValue::Object(value) => ExpressionIterator::new_for_object(value)?,
+        })
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct ExpressionIterator {
     iterator: ExpressionIteratorInner,
@@ -27,6 +67,23 @@ impl ExpressionIterator {
         Ok(Self {
             iterator: ExpressionIteratorInner::Other(iterator),
             span_range: range.span_range,
+        })
+    }
+
+    pub(crate) fn new_for_object(object: ExpressionObject) -> ExecutionResult<Self> {
+        // We have to collect to vec and back to make it clonable
+        let iterator = object
+            .entries
+            .into_iter()
+            .map(|(k, v)| {
+                let span_range = v.key_span.span_range();
+                vec![k.to_value(span_range), v.value].to_value(span_range)
+            })
+            .collect::<Vec<_>>()
+            .into_iter();
+        Ok(Self {
+            iterator: ExpressionIteratorInner::Array(iterator),
+            span_range: object.span_range,
         })
     }
 
@@ -190,7 +247,7 @@ impl Iterator for ExpressionIterator {
 
 define_interface! {
     struct IteratorTypeData,
-    parent: ValueTypeData,
+    parent: IterableTypeData,
     pub(crate) mod iterator_interface {
         pub(crate) mod methods {
         }

@@ -356,7 +356,7 @@ fn test_comma_split() {
 #[test]
 fn test_zip() {
     preinterpret_assert_eq!(
-        #([!zip! [%[Hello "Goodbye"], ["World", "Friend"]]].to_debug_string()),
+        #([%[Hello "Goodbye"], ["World", "Friend"]].zip().to_debug_string()),
         r#"[[%[Hello], "World"], ["Goodbye", "Friend"]]"#,
     );
     preinterpret_assert_eq!(
@@ -364,7 +364,7 @@ fn test_zip() {
             let countries = %["France" "Germany" "Italy"];
             let flags = %["🇫🇷" "🇩🇪" "🇮🇹"];
             let capitals = %["Paris" "Berlin" "Rome"];
-            [!zip! [countries, flags, capitals]].to_debug_string()
+            [countries, flags, capitals].zip().to_debug_string()
         ),
         r#"[["France", "🇫🇷", "Paris"], ["Germany", "🇩🇪", "Berlin"], ["Italy", "🇮🇹", "Rome"]]"#,
     );
@@ -372,7 +372,7 @@ fn test_zip() {
         #(
             let longer = %[A B C D];
             let shorter = [1, 2, 3];
-            [!zip_truncated! [longer, shorter.take()]].to_debug_string()
+            [longer, shorter.take()].zip_truncated().to_debug_string()
         ),
         r#"[[%[A], 1], [%[B], 2], [%[C], 3]]"#,
     );
@@ -380,7 +380,7 @@ fn test_zip() {
         #(
             let letters = %[A B C];
             let numbers = [1, 2, 3];
-            [!zip! [letters, numbers.take()]].to_debug_string()
+            [letters, numbers.take()].zip().to_debug_string()
         ),
         r#"[[%[A], 1], [%[B], 2], [%[C], 3]]"#,
     );
@@ -388,21 +388,19 @@ fn test_zip() {
         #(
             let letters = %[A B C];
             let numbers = [1, 2, 3];
-            let combined = [letters, numbers.take()];
-            [!zip! combined.take()].to_debug_string()
-        ),
-        r#"[[%[A], 1], [%[B], 2], [%[C], 3]]"#,
-    );
-    preinterpret_assert_eq!(
-        #(
-            #(let letters = %[A B C];);
-            let numbers = [1, 2, 3];
-            [!zip! %{ number: numbers.take(), letter: letters }].to_debug_string()
+            %{ number: numbers.take(), letter: letters }.zip().to_debug_string()
         ),
         r#"[{ letter: %[A], number: 1 }, { letter: %[B], number: 2 }, { letter: %[C], number: 3 }]"#,
     );
-    preinterpret_assert_eq!(#([!zip![]].to_debug_string()), r#"[]"#);
-    preinterpret_assert_eq!(#([!zip! %{}].to_debug_string()), r#"[]"#);
+    preinterpret_assert_eq!(#([].zip().to_debug_string()), r#"[]"#);
+    preinterpret_assert_eq!(#(%{}.zip().to_debug_string()), r#"[]"#);
+    // When a stream iterates, we look at each token tree, form a singleton stream from it to be the coerced value.
+    // In reality this means that a stream is an iterator of singleton streams, so zipping it just returns itself
+    // (wrapped in a couple of arrays)
+    assert_eq!(
+        run!(%[%group[A B] C Hello D].zip().to_debug_string()),
+        r#"[[%[%group[A B]], %[C], %[Hello], %[D]]]"#
+    );
 }
 
 #[test]
@@ -413,7 +411,7 @@ fn test_zip_with_for() {
             #(let flags = ["🇫🇷", "🇩🇪", "🇮🇹"])
             #(let capitals = %["Paris" "Berlin" "Rome"];)
             #(let facts = [])
-            [!for! [country, flag, capital] in [!zip! [countries, flags.take(), capitals]] {
+            [!for! [country, flag, capital] in [countries, flags.take(), capitals].zip() {
                 #(facts.push(%["=> The capital of " #country " is " #capital " and its flag is " #flag].to_string()))
             }]
 

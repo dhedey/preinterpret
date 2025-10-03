@@ -210,9 +210,18 @@ impl ToExpressionValue for Vec<ExpressionValue> {
     }
 }
 
+impl ToExpressionValue for ExpressionArray {
+    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
+        ExpressionValue::Array(ExpressionArray {
+            items: self.items,
+            span_range,
+        })
+    }
+}
+
 define_interface! {
     struct ArrayTypeData,
-    parent: ValueTypeData,
+    parent: IterableTypeData,
     pub(crate) mod array_interface {
         pub(crate) mod methods {
             fn len(this: Shared<ExpressionArray>) -> ExecutionResult<usize> {

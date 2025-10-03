@@ -221,7 +221,7 @@ impl ToExpressionValue for ExpressionRangeInner {
 
 define_interface! {
     struct RangeTypeData,
-    parent: ValueTypeData,
+    parent: IterableTypeData,
     pub(crate) mod range_interface {
         pub(crate) mod methods {
         }

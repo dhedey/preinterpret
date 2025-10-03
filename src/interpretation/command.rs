@@ -276,8 +276,6 @@ define_command_enums! {
     IntersperseCommand,
     SplitCommand,
     CommaSplitCommand,
-    ZipCommand,
-    ZipTruncatedCommand,
 
     // Destructuring Commands
     ParseCommand,

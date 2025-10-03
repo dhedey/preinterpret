@@ -563,21 +563,8 @@ impl ExpressionValue {
         }
     }
 
-    pub(crate) fn expect_any_iterator(
-        self,
-        place_descriptor: &str,
-    ) -> ExecutionResult<ExpressionIterator> {
-        match self {
-            ExpressionValue::Array(value) => Ok(ExpressionIterator::new_for_array(value)),
-            ExpressionValue::Stream(value) => Ok(ExpressionIterator::new_for_stream(value)),
-            ExpressionValue::Iterator(value) => Ok(value),
-            ExpressionValue::Range(value) => Ok(ExpressionIterator::new_for_range(value)?),
-            other => other.execution_err(format!(
-                "{} must be iterable (an array, stream, range or iterator), but it is {}",
-                place_descriptor,
-                other.articled_value_type(),
-            )),
-        }
+    pub(crate) fn expect_any_iterator(self) -> ExecutionResult<ExpressionIterator> {
+        IterableValue::resolve_from_owned(self)?.into_iterator()
     }
 
     pub(super) fn handle_compound_assignment(

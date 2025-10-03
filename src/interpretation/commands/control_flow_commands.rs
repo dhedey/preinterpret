@@ -220,7 +220,7 @@ impl StreamCommandDefinition for ForCommand {
         let array = self
             .input
             .interpret_to_value(interpreter)?
-            .expect_any_iterator("The for loop input")?;
+            .expect_any_iterator()?;
 
         let mut iteration_counter = interpreter.start_iteration_counter(&self.in_token);
 

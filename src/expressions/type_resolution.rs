@@ -747,13 +747,13 @@ mod arguments {
         }
     }
 
-    impl<'a, T: ResolvableArgumentShared> ResolveAs<&'a T> for &'a ExpressionValue {
+    impl<'a, T: ResolvableArgumentShared + ?Sized> ResolveAs<&'a T> for &'a ExpressionValue {
         fn resolve_as(self) -> ExecutionResult<&'a T> {
             T::resolve_from_ref(self)
         }
     }
 
-    impl<'a, T: ResolvableArgumentMutable> ResolveAs<&'a mut T> for &'a mut ExpressionValue {
+    impl<'a, T: ResolvableArgumentMutable + ?Sized> ResolveAs<&'a mut T> for &'a mut ExpressionValue {
         fn resolve_as(self) -> ExecutionResult<&'a mut T> {
             T::resolve_from_mut(self)
         }
@@ -1130,15 +1130,6 @@ mod arguments {
         }
     }
 
-    impl<'a> ResolveAs<&'a str> for &'a ExpressionValue {
-        fn resolve_as(self) -> ExecutionResult<&'a str> {
-            match self {
-                ExpressionValue::String(s) => Ok(&s.value),
-                _ => self.execution_err("Expected string"),
-            }
-        }
-    }
-
     impl_resolvable_argument_for! {
         CharTypeData,
         (value) -> ExpressionChar {
@@ -1196,6 +1187,27 @@ mod arguments {
                 ExpressionValue::Range(value) => Ok(value),
                 _ => value.execution_err("Expected range"),
             }
+        }
+    }
+
+    impl ResolvableArgumentTarget for IterableValue {
+        type ValueType = IterableTypeData;
+    }
+
+    impl ResolvableArgumentOwned for IterableValue {
+        fn resolve_from_owned(value: ExpressionValue) -> ExecutionResult<Self> {
+            Ok(match value {
+                ExpressionValue::Array(x) => Self::Array(x),
+                ExpressionValue::Object(x) => Self::Object(x),
+                ExpressionValue::Stream(x) => Self::Stream(x),
+                ExpressionValue::Range(x) => Self::Range(x),
+                ExpressionValue::Iterator(x) => Self::Iterator(x),
+                _ => {
+                    return value.execution_err(
+                        "Expected iterable (array, object, stream, range or iterator)",
+                    )
+                }
+            })
         }
     }
 

@@ -269,9 +269,16 @@ impl ToExpressionValue for BTreeMap<String, ObjectEntry> {
 
 define_interface! {
     struct ObjectTypeData,
-    parent: ValueTypeData,
+    parent: IterableTypeData,
     pub(crate) mod object_interface {
         pub(crate) mod methods {
+            [context] fn zip(this: ExpressionObject) -> ExecutionResult<ExpressionArray> {
+                ZipIterators::new_from_object(this, context.span_range())?.run_zip(context.interpreter, true)
+            }
+
+            [context] fn zip_truncated(this: ExpressionObject) -> ExecutionResult<ExpressionArray> {
+                ZipIterators::new_from_object(this, context.span_range())?.run_zip(context.interpreter, false)
+            }
         }
         pub(crate) mod unary_operations {
         }
