@@ -1,0 +1,12 @@
+error: Expected:
+       %{
+           // Whether to add the separator after the last item (default: false)
+           add_trailing?: false,
+           // Define a different final separator (default: same as normal separator)
+           final_separator?: %[or],
+       }
+       The following field/s are unexpected: finl_separator
+ --> tests/compilation_failures/tokens/intersperse_wrong_settings.rs:5:33
+  |
+5 |         [1, 2].intersperse("", %{ finl_separator: "" })
+  |                                 ^^^^^^^^^^^^^^^^^^^^^^

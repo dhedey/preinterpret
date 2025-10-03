@@ -157,17 +157,18 @@ impl ExpressionArray {
         }
     }
 
-    pub(crate) fn concat_recursive_into(
-        &self,
+    pub(crate) fn concat_array_like_iterator<T: Borrow<ExpressionValue>>(
+        iterator: impl Iterator<Item = T>,
         output: &mut String,
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
-        if behaviour.output_array_structure {
+        if behaviour.output_literal_structure {
             output.push('[');
         }
         let mut is_first = true;
-        for item in self.items.iter() {
-            if !is_first && behaviour.output_array_structure {
+        for item in iterator {
+            let item = item.borrow();
+            if !is_first && behaviour.output_literal_structure {
                 output.push(',');
             }
             if !is_first && behaviour.add_space_between_token_trees {
@@ -176,10 +177,18 @@ impl ExpressionArray {
             item.concat_recursive_into(output, behaviour)?;
             is_first = false;
         }
-        if behaviour.output_array_structure {
+        if behaviour.output_literal_structure {
             output.push(']');
         }
         Ok(())
+    }
+
+    pub(crate) fn concat_recursive_into(
+        &self,
+        output: &mut String,
+        behaviour: &ConcatBehaviour,
+    ) -> ExecutionResult<()> {
+        Self::concat_array_like_iterator(self.items.iter(), output, behaviour)
     }
 }
 

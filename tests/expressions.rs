@@ -234,60 +234,51 @@ fn assign_works() {
 
 #[test]
 fn test_range() {
-    preinterpret_assert_eq!(
-        #([!intersperse! %{
-            items: -2..5,
-            separator: [" "],
-        }] as string),
+    assert_eq!(
+        run!((-2..5).intersperse(" ").to_string()),
         "-2 -1 0 1 2 3 4"
     );
-    preinterpret_assert_eq!(
-        #([!intersperse! %{
-            items: -2..=5,
-            separator: " ",
-        }] as stream as string),
+    assert_eq!(
+        run!((-2..=5).intersperse(" ").to_stream().to_string()),
         "-2 -1 0 1 2 3 4 5"
     );
-    preinterpret_assert_eq!(
-        {
-            #(let x = 2)
-            #([!intersperse! %{
-                items: (x + x)..=5,
-                separator: " ",
-            }] as stream as string)
-        },
+    assert_eq!(
+        run! { let x = 2; ((x + x)..=5).intersperse(" ").to_string() },
         "4 5"
     );
-    preinterpret_assert_eq!(
-        {
-            #([!intersperse! %{
-                items: 8..=5,
-                separator: " ",
-            }] as stream as string)
+    assert_eq!(
+        run! {
+            (8..=5).intersperse(" ").to_string()
         },
         ""
     );
-    preinterpret_assert_eq!(#((('a'..='f') as stream).to_string()), "abcdef");
-    preinterpret_assert_eq!(
-        #((-1i8..3i8).to_debug_string()),
-        "-1i8..3i8"
+    assert_eq!(
+        run! {
+            ('a'..='f').to_string()
+        },
+        "abcdef"
     );
+    assert_eq!(run! {(-1i8..3i8).to_debug_string()}, "-1i8..3i8");
 
     // Large ranges are allowed, but are subject to limits at iteration time
-    preinterpret_assert_eq!(#((0..10000).to_debug_string()), "0..10000");
-    preinterpret_assert_eq!(#((..5 + 5).to_debug_string()), "..10");
-    preinterpret_assert_eq!(#((..=9).to_debug_string()), "..=9");
-    preinterpret_assert_eq!(#((..).to_debug_string()), "..");
-    preinterpret_assert_eq!(#([.., ..].to_debug_string()), "[.., ..]");
-    preinterpret_assert_eq!(#([..[1, 2..], ..].to_debug_string()), "[..[1, 2..], ..]");
-    preinterpret_assert_eq!(#((4 + 7..=10).to_debug_string()), "11..=10");
-    preinterpret_assert_eq!(
+    assert_eq!(run! {(0..10000).to_debug_string()}, "0..10000");
+    assert_eq!(run! {(..5 + 5).to_debug_string()}, "..10");
+    assert_eq!(run! {(..=9).to_debug_string()}, "..=9");
+    assert_eq!(run! {(..).to_debug_string()}, "..");
+    assert_eq!(run! {([.., ..].to_debug_string())}, "[.., ..]");
+    assert_eq!(
+        run! {([..[1, 2..], ..].to_debug_string())},
+        "[..[1, 2..], ..]"
+    );
+    assert_eq!(run! {((4 + 7..=10).to_debug_string())}, "11..=10");
+    assert_eq!(
+        stream! {
         [!for! i in 0..10000000 {
             [!if! i == 5 {
                 #(i.to_string())
                 [!break!]
             }]
-        }],
+        }]},
         "5"
     );
     // preinterpret_assert_eq!(#((0..10000 as iterator).to_debug_string()), "[<iterator> 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, ..<9980 further items>]");
@@ -497,7 +488,7 @@ fn test_objects() {
             x.y = 5;
             x.to_debug_string()
         ),
-        r#"{ a: {}, b: "Hello", hello: 1, world: 2, ["x y z"]: 4, y: 5, ["z\" test"]: {} }"#
+        r#"%{ a: %{}, b: "Hello", hello: 1, world: 2, ["x y z"]: 4, y: 5, ["z\" test"]: %{} }"#
     );
     preinterpret_assert_eq!(
         #(
@@ -525,14 +516,14 @@ fn test_objects() {
             %{ a, y: [_, b], z } = %{ a: 1, y: [5, 7] };
             %{ a, b, z }.to_debug_string()
         ),
-        r#"{ a: 1, b: 7, z: None }"#
+        r#"%{ a: 1, b: 7, z: None }"#
     );
     preinterpret_assert_eq!(
         #(
             let %{ a, y: [_, b], ["c"]: c, [r#"two "words"#]: x, z } = %{ a: 1, y: [5, 7], ["two \"words"]: %{}, };
             %{ a, b, c, x: x.take(), z }.to_debug_string()
         ),
-        r#"{ a: 1, b: 7, c: None, x: {}, z: None }"#
+        r#"%{ a: 1, b: 7, c: None, x: %{}, z: None }"#
     );
 }
 

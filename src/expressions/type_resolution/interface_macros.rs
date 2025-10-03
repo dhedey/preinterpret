@@ -35,6 +35,18 @@ macro_rules! create_method_interface {
     };
     ($method_name:path[
         $($arg_part1:ident)+ : $ty1:ty,
+        $($arg_part2:ident)+ : Option<$ty2:ty> $(,)?
+    ]) => {
+        MethodInterface::Arity1PlusOptional1 {
+            method: |context, a, b| apply_fn1_optional1($method_name, a, b, context),
+            argument_ownership: [
+                <$ty1 as FromResolved>::OWNERSHIP,
+                <$ty2 as FromResolved>::OWNERSHIP,
+            ],
+        }
+    };
+    ($method_name:path[
+        $($arg_part1:ident)+ : $ty1:ty,
         $($arg_part2:ident)+ : $ty2:ty $(,)?
     ]) => {
         MethodInterface::Arity2 {
@@ -42,6 +54,20 @@ macro_rules! create_method_interface {
             argument_ownership: [
                 <$ty1 as FromResolved>::OWNERSHIP,
                 <$ty2 as FromResolved>::OWNERSHIP,
+            ],
+        }
+    };
+    ($method_name:path[
+        $($arg_part1:ident)+ : $ty1:ty,
+        $($arg_part2:ident)+ : $ty2:ty,
+        $($arg_part3:ident)+ : Option<$ty3:ty> $(,)?
+    ]) => {
+        MethodInterface::Arity2PlusOptional1 {
+            method: |context, a, b, c| apply_fn2_optional1($method_name, a, b, c, context),
+            argument_ownership: [
+                <$ty1 as FromResolved>::OWNERSHIP,
+                <$ty2 as FromResolved>::OWNERSHIP,
+                <$ty3 as FromResolved>::OWNERSHIP,
             ],
         }
     };
@@ -66,8 +92,8 @@ macro_rules! create_method_interface {
 
 #[allow(unused)]
 pub(crate) fn apply_fn0<R>(
-    f: fn(MethodCallContext) -> R,
-    context: MethodCallContext,
+    f: fn(&mut MethodCallContext) -> R,
+    context: &mut MethodCallContext,
 ) -> ExecutionResult<ResolvedValue>
 where
     R: ResolvableOutput,
@@ -77,9 +103,9 @@ where
 }
 
 pub(crate) fn apply_fn1<A, R>(
-    f: fn(MethodCallContext, A) -> R,
+    f: fn(&mut MethodCallContext, A) -> R,
     a: ResolvedValue,
-    context: MethodCallContext,
+    context: &mut MethodCallContext,
 ) -> ExecutionResult<ResolvedValue>
 where
     A: FromResolved,
@@ -89,11 +115,32 @@ where
     f(context, A::from_resolved(a)?).to_resolved_value(output_span_range)
 }
 
+#[allow(unused)]
+pub(crate) fn apply_fn1_optional1<A, B, C>(
+    f: fn(&mut MethodCallContext, A, Option<B>) -> C,
+    a: ResolvedValue,
+    b: Option<ResolvedValue>,
+    context: &mut MethodCallContext,
+) -> ExecutionResult<ResolvedValue>
+where
+    A: FromResolved,
+    B: FromResolved,
+    C: ResolvableOutput,
+{
+    let output_span_range = context.output_span_range;
+    f(
+        context,
+        A::from_resolved(a)?,
+        b.map(|b| B::from_resolved(b)).transpose()?,
+    )
+    .to_resolved_value(output_span_range)
+}
+
 pub(crate) fn apply_fn2<A, B, C>(
-    f: fn(MethodCallContext, A, B) -> C,
+    f: fn(&mut MethodCallContext, A, B) -> C,
     a: ResolvedValue,
     b: ResolvedValue,
-    context: MethodCallContext,
+    context: &mut MethodCallContext,
 ) -> ExecutionResult<ResolvedValue>
 where
     A: FromResolved,
@@ -104,12 +151,35 @@ where
     f(context, A::from_resolved(a)?, B::from_resolved(b)?).to_resolved_value(output_span_range)
 }
 
+pub(crate) fn apply_fn2_optional1<A, B, C, D>(
+    f: fn(&mut MethodCallContext, A, B, Option<C>) -> D,
+    a: ResolvedValue,
+    b: ResolvedValue,
+    c: Option<ResolvedValue>,
+    context: &mut MethodCallContext,
+) -> ExecutionResult<ResolvedValue>
+where
+    A: FromResolved,
+    B: FromResolved,
+    C: FromResolved,
+    D: ResolvableOutput,
+{
+    let output_span_range = context.output_span_range;
+    f(
+        context,
+        A::from_resolved(a)?,
+        B::from_resolved(b)?,
+        c.map(|c| C::from_resolved(c)).transpose()?,
+    )
+    .to_resolved_value(output_span_range)
+}
+
 pub(crate) fn apply_fn3<A, B, C, R>(
-    f: fn(MethodCallContext, A, B, C) -> R,
+    f: fn(&mut MethodCallContext, A, B, C) -> R,
     a: ResolvedValue,
     b: ResolvedValue,
     c: ResolvedValue,
-    context: MethodCallContext,
+    context: &mut MethodCallContext,
 ) -> ExecutionResult<ResolvedValue>
 where
     A: FromResolved,
@@ -216,7 +286,7 @@ macro_rules! define_interface {
                 #[allow(unused)]
                 use super::*;
                 $(
-                    pub(crate) fn $method_name(if_empty!([$($method_context)?][_context]): MethodCallContext, $($method_args)*) $(-> $method_output_ty)? {
+                    pub(crate) fn $method_name(if_empty!([$($method_context)?][_context]): &mut MethodCallContext, $($method_args)*) $(-> $method_output_ty)? {
                         $method_body
                     }
                 )*

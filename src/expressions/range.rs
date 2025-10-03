@@ -15,6 +15,13 @@ impl ExpressionRange {
         output: &mut String,
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
+        if !behaviour.use_debug_literal_syntax {
+            return ExpressionArray::concat_array_like_iterator(
+                self.clone().inner.into_iterable()?.resolve_iterator()?,
+                output,
+                behaviour,
+            );
+        }
         match &*self.inner {
             ExpressionRangeInner::Range {
                 start_inclusive,

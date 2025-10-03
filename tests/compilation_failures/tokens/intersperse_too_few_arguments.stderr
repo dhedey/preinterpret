@@ -1,0 +1,5 @@
+error: The method intersperse expects 1 to 2 non-self argument/s, but 0 were provided
+ --> tests/compilation_failures/tokens/intersperse_too_few_arguments.rs:5:16
+  |
+5 |         [1, 2].intersperse()
+  |                ^^^^^^^^^^^

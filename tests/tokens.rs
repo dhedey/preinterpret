@@ -81,147 +81,115 @@ fn test_output_array_to_stream() {
 
 #[test]
 fn test_intersperse() {
-    preinterpret_assert_eq!(
-        #([!intersperse! %{
-            items: %[Hello World],
-            separator: [", "],
-        }] as string),
+    assert_eq!(
+        run! {
+            %[Hello World].intersperse(" ").to_debug_string()
+        },
+        r#"[%[Hello], " ", %[World]]"#
+    );
+    assert_eq!(
+        run! {
+            %[Hello World].intersperse(%{}).to_debug_string()
+        },
+        "[%[Hello], %{}, %[World]]"
+    );
+    assert_eq!(
+        run!(%[Hello World].intersperse(", ").to_string()),
         "Hello, World"
     );
-    preinterpret_assert_eq!(
-        #([!intersperse! %{
-            items: %[Hello World],
-            separator: %[_ "and" _],
-        }] as stream as string),
-        "Hello_and_World"
+    assert_eq!(
+        run!(%[Hello World].intersperse(%[_ "and" _]).to_ident().to_debug_string()),
+        "%[Hello_and_World]"
     );
-    preinterpret_assert_eq!(
-        #([!intersperse! %{
-            items: %[Hello World],
-            separator: %[_ "and" _],
-            add_trailing: true,
-        }] as stream as string),
+    assert_eq!(
+        run!(
+            %[Hello World]
+                .intersperse(
+                    %[_ "and" _],
+                    %{ add_trailing: true },
+                ).to_string()
+        ),
         "Hello_and_World_and_"
     );
-    preinterpret_assert_eq!(
-        #([!intersperse! %{
-            items: %[The Quick Brown Fox],
-            separator: %[],
-        }] as stream as string),
+    assert_eq!(
+        run!(
+            %[The Quick Brown Fox].intersperse(%[]).to_string()
+        ),
         "TheQuickBrownFox"
     );
-    preinterpret_assert_eq!(
-        #([!intersperse! %{
-            items: %[The Quick Brown Fox],
-            separator: %[,],
-            add_trailing: true,
-        }] as stream as string),
+    assert_eq!(
+        run!(%[The Quick Brown Fox].intersperse(%[,], %{ add_trailing: true }).to_string()),
         "The,Quick,Brown,Fox,"
     );
-    preinterpret_assert_eq!(
-        #([!intersperse! %{
-            items: %[Red Green Blue],
-            separator: %[", "],
-            final_separator: %[" and "],
-        }] as stream as string),
+    assert_eq!(
+        run!(%[Red Green Blue].intersperse(", ", %{ final_separator: " and " }).to_string()),
         "Red, Green and Blue"
     );
-    preinterpret_assert_eq!(
-        #([!intersperse! %{
-                items: %[Red Green Blue],
-                separator: %[", "],
-                add_trailing: true,
-                final_separator: %[" and "],
-        }] as stream as string),
+    assert_eq!(
+        run!(
+            let settings = %{ add_trailing: true, final_separator: " and " };
+            %[Red Green Blue].intersperse(", ", settings.take()).to_string()
+        ),
         "Red, Green, Blue and "
     );
-    preinterpret_assert_eq!(
-        #([!intersperse! %{
-            items: %[],
-            separator: %[", "],
-            add_trailing: true,
-            final_separator: %[" and "],
-        }] as stream as string),
+    assert_eq!(
+        run!(
+            let settings = %{ add_trailing: true, final_separator: " and " };
+            %[].intersperse(", ", settings.take()).to_string()
+        ),
         ""
     );
-    preinterpret_assert_eq!(
-        #([!intersperse! %{
-            items: %[SingleItem],
-            separator: %[","],
-            final_separator: %["!"],
-        }] as stream as string),
+    assert_eq!(
+        run!(
+            let settings = %{ final_separator: "!" };
+            %[SingleItem].intersperse(%[","], settings.take()).to_string()
+        ),
         "SingleItem"
     );
-    preinterpret_assert_eq!(
-        #([!intersperse! %{
-            items: %[SingleItem],
-            separator: %[","],
-            final_separator: %["!"],
-            add_trailing: true,
-        }] as stream as string),
+    assert_eq!(
+        run!(
+            let settings = %{ final_separator: "!", add_trailing: true };
+            %[SingleItem].intersperse(%[","], settings.take()).to_string()
+        ),
         "SingleItem!"
     );
-    preinterpret_assert_eq!(
-        #([!intersperse! %{
-            items: %[SingleItem],
-            separator: %[","],
-            add_trailing: true,
-        }] as stream as string),
+    assert_eq!(
+        run!(
+            let settings = %{ add_trailing: true };
+            %[SingleItem].intersperse(",", settings.take()).to_string()
+        ),
         "SingleItem,"
     );
 }
 
 #[test]
 fn complex_cases_for_intersperse_and_input_types() {
-    // Variable containing stream be used for items
-    preinterpret_assert_eq!({
-        #(let items = %[0 1 2 3];)
-        #([!intersperse! %{
-            items,
-            separator: %[_],
-        }] as stream as string)
+    assert_eq!(run!{
+        %[0 1 2 3].intersperse(%[_]).to_string()
     }, "0_1_2_3");
-    // Variable containing iterable can be used for items
-    preinterpret_assert_eq!({
-        #(let items = 0..4)
-        #([!intersperse! %{
-            items,
-            separator: %[_],
-        }] as stream as string)
+    assert_eq!(run!{
+        (0..4).intersperse(%[_]).to_string()
     }, "0_1_2_3");
-    // #(...) block returning token stream (from variable)
-    preinterpret_assert_eq!({
-        #(let items = %[0 1 2 3];)
-        #([!intersperse! %{
-            items,
-            separator: ["_"],
-        }] as string)
+    assert_eq!(run!{
+        %[0 1 2 3].intersperse("_").to_string()
     }, "0_1_2_3");
-    // #(...) block returning array
-    preinterpret_assert_eq!(
-        #([!intersperse! %{
-            items: [0, 1, 2, 3],
-            separator: ["_"],
-        }] as string),
-        "0_1_2_3"
-    );
+    assert_eq!(run!{
+        [0, 1, 2, 3].intersperse("_").to_string()
+    }, "0_1_2_3");
     // Stream containing two groups
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!{
             let items = %group[0 1];
-            [!intersperse! %{
-                items: %[#items #items], // %[%group[0 1] %group[0 1]]
-                separator: %[_],
-            }] as string
-        ),
+            let stream = %[#items #items]; // %[%group[0 1] %group[0 1]]
+            stream.intersperse(%[_]).to_string()
+        },
         "01_01",
     );
-    // Commands can be used, if they return a valid iterable (e.g. a stream)
-    preinterpret_assert_eq!(
-        #([!intersperse! %{
-            items: [!if! false { 0 1 } !else! { 2 3 }],
-            separator: %[_],
-        }] as stream as string),
+    assert_eq!(
+        run!{
+            [!if! false { 0 1 } !else! { 2 3 }]
+                .intersperse(%[_]) as stream as string
+        },
         "2_3"
     );
     // All inputs can be variables
@@ -232,27 +200,19 @@ fn complex_cases_for_intersperse_and_input_types() {
             let separator = [", "];
             let final_separator = [" and "];
             let add_trailing = false;
-            [!intersperse! %{
-                separator: separator.take(),
-                final_separator: final_separator.take(),
-                add_trailing: add_trailing,
-                items: people,
-            }] as string
+            people.intersperse(
+                separator.take(),
+                %{ final_separator: final_separator.take(), add_trailing },
+            ).to_string()
         ),
         "Anna, Barbara and Charlie"
     );
     // Add trailing is executed even if it's irrelevant because there are no items
+    // This is no longer particularly unexpected due to the expression model
     preinterpret_assert_eq!(
         #(
             let x = "NOT_EXECUTED";
-            let _ = [!intersperse! %{
-                items: [],
-                separator: [],
-                add_trailing: #(
-                    x = "EXECUTED";
-                    false
-                ),
-            }];
+            let _ = [].intersperse([], %{ add_trailing: #(x = "EXECUTED"; false) });
             x
         ),
         "EXECUTED",
@@ -390,7 +350,7 @@ fn test_zip() {
             let numbers = [1, 2, 3];
             %{ number: numbers.take(), letter: letters }.zip().to_debug_string()
         ),
-        r#"[{ letter: %[A], number: 1 }, { letter: %[B], number: 2 }, { letter: %[C], number: 3 }]"#,
+        r#"[%{ letter: %[A], number: 1 }, %{ letter: %[B], number: 2 }, %{ letter: %[C], number: 3 }]"#,
     );
     preinterpret_assert_eq!(#([].zip().to_debug_string()), r#"[]"#);
     preinterpret_assert_eq!(#(%{}.zip().to_debug_string()), r#"[]"#);
@@ -415,10 +375,7 @@ fn test_zip_with_for() {
                 #(facts.push(%["=> The capital of " #country " is " #capital " and its flag is " #flag].to_string()))
             }]
 
-            #("The facts are:\n" + [!intersperse! %{
-                items: facts.take(),
-                separator: ["\n"],
-            }] as string + "\n")
+            #("The facts are:\n" + facts.take().intersperse("\n").to_string() + "\n")
         },
         r#"The facts are:
 => The capital of France is Paris and its flag is 🇫🇷

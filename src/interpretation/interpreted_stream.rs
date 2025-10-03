@@ -54,22 +54,18 @@ impl OutputStream {
         }
     }
 
-    pub(crate) fn new_with(
+    pub(crate) fn new_with(appender: impl FnOnce(&mut Self)) -> Self {
+        let mut stream = Self::new();
+        appender(&mut stream);
+        stream
+    }
+
+    #[allow(unused)]
+    pub(crate) fn new_try_with(
         appender: impl FnOnce(&mut Self) -> ExecutionResult<()>,
     ) -> ExecutionResult<Self> {
         let mut stream = Self::new();
         appender(&mut stream)?;
-        Ok(stream)
-    }
-
-    #[allow(unused)]
-    pub(crate) fn new_grouped(
-        appender: impl FnOnce(&mut Self) -> ExecutionResult<()>,
-        delimiter: Delimiter,
-        span: Span,
-    ) -> ExecutionResult<Self> {
-        let mut stream = Self::new();
-        stream.push_grouped(appender, delimiter, span)?;
         Ok(stream)
     }
 
@@ -412,10 +408,10 @@ impl IntoIterator for OutputStream {
 }
 
 pub(crate) struct ConcatBehaviour {
+    pub(crate) use_debug_literal_syntax: bool,
     pub(crate) add_space_between_token_trees: bool,
     pub(crate) use_stream_literal_syntax: bool,
-    pub(crate) use_rust_literal_syntax: bool,
-    pub(crate) output_array_structure: bool,
+    pub(crate) output_literal_structure: bool,
     pub(crate) unwrap_contents_of_string_like_literals: bool,
     pub(crate) show_none_values: bool,
     pub(crate) iterator_limit: usize,
@@ -427,8 +423,8 @@ impl ConcatBehaviour {
         Self {
             add_space_between_token_trees: false,
             use_stream_literal_syntax: false,
-            use_rust_literal_syntax: false,
-            output_array_structure: false,
+            use_debug_literal_syntax: false,
+            output_literal_structure: false,
             unwrap_contents_of_string_like_literals: true,
             show_none_values: false,
             iterator_limit: 1000,
@@ -440,8 +436,8 @@ impl ConcatBehaviour {
         Self {
             add_space_between_token_trees: false,
             use_stream_literal_syntax: false,
-            use_rust_literal_syntax: true,
-            output_array_structure: false,
+            use_debug_literal_syntax: true,
+            output_literal_structure: false,
             unwrap_contents_of_string_like_literals: true,
             show_none_values: false,
             iterator_limit: 1000,
@@ -453,8 +449,8 @@ impl ConcatBehaviour {
         Self {
             add_space_between_token_trees: true,
             use_stream_literal_syntax: true,
-            use_rust_literal_syntax: true,
-            output_array_structure: true,
+            use_debug_literal_syntax: true,
+            output_literal_structure: true,
             unwrap_contents_of_string_like_literals: false,
             show_none_values: true,
             iterator_limit: 20,
@@ -474,7 +470,7 @@ impl ConcatBehaviour {
                 output.push_str(&content)
             }
             _ => {
-                if self.use_rust_literal_syntax {
+                if self.use_debug_literal_syntax {
                     output.push_str(&literal.to_string())
                 } else {
                     output.push_str(&literal.inner_value_to_string())

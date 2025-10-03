@@ -1,4 +1,4 @@
-error: The method error expects 1 arguments, but 0 were provided
+error: The method error expects 1 non-self argument/s, but 0 were provided
  --> tests/compilation_failures/complex/nested.rs:8:23
   |
 8 |                 #(%[].error())

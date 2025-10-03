@@ -77,7 +77,7 @@ impl Expressionable for Source {
                 let (_, delim_span) = input.parse_and_enter_group()?;
                 if let Some((_, next)) = input.cursor().ident() {
                     if next.punct_matching(':').is_some() || next.punct_matching(',').is_some() {
-                        return delim_span.open().parse_err("An object literal must be prefixed with %, e.g. `%{ field: 1 }`. Without such a prefix, { .. } defines a block.`");
+                        return delim_span.open().parse_err("An object literal must be prefixed with %, e.g. `%{ field: 1 }`. Without such a prefix, { .. } defines a block.");
                     }
                 }
                 return delim_span.parse_err("Blocks are not yet supported in expressions")?;

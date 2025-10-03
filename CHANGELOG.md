@@ -38,13 +38,13 @@ This moves preinterpet to an expression-based language, inspired by Rust, but wi
   * `[!continue!]`
   * `[!break!]`
 * Token-stream utility commands:
-  * `[!is_empty! #stream]`
-  * `[!length! #stream]` which gives the number of token trees in the token stream.
+  * `<iterable>.is_empty()`
+  * `<iterable>.len()` which for streams gives the number of token trees in the token stream.
   * `%group[...]` which wraps the tokens in a transparent group. Can be useful if using token streams as iteration sources, e.g. in `!for!`.
-  * `[!intersperse! { ... }]` which inserts separator tokens between each token tree in a stream.
+  * `<iterable>.intersperse(<separator>, <options>?)` which inserts separator tokens between each token tree in a stream.
   * `[!split! ...]` which can be used to split a stream with a given separating stream.
   * `[!comma_split! ...]` which can be used to split a stream on `,` tokens.
-  * `[!zip! [#countries #flags #capitals]]` which can be used to combine multiple streams together.
+  * `[countries, flags, capitals].zip()` or `%{ countries, flags, capitals }.zip()` which can be used to combine multiple streams together.
 
 ### Expressions
 

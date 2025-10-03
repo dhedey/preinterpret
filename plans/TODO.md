@@ -28,9 +28,12 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
   * String: `.to_lowercase()` <- maybe shouldn't concat, others can: `.to_snake_case()`, `.capitalize()` etc
 - [x] Migrate `!is_empty!` and `!length!`
 - [x] Migrate `!zip!` and `!zip_truncated!`
-- [ ] Implement some kind of support for variable length methods (or fudge it for now?)
-- [ ] Migrate `!intersperse!`
+- [x] Implement some kind of support for variable length methods
+- [x] Migrate `!intersperse!`
+- [x] Move `.to_ident()` and friends to `to_value` via `.to_stream()`
 - [ ] Migrate `!split!` and `!comma_split!`
+- [ ] Add tests for object and string as iterables
+- [ ] Add `into_iter()` and `to_vec()` to iterable, and `next()`, `take(N) -> Vec` and `skip(N)` to iterator
 
 ## Span changes
 

@@ -173,3 +173,118 @@ impl ZipIterators {
         Ok(())
     }
 }
+
+define_optional_object! {
+    pub(crate) struct IntersperseSettings {
+        add_trailing: bool = false => ("false", "Whether to add the separator after the last item (default: false)"),
+        final_separator: ExpressionValue => ("%[or]", "Define a different final separator (default: same as normal separator)"),
+    }
+}
+
+pub(crate) fn run_intersperse(
+    items: IterableValue,
+    separator: ExpressionValue,
+    settings: IntersperseSettings,
+    output_span_range: SpanRange,
+) -> ExecutionResult<ExpressionArray> {
+    let mut output = Vec::new();
+
+    let mut items = items.into_iterator()?.peekable();
+
+    let mut this_item = match items.next() {
+        Some(next) => next,
+        None => {
+            return Ok(ExpressionArray {
+                items: output,
+                span_range: output_span_range,
+            })
+        }
+    };
+
+    let mut appender = SeparatorAppender {
+        separator,
+        final_separator: settings.final_separator,
+        add_trailing: settings.add_trailing,
+    };
+
+    loop {
+        output.push(this_item);
+        let next_item = items.next();
+        match next_item {
+            Some(next_item) => {
+                let remaining = if items.peek().is_some() {
+                    RemainingItemCount::MoreThanOne
+                } else {
+                    RemainingItemCount::ExactlyOne
+                };
+                appender.add_separator(remaining, &mut output)?;
+                this_item = next_item;
+            }
+            None => {
+                appender.add_separator(RemainingItemCount::None, &mut output)?;
+                break;
+            }
+        }
+    }
+
+    Ok(ExpressionArray {
+        items: output,
+        span_range: output_span_range,
+    })
+}
+
+struct SeparatorAppender {
+    separator: ExpressionValue,
+    final_separator: Option<ExpressionValue>,
+    add_trailing: bool,
+}
+
+impl SeparatorAppender {
+    fn add_separator(
+        &mut self,
+        remaining: RemainingItemCount,
+        output: &mut Vec<ExpressionValue>,
+    ) -> ExecutionResult<()> {
+        match self.separator(remaining) {
+            TrailingSeparator::Normal => output.push(self.separator.clone()),
+            TrailingSeparator::Final => match self.final_separator.take() {
+                Some(final_separator) => output.push(final_separator),
+                None => output.push(self.separator.clone()),
+            },
+            TrailingSeparator::None => {}
+        }
+        Ok(())
+    }
+
+    fn separator(&self, remaining_item_count: RemainingItemCount) -> TrailingSeparator {
+        match remaining_item_count {
+            RemainingItemCount::None => {
+                if self.add_trailing {
+                    TrailingSeparator::Final
+                } else {
+                    TrailingSeparator::None
+                }
+            }
+            RemainingItemCount::ExactlyOne => {
+                if self.add_trailing {
+                    TrailingSeparator::Normal
+                } else {
+                    TrailingSeparator::Final
+                }
+            }
+            RemainingItemCount::MoreThanOne => TrailingSeparator::Normal,
+        }
+    }
+}
+
+enum RemainingItemCount {
+    None,
+    ExactlyOne,
+    MoreThanOne,
+}
+
+enum TrailingSeparator {
+    Normal,
+    Final,
+    None,
+}

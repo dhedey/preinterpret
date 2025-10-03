@@ -153,19 +153,22 @@ impl ExpressionObject {
         output: &mut String,
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
-        if behaviour.output_array_structure {
+        if !behaviour.use_debug_literal_syntax {
+            return self.execution_err("An object can't be converted to a non-debug string");
+        }
+        if behaviour.output_literal_structure {
             if self.entries.is_empty() {
-                output.push_str("{}");
+                output.push_str("%{}");
                 return Ok(());
             }
-            output.push('{');
+            output.push_str("%{");
             if behaviour.add_space_between_token_trees {
                 output.push(' ');
             }
         }
         let mut is_first = true;
         for (key, entry) in self.entries.iter() {
-            if !is_first && behaviour.output_array_structure {
+            if !is_first && behaviour.output_literal_structure {
                 output.push(',');
             }
             if !is_first && behaviour.add_space_between_token_trees {
@@ -185,7 +188,7 @@ impl ExpressionObject {
             entry.value.concat_recursive_into(output, behaviour)?;
             is_first = false;
         }
-        if behaviour.output_array_structure {
+        if behaviour.output_literal_structure {
             if behaviour.add_space_between_token_trees {
                 output.push(' ');
             }
@@ -364,4 +367,19 @@ pub(crate) struct FieldDefinition {
     pub(crate) required: bool,
     pub(crate) description: Option<Cow<'static, str>>,
     pub(crate) example: Cow<'static, str>,
+}
+
+impl FieldDefinition {
+    pub(crate) const fn new_full_static(
+        required: bool,
+        description: &'static str,
+        example: &'static str,
+    ) -> Self {
+        use std::borrow::Cow;
+        Self {
+            required,
+            description: Some(Cow::Borrowed(description)),
+            example: Cow::Borrowed(example),
+        }
+    }
 }

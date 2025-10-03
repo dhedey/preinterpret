@@ -167,6 +167,39 @@ define_interface! {
             fn to_string(input: SharedValue) -> ExecutionResult<String> {
                 input.concat_recursive(&ConcatBehaviour::standard())
             }
+
+                        // STRING-BASED CONVERSION METHODS
+            // ===============================
+
+            [context] fn to_ident(this: ExpressionValue) -> ExecutionResult<Ident> {
+                let stream = to_stream(context, this)?;
+                let spanned = stream.spanned(context.output_span_range);
+                stream_interface::methods::to_ident(context, spanned)
+            }
+
+            [context] fn to_ident_camel(this: ExpressionValue) -> ExecutionResult<Ident> {
+                let stream = to_stream(context, this)?;
+                let spanned = stream.spanned(context.output_span_range);
+                stream_interface::methods::to_ident_camel(context, spanned)
+            }
+
+            [context] fn to_ident_snake(this: ExpressionValue) -> ExecutionResult<Ident> {
+                let stream = to_stream(context, this)?;
+                let spanned = stream.spanned(context.output_span_range);
+                stream_interface::methods::to_ident_snake(context, spanned)
+            }
+
+            [context] fn to_ident_upper_snake(this: ExpressionValue) -> ExecutionResult<Ident> {
+                let stream = to_stream(context, this)?;
+                let spanned = stream.spanned(context.output_span_range);
+                stream_interface::methods::to_ident_upper_snake(context, spanned)
+            }
+
+            [context] fn to_literal(this: ExpressionValue) -> ExecutionResult<Literal> {
+                let stream = to_stream(context, this)?;
+                let spanned = stream.spanned(context.output_span_range);
+                stream_interface::methods::to_literal(context, spanned)
+            }
         }
         pub(crate) mod unary_operations {
             fn cast_to_string(input: ExpressionValue) -> ExecutionResult<String> {

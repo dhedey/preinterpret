@@ -12,6 +12,10 @@ define_interface! {
             [context] fn zip_truncated(this: IterableValue) -> ExecutionResult<ExpressionArray> {
                 ZipIterators::new_from_iterable(this, context.span_range())?.run_zip(context.interpreter, false)
             }
+
+            [context] fn intersperse(this: IterableValue, separator: ExpressionValue, settings: Option<IntersperseSettings>) -> ExecutionResult<ExpressionArray> {
+                run_intersperse(this, separator, settings.unwrap_or_default(), context.output_span_range)
+            }
         }
         pub(crate) mod unary_operations {
         }
@@ -127,7 +131,10 @@ impl ExpressionIterator {
         output: &mut String,
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
-        if behaviour.output_array_structure {
+        if !behaviour.use_stream_literal_syntax {
+            return ExpressionArray::concat_array_like_iterator(self.clone(), output, behaviour);
+        }
+        if behaviour.output_literal_structure {
             output.push_str("[<iterator>");
         }
         let max = self.size_hint().1;
@@ -137,7 +144,7 @@ impl ExpressionIterator {
                 if behaviour.error_after_iterator_limit {
                     return span_range.execution_err(format!("To protect against infinite loops, only a maximum of {} items can be output to a string from an iterator. Try casting `as stream` to avoid this limit. This can't currently be reconfigured with the iteration limit.", behaviour.iterator_limit));
                 } else {
-                    if behaviour.output_array_structure {
+                    if behaviour.output_literal_structure {
                         match max {
                             Some(max) => output.push_str(&format!(
                                 ", ..<{} further items>",
@@ -152,7 +159,7 @@ impl ExpressionIterator {
             if i == 0 {
                 output.push(' ');
             }
-            if i != 0 && behaviour.output_array_structure {
+            if i != 0 && behaviour.output_literal_structure {
                 output.push(',');
             }
             if i != 0 && behaviour.add_space_between_token_trees {
@@ -160,7 +167,7 @@ impl ExpressionIterator {
             }
             item.concat_recursive_into(output, behaviour)?;
         }
-        if behaviour.output_array_structure {
+        if behaviour.output_literal_structure {
             output.push(']');
         }
         Ok(())

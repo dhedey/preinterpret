@@ -56,11 +56,7 @@ impl<T: ResolvableOutput> ResolvableOutput for ExecutionResult<T> {
 
 impl ResolvableOutput for Ident {
     fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue> {
-        let stream = OutputStream::new_with(|stream| {
-            let _: () = stream.push_ident(self);
-            Ok(())
-        })?;
-        stream.to_resolved_value(output_span_range)
+        OutputStream::new_with(|s| s.push_ident(self)).to_resolved_value(output_span_range)
     }
 }
 
