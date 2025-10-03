@@ -1,0 +1,279 @@
+use super::*;
+
+macro_rules! ignore_all {
+    ($($_:tt)*) => {};
+}
+
+macro_rules! if_empty {
+    ([] [$($output:tt)*]) => {
+        $($output)*
+    };
+    ([$($input:tt)+] [$($output:tt)*]) => {
+        $($input)*
+    };
+}
+
+macro_rules! handle_first_arg_type {
+    // By value
+    ($($arg_part:ident)+ : $type:ty, $($rest:tt)*) => {
+        $type
+    };
+}
+
+macro_rules! create_method_interface {
+    ($method_name:path[$(,)?]) => {
+        MethodInterface::Arity0 {
+            method: |context| apply_fn0($method_name, context),
+            argument_ownership: [],
+        }
+    };
+    ($method_name:path[$($arg_part:ident)+ : $ty:ty $(,)?]) => {
+        MethodInterface::Arity1 {
+            method: |context, a| apply_fn1($method_name, a, context),
+            argument_ownership: [<$ty as FromResolved>::OWNERSHIP],
+        }
+    };
+    ($method_name:path[
+        $($arg_part1:ident)+ : $ty1:ty,
+        $($arg_part2:ident)+ : $ty2:ty $(,)?
+    ]) => {
+        MethodInterface::Arity2 {
+            method: |context, a, b| apply_fn2($method_name, a, b, context),
+            argument_ownership: [
+                <$ty1 as FromResolved>::OWNERSHIP,
+                <$ty2 as FromResolved>::OWNERSHIP,
+            ],
+        }
+    };
+    ($method_name:path[
+        $($arg_part1:ident)+ : $ty1:ty,
+        $($arg_part2:ident)+ : $ty2:ty,
+        $($arg_part3:ident)+ : $ty3:ty $(,)?
+    ]) => {
+        MethodInterface::Arity3 {
+            method: |context, a, b, c| apply_fn3($method_name, a, b, c, context),
+            argument_ownership: [
+                <$ty1 as FromResolved>::OWNERSHIP,
+                <$ty2 as FromResolved>::OWNERSHIP,
+                <$ty3 as FromResolved>::OWNERSHIP,
+            ],
+        }
+    };
+}
+
+// NOTE: We use function pointers here rather than generics to avoid monomorphization bloat.
+// This means that we only need to compile the mapping glue combination once for each (A, B) -> C combination
+
+#[allow(unused)]
+pub(crate) fn apply_fn0<R>(
+    f: fn(MethodCallContext) -> R,
+    context: MethodCallContext,
+) -> ExecutionResult<ResolvedValue>
+where
+    R: ResolvableOutput,
+{
+    let output_span_range = context.output_span_range;
+    f(context).to_resolved_value(output_span_range)
+}
+
+pub(crate) fn apply_fn1<A, R>(
+    f: fn(MethodCallContext, A) -> R,
+    a: ResolvedValue,
+    context: MethodCallContext,
+) -> ExecutionResult<ResolvedValue>
+where
+    A: FromResolved,
+    R: ResolvableOutput,
+{
+    let output_span_range = context.output_span_range;
+    f(context, A::from_resolved(a)?).to_resolved_value(output_span_range)
+}
+
+pub(crate) fn apply_fn2<A, B, C>(
+    f: fn(MethodCallContext, A, B) -> C,
+    a: ResolvedValue,
+    b: ResolvedValue,
+    context: MethodCallContext,
+) -> ExecutionResult<ResolvedValue>
+where
+    A: FromResolved,
+    B: FromResolved,
+    C: ResolvableOutput,
+{
+    let output_span_range = context.output_span_range;
+    f(context, A::from_resolved(a)?, B::from_resolved(b)?).to_resolved_value(output_span_range)
+}
+
+pub(crate) fn apply_fn3<A, B, C, R>(
+    f: fn(MethodCallContext, A, B, C) -> R,
+    a: ResolvedValue,
+    b: ResolvedValue,
+    c: ResolvedValue,
+    context: MethodCallContext,
+) -> ExecutionResult<ResolvedValue>
+where
+    A: FromResolved,
+    B: FromResolved,
+    C: FromResolved,
+    R: ResolvableOutput,
+{
+    let output_span_range = context.output_span_range;
+    f(
+        context,
+        A::from_resolved(a)?,
+        B::from_resolved(b)?,
+        C::from_resolved(c)?,
+    )
+    .to_resolved_value(output_span_range)
+}
+
+macro_rules! create_unary_interface {
+    ($method_name:path[$($arg_part:ident)+ : $ty:ty $(,)?]) => {
+        UnaryOperationInterface {
+            method: |context, a| apply_unary_fn($method_name, a, context),
+            argument_ownership: <$ty as FromResolved>::OWNERSHIP,
+        }
+    };
+}
+
+pub(crate) fn apply_unary_fn<A, R>(
+    f: fn(UnaryOperationCallContext, A) -> R,
+    a: ResolvedValue,
+    context: UnaryOperationCallContext,
+) -> ExecutionResult<ResolvedValue>
+where
+    A: FromResolved,
+    R: ResolvableOutput,
+{
+    let output_span_range = context.output_span_range;
+    f(context, A::from_resolved(a)?).to_resolved_value(output_span_range)
+}
+
+pub(crate) struct MethodCallContext<'a> {
+    pub interpreter: &'a mut Interpreter,
+    pub output_span_range: SpanRange,
+}
+
+impl<'a> HasSpanRange for MethodCallContext<'a> {
+    fn span_range(&self) -> SpanRange {
+        self.output_span_range
+    }
+}
+
+pub(crate) struct UnaryOperationCallContext<'a> {
+    pub operation: &'a UnaryOperation,
+    pub output_span_range: SpanRange,
+}
+
+macro_rules! define_interface {
+    (
+        struct $type_data:ident,
+        parent: $parent_type_data:ident,
+        $mod_vis:vis mod $mod_name:ident {
+            $mod_methods_vis:vis mod methods {
+                $(
+                    $([$method_context:ident])? fn $method_name:ident($($method_args:tt)*) $(-> $method_output_ty:ty)? $method_body:block
+                )*
+            }
+            $mod_unary_operations_vis:vis mod unary_operations {
+                $(
+                    $([$unary_context:ident])? fn $unary_name:ident($($unary_args:tt)*) $(-> $unary_output_ty:ty)? $unary_body:block
+                )*
+            }
+            interface_items {
+                $($items:item)*
+            }
+        }
+    ) => {
+        #[derive(Clone, Copy)]
+        pub(crate) struct $type_data;
+
+        $mod_vis mod $mod_name {
+            use super::*;
+
+            $mod_vis const fn parent() -> Option<$parent_type_data> {
+                // Type ids aren't const, and strings aren't const-comparable, but I can use this work-around:
+                // https://internals.rust-lang.org/t/why-i-cannot-compare-two-static-str-s-in-a-const-context/17726/2
+                const OWN_TYPE_NAME: &'static [u8] = stringify!($type_data).as_bytes();
+                const PARENT_TYPE_NAME: &'static [u8] = stringify!($parent_type_data).as_bytes();
+                match PARENT_TYPE_NAME {
+                    OWN_TYPE_NAME => None,
+                    _ => Some($parent_type_data),
+                }
+            }
+
+            #[allow(unused)]
+            fn asserts() {
+                $(
+                    $type_data::assert_first_argument::<handle_first_arg_type!($($method_args)*,)>();
+                )*
+                $(
+                    $type_data::assert_first_argument::<handle_first_arg_type!($($unary_args)*,)>();
+                )*
+            }
+
+            $mod_methods_vis mod methods {
+                #[allow(unused)]
+                use super::*;
+                $(
+                    pub(crate) fn $method_name(if_empty!([$($method_context)?][_context]): MethodCallContext, $($method_args)*) $(-> $method_output_ty)? {
+                        $method_body
+                    }
+                )*
+            }
+
+            $mod_methods_vis mod method_definitions {
+                #[allow(unused)]
+                use super::*;
+                $(
+                    $mod_methods_vis fn $method_name() -> MethodInterface {
+                        create_method_interface!(methods::$method_name[$($method_args)*])
+                    }
+                )*
+            }
+
+            $mod_unary_operations_vis mod unary_operations {
+                #[allow(unused)]
+                use super::*;
+                $(
+                    $mod_unary_operations_vis fn $unary_name(if_empty!([$($unary_context)?][_context]): UnaryOperationCallContext, $($unary_args)*) $(-> $unary_output_ty)? {
+                        $unary_body
+                    }
+                )*
+            }
+
+            $mod_unary_operations_vis mod unary_definitions {
+                #[allow(unused)]
+                use super::*;
+                $(
+                    $mod_unary_operations_vis fn $unary_name() -> UnaryOperationInterface {
+                        create_unary_interface!(unary_operations::$unary_name[$($unary_args)*])
+                    }
+                )*
+            }
+
+            impl HierarchicalTypeData for $type_data {
+                type Parent = $parent_type_data;
+                const PARENT: Option<Self::Parent> = $mod_name::parent();
+
+                #[allow(unreachable_code)]
+                fn resolve_own_method(method_name: &str) -> Option<MethodInterface> {
+                    Some(match method_name {
+                        $(
+                            stringify!($method_name) => method_definitions::$method_name(),
+                        )*
+                        _ => return None,
+                    })
+                }
+
+                // Pass through resolve_own_unary_operation until there's a better way to define them
+                $($items)*
+            }
+        }
+    }
+}
+
+pub(crate) use {
+    create_method_interface, create_unary_interface, define_interface, handle_first_arg_type,
+    if_empty, ignore_all,
+};
