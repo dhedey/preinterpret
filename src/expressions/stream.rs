@@ -148,6 +148,10 @@ define_interface! {
                 Ok(this.coerce_into_value(span_range))
             }
 
+            [context] fn split(this: OutputStream, separator: Ref<OutputStream>, settings: Option<SplitSettings>) -> ExecutionResult<ExpressionArray> {
+                handle_split(this, &separator, settings.unwrap_or_default(), context.output_span_range)
+            }
+
             // STRING-BASED CONVERSION METHODS
             // ===============================
 

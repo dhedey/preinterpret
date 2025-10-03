@@ -31,7 +31,7 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 - [x] Implement some kind of support for variable length methods
 - [x] Migrate `!intersperse!`
 - [x] Move `.to_ident()` and friends to `to_value` via `.to_stream()`
-- [ ] Migrate `!split!` and `!comma_split!`
+- [x] Migrate `!split!` and `!comma_split!`
 - [ ] Add tests for object and string as iterables
 - [ ] Add `into_iter()` and `to_vec()` to iterable, and `next()`, `take(N) -> Vec` and `skip(N)` to iterator
 
@@ -119,7 +119,6 @@ Create the following expressions:
 
 ... and remove their commands
 
-
 ## Scopes & Blocks (requires control flow expressions, or at least no `!let!` command)
 
 * Scopes exist at compile time, e.g. as a `ScopeId(usize)` and include:
@@ -135,7 +134,6 @@ Create the following expressions:
 ## Attempt Expression (requires Scopes & Blocks)
 
 See @./2025-09-vision.md
-
 
 ## Parser Changes
 
@@ -179,16 +177,11 @@ First, read the @./2025-09-vision.md
 
 ## Utility methods
 
-Implement the following. (NB - do we need to add support for )
-
+Implement the following:
 * All value kinds:
   * `is_none()`, and similarly for other value kinds
 * Streams:
   * `is_ident()` and similarly for other stream
-* Bools:
-  * `assert("Error message", %[<span>])`
-* Strings:
-  * `error(%[span])`
 
 ## Repeat output bindings
 

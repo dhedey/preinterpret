@@ -374,10 +374,9 @@ impl OutputStream {
     pub(crate) fn parse_exact_match(
         &self,
         input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        handle_parsing_exact_output_match(input, interpreter, self, output)
+        handle_parsing_exact_output_match(input, self, output)
     }
 
     pub(crate) fn iter(&self) -> impl Iterator<Item = OutputTokenTreeRef<'_>> {

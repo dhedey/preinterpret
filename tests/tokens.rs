@@ -164,21 +164,33 @@ fn test_intersperse() {
 
 #[test]
 fn complex_cases_for_intersperse_and_input_types() {
-    assert_eq!(run!{
-        %[0 1 2 3].intersperse(%[_]).to_string()
-    }, "0_1_2_3");
-    assert_eq!(run!{
-        (0..4).intersperse(%[_]).to_string()
-    }, "0_1_2_3");
-    assert_eq!(run!{
-        %[0 1 2 3].intersperse("_").to_string()
-    }, "0_1_2_3");
-    assert_eq!(run!{
-        [0, 1, 2, 3].intersperse("_").to_string()
-    }, "0_1_2_3");
+    assert_eq!(
+        run! {
+            %[0 1 2 3].intersperse(%[_]).to_string()
+        },
+        "0_1_2_3"
+    );
+    assert_eq!(
+        run! {
+            (0..4).intersperse(%[_]).to_string()
+        },
+        "0_1_2_3"
+    );
+    assert_eq!(
+        run! {
+            %[0 1 2 3].intersperse("_").to_string()
+        },
+        "0_1_2_3"
+    );
+    assert_eq!(
+        run! {
+            [0, 1, 2, 3].intersperse("_").to_string()
+        },
+        "0_1_2_3"
+    );
     // Stream containing two groups
     assert_eq!(
-        run!{
+        run! {
             let items = %group[0 1];
             let stream = %[#items #items]; // %[%group[0 1] %group[0 1]]
             stream.intersperse(%[_]).to_string()
@@ -186,7 +198,7 @@ fn complex_cases_for_intersperse_and_input_types() {
         "01_01",
     );
     assert_eq!(
-        run!{
+        run! {
             [!if! false { 0 1 } !else! { 2 3 }]
                 .intersperse(%[_]) as stream as string
         },
@@ -223,93 +235,69 @@ fn complex_cases_for_intersperse_and_input_types() {
 fn test_split() {
     // Empty separators are allowed, and split on every token
     // In this case, drop_empty_start / drop_empty_end are ignored
-    preinterpret_assert_eq!(
-        #(
-            [!split! %{
-                stream: %[A::B],
-                separator: %[],
-            }].to_debug_string()
-        ),
+    assert_eq!(
+        run!(%[A::B].split(%[]).to_debug_string()),
         "[%[A], %[:], %[:], %[B]]"
     );
+    // TODO - panics:
+    // > Returning a shared reference when late-bound was requested
+    // > run!(%[A::B].as_ref().split(%[]).to_debug_string()),
+    // > expect_shared() called on a non-shared ResolvedValue
+    // > run!(%[A::B].split(%[]).to_debug_string()),
+
     // Double separators are allowed
-    preinterpret_assert_eq!(
-        #(
-            [!split! %{
-                stream: %[A::B::C],
-                separator: %[::],
-            }].to_debug_string()
-        ),
+    assert_eq!(
+        run!(%[A::B::C].split(%[::]).to_debug_string()),
         "[%[A], %[B], %[C]]"
     );
     // Trailing separator is ignored by default
-    preinterpret_assert_eq!(
-        #(
-            [!split! %{
-                stream: %[Pizza, Mac and Cheese, Hamburger,],
-                separator: %[,],
-            }].to_debug_string()
-        ),
+    assert_eq!(
+        run!(%[Pizza, Mac and Cheese, Hamburger,].split(%[,]).to_debug_string()),
         "[%[Pizza], %[Mac and Cheese], %[Hamburger]]"
     );
-    // When using stream_grouped(), empty groups are included except at the end
-    preinterpret_assert_eq!(
-        #(
-            [!split! %{
-                stream: %[::A::B::::C::],
-                separator: %[::],
-            }].stream_grouped().to_debug_string()
-        ),
+    // Split typically returns an array.
+    // When using to_stream_grouped(), empty groups are included except at the end.
+    assert_eq!(
+        run!(%[::A::B::::C::].split(%[::]).to_stream_grouped().to_debug_string()),
         "%[%group[] %group[A] %group[B] %group[] %group[C]]"
     );
     // Stream and separator are both interpreted
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let x = %[;];
-            [!split! %{
-                stream: %[;A;;B;C;D #x E;],
-                separator: x,
+            let options = %{
                 drop_empty_start: true,
                 drop_empty_middle: true,
                 drop_empty_end: true,
-            }].stream_grouped().to_debug_string()
+            };
+            %[;A;;B;C;D #x E;].split(x, options.take()).to_stream_grouped().to_debug_string()
         ),
-        "%[%group[A] %group[B] %group[C] %group[D] %group[E]]");
+        "%[%group[A] %group[B] %group[C] %group[D] %group[E]]"
+    );
     // Drop empty false works
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let x = %[;];
-            let output = [!split! %{
-                stream: %[;A;;B;C;D #x E;],
-                separator: x,
+            let options = %{
                 drop_empty_start: false,
                 drop_empty_middle: false,
                 drop_empty_end: false,
-            }].stream_grouped();
-            output.to_debug_string()
+            };
+            %[;A;;B;C;D #x E;].split(x, options.take()).to_stream_grouped().to_debug_string()
         ),
         "%[%group[] %group[A] %group[] %group[B] %group[C] %group[D] %group[E] %group[]]"
     );
     // Drop empty middle works
-    preinterpret_assert_eq!(
-        #(
-            [!split! %{
-                stream: %[;A;;B;;;;E;],
-                separator: %[;],
+    assert_eq!(
+        run!(
+            let options = %{
                 drop_empty_start: false,
                 drop_empty_middle: true,
                 drop_empty_end: false,
-            }].to_debug_string()
+            };
+            %[;A;;B;;;;E;].split(%[;], options.take()).to_debug_string()
         ),
         "[%[], %[A], %[B], %[E], %[]]"
-    );
-}
-
-#[test]
-fn test_comma_split() {
-    preinterpret_assert_eq!(
-        #([!comma_split! Pizza, Mac and Cheese, Hamburger,].to_debug_string()),
-        "[%[Pizza], %[Mac and Cheese], %[Hamburger]]"
     );
 }
 

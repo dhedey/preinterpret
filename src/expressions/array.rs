@@ -10,6 +10,10 @@ pub(crate) struct ExpressionArray {
 }
 
 impl ExpressionArray {
+    pub(crate) fn new(items: Vec<ExpressionValue>, span_range: SpanRange) -> Self {
+        Self { items, span_range }
+    }
+
     pub(crate) fn output_items_to(
         &self,
         output: &mut OutputStream,
@@ -242,7 +246,7 @@ define_interface! {
                 Ok(())
             }
 
-            fn stream_grouped(this: ExpressionArray) -> StreamOutput<impl StreamAppender> {
+            fn to_stream_grouped(this: ExpressionArray) -> StreamOutput<impl StreamAppender> {
                 StreamOutput::new(move |stream| this.output_items_to(stream, Grouping::Grouped))
             }
         }

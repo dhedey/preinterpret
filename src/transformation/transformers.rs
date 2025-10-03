@@ -215,6 +215,6 @@ impl TransformerDefinition for ExactTransformer {
             .stream
             .interpret_to_value(interpreter)?
             .expect_stream("Input to the EXACT parser")?;
-        stream.value.parse_exact_match(input, interpreter, output)
+        stream.value.parse_exact_match(input, output)
     }
 }

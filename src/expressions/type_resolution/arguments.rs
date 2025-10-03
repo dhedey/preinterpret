@@ -33,7 +33,6 @@ where
     Shared<T>: FromResolved,
 {
     type ValueType = <Shared<T> as FromResolved>::ValueType;
-
     const OWNERSHIP: ResolvedValueOwnership = <Shared<T> as FromResolved>::OWNERSHIP;
 
     fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
@@ -46,7 +45,6 @@ where
     Shared<T>: FromResolved,
 {
     type ValueType = <Shared<T> as FromResolved>::ValueType;
-
     const OWNERSHIP: ResolvedValueOwnership = <Shared<T> as FromResolved>::OWNERSHIP;
 
     fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
@@ -70,7 +68,6 @@ where
     Mutable<T>: FromResolved,
 {
     type ValueType = <Mutable<T> as FromResolved>::ValueType;
-
     const OWNERSHIP: ResolvedValueOwnership = <Mutable<T> as FromResolved>::OWNERSHIP;
 
     fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
@@ -83,7 +80,6 @@ where
     Mutable<T>: FromResolved,
 {
     type ValueType = <Mutable<T> as FromResolved>::ValueType;
-
     const OWNERSHIP: ResolvedValueOwnership = <Mutable<T> as FromResolved>::OWNERSHIP;
 
     fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {

@@ -1029,11 +1029,12 @@ impl EvaluationFrame for MethodCallBuilder {
                 let caller = argument_ownerships[0].map_from_late_bound(caller)?;
 
                 // We skip 1 to ignore the caller
-                let argument_ownerships_stack = argument_ownerships.iter().skip(1).rev();
+                let non_self_argument_ownerships = argument_ownerships.iter().skip(1);
                 for ((_, requested_ownership), ownership) in self
                     .unevaluated_parameters_stack
                     .iter_mut()
-                    .zip(argument_ownerships_stack)
+                    .rev() // Swap the stack back to the normal order
+                    .zip(non_self_argument_ownerships)
                 {
                     *requested_ownership = *ownership;
                 }

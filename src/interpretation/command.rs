@@ -97,42 +97,6 @@ impl<C: NoOutputCommandDefinition> CommandInvocationAs<OutputKindNone> for C {
     }
 }
 
-//================
-// OutputKindValue
-//================
-
-pub(crate) struct OutputKindValue;
-impl OutputKind for OutputKindValue {
-    type Output = TokenTree;
-
-    fn resolve_enum_kind() -> CommandOutputKind {
-        CommandOutputKind::Value
-    }
-}
-
-pub(crate) trait ValueCommandDefinition:
-    Sized + CommandType<OutputKind = OutputKindValue>
-{
-    const COMMAND_NAME: &'static str;
-    fn parse(arguments: CommandArguments) -> ParseResult<Self>;
-    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue>;
-}
-
-impl<C: ValueCommandDefinition> CommandInvocationAs<OutputKindValue> for C {
-    fn execute_into(
-        self,
-        context: ExecutionContext,
-        output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
-        self.execute(context.interpreter)?
-            .output_to(Grouping::Grouped, output)
-    }
-
-    fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
-        self.execute(context.interpreter)
-    }
-}
-
 //=================
 // OutputKindStream
 //=================
@@ -271,10 +235,6 @@ define_command_enums! {
     LoopCommand,
     ContinueCommand,
     BreakCommand,
-
-    // Token Commands
-    SplitCommand,
-    CommaSplitCommand,
 
     // Destructuring Commands
     ParseCommand,

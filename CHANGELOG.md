@@ -25,7 +25,7 @@ This moves preinterpet to an expression-based language, inspired by Rust, but wi
   * `#(x += %[...];)` to add extra tokens to a variable's stream.
   * `#(let _ = %[...];)` interprets its arguments but then ignores any outputs.
   * `%[...]` can be used to just output its interpreted contents. It's useful to create a stream value inside an expression.
-  * `%[...].reinterpret_as_run()` is like an `eval` command in scripting languages. It takes a stream, and runs it as a preinterpret expression block content like `run!{ ... }`. Similarly, `reinterpret_as_stream()` runs it as a stream
+  * `%[...].reinterpret_as_run()` is like an `eval` command in scripting languages. It takes a stream, and runs it as a preinterpret expression block content like `run!{ ... }`. Similarly, `%[...].reinterpret_as_stream()` runs it as a stream
   literal, like `stream!{ ... }`
   * `[!settings! { ... }]` can be used to adjust the iteration limit.
 * Expression commands:
@@ -41,9 +41,8 @@ This moves preinterpet to an expression-based language, inspired by Rust, but wi
   * `<iterable>.is_empty()`
   * `<iterable>.len()` which for streams gives the number of token trees in the token stream.
   * `%group[...]` which wraps the tokens in a transparent group. Can be useful if using token streams as iteration sources, e.g. in `!for!`.
-  * `<iterable>.intersperse(<separator>, <options>?)` which inserts separator tokens between each token tree in a stream.
-  * `[!split! ...]` which can be used to split a stream with a given separating stream.
-  * `[!comma_split! ...]` which can be used to split a stream on `,` tokens.
+  * `<any iterable>.intersperse(<separator (any value)>, <options>?)` which inserts the separator between each value from the iterator, and returns a vec. This can then be handled as a vector, embedded in a stream, or mapped with `to_string()` or `to_stream()` as required.
+  * `<stream>.split(<separator (stream)>, <options>?)` which can be used to split a stream with a given separating stream.
   * `[countries, flags, capitals].zip()` or `%{ countries, flags, capitals }.zip()` which can be used to combine multiple streams together.
 
 ### Expressions

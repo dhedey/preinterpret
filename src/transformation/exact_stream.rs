@@ -2,26 +2,20 @@ use crate::internal_prelude::*;
 
 pub(crate) fn handle_parsing_exact_output_match(
     input: ParseStream<Output>,
-    interpreter: &mut Interpreter,
     expected: &OutputStream,
     output: &mut OutputStream,
 ) -> ExecutionResult<()> {
     for item in expected.iter() {
         match item {
             OutputTokenTreeRef::TokenTree(token_tree) => {
-                handle_parsing_exact_token_tree(input, interpreter, token_tree, output)?;
+                handle_parsing_exact_token_tree(input, token_tree, output)?;
             }
             OutputTokenTreeRef::OutputGroup(delimiter, _, inner_expected) => {
                 handle_parsing_exact_group(
                     input,
                     delimiter,
                     |inner_input, inner_output| {
-                        handle_parsing_exact_output_match(
-                            inner_input,
-                            interpreter,
-                            inner_expected,
-                            inner_output,
-                        )
+                        handle_parsing_exact_output_match(inner_input, inner_expected, inner_output)
                     },
                     output,
                 )?;
@@ -33,19 +27,17 @@ pub(crate) fn handle_parsing_exact_output_match(
 
 fn handle_parsing_exact_stream_match(
     input: ParseStream<Output>,
-    interpreter: &mut Interpreter,
     expected: TokenStream,
     output: &mut OutputStream,
 ) -> ExecutionResult<()> {
     for item in expected.into_iter() {
-        handle_parsing_exact_token_tree(input, interpreter, &item, output)?;
+        handle_parsing_exact_token_tree(input, &item, output)?;
     }
     Ok(())
 }
 
 fn handle_parsing_exact_token_tree(
     input: ParseStream<Output>,
-    interpreter: &mut Interpreter,
     expected: &TokenTree,
     output: &mut OutputStream,
 ) -> ExecutionResult<()> {
@@ -55,12 +47,7 @@ fn handle_parsing_exact_token_tree(
                 input,
                 group.delimiter(),
                 |inner_input, inner_output| {
-                    handle_parsing_exact_stream_match(
-                        inner_input,
-                        interpreter,
-                        group.stream(),
-                        inner_output,
-                    )
+                    handle_parsing_exact_stream_match(inner_input, group.stream(), inner_output)
                 },
                 output,
             )?;
