@@ -1,5 +1,5 @@
 error: The iterables have different lengths. The lengths vary from 3 to 4. To truncate to the shortest, use `zip_truncated` instead of `zip`
- --> tests/compilation_failures/tokens/zip_different_length_streams.rs:5:40
+ --> tests/compilation_failures/iteration/zip_different_length_streams.rs:5:40
   |
 5 |         [["A", "B", "C"], [1, 2, 3, 4]].zip()
   |                                        ^^^^^^

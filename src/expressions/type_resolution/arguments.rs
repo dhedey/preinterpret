@@ -575,9 +575,11 @@ impl ResolvableArgumentOwned for IterableValue {
             ExpressionValue::Stream(x) => Self::Stream(x),
             ExpressionValue::Range(x) => Self::Range(x),
             ExpressionValue::Iterator(x) => Self::Iterator(x),
+            ExpressionValue::String(x) => Self::String(x),
             _ => {
-                return value
-                    .execution_err("Expected iterable (array, object, stream, range or iterator)")
+                return value.execution_err(
+                    "Expected iterable (iterator, array, object, stream, range or string)",
+                )
             }
         })
     }

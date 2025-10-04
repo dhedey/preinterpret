@@ -131,10 +131,12 @@ define_interface! {
     parent: IterableTypeData,
     pub(crate) mod stream_interface {
         pub(crate) mod methods {
-            fn len(this: Ref<OutputStream>) -> ExecutionResult<usize> {
-                Ok(this.len())
+            // This is also on iterable, but is specialized here for performance
+            fn len(this: Ref<OutputStream>) -> usize {
+                this.len()
             }
 
+            // This is also on iterable, but is specialized here for performance
             fn is_empty(this: Ref<OutputStream>) -> bool {
                 this.is_empty()
             }
@@ -156,27 +158,27 @@ define_interface! {
             // ===============================
 
             [context] fn to_ident(this: SpannedRef<OutputStream>) -> ExecutionResult<Ident> {
-                let string = this.concat_recursive(&ConcatBehaviour::standard());
+                let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident(context, string.as_str().spanned(this.span_range()))
             }
 
             [context] fn to_ident_camel(this: SpannedRef<OutputStream>) -> ExecutionResult<Ident> {
-                let string = this.concat_recursive(&ConcatBehaviour::standard());
+                let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident_camel(context, string.as_str().spanned(this.span_range()))
             }
 
             [context] fn to_ident_snake(this: SpannedRef<OutputStream>) -> ExecutionResult<Ident> {
-                let string = this.concat_recursive(&ConcatBehaviour::standard());
+                let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident_snake(context, string.as_str().spanned(this.span_range()))
             }
 
             [context] fn to_ident_upper_snake(this: SpannedRef<OutputStream>) -> ExecutionResult<Ident> {
-                let string = this.concat_recursive(&ConcatBehaviour::standard());
+                let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident_upper_snake(context, string.as_str().spanned(this.span_range()))
             }
 
             [context] fn to_literal(this: SpannedRef<OutputStream>) -> ExecutionResult<Literal> {
-                let string = this.concat_recursive(&ConcatBehaviour::literal());
+                let string = this.concat_recursive(&ConcatBehaviour::literal(this.span_range()));
                 string_interface::methods::to_literal(context, string.as_str().spanned(this.span_range()))
             }
 

@@ -32,8 +32,16 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 - [x] Migrate `!intersperse!`
 - [x] Move `.to_ident()` and friends to `to_value` via `.to_stream()`
 - [x] Migrate `!split!` and `!comma_split!`
-- [ ] Add tests for object and string as iterables
-- [ ] Add `into_iter()` and `to_vec()` to iterable, and `next()`, `take(N) -> Vec` and `skip(N)` to iterator
+- [x] Add tests for object and string as iterables and test length
+- [x] Add `into_iter()` and `to_vec()` to iterable
+- [ ] Add `next()`, `take(N) -> Vec` and `skip(N)` to iterator
+- [ ] Trial if `Shared<ExpressionValue>` can actually store an `ExpressionValueRef<'a>` (which just stores `&'a`, not the `Ref` variable)...
+  * This could be done by adding GATs (raising MSRV to 1.65) so that TypeData can have a `Ref<'T>`
+  * And then `Shared<T>` can store a `<T as ..Target>::Type::Ref<'T>` (in the file, this can be encapsulated as a `HasRefType` trait, which can be blanket implemeted for types implementing `..Target`)
+  * And then have a `AdvancedCellRef<T>` store a `<T as ..Target>::Type::Ref<'T>` which can be owned and we can manually call increase strong count etc on the `RefCell`.
+  * To implement `AdvancedCellRef::map`, we'll need `TypeData::Ref<'T>` to implement Target in a self-fulfilling way. (i.e. `HasRefType { type Ref<'a>: HasRefParent<Parent = Self> }`, `HasRefParent { type Parent: HasRefType })`)
+  * If this works, we can replace our `Ref<T>` with `T: HasRefType`
+  * Migrate `IterableRef`
 
 ## Span changes
 
@@ -304,7 +312,6 @@ Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` doc
   * The `as char` operator is not supported for untyped integer values
   * The `<range> as array`, `<iterator> as array` and `<stream> as array` - possibly on an Iterator type?
   * And `object` can be iterated as `[key, value]`?
-  * Add `as iterator` and uncomment the test at the end of `test_range()`
   * Support a CastTarget of `array` using `into_iterator()`.
   * Add `as ident` and `as literal` casting and support it for string, array and stream using concat recursive.
   * Add casts of any integer to char, via `char::from_u32(u32::try_from(x))`

@@ -89,7 +89,7 @@ impl ToExpressionValue for &str {
 
 define_interface! {
     struct StringTypeData,
-    parent: ValueTypeData,
+    parent: IterableTypeData,
     pub(crate) mod string_interface {
         pub(crate) mod methods {
             // ==================

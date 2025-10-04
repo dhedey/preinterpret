@@ -5,16 +5,47 @@ define_interface! {
     parent: ValueTypeData,
     pub(crate) mod object_interface {
         pub(crate) mod methods {
+            fn into_iter(this: IterableValue) -> ExecutionResult<ExpressionIterator> {
+                this.into_iterator()
+            }
+
+            fn len(this: IterableRef) -> ExecutionResult<usize> {
+                this.len()
+            }
+
+            fn is_empty(this: IterableRef) -> ExecutionResult<bool> {
+                Ok(this.len()? == 0)
+            }
+
             [context] fn zip(this: IterableValue) -> ExecutionResult<ExpressionArray> {
-                ZipIterators::new_from_iterable(this, context.span_range())?.run_zip(context.interpreter, true)
+                let iterator = this.into_iterator()?;
+                ZipIterators::new_from_iterator(iterator, context.span_range())?.run_zip(context.interpreter, true)
             }
 
             [context] fn zip_truncated(this: IterableValue) -> ExecutionResult<ExpressionArray> {
-                ZipIterators::new_from_iterable(this, context.span_range())?.run_zip(context.interpreter, false)
+                let iterator = this.into_iterator()?;
+                ZipIterators::new_from_iterator(iterator, context.span_range())?.run_zip(context.interpreter, false)
             }
 
             [context] fn intersperse(this: IterableValue, separator: ExpressionValue, settings: Option<IntersperseSettings>) -> ExecutionResult<ExpressionArray> {
                 run_intersperse(this, separator, settings.unwrap_or_default(), context.output_span_range)
+            }
+
+            [context] fn to_vec(this: IterableValue) -> ExecutionResult<Vec<ExpressionValue>> {
+                let error_span_range = context.span_range();
+                let mut counter = context.interpreter.start_iteration_counter(&error_span_range);
+                let iterator = this.into_iterator()?;
+                let max_hint = iterator.size_hint().1;
+                let mut vec = if let Some(max) = max_hint {
+                    Vec::with_capacity(max)
+                } else {
+                    Vec::new()
+                };
+                for item in iterator {
+                    counter.increment_and_check()?;
+                    vec.push(item);
+                }
+                Ok(vec)
             }
         }
         pub(crate) mod unary_operations {
@@ -24,12 +55,17 @@ define_interface! {
     }
 }
 
+// If you add a new variant, also update:
+// * ResolvableArgumentOwned for IterableValue
+// * FromResolved for IterableRef
+// * The parent of the value's TypeData to be IterableTypeData
 pub(crate) enum IterableValue {
     Iterator(ExpressionIterator),
     Array(ExpressionArray),
     Stream(ExpressionStream),
     Object(ExpressionObject),
     Range(ExpressionRange),
+    String(ExpressionString),
 }
 
 impl IterableValue {
@@ -40,6 +76,50 @@ impl IterableValue {
             IterableValue::Iterator(value) => value,
             IterableValue::Range(value) => ExpressionIterator::new_for_range(value)?,
             IterableValue::Object(value) => ExpressionIterator::new_for_object(value)?,
+            IterableValue::String(value) => ExpressionIterator::new_for_string(value)?,
+        })
+    }
+}
+
+pub(crate) enum IterableRef<'a> {
+    Iterator(Ref<'a, ExpressionIterator>),
+    Array(Ref<'a, ExpressionArray>),
+    Stream(Ref<'a, OutputStream>),
+    Range(Ref<'a, ExpressionRange>),
+    Object(Ref<'a, ExpressionObject>),
+    String(Ref<'a, str>),
+}
+
+impl FromResolved for IterableRef<'static> {
+    type ValueType = IterableTypeData;
+    const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Shared;
+
+    fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
+        Ok(match value.kind() {
+            ValueKind::Iterator => IterableRef::Iterator(FromResolved::from_resolved(value)?),
+            ValueKind::Array => IterableRef::Array(FromResolved::from_resolved(value)?),
+            ValueKind::Stream => IterableRef::Stream(FromResolved::from_resolved(value)?),
+            ValueKind::Range => IterableRef::Range(FromResolved::from_resolved(value)?),
+            ValueKind::Object => IterableRef::Object(FromResolved::from_resolved(value)?),
+            ValueKind::String => IterableRef::String(FromResolved::from_resolved(value)?),
+            _ => {
+                return value.execution_err(
+                    "Expected iterable (iterator, array, object, stream, range or string)",
+                )
+            }
+        })
+    }
+}
+
+impl IterableRef<'_> {
+    pub(crate) fn len(&self) -> ExecutionResult<usize> {
+        Ok(match self {
+            IterableRef::Iterator(iterator) => iterator.size_hint().0,
+            IterableRef::Array(value) => value.items.len(),
+            IterableRef::Stream(value) => value.len(),
+            IterableRef::Range(value) => return value.len(),
+            IterableRef::Object(value) => value.entries.len(),
+            IterableRef::String(value) => value.chars().count(),
         })
     }
 }
@@ -54,7 +134,7 @@ pub(crate) struct ExpressionIterator {
 impl ExpressionIterator {
     pub(crate) fn new_for_array(array: ExpressionArray) -> Self {
         Self {
-            iterator: ExpressionIteratorInner::Array(array.items.into_iter()),
+            iterator: ExpressionIteratorInner::Vec(array.items.into_iter()),
             span_range: array.span_range,
         }
     }
@@ -86,8 +166,24 @@ impl ExpressionIterator {
             .collect::<Vec<_>>()
             .into_iter();
         Ok(Self {
-            iterator: ExpressionIteratorInner::Array(iterator),
+            iterator: ExpressionIteratorInner::Vec(iterator),
             span_range: object.span_range,
+        })
+    }
+
+    pub(crate) fn new_for_string(string: ExpressionString) -> ExecutionResult<Self> {
+        // We have to collect to vec and back to make the iterator owned
+        // That's because value.chars() creates a `Chars<'_>` iterator which
+        // borrows from the string, which we don't allow in a Boxed iterator
+        let iterator = string
+            .value
+            .chars()
+            .map(|c| c.to_value(string.span_range))
+            .collect::<Vec<_>>()
+            .into_iter();
+        Ok(Self {
+            iterator: ExpressionIteratorInner::Vec(iterator),
+            span_range: string.span_range,
         })
     }
 
@@ -131,18 +227,38 @@ impl ExpressionIterator {
         output: &mut String,
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
-        if !behaviour.use_stream_literal_syntax {
-            return ExpressionArray::concat_array_like_iterator(self.clone(), output, behaviour);
-        }
-        if behaviour.output_literal_structure {
-            output.push_str("[<iterator>");
-        }
-        let max = self.size_hint().1;
-        let span_range = self.span_range;
-        for (i, item) in self.clone().enumerate() {
-            if i >= behaviour.iterator_limit {
+        Self::any_iterator_to_string(
+            self.clone(),
+            output,
+            behaviour,
+            "[<iterator>]",
+            "[<iterator> ",
+            "]",
+            true,
+        )
+    }
+
+    pub(crate) fn any_iterator_to_string<T: Borrow<ExpressionValue>>(
+        iterator: impl Iterator<Item = T>,
+        output: &mut String,
+        behaviour: &ConcatBehaviour,
+        literal_empty: &str,
+        literal_start: &str,
+        literal_end: &str,
+        possibly_unbounded: bool,
+    ) -> ExecutionResult<()> {
+        let mut is_empty = true;
+        let max = iterator.size_hint().1;
+        for (i, item) in iterator.enumerate() {
+            if i == 0 {
+                if behaviour.output_literal_structure {
+                    output.push_str(literal_start);
+                }
+                is_empty = false;
+            }
+            if possibly_unbounded && i >= behaviour.iterator_limit {
                 if behaviour.error_after_iterator_limit {
-                    return span_range.execution_err(format!("To protect against infinite loops, only a maximum of {} items can be output to a string from an iterator. Try casting `as stream` to avoid this limit. This can't currently be reconfigured with the iteration limit.", behaviour.iterator_limit));
+                    return behaviour.error_span_range.execution_err(format!("To protect against infinite loops, only a maximum of {} items can be output to a string from an iterator. You can use .to_vec() to avoid this limit. This can't currently be reconfigured with the iteration limit.", behaviour.iterator_limit));
                 } else {
                     if behaviour.output_literal_structure {
                         match max {
@@ -156,9 +272,7 @@ impl ExpressionIterator {
                     break;
                 }
             }
-            if i == 0 {
-                output.push(' ');
-            }
+            let item = item.borrow();
             if i != 0 && behaviour.output_literal_structure {
                 output.push(',');
             }
@@ -168,7 +282,11 @@ impl ExpressionIterator {
             item.concat_recursive_into(output, behaviour)?;
         }
         if behaviour.output_literal_structure {
-            output.push(']');
+            if is_empty {
+                output.push_str(literal_empty);
+            } else {
+                output.push_str(literal_end);
+            }
         }
         Ok(())
     }
@@ -206,7 +324,7 @@ impl HasValueType for ExpressionIterator {
 
 #[derive(Clone)]
 enum ExpressionIteratorInner {
-    Array(<Vec<ExpressionValue> as IntoIterator>::IntoIter),
+    Vec(<Vec<ExpressionValue> as IntoIterator>::IntoIter),
     Stream(<OutputStream as IntoIterator>::IntoIter),
     Other(Box<dyn CustomExpressionIterator>),
 }
@@ -232,7 +350,7 @@ impl Iterator for ExpressionIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.iterator {
-            ExpressionIteratorInner::Array(iter) => iter.next(),
+            ExpressionIteratorInner::Vec(iter) => iter.next(),
             ExpressionIteratorInner::Stream(iter) => {
                 let item = iter.next()?;
                 let span = item.span();
@@ -245,7 +363,7 @@ impl Iterator for ExpressionIterator {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         match &self.iterator {
-            ExpressionIteratorInner::Array(iter) => iter.size_hint(),
+            ExpressionIteratorInner::Vec(iter) => iter.size_hint(),
             ExpressionIteratorInner::Stream(iter) => iter.size_hint(),
             ExpressionIteratorInner::Other(iter) => iter.size_hint(),
         }

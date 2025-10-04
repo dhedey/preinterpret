@@ -10,16 +10,30 @@ pub(crate) struct ExpressionRange {
 }
 
 impl ExpressionRange {
+    pub(crate) fn len(&self) -> ExecutionResult<usize> {
+        Ok(self
+            .inner
+            .clone()
+            .into_iterable()?
+            .resolve_iterator()?
+            .size_hint()
+            .0)
+    }
+
     pub(crate) fn concat_recursive_into(
         &self,
         output: &mut String,
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
         if !behaviour.use_debug_literal_syntax {
-            return ExpressionArray::concat_array_like_iterator(
+            return ExpressionIterator::any_iterator_to_string(
                 self.clone().inner.into_iterable()?.resolve_iterator()?,
                 output,
                 behaviour,
+                "[<range>]",
+                "[<range> ",
+                "]",
+                true,
             );
         }
         match &*self.inner {

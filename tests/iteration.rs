@@ -10,7 +10,82 @@ fn test_tokens_compilation_failures() {
         return;
     }
     let t = trybuild::TestCases::new();
-    t.compile_fail("tests/compilation_failures/tokens/*.rs");
+    t.compile_fail("tests/compilation_failures/iteration/*.rs");
+}
+
+#[test]
+fn test_len() {
+    // Various iterators
+    assert_eq!(run!([1, 2, 3].into_iter().len()), 3);
+    assert_eq!(run!(%[%group[a b] c d].into_iter().len()), 3);
+    assert_eq!(run!((3..=5).into_iter().len()), 3);
+    assert_eq!(run!(%{ a: 1 }.into_iter().len()), 1);
+    assert_eq!(run!("Hello World".into_iter().len()), 11);
+
+    // Others
+    assert_eq!(run!([1, 2, 3].len()), 3);
+    assert_eq!(run!(%[%group[a b] c d].len()), 3);
+    assert_eq!(run!((3..=5).len()), 3);
+    assert_eq!(run!(%{ a: 1 }.len()), 1);
+    assert_eq!(run!("Hello World".len()), 11);
+}
+
+#[test]
+fn test_is_empty() {
+    // Various iterators
+    assert_eq!(run!([].into_iter().is_empty()), true);
+    assert_eq!(run!([1, 2, 3].into_iter().is_empty()), false);
+    assert_eq!(run!(%[].into_iter().is_empty()), true);
+    assert_eq!(run!(%[%group[a b] c d].into_iter().is_empty()), false);
+
+    // Others
+    assert_eq!(run!([].is_empty()), true);
+    assert_eq!(run!([1, 2, 3].is_empty()), false);
+    assert_eq!(run!(%[].is_empty()), true);
+    assert_eq!(run!(%[%group[a b] c d].is_empty()), false);
+    assert_eq!(run!((3..3).is_empty()), true);
+    assert_eq!(run!((3..=5).is_empty()), false);
+    assert_eq!(run!(%{}.is_empty()), true);
+    assert_eq!(run!(%{ a: 1 }.is_empty()), false);
+    assert_eq!(run!("".is_empty()), true);
+    assert_eq!(run!("Hello World".is_empty()), false);
+}
+
+#[test]
+fn iterator_to_debug_string() {
+    assert_eq!(
+        run!([1, 2, 3].into_iter().to_debug_string()),
+        "[<iterator> 1, 2, 3]"
+    );
+    assert_eq!(
+        run!(%[%group[a b] c d].into_iter().to_debug_string()),
+        "[<iterator> %[%group[a b]], %[c], %[d]]"
+    );
+    assert_eq!(
+        run!((3..=5).into_iter().to_debug_string()),
+        "[<iterator> 3, 4, 5]"
+    );
+    assert_eq!(
+        run!(%{ a: 1 }.into_iter().to_debug_string()),
+        r#"[<iterator> ["a", 1]]"#
+    );
+    assert_eq!(
+        run!("Hello World".into_iter().to_debug_string()),
+        "[<iterator> 'H', 'e', 'l', 'l', 'o', ' ', 'W', 'o', 'r', 'l', 'd']"
+    );
+    assert_eq!(run!("The world is such a great place and this is a very long string".into_iter().to_debug_string()), "[<iterator> 'T', 'h', 'e', ' ', 'w', 'o', 'r', 'l', 'd', ' ', 'i', 's', ' ', 's', 'u', 'c', 'h', ' ', 'a', ' ', ..<42 further items>]");
+    assert_eq!(run!((0..10000).into_iter().to_debug_string()), "[<iterator> 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, ..<9980 further items>]");
+}
+
+#[test]
+fn iterator_to_string() {
+    assert_eq!(run!([1, 2, 3].into_iter().to_string()), "123");
+    assert_eq!(run!(%[%group[a b] c d].into_iter().to_string()), "abcd");
+    assert_eq!(run!((3..=5).into_iter().to_string()), "345");
+    assert_eq!(run!(%{ a: 1 }.into_iter().to_string()), r#"a1"#);
+    assert_eq!(run!("Hello World".into_iter().to_string()), "Hello World");
+    assert_eq!(run!((0..10).into_iter().to_string()), "0123456789");
+    // TODO: Add test for (0..10000).to_string() and (0..10000).into_iter().to_string()
 }
 
 #[test]
@@ -232,76 +307,6 @@ fn complex_cases_for_intersperse_and_input_types() {
 }
 
 #[test]
-fn test_split() {
-    // Empty separators are allowed, and split on every token
-    // In this case, drop_empty_start / drop_empty_end are ignored
-    assert_eq!(
-        run!(%[A::B].split(%[]).to_debug_string()),
-        "[%[A], %[:], %[:], %[B]]"
-    );
-    // TODO - panics:
-    // > Returning a shared reference when late-bound was requested
-    // > run!(%[A::B].as_ref().split(%[]).to_debug_string()),
-    // > expect_shared() called on a non-shared ResolvedValue
-    // > run!(%[A::B].split(%[]).to_debug_string()),
-
-    // Double separators are allowed
-    assert_eq!(
-        run!(%[A::B::C].split(%[::]).to_debug_string()),
-        "[%[A], %[B], %[C]]"
-    );
-    // Trailing separator is ignored by default
-    assert_eq!(
-        run!(%[Pizza, Mac and Cheese, Hamburger,].split(%[,]).to_debug_string()),
-        "[%[Pizza], %[Mac and Cheese], %[Hamburger]]"
-    );
-    // Split typically returns an array.
-    // When using to_stream_grouped(), empty groups are included except at the end.
-    assert_eq!(
-        run!(%[::A::B::::C::].split(%[::]).to_stream_grouped().to_debug_string()),
-        "%[%group[] %group[A] %group[B] %group[] %group[C]]"
-    );
-    // Stream and separator are both interpreted
-    assert_eq!(
-        run!(
-            let x = %[;];
-            let options = %{
-                drop_empty_start: true,
-                drop_empty_middle: true,
-                drop_empty_end: true,
-            };
-            %[;A;;B;C;D #x E;].split(x, options.take()).to_stream_grouped().to_debug_string()
-        ),
-        "%[%group[A] %group[B] %group[C] %group[D] %group[E]]"
-    );
-    // Drop empty false works
-    assert_eq!(
-        run!(
-            let x = %[;];
-            let options = %{
-                drop_empty_start: false,
-                drop_empty_middle: false,
-                drop_empty_end: false,
-            };
-            %[;A;;B;C;D #x E;].split(x, options.take()).to_stream_grouped().to_debug_string()
-        ),
-        "%[%group[] %group[A] %group[] %group[B] %group[C] %group[D] %group[E] %group[]]"
-    );
-    // Drop empty middle works
-    assert_eq!(
-        run!(
-            let options = %{
-                drop_empty_start: false,
-                drop_empty_middle: true,
-                drop_empty_end: false,
-            };
-            %[;A;;B;;;;E;].split(%[;], options.take()).to_debug_string()
-        ),
-        "[%[], %[A], %[B], %[E], %[]]"
-    );
-}
-
-#[test]
 fn test_zip() {
     preinterpret_assert_eq!(
         #([%[Hello "Goodbye"], ["World", "Friend"]].zip().to_debug_string()),
@@ -370,5 +375,70 @@ fn test_zip_with_for() {
 => The capital of Germany is Berlin and its flag is 🇩🇪
 => The capital of Italy is Rome and its flag is 🇮🇹
 "#,
+    );
+}
+
+#[test]
+fn test_split() {
+    // Empty separators are allowed, and split on every token
+    // In this case, drop_empty_start / drop_empty_end are ignored
+    assert_eq!(
+        run!(%[A::B].split(%[]).to_debug_string()),
+        "[%[A], %[:], %[:], %[B]]"
+    );
+
+    // Double separators are allowed
+    assert_eq!(
+        run!(%[A::B::C].split(%[::]).to_debug_string()),
+        "[%[A], %[B], %[C]]"
+    );
+    // Trailing separator is ignored by default
+    assert_eq!(
+        run!(%[Pizza, Mac and Cheese, Hamburger,].split(%[,]).to_debug_string()),
+        "[%[Pizza], %[Mac and Cheese], %[Hamburger]]"
+    );
+    // Split typically returns an array.
+    // When using to_stream_grouped(), empty groups are included except at the end.
+    assert_eq!(
+        run!(%[::A::B::::C::].split(%[::]).to_stream_grouped().to_debug_string()),
+        "%[%group[] %group[A] %group[B] %group[] %group[C]]"
+    );
+    // Stream and separator are both interpreted
+    assert_eq!(
+        run!(
+            let x = %[;];
+            let options = %{
+                drop_empty_start: true,
+                drop_empty_middle: true,
+                drop_empty_end: true,
+            };
+            %[;A;;B;C;D #x E;].split(x, options.take()).to_stream_grouped().to_debug_string()
+        ),
+        "%[%group[A] %group[B] %group[C] %group[D] %group[E]]"
+    );
+    // Drop empty false works
+    assert_eq!(
+        run!(
+            let x = %[;];
+            let options = %{
+                drop_empty_start: false,
+                drop_empty_middle: false,
+                drop_empty_end: false,
+            };
+            %[;A;;B;C;D #x E;].split(x, options.take()).to_stream_grouped().to_debug_string()
+        ),
+        "%[%group[] %group[A] %group[] %group[B] %group[C] %group[D] %group[E] %group[]]"
+    );
+    // Drop empty middle works
+    assert_eq!(
+        run!(
+            let options = %{
+                drop_empty_start: false,
+                drop_empty_middle: true,
+                drop_empty_end: false,
+            };
+            %[;A;;B;;;;E;].split(%[;], options.take()).to_debug_string()
+        ),
+        "[%[], %[A], %[B], %[E], %[]]"
     );
 }

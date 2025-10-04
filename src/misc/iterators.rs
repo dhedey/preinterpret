@@ -44,11 +44,10 @@ impl ZipIterators {
         Ok(ZipIterators::Object(entries, span_range))
     }
 
-    pub(crate) fn new_from_iterable(
-        value: IterableValue,
+    pub(crate) fn new_from_iterator(
+        iterator: ExpressionIterator,
         span_range: SpanRange,
     ) -> ExecutionResult<Self> {
-        let iterator = value.into_iterator()?;
         let vec = iterator
             .take(101)
             .map(|x| x.expect_any_iterator())

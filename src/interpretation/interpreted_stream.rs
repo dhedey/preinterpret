@@ -415,10 +415,11 @@ pub(crate) struct ConcatBehaviour {
     pub(crate) show_none_values: bool,
     pub(crate) iterator_limit: usize,
     pub(crate) error_after_iterator_limit: bool,
+    pub(crate) error_span_range: SpanRange,
 }
 
 impl ConcatBehaviour {
-    pub(crate) fn standard() -> Self {
+    pub(crate) fn standard(error_span_range: SpanRange) -> Self {
         Self {
             add_space_between_token_trees: false,
             use_stream_literal_syntax: false,
@@ -428,10 +429,11 @@ impl ConcatBehaviour {
             show_none_values: false,
             iterator_limit: 1000,
             error_after_iterator_limit: true,
+            error_span_range,
         }
     }
 
-    pub(crate) fn literal() -> Self {
+    pub(crate) fn literal(error_span_range: SpanRange) -> Self {
         Self {
             add_space_between_token_trees: false,
             use_stream_literal_syntax: false,
@@ -441,10 +443,11 @@ impl ConcatBehaviour {
             show_none_values: false,
             iterator_limit: 1000,
             error_after_iterator_limit: true,
+            error_span_range,
         }
     }
 
-    pub(crate) fn debug() -> Self {
+    pub(crate) fn debug(error_span_range: SpanRange) -> Self {
         Self {
             add_space_between_token_trees: true,
             use_stream_literal_syntax: true,
@@ -454,6 +457,7 @@ impl ConcatBehaviour {
             show_none_values: true,
             iterator_limit: 20,
             error_after_iterator_limit: false,
+            error_span_range,
         }
     }
 

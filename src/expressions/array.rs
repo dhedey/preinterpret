@@ -161,38 +161,20 @@ impl ExpressionArray {
         }
     }
 
-    pub(crate) fn concat_array_like_iterator<T: Borrow<ExpressionValue>>(
-        iterator: impl Iterator<Item = T>,
-        output: &mut String,
-        behaviour: &ConcatBehaviour,
-    ) -> ExecutionResult<()> {
-        if behaviour.output_literal_structure {
-            output.push('[');
-        }
-        let mut is_first = true;
-        for item in iterator {
-            let item = item.borrow();
-            if !is_first && behaviour.output_literal_structure {
-                output.push(',');
-            }
-            if !is_first && behaviour.add_space_between_token_trees {
-                output.push(' ');
-            }
-            item.concat_recursive_into(output, behaviour)?;
-            is_first = false;
-        }
-        if behaviour.output_literal_structure {
-            output.push(']');
-        }
-        Ok(())
-    }
-
     pub(crate) fn concat_recursive_into(
         &self,
         output: &mut String,
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
-        Self::concat_array_like_iterator(self.items.iter(), output, behaviour)
+        ExpressionIterator::any_iterator_to_string(
+            self.items.iter(),
+            output,
+            behaviour,
+            "[]",
+            "[",
+            "]",
+            false, // Output all the vec because it's already in memory
+        )
     }
 }
 
@@ -237,10 +219,6 @@ define_interface! {
     parent: IterableTypeData,
     pub(crate) mod array_interface {
         pub(crate) mod methods {
-            fn len(this: Shared<ExpressionArray>) -> ExecutionResult<usize> {
-                Ok(this.items.len())
-            }
-
             fn push(mut this: Mutable<ExpressionArray>, item: OwnedValue) -> ExecutionResult<()> {
                 this.items.push(item.into());
                 Ok(())

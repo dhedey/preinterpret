@@ -146,14 +146,14 @@ define_interface! {
             }
 
             fn debug(this: CopyOnWriteValue) -> ExecutionResult<()> {
-                let value = this.into_owned_infallible();
-                let span_range = value.span_range();
-                let message = value.into_inner().into_debug_string()?;
+                let (value, span_range) = this.into_owned_infallible().deconstruct();
+                let message = value.concat_recursive(&ConcatBehaviour::debug(span_range))?;
                 span_range.execution_err(message)
             }
 
             fn to_debug_string(this: CopyOnWriteValue) -> ExecutionResult<String> {
-                this.into_owned_infallible().into_inner().into_debug_string()
+                let (value, span_range) = this.into_owned_infallible().deconstruct();
+                value.concat_recursive(&ConcatBehaviour::debug(span_range))
             }
 
             fn to_stream(input: ExpressionValue) -> ExecutionResult<OutputStream> {
@@ -165,7 +165,7 @@ define_interface! {
             }
 
             fn to_string(input: SharedValue) -> ExecutionResult<String> {
-                input.concat_recursive(&ConcatBehaviour::standard())
+                input.concat_recursive(&ConcatBehaviour::standard(input.span_range()))
             }
 
                         // STRING-BASED CONVERSION METHODS
@@ -203,7 +203,7 @@ define_interface! {
         }
         pub(crate) mod unary_operations {
             fn cast_to_string(input: ExpressionValue) -> ExecutionResult<String> {
-                input.concat_recursive(&ConcatBehaviour::standard())
+                input.concat_recursive(&ConcatBehaviour::standard(input.span_range()))
             }
 
             fn cast_to_stream(input: ExpressionValue) -> ExecutionResult<OutputStream> {
@@ -812,10 +812,6 @@ impl ExpressionValue {
             }
         };
         Ok(())
-    }
-
-    pub(crate) fn into_debug_string(self) -> ExecutionResult<String> {
-        self.concat_recursive(&ConcatBehaviour::debug())
     }
 
     pub(crate) fn concat_recursive(&self, behaviour: &ConcatBehaviour) -> ExecutionResult<String> {
