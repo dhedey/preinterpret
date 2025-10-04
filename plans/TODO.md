@@ -34,18 +34,12 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 - [x] Migrate `!split!` and `!comma_split!`
 - [x] Add tests for object and string as iterables and test length
 - [x] Add `into_iter()` and `to_vec()` to iterable
-- [ ] Add `next()`, `take(N) -> Vec` and `skip(N)` to iterator
-- [ ] Trial if `Shared<ExpressionValue>` can actually store an `ExpressionValueRef<'a>` (which just stores `&'a`, not the `Ref` variable)...
-  * This could be done by adding GATs (raising MSRV to 1.65) so that TypeData can have a `Ref<'T>`
-  * And then `Shared<T>` can store a `<T as ..Target>::Type::Ref<'T>` (in the file, this can be encapsulated as a `HasRefType` trait, which can be blanket implemeted for types implementing `..Target`)
-  * And then have a `AdvancedCellRef<T>` store a `<T as ..Target>::Type::Ref<'T>` which can be owned and we can manually call increase strong count etc on the `RefCell`.
-  * To implement `AdvancedCellRef::map`, we'll need `TypeData::Ref<'T>` to implement Target in a self-fulfilling way. (i.e. `HasRefType { type Ref<'a>: HasRefParent<Parent = Self> }`, `HasRefParent { type Parent: HasRefType })`)
-  * If this works, we can replace our `Ref<T>` with `T: HasRefType`
-  * Migrate `IterableRef`
+- [x] Add `next()`, `take(N) -> Vec` and `skip(N)` to iterator, and add tests
 
 ## Span changes
 
 * Remove span range from value:
+    * Mark `SpanRange::dummy()` as `#[deprecated]` and start using it during the refactor
     * Move it to a binding such as `Owned<T>` etc
     * Possibly can use `EvaluationError` (without a span!) inside a calculation, and adding the span in the evaluator (nb. it may still need to be able to propogate an `ExecutionInterrupt` internally)
 * Except streams, which keep spans on literals/groups.
@@ -307,23 +301,37 @@ Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` doc
 * Add `LiteralPattern` (wrapping a `Literal`)
 * Add `Eq` support on composite types and streams
 * Have UntypedInteger have an inner representation of either i128 or literal (and same with float)
-* CastTarget expansion:
+* CastTarget revision:
   * The `as int` operator is not supported for string values
   * The `as char` operator is not supported for untyped integer values
-  * The `<range> as array`, `<iterator> as array` and `<stream> as array` - possibly on an Iterator type?
-  * And `object` can be iterated as `[key, value]`?
-  * Support a CastTarget of `array` using `into_iterator()`.
-  * Add `as ident` and `as literal` casting and support it for string, array and stream using concat recursive.
   * Add casts of any integer to char, via `char::from_u32(u32::try_from(x))`
+  * Should we remove/replace any CastTargets?
 * TODO check
 * Check all `#[allow(unused)]` and remove any which aren't needed
 
 NB: `define_command`, `define_parser`, and parsing of Rust code pushed to v1.1
 
+## Better handling of value sub-references
+
+Returning refs of sub-values requires taking the enum outside of the reference, i.e. some `ExpressionValueRef<'a>`.
+
+One option We can work it like `IterableRef`, but perhaps we can do better? 
+
+- [ ] Trial if `Shared<ExpressionValue>` can actually store an `ExpressionValueRef<'a>` (which just stores `&'a`, not the `Ref` variable)...
+  * This could be done by adding GATs (raising MSRV to 1.65) so that TypeData can have a `Ref<'T>`
+  * And then `Shared<T>` can store a `<T as ..Target>::Type::Ref<'T>` (in the file, this can be encapsulated as a `HasRefType` trait, which can be blanket implemeted for types implementing `..Target`)
+  * And then have a `AdvancedCellRef<T>` store a `<T as ..Target>::Type::Ref<'T>` which can be owned and we can manually call increase strong count etc on the `RefCell`.
+  * To implement `AdvancedCellRef::map`, we'll need `TypeData::Ref<'T>` to implement Target in a self-fulfilling way. (i.e. `HasRefType { type Ref<'a>: HasRefParent<Parent = Self> }`, `HasRefParent { type Parent: HasRefType })`)
+  * If this works, we can replace our `Ref<T>` with `T: HasRefType`
+  * Migrate `IterableRef`
+
+## Cloning
+
+* Consider making Iterator non-clonable (which will unlock many more easy lazy implementations, of e.g. `take` using the non-clonable `Take`, and similar for other mapped iterators), i.e. `ExpressionValue` has a manual `clone() -> ExecutionResult<Self>` - this will simplify some things. But then, `to_string()` would want to take a `CopyOnWrite` so that where we clone, the iterator can potentially take owned, attempt cloen, else error.
+
 ## Finish converting all commands to expressions
 
 E.G.
-* `#(%[#x #y].ident_lower_camel())`
 * `preinterpret.settings({..})` (`preinterpret` is available as a variable pre-bound on the root frame)
 * .. possibly keep the v0.2 commands in `deprecated` mode?
 

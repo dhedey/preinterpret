@@ -85,6 +85,22 @@ macro_rules! create_method_interface {
             ],
         }
     };
+    ($method_name:path[
+        $($arg_part1:ident)+ : $ty1:ty,
+        $($arg_part2:ident)+ : $ty2:ty,
+        $($arg_part3:ident)+ : $ty3:ty,
+        $($arg_part4:ident)+ : Option<$ty4:ty> $(,)?
+    ]) => {
+        MethodInterface::Arity3PlusOptional1 {
+            method: |context, a, b, c, d| apply_fn3_optional1($method_name, a, b, c, d, context),
+            argument_ownership: [
+                <$ty1 as FromResolved>::OWNERSHIP,
+                <$ty2 as FromResolved>::OWNERSHIP,
+                <$ty3 as FromResolved>::OWNERSHIP,
+                <$ty4 as FromResolved>::OWNERSHIP,
+            ],
+        }
+    };
 }
 
 // NOTE: We use function pointers here rather than generics to avoid monomorphization bloat.
@@ -174,6 +190,7 @@ where
     .to_resolved_value(output_span_range)
 }
 
+#[allow(unused)]
 pub(crate) fn apply_fn3<A, B, C, R>(
     f: fn(&mut MethodCallContext, A, B, C) -> R,
     a: ResolvedValue,
@@ -193,6 +210,32 @@ where
         A::from_resolved(a)?,
         B::from_resolved(b)?,
         C::from_resolved(c)?,
+    )
+    .to_resolved_value(output_span_range)
+}
+
+pub(crate) fn apply_fn3_optional1<A, B, C, D, R>(
+    f: fn(&mut MethodCallContext, A, B, C, Option<D>) -> R,
+    a: ResolvedValue,
+    b: ResolvedValue,
+    c: ResolvedValue,
+    d: Option<ResolvedValue>,
+    context: &mut MethodCallContext,
+) -> ExecutionResult<ResolvedValue>
+where
+    A: FromResolved,
+    B: FromResolved,
+    C: FromResolved,
+    D: FromResolved,
+    R: ResolvableOutput,
+{
+    let output_span_range = context.output_span_range;
+    f(
+        context,
+        A::from_resolved(a)?,
+        B::from_resolved(b)?,
+        C::from_resolved(c)?,
+        d.map(|d| D::from_resolved(d)).transpose()?,
     )
     .to_resolved_value(output_span_range)
 }

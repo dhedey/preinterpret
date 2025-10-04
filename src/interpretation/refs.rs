@@ -18,16 +18,17 @@ impl<'a, T: ?Sized> From<&'a T> for Ref<'a, T> {
 
 pub(crate) trait ToSpannedRef<'a> {
     type Target: ?Sized;
-    fn spanned(self, source: impl HasSpanRange) -> SpannedRef<'a, Self::Target>;
+    fn into_ref(self) -> Ref<'a, Self::Target>;
+    fn into_spanned_ref(self, source: impl HasSpanRange) -> SpannedRef<'a, Self::Target>;
 }
 
 impl<'a, T: ?Sized> ToSpannedRef<'a> for &'a T {
     type Target = T;
-    fn spanned(self, source: impl HasSpanRange) -> SpannedRef<'a, Self::Target> {
-        SpannedRef {
-            value: self.into(),
-            span_range: source.span_range(),
-        }
+    fn into_ref(self) -> Ref<'a, Self::Target> {
+        self.into()
+    }
+    fn into_spanned_ref(self, source: impl HasSpanRange) -> SpannedRef<'a, Self::Target> {
+        self.into_ref().spanned(source)
     }
 }
 
@@ -85,19 +86,21 @@ impl<'a, T: ?Sized> From<&'a mut T> for RefMut<'a, T> {
 }
 
 #[allow(unused)]
-pub(crate) trait ToSpannedRefMut<'a> {
+pub(crate) trait IntoRefMut<'a> {
     type Target: ?Sized;
-    fn spanned(self, source: impl HasSpanRange) -> SpannedRefMut<'a, Self::Target>;
+    fn into_ref_mut(self) -> RefMut<'a, Self::Target>;
+    fn into_spanned_ref_mut(self, source: impl HasSpanRange) -> SpannedRefMut<'a, Self::Target>;
 }
 
-impl<'a, T: ?Sized + 'static> ToSpannedRefMut<'a> for &'a mut T {
+impl<'a, T: ?Sized + 'static> IntoRefMut<'a> for &'a mut T {
     type Target = T;
 
-    fn spanned(self, source: impl HasSpanRange) -> SpannedRefMut<'a, T> {
-        SpannedRefMut {
-            value: self.into(),
-            span_range: source.span_range(),
-        }
+    fn into_spanned_ref_mut(self, source: impl HasSpanRange) -> SpannedRefMut<'a, T> {
+        self.into_ref_mut().spanned(source)
+    }
+
+    fn into_ref_mut(self) -> RefMut<'a, Self::Target> {
+        self.into()
     }
 }
 

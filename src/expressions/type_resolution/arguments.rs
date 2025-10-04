@@ -40,18 +40,6 @@ where
     }
 }
 
-impl<T: 'static + ?Sized> FromResolved for SpannedRef<'static, T>
-where
-    Shared<T>: FromResolved,
-{
-    type ValueType = <Shared<T> as FromResolved>::ValueType;
-    const OWNERSHIP: ResolvedValueOwnership = <Shared<T> as FromResolved>::OWNERSHIP;
-
-    fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
-        Ok(Shared::<T>::from_resolved(value)?.into())
-    }
-}
-
 impl<T: ResolvableArgumentMutable + ResolvableArgumentTarget + ?Sized> FromResolved for Mutable<T> {
     type ValueType = T::ValueType;
     const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Mutable;
@@ -60,18 +48,6 @@ impl<T: ResolvableArgumentMutable + ResolvableArgumentTarget + ?Sized> FromResol
         value
             .expect_mutable()
             .try_map(|v, _| T::resolve_from_mut(v))
-    }
-}
-
-impl<T: 'static + ?Sized> FromResolved for SpannedRefMut<'static, T>
-where
-    Mutable<T>: FromResolved,
-{
-    type ValueType = <Mutable<T> as FromResolved>::ValueType;
-    const OWNERSHIP: ResolvedValueOwnership = <Mutable<T> as FromResolved>::OWNERSHIP;
-
-    fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
-        Ok(Mutable::<T>::from_resolved(value)?.into())
     }
 }
 
@@ -109,6 +85,19 @@ where
             T::resolve_shared,
             <T::Owned as ResolvableArgumentOwned>::resolve_owned,
         )
+    }
+}
+
+impl<T: FromResolved> FromResolved for Spanned<T> {
+    type ValueType = <T as FromResolved>::ValueType;
+    const OWNERSHIP: ResolvedValueOwnership = <T as FromResolved>::OWNERSHIP;
+
+    fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
+        let span_range = value.span_range();
+        Ok(Spanned {
+            value: T::from_resolved(value)?,
+            span_range,
+        })
     }
 }
 
@@ -261,23 +250,6 @@ impl_resolvable_argument_for! {
     }
 }
 
-pub(crate) struct MaybeTypedInt<X>(X);
-
-impl<X: ResolvableArgumentOwned + FromStr> ResolvableArgumentOwned for MaybeTypedInt<X>
-where
-    X::Err: core::fmt::Display,
-{
-    fn resolve_from_owned(value: ExpressionValue) -> ExecutionResult<Self> {
-        Ok(Self(match value {
-            ExpressionValue::Integer(ExpressionInteger {
-                value: ExpressionIntegerValue::Untyped(x),
-                ..
-            }) => x.parse_as()?,
-            _ => value.resolve_as()?,
-        }))
-    }
-}
-
 pub(crate) struct UntypedIntegerFallback(pub FallbackInteger);
 
 impl ResolvableArgumentTarget for UntypedIntegerFallback {
@@ -301,125 +273,66 @@ impl_resolvable_argument_for! {
     }
 }
 
-impl_resolvable_argument_for! {
-    I8TypeData,
-    (value) -> i8 {
-        match value {
-            ExpressionValue::Integer(ExpressionInteger { value: ExpressionIntegerValue::I8(x), ..}) => Ok(x),
-            _ => value.execution_err("Expected i8"),
+macro_rules! impl_resolvable_integer_subtype {
+    ($value_type:ty, $type:ty, $variant:ident, $expected_msg:expr) => {
+        impl ResolvableArgumentTarget for $type {
+            type ValueType = $value_type;
         }
-    }
+
+        impl ResolvableArgumentOwned for $type {
+            fn resolve_from_owned(value: ExpressionValue) -> ExecutionResult<Self> {
+                match value {
+                    ExpressionValue::Integer(ExpressionInteger {
+                        value: ExpressionIntegerValue::Untyped(x),
+                        ..
+                    }) => x.parse_as(),
+                    ExpressionValue::Integer(ExpressionInteger {
+                        value: ExpressionIntegerValue::$variant(x),
+                        ..
+                    }) => Ok(x),
+                    _ => value.execution_err($expected_msg),
+                }
+            }
+        }
+
+        impl ResolvableArgumentShared for $type {
+            fn resolve_from_ref(value: &ExpressionValue) -> ExecutionResult<&Self> {
+                match value {
+                    ExpressionValue::Integer(ExpressionInteger {
+                        value: ExpressionIntegerValue::$variant(x),
+                        ..
+                    }) => Ok(x),
+                    _ => value.execution_err($expected_msg),
+                }
+            }
+        }
+
+        impl ResolvableArgumentMutable for $type {
+            fn resolve_from_mut(value: &mut ExpressionValue) -> ExecutionResult<&mut Self> {
+                match value {
+                    ExpressionValue::Integer(ExpressionInteger {
+                        value: ExpressionIntegerValue::$variant(x),
+                        ..
+                    }) => Ok(x),
+                    _ => value.execution_err($expected_msg),
+                }
+            }
+        }
+    };
 }
 
-impl_resolvable_argument_for! {
-    I16TypeData,
-    (value) -> i16 {
-        match value {
-            ExpressionValue::Integer(ExpressionInteger { value: ExpressionIntegerValue::I16(x), ..}) => Ok(x),
-            _ => value.execution_err("Expected i16"),
-        }
-    }
-}
-
-impl_resolvable_argument_for! {
-    I32TypeData,
-    (value) -> i32 {
-        match value {
-            ExpressionValue::Integer(ExpressionInteger { value: ExpressionIntegerValue::I32(x), ..}) => Ok(x),
-            _ => value.execution_err("Expected i32"),
-        }
-    }
-}
-
-impl_resolvable_argument_for! {
-    I64TypeData,
-    (value) -> i64 {
-        match value {
-            ExpressionValue::Integer(ExpressionInteger { value: ExpressionIntegerValue::I64(x), ..}) => Ok(x),
-            _ => value.execution_err("Expected i64"),
-        }
-    }
-}
-
-impl_resolvable_argument_for! {
-    I128TypeData,
-    (value) -> i128 {
-        match value {
-            ExpressionValue::Integer(ExpressionInteger { value: ExpressionIntegerValue::I128(x), ..}) => Ok(x),
-            _ => value.execution_err("Expected i128"),
-        }
-    }
-}
-
-impl_resolvable_argument_for! {
-    IsizeTypeData,
-    (value) -> isize {
-        match value {
-            ExpressionValue::Integer(ExpressionInteger { value: ExpressionIntegerValue::Isize(x), ..}) => Ok(x),
-            _ => value.execution_err("Expected isize"),
-        }
-    }
-}
-
-impl_resolvable_argument_for! {
-    U8TypeData,
-    (value) -> u8 {
-        match value {
-            ExpressionValue::Integer(ExpressionInteger { value: ExpressionIntegerValue::U8(x), ..}) => Ok(x),
-            _ => value.execution_err("Expected u8"),
-        }
-    }
-}
-
-impl_resolvable_argument_for! {
-    U16TypeData,
-    (value) -> u16 {
-        match value {
-            ExpressionValue::Integer(ExpressionInteger { value: ExpressionIntegerValue::U16(x), ..}) => Ok(x),
-            _ => value.execution_err("Expected u16"),
-        }
-    }
-}
-
-impl_resolvable_argument_for! {
-    U32TypeData,
-    (value) -> u32 {
-        match value {
-            ExpressionValue::Integer(ExpressionInteger { value: ExpressionIntegerValue::U32(x), ..}) => Ok(x),
-            _ => value.execution_err("Expected u32"),
-        }
-    }
-}
-
-impl_resolvable_argument_for! {
-    U64TypeData,
-    (value) -> u64 {
-        match value {
-            ExpressionValue::Integer(ExpressionInteger { value: ExpressionIntegerValue::U64(x), ..}) => Ok(x),
-            _ => value.execution_err("Expected u64"),
-        }
-    }
-}
-
-impl_resolvable_argument_for! {
-    U128TypeData,
-    (value) -> u128 {
-        match value {
-            ExpressionValue::Integer(ExpressionInteger { value: ExpressionIntegerValue::U128(x), ..}) => Ok(x),
-            _ => value.execution_err("Expected u128"),
-        }
-    }
-}
-
-impl_resolvable_argument_for! {
-    UsizeTypeData,
-    (value) -> usize {
-        match value {
-            ExpressionValue::Integer(ExpressionInteger { value: ExpressionIntegerValue::Usize(x), ..}) => Ok(x),
-            _ => value.execution_err("Expected usize"),
-        }
-    }
-}
+impl_resolvable_integer_subtype!(I8TypeData, i8, I8, "Expected i8");
+impl_resolvable_integer_subtype!(I16TypeData, i16, I16, "Expected i16");
+impl_resolvable_integer_subtype!(I32TypeData, i32, I32, "Expected i32");
+impl_resolvable_integer_subtype!(I64TypeData, i64, I64, "Expected i64");
+impl_resolvable_integer_subtype!(I128TypeData, i128, I128, "Expected i128");
+impl_resolvable_integer_subtype!(IsizeTypeData, isize, Isize, "Expected isize");
+impl_resolvable_integer_subtype!(U8TypeData, u8, U8, "Expected u8");
+impl_resolvable_integer_subtype!(U16TypeData, u16, U16, "Expected u16");
+impl_resolvable_integer_subtype!(U32TypeData, u32, U32, "Expected u32");
+impl_resolvable_integer_subtype!(U64TypeData, u64, U64, "Expected u64");
+impl_resolvable_integer_subtype!(U128TypeData, u128, U128, "Expected u128");
+impl_resolvable_integer_subtype!(UsizeTypeData, usize, Usize, "Expected usize");
 
 // Float types
 impl_resolvable_argument_for! {
@@ -455,25 +368,56 @@ impl_resolvable_argument_for! {
     }
 }
 
-impl_resolvable_argument_for! {
-    F32TypeData,
-    (value) -> f32 {
-        match value {
-            ExpressionValue::Float(ExpressionFloat { value: ExpressionFloatValue::F32(x), ..}) => Ok(x),
-            _ => value.execution_err("Expected f32"),
+macro_rules! impl_resolvable_float_subtype {
+    ($value_type:ty, $type:ty, $variant:ident, $expected_msg:expr) => {
+        impl ResolvableArgumentTarget for $type {
+            type ValueType = $value_type;
         }
-    }
+
+        impl ResolvableArgumentOwned for $type {
+            fn resolve_from_owned(value: ExpressionValue) -> ExecutionResult<Self> {
+                match value {
+                    ExpressionValue::Float(ExpressionFloat {
+                        value: ExpressionFloatValue::Untyped(x),
+                        ..
+                    }) => x.parse_as(),
+                    ExpressionValue::Float(ExpressionFloat {
+                        value: ExpressionFloatValue::$variant(x),
+                        ..
+                    }) => Ok(x),
+                    _ => value.execution_err($expected_msg),
+                }
+            }
+        }
+
+        impl ResolvableArgumentShared for $type {
+            fn resolve_from_ref(value: &ExpressionValue) -> ExecutionResult<&Self> {
+                match value {
+                    ExpressionValue::Float(ExpressionFloat {
+                        value: ExpressionFloatValue::$variant(x),
+                        ..
+                    }) => Ok(x),
+                    _ => value.execution_err($expected_msg),
+                }
+            }
+        }
+
+        impl ResolvableArgumentMutable for $type {
+            fn resolve_from_mut(value: &mut ExpressionValue) -> ExecutionResult<&mut Self> {
+                match value {
+                    ExpressionValue::Float(ExpressionFloat {
+                        value: ExpressionFloatValue::$variant(x),
+                        ..
+                    }) => Ok(x),
+                    _ => value.execution_err($expected_msg),
+                }
+            }
+        }
+    };
 }
 
-impl_resolvable_argument_for! {
-    F64TypeData,
-    (value) -> f64 {
-        match value {
-            ExpressionValue::Float(ExpressionFloat { value: ExpressionFloatValue::F64(x), ..}) => Ok(x),
-            _ => value.execution_err("Expected f64"),
-        }
-    }
-}
+impl_resolvable_float_subtype!(F32TypeData, f32, F32, "Expected f32");
+impl_resolvable_float_subtype!(F64TypeData, f64, F64, "Expected f64");
 
 impl_resolvable_argument_for! {
     StringTypeData,

@@ -3,17 +3,17 @@ use super::*;
 define_interface! {
     struct IterableTypeData,
     parent: ValueTypeData,
-    pub(crate) mod object_interface {
+    pub(crate) mod iterable_interface {
         pub(crate) mod methods {
             fn into_iter(this: IterableValue) -> ExecutionResult<ExpressionIterator> {
                 this.into_iterator()
             }
 
-            fn len(this: IterableRef) -> ExecutionResult<usize> {
+            fn len(this: Spanned<IterableRef>) -> ExecutionResult<usize> {
                 this.len()
             }
 
-            fn is_empty(this: IterableRef) -> ExecutionResult<bool> {
+            fn is_empty(this: Spanned<IterableRef>) -> ExecutionResult<bool> {
                 Ok(this.len()? == 0)
             }
 
@@ -111,10 +111,17 @@ impl FromResolved for IterableRef<'static> {
     }
 }
 
-impl IterableRef<'_> {
+impl Spanned<IterableRef<'_>> {
     pub(crate) fn len(&self) -> ExecutionResult<usize> {
-        Ok(match self {
-            IterableRef::Iterator(iterator) => iterator.size_hint().0,
+        Ok(match &self.value {
+            IterableRef::Iterator(iterator) => {
+                let (min, max) = iterator.size_hint();
+                if max == Some(min) {
+                    min
+                } else {
+                    return self.execution_err("Iterator has an inexact length");
+                }
+            }
             IterableRef::Array(value) => value.items.len(),
             IterableRef::Stream(value) => value.len(),
             IterableRef::Range(value) => return value.len(),
@@ -132,6 +139,16 @@ pub(crate) struct ExpressionIterator {
 }
 
 impl ExpressionIterator {
+    #[allow(unused)]
+    pub(crate) fn new_any(
+        iterator: impl Iterator<Item = ExpressionValue> + 'static + Clone,
+    ) -> Self {
+        Self {
+            iterator: ExpressionIteratorInner::Other(Box::new(iterator)),
+            span_range: SpanRange::dummy(),
+        }
+    }
+
     pub(crate) fn new_for_array(array: ExpressionArray) -> Self {
         Self {
             iterator: ExpressionIteratorInner::Vec(array.items.into_iter()),
@@ -370,11 +387,49 @@ impl Iterator for ExpressionIterator {
     }
 }
 
+impl Iterator for Mutable<ExpressionIterator> {
+    type Item = ExpressionValue;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let this: &mut ExpressionIterator = &mut *self;
+        this.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let this: &ExpressionIterator = self;
+        this.size_hint()
+    }
+}
+
 define_interface! {
     struct IteratorTypeData,
     parent: IterableTypeData,
     pub(crate) mod iterator_interface {
         pub(crate) mod methods {
+            [context] fn next(mut this: Mutable<ExpressionIterator>) -> ExpressionValue {
+                match this.next() {
+                    Some(value) => value,
+                    None => ExpressionValue::None(context.span_range()),
+                }
+            }
+
+            fn skip(mut this: ExpressionIterator, n: usize) -> ExpressionIterator {
+                // We make this greedy instead of lazy because the Skip iterator is not clonable.
+                // We return an iterator for forwards compatibility in case we change it.
+                for _ in 0..n {
+                    if this.next().is_none() {
+                        break;
+                    }
+                }
+                this
+            }
+
+            [context] fn take(this: ExpressionIterator, n: usize) -> ExpressionIterator {
+                // We collect to a vec to satisfy the clonability requirement,
+                // but only return an iterator for forwards compatibility in case we change it.
+                let taken = this.take(n).collect::<Vec<_>>();
+                ExpressionIterator::new_for_array(ExpressionArray::new(taken, context.span_range()))
+            }
         }
         pub(crate) mod unary_operations {
             [context] fn cast_singleton_to_value(this: Owned<ExpressionIterator>) -> ExecutionResult<ResolvedValue> {

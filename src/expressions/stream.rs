@@ -159,27 +159,27 @@ define_interface! {
 
             [context] fn to_ident(this: SpannedRef<OutputStream>) -> ExecutionResult<Ident> {
                 let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
-                string_interface::methods::to_ident(context, string.as_str().spanned(this.span_range()))
+                string_interface::methods::to_ident(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
             [context] fn to_ident_camel(this: SpannedRef<OutputStream>) -> ExecutionResult<Ident> {
                 let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
-                string_interface::methods::to_ident_camel(context, string.as_str().spanned(this.span_range()))
+                string_interface::methods::to_ident_camel(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
             [context] fn to_ident_snake(this: SpannedRef<OutputStream>) -> ExecutionResult<Ident> {
                 let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
-                string_interface::methods::to_ident_snake(context, string.as_str().spanned(this.span_range()))
+                string_interface::methods::to_ident_snake(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
             [context] fn to_ident_upper_snake(this: SpannedRef<OutputStream>) -> ExecutionResult<Ident> {
                 let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
-                string_interface::methods::to_ident_upper_snake(context, string.as_str().spanned(this.span_range()))
+                string_interface::methods::to_ident_upper_snake(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
             [context] fn to_literal(this: SpannedRef<OutputStream>) -> ExecutionResult<Literal> {
                 let string = this.concat_recursive(&ConcatBehaviour::literal(this.span_range()));
-                string_interface::methods::to_literal(context, string.as_str().spanned(this.span_range()))
+                string_interface::methods::to_literal(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
             // CORE METHODS
@@ -190,12 +190,40 @@ define_interface! {
                 error_span_range.execution_err(message.as_str())
             }
 
-            fn assert(this: Shared<ExpressionStream>, condition: bool, message: Shared<String>) -> ExecutionResult<()> {
+            fn assert(this: Shared<ExpressionStream>, condition: bool, message: Option<Ref<str>>) -> ExecutionResult<()> {
                 if condition {
                     Ok(())
                 } else {
                     let error_span_range = this.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
-                    error_span_range.execution_err(message.as_str())
+                    let message = match message {
+                        Some(ref m) => m,
+                        None => "Assertion failed",
+                    };
+                    error_span_range.execution_err(message)
+                }
+            }
+
+            fn assert_eq(this: Shared<ExpressionStream>, lhs: SpannedRef<ExpressionValue>, rhs: SpannedRef<ExpressionValue>, message: Option<Ref<str>>) -> ExecutionResult<()> {
+                let lhs_value: &ExpressionValue = &lhs;
+                let rhs_value: &ExpressionValue = &rhs;
+                let res = {
+                    // TODO: Replace with eq when we have a solid implementation
+                    let lhs_debug_str = lhs_value.concat_recursive(&ConcatBehaviour::debug(lhs.span_range()))?;
+                    let rhs_debug_str = rhs_value.concat_recursive(&ConcatBehaviour::debug(rhs.span_range()))?;
+                    lhs_debug_str == rhs_debug_str
+                }; if res {
+                    Ok(())
+                } else {
+                    let error_span_range = this.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
+                    let message = match message {
+                        Some(ref m) => m.to_string(),
+                        None => format!(
+                            "Assertion failed: lhs != rhs, where:\n  lhs = {}\n  rhs = {}",
+                            lhs.concat_recursive(&ConcatBehaviour::debug(lhs.span_range()))?,
+                            rhs.concat_recursive(&ConcatBehaviour::debug(rhs.span_range()))?,
+                        ),
+                    };
+                    error_span_range.execution_err(message)
                 }
             }
 

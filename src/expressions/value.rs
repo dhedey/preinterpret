@@ -126,7 +126,7 @@ define_interface! {
                 this.into_owned_infallible()
             }
 
-            fn take(mut this: MutableValue) -> ExpressionValue {
+            fn take_owned(mut this: MutableValue) -> ExpressionValue {
                 let span_range = this.span_range();
                 core::mem::replace(this.deref_mut(), ExpressionValue::None(span_range))
             }
@@ -168,36 +168,42 @@ define_interface! {
                 input.concat_recursive(&ConcatBehaviour::standard(input.span_range()))
             }
 
-                        // STRING-BASED CONVERSION METHODS
+            // TYPE CHECKING
+            // ===============================
+            fn is_none(this: SharedValue) -> bool {
+                this.is_none()
+            }
+
+            // STRING-BASED CONVERSION METHODS
             // ===============================
 
             [context] fn to_ident(this: ExpressionValue) -> ExecutionResult<Ident> {
                 let stream = to_stream(context, this)?;
-                let spanned = stream.spanned(context.output_span_range);
+                let spanned = stream.into_spanned_ref(context.output_span_range);
                 stream_interface::methods::to_ident(context, spanned)
             }
 
             [context] fn to_ident_camel(this: ExpressionValue) -> ExecutionResult<Ident> {
                 let stream = to_stream(context, this)?;
-                let spanned = stream.spanned(context.output_span_range);
+                let spanned = stream.into_spanned_ref(context.output_span_range);
                 stream_interface::methods::to_ident_camel(context, spanned)
             }
 
             [context] fn to_ident_snake(this: ExpressionValue) -> ExecutionResult<Ident> {
                 let stream = to_stream(context, this)?;
-                let spanned = stream.spanned(context.output_span_range);
+                let spanned = stream.into_spanned_ref(context.output_span_range);
                 stream_interface::methods::to_ident_snake(context, spanned)
             }
 
             [context] fn to_ident_upper_snake(this: ExpressionValue) -> ExecutionResult<Ident> {
                 let stream = to_stream(context, this)?;
-                let spanned = stream.spanned(context.output_span_range);
+                let spanned = stream.into_spanned_ref(context.output_span_range);
                 stream_interface::methods::to_ident_upper_snake(context, spanned)
             }
 
             [context] fn to_literal(this: ExpressionValue) -> ExecutionResult<Literal> {
                 let stream = to_stream(context, this)?;
-                let spanned = stream.spanned(context.output_span_range);
+                let spanned = stream.into_spanned_ref(context.output_span_range);
                 stream_interface::methods::to_literal(context, spanned)
             }
         }
@@ -275,7 +281,7 @@ impl ExpressionValue {
     ) -> ExecutionResult<ExpressionValue> {
         if !self.kind().supports_transparent_cloning() {
             return new_span_range.execution_err(format!(
-                "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .take() or .clone() explicitly.",
+                "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .take_owned() or .clone() explicitly.",
                 self.articled_value_type()
             ));
         }

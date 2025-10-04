@@ -1,0 +1,7 @@
+error[E0308]: mismatched types
+ --> tests/compilation_failures/iteration/infinite_range_len.rs:4:15
+  |
+3 | fn main() {
+  |          - expected `()` because of default return type
+4 |     run!((0..).len())
+  |               ^ expected `()`, found `usize`

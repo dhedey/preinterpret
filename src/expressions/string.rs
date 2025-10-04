@@ -96,7 +96,7 @@ define_interface! {
             // CONVERSION METHODS
             // ==================
             [context] fn to_ident(this: SpannedRef<str>) -> ExecutionResult<Ident> {
-                let str = &*this;
+                let str: &str = &this;
                 let ident = parse_str::<Ident>(str)
                     .map_err(|err| this.error(format!("`{}` is not a valid ident: {:?}", str, err)))?
                     .with_span(context.span_from_join_else_start());
@@ -128,7 +128,7 @@ define_interface! {
             }
 
             [context] fn to_literal(this: SpannedRef<str>) -> ExecutionResult<Literal> {
-                let str = &*this;
+                let str: &str = &this;
                 let literal = Literal::from_str(str)
                     .map_err(|err| {
                         this.error(format!("`{}` is not a valid literal: {:?}", str, err))

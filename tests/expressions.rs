@@ -305,42 +305,42 @@ fn test_array_indexing() {
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3, 4, 5];
-            x.take()[..].to_debug_string()
+            x.take_owned()[..].to_debug_string()
         ),
         "[1, 2, 3, 4, 5]"
     );
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3, 4, 5];
-            x.take()[0..0].to_debug_string()
+            x.take_owned()[0..0].to_debug_string()
         ),
         "[]"
     );
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3, 4, 5];
-            x.take()[2..=2].to_debug_string()
+            x.take_owned()[2..=2].to_debug_string()
         ),
         "[3]"
     );
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3, 4, 5];
-            x.take()[..=2].to_debug_string()
+            x.take_owned()[..=2].to_debug_string()
         ),
         "[1, 2, 3]"
     );
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3, 4, 5];
-            x.take()[..4].to_debug_string()
+            x.take_owned()[..4].to_debug_string()
         ),
         "[1, 2, 3, 4]"
     );
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3, 4, 5];
-            x.take()[2..].to_debug_string()
+            x.take_owned()[2..].to_debug_string()
         ),
         "[3, 4, 5]"
     );
@@ -353,7 +353,7 @@ fn test_array_place_destructurings() {
         #(
             let a = 0; let b = 0; let c = 0;
             let x = [1, 2, 3, 4, 5];
-            [a, b, _, _, c] = x.take();
+            [a, b, _, _, c] = x.take_owned();
             [a, b, c].to_debug_string()
         ),
         "[1, 2, 5]"
@@ -362,7 +362,7 @@ fn test_array_place_destructurings() {
         #(
             let a = 0; let b = 0; let c = 0;
             let x = [1, 2, 3, 4, 5];
-            [a, b, c, ..] = x.take();
+            [a, b, c, ..] = x.take_owned();
             [a, b, c].to_debug_string()
         ),
         "[1, 2, 3]"
@@ -371,7 +371,7 @@ fn test_array_place_destructurings() {
         #(
             let a = 0; let b = 0; let c = 0;
             let x = [1, 2, 3, 4, 5];
-            [.., a, b] = x.take();
+            [.., a, b] = x.take_owned();
             [a, b, c].to_debug_string()
         ),
         "[4, 5, 0]"
@@ -380,7 +380,7 @@ fn test_array_place_destructurings() {
         #(
             let a = 0; let b = 0; let c = 0;
             let x = [1, 2, 3, 4, 5];
-            [a, .., b, c] = x.take();
+            [a, .., b, c] = x.take_owned();
             [a, b, c].to_debug_string()
         ),
         "[1, 4, 5]"
@@ -405,7 +405,7 @@ fn test_array_place_destructurings() {
             let _ = c = [a[2], _] = [4, 5];
             let _ = a[1] += 2;
             let _ = b = 2;
-            [a.take(), b, c].to_debug_string()
+            [a.take_owned(), b, c].to_debug_string()
         ),
         "[[0, 2, 4, 0, 0], 2, None]"
     );
@@ -469,7 +469,7 @@ fn test_array_pattern_destructurings() {
     preinterpret_assert_eq!(
         #(
             let [a, .., b, c] = [[1, "a"], 2, 3, 4, 5];
-            [a.take(), b, c].to_debug_string()
+            [a.take_owned(), b, c].to_debug_string()
         ),
         r#"[[1, "a"], 4, 5]"#
     );
@@ -520,7 +520,7 @@ fn test_objects() {
     preinterpret_assert_eq!(
         #(
             let %{ a, y: [_, b], ["c"]: c, [r#"two "words"#]: x, z } = %{ a: 1, y: [5, 7], ["two \"words"]: %{}, };
-            %{ a, b, c, x: x.take(), z }.to_debug_string()
+            %{ a, b, c, x: x.take_owned(), z }.to_debug_string()
         ),
         r#"%{ a: 1, b: 7, c: None, x: %{}, z: None }"#
     );
@@ -557,7 +557,7 @@ fn test_method_calls() {
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3];
-            let y = x.take();
+            let y = x.take_owned();
             // x is now None
             x.to_debug_string() + " - " + y.to_debug_string()
         ),

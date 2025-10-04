@@ -110,6 +110,16 @@ pub(crate) enum MethodInterface {
         ) -> ExecutionResult<ResolvedValue>,
         argument_ownership: [ResolvedValueOwnership; 3],
     },
+    Arity3PlusOptional1 {
+        method: fn(
+            &mut MethodCallContext,
+            ResolvedValue,
+            ResolvedValue,
+            ResolvedValue,
+            Option<ResolvedValue>,
+        ) -> ExecutionResult<ResolvedValue>,
+        argument_ownership: [ResolvedValueOwnership; 4],
+    },
     ArityAny {
         method: fn(&mut MethodCallContext, Vec<ResolvedValue>) -> ExecutionResult<ResolvedValue>,
         argument_ownership: Vec<ResolvedValueOwnership>,
@@ -181,6 +191,19 @@ impl MethodInterface {
                         .execution_err("Expected 3 arguments"),
                 }
             }
+            MethodInterface::Arity3PlusOptional1 { method, .. } => match arguments.len() {
+                3 => {
+                    let [a, b, c] = <[ResolvedValue; 3]>::try_from(arguments).ok().unwrap();
+                    method(context, a, b, c, None)
+                }
+                4 => {
+                    let [a, b, c, d] = <[ResolvedValue; 4]>::try_from(arguments).ok().unwrap();
+                    method(context, a, b, c, Some(d))
+                }
+                _ => context
+                    .output_span_range
+                    .execution_err("Expected 3 or 4 arguments"),
+            },
             MethodInterface::ArityAny { method, .. } => method(context, arguments),
         }
     }
@@ -204,6 +227,9 @@ impl MethodInterface {
                 argument_ownership, ..
             } => (argument_ownership, 2),
             MethodInterface::Arity3 {
+                argument_ownership, ..
+            } => (argument_ownership, 3),
+            MethodInterface::Arity3PlusOptional1 {
                 argument_ownership, ..
             } => (argument_ownership, 3),
             MethodInterface::ArityAny {
