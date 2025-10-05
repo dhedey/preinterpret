@@ -22,7 +22,11 @@ impl<T: 'static + ?Sized> MutSubRcRefCell<T, T> {
             // reference to pointed_at (i.e. the RefCell).
             // This is guaranteed by the fact that the only time we drop the RefCell
             // is when we drop the MutRcRefCell, and we ensure that the RefMut is dropped first.
-            ref_mut: unsafe { std::mem::transmute::<RefMut<'_, T>, RefMut<'static, T>>(ref_mut) },
+            ref_mut: unsafe {
+                less_buggy_transmute::<std::cell::RefMut<'_, T>, std::cell::RefMut<'static, T>>(
+                    ref_mut,
+                )
+            },
             pointed_at,
         })
     }
@@ -107,7 +111,7 @@ impl<T: 'static + ?Sized> SharedSubRcRefCell<T, T> {
             // reference to pointed_at (i.e. the RefCell).
             // This is guaranteed by the fact that the only time we drop the RefCell
             // is when we drop the SharedSubRcRefCell, and we ensure that the Ref is dropped first.
-            shared_ref: unsafe { std::mem::transmute::<Ref<'_, T>, Ref<'static, T>>(shared_ref) },
+            shared_ref: unsafe { less_buggy_transmute::<Ref<'_, T>, Ref<'static, T>>(shared_ref) },
             pointed_at,
         })
     }
@@ -156,4 +160,15 @@ impl<T: ?Sized, U: 'static + ?Sized> Deref for SharedSubRcRefCell<T, U> {
     fn deref(&self) -> &U {
         &self.shared_ref
     }
+}
+
+unsafe fn less_buggy_transmute<T, U>(t: T) -> U {
+    // std::mem::transmute::<Ref<'_, T>, Ref<'static, T>> on MSRV only incorrectly flags:
+    // > error[E0512]: cannot transmute between types of different sizes, or dependently-sized types
+    // Likely due to the ?Sized bound and assuming Ref is therfore ?Sized (it's not).
+    // To workaround this, we do a trick from https://users.rust-lang.org/t/transmute-doesnt-work-on-generic-types/87272
+    // using transmute_copy and manual forgetting
+    use std::mem::ManuallyDrop;
+    assert!(std::mem::size_of::<T>() == std::mem::size_of::<U>());
+    std::mem::transmute_copy::<ManuallyDrop<T>, U>(&ManuallyDrop::new(t))
 }

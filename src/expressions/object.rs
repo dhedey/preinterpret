@@ -375,7 +375,6 @@ impl FieldDefinition {
         description: &'static str,
         example: &'static str,
     ) -> Self {
-        use std::borrow::Cow;
         Self {
             required,
             description: Some(Cow::Borrowed(description)),
