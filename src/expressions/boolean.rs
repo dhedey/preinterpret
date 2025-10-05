@@ -3,18 +3,17 @@ use super::*;
 #[derive(Clone)]
 pub(crate) struct ExpressionBoolean {
     pub(crate) value: bool,
-    /// The span range that generated this value.
-    /// For a complex expression, the start span is the most left part
-    /// of the expression, and the end span is the most right part.
-    pub(super) span_range: SpanRange,
+}
+
+impl ToExpressionValue for ExpressionBoolean {
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::Boolean(self)
+    }
 }
 
 impl ExpressionBoolean {
-    pub(super) fn for_litbool(lit: syn::LitBool) -> Self {
-        Self {
-            span_range: lit.span().span_range(),
-            value: lit.value,
-        }
+    pub(super) fn for_litbool(lit: &syn::LitBool) -> Owned<Self> {
+        Self { value: lit.value }.into_owned(lit.span)
     }
 
     pub(super) fn handle_integer_binary_operation(
@@ -56,7 +55,7 @@ impl ExpressionBoolean {
     }
 
     pub(super) fn to_ident(&self) -> Ident {
-        Ident::new_bool(self.value, self.span_range.join_into_span_else_start())
+        Ident::new_bool(self.value, Span::dummy())
     }
 }
 
@@ -67,11 +66,8 @@ impl HasValueType for ExpressionBoolean {
 }
 
 impl ToExpressionValue for bool {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
-        ExpressionValue::Boolean(ExpressionBoolean {
-            value: self,
-            span_range,
-        })
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::Boolean(ExpressionBoolean { value: self })
     }
 }
 

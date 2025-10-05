@@ -3,10 +3,6 @@ use super::*;
 #[derive(Clone)]
 pub(crate) struct ExpressionStream {
     pub(crate) value: OutputStream,
-    /// The span range that generated this value.
-    /// For a complex expression, the start span is the most left part
-    /// of the expression, and the end span is the most right part.
-    pub(crate) span_range: SpanRange,
 }
 
 impl ExpressionStream {
@@ -112,17 +108,14 @@ impl HasValueType for OutputStream {
 }
 
 impl ToExpressionValue for OutputStream {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
-        ExpressionValue::Stream(ExpressionStream {
-            value: self,
-            span_range,
-        })
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::Stream(ExpressionStream { value: self })
     }
 }
 
 impl ToExpressionValue for TokenStream {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
-        OutputStream::raw(self).to_value(span_range)
+    fn into_value(self) -> ExpressionValue {
+        OutputStream::raw(self).into_value()
     }
 }
 
@@ -145,13 +138,12 @@ define_interface! {
                 Ok(this.to_token_stream_removing_any_transparent_groups())
             }
 
-            fn infer(this: Owned<OutputStream>) -> ExecutionResult<ExpressionValue> {
-                let (this, span_range) = this.deconstruct();
-                Ok(this.coerce_into_value(span_range))
+            fn infer(this: OutputStream) -> ExecutionResult<ExpressionValue> {
+                Ok(this.coerce_into_value())
             }
 
-            [context] fn split(this: OutputStream, separator: Ref<OutputStream>, settings: Option<SplitSettings>) -> ExecutionResult<ExpressionArray> {
-                handle_split(this, &separator, settings.unwrap_or_default(), context.output_span_range)
+            fn split(this: OutputStream, separator: Ref<OutputStream>, settings: Option<SplitSettings>) -> ExecutionResult<ExpressionArray> {
+                handle_split(this, &separator, settings.unwrap_or_default())
             }
 
             // STRING-BASED CONVERSION METHODS
@@ -227,7 +219,7 @@ define_interface! {
                 }
             }
 
-            [context] fn reinterpret_as_run(this: Owned<ExpressionStream>) -> ExecutionResult<ExpressionValue> {
+            [context] fn reinterpret_as_run(this: Owned<ExpressionStream>) -> ExecutionResult<OwnedValue> {
                 let source = unsafe {
                     // RUST-ANALYZER-SAFETY - We can't do any better than this, and we're about to parse it as source code,
                     // which handles groups/missing groups reasonably well (see tests)
@@ -252,11 +244,12 @@ define_interface! {
         pub(crate) mod unary_operations {
             [context] fn cast_to_value(this: Owned<ExpressionStream>) -> ExecutionResult<ResolvedValue> {
                 let (this, span_range) = this.deconstruct();
-                let coerced = this.value.coerce_into_value(span_range);
+                let coerced = this.value.coerce_into_value();
                 if let ExpressionValue::Stream(_) = &coerced {
                     return span_range.execution_err("The stream could not be coerced into a single value");
                 }
-                context.operation.evaluate(coerced.into())
+                // Re-run the cast operation on the coerced value
+                context.operation.evaluate(coerced.into_owned(span_range))
             }
         }
         interface_items {
@@ -390,10 +383,7 @@ impl InterpretToValue for RegularStreamLiteral {
         self,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<Self::OutputValue> {
-        let span_range = self.span_range();
-        Ok(self
-            .interpret_to_new_stream(interpreter)?
-            .to_value(span_range))
+        Ok(self.interpret_to_new_stream(interpreter)?.into_value())
     }
 }
 
@@ -445,9 +435,7 @@ impl InterpretToValue for RawStreamLiteral {
         self,
         _interpreter: &mut Interpreter,
     ) -> ExecutionResult<Self::OutputValue> {
-        let span_range = self.span_range();
-        let value = self.content.to_value(span_range);
-        Ok(value)
+        Ok(self.content.into_value())
     }
 }
 
@@ -502,9 +490,6 @@ impl InterpretToValue for GroupedStreamLiteral {
         self,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<Self::OutputValue> {
-        let span_range = self.span_range();
-        Ok(self
-            .interpret_to_new_stream(interpreter)?
-            .to_value(span_range))
+        Ok(self.interpret_to_new_stream(interpreter)?.into_value())
     }
 }

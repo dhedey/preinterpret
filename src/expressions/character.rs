@@ -3,18 +3,17 @@ use super::*;
 #[derive(Clone)]
 pub(crate) struct ExpressionChar {
     pub(super) value: char,
-    /// The span range that generated this value.
-    /// For a complex expression, the start span is the most left part
-    /// of the expression, and the end span is the most right part.
-    pub(super) span_range: SpanRange,
+}
+
+impl ToExpressionValue for ExpressionChar {
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::Char(self)
+    }
 }
 
 impl ExpressionChar {
-    pub(super) fn for_litchar(lit: syn::LitChar) -> Self {
-        Self {
-            value: lit.value(),
-            span_range: lit.span().span_range(),
-        }
+    pub(super) fn for_litchar(lit: &syn::LitChar) -> Owned<Self> {
+        Self { value: lit.value() }.into_owned(lit.span())
     }
 
     pub(super) fn handle_integer_binary_operation(
@@ -53,7 +52,7 @@ impl ExpressionChar {
     }
 
     pub(super) fn to_literal(&self) -> Literal {
-        Literal::character(self.value).with_span(self.span_range.join_into_span_else_start())
+        Literal::character(self.value).with_span(Span::dummy())
     }
 }
 
@@ -64,11 +63,8 @@ impl HasValueType for ExpressionChar {
 }
 
 impl ToExpressionValue for char {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
-        ExpressionValue::Char(ExpressionChar {
-            value: self,
-            span_range,
-        })
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::Char(ExpressionChar { value: self })
     }
 }
 

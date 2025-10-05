@@ -234,13 +234,10 @@ fn test_exact_transformer() {
         true
     );
     // EXACT is evaluated at execution time
-    assert_eq!(
-        run! {
-            let %[The @(#a = @TOKEN_TREE) fox is @(#b = @TOKEN_TREE). It 's super @[EXACT(%[#a #b])].] = %[The brown fox is brown. It 's super brown brown.];
-            true
-        },
+    assert!(run! {
+        let %[The @(#a = @TOKEN_TREE) fox is @(#b = @TOKEN_TREE). It 's super @[EXACT(%[#a #b])].] = %[The brown fox is brown. It 's super brown brown.];
         true
-    );
+    });
 }
 
 #[test]

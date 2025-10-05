@@ -35,7 +35,7 @@ pub(crate) fn print_if_slow<T>(
 pub(crate) enum Never {}
 
 impl ToExpressionValue for Never {
-    fn to_value(self, _span_range: SpanRange) -> ExpressionValue {
+    fn into_value(self) -> ExpressionValue {
         match self {}
     }
 }

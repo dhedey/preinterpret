@@ -18,7 +18,7 @@ impl<'a> ExpressionEvaluator<'a, Source> {
         mut self,
         root: ExpressionNodeId,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<ExpressionValue> {
+    ) -> ExecutionResult<OwnedValue> {
         let mut next_action = NextActionInner::ReadNodeAsValue(
             root,
             RequestedValueOwnership::Concrete(ResolvedValueOwnership::Owned),
@@ -71,7 +71,7 @@ impl<'a> ExpressionEvaluator<'a, Source> {
                     Some(top) => top,
                     None => {
                         // This aligns with the request for an owned value in evaluate
-                        return Ok(StepResult::Return(item.expect_owned().into_inner()));
+                        return Ok(StepResult::Return(item.expect_owned()));
                     }
                 };
                 top_of_stack.handle_item(interpreter, &mut self.stack, item)?
@@ -95,7 +95,7 @@ impl EvaluationStack {
 
 pub(super) enum StepResult {
     Continue(NextAction),
-    Return(ExpressionValue),
+    Return(OwnedValue),
 }
 
 pub(super) struct NextAction(NextActionInner);

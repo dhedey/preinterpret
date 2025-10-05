@@ -324,10 +324,12 @@ impl ArrayBuilder {
                 .cloned()
             {
                 Some(next) => context.handle_node_as_owned(self, next),
-                None => context.return_owned(ExpressionValue::Array(ExpressionArray {
-                    items: self.evaluated_items,
-                    span_range: self.span.span_range(),
-                }))?,
+                None => context.return_owned(
+                    ExpressionValue::Array(ExpressionArray {
+                        items: self.evaluated_items,
+                    })
+                    .into_owned(self.span),
+                )?,
             },
         )
     }
@@ -407,9 +409,8 @@ impl ObjectBuilder {
                     self.pending = Some(PendingEntryPath::OnIndexKeyBranch { access, value_node });
                     context.handle_node_as_owned(self, index)
                 }
-                None => {
-                    context.return_owned(self.evaluated_entries.to_value(self.span.span_range()))?
-                }
+                None => context
+                    .return_owned(self.evaluated_entries.into_value().into_owned(self.span))?,
             },
         )
     }
@@ -547,7 +548,9 @@ impl EvaluationFrame for BinaryOperationBuilder {
                 let left_late_bound = item.expect_late_bound();
 
                 // Check for lazy evaluation first (short-circuit operators)
-                let left_value = left_late_bound.as_ref();
+                let left_value = left_late_bound
+                    .as_ref()
+                    .spanned(left_late_bound.span_range());
                 if let Some(result) = self.operation.lazy_evaluate(left_value)? {
                     context.return_owned(result)?
                 } else {
@@ -585,10 +588,8 @@ impl EvaluationFrame for BinaryOperationBuilder {
                 // Try method resolution first (we already determined this during left evaluation)
                 if let Some(method) = method {
                     // TODO[operation-refactor]: Use proper span range from operation
-                    let span_range = SpanRange::new_between(
-                        left.as_ref().span_range().start(),
-                        right.as_ref().span_range().end(),
-                    );
+                    let span_range =
+                        SpanRange::new_between(left.span_range().start(), right.span_range().end());
 
                     let mut call_context = MethodCallContext {
                         output_span_range: span_range,
@@ -598,8 +599,8 @@ impl EvaluationFrame for BinaryOperationBuilder {
                     return context.return_resolved_value(result);
                 }
 
-                let left = left.expect_owned().into_inner();
-                let right = right.expect_owned().into_inner();
+                let left = left.expect_owned();
+                let right = right.expect_owned();
                 context.return_owned(self.operation.evaluate(left, right)?)?
             }
         })
@@ -704,9 +705,9 @@ impl EvaluationFrame for ValueIndexAccessBuilder {
                 let is_range = matches!(index.kind(), ValueKind::Range);
 
                 context.return_item(source.expect_any_value_and_map(
-                    |shared| shared.resolve_indexed(self.access, index.as_ref()),
-                    |mutable| mutable.resolve_indexed(self.access, index.as_ref(), false),
-                    |owned| owned.resolve_indexed(self.access, index.as_ref()),
+                    |shared| shared.resolve_indexed(self.access, index.as_spanned()),
+                    |mutable| mutable.resolve_indexed(self.access, index.as_spanned(), false),
+                    |owned| owned.resolve_indexed(self.access, index.as_spanned()),
                 )?)?
             }
         })
@@ -734,7 +735,7 @@ impl RangeBuilder {
             (None, None) => match range_limits {
                 syn::RangeLimits::HalfOpen(token) => {
                     let inner = ExpressionRangeInner::RangeFull { token: *token };
-                    context.return_owned(inner.to_value(token.span_range()))?
+                    context.return_owned(inner.into_value().into_owned(token.span_range()))?
                 }
                 syn::RangeLimits::Closed(_) => {
                     unreachable!(
@@ -784,7 +785,7 @@ impl EvaluationFrame for RangeBuilder {
                     start_inclusive: value,
                     token,
                 };
-                context.return_owned(inner.to_value(token.span_range()))?
+                context.return_owned(inner.into_owned_value(token))?
             }
             (RangePath::OnLeftBranch { right: None }, syn::RangeLimits::Closed(_)) => {
                 unreachable!("A closed range should have been given a right in continue_range(..)")
@@ -795,7 +796,7 @@ impl EvaluationFrame for RangeBuilder {
                     token,
                     end_exclusive: value,
                 };
-                context.return_owned(inner.to_value(token.span_range()))?
+                context.return_owned(inner.into_owned_value(token))?
             }
             (RangePath::OnRightBranch { left: Some(left) }, syn::RangeLimits::Closed(token)) => {
                 let inner = ExpressionRangeInner::RangeInclusive {
@@ -803,21 +804,21 @@ impl EvaluationFrame for RangeBuilder {
                     token,
                     end_inclusive: value,
                 };
-                context.return_owned(inner.to_value(token.span_range()))?
+                context.return_owned(inner.into_owned_value(token))?
             }
             (RangePath::OnRightBranch { left: None }, syn::RangeLimits::HalfOpen(token)) => {
                 let inner = ExpressionRangeInner::RangeTo {
                     token,
                     end_exclusive: value,
                 };
-                context.return_owned(inner.to_value(token.span_range()))?
+                context.return_owned(inner.into_owned_value(token))?
             }
             (RangePath::OnRightBranch { left: None }, syn::RangeLimits::Closed(token)) => {
                 let inner = ExpressionRangeInner::RangeToInclusive {
                     token,
                     end_inclusive: value,
                 };
-                context.return_owned(inner.to_value(token.span_range()))?
+                context.return_owned(inner.into_owned_value(token.span_range()))?
             }
         })
     }
@@ -869,7 +870,7 @@ impl EvaluationFrame for AssignmentBuilder {
             }
             AssignmentPath::OnAwaitingAssignment => {
                 let AssignmentCompletion { span_range } = item.expect_assignment_completion();
-                context.return_owned(ExpressionValue::None(span_range))?
+                context.return_owned(ExpressionValue::None.into_owned(span_range))?
             }
         })
     }
@@ -882,7 +883,7 @@ pub(super) struct CompoundAssignmentBuilder {
 
 enum CompoundAssignmentPath {
     OnValueBranch { target: ExpressionNodeId },
-    OnTargetBranch { value: ExpressionValue },
+    OnTargetBranch { value: OwnedValue },
 }
 
 impl CompoundAssignmentBuilder {
@@ -914,7 +915,7 @@ impl EvaluationFrame for CompoundAssignmentBuilder {
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
             CompoundAssignmentPath::OnValueBranch { target } => {
-                let value = item.expect_owned().into_inner();
+                let value = item.expect_owned();
                 self.state = CompoundAssignmentPath::OnTargetBranch { value };
                 // TODO[compound-assignment-refactor]: Resolve as LateBound, and then convert to what is needed based on the operation
                 context.handle_node_as_mutable(self, target)
@@ -922,10 +923,8 @@ impl EvaluationFrame for CompoundAssignmentBuilder {
             CompoundAssignmentPath::OnTargetBranch { value } => {
                 let mut mutable = item.expect_mutable();
                 let span_range = SpanRange::new_between(mutable.span_range(), value.span_range());
-                mutable
-                    .as_mut()
-                    .handle_compound_assignment(&self.operation, value, span_range)?;
-                context.return_owned(ExpressionValue::None(span_range))?
+                SpannedRefMut::from(mutable).handle_compound_assignment(&self.operation, value)?;
+                context.return_owned(ExpressionValue::None.into_owned(span_range))?
             }
         })
     }

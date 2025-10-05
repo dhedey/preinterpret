@@ -35,7 +35,14 @@ impl ZipIterators {
             .into_iter()
             .take(101)
             .map(|(k, v)| -> ExecutionResult<_> {
-                Ok((k, v.key_span, v.value.expect_any_iterator()?))
+                Ok((
+                    k,
+                    v.key_span,
+                    v.value
+                        .into_owned(span_range)
+                        .expect_any_iterator("Each zip input")?
+                        .into_inner(),
+                ))
             })
             .collect::<Result<Vec<_>, _>>()?;
         if entries.len() == 101 {
@@ -50,7 +57,11 @@ impl ZipIterators {
     ) -> ExecutionResult<Self> {
         let vec = iterator
             .take(101)
-            .map(|x| x.expect_any_iterator())
+            .map(|x| {
+                x.into_owned(span_range)
+                    .expect_any_iterator("Each zip input")
+                    .map(|x| x.into_inner())
+            })
             .collect::<Result<Vec<_>, _>>()?;
         if vec.len() == 101 {
             return span_range.execution_err("A maximum of 100 iterators are allowed");
@@ -64,23 +75,20 @@ impl ZipIterators {
         error_on_length_mismatch: bool,
     ) -> ExecutionResult<ExpressionArray> {
         let mut iterators = self;
-        let output_span_range = match &iterators {
+        let error_span_range = match &iterators {
             ZipIterators::Array(_, span_range) => *span_range,
             ZipIterators::Object(_, span_range) => *span_range,
         };
         let mut output = Vec::new();
 
         if iterators.len() == 0 {
-            return Ok(ExpressionArray {
-                items: output,
-                span_range: output_span_range,
-            });
+            return Ok(ExpressionArray::new(output));
         }
 
         let (min_iterator_min_length, max_iterator_max_length) = iterators.size_hint_range();
 
         if error_on_length_mismatch && Some(min_iterator_min_length) != max_iterator_max_length {
-            return output_span_range.execution_err(format!(
+            return error_span_range.execution_err(format!(
                 "The iterables have different lengths. The lengths vary from {} to {}. To truncate to the shortest, use `zip_truncated` instead of `zip`",
                 min_iterator_min_length,
                 match max_iterator_max_length {
@@ -93,14 +101,11 @@ impl ZipIterators {
         iterators.zip_into(
             min_iterator_min_length,
             interpreter,
-            output_span_range,
+            error_span_range,
             &mut output,
         )?;
 
-        Ok(ExpressionArray {
-            items: output,
-            span_range: output_span_range,
-        })
+        Ok(ExpressionArray::new(output))
     }
 
     /// Panics if called on an empty list of iterators
@@ -135,10 +140,10 @@ impl ZipIterators {
         &mut self,
         count: usize,
         interpreter: &mut Interpreter,
-        output_span_range: SpanRange,
+        error_span_range: SpanRange,
         output: &mut Vec<ExpressionValue>,
     ) -> ExecutionResult<()> {
-        let mut counter = interpreter.start_iteration_counter(&output_span_range);
+        let mut counter = interpreter.start_iteration_counter(&error_span_range);
 
         match self {
             ZipIterators::Array(iterators, _) => {
@@ -148,7 +153,7 @@ impl ZipIterators {
                     for iter in iterators.iter_mut() {
                         inner.push(iter.next().unwrap());
                     }
-                    output.push(inner.to_value(output_span_range));
+                    output.push(inner.into_value());
                 }
             }
             ZipIterators::Object(iterators, _) => {
@@ -164,7 +169,7 @@ impl ZipIterators {
                             },
                         );
                     }
-                    output.push(inner.to_value(output_span_range));
+                    output.push(inner.into_value());
                 }
             }
         }
@@ -184,7 +189,6 @@ pub(crate) fn run_intersperse(
     items: IterableValue,
     separator: ExpressionValue,
     settings: IntersperseSettings,
-    output_span_range: SpanRange,
 ) -> ExecutionResult<ExpressionArray> {
     let mut output = Vec::new();
 
@@ -192,12 +196,7 @@ pub(crate) fn run_intersperse(
 
     let mut this_item = match items.next() {
         Some(next) => next,
-        None => {
-            return Ok(ExpressionArray {
-                items: output,
-                span_range: output_span_range,
-            })
-        }
+        None => return Ok(ExpressionArray { items: output }),
     };
 
     let mut appender = SeparatorAppender {
@@ -226,10 +225,7 @@ pub(crate) fn run_intersperse(
         }
     }
 
-    Ok(ExpressionArray {
-        items: output,
-        span_range: output_span_range,
-    })
+    Ok(ExpressionArray { items: output })
 }
 
 struct SeparatorAppender {
@@ -300,7 +296,6 @@ pub(crate) fn handle_split(
     input: OutputStream,
     separator: &OutputStream,
     settings: SplitSettings,
-    output_span_range: SpanRange,
 ) -> ExecutionResult<ExpressionArray> {
     unsafe {
         // RUST-ANALYZER SAFETY: This is as safe as we can get.
@@ -314,9 +309,9 @@ pub(crate) fn handle_split(
                 while !input.is_empty() {
                     current_item.push_raw_token_tree(input.parse()?);
                     let complete_item = core::mem::replace(&mut current_item, OutputStream::new());
-                    output.push(complete_item.to_value(output_span_range));
+                    output.push(complete_item.into_value());
                 }
-                return Ok(ExpressionArray::new(output, output_span_range));
+                return Ok(ExpressionArray::new(output));
             }
 
             let mut drop_empty_next = settings.drop_empty_start;
@@ -334,14 +329,14 @@ pub(crate) fn handle_split(
                 input.advance_to(&separator_fork);
                 if !current_item.is_empty() || !drop_empty_next {
                     let complete_item = core::mem::replace(&mut current_item, OutputStream::new());
-                    output.push(complete_item.to_value(output_span_range));
+                    output.push(complete_item.into_value());
                 }
                 drop_empty_next = settings.drop_empty_middle;
             }
             if !current_item.is_empty() || !settings.drop_empty_end {
-                output.push(current_item.to_value(output_span_range));
+                output.push(current_item.into_value());
             }
-            Ok(ExpressionArray::new(output, output_span_range))
+            Ok(ExpressionArray::new(output))
         })
     }
 }

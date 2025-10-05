@@ -258,6 +258,17 @@ impl HasSpan for Parentheses {
     }
 }
 
+impl HasSpan for LitFloat {
+    fn span(&self) -> Span {
+        LitFloat::span(self)
+    }
+}
+impl HasSpan for LitInt {
+    fn span(&self) -> Span {
+        LitInt::span(self)
+    }
+}
+
 #[derive(Copy, Clone)]
 pub(crate) struct TransparentDelimiters {
     pub(crate) delim_span: DelimSpan,
@@ -375,6 +386,33 @@ pub(crate) struct Spanned<T> {
     pub(crate) span_range: SpanRange,
 }
 
+impl<T> Spanned<T> {
+    pub(crate) fn deconstruct(self) -> (T, SpanRange) {
+        (self.value, self.span_range)
+    }
+
+    pub(crate) fn inner_ref(&self) -> &T {
+        &self.value
+    }
+
+    pub(crate) fn map<U>(self, f: impl FnOnce(T, &SpanRange) -> U) -> Spanned<U> {
+        Spanned {
+            value: f(self.value, &self.span_range),
+            span_range: self.span_range,
+        }
+    }
+
+    pub(crate) fn try_map<U, E>(
+        self,
+        f: impl FnOnce(T, &SpanRange) -> Result<U, E>,
+    ) -> Result<Spanned<U>, E> {
+        Ok(Spanned {
+            value: f(self.value, &self.span_range)?,
+            span_range: self.span_range,
+        })
+    }
+}
+
 impl<T> HasSpanRange for Spanned<T> {
     fn span_range(&self) -> SpanRange {
         self.span_range
@@ -420,7 +458,7 @@ impl<T> ToSpanned for T {
     }
 }
 
-#[deprecated="Only for use temporarily during object span migration"]
+#[deprecated = "Only for use temporarily during object span migration"]
 pub(crate) trait HasDummy {
     fn dummy() -> Self;
 }

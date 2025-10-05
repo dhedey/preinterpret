@@ -11,7 +11,7 @@ impl ExpressionNode<Source> {
                     SourceExpressionLeaf::Command(command) => {
                         // TODO[interpret_to_value]: Allow command to return a reference
                         let value = command.clone().interpret_to_value(context.interpreter())?;
-                        context.return_owned(value)?
+                        context.return_owned(value.into_owned(command.span_range()))?
                     }
                     SourceExpressionLeaf::Discarded(token) => {
                         return token.execution_err("This cannot be used in a value expression");
@@ -48,7 +48,7 @@ impl ExpressionNode<Source> {
                         let value = stream_literal
                             .clone()
                             .interpret_to_value(context.interpreter())?;
-                        context.return_owned(value)?
+                        context.return_owned(value.into_owned(stream_literal.span_range()))?
                     }
                 }
             }
@@ -114,7 +114,10 @@ impl ExpressionNode<Source> {
             | ExpressionNode::Index { .. }
             | ExpressionNode::Property { .. } => PlaceAssigner::start(context, self_node_id, value),
             ExpressionNode::Leaf(SourceExpressionLeaf::Discarded(underscore)) => {
-                context.return_assignment_completion(SpanRange::new_between(*underscore, value))
+                context.return_assignment_completion(SpanRange::new_between(
+                    *underscore,
+                    SpanRange::dummy(/*value*/),
+                ))
             }
             ExpressionNode::Array {
                 brackets,

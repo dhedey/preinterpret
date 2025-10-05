@@ -51,21 +51,21 @@ impl StreamCommandDefinition for IfCommand {
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        let evaluated_condition = self
+        let evaluated_condition: bool = self
             .condition
             .interpret_to_value(interpreter)?
-            .expect_bool("An if condition")?;
+            .resolve_as("An if condition")?;
 
-        if evaluated_condition.value {
+        if evaluated_condition {
             return self.true_code.interpret_into(interpreter, output);
         }
 
         for (condition, code) in self.else_ifs {
-            let evaluated_condition = condition
+            let evaluated_condition: bool = condition
                 .interpret_to_value(interpreter)?
-                .expect_bool("An else if condition")?;
+                .resolve_as("An else if condition")?;
 
-            if evaluated_condition.value {
+            if evaluated_condition {
                 return code.interpret_into(interpreter, output);
             }
         }
@@ -112,12 +112,12 @@ impl StreamCommandDefinition for WhileCommand {
         loop {
             iteration_counter.increment_and_check()?;
 
-            let evaluated_condition = self
+            let evaluated_condition: bool = self
                 .condition
                 .interpret_to_value(interpreter)?
-                .expect_bool("A while condition")?;
+                .resolve_as("A while condition")?;
 
-            if !evaluated_condition.value {
+            if !evaluated_condition {
                 break;
             }
 
@@ -217,14 +217,14 @@ impl StreamCommandDefinition for ForCommand {
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        let array = self
+        let iterable: IterableValue = self
             .input
             .interpret_to_value(interpreter)?
-            .expect_any_iterator()?;
+            .resolve_as("A for loop source")?;
 
         let mut iteration_counter = interpreter.start_iteration_counter(&self.in_token);
 
-        for item in array {
+        for item in iterable.into_iterator()? {
             iteration_counter.increment_and_check()?;
 
             self.destructuring.handle_destructure(interpreter, item)?;

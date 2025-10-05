@@ -37,16 +37,15 @@ macro_rules! define_object_arguments {
                 self,
                 interpreter: &mut Interpreter,
             ) -> ExecutionResult<Self::OutputValue> {
-                let mut object = self.inner.interpret_to_value(interpreter)?
-                    .expect_object("The arguments")?;
+                let mut object: ExpressionObject = self.inner.interpret_to_value(interpreter)?
+                    .resolve_as("This argument")?;
                 object.validate(&$source::validation())?;
-                let span_range = object.span_range;
                 Ok($validated {
                     $(
-                        $required_field: object.remove_or_none(stringify!($required_field), span_range),
+                        $required_field: object.remove_or_none(stringify!($required_field)),
                     )*
                     $(
-                        $optional_field: object.remove_no_none(stringify!($optional_field), span_range),
+                        $optional_field: object.remove_no_none(stringify!($optional_field)),
                     )*
                 })
             }
@@ -184,8 +183,8 @@ macro_rules! define_typed_object {
         }
 
         impl ResolvableArgumentOwned for $model {
-            fn resolve_from_owned(value: ExpressionValue) -> ExecutionResult<Self> {
-                Self::try_from(ExpressionObject::resolve_from_owned(value)?)
+            fn resolve_from_value(value: ExpressionValue, context: ResolutionContext) -> ExecutionResult<Self> {
+                Self::try_from(ExpressionObject::resolve_owned_from_value(value, context)?)
             }
         }
 
@@ -209,32 +208,32 @@ macro_rules! define_typed_object {
             }
         }
 
-        impl TryFrom<ExpressionObject> for $model {
+        impl TryFrom<Owned<ExpressionObject>> for $model {
             type Error = ExecutionInterrupt;
 
-            fn try_from(mut object: ExpressionObject) -> Result<Self, Self::Error> {
+            fn try_from(object: Owned<ExpressionObject>) -> Result<Self, Self::Error> {
+                let (mut object, span_range) = object.deconstruct();
                 object.validate(&Self::validation())?;
-                let span_range = object.span_range;
                 Ok($model {
                     $(
-                        $required_field: object.remove_or_none(stringify!($required_field), span_range),
+                        $required_field: object.remove_or_none(stringify!($required_field)),
                     )*
                     $(
                         $optional_field: {
-                            let optional = object.remove_no_none(stringify!($optional_field), span_range);
+                            let optional = object.remove_no_none(stringify!($optional_field));
                             if_exists!{
                                 { $($optional_field_default)? }
                                 {
                                     // Need to return the $optional_field_type
                                     match optional {
-                                        Some(value) => <$optional_field_type as ResolvableArgumentOwned>::resolve_from_owned(value)?,
+                                        Some(value) => ResolveAs::<$optional_field_type>::resolve_as(value.into_owned(span_range), stringify!($optional_field))?,
                                         None => $($optional_field_default)?,
                                     }
                                 }
                                 {
                                     // Need to return Option<$optional_field_type>
                                     match optional {
-                                        Some(value) => Some(<$optional_field_type as ResolvableArgumentOwned>::resolve_from_owned(value)?),
+                                        Some(value) => Some(ResolveAs::<$optional_field_type>::resolve_as(value.into_owned(span_range), stringify!($optional_field))?),
                                         None => None,
                                     }
                                 }

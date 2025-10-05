@@ -58,7 +58,8 @@ impl EvaluationFrame for PlaceAssigner {
     ) -> ExecutionResult<NextAction> {
         let mut mutable_place = item.expect_place();
         let value = self.value;
-        let span_range = SpanRange::new_between(mutable_place.span_range(), value.span_range());
+        let span_range =
+            SpanRange::new_between(mutable_place.span_range(), SpanRange::dummy(/*value*/));
         mutable_place.set(value);
         Ok(context.return_assignment_completion(span_range))
     }
@@ -119,7 +120,7 @@ impl ArrayBasedAssigner {
         value: ExpressionValue,
     ) -> ExecutionResult<Self> {
         let array = value.expect_array("The value destructured as an array")?;
-        let span_range = SpanRange::new_between(assignee_span, array.span_range.end());
+        let span_range = SpanRange::new_between(assignee_span, SpanRange::dummy(/*array*/).end());
         let mut has_seen_dot_dot = false;
         let mut prefix_assignees = Vec::new();
         let mut suffix_assignees = Vec::new();
@@ -245,7 +246,7 @@ impl ObjectBasedAssigner {
         value: ExpressionValue,
     ) -> ExecutionResult<Self> {
         let object = value.expect_object("The value destructured as an object")?;
-        let span_range = SpanRange::new_between(assignee_span, object.span_range.end());
+        let span_range = SpanRange::new_between(assignee_span, SpanRange::dummy(/*object*/).end());
 
         Ok(Self {
             span_range,
@@ -296,7 +297,7 @@ impl ObjectBasedAssigner {
             .entries
             .remove(&key)
             .map(|entry| entry.value)
-            .unwrap_or_else(|| ExpressionValue::None(key_span.span_range()));
+            .unwrap_or_else(|| ExpressionValue::None);
         self.already_used_keys.insert(key);
         Ok(value)
     }

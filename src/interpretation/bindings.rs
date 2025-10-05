@@ -166,7 +166,12 @@ impl AsRef<ExpressionValue> for LateBoundValue {
 
 impl HasSpanRange for LateBoundValue {
     fn span_range(&self) -> SpanRange {
-        self.as_ref().span_range()
+        match self {
+            LateBoundValue::Owned(owned) => owned.span_range,
+            LateBoundValue::CopyOnWrite(cow) => cow.span_range(),
+            LateBoundValue::Mutable(mutable) => mutable.span_range,
+            LateBoundValue::Shared(shared) => shared.shared.span_range,
+        }
     }
 }
 
@@ -237,7 +242,7 @@ impl OwnedValue {
     pub(crate) fn resolve_indexed(
         self,
         access: IndexAccess,
-        index: &ExpressionValue,
+        index: Spanned<&ExpressionValue>,
     ) -> ExecutionResult<Self> {
         self.update_span_range(|span_range| SpanRange::new_between(span_range, access.span_range()))
             .try_map(|value, _| value.into_indexed(access, index))
@@ -251,7 +256,7 @@ impl OwnedValue {
 
 impl<T: ToExpressionValue> Owned<T> {
     pub(crate) fn into_value(self) -> ExpressionValue {
-        self.inner.to_value(self.span_range)
+        self.inner.into_value()
     }
 
     pub(crate) fn into_owned_value(self) -> OwnedValue {
@@ -286,17 +291,6 @@ impl Deref for OwnedValue {
 impl DerefMut for OwnedValue {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
-    }
-}
-
-/// NOTE: This should be deleted when we remove the span range from ExpressionValue
-impl From<ExpressionValue> for OwnedValue {
-    fn from(value: ExpressionValue) -> Self {
-        let span_range = value.span_range();
-        Self {
-            inner: value,
-            span_range,
-        }
     }
 }
 
@@ -401,7 +395,7 @@ impl Mutable<ExpressionValue> {
     pub(crate) fn resolve_indexed(
         self,
         access: IndexAccess,
-        index: &ExpressionValue,
+        index: Spanned<&ExpressionValue>,
         auto_create: bool,
     ) -> ExecutionResult<Self> {
         self.update_span_range(|span_range| SpanRange::new_between(span_range, access.span_range()))
@@ -418,7 +412,7 @@ impl Mutable<ExpressionValue> {
     }
 
     pub(crate) fn set(&mut self, content: impl ToExpressionValue) {
-        *self.mut_cell = content.to_value(self.span_range);
+        *self.mut_cell = content.into_value();
     }
 }
 
@@ -485,6 +479,10 @@ impl<T: ?Sized> Shared<T> {
         }
     }
 
+    pub(crate) fn as_spanned(&self) -> Spanned<&T> {
+        self.as_ref().spanned(self.span_range)
+    }
+
     pub(crate) fn try_map<V: ?Sized>(
         self,
         value_map: impl for<'a, 'b> FnOnce(&'a T, &'b SpanRange) -> ExecutionResult<&'a V>,
@@ -534,8 +532,7 @@ impl Shared<ExpressionValue> {
     }
 
     pub(crate) fn infallible_clone(&self) -> OwnedValue {
-        let value = self.as_ref().clone().with_span_range(self.span_range);
-        OwnedValue::new(value, self.span_range)
+        self.as_ref().clone().into_owned(self.span_range)
     }
 
     fn new_from_variable(reference: VariableBinding) -> ExecutionResult<Self> {
@@ -552,7 +549,7 @@ impl Shared<ExpressionValue> {
     pub(crate) fn resolve_indexed(
         self,
         access: IndexAccess,
-        index: &ExpressionValue,
+        index: Spanned<&ExpressionValue>,
     ) -> ExecutionResult<Self> {
         self.update_span_range(|old_span| SpanRange::new_between(old_span, access))
             .try_map(|value, _| value.index_ref(access, index))

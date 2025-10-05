@@ -3,18 +3,17 @@ use super::*;
 #[derive(Clone)]
 pub(crate) struct ExpressionString {
     pub(crate) value: String,
-    /// The span range that generated this value.
-    /// For a complex expression, the start span is the most left part
-    /// of the expression, and the end span is the most right part.
-    pub(super) span_range: SpanRange,
+}
+
+impl ToExpressionValue for ExpressionString {
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::String(self)
+    }
 }
 
 impl ExpressionString {
-    pub(super) fn for_litstr(lit: syn::LitStr) -> Self {
-        Self {
-            value: lit.value(),
-            span_range: lit.span().span_range(),
-        }
+    pub(super) fn for_litstr(lit: &syn::LitStr) -> Owned<Self> {
+        Self { value: lit.value() }.into_owned(lit.span())
     }
 
     pub(super) fn handle_integer_binary_operation(
@@ -53,7 +52,7 @@ impl ExpressionString {
     }
 
     pub(super) fn to_literal(&self) -> Literal {
-        Literal::string(&self.value).with_span(self.span_range.join_into_span_else_start())
+        Literal::string(&self.value).with_span(Span::dummy(/*self*/))
     }
 }
 
@@ -70,19 +69,15 @@ impl HasValueType for String {
 }
 
 impl ToExpressionValue for String {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
-        ExpressionValue::String(ExpressionString {
-            value: self,
-            span_range,
-        })
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::String(ExpressionString { value: self })
     }
 }
 
 impl ToExpressionValue for &str {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
+    fn into_value(self) -> ExpressionValue {
         ExpressionValue::String(ExpressionString {
             value: self.to_string(),
-            span_range,
         })
     }
 }

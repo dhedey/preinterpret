@@ -27,8 +27,8 @@ define_interface! {
                 ZipIterators::new_from_iterator(iterator, context.span_range())?.run_zip(context.interpreter, false)
             }
 
-            [context] fn intersperse(this: IterableValue, separator: ExpressionValue, settings: Option<IntersperseSettings>) -> ExecutionResult<ExpressionArray> {
-                run_intersperse(this, separator, settings.unwrap_or_default(), context.output_span_range)
+            fn intersperse(this: IterableValue, separator: ExpressionValue, settings: Option<IntersperseSettings>) -> ExecutionResult<ExpressionArray> {
+                run_intersperse(this, separator, settings.unwrap_or_default())
             }
 
             [context] fn to_vec(this: IterableValue) -> ExecutionResult<Vec<ExpressionValue>> {
@@ -134,8 +134,6 @@ impl Spanned<IterableRef<'_>> {
 #[derive(Clone)]
 pub(crate) struct ExpressionIterator {
     iterator: ExpressionIteratorInner,
-    #[allow(unused)]
-    pub(crate) span_range: SpanRange,
 }
 
 impl ExpressionIterator {
@@ -145,21 +143,18 @@ impl ExpressionIterator {
     ) -> Self {
         Self {
             iterator: ExpressionIteratorInner::Other(Box::new(iterator)),
-            span_range: SpanRange::dummy(),
         }
     }
 
     pub(crate) fn new_for_array(array: ExpressionArray) -> Self {
         Self {
             iterator: ExpressionIteratorInner::Vec(array.items.into_iter()),
-            span_range: array.span_range,
         }
     }
 
     pub(crate) fn new_for_stream(stream: ExpressionStream) -> Self {
         Self {
             iterator: ExpressionIteratorInner::Stream(stream.value.into_iter()),
-            span_range: stream.span_range,
         }
     }
 
@@ -167,7 +162,6 @@ impl ExpressionIterator {
         let iterator = range.inner.into_iterable()?.resolve_iterator()?;
         Ok(Self {
             iterator: ExpressionIteratorInner::Other(iterator),
-            span_range: range.span_range,
         })
     }
 
@@ -176,15 +170,11 @@ impl ExpressionIterator {
         let iterator = object
             .entries
             .into_iter()
-            .map(|(k, v)| {
-                let span_range = v.key_span.span_range();
-                vec![k.to_value(span_range), v.value].to_value(span_range)
-            })
+            .map(|(k, v)| vec![k.into_value(), v.value].into_value())
             .collect::<Vec<_>>()
             .into_iter();
         Ok(Self {
             iterator: ExpressionIteratorInner::Vec(iterator),
-            span_range: object.span_range,
         })
     }
 
@@ -195,22 +185,17 @@ impl ExpressionIterator {
         let iterator = string
             .value
             .chars()
-            .map(|c| c.to_value(string.span_range))
+            .map(|c| c.into_value())
             .collect::<Vec<_>>()
             .into_iter();
         Ok(Self {
             iterator: ExpressionIteratorInner::Vec(iterator),
-            span_range: string.span_range,
         })
     }
 
-    pub(crate) fn new_custom(
-        iterator: Box<dyn CustomExpressionIterator>,
-        span_range: SpanRange,
-    ) -> Self {
+    pub(crate) fn new_custom(iterator: Box<dyn CustomExpressionIterator>) -> Self {
         Self {
             iterator: ExpressionIteratorInner::Other(iterator),
-            span_range,
         }
     }
 
@@ -229,10 +214,9 @@ impl ExpressionIterator {
         grouping: Grouping,
     ) -> ExecutionResult<()> {
         const LIMIT: usize = 10_000;
-        let span_range = self.span_range;
         for (i, item) in self.enumerate() {
             if i > LIMIT {
-                return span_range.execution_err(format!("Only a maximum of {} items can be output to a stream from an iterator, to protect you from infinite loops. This can't currently be reconfigured with the iteration limit.", LIMIT));
+                return SpanRange::dummy(/*self*/).execution_err(format!("Only a maximum of {} items can be output to a stream from an iterator, to protect you from infinite loops. This can't currently be reconfigured with the iteration limit.", LIMIT));
             }
             item.output_to(grouping, output)?;
         }
@@ -310,25 +294,21 @@ impl ExpressionIterator {
 }
 
 impl ToExpressionValue for ExpressionIteratorInner {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
-        ExpressionValue::Iterator(ExpressionIterator {
-            iterator: self,
-            span_range,
-        })
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::Iterator(ExpressionIterator { iterator: self })
     }
 }
 
 impl ToExpressionValue for Box<dyn CustomExpressionIterator> {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
-        ExpressionValue::Iterator(ExpressionIterator::new_custom(self, span_range))
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::Iterator(ExpressionIterator::new_custom(self))
     }
 }
 
 impl ToExpressionValue for ExpressionIterator {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
+    fn into_value(self) -> ExpressionValue {
         ExpressionValue::Iterator(ExpressionIterator {
             iterator: self.iterator,
-            span_range,
         })
     }
 }
@@ -370,9 +350,8 @@ impl Iterator for ExpressionIterator {
             ExpressionIteratorInner::Vec(iter) => iter.next(),
             ExpressionIteratorInner::Stream(iter) => {
                 let item = iter.next()?;
-                let span = item.span();
                 let stream: OutputStream = item.into();
-                Some(stream.coerce_into_value(span.span_range()))
+                Some(stream.coerce_into_value())
             }
             ExpressionIteratorInner::Other(iter) => iter.next(),
         }
@@ -406,10 +385,10 @@ define_interface! {
     parent: IterableTypeData,
     pub(crate) mod iterator_interface {
         pub(crate) mod methods {
-            [context] fn next(mut this: Mutable<ExpressionIterator>) -> ExpressionValue {
+            fn next(mut this: Mutable<ExpressionIterator>) -> ExpressionValue {
                 match this.next() {
                     Some(value) => value,
-                    None => ExpressionValue::None(context.span_range()),
+                    None => ExpressionValue::None,
                 }
             }
 
@@ -424,11 +403,11 @@ define_interface! {
                 this
             }
 
-            [context] fn take(this: ExpressionIterator, n: usize) -> ExpressionIterator {
+            fn take(this: ExpressionIterator, n: usize) -> ExpressionIterator {
                 // We collect to a vec to satisfy the clonability requirement,
                 // but only return an iterator for forwards compatibility in case we change it.
                 let taken = this.take(n).collect::<Vec<_>>();
-                ExpressionIterator::new_for_array(ExpressionArray::new(taken, context.span_range()))
+                ExpressionIterator::new_for_array(ExpressionArray::new(taken))
             }
         }
         pub(crate) mod unary_operations {

@@ -221,7 +221,7 @@ impl HandleDestructure for ObjectPattern {
             let value = value_map
                 .remove(&key)
                 .map(|entry| entry.value)
-                .unwrap_or_else(|| ExpressionValue::None(key_span.span_range()));
+                .unwrap_or_else(|| ExpressionValue::None);
             already_used_keys.insert(key);
             pattern.handle_destructure(interpreter, value)?;
         }

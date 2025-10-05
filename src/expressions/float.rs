@@ -4,19 +4,20 @@ use crate::internal_prelude::*;
 #[derive(Clone)]
 pub(crate) struct ExpressionFloat {
     pub(super) value: ExpressionFloatValue,
-    /// The span range that generated this value.
-    /// For a complex expression, the start span is the most left part
-    /// of the expression, and the end span is the most right part.
-    pub(super) span_range: SpanRange,
+}
+
+impl ToExpressionValue for ExpressionFloat {
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::Float(self)
+    }
 }
 
 impl ExpressionFloat {
-    pub(super) fn for_litfloat(lit: &syn::LitFloat) -> ParseResult<Self> {
-        let span_range = lit.span().span_range();
+    pub(super) fn for_litfloat(lit: &syn::LitFloat) -> ParseResult<Owned<Self>> {
         Ok(Self {
             value: ExpressionFloatValue::for_litfloat(lit)?,
-            span_range,
-        })
+        }
+        .into_owned(lit.span()))
     }
 
     pub(super) fn handle_integer_binary_operation(
@@ -38,9 +39,7 @@ impl ExpressionFloat {
     }
 
     pub(super) fn to_literal(&self) -> Literal {
-        self.value
-            .to_unspanned_literal()
-            .with_span(self.span_range.join_into_span_else_start())
+        self.value.to_unspanned_literal().with_span(Span::dummy())
     }
 }
 
@@ -154,17 +153,15 @@ impl FloatKind {
 pub(super) struct UntypedFloat(
     /// The span of the literal is ignored, and will be set when converted to an output.
     LitFloat,
-    SpanRange,
 );
 pub(super) type FallbackFloat = f64;
 
 impl UntypedFloat {
     pub(super) fn new_from_lit_float(lit_float: LitFloat) -> Self {
-        let span_range = lit_float.span().span_range();
-        Self(lit_float, span_range)
+        Self(lit_float)
     }
 
-    pub(super) fn new_from_literal(literal: Literal) -> Self {
+    fn new_from_known_float_literal(literal: Literal) -> Self {
         Self::new_from_lit_float(literal.into())
     }
 
@@ -218,12 +215,12 @@ impl UntypedFloat {
     }
 
     pub(super) fn from_fallback(value: FallbackFloat) -> Self {
-        Self::new_from_literal(Literal::f64_unsuffixed(value))
+        Self::new_from_known_float_literal(Literal::f64_unsuffixed(value).with_span(Span::dummy()))
     }
 
     pub(super) fn parse_fallback(&self) -> ExecutionResult<FallbackFloat> {
         self.0.base10_digits().parse().map_err(|err| {
-            self.1.execution_error(format!(
+            self.0.execution_error(format!(
                 "Could not parse as the default inferred type {}: {}",
                 core::any::type_name::<FallbackFloat>(),
                 err
@@ -237,7 +234,7 @@ impl UntypedFloat {
         N::Err: core::fmt::Display,
     {
         self.0.base10_digits().parse().map_err(|err| {
-            self.1.execution_error(format!(
+            self.0.execution_error(format!(
                 "Could not parse as {}: {}",
                 core::any::type_name::<N>(),
                 err
@@ -257,11 +254,9 @@ impl HasValueType for UntypedFloat {
 }
 
 impl ToExpressionValue for UntypedFloat {
-    fn to_value(mut self, span_range: SpanRange) -> ExpressionValue {
-        self.1 = span_range;
+    fn into_value(self) -> ExpressionValue {
         ExpressionValue::Float(ExpressionFloat {
             value: ExpressionFloatValue::Untyped(self),
-            span_range,
         })
     }
 }
@@ -497,10 +492,9 @@ macro_rules! impl_float_operations {
         }
 
         impl ToExpressionValue for $float_type {
-            fn to_value(self, span_range: SpanRange) -> ExpressionValue {
+            fn into_value(self) -> ExpressionValue {
                 ExpressionValue::Float(ExpressionFloat {
                     value: ExpressionFloatValue::$float_enum_variant(self),
-                    span_range,
                 })
             }
         }

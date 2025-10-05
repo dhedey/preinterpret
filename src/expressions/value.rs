@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Clone)]
 pub(crate) enum ExpressionValue {
-    None(SpanRange),
+    None,
     Integer(ExpressionInteger),
     Float(ExpressionFloat),
     Boolean(ExpressionBoolean),
@@ -127,8 +127,7 @@ define_interface! {
             }
 
             fn take_owned(mut this: MutableValue) -> ExpressionValue {
-                let span_range = this.span_range();
-                core::mem::replace(this.deref_mut(), ExpressionValue::None(span_range))
+                core::mem::replace(this.deref_mut(), ExpressionValue::None)
             }
 
             fn as_mut(this: OwnedValue) -> MutableValue {
@@ -208,8 +207,9 @@ define_interface! {
             }
         }
         pub(crate) mod unary_operations {
-            fn cast_to_string(input: ExpressionValue) -> ExecutionResult<String> {
-                input.concat_recursive(&ConcatBehaviour::standard(input.span_range()))
+            fn cast_to_string(input: OwnedValue) -> ExecutionResult<String> {
+                let (input, span_range) = input.deconstruct();
+                input.concat_recursive(&ConcatBehaviour::standard(span_range))
             }
 
             fn cast_to_stream(input: ExpressionValue) -> ExecutionResult<OutputStream> {
@@ -232,46 +232,50 @@ define_interface! {
 }
 
 pub(crate) trait ToExpressionValue: Sized {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue;
+    fn into_value(self) -> ExpressionValue;
+    fn into_owned(self, span_range: impl HasSpanRange) -> Owned<Self> {
+        Owned::new(self, span_range.span_range())
+    }
+    fn into_owned_value(self, span_range: impl HasSpanRange) -> OwnedValue {
+        OwnedValue::new(self.into_value(), span_range.span_range())
+    }
 }
 
 impl ToExpressionValue for () {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
-        ExpressionValue::None(span_range)
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::None
     }
 }
 
 impl ExpressionValue {
-    pub(crate) fn for_literal(literal: Literal) -> Self {
+    pub(crate) fn for_literal(literal: Literal) -> OwnedValue {
         // The unwrap should be safe because all Literal should be parsable
         // as syn::Lit; falling back to syn::Lit::Verbatim if necessary.
         Self::for_syn_lit(literal.to_token_stream().source_parse_as().unwrap())
     }
 
-    pub(crate) fn for_syn_lit(lit: syn::Lit) -> Self {
+    pub(crate) fn for_syn_lit(lit: syn::Lit) -> OwnedValue {
         // https://docs.rs/syn/latest/syn/enum.Lit.html
-        match lit {
-            Lit::Int(lit) => match ExpressionInteger::for_litint(&lit) {
-                Ok(int) => Self::Integer(int),
-                Err(_) => Self::UnsupportedLiteral(UnsupportedLiteral {
-                    span_range: lit.span().span_range(),
-                    lit: Lit::Int(lit),
-                }),
+        let matched = match &lit {
+            Lit::Int(lit) => match ExpressionInteger::for_litint(lit) {
+                Ok(int) => Some(int.into_owned_value()),
+                Err(_) => None,
             },
-            Lit::Float(lit) => match ExpressionFloat::for_litfloat(&lit) {
-                Ok(float) => Self::Float(float),
-                Err(_) => Self::UnsupportedLiteral(UnsupportedLiteral {
-                    span_range: lit.span().span_range(),
-                    lit: Lit::Float(lit),
-                }),
+            Lit::Float(lit) => match ExpressionFloat::for_litfloat(lit) {
+                Ok(float) => Some(float.into_owned_value()),
+                Err(_) => None,
             },
-            Lit::Bool(lit) => Self::Boolean(ExpressionBoolean::for_litbool(lit)),
-            Lit::Str(lit) => Self::String(ExpressionString::for_litstr(lit)),
-            Lit::Char(lit) => Self::Char(ExpressionChar::for_litchar(lit)),
-            other => Self::UnsupportedLiteral(UnsupportedLiteral {
-                span_range: other.span().span_range(),
-                lit: other,
-            }),
+            Lit::Bool(lit) => Some(ExpressionBoolean::for_litbool(lit).into_owned_value()),
+            Lit::Str(lit) => Some(ExpressionString::for_litstr(lit).into_owned_value()),
+            Lit::Char(lit) => Some(ExpressionChar::for_litchar(lit).into_owned_value()),
+            _ => None,
+        };
+        match matched {
+            Some(value) => value,
+            None => {
+                let span = lit.span();
+                Self::UnsupportedLiteral(UnsupportedLiteral { lit }).into_owned(span)
+            }
         }
     }
 
@@ -279,13 +283,14 @@ impl ExpressionValue {
         &self,
         new_span_range: SpanRange,
     ) -> ExecutionResult<ExpressionValue> {
+        let _ = SpanRange::dummy(/* marker to revisit new_span_range*/);
         if !self.kind().supports_transparent_cloning() {
             return new_span_range.execution_err(format!(
                 "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .take_owned() or .clone() explicitly.",
                 self.articled_value_type()
             ));
         }
-        Ok(self.clone().with_span_range(new_span_range))
+        Ok(self.clone())
     }
 
     pub(super) fn expect_value_pair(
@@ -482,7 +487,7 @@ impl ExpressionValue {
 
     pub(crate) fn kind(&self) -> ValueKind {
         match self {
-            ExpressionValue::None(_) => ValueKind::None,
+            ExpressionValue::None => ValueKind::None,
             ExpressionValue::Integer(integer) => ValueKind::Integer(integer.value.kind()),
             ExpressionValue::Float(float) => ValueKind::Float(float.value.kind()),
             ExpressionValue::Boolean(_) => ValueKind::Boolean,
@@ -498,7 +503,7 @@ impl ExpressionValue {
     }
 
     pub(crate) fn is_none(&self) -> bool {
-        matches!(self, ExpressionValue::None(_))
+        matches!(self, ExpressionValue::None)
     }
 
     pub(crate) fn into_integer(self) -> Option<ExpressionInteger> {
@@ -511,7 +516,7 @@ impl ExpressionValue {
     pub(crate) fn expect_bool(self, place_descriptor: &str) -> ExecutionResult<ExpressionBoolean> {
         match self {
             ExpressionValue::Boolean(value) => Ok(value),
-            other => other.execution_err(format!(
+            other => SpanRange::dummy(/*other*/).execution_err(format!(
                 "{} must be a boolean, but it is {}",
                 place_descriptor,
                 other.articled_value_type(),
@@ -525,7 +530,7 @@ impl ExpressionValue {
     ) -> ExecutionResult<ExpressionInteger> {
         match self {
             ExpressionValue::Integer(value) => Ok(value),
-            other => other.execution_err(format!(
+            other => SpanRange::dummy(/*other*/).execution_err(format!(
                 "{} must be an integer, but it is {}",
                 place_descriptor,
                 other.articled_value_type(),
@@ -536,7 +541,7 @@ impl ExpressionValue {
     pub(crate) fn expect_str(&self, place_descriptor: &str) -> ExecutionResult<&str> {
         match self {
             ExpressionValue::String(value) => Ok(&value.value),
-            other => other.execution_err(format!(
+            other => SpanRange::dummy(/*other*/).execution_err(format!(
                 "{} must be a string, but it is {}",
                 place_descriptor,
                 other.articled_value_type(),
@@ -547,7 +552,7 @@ impl ExpressionValue {
     pub(crate) fn expect_string(self, place_descriptor: &str) -> ExecutionResult<ExpressionString> {
         match self {
             ExpressionValue::String(value) => Ok(value),
-            other => other.execution_err(format!(
+            other => SpanRange::dummy(/*other*/).execution_err(format!(
                 "{} must be a string, but it is {}",
                 place_descriptor,
                 other.articled_value_type(),
@@ -561,7 +566,7 @@ impl ExpressionValue {
     ) -> ExecutionResult<&ExpressionString> {
         match self {
             ExpressionValue::String(value) => Ok(value),
-            other => other.execution_err(format!(
+            other => SpanRange::dummy(/*other*/).execution_err(format!(
                 "{} must be a string, but it is {}",
                 place_descriptor,
                 other.articled_value_type(),
@@ -572,7 +577,7 @@ impl ExpressionValue {
     pub(crate) fn expect_array(self, place_descriptor: &str) -> ExecutionResult<ExpressionArray> {
         match self {
             ExpressionValue::Array(value) => Ok(value),
-            other => other.execution_err(format!(
+            other => SpanRange::dummy(/*other*/).execution_err(format!(
                 "{} must be an array, but it is {}",
                 place_descriptor,
                 other.articled_value_type(),
@@ -583,7 +588,7 @@ impl ExpressionValue {
     pub(crate) fn expect_object(self, place_descriptor: &str) -> ExecutionResult<ExpressionObject> {
         match self {
             ExpressionValue::Object(value) => Ok(value),
-            other => other.execution_err(format!(
+            other => SpanRange::dummy(/*other*/).execution_err(format!(
                 "{} must be an object, but it is {}",
                 place_descriptor,
                 other.articled_value_type(),
@@ -594,45 +599,12 @@ impl ExpressionValue {
     pub(crate) fn expect_stream(self, place_descriptor: &str) -> ExecutionResult<ExpressionStream> {
         match self {
             ExpressionValue::Stream(value) => Ok(value),
-            other => other.execution_err(format!(
+            other => SpanRange::dummy(/*other*/).execution_err(format!(
                 "{} must be a stream, but it is {}",
                 place_descriptor,
                 other.articled_value_type(),
             )),
         }
-    }
-
-    pub(crate) fn expect_any_iterator(self) -> ExecutionResult<ExpressionIterator> {
-        IterableValue::resolve_from_owned(self)?.into_iterator()
-    }
-
-    pub(super) fn handle_compound_assignment(
-        &mut self,
-        operation: &CompoundAssignmentOperation,
-        right: Self,
-        source_span_range: SpanRange,
-    ) -> ExecutionResult<()> {
-        match (self, operation) {
-            (ExpressionValue::Stream(left_mut), CompoundAssignmentOperation::Add(_)) => {
-                let right = right.expect_stream("The target of += on a stream")?;
-                right.value.append_into(&mut left_mut.value);
-                left_mut.span_range = source_span_range;
-            }
-            (ExpressionValue::Array(left_mut), CompoundAssignmentOperation::Add(_)) => {
-                let mut right = right.expect_array("The target of += on an array")?;
-                left_mut.items.append(&mut right.items);
-                left_mut.span_range = source_span_range;
-            }
-            (left_mut, operation) => {
-                // Fallback to just clone and use the normal operator
-                let left = left_mut.clone();
-                *left_mut = operation
-                    .to_binary()
-                    .evaluate(left, right)?
-                    .with_span_range(source_span_range);
-            }
-        }
-        Ok(())
     }
 
     pub(super) fn handle_integer_binary_operation(
@@ -641,7 +613,7 @@ impl ExpressionValue {
         operation: OutputSpanned<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         match self {
-            ExpressionValue::None(_) => operation.unsupported(self),
+            ExpressionValue::None => operation.unsupported(self),
             ExpressionValue::Integer(value) => {
                 value.handle_integer_binary_operation(right, operation)
             }
@@ -670,7 +642,11 @@ impl ExpressionValue {
         }
     }
 
-    pub(crate) fn into_indexed(self, access: IndexAccess, index: &Self) -> ExecutionResult<Self> {
+    pub(crate) fn into_indexed(
+        self,
+        access: IndexAccess,
+        index: Spanned<&Self>,
+    ) -> ExecutionResult<Self> {
         match self {
             ExpressionValue::Array(array) => array.into_indexed(access, index),
             ExpressionValue::Object(object) => object.into_indexed(access, index),
@@ -681,7 +657,7 @@ impl ExpressionValue {
     pub(crate) fn index_mut(
         &mut self,
         access: IndexAccess,
-        index: &Self,
+        index: Spanned<&Self>,
         auto_create: bool,
     ) -> ExecutionResult<&mut Self> {
         match self {
@@ -691,7 +667,11 @@ impl ExpressionValue {
         }
     }
 
-    pub(crate) fn index_ref(&self, access: IndexAccess, index: &Self) -> ExecutionResult<&Self> {
+    pub(crate) fn index_ref(
+        &self,
+        access: IndexAccess,
+        index: Spanned<&Self>,
+    ) -> ExecutionResult<&Self> {
         match self {
             ExpressionValue::Array(array) => array.index_ref(access, index),
             ExpressionValue::Object(object) => object.index_ref(access, index),
@@ -733,28 +713,6 @@ impl ExpressionValue {
         }
     }
 
-    fn span_range_mut(&mut self) -> &mut SpanRange {
-        match self {
-            Self::None(span_range) => span_range,
-            Self::Integer(value) => &mut value.span_range,
-            Self::Float(value) => &mut value.span_range,
-            Self::Boolean(value) => &mut value.span_range,
-            Self::String(value) => &mut value.span_range,
-            Self::Char(value) => &mut value.span_range,
-            Self::UnsupportedLiteral(value) => &mut value.span_range,
-            Self::Array(value) => &mut value.span_range,
-            Self::Object(value) => &mut value.span_range,
-            Self::Stream(value) => &mut value.span_range,
-            Self::Iterator(value) => &mut value.span_range,
-            Self::Range(value) => &mut value.span_range,
-        }
-    }
-
-    pub(crate) fn with_span_range(mut self, source_span_range: SpanRange) -> ExpressionValue {
-        *self.span_range_mut() = source_span_range;
-        self
-    }
-
     pub(crate) fn into_new_output_stream(
         self,
         grouping: Grouping,
@@ -783,7 +741,7 @@ impl ExpressionValue {
                 output.push_grouped(
                     |inner| self.output_flattened_to(inner),
                     Delimiter::None,
-                    self.span_from_join_else_start(),
+                    Span::dummy(/*self*/),
                 )?;
             }
             Grouping::Flattened => {
@@ -795,7 +753,7 @@ impl ExpressionValue {
 
     fn output_flattened_to(&self, output: &mut OutputStream) -> ExecutionResult<()> {
         match self {
-            Self::None { .. } => {}
+            Self::None => {}
             Self::Integer(value) => output.push_literal(value.to_literal()),
             Self::Float(value) => output.push_literal(value.to_literal()),
             Self::Boolean(value) => output.push_ident(value.to_ident()),
@@ -805,7 +763,8 @@ impl ExpressionValue {
                 output.extend_raw_tokens(literal.lit.to_token_stream())
             }
             Self::Object(_) => {
-                return self.execution_err("Objects cannot be output to a stream");
+                return SpanRange::dummy(/*self*/)
+                    .execution_err("Objects cannot be output to a stream");
             }
             Self::Array(array) => array.output_items_to(output, Grouping::Flattened)?,
             Self::Stream(value) => value.value.append_cloned_into(output),
@@ -832,7 +791,7 @@ impl ExpressionValue {
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
         match self {
-            ExpressionValue::None { .. } => {
+            ExpressionValue::None => {
                 if behaviour.show_none_values {
                     output.push_str("None");
                 }
@@ -869,9 +828,51 @@ impl ExpressionValue {
     }
 }
 
+impl OwnedValue {
+    pub(crate) fn expect_any_iterator(
+        self,
+        resolution_target: &str,
+    ) -> ExecutionResult<Owned<ExpressionIterator>> {
+        IterableValue::resolve_owned(self, resolution_target)?.try_map(|v, _| v.into_iterator())
+    }
+}
+
+impl SpannedRefMut<'_, ExpressionValue> {
+    pub(super) fn handle_compound_assignment(
+        self,
+        operation: &CompoundAssignmentOperation,
+        right: OwnedValue,
+    ) -> ExecutionResult<()> {
+        let (mut left, left_span_range) = self.deconstruct();
+        match (&mut *left, operation) {
+            (ExpressionValue::Stream(left_mut), CompoundAssignmentOperation::Add(_)) => {
+                let right = right
+                    .into_inner()
+                    .expect_stream("The target of += on a stream")?;
+                right.value.append_into(&mut left_mut.value);
+            }
+            (ExpressionValue::Array(left_mut), CompoundAssignmentOperation::Add(_)) => {
+                let mut right = right
+                    .into_inner()
+                    .expect_array("The target of += on an array")?;
+                left_mut.items.append(&mut right.items);
+            }
+            (left_mut, operation) => {
+                // Fallback to just clone and use the normal operator
+                let left = left_mut.clone();
+                *left_mut = operation
+                    .to_binary()
+                    .evaluate(left.into_owned(left_span_range), right)?
+                    .into_value();
+            }
+        }
+        Ok(())
+    }
+}
+
 impl ToExpressionValue for ExpressionValue {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
-        self.with_span_range(span_range)
+    fn into_value(self) -> ExpressionValue {
+        self
     }
 }
 
@@ -884,7 +885,7 @@ pub(crate) enum Grouping {
 impl HasValueType for ExpressionValue {
     fn value_type(&self) -> &'static str {
         match self {
-            Self::None { .. } => "none value",
+            Self::None => "none value",
             Self::Integer(value) => value.value_type(),
             Self::Float(value) => value.value_type(),
             Self::Boolean(value) => value.value_type(),
@@ -896,25 +897,6 @@ impl HasValueType for ExpressionValue {
             Self::Stream(value) => value.value_type(),
             Self::Iterator(value) => value.value_type(),
             Self::Range(value) => value.value_type(),
-        }
-    }
-}
-
-impl HasSpanRange for ExpressionValue {
-    fn span_range(&self) -> SpanRange {
-        match self {
-            ExpressionValue::None(span_range) => *span_range,
-            ExpressionValue::Integer(int) => int.span_range,
-            ExpressionValue::Float(float) => float.span_range,
-            ExpressionValue::Boolean(bool) => bool.span_range,
-            ExpressionValue::String(str) => str.span_range,
-            ExpressionValue::Char(char) => char.span_range,
-            ExpressionValue::UnsupportedLiteral(lit) => lit.span_range,
-            ExpressionValue::Array(array) => array.span_range,
-            ExpressionValue::Object(object) => object.span_range,
-            ExpressionValue::Stream(stream) => stream.span_range,
-            ExpressionValue::Iterator(iterator) => iterator.span_range,
-            ExpressionValue::Range(iterator) => iterator.span_range,
         }
     }
 }
@@ -938,7 +920,6 @@ pub(super) trait HasValueType {
 #[derive(Clone)]
 pub(crate) struct UnsupportedLiteral {
     lit: syn::Lit,
-    span_range: SpanRange,
 }
 
 impl HasValueType for UnsupportedLiteral {

@@ -39,9 +39,12 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 ## Span changes
 
 * Remove span range from value:
-    * Mark `SpanRange::dummy()` as `#[deprecated]` and start using it during the refactor
-    * Move it to a binding such as `Owned<T>` etc
-    * Possibly can use `EvaluationError` (without a span!) inside a calculation, and adding the span in the evaluator (nb. it may still need to be able to propogate an `ExecutionInterrupt` internally)
+    * Use `Span::dummy()` and `SpanRange::dummy()` during the refactor if we need a span range we don't have any more. I'll then go through all of these and work out what to do about it after.
+    * Remove the span range from `ExpressionValue` and all its sub-kinds. We'll only keep span ranges on:
+      * Tokens inside an OutputStream
+      * Variable bindings in preinterpet code (`Owned<X>` etc)
+      * Output span ranges for method return values and errors
+* Possibly can use `EvaluationError` (without a span!) inside a calculation, and adding the span in the evaluator (nb. it may still need to be able to propogate an `ExecutionInterrupt` internally)
 * Except streams, which keep spans on literals/groups.
     * If someone wants to keep a value's span, they can keep it in a stream and coerce it; or store it as a tuple of a value with its span `[value, %[value]]`
 * Bindings such as `Owned<X>` have a span, which:
