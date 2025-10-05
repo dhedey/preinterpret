@@ -199,7 +199,7 @@ impl TransformerDefinition for ExactTransformer {
                     stream: inner.parse()?,
                 })
             },
-            "Expected @[EXACT(%[...<stream contents to match exactly>...])]",
+            "Expected @[EXACT(%[...stream contents to match exactly...])]",
         )
     }
 
