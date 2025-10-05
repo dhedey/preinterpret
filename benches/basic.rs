@@ -28,18 +28,13 @@ fn main() {
         [!for! N in 0..=10 {
             #(
                 let comma_separated_types = %[];
-                let i = 0;
-                let _ = [!for! name in 'A'..'Z' {
+                let _ = [!for! name in ('A'..).into_iter().take(N) {
                     #(
-                        let _ = [!if! i >= N {
-                            [!break!];
-                        }];
-                        let ident = [!ident! name];
+                        let ident = name.to_ident();
                         comma_separated_types += %[#ident,];
-                        i += 1;
                     )
                 }];
-                [!stream!
+                %[
                     impl<#comma_separated_types> MyTrait for (#comma_separated_types) {}
                 ]
             )
@@ -56,13 +51,12 @@ fn main() {
         }];
     });
     benchmark!("Lazy iterator", {
-        let count = 0;
-        [!for! i in 0..100000 {
+        let x = [!for! i in 0..100000 {
             [!if! i == 5 {
-                [!string! #i]
+                #i
                 [!break!]
             }]
-            #(count += 1)
-        }]
+        }].to_string();
+        %[].assert_eq(x, "5");
     });
 }

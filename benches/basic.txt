@@ -7,13 +7,13 @@ Trivial Sum
 - Output     |     0ns
 
 For loop adding up 1000 times
-- Parsing    |    22ns
-- Evaluation |  1445ns
+- Parsing    |    21ns
+- Evaluation |  1477ns
 - Output     |     0ns
 
 For loop concatenating to stream 1000 tokens
 - Parsing    |    23ns
-- Evaluation |  1849ns
+- Evaluation |  1875ns
 - Output     |     0ns
 
 Lots of casts
@@ -22,16 +22,16 @@ Lots of casts
 - Output     |     0ns
 
 Simple tuple impls
-- Parsing    |    79ns
-- Evaluation |  1044ns
-- Output     |   132ns
+- Parsing    |    56ns
+- Evaluation |   825ns
+- Output     |    35ns
 
 Accessing single elements of a large array
-- Parsing    |    43ns
-- Evaluation |  2039ns
+- Parsing    |    44ns
+- Evaluation |  2235ns
 - Output     |     0ns
 
 Lazy iterator
-- Parsing    |    32ns
-- Evaluation |    51ns
-- Output     |     1ns
+- Parsing    |    36ns
+- Evaluation |    42ns
+- Output     |     0ns
