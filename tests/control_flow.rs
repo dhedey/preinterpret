@@ -17,55 +17,78 @@ fn test_control_flow_compilation_failures() {
 
 #[test]
 fn test_if() {
-    preinterpret_assert_eq!([!if! (1 == 2) { "YES" } !else! { "NO" }], "NO");
-    preinterpret_assert_eq!({
-        #(let x = 1 == 2)
-        [!if! x { "YES" } !else! { "NO" }]
-    }, "NO");
-    preinterpret_assert_eq!({
-        #(let x = 1; let y = 2)
-        [!if! x == y { "YES" } !else! { "NO" }]
-    }, "NO");
-    preinterpret_assert_eq!({
+    assert_eq!(
+        run! {
+            [!if! (1 == 2) { "YES" } !else! { "NO" }]
+        },
+        "NO"
+    );
+    assert_eq!(
+        run! {
+            let x = 1 == 2;
+            [!if! x { "YES" } !else! { "NO" }]
+        },
+        "NO"
+    );
+    assert_eq!(
+        run! {
+            let x = 1;
+            let y = 2;
+            [!if! x == y { "YES" } !else! { "NO" }]
+        },
+        "NO"
+    );
+    assert_eq!(
+        run! {
+            %[0 [!if! true { + 1 }]]
+        },
+        1
+    );
+    assert_eq!(
+        stream! {
+            0
+            [!if! false { + 1 }]
+        },
         0
-        [!if! true { + 1 }]
-    }, 1);
-    preinterpret_assert_eq!({
-        0
-        [!if! false { + 1 }]
-    }, 0);
-    preinterpret_assert_eq!({
-        [!if! false {
-            1
-        } !elif! false {
-            2
-        } !elif! true {
-            3
-        } !else! {
-            4
-        }]
-    }, 3);
+    );
+    assert_eq!(
+        run! {
+            [!if! false {
+                1
+            } !elif! false {
+                2
+            } !elif! true {
+                3
+            } !else! {
+                4
+            }]
+        },
+        3
+    );
 }
 
 #[test]
 fn test_while() {
-    preinterpret_assert_eq!({
-        #(let x = 0)
-        [!while! x < 5 { #(x += 1) }]
-        #x
-    }, 5);
+    assert_eq!(
+        run! {
+            let x = 0;
+            let _ = [!while! x < 5 { #(x += 1) }];
+            x
+        },
+        5
+    );
 }
 
 #[test]
 fn test_loop_continue_and_break() {
-    preinterpret_assert_eq!(
-        {
-            #(let x = 0)
-            [!loop! {
+    assert_eq!(
+        run! {
+            let x = 0;
+            let _ = [!loop! {
                 #(x += 1)
                 [!if! x >= 10 { [!break!] }]
-            }]
-            #x
+            }];
+            x
         },
         10
     );

@@ -1,9 +1,9 @@
 use preinterpret::*;
 
 fn main() {
-    stream!(
-        #(let x = 0)
-        [!while! true {
+    run!(
+        let x = 0;
+        let _ = [!while! true {
             #(x += 1)
             [!if! x == 3 {
                 [!continue!]
@@ -12,6 +12,6 @@ fn main() {
                 // and future errors propagate correctly.
                 #(%[_].error("And now we error"))
             }]
-        }]
+        }];
     );
 }

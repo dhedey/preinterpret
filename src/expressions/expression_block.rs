@@ -3,24 +3,17 @@ use super::*;
 #[derive(Clone)]
 pub(crate) struct EmbeddedExpression {
     marker: Token![#],
-    flattening: Option<Token![..]>,
     parentheses: Parentheses,
-    content: ExpressionBlockContent,
+    content: SourceExpression,
 }
 
 impl Parse<Source> for EmbeddedExpression {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         let marker = input.parse()?;
-        let flattening = if input.peek(Token![..]) {
-            Some(input.parse()?)
-        } else {
-            None
-        };
         let (parentheses, inner) = input.parse_parentheses()?;
         let content = inner.parse()?;
         Ok(Self {
             marker,
-            flattening,
             parentheses,
             content,
         })
@@ -35,7 +28,7 @@ impl HasSpanRange for EmbeddedExpression {
 
 impl EmbeddedExpression {
     pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
-        self.content.evaluate(interpreter, self.span_range())
+        self.content.interpret_to_value(interpreter)
     }
 }
 
@@ -45,12 +38,8 @@ impl Interpret for &EmbeddedExpression {
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        let grouping = match self.flattening {
-            Some(_) => Grouping::Flattened,
-            None => Grouping::Flattened,
-        };
         self.evaluate(interpreter)?.output_to(
-            grouping,
+            Grouping::Flattened,
             &mut ToStreamContext::new(output, self.span_range()),
         )?;
         Ok(())
@@ -64,11 +53,33 @@ impl InterpretToValue for &EmbeddedExpression {
         self,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<Self::OutputValue> {
-        if let Some(flattening) = &self.flattening {
-            return flattening
-                .execution_err("Flattening is not supported when outputting as a value");
-        }
         self.evaluate(interpreter)
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct ExpressionBlock {
+    pub(super) braces: Braces,
+    pub(super) content: ExpressionBlockContent,
+}
+
+impl Parse<Source> for ExpressionBlock {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+        let (braces, inner) = input.parse_braces()?;
+        let content = inner.parse()?;
+        Ok(Self { braces, content })
+    }
+}
+
+impl HasSpan for ExpressionBlock {
+    fn span(&self) -> Span {
+        self.braces.join()
+    }
+}
+
+impl ExpressionBlock {
+    pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
+        self.content.evaluate(interpreter, self.span().into())
     }
 }
 

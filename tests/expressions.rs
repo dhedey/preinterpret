@@ -177,7 +177,7 @@ fn boolean_operators_short_circuit() {
     preinterpret_assert_eq!(
         #(
             let is_lazy = true;
-            let _ = false && #(is_lazy = false; true);
+            let _ = false && { is_lazy = false; true };
             is_lazy
         ),
         true
@@ -186,7 +186,7 @@ fn boolean_operators_short_circuit() {
     preinterpret_assert_eq!(
         #(
             let is_lazy = true;
-            let _ = true || #(is_lazy = false; true);
+            let _ = true || { is_lazy = false; true };
             is_lazy
         ),
         true
@@ -195,7 +195,7 @@ fn boolean_operators_short_circuit() {
     preinterpret_assert_eq!(
         #(
             let is_lazy = true;
-            let _ = false & #(is_lazy = false; true);
+            let _ = false & { is_lazy = false; true };
             is_lazy
         ),
         false
@@ -415,7 +415,7 @@ fn test_array_place_destructurings() {
         #(
             let a = [0, 0];
             let b = 0;
-            a[b] += #(b += 1; 5);
+            a[b] += { b += 1; 5 };
             a.to_debug_string()
         ),
         "[0, 5]"
@@ -428,7 +428,7 @@ fn test_array_place_destructurings() {
             let arr2 = [0, 0];
             // The first assignment arr[0] = 1 occurs before being overwritten
             // by the arr[0] = 5 in the second index.
-            [arr[0], arr2[#(arr[0] = 5; 1)]] = [1, 1];
+            [arr[0], arr2[{ arr[0] = 5; 1 }]] = [1, 1];
             arr[0]
         ),
         5
@@ -589,7 +589,7 @@ fn stream_append_can_use_self_in_appender() {
     assert_eq!(
         run! {
             let variable = %[Hello];
-            variable += %[World #(variable += %[!];)];
+            variable += %[World #(variable += %[!])];
             variable.to_debug_string()
         },
         "%[Hello ! World]"
@@ -597,7 +597,7 @@ fn stream_append_can_use_self_in_appender() {
     assert_eq!(
         run! {
             let variable = %[Hello];
-            variable += %[World #(variable = %[Hello2];)];
+            variable += %[World #(variable = %[Hello2])];
             variable.to_debug_string()
         },
         "%[Hello2 World]"

@@ -1,5 +1,5 @@
 error: The key `x` has already used
- --> tests/compilation_failures/expressions/object_place_destructuring_repeated_field.rs:7:19
+ --> tests/compilation_failures/expressions/object_place_destructuring_repeated_field.rs:6:15
   |
-7 |             %{ x, x } = %{ x: 1 };
-  |                   ^
+6 |         %{ x, x } = %{ x: 1 };
+  |               ^

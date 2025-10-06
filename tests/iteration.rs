@@ -318,7 +318,7 @@ fn complex_cases_for_intersperse_and_input_types() {
     preinterpret_assert_eq!(
         #(
             let x = "NOT_EXECUTED";
-            let _ = [].intersperse([], %{ add_trailing: #(x = "EXECUTED"; false) });
+            let _ = [].intersperse([], %{ add_trailing: { x = "EXECUTED"; false } });
             x
         ),
         "EXECUTED",
@@ -377,17 +377,17 @@ fn test_zip() {
 
 #[test]
 fn test_zip_with_for() {
-    preinterpret_assert_eq!(
-        {
-            #(let countries = %[France Germany Italy];)
-            #(let flags = ["🇫🇷", "🇩🇪", "🇮🇹"])
-            #(let capitals = %["Paris" "Berlin" "Rome"];)
-            #(let facts = [])
-            [!for! [country, flag, capital] in [countries, flags.take_owned(), capitals].zip() {
+    assert_eq!(
+        run! {
+            let countries = %[France Germany Italy];
+            let flags = ["🇫🇷", "🇩🇪", "🇮🇹"];
+            let capitals = %["Paris" "Berlin" "Rome"];
+            let facts = [];
+            let _ = [!for! [country, flag, capital] in [countries, flags.take_owned(), capitals].zip() {
                 #(facts.push(%["=> The capital of " #country " is " #capital " and its flag is " #flag].to_string()))
-            }]
+            }];
 
-            #("The facts are:\n" + facts.take_owned().intersperse("\n").to_string() + "\n")
+            "The facts are:\n" + facts.take_owned().intersperse("\n").to_string() + "\n"
         },
         r#"The facts are:
 => The capital of France is Paris and its flag is 🇫🇷

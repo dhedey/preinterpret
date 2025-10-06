@@ -1,7 +1,7 @@
 use preinterpret::*;
 
 fn main() {
-    let _ = stream! {
-        #(10 _ 10)
+    let _ = run! {
+        10 _ 10
     };
 }

@@ -1,11 +1,9 @@
 use preinterpret::*;
 
 fn main() {
-    let _ = stream!{
-        #(
-            let x = 0;
-            %{ x } = [x];
-            x
-        )
+    let _ = run!{
+        let x = 0;
+        %{ x } = [x];
+        x
     };
 }

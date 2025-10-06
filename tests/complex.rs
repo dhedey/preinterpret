@@ -2,19 +2,19 @@
 mod prelude;
 use prelude::*;
 
-preinterpret::stream! {
-    #(
-        let bytes = 32;
-        let postfix = %[Hello World #bytes];
-        let some_symbols = %[and some symbols such as %raw[#] and #123];
-        let MyRawVar = %raw[Test no #str $(%[replacement].to_ident())];
-        let _ = %raw[non - sensical !code :D - ignored (!)];
-    )
-    struct MyStruct;
-    type #(%[X "Boo" #(%[Hello 1].to_string()) #postfix].to_ident()) = MyStruct;
-    const NUM: u32 = #(%[1337u #bytes].to_literal());
-    const STRING: &str = #(MyRawVar.to_string());
-    const SNAKE_CASE: &str = #("MyVar".to_lower_snake_case());
+preinterpret::run! {
+    let bytes = 32;
+    let postfix = %[Hello World #bytes];
+    let some_symbols = %[and some symbols such as %raw[#] and #123];
+    let MyRawVar = %raw[Test no #str $(%[replacement].to_ident())];
+    let _ = %raw[non - sensical !code :D - ignored (!)];
+    %[
+        struct MyStruct;
+        type #(%[X "Boo" #(%[Hello 1].to_string()) #postfix].to_ident()) = MyStruct;
+        const NUM: u32 = #(%[1337u #bytes].to_literal());
+        const STRING: &str = #(MyRawVar.to_string());
+        const SNAKE_CASE: &str = #("MyVar".to_lower_snake_case());
+    ]
 }
 
 #[test]

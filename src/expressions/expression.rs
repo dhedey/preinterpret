@@ -30,10 +30,10 @@ impl InterpretToValue for &SourceExpression {
 }
 
 pub(super) enum SourceExpressionLeaf {
+    Block(ExpressionBlock),
     Command(Command),
     Variable(VariableIdentifier),
     Discarded(Token![_]),
-    EmbeddedExpression(EmbeddedExpression),
     Value(SharedValue),
     StreamLiteral(StreamLiteral),
 }
@@ -44,7 +44,7 @@ impl HasSpanRange for SourceExpressionLeaf {
             SourceExpressionLeaf::Command(command) => command.span_range(),
             SourceExpressionLeaf::Variable(variable) => variable.span_range(),
             SourceExpressionLeaf::Discarded(token) => token.span_range(),
-            SourceExpressionLeaf::EmbeddedExpression(block) => block.span_range(),
+            SourceExpressionLeaf::Block(block) => block.span_range(),
             SourceExpressionLeaf::Value(value) => value.span_range(),
             SourceExpressionLeaf::StreamLiteral(stream) => stream.span_range(),
         }
@@ -58,13 +58,10 @@ impl Expressionable for Source {
     fn parse_unary_atom(input: &mut ParseStreamStack<Self>) -> ParseResult<UnaryAtom<Self>> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => UnaryAtom::Leaf(Self::Leaf::Command(input.parse()?)),
-            SourcePeekMatch::EmbeddedVariable => {
+            SourcePeekMatch::EmbeddedVariable | SourcePeekMatch::EmbeddedExpression => {
                 return input.parse_err(
-                    "In an expression, the # variable prefix is not allowed. The # prefix should only be used when embedding a variable into an output stream.",
+                    "In an expression, the # variable prefix is not allowed. The # prefix should only be used when embedding a variable into an output stream, e.g. %[#var + #(..expressions..)]",
                 )
-            }
-            SourcePeekMatch::EmbeddedExpression => {
-                UnaryAtom::Leaf(Self::Leaf::EmbeddedExpression(input.parse()?))
             }
             SourcePeekMatch::ExplicitTransformStream | SourcePeekMatch::Transformer(_) => {
                 return input.parse_err("Destructurings are not supported in an expression")
@@ -74,13 +71,13 @@ impl Expressionable for Source {
                 UnaryAtom::Group(delim_span)
             }
             SourcePeekMatch::Group(Delimiter::Brace) => {
-                let (_, delim_span) = input.parse_and_enter_group()?;
-                if let Some((_, next)) = input.cursor().ident() {
+                let (inner, _, delim_span, _) = input.cursor().any_group().unwrap();
+                if let Some((_, next)) = inner.ident() {
                     if next.punct_matching(':').is_some() || next.punct_matching(',').is_some() {
                         return delim_span.open().parse_err("An object literal must be prefixed with %, e.g. `%{ field: 1 }`. Without such a prefix, { .. } defines a block.");
                     }
                 }
-                return delim_span.parse_err("Blocks are not yet supported in expressions")?;
+                UnaryAtom::Leaf(SourceExpressionLeaf::Block(input.parse()?))
             }
             SourcePeekMatch::Group(Delimiter::Bracket) => {
                 // This could be handled as parsing a vector of SourceExpressions,

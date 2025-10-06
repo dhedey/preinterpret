@@ -1,5 +1,5 @@
 error: Commas are only permitted inside preinterpret arrays []. Preinterpret arrays [a, b] can be used as a drop-in replacement for rust tuples (a, b).
- --> tests/compilation_failures/expressions/tuple_syntax_helpful_error.rs:5:21
+ --> tests/compilation_failures/expressions/tuple_syntax_helpful_error.rs:5:19
   |
-5 |         #(let x = (1, 2))
-  |                     ^
+5 |         let x = (1, 2);
+  |                   ^

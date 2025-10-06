@@ -99,8 +99,20 @@ Create the following expressions:
 * `break`
   * Can be used to return a value from a `loop` expression. If present, the loop changes to not return an array
   * Could maybe be used to (return from even a labelled block? https://blog.rust-lang.org/2022/11/03/Rust-1.65.0/#break-from-labeled-blocks)
+* Refactors:
+  * Rename `SourceExpression` => `Expression`, and inline the leaf parsing
+  * Rename `interpreted_stream.rs` to `output_stream.rs`
 
-* Consider `GroupedVariable` and `ExpressionBlock`:
+* Consider embedded expressions:
+  * Do we want a `#{ ... }` as well as `#var` and `#()`?
+    ... or should we let `#( ... )` have block content again?
+  * What should the scoping rules be?
+    * If we support `preinterpret::stream!` then all blocks in a stream literal should be part of a wider scope under that stream; otherwise we won't be able to define variables and use them in the output stream itself.
+    * In a stream literal pattern, we likely want `let` to also work and apply to the wider scope.
+    * In a parse expression, it would be nice if we could define let variables, but it's not strictly necessary.
+  ... in all cases, we want a wider scope than "last open brace `{}`", so we need to use one of two approaches:
+      * We consider `{}` to be more associated with "combined statements" and consider breaking that cardinal scoping rule that `{}` introduce a new scope
+      * We use `()` for blocks which don't introduce a new scope, e.g. parse blocks and embedded expressions `#(...)`
   * `ExpressionBlock` with a `#` prefix `#{ .. }` shouldn't exist
   * In an output-stream  `#var` or `#(..)` are possible
   * In an stream-parser, only `#(..)` is possible, and should return `None`
@@ -166,6 +178,24 @@ First, read the @./2025-09-vision.md
 }) { <block> }]
 ```
 
+## Methods and closures
+
+- [ ] Introduce basic functions
+  * Value type function `let my_func = |x, y, z| { ... };`
+  * To start with, they are not closures (i.e. they can't capture any outer variables)
+  * New node extension in the expression parser: invocation `(...)`
+- [ ] Closures
+  * A function may capture variable bindings from the parent scope, these are converted into a `VariableBinding::Closure(<closed_variable_id>)`
+  * The closure consists of a set of bindings attached to the function value, either:
+    - `ClosedVariable::Owned(Value)` if it's the last mention of the closed variable, so it can be moved in
+    - `ClosedVariable::Referenced(Rc<RefCell<Value>>)` otherwise
+  * Invocation requests `CopyOnWrite`, and can be on a shared function or an owned function
+    (if it is the last usage of that value, as per normal red/owned binding rules)
+    * If invocation is on an owned function, then owned values from the closure can be consumed
+      by the invocation
+    * Otherwise, the values are only available as shared/mut
+- [ ] Optional arguments
+
 ## Utility methods
 
 Implement the following:
@@ -176,16 +206,18 @@ Implement the following:
 
 ## Repeat output bindings
 
-* Use case: Easily create the below code, similar to a procedural macro. Notably creating tuples of all sizes
+* Use case: Easily create the below code, similar to a procedural macro. Notably creating tuples of all sizes.
+  => Honestly, `map(|x| x.to_ident())` and existing `.intersperse(%[,])` is probably the cleanest combination
 * We need maps or repeats. A simple join isn't enough for . Consider alternatives to the below syntax.
-  * Option 0: Do nothing. Use `for x in A..Z { let ident = x.ident(); $[x,] }`
+  * Option 0: Do nothing:
+    - Use `for x in A..Z { let ident = x.ident(); $[x,] }`
+    - Use `#(generics.intersperse(%[,]))`
   * Option 1: `%*(#generics,)` or `%(#generics),` like declarative macros.
     * All the variable bindings in the repeat must refer to arrays or streams (i.e. iterables) of the same length, similar to proc macros.
     * BUT sadly we'll often have arrays of objects, so we really want to map e.g. `arr[i].x`
   * Option 2: Python style iterator comprehension `#(%[x,] for x in generics)` using a `for` extension
               ... actually we already have this kinda with the for expression returning a list `for x in A..Z { x.ident() }`
-  * Option 3: Specific methods for this `#(generics.join(%[,]))` and `#(generics.trailing_join(%[,]))`
-  * Option 4: Map methods
+  * Option 3: Map methods
 
 Option 0 - Do nothing
 ```rust
@@ -208,7 +240,7 @@ Or even, with for expressions returning arrays:
 // Impls `MyTrait` for tuples of size 0 to 10
 preinterpret::run! {
   for N in 0..=10 {
-    let comma_separated_types = (for name in 'A'..'Z'.take(N) { name.ident() }).join(%[,]);
+    let comma_separated_types = (for name in 'A'..'Z'.take(N) { name.ident() }).intersperse(%[,]);
     %[
       impl<#comma_separated_types> MyTrait for (#comma_separated_types) {}
     ]
@@ -234,7 +266,7 @@ Option 2 - Python-style for comprehensions? (or rust-style one-line for expressi
 // Impls `MyTrait` for tuples of size 0 to 10
 preinterpret::run! {
   for N in 0..=10 {
-    let type_params = [x.ident() for x in A..Z.take(N)];
+    let type_params = [x.ident() for x in ('A'..).take(N)];
     // OR type_params = for x in A..Z { x.ident() }
     let tuple = %[( #(%[#x,] for x in type_params) )];
     let generics = %[< #(%[#x,] for x in type_params) >];
@@ -245,26 +277,12 @@ preinterpret::run! {
 }
 ```
 
-Option 3 - Explicit methods
+Option 3 - Maps:
 ```rust
 // Impls `MyTrait` for tuples of size 0 to 10
 preinterpret::run! {
   for N in 0..=10 {
-    let type_params = %[A B C D E F G H I J K L M N].take(N);
-    %[
-        impl <#(type_params.join(%[,]))> MyTrait for (#(type_params.trailing_join(%[,]))) {}
-    ]
-  }
-}
-```
-
-
-Option 4 - Maps:
-```rust
-// Impls `MyTrait` for tuples of size 0 to 10
-preinterpret::run! {
-  for N in 0..=10 {
-    let idents = A..Z.take(N).map(|x| x.ident());
+    let idents = ('A'..).take(N).map(|x| x.ident());
     let type_params = %[< #(idents.map(|x| %[#x,])) >];
     let tuple = %[( #(idents.map(|x| %[#x,])) )];
     %[

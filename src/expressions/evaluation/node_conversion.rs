@@ -34,9 +34,9 @@ impl ExpressionNode<Source> {
                             },
                         }
                     }
-                    SourceExpressionLeaf::EmbeddedExpression(block) => {
+                    SourceExpressionLeaf::Block(block) => {
                         // TODO[interpret_to_value]: Allow block to return reference
-                        let value = block.interpret_to_value(context.interpreter())?;
+                        let value = block.evaluate(context.interpreter())?;
                         context.return_owned(value)?
                     }
                     SourceExpressionLeaf::Value(value) => {
