@@ -66,9 +66,10 @@ impl ResolvableOutput for Literal {
     }
 }
 
-pub trait StreamAppender {
+pub(crate) trait StreamAppender {
     fn append(self, output: &mut OutputStream) -> ExecutionResult<()>;
 }
+
 impl<F: FnOnce(&mut OutputStream) -> ExecutionResult<()>> StreamAppender for F {
     fn append(self, output: &mut OutputStream) -> ExecutionResult<()> {
         self(output)

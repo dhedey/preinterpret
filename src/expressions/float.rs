@@ -151,12 +151,12 @@ impl FloatKind {
 }
 
 #[derive(Clone)]
-pub(super) struct UntypedFloat(
+pub(crate) struct UntypedFloat(
     /// The span of the literal is ignored, and will be set when converted to an output.
     LitFloat,
     SpanRange,
 );
-pub(super) type FallbackFloat = f64;
+pub(crate) type FallbackFloat = f64;
 
 impl UntypedFloat {
     pub(super) fn new_from_lit_float(lit_float: LitFloat) -> Self {
