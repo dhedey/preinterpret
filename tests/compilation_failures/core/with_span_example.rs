@@ -4,15 +4,15 @@ use preinterpret::*;
 macro_rules! capitalize_variants {
     ($enum_name:ident, [$($variants:ident),*]) => {run!{
         let enum_name = %raw[$enum_name];
-        let variant_code = %[];
+        let variants = [];
         let _ = [!for! variant in [$(%raw[$variants]),*] {#(
-            let uppercased = variant.to_string().capitalize().to_ident().with_span(variant);
-            variant_code += %[#uppercased,];
+            let capitalized = variant.to_string().capitalize().to_ident().with_span(variant);
+            variants.push(capitalized.take_owned());
         )}];
 
         %[
             enum #enum_name {
-                #variant_code
+                #(variants.take_owned().intersperse(%[,]))
             }
         ]
     }};
