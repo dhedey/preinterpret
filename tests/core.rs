@@ -147,3 +147,29 @@ fn test_debug() {
         r###"%[%group[Hello (World)] %raw[#] test "and" %raw[#]%raw[#] Hello (World) (3 %raw[%] 2)]"###
     );
 }
+
+macro_rules! capitalize_variants {
+    ($enum_name:ident, [$($variants:ident),*]) => {run!{
+        let enum_name = %raw[$enum_name];
+        let variant_code = %[];
+        let _ = [!for! variant in [$(%raw[$variants]),*] {#(
+            let uppercased = variant.to_string().capitalize().to_ident().with_span(variant);
+            variant_code += %[#uppercased,];
+        )}];
+
+        %[
+            enum #enum_name {
+                #variant_code
+            }
+        ]
+    }};
+}
+
+capitalize_variants!(CapitalizeTest, [one, two, three]);
+
+#[test]
+fn test_capitalize_variants() {
+    let _ = CapitalizeTest::One;
+    let _ = CapitalizeTest::Two;
+    let _ = CapitalizeTest::Three;
+}

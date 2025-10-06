@@ -125,12 +125,12 @@ define_interface! {
     pub(crate) mod stream_interface {
         pub(crate) mod methods {
             // This is also on iterable, but is specialized here for performance
-            fn len(this: Ref<OutputStream>) -> usize {
+            fn len(this: AnyRef<OutputStream>) -> usize {
                 this.len()
             }
 
             // This is also on iterable, but is specialized here for performance
-            fn is_empty(this: Ref<OutputStream>) -> bool {
+            fn is_empty(this: AnyRef<OutputStream>) -> bool {
                 this.is_empty()
             }
 
@@ -142,34 +142,34 @@ define_interface! {
                 Ok(this.coerce_into_value())
             }
 
-            fn split(this: OutputStream, separator: Ref<OutputStream>, settings: Option<SplitSettings>) -> ExecutionResult<ExpressionArray> {
+            fn split(this: OutputStream, separator: AnyRef<OutputStream>, settings: Option<SplitSettings>) -> ExecutionResult<ExpressionArray> {
                 handle_split(this, &separator, settings.unwrap_or_default())
             }
 
             // STRING-BASED CONVERSION METHODS
             // ===============================
 
-            [context] fn to_ident(this: SpannedRef<OutputStream>) -> ExecutionResult<Ident> {
+            [context] fn to_ident(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Ident> {
                 let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
-            [context] fn to_ident_camel(this: SpannedRef<OutputStream>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_camel(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Ident> {
                 let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident_camel(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
-            [context] fn to_ident_snake(this: SpannedRef<OutputStream>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_snake(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Ident> {
                 let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident_snake(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
-            [context] fn to_ident_upper_snake(this: SpannedRef<OutputStream>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_upper_snake(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Ident> {
                 let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident_upper_snake(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
-            [context] fn to_literal(this: SpannedRef<OutputStream>) -> ExecutionResult<Literal> {
+            [context] fn to_literal(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Literal> {
                 let string = this.concat_recursive(&ConcatBehaviour::literal(this.span_range()));
                 string_interface::methods::to_literal(context, string.as_str().into_spanned_ref(this.span_range()))
             }
@@ -182,7 +182,7 @@ define_interface! {
                 error_span_range.execution_err(message.as_str())
             }
 
-            fn assert(this: Shared<ExpressionStream>, condition: bool, message: Option<Ref<str>>) -> ExecutionResult<()> {
+            fn assert(this: Shared<ExpressionStream>, condition: bool, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
                 if condition {
                     Ok(())
                 } else {
@@ -195,7 +195,7 @@ define_interface! {
                 }
             }
 
-            fn assert_eq(this: Shared<ExpressionStream>, lhs: SpannedRef<ExpressionValue>, rhs: SpannedRef<ExpressionValue>, message: Option<Ref<str>>) -> ExecutionResult<()> {
+            fn assert_eq(this: Shared<ExpressionStream>, lhs: SpannedAnyRef<ExpressionValue>, rhs: SpannedAnyRef<ExpressionValue>, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
                 let lhs_value: &ExpressionValue = &lhs;
                 let rhs_value: &ExpressionValue = &rhs;
                 let res = {

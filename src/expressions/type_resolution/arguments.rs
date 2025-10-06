@@ -45,7 +45,7 @@ impl<T: ResolvableArgumentShared + ResolvableArgumentTarget + ?Sized> FromResolv
     }
 }
 
-impl<T: 'static + ?Sized> FromResolved for Ref<'static, T>
+impl<T: 'static + ?Sized> FromResolved for AnyRef<'static, T>
 where
     Shared<T>: FromResolved,
 {
@@ -66,7 +66,7 @@ impl<T: ResolvableArgumentMutable + ResolvableArgumentTarget + ?Sized> FromResol
     }
 }
 
-impl<T: 'static + ?Sized> FromResolved for RefMut<'static, T>
+impl<T: 'static + ?Sized> FromResolved for AnyRefMut<'static, T>
 where
     Mutable<T>: FromResolved,
 {

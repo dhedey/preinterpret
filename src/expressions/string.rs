@@ -90,7 +90,7 @@ define_interface! {
             // ==================
             // CONVERSION METHODS
             // ==================
-            [context] fn to_ident(this: SpannedRef<str>) -> ExecutionResult<Ident> {
+            [context] fn to_ident(this: SpannedAnyRef<str>) -> ExecutionResult<Ident> {
                 let str: &str = &this;
                 let ident = parse_str::<Ident>(str)
                     .map_err(|err| this.error(format!("`{}` is not a valid ident: {:?}", str, err)))?
@@ -98,7 +98,7 @@ define_interface! {
                 Ok(ident)
             }
 
-            [context] fn to_ident_camel(this: SpannedRef<str>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_camel(this: SpannedAnyRef<str>) -> ExecutionResult<Ident> {
                 let str = string_conversion::to_upper_camel_case(&this);
                 let ident = parse_str::<Ident>(&str)
                     .map_err(|err| this.error(format!("`{}` is not a valid ident: {:?}", str, err)))?
@@ -106,7 +106,7 @@ define_interface! {
                 Ok(ident)
             }
 
-            [context] fn to_ident_snake(this: SpannedRef<str>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_snake(this: SpannedAnyRef<str>) -> ExecutionResult<Ident> {
                 let str = string_conversion::to_lower_snake_case(&this);
                 let ident = parse_str::<Ident>(&str)
                     .map_err(|err| this.error(format!("`{}` is not a valid ident: {:?}", str, err)))?
@@ -114,7 +114,7 @@ define_interface! {
                 Ok(ident)
             }
 
-            [context] fn to_ident_upper_snake(this: SpannedRef<str>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_upper_snake(this: SpannedAnyRef<str>) -> ExecutionResult<Ident> {
                 let str = string_conversion::to_upper_snake_case(&this);
                 let ident = parse_str::<Ident>(&str)
                     .map_err(|err| this.error(format!("`{}` is not a valid ident: {:?}", str, err)))?
@@ -122,7 +122,7 @@ define_interface! {
                 Ok(ident)
             }
 
-            [context] fn to_literal(this: SpannedRef<str>) -> ExecutionResult<Literal> {
+            [context] fn to_literal(this: SpannedAnyRef<str>) -> ExecutionResult<Literal> {
                 let str: &str = &this;
                 let literal = Literal::from_str(str)
                     .map_err(|err| {
@@ -135,47 +135,47 @@ define_interface! {
             // ======================
             // STRING RESHAPE METHODS
             // ======================
-            fn to_uppercase(this: Ref<str>) -> String {
+            fn to_uppercase(this: AnyRef<str>) -> String {
                 string_conversion::to_uppercase(&this)
             }
 
-            fn to_lowercase(this: Ref<str>) -> String {
+            fn to_lowercase(this: AnyRef<str>) -> String {
                 string_conversion::to_lowercase(&this)
             }
 
-            fn to_lower_snake_case(this: Ref<str>) -> String {
+            fn to_lower_snake_case(this: AnyRef<str>) -> String {
                 string_conversion::to_lower_snake_case(&this)
             }
 
-            fn to_upper_snake_case(this: Ref<str>) -> String {
+            fn to_upper_snake_case(this: AnyRef<str>) -> String {
                 string_conversion::to_upper_snake_case(&this)
             }
 
-            fn to_kebab_case(this: Ref<str>) -> String {
+            fn to_kebab_case(this: AnyRef<str>) -> String {
                 string_conversion::to_lower_kebab_case(&this)
             }
 
-            fn to_lower_camel_case(this: Ref<str>) -> String {
+            fn to_lower_camel_case(this: AnyRef<str>) -> String {
                 string_conversion::to_lower_camel_case(&this)
             }
 
-            fn to_upper_camel_case(this: Ref<str>) -> String {
+            fn to_upper_camel_case(this: AnyRef<str>) -> String {
                 string_conversion::to_upper_camel_case(&this)
             }
 
-            fn capitalize(this: Ref<str>) -> String {
+            fn capitalize(this: AnyRef<str>) -> String {
                 string_conversion::capitalize(&this)
             }
 
-            fn decapitalize(this: Ref<str>) -> String {
+            fn decapitalize(this: AnyRef<str>) -> String {
                 string_conversion::decapitalize(&this)
             }
 
-            fn to_title_case(this: Ref<str>) -> String {
+            fn to_title_case(this: AnyRef<str>) -> String {
                 string_conversion::title_case(&this)
             }
 
-            fn insert_spaces(this: Ref<str>) -> String {
+            fn insert_spaces(this: AnyRef<str>) -> String {
                 string_conversion::insert_spaces_between_words(&this)
             }
         }

@@ -1,5 +1,22 @@
 use super::*;
 
+impl<I: Iterator + Clone + 'static> ClonableIterator for I {
+    fn clone_box(&self) -> Box<dyn ClonableIterator<Item = Self::Item>> {
+        Box::new(self.clone())
+    }
+}
+
+pub(crate) trait ClonableIterator: Iterator {
+    fn clone_box(&self) -> Box<dyn ClonableIterator<Item = Self::Item>>;
+}
+
+impl<T> Clone for Box<dyn ClonableIterator<Item = T>> {
+    fn clone(&self) -> Self {
+        (**self).clone_box()
+    }
+}
+
+#[derive(Clone)]
 pub(crate) enum EitherIterator<L, R> {
     Left(L),
     Right(R),

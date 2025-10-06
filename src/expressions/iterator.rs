@@ -82,12 +82,12 @@ impl IterableValue {
 }
 
 pub(crate) enum IterableRef<'a> {
-    Iterator(Ref<'a, ExpressionIterator>),
-    Array(Ref<'a, ExpressionArray>),
-    Stream(Ref<'a, OutputStream>),
-    Range(Ref<'a, ExpressionRange>),
-    Object(Ref<'a, ExpressionObject>),
-    String(Ref<'a, str>),
+    Iterator(AnyRef<'a, ExpressionIterator>),
+    Array(AnyRef<'a, ExpressionArray>),
+    Stream(AnyRef<'a, OutputStream>),
+    Range(AnyRef<'a, ExpressionRange>),
+    Object(AnyRef<'a, ExpressionObject>),
+    String(AnyRef<'a, str>),
 }
 
 impl FromResolved for IterableRef<'static> {
@@ -131,41 +131,30 @@ pub(crate) struct ExpressionIterator {
 }
 
 impl ExpressionIterator {
-    pub(crate) fn len(&self, error_span_range: SpanRange) -> ExecutionResult<usize> {
-        let (min, max) = self.size_hint();
-        if max == Some(min) {
-            Ok(min)
-        } else {
-            error_span_range.execution_err("Iterator has an inexact length")
-        }
+    fn new(iterator: ExpressionIteratorInner) -> Self {
+        Self { iterator }
     }
 
     #[allow(unused)]
     pub(crate) fn new_any(
         iterator: impl Iterator<Item = ExpressionValue> + 'static + Clone,
     ) -> Self {
-        Self {
-            iterator: ExpressionIteratorInner::Other(Box::new(iterator)),
-        }
+        Self::new_custom(Box::new(iterator))
     }
 
     pub(crate) fn new_for_array(array: ExpressionArray) -> Self {
-        Self {
-            iterator: ExpressionIteratorInner::Vec(array.items.into_iter()),
-        }
+        Self::new_vec(array.items.into_iter())
     }
 
     pub(crate) fn new_for_stream(stream: ExpressionStream) -> Self {
-        Self {
-            iterator: ExpressionIteratorInner::Stream(stream.value.into_iter()),
-        }
+        Self::new(ExpressionIteratorInner::Stream(Box::new(
+            stream.value.into_iter(),
+        )))
     }
 
     pub(crate) fn new_for_range(range: ExpressionRange) -> ExecutionResult<Self> {
         let iterator = range.inner.into_iterable()?.resolve_iterator()?;
-        Ok(Self {
-            iterator: ExpressionIteratorInner::Other(iterator),
-        })
+        Ok(Self::new_custom(iterator))
     }
 
     pub(crate) fn new_for_object(object: ExpressionObject) -> ExecutionResult<Self> {
@@ -176,9 +165,7 @@ impl ExpressionIterator {
             .map(|(k, v)| vec![k.into_value(), v.value].into_value())
             .collect::<Vec<_>>()
             .into_iter();
-        Ok(Self {
-            iterator: ExpressionIteratorInner::Vec(iterator),
-        })
+        Ok(Self::new_vec(iterator))
     }
 
     pub(crate) fn new_for_string(string: ExpressionString) -> ExecutionResult<Self> {
@@ -191,14 +178,23 @@ impl ExpressionIterator {
             .map(|c| c.into_value())
             .collect::<Vec<_>>()
             .into_iter();
-        Ok(Self {
-            iterator: ExpressionIteratorInner::Vec(iterator),
-        })
+        Ok(Self::new_vec(iterator))
     }
 
-    pub(crate) fn new_custom(iterator: Box<dyn CustomExpressionIterator>) -> Self {
-        Self {
-            iterator: ExpressionIteratorInner::Other(iterator),
+    fn new_vec(iterator: std::vec::IntoIter<ExpressionValue>) -> Self {
+        Self::new(ExpressionIteratorInner::Vec(Box::new(iterator)))
+    }
+
+    pub(crate) fn new_custom(iterator: Box<dyn ClonableIterator<Item = ExpressionValue>>) -> Self {
+        Self::new(ExpressionIteratorInner::Other(iterator))
+    }
+
+    pub(crate) fn len(&self, error_span_range: SpanRange) -> ExecutionResult<usize> {
+        let (min, max) = self.size_hint();
+        if max == Some(min) {
+            Ok(min)
+        } else {
+            error_span_range.execution_err("Iterator has an inexact length")
         }
     }
 
@@ -298,11 +294,11 @@ impl ExpressionIterator {
 
 impl ToExpressionValue for ExpressionIteratorInner {
     fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Iterator(ExpressionIterator { iterator: self })
+        ExpressionValue::Iterator(ExpressionIterator::new(self))
     }
 }
 
-impl ToExpressionValue for Box<dyn CustomExpressionIterator> {
+impl ToExpressionValue for Box<dyn ClonableIterator<Item = ExpressionValue>> {
     fn into_value(self) -> ExpressionValue {
         ExpressionValue::Iterator(ExpressionIterator::new_custom(self))
     }
@@ -324,25 +320,10 @@ impl HasValueType for ExpressionIterator {
 
 #[derive(Clone)]
 enum ExpressionIteratorInner {
-    Vec(<Vec<ExpressionValue> as IntoIterator>::IntoIter),
-    Stream(<OutputStream as IntoIterator>::IntoIter),
-    Other(Box<dyn CustomExpressionIterator>),
-}
-
-impl<T: Iterator<Item = ExpressionValue> + Clone + 'static> CustomExpressionIterator for T {
-    fn clone_box(&self) -> Box<dyn CustomExpressionIterator> {
-        Box::new(self.clone())
-    }
-}
-
-pub(crate) trait CustomExpressionIterator: Iterator<Item = ExpressionValue> {
-    fn clone_box(&self) -> Box<dyn CustomExpressionIterator>;
-}
-
-impl Clone for Box<dyn CustomExpressionIterator> {
-    fn clone(&self) -> Self {
-        (**self).clone_box()
-    }
+    // We Box these so that Value is smaller on the stack
+    Vec(Box<<Vec<ExpressionValue> as IntoIterator>::IntoIter>),
+    Stream(Box<<OutputStream as IntoIterator>::IntoIter>),
+    Other(Box<dyn ClonableIterator<Item = ExpressionValue>>),
 }
 
 impl Iterator for ExpressionIterator {

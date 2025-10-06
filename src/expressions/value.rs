@@ -173,6 +173,16 @@ define_interface! {
                 input.concat_recursive(&ConcatBehaviour::standard(input.span_range()))
             }
 
+            [context] fn with_span(this: CopyOnWriteValue, spans: AnyRef<ExpressionStream>) -> ExecutionResult<OutputStream> {
+                let mut this = to_stream(context, this)?;
+                let span_to_use = match spans.resolve_content_span_range() {
+                    Some(span_range) => span_range.span_from_join_else_start(),
+                    None => Span::call_site(),
+                };
+                this.replace_first_level_spans(span_to_use);
+                Ok(this)
+            }
+
             // TYPE CHECKING
             // ===============================
             fn is_none(this: SharedValue) -> bool {
@@ -830,7 +840,7 @@ impl OwnedValue {
     }
 }
 
-impl SpannedRefMut<'_, ExpressionValue> {
+impl SpannedAnyRefMut<'_, ExpressionValue> {
     pub(super) fn handle_compound_assignment(
         self,
         operation: &CompoundAssignmentOperation,

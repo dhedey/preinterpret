@@ -268,7 +268,9 @@ pub(super) enum IterableExpressionRange<T> {
 }
 
 impl IterableExpressionRange<ExpressionValue> {
-    pub(super) fn resolve_iterator(self) -> ExecutionResult<Box<dyn CustomExpressionIterator>> {
+    pub(super) fn resolve_iterator(
+        self,
+    ) -> ExecutionResult<Box<dyn ClonableIterator<Item = ExpressionValue>>> {
         match self {
             Self::RangeFromTo { start, dots, end } => {
                 let pair = start.expect_value_pair(&dots, end)?;
@@ -380,7 +382,7 @@ impl IterableExpressionRange<ExpressionValue> {
 }
 
 impl IterableExpressionRange<UntypedInteger> {
-    fn resolve(self) -> ExecutionResult<Box<dyn CustomExpressionIterator>> {
+    fn resolve(self) -> ExecutionResult<Box<dyn ClonableIterator<Item = ExpressionValue>>> {
         match self {
             Self::RangeFromTo { start, dots, end } => {
                 let start = start.parse_fallback()?;
@@ -409,7 +411,7 @@ macro_rules! define_range_resolvers {
         $($the_type:ident),* $(,)?
     ) => {$(
         impl IterableExpressionRange<$the_type> {
-            fn resolve(self) -> ExecutionResult<Box<dyn CustomExpressionIterator>> {
+            fn resolve(self) -> ExecutionResult<Box<dyn ClonableIterator<Item = ExpressionValue>>> {
                 match self {
                     Self::RangeFromTo { start, dots, end } => {
                         Ok(match dots {

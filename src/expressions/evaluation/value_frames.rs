@@ -923,7 +923,8 @@ impl EvaluationFrame for CompoundAssignmentBuilder {
             CompoundAssignmentPath::OnTargetBranch { value } => {
                 let mut mutable = item.expect_mutable();
                 let span_range = SpanRange::new_between(mutable.span_range(), value.span_range());
-                SpannedRefMut::from(mutable).handle_compound_assignment(&self.operation, value)?;
+                SpannedAnyRefMut::from(mutable)
+                    .handle_compound_assignment(&self.operation, value)?;
                 context.return_owned(ExpressionValue::None.into_owned(span_range))?
             }
         })

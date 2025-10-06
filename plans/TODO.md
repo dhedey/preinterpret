@@ -39,7 +39,7 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 ## Span changes
 
 - [x] Remove spans from `ExpressionValue`, leave only on bindings or strem contents
-- [ ] Add `stream.with_span(%[])` which replaces the span of everything at the top level
+- [x] Add `xx.with_span(%[])` which changes the value to stream and replaces the span of every token at the top iteration level of the stream
 
 ## Method Calls
 
