@@ -1,37 +1,37 @@
 Basic Benchmarks (cargo bench --features benchmark)
-=> September 2025, run on Apple Silicon M2 Pro
+=> October 2025, run on Apple Silicon M2 Pro
 
 Trivial Sum
-- Parsing    |     7ns
-- Evaluation |     4ns
+- Parsing    |     6ns
+- Evaluation |     3ns
 - Output     |     0ns
 
 For loop adding up 1000 times
-- Parsing    |    21ns
-- Evaluation |  1477ns
+- Parsing    |    22ns
+- Evaluation |  1469ns
 - Output     |     0ns
 
 For loop concatenating to stream 1000 tokens
 - Parsing    |    23ns
-- Evaluation |  1875ns
+- Evaluation |  1886ns
 - Output     |     0ns
 
 Lots of casts
 - Parsing    |     6ns
-- Evaluation |     4ns
+- Evaluation |     3ns
 - Output     |     0ns
 
 Simple tuple impls
-- Parsing    |    56ns
-- Evaluation |   825ns
+- Parsing    |    59ns
+- Evaluation |   790ns
 - Output     |    35ns
 
 Accessing single elements of a large array
-- Parsing    |    44ns
-- Evaluation |  2235ns
+- Parsing    |    43ns
+- Evaluation |  2078ns
 - Output     |     0ns
 
 Lazy iterator
-- Parsing    |    36ns
-- Evaluation |    42ns
+- Parsing    |    34ns
+- Evaluation |    38ns
 - Output     |     0ns
