@@ -92,6 +92,7 @@ impl AsRef<ExpressionValue> for ResolvedValue {
 }
 
 pub(crate) use crate::interpretation::CopyOnWriteValue;
+use crate::stream_interface::method_definitions::assert;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum RequestedValueOwnership {
@@ -538,7 +539,7 @@ impl EvaluationFrame for BinaryOperationBuilder {
 
     fn handle_item(
         mut self,
-        context: ValueContext,
+        mut context: ValueContext,
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
@@ -557,10 +558,9 @@ impl EvaluationFrame for BinaryOperationBuilder {
                         .resolve_binary_operation(&self.operation);
 
                     let (left_ownership, right_ownership) = if let Some(method) = &method {
-                        let ownerships = method.argument_ownerships();
-                        assert_eq!(
-                            ownerships.len(),
-                            2,
+                        let (ownerships, min_required) = method.argument_ownerships();
+                        assert!(
+                            ownerships.len() == 2 && min_required == 2,
                             "Binary operation methods must have exactly two ownerships"
                         );
                         (ownerships[0], ownerships[1])
@@ -590,8 +590,11 @@ impl EvaluationFrame for BinaryOperationBuilder {
                         right.as_ref().span_range().end(),
                     );
 
-                    // Left operand is already resolved, right operand is provided
-                    let result = method.execute(vec![left, right], span_range)?;
+                    let mut call_context = MethodCallContext {
+                        output_span_range: span_range,
+                        interpreter: context.interpreter(),
+                    };
+                    let result = method.execute(vec![left, right], &mut call_context)?;
                     return context.return_resolved_value(result);
                 }
 
@@ -974,7 +977,7 @@ impl EvaluationFrame for MethodCallBuilder {
 
     fn handle_item(
         mut self,
-        context: ValueContext,
+        mut context: ValueContext,
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
         // Handle expected item based on current state
@@ -995,23 +998,43 @@ impl EvaluationFrame for MethodCallBuilder {
                         ))
                     }
                 };
-                if method.argument_ownerships().len() != 1 + self.unevaluated_parameters_stack.len()
+                let non_caller_arguments = self.unevaluated_parameters_stack.len();
+                let (argument_ownerships, min_arguments) = method.argument_ownerships();
+                let max_arguments = argument_ownerships.len();
+                assert!(
+                    max_arguments >= 1 && min_arguments >= 1,
+                    "Method calls must have at least one argument (the caller)"
+                );
+                let non_caller_min_arguments = min_arguments - 1;
+                let non_caller_max_arguments = max_arguments - 1;
+
+                if non_caller_arguments < non_caller_min_arguments
+                    || non_caller_arguments > non_caller_max_arguments
                 {
                     return self.method.method.execution_err(format!(
-                        "The method {} expects {} arguments, but {} were provided",
+                        "The method {} expects {} non-self argument/s, but {} were provided",
                         self.method.method,
-                        method.argument_ownerships().len() - 1,
-                        self.unevaluated_parameters_stack.len()
+                        if non_caller_min_arguments == non_caller_max_arguments {
+                            (non_caller_min_arguments).to_string()
+                        } else {
+                            format!(
+                                "{} to {}",
+                                (non_caller_min_arguments),
+                                (non_caller_max_arguments)
+                            )
+                        },
+                        non_caller_arguments,
                     ));
                 }
-                let caller = method.argument_ownerships()[0].map_from_late_bound(caller)?;
+                let caller = argument_ownerships[0].map_from_late_bound(caller)?;
 
                 // We skip 1 to ignore the caller
-                let argument_ownerships_stack = method.argument_ownerships().iter().skip(1).rev();
+                let non_self_argument_ownerships = argument_ownerships.iter().skip(1);
                 for ((_, requested_ownership), ownership) in self
                     .unevaluated_parameters_stack
                     .iter_mut()
-                    .zip(argument_ownerships_stack)
+                    .rev() // Swap the stack back to the normal order
+                    .zip(non_self_argument_ownerships)
                 {
                     *requested_ownership = *ownership;
                 }
@@ -1049,7 +1072,11 @@ impl EvaluationFrame for MethodCallBuilder {
                         method,
                     } => (evaluated_arguments_including_caller, method),
                 };
-                let output = method.execute(arguments, self.method.span_range())?;
+                let mut call_context = MethodCallContext {
+                    output_span_range: self.method.span_range(),
+                    interpreter: context.interpreter(),
+                };
+                let output = method.execute(arguments, &mut call_context)?;
                 context.return_resolved_value(output)?
             }
         })

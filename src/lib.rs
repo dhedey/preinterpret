@@ -35,9 +35,9 @@
 //! Preinterpret works with its own very simple language, with two pieces of syntax:
 //!
 //! * **Commands**: `[!command_name! input token stream...]` take an input token stream and output a token stream. There are a number of commands which cover a toolkit of useful functions.
-//! * **Variables**: `[!set! #var_name = token stream...]` defines a variable, and `#var_name` substitutes the variable into another command or the output.
+//! * **Variables**: `#(let var_name = %[token stream...];)` defines a variable, and `#var_name` substitutes the variable into another command or the output.
 //!
-//! Commands can be nested intuitively. The input of all commands (except `[!raw! ...]`) are first interpreted before the command itself executes.
+//! Commands can be nested intuitively. In general, the input of commands are first interpreted before the command itself executes.
 //!
 //! ### Declarative macro example
 //!
@@ -51,7 +51,7 @@
 //!             $($field_name:ident: $inner_type:ident),* $(,)?
 //!         }
 //!     ) => {preinterpret::stream! {
-//!         [!set! #type_name = [!ident! My $type_name]]
+//!         #(let type_name = %[My $type_name].to_ident();)
 //!         
 //!         $(#[$attributes])*
 //!         $vis struct #type_name {
@@ -60,7 +60,7 @@
 //!
 //!         impl #type_name {
 //!             $(
-//!                 fn [!ident_snake! my_ $inner_type](&self) -> &$inner_type {
+//!                 fn #(%[my_ $inner_type].to_ident_snake())(&self) -> &$inner_type {
 //!                     &self.$field_name
 //!                 }
 //!             )*
@@ -104,14 +104,14 @@
 //!
 //! ```rust
 //! preinterpret::stream! {
-//!     [!set! #type_name = [!ident! HelloWorld]]
+//!     #(let type_name = %[HelloWorld];)
 //!
 //!     struct #type_name;
 //!
-//!     #[doc = [!string! "This type is called [`" #type_name "`]"]]
+//!     #[doc = #(%["This type is called [`" #type_name "`]"].to_string())]
 //!     impl #type_name {
-//!         fn [!ident_snake! say_ #type_name]() -> &'static str {
-//!             [!string! "It's time to say: " [!title! #type_name] "!"]
+//!         fn #(%[say_ #type_name].to_ident_snake())() -> &'static str {
+//!             #(%["It's time to say: " #(type_name.to_string().to_title_case()) "!"].to_string())
 //!         }
 //!     }
 //! }
@@ -122,9 +122,9 @@
 //!
 //! ### Special commands
 //!
-//! * `[!set! #foo = Hello]` followed by `[!set! #foo = #bar(World)]` sets the variable `#foo` to the token stream `Hello` and `#bar` to the token stream `Hello(World)`, and outputs no tokens. Using `#foo` or `#bar` later on will output the current value in the corresponding variable.
-//! * `[!raw! abc #abc [!ident! test]]` outputs its contents as-is, without any interpretation, giving the token stream `abc #abc [!ident! test]`.
-//! * `[!ignore! $foo]` ignores all of its content and outputs no tokens. It is useful to make a declarative macro loop over a meta-variable without outputting it into the resulting stream.
+//! * `#(let foo = %[Hello];)` followed by `#(let foo = %[#bar(World)];)` sets the variable `#foo` to the token stream `Hello` and `#bar` to the token stream `Hello(World)`, and outputs no tokens. Using `#foo` or `#bar` later on will output the current value in the corresponding variable.
+//! * `%raw[abc #abc %[test]]` outputs its contents as-is, without any interpretation, giving the token stream `abc #abc %[test]`.
+//! * `let _ = %raw[$foo]` ignores all content inside `[...]` and outputs no tokens. It is useful to make a declarative macro loop over a meta-variable without outputting it into the resulting stream.
 //!
 //! ### Concatenate and convert commands
 //!
@@ -135,33 +135,33 @@
 //!
 //! The following commands output idents:
 //!
-//! * `[!ident! X Y "Z"]` outputs the ident `XYZ`
-//! * `[!ident_camel! my hello_world]` outputs `MyHelloWorld`
-//! * `[!ident_snake! my_ HelloWorld]` outputs `my_hello_world`
-//! * `[!ident_upper_snake! my_ const Name]` outputs `MY_CONST_NAME`
+//! * `%[X Y "Z"].to_ident()` outputs the ident `XYZ`
+//! * `%[my hello_world].to_ident_camel()` outputs `MyHelloWorld`
+//! * `%[my_ HelloWorld].to_ident_snake()` outputs `my_hello_world`
+//! * `%[my_ const Name].to_ident_upper_snake()` outputs `MY_CONST_NAME`
 //!
-//! The `!literal!` command outputs any kind of literal, for example:
+//! The following commands output any kind of literal, for example:
 //!
-//! * `[!literal! 31 u 32]` outputs the integer literal `31u32`
-//! * `[!literal! '"' hello '"']` outputs the string literal `"hello"`
+//! * `%[31 u 32].to_literal()` outputs the integer literal `31u32`
+//! * `%['"' hello '"'].to_literal()` outputs the string literal `"hello"`
 //!
 //! The following commands output strings, without dropping non-alphanumeric characters:
 //!
-//! * `[!string! X Y " " Z (Hello World)]` outputs `"XY Z(HelloWorld)"`
-//! * `[!upper! foo_bar]` outputs `"FOO_BAR"`
-//! * `[!lower! FooBar]` outputs `"foobar"`
-//! * `[!capitalize! fooBar]` outputs `"FooBar"`
-//! * `[!decapitalize! FooBar]` outputs `"fooBar"`
+//! * `%[X Y " " Z (Hello World)].to_string()` outputs `"XY Z(HelloWorld)"`
+//! * `"foo_bar".to_uppercase()` outputs `"FOO_BAR"`
+//! * `"FooBar".to_lowercase()` outputs `"foobar"`
+//! * `"fooBar".capitalize()"` outputs `"FooBar"`
+//! * `"FooBar".decapitalize()` outputs `"fooBar"`
 //!
 //! The following commands output strings, whilst also dropping non-alphanumeric characters:
 //!
-//! * `[!snake! FooBar]` and `[!lower_snake! FooBar]` are equivalent and output `"foo_bar"`
-//! * `[!upper_snake! FooBar]` outputs `"FOO_BAR"`
-//! * `[!camel! foo_bar]` and `[!upper_camel! foo_bar]` are equivalent and output `"FooBar"`
-//! * `[!lower_camel! foo_bar]` outputs `"fooBar"`
-//! * `[!kebab! fooBar]` outputs `"foo-bar"`
-//! * `[!title! fooBar]` outputs `"Foo Bar"`
-//! * `[!insert_spaces! fooBar]` outputs `"foo Bar"`
+//! * `"FooBar".to_lower_snake_case()` outputs `"foo_bar"`
+//! * `"FooBar".to_upper_snake_case()"` outputs `"FOO_BAR"`
+//! * `"foo_bar".to_upper_camel_case()"` outputs `"FooBar"`
+//! * `"foo_bar".to_lower_camel_case()"` outputs `"fooBar"`
+//! * `"fooBar".to_kebab_case()"` outputs `"foo-bar"`
+//! * `"fooBar".to_title_case()"` outputs `"Foo Bar"`
+//! * `"fooBar".insert_spaces()"` outputs `"foo Bar"`
 //!
 //! > [!NOTE]
 //! >
@@ -195,9 +195,11 @@
 //!             < $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? $( = $deflt:tt)? ),+ >
 //!         )?
 //!     } => {preinterpret::stream!{
-//!         [!set! #impl_generics = $(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)?]
-//!         [!set! #type_generics = $(< $( $lt ),+ >)?]
-//!         [!set! #my_type = $type_name #type_generics]
+//!         #(
+//!             let impl_generics = %[$(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)?];
+//!             let type_generics = %[$(< $( $lt ),+ >)?];
+//!             let my_type = %[$type_name #type_generics];
+//!         )
 //!
 //!         $(
 //!             // Output each marker trait for the type
@@ -234,7 +236,7 @@
 //!         impl $name {
 //!             $(
 //!                 // Define get_X for each field X
-//!                 pub fn [!ident! get_ $field](&self) -> &str {
+//!                 pub fn #(%[get_ $field].to_ident())(&self) -> &str {
 //!                     &self.$field
 //!                 }
 //!             )*
@@ -245,44 +247,6 @@
 //!   MyStruct { hello, world }
 //! }
 //! ```
-//!
-//! Variable assignment works intuitively with the `* + ?` expansion operators, allowing basic procedural logic, such as creation of loop counts and indices before [meta-variables](https://github.com/rust-lang/rust/issues/83527) are stabilized.
-//!
-//! For example:
-//! ```rust
-//! macro_rules! count_idents {
-//!     {
-//!         $($item: ident),*
-//!     } => {preinterpret::stream!{
-//!         [!set! #current_index = 0usize]
-//!         $(
-//!             [!ignore! $item] // Loop over the items, but don't output them
-//!             [!set! #current_index = #current_index + 1]
-//!         )*
-//!         [!set! #count = #current_index]
-//!         #count
-//!     }}
-//! }
-//! ```
-//!
-//! To quickly explain how this works, imagine we evaluate `count_idents!(a, b, c)`. As `count_idents!` is the most outer macro, it runs first, and expands into the following token stream:
-//!
-//! ```rust
-//! let count = preinterpret::stream!{
-//!   [!set! #current_index = 0usize]
-//!   [!ignore! a]
-//!   [!set! #current_index = #current_index + 1]
-//!   [!ignore! = b]
-//!   [!set! #current_index = #current_index + 1]
-//!   [!ignore! = c]
-//!   [!set! #current_index = #current_index + 1]
-//!   [!set! #count = #current_index]
-//!   #count
-//! };
-//! ```
-//!
-//! Now the `stream!` macro runs, resulting in `#count` equal to the token stream `0usize + 1 + 1 + 1`.
-//! This will be improved in future releases by adding support for mathematical operations on integer literals.
 //!
 //! ### Simplicity
 //!
@@ -328,17 +292,13 @@
 //!     {
 //!         $vis:vis $my_type:ident($my_inner_type:ty)
 //!     } => {preinterpret::stream!{
-//!         #[xyz(as_type = [!string! $my_inner_type])]
+//!         #[xyz(as_type = #(%[$my_inner_type].to_string()))]
 //!         $vis struct $my_type($my_inner_type);
 //!     }}
 //! }
 //! ```
 //!
 //! ## Future Extension Possibilities
-//!
-//! ### Add github docs page / rust book
-//!
-//! Add a github docs page / rust book at this repository, to allow us to build out a suite of examples, like `serde` or the little book of macros.
 //!
 //! ### Destructuring / Parsing Syntax, and Declarative Macros 2.0
 //!
@@ -431,7 +391,7 @@
 //!
 //! We also support the following assignment commands:
 //!
-//! * `[!increment! #i]` is shorthand for `[!set! #i = [!add! #i 1]]` and outputs no tokens.
+//! * `[!increment! #i]` is shorthand for `#(let i = %[[!add! #i 1];)]` and outputs no tokens.
 //!
 //! Even better - we could even support calculator-style expression interpretation:
 //!
@@ -487,7 +447,7 @@
 //! ```rust,ignore
 //! // Hypothetical future syntax - not yet implemented!
 //! preinterpret::stream!{
-//!     [!set! #i = 0]
+//!     #(let i = %[0];)
 //!     [!label! loop]
 //!     const [!ident! AB #i]: u8 = 0;
 //!     [!increment! #i]
@@ -568,9 +528,7 @@ fn preinterpret_run_internal(input: TokenStream) -> SynResult<TokenStream> {
 
     let interpreted_stream = block_content
         .evaluate(&mut interpreter, Span::call_site().into())
-        .and_then(|x| {
-            x.into_new_output_stream(Grouping::Flattened, StreamOutputBehaviour::PermitArrays)
-        })
+        .and_then(|x| x.into_new_output_stream(Grouping::Flattened))
         .convert_to_final_result()?;
 
     unsafe {
@@ -628,12 +586,7 @@ mod benchmarking {
             let mut interpreter = Interpreter::new();
             block_content
                 .evaluate(&mut interpreter, Span::call_site().into())
-                .and_then(|x| {
-                    x.into_new_output_stream(
-                        Grouping::Flattened,
-                        StreamOutputBehaviour::PermitArrays,
-                    )
-                })
+                .and_then(|x| x.into_new_output_stream(Grouping::Flattened))
                 .convert_to_final_result()
         });
         let interpreted_stream = interpreted_stream?;

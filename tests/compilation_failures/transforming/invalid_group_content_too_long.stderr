@@ -1,5 +1,5 @@
 error: unexpected token, expected `)`
- --> tests/compilation_failures/transforming/invalid_group_content_too_long.rs:4:62
+ --> tests/compilation_failures/transforming/invalid_group_content_too_long.rs:4:61
   |
-4 |     stream!([!let! Group: (Hello World) = Group: (Hello World!!!)]);
-  |                                                              ^
+4 |     run!(let %[Group: (Hello World)] = %[Group: (Hello World!!!)]);
+  |                                                             ^

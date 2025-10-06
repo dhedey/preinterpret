@@ -1,0 +1,7 @@
+error: Assertion failed: lhs != rhs, where:
+         lhs = 1
+         rhs = 2
+ --> tests/compilation_failures/core/assert_eq_in_macro.rs:4:12
+  |
+4 |     run!(%[_].assert_eq(1, 2));
+  |            ^

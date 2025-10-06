@@ -4,8 +4,53 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 
 ## (Interpreted) Stream Literals
 
-* Introduce `%[..]` and `%raw[..]` instead of `[!stream! ...]` and `[!raw! ...]`
-* Replace `[!set!]` with `#(let x = %[ ... ])`
+- [x] Introduce `%[..]` and the corresponding pattern
+- [x] Introduce `%{}` instead of `{}` and the corresponding pattern
+- [x] Introduce `%raw[..]` (we don't need such a pattern, as it'll be equal to `@[EXACT(%raw[...])`, but perhaps we should advise of this)
+- [x] Remove `[!raw! ...]` and replace with `#..(%raw[...])`
+- [x] Remove `#..` because it's confusing and remove grouping from `#`. Instead have a `group()` method on streams. Search for all `#..` to remove. In future, perhaps `@EXPR` could add a group around it at a parser layer.
+- [x] Allow %[], %raw[] directly in token streams, and search for all `#(%group` and `#(%raw` to amend.
+- [x] Remove `[!stream! ...]` and replace with `%[...]`
+- [x] Remove `[!set!]` and replace with `#(let x = %[ ... ])`
+- [x] Remove `[!ignore!]` and replace with `#(let _ = %[ ... ])`
+- [x] Add `%group[]` and remove `as group` and `[!group! ..]`
+- [x] Remove `[!let!]` and replace with `#(let %[..] = %[..])`
+- [x] Remove `StopCondition`
+- [x] Fix the to_debug_string to add `%raw[..]` around punct groups including `#` or `%`
+- [x] Fix grammar-peeking of none-groups so that e.g. `[!reinterpret! %group[#]var_name]` works
+- [x] `4usize.to_string()` should return `4` but `debug_string` should return 4usize
+- [x] Simplify the EXACT parser
+- [x] Migrate `ErrorCommand`
+- [x] Migrate `ReinterpretCommand`
+- [x] Fix naming of `.string()` etc to `.to_string()`, `.to_stream()`, `.to_group()`, `.to_debug_string()`
+- [x] Migrate the `Concat & Type Convert Commands` and `Concat & String Convert Commands`, and decide on method names for e.g. `string()`
+  * `.to_literal()`, `.concat()`, `.to_ident()`, `.to_ident_camel()`, `.to_ident_snake()`, `.to_ident_upper_snake()`
+  * String: `.to_lowercase()` <- maybe shouldn't concat, others can: `.to_snake_case()`, `.capitalize()` etc
+- [x] Migrate `!is_empty!` and `!length!`
+- [x] Migrate `!zip!` and `!zip_truncated!`
+- [x] Implement some kind of support for variable length methods
+- [x] Migrate `!intersperse!`
+- [x] Move `.to_ident()` and friends to `to_value` via `.to_stream()`
+- [x] Migrate `!split!` and `!comma_split!`
+- [x] Add tests for object and string as iterables and test length
+- [x] Add `into_iter()` and `to_vec()` to iterable
+- [x] Add `next()`, `take(N) -> Vec` and `skip(N)` to iterator, and add tests
+
+## Span changes
+
+* Remove span range from value:
+    * Mark `SpanRange::dummy()` as `#[deprecated]` and start using it during the refactor
+    * Move it to a binding such as `Owned<T>` etc
+    * Possibly can use `EvaluationError` (without a span!) inside a calculation, and adding the span in the evaluator (nb. it may still need to be able to propogate an `ExecutionInterrupt` internally)
+* Except streams, which keep spans on literals/groups.
+    * If someone wants to keep a value's span, they can keep it in a stream and coerce it; or store it as a tuple of a value with its span `[value, %[value]]`
+* Bindings such as `Owned<X>` have a span, which:
+    * Typically refers to the span of the preinterpret code that created the value/binding
+    * In some cases (e.g. source literals) it can refer to a source span
+    * And we can add a `spanned(%[..])` method which overrides the span of the binding (it'll have to return a `OwnedFixedSpan<ExpressionValue>` which has different handling)
+    * We can have a `bool.assert(message, span?)`
+
+* We can add a `spanned(%[..])` method which overrides the span of the binding (it'll have to return a `NoOverrideSpanOwned<ExpressionValue>` which has different handling in the `ToResolvedValue` trait)
 
 ## Method Calls
 
@@ -50,29 +95,12 @@ fn resolve_own_binary_operation(operation: &BinaryOperation) -> Option<MethodInt
 }
 ```
 
-## Span changes
-
-* Remove span range from value:
-    * Move it to a binding such as `Owned<T>` etc
-    * Possibly can use `EvaluationError` (without a span!) inside a calculation, and adding the span in the evaluator (nb. it may still need to be able to propogate an `ExecutionInterrupt` internally)
-* Except streams, which keep spans on literals/groups.
-    * If someone wants to keep a value's span, they can keep it in a stream and coerce it; or store it as a tuple of a value with its span `[value, %[value]]`
-* Bindings such as `Owned<X>` have a span, which:
-    * Typically refers to the span of the preinterpret code that created the value/binding
-    * In some cases (e.g. source literals) it can refer to a source span
-    * And we can add a `spanned(%[..])` method which overrides the span of the binding (it'll have to return a `OwnedFixedSpan<ExpressionValue>` which has different handling)
-    * We can have a `bool.assert(message, span?)`
-
-* We can add a `spanned(%[..])` method which overrides the span of the binding (it'll have to return a `NoOverrideSpanOwned<ExpressionValue>` which has different handling in the `ToResolvedValue` trait)
-
 ## Control flow expressions (ideally requires Stream Literals)
 
 Create the following expressions:
 * Blocks `{}`
-  * These should be in the expression parser...
+  * These should be in the expression parser (maybe)...
   * ... and remove EmbeddedExpressions inside expressions
-  * ... and make object literals either `({ a: b })` OR `{{ a: x, b: y }}` OR `object { a: y }` OR `%{ a: 1, b: 2 }` possibly the latter two are least likely to be confused in the grammar.
-  * ... and move `let` statement to replace `[!let!]`
 * `if`, `else`
 * `for`, `while`, `loop`
   * These return an array of values from each iteration (possibly with an optimization to skip if the value will be ignored)
@@ -93,7 +121,6 @@ Create the following expressions:
 
 ... and remove their commands
 
-
 ## Scopes & Blocks (requires control flow expressions, or at least no `!let!` command)
 
 * Scopes exist at compile time, e.g. as a `ScopeId(usize)` and include:
@@ -104,11 +131,11 @@ Create the following expressions:
   * Each let expression
 * Spans are only kept from source inside streams, otherwise it refers to a binding
 * At execution time, there needs to be some link between scope and stack frame
+* Fix `TODO[scopes]`
 
 ## Attempt Expression (requires Scopes & Blocks)
 
 See @./2025-09-vision.md
-
 
 ## Parser Changes
 
@@ -152,16 +179,11 @@ First, read the @./2025-09-vision.md
 
 ## Utility methods
 
-Implement the following. (NB - do we need to add support for )
-
+Implement the following:
 * All value kinds:
   * `is_none()`, and similarly for other value kinds
 * Streams:
   * `is_ident()` and similarly for other stream
-* Bools:
-  * `assert("Error message", %[<span>])`
-* Strings:
-  * `error(%[span])`
 
 ## Repeat output bindings
 
@@ -275,32 +297,41 @@ Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` doc
 
 ## Final considerations
 
-* Should `preinterpret` should start in expression mode?
-  => Or whether to have `preinterpet::stream` / `preinterpret::run` options?
-  => Maybe `preinterpret::preinterpret` is marked as deprecated; starts in `stream` mode, and enables `[!set!]`?
-
 * Add `preinterpret::macro` - can this be a declarative macro? Would be slightly more efficient, as it just needs to wrap a call to `preinterpret::stream` or `preinterpret::run`...
 * Add `LiteralPattern` (wrapping a `Literal`)
 * Add `Eq` support on composite types and streams
 * Have UntypedInteger have an inner representation of either i128 or literal (and same with float)
-* CastTarget expansion:
+* CastTarget revision:
   * The `as int` operator is not supported for string values
   * The `as char` operator is not supported for untyped integer values
-  * The `<range> as array`, `<iterator> as array` and `<stream> as array` - possibly on an Iterator type?
-  * And `object` can be iterated as `[key, value]`?
-  * Add `as iterator` and uncomment the test at the end of `test_range()`
-  * Support a CastTarget of `array` using `into_iterator()`.
-  * Add `as ident` and `as literal` casting and support it for string, array and stream using concat recursive.
   * Add casts of any integer to char, via `char::from_u32(u32::try_from(x))`
+  * Should we remove/replace any CastTargets?
 * TODO check
 * Check all `#[allow(unused)]` and remove any which aren't needed
 
 NB: `define_command`, `define_parser`, and parsing of Rust code pushed to v1.1
 
+## Better handling of value sub-references
+
+Returning refs of sub-values requires taking the enum outside of the reference, i.e. some `ExpressionValueRef<'a>`.
+
+One option We can work it like `IterableRef`, but perhaps we can do better? 
+
+- [ ] Trial if `Shared<ExpressionValue>` can actually store an `ExpressionValueRef<'a>` (which just stores `&'a`, not the `Ref` variable)...
+  * This could be done by adding GATs (raising MSRV to 1.65) so that TypeData can have a `Ref<'T>`
+  * And then `Shared<T>` can store a `<T as ..Target>::Type::Ref<'T>` (in the file, this can be encapsulated as a `HasRefType` trait, which can be blanket implemeted for types implementing `..Target`)
+  * And then have a `AdvancedCellRef<T>` store a `<T as ..Target>::Type::Ref<'T>` which can be owned and we can manually call increase strong count etc on the `RefCell`.
+  * To implement `AdvancedCellRef::map`, we'll need `TypeData::Ref<'T>` to implement Target in a self-fulfilling way. (i.e. `HasRefType { type Ref<'a>: HasRefParent<Parent = Self> }`, `HasRefParent { type Parent: HasRefType })`)
+  * If this works, we can replace our `Ref<T>` with `T: HasRefType`
+  * Migrate `IterableRef`
+
+## Cloning
+
+* Consider making Iterator non-clonable (which will unlock many more easy lazy implementations, of e.g. `take` using the non-clonable `Take`, and similar for other mapped iterators), i.e. `ExpressionValue` has a manual `clone() -> ExecutionResult<Self>` - this will simplify some things. But then, `to_string()` would want to take a `CopyOnWrite` so that where we clone, the iterator can potentially take owned, attempt cloen, else error.
+
 ## Finish converting all commands to expressions
 
 E.G.
-* `#(%[#x #y].ident_lower_camel())`
 * `preinterpret.settings({..})` (`preinterpret` is available as a variable pre-bound on the root frame)
 * .. possibly keep the v0.2 commands in `deprecated` mode?
 
@@ -338,10 +369,12 @@ And then we need to:
 
 ## Stream-return optimizations [OPTIONAL]
 
-Expression evaluation can come with a `OutputStyle::AppendToStream(&mut OutputStream)` rather than a `OutputStyle::OwnedValue`.
+Expression evaluation can come with an `OutputStyle::AppendToStream(&mut OutputStream)` rather than a `OutputStyle::OwnedValue`, which is handled in `ResolvedValue` (might need a new name!)
 
 This can be used to optimize, e.g.:
 
+* Methods
+  * Using the `StreamOutput` return
 * Stream Literals
   * Could output direct to the output stream
 * Loops:

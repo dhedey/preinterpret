@@ -149,30 +149,33 @@ impl ExpressionObject {
     }
 
     pub(crate) fn concat_recursive_into(
-        self,
+        &self,
         output: &mut String,
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
-        if behaviour.output_array_structure {
+        if !behaviour.use_debug_literal_syntax {
+            return self.execution_err("An object can't be converted to a non-debug string");
+        }
+        if behaviour.output_literal_structure {
             if self.entries.is_empty() {
-                output.push_str("{}");
+                output.push_str("%{}");
                 return Ok(());
             }
-            output.push('{');
+            output.push_str("%{");
             if behaviour.add_space_between_token_trees {
                 output.push(' ');
             }
         }
         let mut is_first = true;
-        for (key, entry) in self.entries {
-            if !is_first && behaviour.output_array_structure {
+        for (key, entry) in self.entries.iter() {
+            if !is_first && behaviour.output_literal_structure {
                 output.push(',');
             }
             if !is_first && behaviour.add_space_between_token_trees {
                 output.push(' ');
             }
-            if syn::parse_str::<Ident>(&key).is_ok() {
-                output.push_str(&key);
+            if syn::parse_str::<Ident>(key).is_ok() {
+                output.push_str(key);
             } else {
                 output.push('[');
                 output.push_str(format!("{:?}", key).as_str());
@@ -185,7 +188,7 @@ impl ExpressionObject {
             entry.value.concat_recursive_into(output, behaviour)?;
             is_first = false;
         }
-        if behaviour.output_array_structure {
+        if behaviour.output_literal_structure {
             if behaviour.add_space_between_token_trees {
                 output.push(' ');
             }
@@ -267,12 +270,24 @@ impl ToExpressionValue for BTreeMap<String, ObjectEntry> {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct ObjectTypeData;
+define_interface! {
+    struct ObjectTypeData,
+    parent: IterableTypeData,
+    pub(crate) mod object_interface {
+        pub(crate) mod methods {
+            [context] fn zip(this: ExpressionObject) -> ExecutionResult<ExpressionArray> {
+                ZipIterators::new_from_object(this, context.span_range())?.run_zip(context.interpreter, true)
+            }
 
-impl MethodResolutionTarget for ObjectTypeData {
-    type Parent = ValueTypeData;
-    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+            [context] fn zip_truncated(this: ExpressionObject) -> ExecutionResult<ExpressionArray> {
+                ZipIterators::new_from_object(this, context.span_range())?.run_zip(context.interpreter, false)
+            }
+        }
+        pub(crate) mod unary_operations {
+        }
+        interface_items {
+        }
+    }
 }
 
 #[allow(unused)] // TODO[unused-clearup]
@@ -309,7 +324,7 @@ pub(crate) trait ObjectValidate {
     fn describe_object(&self) -> String {
         use std::fmt::Write;
         let mut buffer = String::new();
-        buffer.write_str("{\n").unwrap();
+        buffer.write_str("%{\n").unwrap();
         for (key, definition) in self.all_fields() {
             if let Some(description) = &definition.description {
                 writeln!(buffer, "    // {}", description).unwrap();
@@ -352,4 +367,18 @@ pub(crate) struct FieldDefinition {
     pub(crate) required: bool,
     pub(crate) description: Option<Cow<'static, str>>,
     pub(crate) example: Cow<'static, str>,
+}
+
+impl FieldDefinition {
+    pub(crate) const fn new_full_static(
+        required: bool,
+        description: &'static str,
+        example: &'static str,
+    ) -> Self {
+        Self {
+            required,
+            description: Some(Cow::Borrowed(description)),
+            example: Cow::Borrowed(example),
+        }
+    }
 }

@@ -1,0 +1,5 @@
+error: Invalid statement continuation. Possibly the previous statement is missing a semicolon?
+ --> tests/compilation_failures/expressions/variable_with_incomplete_expression.rs:5:25
+  |
+5 |         #(x = %[+ 1]; 1 x)
+  |                         ^

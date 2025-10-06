@@ -54,6 +54,21 @@ impl OutputStream {
         }
     }
 
+    pub(crate) fn new_with(appender: impl FnOnce(&mut Self)) -> Self {
+        let mut stream = Self::new();
+        appender(&mut stream);
+        stream
+    }
+
+    #[allow(unused)]
+    pub(crate) fn new_try_with(
+        appender: impl FnOnce(&mut Self) -> ExecutionResult<()>,
+    ) -> ExecutionResult<Self> {
+        let mut stream = Self::new();
+        appender(&mut stream)?;
+        Ok(stream)
+    }
+
     pub(crate) fn raw(token_stream: TokenStream) -> Self {
         let mut new = Self::new();
         new.extend_raw_tokens(token_stream);
@@ -197,14 +212,14 @@ impl OutputStream {
         }
     }
 
-    pub(crate) fn into_token_stream_removing_any_transparent_groups(self) -> TokenStream {
+    pub(crate) fn to_token_stream_removing_any_transparent_groups(&self) -> TokenStream {
         let mut output = TokenStream::new();
         self.append_to_token_stream_without_transparent_groups(&mut output);
         output
     }
 
-    fn append_to_token_stream_without_transparent_groups(self, output: &mut TokenStream) {
-        for segment in self.segments {
+    fn append_to_token_stream_without_transparent_groups(&self, output: &mut TokenStream) {
+        for segment in self.segments.iter() {
             match segment {
                 OutputSegment::TokenVec(vec) => {
                     for token in vec {
@@ -212,11 +227,13 @@ impl OutputStream {
                             TokenTree::Group(group) if group.delimiter() == Delimiter::None => {
                                 output.extend(group.stream().flatten_transparent_groups());
                             }
-                            other => output.extend(iter::once(other)),
+                            other => output.extend(iter::once(other.clone())),
                         }
                     }
                 }
                 OutputSegment::OutputGroup(delimiter, span, interpreted_stream) => {
+                    let delimiter = *delimiter;
+                    let span = *span;
                     if delimiter == Delimiter::None {
                         interpreted_stream
                             .append_to_token_stream_without_transparent_groups(output);
@@ -252,21 +269,21 @@ impl OutputStream {
         output
     }
 
-    pub(crate) fn concat_recursive(self, behaviour: &ConcatBehaviour) -> String {
+    pub(crate) fn concat_recursive(&self, behaviour: &ConcatBehaviour) -> String {
         let mut output = String::new();
         self.concat_recursive_into(&mut output, behaviour);
         output
     }
 
-    pub(crate) fn concat_recursive_into(self, output: &mut String, behaviour: &ConcatBehaviour) {
+    pub(crate) fn concat_recursive_into(&self, output: &mut String, behaviour: &ConcatBehaviour) {
         fn concat_recursive_interpreted_stream(
             behaviour: &ConcatBehaviour,
             output: &mut String,
             prefix_spacing: Spacing,
-            stream: OutputStream,
+            stream: &OutputStream,
         ) {
             let mut spacing = prefix_spacing;
-            for segment in stream.segments {
+            for segment in stream.segments.iter() {
                 spacing = match segment {
                     OutputSegment::TokenVec(vec) => {
                         concat_recursive_token_stream(behaviour, output, spacing, vec)
@@ -275,7 +292,7 @@ impl OutputStream {
                         behaviour.before_token_tree(output, spacing);
                         behaviour.wrap_delimiters(
                             output,
-                            delimiter,
+                            *delimiter,
                             interpreted_stream.is_empty(),
                             |output| {
                                 concat_recursive_interpreted_stream(
@@ -292,14 +309,15 @@ impl OutputStream {
             }
         }
 
-        fn concat_recursive_token_stream(
+        fn concat_recursive_token_stream<T: core::borrow::Borrow<TokenTree>>(
             behaviour: &ConcatBehaviour,
             output: &mut String,
             prefix_spacing: Spacing,
-            token_stream: impl IntoIterator<Item = TokenTree>,
+            token_stream: impl IntoIterator<Item = T>,
         ) -> Spacing {
             let mut spacing = prefix_spacing;
             for token_tree in token_stream.into_iter() {
+                let token_tree = token_tree.borrow();
                 behaviour.before_token_tree(output, spacing);
                 spacing = match token_tree {
                     TokenTree::Literal(literal) => {
@@ -324,7 +342,21 @@ impl OutputStream {
                         Spacing::Alone
                     }
                     TokenTree::Punct(punct) => {
-                        output.push(punct.as_char());
+                        let char = punct.as_char();
+                        // This conversion captures ~#% as ~%raw[#]%raw[%] rather than the
+                        // more accurate %raw[~#%] which also captures the correct punct spacing.
+                        // To do this properly would require lookahead which require quite a big
+                        // logic change! So I've opted to ignore it for now...
+                        // * Debug string isn't expected to be used for re-parsing
+                        // * Even if it were, the specific spacing isn't used/relevant
+                        //   for any known grammar
+                        if behaviour.use_stream_literal_syntax && (char == '#' || char == '%') {
+                            output.push_str("%raw[");
+                            output.push(char);
+                            output.push(']');
+                        } else {
+                            output.push(char);
+                        }
                         punct.spacing()
                     }
                     TokenTree::Ident(ident) => {
@@ -339,12 +371,30 @@ impl OutputStream {
         concat_recursive_interpreted_stream(behaviour, output, Spacing::Joint, self);
     }
 
-    pub(crate) fn into_exact_stream(self) -> ParseResult<ExactStream> {
-        unsafe {
-            // RUST-ANALYZER SAFETY: Can't be any safer than this for now
-            self.parse_as()
-        }
+    pub(crate) fn parse_exact_match(
+        &self,
+        input: ParseStream<Output>,
+        output: &mut OutputStream,
+    ) -> ExecutionResult<()> {
+        handle_parsing_exact_output_match(input, self, output)
     }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = OutputTokenTreeRef<'_>> {
+        self.segments.iter().flat_map(|segment| match segment {
+            OutputSegment::TokenVec(vec) => {
+                EitherIterator::Left(vec.iter().map(OutputTokenTreeRef::TokenTree))
+            }
+            OutputSegment::OutputGroup(delimiter, span, inner) => EitherIterator::Right(
+                [OutputTokenTreeRef::OutputGroup(*delimiter, *span, inner)].into_iter(),
+            ),
+        })
+    }
+}
+
+pub(crate) enum OutputTokenTreeRef<'a> {
+    TokenTree(&'a TokenTree),
+    #[allow(unused)]
+    OutputGroup(Delimiter, Span, &'a OutputStream),
 }
 
 impl IntoIterator for OutputStream {
@@ -357,37 +407,57 @@ impl IntoIterator for OutputStream {
 }
 
 pub(crate) struct ConcatBehaviour {
+    pub(crate) use_debug_literal_syntax: bool,
     pub(crate) add_space_between_token_trees: bool,
-    pub(crate) output_types_as_commands: bool,
-    pub(crate) output_array_structure: bool,
+    pub(crate) use_stream_literal_syntax: bool,
+    pub(crate) output_literal_structure: bool,
     pub(crate) unwrap_contents_of_string_like_literals: bool,
     pub(crate) show_none_values: bool,
     pub(crate) iterator_limit: usize,
     pub(crate) error_after_iterator_limit: bool,
+    pub(crate) error_span_range: SpanRange,
 }
 
 impl ConcatBehaviour {
-    pub(crate) fn standard() -> Self {
+    pub(crate) fn standard(error_span_range: SpanRange) -> Self {
         Self {
             add_space_between_token_trees: false,
-            output_types_as_commands: false,
-            output_array_structure: false,
+            use_stream_literal_syntax: false,
+            use_debug_literal_syntax: false,
+            output_literal_structure: false,
             unwrap_contents_of_string_like_literals: true,
             show_none_values: false,
             iterator_limit: 1000,
             error_after_iterator_limit: true,
+            error_span_range,
         }
     }
 
-    pub(crate) fn debug() -> Self {
+    pub(crate) fn literal(error_span_range: SpanRange) -> Self {
+        Self {
+            add_space_between_token_trees: false,
+            use_stream_literal_syntax: false,
+            use_debug_literal_syntax: true,
+            output_literal_structure: false,
+            unwrap_contents_of_string_like_literals: true,
+            show_none_values: false,
+            iterator_limit: 1000,
+            error_after_iterator_limit: true,
+            error_span_range,
+        }
+    }
+
+    pub(crate) fn debug(error_span_range: SpanRange) -> Self {
         Self {
             add_space_between_token_trees: true,
-            output_types_as_commands: true,
-            output_array_structure: true,
+            use_stream_literal_syntax: true,
+            use_debug_literal_syntax: true,
+            output_literal_structure: true,
             unwrap_contents_of_string_like_literals: false,
             show_none_values: true,
             iterator_limit: 20,
             error_after_iterator_limit: false,
+            error_span_range,
         }
     }
 
@@ -397,12 +467,18 @@ impl ConcatBehaviour {
         }
     }
 
-    pub(crate) fn handle_literal(&self, output: &mut String, literal: Literal) {
+    pub(crate) fn handle_literal(&self, output: &mut String, literal: &Literal) {
         match literal.content_if_string_like() {
             Some(content) if self.unwrap_contents_of_string_like_literals => {
                 output.push_str(&content)
             }
-            _ => output.push_str(&literal.to_string()),
+            _ => {
+                if self.use_debug_literal_syntax {
+                    output.push_str(&literal.to_string())
+                } else {
+                    output.push_str(&literal.inner_value_to_string())
+                }
+            }
         }
     }
 
@@ -436,12 +512,8 @@ impl ConcatBehaviour {
                 output.push(']');
             }
             Delimiter::None => {
-                if self.output_types_as_commands {
-                    if is_empty {
-                        output.push_str("[!group!");
-                    } else {
-                        output.push_str("[!group! ");
-                    }
+                if self.use_stream_literal_syntax {
+                    output.push_str("%group[");
                     inner(output);
                     output.push(']');
                 } else {

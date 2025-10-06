@@ -1,5 +1,136 @@
 use super::*;
 
+define_interface! {
+    struct IterableTypeData,
+    parent: ValueTypeData,
+    pub(crate) mod iterable_interface {
+        pub(crate) mod methods {
+            fn into_iter(this: IterableValue) -> ExecutionResult<ExpressionIterator> {
+                this.into_iterator()
+            }
+
+            fn len(this: Spanned<IterableRef>) -> ExecutionResult<usize> {
+                this.len()
+            }
+
+            fn is_empty(this: Spanned<IterableRef>) -> ExecutionResult<bool> {
+                Ok(this.len()? == 0)
+            }
+
+            [context] fn zip(this: IterableValue) -> ExecutionResult<ExpressionArray> {
+                let iterator = this.into_iterator()?;
+                ZipIterators::new_from_iterator(iterator, context.span_range())?.run_zip(context.interpreter, true)
+            }
+
+            [context] fn zip_truncated(this: IterableValue) -> ExecutionResult<ExpressionArray> {
+                let iterator = this.into_iterator()?;
+                ZipIterators::new_from_iterator(iterator, context.span_range())?.run_zip(context.interpreter, false)
+            }
+
+            [context] fn intersperse(this: IterableValue, separator: ExpressionValue, settings: Option<IntersperseSettings>) -> ExecutionResult<ExpressionArray> {
+                run_intersperse(this, separator, settings.unwrap_or_default(), context.output_span_range)
+            }
+
+            [context] fn to_vec(this: IterableValue) -> ExecutionResult<Vec<ExpressionValue>> {
+                let error_span_range = context.span_range();
+                let mut counter = context.interpreter.start_iteration_counter(&error_span_range);
+                let iterator = this.into_iterator()?;
+                let max_hint = iterator.size_hint().1;
+                let mut vec = if let Some(max) = max_hint {
+                    Vec::with_capacity(max)
+                } else {
+                    Vec::new()
+                };
+                for item in iterator {
+                    counter.increment_and_check()?;
+                    vec.push(item);
+                }
+                Ok(vec)
+            }
+        }
+        pub(crate) mod unary_operations {
+        }
+        interface_items {
+        }
+    }
+}
+
+// If you add a new variant, also update:
+// * ResolvableArgumentOwned for IterableValue
+// * FromResolved for IterableRef
+// * The parent of the value's TypeData to be IterableTypeData
+pub(crate) enum IterableValue {
+    Iterator(ExpressionIterator),
+    Array(ExpressionArray),
+    Stream(ExpressionStream),
+    Object(ExpressionObject),
+    Range(ExpressionRange),
+    String(ExpressionString),
+}
+
+impl IterableValue {
+    pub(crate) fn into_iterator(self) -> ExecutionResult<ExpressionIterator> {
+        Ok(match self {
+            IterableValue::Array(value) => ExpressionIterator::new_for_array(value),
+            IterableValue::Stream(value) => ExpressionIterator::new_for_stream(value),
+            IterableValue::Iterator(value) => value,
+            IterableValue::Range(value) => ExpressionIterator::new_for_range(value)?,
+            IterableValue::Object(value) => ExpressionIterator::new_for_object(value)?,
+            IterableValue::String(value) => ExpressionIterator::new_for_string(value)?,
+        })
+    }
+}
+
+pub(crate) enum IterableRef<'a> {
+    Iterator(Ref<'a, ExpressionIterator>),
+    Array(Ref<'a, ExpressionArray>),
+    Stream(Ref<'a, OutputStream>),
+    Range(Ref<'a, ExpressionRange>),
+    Object(Ref<'a, ExpressionObject>),
+    String(Ref<'a, str>),
+}
+
+impl FromResolved for IterableRef<'static> {
+    type ValueType = IterableTypeData;
+    const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Shared;
+
+    fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
+        Ok(match value.kind() {
+            ValueKind::Iterator => IterableRef::Iterator(FromResolved::from_resolved(value)?),
+            ValueKind::Array => IterableRef::Array(FromResolved::from_resolved(value)?),
+            ValueKind::Stream => IterableRef::Stream(FromResolved::from_resolved(value)?),
+            ValueKind::Range => IterableRef::Range(FromResolved::from_resolved(value)?),
+            ValueKind::Object => IterableRef::Object(FromResolved::from_resolved(value)?),
+            ValueKind::String => IterableRef::String(FromResolved::from_resolved(value)?),
+            _ => {
+                return value.execution_err(
+                    "Expected iterable (iterator, array, object, stream, range or string)",
+                )
+            }
+        })
+    }
+}
+
+impl Spanned<IterableRef<'_>> {
+    pub(crate) fn len(&self) -> ExecutionResult<usize> {
+        Ok(match &self.value {
+            IterableRef::Iterator(iterator) => {
+                let (min, max) = iterator.size_hint();
+                if max == Some(min) {
+                    min
+                } else {
+                    return self.execution_err("Iterator has an inexact length");
+                }
+            }
+            IterableRef::Array(value) => value.items.len(),
+            IterableRef::Stream(value) => value.len(),
+            IterableRef::Range(value) => return value.len(),
+            IterableRef::Object(value) => value.entries.len(),
+            IterableRef::String(value) => value.chars().count(),
+        })
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct ExpressionIterator {
     iterator: ExpressionIteratorInner,
@@ -8,9 +139,19 @@ pub(crate) struct ExpressionIterator {
 }
 
 impl ExpressionIterator {
+    #[allow(unused)]
+    pub(crate) fn new_any(
+        iterator: impl Iterator<Item = ExpressionValue> + 'static + Clone,
+    ) -> Self {
+        Self {
+            iterator: ExpressionIteratorInner::Other(Box::new(iterator)),
+            span_range: SpanRange::dummy(),
+        }
+    }
+
     pub(crate) fn new_for_array(array: ExpressionArray) -> Self {
         Self {
-            iterator: ExpressionIteratorInner::Array(array.items.into_iter()),
+            iterator: ExpressionIteratorInner::Vec(array.items.into_iter()),
             span_range: array.span_range,
         }
     }
@@ -27,6 +168,39 @@ impl ExpressionIterator {
         Ok(Self {
             iterator: ExpressionIteratorInner::Other(iterator),
             span_range: range.span_range,
+        })
+    }
+
+    pub(crate) fn new_for_object(object: ExpressionObject) -> ExecutionResult<Self> {
+        // We have to collect to vec and back to make it clonable
+        let iterator = object
+            .entries
+            .into_iter()
+            .map(|(k, v)| {
+                let span_range = v.key_span.span_range();
+                vec![k.to_value(span_range), v.value].to_value(span_range)
+            })
+            .collect::<Vec<_>>()
+            .into_iter();
+        Ok(Self {
+            iterator: ExpressionIteratorInner::Vec(iterator),
+            span_range: object.span_range,
+        })
+    }
+
+    pub(crate) fn new_for_string(string: ExpressionString) -> ExecutionResult<Self> {
+        // We have to collect to vec and back to make the iterator owned
+        // That's because value.chars() creates a `Chars<'_>` iterator which
+        // borrows from the string, which we don't allow in a Boxed iterator
+        let iterator = string
+            .value
+            .chars()
+            .map(|c| c.to_value(string.span_range))
+            .collect::<Vec<_>>()
+            .into_iter();
+        Ok(Self {
+            iterator: ExpressionIteratorInner::Vec(iterator),
+            span_range: string.span_range,
         })
     }
 
@@ -49,38 +223,61 @@ impl ExpressionIterator {
         }
     }
 
-    pub(super) fn output_grouped_items_to(self, output: &mut OutputStream) -> ExecutionResult<()> {
+    pub(super) fn output_items_to(
+        self,
+        output: &mut OutputStream,
+        grouping: Grouping,
+    ) -> ExecutionResult<()> {
         const LIMIT: usize = 10_000;
         let span_range = self.span_range;
         for (i, item) in self.enumerate() {
             if i > LIMIT {
                 return span_range.execution_err(format!("Only a maximum of {} items can be output to a stream from an iterator, to protect you from infinite loops. This can't currently be reconfigured with the iteration limit.", LIMIT));
             }
-            item.output_to(
-                Grouping::Grouped,
-                output,
-                StreamOutputBehaviour::PermitArrays,
-            )?;
+            item.output_to(grouping, output)?;
         }
         Ok(())
     }
 
     pub(crate) fn concat_recursive_into(
-        self,
+        &self,
         output: &mut String,
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
-        if behaviour.output_array_structure {
-            output.push_str("[<iterator>");
-        }
-        let max = self.size_hint().1;
-        let span_range = self.span_range;
-        for (i, item) in self.enumerate() {
-            if i >= behaviour.iterator_limit {
+        Self::any_iterator_to_string(
+            self.clone(),
+            output,
+            behaviour,
+            "[<iterator>]",
+            "[<iterator> ",
+            "]",
+            true,
+        )
+    }
+
+    pub(crate) fn any_iterator_to_string<T: Borrow<ExpressionValue>>(
+        iterator: impl Iterator<Item = T>,
+        output: &mut String,
+        behaviour: &ConcatBehaviour,
+        literal_empty: &str,
+        literal_start: &str,
+        literal_end: &str,
+        possibly_unbounded: bool,
+    ) -> ExecutionResult<()> {
+        let mut is_empty = true;
+        let max = iterator.size_hint().1;
+        for (i, item) in iterator.enumerate() {
+            if i == 0 {
+                if behaviour.output_literal_structure {
+                    output.push_str(literal_start);
+                }
+                is_empty = false;
+            }
+            if possibly_unbounded && i >= behaviour.iterator_limit {
                 if behaviour.error_after_iterator_limit {
-                    return span_range.execution_err(format!("To protect against infinite loops, only a maximum of {} items can be output to a string from an iterator. Try casting `as stream` to avoid this limit. This can't currently be reconfigured with the iteration limit.", behaviour.iterator_limit));
+                    return behaviour.error_span_range.execution_err(format!("To protect against infinite loops, only a maximum of {} items can be output to a string from an iterator. You can use .to_vec() to avoid this limit. This can't currently be reconfigured with the iteration limit.", behaviour.iterator_limit));
                 } else {
-                    if behaviour.output_array_structure {
+                    if behaviour.output_literal_structure {
                         match max {
                             Some(max) => output.push_str(&format!(
                                 ", ..<{} further items>",
@@ -92,10 +289,8 @@ impl ExpressionIterator {
                     break;
                 }
             }
-            if i == 0 {
-                output.push(' ');
-            }
-            if i != 0 && behaviour.output_array_structure {
+            let item = item.borrow();
+            if i != 0 && behaviour.output_literal_structure {
                 output.push(',');
             }
             if i != 0 && behaviour.add_space_between_token_trees {
@@ -103,8 +298,12 @@ impl ExpressionIterator {
             }
             item.concat_recursive_into(output, behaviour)?;
         }
-        if behaviour.output_array_structure {
-            output.push(']');
+        if behaviour.output_literal_structure {
+            if is_empty {
+                output.push_str(literal_empty);
+            } else {
+                output.push_str(literal_end);
+            }
         }
         Ok(())
     }
@@ -142,7 +341,7 @@ impl HasValueType for ExpressionIterator {
 
 #[derive(Clone)]
 enum ExpressionIteratorInner {
-    Array(<Vec<ExpressionValue> as IntoIterator>::IntoIter),
+    Vec(<Vec<ExpressionValue> as IntoIterator>::IntoIter),
     Stream(<OutputStream as IntoIterator>::IntoIter),
     Other(Box<dyn CustomExpressionIterator>),
 }
@@ -168,7 +367,7 @@ impl Iterator for ExpressionIterator {
 
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.iterator {
-            ExpressionIteratorInner::Array(iter) => iter.next(),
+            ExpressionIteratorInner::Vec(iter) => iter.next(),
             ExpressionIteratorInner::Stream(iter) => {
                 let item = iter.next()?;
                 let span = item.span();
@@ -181,38 +380,79 @@ impl Iterator for ExpressionIterator {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         match &self.iterator {
-            ExpressionIteratorInner::Array(iter) => iter.size_hint(),
+            ExpressionIteratorInner::Vec(iter) => iter.size_hint(),
             ExpressionIteratorInner::Stream(iter) => iter.size_hint(),
             ExpressionIteratorInner::Other(iter) => iter.size_hint(),
         }
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct IteratorTypeData;
+impl Iterator for Mutable<ExpressionIterator> {
+    type Item = ExpressionValue;
 
-impl MethodResolutionTarget for IteratorTypeData {
-    type Parent = ValueTypeData;
-    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+    fn next(&mut self) -> Option<Self::Item> {
+        let this: &mut ExpressionIterator = &mut *self;
+        this.next()
+    }
 
-    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
-        Some(match operation {
-            UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => return None,
-            UnaryOperation::Cast { target, .. } => match target {
-                CastTarget::Boolean
-                | CastTarget::Char
-                | CastTarget::Integer(_)
-                | CastTarget::Float(_) => {
-                    wrap_unary!([Op=operation](this: Owned<ExpressionIterator>) -> ExecutionResult<ResolvedValue> {
-                        let (this, input_span_range) = this.deconstruct();
-                        match this.singleton_value() {
-                            Some(value) => operation.evaluate(Owned::new(value, input_span_range)),
-                            None => input_span_range.execution_err("Only an iterator with one item can be cast to this value")
-                        }
-                    })
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let this: &ExpressionIterator = self;
+        this.size_hint()
+    }
+}
+
+define_interface! {
+    struct IteratorTypeData,
+    parent: IterableTypeData,
+    pub(crate) mod iterator_interface {
+        pub(crate) mod methods {
+            [context] fn next(mut this: Mutable<ExpressionIterator>) -> ExpressionValue {
+                match this.next() {
+                    Some(value) => value,
+                    None => ExpressionValue::None(context.span_range()),
                 }
-                _ => return None,
-            },
-        })
+            }
+
+            fn skip(mut this: ExpressionIterator, n: usize) -> ExpressionIterator {
+                // We make this greedy instead of lazy because the Skip iterator is not clonable.
+                // We return an iterator for forwards compatibility in case we change it.
+                for _ in 0..n {
+                    if this.next().is_none() {
+                        break;
+                    }
+                }
+                this
+            }
+
+            [context] fn take(this: ExpressionIterator, n: usize) -> ExpressionIterator {
+                // We collect to a vec to satisfy the clonability requirement,
+                // but only return an iterator for forwards compatibility in case we change it.
+                let taken = this.take(n).collect::<Vec<_>>();
+                ExpressionIterator::new_for_array(ExpressionArray::new(taken, context.span_range()))
+            }
+        }
+        pub(crate) mod unary_operations {
+            [context] fn cast_singleton_to_value(this: Owned<ExpressionIterator>) -> ExecutionResult<ResolvedValue> {
+                let (this, input_span_range) = this.deconstruct();
+                match this.singleton_value() {
+                    Some(value) => context.operation.evaluate(Owned::new(value, input_span_range)),
+                    None => input_span_range.execution_err("Only an iterator with one item can be cast to this value")
+                }
+            }
+        }
+        interface_items {
+            fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+                Some(match operation {
+                    UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => return None,
+                    UnaryOperation::Cast { target, .. } => match target {
+                        CastTarget::Boolean
+                        | CastTarget::Char
+                        | CastTarget::Integer(_)
+                        | CastTarget::Float(_) => unary_definitions::cast_singleton_to_value(),
+                        _ => return None,
+                    },
+                })
+            }
+        }
     }
 }

@@ -1,4 +1,4 @@
-error: Expected an operator to continue the expression, or ; to mark the end of the expression statement
+error: Invalid statement continuation. Possibly the previous statement is missing a semicolon?
  --> tests/compilation_failures/expressions/invalid_binary_operator.rs:5:14
   |
 5 |         #(10 _ 10)

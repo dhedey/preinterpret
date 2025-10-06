@@ -87,24 +87,118 @@ impl ToExpressionValue for &str {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct StringTypeData;
+define_interface! {
+    struct StringTypeData,
+    parent: IterableTypeData,
+    pub(crate) mod string_interface {
+        pub(crate) mod methods {
+            // ==================
+            // CONVERSION METHODS
+            // ==================
+            [context] fn to_ident(this: SpannedRef<str>) -> ExecutionResult<Ident> {
+                let str: &str = &this;
+                let ident = parse_str::<Ident>(str)
+                    .map_err(|err| this.error(format!("`{}` is not a valid ident: {:?}", str, err)))?
+                    .with_span(context.span_from_join_else_start());
+                Ok(ident)
+            }
 
-impl MethodResolutionTarget for StringTypeData {
-    type Parent = ValueTypeData;
-    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+            [context] fn to_ident_camel(this: SpannedRef<str>) -> ExecutionResult<Ident> {
+                let str = string_conversion::to_upper_camel_case(&this);
+                let ident = parse_str::<Ident>(&str)
+                    .map_err(|err| this.error(format!("`{}` is not a valid ident: {:?}", str, err)))?
+                    .with_span(context.span_from_join_else_start());
+                Ok(ident)
+            }
 
-    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
-        Some(match operation {
-            UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => return None,
-            UnaryOperation::Cast { target, .. } => match target {
-                CastTarget::String => {
-                    wrap_unary!((this: String) -> String {
-                        this
-                    })
-                }
-                _ => return None,
-            },
-        })
+            [context] fn to_ident_snake(this: SpannedRef<str>) -> ExecutionResult<Ident> {
+                let str = string_conversion::to_lower_snake_case(&this);
+                let ident = parse_str::<Ident>(&str)
+                    .map_err(|err| this.error(format!("`{}` is not a valid ident: {:?}", str, err)))?
+                    .with_span(context.span_from_join_else_start());
+                Ok(ident)
+            }
+
+            [context] fn to_ident_upper_snake(this: SpannedRef<str>) -> ExecutionResult<Ident> {
+                let str = string_conversion::to_upper_snake_case(&this);
+                let ident = parse_str::<Ident>(&str)
+                    .map_err(|err| this.error(format!("`{}` is not a valid ident: {:?}", str, err)))?
+                    .with_span(context.span_from_join_else_start());
+                Ok(ident)
+            }
+
+            [context] fn to_literal(this: SpannedRef<str>) -> ExecutionResult<Literal> {
+                let str: &str = &this;
+                let literal = Literal::from_str(str)
+                    .map_err(|err| {
+                        this.error(format!("`{}` is not a valid literal: {:?}", str, err))
+                    })?
+                    .with_span(context.span_from_join_else_start());
+                Ok(literal)
+            }
+
+            // ======================
+            // STRING RESHAPE METHODS
+            // ======================
+            fn to_uppercase(this: Ref<str>) -> String {
+                string_conversion::to_uppercase(&this)
+            }
+
+            fn to_lowercase(this: Ref<str>) -> String {
+                string_conversion::to_lowercase(&this)
+            }
+
+            fn to_lower_snake_case(this: Ref<str>) -> String {
+                string_conversion::to_lower_snake_case(&this)
+            }
+
+            fn to_upper_snake_case(this: Ref<str>) -> String {
+                string_conversion::to_upper_snake_case(&this)
+            }
+
+            fn to_kebab_case(this: Ref<str>) -> String {
+                string_conversion::to_lower_kebab_case(&this)
+            }
+
+            fn to_lower_camel_case(this: Ref<str>) -> String {
+                string_conversion::to_lower_camel_case(&this)
+            }
+
+            fn to_upper_camel_case(this: Ref<str>) -> String {
+                string_conversion::to_upper_camel_case(&this)
+            }
+
+            fn capitalize(this: Ref<str>) -> String {
+                string_conversion::capitalize(&this)
+            }
+
+            fn decapitalize(this: Ref<str>) -> String {
+                string_conversion::decapitalize(&this)
+            }
+
+            fn to_title_case(this: Ref<str>) -> String {
+                string_conversion::title_case(&this)
+            }
+
+            fn insert_spaces(this: Ref<str>) -> String {
+                string_conversion::insert_spaces_between_words(&this)
+            }
+        }
+        pub(crate) mod unary_operations {
+            fn cast_to_string(this: String) -> String {
+                this
+            }
+        }
+        interface_items {
+            fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+                Some(match operation {
+                    UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => return None,
+                    UnaryOperation::Cast { target, .. } => match target {
+                        CastTarget::String => unary_definitions::cast_to_string(),
+                        _ => return None,
+                    },
+                })
+            }
+        }
     }
 }

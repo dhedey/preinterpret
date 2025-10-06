@@ -1,14 +1,17 @@
 mod errors;
 mod field_inputs;
+mod iterators;
 mod mut_rc_ref_cell;
 mod parse_traits;
-mod string_conversion;
+pub(crate) mod string_conversion;
 
 pub(crate) use errors::*;
 pub(crate) use field_inputs::*;
+pub(crate) use iterators::*;
 pub(crate) use mut_rc_ref_cell::*;
 pub(crate) use parse_traits::*;
-pub(crate) use string_conversion::*;
+
+use crate::internal_prelude::*;
 
 #[allow(unused)]
 pub(crate) fn print_if_slow<T>(
@@ -26,4 +29,13 @@ pub(crate) fn print_if_slow<T>(
         println!("{}", print_message(&output, elapsed));
     }
     output
+}
+
+// Equivalent to `!` but stable in our MSRV
+pub(crate) enum Never {}
+
+impl ToExpressionValue for Never {
+    fn to_value(self, _span_range: SpanRange) -> ExpressionValue {
+        match self {}
+    }
 }

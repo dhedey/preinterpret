@@ -3,16 +3,18 @@ mod prelude;
 use prelude::*;
 
 preinterpret::stream! {
-    [!set! #bytes = 32]
-    [!set! #postfix = Hello World #bytes]
-    [!set! #some_symbols = and some symbols such as [!raw! #] and #123]
-    [!set! #MyRawVar = [!raw! Test no #str [!ident! replacement]]]
-    [!ignore! non - sensical !code :D - ignored (!)]
+    #(
+        let bytes = 32;
+        let postfix = %[Hello World #bytes];
+        let some_symbols = %[and some symbols such as %raw[#] and #123];
+        let MyRawVar = %raw[Test no #str $(%[replacement].to_ident())];
+        let _ = %raw[non - sensical !code :D - ignored (!)];
+    )
     struct MyStruct;
-    type [!ident! X "Boo" [!string! Hello 1] #postfix] = MyStruct;
-    const NUM: u32 = [!literal! 1337u #bytes];
-    const STRING: &str = [!string! #MyRawVar];
-    const SNAKE_CASE: &str = [!snake! MyVar];
+    type #(%[X "Boo" #(%[Hello 1].to_string()) #postfix].to_ident()) = MyStruct;
+    const NUM: u32 = #(%[1337u #bytes].to_literal());
+    const STRING: &str = #(MyRawVar.to_string());
+    const SNAKE_CASE: &str = #("MyVar".to_lower_snake_case());
 }
 
 #[test]
@@ -30,6 +32,6 @@ fn test_complex_compilation_failures() {
 fn complex_example_evaluates_correctly() {
     let _x: XBooHello1HelloWorld32 = MyStruct;
     assert_eq!(NUM, 1337u32);
-    assert_eq!(STRING, "Testno#str[!ident!replacement]");
+    assert_eq!(STRING, "Testno#str$(%[replacement].to_ident())");
     assert_eq!(SNAKE_CASE, "my_var");
 }

@@ -1,15 +1,5 @@
-error: Expected:
-       {
-           // The error message to display
-           message: "...",
-           // An optional [token stream], to determine where to show the error message
-           spans?: [!stream! $abc],
-       }
-       The following required field/s are missing: message
- --> tests/compilation_failures/complex/nested.rs:7:26
+error: The method error expects 1 non-self argument/s, but 0 were provided
+ --> tests/compilation_failures/complex/nested.rs:8:23
   |
-7 |                   [!error! {
-  |  __________________________^
-8 | |                     // Missing message
-9 | |                 }]
-  | |_________________^
+8 |                 #(%[].error())
+  |                       ^^^^^

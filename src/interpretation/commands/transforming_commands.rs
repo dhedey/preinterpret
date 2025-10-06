@@ -5,7 +5,7 @@ pub(crate) struct ParseCommand {
     input: SourceExpression,
     #[allow(unused)]
     with_token: Ident,
-    transformer: ExplicitTransformStream,
+    transformer: StreamParser,
 }
 
 impl CommandType for ParseCommand {
@@ -24,7 +24,7 @@ impl StreamCommandDefinition for ParseCommand {
                     transformer: input.parse()?,
                 })
             },
-            "Expected [!parse! <stream> with <parser>] where:\n* The <stream> is some stream-valued expression, such as `#x` or `[!stream! ...]`\n* The <parser> is some parser such as @(...)",
+            "Expected [!parse! <stream> with <parser>] where:\n* The <stream> is some stream-valued expression, such as `#x` or `%[...]`\n* The <parser> is some parser such as @(...)",
         )
     }
 
@@ -40,44 +40,5 @@ impl StreamCommandDefinition for ParseCommand {
             .value;
         self.transformer
             .handle_transform_from_stream(input, interpreter, output)
-    }
-}
-
-#[derive(Clone)]
-pub(crate) struct LetCommand {
-    destructuring: TransformStreamUntilToken<Token![=]>,
-    #[allow(unused)]
-    equals: Token![=],
-    arguments: SourceStream,
-}
-
-impl CommandType for LetCommand {
-    type OutputKind = OutputKindNone;
-}
-
-impl NoOutputCommandDefinition for LetCommand {
-    const COMMAND_NAME: &'static str = "let";
-
-    fn parse(arguments: CommandArguments) -> ParseResult<Self> {
-        arguments.fully_parse_or_error(
-            |input| {
-                Ok(Self {
-                    destructuring: input.parse()?,
-                    equals: input.parse()?,
-                    arguments: input.parse_with_context(arguments.command_span())?,
-                })
-            },
-            "Expected [!let! <destructuring> = ...]",
-        )
-    }
-
-    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        let result_tokens = self.arguments.interpret_to_new_stream(interpreter)?;
-        let mut ignored_transformer_output = OutputStream::new();
-        self.destructuring.handle_transform_from_stream(
-            result_tokens,
-            interpreter,
-            &mut ignored_transformer_output,
-        )
     }
 }

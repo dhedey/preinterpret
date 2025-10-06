@@ -17,7 +17,7 @@ fn main() {
         output
     });
     benchmark!("For loop concatenating to stream 1000 tokens", {
-        let output = [!stream!];
+        let output = %[];
         let _ = [!for! i in 1..=1000 { output.push(i); }];
         output
     });
@@ -27,19 +27,14 @@ fn main() {
     benchmark!("Simple tuple impls", {
         [!for! N in 0..=10 {
             #(
-                let comma_separated_types = [!stream!];
-                let i = 0;
-                let _ = [!for! name in 'A'..'Z' {
+                let comma_separated_types = %[];
+                let _ = [!for! name in ('A'..).into_iter().take(N) {
                     #(
-                        let _ = [!if! i >= N {
-                            [!break!];
-                        }];
-                        let ident = [!ident! name];
-                        comma_separated_types += [!stream! #ident,];
-                        i += 1;
+                        let ident = name.to_ident();
+                        comma_separated_types += %[#ident,];
                     )
                 }];
-                [!stream!
+                %[
                     impl<#comma_separated_types> MyTrait for (#comma_separated_types) {}
                 ]
             )
@@ -56,13 +51,12 @@ fn main() {
         }];
     });
     benchmark!("Lazy iterator", {
-        let count = 0;
-        [!for! i in 0..100000 {
+        let x = [!for! i in 0..100000 {
             [!if! i == 5 {
-                [!string! #i]
+                #i
                 [!break!]
             }]
-            #(count += 1)
-        }]
+        }].to_string();
+        %[].assert_eq(x, "5");
     });
 }

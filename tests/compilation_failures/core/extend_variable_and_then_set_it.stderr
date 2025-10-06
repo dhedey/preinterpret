@@ -1,5 +1,0 @@
-error: The variable cannot be modified as it is already being modified
- --> tests/compilation_failures/core/extend_variable_and_then_set_it.rs:6:37
-  |
-6 |         [!set! #variable += World #(variable = [!stream! Hello2])]
-  |                                     ^^^^^^^^

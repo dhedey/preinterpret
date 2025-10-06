@@ -14,62 +14,43 @@ impl ParseBuffer<'_, Source> {
 #[allow(unused)]
 pub(crate) enum SourcePeekMatch {
     Command(Option<CommandOutputKind>),
-    EmbeddedExpression(Grouping),
-    Variable(Grouping),
+    EmbeddedExpression,
+    EmbeddedVariable,
     ExplicitTransformStream,
     Transformer(Option<TransformerKind>),
     Group(Delimiter),
     Ident(Ident),
     Punct(Punct),
     Literal(Literal),
+    StreamLiteral(StreamLiteralKind),
+    ObjectLiteral,
     End,
 }
 
 fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> SourcePeekMatch {
-    // We have to check groups first, so that we handle transparent groups
-    // and avoid the self.ignore_none() calls inside cursor
-    if let Some((next, delimiter, _, _)) = cursor.any_group() {
-        if delimiter == Delimiter::Bracket {
-            if let Some((_, next)) = next.punct_matching('!') {
-                if let Some((ident, next)) = next.ident() {
-                    if next.punct_matching('!').is_some() {
-                        let output_kind =
-                            CommandKind::for_ident(&ident).map(|kind| kind.resolve_output_kind());
-                        return SourcePeekMatch::Command(output_kind);
-                    }
-                }
-            }
-        }
-
-        // Ideally we'd like to detect $($tt)* substitutions from macros and interpret them as
-        // a Raw (uninterpreted) group, because typically that's what a user would typically intend.
-        //
-        // You'd think mapping a Delimiter::None to a GrammarPeekMatch::RawGroup would be a good way
-        // of doing this, but unfortunately this behaviour is very arbitrary and not in a helpful way:
-        // => A $tt or $($tt)* is not grouped...
-        // => A $literal or $($literal)* _is_ outputted in a group...
-        //
-        // So this isn't possible. It's unlikely to matter much, and a user can always do:
-        // [!raw! $($tt)*] anyway.
-
-        return SourcePeekMatch::Group(delimiter);
-    }
     if let Some((_, next)) = cursor.punct_matching('#') {
         if next.ident().is_some() {
-            return SourcePeekMatch::Variable(Grouping::Grouped);
-        }
-        if let Some((_, next)) = next.punct_matching('.') {
-            if let Some((_, next)) = next.punct_matching('.') {
-                if next.ident().is_some() {
-                    return SourcePeekMatch::Variable(Grouping::Flattened);
-                }
-                if next.group_matching(Delimiter::Parenthesis).is_some() {
-                    return SourcePeekMatch::EmbeddedExpression(Grouping::Flattened);
-                }
-            }
+            return SourcePeekMatch::EmbeddedVariable;
         }
         if next.group_matching(Delimiter::Parenthesis).is_some() {
-            return SourcePeekMatch::EmbeddedExpression(Grouping::Grouped);
+            return SourcePeekMatch::EmbeddedExpression;
+        }
+    }
+
+    if let Some((_, next)) = cursor.punct_matching('%') {
+        if next.group_matching(Delimiter::Bracket).is_some() {
+            return SourcePeekMatch::StreamLiteral(StreamLiteralKind::Regular);
+        }
+        if let Some((ident, _)) = next.ident() {
+            let ident_string = ident.to_string();
+            match ident_string.as_str() {
+                "raw" => return SourcePeekMatch::StreamLiteral(StreamLiteralKind::Raw),
+                "group" => return SourcePeekMatch::StreamLiteral(StreamLiteralKind::Grouped),
+                _ => {}
+            }
+        }
+        if next.group_matching(Delimiter::Brace).is_some() {
+            return SourcePeekMatch::ObjectLiteral;
         }
     }
 
@@ -94,6 +75,32 @@ fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> SourcePeekMatch {
         }
     }
 
+    if let Some((next, delimiter, _, _)) = cursor.any_group() {
+        if delimiter == Delimiter::Bracket {
+            if let Some((_, next)) = next.punct_matching('!') {
+                if let Some((ident, next)) = next.ident() {
+                    if next.punct_matching('!').is_some() {
+                        let output_kind =
+                            CommandKind::for_ident(&ident).map(|kind| kind.resolve_output_kind());
+                        return SourcePeekMatch::Command(output_kind);
+                    }
+                }
+            }
+        }
+
+        // Ideally we'd like to detect $($tt)* substitutions from macros and interpret them as
+        // a Raw (uninterpreted) group, because typically that's what a user would typically intend.
+        //
+        // You'd think mapping a Delimiter::None to a GrammarPeekMatch::RawGroup would be a good way
+        // of doing this, but unfortunately this behaviour is very arbitrary and not in a helpful way:
+        // => A $tt or $($tt)* is not grouped...
+        // => A $literal or $($literal)* _is_ outputted in a group...
+        //
+        // So this isn't possible. It's unlikely to matter much, and a user can always do:
+        // %raw[$($tt)*] anyway.
+        return SourcePeekMatch::Group(delimiter);
+    }
+
     match cursor.token_tree() {
         Some((TokenTree::Ident(ident), _)) => SourcePeekMatch::Ident(ident),
         Some((TokenTree::Punct(punct), _)) => SourcePeekMatch::Punct(punct),
@@ -108,27 +115,6 @@ fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> SourcePeekMatch {
 // =====================================
 
 pub(crate) struct Output;
-
-impl ParseBuffer<'_, Output> {
-    pub(crate) fn peek_grammar(&self) -> OutputPeekMatch {
-        match self.cursor().token_tree() {
-            Some((TokenTree::Ident(ident), _)) => OutputPeekMatch::Ident(ident),
-            Some((TokenTree::Punct(punct), _)) => OutputPeekMatch::Punct(punct),
-            Some((TokenTree::Literal(literal), _)) => OutputPeekMatch::Literal(literal),
-            Some((TokenTree::Group(group), _)) => OutputPeekMatch::Group(group.delimiter()),
-            None => OutputPeekMatch::End,
-        }
-    }
-}
-
-#[allow(unused)]
-pub(crate) enum OutputPeekMatch {
-    Group(Delimiter),
-    Ident(Ident),
-    Punct(Punct),
-    Literal(Literal),
-    End,
-}
 
 // Generic parsing
 // ===============

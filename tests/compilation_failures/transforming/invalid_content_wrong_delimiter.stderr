@@ -1,0 +1,5 @@
+error: Expected (
+ --> tests/compilation_failures/transforming/invalid_content_wrong_delimiter.rs:4:29
+  |
+4 |     run!(let %[(@REST)] = %[[Hello World]]);
+  |                             ^^^^^^^^^^^^^

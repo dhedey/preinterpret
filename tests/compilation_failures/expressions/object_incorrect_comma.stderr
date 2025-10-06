@@ -1,5 +1,5 @@
 error: Expected an object entry (`field,` `field: ..,` or `["field"]: ..,`). If you meant to start a new block, use #{ ... } instead.
- --> tests/compilation_failures/expressions/object_incorrect_comma.rs:6:14
+ --> tests/compilation_failures/expressions/object_incorrect_comma.rs:6:15
   |
-6 |         #({ a; b: 1 })
-  |              ^
+6 |         #(%{ a; b: 1 })
+  |               ^

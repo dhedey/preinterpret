@@ -97,121 +97,6 @@ impl<C: NoOutputCommandDefinition> CommandInvocationAs<OutputKindNone> for C {
     }
 }
 
-//================
-// OutputKindValue
-//================
-
-pub(crate) struct OutputKindValue;
-impl OutputKind for OutputKindValue {
-    type Output = TokenTree;
-
-    fn resolve_enum_kind() -> CommandOutputKind {
-        CommandOutputKind::Value
-    }
-}
-
-pub(crate) trait ValueCommandDefinition:
-    Sized + CommandType<OutputKind = OutputKindValue>
-{
-    const COMMAND_NAME: &'static str;
-    fn parse(arguments: CommandArguments) -> ParseResult<Self>;
-    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue>;
-}
-
-impl<C: ValueCommandDefinition> CommandInvocationAs<OutputKindValue> for C {
-    fn execute_into(
-        self,
-        context: ExecutionContext,
-        output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
-        self.execute(context.interpreter)?.output_to(
-            Grouping::Grouped,
-            output,
-            StreamOutputBehaviour::Standard,
-        )
-    }
-
-    fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
-        self.execute(context.interpreter)
-    }
-}
-
-//================
-// OutputKindIdent
-//================
-
-pub(crate) struct OutputKindIdent;
-impl OutputKind for OutputKindIdent {
-    type Output = Ident;
-
-    fn resolve_enum_kind() -> CommandOutputKind {
-        CommandOutputKind::Ident
-    }
-}
-
-pub(crate) trait IdentCommandDefinition:
-    Sized + CommandType<OutputKind = OutputKindIdent>
-{
-    const COMMAND_NAME: &'static str;
-    fn parse(arguments: CommandArguments) -> ParseResult<Self>;
-    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<Ident>;
-}
-
-impl<C: IdentCommandDefinition> CommandInvocationAs<OutputKindIdent> for C {
-    fn execute_into(
-        self,
-        context: ExecutionContext,
-        output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
-        output.push_ident(self.execute(context.interpreter)?);
-        Ok(())
-    }
-
-    fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
-        let span_range = context.delim_span.span_range();
-        let mut output = OutputStream::new();
-        output.push_ident(self.execute(context.interpreter)?);
-        Ok(output.to_value(span_range))
-    }
-}
-
-//==================
-// OutputKindLiteral
-//==================
-
-pub(crate) struct OutputKindLiteral;
-impl OutputKind for OutputKindLiteral {
-    type Output = Literal;
-
-    fn resolve_enum_kind() -> CommandOutputKind {
-        CommandOutputKind::Literal
-    }
-}
-
-pub(crate) trait LiteralCommandDefinition:
-    Sized + CommandType<OutputKind = OutputKindLiteral>
-{
-    const COMMAND_NAME: &'static str;
-    fn parse(arguments: CommandArguments) -> ParseResult<Self>;
-    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<Literal>;
-}
-
-impl<C: LiteralCommandDefinition> CommandInvocationAs<OutputKindLiteral> for C {
-    fn execute_into(
-        self,
-        context: ExecutionContext,
-        output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
-        output.push_literal(self.execute(context.interpreter)?);
-        Ok(())
-    }
-
-    fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
-        let literal = self.execute(context.interpreter)?;
-        Ok(ExpressionValue::for_literal(literal))
-    }
-}
-
 //=================
 // OutputKindStream
 //=================
@@ -341,36 +226,7 @@ macro_rules! define_command_enums {
 
 define_command_enums! {
     // Core Commands
-    SetCommand,
-    RawCommand,
-    StreamCommand,
-    IgnoreCommand,
-    ReinterpretCommand,
     SettingsCommand,
-    ErrorCommand,
-
-    // Concat & Type Convert Commands
-    StringCommand,
-    IdentCommand,
-    IdentCamelCommand,
-    IdentSnakeCommand,
-    IdentUpperSnakeCommand,
-    LiteralCommand,
-
-    // Concat & String Convert Commands
-    UpperCommand,
-    LowerCommand,
-    SnakeCommand,
-    LowerSnakeCommand,
-    UpperSnakeCommand,
-    CamelCommand,
-    LowerCamelCommand,
-    UpperCamelCommand,
-    KebabCommand,
-    CapitalizeCommand,
-    DecapitalizeCommand,
-    TitleCommand,
-    InsertSpacesCommand,
 
     // Control flow commands
     IfCommand,
@@ -380,19 +236,8 @@ define_command_enums! {
     ContinueCommand,
     BreakCommand,
 
-    // Token Commands
-    IsEmptyCommand,
-    LengthCommand,
-    GroupCommand,
-    IntersperseCommand,
-    SplitCommand,
-    CommaSplitCommand,
-    ZipCommand,
-    ZipTruncatedCommand,
-
     // Destructuring Commands
     ParseCommand,
-    LetCommand,
 }
 
 #[derive(Clone)]
@@ -410,7 +255,7 @@ impl Parse<Source> for Command {
             Some(command_kind) => command_kind,
             None => command_name.span().err(
                 format!(
-                    "Expected `[!<command>! ..]`, for <command> one of: {}.\nIf this wasn't intended to be a preinterpret command, you can work around this with [!raw! [!{} ... ]]",
+                    "Expected `[!<command>! ..]`, for <command> one of: {}.\nIf this wasn't intended to be a preinterpret command, you can work around this with %raw[[!{} ... ]]",
                     CommandKind::list_all(),
                     command_name,
                 ),

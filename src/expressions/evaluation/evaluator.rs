@@ -43,31 +43,29 @@ impl<'a> ExpressionEvaluator<'a, Source> {
     ) -> ExecutionResult<StepResult> {
         Ok(StepResult::Continue(match action {
             NextActionInner::ReadNodeAsValue(node, ownership) => self.nodes[node.0]
-                .handle_as_value(
+                .handle_as_value(Context {
+                    request: ownership,
                     interpreter,
-                    Context {
-                        request: ownership,
-                        stack: &mut self.stack,
-                    },
-                )?,
+                    stack: &mut self.stack,
+                })?,
             NextActionInner::ReadNodeAsAssignee(node, value) => self.nodes[node.0]
                 .handle_as_assignee(
-                    interpreter,
                     Context {
                         stack: &mut self.stack,
+                        interpreter,
                         request: (),
                     },
                     self.nodes,
                     node,
                     value,
                 )?,
-            NextActionInner::ReadNodeAsPlace(node) => self.nodes[node.0].handle_as_place(
-                interpreter,
-                Context {
+            NextActionInner::ReadNodeAsPlace(node) => {
+                self.nodes[node.0].handle_as_place(Context {
                     stack: &mut self.stack,
+                    interpreter,
                     request: (),
-                },
-            )?,
+                })?
+            }
             NextActionInner::HandleReturnedItem(item) => {
                 let top_of_stack = match self.stack.handlers.pop() {
                     Some(top) => top,
@@ -76,7 +74,7 @@ impl<'a> ExpressionEvaluator<'a, Source> {
                         return Ok(StepResult::Return(item.expect_owned().into_inner()));
                     }
                 };
-                top_of_stack.handle_item(&mut self.stack, item)?
+                top_of_stack.handle_item(interpreter, &mut self.stack, item)?
             }
         }))
     }
@@ -270,28 +268,41 @@ pub(super) enum AnyEvaluationHandler {
 impl AnyEvaluationHandler {
     fn handle_item(
         self,
+        interpreter: &mut Interpreter,
         stack: &mut EvaluationStack,
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
         match self {
             AnyEvaluationHandler::Value(handler, ownership) => handler.handle_item(
                 Context {
+                    interpreter,
                     stack,
                     request: ownership,
                 },
                 item,
             ),
-            AnyEvaluationHandler::Place(handler) => {
-                handler.handle_item(Context { stack, request: () }, item)
-            }
-            AnyEvaluationHandler::Assignment(handler) => {
-                handler.handle_item(Context { stack, request: () }, item)
-            }
+            AnyEvaluationHandler::Place(handler) => handler.handle_item(
+                Context {
+                    interpreter,
+                    stack,
+                    request: (),
+                },
+                item,
+            ),
+            AnyEvaluationHandler::Assignment(handler) => handler.handle_item(
+                Context {
+                    interpreter,
+                    stack,
+                    request: (),
+                },
+                item,
+            ),
         }
     }
 }
 
 pub(super) struct Context<'a, T: EvaluationItemType> {
+    interpreter: &'a mut Interpreter,
     stack: &'a mut EvaluationStack,
     request: T::RequestConstraints,
 }
@@ -386,6 +397,10 @@ impl<'a, T: EvaluationItemType> Context<'a, T> {
             .handlers
             .push(T::into_unkinded_handler(handler.into_any(), self.request));
         NextActionInner::ReadNodeAsAssignee(node, value).into()
+    }
+
+    pub(super) fn interpreter(&mut self) -> &mut Interpreter {
+        self.interpreter
     }
 }
 

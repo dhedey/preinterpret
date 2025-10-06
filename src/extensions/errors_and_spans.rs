@@ -57,6 +57,10 @@ pub(crate) trait HasSpan {
 /// See also [`SlowSpanRange`] for the equivalent of [`syn::spanned`].
 pub(crate) trait HasSpanRange {
     fn span_range(&self) -> SpanRange;
+
+    fn span_from_join_else_start(&self) -> Span {
+        self.span_range().join_into_span_else_start()
+    }
 }
 
 impl<T: HasSpan + ?Sized> HasSpanRange for T {
@@ -87,6 +91,14 @@ pub(crate) struct SpanRange {
 }
 
 impl SpanRange {
+    /// Temporary whilst we remove span ranges from values
+    pub(crate) fn dummy() -> Self {
+        Self {
+            start: Span::call_site(),
+            end: Span::call_site(),
+        }
+    }
+
     pub(crate) fn new_single(span: Span) -> Self {
         Self {
             start: span,
@@ -364,4 +376,54 @@ single_span_token! {
     Token![^],
     Token![&],
     Token![|],
+}
+
+pub(crate) struct Spanned<T> {
+    pub(crate) value: T,
+    pub(crate) span_range: SpanRange,
+}
+
+impl<T> HasSpanRange for Spanned<T> {
+    fn span_range(&self) -> SpanRange {
+        self.span_range
+    }
+}
+
+impl<T> Deref for Spanned<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        &self.value
+    }
+}
+
+impl<T> DerefMut for Spanned<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        &mut self.value
+    }
+}
+
+impl<X, T: AsRef<X>> AsRef<X> for Spanned<T> {
+    fn as_ref(&self) -> &X {
+        self.value.as_ref()
+    }
+}
+
+impl<X, T: AsMut<X>> AsMut<X> for Spanned<T> {
+    fn as_mut(&mut self) -> &mut X {
+        self.value.as_mut()
+    }
+}
+
+pub(crate) trait ToSpanned: Sized {
+    fn spanned(self, source: impl HasSpanRange) -> Spanned<Self>;
+}
+
+impl<T> ToSpanned for T {
+    fn spanned(self, source: impl HasSpanRange) -> Spanned<Self> {
+        Spanned {
+            value: self,
+            span_range: source.span_range(),
+        }
+    }
 }

@@ -10,13 +10,17 @@ pub(crate) struct ExpressionArray {
 }
 
 impl ExpressionArray {
-    pub(crate) fn output_grouped_items_to(&self, output: &mut OutputStream) -> ExecutionResult<()> {
+    pub(crate) fn new(items: Vec<ExpressionValue>, span_range: SpanRange) -> Self {
+        Self { items, span_range }
+    }
+
+    pub(crate) fn output_items_to(
+        &self,
+        output: &mut OutputStream,
+        grouping: Grouping,
+    ) -> ExecutionResult<()> {
         for item in &self.items {
-            item.output_to(
-                Grouping::Grouped,
-                output,
-                StreamOutputBehaviour::PermitArrays,
-            )?;
+            item.output_to(grouping, output)?;
         }
         Ok(())
     }
@@ -158,28 +162,19 @@ impl ExpressionArray {
     }
 
     pub(crate) fn concat_recursive_into(
-        self,
+        &self,
         output: &mut String,
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
-        if behaviour.output_array_structure {
-            output.push('[');
-        }
-        let mut is_first = true;
-        for item in self.items {
-            if !is_first && behaviour.output_array_structure {
-                output.push(',');
-            }
-            if !is_first && behaviour.add_space_between_token_trees {
-                output.push(' ');
-            }
-            item.concat_recursive_into(output, behaviour)?;
-            is_first = false;
-        }
-        if behaviour.output_array_structure {
-            output.push(']');
-        }
-        Ok(())
+        ExpressionIterator::any_iterator_to_string(
+            self.items.iter(),
+            output,
+            behaviour,
+            "[]",
+            "[",
+            "]",
+            false, // Output all the vec because it's already in memory
+        )
     }
 }
 
@@ -210,51 +205,56 @@ impl ToExpressionValue for Vec<ExpressionValue> {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct ArrayTypeData;
+impl ToExpressionValue for ExpressionArray {
+    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
+        ExpressionValue::Array(ExpressionArray {
+            items: self.items,
+            span_range,
+        })
+    }
+}
 
-impl MethodResolutionTarget for ArrayTypeData {
-    type Parent = ValueTypeData;
-    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
-
-    fn resolve_own_method(method_name: &str) -> Option<MethodInterface> {
-        define_method_matcher! {
-            (match method_name on Self)
-
-            fn len(this: Shared<ExpressionArray>) -> ExecutionResult<usize> {
-                Ok(this.items.len())
-            }
-
+define_interface! {
+    struct ArrayTypeData,
+    parent: IterableTypeData,
+    pub(crate) mod array_interface {
+        pub(crate) mod methods {
             fn push(mut this: Mutable<ExpressionArray>, item: OwnedValue) -> ExecutionResult<()> {
                 this.items.push(item.into());
                 Ok(())
             }
-        }
-    }
 
-    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
-        Some(match operation {
-            UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => return None,
-            UnaryOperation::Cast { target, .. } => match target {
-                CastTarget::Boolean
-                | CastTarget::Char
-                | CastTarget::Integer(_)
-                | CastTarget::Float(_) => {
-                    wrap_unary!([Op=operation](this: Owned<ExpressionArray>) -> ExecutionResult<ResolvedValue> {
-                        let (mut this, _) = this.deconstruct();
-                        let length = this.items.len();
-                        if length == 1 {
-                            operation.evaluate(this.items.pop().unwrap().into())
-                        } else {
-                            operation.execution_err(format!(
-                                "Only a singleton array can be cast to this value but the array has {} elements",
-                                length,
-                            ))
-                        }
-                    })
+            fn to_stream_grouped(this: ExpressionArray) -> StreamOutput<impl StreamAppender> {
+                StreamOutput::new(move |stream| this.output_items_to(stream, Grouping::Grouped))
+            }
+        }
+        pub(crate) mod unary_operations {
+            [context] fn cast_to_numeric(this: Owned<ExpressionArray>) -> ExecutionResult<ResolvedValue> {
+                let (mut this, _) = this.deconstruct();
+                let length = this.items.len();
+                if length == 1 {
+                    context.operation.evaluate(this.items.pop().unwrap().into())
+                } else {
+                    context.operation.execution_err(format!(
+                        "Only a singleton array can be cast to this value but the array has {} elements",
+                        length,
+                    ))
                 }
-                _ => return None,
-            },
-        })
+            }
+        }
+        interface_items {
+            fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+                Some(match operation {
+                    UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => return None,
+                    UnaryOperation::Cast { target, .. } => match target {
+                        CastTarget::Boolean
+                        | CastTarget::Char
+                        | CastTarget::Integer(_)
+                        | CastTarget::Float(_) => unary_definitions::cast_to_numeric(),
+                        _ => return None,
+                    },
+                })
+            }
+        }
     }
 }

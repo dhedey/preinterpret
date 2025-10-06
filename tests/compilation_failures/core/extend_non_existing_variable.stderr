@@ -1,5 +1,5 @@
 error: The variable does not already exist in the current scope
- --> tests/compilation_failures/core/extend_non_existing_variable.rs:5:16
+ --> tests/compilation_failures/core/extend_non_existing_variable.rs:5:11
   |
-5 |         [!set! #variable += 2]
-  |                ^^^^^^^^^
+5 |         #(variable += %[2];)
+  |           ^^^^^^^^

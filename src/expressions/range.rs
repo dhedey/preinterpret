@@ -10,12 +10,33 @@ pub(crate) struct ExpressionRange {
 }
 
 impl ExpressionRange {
+    pub(crate) fn len(&self) -> ExecutionResult<usize> {
+        Ok(self
+            .inner
+            .clone()
+            .into_iterable()?
+            .resolve_iterator()?
+            .size_hint()
+            .0)
+    }
+
     pub(crate) fn concat_recursive_into(
-        self,
+        &self,
         output: &mut String,
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
-        match *self.inner {
+        if !behaviour.use_debug_literal_syntax {
+            return ExpressionIterator::any_iterator_to_string(
+                self.clone().inner.into_iterable()?.resolve_iterator()?,
+                output,
+                behaviour,
+                "[<range>]",
+                "[<range> ",
+                "]",
+                true,
+            );
+        }
+        match &*self.inner {
             ExpressionRangeInner::Range {
                 start_inclusive,
                 end_exclusive,
@@ -219,25 +240,30 @@ impl ToExpressionValue for ExpressionRangeInner {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct RangeTypeData;
-
-impl MethodResolutionTarget for RangeTypeData {
-    type Parent = ValueTypeData;
-    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
-
-    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
-        Some(match operation {
-            UnaryOperation::Cast { .. }
-                if IteratorTypeData::resolve_own_unary_operation(operation).is_some() =>
-            {
-                wrap_unary!([Op=operation](this: Owned<ExpressionRange>) -> ExecutionResult<ResolvedValue> {
-                    let this_iterator = this.try_map(|this, _| ExpressionIterator::new_for_range(this))?;
-                    operation.evaluate(this_iterator)
+define_interface! {
+    struct RangeTypeData,
+    parent: IterableTypeData,
+    pub(crate) mod range_interface {
+        pub(crate) mod methods {
+        }
+        pub(crate) mod unary_operations {
+            [context] fn cast_via_iterator(this: Owned<ExpressionRange>) -> ExecutionResult<ResolvedValue> {
+                let this_iterator = this.try_map(|this, _| ExpressionIterator::new_for_range(this))?;
+                context.operation.evaluate(this_iterator)
+            }
+        }
+        interface_items {
+            fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+                Some(match operation {
+                    UnaryOperation::Cast { .. }
+                        if IteratorTypeData::resolve_own_unary_operation(operation).is_some() =>
+                    {
+                        unary_definitions::cast_via_iterator()
+                    }
+                    _ => return None,
                 })
             }
-            _ => return None,
-        })
+        }
     }
 }
 

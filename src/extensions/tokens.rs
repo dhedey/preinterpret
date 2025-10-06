@@ -45,6 +45,7 @@ pub(crate) trait LiteralExt: Sized {
     #[allow(unused)]
     fn content_if_string(&self) -> Option<String>;
     fn content_if_string_like(&self) -> Option<String>;
+    fn inner_value_to_string(&self) -> String;
 }
 
 impl LiteralExt for Literal {
@@ -61,6 +62,19 @@ impl LiteralExt for Literal {
             Lit::Char(lit_char) => Some(lit_char.value().to_string()),
             Lit::CStr(lit_cstr) => Some(lit_cstr.value().to_string_lossy().to_string()),
             _ => None,
+        }
+    }
+
+    fn inner_value_to_string(&self) -> String {
+        match parse_str::<Lit>(&self.to_string()).unwrap() {
+            Lit::Str(lit_str) => lit_str.value(),
+            Lit::Char(lit_char) => lit_char.value().to_string(),
+            Lit::CStr(lit_cstr) => lit_cstr.value().to_string_lossy().to_string(),
+            Lit::Byte(lit_byte) => lit_byte.value().to_string(),
+            Lit::Int(lit_int) => lit_int.base10_digits().to_string(),
+            Lit::Float(lit_float) => lit_float.base10_digits().to_string(),
+            Lit::Bool(lit_bool) => lit_bool.value.to_string(),
+            _ => self.to_string(),
         }
     }
 }

@@ -10,9 +10,7 @@ fn main() {
             } !elif! x >= 3 {
                 // This checks that the "continue" flag is consumed,
                 // and future errors propagate correctly.
-                [!error! {
-                    message: "And now we error"
-                }]
+                #(%[_].error("And now we error"))
             }]
         }]
     );

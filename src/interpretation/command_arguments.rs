@@ -63,14 +63,6 @@ impl<'a> CommandArguments<'a> {
 
         Ok(parsed)
     }
-
-    pub(crate) fn parse_all_as_source(&self) -> ParseResult<SourceStream> {
-        self.parse_stream.parse_with_context(self.command_span)
-    }
-
-    pub(crate) fn read_all_as_raw_token_stream(&self) -> TokenStream {
-        self.parse_stream.parse::<TokenStream>().unwrap()
-    }
 }
 
 pub(crate) trait ArgumentsContent: Parse<Source> {

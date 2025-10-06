@@ -107,30 +107,26 @@ impl MethodResolver for ValueKind {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct NoneTypeData;
-
-impl MethodResolutionTarget for NoneTypeData {
-    type Parent = ValueTypeData;
-    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+define_interface! {
+    struct NoneTypeData,
+    parent: ValueTypeData,
+    pub(crate) mod none_interface {
+        pub(crate) mod methods {}
+        pub(crate) mod unary_operations {}
+        interface_items {}
+    }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct ValueTypeData;
-
-impl MethodResolutionTarget for ValueTypeData {
-    type Parent = ValueTypeData; // Irrelevant placeholder
-    const PARENT: Option<Self::Parent> = None;
-
-    fn resolve_own_method(method_name: &str) -> Option<MethodInterface> {
-        define_method_matcher! {
-            (match method_name on Self)
-
+define_interface! {
+    struct ValueTypeData,
+    parent: ValueTypeData,
+    pub(crate) mod value_interface {
+        pub(crate) mod methods {
             fn clone(this: CopyOnWriteValue) -> OwnedValue {
                 this.into_owned_infallible()
             }
 
-            fn take(mut this: MutableValue) -> ExpressionValue {
+            fn take_owned(mut this: MutableValue) -> ExpressionValue {
                 let span_range = this.span_range();
                 core::mem::replace(this.deref_mut(), ExpressionValue::None(span_range))
             }
@@ -145,45 +141,93 @@ impl MethodResolutionTarget for ValueTypeData {
                 this
             }
 
-            fn debug_string(this: CopyOnWriteValue) -> ExecutionResult<String> {
-                this.into_owned_infallible().into_inner().into_debug_string()
-            }
-
-            fn debug(this: CopyOnWriteValue) -> ExecutionResult<()> {
-                let value = this.into_owned_infallible();
-                let span_range = value.span_range();
-                let message = value.into_inner().into_debug_string()?;
-                span_range.execution_err(message)
-            }
-
             fn swap(mut a: MutableValue, mut b: MutableValue) -> () {
                 core::mem::swap(a.deref_mut(), b.deref_mut());
             }
-        }
-    }
 
-    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
-        Some(match operation {
-            UnaryOperation::Cast { target, .. } => match target {
-                CastTarget::String => {
-                    wrap_unary!((input: ExpressionValue) -> ExecutionResult<String> {
-                        input.concat_recursive(&ConcatBehaviour::standard())
-                    })
-                }
-                CastTarget::Stream => {
-                    wrap_unary!((input: ExpressionValue) -> ExecutionResult<OutputStream> {
-                        input.into_new_output_stream(Grouping::Flattened, StreamOutputBehaviour::PermitArrays)
-                    })
-                }
-                CastTarget::Group => {
-                    wrap_unary!((input: ExpressionValue) -> ExecutionResult<OutputStream> {
-                        input.into_new_output_stream(Grouping::Grouped, StreamOutputBehaviour::PermitArrays)
-                    })
-                }
-                _ => return None,
-            },
-            _ => return None,
-        })
+            fn debug(this: CopyOnWriteValue) -> ExecutionResult<()> {
+                let (value, span_range) = this.into_owned_infallible().deconstruct();
+                let message = value.concat_recursive(&ConcatBehaviour::debug(span_range))?;
+                span_range.execution_err(message)
+            }
+
+            fn to_debug_string(this: CopyOnWriteValue) -> ExecutionResult<String> {
+                let (value, span_range) = this.into_owned_infallible().deconstruct();
+                value.concat_recursive(&ConcatBehaviour::debug(span_range))
+            }
+
+            fn to_stream(input: ExpressionValue) -> ExecutionResult<OutputStream> {
+                input.into_new_output_stream(Grouping::Flattened)
+            }
+
+            fn to_group(input: ExpressionValue) -> ExecutionResult<OutputStream> {
+                input.into_new_output_stream(Grouping::Grouped)
+            }
+
+            fn to_string(input: SharedValue) -> ExecutionResult<String> {
+                input.concat_recursive(&ConcatBehaviour::standard(input.span_range()))
+            }
+
+            // TYPE CHECKING
+            // ===============================
+            fn is_none(this: SharedValue) -> bool {
+                this.is_none()
+            }
+
+            // STRING-BASED CONVERSION METHODS
+            // ===============================
+
+            [context] fn to_ident(this: ExpressionValue) -> ExecutionResult<Ident> {
+                let stream = to_stream(context, this)?;
+                let spanned = stream.into_spanned_ref(context.output_span_range);
+                stream_interface::methods::to_ident(context, spanned)
+            }
+
+            [context] fn to_ident_camel(this: ExpressionValue) -> ExecutionResult<Ident> {
+                let stream = to_stream(context, this)?;
+                let spanned = stream.into_spanned_ref(context.output_span_range);
+                stream_interface::methods::to_ident_camel(context, spanned)
+            }
+
+            [context] fn to_ident_snake(this: ExpressionValue) -> ExecutionResult<Ident> {
+                let stream = to_stream(context, this)?;
+                let spanned = stream.into_spanned_ref(context.output_span_range);
+                stream_interface::methods::to_ident_snake(context, spanned)
+            }
+
+            [context] fn to_ident_upper_snake(this: ExpressionValue) -> ExecutionResult<Ident> {
+                let stream = to_stream(context, this)?;
+                let spanned = stream.into_spanned_ref(context.output_span_range);
+                stream_interface::methods::to_ident_upper_snake(context, spanned)
+            }
+
+            [context] fn to_literal(this: ExpressionValue) -> ExecutionResult<Literal> {
+                let stream = to_stream(context, this)?;
+                let spanned = stream.into_spanned_ref(context.output_span_range);
+                stream_interface::methods::to_literal(context, spanned)
+            }
+        }
+        pub(crate) mod unary_operations {
+            fn cast_to_string(input: ExpressionValue) -> ExecutionResult<String> {
+                input.concat_recursive(&ConcatBehaviour::standard(input.span_range()))
+            }
+
+            fn cast_to_stream(input: ExpressionValue) -> ExecutionResult<OutputStream> {
+                input.into_new_output_stream(Grouping::Flattened)
+            }
+        }
+        interface_items {
+            fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+                Some(match operation {
+                    UnaryOperation::Cast { target, .. } => match target {
+                        CastTarget::String => unary_definitions::cast_to_string(),
+                        CastTarget::Stream => unary_definitions::cast_to_stream(),
+                        _ => return None,
+                    },
+                    _ => return None,
+                })
+            }
+        }
     }
 }
 
@@ -237,7 +281,7 @@ impl ExpressionValue {
     ) -> ExecutionResult<ExpressionValue> {
         if !self.kind().supports_transparent_cloning() {
             return new_span_range.execution_err(format!(
-                "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .take() or .clone() explicitly.",
+                "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .take_owned() or .clone() explicitly.",
                 self.articled_value_type()
             ));
         }
@@ -558,21 +602,8 @@ impl ExpressionValue {
         }
     }
 
-    pub(crate) fn expect_any_iterator(
-        self,
-        place_descriptor: &str,
-    ) -> ExecutionResult<ExpressionIterator> {
-        match self {
-            ExpressionValue::Array(value) => Ok(ExpressionIterator::new_for_array(value)),
-            ExpressionValue::Stream(value) => Ok(ExpressionIterator::new_for_stream(value)),
-            ExpressionValue::Iterator(value) => Ok(value),
-            ExpressionValue::Range(value) => Ok(ExpressionIterator::new_for_range(value)?),
-            other => other.execution_err(format!(
-                "{} must be iterable (an array, stream, range or iterator), but it is {}",
-                place_descriptor,
-                other.articled_value_type(),
-            )),
-        }
+    pub(crate) fn expect_any_iterator(self) -> ExecutionResult<ExpressionIterator> {
+        IterableValue::resolve_from_owned(self)?.into_iterator()
     }
 
     pub(super) fn handle_compound_assignment(
@@ -727,13 +758,12 @@ impl ExpressionValue {
     pub(crate) fn into_new_output_stream(
         self,
         grouping: Grouping,
-        behaviour: StreamOutputBehaviour,
     ) -> ExecutionResult<OutputStream> {
         Ok(match (self, grouping) {
             (Self::Stream(value), Grouping::Flattened) => value.value,
             (other, grouping) => {
                 let mut output = OutputStream::new();
-                other.output_to(grouping, &mut output, behaviour)?;
+                other.output_to(grouping, &mut output)?;
                 output
             }
         })
@@ -743,7 +773,6 @@ impl ExpressionValue {
         &self,
         grouping: Grouping,
         output: &mut OutputStream,
-        behaviour: StreamOutputBehaviour,
     ) -> ExecutionResult<()> {
         match grouping {
             Grouping::Grouped => {
@@ -752,23 +781,19 @@ impl ExpressionValue {
                 // * Grouping means -1 is interpreted atomically, rather than as a punct then a number
                 // * Grouping means that a stream is interpreted atomically
                 output.push_grouped(
-                    |inner| self.output_flattened_to(inner, behaviour),
+                    |inner| self.output_flattened_to(inner),
                     Delimiter::None,
-                    self.span_range().join_into_span_else_start(),
+                    self.span_from_join_else_start(),
                 )?;
             }
             Grouping::Flattened => {
-                self.output_flattened_to(output, behaviour)?;
+                self.output_flattened_to(output)?;
             }
         }
         Ok(())
     }
 
-    fn output_flattened_to(
-        &self,
-        output: &mut OutputStream,
-        behaviour: StreamOutputBehaviour,
-    ) -> ExecutionResult<()> {
+    fn output_flattened_to(&self, output: &mut OutputStream) -> ExecutionResult<()> {
         match self {
             Self::None { .. } => {}
             Self::Integer(value) => output.push_literal(value.to_literal()),
@@ -782,45 +807,27 @@ impl ExpressionValue {
             Self::Object(_) => {
                 return self.execution_err("Objects cannot be output to a stream");
             }
-            Self::Array(array) => {
-                if behaviour.should_output_arrays() {
-                    array.output_grouped_items_to(output)?
-                } else {
-                    return self.execution_err("Arrays cannot be output to a stream. You likely wish to use the !for! command or if you wish to output every element, use `#(XXX as stream)` to cast the array to a stream.");
-                }
-            }
+            Self::Array(array) => array.output_items_to(output, Grouping::Flattened)?,
             Self::Stream(value) => value.value.append_cloned_into(output),
-            Self::Iterator(iterator) => {
-                if behaviour.should_output_iterators() {
-                    iterator.clone().output_grouped_items_to(output)?
-                } else {
-                    return self.execution_err("Iterators cannot be output to a stream. You likely wish to use the !for! command or if you wish to output every element, use `#(XXX as stream)` to cast the iterator to a stream.");
-                }
-            }
+            Self::Iterator(iterator) => iterator
+                .clone()
+                .output_items_to(output, Grouping::Flattened)?,
             Self::Range(range) => {
                 let iterator = ExpressionIterator::new_for_range(range.clone())?;
-                if behaviour.should_output_iterators() {
-                    iterator.output_grouped_items_to(output)?
-                } else {
-                    return self.execution_err("Iterators cannot be output to a stream. You likely wish to use the !for! command or if you wish to output every element, use `#(XXX as stream)` to cast the iterator to a stream.");
-                }
+                iterator.output_items_to(output, Grouping::Flattened)?
             }
         };
         Ok(())
     }
 
-    pub(crate) fn into_debug_string(self) -> ExecutionResult<String> {
-        self.concat_recursive(&ConcatBehaviour::debug())
-    }
-
-    pub(crate) fn concat_recursive(self, behaviour: &ConcatBehaviour) -> ExecutionResult<String> {
+    pub(crate) fn concat_recursive(&self, behaviour: &ConcatBehaviour) -> ExecutionResult<String> {
         let mut output = String::new();
         self.concat_recursive_into(&mut output, behaviour)?;
         Ok(output)
     }
 
     pub(crate) fn concat_recursive_into(
-        self,
+        &self,
         output: &mut String,
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
@@ -853,7 +860,7 @@ impl ExpressionValue {
             | ExpressionValue::String(_) => {
                 // This isn't the most efficient, but it's less code and debug doesn't need to be super efficient.
                 let mut stream = OutputStream::new();
-                self.output_flattened_to(&mut stream, StreamOutputBehaviour::Standard)
+                self.output_flattened_to(&mut stream)
                     .expect("Non-composite values should all be able to be outputted to a stream");
                 stream.concat_recursive_into(output, behaviour);
             }
@@ -868,28 +875,7 @@ impl ToExpressionValue for ExpressionValue {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) enum StreamOutputBehaviour {
-    Standard,
-    PermitArrays,
-}
-
-impl StreamOutputBehaviour {
-    pub(super) fn should_output_arrays(&self) -> bool {
-        match self {
-            Self::Standard => false,
-            Self::PermitArrays => true,
-        }
-    }
-
-    pub(super) fn should_output_iterators(&self) -> bool {
-        match self {
-            Self::Standard => false,
-            Self::PermitArrays => true,
-        }
-    }
-}
-
+#[derive(Copy, Clone)]
 pub(crate) enum Grouping {
     Grouped,
     Flattened,
@@ -961,12 +947,14 @@ impl HasValueType for UnsupportedLiteral {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct UnsupportedLiteralTypeData;
-
-impl MethodResolutionTarget for UnsupportedLiteralTypeData {
-    type Parent = ValueTypeData;
-    const PARENT: Option<Self::Parent> = Some(ValueTypeData);
+define_interface! {
+    struct UnsupportedLiteralTypeData,
+    parent: ValueTypeData,
+    pub(crate) mod unsupported_literal_interface {
+        pub(crate) mod methods {}
+        pub(crate) mod unary_operations {}
+        interface_items {}
+    }
 }
 
 pub(super) enum ExpressionValuePair {

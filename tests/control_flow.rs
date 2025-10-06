@@ -69,12 +69,12 @@ fn test_loop_continue_and_break() {
         },
         10
     );
-    preinterpret_assert_eq!(
-        {
-            [!string! [!for! x in 65..75 {
+    assert_eq!(
+        run! {
+            [!for! x in 65..75 {
                 [!if! x % 2 == 0 { [!continue!] }]
                 #(x as u8 as char)
-            }]]
+            }].to_string()
         },
         "ACEGI"
     );
@@ -82,21 +82,22 @@ fn test_loop_continue_and_break() {
 
 #[test]
 fn test_for() {
-    preinterpret_assert_eq!(
-        {
-            [!string! [!for! x in 65..70 {
+    assert_eq!(
+        run! {
+            [!for! x in 65..70 {
                 #(x as u8 as char)
-            }]]
+            }].to_string()
         },
         "ABCDE"
     );
-    preinterpret_assert_eq!(
-        {
-            [!string!
-            [!for! @((@(#x = @IDENT),)) in [!stream! (a,) (b,) (c,)] {
+    assert_eq!(
+        run! {
+            // A stream is iterated token-tree by token-tree
+            // So we can match each value with a stream pattern matching each `(X,)`
+            [!for! %[(@(#x = @IDENT),)] in %[(a,) (b,) (c,)] {
                 #x
-                [!if! [!string! #x] == "b" { [!break!] }]
-            }]]
+                [!if! x.to_string() == "b" { [!break!] }]
+            }].to_string()
         },
         "ab"
     );
