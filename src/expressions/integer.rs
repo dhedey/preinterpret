@@ -3,24 +3,26 @@ use super::*;
 #[derive(Clone)]
 pub(crate) struct ExpressionInteger {
     pub(super) value: ExpressionIntegerValue,
-    /// The span range that generated this value.
-    /// For a complex expression, the start span is the most left part
-    /// of the expression, and the end span is the most right part.
-    pub(super) span_range: SpanRange,
+}
+
+impl ToExpressionValue for ExpressionInteger {
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::Integer(self)
+    }
 }
 
 impl ExpressionInteger {
-    pub(super) fn for_litint(lit: &syn::LitInt) -> ParseResult<Self> {
+    pub(super) fn for_litint(lit: &syn::LitInt) -> ParseResult<Owned<Self>> {
         Ok(Self {
-            span_range: lit.span().span_range(),
             value: ExpressionIntegerValue::for_litint(lit)?,
-        })
+        }
+        .into_owned(lit.span_range()))
     }
 
     pub(super) fn handle_integer_binary_operation(
         self,
         right: ExpressionInteger,
-        operation: OutputSpanned<IntegerBinaryOperation>,
+        operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         match self.value {
             ExpressionIntegerValue::Untyped(input) => {
@@ -65,22 +67,8 @@ impl ExpressionInteger {
         }
     }
 
-    pub(crate) fn expect_usize(&self) -> ExecutionResult<usize> {
-        Ok(match &self.value {
-            ExpressionIntegerValue::Untyped(input) => input.parse_as()?,
-            ExpressionIntegerValue::Usize(input) => *input,
-            _ => {
-                return self
-                    .span_range
-                    .execution_err("Expected a usize or untyped integer")
-            }
-        })
-    }
-
-    pub(super) fn to_literal(&self) -> Literal {
-        self.value
-            .to_unspanned_literal()
-            .with_span(self.span_range.join_into_span_else_start())
+    pub(super) fn to_literal(&self, span: Span) -> Literal {
+        self.value.to_unspanned_literal().with_span(span)
     }
 }
 
@@ -122,7 +110,7 @@ pub(super) enum ExpressionIntegerValuePair {
 impl ExpressionIntegerValuePair {
     pub(super) fn handle_paired_binary_operation(
         self,
-        operation: OutputSpanned<PairedBinaryOperation>,
+        operation: WrappedOp<PairedBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         match self {
             Self::Untyped(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
@@ -299,27 +287,22 @@ impl HasValueType for UntypedInteger {
 }
 
 #[derive(Clone)]
-pub(crate) struct UntypedInteger(
-    /// The span of the literal is ignored, and will be set when converted to an output.
-    syn::LitInt,
-    SpanRange,
-);
+pub(crate) struct UntypedInteger(syn::LitInt);
 pub(crate) type FallbackInteger = i128;
 
 impl UntypedInteger {
     pub(super) fn new_from_lit_int(lit_int: LitInt) -> Self {
-        let span_range = lit_int.span().span_range();
-        Self(lit_int, span_range)
+        Self(lit_int)
     }
 
-    pub(super) fn new_from_literal(literal: Literal) -> Self {
+    fn new_from_known_int_literal(literal: Literal) -> Self {
         Self::new_from_lit_int(literal.into())
     }
 
     pub(super) fn handle_integer_binary_operation(
         self,
         rhs: ExpressionInteger,
-        operation: OutputSpanned<IntegerBinaryOperation>,
+        operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.parse_fallback()?;
         Ok(match operation.operation {
@@ -363,7 +346,7 @@ impl UntypedInteger {
     pub(super) fn handle_paired_binary_operation(
         self,
         rhs: Self,
-        operation: OutputSpanned<PairedBinaryOperation>,
+        operation: WrappedOp<PairedBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.parse_fallback()?;
         let rhs = rhs.parse_fallback()?;
@@ -426,12 +409,15 @@ impl UntypedInteger {
     }
 
     pub(crate) fn from_fallback(value: FallbackInteger) -> Self {
-        Self::new_from_literal(Literal::i128_unsuffixed(value))
+        // TODO[untyped] - Have a way to store this more efficiently without going through a literal
+        Self::new_from_known_int_literal(
+            Literal::i128_unsuffixed(value).with_span(Span::call_site()),
+        )
     }
 
     pub(super) fn parse_fallback(&self) -> ExecutionResult<FallbackInteger> {
         self.0.base10_digits().parse().map_err(|err| {
-            self.1.execution_error(format!(
+            self.0.execution_error(format!(
                 "Could not parse as the default inferred type {}: {}",
                 core::any::type_name::<FallbackInteger>(),
                 err
@@ -445,7 +431,7 @@ impl UntypedInteger {
         N::Err: core::fmt::Display,
     {
         self.0.base10_digits().parse().map_err(|err| {
-            self.1.execution_error(format!(
+            self.0.execution_error(format!(
                 "Could not parse as {}: {}",
                 core::any::type_name::<N>(),
                 err
@@ -459,11 +445,9 @@ impl UntypedInteger {
 }
 
 impl ToExpressionValue for UntypedInteger {
-    fn to_value(mut self, span_range: SpanRange) -> ExpressionValue {
-        self.1 = span_range;
+    fn into_value(self) -> ExpressionValue {
         ExpressionValue::Integer(ExpressionInteger {
             value: ExpressionIntegerValue::Untyped(self),
-            span_range,
         })
     }
 }
@@ -730,16 +714,15 @@ macro_rules! impl_int_operations {
         }
 
         impl ToExpressionValue for $integer_type {
-            fn to_value(self, span_range: SpanRange) -> ExpressionValue {
+            fn into_value(self) -> ExpressionValue {
                 ExpressionValue::Integer(ExpressionInteger {
                     value: ExpressionIntegerValue::$integer_enum_variant(self),
-                    span_range,
                 })
             }
         }
 
         impl HandleBinaryOperation for $integer_type {
-            fn handle_paired_binary_operation(self, rhs: Self, operation: OutputSpanned<PairedBinaryOperation>) -> ExecutionResult<ExpressionValue> {
+            fn handle_paired_binary_operation(self, rhs: Self, operation: WrappedOp<PairedBinaryOperation>) -> ExecutionResult<ExpressionValue> {
                 let lhs = self;
                 let overflow_error = || format!("The {} operation {:?} {} {:?} overflowed", stringify!($integer_type), lhs, operation.symbolic_description(), rhs);
                 Ok(match operation.operation {
@@ -765,7 +748,7 @@ macro_rules! impl_int_operations {
             fn handle_integer_binary_operation(
                 self,
                 rhs: ExpressionInteger,
-                operation: OutputSpanned<IntegerBinaryOperation>,
+                operation: WrappedOp<IntegerBinaryOperation>,
             ) -> ExecutionResult<ExpressionValue> {
                 let lhs = self;
                 Ok(match operation.operation {

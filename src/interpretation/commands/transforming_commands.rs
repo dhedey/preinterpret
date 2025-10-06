@@ -33,11 +33,10 @@ impl StreamCommandDefinition for ParseCommand {
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        let input = self
+        let input: OutputStream = self
             .input
             .interpret_to_value(interpreter)?
-            .expect_stream("Parse input")?
-            .value;
+            .resolve_as("Parse input")?;
         self.transformer
             .handle_transform_from_stream(input, interpreter, output)
     }

@@ -105,7 +105,7 @@ impl EvaluationFrame for PlaceIndexer {
             }
             PlaceIndexerPath::IndexPath { place } => {
                 let index = item.expect_shared();
-                let output = place.resolve_indexed(self.access, &index, true)?;
+                let output = place.resolve_indexed(self.access, index.as_spanned(), true)?;
                 context.return_place(output)
             }
         })

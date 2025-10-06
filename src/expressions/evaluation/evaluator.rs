@@ -18,7 +18,7 @@ impl<'a> ExpressionEvaluator<'a, Source> {
         mut self,
         root: ExpressionNodeId,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<ExpressionValue> {
+    ) -> ExecutionResult<OwnedValue> {
         let mut next_action = NextActionInner::ReadNodeAsValue(
             root,
             RequestedValueOwnership::Concrete(ResolvedValueOwnership::Owned),
@@ -71,7 +71,7 @@ impl<'a> ExpressionEvaluator<'a, Source> {
                     Some(top) => top,
                     None => {
                         // This aligns with the request for an owned value in evaluate
-                        return Ok(StepResult::Return(item.expect_owned().into_inner()));
+                        return Ok(StepResult::Return(item.expect_owned()));
                     }
                 };
                 top_of_stack.handle_item(interpreter, &mut self.stack, item)?
@@ -95,7 +95,7 @@ impl EvaluationStack {
 
 pub(super) enum StepResult {
     Continue(NextAction),
-    Return(ExpressionValue),
+    Return(OwnedValue),
 }
 
 pub(super) struct NextAction(NextActionInner);
@@ -249,7 +249,7 @@ impl EvaluationItem {
             EvaluationItem::Mutable(mutable) => EvaluationItem::Mutable(map_mutable(mutable)?),
             EvaluationItem::Shared(shared) => EvaluationItem::Shared(map_shared(shared)?),
             EvaluationItem::CopyOnWrite(cow) => {
-                EvaluationItem::CopyOnWrite(cow.map_any(map_shared, map_owned)?)
+                EvaluationItem::CopyOnWrite(cow.map(map_shared, map_owned)?)
             }
             _ => panic!("expect_any_value_and_map() called on non-value EvaluationItem"),
         })

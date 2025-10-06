@@ -19,7 +19,7 @@ impl Parse<Source> for SourceExpression {
 }
 
 impl InterpretToValue for &SourceExpression {
-    type OutputValue = ExpressionValue;
+    type OutputValue = OwnedValue;
 
     fn interpret_to_value(
         self,
@@ -101,15 +101,15 @@ impl Expressionable for Source {
                     return Ok(UnaryAtom::Leaf(Self::Leaf::Discarded(input.parse()?)));
                 }
                 match input.try_parse_or_revert() {
-                    Ok(bool) => UnaryAtom::Leaf(Self::Leaf::Value(SharedValue::new_from_owned(ExpressionValue::Boolean(
-                        ExpressionBoolean::for_litbool(bool),
-                    ).into()))),
+                    Ok(bool) => UnaryAtom::Leaf(Self::Leaf::Value(SharedValue::new_from_owned(
+                        ExpressionBoolean::for_litbool(&bool).into_owned_value(),
+                    ))),
                     Err(_) => UnaryAtom::Leaf(Self::Leaf::Variable(input.parse()?)),
                 }
             },
             SourcePeekMatch::Literal(_) => {
                 let value = ExpressionValue::for_syn_lit(input.parse()?);
-                UnaryAtom::Leaf(Self::Leaf::Value(SharedValue::new_from_owned(value.into())))
+                UnaryAtom::Leaf(Self::Leaf::Value(SharedValue::new_from_owned(value)))
             },
             SourcePeekMatch::StreamLiteral(_) => {
                 UnaryAtom::Leaf(Self::Leaf::StreamLiteral(input.parse()?))

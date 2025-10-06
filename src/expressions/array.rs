@@ -3,20 +3,16 @@ use super::*;
 #[derive(Clone)]
 pub(crate) struct ExpressionArray {
     pub(crate) items: Vec<ExpressionValue>,
-    /// The span range that generated this value.
-    /// For a complex expression, the start span is the most left part
-    /// of the expression, and the end span is the most right part.
-    pub(crate) span_range: SpanRange,
 }
 
 impl ExpressionArray {
-    pub(crate) fn new(items: Vec<ExpressionValue>, span_range: SpanRange) -> Self {
-        Self { items, span_range }
+    pub(crate) fn new(items: Vec<ExpressionValue>) -> Self {
+        Self { items }
     }
 
     pub(crate) fn output_items_to(
         &self,
-        output: &mut OutputStream,
+        output: &mut ToStreamContext,
         grouping: Grouping,
     ) -> ExecutionResult<()> {
         for item in &self.items {
@@ -28,7 +24,7 @@ impl ExpressionArray {
     pub(super) fn handle_integer_binary_operation(
         self,
         _right: ExpressionInteger,
-        operation: OutputSpanned<IntegerBinaryOperation>,
+        operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         operation.unsupported(self)
     }
@@ -36,7 +32,7 @@ impl ExpressionArray {
     pub(super) fn handle_paired_binary_operation(
         self,
         rhs: Self,
-        operation: OutputSpanned<PairedBinaryOperation>,
+        operation: WrappedOp<PairedBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.items;
         let rhs = rhs.items;
@@ -66,85 +62,90 @@ impl ExpressionArray {
 
     pub(super) fn into_indexed(
         mut self,
-        access: IndexAccess,
-        index: &ExpressionValue,
+        index: Spanned<&ExpressionValue>,
     ) -> ExecutionResult<ExpressionValue> {
-        let span_range = SpanRange::new_between(self.span_range, access);
+        let (index, span_range) = index.deconstruct();
         Ok(match index {
             ExpressionValue::Integer(integer) => {
-                let index = self.resolve_valid_index_from_integer(integer, false)?;
-                self.items[index].clone().with_span_range(span_range)
+                let index =
+                    self.resolve_valid_index_from_integer(integer.spanned(span_range), false)?;
+                std::mem::replace(&mut self.items[index], ExpressionValue::None)
             }
             ExpressionValue::Range(range) => {
-                let range = range.resolve_to_index_range(&self)?;
+                let range = range.spanned(span_range).resolve_to_index_range(&self)?;
                 let new_items: Vec<_> = self.items.drain(range).collect();
-                new_items.to_value(span_range)
+                new_items.into_value()
             }
-            _ => return index.execution_err("The index must be an integer or a range"),
+            _ => return span_range.execution_err("The index must be an integer or a range"),
         })
     }
 
     pub(super) fn index_mut(
         &mut self,
-        access: IndexAccess,
-        index: &ExpressionValue,
+        index: Spanned<&ExpressionValue>,
     ) -> ExecutionResult<&mut ExpressionValue> {
+        let (index, span_range) = index.deconstruct();
         Ok(match index {
             ExpressionValue::Integer(integer) => {
-                let index = self.resolve_valid_index_from_integer(integer, false)?;
+                let index =
+                    self.resolve_valid_index_from_integer(integer.spanned(span_range), false)?;
                 &mut self.items[index]
             }
             ExpressionValue::Range(..) => {
                 // Temporary until we add slice types - we error here
-                return access.execution_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]");
+                return span_range.execution_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]");
             }
-            _ => return index.execution_err("The index must be an integer or a range"),
+            _ => return span_range.execution_err("The index must be an integer or a range"),
         })
     }
 
     pub(super) fn index_ref(
         &self,
-        access: IndexAccess,
-        index: &ExpressionValue,
+        index: Spanned<&ExpressionValue>,
     ) -> ExecutionResult<&ExpressionValue> {
+        let (index, span_range) = index.deconstruct();
         Ok(match index {
             ExpressionValue::Integer(integer) => {
-                let index = self.resolve_valid_index_from_integer(integer, false)?;
+                let index =
+                    self.resolve_valid_index_from_integer(integer.spanned(span_range), false)?;
                 &self.items[index]
             }
             ExpressionValue::Range(..) => {
                 // Temporary until we add slice types - we error here
-                return access.execution_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]");
+                return span_range.execution_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]");
             }
-            _ => return index.execution_err("The index must be an integer or a range"),
+            _ => return span_range.execution_err("The index must be an integer or a range"),
         })
     }
 
     pub(super) fn resolve_valid_index(
         &self,
-        index: &ExpressionValue,
+        index: Spanned<&ExpressionValue>,
         is_exclusive: bool,
     ) -> ExecutionResult<usize> {
+        let (index, span_range) = index.deconstruct();
         match index {
             ExpressionValue::Integer(int) => {
-                self.resolve_valid_index_from_integer(int, is_exclusive)
+                self.resolve_valid_index_from_integer(int.spanned(span_range), is_exclusive)
             }
-            _ => index.execution_err("The index must be an integer"),
+            _ => span_range.execution_err("The index must be an integer"),
         }
     }
 
     fn resolve_valid_index_from_integer(
         &self,
-        integer: &ExpressionInteger,
+        integer: Spanned<&ExpressionInteger>,
         is_exclusive: bool,
     ) -> ExecutionResult<usize> {
-        let span_range = integer.span_range;
-        let index = integer.expect_usize()?;
+        let index: usize = integer
+            .clone()
+            .into_owned_value(integer.span_range)
+            .resolve_as("An array index")?;
         if is_exclusive {
             if index <= self.items.len() {
                 Ok(index)
             } else {
-                span_range.execution_err(format!(
+                integer.execution_err(format!(
                     "Exclusive index of {} must be less than or equal to the array length of {}",
                     index,
                     self.items.len()
@@ -153,7 +154,7 @@ impl ExpressionArray {
         } else if index < self.items.len() {
             Ok(index)
         } else {
-            span_range.execution_err(format!(
+            integer.execution_err(format!(
                 "Inclusive index of {} must be less than the array length of {}",
                 index,
                 self.items.len()
@@ -178,12 +179,6 @@ impl ExpressionArray {
     }
 }
 
-impl HasSpanRange for ExpressionArray {
-    fn span_range(&self) -> SpanRange {
-        self.span_range
-    }
-}
-
 impl HasValueType for ExpressionArray {
     fn value_type(&self) -> &'static str {
         self.items.value_type()
@@ -197,20 +192,14 @@ impl HasValueType for Vec<ExpressionValue> {
 }
 
 impl ToExpressionValue for Vec<ExpressionValue> {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
-        ExpressionValue::Array(ExpressionArray {
-            items: self,
-            span_range,
-        })
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::Array(ExpressionArray { items: self })
     }
 }
 
 impl ToExpressionValue for ExpressionArray {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
-        ExpressionValue::Array(ExpressionArray {
-            items: self.items,
-            span_range,
-        })
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::Array(self)
     }
 }
 
@@ -224,16 +213,17 @@ define_interface! {
                 Ok(())
             }
 
-            fn to_stream_grouped(this: ExpressionArray) -> StreamOutput<impl StreamAppender> {
-                StreamOutput::new(move |stream| this.output_items_to(stream, Grouping::Grouped))
+            [context] fn to_stream_grouped(this: ExpressionArray) -> StreamOutput<impl StreamAppender> {
+                let error_span_range = context.span_range();
+                StreamOutput::new(move |stream| this.output_items_to(&mut ToStreamContext::new(stream, error_span_range), Grouping::Grouped))
             }
         }
         pub(crate) mod unary_operations {
             [context] fn cast_to_numeric(this: Owned<ExpressionArray>) -> ExecutionResult<ResolvedValue> {
-                let (mut this, _) = this.deconstruct();
+                let (mut this, span_range) = this.deconstruct();
                 let length = this.items.len();
                 if length == 1 {
-                    context.operation.evaluate(this.items.pop().unwrap().into())
+                    context.operation.evaluate(this.items.pop().unwrap().into_owned(span_range))
                 } else {
                     context.operation.execution_err(format!(
                         "Only a singleton array can be cast to this value but the array has {} elements",

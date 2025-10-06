@@ -3,17 +3,13 @@ use super::*;
 #[derive(Clone)]
 pub(crate) struct ExpressionStream {
     pub(crate) value: OutputStream,
-    /// The span range that generated this value.
-    /// For a complex expression, the start span is the most left part
-    /// of the expression, and the end span is the most right part.
-    pub(crate) span_range: SpanRange,
 }
 
 impl ExpressionStream {
     pub(super) fn handle_integer_binary_operation(
         self,
         _right: ExpressionInteger,
-        operation: OutputSpanned<IntegerBinaryOperation>,
+        operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         operation.unsupported(self)
     }
@@ -21,7 +17,7 @@ impl ExpressionStream {
     pub(super) fn handle_paired_binary_operation(
         self,
         rhs: Self,
-        operation: OutputSpanned<PairedBinaryOperation>,
+        operation: WrappedOp<PairedBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.value;
         let rhs = rhs.value;
@@ -112,17 +108,14 @@ impl HasValueType for OutputStream {
 }
 
 impl ToExpressionValue for OutputStream {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
-        ExpressionValue::Stream(ExpressionStream {
-            value: self,
-            span_range,
-        })
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::Stream(ExpressionStream { value: self })
     }
 }
 
 impl ToExpressionValue for TokenStream {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
-        OutputStream::raw(self).to_value(span_range)
+    fn into_value(self) -> ExpressionValue {
+        OutputStream::raw(self).into_value()
     }
 }
 
@@ -132,12 +125,12 @@ define_interface! {
     pub(crate) mod stream_interface {
         pub(crate) mod methods {
             // This is also on iterable, but is specialized here for performance
-            fn len(this: Ref<OutputStream>) -> usize {
+            fn len(this: AnyRef<OutputStream>) -> usize {
                 this.len()
             }
 
             // This is also on iterable, but is specialized here for performance
-            fn is_empty(this: Ref<OutputStream>) -> bool {
+            fn is_empty(this: AnyRef<OutputStream>) -> bool {
                 this.is_empty()
             }
 
@@ -145,39 +138,38 @@ define_interface! {
                 Ok(this.to_token_stream_removing_any_transparent_groups())
             }
 
-            fn infer(this: Owned<OutputStream>) -> ExecutionResult<ExpressionValue> {
-                let (this, span_range) = this.deconstruct();
-                Ok(this.coerce_into_value(span_range))
+            fn infer(this: OutputStream) -> ExecutionResult<ExpressionValue> {
+                Ok(this.coerce_into_value())
             }
 
-            [context] fn split(this: OutputStream, separator: Ref<OutputStream>, settings: Option<SplitSettings>) -> ExecutionResult<ExpressionArray> {
-                handle_split(this, &separator, settings.unwrap_or_default(), context.output_span_range)
+            fn split(this: OutputStream, separator: AnyRef<OutputStream>, settings: Option<SplitSettings>) -> ExecutionResult<ExpressionArray> {
+                handle_split(this, &separator, settings.unwrap_or_default())
             }
 
             // STRING-BASED CONVERSION METHODS
             // ===============================
 
-            [context] fn to_ident(this: SpannedRef<OutputStream>) -> ExecutionResult<Ident> {
+            [context] fn to_ident(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Ident> {
                 let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
-            [context] fn to_ident_camel(this: SpannedRef<OutputStream>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_camel(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Ident> {
                 let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident_camel(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
-            [context] fn to_ident_snake(this: SpannedRef<OutputStream>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_snake(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Ident> {
                 let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident_snake(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
-            [context] fn to_ident_upper_snake(this: SpannedRef<OutputStream>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_upper_snake(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Ident> {
                 let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident_upper_snake(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
-            [context] fn to_literal(this: SpannedRef<OutputStream>) -> ExecutionResult<Literal> {
+            [context] fn to_literal(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Literal> {
                 let string = this.concat_recursive(&ConcatBehaviour::literal(this.span_range()));
                 string_interface::methods::to_literal(context, string.as_str().into_spanned_ref(this.span_range()))
             }
@@ -190,7 +182,7 @@ define_interface! {
                 error_span_range.execution_err(message.as_str())
             }
 
-            fn assert(this: Shared<ExpressionStream>, condition: bool, message: Option<Ref<str>>) -> ExecutionResult<()> {
+            fn assert(this: Shared<ExpressionStream>, condition: bool, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
                 if condition {
                     Ok(())
                 } else {
@@ -203,7 +195,7 @@ define_interface! {
                 }
             }
 
-            fn assert_eq(this: Shared<ExpressionStream>, lhs: SpannedRef<ExpressionValue>, rhs: SpannedRef<ExpressionValue>, message: Option<Ref<str>>) -> ExecutionResult<()> {
+            fn assert_eq(this: Shared<ExpressionStream>, lhs: SpannedAnyRef<ExpressionValue>, rhs: SpannedAnyRef<ExpressionValue>, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
                 let lhs_value: &ExpressionValue = &lhs;
                 let rhs_value: &ExpressionValue = &rhs;
                 let res = {
@@ -227,7 +219,7 @@ define_interface! {
                 }
             }
 
-            [context] fn reinterpret_as_run(this: Owned<ExpressionStream>) -> ExecutionResult<ExpressionValue> {
+            [context] fn reinterpret_as_run(this: Owned<ExpressionStream>) -> ExecutionResult<OwnedValue> {
                 let source = unsafe {
                     // RUST-ANALYZER-SAFETY - We can't do any better than this, and we're about to parse it as source code,
                     // which handles groups/missing groups reasonably well (see tests)
@@ -252,11 +244,12 @@ define_interface! {
         pub(crate) mod unary_operations {
             [context] fn cast_to_value(this: Owned<ExpressionStream>) -> ExecutionResult<ResolvedValue> {
                 let (this, span_range) = this.deconstruct();
-                let coerced = this.value.coerce_into_value(span_range);
+                let coerced = this.value.coerce_into_value();
                 if let ExpressionValue::Stream(_) = &coerced {
                     return span_range.execution_err("The stream could not be coerced into a single value");
                 }
-                context.operation.evaluate(coerced.into())
+                // Re-run the cast operation on the coerced value
+                context.operation.evaluate(coerced.into_owned(span_range))
             }
         }
         interface_items {
@@ -390,10 +383,7 @@ impl InterpretToValue for RegularStreamLiteral {
         self,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<Self::OutputValue> {
-        let span_range = self.span_range();
-        Ok(self
-            .interpret_to_new_stream(interpreter)?
-            .to_value(span_range))
+        Ok(self.interpret_to_new_stream(interpreter)?.into_value())
     }
 }
 
@@ -445,9 +435,7 @@ impl InterpretToValue for RawStreamLiteral {
         self,
         _interpreter: &mut Interpreter,
     ) -> ExecutionResult<Self::OutputValue> {
-        let span_range = self.span_range();
-        let value = self.content.to_value(span_range);
-        Ok(value)
+        Ok(self.content.into_value())
     }
 }
 
@@ -502,9 +490,6 @@ impl InterpretToValue for GroupedStreamLiteral {
         self,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<Self::OutputValue> {
-        let span_range = self.span_range();
-        Ok(self
-            .interpret_to_new_stream(interpreter)?
-            .to_value(span_range))
+        Ok(self.interpret_to_new_stream(interpreter)?.into_value())
     }
 }

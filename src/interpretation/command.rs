@@ -25,7 +25,6 @@ pub(crate) trait OutputKind {
 
 struct ExecutionContext<'a> {
     interpreter: &'a mut Interpreter,
-    delim_span: DelimSpan,
 }
 
 trait CommandInvocation {
@@ -93,7 +92,7 @@ impl<C: NoOutputCommandDefinition> CommandInvocationAs<OutputKindNone> for C {
 
     fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
         self.execute(context.interpreter)?;
-        Ok(ExpressionValue::None(context.delim_span.span_range()))
+        Ok(ExpressionValue::None)
     }
 }
 
@@ -133,10 +132,9 @@ impl<C: StreamCommandDefinition> CommandInvocationAs<OutputKindStream> for C {
     }
 
     fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
-        let span_range = context.delim_span.span_range();
         let mut output = OutputStream::new();
         <Self as CommandInvocationAs<OutputKindStream>>::execute_into(self, context, &mut output)?;
-        Ok(output.to_value(span_range))
+        Ok(output.into_value())
     }
 }
 
@@ -286,10 +284,7 @@ impl Interpret for Command {
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        let context = ExecutionContext {
-            interpreter,
-            delim_span: self.brackets.delim_span,
-        };
+        let context = ExecutionContext { interpreter };
         self.typed.execute_into(context, output)
     }
 }
@@ -301,10 +296,7 @@ impl InterpretToValue for Command {
         self,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<Self::OutputValue> {
-        let context = ExecutionContext {
-            interpreter,
-            delim_span: self.brackets.delim_span,
-        };
+        let context = ExecutionContext { interpreter };
         self.typed.execute_to_value(context)
     }
 }

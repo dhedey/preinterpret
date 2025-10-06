@@ -38,19 +38,8 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 
 ## Span changes
 
-* Remove span range from value:
-    * Mark `SpanRange::dummy()` as `#[deprecated]` and start using it during the refactor
-    * Move it to a binding such as `Owned<T>` etc
-    * Possibly can use `EvaluationError` (without a span!) inside a calculation, and adding the span in the evaluator (nb. it may still need to be able to propogate an `ExecutionInterrupt` internally)
-* Except streams, which keep spans on literals/groups.
-    * If someone wants to keep a value's span, they can keep it in a stream and coerce it; or store it as a tuple of a value with its span `[value, %[value]]`
-* Bindings such as `Owned<X>` have a span, which:
-    * Typically refers to the span of the preinterpret code that created the value/binding
-    * In some cases (e.g. source literals) it can refer to a source span
-    * And we can add a `spanned(%[..])` method which overrides the span of the binding (it'll have to return a `OwnedFixedSpan<ExpressionValue>` which has different handling)
-    * We can have a `bool.assert(message, span?)`
-
-* We can add a `spanned(%[..])` method which overrides the span of the binding (it'll have to return a `NoOverrideSpanOwned<ExpressionValue>` which has different handling in the `ToResolvedValue` trait)
+- [x] Remove spans from `ExpressionValue`, leave only on bindings or strem contents
+- [x] Add `xx.with_span(%[])` which changes the value to stream and replaces the span of every token at the top iteration level of the stream
 
 ## Method Calls
 
@@ -300,7 +289,7 @@ Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` doc
 * Add `preinterpret::macro` - can this be a declarative macro? Would be slightly more efficient, as it just needs to wrap a call to `preinterpret::stream` or `preinterpret::run`...
 * Add `LiteralPattern` (wrapping a `Literal`)
 * Add `Eq` support on composite types and streams
-* Have UntypedInteger have an inner representation of either i128 or literal (and same with float)
+* See `TODO[untyped]` - Have UntypedInteger/UntypedFloat have an inner representation of either value or literal, for improved efficiency / less weird `Span::call_site()` error handling
 * CastTarget revision:
   * The `as int` operator is not supported for string values
   * The `as char` operator is not supported for untyped integer values
@@ -355,6 +344,8 @@ E.G.
 * Examples
 * Cheat-sheet
 * Values & Streams
+* Span handling
+  * If someone wants to keep a value's span, they can keep it in a stream and coerce it; or store it as a tuple of a value with its span `%{ value: $x, span: %[$x] }`
 * Parsing
 * Explanation of each expression, showing how it can be defined in terms of other building blocks
 

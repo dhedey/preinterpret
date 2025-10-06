@@ -528,7 +528,7 @@ fn preinterpret_run_internal(input: TokenStream) -> SynResult<TokenStream> {
 
     let interpreted_stream = block_content
         .evaluate(&mut interpreter, Span::call_site().into())
-        .and_then(|x| x.into_new_output_stream(Grouping::Flattened))
+        .and_then(|x| x.into_stream())
         .convert_to_final_result()?;
 
     unsafe {
@@ -586,7 +586,7 @@ mod benchmarking {
             let mut interpreter = Interpreter::new();
             block_content
                 .evaluate(&mut interpreter, Span::call_site().into())
-                .and_then(|x| x.into_new_output_stream(Grouping::Flattened))
+                .and_then(|x| x.into_stream())
                 .convert_to_final_result()
         });
         let interpreted_stream = interpreted_stream?;

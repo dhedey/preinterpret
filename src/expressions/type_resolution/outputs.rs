@@ -34,7 +34,7 @@ impl ResolvableOutput for Mutable<ExpressionValue> {
 impl<T: ToExpressionValue> ResolvableOutput for T {
     fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue> {
         Ok(ResolvedValue::Owned(
-            self.to_value(output_span_range).into(),
+            self.into_owned_value(output_span_range),
         ))
     }
 }
@@ -42,7 +42,7 @@ impl<T: ToExpressionValue> ResolvableOutput for T {
 impl<T: ToExpressionValue> ResolvableOutput for Owned<T> {
     fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue> {
         Ok(ResolvedValue::Owned(
-            self.map(|f, _| f.to_value(output_span_range))
+            self.map(|f, _| f.into_value())
                 .with_span_range(output_span_range),
         ))
     }

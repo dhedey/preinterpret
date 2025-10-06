@@ -35,10 +35,6 @@ impl<'a> CommandArguments<'a> {
         }
     }
 
-    pub(crate) fn fully_parse_as<T: ArgumentsContent>(&self) -> ParseResult<T> {
-        self.fully_parse_or_error(T::parse, T::error_message())
-    }
-
     pub(crate) fn fully_parse_or_error<T>(
         &self,
         parse_function: impl FnOnce(ParseStream<Source>) -> ParseResult<T>,

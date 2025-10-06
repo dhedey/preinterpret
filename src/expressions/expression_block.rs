@@ -34,10 +34,7 @@ impl HasSpanRange for EmbeddedExpression {
 }
 
 impl EmbeddedExpression {
-    pub(crate) fn evaluate(
-        &self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<ExpressionValue> {
+    pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
         self.content.evaluate(interpreter, self.span_range())
     }
 }
@@ -52,13 +49,16 @@ impl Interpret for &EmbeddedExpression {
             Some(_) => Grouping::Flattened,
             None => Grouping::Flattened,
         };
-        self.evaluate(interpreter)?.output_to(grouping, output)?;
+        self.evaluate(interpreter)?.output_to(
+            grouping,
+            &mut ToStreamContext::new(output, self.span_range()),
+        )?;
         Ok(())
     }
 }
 
 impl InterpretToValue for &EmbeddedExpression {
-    type OutputValue = ExpressionValue;
+    type OutputValue = OwnedValue;
 
     fn interpret_to_value(
         self,
@@ -106,19 +106,22 @@ impl ExpressionBlockContent {
         &self,
         interpreter: &mut Interpreter,
         output_span_range: SpanRange,
-    ) -> ExecutionResult<ExpressionValue> {
+    ) -> ExecutionResult<OwnedValue> {
         for (statement, ..) in &self.standard_statements {
-            let value = statement.interpret_to_value(interpreter)?;
+            let (value, span) = statement.interpret_to_value(interpreter)?.deconstruct();
             match value {
-                ExpressionValue::None { .. } => {},
-                other_value => return other_value.execution_err("A statement ending with ; must not return a value. If you wish to explicitly discard the expression's result, use `let _ = ...;`"),
+                ExpressionValue::None => {},
+                _ => return span.execution_err("A statement ending with ; must not return a value. If you wish to explicitly discard the expression's result, use `let _ = ...;`"),
             }
         }
-        if let Some(return_statement) = &self.return_statement {
-            return_statement.interpret_to_value(interpreter)
+        Ok(if let Some(return_statement) = &self.return_statement {
+            return_statement
+                .interpret_to_value(interpreter)?
+                .into_inner()
         } else {
-            Ok(ExpressionValue::None(output_span_range))
+            ExpressionValue::None
         }
+        .into_owned(output_span_range))
     }
 }
 
@@ -139,7 +142,7 @@ impl Parse<Source> for Statement {
 }
 
 impl InterpretToValue for &Statement {
-    type OutputValue = ExpressionValue;
+    type OutputValue = OwnedValue;
 
     fn interpret_to_value(
         self,
@@ -196,24 +199,26 @@ impl Parse<Source> for LetStatement {
 }
 
 impl InterpretToValue for &LetStatement {
-    type OutputValue = ExpressionValue;
+    type OutputValue = OwnedValue;
 
     fn interpret_to_value(
         self,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<Self::OutputValue> {
+        let output_span_range = self.let_token.span;
         let LetStatement {
-            let_token,
+            let_token: _,
             pattern,
             assignment,
         } = self;
         let value = match assignment {
-            Some(assignment) => assignment.expression.interpret_to_value(interpreter)?,
-            None => ExpressionValue::None(let_token.span.span_range()),
+            Some(assignment) => assignment
+                .expression
+                .interpret_to_value(interpreter)?
+                .into_inner(),
+            None => ExpressionValue::None,
         };
-        let mut span_range = value.span_range();
         pattern.handle_destructure(interpreter, value)?;
-        span_range.set_start(let_token.span);
-        Ok(ExpressionValue::None(span_range))
+        Ok(ExpressionValue::None.into_owned(output_span_range))
     }
 }

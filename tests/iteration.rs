@@ -1,3 +1,5 @@
+#![allow(clippy::assertions_on_constants)]
+
 #[path = "helpers/prelude.rs"]
 mod prelude;
 use prelude::*;
@@ -33,22 +35,22 @@ fn test_len() {
 #[test]
 fn test_is_empty() {
     // Various iterators
-    assert_eq!(run!([].into_iter().is_empty()), true);
-    assert_eq!(run!([1, 2, 3].into_iter().is_empty()), false);
-    assert_eq!(run!(%[].into_iter().is_empty()), true);
-    assert_eq!(run!(%[%group[a b] c d].into_iter().is_empty()), false);
+    assert!(run!([].into_iter().is_empty()));
+    assert!(!run!([1, 2, 3].into_iter().is_empty()));
+    assert!(run!(%[].into_iter().is_empty()));
+    assert!(!run!(%[%group[a b] c d].into_iter().is_empty()));
 
     // Others
-    assert_eq!(run!([].is_empty()), true);
-    assert_eq!(run!([1, 2, 3].is_empty()), false);
-    assert_eq!(run!(%[].is_empty()), true);
-    assert_eq!(run!(%[%group[a b] c d].is_empty()), false);
-    assert_eq!(run!((3..3).is_empty()), true);
-    assert_eq!(run!((3..=5).is_empty()), false);
-    assert_eq!(run!(%{}.is_empty()), true);
-    assert_eq!(run!(%{ a: 1 }.is_empty()), false);
-    assert_eq!(run!("".is_empty()), true);
-    assert_eq!(run!("Hello World".is_empty()), false);
+    assert!(run!([].is_empty()));
+    assert!(!run!([1, 2, 3].is_empty()));
+    assert!(run!(%[].is_empty()));
+    assert!(!run!(%[%group[a b] c d].is_empty()));
+    assert!(run!((3..3).is_empty()));
+    assert!(!run!((3..=5).is_empty()));
+    assert!(run!(%{}.is_empty()));
+    assert!(!run!(%{ a: 1 }.is_empty()));
+    assert!(run!("".is_empty()));
+    assert!(!run!("Hello World".is_empty()));
 }
 
 #[test]
@@ -116,27 +118,21 @@ fn test_empty_stream_is_empty() {
     preinterpret_assert_eq!({
         %[] "hello" %[] %[]
     }, "hello");
-    assert_eq!(run!(%[].is_empty()), true);
-    assert_eq!(run!(%[%[]].is_empty()), true);
-    assert_eq!(run!(%[%[] %[]].is_empty()), true);
-    assert_eq!(run!(%[Not Empty].is_empty()), false);
-    assert_eq!(run!(%[%group[]].is_empty()), false);
-    assert_eq!(run!(%group[].is_empty()), false);
-    assert_eq!(
-        run! {
-            let x = %[];
-            x.is_empty()
-        },
-        true
-    );
-    assert_eq!(
-        run! {
-            let x = %[];
-            let x = %[#x is no longer empty];
-            x.is_empty()
-        },
-        false
-    );
+    assert!(run!(%[].is_empty()));
+    assert!(run!(%[%[]].is_empty()));
+    assert!(run!(%[%[] %[]].is_empty()));
+    assert!(!run!(%[Not Empty].is_empty()));
+    assert!(!run!(%[%group[]].is_empty()));
+    assert!(!run!(%group[].is_empty()));
+    assert!(run! {
+        let x = %[];
+        x.is_empty()
+    });
+    assert!(!run! {
+        let x = %[];
+        let x = %[#x is no longer empty];
+        x.is_empty()
+    });
 }
 
 #[test]
