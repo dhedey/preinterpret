@@ -113,21 +113,15 @@ impl FromResolved for IterableRef<'static> {
 
 impl Spanned<IterableRef<'_>> {
     pub(crate) fn len(&self) -> ExecutionResult<usize> {
-        Ok(match &self.value {
-            IterableRef::Iterator(iterator) => {
-                let (min, max) = iterator.size_hint();
-                if max == Some(min) {
-                    min
-                } else {
-                    return self.execution_err("Iterator has an inexact length");
-                }
-            }
-            IterableRef::Array(value) => value.items.len(),
-            IterableRef::Stream(value) => value.len(),
-            IterableRef::Range(value) => return value.len(),
-            IterableRef::Object(value) => value.entries.len(),
-            IterableRef::String(value) => value.chars().count(),
-        })
+        match &self.value {
+            IterableRef::Iterator(iterator) => iterator.len(self.span_range),
+            IterableRef::Array(value) => Ok(value.items.len()),
+            IterableRef::Stream(value) => Ok(value.len()),
+            IterableRef::Range(value) => value.len(self.span_range),
+            IterableRef::Object(value) => Ok(value.entries.len()),
+            // NB - this is different to string.len() which counts bytes
+            IterableRef::String(value) => Ok(value.chars().count()),
+        }
     }
 }
 
@@ -137,6 +131,15 @@ pub(crate) struct ExpressionIterator {
 }
 
 impl ExpressionIterator {
+    pub(crate) fn len(&self, error_span_range: SpanRange) -> ExecutionResult<usize> {
+        let (min, max) = self.size_hint();
+        if max == Some(min) {
+            Ok(min)
+        } else {
+            error_span_range.execution_err("Iterator has an inexact length")
+        }
+    }
+
     #[allow(unused)]
     pub(crate) fn new_any(
         iterator: impl Iterator<Item = ExpressionValue> + 'static + Clone,
@@ -210,13 +213,13 @@ impl ExpressionIterator {
 
     pub(super) fn output_items_to(
         self,
-        output: &mut OutputStream,
+        output: &mut ToStreamContext,
         grouping: Grouping,
     ) -> ExecutionResult<()> {
         const LIMIT: usize = 10_000;
         for (i, item) in self.enumerate() {
             if i > LIMIT {
-                return SpanRange::dummy(/*self*/).execution_err(format!("Only a maximum of {} items can be output to a stream from an iterator, to protect you from infinite loops. This can't currently be reconfigured with the iteration limit.", LIMIT));
+                return output.execution_err(format!("Only a maximum of {} items can be output to a stream from an iterator, to protect you from infinite loops. This can't currently be reconfigured with the iteration limit.", LIMIT));
             }
             item.output_to(grouping, output)?;
         }

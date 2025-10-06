@@ -12,7 +12,7 @@ impl ExpressionArray {
 
     pub(crate) fn output_items_to(
         &self,
-        output: &mut OutputStream,
+        output: &mut ToStreamContext,
         grouping: Grouping,
     ) -> ExecutionResult<()> {
         for item in &self.items {
@@ -24,7 +24,7 @@ impl ExpressionArray {
     pub(super) fn handle_integer_binary_operation(
         self,
         _right: ExpressionInteger,
-        operation: OutputSpanned<IntegerBinaryOperation>,
+        operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         operation.unsupported(self)
     }
@@ -32,7 +32,7 @@ impl ExpressionArray {
     pub(super) fn handle_paired_binary_operation(
         self,
         rhs: Self,
-        operation: OutputSpanned<PairedBinaryOperation>,
+        operation: WrappedOp<PairedBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.items;
         let rhs = rhs.items;
@@ -62,7 +62,6 @@ impl ExpressionArray {
 
     pub(super) fn into_indexed(
         mut self,
-        access: IndexAccess,
         index: Spanned<&ExpressionValue>,
     ) -> ExecutionResult<ExpressionValue> {
         let (index, span_range) = index.deconstruct();
@@ -77,13 +76,12 @@ impl ExpressionArray {
                 let new_items: Vec<_> = self.items.drain(range).collect();
                 new_items.into_value()
             }
-            _ => return access.execution_err("The index must be an integer or a range"),
+            _ => return span_range.execution_err("The index must be an integer or a range"),
         })
     }
 
     pub(super) fn index_mut(
         &mut self,
-        access: IndexAccess,
         index: Spanned<&ExpressionValue>,
     ) -> ExecutionResult<&mut ExpressionValue> {
         let (index, span_range) = index.deconstruct();
@@ -103,7 +101,6 @@ impl ExpressionArray {
 
     pub(super) fn index_ref(
         &self,
-        access: IndexAccess,
         index: Spanned<&ExpressionValue>,
     ) -> ExecutionResult<&ExpressionValue> {
         let (index, span_range) = index.deconstruct();
@@ -140,7 +137,10 @@ impl ExpressionArray {
         integer: Spanned<&ExpressionInteger>,
         is_exclusive: bool,
     ) -> ExecutionResult<usize> {
-        let index = integer.expect_usize()?;
+        let index: usize = integer
+            .clone()
+            .into_owned_value(integer.span_range)
+            .resolve_as("An array index")?;
         if is_exclusive {
             if index <= self.items.len() {
                 Ok(index)
@@ -213,8 +213,9 @@ define_interface! {
                 Ok(())
             }
 
-            fn to_stream_grouped(this: ExpressionArray) -> StreamOutput<impl StreamAppender> {
-                StreamOutput::new(move |stream| this.output_items_to(stream, Grouping::Grouped))
+            [context] fn to_stream_grouped(this: ExpressionArray) -> StreamOutput<impl StreamAppender> {
+                let error_span_range = context.span_range();
+                StreamOutput::new(move |stream| this.output_items_to(&mut ToStreamContext::new(stream, error_span_range), Grouping::Grouped))
             }
         }
         pub(crate) mod unary_operations {

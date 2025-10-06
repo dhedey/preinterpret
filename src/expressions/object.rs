@@ -22,7 +22,7 @@ impl ExpressionObject {
     pub(super) fn handle_integer_binary_operation(
         self,
         _right: ExpressionInteger,
-        operation: OutputSpanned<IntegerBinaryOperation>,
+        operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         operation.unsupported(self)
     }
@@ -30,14 +30,13 @@ impl ExpressionObject {
     pub(super) fn handle_paired_binary_operation(
         self,
         _rhs: Self,
-        operation: OutputSpanned<PairedBinaryOperation>,
+        operation: WrappedOp<PairedBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         operation.unsupported(self)
     }
 
     pub(super) fn into_indexed(
         mut self,
-        access: IndexAccess,
         index: Spanned<&ExpressionValue>,
     ) -> ExecutionResult<ExpressionValue> {
         let key = index.resolve_as("An object key")?;
@@ -74,22 +73,23 @@ impl ExpressionObject {
 
     pub(super) fn index_mut(
         &mut self,
-        access: IndexAccess,
         index: Spanned<&ExpressionValue>,
         auto_create: bool,
     ) -> ExecutionResult<&mut ExpressionValue> {
-        let index: &str = index.resolve_as("An object key")?;
-        self.mut_entry(index.to_string().spanned(access.span()), auto_create)
+        let index: Spanned<&str> = index.resolve_as("An object key")?;
+        self.mut_entry(index.map(|s, _| s.to_string()), auto_create)
     }
 
     pub(super) fn index_ref(
         &self,
-        access: IndexAccess,
         index: Spanned<&ExpressionValue>,
     ) -> ExecutionResult<&ExpressionValue> {
-        let key: &str = index.resolve_as("An object key")?;
-        let entry = self.entries.get(key).ok_or_else(|| {
-            access.execution_error(format!("The object does not have a field named `{}`", key))
+        let key: Spanned<&str> = index.resolve_as("An object key")?;
+        let entry = self.entries.get(key.value).ok_or_else(|| {
+            key.execution_error(format!(
+                "The object does not have a field named `{}`",
+                key.value
+            ))
         })?;
         Ok(&entry.value)
     }
@@ -149,7 +149,8 @@ impl ExpressionObject {
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
         if !behaviour.use_debug_literal_syntax {
-            return SpanRange::dummy(/*self*/)
+            return behaviour
+                .error_span_range
                 .execution_err("An object can't be converted to a non-debug string");
         }
         if behaviour.output_literal_structure {
@@ -192,7 +193,9 @@ impl ExpressionObject {
         }
         Ok(())
     }
+}
 
+impl Spanned<&ExpressionObject> {
     pub(crate) fn validate(&self, validation: &impl ObjectValidate) -> ExecutionResult<()> {
         let mut missing_fields = Vec::new();
         for (field_name, _) in validation.required_fields() {
@@ -235,7 +238,7 @@ impl ExpressionObject {
             error_message.push_str(&unexpected_fields.join(", "));
         }
 
-        SpanRange::dummy(/*self*/).execution_err(error_message)
+        self.execution_err(error_message)
     }
 }
 

@@ -49,7 +49,10 @@ impl Interpret for &EmbeddedExpression {
             Some(_) => Grouping::Flattened,
             None => Grouping::Flattened,
         };
-        self.evaluate(interpreter)?.output_to(grouping, output)?;
+        self.evaluate(interpreter)?.output_to(
+            grouping,
+            &mut ToStreamContext::new(output, self.span_range()),
+        )?;
         Ok(())
     }
 }

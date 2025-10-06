@@ -58,8 +58,7 @@ impl EvaluationFrame for PlaceAssigner {
     ) -> ExecutionResult<NextAction> {
         let mut mutable_place = item.expect_place();
         let value = self.value;
-        let span_range =
-            SpanRange::new_between(mutable_place.span_range(), SpanRange::dummy(/*value*/));
+        let span_range = mutable_place.span_range();
         mutable_place.set(value);
         Ok(context.return_assignment_completion(span_range))
     }
@@ -119,8 +118,10 @@ impl ArrayBasedAssigner {
         assignee_item_node_ids: &[ExpressionNodeId],
         value: ExpressionValue,
     ) -> ExecutionResult<Self> {
-        let array = value.expect_array("The value destructured as an array")?;
-        let span_range = SpanRange::new_between(assignee_span, SpanRange::dummy(/*array*/).end());
+        let span_range = assignee_span.span_range();
+        let array: ExpressionArray = value
+            .into_owned(span_range)
+            .resolve_as("The value destructured as an array")?;
         let mut has_seen_dot_dot = false;
         let mut prefix_assignees = Vec::new();
         let mut suffix_assignees = Vec::new();
@@ -245,8 +246,10 @@ impl ObjectBasedAssigner {
         assignee_pairs: &[(ObjectKey, ExpressionNodeId)],
         value: ExpressionValue,
     ) -> ExecutionResult<Self> {
-        let object = value.expect_object("The value destructured as an object")?;
-        let span_range = SpanRange::new_between(assignee_span, SpanRange::dummy(/*object*/).end());
+        let span_range = assignee_span.span_range();
+        let object: ExpressionObject = value
+            .into_owned(span_range)
+            .resolve_as("The value destructured as an object")?;
 
         Ok(Self {
             span_range,
@@ -264,8 +267,10 @@ impl ObjectBasedAssigner {
         index: &ExpressionValue,
         assignee_node: ExpressionNodeId,
     ) -> ExecutionResult<NextAction> {
-        let key = index.ref_expect_string("An object key")?.clone().value;
-        let value = self.resolve_value(key, access.span())?;
+        let key: &str = index
+            .spanned(access.span_range())
+            .resolve_as("An object key")?;
+        let value = self.resolve_value(key.to_string(), access.span())?;
         Ok(context.handle_node_as_assignment(self, assignee_node, value))
     }
 

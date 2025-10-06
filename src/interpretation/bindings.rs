@@ -131,7 +131,7 @@ impl LateBoundValue {
         Ok(match self {
             LateBoundValue::Owned(owned) => LateBoundValue::Owned(map_owned(owned)?),
             LateBoundValue::CopyOnWrite(copy_on_write) => {
-                LateBoundValue::CopyOnWrite(copy_on_write.map_any(map_shared, map_owned)?)
+                LateBoundValue::CopyOnWrite(copy_on_write.map(map_shared, map_owned)?)
             }
             LateBoundValue::Mutable(mutable) => LateBoundValue::Mutable(map_mutable(mutable)?),
             LateBoundValue::Shared(LateBoundSharedValue {
@@ -183,36 +183,36 @@ pub(crate) type OwnedValue = Owned<ExpressionValue>;
 /// * The owned value
 /// * The lexical span of the tokens `x.y[4]`
 pub(crate) struct Owned<T: 'static> {
-    inner: T,
+    pub(crate) value: T,
     /// The span-range of the current binding to the value.
-    span_range: SpanRange,
+    pub(crate) span_range: SpanRange,
 }
 
 #[allow(unused)]
 impl<T> Owned<T> {
-    pub(crate) fn new(inner: T, span_range: SpanRange) -> Self {
-        Self { inner, span_range }
+    pub(crate) fn new(value: T, span_range: SpanRange) -> Self {
+        Self { value, span_range }
     }
 
     pub(crate) fn deconstruct(self) -> (T, SpanRange) {
-        (self.inner, self.span_range)
+        (self.value, self.span_range)
     }
 
     pub(crate) fn into_inner(self) -> T {
-        self.inner
+        self.value
     }
 
     pub(crate) fn as_ref(&self) -> &T {
-        &self.inner
+        &self.value
     }
 
     pub(crate) fn as_mut(&mut self) -> &mut T {
-        &mut self.inner
+        &mut self.value
     }
 
     pub(crate) fn map<V>(self, value_map: impl FnOnce(T, &SpanRange) -> V) -> Owned<V> {
         Owned {
-            inner: value_map(self.inner, &self.span_range),
+            value: value_map(self.value, &self.span_range),
             span_range: self.span_range,
         }
     }
@@ -222,7 +222,7 @@ impl<T> Owned<T> {
         value_map: impl FnOnce(T, &SpanRange) -> ExecutionResult<V>,
     ) -> ExecutionResult<Owned<V>> {
         Ok(Owned {
-            inner: value_map(self.inner, &self.span_range)?,
+            value: value_map(self.value, &self.span_range)?,
             span_range: self.span_range,
         })
     }
@@ -232,7 +232,7 @@ impl<T> Owned<T> {
         span_range_map: impl FnOnce(SpanRange) -> SpanRange,
     ) -> Self {
         Self {
-            inner: self.inner,
+            value: self.value,
             span_range: span_range_map(self.span_range),
         }
     }
@@ -256,13 +256,13 @@ impl OwnedValue {
 
 impl<T: ToExpressionValue> Owned<T> {
     pub(crate) fn into_value(self) -> ExpressionValue {
-        self.inner.into_value()
+        self.value.into_value()
     }
 
     pub(crate) fn into_owned_value(self) -> OwnedValue {
         let span_range = self.span_range;
         Owned {
-            inner: self.into_value(),
+            value: self.into_value(),
             span_range,
         }
     }
@@ -276,7 +276,7 @@ impl<T> HasSpanRange for Owned<T> {
 
 impl From<OwnedValue> for ExpressionValue {
     fn from(value: OwnedValue) -> Self {
-        value.inner
+        value.value
     }
 }
 
@@ -284,20 +284,20 @@ impl Deref for OwnedValue {
     type Target = ExpressionValue;
 
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        &self.value
     }
 }
 
 impl DerefMut for OwnedValue {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
+        &mut self.value
     }
 }
 
 impl<T> WithSpanRangeExt for Owned<T> {
     fn with_span_range(self, span_range: SpanRange) -> Self {
         Self {
-            inner: self.inner,
+            value: self.value,
             span_range,
         }
     }
@@ -364,7 +364,7 @@ impl Mutable<ExpressionValue> {
         let span_range = value.span_range;
         Self {
             // Unwrap is safe because it's a new refcell
-            mut_cell: MutSubRcRefCell::new(Rc::new(RefCell::new(value.inner))).unwrap(),
+            mut_cell: MutSubRcRefCell::new(Rc::new(RefCell::new(value.value))).unwrap(),
             span_range,
         }
     }
@@ -521,7 +521,7 @@ impl Shared<ExpressionValue> {
         let span_range = value.span_range;
         Self {
             // Unwrap is safe because it's a new refcell
-            shared_cell: SharedSubRcRefCell::new(Rc::new(RefCell::new(value.inner))).unwrap(),
+            shared_cell: SharedSubRcRefCell::new(Rc::new(RefCell::new(value.value))).unwrap(),
             span_range,
         }
     }
@@ -625,6 +625,22 @@ impl<T: 'static + ToOwned + ?Sized> CopyOnWrite<T> {
         }
     }
 
+    #[allow(unused)]
+    pub(crate) fn extract_owned<U>(
+        self,
+        map: impl FnOnce(T::Owned) -> Result<U, T::Owned>,
+    ) -> Result<U, Self> {
+        match self.inner {
+            CopyOnWriteInner::Owned(owned) => match map(owned.value) {
+                Ok(mapped) => Ok(mapped),
+                Err(other) => Err(Self {
+                    inner: CopyOnWriteInner::Owned(Owned::new(other, owned.span_range)),
+                }),
+            },
+            other => Err(Self { inner: other }),
+        }
+    }
+
     pub(crate) fn acts_as_shared_reference(&self) -> bool {
         match &self.inner {
             CopyOnWriteInner::Owned { .. } => false,
@@ -632,22 +648,44 @@ impl<T: 'static + ToOwned + ?Sized> CopyOnWrite<T> {
             CopyOnWriteInner::SharedWithTransparentCloning { .. } => true,
         }
     }
+
+    pub(crate) fn map<O: ToOwned + ?Sized>(
+        self,
+        map_shared: impl FnOnce(Shared<T>) -> ExecutionResult<Shared<O>>,
+        map_owned: impl FnOnce(Owned<T::Owned>) -> ExecutionResult<Owned<O::Owned>>,
+    ) -> ExecutionResult<CopyOnWrite<O>> {
+        let inner = match self.inner {
+            CopyOnWriteInner::Owned(owned) => CopyOnWriteInner::Owned(map_owned(owned)?),
+            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
+                CopyOnWriteInner::SharedWithInfallibleCloning(map_shared(shared)?)
+            }
+            CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
+                CopyOnWriteInner::SharedWithTransparentCloning(map_shared(shared)?)
+            }
+        };
+        Ok(CopyOnWrite { inner })
+    }
+
+    pub(crate) fn map_into<U>(
+        self,
+        map_shared: impl FnOnce(Shared<T>) -> U,
+        map_owned: impl FnOnce(Owned<T::Owned>) -> U,
+    ) -> U {
+        match self.inner {
+            CopyOnWriteInner::Owned(owned) => map_owned(owned),
+            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => map_shared(shared),
+            CopyOnWriteInner::SharedWithTransparentCloning(shared) => map_shared(shared),
+        }
+    }
 }
 
-impl<T: ?Sized + ToOwned> AsRef<T> for CopyOnWrite<T>
-// Why isn's this needed? It's somehow now needed on the CoW implementation either
-// where
-//     T::Owned: Borrow<T>,
-{
+impl<T: ?Sized + ToOwned> AsRef<T> for CopyOnWrite<T> {
     fn as_ref(&self) -> &T {
         self
     }
 }
 
-impl<T: ?Sized + ToOwned> Deref for CopyOnWrite<T>
-where
-    T::Owned: Borrow<T>,
-{
+impl<T: ?Sized + ToOwned> Deref for CopyOnWrite<T> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -716,22 +754,3 @@ impl<T: ToOwned + ?Sized> HasSpanRange for CopyOnWrite<T> {
 }
 
 pub(crate) type CopyOnWriteValue = CopyOnWrite<ExpressionValue>;
-
-impl<T: ToOwned + ?Sized> CopyOnWrite<T> {
-    pub(crate) fn map_any<O: ToOwned + ?Sized>(
-        self,
-        map_shared: impl FnOnce(Shared<T>) -> ExecutionResult<Shared<O>>,
-        map_owned: impl FnOnce(Owned<T::Owned>) -> ExecutionResult<Owned<O::Owned>>,
-    ) -> ExecutionResult<CopyOnWrite<O>> {
-        let inner = match self.inner {
-            CopyOnWriteInner::Owned(owned) => CopyOnWriteInner::Owned(map_owned(owned)?),
-            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
-                CopyOnWriteInner::SharedWithInfallibleCloning(map_shared(shared)?)
-            }
-            CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
-                CopyOnWriteInner::SharedWithTransparentCloning(map_shared(shared)?)
-            }
-        };
-        Ok(CopyOnWrite { inner })
-    }
-}

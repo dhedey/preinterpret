@@ -249,7 +249,7 @@ impl EvaluationItem {
             EvaluationItem::Mutable(mutable) => EvaluationItem::Mutable(map_mutable(mutable)?),
             EvaluationItem::Shared(shared) => EvaluationItem::Shared(map_shared(shared)?),
             EvaluationItem::CopyOnWrite(cow) => {
-                EvaluationItem::CopyOnWrite(cow.map_any(map_shared, map_owned)?)
+                EvaluationItem::CopyOnWrite(cow.map(map_shared, map_owned)?)
             }
             _ => panic!("expect_any_value_and_map() called on non-value EvaluationItem"),
         })

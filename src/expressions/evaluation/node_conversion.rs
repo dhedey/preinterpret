@@ -107,6 +107,9 @@ impl ExpressionNode<Source> {
         context: AssignmentContext,
         nodes: &[ExpressionNode<Source>],
         self_node_id: ExpressionNodeId,
+        // NB: This might intrisically be a part of a larger value, and might have been
+        // created many lines previously, so doesn't have an obvious span associated with it
+        // Instead, we put errors on the assignee syntax side
         value: ExpressionValue,
     ) -> ExecutionResult<NextAction> {
         Ok(match self {
@@ -114,10 +117,7 @@ impl ExpressionNode<Source> {
             | ExpressionNode::Index { .. }
             | ExpressionNode::Property { .. } => PlaceAssigner::start(context, self_node_id, value),
             ExpressionNode::Leaf(SourceExpressionLeaf::Discarded(underscore)) => {
-                context.return_assignment_completion(SpanRange::new_between(
-                    *underscore,
-                    SpanRange::dummy(/*value*/),
-                ))
+                context.return_assignment_completion(underscore.span_range())
             }
             ExpressionNode::Array {
                 brackets,

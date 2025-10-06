@@ -19,7 +19,7 @@ impl ExpressionBoolean {
     pub(super) fn handle_integer_binary_operation(
         self,
         _right: ExpressionInteger,
-        operation: OutputSpanned<IntegerBinaryOperation>,
+        operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         match operation.operation {
             IntegerBinaryOperation::ShiftLeft { .. }
@@ -30,7 +30,7 @@ impl ExpressionBoolean {
     pub(super) fn handle_paired_binary_operation(
         self,
         rhs: Self,
-        operation: OutputSpanned<PairedBinaryOperation>,
+        operation: WrappedOp<PairedBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.value;
         let rhs = rhs.value;
@@ -54,8 +54,8 @@ impl ExpressionBoolean {
         })
     }
 
-    pub(super) fn to_ident(&self) -> Ident {
-        Ident::new_bool(self.value, Span::dummy())
+    pub(super) fn to_ident(&self, span: Span) -> Ident {
+        Ident::new_bool(self.value, span)
     }
 }
 

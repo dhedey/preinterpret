@@ -391,10 +391,7 @@ impl<T> Spanned<T> {
         (self.value, self.span_range)
     }
 
-    pub(crate) fn inner_ref(&self) -> &T {
-        &self.value
-    }
-
+    #[allow(unused)]
     pub(crate) fn map<U>(self, f: impl FnOnce(T, &SpanRange) -> U) -> Spanned<U> {
         Spanned {
             value: f(self.value, &self.span_range),
@@ -454,26 +451,6 @@ impl<T> ToSpanned for T {
         Spanned {
             value: self,
             span_range: source.span_range(),
-        }
-    }
-}
-
-#[deprecated = "Only for use temporarily during object span migration"]
-pub(crate) trait HasDummy {
-    fn dummy() -> Self;
-}
-
-impl HasDummy for Span {
-    fn dummy() -> Self {
-        Span::call_site()
-    }
-}
-
-impl HasDummy for SpanRange {
-    fn dummy() -> Self {
-        Self {
-            start: Span::dummy(),
-            end: Span::dummy(),
         }
     }
 }

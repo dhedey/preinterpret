@@ -19,7 +19,7 @@ impl ExpressionString {
     pub(super) fn handle_integer_binary_operation(
         self,
         _right: ExpressionInteger,
-        operation: OutputSpanned<IntegerBinaryOperation>,
+        operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         operation.unsupported(self)
     }
@@ -27,7 +27,7 @@ impl ExpressionString {
     pub(super) fn handle_paired_binary_operation(
         self,
         rhs: Self,
-        operation: OutputSpanned<PairedBinaryOperation>,
+        operation: WrappedOp<PairedBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.value;
         let rhs = rhs.value;
@@ -51,8 +51,8 @@ impl ExpressionString {
         })
     }
 
-    pub(super) fn to_literal(&self) -> Literal {
-        Literal::string(&self.value).with_span(Span::dummy(/*self*/))
+    pub(super) fn to_literal(&self, span: Span) -> Literal {
+        Literal::string(&self.value).with_span(span)
     }
 }
 

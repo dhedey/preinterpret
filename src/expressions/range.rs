@@ -6,14 +6,8 @@ pub(crate) struct ExpressionRange {
 }
 
 impl ExpressionRange {
-    pub(crate) fn len(&self) -> ExecutionResult<usize> {
-        Ok(self
-            .inner
-            .clone()
-            .into_iterable()?
-            .resolve_iterator()?
-            .size_hint()
-            .0)
+    pub(crate) fn len(&self, error_span_range: SpanRange) -> ExecutionResult<usize> {
+        ExpressionIterator::new_for_range(self.clone())?.len(error_span_range)
     }
 
     pub(crate) fn concat_recursive_into(

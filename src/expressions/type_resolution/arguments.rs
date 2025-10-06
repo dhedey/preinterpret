@@ -22,7 +22,7 @@ impl<'a> ResolutionContext<'a> {
         value: impl Borrow<ExpressionValue>,
     ) -> ExecutionResult<T> {
         self.span_range.execution_err(format!(
-            "{} is expected to be {}, but it is a {}",
+            "{} is expected to be {}, but it is {}",
             self.resolution_target,
             expected_value_kind,
             value.borrow().articled_value_type()
@@ -105,7 +105,7 @@ where
     const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::CopyOnWrite;
 
     fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
-        value.expect_copy_on_write().map_any(
+        value.expect_copy_on_write().map(
             |v| T::resolve_shared(v, "This argument"),
             |v| <T::Owned as ResolvableArgumentOwned>::resolve_owned(v, "This argument"),
         )
@@ -136,8 +136,22 @@ impl<T: ResolvableArgumentOwned> ResolveAs<T> for OwnedValue {
     }
 }
 
+impl<T: ResolvableArgumentOwned> ResolveAs<Owned<T>> for OwnedValue {
+    fn resolve_as(self, resolution_target: &str) -> ExecutionResult<Owned<T>> {
+        T::resolve_owned(self, resolution_target)
+    }
+}
+
 impl<'a, T: ResolvableArgumentShared + ?Sized> ResolveAs<&'a T> for Spanned<&'a ExpressionValue> {
     fn resolve_as(self, resolution_target: &str) -> ExecutionResult<&'a T> {
+        T::resolve_ref(self, resolution_target)
+    }
+}
+
+impl<'a, T: ResolvableArgumentShared + ?Sized> ResolveAs<Spanned<&'a T>>
+    for Spanned<&'a ExpressionValue>
+{
+    fn resolve_as(self, resolution_target: &str) -> ExecutionResult<Spanned<&'a T>> {
         T::resolve_spanned_ref(self, resolution_target)
     }
 }
@@ -146,6 +160,14 @@ impl<'a, T: ResolvableArgumentMutable + ?Sized> ResolveAs<&'a mut T>
     for Spanned<&'a mut ExpressionValue>
 {
     fn resolve_as(self, resolution_target: &str) -> ExecutionResult<&'a mut T> {
+        T::resolve_ref_mut(self, resolution_target)
+    }
+}
+
+impl<'a, T: ResolvableArgumentMutable + ?Sized> ResolveAs<Spanned<&'a mut T>>
+    for Spanned<&'a mut ExpressionValue>
+{
+    fn resolve_as(self, resolution_target: &str) -> ExecutionResult<Spanned<&'a mut T>> {
         T::resolve_spanned_ref_mut(self, resolution_target)
     }
 }
@@ -217,7 +239,7 @@ pub(crate) trait ResolvableArgumentShared {
         })
     }
 
-    fn resolve_spanned_ref<'a>(
+    fn resolve_ref<'a>(
         value: Spanned<&'a ExpressionValue>,
         resolution_target: &str,
     ) -> ExecutionResult<&'a Self> {
@@ -229,6 +251,21 @@ pub(crate) trait ResolvableArgumentShared {
             },
         )
     }
+
+    fn resolve_spanned_ref<'a>(
+        value: Spanned<&'a ExpressionValue>,
+        resolution_target: &str,
+    ) -> ExecutionResult<Spanned<&'a Self>> {
+        value.try_map(|v, span_range| {
+            Self::resolve_from_ref(
+                v,
+                ResolutionContext {
+                    span_range,
+                    resolution_target,
+                },
+            )
+        })
+    }
 }
 
 pub(crate) trait ResolvableArgumentMutable {
@@ -236,6 +273,7 @@ pub(crate) trait ResolvableArgumentMutable {
         value: &'a mut ExpressionValue,
         context: ResolutionContext,
     ) -> ExecutionResult<&'a mut Self>;
+
     fn resolve_mutable(
         value: Mutable<ExpressionValue>,
         resolution_target: &str,
@@ -250,7 +288,8 @@ pub(crate) trait ResolvableArgumentMutable {
             )
         })
     }
-    fn resolve_spanned_ref_mut<'a>(
+
+    fn resolve_ref_mut<'a>(
         value: Spanned<&'a mut ExpressionValue>,
         resolution_target: &str,
     ) -> ExecutionResult<&'a mut Self> {
@@ -262,11 +301,27 @@ pub(crate) trait ResolvableArgumentMutable {
             },
         )
     }
+
+    fn resolve_spanned_ref_mut<'a>(
+        value: Spanned<&'a mut ExpressionValue>,
+        resolution_target: &str,
+    ) -> ExecutionResult<Spanned<&'a mut Self>> {
+        value.try_map(|value, span_range| {
+            Self::resolve_from_mut(
+                value,
+                ResolutionContext {
+                    span_range,
+                    resolution_target,
+                },
+            )
+        })
+    }
 }
 
 impl ResolvableArgumentTarget for ExpressionValue {
     type ValueType = ValueTypeData;
 }
+
 impl ResolvableArgumentOwned for ExpressionValue {
     fn resolve_from_value(
         value: ExpressionValue,

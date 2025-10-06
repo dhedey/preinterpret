@@ -28,9 +28,10 @@ pub(crate) trait IsVariable: HasSpanRange {
         grouping: Grouping,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        self.binding(interpreter)?
-            .into_shared()?
-            .output_to(grouping, output)
+        self.binding(interpreter)?.into_shared()?.output_to(
+            grouping,
+            &mut ToStreamContext::new(output, self.span_range()),
+        )
     }
 
     fn binding(&self, interpreter: &Interpreter) -> ExecutionResult<VariableBinding> {

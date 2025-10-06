@@ -23,7 +23,7 @@ impl ExpressionFloat {
     pub(super) fn handle_integer_binary_operation(
         self,
         right: ExpressionInteger,
-        operation: OutputSpanned<IntegerBinaryOperation>,
+        operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         match self.value {
             ExpressionFloatValue::Untyped(input) => {
@@ -38,8 +38,8 @@ impl ExpressionFloat {
         }
     }
 
-    pub(super) fn to_literal(&self) -> Literal {
-        self.value.to_unspanned_literal().with_span(Span::dummy())
+    pub(super) fn to_literal(&self, span: Span) -> Literal {
+        self.value.to_unspanned_literal().with_span(span)
     }
 }
 
@@ -71,7 +71,7 @@ pub(super) enum ExpressionFloatValuePair {
 impl ExpressionFloatValuePair {
     pub(super) fn handle_paired_binary_operation(
         self,
-        operation: OutputSpanned<PairedBinaryOperation>,
+        operation: WrappedOp<PairedBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         match self {
             Self::Untyped(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
@@ -168,7 +168,7 @@ impl UntypedFloat {
     pub(super) fn handle_integer_binary_operation(
         self,
         _rhs: ExpressionInteger,
-        operation: OutputSpanned<IntegerBinaryOperation>,
+        operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         match operation.operation {
             IntegerBinaryOperation::ShiftLeft { .. }
@@ -179,7 +179,7 @@ impl UntypedFloat {
     pub(super) fn handle_paired_binary_operation(
         self,
         rhs: Self,
-        operation: OutputSpanned<PairedBinaryOperation>,
+        operation: WrappedOp<PairedBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.parse_fallback()?;
         let rhs = rhs.parse_fallback()?;
@@ -215,7 +215,10 @@ impl UntypedFloat {
     }
 
     pub(super) fn from_fallback(value: FallbackFloat) -> Self {
-        Self::new_from_known_float_literal(Literal::f64_unsuffixed(value).with_span(Span::dummy()))
+        // TODO[untyped] - Have a way to store this more efficiently without going through a literal
+        Self::new_from_known_float_literal(
+            Literal::f64_unsuffixed(value).with_span(Span::call_site()),
+        )
     }
 
     pub(super) fn parse_fallback(&self) -> ExecutionResult<FallbackFloat> {
@@ -501,7 +504,7 @@ macro_rules! impl_float_operations {
 
 
         impl HandleBinaryOperation for $float_type {
-            fn handle_paired_binary_operation(self, rhs: Self, operation: OutputSpanned<PairedBinaryOperation>) -> ExecutionResult<ExpressionValue> {
+            fn handle_paired_binary_operation(self, rhs: Self, operation: WrappedOp<PairedBinaryOperation>) -> ExecutionResult<ExpressionValue> {
                 // Unlike integer arithmetic, float arithmetic does not overflow
                 // and instead falls back to NaN or infinity. In future we could
                 // allow trapping on these codes, but for now this is good enough
@@ -533,7 +536,7 @@ macro_rules! impl_float_operations {
             fn handle_integer_binary_operation(
                 self,
                 _rhs: ExpressionInteger,
-                operation: OutputSpanned<IntegerBinaryOperation>,
+                operation: WrappedOp<IntegerBinaryOperation>,
             ) -> ExecutionResult<ExpressionValue> {
                 match operation.operation {
                     IntegerBinaryOperation::ShiftLeft { .. } | IntegerBinaryOperation::ShiftRight { .. } => {
