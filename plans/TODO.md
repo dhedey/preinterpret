@@ -90,49 +90,70 @@ Create the following expressions:
 - [x] Blocks `{}`
 - [x] `if`, `else`, `for`, `while`, `loop`
 - [x] `continue`, `break`
-- [ ] `break` / `continue` improvements:
-  - Can return a value (from the last iteration of for / while loops)
-  - We only store values which are non-None in the array
-  - You can use `loop { break X }[0]` to get the return value
-  - Can specify a label, and return from a labelled block (https://blog.rust-lang.org/2022/11/03/Rust-1.65.0/#break-from-labeled-blocks)
 - [ ] Refactors:
-  * Rename `SourceExpression` => `Expression`, and inline the leaf parsing
-  * Rename `interpreted_stream.rs` to `output_stream.rs`
-
-* Consider embedded expressions:
-  * Do we want a `#{ ... }` as well as `#var` and `#()`?
-    ... or should we let `#( ... )` have block content again?
-  * What should the scoping rules be?
-    * If we support `preinterpret::stream!` then all blocks in a stream literal should be part of a wider scope under that stream; otherwise we won't be able to define variables and use them in the output stream itself.
-    * In a stream literal pattern, we likely want `let` to also work and apply to the wider scope.
-    * In a parse expression, it would be nice if we could define let variables, but it's not strictly necessary.
-  ... in all cases, we want a wider scope than "last open brace `{}`", so we need to use one of two approaches:
-      * We consider `{}` to be more associated with "combined statements" and consider breaking that cardinal scoping rule that `{}` introduce a new scope
-      * We use `()` for blocks which don't introduce a new scope, e.g. parse blocks and embedded expressions `#(...)`
-  * `ExpressionBlock` with a `#` prefix `#{ .. }` shouldn't exist
-  * In an output-stream  `#var` or `#(..)` are possible
-  * In an stream-parser, only `#(..)` is possible, and should return `None`
-    * If looking to match on a value, you should use  `@[EXACT({ tokens: %[] })]` instead
-  * In an expression, `#x` and `#(..)` are NOT allowed - this avoids confusion such as below:
-    * Confusion example: `let x; x = #(let x = 123; 5)`. This isn't allowed in normal rust because the inside is a `{ .. }` which defines a new scope.
-
-... and remove their commands
+  - [x] Rename `SourceExpression` => `Expression`, and inline the leaf parsing
+  - [ ] Rename `interpreted_stream.rs` to `output_stream.rs`
+  - [ ] Get rid of the `InterpretToValue` trait, instead have method calls `evaluate` 
+  - [ ] Change `InterpretTo` to use `&self`, and maybe get rid of it
 
 ## Scopes & Blocks (requires control flow expressions, or at least no `!let!` command)
 
-* Scopes exist at compile time, e.g. as a `ScopeId(usize)` and include:
+- [ ] Scopes exist at compile time, e.g. as a `ScopeId(usize)` and include:
   * A definition about whether the scope is irrevertible or not
   * Variable definitions ...and the last use of them (as a value irrevertible - if at all) - that usage can do a take for free, like in Rust
   * A parent scope
   * Each variable usage can be tied back to a definition
   * Each let expression
-* Spans are only kept from source inside streams, otherwise it refers to a binding
-* At execution time, there needs to be some link between scope and stack frame
-* Fix `TODO[scopes]`
+- [ ] Spans are only kept from source inside streams, otherwise it refers to a binding
+- [ ] At execution time, there needs to be some link between scope and stack frame
+- [ ] Fix `TODO[scopes]`
+- [ ] Add test that `let x; x = { let x = 123; x = 456; 5 }`. resolves correctly with `x = 5`.
+
+We then need ot consider whether an embedded expression in a stream literal and/or stream pattern create new scopes or not...
+
+* Should we let `#( ... )` have block content again? but not define a new scope? Or should we remove `preinterpret::stream!` and allow `#{}` for blocks?
+  * Current thinking is we allow `#{ ... }` but it doesn't define a new scope. 
+* What should the scoping rules be?
+  * If we support `preinterpret::stream!` then all blocks in a stream literal should be part of a wider scope under that stream; otherwise we won't be able to define variables and use them in the output stream itself.
+  * In a stream literal pattern, we likely want `let` to also work and apply to the wider scope.
+  * In a parse expression, it would be nice if we could define let variables, but it's not strictly necessary.
+... in all cases, we want a wider scope than "last open brace `{}`", so we need to use one of two approaches:
+    * We consider `{}` to be more associated with "combined statements" and consider breaking that cardinal scoping rule that `{}` introduce a new scope
+    * We use `()` for blocks which don't introduce a new scope, e.g. parse blocks and embedded expressions `#(...)`
+* `ExpressionBlock` with a `#` prefix `#{ .. }` shouldn't exist
+* In an output-stream  `#var` or `#(..)` are possible
+* In an stream-pattern, only `#{ .. }` is possible, and should return `None`
+  * If looking to match on a value, you should use  `@[EXACT({ tokens: %[] })]` instead
+  * We could consider allowing `%[]` directly in the stream, but this is probably confusing as it has different meaning in the outer/in values
+  * We could also consider just allowing embeddings directly into the token stream? But I think this is an unlikely scenario; AND it might mean that `#{ ... }` returning a value might be confusing
 
 ## Attempt Expression (requires Scopes & Blocks)
 
-See @./2025-09-vision.md
+- [ ] Migrate remaining commands. Even using `{}.settings()` for now?
+- [ ] Add `attempt` expression - See @./2025-09-vision.md
+
+## Loop return behaviour
+
+Ideally we want to allow returning/appending easily in a loop. Currently, we're trialing loops returning a vector (or possibly a vector of non-None values).
+
+But this might just be unexpected / confusing.
+
+Alternatively, we could have consider:
+* Loops not returning anything (unless a `loop` uses a `break` perhaps, like in Rust)
+* Embedded expressions having access to a `stream` variable, bound to the current contents of the stream, which they can append to.
+
+So some possible things we can explore / consider:
+
+- [ ] Either:
+  - A: We remove vec-returns from loops
+  - B: We only store values which are non-None in the array, we can therefore use `loop { break X }[0]` to get the return value
+- [ ] Trial exposing the output stream as a variable binding `stream`. We need to have some way to make it kinda efficient though.
+  - Conceptually considering some optimizations further down, this `stream` might actually be from some few levels above,
+    using tail-return optimizations
+  - Maybe we just have an `output(%[...])` command instead of exposing the stream variable?
+- [ ] `break` / `continue` improvements:
+  - Can return a value (from the last iteration of for / while loops)
+  - Can specify a label, and return from a labelled block (https://blog.rust-lang.org/2022/11/03/Rust-1.65.0/#break-from-labeled-blocks)
 
 ## Parser Changes
 

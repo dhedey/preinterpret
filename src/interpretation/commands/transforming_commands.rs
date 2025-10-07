@@ -2,7 +2,7 @@ use crate::internal_prelude::*;
 
 #[derive(Clone)]
 pub(crate) struct ParseCommand {
-    input: SourceExpression,
+    input: Expression,
     #[allow(unused)]
     with_token: Ident,
     transformer: StreamParser,
@@ -35,7 +35,7 @@ impl StreamCommandDefinition for ParseCommand {
     ) -> ExecutionResult<()> {
         let input: OutputStream = self
             .input
-            .interpret_to_value(interpreter)?
+            .evaluate(interpreter)?
             .resolve_as("Parse input")?;
         self.transformer
             .handle_transform_from_stream(input, interpreter, output)

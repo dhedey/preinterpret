@@ -3,9 +3,9 @@ use super::*;
 #[derive(Clone)]
 pub(crate) struct IfExpression {
     if_token: Ident,
-    condition: SourceExpression,
+    condition: Expression,
     then_code: ExpressionBlock,
-    else_ifs: Vec<(SourceExpression, ExpressionBlock)>,
+    else_ifs: Vec<(Expression, ExpressionBlock)>,
     else_code: Option<ExpressionBlock>,
 }
 
@@ -54,7 +54,7 @@ impl IfExpression {
     pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
         let evaluated_condition: bool = self
             .condition
-            .interpret_to_value(interpreter)?
+            .evaluate(interpreter)?
             .resolve_as("An if condition")?;
 
         if evaluated_condition {
@@ -63,7 +63,7 @@ impl IfExpression {
 
         for (condition, code) in &self.else_ifs {
             let evaluated_condition: bool = condition
-                .interpret_to_value(interpreter)?
+                .evaluate(interpreter)?
                 .resolve_as("An else if condition")?;
             if evaluated_condition {
                 return code.evaluate(interpreter);
@@ -81,7 +81,7 @@ impl IfExpression {
 #[derive(Clone)]
 pub(crate) struct WhileExpression {
     while_token: Ident,
-    condition: SourceExpression,
+    condition: Expression,
     body: ExpressionBlock,
 }
 
@@ -130,7 +130,7 @@ impl WhileExpression {
         let mut output = vec![];
         while self
             .condition
-            .interpret_to_value(interpreter)?
+            .evaluate(interpreter)?
             .resolve_as("A while condition")?
         {
             iteration_counter.increment_and_check()?;
@@ -227,7 +227,7 @@ pub(crate) struct ForExpression {
     for_token: Ident,
     pattern: Pattern,
     _in_token: Ident,
-    iterable: SourceExpression,
+    iterable: Expression,
     body: ExpressionBlock,
 }
 
@@ -276,7 +276,7 @@ impl ForExpression {
     ) -> ExecutionResult<OwnedValue> {
         let iterable: IterableValue = self
             .iterable
-            .interpret_to_value(interpreter)?
+            .evaluate(interpreter)?
             .resolve_as("A for loop iterable")?;
 
         let span = self.body.span();

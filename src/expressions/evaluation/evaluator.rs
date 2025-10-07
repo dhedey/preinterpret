@@ -1,13 +1,13 @@
 #![allow(unused)] // TODO[unused-clearup]
 use super::*;
 
-pub(in super::super) struct ExpressionEvaluator<'a, K: Expressionable> {
-    nodes: &'a [ExpressionNode<K>],
+pub(in super::super) struct ExpressionEvaluator<'a> {
+    nodes: &'a [ExpressionNode],
     stack: EvaluationStack,
 }
 
-impl<'a> ExpressionEvaluator<'a, Source> {
-    pub(in super::super) fn new(nodes: &'a [ExpressionNode<Source>]) -> Self {
+impl<'a> ExpressionEvaluator<'a> {
+    pub(in super::super) fn new(nodes: &'a [ExpressionNode]) -> Self {
         Self {
             nodes,
             stack: EvaluationStack::new(),
