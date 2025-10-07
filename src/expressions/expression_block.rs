@@ -32,9 +32,9 @@ impl EmbeddedExpression {
     }
 }
 
-impl Interpret for &EmbeddedExpression {
+impl Interpret for EmbeddedExpression {
     fn interpret_into(
-        self,
+        &self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {

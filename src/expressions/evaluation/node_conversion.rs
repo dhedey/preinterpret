@@ -10,7 +10,7 @@ impl ExpressionNode {
                 match leaf {
                     Leaf::Command(command) => {
                         // TODO[interpret_to_value]: Allow command to return a reference
-                        let value = command.clone().interpret_to_value(context.interpreter())?;
+                        let value = command.evaluate(context.interpreter())?;
                         context.return_owned(value.into_owned(command.span_range()))?
                     }
                     Leaf::Discarded(token) => {
@@ -45,9 +45,7 @@ impl ExpressionNode {
                         context.return_copy_on_write(value)?
                     }
                     Leaf::StreamLiteral(stream_literal) => {
-                        let value = stream_literal
-                            .clone()
-                            .interpret_to_value(context.interpreter())?;
+                        let value = stream_literal.clone().evaluate(context.interpreter())?;
                         context.return_owned(value.into_owned(stream_literal.span_range()))?
                     }
                     Leaf::IfExpression(if_expression) => {

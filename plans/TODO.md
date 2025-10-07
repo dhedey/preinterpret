@@ -90,11 +90,11 @@ Create the following expressions:
 - [x] Blocks `{}`
 - [x] `if`, `else`, `for`, `while`, `loop`
 - [x] `continue`, `break`
-- [ ] Refactors:
+- [x] Refactors:
   - [x] Rename `SourceExpression` => `Expression`, and inline the leaf parsing
-  - [ ] Rename `interpreted_stream.rs` to `output_stream.rs`
-  - [ ] Get rid of the `InterpretToValue` trait, instead have method calls `evaluate` 
-  - [ ] Change `InterpretTo` to use `&self`, and maybe get rid of it
+  - [x] Rename `interpreted_stream.rs` to `output_stream.rs`
+  - [x] Change `InterpretTo` to use `&self`
+  - [x] Rename `InterpretToValue` to `Evaluate` and make it use `&self`
 
 ## Scopes & Blocks (requires control flow expressions, or at least no `!let!` command)
 

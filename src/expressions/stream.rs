@@ -302,7 +302,7 @@ impl Parse<Source> for StreamLiteral {
 
 impl Interpret for StreamLiteral {
     fn interpret_into(
-        self,
+        &self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -324,17 +324,14 @@ impl HasSpanRange for StreamLiteral {
     }
 }
 
-impl InterpretToValue for StreamLiteral {
+impl Evaluate for StreamLiteral {
     type OutputValue = ExpressionValue;
 
-    fn interpret_to_value(
-        self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Self::OutputValue> {
+    fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<Self::OutputValue> {
         match self {
-            StreamLiteral::Regular(lit) => lit.interpret_to_value(interpreter),
-            StreamLiteral::Raw(lit) => lit.interpret_to_value(interpreter),
-            StreamLiteral::Grouped(lit) => lit.interpret_to_value(interpreter),
+            StreamLiteral::Regular(lit) => lit.evaluate(interpreter),
+            StreamLiteral::Raw(lit) => lit.evaluate(interpreter),
+            StreamLiteral::Grouped(lit) => lit.evaluate(interpreter),
         }
     }
 }
@@ -362,7 +359,7 @@ impl Parse<Source> for RegularStreamLiteral {
 
 impl Interpret for RegularStreamLiteral {
     fn interpret_into(
-        self,
+        &self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -376,13 +373,10 @@ impl HasSpanRange for RegularStreamLiteral {
     }
 }
 
-impl InterpretToValue for RegularStreamLiteral {
+impl Evaluate for RegularStreamLiteral {
     type OutputValue = ExpressionValue;
 
-    fn interpret_to_value(
-        self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Self::OutputValue> {
+    fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<Self::OutputValue> {
         Ok(self.interpret_to_new_stream(interpreter)?.into_value())
     }
 }
@@ -413,11 +407,11 @@ impl Parse<Source> for RawStreamLiteral {
 
 impl Interpret for RawStreamLiteral {
     fn interpret_into(
-        self,
+        &self,
         _interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        output.extend_raw_tokens(self.content);
+        output.extend_raw_tokens(self.content.clone());
         Ok(())
     }
 }
@@ -428,14 +422,12 @@ impl HasSpanRange for RawStreamLiteral {
     }
 }
 
-impl InterpretToValue for RawStreamLiteral {
+impl Evaluate for RawStreamLiteral {
     type OutputValue = ExpressionValue;
 
-    fn interpret_to_value(
-        self,
-        _interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Self::OutputValue> {
-        Ok(self.content.into_value())
+    fn evaluate(&self, _interpreter: &mut Interpreter) -> ExecutionResult<Self::OutputValue> {
+        // TODO[interpret_to_value] - Consider storing an Owned and returning a Shared here
+        Ok(self.content.clone().into_value())
     }
 }
 
@@ -465,7 +457,7 @@ impl Parse<Source> for GroupedStreamLiteral {
 
 impl Interpret for GroupedStreamLiteral {
     fn interpret_into(
-        self,
+        &self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -483,13 +475,10 @@ impl HasSpanRange for GroupedStreamLiteral {
     }
 }
 
-impl InterpretToValue for GroupedStreamLiteral {
+impl Evaluate for GroupedStreamLiteral {
     type OutputValue = ExpressionValue;
 
-    fn interpret_to_value(
-        self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Self::OutputValue> {
+    fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<Self::OutputValue> {
         Ok(self.interpret_to_new_stream(interpreter)?.into_value())
     }
 }

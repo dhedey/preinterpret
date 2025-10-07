@@ -67,9 +67,9 @@ impl IsVariable for EmbeddedVariable {
     }
 }
 
-impl Interpret for &EmbeddedVariable {
+impl Interpret for EmbeddedVariable {
     fn interpret_into(
-        self,
+        &self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -77,13 +77,10 @@ impl Interpret for &EmbeddedVariable {
     }
 }
 
-impl InterpretToValue for &EmbeddedVariable {
+impl Evaluate for EmbeddedVariable {
     type OutputValue = ExpressionValue;
 
-    fn interpret_to_value(
-        self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Self::OutputValue> {
+    fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<Self::OutputValue> {
         self.get_transparently_cloned_value(interpreter)
     }
 }
@@ -132,13 +129,10 @@ impl HasSpan for VariableIdentifier {
     }
 }
 
-impl InterpretToValue for &VariableIdentifier {
+impl Evaluate for VariableIdentifier {
     type OutputValue = ExpressionValue;
 
-    fn interpret_to_value(
-        self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Self::OutputValue> {
+    fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<Self::OutputValue> {
         self.get_transparently_cloned_value(interpreter)
     }
 }

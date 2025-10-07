@@ -21,11 +21,11 @@ impl ContextualParse<Source> for SourceStream {
 
 impl Interpret for SourceStream {
     fn interpret_into(
-        self,
+        &self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        for item in self.items {
+        for item in self.items.iter() {
             item.interpret_into(interpreter, output)?;
         }
         Ok(())
@@ -74,7 +74,7 @@ impl Parse<Source> for SourceItem {
 
 impl Interpret for SourceItem {
     fn interpret_into(
-        self,
+        &self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -91,9 +91,9 @@ impl Interpret for SourceItem {
             SourceItem::SourceGroup(group) => {
                 group.interpret_into(interpreter, output)?;
             }
-            SourceItem::Punct(punct) => output.push_punct(punct),
-            SourceItem::Ident(ident) => output.push_ident(ident),
-            SourceItem::Literal(literal) => output.push_literal(literal),
+            SourceItem::Punct(punct) => output.push_punct(punct.clone()),
+            SourceItem::Ident(ident) => output.push_ident(ident.clone()),
+            SourceItem::Literal(literal) => output.push_literal(literal.clone()),
             SourceItem::StreamLiteral(stream_literal) => {
                 stream_literal.interpret_into(interpreter, output)?
             }
@@ -139,7 +139,7 @@ impl Parse<Source> for SourceGroup {
 
 impl Interpret for SourceGroup {
     fn interpret_into(
-        self,
+        &self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {

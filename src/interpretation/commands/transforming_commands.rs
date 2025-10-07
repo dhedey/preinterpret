@@ -29,7 +29,7 @@ impl StreamCommandDefinition for ParseCommand {
     }
 
     fn execute(
-        self,
+        &self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
