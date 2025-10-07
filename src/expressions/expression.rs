@@ -19,10 +19,7 @@ impl Expression {
         }
     }
 
-    pub(crate) fn evaluate(
-        &self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<OwnedValue> {
+    pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
         ExpressionEvaluator::new(&self.nodes).evaluate(self.root, interpreter)
     }
 
@@ -59,9 +56,7 @@ impl Expression {
             ExpressionNode::Leaf(Leaf::ForExpression(for_expression)) => {
                 for_expression.evaluate_as_statement(interpreter)
             }
-            _ => self
-                .evaluate(interpreter)?
-                .into_statement_result(),
+            _ => self.evaluate(interpreter)?.into_statement_result(),
         }
     }
 }

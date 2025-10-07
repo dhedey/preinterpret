@@ -235,10 +235,7 @@ impl LetStatement {
             assignment,
         } = self;
         let value = match assignment {
-            Some(assignment) => assignment
-                .expression
-                .evaluate(interpreter)?
-                .into_inner(),
+            Some(assignment) => assignment.expression.evaluate(interpreter)?.into_inner(),
             None => ExpressionValue::None,
         };
         pattern.handle_destructure(interpreter, value)?;
