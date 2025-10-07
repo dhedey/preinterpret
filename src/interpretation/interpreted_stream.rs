@@ -14,38 +14,6 @@ pub(crate) struct OutputStream {
     token_length: usize,
 }
 
-#[derive(Clone)]
-// This was primarily implemented to avoid this issue: https://github.com/rust-lang/rust-analyzer/issues/18211#issuecomment-2604547032
-// But it doesn't actually help because the `syn::parse` mechanism only operates on a TokenStream,
-// so we have to convert back into a TokenStream.
-enum OutputSegment {
-    TokenVec(Vec<TokenTree>), // Cheaper than a TokenStream (probably)
-    OutputGroup(Delimiter, Span, OutputStream),
-}
-
-#[derive(Clone)]
-pub(crate) enum OutputTokenTree {
-    TokenTree(TokenTree),
-    OutputGroup(Delimiter, Span, OutputStream),
-}
-
-impl From<OutputTokenTree> for OutputStream {
-    fn from(value: OutputTokenTree) -> Self {
-        let mut new = Self::new();
-        new.push_interpreted_item(value);
-        new
-    }
-}
-
-impl HasSpan for OutputTokenTree {
-    fn span(&self) -> Span {
-        match self {
-            OutputTokenTree::TokenTree(token_tree) => token_tree.span(),
-            OutputTokenTree::OutputGroup(_, span, _) => *span,
-        }
-    }
-}
-
 impl OutputStream {
     pub(crate) fn new() -> Self {
         Self {
@@ -148,14 +116,14 @@ impl OutputStream {
         self.token_length == 0
     }
 
-    pub(crate) fn coerce_into_value(self, stream_span_range: SpanRange) -> ExpressionValue {
+    pub(crate) fn coerce_into_value(self) -> ExpressionValue {
         let parse_result = unsafe {
             // RUST-ANALYZER SAFETY: This is actually safe.
             self.clone().parse_as::<syn::Lit>()
         };
         match parse_result {
-            Ok(syn_lit) => ExpressionValue::for_syn_lit(syn_lit),
-            Err(_) => self.to_value(stream_span_range),
+            Ok(syn_lit) => ExpressionValue::for_syn_lit(syn_lit).into_inner(),
+            Err(_) => self.into_value(),
         }
     }
 
@@ -212,6 +180,26 @@ impl OutputStream {
         }
     }
 
+    pub(crate) fn replace_first_level_spans(&mut self, new_span: Span) {
+        for segment in self.segments.iter_mut() {
+            match segment {
+                OutputSegment::TokenVec(vec) => {
+                    for token in vec.iter_mut() {
+                        match token {
+                            TokenTree::Group(group) => group.set_span(new_span),
+                            TokenTree::Ident(ident) => ident.set_span(new_span),
+                            TokenTree::Punct(punct) => punct.set_span(new_span),
+                            TokenTree::Literal(literal) => literal.set_span(new_span),
+                        }
+                    }
+                }
+                OutputSegment::OutputGroup(_, span, _) => {
+                    *span = new_span;
+                }
+            }
+        }
+    }
+
     pub(crate) fn to_token_stream_removing_any_transparent_groups(&self) -> TokenStream {
         let mut output = TokenStream::new();
         self.append_to_token_stream_without_transparent_groups(&mut output);
@@ -248,25 +236,6 @@ impl OutputStream {
                 }
             }
         }
-    }
-
-    pub(crate) fn into_item_vec(self) -> Vec<OutputTokenTree> {
-        let mut output = Vec::with_capacity(self.token_length);
-        for segment in self.segments {
-            match segment {
-                OutputSegment::TokenVec(vec) => {
-                    output.extend(vec.into_iter().map(OutputTokenTree::TokenTree));
-                }
-                OutputSegment::OutputGroup(delimiter, span, interpreted_stream) => {
-                    output.push(OutputTokenTree::OutputGroup(
-                        delimiter,
-                        span,
-                        interpreted_stream,
-                    ));
-                }
-            }
-        }
-        output
     }
 
     pub(crate) fn concat_recursive(&self, behaviour: &ConcatBehaviour) -> String {
@@ -385,7 +354,7 @@ impl OutputStream {
                 EitherIterator::Left(vec.iter().map(OutputTokenTreeRef::TokenTree))
             }
             OutputSegment::OutputGroup(delimiter, span, inner) => EitherIterator::Right(
-                [OutputTokenTreeRef::OutputGroup(*delimiter, *span, inner)].into_iter(),
+                core::iter::once(OutputTokenTreeRef::OutputGroup(*delimiter, *span, inner)),
             ),
         })
     }
@@ -397,12 +366,65 @@ pub(crate) enum OutputTokenTreeRef<'a> {
     OutputGroup(Delimiter, Span, &'a OutputStream),
 }
 
+#[derive(Clone)]
+pub(crate) struct OutputStreamIntoIter {
+    segments: std::vec::IntoIter<OutputSegment>,
+    current_segment_iter: Option<OutputSegmentIntoIter>,
+    count_remaining: usize,
+}
+
+impl OutputStreamIntoIter {
+    fn new(stream: OutputStream) -> Self {
+        let mut segments = stream.segments.into_iter();
+        let current_segment_iter = segments.next().map(OutputSegment::into_iter);
+        let count_remaining = stream.token_length;
+        Self {
+            segments,
+            current_segment_iter,
+            count_remaining,
+        }
+    }
+}
+
+impl Iterator for OutputStreamIntoIter {
+    type Item = OutputTokenTree;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.count_remaining == 0 {
+            return None;
+        }
+
+        loop {
+            if let Some(current_segment_iter) = &mut self.current_segment_iter {
+                if let Some(item) = current_segment_iter.next() {
+                    self.count_remaining -= 1;
+                    return Some(item);
+                }
+            }
+
+            match self.segments.next() {
+                Some(next_segment) => {
+                    self.current_segment_iter = Some(next_segment.into_iter());
+                }
+                None => {
+                    self.current_segment_iter = None;
+                    return None;
+                }
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.count_remaining, Some(self.count_remaining))
+    }
+}
+
 impl IntoIterator for OutputStream {
-    type IntoIter = std::vec::IntoIter<OutputTokenTree>;
+    type IntoIter = OutputStreamIntoIter;
     type Item = OutputTokenTree;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.into_item_vec().into_iter()
+        OutputStreamIntoIter::new(self)
     }
 }
 
@@ -527,6 +549,83 @@ impl ConcatBehaviour {
 impl From<TokenTree> for OutputStream {
     fn from(value: TokenTree) -> Self {
         OutputStream::raw(value.into())
+    }
+}
+
+#[derive(Clone)]
+// This was primarily implemented to avoid this issue: https://github.com/rust-lang/rust-analyzer/issues/18211#issuecomment-2604547032
+// But it doesn't actually help because the `syn::parse` mechanism only operates on a TokenStream,
+// so we have to convert back into a TokenStream.
+enum OutputSegment {
+    TokenVec(Vec<TokenTree>), // Cheaper than a TokenStream (probably)
+    OutputGroup(Delimiter, Span, OutputStream),
+}
+
+#[derive(Clone)]
+enum OutputSegmentIntoIter {
+    Vec(std::vec::IntoIter<TokenTree>),
+    Single(Option<OutputTokenTree>),
+}
+
+impl Iterator for OutputSegmentIntoIter {
+    type Item = OutputTokenTree;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            OutputSegmentIntoIter::Vec(iter) => iter.next().map(OutputTokenTree::TokenTree),
+            OutputSegmentIntoIter::Single(option) => option.take(),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match self {
+            OutputSegmentIntoIter::Vec(iter) => iter.size_hint(),
+            OutputSegmentIntoIter::Single(option) => {
+                let len = if option.is_some() { 1 } else { 0 };
+                (len, Some(len))
+            }
+        }
+    }
+}
+
+impl IntoIterator for OutputSegment {
+    type IntoIter = OutputSegmentIntoIter;
+    type Item = OutputTokenTree;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            OutputSegment::TokenVec(vec) => OutputSegmentIntoIter::Vec(vec.into_iter()),
+            OutputSegment::OutputGroup(delimiter, span, interpreted_stream) => {
+                OutputSegmentIntoIter::Single(Some(OutputTokenTree::OutputGroup(
+                    delimiter,
+                    span,
+                    interpreted_stream,
+                )))
+            }
+        }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) enum OutputTokenTree {
+    TokenTree(TokenTree),
+    OutputGroup(Delimiter, Span, OutputStream),
+}
+
+impl From<OutputTokenTree> for OutputStream {
+    fn from(value: OutputTokenTree) -> Self {
+        let mut new = Self::new();
+        new.push_interpreted_item(value);
+        new
+    }
+}
+
+impl HasSpan for OutputTokenTree {
+    fn span(&self) -> Span {
+        match self {
+            OutputTokenTree::TokenTree(token_tree) => token_tree.span(),
+            OutputTokenTree::OutputGroup(_, span, _) => *span,
+        }
     }
 }
 

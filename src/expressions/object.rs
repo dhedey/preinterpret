@@ -3,10 +3,12 @@ use super::*;
 #[derive(Clone)]
 pub(crate) struct ExpressionObject {
     pub(crate) entries: BTreeMap<String, ObjectEntry>,
-    /// The span range that generated this value.
-    /// For a complex expression, the start span is the most left part
-    /// of the expression, and the end span is the most right part.
-    pub(crate) span_range: SpanRange,
+}
+
+impl ToExpressionValue for ExpressionObject {
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::Object(self)
+    }
 }
 
 #[derive(Clone)]
@@ -20,7 +22,7 @@ impl ExpressionObject {
     pub(super) fn handle_integer_binary_operation(
         self,
         _right: ExpressionInteger,
-        operation: OutputSpanned<IntegerBinaryOperation>,
+        operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         operation.unsupported(self)
     }
@@ -28,48 +30,41 @@ impl ExpressionObject {
     pub(super) fn handle_paired_binary_operation(
         self,
         _rhs: Self,
-        operation: OutputSpanned<PairedBinaryOperation>,
+        operation: WrappedOp<PairedBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         operation.unsupported(self)
     }
 
     pub(super) fn into_indexed(
         mut self,
-        access: IndexAccess,
-        index: &ExpressionValue,
+        index: Spanned<&ExpressionValue>,
     ) -> ExecutionResult<ExpressionValue> {
-        let span_range = SpanRange::new_between(self.span_range, access.span_range());
-        let key = index.expect_str("An object key")?;
-        Ok(self.remove_or_none(key, span_range))
+        let key = index.resolve_as("An object key")?;
+        Ok(self.remove_or_none(key))
     }
 
     pub(super) fn into_property(
         mut self,
         access: &PropertyAccess,
     ) -> ExecutionResult<ExpressionValue> {
-        let span_range = SpanRange::new_between(self.span_range, access.span_range());
         let key = access.property.to_string();
-        Ok(self.remove_or_none(&key, span_range))
+        Ok(self.remove_or_none(&key))
     }
 
-    pub(crate) fn remove_or_none(&mut self, key: &str, span_range: SpanRange) -> ExpressionValue {
+    pub(crate) fn remove_or_none(&mut self, key: &str) -> ExpressionValue {
         match self.entries.remove(key) {
-            Some(entry) => entry.value.with_span_range(span_range),
-            None => ExpressionValue::None(span_range),
+            Some(entry) => entry.value,
+            None => ExpressionValue::None,
         }
     }
 
-    pub(crate) fn remove_no_none(
-        &mut self,
-        key: &str,
-        span_range: SpanRange,
-    ) -> Option<ExpressionValue> {
+    pub(crate) fn remove_no_none(&mut self, key: &str) -> Option<ExpressionValue> {
         match self.entries.remove(key) {
             Some(entry) => {
                 if entry.value.is_none() {
                     None
                 } else {
-                    Some(entry.value.with_span_range(span_range))
+                    Some(entry.value)
                 }
             }
             None => None,
@@ -78,22 +73,23 @@ impl ExpressionObject {
 
     pub(super) fn index_mut(
         &mut self,
-        access: IndexAccess,
-        index: &ExpressionValue,
+        index: Spanned<&ExpressionValue>,
         auto_create: bool,
     ) -> ExecutionResult<&mut ExpressionValue> {
-        let index: &str = index.resolve_as()?;
-        self.mut_entry(index.to_string(), access.span(), auto_create)
+        let index: Spanned<&str> = index.resolve_as("An object key")?;
+        self.mut_entry(index.map(|s, _| s.to_string()), auto_create)
     }
 
     pub(super) fn index_ref(
         &self,
-        access: IndexAccess,
-        index: &ExpressionValue,
+        index: Spanned<&ExpressionValue>,
     ) -> ExecutionResult<&ExpressionValue> {
-        let key = index.expect_str("An object key")?;
-        let entry = self.entries.get(key).ok_or_else(|| {
-            access.execution_error(format!("The object does not have a field named `{}`", key))
+        let key: Spanned<&str> = index.resolve_as("An object key")?;
+        let entry = self.entries.get(key.value).ok_or_else(|| {
+            key.execution_error(format!(
+                "The object does not have a field named `{}`",
+                key.value
+            ))
         })?;
         Ok(&entry.value)
     }
@@ -104,8 +100,7 @@ impl ExpressionObject {
         auto_create: bool,
     ) -> ExecutionResult<&mut ExpressionValue> {
         self.mut_entry(
-            access.property.to_string(),
-            access.property.span(),
+            access.property.to_string().spanned(access.property.span()),
             auto_create,
         )
     }
@@ -123,19 +118,19 @@ impl ExpressionObject {
 
     fn mut_entry(
         &mut self,
-        key: String,
-        key_span: Span,
+        key: Spanned<String>,
         auto_create: bool,
     ) -> ExecutionResult<&mut ExpressionValue> {
         use std::collections::btree_map::*;
+        let (key, key_span) = key.deconstruct();
         Ok(match self.entries.entry(key) {
             Entry::Occupied(entry) => &mut entry.into_mut().value,
             Entry::Vacant(entry) => {
                 if auto_create {
                     &mut entry
                         .insert(ObjectEntry {
-                            key_span,
-                            value: ExpressionValue::None(key_span.span_range()),
+                            key_span: key_span.join_into_span_else_start(),
+                            value: ExpressionValue::None,
                         })
                         .value
                 } else {
@@ -154,7 +149,9 @@ impl ExpressionObject {
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
         if !behaviour.use_debug_literal_syntax {
-            return self.execution_err("An object can't be converted to a non-debug string");
+            return behaviour
+                .error_span_range
+                .execution_err("An object can't be converted to a non-debug string");
         }
         if behaviour.output_literal_structure {
             if self.entries.is_empty() {
@@ -196,14 +193,16 @@ impl ExpressionObject {
         }
         Ok(())
     }
+}
 
+impl Spanned<&ExpressionObject> {
     pub(crate) fn validate(&self, validation: &impl ObjectValidate) -> ExecutionResult<()> {
         let mut missing_fields = Vec::new();
         for (field_name, _) in validation.required_fields() {
             match self.entries.get(field_name) {
                 None
                 | Some(ObjectEntry {
-                    value: ExpressionValue::None { .. },
+                    value: ExpressionValue::None,
                     ..
                 }) => {
                     missing_fields.push(field_name);
@@ -239,13 +238,7 @@ impl ExpressionObject {
             error_message.push_str(&unexpected_fields.join(", "));
         }
 
-        self.span_range().execution_err(error_message)
-    }
-}
-
-impl HasSpanRange for ExpressionObject {
-    fn span_range(&self) -> SpanRange {
-        self.span_range
+        self.execution_err(error_message)
     }
 }
 
@@ -262,11 +255,8 @@ impl HasValueType for BTreeMap<String, ObjectEntry> {
 }
 
 impl ToExpressionValue for BTreeMap<String, ObjectEntry> {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
-        ExpressionValue::Object(ExpressionObject {
-            entries: self,
-            span_range,
-        })
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::Object(ExpressionObject { entries: self })
     }
 }
 

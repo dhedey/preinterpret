@@ -1,28 +1,24 @@
 use super::*;
 
 pub(super) trait Operation: HasSpanRange {
-    fn with_output_span_range(&self, output_span_range: SpanRange) -> OutputSpanned<'_, Self> {
-        OutputSpanned {
-            output_span_range,
-            operation: self,
-        }
+    fn wrap(&self) -> WrappedOp<'_, Self> {
+        WrappedOp { operation: self }
     }
 
     fn symbolic_description(&self) -> &'static str;
 }
 
-pub(super) struct OutputSpanned<'a, T: Operation + ?Sized> {
-    pub(super) output_span_range: SpanRange,
+pub(super) struct WrappedOp<'a, T: Operation + ?Sized> {
     pub(super) operation: &'a T,
 }
 
-impl<T: Operation> OutputSpanned<'_, T> {
+impl<T: Operation> WrappedOp<'_, T> {
     pub(super) fn symbolic_description(&self) -> &'static str {
         self.operation.symbolic_description()
     }
 
     pub(super) fn output(&self, output_value: impl ToExpressionValue) -> ExpressionValue {
-        output_value.to_value(self.output_span_range)
+        output_value.into_value()
     }
 
     pub(super) fn output_if_some(
@@ -42,14 +38,6 @@ impl<T: Operation> OutputSpanned<'_, T> {
             self.operation.symbolic_description(),
             value.value_type(),
         )))
-    }
-}
-
-impl<T: Operation> HasSpanRange for OutputSpanned<'_, T> {
-    fn span_range(&self) -> SpanRange {
-        // This is used for errors of the operation, so should be targetted
-        // to the span range of the _operator_, not the output.
-        self.operation.span_range()
     }
 }
 
@@ -329,21 +317,21 @@ impl SynParse for BinaryOperation {
 impl BinaryOperation {
     pub(super) fn lazy_evaluate(
         &self,
-        left: &ExpressionValue,
-    ) -> ExecutionResult<Option<ExpressionValue>> {
+        left: Spanned<&ExpressionValue>,
+    ) -> ExecutionResult<Option<OwnedValue>> {
         match self {
             BinaryOperation::Paired(PairedBinaryOperation::LogicalAnd { .. }) => {
-                let bool = left.clone().expect_bool("The left operand to &&")?;
-                if !bool.value {
-                    Ok(Some(ExpressionValue::Boolean(bool)))
+                let bool: Spanned<&bool> = left.resolve_as("The left operand to &&")?;
+                if !*bool.value {
+                    Ok(Some(bool.value.into_owned_value(bool.span_range)))
                 } else {
                     Ok(None)
                 }
             }
             BinaryOperation::Paired(PairedBinaryOperation::LogicalOr { .. }) => {
-                let bool = left.clone().expect_bool("The left operand to ||")?;
-                if bool.value {
-                    Ok(Some(ExpressionValue::Boolean(bool)))
+                let bool: Spanned<&bool> = left.resolve_as("The left operand to ||")?;
+                if *bool.value {
+                    Ok(Some(bool.value.into_owned_value(bool.span_range)))
                 } else {
                     Ok(None)
                 }
@@ -354,27 +342,28 @@ impl BinaryOperation {
 
     pub(crate) fn evaluate(
         &self,
-        left: ExpressionValue,
-        right: ExpressionValue,
-    ) -> ExecutionResult<ExpressionValue> {
-        let span_range =
-            SpanRange::new_between(left.span_range().start(), right.span_range().end());
-        match self {
+        left: OwnedValue,
+        right: OwnedValue,
+    ) -> ExecutionResult<OwnedValue> {
+        let (left, left_span_range) = left.deconstruct();
+        let (right, right_span_range) = right.deconstruct();
+        let span_range = SpanRange::new_between(left_span_range, right_span_range);
+
+        Ok(match self {
             BinaryOperation::Paired(operation) => {
                 let value_pair = left.expect_value_pair(operation, right)?;
                 value_pair
-                    .handle_paired_binary_operation(operation.with_output_span_range(span_range))
+                    .handle_paired_binary_operation(operation.wrap())?
+                    .into_owned(span_range)
             }
             BinaryOperation::Integer(operation) => {
                 let right = right
                     .into_integer()
                     .ok_or_else(|| self.execution_error("The shift amount must be an integer"))?;
-                left.handle_integer_binary_operation(
-                    right,
-                    operation.with_output_span_range(span_range),
-                )
+                left.handle_integer_binary_operation(right, operation.wrap())?
+                    .into_owned(span_range)
             }
-        }
+        })
     }
 }
 
@@ -490,13 +479,13 @@ pub(super) trait HandleBinaryOperation: Sized {
     fn handle_paired_binary_operation(
         self,
         rhs: Self,
-        operation: OutputSpanned<PairedBinaryOperation>,
+        operation: WrappedOp<PairedBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue>;
 
     fn handle_integer_binary_operation(
         self,
         rhs: ExpressionInteger,
-        operation: OutputSpanned<IntegerBinaryOperation>,
+        operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue>;
 }
 

@@ -27,8 +27,8 @@ define_interface! {
                 ZipIterators::new_from_iterator(iterator, context.span_range())?.run_zip(context.interpreter, false)
             }
 
-            [context] fn intersperse(this: IterableValue, separator: ExpressionValue, settings: Option<IntersperseSettings>) -> ExecutionResult<ExpressionArray> {
-                run_intersperse(this, separator, settings.unwrap_or_default(), context.output_span_range)
+            fn intersperse(this: IterableValue, separator: ExpressionValue, settings: Option<IntersperseSettings>) -> ExecutionResult<ExpressionArray> {
+                run_intersperse(this, separator, settings.unwrap_or_default())
             }
 
             [context] fn to_vec(this: IterableValue) -> ExecutionResult<Vec<ExpressionValue>> {
@@ -82,12 +82,12 @@ impl IterableValue {
 }
 
 pub(crate) enum IterableRef<'a> {
-    Iterator(Ref<'a, ExpressionIterator>),
-    Array(Ref<'a, ExpressionArray>),
-    Stream(Ref<'a, OutputStream>),
-    Range(Ref<'a, ExpressionRange>),
-    Object(Ref<'a, ExpressionObject>),
-    String(Ref<'a, str>),
+    Iterator(AnyRef<'a, ExpressionIterator>),
+    Array(AnyRef<'a, ExpressionArray>),
+    Stream(AnyRef<'a, OutputStream>),
+    Range(AnyRef<'a, ExpressionRange>),
+    Object(AnyRef<'a, ExpressionObject>),
+    String(AnyRef<'a, str>),
 }
 
 impl FromResolved for IterableRef<'static> {
@@ -113,62 +113,48 @@ impl FromResolved for IterableRef<'static> {
 
 impl Spanned<IterableRef<'_>> {
     pub(crate) fn len(&self) -> ExecutionResult<usize> {
-        Ok(match &self.value {
-            IterableRef::Iterator(iterator) => {
-                let (min, max) = iterator.size_hint();
-                if max == Some(min) {
-                    min
-                } else {
-                    return self.execution_err("Iterator has an inexact length");
-                }
-            }
-            IterableRef::Array(value) => value.items.len(),
-            IterableRef::Stream(value) => value.len(),
-            IterableRef::Range(value) => return value.len(),
-            IterableRef::Object(value) => value.entries.len(),
-            IterableRef::String(value) => value.chars().count(),
-        })
+        match &self.value {
+            IterableRef::Iterator(iterator) => iterator.len(self.span_range),
+            IterableRef::Array(value) => Ok(value.items.len()),
+            IterableRef::Stream(value) => Ok(value.len()),
+            IterableRef::Range(value) => value.len(self.span_range),
+            IterableRef::Object(value) => Ok(value.entries.len()),
+            // NB - this is different to string.len() which counts bytes
+            IterableRef::String(value) => Ok(value.chars().count()),
+        }
     }
 }
 
 #[derive(Clone)]
 pub(crate) struct ExpressionIterator {
     iterator: ExpressionIteratorInner,
-    #[allow(unused)]
-    pub(crate) span_range: SpanRange,
 }
 
 impl ExpressionIterator {
+    fn new(iterator: ExpressionIteratorInner) -> Self {
+        Self { iterator }
+    }
+
     #[allow(unused)]
     pub(crate) fn new_any(
         iterator: impl Iterator<Item = ExpressionValue> + 'static + Clone,
     ) -> Self {
-        Self {
-            iterator: ExpressionIteratorInner::Other(Box::new(iterator)),
-            span_range: SpanRange::dummy(),
-        }
+        Self::new_custom(Box::new(iterator))
     }
 
     pub(crate) fn new_for_array(array: ExpressionArray) -> Self {
-        Self {
-            iterator: ExpressionIteratorInner::Vec(array.items.into_iter()),
-            span_range: array.span_range,
-        }
+        Self::new_vec(array.items.into_iter())
     }
 
     pub(crate) fn new_for_stream(stream: ExpressionStream) -> Self {
-        Self {
-            iterator: ExpressionIteratorInner::Stream(stream.value.into_iter()),
-            span_range: stream.span_range,
-        }
+        Self::new(ExpressionIteratorInner::Stream(Box::new(
+            stream.value.into_iter(),
+        )))
     }
 
     pub(crate) fn new_for_range(range: ExpressionRange) -> ExecutionResult<Self> {
         let iterator = range.inner.into_iterable()?.resolve_iterator()?;
-        Ok(Self {
-            iterator: ExpressionIteratorInner::Other(iterator),
-            span_range: range.span_range,
-        })
+        Ok(Self::new_custom(iterator))
     }
 
     pub(crate) fn new_for_object(object: ExpressionObject) -> ExecutionResult<Self> {
@@ -176,16 +162,10 @@ impl ExpressionIterator {
         let iterator = object
             .entries
             .into_iter()
-            .map(|(k, v)| {
-                let span_range = v.key_span.span_range();
-                vec![k.to_value(span_range), v.value].to_value(span_range)
-            })
+            .map(|(k, v)| vec![k.into_value(), v.value].into_value())
             .collect::<Vec<_>>()
             .into_iter();
-        Ok(Self {
-            iterator: ExpressionIteratorInner::Vec(iterator),
-            span_range: object.span_range,
-        })
+        Ok(Self::new_vec(iterator))
     }
 
     pub(crate) fn new_for_string(string: ExpressionString) -> ExecutionResult<Self> {
@@ -195,22 +175,26 @@ impl ExpressionIterator {
         let iterator = string
             .value
             .chars()
-            .map(|c| c.to_value(string.span_range))
+            .map(|c| c.into_value())
             .collect::<Vec<_>>()
             .into_iter();
-        Ok(Self {
-            iterator: ExpressionIteratorInner::Vec(iterator),
-            span_range: string.span_range,
-        })
+        Ok(Self::new_vec(iterator))
     }
 
-    pub(crate) fn new_custom(
-        iterator: Box<dyn CustomExpressionIterator>,
-        span_range: SpanRange,
-    ) -> Self {
-        Self {
-            iterator: ExpressionIteratorInner::Other(iterator),
-            span_range,
+    fn new_vec(iterator: std::vec::IntoIter<ExpressionValue>) -> Self {
+        Self::new(ExpressionIteratorInner::Vec(Box::new(iterator)))
+    }
+
+    pub(crate) fn new_custom(iterator: Box<dyn ClonableIterator<Item = ExpressionValue>>) -> Self {
+        Self::new(ExpressionIteratorInner::Other(iterator))
+    }
+
+    pub(crate) fn len(&self, error_span_range: SpanRange) -> ExecutionResult<usize> {
+        let (min, max) = self.size_hint();
+        if max == Some(min) {
+            Ok(min)
+        } else {
+            error_span_range.execution_err("Iterator has an inexact length")
         }
     }
 
@@ -225,14 +209,13 @@ impl ExpressionIterator {
 
     pub(super) fn output_items_to(
         self,
-        output: &mut OutputStream,
+        output: &mut ToStreamContext,
         grouping: Grouping,
     ) -> ExecutionResult<()> {
         const LIMIT: usize = 10_000;
-        let span_range = self.span_range;
         for (i, item) in self.enumerate() {
             if i > LIMIT {
-                return span_range.execution_err(format!("Only a maximum of {} items can be output to a stream from an iterator, to protect you from infinite loops. This can't currently be reconfigured with the iteration limit.", LIMIT));
+                return output.execution_err(format!("Only a maximum of {} items can be output to a stream from an iterator, to protect you from infinite loops. This can't currently be reconfigured with the iteration limit.", LIMIT));
             }
             item.output_to(grouping, output)?;
         }
@@ -310,25 +293,21 @@ impl ExpressionIterator {
 }
 
 impl ToExpressionValue for ExpressionIteratorInner {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
-        ExpressionValue::Iterator(ExpressionIterator {
-            iterator: self,
-            span_range,
-        })
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::Iterator(ExpressionIterator::new(self))
     }
 }
 
-impl ToExpressionValue for Box<dyn CustomExpressionIterator> {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
-        ExpressionValue::Iterator(ExpressionIterator::new_custom(self, span_range))
+impl ToExpressionValue for Box<dyn ClonableIterator<Item = ExpressionValue>> {
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::Iterator(ExpressionIterator::new_custom(self))
     }
 }
 
 impl ToExpressionValue for ExpressionIterator {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
+    fn into_value(self) -> ExpressionValue {
         ExpressionValue::Iterator(ExpressionIterator {
             iterator: self.iterator,
-            span_range,
         })
     }
 }
@@ -341,25 +320,10 @@ impl HasValueType for ExpressionIterator {
 
 #[derive(Clone)]
 enum ExpressionIteratorInner {
-    Vec(<Vec<ExpressionValue> as IntoIterator>::IntoIter),
-    Stream(<OutputStream as IntoIterator>::IntoIter),
-    Other(Box<dyn CustomExpressionIterator>),
-}
-
-impl<T: Iterator<Item = ExpressionValue> + Clone + 'static> CustomExpressionIterator for T {
-    fn clone_box(&self) -> Box<dyn CustomExpressionIterator> {
-        Box::new(self.clone())
-    }
-}
-
-pub(crate) trait CustomExpressionIterator: Iterator<Item = ExpressionValue> {
-    fn clone_box(&self) -> Box<dyn CustomExpressionIterator>;
-}
-
-impl Clone for Box<dyn CustomExpressionIterator> {
-    fn clone(&self) -> Self {
-        (**self).clone_box()
-    }
+    // We Box these so that Value is smaller on the stack
+    Vec(Box<<Vec<ExpressionValue> as IntoIterator>::IntoIter>),
+    Stream(Box<<OutputStream as IntoIterator>::IntoIter>),
+    Other(Box<dyn ClonableIterator<Item = ExpressionValue>>),
 }
 
 impl Iterator for ExpressionIterator {
@@ -370,9 +334,8 @@ impl Iterator for ExpressionIterator {
             ExpressionIteratorInner::Vec(iter) => iter.next(),
             ExpressionIteratorInner::Stream(iter) => {
                 let item = iter.next()?;
-                let span = item.span();
                 let stream: OutputStream = item.into();
-                Some(stream.coerce_into_value(span.span_range()))
+                Some(stream.coerce_into_value())
             }
             ExpressionIteratorInner::Other(iter) => iter.next(),
         }
@@ -406,10 +369,10 @@ define_interface! {
     parent: IterableTypeData,
     pub(crate) mod iterator_interface {
         pub(crate) mod methods {
-            [context] fn next(mut this: Mutable<ExpressionIterator>) -> ExpressionValue {
+            fn next(mut this: Mutable<ExpressionIterator>) -> ExpressionValue {
                 match this.next() {
                     Some(value) => value,
-                    None => ExpressionValue::None(context.span_range()),
+                    None => ExpressionValue::None,
                 }
             }
 
@@ -424,11 +387,11 @@ define_interface! {
                 this
             }
 
-            [context] fn take(this: ExpressionIterator, n: usize) -> ExpressionIterator {
+            fn take(this: ExpressionIterator, n: usize) -> ExpressionIterator {
                 // We collect to a vec to satisfy the clonability requirement,
                 // but only return an iterator for forwards compatibility in case we change it.
                 let taken = this.take(n).collect::<Vec<_>>();
-                ExpressionIterator::new_for_array(ExpressionArray::new(taken, context.span_range()))
+                ExpressionIterator::new_for_array(ExpressionArray::new(taken))
             }
         }
         pub(crate) mod unary_operations {

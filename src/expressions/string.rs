@@ -3,24 +3,23 @@ use super::*;
 #[derive(Clone)]
 pub(crate) struct ExpressionString {
     pub(crate) value: String,
-    /// The span range that generated this value.
-    /// For a complex expression, the start span is the most left part
-    /// of the expression, and the end span is the most right part.
-    pub(super) span_range: SpanRange,
+}
+
+impl ToExpressionValue for ExpressionString {
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::String(self)
+    }
 }
 
 impl ExpressionString {
-    pub(super) fn for_litstr(lit: syn::LitStr) -> Self {
-        Self {
-            value: lit.value(),
-            span_range: lit.span().span_range(),
-        }
+    pub(super) fn for_litstr(lit: &syn::LitStr) -> Owned<Self> {
+        Self { value: lit.value() }.into_owned(lit.span())
     }
 
     pub(super) fn handle_integer_binary_operation(
         self,
         _right: ExpressionInteger,
-        operation: OutputSpanned<IntegerBinaryOperation>,
+        operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         operation.unsupported(self)
     }
@@ -28,7 +27,7 @@ impl ExpressionString {
     pub(super) fn handle_paired_binary_operation(
         self,
         rhs: Self,
-        operation: OutputSpanned<PairedBinaryOperation>,
+        operation: WrappedOp<PairedBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.value;
         let rhs = rhs.value;
@@ -52,8 +51,8 @@ impl ExpressionString {
         })
     }
 
-    pub(super) fn to_literal(&self) -> Literal {
-        Literal::string(&self.value).with_span(self.span_range.join_into_span_else_start())
+    pub(super) fn to_literal(&self, span: Span) -> Literal {
+        Literal::string(&self.value).with_span(span)
     }
 }
 
@@ -70,19 +69,15 @@ impl HasValueType for String {
 }
 
 impl ToExpressionValue for String {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
-        ExpressionValue::String(ExpressionString {
-            value: self,
-            span_range,
-        })
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::String(ExpressionString { value: self })
     }
 }
 
 impl ToExpressionValue for &str {
-    fn to_value(self, span_range: SpanRange) -> ExpressionValue {
+    fn into_value(self) -> ExpressionValue {
         ExpressionValue::String(ExpressionString {
             value: self.to_string(),
-            span_range,
         })
     }
 }
@@ -95,7 +90,7 @@ define_interface! {
             // ==================
             // CONVERSION METHODS
             // ==================
-            [context] fn to_ident(this: SpannedRef<str>) -> ExecutionResult<Ident> {
+            [context] fn to_ident(this: SpannedAnyRef<str>) -> ExecutionResult<Ident> {
                 let str: &str = &this;
                 let ident = parse_str::<Ident>(str)
                     .map_err(|err| this.error(format!("`{}` is not a valid ident: {:?}", str, err)))?
@@ -103,7 +98,7 @@ define_interface! {
                 Ok(ident)
             }
 
-            [context] fn to_ident_camel(this: SpannedRef<str>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_camel(this: SpannedAnyRef<str>) -> ExecutionResult<Ident> {
                 let str = string_conversion::to_upper_camel_case(&this);
                 let ident = parse_str::<Ident>(&str)
                     .map_err(|err| this.error(format!("`{}` is not a valid ident: {:?}", str, err)))?
@@ -111,7 +106,7 @@ define_interface! {
                 Ok(ident)
             }
 
-            [context] fn to_ident_snake(this: SpannedRef<str>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_snake(this: SpannedAnyRef<str>) -> ExecutionResult<Ident> {
                 let str = string_conversion::to_lower_snake_case(&this);
                 let ident = parse_str::<Ident>(&str)
                     .map_err(|err| this.error(format!("`{}` is not a valid ident: {:?}", str, err)))?
@@ -119,7 +114,7 @@ define_interface! {
                 Ok(ident)
             }
 
-            [context] fn to_ident_upper_snake(this: SpannedRef<str>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_upper_snake(this: SpannedAnyRef<str>) -> ExecutionResult<Ident> {
                 let str = string_conversion::to_upper_snake_case(&this);
                 let ident = parse_str::<Ident>(&str)
                     .map_err(|err| this.error(format!("`{}` is not a valid ident: {:?}", str, err)))?
@@ -127,7 +122,7 @@ define_interface! {
                 Ok(ident)
             }
 
-            [context] fn to_literal(this: SpannedRef<str>) -> ExecutionResult<Literal> {
+            [context] fn to_literal(this: SpannedAnyRef<str>) -> ExecutionResult<Literal> {
                 let str: &str = &this;
                 let literal = Literal::from_str(str)
                     .map_err(|err| {
@@ -140,47 +135,47 @@ define_interface! {
             // ======================
             // STRING RESHAPE METHODS
             // ======================
-            fn to_uppercase(this: Ref<str>) -> String {
+            fn to_uppercase(this: AnyRef<str>) -> String {
                 string_conversion::to_uppercase(&this)
             }
 
-            fn to_lowercase(this: Ref<str>) -> String {
+            fn to_lowercase(this: AnyRef<str>) -> String {
                 string_conversion::to_lowercase(&this)
             }
 
-            fn to_lower_snake_case(this: Ref<str>) -> String {
+            fn to_lower_snake_case(this: AnyRef<str>) -> String {
                 string_conversion::to_lower_snake_case(&this)
             }
 
-            fn to_upper_snake_case(this: Ref<str>) -> String {
+            fn to_upper_snake_case(this: AnyRef<str>) -> String {
                 string_conversion::to_upper_snake_case(&this)
             }
 
-            fn to_kebab_case(this: Ref<str>) -> String {
+            fn to_kebab_case(this: AnyRef<str>) -> String {
                 string_conversion::to_lower_kebab_case(&this)
             }
 
-            fn to_lower_camel_case(this: Ref<str>) -> String {
+            fn to_lower_camel_case(this: AnyRef<str>) -> String {
                 string_conversion::to_lower_camel_case(&this)
             }
 
-            fn to_upper_camel_case(this: Ref<str>) -> String {
+            fn to_upper_camel_case(this: AnyRef<str>) -> String {
                 string_conversion::to_upper_camel_case(&this)
             }
 
-            fn capitalize(this: Ref<str>) -> String {
+            fn capitalize(this: AnyRef<str>) -> String {
                 string_conversion::capitalize(&this)
             }
 
-            fn decapitalize(this: Ref<str>) -> String {
+            fn decapitalize(this: AnyRef<str>) -> String {
                 string_conversion::decapitalize(&this)
             }
 
-            fn to_title_case(this: Ref<str>) -> String {
+            fn to_title_case(this: AnyRef<str>) -> String {
                 string_conversion::title_case(&this)
             }
 
-            fn insert_spaces(this: Ref<str>) -> String {
+            fn insert_spaces(this: AnyRef<str>) -> String {
                 string_conversion::insert_spaces_between_words(&this)
             }
         }

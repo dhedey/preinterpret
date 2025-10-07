@@ -93,7 +93,9 @@ impl HandleDestructure for ArrayPattern {
         interpreter: &mut Interpreter,
         value: ExpressionValue,
     ) -> ExecutionResult<()> {
-        let array = value.expect_array("The value destructured with an array pattern")?;
+        let array: ExpressionArray = value
+            .into_owned(self.brackets.span_range())
+            .resolve_as("The value destructured with an array pattern")?;
         let mut has_seen_dot_dot = false;
         let mut prefix_assignees = Vec::new();
         let mut suffix_assignees = Vec::new();
@@ -197,7 +199,9 @@ impl HandleDestructure for ObjectPattern {
         interpreter: &mut Interpreter,
         value: ExpressionValue,
     ) -> ExecutionResult<()> {
-        let object = value.expect_object("The value destructured with an object pattern")?;
+        let object: ExpressionObject = value
+            .into_owned(self.braces.span_range())
+            .resolve_as("The value destructured with an object pattern")?;
         let mut value_map = object.entries;
         let mut already_used_keys = HashSet::with_capacity(self.entries.len());
         for entry in self.entries.iter() {
@@ -221,7 +225,7 @@ impl HandleDestructure for ObjectPattern {
             let value = value_map
                 .remove(&key)
                 .map(|entry| entry.value)
-                .unwrap_or_else(|| ExpressionValue::None(key_span.span_range()));
+                .unwrap_or_else(|| ExpressionValue::None);
             already_used_keys.insert(key);
             pattern.handle_destructure(interpreter, value)?;
         }
@@ -310,7 +314,9 @@ impl HandleDestructure for StreamPattern {
         interpreter: &mut Interpreter,
         value: ExpressionValue,
     ) -> ExecutionResult<()> {
-        let stream = value.expect_stream("The destructure source")?;
+        let stream: ExpressionStream = value
+            .into_owned(self.brackets.span_range())
+            .resolve_as("The value destructured with a stream pattern")?;
         let mut discarded = OutputStream::new();
         self.content
             .handle_transform_from_stream(stream.value, interpreter, &mut discarded)?;

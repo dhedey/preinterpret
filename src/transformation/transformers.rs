@@ -211,10 +211,10 @@ impl TransformerDefinition for ExactTransformer {
     ) -> ExecutionResult<()> {
         // TODO[parsers]: Ensure that no contextual parser is available when interpreting
         // To save confusion about parse order.
-        let stream = self
+        let stream: ExpressionStream = self
             .stream
             .interpret_to_value(interpreter)?
-            .expect_stream("Input to the EXACT parser")?;
+            .resolve_as("Input to the EXACT parser")?;
         stream.value.parse_exact_match(input, output)
     }
 }

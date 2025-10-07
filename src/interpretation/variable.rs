@@ -4,12 +4,12 @@ pub(crate) trait IsVariable: HasSpanRange {
     fn get_name(&self) -> String;
 
     fn define(&self, interpreter: &mut Interpreter, value_source: impl ToExpressionValue) {
-        interpreter.define_variable(self, value_source.to_value(self.span_range()))
+        interpreter.define_variable(self, value_source.into_value())
     }
 
     #[allow(unused)]
     fn define_coerced(&self, interpreter: &mut Interpreter, content: OutputStream) {
-        interpreter.define_variable(self, content.coerce_into_value(self.span_range()))
+        interpreter.define_variable(self, content.coerce_into_value())
     }
 
     fn get_transparently_cloned_value(
@@ -28,9 +28,10 @@ pub(crate) trait IsVariable: HasSpanRange {
         grouping: Grouping,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        self.binding(interpreter)?
-            .into_shared()?
-            .output_to(grouping, output)
+        self.binding(interpreter)?.into_shared()?.output_to(
+            grouping,
+            &mut ToStreamContext::new(output, self.span_range()),
+        )
     }
 
     fn binding(&self, interpreter: &Interpreter) -> ExecutionResult<VariableBinding> {
