@@ -4,25 +4,18 @@ use crate::internal_prelude::*;
 pub(crate) struct CommandArguments<'a> {
     parse_stream: ParseStream<'a, Source>,
     command_name: Ident,
-    /// The span of the [ ... ] which contained the command
-    command_span: Span,
 }
 
 impl<'a> CommandArguments<'a> {
     pub(crate) fn new(
         parse_stream: ParseStream<'a, Source>,
         command_name: Ident,
-        command_span: Span,
+        _command_span: Span,
     ) -> Self {
         Self {
             parse_stream,
             command_name,
-            command_span,
         }
-    }
-
-    pub(crate) fn command_span(&self) -> Span {
-        self.command_span
     }
 
     /// We use this instead of the "unexpected / drop glue" pattern in order to give a better error message

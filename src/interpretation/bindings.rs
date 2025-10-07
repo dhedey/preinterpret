@@ -55,9 +55,9 @@ impl VariableBinding {
     }
 
     pub(crate) fn into_late_bound(self) -> ExecutionResult<LateBoundValue> {
-        match self.clone().into_mut() {
+        match self.clone().into_mut().catch_execution_error()? {
             Ok(value) => Ok(LateBoundValue::Mutable(value)),
-            Err(ExecutionInterrupt::Error(reason_not_mutable)) => {
+            Err(reason_not_mutable) => {
                 // If we get an error with a mutable and shared reference, a mutable reference must already exist.
                 // We can just propogate the error from taking the shared reference, it should be good enough.
                 let shared = self.into_shared()?;
@@ -66,8 +66,6 @@ impl VariableBinding {
                     reason_not_mutable,
                 )))
             }
-            // Propogate any other errors, these shouldn't happen mind
-            Err(err) => Err(err),
         }
     }
 }
@@ -251,6 +249,15 @@ impl OwnedValue {
     pub(crate) fn resolve_property(self, access: &PropertyAccess) -> ExecutionResult<Self> {
         self.update_span_range(|span_range| SpanRange::new_between(span_range, access.span_range()))
             .try_map(|value, _| value.into_property(access))
+    }
+
+    pub(crate) fn into_statement_result(self) -> ExecutionResult<()> {
+        match self.value {
+            ExpressionValue::None => Ok(()),
+            _ => self
+                .span_range
+                .execution_err("A non-returning statement must not return a value. If you wish to explicitly discard the expression's result, use `let _ = ...;`"),
+        }
     }
 }
 

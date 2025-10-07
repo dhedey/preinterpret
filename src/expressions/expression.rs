@@ -10,6 +10,47 @@ pub(crate) struct SourceExpression {
     inner: Expression<Source>,
 }
 
+impl SourceExpression {
+    pub(crate) fn is_valid_as_statement_without_semicolon(&self) -> bool {
+        // Must align with evaluate_as_statement
+        matches!(
+            &self.inner.nodes[self.inner.root.0],
+            ExpressionNode::Leaf(SourceExpressionLeaf::Block(_))
+                | ExpressionNode::Leaf(SourceExpressionLeaf::IfExpression(_))
+                | ExpressionNode::Leaf(SourceExpressionLeaf::LoopExpression(_))
+                | ExpressionNode::Leaf(SourceExpressionLeaf::WhileExpression(_))
+                | ExpressionNode::Leaf(SourceExpressionLeaf::ForExpression(_))
+        )
+    }
+
+    pub(crate) fn evaluate_as_statement(
+        &self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<()> {
+        // This must align with is_valid_as_statement_without_semicolon
+        match &self.inner.nodes[self.inner.root.0] {
+            ExpressionNode::Leaf(SourceExpressionLeaf::Block(block)) => {
+                block.evaluate(interpreter)?.into_statement_result()
+            }
+            ExpressionNode::Leaf(SourceExpressionLeaf::IfExpression(if_expression)) => {
+                if_expression.evaluate(interpreter)?.into_statement_result()
+            }
+            ExpressionNode::Leaf(SourceExpressionLeaf::LoopExpression(loop_expression)) => {
+                loop_expression.evaluate_as_statement(interpreter)
+            }
+            ExpressionNode::Leaf(SourceExpressionLeaf::WhileExpression(while_expression)) => {
+                while_expression.evaluate_as_statement(interpreter)
+            }
+            ExpressionNode::Leaf(SourceExpressionLeaf::ForExpression(for_expression)) => {
+                for_expression.evaluate_as_statement(interpreter)
+            }
+            _ => self
+                .interpret_to_value(interpreter)?
+                .into_statement_result(),
+        }
+    }
+}
+
 impl Parse<Source> for SourceExpression {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         Ok(Self {
@@ -36,6 +77,10 @@ pub(super) enum SourceExpressionLeaf {
     Discarded(Token![_]),
     Value(SharedValue),
     StreamLiteral(StreamLiteral),
+    IfExpression(IfExpression),
+    LoopExpression(LoopExpression),
+    WhileExpression(WhileExpression),
+    ForExpression(ForExpression),
 }
 
 impl HasSpanRange for SourceExpressionLeaf {
@@ -47,6 +92,10 @@ impl HasSpanRange for SourceExpressionLeaf {
             SourceExpressionLeaf::Block(block) => block.span_range(),
             SourceExpressionLeaf::Value(value) => value.span_range(),
             SourceExpressionLeaf::StreamLiteral(stream) => stream.span_range(),
+            SourceExpressionLeaf::IfExpression(expression) => expression.span_range(),
+            SourceExpressionLeaf::LoopExpression(expression) => expression.span_range(),
+            SourceExpressionLeaf::WhileExpression(expression) => expression.span_range(),
+            SourceExpressionLeaf::ForExpression(expression) => expression.span_range(),
         }
     }
 }
@@ -93,15 +142,20 @@ impl Expressionable for Source {
                     UnaryAtom::PrefixUnaryOperation(input.parse()?)
                 }
             }
-            SourcePeekMatch::Ident(_) => {
-                if input.peek(Token![_]) {
-                    return Ok(UnaryAtom::Leaf(Self::Leaf::Discarded(input.parse()?)));
-                }
-                match input.try_parse_or_revert() {
-                    Ok(bool) => UnaryAtom::Leaf(Self::Leaf::Value(SharedValue::new_from_owned(
-                        ExpressionBoolean::for_litbool(&bool).into_owned_value(),
-                    ))),
-                    Err(_) => UnaryAtom::Leaf(Self::Leaf::Variable(input.parse()?)),
+            SourcePeekMatch::Ident(ident) => {
+                match ident.to_string().as_str() {
+                    "_" => UnaryAtom::Leaf(Self::Leaf::Discarded(input.parse()?)),
+                    "true" | "false" => {
+                        let bool = input.parse::<syn::LitBool>()?;
+                        UnaryAtom::Leaf(Self::Leaf::Value(SharedValue::new_from_owned(
+                            ExpressionBoolean::for_litbool(&bool).into_owned_value(),
+                        )))
+                    }
+                    "if" => UnaryAtom::Leaf(Self::Leaf::IfExpression(input.parse()?)),
+                    "loop" => UnaryAtom::Leaf(Self::Leaf::LoopExpression(input.parse()?)),
+                    "while" => UnaryAtom::Leaf(Self::Leaf::WhileExpression(input.parse()?)),
+                    "for" => UnaryAtom::Leaf(Self::Leaf::ForExpression(input.parse()?)),
+                    _ => UnaryAtom::Leaf(Self::Leaf::Variable(input.parse()?))
                 }
             },
             SourcePeekMatch::Literal(_) => {

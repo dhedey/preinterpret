@@ -1,5 +1,5 @@
 use preinterpret::*;
 
 fn main() {
-    run!(while true {});
+    run!(break;);
 }

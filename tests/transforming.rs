@@ -99,9 +99,9 @@ fn test_variable_parsing() {
 #[test]
 fn test_explicit_transform_stream() {
     // It's not very exciting
-    preinterpret::run!(let %[@(Hello World)] = %[Hello World]);
-    preinterpret::run!(let %[Hello @(World)] = %[Hello World]);
-    preinterpret::run!(let %[@(Hello @(World))] = %[Hello World]);
+    preinterpret::run!(let %[@(Hello World)] = %[Hello World];);
+    preinterpret::run!(let %[Hello @(World)] = %[Hello World];);
+    preinterpret::run!(let %[@(Hello @(World))] = %[Hello World];);
 }
 
 #[test]
@@ -203,7 +203,7 @@ fn test_group_transformer() {
 fn test_none_output_commands_mid_parse() {
     assert_eq!(
         run! {
-            let %[The "quick" @(#x = @LITERAL) fox #({ let y = x.take_owned().infer() }) @(#x = @IDENT)] = %[The "quick" "brown" fox jumps];
+            let %[The "quick" @(#x = @LITERAL) fox #({ let y = x.take_owned().infer(); }) @(#x = @IDENT)] = %[The "quick" "brown" fox jumps];
             ["#x = ", x.to_debug_string(), "; #y = ", y.to_debug_string()].to_string()
         },
         "#x = %[jumps]; #y = \"brown\""

@@ -28,10 +28,9 @@ pub(crate) trait SpanErrorExt {
     fn error(&self, message: impl std::fmt::Display) -> syn::Error;
 
     fn execution_error(&self, message: impl std::fmt::Display) -> ExecutionInterrupt {
-        ExecutionInterrupt::Error(self.error(message))
+        ExecutionInterrupt::error(self.error(message))
     }
 
-    #[allow(unused)]
     fn parse_error(&self, message: impl std::fmt::Display) -> ParseError {
         ParseError::Standard(self.error(message))
     }

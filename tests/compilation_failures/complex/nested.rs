@@ -1,12 +1,14 @@
 use preinterpret::*;
 
 fn main() {
-    stream!([!if! true {
-        [!if! true {
-            [!if! true {
-                // Missing message
-                #(%[].error())
-            }]
-        }]
-    }]);
-} 
+    run!(
+        if true {
+            if true {
+                if true {
+                    // Missing message
+                    %[].error()
+                }
+            }
+        }
+    );
+}

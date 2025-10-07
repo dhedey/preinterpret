@@ -1,5 +1,5 @@
 error: Expected (
- --> tests/compilation_failures/transforming/invalid_content_wrong_delimiter.rs:4:29
+ --> tests/compilation_failures/transforming/invalid_content_wrong_delimiter.rs:5:28
   |
-4 |     run!(let %[(@REST)] = %[[Hello World]]);
-  |                             ^^^^^^^^^^^^^
+5 |         let %[(@REST)] = %[[Hello World]];
+  |                            ^^^^^^^^^^^^^

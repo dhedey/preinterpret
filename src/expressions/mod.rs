@@ -1,6 +1,7 @@
 mod array;
 mod boolean;
 mod character;
+mod control_flow;
 mod evaluation;
 mod expression;
 mod expression_block;
@@ -17,6 +18,7 @@ mod type_resolution;
 mod value;
 
 pub(crate) use array::*;
+pub(crate) use control_flow::*;
 pub(crate) use evaluation::*;
 pub(crate) use expression::*;
 pub(crate) use expression_block::*;

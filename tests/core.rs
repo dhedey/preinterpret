@@ -58,13 +58,13 @@ fn test_extend() {
         run! {
             let i = 1;
             let output = %[];
-            let _ = [!while! i <= 4 {
-                #(output += %[#i])
-                [!if! i <= 3 {
-                    #(output += %[", "])
-                }]
-                #(i += 1)
-            }];
+            while i <= 4 {
+                output += %[#i];
+                if i <= 3 {
+                    output += %[", "];
+                }
+                i += 1;
+            }
             output.to_string()
         },
         "1, 2, 3, 4"
@@ -154,12 +154,10 @@ macro_rules! capitalize_variants {
     ($enum_name:ident, [$($variants:ident),*]) => {run!{
         let enum_name = %raw[$enum_name];
         let variants = [];
-        let _ = [!for! variant in [$(%raw[$variants]),*] {
-            #({
-                let capitalized = variant.to_string().capitalize().to_ident().with_span(variant);
-                variants.push(capitalized.take_owned());
-            })
-        }];
+        for variant in [$(%raw[$variants]),*] {
+            let capitalized = variant.to_string().capitalize().to_ident().with_span(variant);
+            variants.push(capitalized.take_owned());
+        }
 
         %[
             enum #enum_name {

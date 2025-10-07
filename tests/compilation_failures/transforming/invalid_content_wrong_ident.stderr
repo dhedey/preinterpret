@@ -1,5 +1,5 @@
 error: expected World
- --> tests/compilation_failures/transforming/invalid_content_wrong_ident.rs:4:39
+ --> tests/compilation_failures/transforming/invalid_content_wrong_ident.rs:5:38
   |
-4 |     run!(let %[Hello World] = %[Hello Earth]);
-  |                                       ^^^^^
+5 |         let %[Hello World] = %[Hello Earth];
+  |                                      ^^^^^

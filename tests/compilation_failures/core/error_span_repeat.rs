@@ -4,9 +4,9 @@ macro_rules! assert_input_length_of_3 {
     ($($input:literal)+) => {run!{
         let input = %raw[$($input)+];
         let input_length = input.len();
-        let _ = [!if! input_length != 3 {
-            #(input.error(%["Expected 3 inputs, got " #input_length].to_string()))
-        }];
+        if input_length != 3 {
+            input.error(%["Expected 3 inputs, got " #input_length].to_string());
+        }
     }};
 }
 
