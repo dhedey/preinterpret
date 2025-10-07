@@ -1,6 +1,6 @@
 error: Iteration limit of 1000 exceeded.
        If needed, the limit can be reconfigured with [!settings! { iteration_limit: X }]
- --> tests/compilation_failures/control_flow/while_infinite_loop.rs:4:27
+ --> tests/compilation_failures/control_flow/while_infinite_loop.rs:4:21
   |
-4 |     stream!([!while! true {}]);
-  |                           ^^
+4 |     run!(while true {});
+  |                     ^^

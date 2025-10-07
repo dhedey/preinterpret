@@ -1,5 +1,7 @@
 use preinterpret::*;
 
 fn main() {
-    run!(let %[(@REST)] = %[[Hello World]]);
+    run!(
+        let %[(@REST)] = %[[Hello World]];
+    );
 }

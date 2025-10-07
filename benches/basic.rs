@@ -13,50 +13,51 @@ fn main() {
     benchmark!("Trivial Sum", { 1 + 1 + 1 });
     benchmark!("For loop adding up 1000 times", {
         let output = 0;
-        let _ = [!for! i in 1..=1000 { output += i }];
+        for i in 1..=1000 {
+            output += i
+        }
         output
     });
     benchmark!("For loop concatenating to stream 1000 tokens", {
         let output = %[];
-        let _ = [!for! i in 1..=1000 { output.push(i); }];
+        for i in 1..=1000 {
+            output += %[i];
+        }
         output
     });
     benchmark!("Lots of casts", {
         0 as u32 as int as u8 as char as string as stream
     });
     benchmark!("Simple tuple impls", {
-        [!for! N in 0..=10 {
-            #(
-                let comma_separated_types = %[];
-                let _ = [!for! name in ('A'..).into_iter().take(N) {
-                    #(
-                        let ident = name.to_ident();
-                        comma_separated_types += %[#ident,];
-                    )
-                }];
-                %[
-                    impl<#comma_separated_types> MyTrait for (#comma_separated_types) {}
-                ]
-            )
-        }]
+        for N in 0..=10 {
+            let comma_separated_types = %[];
+            for name in ('A'..).into_iter().take(N) {
+                let ident = name.to_ident();
+                comma_separated_types += %[#ident,];
+            }
+            %[
+                impl<#comma_separated_types> MyTrait for (#comma_separated_types) {}
+            ]
+        }
     });
     benchmark!("Accessing single elements of a large array", {
         let array = [];
-        let _ = [!for! i in 0..1000 {
+        for i in 0..1000 {
             array.push(i);
-        }];
+        }
         let sum = 0;
-        let _ = [!for! i in 0..100 {
+        for i in 0..100 {
             sum += array[i];
-        }];
+        }
     });
     benchmark!("Lazy iterator", {
-        let x = [!for! i in 0..100000 {
-            [!if! i == 5 {
-                #i
-                [!break!]
-            }]
-        }].to_string();
-        %[].assert_eq(x, "5");
+        let last = 0;
+        for i in 0..100000 {
+            if i == 5 {
+                last = i;
+                break;
+            }
+        }
+        %[].assert_eq(last, 5);
     });
 }

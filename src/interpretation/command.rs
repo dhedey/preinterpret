@@ -226,14 +226,6 @@ define_command_enums! {
     // Core Commands
     SettingsCommand,
 
-    // Control flow commands
-    IfCommand,
-    WhileCommand,
-    ForCommand,
-    LoopCommand,
-    ContinueCommand,
-    BreakCommand,
-
     // Destructuring Commands
     ParseCommand,
 }

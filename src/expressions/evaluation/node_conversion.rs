@@ -34,9 +34,9 @@ impl ExpressionNode<Source> {
                             },
                         }
                     }
-                    SourceExpressionLeaf::EmbeddedExpression(block) => {
+                    SourceExpressionLeaf::Block(block) => {
                         // TODO[interpret_to_value]: Allow block to return reference
-                        let value = block.interpret_to_value(context.interpreter())?;
+                        let value = block.evaluate(context.interpreter())?;
                         context.return_owned(value)?
                     }
                     SourceExpressionLeaf::Value(value) => {
@@ -49,6 +49,24 @@ impl ExpressionNode<Source> {
                             .clone()
                             .interpret_to_value(context.interpreter())?;
                         context.return_owned(value.into_owned(stream_literal.span_range()))?
+                    }
+                    SourceExpressionLeaf::IfExpression(if_expression) => {
+                        let value = if_expression.evaluate(context.interpreter())?;
+                        context.return_owned(value)?
+                    }
+                    SourceExpressionLeaf::LoopExpression(loop_expression) => {
+                        let value =
+                            loop_expression.evaluate_as_expression(context.interpreter())?;
+                        context.return_owned(value)?
+                    }
+                    SourceExpressionLeaf::WhileExpression(while_expression) => {
+                        let value =
+                            while_expression.evaluate_as_expression(context.interpreter())?;
+                        context.return_owned(value)?
+                    }
+                    SourceExpressionLeaf::ForExpression(for_expression) => {
+                        let value = for_expression.evaluate_as_expression(context.interpreter())?;
+                        context.return_owned(value)?
                     }
                 }
             }

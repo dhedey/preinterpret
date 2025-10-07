@@ -17,64 +17,93 @@ fn test_control_flow_compilation_failures() {
 
 #[test]
 fn test_if() {
-    preinterpret_assert_eq!([!if! (1 == 2) { "YES" } !else! { "NO" }], "NO");
-    preinterpret_assert_eq!({
-        #(let x = 1 == 2)
-        [!if! x { "YES" } !else! { "NO" }]
-    }, "NO");
-    preinterpret_assert_eq!({
-        #(let x = 1; let y = 2)
-        [!if! x == y { "YES" } !else! { "NO" }]
-    }, "NO");
-    preinterpret_assert_eq!({
+    assert_eq!(
+        run! {
+            if (1 == 2) { "YES" } else { "NO" }
+        },
+        "NO"
+    );
+    assert_eq!(
+        run! {
+            let x = 1 == 2;
+            if x { "YES" } else { "NO" }
+        },
+        "NO"
+    );
+    assert_eq!(
+        run! {
+            let x = 1;
+            let y = 2;
+            if x == y { "YES" } else { "NO" }
+        },
+        "NO"
+    );
+    assert_eq!(
+        run! {
+            %[0 #(if true { %[+ 1] })]
+        },
+        1
+    );
+    assert_eq!(
+        stream! {
+            0
+            #(if false { %[+ 1] })
+        },
         0
-        [!if! true { + 1 }]
-    }, 1);
-    preinterpret_assert_eq!({
-        0
-        [!if! false { + 1 }]
-    }, 0);
-    preinterpret_assert_eq!({
-        [!if! false {
-            1
-        } !elif! false {
-            2
-        } !elif! true {
-            3
-        } !else! {
-            4
-        }]
-    }, 3);
+    );
+    assert_eq!(
+        run! {
+            if false {
+                1
+            } else if false {
+                2
+            } else if true {
+                3
+            } else {
+                4
+            }
+        },
+        3
+    );
 }
 
 #[test]
 fn test_while() {
-    preinterpret_assert_eq!({
-        #(let x = 0)
-        [!while! x < 5 { #(x += 1) }]
-        #x
-    }, 5);
+    assert_eq!(
+        run! {
+            let x = 0;
+            while x < 5 {
+                x += 1;
+            }
+            x
+        },
+        5
+    );
 }
 
 #[test]
 fn test_loop_continue_and_break() {
-    preinterpret_assert_eq!(
-        {
-            #(let x = 0)
-            [!loop! {
-                #(x += 1)
-                [!if! x >= 10 { [!break!] }]
-            }]
-            #x
+    assert_eq!(
+        run! {
+            let x = 0;
+            loop {
+                x += 1;
+                if x >= 10 {
+                    break;
+                }
+            }
+            x
         },
         10
     );
     assert_eq!(
         run! {
-            [!for! x in 65..75 {
-                [!if! x % 2 == 0 { [!continue!] }]
-                #(x as u8 as char)
-            }].to_string()
+            for x in 65..75 {
+                if x % 2 == 0 {
+                    continue;
+                }
+                x as u8 as char
+            }.to_string()
         },
         "ACEGI"
     );
@@ -84,9 +113,9 @@ fn test_loop_continue_and_break() {
 fn test_for() {
     assert_eq!(
         run! {
-            [!for! x in 65..70 {
-                #(x as u8 as char)
-            }].to_string()
+            for x in 65..70 {
+                x as u8 as char
+            }.to_string()
         },
         "ABCDE"
     );
@@ -94,10 +123,12 @@ fn test_for() {
         run! {
             // A stream is iterated token-tree by token-tree
             // So we can match each value with a stream pattern matching each `(X,)`
-            [!for! %[(@(#x = @IDENT),)] in %[(a,) (b,) (c,)] {
-                #x
-                [!if! x.to_string() == "b" { [!break!] }]
-            }].to_string()
+            for %[(@(#x = @IDENT),)] in %[(a,) (b,) (c,)] {
+                if x.to_string() == "c" {
+                    break;
+                }
+                x
+            }.to_string()
         },
         "ab"
     );

@@ -31,37 +31,37 @@ Script: `cargo bench --features benchmark --profile=dev`
 // October 2025, run on Apple Silicon M2 Pro
 Trivial Sum
 - Parsing    |     8ns
-- Evaluation |     4ns
+- Evaluation |     3ns
 - Output     |     0ns
 
 For loop adding up 1000 times
-- Parsing    |    26ns
-- Evaluation |  1817ns
+- Parsing    |    21ns
+- Evaluation |  5704ns
 - Output     |     0ns
 
 For loop concatenating to stream 1000 tokens
-- Parsing    |    26ns
-- Evaluation |  2217ns
-- Output     |     0ns
+- Parsing    |    27ns
+- Evaluation |  3042ns
+- Output     |   163ns
 
 Lots of casts
-- Parsing    |     6ns
+- Parsing    |     7ns
 - Evaluation |     3ns
 - Output     |     0ns
 
 Simple tuple impls
-- Parsing    |    64ns
-- Evaluation |   881ns
-- Output     |    45ns
+- Parsing    |    53ns
+- Evaluation |   826ns
+- Output     |    44ns
 
 Accessing single elements of a large array
-- Parsing    |    50ns
-- Evaluation |  2446ns
+- Parsing    |    52ns
+- Evaluation |  4283ns
 - Output     |     0ns
 
 Lazy iterator
-- Parsing    |    39ns
-- Evaluation |    42ns
+- Parsing    |    48ns
+- Evaluation |    34ns
 - Output     |     0ns
 ```
 
@@ -79,7 +79,7 @@ Script: `cargo clean && cargo build --timings --release`
 
 ### Basic Execution Benchmarks
 
-Script: `cargo bench --features benchmark --profile=dev`
+Script: `cargo bench --features benchmark`
 
 ```text
 // October 2025, run on Apple Silicon M2 Pro
@@ -89,14 +89,14 @@ Trivial Sum
 - Output     |     0ns
 
 For loop adding up 1000 times
-- Parsing    |    23ns
-- Evaluation |  1519ns
+- Parsing    |    19ns
+- Evaluation |  4819ns
 - Output     |     0ns
 
 For loop concatenating to stream 1000 tokens
-- Parsing    |    23ns
-- Evaluation |  1880ns
-- Output     |     0ns
+- Parsing    |    24ns
+- Evaluation |  2582ns
+- Output     |   129ns
 
 Lots of casts
 - Parsing    |     6ns
@@ -104,17 +104,17 @@ Lots of casts
 - Output     |     0ns
 
 Simple tuple impls
-- Parsing    |    58ns
-- Evaluation |   763ns
-- Output     |    35ns
+- Parsing    |    47ns
+- Evaluation |   725ns
+- Output     |    34ns
 
 Accessing single elements of a large array
-- Parsing    |    43ns
-- Evaluation |  2058ns
+- Parsing    |    45ns
+- Evaluation |  3677ns
 - Output     |     0ns
 
 Lazy iterator
-- Parsing    |    35ns
-- Evaluation |    38ns
+- Parsing    |    40ns
+- Evaluation |    30ns
 - Output     |     0ns
 ```

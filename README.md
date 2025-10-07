@@ -51,7 +51,9 @@ macro_rules! create_my_type {
             $($field_name:ident: $inner_type:ident),* $(,)?
         }
     ) => {preinterpret::stream! {
-        #(let type_name = %[My $type_name].to_ident();)
+        #({
+            let type_name = %[My $type_name].to_ident();
+        })
         
         $(#[$attributes])*
         $vis struct #type_name {
@@ -104,7 +106,9 @@ For example:
 
 ```rust
 preinterpret::stream! {
-    #(let type_name = %[HelloWorld];)
+    #({
+        let type_name = %[HelloWorld];
+    })
 
     struct #type_name;
 
@@ -195,11 +199,11 @@ macro_rules! impl_marker_traits {
             < $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? $( = $deflt:tt)? ),+ >
         )?
     } => {preinterpret::stream!{
-        #(
+        #({
             let impl_generics = %[$(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)?];
             let type_generics = %[$(< $( $lt ),+ >)?];
             let my_type = %[$type_name #type_generics];
-        )
+        })
 
         $(
             // Output each marker trait for the type

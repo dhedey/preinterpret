@@ -1,10 +1,10 @@
 use preinterpret::*;
 
 macro_rules! assert_literals_eq {
-    ($input1:literal, $input2:literal) => {stream!{
-        [!if! ($input1 != $input2) {
-            #(%[].error(%["Expected " $input1 " to equal " $input2].to_string()))
-        }]
+    ($input1:literal, $input2:literal) => {run!{
+        if ($input1 != $input2) {
+            %[].error(%["Expected " $input1 " to equal " $input2].to_string());
+        }
     }};
 }
 

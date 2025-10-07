@@ -1,15 +1,15 @@
 error: Expected 102 to equal 64
   --> tests/compilation_failures/core/error_no_span.rs:4:47
    |
- 4 |       ($input1:literal and $input2:literal) => {stream!{
+ 4 |       ($input1:literal and $input2:literal) => {run!{
    |  _______________________________________________^
- 5 | |         [!if! ($input1 != $input2) {
- 6 | |             #(%[].error(%["Expected " $input1 " to equal " $input2].to_string()))
- 7 | |         }]
+ 5 | |         if ($input1 != $input2) {
+ 6 | |             %[].error(%["Expected " $input1 " to equal " $input2].to_string());
+ 7 | |         }
  8 | |     }};
    | |_____^
 ...
 12 |       assert_literals_eq_no_spans!(102 and 64);
    |       ---------------------------------------- in this macro invocation
    |
-   = note: this error originates in the macro `stream` which comes from the expansion of the macro `assert_literals_eq_no_spans` (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in the macro `run` which comes from the expansion of the macro `assert_literals_eq_no_spans` (in Nightly builds, run with -Z macro-backtrace for more info)

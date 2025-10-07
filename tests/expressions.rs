@@ -164,8 +164,11 @@ fn test_very_long_expression_works() {
             [!settings! %{
                 iteration_limit: 100000,
             }];
-            let expression = [!for! _ in 0..100000 { 1 + }] + %[0];
-            expression.reinterpret_as_run()
+            let expression = %[];
+            for _ in 0..100000 {
+                expression += %[1 +]
+            };
+            (expression + %[0]).reinterpret_as_run()
         },
         100000
     );
@@ -177,7 +180,7 @@ fn boolean_operators_short_circuit() {
     preinterpret_assert_eq!(
         #(
             let is_lazy = true;
-            let _ = false && #(is_lazy = false; true);
+            let _ = false && { is_lazy = false; true };
             is_lazy
         ),
         true
@@ -186,7 +189,7 @@ fn boolean_operators_short_circuit() {
     preinterpret_assert_eq!(
         #(
             let is_lazy = true;
-            let _ = true || #(is_lazy = false; true);
+            let _ = true || { is_lazy = false; true };
             is_lazy
         ),
         true
@@ -195,7 +198,7 @@ fn boolean_operators_short_circuit() {
     preinterpret_assert_eq!(
         #(
             let is_lazy = true;
-            let _ = false & #(is_lazy = false; true);
+            let _ = false & { is_lazy = false; true };
             is_lazy
         ),
         false
@@ -272,14 +275,17 @@ fn test_range() {
     );
     assert_eq!(run! {((4 + 7..=10).to_debug_string())}, "11..=10");
     assert_eq!(
-        stream! {
-        [!for! i in 0..10000000 {
-            [!if! i == 5 {
-                #(i.to_string())
-                [!break!]
-            }]
-        }]},
-        "5"
+        run! {
+            let output = 0;
+            for i in 0..10000000 {
+                if i == 5 {
+                    output = i;
+                    break;
+                }
+            }
+            output
+        },
+        5
     );
 }
 
@@ -415,7 +421,7 @@ fn test_array_place_destructurings() {
         #(
             let a = [0, 0];
             let b = 0;
-            a[b] += #(b += 1; 5);
+            a[b] += { b += 1; 5 };
             a.to_debug_string()
         ),
         "[0, 5]"
@@ -428,7 +434,7 @@ fn test_array_place_destructurings() {
             let arr2 = [0, 0];
             // The first assignment arr[0] = 1 occurs before being overwritten
             // by the arr[0] = 5 in the second index.
-            [arr[0], arr2[#(arr[0] = 5; 1)]] = [1, 1];
+            [arr[0], arr2[{ arr[0] = 5; 1 }]] = [1, 1];
             arr[0]
         ),
         5
@@ -589,7 +595,7 @@ fn stream_append_can_use_self_in_appender() {
     assert_eq!(
         run! {
             let variable = %[Hello];
-            variable += %[World #(variable += %[!];)];
+            variable += %[World #(variable += %[!])];
             variable.to_debug_string()
         },
         "%[Hello ! World]"
@@ -597,7 +603,7 @@ fn stream_append_can_use_self_in_appender() {
     assert_eq!(
         run! {
             let variable = %[Hello];
-            variable += %[World #(variable = %[Hello2];)];
+            variable += %[World #(variable = %[Hello2])];
             variable.to_debug_string()
         },
         "%[Hello2 World]"

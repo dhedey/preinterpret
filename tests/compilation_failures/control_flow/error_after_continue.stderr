@@ -1,5 +1,5 @@
 error: And now we error
-  --> tests/compilation_failures/control_flow/error_after_continue.rs:13:21
+  --> tests/compilation_failures/control_flow/error_after_continue.rs:13:19
    |
-13 |                 #(%[_].error("And now we error"))
-   |                     ^
+13 |                 %[_].error("And now we error");
+   |                   ^

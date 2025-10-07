@@ -1,5 +1,5 @@
 error: [1, 2]
- --> tests/compilation_failures/expressions/debug_method.rs:5:27
+ --> tests/compilation_failures/expressions/debug_method.rs:6:9
   |
-5 |         #(let x = [1, 2]; x.debug())
-  |                           ^
+6 |         x.debug()
+  |         ^

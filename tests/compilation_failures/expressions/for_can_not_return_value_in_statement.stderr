@@ -1,0 +1,8 @@
+error: A non-returning statement must not return a value. If you wish to explicitly discard the expression's result, use `let _ = ...;`
+ --> tests/compilation_failures/expressions/for_can_not_return_value_in_statement.rs:5:24
+  |
+5 |           for i in 1..=5 {
+  |  ________________________^
+6 | |             i
+7 | |         }; // Semi-colon makes it a statement
+  | |_________^

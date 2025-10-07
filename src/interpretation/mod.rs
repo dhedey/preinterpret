@@ -6,7 +6,6 @@ mod interpret_traits;
 mod interpreted_stream;
 mod interpreter;
 mod refs;
-mod source_code_block;
 mod source_stream;
 mod variable;
 
@@ -19,6 +18,5 @@ pub(crate) use interpret_traits::*;
 pub(crate) use interpreted_stream::*;
 pub(crate) use interpreter::*;
 pub(crate) use refs::*;
-pub(crate) use source_code_block::*;
 pub(crate) use source_stream::*;
 pub(crate) use variable::*;

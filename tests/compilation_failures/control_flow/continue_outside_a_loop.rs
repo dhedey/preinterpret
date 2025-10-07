@@ -1,5 +1,5 @@
 use preinterpret::*;
 
 fn main() {
-    stream!(1 + [!continue!] 2);
+    run!(1 + continue + 2);
 }
