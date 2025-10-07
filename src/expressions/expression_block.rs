@@ -173,10 +173,10 @@ impl Parse<Source> for Statement {
 impl Statement {
     fn evaluate_as_statement(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         match self {
-            Statement::LetStatement(assignment) => assignment.evaluate(interpreter),
+            Statement::LetStatement(statement) => statement.evaluate_as_statement(interpreter),
             Statement::Expression(expression) => expression.evaluate_as_statement(interpreter),
-            Statement::BreakStatement(statement) => statement.evaluate(interpreter),
-            Statement::ContinueStatement(statement) => statement.evaluate(interpreter),
+            Statement::BreakStatement(statement) => statement.evaluate_as_statement(interpreter),
+            Statement::ContinueStatement(statement) => statement.evaluate_as_statement(interpreter),
         }
     }
 
@@ -239,7 +239,7 @@ impl Parse<Source> for LetStatement {
 }
 
 impl LetStatement {
-    fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+    fn evaluate_as_statement(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         let LetStatement {
             _let_token: _,
             pattern,
@@ -276,7 +276,7 @@ impl Parse<Source> for BreakStatement {
 }
 
 impl BreakStatement {
-    pub(crate) fn evaluate(&self, _: &mut Interpreter) -> ExecutionResult<()> {
+    pub(crate) fn evaluate_as_statement(&self, _: &mut Interpreter) -> ExecutionResult<()> {
         Err(ExecutionInterrupt::control_flow(
             ControlFlowInterrupt::Break,
             self.break_token.span(),
@@ -303,7 +303,7 @@ impl Parse<Source> for ContinueStatement {
 }
 
 impl ContinueStatement {
-    pub(crate) fn evaluate(&self, _: &mut Interpreter) -> ExecutionResult<()> {
+    pub(crate) fn evaluate_as_statement(&self, _: &mut Interpreter) -> ExecutionResult<()> {
         Err(ExecutionInterrupt::control_flow(
             ControlFlowInterrupt::Continue,
             self.continue_token.span(),

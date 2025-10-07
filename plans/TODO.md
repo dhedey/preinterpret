@@ -87,19 +87,15 @@ fn resolve_own_binary_operation(operation: &BinaryOperation) -> Option<MethodInt
 ## Control flow expressions (ideally requires Stream Literals)
 
 Create the following expressions:
-* Blocks `{}`
-  * These should be in the expression parser (maybe)...
-  * ... and remove EmbeddedExpressions inside expressions
-* `if`, `else`
-* `for`, `while`, `loop`
-  * These return an array of values from each iteration (possibly with an optimization to skip if the value will be ignored)
-  * If it's as a statement, it doesn't need a semi-colon. If it's as an expression, (e.g. `let x = for ...;`) then it does.
-  * Improve the "missing semicolon" warning to warn that the semi-colon was likely missing from the previous line end.
-* `continue`
-* `break`
-  * Can be used to return a value from a `loop` expression. If present, the loop changes to not return an array
-  * Could maybe be used to (return from even a labelled block? https://blog.rust-lang.org/2022/11/03/Rust-1.65.0/#break-from-labeled-blocks)
-* Refactors:
+- [x] Blocks `{}`
+- [x] `if`, `else`, `for`, `while`, `loop`
+- [x] `continue`, `break`
+- [ ] `break` / `continue` improvements:
+  - Can return a value (from the last iteration of for / while loops)
+  - We only store values which are non-None in the array
+  - You can use `loop { break X }[0]` to get the return value
+  - Can specify a label, and return from a labelled block (https://blog.rust-lang.org/2022/11/03/Rust-1.65.0/#break-from-labeled-blocks)
+- [ ] Refactors:
   * Rename `SourceExpression` => `Expression`, and inline the leaf parsing
   * Rename `interpreted_stream.rs` to `output_stream.rs`
 
