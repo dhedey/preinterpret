@@ -1,11 +1,10 @@
 use crate::internal_prelude::*;
 
 pub(crate) trait TokenStreamParseExt: Sized {
-    fn source_parse_as<T: Parse<Source>>(self) -> ParseResult<T>;
-    fn source_parse_with<T, E: From<syn::Error>>(
+    fn full_source_parse_with<T, E: From<syn::Error>>(
         self,
-        parser: impl FnOnce(ParseStream<Source>) -> Result<T, E>,
-    ) -> Result<T, E>;
+        parser: impl FnOnce(SourceParser) -> Result<T, E>,
+    ) -> Result<(T, ParseState), E>;
 
     fn interpreted_parse_with<T, E: From<syn::Error>>(
         self,
@@ -14,15 +13,11 @@ pub(crate) trait TokenStreamParseExt: Sized {
 }
 
 impl TokenStreamParseExt for TokenStream {
-    fn source_parse_as<T: Parse<Source>>(self) -> ParseResult<T> {
-        self.source_parse_with(T::parse)
-    }
-
-    fn source_parse_with<T, E: From<syn::Error>>(
+    fn full_source_parse_with<T, E: From<syn::Error>>(
         self,
-        parser: impl FnOnce(ParseStream<Source>) -> Result<T, E>,
-    ) -> Result<T, E> {
-        parse_with(self, parser)
+        parser: impl FnOnce(SourceParser) -> Result<T, E>,
+    ) -> Result<(T, ParseState), E> {
+        parse_with(self, wrap_parser(parser))
     }
 
     fn interpreted_parse_with<T, E: From<syn::Error>>(

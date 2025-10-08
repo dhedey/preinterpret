@@ -127,8 +127,8 @@ impl Parse<Source> for Transformer {
             }
             None => {
                 let span = name.span();
-                let instance = TokenStream::new()
-                    .source_parse_with(|parse_stream| {
+                let (instance, _) = TokenStream::new()
+                    .full_source_parse_with(|parse_stream| {
                         let arguments = TransformerArguments::new(parse_stream, name.clone(), span);
                         transformer_kind.parse_instance(arguments)
                     })

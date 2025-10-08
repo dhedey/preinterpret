@@ -7,10 +7,8 @@ pub(crate) struct SourceStream {
     span: Span,
 }
 
-impl ContextualParse<Source> for SourceStream {
-    type Context = Span;
-
-    fn parse(input: ParseStream<Source>, span: Self::Context) -> ParseResult<Self> {
+impl SourceStream {
+    pub(crate) fn parse_with_span(input: ParseStream<Source>, span: Span) -> ParseResult<Self> {
         let mut items = Vec::new();
         while !input.is_empty() {
             items.push(input.parse()?);
@@ -128,7 +126,7 @@ pub(crate) struct SourceGroup {
 impl Parse<Source> for SourceGroup {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         let (delimiter, delim_span, content) = input.parse_any_group()?;
-        let content = content.parse_with_context(delim_span.join())?;
+        let content = SourceStream::parse_with_span(&content, delim_span.join())?;
         Ok(Self {
             source_delimiter: delimiter,
             source_delim_span: delim_span,

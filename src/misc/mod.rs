@@ -1,3 +1,5 @@
+mod arena;
+mod containers;
 mod errors;
 mod field_inputs;
 mod iterators;
@@ -5,6 +7,8 @@ mod mut_rc_ref_cell;
 mod parse_traits;
 pub(crate) mod string_conversion;
 
+pub(crate) use arena::*;
+pub(crate) use containers::*;
 pub(crate) use errors::*;
 pub(crate) use field_inputs::*;
 pub(crate) use iterators::*;

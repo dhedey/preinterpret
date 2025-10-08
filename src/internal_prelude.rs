@@ -9,6 +9,7 @@ pub(crate) use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
     str::FromStr,
+    rc::Rc,
 };
 pub(crate) use syn::buffer::Cursor;
 pub(crate) use syn::ext::IdentExt as SynIdentExt;

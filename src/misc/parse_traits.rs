@@ -119,6 +119,12 @@ pub(crate) struct Output;
 // Generic parsing
 // ===============
 
+/// This trait is slightly more restrict/powerful than Parse<Source>
+/// as it gives access to the parse context.
+pub(crate) trait ParseSource: Sized {
+    fn parse(input: SourceParser) -> ParseResult<Self>;
+}
+
 pub(crate) trait Parse<K>: Sized {
     fn parse(input: ParseStream<K>) -> ParseResult<Self>;
 }

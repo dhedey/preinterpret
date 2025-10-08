@@ -496,13 +496,13 @@ pub fn stream(token_stream: proc_macro::TokenStream) -> proc_macro::TokenStream 
 }
 
 fn preinterpret_stream_internal(input: TokenStream) -> SynResult<TokenStream> {
-    let mut interpreter = Interpreter::new();
-
-    let interpretation_stream = input
-        .source_parse_with(|input| SourceStream::parse(input, Span::call_site()))
+    let (stream, parse_state) = input
+        .full_source_parse_with(|input| SourceStream::parse_with_span(input, Span::call_site()))
         .convert_to_final_result()?;
 
-    let interpreted_stream = interpretation_stream
+    let mut interpreter = Interpreter::new(parse_state);
+
+    let interpreted_stream = stream
         .interpret_to_new_stream(&mut interpreter)
         .convert_to_final_result()?;
 
@@ -524,13 +524,13 @@ pub fn run(token_stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 fn preinterpret_run_internal(input: TokenStream) -> SynResult<TokenStream> {
-    let mut interpreter = Interpreter::new();
-
-    let block_content = input
-        .source_parse_with(ExpressionBlockContent::parse)
+    let (content, parse_state) = input
+        .full_source_parse_with(|input| ExpressionBlockContent::parse(input))
         .convert_to_final_result()?;
+    
+    let mut interpreter = Interpreter::new(parse_state);
 
-    let interpreted_stream = block_content
+    let interpreted_stream = content
         .evaluate(&mut interpreter, Span::call_site().into())
         .and_then(|x| x.into_stream())
         .convert_to_final_result()?;
@@ -581,13 +581,13 @@ mod benchmarking {
         let (block_content, parse_duration) = timed(|| {
             input
                 .clone()
-                .source_parse_with(ExpressionBlockContent::parse)
+                .full_source_parse_with(ExpressionBlockContent::parse)
                 .convert_to_final_result()
         });
-        let block_content = block_content?;
+        let (block_content, parse_state) = block_content?;
 
         let (interpreted_stream, eval_duration) = timed(|| {
-            let mut interpreter = Interpreter::new();
+            let mut interpreter = Interpreter::new(parse_state);
             block_content
                 .evaluate(&mut interpreter, Span::call_site().into())
                 .and_then(|x| x.into_stream())

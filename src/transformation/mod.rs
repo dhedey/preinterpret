@@ -1,5 +1,4 @@
 mod exact_stream;
-mod fields;
 mod parse_utilities;
 mod patterns;
 mod transform_stream;
@@ -9,8 +8,6 @@ mod transformers;
 
 use crate::internal_prelude::*;
 pub(crate) use exact_stream::*;
-#[allow(unused)]
-pub(crate) use fields::*;
 pub(crate) use parse_utilities::*;
 pub(crate) use patterns::*;
 pub(crate) use transform_stream::*;

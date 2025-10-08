@@ -225,7 +225,8 @@ define_interface! {
                     // which handles groups/missing groups reasonably well (see tests)
                     this.into_inner().value.into_token_stream()
                 };
-                let reparsed = source.source_parse_as::<ExpressionBlockContent>()?;
+                // TODO[scopes] fix this! (see comment below)
+                let (reparsed, _) = source.full_source_parse_with(|input| ExpressionBlockContent::parse(input))?;
                 reparsed.evaluate(context.interpreter, context.output_span_range)
             }
 
@@ -235,10 +236,19 @@ define_interface! {
                     // which handles groups/missing groups reasonably well (see tests)
                     this.into_inner().value.into_token_stream()
                 };
-                let reparsed_source_stream = source.source_parse_with(|input| SourceStream::parse(input, context.output_span_range.start()))?;
+                // TODO[scopes] fix this!
+                // EITHER (simplest)
+                // > We create a new interpreter for the reinterpretation
+                //   (i.e. we can't access existing variables, it's pure, returning a value)
+                // > And we'll need to update the docs
+                // OR (harder)
+                // > We need to create a new scope on top of the current scope
+                // > ...And continue the parse process from there!
+                // > ...And then adjust the scope
+                let (reparsed, _) = source.full_source_parse_with(|input| SourceStream::parse_with_span(input, context.output_span_range.start()))?;
                 // NB: We can't use a StreamOutput here, because it can't capture the Interpreter
                 //     without some lifetime shenanigans.
-                reparsed_source_stream.interpret_to_new_stream(context.interpreter)
+                reparsed.interpret_to_new_stream(context.interpreter)
             }
         }
         pub(crate) mod unary_operations {
@@ -348,7 +358,7 @@ impl Parse<Source> for RegularStreamLiteral {
     fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
         let prefix = input.parse()?;
         let (brackets, inner) = input.parse_brackets()?;
-        let content = inner.parse_with_context(brackets.span())?;
+        let content = SourceStream::parse_with_span(&inner, brackets.span())?;
         Ok(Self {
             prefix,
             brackets,
@@ -445,7 +455,7 @@ impl Parse<Source> for GroupedStreamLiteral {
         let prefix = input.parse()?;
         let group = input.parse_ident_matching("group")?;
         let (brackets, inner) = input.parse_brackets()?;
-        let content = inner.parse_with_context(brackets.span())?;
+        let content = SourceStream::parse_with_span(&inner, brackets.span())?;
         Ok(Self {
             prefix,
             group,
