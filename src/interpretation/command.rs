@@ -29,36 +29,36 @@ struct ExecutionContext<'a> {
 
 trait CommandInvocation {
     fn execute_into(
-        self,
+        &self,
         context: ExecutionContext,
         output: &mut OutputStream,
     ) -> ExecutionResult<()>;
 
-    fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue>;
+    fn execute_to_value(&self, context: ExecutionContext) -> ExecutionResult<ExpressionValue>;
 }
 
 // Using the trick for permitting multiple non-overlapping blanket
 // implementations, conditioned on an associated type
 trait CommandInvocationAs<T: OutputKind> {
     fn execute_into(
-        self,
+        &self,
         context: ExecutionContext,
         output: &mut OutputStream,
     ) -> ExecutionResult<()>;
 
-    fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue>;
+    fn execute_to_value(&self, context: ExecutionContext) -> ExecutionResult<ExpressionValue>;
 }
 
 impl<C: CommandType + CommandInvocationAs<C::OutputKind>> CommandInvocation for C {
     fn execute_into(
-        self,
+        &self,
         context: ExecutionContext,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         <Self as CommandInvocationAs<C::OutputKind>>::execute_into(self, context, output)
     }
 
-    fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
+    fn execute_to_value(&self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
         <Self as CommandInvocationAs<C::OutputKind>>::execute_to_value(self, context)
     }
 }
@@ -81,16 +81,16 @@ pub(crate) trait NoOutputCommandDefinition:
 {
     const COMMAND_NAME: &'static str;
     fn parse(arguments: CommandArguments) -> ParseResult<Self>;
-    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<()>;
+    fn execute(&self, interpreter: &mut Interpreter) -> ExecutionResult<()>;
 }
 
 impl<C: NoOutputCommandDefinition> CommandInvocationAs<OutputKindNone> for C {
-    fn execute_into(self, context: ExecutionContext, _: &mut OutputStream) -> ExecutionResult<()> {
+    fn execute_into(&self, context: ExecutionContext, _: &mut OutputStream) -> ExecutionResult<()> {
         self.execute(context.interpreter)?;
         Ok(())
     }
 
-    fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
+    fn execute_to_value(&self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
         self.execute(context.interpreter)?;
         Ok(ExpressionValue::None)
     }
@@ -116,7 +116,7 @@ pub(crate) trait StreamCommandDefinition:
     const COMMAND_NAME: &'static str;
     fn parse(arguments: CommandArguments) -> ParseResult<Self>;
     fn execute(
-        self,
+        &self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()>;
@@ -124,14 +124,14 @@ pub(crate) trait StreamCommandDefinition:
 
 impl<C: StreamCommandDefinition> CommandInvocationAs<OutputKindStream> for C {
     fn execute_into(
-        self,
+        &self,
         context: ExecutionContext,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         self.execute(context.interpreter, output)
     }
 
-    fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
+    fn execute_to_value(&self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
         let mut output = OutputStream::new();
         <Self as CommandInvocationAs<OutputKindStream>>::execute_into(self, context, &mut output)?;
         Ok(output.into_value())
@@ -200,7 +200,7 @@ macro_rules! define_command_enums {
 
         impl TypedCommand {
             fn execute_into(
-                self,
+                &self,
                 context: ExecutionContext,
                 output: &mut OutputStream,
             ) -> ExecutionResult<()> {
@@ -211,7 +211,7 @@ macro_rules! define_command_enums {
                 }
             }
 
-            fn execute_to_value(self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
+            fn execute_to_value(&self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
                 match self {
                     $(
                         Self::$command(command) => <$command as CommandInvocation>::execute_to_value(command, context),
@@ -272,7 +272,7 @@ impl HasSpan for Command {
 
 impl Interpret for Command {
     fn interpret_into(
-        self,
+        &self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -281,13 +281,10 @@ impl Interpret for Command {
     }
 }
 
-impl InterpretToValue for Command {
+impl Evaluate for Command {
     type OutputValue = ExpressionValue;
 
-    fn interpret_to_value(
-        self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Self::OutputValue> {
+    fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<ExpressionValue> {
         let context = ExecutionContext { interpreter };
         self.typed.execute_to_value(context)
     }

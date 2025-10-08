@@ -2,7 +2,7 @@ use crate::internal_prelude::*;
 
 #[derive(Clone)]
 pub(crate) struct SettingsCommand {
-    settings: SourceExpression,
+    settings: Expression,
 }
 
 impl CommandType for SettingsCommand {
@@ -29,8 +29,8 @@ impl NoOutputCommandDefinition for SettingsCommand {
         )
     }
 
-    fn execute(self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        let inputs = self.settings.interpret_to_value(interpreter)?;
+    fn execute(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        let inputs = self.settings.evaluate(interpreter)?;
         let inputs: SettingsInputs = inputs.resolve_as("The settings inputs")?;
         if let Some(limit) = inputs.iteration_limit {
             interpreter.set_iteration_limit(Some(limit));

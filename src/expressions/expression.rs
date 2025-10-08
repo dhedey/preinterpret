@@ -1,25 +1,37 @@
-use syn::token;
-
 use super::*;
 
-// Source
-// =======================
-
-#[derive(Clone)]
-pub(crate) struct SourceExpression {
-    inner: Expression<Source>,
+pub(crate) struct Expression {
+    root: ExpressionNodeId,
+    nodes: std::rc::Rc<[ExpressionNode]>,
 }
 
-impl SourceExpression {
+impl Parse<Source> for Expression {
+    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+        ExpressionParser::parse(input)
+    }
+}
+
+impl Expression {
+    pub(super) fn new(root: ExpressionNodeId, nodes: Vec<ExpressionNode>) -> Self {
+        Self {
+            root,
+            nodes: nodes.into(),
+        }
+    }
+
+    pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
+        ExpressionEvaluator::new(&self.nodes).evaluate(self.root, interpreter)
+    }
+
     pub(crate) fn is_valid_as_statement_without_semicolon(&self) -> bool {
         // Must align with evaluate_as_statement
         matches!(
-            &self.inner.nodes[self.inner.root.0],
-            ExpressionNode::Leaf(SourceExpressionLeaf::Block(_))
-                | ExpressionNode::Leaf(SourceExpressionLeaf::IfExpression(_))
-                | ExpressionNode::Leaf(SourceExpressionLeaf::LoopExpression(_))
-                | ExpressionNode::Leaf(SourceExpressionLeaf::WhileExpression(_))
-                | ExpressionNode::Leaf(SourceExpressionLeaf::ForExpression(_))
+            &self.nodes[self.root.0],
+            ExpressionNode::Leaf(Leaf::Block(_))
+                | ExpressionNode::Leaf(Leaf::IfExpression(_))
+                | ExpressionNode::Leaf(Leaf::LoopExpression(_))
+                | ExpressionNode::Leaf(Leaf::WhileExpression(_))
+                | ExpressionNode::Leaf(Leaf::ForExpression(_))
         )
     }
 
@@ -28,273 +40,28 @@ impl SourceExpression {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         // This must align with is_valid_as_statement_without_semicolon
-        match &self.inner.nodes[self.inner.root.0] {
-            ExpressionNode::Leaf(SourceExpressionLeaf::Block(block)) => {
+        match &self.nodes[self.root.0] {
+            ExpressionNode::Leaf(Leaf::Block(block)) => {
                 block.evaluate(interpreter)?.into_statement_result()
             }
-            ExpressionNode::Leaf(SourceExpressionLeaf::IfExpression(if_expression)) => {
+            ExpressionNode::Leaf(Leaf::IfExpression(if_expression)) => {
                 if_expression.evaluate(interpreter)?.into_statement_result()
             }
-            ExpressionNode::Leaf(SourceExpressionLeaf::LoopExpression(loop_expression)) => {
+            ExpressionNode::Leaf(Leaf::LoopExpression(loop_expression)) => {
                 loop_expression.evaluate_as_statement(interpreter)
             }
-            ExpressionNode::Leaf(SourceExpressionLeaf::WhileExpression(while_expression)) => {
+            ExpressionNode::Leaf(Leaf::WhileExpression(while_expression)) => {
                 while_expression.evaluate_as_statement(interpreter)
             }
-            ExpressionNode::Leaf(SourceExpressionLeaf::ForExpression(for_expression)) => {
+            ExpressionNode::Leaf(Leaf::ForExpression(for_expression)) => {
                 for_expression.evaluate_as_statement(interpreter)
             }
-            _ => self
-                .interpret_to_value(interpreter)?
-                .into_statement_result(),
+            _ => self.evaluate(interpreter)?.into_statement_result(),
         }
     }
 }
 
-impl Parse<Source> for SourceExpression {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
-        Ok(Self {
-            inner: input.parse()?,
-        })
-    }
-}
-
-impl InterpretToValue for &SourceExpression {
-    type OutputValue = OwnedValue;
-
-    fn interpret_to_value(
-        self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Self::OutputValue> {
-        ExpressionEvaluator::new(&self.inner.nodes).evaluate(self.inner.root, interpreter)
-    }
-}
-
-pub(super) enum SourceExpressionLeaf {
-    Block(ExpressionBlock),
-    Command(Command),
-    Variable(VariableIdentifier),
-    Discarded(Token![_]),
-    Value(SharedValue),
-    StreamLiteral(StreamLiteral),
-    IfExpression(IfExpression),
-    LoopExpression(LoopExpression),
-    WhileExpression(WhileExpression),
-    ForExpression(ForExpression),
-}
-
-impl HasSpanRange for SourceExpressionLeaf {
-    fn span_range(&self) -> SpanRange {
-        match self {
-            SourceExpressionLeaf::Command(command) => command.span_range(),
-            SourceExpressionLeaf::Variable(variable) => variable.span_range(),
-            SourceExpressionLeaf::Discarded(token) => token.span_range(),
-            SourceExpressionLeaf::Block(block) => block.span_range(),
-            SourceExpressionLeaf::Value(value) => value.span_range(),
-            SourceExpressionLeaf::StreamLiteral(stream) => stream.span_range(),
-            SourceExpressionLeaf::IfExpression(expression) => expression.span_range(),
-            SourceExpressionLeaf::LoopExpression(expression) => expression.span_range(),
-            SourceExpressionLeaf::WhileExpression(expression) => expression.span_range(),
-            SourceExpressionLeaf::ForExpression(expression) => expression.span_range(),
-        }
-    }
-}
-
-impl Expressionable for Source {
-    type Leaf = SourceExpressionLeaf;
-    type EvaluationContext = Interpreter;
-
-    fn parse_unary_atom(input: &mut ParseStreamStack<Self>) -> ParseResult<UnaryAtom<Self>> {
-        Ok(match input.peek_grammar() {
-            SourcePeekMatch::Command(_) => UnaryAtom::Leaf(Self::Leaf::Command(input.parse()?)),
-            SourcePeekMatch::EmbeddedVariable | SourcePeekMatch::EmbeddedExpression => {
-                return input.parse_err(
-                    "In an expression, the # variable prefix is not allowed. The # prefix should only be used when embedding a variable into an output stream, e.g. %[#var + #(..expressions..)]",
-                )
-            }
-            SourcePeekMatch::ExplicitTransformStream | SourcePeekMatch::Transformer(_) => {
-                return input.parse_err("Destructurings are not supported in an expression")
-            }
-            SourcePeekMatch::Group(Delimiter::None | Delimiter::Parenthesis) => {
-                let (_, delim_span) = input.parse_and_enter_group()?;
-                UnaryAtom::Group(delim_span)
-            }
-            SourcePeekMatch::Group(Delimiter::Brace) => {
-                let (inner, _, delim_span, _) = input.cursor().any_group().unwrap();
-                if let Some((_, next)) = inner.ident() {
-                    if next.punct_matching(':').is_some() || next.punct_matching(',').is_some() {
-                        return delim_span.open().parse_err("An object literal must be prefixed with %, e.g. `%{ field: 1 }`. Without such a prefix, { .. } defines a block.");
-                    }
-                }
-                UnaryAtom::Leaf(SourceExpressionLeaf::Block(input.parse()?))
-            }
-            SourcePeekMatch::Group(Delimiter::Bracket) => {
-                // This could be handled as parsing a vector of SourceExpressions,
-                // but it's more efficient to handle nested vectors as a single expression
-                // in the expression parser
-                let (_, delim_span) = input.parse_and_enter_group()?;
-                UnaryAtom::Array(Brackets { delim_span })
-            }
-            SourcePeekMatch::Punct(punct) => {
-                if punct.as_char() == '.' {
-                    UnaryAtom::Range(input.parse()?)
-                } else {
-                    UnaryAtom::PrefixUnaryOperation(input.parse()?)
-                }
-            }
-            SourcePeekMatch::Ident(ident) => {
-                match ident.to_string().as_str() {
-                    "_" => UnaryAtom::Leaf(Self::Leaf::Discarded(input.parse()?)),
-                    "true" | "false" => {
-                        let bool = input.parse::<syn::LitBool>()?;
-                        UnaryAtom::Leaf(Self::Leaf::Value(SharedValue::new_from_owned(
-                            ExpressionBoolean::for_litbool(&bool).into_owned_value(),
-                        )))
-                    }
-                    "if" => UnaryAtom::Leaf(Self::Leaf::IfExpression(input.parse()?)),
-                    "loop" => UnaryAtom::Leaf(Self::Leaf::LoopExpression(input.parse()?)),
-                    "while" => UnaryAtom::Leaf(Self::Leaf::WhileExpression(input.parse()?)),
-                    "for" => UnaryAtom::Leaf(Self::Leaf::ForExpression(input.parse()?)),
-                    _ => UnaryAtom::Leaf(Self::Leaf::Variable(input.parse()?))
-                }
-            },
-            SourcePeekMatch::Literal(_) => {
-                let value = ExpressionValue::for_syn_lit(input.parse()?);
-                UnaryAtom::Leaf(Self::Leaf::Value(SharedValue::new_from_owned(value)))
-            },
-            SourcePeekMatch::StreamLiteral(_) => {
-                UnaryAtom::Leaf(Self::Leaf::StreamLiteral(input.parse()?))
-            }
-            SourcePeekMatch::ObjectLiteral => {
-                let _: Token![%] = input.parse()?;
-                let (_, delim_span) = input.parse_and_enter_group()?;
-                UnaryAtom::Object(Braces { delim_span })
-            }
-            SourcePeekMatch::End => return input.parse_err("Expected an expression"),
-        })
-    }
-
-    fn parse_extension(
-        input: &mut ParseStreamStack<Self>,
-        parent_stack_frame: &ExpressionStackFrame,
-    ) -> ParseResult<NodeExtension> {
-        // We fall through if we have no match
-        match input.peek_grammar() {
-            SourcePeekMatch::Group(Delimiter::Bracket) => {
-                let (_, delim_span) = input.parse_and_enter_group()?;
-                return Ok(NodeExtension::Index(IndexAccess {
-                    brackets: Brackets { delim_span },
-                }));
-            }
-            SourcePeekMatch::Punct(punct) if punct.as_char() == ',' => {
-                match parent_stack_frame {
-                    ExpressionStackFrame::NonEmptyArray { .. }
-                    | ExpressionStackFrame::NonEmptyMethodCallParametersList { .. }
-                    | ExpressionStackFrame::NonEmptyObject {
-                        state: ObjectStackFrameState::EntryValue { .. },
-                        ..
-                    } => {
-                        input.parse::<Token![,]>()?;
-                        if input.is_current_empty() {
-                            return Ok(NodeExtension::EndOfStreamOrGroup);
-                        } else {
-                            return Ok(NodeExtension::NonTerminalComma);
-                        }
-                    }
-                    ExpressionStackFrame::Group { .. } => {
-                        return input.parse_err("Commas are only permitted inside preinterpret arrays []. Preinterpret arrays [a, b] can be used as a drop-in replacement for rust tuples (a, b).")
-                    }
-                    // Fall through for an unmatched extension
-                    _ => {}
-                }
-            }
-            SourcePeekMatch::Punct(punct) => {
-                if punct.as_char() == '.' && input.peek2(syn::Ident) {
-                    let dot = input.parse()?;
-                    let ident = input.parse()?;
-                    if input.peek(token::Paren) {
-                        let (_, delim_span) = input.parse_and_enter_group()?;
-                        return Ok(NodeExtension::MethodCall(MethodAccess {
-                            dot,
-                            method: ident,
-                            parentheses: Parentheses { delim_span },
-                        }));
-                    }
-                    return Ok(NodeExtension::Property(PropertyAccess {
-                        dot,
-                        property: ident,
-                    }));
-                }
-                if let Ok(operation) = input.try_parse_or_revert() {
-                    return Ok(NodeExtension::CompoundAssignmentOperation(operation));
-                }
-                if let Ok(operation) = input.try_parse_or_revert() {
-                    return Ok(NodeExtension::BinaryOperation(operation));
-                }
-                if let Ok(range_limits) = input.try_parse_or_revert() {
-                    return Ok(NodeExtension::Range(range_limits));
-                }
-                if let Ok(eq) = input.try_parse_or_revert() {
-                    return Ok(NodeExtension::AssignmentOperation(eq));
-                }
-            }
-            SourcePeekMatch::Ident(ident) if ident == "as" => {
-                let cast_operation =
-                    UnaryOperation::for_cast_operation(input.parse()?, input.parse_any_ident()?)?;
-                return Ok(NodeExtension::PostfixOperation(cast_operation));
-            }
-            SourcePeekMatch::End => return Ok(NodeExtension::EndOfStreamOrGroup),
-            _ => {}
-        };
-        // We are not at the end of the stream, but the tokens which follow are
-        // not a valid extension...
-        match parent_stack_frame {
-            ExpressionStackFrame::Root => Ok(NodeExtension::NoValidExtensionForCurrentParent),
-            ExpressionStackFrame::Group { .. } => input.parse_err("Expected ) or operator"),
-            ExpressionStackFrame::NonEmptyArray { .. } => {
-                input.parse_err("Expected comma, ], or operator")
-            }
-            ExpressionStackFrame::IncompleteIndex { .. }
-            | ExpressionStackFrame::NonEmptyObject {
-                state: ObjectStackFrameState::EntryIndex { .. },
-                ..
-            } => input.parse_err("Expected ], or operator"),
-            ExpressionStackFrame::NonEmptyObject {
-                state: ObjectStackFrameState::EntryValue { .. },
-                ..
-            } => input.parse_err("Expected comma, }, or operator"),
-            ExpressionStackFrame::NonEmptyMethodCallParametersList { .. } => {
-                input.parse_err("Expected comma, ) or operator")
-            }
-            // e.g. I've just matched the true in !true or false || true,
-            // and I want to see if there's an extension (e.g. a cast).
-            // There's nothing matching, so we fall through to an EndOfFrame
-            ExpressionStackFrame::IncompleteUnaryPrefixOperation { .. }
-            | ExpressionStackFrame::IncompleteBinaryOperation { .. }
-            | ExpressionStackFrame::IncompleteRange { .. }
-            | ExpressionStackFrame::IncompleteAssignment { .. }
-            | ExpressionStackFrame::IncompleteCompoundAssignment { .. } => {
-                Ok(NodeExtension::NoValidExtensionForCurrentParent)
-            }
-        }
-    }
-}
-
-impl Parse<Source> for Expression<Source> {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
-        ExpressionParser::parse(input)
-    }
-}
-
-// Generic
-// =======
-
-pub(super) struct Expression<K: Expressionable> {
-    pub(super) root: ExpressionNodeId,
-    pub(super) nodes: std::rc::Rc<[ExpressionNode<K>]>,
-}
-
-impl<K: Expressionable> Clone for Expression<K> {
+impl Clone for Expression {
     fn clone(&self) -> Self {
         Self {
             root: self.root,
@@ -306,8 +73,8 @@ impl<K: Expressionable> Clone for Expression<K> {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) struct ExpressionNodeId(pub(super) usize);
 
-pub(super) enum ExpressionNode<K: Expressionable> {
-    Leaf(K::Leaf),
+pub(super) enum ExpressionNode {
+    Leaf(Leaf),
     Grouped {
         delim_span: DelimSpan,
         inner: ExpressionNodeId,
@@ -360,7 +127,7 @@ pub(super) enum ExpressionNode<K: Expressionable> {
     },
 }
 
-impl ExpressionNode<Source> {
+impl ExpressionNode {
     pub(super) fn operator_span_range(&self) -> SpanRange {
         match self {
             ExpressionNode::Leaf(leaf) => leaf.span_range(),
@@ -379,13 +146,32 @@ impl ExpressionNode<Source> {
     }
 }
 
-pub(super) trait Expressionable: Sized {
-    type Leaf;
-    type EvaluationContext;
+pub(super) enum Leaf {
+    Block(ExpressionBlock),
+    Command(Command),
+    Variable(VariableIdentifier),
+    Discarded(Token![_]),
+    Value(SharedValue),
+    StreamLiteral(StreamLiteral),
+    IfExpression(IfExpression),
+    LoopExpression(LoopExpression),
+    WhileExpression(WhileExpression),
+    ForExpression(ForExpression),
+}
 
-    fn parse_unary_atom(input: &mut ParseStreamStack<Self>) -> ParseResult<UnaryAtom<Self>>;
-    fn parse_extension(
-        input: &mut ParseStreamStack<Self>,
-        parent_stack_frame: &ExpressionStackFrame,
-    ) -> ParseResult<NodeExtension>;
+impl HasSpanRange for Leaf {
+    fn span_range(&self) -> SpanRange {
+        match self {
+            Leaf::Command(command) => command.span_range(),
+            Leaf::Variable(variable) => variable.span_range(),
+            Leaf::Discarded(token) => token.span_range(),
+            Leaf::Block(block) => block.span_range(),
+            Leaf::Value(value) => value.span_range(),
+            Leaf::StreamLiteral(stream) => stream.span_range(),
+            Leaf::IfExpression(expression) => expression.span_range(),
+            Leaf::LoopExpression(expression) => expression.span_range(),
+            Leaf::WhileExpression(expression) => expression.span_range(),
+            Leaf::ForExpression(expression) => expression.span_range(),
+        }
+    }
 }

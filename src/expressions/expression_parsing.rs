@@ -21,34 +21,32 @@ use super::*;
 /// ## Examples
 ///
 /// See the rust doc on the [`ExpressionStackFrame`] for further details.
-pub(super) struct ExpressionParser<'a, K: Expressionable> {
-    streams: ParseStreamStack<'a, K>,
-    nodes: ExpressionNodes<K>,
+pub(super) struct ExpressionParser<'a> {
+    streams: ParseStreamStack<'a, Source>,
+    nodes: ExpressionNodes,
     expression_stack: Vec<ExpressionStackFrame>,
-    kind: PhantomData<K>,
 }
 
-impl<'a> ExpressionParser<'a, Source> {
-    pub(super) fn parse(input: ParseStream<'a, Source>) -> ParseResult<Expression<Source>> {
+impl<'a> ExpressionParser<'a> {
+    pub(super) fn parse(input: ParseStream<'a, Source>) -> ParseResult<Expression> {
         Self {
             streams: ParseStreamStack::new(input),
             nodes: ExpressionNodes::new(),
             expression_stack: Vec::with_capacity(10),
-            kind: PhantomData,
         }
         .run()
     }
 
-    fn run(mut self) -> ParseResult<Expression<Source>> {
+    fn run(mut self) -> ParseResult<Expression> {
         let mut work_item = self.push_stack_frame(ExpressionStackFrame::Root);
         loop {
             work_item = match work_item {
                 WorkItem::RequireUnaryAtom => {
-                    let unary_atom = Source::parse_unary_atom(&mut self.streams)?;
+                    let unary_atom = Self::parse_unary_atom(&mut self.streams)?;
                     self.extend_with_unary_atom(unary_atom)?
                 }
                 WorkItem::TryParseAndApplyExtension { node } => {
-                    let extension = Source::parse_extension(
+                    let extension = Self::parse_extension(
                         &mut self.streams,
                         self.expression_stack.last().unwrap(),
                     )?;
@@ -67,7 +65,182 @@ impl<'a> ExpressionParser<'a, Source> {
         }
     }
 
-    fn extend_with_unary_atom(&mut self, unary_atom: UnaryAtom<Source>) -> ParseResult<WorkItem> {
+    fn parse_unary_atom(input: &mut ParseStreamStack<Source>) -> ParseResult<UnaryAtom> {
+        Ok(match input.peek_grammar() {
+            SourcePeekMatch::Command(_) => UnaryAtom::Leaf(Leaf::Command(input.parse()?)),
+            SourcePeekMatch::EmbeddedVariable | SourcePeekMatch::EmbeddedExpression => {
+                return input.parse_err(
+                    "In an expression, the # variable prefix is not allowed. The # prefix should only be used when embedding a variable into an output stream, e.g. %[#var + #(..expressions..)]",
+                )
+            }
+            SourcePeekMatch::ExplicitTransformStream | SourcePeekMatch::Transformer(_) => {
+                return input.parse_err("Destructurings are not supported in an expression")
+            }
+            SourcePeekMatch::Group(Delimiter::None | Delimiter::Parenthesis) => {
+                let (_, delim_span) = input.parse_and_enter_group()?;
+                UnaryAtom::Group(delim_span)
+            }
+            SourcePeekMatch::Group(Delimiter::Brace) => {
+                let (inner, _, delim_span, _) = input.cursor().any_group().unwrap();
+                if let Some((_, next)) = inner.ident() {
+                    if next.punct_matching(':').is_some() || next.punct_matching(',').is_some() {
+                        return delim_span.open().parse_err("An object literal must be prefixed with %, e.g. `%{ field: 1 }`. Without such a prefix, { .. } defines a block.");
+                    }
+                }
+                UnaryAtom::Leaf(Leaf::Block(input.parse()?))
+            }
+            SourcePeekMatch::Group(Delimiter::Bracket) => {
+                // This could be handled as parsing a vector of SourceExpressions,
+                // but it's more efficient to handle nested vectors as a single expression
+                // in the expression parser
+                let (_, delim_span) = input.parse_and_enter_group()?;
+                UnaryAtom::Array(Brackets { delim_span })
+            }
+            SourcePeekMatch::Punct(punct) => {
+                if punct.as_char() == '.' {
+                    UnaryAtom::Range(input.parse()?)
+                } else {
+                    UnaryAtom::PrefixUnaryOperation(input.parse()?)
+                }
+            }
+            SourcePeekMatch::Ident(ident) => {
+                match ident.to_string().as_str() {
+                    "_" => UnaryAtom::Leaf(Leaf::Discarded(input.parse()?)),
+                    "true" | "false" => {
+                        let bool = input.parse::<syn::LitBool>()?;
+                        UnaryAtom::Leaf(Leaf::Value(SharedValue::new_from_owned(
+                            ExpressionBoolean::for_litbool(&bool).into_owned_value(),
+                        )))
+                    }
+                    "if" => UnaryAtom::Leaf(Leaf::IfExpression(input.parse()?)),
+                    "loop" => UnaryAtom::Leaf(Leaf::LoopExpression(input.parse()?)),
+                    "while" => UnaryAtom::Leaf(Leaf::WhileExpression(input.parse()?)),
+                    "for" => UnaryAtom::Leaf(Leaf::ForExpression(input.parse()?)),
+                    _ => UnaryAtom::Leaf(Leaf::Variable(input.parse()?))
+                }
+            },
+            SourcePeekMatch::Literal(_) => {
+                let value = ExpressionValue::for_syn_lit(input.parse()?);
+                UnaryAtom::Leaf(Leaf::Value(SharedValue::new_from_owned(value)))
+            },
+            SourcePeekMatch::StreamLiteral(_) => {
+                UnaryAtom::Leaf(Leaf::StreamLiteral(input.parse()?))
+            }
+            SourcePeekMatch::ObjectLiteral => {
+                let _: Token![%] = input.parse()?;
+                let (_, delim_span) = input.parse_and_enter_group()?;
+                UnaryAtom::Object(Braces { delim_span })
+            }
+            SourcePeekMatch::End => return input.parse_err("Expected an expression"),
+        })
+    }
+
+    fn parse_extension(
+        input: &mut ParseStreamStack<Source>,
+        parent_stack_frame: &ExpressionStackFrame,
+    ) -> ParseResult<NodeExtension> {
+        // We fall through if we have no match
+        match input.peek_grammar() {
+            SourcePeekMatch::Group(Delimiter::Bracket) => {
+                let (_, delim_span) = input.parse_and_enter_group()?;
+                return Ok(NodeExtension::Index(IndexAccess {
+                    brackets: Brackets { delim_span },
+                }));
+            }
+            SourcePeekMatch::Punct(punct) if punct.as_char() == ',' => {
+                match parent_stack_frame {
+                    ExpressionStackFrame::NonEmptyArray { .. }
+                    | ExpressionStackFrame::NonEmptyMethodCallParametersList { .. }
+                    | ExpressionStackFrame::NonEmptyObject {
+                        state: ObjectStackFrameState::EntryValue { .. },
+                        ..
+                    } => {
+                        input.parse::<Token![,]>()?;
+                        if input.is_current_empty() {
+                            return Ok(NodeExtension::EndOfStreamOrGroup);
+                        } else {
+                            return Ok(NodeExtension::NonTerminalComma);
+                        }
+                    }
+                    ExpressionStackFrame::Group { .. } => {
+                        return input.parse_err("Commas are only permitted inside preinterpret arrays []. Preinterpret arrays [a, b] can be used as a drop-in replacement for rust tuples (a, b).")
+                    }
+                    // Fall through for an unmatched extension
+                    _ => {}
+                }
+            }
+            SourcePeekMatch::Punct(punct) => {
+                if punct.as_char() == '.' && input.peek2(syn::Ident) {
+                    let dot = input.parse()?;
+                    let ident = input.parse()?;
+                    if input.peek(token::Paren) {
+                        let (_, delim_span) = input.parse_and_enter_group()?;
+                        return Ok(NodeExtension::MethodCall(MethodAccess {
+                            dot,
+                            method: ident,
+                            parentheses: Parentheses { delim_span },
+                        }));
+                    }
+                    return Ok(NodeExtension::Property(PropertyAccess {
+                        dot,
+                        property: ident,
+                    }));
+                }
+                if let Ok(operation) = input.try_parse_or_revert() {
+                    return Ok(NodeExtension::CompoundAssignmentOperation(operation));
+                }
+                if let Ok(operation) = input.try_parse_or_revert() {
+                    return Ok(NodeExtension::BinaryOperation(operation));
+                }
+                if let Ok(range_limits) = input.try_parse_or_revert() {
+                    return Ok(NodeExtension::Range(range_limits));
+                }
+                if let Ok(eq) = input.try_parse_or_revert() {
+                    return Ok(NodeExtension::AssignmentOperation(eq));
+                }
+            }
+            SourcePeekMatch::Ident(ident) if ident == "as" => {
+                let cast_operation =
+                    UnaryOperation::for_cast_operation(input.parse()?, input.parse_any_ident()?)?;
+                return Ok(NodeExtension::PostfixOperation(cast_operation));
+            }
+            SourcePeekMatch::End => return Ok(NodeExtension::EndOfStreamOrGroup),
+            _ => {}
+        };
+        // We are not at the end of the stream, but the tokens which follow are
+        // not a valid extension...
+        match parent_stack_frame {
+            ExpressionStackFrame::Root => Ok(NodeExtension::NoValidExtensionForCurrentParent),
+            ExpressionStackFrame::Group { .. } => input.parse_err("Expected ) or operator"),
+            ExpressionStackFrame::NonEmptyArray { .. } => {
+                input.parse_err("Expected comma, ], or operator")
+            }
+            ExpressionStackFrame::IncompleteIndex { .. }
+            | ExpressionStackFrame::NonEmptyObject {
+                state: ObjectStackFrameState::EntryIndex { .. },
+                ..
+            } => input.parse_err("Expected ], or operator"),
+            ExpressionStackFrame::NonEmptyObject {
+                state: ObjectStackFrameState::EntryValue { .. },
+                ..
+            } => input.parse_err("Expected comma, }, or operator"),
+            ExpressionStackFrame::NonEmptyMethodCallParametersList { .. } => {
+                input.parse_err("Expected comma, ) or operator")
+            }
+            // e.g. I've just matched the true in !true or false || true,
+            // and I want to see if there's an extension (e.g. a cast).
+            // There's nothing matching, so we fall through to an EndOfFrame
+            ExpressionStackFrame::IncompleteUnaryPrefixOperation { .. }
+            | ExpressionStackFrame::IncompleteBinaryOperation { .. }
+            | ExpressionStackFrame::IncompleteRange { .. }
+            | ExpressionStackFrame::IncompleteAssignment { .. }
+            | ExpressionStackFrame::IncompleteCompoundAssignment { .. } => {
+                Ok(NodeExtension::NoValidExtensionForCurrentParent)
+            }
+        }
+    }
+
+    fn extend_with_unary_atom(&mut self, unary_atom: UnaryAtom) -> ParseResult<WorkItem> {
         Ok(match unary_atom {
             UnaryAtom::Leaf(leaf) => self.add_leaf(leaf),
             UnaryAtom::Group(delim_span) => {
@@ -382,7 +555,7 @@ impl<'a> ExpressionParser<'a, Source> {
         let can_parse_unary_atom = {
             let forked = self.streams.fork_current();
             let mut forked_stack = ParseStreamStack::new(&forked);
-            Source::parse_unary_atom(&mut forked_stack).is_ok()
+            Self::parse_unary_atom(&mut forked_stack).is_ok()
         };
         if can_parse_unary_atom {
             // A unary atom can be parsed so let's attempt to complete the range with it
@@ -404,45 +577,44 @@ impl<'a> ExpressionParser<'a, Source> {
         mut complete_entries: Vec<(ObjectKey, ExpressionNodeId)>,
     ) -> ParseResult<WorkItem> {
         const ERROR_MESSAGE: &str = r##"Expected an object entry (`field,` `field: ..,` or `["field"]: ..,`). If you meant to start a new block, use #{ ... } instead."##;
-        let state = loop {
-            if self.streams.is_current_empty() {
-                self.streams.exit_group();
-                let node = self.nodes.add_node(ExpressionNode::Object {
-                    braces,
-                    entries: complete_entries,
-                });
-                return Ok(WorkItem::TryParseAndApplyExtension { node });
-            } else if self.streams.peek(syn::Ident) {
-                let key: Ident = self.streams.parse()?;
-
+        let state =
+            loop {
                 if self.streams.is_current_empty() {
-                    // Fall through
-                } else if self.streams.peek(token::Comma) {
-                    self.streams.parse::<Token![,]>()?;
-                    // Fall through
-                } else if self.streams.peek(token::Colon) {
-                    let colon = self.streams.parse()?;
-                    break ObjectStackFrameState::EntryValue(ObjectKey::Identifier(key), colon);
+                    self.streams.exit_group();
+                    let node = self.nodes.add_node(ExpressionNode::Object {
+                        braces,
+                        entries: complete_entries,
+                    });
+                    return Ok(WorkItem::TryParseAndApplyExtension { node });
+                } else if self.streams.peek(syn::Ident) {
+                    let key: Ident = self.streams.parse()?;
+
+                    if self.streams.is_current_empty() {
+                        // Fall through
+                    } else if self.streams.peek(token::Comma) {
+                        self.streams.parse::<Token![,]>()?;
+                        // Fall through
+                    } else if self.streams.peek(token::Colon) {
+                        let colon = self.streams.parse()?;
+                        break ObjectStackFrameState::EntryValue(ObjectKey::Identifier(key), colon);
+                    } else {
+                        return self.streams.parse_err(ERROR_MESSAGE);
+                    }
+
+                    let node = self.nodes.add_node(ExpressionNode::Leaf(Leaf::Variable(
+                        VariableIdentifier { ident: key.clone() },
+                    )));
+                    complete_entries.push((ObjectKey::Identifier(key), node));
+                    continue;
+                } else if self.streams.peek(token::Bracket) {
+                    let (_, delim_span) = self.streams.parse_and_enter_group()?;
+                    break ObjectStackFrameState::EntryIndex(IndexAccess {
+                        brackets: Brackets { delim_span },
+                    });
                 } else {
                     return self.streams.parse_err(ERROR_MESSAGE);
                 }
-
-                let node =
-                    self.nodes
-                        .add_node(ExpressionNode::Leaf(SourceExpressionLeaf::Variable(
-                            VariableIdentifier { ident: key.clone() },
-                        )));
-                complete_entries.push((ObjectKey::Identifier(key), node));
-                continue;
-            } else if self.streams.peek(token::Bracket) {
-                let (_, delim_span) = self.streams.parse_and_enter_group()?;
-                break ObjectStackFrameState::EntryIndex(IndexAccess {
-                    brackets: Brackets { delim_span },
-                });
-            } else {
-                return self.streams.parse_err(ERROR_MESSAGE);
-            }
-        };
+            };
         Ok(self.push_stack_frame(ExpressionStackFrame::NonEmptyObject {
             braces,
             complete_entries,
@@ -450,7 +622,7 @@ impl<'a> ExpressionParser<'a, Source> {
         }))
     }
 
-    fn add_leaf(&mut self, leaf: SourceExpressionLeaf) -> WorkItem {
+    fn add_leaf(&mut self, leaf: Leaf) -> WorkItem {
         let node = self.nodes.add_node(ExpressionNode::Leaf(leaf));
         WorkItem::TryParseAndApplyExtension { node }
     }
@@ -476,26 +648,23 @@ impl<'a> ExpressionParser<'a, Source> {
     }
 }
 
-pub(super) struct ExpressionNodes<K: Expressionable> {
-    nodes: Vec<ExpressionNode<K>>,
+pub(super) struct ExpressionNodes {
+    nodes: Vec<ExpressionNode>,
 }
 
-impl<K: Expressionable> ExpressionNodes<K> {
+impl ExpressionNodes {
     pub(super) fn new() -> Self {
         Self { nodes: Vec::new() }
     }
 
-    pub(super) fn add_node(&mut self, node: ExpressionNode<K>) -> ExpressionNodeId {
+    pub(super) fn add_node(&mut self, node: ExpressionNode) -> ExpressionNodeId {
         let node_id = ExpressionNodeId(self.nodes.len());
         self.nodes.push(node);
         node_id
     }
 
-    pub(super) fn complete(self, root: ExpressionNodeId) -> Expression<K> {
-        Expression {
-            root,
-            nodes: self.nodes.into(),
-        }
+    pub(super) fn complete(self, root: ExpressionNodeId) -> Expression {
+        Expression::new(root, self.nodes)
     }
 }
 
@@ -838,8 +1007,8 @@ enum WorkItem {
     },
 }
 
-pub(super) enum UnaryAtom<K: Expressionable> {
-    Leaf(K::Leaf),
+pub(super) enum UnaryAtom {
+    Leaf(Leaf),
     Group(DelimSpan),
     Array(Brackets),
     Object(Braces),

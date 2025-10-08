@@ -184,7 +184,7 @@ impl TransformerDefinition for GroupTransformer {
 #[derive(Clone)]
 pub(crate) struct ExactTransformer {
     _parentheses: Parentheses,
-    stream: SourceExpression,
+    stream: Expression,
 }
 
 impl TransformerDefinition for ExactTransformer {
@@ -213,7 +213,7 @@ impl TransformerDefinition for ExactTransformer {
         // To save confusion about parse order.
         let stream: ExpressionStream = self
             .stream
-            .interpret_to_value(interpreter)?
+            .evaluate(interpreter)?
             .resolve_as("Input to the EXACT parser")?;
         stream.value.parse_exact_match(input, output)
     }

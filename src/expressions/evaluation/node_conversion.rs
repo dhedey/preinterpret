@@ -1,6 +1,6 @@
 use super::*;
 
-impl ExpressionNode<Source> {
+impl ExpressionNode {
     pub(super) fn handle_as_value(
         &self,
         mut context: Context<ValueType>,
@@ -8,15 +8,15 @@ impl ExpressionNode<Source> {
         Ok(match self {
             ExpressionNode::Leaf(leaf) => {
                 match leaf {
-                    SourceExpressionLeaf::Command(command) => {
+                    Leaf::Command(command) => {
                         // TODO[interpret_to_value]: Allow command to return a reference
-                        let value = command.clone().interpret_to_value(context.interpreter())?;
+                        let value = command.evaluate(context.interpreter())?;
                         context.return_owned(value.into_owned(command.span_range()))?
                     }
-                    SourceExpressionLeaf::Discarded(token) => {
+                    Leaf::Discarded(token) => {
                         return token.execution_err("This cannot be used in a value expression");
                     }
-                    SourceExpressionLeaf::Variable(variable_path) => {
+                    Leaf::Variable(variable_path) => {
                         let variable_ref = variable_path.binding(context.interpreter())?;
                         match context.requested_ownership() {
                             RequestedValueOwnership::LateBound => {
@@ -34,37 +34,35 @@ impl ExpressionNode<Source> {
                             },
                         }
                     }
-                    SourceExpressionLeaf::Block(block) => {
+                    Leaf::Block(block) => {
                         // TODO[interpret_to_value]: Allow block to return reference
                         let value = block.evaluate(context.interpreter())?;
                         context.return_owned(value)?
                     }
-                    SourceExpressionLeaf::Value(value) => {
+                    Leaf::Value(value) => {
                         // We return a freely clonable CopyOnWrite in order to delay the clone of the literal if it's not necessary
                         let value = CopyOnWrite::shared_in_place_of_owned(Shared::clone(value));
                         context.return_copy_on_write(value)?
                     }
-                    SourceExpressionLeaf::StreamLiteral(stream_literal) => {
-                        let value = stream_literal
-                            .clone()
-                            .interpret_to_value(context.interpreter())?;
+                    Leaf::StreamLiteral(stream_literal) => {
+                        let value = stream_literal.clone().evaluate(context.interpreter())?;
                         context.return_owned(value.into_owned(stream_literal.span_range()))?
                     }
-                    SourceExpressionLeaf::IfExpression(if_expression) => {
+                    Leaf::IfExpression(if_expression) => {
                         let value = if_expression.evaluate(context.interpreter())?;
                         context.return_owned(value)?
                     }
-                    SourceExpressionLeaf::LoopExpression(loop_expression) => {
+                    Leaf::LoopExpression(loop_expression) => {
                         let value =
                             loop_expression.evaluate_as_expression(context.interpreter())?;
                         context.return_owned(value)?
                     }
-                    SourceExpressionLeaf::WhileExpression(while_expression) => {
+                    Leaf::WhileExpression(while_expression) => {
                         let value =
                             while_expression.evaluate_as_expression(context.interpreter())?;
                         context.return_owned(value)?
                     }
-                    SourceExpressionLeaf::ForExpression(for_expression) => {
+                    Leaf::ForExpression(for_expression) => {
                         let value = for_expression.evaluate_as_expression(context.interpreter())?;
                         context.return_owned(value)?
                     }
@@ -123,7 +121,7 @@ impl ExpressionNode<Source> {
     pub(super) fn handle_as_assignee(
         &self,
         context: AssignmentContext,
-        nodes: &[ExpressionNode<Source>],
+        nodes: &[ExpressionNode],
         self_node_id: ExpressionNodeId,
         // NB: This might intrisically be a part of a larger value, and might have been
         // created many lines previously, so doesn't have an obvious span associated with it
@@ -131,10 +129,10 @@ impl ExpressionNode<Source> {
         value: ExpressionValue,
     ) -> ExecutionResult<NextAction> {
         Ok(match self {
-            ExpressionNode::Leaf(SourceExpressionLeaf::Variable(_))
+            ExpressionNode::Leaf(Leaf::Variable(_))
             | ExpressionNode::Index { .. }
             | ExpressionNode::Property { .. } => PlaceAssigner::start(context, self_node_id, value),
-            ExpressionNode::Leaf(SourceExpressionLeaf::Discarded(underscore)) => {
+            ExpressionNode::Leaf(Leaf::Discarded(underscore)) => {
                 context.return_assignment_completion(underscore.span_range())
             }
             ExpressionNode::Array {
@@ -157,7 +155,7 @@ impl ExpressionNode<Source> {
 
     pub(super) fn handle_as_place(&self, mut context: PlaceContext) -> ExecutionResult<NextAction> {
         Ok(match self {
-            ExpressionNode::Leaf(SourceExpressionLeaf::Variable(variable)) => {
+            ExpressionNode::Leaf(Leaf::Variable(variable)) => {
                 let variable_ref = variable.binding(context.interpreter())?;
                 context.return_place(variable_ref.into_mut()?)
             }

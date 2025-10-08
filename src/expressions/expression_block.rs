@@ -4,7 +4,7 @@ use super::*;
 pub(crate) struct EmbeddedExpression {
     marker: Token![#],
     parentheses: Parentheses,
-    content: SourceExpression,
+    content: Expression,
 }
 
 impl Parse<Source> for EmbeddedExpression {
@@ -28,13 +28,13 @@ impl HasSpanRange for EmbeddedExpression {
 
 impl EmbeddedExpression {
     pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
-        self.content.interpret_to_value(interpreter)
+        self.content.evaluate(interpreter)
     }
 }
 
-impl Interpret for &EmbeddedExpression {
+impl Interpret for EmbeddedExpression {
     fn interpret_into(
-        self,
+        &self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
@@ -43,17 +43,6 @@ impl Interpret for &EmbeddedExpression {
             &mut ToStreamContext::new(output, self.span_range()),
         )?;
         Ok(())
-    }
-}
-
-impl InterpretToValue for &EmbeddedExpression {
-    type OutputValue = OwnedValue;
-
-    fn interpret_to_value(
-        self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Self::OutputValue> {
-        self.evaluate(interpreter)
     }
 }
 
@@ -139,7 +128,7 @@ pub(crate) enum Statement {
     LetStatement(LetStatement),
     BreakStatement(BreakStatement),
     ContinueStatement(ContinueStatement),
-    Expression(SourceExpression),
+    Expression(Expression),
 }
 
 impl Statement {
@@ -185,7 +174,7 @@ impl Statement {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<OwnedValue> {
         match self {
-            Statement::Expression(expression) => expression.interpret_to_value(interpreter),
+            Statement::Expression(expression) => expression.evaluate(interpreter),
             Statement::LetStatement(_)
             | Statement::BreakStatement(_)
             | Statement::ContinueStatement(_) => {
@@ -210,7 +199,7 @@ pub(crate) struct LetStatement {
 struct LetStatementAssignment {
     #[allow(unused)]
     equals: Token![=],
-    expression: SourceExpression,
+    expression: Expression,
 }
 
 impl Parse<Source> for LetStatement {
@@ -246,10 +235,7 @@ impl LetStatement {
             assignment,
         } = self;
         let value = match assignment {
-            Some(assignment) => assignment
-                .expression
-                .interpret_to_value(interpreter)?
-                .into_inner(),
+            Some(assignment) => assignment.expression.evaluate(interpreter)?.into_inner(),
             None => ExpressionValue::None,
         };
         pattern.handle_destructure(interpreter, value)?;
