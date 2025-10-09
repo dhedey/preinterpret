@@ -226,7 +226,7 @@ define_interface! {
                     this.into_inner().value.into_token_stream()
                 };
                 // TODO[scopes] fix this! (see comment below)
-                let (reparsed, _) = source.full_source_parse_with(|input| ExpressionBlockContent::parse(input))?;
+                let (reparsed, _) = source.full_source_parse_with(ExpressionBlockContent::parse)?;
                 reparsed.evaluate(context.interpreter, context.output_span_range)
             }
 

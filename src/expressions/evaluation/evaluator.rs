@@ -42,14 +42,15 @@ impl<'a> ExpressionEvaluator<'a> {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<StepResult> {
         Ok(StepResult::Continue(match action {
-            NextActionInner::ReadNodeAsValue(node, ownership) => self.nodes.get(node)
-                .handle_as_value(Context {
+            NextActionInner::ReadNodeAsValue(node, ownership) => {
+                self.nodes.get(node).handle_as_value(Context {
                     request: ownership,
                     interpreter,
                     stack: &mut self.stack,
-                })?,
-            NextActionInner::ReadNodeAsAssignee(node, value) => self.nodes.get(node)
-                .handle_as_assignee(
+                })?
+            }
+            NextActionInner::ReadNodeAsAssignee(node, value) => {
+                self.nodes.get(node).handle_as_assignee(
                     Context {
                         stack: &mut self.stack,
                         interpreter,
@@ -58,7 +59,8 @@ impl<'a> ExpressionEvaluator<'a> {
                     self.nodes,
                     node,
                     value,
-                )?,
+                )?
+            }
             NextActionInner::ReadNodeAsPlace(node) => {
                 self.nodes.get(node).handle_as_place(Context {
                     stack: &mut self.stack,

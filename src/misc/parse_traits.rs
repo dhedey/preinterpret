@@ -144,8 +144,8 @@ pub(crate) fn wrap_parser<T, E>(
         let parse_buffer = SourceParseBuffer::new(forked);
         let output = parser(&parse_buffer)?;
         stream.advance_to(&parse_buffer.buffer);
-        
-        let state = match Rc::into_inner(parse_buffer.context.full_state) {
+
+        let state = match Rc::try_unwrap(parse_buffer.context.full_state).ok() {
             Some(state) => state,
             None => {
                 panic!("Something held onto a parser state after the parser returned");
@@ -186,10 +186,7 @@ impl<'a> SourceParseBuffer<'a> {
         }
     }
 
-    fn child_from_buffer<'c>(
-        &self,
-        buffer: ParseBuffer<'c, Source>,
-    ) -> SourceParseBuffer<'c> {
+    fn child_from_buffer<'c>(&self, buffer: ParseBuffer<'c, Source>) -> SourceParseBuffer<'c> {
         SourceParseBuffer {
             buffer,
             context: self.context.clone(),
@@ -216,7 +213,9 @@ impl<'a> SourceParseBuffer<'a> {
     pub(crate) fn parse_any_group(
         &self,
     ) -> ParseResult<(Delimiter, DelimSpan, SourceParseBuffer<'_>)> {
-        self.buffer.parse_any_group().map(move |(d, s, b)| (d, s, self.child_from_buffer(b)))
+        self.buffer
+            .parse_any_group()
+            .map(move |(d, s, b)| (d, s, self.child_from_buffer(b)))
     }
 
     pub(crate) fn parse_group_matching(
@@ -224,7 +223,9 @@ impl<'a> SourceParseBuffer<'a> {
         matching: impl FnOnce(Delimiter) -> bool,
         expected_message: impl FnOnce() -> String,
     ) -> ParseResult<(DelimSpan, SourceParseBuffer<'_>)> {
-        self.buffer.parse_group_matching(matching, expected_message).map(|(s, b)| (s, self.child_from_buffer(b)))
+        self.buffer
+            .parse_group_matching(matching, expected_message)
+            .map(|(s, b)| (s, self.child_from_buffer(b)))
     }
 
     pub(crate) fn parse_specific_group(
@@ -316,9 +317,7 @@ impl<'a, K> ParseBuffer<'a, K> {
         T::parse(self)
     }
 
-    pub fn parse_terminated<T: Parse<K>, P: Parse<K>>(
-        &'a self,
-    ) -> ParseResult<Punctuated<T, P>> {
+    pub fn parse_terminated<T: Parse<K>, P: Parse<K>>(&'a self) -> ParseResult<Punctuated<T, P>> {
         Punctuated::parse_terminated_using(self, T::parse, P::parse)
     }
 
@@ -551,4 +550,3 @@ impl<'a> AnyParseStream for SourceParser<'a> {
         self.inner.is_empty()
     }
 }
-

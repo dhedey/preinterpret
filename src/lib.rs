@@ -525,9 +525,9 @@ pub fn run(token_stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 fn preinterpret_run_internal(input: TokenStream) -> SynResult<TokenStream> {
     let (content, parse_state) = input
-        .full_source_parse_with(|input| ExpressionBlockContent::parse(input))
+        .full_source_parse_with(ExpressionBlockContent::parse)
         .convert_to_final_result()?;
-    
+
     let mut interpreter = Interpreter::new(parse_state);
 
     let interpreted_stream = content

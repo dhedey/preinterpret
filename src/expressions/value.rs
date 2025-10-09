@@ -267,7 +267,12 @@ impl ExpressionValue {
     pub(crate) fn for_literal(literal: Literal) -> OwnedValue {
         // The unwrap should be safe because all Literal should be parsable
         // as syn::Lit; falling back to syn::Lit::Verbatim if necessary.
-        Self::for_syn_lit(literal.to_token_stream().interpreted_parse_with(|input| input.parse()).unwrap())
+        Self::for_syn_lit(
+            literal
+                .to_token_stream()
+                .interpreted_parse_with(|input| input.parse())
+                .unwrap(),
+        )
     }
 
     pub(crate) fn for_syn_lit(lit: syn::Lit) -> OwnedValue {

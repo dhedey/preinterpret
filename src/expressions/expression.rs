@@ -13,11 +13,11 @@ impl ParseSource for Expression {
 }
 
 impl Expression {
-    pub(super) fn new(root: ExpressionNodeId, nodes: RcArena<ExpressionNodeId, ExpressionNode>) -> Self {
-        Self {
-            root,
-            nodes: nodes.into(),
-        }
+    pub(super) fn new(
+        root: ExpressionNodeId,
+        nodes: RcArena<ExpressionNodeId, ExpressionNode>,
+    ) -> Self {
+        Self { root, nodes }
     }
 
     pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {

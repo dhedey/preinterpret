@@ -1,12 +1,19 @@
 use super::*;
 
 macro_rules! new_key {
-    ($vis:vis $key:ident($marker:ident)) => {
+    ($vis:vis $key:ident) => {
         #[derive(Copy, Clone)]
-        $vis struct $marker;
-        impl ArenaMarker for $marker {}
+        $vis struct $key(Key<$key>);
 
-        $vis type $key = Key<$marker>;
+        impl ArenaKey for $key {
+            fn from_inner(value: Key<$key>) -> Self {
+                Self(value)
+            }
+
+            fn to_inner(self) -> Key<Self> {
+                self.0
+            }
+        }
     }
 }
 
@@ -19,18 +26,21 @@ pub(crate) struct AppendOnlyArena<K: ArenaKey, Data> {
 
 impl<K: ArenaKey, D> AppendOnlyArena<K, D> {
     pub(crate) fn new() -> Self {
-        Self { data: Vec::new(), instance_marker: PhantomData, }
+        Self {
+            data: Vec::new(),
+            instance_marker: PhantomData,
+        }
     }
 
-    pub(crate) fn add(&mut self, value: D) -> Key<K::Marker> {
+    pub(crate) fn add(&mut self, value: D) -> K {
         let index = self.data.len();
         self.data.push(value);
-        Key::new(index)
+        K::from_inner(Key::new(index))
     }
 
     #[allow(unused)]
-    pub(crate) fn get(&self, key: Key<K::Marker>) -> &D {
-        &self.data[key.index]
+    pub(crate) fn get(&self, key: K) -> &D {
+        &self.data[key.to_inner().index]
     }
 
     pub(crate) fn into_rc_arena(self) -> RcArena<K, D> {
@@ -57,34 +67,27 @@ impl<K: ArenaKey, D> Clone for RcArena<K, D> {
 }
 
 impl<K: ArenaKey, D> RcArena<K, D> {
-    pub(crate) fn get(&self, key: Key<K::Marker>) -> &D {
-        &self.data[key.index]
+    pub(crate) fn get(&self, key: K) -> &D {
+        &self.data[key.to_inner().index]
     }
 }
 
-pub(crate) trait ArenaMarker: Copy + Clone {}
-
-pub(crate) trait ArenaKey: private::Sealed {
-    type Marker: ArenaMarker;
-}
-
-mod private {
-    pub(crate) trait Sealed {}
+pub(crate) trait ArenaKey: Sized {
+    fn from_inner(value: Key<Self>) -> Self;
+    fn to_inner(self) -> Key<Self>;
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub(crate) struct Key<M: ArenaMarker> {
+pub(crate) struct Key<K: ArenaKey> {
     index: usize,
-    instance_marker: PhantomData<M>,
+    instance_marker: PhantomData<K>,
 }
 
-impl<M: ArenaMarker> private::Sealed for Key<M> {}
-impl<M: ArenaMarker> ArenaKey for Key<M> {
-    type Marker = M;
-}
-
-impl<M: ArenaMarker> Key<M> {
+impl<K: ArenaKey> Key<K> {
     fn new(index: usize) -> Self {
-        Self { index, instance_marker: PhantomData, }
+        Self {
+            index,
+            instance_marker: PhantomData,
+        }
     }
 }

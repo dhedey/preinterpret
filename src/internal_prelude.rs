@@ -8,8 +8,8 @@ pub(crate) use std::{
     borrow::Borrow,
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
-    str::FromStr,
     rc::Rc,
+    str::FromStr,
 };
 pub(crate) use syn::buffer::Cursor;
 pub(crate) use syn::ext::IdentExt as SynIdentExt;

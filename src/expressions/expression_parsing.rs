@@ -648,7 +648,7 @@ impl<'a> ExpressionParser<'a> {
     }
 }
 
-new_key!(pub(crate) ExpressionNodeId(ExpressionNodeMarker));
+new_key!(pub(crate) ExpressionNodeId);
 
 pub(super) struct ExpressionNodes {
     nodes: AppendOnlyArena<ExpressionNodeId, ExpressionNode>,
@@ -656,7 +656,9 @@ pub(super) struct ExpressionNodes {
 
 impl ExpressionNodes {
     pub(super) fn new() -> Self {
-        Self { nodes: AppendOnlyArena::new() }
+        Self {
+            nodes: AppendOnlyArena::new(),
+        }
     }
 
     pub(super) fn add_node(&mut self, node: ExpressionNode) -> ExpressionNodeId {

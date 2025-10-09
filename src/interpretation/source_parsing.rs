@@ -18,8 +18,8 @@ impl ParseContext {
     }
 }
 
-new_key!(pub(crate) ScopeId(ScopeMarker));
-new_key!(pub(crate) BindingId(BindingMarker));
+new_key!(pub(crate) ScopeId);
+new_key!(pub(crate) BindingId);
 
 pub(crate) struct ParseState {
     #[allow(unused)]
@@ -33,18 +33,11 @@ impl ParseState {
         let mut scopes = AppendOnlyArena::new();
         let bindings = AppendOnlyArena::new();
         let root = scopes.add(ScopeData {});
-        let state = Self {
-            scopes,
-            bindings,
-        };
+        let state = Self { scopes, bindings };
         (state, root)
     }
 }
 
-struct ScopeData {
+struct ScopeData {}
 
-}
-
-struct BindingData {
-
-}
+struct BindingData {}
