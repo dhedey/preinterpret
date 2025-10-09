@@ -7,8 +7,8 @@ pub(crate) struct EmbeddedExpression {
     content: Expression,
 }
 
-impl Parse<Source> for EmbeddedExpression {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for EmbeddedExpression {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let marker = input.parse()?;
         let (parentheses, inner) = input.parse_parentheses()?;
         let content = inner.parse()?;
@@ -52,8 +52,8 @@ pub(crate) struct ExpressionBlock {
     pub(super) content: ExpressionBlockContent,
 }
 
-impl Parse<Source> for ExpressionBlock {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for ExpressionBlock {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let (braces, inner) = input.parse_braces()?;
         let content = inner.parse()?;
         Ok(Self { braces, content })
@@ -77,8 +77,8 @@ pub(crate) struct ExpressionBlockContent {
     statements: Vec<(Statement, Option<Token![;]>)>,
 }
 
-impl Parse<Source> for ExpressionBlockContent {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for ExpressionBlockContent {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let mut statements = Vec::new();
         while !input.is_empty() {
             let statement: Statement = input.parse()?;
@@ -144,8 +144,8 @@ impl Statement {
     }
 }
 
-impl Parse<Source> for Statement {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for Statement {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         Ok(if let Some((ident, _)) = input.cursor().ident() {
             match ident.to_string().as_str() {
                 "let" => Statement::LetStatement(input.parse()?),
@@ -202,8 +202,8 @@ struct LetStatementAssignment {
     expression: Expression,
 }
 
-impl Parse<Source> for LetStatement {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for LetStatement {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let let_token = input.parse()?;
         let pattern = input.parse()?;
         if input.peek(Token![=]) {
@@ -254,8 +254,8 @@ impl HasSpan for BreakStatement {
     }
 }
 
-impl Parse<Source> for BreakStatement {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for BreakStatement {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let break_token = input.parse_ident_matching("break")?;
         Ok(Self { break_token })
     }
@@ -281,8 +281,8 @@ impl HasSpan for ContinueStatement {
     }
 }
 
-impl Parse<Source> for ContinueStatement {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for ContinueStatement {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let continue_token = input.parse_ident_matching("continue")?;
         Ok(Self { continue_token })
     }

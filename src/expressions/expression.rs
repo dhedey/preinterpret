@@ -1,18 +1,19 @@
 use super::*;
 
+#[derive(Clone)]
 pub(crate) struct Expression {
     root: ExpressionNodeId,
-    nodes: std::rc::Rc<[ExpressionNode]>,
+    nodes: RcArena<ExpressionNodeId, ExpressionNode>,
 }
 
-impl Parse<Source> for Expression {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for Expression {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         ExpressionParser::parse(input)
     }
 }
 
 impl Expression {
-    pub(super) fn new(root: ExpressionNodeId, nodes: Vec<ExpressionNode>) -> Self {
+    pub(super) fn new(root: ExpressionNodeId, nodes: RcArena<ExpressionNodeId, ExpressionNode>) -> Self {
         Self {
             root,
             nodes: nodes.into(),
@@ -26,7 +27,7 @@ impl Expression {
     pub(crate) fn is_valid_as_statement_without_semicolon(&self) -> bool {
         // Must align with evaluate_as_statement
         matches!(
-            &self.nodes[self.root.0],
+            &self.nodes.get(self.root),
             ExpressionNode::Leaf(Leaf::Block(_))
                 | ExpressionNode::Leaf(Leaf::IfExpression(_))
                 | ExpressionNode::Leaf(Leaf::LoopExpression(_))
@@ -40,7 +41,7 @@ impl Expression {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         // This must align with is_valid_as_statement_without_semicolon
-        match &self.nodes[self.root.0] {
+        match &self.nodes.get(self.root) {
             ExpressionNode::Leaf(Leaf::Block(block)) => {
                 block.evaluate(interpreter)?.into_statement_result()
             }
@@ -60,18 +61,6 @@ impl Expression {
         }
     }
 }
-
-impl Clone for Expression {
-    fn clone(&self) -> Self {
-        Self {
-            root: self.root,
-            nodes: self.nodes.clone(),
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) struct ExpressionNodeId(pub(super) usize);
 
 pub(super) enum ExpressionNode {
     Leaf(Leaf),

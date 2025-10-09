@@ -236,8 +236,8 @@ pub(crate) struct Command {
     brackets: Brackets,
 }
 
-impl Parse<Source> for Command {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for Command {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let (brackets, content) = input.parse_brackets()?;
         content.parse::<Token![!]>()?;
         let command_name = content.parse_any_ident()?;

@@ -295,8 +295,8 @@ pub(crate) enum StreamLiteralKind {
     Grouped,
 }
 
-impl Parse<Source> for StreamLiteral {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for StreamLiteral {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         if let Some((_, next)) = input.cursor().punct_matching('%') {
             if next.group_matching(Delimiter::Bracket).is_some() {
                 return Ok(StreamLiteral::Regular(input.parse()?));
@@ -354,8 +354,8 @@ pub(crate) struct RegularStreamLiteral {
     content: SourceStream,
 }
 
-impl Parse<Source> for RegularStreamLiteral {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for RegularStreamLiteral {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let prefix = input.parse()?;
         let (brackets, inner) = input.parse_brackets()?;
         let content = SourceStream::parse_with_span(&inner, brackets.span())?;
@@ -400,8 +400,8 @@ pub(crate) struct RawStreamLiteral {
     content: TokenStream,
 }
 
-impl Parse<Source> for RawStreamLiteral {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for RawStreamLiteral {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let prefix = input.parse()?;
         let raw = input.parse_ident_matching("raw")?;
         let (brackets, inner) = input.parse_brackets()?;
@@ -450,8 +450,8 @@ pub(crate) struct GroupedStreamLiteral {
     content: SourceStream,
 }
 
-impl Parse<Source> for GroupedStreamLiteral {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for GroupedStreamLiteral {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let prefix = input.parse()?;
         let group = input.parse_ident_matching("group")?;
         let (brackets, inner) = input.parse_brackets()?;

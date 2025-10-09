@@ -15,7 +15,7 @@ pub(crate) trait TransformerDefinition: Clone {
 
 #[derive(Clone)]
 pub(crate) struct TransformerArguments<'a> {
-    parse_stream: ParseStream<'a, Source>,
+    parse_stream: SourceParser<'a>,
     transformer_name: Ident,
     full_span: Span,
 }
@@ -23,7 +23,7 @@ pub(crate) struct TransformerArguments<'a> {
 #[allow(unused)]
 impl<'a> TransformerArguments<'a> {
     pub(crate) fn new(
-        parse_stream: ParseStream<'a, Source>,
+        parse_stream: SourceParser<'a>,
         transformer_name: Ident,
         full_span: Span,
     ) -> Self {
@@ -47,7 +47,7 @@ impl<'a> TransformerArguments<'a> {
         }
     }
 
-    pub(crate) fn fully_parse_no_error_override<T: Parse<Source>>(&self) -> ParseResult<T> {
+    pub(crate) fn fully_parse_no_error_override<T: ParseSource>(&self) -> ParseResult<T> {
         self.parse_stream.parse()
     }
 
@@ -57,7 +57,7 @@ impl<'a> TransformerArguments<'a> {
 
     pub(crate) fn fully_parse_or_error<T>(
         &self,
-        parse_function: impl FnOnce(ParseStream<Source>) -> ParseResult<T>,
+        parse_function: impl FnOnce(SourceParser) -> ParseResult<T>,
         error_message: impl std::fmt::Display,
     ) -> ParseResult<T> {
         // In future, when the diagnostic API is stable,
@@ -90,8 +90,8 @@ pub(crate) struct Transformer {
     source_brackets: Option<Brackets>,
 }
 
-impl Parse<Source> for Transformer {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for Transformer {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let transformer_token = input.parse()?;
 
         let (name, arguments) = if input.cursor().ident().is_some() {

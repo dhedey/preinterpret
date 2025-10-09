@@ -102,7 +102,7 @@ pub(super) struct ArrayBasedAssigner {
 impl ArrayBasedAssigner {
     pub(super) fn start(
         context: AssignmentContext,
-        nodes: &[ExpressionNode],
+        nodes: &RcArena<ExpressionNodeId, ExpressionNode>,
         brackets: &Brackets,
         assignee_item_node_ids: &[ExpressionNodeId],
         value: ExpressionValue,
@@ -113,7 +113,7 @@ impl ArrayBasedAssigner {
 
     /// See also `ArrayPattern` in `patterns.rs`
     fn new(
-        nodes: &[ExpressionNode],
+        nodes: &RcArena<ExpressionNodeId, ExpressionNode>,
         assignee_span: Span,
         assignee_item_node_ids: &[ExpressionNodeId],
         value: ExpressionValue,
@@ -126,7 +126,7 @@ impl ArrayBasedAssigner {
         let mut prefix_assignees = Vec::new();
         let mut suffix_assignees = Vec::new();
         for node in assignee_item_node_ids.iter() {
-            match nodes[node.0] {
+            match nodes.get(*node) {
                 ExpressionNode::Range {
                     left: None,
                     range_limits: syn::RangeLimits::HalfOpen(_),

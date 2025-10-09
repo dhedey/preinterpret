@@ -2,12 +2,12 @@
 use super::*;
 
 pub(in super::super) struct ExpressionEvaluator<'a> {
-    nodes: &'a [ExpressionNode],
+    nodes: &'a RcArena<ExpressionNodeId, ExpressionNode>,
     stack: EvaluationStack,
 }
 
 impl<'a> ExpressionEvaluator<'a> {
-    pub(in super::super) fn new(nodes: &'a [ExpressionNode]) -> Self {
+    pub(in super::super) fn new(nodes: &'a RcArena<ExpressionNodeId, ExpressionNode>) -> Self {
         Self {
             nodes,
             stack: EvaluationStack::new(),
@@ -42,13 +42,13 @@ impl<'a> ExpressionEvaluator<'a> {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<StepResult> {
         Ok(StepResult::Continue(match action {
-            NextActionInner::ReadNodeAsValue(node, ownership) => self.nodes[node.0]
+            NextActionInner::ReadNodeAsValue(node, ownership) => self.nodes.get(node)
                 .handle_as_value(Context {
                     request: ownership,
                     interpreter,
                     stack: &mut self.stack,
                 })?,
-            NextActionInner::ReadNodeAsAssignee(node, value) => self.nodes[node.0]
+            NextActionInner::ReadNodeAsAssignee(node, value) => self.nodes.get(node)
                 .handle_as_assignee(
                     Context {
                         stack: &mut self.stack,
@@ -60,7 +60,7 @@ impl<'a> ExpressionEvaluator<'a> {
                     value,
                 )?,
             NextActionInner::ReadNodeAsPlace(node) => {
-                self.nodes[node.0].handle_as_place(Context {
+                self.nodes.get(node).handle_as_place(Context {
                     stack: &mut self.stack,
                     interpreter,
                     request: (),

@@ -22,13 +22,13 @@ use super::*;
 ///
 /// See the rust doc on the [`ExpressionStackFrame`] for further details.
 pub(super) struct ExpressionParser<'a> {
-    streams: ParseStreamStack<'a, Source>,
+    streams: ParseStreamStack<'a>,
     nodes: ExpressionNodes,
     expression_stack: Vec<ExpressionStackFrame>,
 }
 
 impl<'a> ExpressionParser<'a> {
-    pub(super) fn parse(input: ParseStream<'a, Source>) -> ParseResult<Expression> {
+    pub(super) fn parse(input: SourceParser<'a>) -> ParseResult<Expression> {
         Self {
             streams: ParseStreamStack::new(input),
             nodes: ExpressionNodes::new(),
@@ -65,7 +65,7 @@ impl<'a> ExpressionParser<'a> {
         }
     }
 
-    fn parse_unary_atom(input: &mut ParseStreamStack<Source>) -> ParseResult<UnaryAtom> {
+    fn parse_unary_atom(input: &mut ParseStreamStack) -> ParseResult<UnaryAtom> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => UnaryAtom::Leaf(Leaf::Command(input.parse()?)),
             SourcePeekMatch::EmbeddedVariable | SourcePeekMatch::EmbeddedExpression => {
@@ -136,7 +136,7 @@ impl<'a> ExpressionParser<'a> {
     }
 
     fn parse_extension(
-        input: &mut ParseStreamStack<Source>,
+        input: &mut ParseStreamStack,
         parent_stack_frame: &ExpressionStackFrame,
     ) -> ParseResult<NodeExtension> {
         // We fall through if we have no match
@@ -648,23 +648,23 @@ impl<'a> ExpressionParser<'a> {
     }
 }
 
+new_key!(pub(crate) ExpressionNodeId(ExpressionNodeMarker));
+
 pub(super) struct ExpressionNodes {
-    nodes: Vec<ExpressionNode>,
+    nodes: AppendOnlyArena<ExpressionNodeId, ExpressionNode>,
 }
 
 impl ExpressionNodes {
     pub(super) fn new() -> Self {
-        Self { nodes: Vec::new() }
+        Self { nodes: AppendOnlyArena::new() }
     }
 
     pub(super) fn add_node(&mut self, node: ExpressionNode) -> ExpressionNodeId {
-        let node_id = ExpressionNodeId(self.nodes.len());
-        self.nodes.push(node);
-        node_id
+        self.nodes.add(node)
     }
 
     pub(super) fn complete(self, root: ExpressionNodeId) -> Expression {
-        Expression::new(root, self.nodes)
+        Expression::new(root, self.nodes.into_rc_arena())
     }
 }
 

@@ -23,8 +23,8 @@ impl HasSpanRange for IfExpression {
     }
 }
 
-impl Parse<Source> for IfExpression {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for IfExpression {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let if_token = input.parse_ident_matching("if")?;
         let condition = input.parse()?;
         let then_code = input.parse()?;
@@ -91,8 +91,8 @@ impl HasSpanRange for WhileExpression {
     }
 }
 
-impl Parse<Source> for WhileExpression {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for WhileExpression {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let while_token = input.parse_ident_matching("while")?;
         let condition = input.parse()?;
         let body = input.parse()?;
@@ -167,8 +167,8 @@ impl HasSpanRange for LoopExpression {
     }
 }
 
-impl Parse<Source> for LoopExpression {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for LoopExpression {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let loop_token = input.parse_ident_matching("loop")?;
         let body = input.parse()?;
         Ok(Self { loop_token, body })
@@ -237,8 +237,8 @@ impl HasSpanRange for ForExpression {
     }
 }
 
-impl Parse<Source> for ForExpression {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for ForExpression {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let for_token = input.parse_ident_matching("for")?;
         let pattern = input.parse()?;
         let in_token = input.parse_ident_matching("in")?;

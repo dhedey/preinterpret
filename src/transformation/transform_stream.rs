@@ -5,8 +5,8 @@ pub(crate) struct TransformStream {
     inner: Vec<TransformItem>,
 }
 
-impl Parse<Source> for TransformStream {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for TransformStream {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let mut inner = vec![];
         while !input.is_empty() {
             inner.push(input.parse()?);
@@ -41,8 +41,8 @@ pub(crate) enum TransformItem {
     ExactGroup(TransformGroup),
 }
 
-impl Parse<Source> for TransformItem {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for TransformItem {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => Self::Command(input.parse()?),
             SourcePeekMatch::EmbeddedVariable => return input.parse_err("Variable bindings are not supported here. #(x.to_group()) can be inverted with @(#x = @TOKEN_TREE.flatten()). #x can't necessarily be inverted because its contents are flattened, although @(#x = @REST) or @(#x = @[UNTIL ..]) may work in some instances"),
@@ -103,8 +103,8 @@ pub(crate) struct TransformGroup {
     inner: TransformStream,
 }
 
-impl Parse<Source> for TransformGroup {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for TransformGroup {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let (delimiter, _, content) = input.parse_any_group()?;
         Ok(Self {
             delimiter,
@@ -141,8 +141,8 @@ pub(crate) struct StreamParser {
     content: StreamParserContent,
 }
 
-impl Parse<Source> for StreamParser {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for StreamParser {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let transformer_token = input.parse()?;
         let (parentheses, content) = input.parse_parentheses()?;
 
@@ -191,8 +191,8 @@ pub(crate) enum StreamParserContent {
     },
 }
 
-impl Parse<Source> for StreamParserContent {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for StreamParserContent {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         if input.peek(Token![_]) {
             return Ok(Self::Discard {
                 discard: input.parse()?,

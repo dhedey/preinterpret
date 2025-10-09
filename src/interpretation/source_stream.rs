@@ -8,7 +8,7 @@ pub(crate) struct SourceStream {
 }
 
 impl SourceStream {
-    pub(crate) fn parse_with_span(input: ParseStream<Source>, span: Span) -> ParseResult<Self> {
+    pub(crate) fn parse_with_span(input: SourceParser, span: Span) -> ParseResult<Self> {
         let mut items = Vec::new();
         while !input.is_empty() {
             items.push(input.parse()?);
@@ -48,8 +48,8 @@ pub(crate) enum SourceItem {
     StreamLiteral(StreamLiteral),
 }
 
-impl Parse<Source> for SourceItem {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for SourceItem {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => SourceItem::Command(input.parse()?),
             SourcePeekMatch::Group(_) => SourceItem::SourceGroup(input.parse()?),
@@ -123,8 +123,8 @@ pub(crate) struct SourceGroup {
     content: SourceStream,
 }
 
-impl Parse<Source> for SourceGroup {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for SourceGroup {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let (delimiter, delim_span, content) = input.parse_any_group()?;
         let content = SourceStream::parse_with_span(&content, delim_span.join())?;
         Ok(Self {

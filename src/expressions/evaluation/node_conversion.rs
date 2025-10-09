@@ -121,7 +121,7 @@ impl ExpressionNode {
     pub(super) fn handle_as_assignee(
         &self,
         context: AssignmentContext,
-        nodes: &[ExpressionNode],
+        nodes: &RcArena<ExpressionNodeId, ExpressionNode>,
         self_node_id: ExpressionNodeId,
         // NB: This might intrisically be a part of a larger value, and might have been
         // created many lines previously, so doesn't have an obvious span associated with it

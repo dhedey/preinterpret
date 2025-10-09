@@ -18,8 +18,8 @@ pub(crate) enum Pattern {
     Discarded(Token![_]),
 }
 
-impl Parse<Source> for Pattern {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for Pattern {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let lookahead = input.lookahead1();
         if lookahead.peek(syn::Ident) {
             Ok(Pattern::Variable(input.parse()?))
@@ -76,8 +76,8 @@ pub struct ArrayPattern {
     items: Punctuated<PatternOrDotDot, Token![,]>,
 }
 
-impl Parse<Source> for ArrayPattern {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for ArrayPattern {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let (brackets, inner) = input.parse_brackets()?;
         Ok(Self {
             brackets,
@@ -161,8 +161,8 @@ enum PatternOrDotDot {
     DotDot(Token![..]),
 }
 
-impl Parse<Source> for PatternOrDotDot {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for PatternOrDotDot {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         if input.peek(Token![..]) {
             Ok(PatternOrDotDot::DotDot(input.parse()?))
         } else {
@@ -180,8 +180,8 @@ pub struct ObjectPattern {
     entries: Punctuated<ObjectEntry, Token![,]>,
 }
 
-impl Parse<Source> for ObjectPattern {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for ObjectPattern {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let prefix = input.parse()?;
         let (braces, inner) = input.parse_braces()?;
         Ok(Self {
@@ -252,8 +252,8 @@ enum ObjectEntry {
     },
 }
 
-impl Parse<Source> for ObjectEntry {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for ObjectEntry {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         if input.peek(syn::Ident) {
             let field = input.parse()?;
             if input.peek(Token![:]) {
@@ -296,8 +296,8 @@ pub struct StreamPattern {
     content: TransformStream,
 }
 
-impl Parse<Source> for StreamPattern {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for StreamPattern {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let prefix = input.parse()?;
         let (brackets, inner) = input.parse_brackets()?;
         Ok(Self {

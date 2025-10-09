@@ -47,8 +47,8 @@ pub(crate) struct EmbeddedVariable {
     variable_name: Ident,
 }
 
-impl Parse<Source> for EmbeddedVariable {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for EmbeddedVariable {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         input.try_parse_or_error(
             |input| {
                 Ok(Self {
@@ -109,8 +109,8 @@ pub(crate) struct VariableIdentifier {
     pub(crate) ident: Ident,
 }
 
-impl Parse<Source> for VariableIdentifier {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for VariableIdentifier {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         Ok(Self {
             ident: input.parse()?,
         })
@@ -142,8 +142,8 @@ pub(crate) struct VariablePattern {
     pub(crate) name: Ident,
 }
 
-impl Parse<Source> for VariablePattern {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for VariablePattern {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         Ok(Self {
             name: input.parse()?,
         })
