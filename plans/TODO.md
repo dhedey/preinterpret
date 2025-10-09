@@ -98,18 +98,24 @@ Create the following expressions:
 
 ## Scopes & Blocks (requires control flow expressions, or at least no `!let!` command)
 
-- [ ] Scopes exist at compile time, e.g. as a `ScopeId(usize)` and include:
-  * A definition about whether the scope is irrevertible or not
-  * Variable definitions ...and the last use of them (as a value irrevertible - if at all) - that usage can do a take for free, like in Rust
-  * A parent scope
-  * Each variable usage can be tied back to a definition
-  * Each let expression
-- [ ] Spans are only kept from source inside streams, otherwise it refers to a binding
-- [ ] At execution time, there needs to be some link between scope and stack frame
+- [ ] Scopes, Definitions, References and ControlFlowSegments exist at compile time:
+  - [ ] Scopes and segments are created everywhere they're needed:
+    - [ ] If Expressions
+    - [ ] All the loops
+    - [ ] Blocks
+  - [ ] Add in algorithm to mark references as final
+- [ ] At execution time:
+  - [ ] There needs to be some link between scope and stack frame
+  - [ ] Variable places go through `Unallocated` | `Occupied` | `Removed`
+  - [ ] Variables are read / written based on definition ids
+  - [ ] Final variable references can be taken as owned, get rid of `.take_owned()` method
 - [ ] Fix `TODO[scopes]`
-- [ ] Add test that `let x; x = { let x = 123; x = 456; 5 }`. resolves correctly with `x = 5`.
+- [ ] Tests
+  - [ ] Add tests for things like `let x = %[1]; let x = %[2] + x; x`
+  - [ ] Add tests for things like `let x = %[1]; { let x = %[2] + x; }; x`
+  - [ ] Add test that `let x; x = { let x = 123; x = 456; 5 }`. resolves correctly with `x = 5`.
 
-We then need ot consider whether an embedded expression in a stream literal and/or stream pattern create new scopes or not...
+We then need to consider whether an embedded expression in a stream literal and/or stream pattern create new scopes or not...
 
 * Should we let `#( ... )` have block content again? but not define a new scope? Or should we remove `preinterpret::stream!` and allow `#{}` for blocks?
   * Current thinking is we allow `#{ ... }` but it doesn't define a new scope. 
