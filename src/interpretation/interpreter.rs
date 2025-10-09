@@ -15,7 +15,7 @@ impl Interpreter {
 
     pub(crate) fn define_variable(
         &mut self,
-        variable: &(impl IsVariable + ?Sized),
+        variable: &VariableDefinition,
         value: ExpressionValue,
     ) {
         self.variable_data.define_variable(variable, value)
@@ -23,7 +23,7 @@ impl Interpreter {
 
     pub(crate) fn resolve_variable_binding(
         &self,
-        variable: &(impl IsVariable + ?Sized),
+        variable: &VariableReference,
         make_error: impl FnOnce() -> SynError,
     ) -> ExecutionResult<VariableBinding> {
         self.variable_data.resolve_binding(variable, make_error)
@@ -56,7 +56,7 @@ impl VariableData {
         }
     }
 
-    fn define_variable(&mut self, variable: &(impl IsVariable + ?Sized), value: ExpressionValue) {
+    fn define_variable(&mut self, variable: &VariableDefinition, value: ExpressionValue) {
         self.variable_data.insert(
             variable.get_name(),
             VariableContent::new(value, variable.span_range()),
@@ -65,7 +65,7 @@ impl VariableData {
 
     fn resolve_binding(
         &self,
-        variable: &(impl IsVariable + ?Sized),
+        variable: &VariableReference,
         make_error: impl FnOnce() -> SynError,
     ) -> ExecutionResult<VariableBinding> {
         let reference = self

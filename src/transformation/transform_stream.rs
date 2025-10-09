@@ -171,13 +171,13 @@ pub(crate) enum StreamParserContent {
         content: TransformStream,
     },
     StoreToVariable {
-        variable: EmbeddedVariable,
+        variable: VariableDefinition,
         #[allow(unused)]
         equals: Token![=],
         content: TransformStream,
     },
     ExtendToVariable {
-        variable: EmbeddedVariable,
+        variable: VariableReference,
         #[allow(unused)]
         plus_equals: Token![+=],
         content: TransformStream,
@@ -201,23 +201,24 @@ impl ParseSource for StreamParserContent {
             });
         }
         if input.peek(Token![#]) {
-            let variable = input.parse()?;
-            let lookahead = input.lookahead1();
-            if lookahead.peek(Token![=]) {
-                return Ok(Self::StoreToVariable {
-                    variable,
-                    equals: input.parse()?,
-                    content: input.parse()?,
-                });
+            let _ = input.parse::<Token![#]>()?;
+            if let Some((_, cursor)) = input.cursor().ident() {
+                if cursor.punct_matching('=').is_some() {
+                    return Ok(Self::StoreToVariable {
+                        variable: input.parse()?,
+                        equals: input.parse()?,
+                        content: input.parse()?,
+                    });
+                }
+                if cursor.punct_matching('+').is_some() {
+                    return Ok(Self::ExtendToVariable {
+                        variable: input.parse()?,
+                        plus_equals: input.parse()?,
+                        content: input.parse()?,
+                    });
+                }
             }
-            if lookahead.peek(Token![+=]) {
-                return Ok(Self::ExtendToVariable {
-                    variable,
-                    plus_equals: input.parse()?,
-                    content: input.parse()?,
-                });
-            }
-            Err(lookahead.error())?;
+            return input.parse_err("Expected '#var =' or '#var +='")?;
         }
         Ok(Self::Output {
             content: input.parse()?,

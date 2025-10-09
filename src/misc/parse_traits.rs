@@ -178,6 +178,10 @@ impl<'a> SourceParseBuffer<'a> {
         }
     }
 
+    pub(crate) fn state<R>(&self, f: impl FnOnce(&mut ParseState) -> R) -> R {
+        self.context.update(f)
+    }
+
     pub(crate) fn fork(&self) -> SourceParseBuffer<'a> {
         // TODO[scopes] See if we need to protect better against context mutating on the fork
         SourceParseBuffer {

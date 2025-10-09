@@ -138,7 +138,7 @@ impl ExpressionNode {
 pub(super) enum Leaf {
     Block(ExpressionBlock),
     Command(Command),
-    Variable(VariableIdentifier),
+    Variable(VariableReference),
     Discarded(Token![_]),
     Value(SharedValue),
     StreamLiteral(StreamLiteral),

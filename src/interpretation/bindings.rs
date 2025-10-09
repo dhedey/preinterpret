@@ -18,7 +18,7 @@ impl VariableContent {
         }
     }
 
-    pub(super) fn binding(&self, variable: &(impl IsVariable + ?Sized)) -> VariableBinding {
+    pub(super) fn binding(&self, variable: &VariableReference) -> VariableBinding {
         VariableBinding {
             data: self.value.clone(),
             variable_span_range: variable.span_range(),

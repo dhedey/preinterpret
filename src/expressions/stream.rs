@@ -226,8 +226,9 @@ define_interface! {
                     this.into_inner().value.into_token_stream()
                 };
                 // TODO[scopes] fix this! (see comment below)
-                let (reparsed, _) = source.full_source_parse_with(ExpressionBlockContent::parse)?;
-                reparsed.evaluate(context.interpreter, context.output_span_range)
+                let (reparsed, scope_definitions) = source.full_source_parse_with(ExpressionBlockContent::parse)?;
+                let mut inner_interpreter = Interpreter::new(scope_definitions);
+                reparsed.evaluate(&mut inner_interpreter, context.output_span_range)
             }
 
             [context] fn reinterpret_as_stream(this: Owned<ExpressionStream>) -> ExecutionResult<OutputStream> {
@@ -236,7 +237,7 @@ define_interface! {
                     // which handles groups/missing groups reasonably well (see tests)
                     this.into_inner().value.into_token_stream()
                 };
-                // TODO[scopes] fix this!
+                // TODO[scopes] consider fixing this to have access to the parent scope
                 // EITHER (simplest)
                 // > We create a new interpreter for the reinterpretation
                 //   (i.e. we can't access existing variables, it's pure, returning a value)
@@ -245,10 +246,11 @@ define_interface! {
                 // > We need to create a new scope on top of the current scope
                 // > ...And continue the parse process from there!
                 // > ...And then adjust the scope
-                let (reparsed, _) = source.full_source_parse_with(|input| SourceStream::parse_with_span(input, context.output_span_range.start()))?;
+                let (reparsed, scope_definitions) = source.full_source_parse_with(|input| SourceStream::parse_with_span(input, context.output_span_range.start()))?;
+                let mut inner_interpreter = Interpreter::new(scope_definitions);
                 // NB: We can't use a StreamOutput here, because it can't capture the Interpreter
                 //     without some lifetime shenanigans.
-                reparsed.interpret_to_new_stream(context.interpreter)
+                reparsed.interpret_to_new_stream(&mut inner_interpreter)
             }
         }
         pub(crate) mod unary_operations {

@@ -263,8 +263,12 @@ impl ParseSource for ObjectEntry {
                     pattern: input.parse()?,
                 })
             } else if input.peek(Token![,]) || input.is_empty() {
+                let definition_id = input.state(|s| s.define_variable(&field));
                 let pattern = Pattern::Variable(VariablePattern {
-                    name: field.clone(),
+                    definition: VariableDefinition {
+                        ident: field.clone(),
+                        id: definition_id,
+                    },
                 });
                 Ok(ObjectEntry::KeyOnly { field, pattern })
             } else {

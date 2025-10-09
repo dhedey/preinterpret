@@ -577,44 +577,50 @@ impl<'a> ExpressionParser<'a> {
         mut complete_entries: Vec<(ObjectKey, ExpressionNodeId)>,
     ) -> ParseResult<WorkItem> {
         const ERROR_MESSAGE: &str = r##"Expected an object entry (`field,` `field: ..,` or `["field"]: ..,`). If you meant to start a new block, use #{ ... } instead."##;
-        let state =
-            loop {
+        let state = loop {
+            if self.streams.is_current_empty() {
+                self.streams.exit_group();
+                let node = self.nodes.add_node(ExpressionNode::Object {
+                    braces,
+                    entries: complete_entries,
+                });
+                return Ok(WorkItem::TryParseAndApplyExtension { node });
+            } else if self.streams.peek(syn::Ident) {
+                let key: Ident = self.streams.parse()?;
+
                 if self.streams.is_current_empty() {
-                    self.streams.exit_group();
-                    let node = self.nodes.add_node(ExpressionNode::Object {
-                        braces,
-                        entries: complete_entries,
-                    });
-                    return Ok(WorkItem::TryParseAndApplyExtension { node });
-                } else if self.streams.peek(syn::Ident) {
-                    let key: Ident = self.streams.parse()?;
-
-                    if self.streams.is_current_empty() {
-                        // Fall through
-                    } else if self.streams.peek(token::Comma) {
-                        self.streams.parse::<Token![,]>()?;
-                        // Fall through
-                    } else if self.streams.peek(token::Colon) {
-                        let colon = self.streams.parse()?;
-                        break ObjectStackFrameState::EntryValue(ObjectKey::Identifier(key), colon);
-                    } else {
-                        return self.streams.parse_err(ERROR_MESSAGE);
-                    }
-
-                    let node = self.nodes.add_node(ExpressionNode::Leaf(Leaf::Variable(
-                        VariableIdentifier { ident: key.clone() },
-                    )));
-                    complete_entries.push((ObjectKey::Identifier(key), node));
-                    continue;
-                } else if self.streams.peek(token::Bracket) {
-                    let (_, delim_span) = self.streams.parse_and_enter_group()?;
-                    break ObjectStackFrameState::EntryIndex(IndexAccess {
-                        brackets: Brackets { delim_span },
-                    });
+                    // Fall through
+                } else if self.streams.peek(token::Comma) {
+                    self.streams.parse::<Token![,]>()?;
+                    // Fall through
+                } else if self.streams.peek(token::Colon) {
+                    let colon = self.streams.parse()?;
+                    break ObjectStackFrameState::EntryValue(ObjectKey::Identifier(key), colon);
                 } else {
                     return self.streams.parse_err(ERROR_MESSAGE);
                 }
-            };
+
+                let reference_id = self
+                    .streams
+                    .current()
+                    .state(|s| s.reference_variable(&key))?;
+                let node =
+                    self.nodes
+                        .add_node(ExpressionNode::Leaf(Leaf::Variable(VariableReference {
+                            ident: key.clone(),
+                            id: reference_id,
+                        })));
+                complete_entries.push((ObjectKey::Identifier(key), node));
+                continue;
+            } else if self.streams.peek(token::Bracket) {
+                let (_, delim_span) = self.streams.parse_and_enter_group()?;
+                break ObjectStackFrameState::EntryIndex(IndexAccess {
+                    brackets: Brackets { delim_span },
+                });
+            } else {
+                return self.streams.parse_err(ERROR_MESSAGE);
+            }
+        };
         Ok(self.push_stack_frame(ExpressionStackFrame::NonEmptyObject {
             braces,
             complete_entries,

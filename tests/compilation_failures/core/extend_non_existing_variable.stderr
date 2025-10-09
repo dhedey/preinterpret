@@ -1,4 +1,4 @@
-error: The variable does not already exist in the current scope
+error: A variable must be defined before it is referenced.
  --> tests/compilation_failures/core/extend_non_existing_variable.rs:5:9
   |
 5 |         variable += %[2];

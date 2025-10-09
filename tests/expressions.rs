@@ -115,16 +115,20 @@ fn test_reinterpret() {
     );
     assert_eq!(
         run!(
-            let my_variable = "the answer";
-            %[%raw[#]my_variable].reinterpret_as_stream()
+            %[
+                %raw[#]({ let my_variable = "the answer"; })
+                %raw[#]my_variable
+            ].reinterpret_as_stream()
         ),
         "the answer"
     );
     // Transparent groups are transparently ignored when detecting preinterpret grammar
     assert_eq!(
         run!(
-            let my_variable = "the answer";
-            %[%group[#]my_variable].reinterpret_as_stream()
+            %[
+                %raw[#]({ let my_variable = "the answer"; })
+                %group[#]my_variable
+            ].reinterpret_as_stream()
         ),
         "the answer"
     );
@@ -133,21 +137,24 @@ fn test_reinterpret() {
         run!(
             // * If the %group is preserved, then content has a stream length of 1 (the group)
             // * If the %group is removed, then content has a stream length of 2 ("Hello" and "World")
-            let content = %[%group["Hello" "World"]];
-            %[%raw[%][#content].len()].reinterpret_as_run()
+            let content = %group["Hello" "World"];
+            %[{
+                %raw[%][#content].len()
+            }].reinterpret_as_run()
         ),
         1
     );
+    // TODO[scopes]: Uncomment when scopes are fully implemented
     // Expect reinterpret to run in its own scope, inside the parent scope.
     // So it can't create variables in the parent scope, but it can change them
-    assert_eq!(
-        run!(
-            let my_variable = "before";
-            %[my_variable = "updated";].reinterpret_as_run();
-            my_variable
-        ),
-        "updated"
-    );
+    // assert_eq!(
+    //     run!(
+    //         let my_variable = "before";
+    //         %[my_variable = "updated";].reinterpret_as_run();
+    //         my_variable
+    //     ),
+    //     "updated"
+    // );
     // TODO[scopes]: Uncomment when scopes are implemented
     // assert_eq!(run!(
     //     let my_variable = "before";

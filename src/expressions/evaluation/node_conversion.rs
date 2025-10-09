@@ -16,8 +16,8 @@ impl ExpressionNode {
                     Leaf::Discarded(token) => {
                         return token.execution_err("This cannot be used in a value expression");
                     }
-                    Leaf::Variable(variable_path) => {
-                        let variable_ref = variable_path.binding(context.interpreter())?;
+                    Leaf::Variable(variable) => {
+                        let variable_ref = variable.binding(context.interpreter())?;
                         match context.requested_ownership() {
                             RequestedValueOwnership::LateBound => {
                                 context.return_late_bound(variable_ref.into_late_bound()?)?
