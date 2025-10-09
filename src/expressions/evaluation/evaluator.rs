@@ -2,12 +2,12 @@
 use super::*;
 
 pub(in super::super) struct ExpressionEvaluator<'a> {
-    nodes: &'a RcArena<ExpressionNodeId, ExpressionNode>,
+    nodes: &'a ReadOnlyArena<ExpressionNodeId, ExpressionNode>,
     stack: EvaluationStack,
 }
 
 impl<'a> ExpressionEvaluator<'a> {
-    pub(in super::super) fn new(nodes: &'a RcArena<ExpressionNodeId, ExpressionNode>) -> Self {
+    pub(in super::super) fn new(nodes: &'a ReadOnlyArena<ExpressionNodeId, ExpressionNode>) -> Self {
         Self {
             nodes,
             stack: EvaluationStack::new(),

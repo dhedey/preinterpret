@@ -6,7 +6,7 @@ pub(crate) struct Interpreter {
 }
 
 impl Interpreter {
-    pub(crate) fn new(_parse_state: ParseState) -> Self {
+    pub(crate) fn new(_scope_definitions: ScopeDefinitions) -> Self {
         Self {
             config: Default::default(),
             variable_data: VariableData::new(),

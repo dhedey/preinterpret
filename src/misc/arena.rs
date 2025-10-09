@@ -2,7 +2,7 @@ use super::*;
 
 macro_rules! new_key {
     ($vis:vis $key:ident) => {
-        #[derive(Copy, Clone)]
+        #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
         $vis struct $key(Key<$key>);
 
         impl ArenaKey for $key {
@@ -43,8 +43,12 @@ impl<K: ArenaKey, D> AppendOnlyArena<K, D> {
         &self.data[key.to_inner().index]
     }
 
-    pub(crate) fn into_rc_arena(self) -> RcArena<K, D> {
-        RcArena {
+    pub(crate) fn get_mut(&mut self, key: K) -> &mut D {
+        &mut self.data[key.to_inner().index]
+    }
+
+    pub(crate) fn into_read_only(self) -> ReadOnlyArena<K, D> {
+        ReadOnlyArena {
             data: self.data.into(),
             instance_marker: PhantomData,
         }
@@ -52,12 +56,12 @@ impl<K: ArenaKey, D> AppendOnlyArena<K, D> {
 }
 
 /// A cheaply clonable read-only arena.
-pub(crate) struct RcArena<K: ArenaKey, D> {
+pub(crate) struct ReadOnlyArena<K: ArenaKey, D> {
     data: Rc<[D]>,
     instance_marker: PhantomData<K>,
 }
 
-impl<K: ArenaKey, D> Clone for RcArena<K, D> {
+impl<K: ArenaKey, D> Clone for ReadOnlyArena<K, D> {
     fn clone(&self) -> Self {
         Self {
             data: Rc::clone(&self.data),
@@ -66,7 +70,7 @@ impl<K: ArenaKey, D> Clone for RcArena<K, D> {
     }
 }
 
-impl<K: ArenaKey, D> RcArena<K, D> {
+impl<K: ArenaKey, D> ReadOnlyArena<K, D> {
     pub(crate) fn get(&self, key: K) -> &D {
         &self.data[key.to_inner().index]
     }
@@ -77,7 +81,7 @@ pub(crate) trait ArenaKey: Sized {
     fn to_inner(self) -> Key<Self>;
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub(crate) struct Key<K: ArenaKey> {
     index: usize,
     instance_marker: PhantomData<K>,

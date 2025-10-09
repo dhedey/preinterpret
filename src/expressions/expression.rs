@@ -3,7 +3,7 @@ use super::*;
 #[derive(Clone)]
 pub(crate) struct Expression {
     root: ExpressionNodeId,
-    nodes: RcArena<ExpressionNodeId, ExpressionNode>,
+    nodes: ReadOnlyArena<ExpressionNodeId, ExpressionNode>,
 }
 
 impl ParseSource for Expression {
@@ -15,7 +15,7 @@ impl ParseSource for Expression {
 impl Expression {
     pub(super) fn new(
         root: ExpressionNodeId,
-        nodes: RcArena<ExpressionNodeId, ExpressionNode>,
+        nodes: ReadOnlyArena<ExpressionNodeId, ExpressionNode>,
     ) -> Self {
         Self { root, nodes }
     }

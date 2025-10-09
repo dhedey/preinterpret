@@ -4,7 +4,7 @@ pub(crate) trait TokenStreamParseExt: Sized {
     fn full_source_parse_with<T, E: From<syn::Error>>(
         self,
         parser: impl FnOnce(SourceParser) -> Result<T, E>,
-    ) -> Result<(T, ParseState), E>;
+    ) -> Result<(T, ScopeDefinitions), E>;
 
     fn interpreted_parse_with<T, E: From<syn::Error>>(
         self,
@@ -16,7 +16,7 @@ impl TokenStreamParseExt for TokenStream {
     fn full_source_parse_with<T, E: From<syn::Error>>(
         self,
         parser: impl FnOnce(SourceParser) -> Result<T, E>,
-    ) -> Result<(T, ParseState), E> {
+    ) -> Result<(T, ScopeDefinitions), E> {
         parse_with(self, wrap_parser(parser))
     }
 

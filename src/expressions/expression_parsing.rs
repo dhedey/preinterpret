@@ -666,7 +666,7 @@ impl ExpressionNodes {
     }
 
     pub(super) fn complete(self, root: ExpressionNodeId) -> Expression {
-        Expression::new(root, self.nodes.into_rc_arena())
+        Expression::new(root, self.nodes.into_read_only())
     }
 }
 

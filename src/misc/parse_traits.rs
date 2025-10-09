@@ -137,7 +137,7 @@ where
 
 pub(crate) fn wrap_parser<T, E>(
     parser: impl FnOnce(SourceParser) -> Result<T, E>,
-) -> impl FnOnce(ParseStream<Source>) -> Result<(T, ParseState), E> {
+) -> impl FnOnce(ParseStream<Source>) -> Result<(T, ScopeDefinitions), E> {
     move |stream: ParseStream<Source>| {
         // To get access to an owned ParseBuffer we fork it... and advance later!
         let forked = stream.fork();
@@ -146,12 +146,12 @@ pub(crate) fn wrap_parser<T, E>(
         stream.advance_to(&parse_buffer.buffer);
 
         let state = match Rc::try_unwrap(parse_buffer.context.full_state).ok() {
-            Some(state) => state,
+            Some(state) => state.into_inner(),
             None => {
                 panic!("Something held onto a parser state after the parser returned");
             }
         };
-        Ok((output, state))
+        Ok((output, state.finish()))
     }
 }
 

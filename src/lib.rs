@@ -584,10 +584,10 @@ mod benchmarking {
                 .full_source_parse_with(ExpressionBlockContent::parse)
                 .convert_to_final_result()
         });
-        let (block_content, parse_state) = block_content?;
+        let (block_content, scopes) = block_content?;
 
         let (interpreted_stream, eval_duration) = timed(|| {
-            let mut interpreter = Interpreter::new(parse_state);
+            let mut interpreter = Interpreter::new(scopes.clone());
             block_content
                 .evaluate(&mut interpreter, Span::call_site().into())
                 .and_then(|x| x.into_stream())
