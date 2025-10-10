@@ -98,35 +98,29 @@ Create the following expressions:
 
 ## Scopes & Blocks (requires control flow expressions, or at least no `!let!` command)
 
-- [ ] Scopes, Definitions, References and ControlFlowSegments exist at compile time:
-  - [ ] Scopes and segments are created everywhere they're needed:
-    - [ ] If Expressions
-    - [ ] All the loops
-    - [ ] Blocks
-  - [ ] Add in algorithm to mark references as final
-- [ ] At execution time:
-  - [ ] There needs to be some link between scope and stack frame
-  - [ ] Variable places go through `Unallocated` | `Occupied` | `Removed`
-  - [ ] Variables are read / written based on definition ids
+- [x] Add back `#{  }` in stream literals. Despite the brackets, the code/definitions get executed *in the parent scope*.
+- [x] Scopes, Definitions, References and ControlFlowSegments exist at compile time:
+  - [x] Scopes and segments are created everywhere they're needed
+  - [x] Add in algorithm to mark references as final
+- [x] At execution time:
+  - [x] There needs to be some link between scope and stack frame
+  - [x] Variable places go through `Unallocated` | `Occupied` | `Removed`
+  - [x] Variables are read / written based on binding ids
+- [ ] Fix marking references as final:
+  - [ ] Fix the basic algorithm
+  - [ ] Fix bug that the parse order isn't necessarily the execution order, e.g. `y[x] = x + 1`.
+        Maybe the expression has its own segment; and we use some visitor pattern once the expression has been parsed to form a list of children;
+        then re-order the children in the segment?
   - [ ] Final variable references can be taken as owned, get rid of `.take_owned()` method
 - [ ] Fix `TODO[scopes]`
 - [ ] Tests
+  - [ ] Add test macro for dumping variable binding `is_final` information and create lots of tests, involving if blocks, loops, etc etc. e.g. it could output `x: false, false, true`
   - [ ] Add tests for things like `let x = %[1]; let x = %[2] + x; x`
   - [ ] Add tests for things like `let x = %[1]; { let x = %[2] + x; }; x`
   - [ ] Add test that `let x; x = { let x = 123; x = 456; 5 }`. resolves correctly with `x = 5`.
 
 We then need to consider whether an embedded expression in a stream literal and/or stream pattern create new scopes or not...
 
-* Should we let `#( ... )` have block content again? but not define a new scope? Or should we remove `preinterpret::stream!` and allow `#{}` for blocks?
-  * Current thinking is we allow `#{ ... }` but it doesn't define a new scope. 
-* What should the scoping rules be?
-  * If we support `preinterpret::stream!` then all blocks in a stream literal should be part of a wider scope under that stream; otherwise we won't be able to define variables and use them in the output stream itself.
-  * In a stream literal pattern, we likely want `let` to also work and apply to the wider scope.
-  * In a parse expression, it would be nice if we could define let variables, but it's not strictly necessary.
-... in all cases, we want a wider scope than "last open brace `{}`", so we need to use one of two approaches:
-    * We consider `{}` to be more associated with "combined statements" and consider breaking that cardinal scoping rule that `{}` introduce a new scope
-    * We use `()` for blocks which don't introduce a new scope, e.g. parse blocks and embedded expressions `#(...)`
-* `ExpressionBlock` with a `#` prefix `#{ .. }` shouldn't exist
 * In an output-stream  `#var` or `#(..)` are possible
 * In an stream-pattern, only `#{ .. }` is possible, and should return `None`
   * If looking to match on a value, you should use  `@[EXACT({ tokens: %[] })]` instead
@@ -154,8 +148,7 @@ So some possible things we can explore / consider:
   - A: We remove vec-returns from loops
   - B: We only store values which are non-None in the array, we can therefore use `loop { break X }[0]` to get the return value
 - [ ] Trial exposing the output stream as a variable binding `stream`. We need to have some way to make it kinda efficient though.
-  - Conceptually considering some optimizations further down, this `stream` might actually be from some few levels above,
-    using tail-return optimizations
+  - Conceptually considering some optimizations further down, this `stream` might actually be from some few levels above, using tail-return optimizations
   - Maybe we just have an `output(%[...])` command instead of exposing the stream variable?
 - [ ] `break` / `continue` improvements:
   - Can return a value (from the last iteration of for / while loops)

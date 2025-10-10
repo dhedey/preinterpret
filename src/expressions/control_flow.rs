@@ -25,21 +25,52 @@ impl HasSpanRange for IfExpression {
 
 impl ParseSource for IfExpression {
     fn parse(input: SourceParser) -> ParseResult<Self> {
+        // In terms of control-flow segments, the possible execution paths
+        // look like this, so we model that with path-based segments:
+        //
+        // IfCondA           < BlockA
+        // ^< ElseIfCondB    < BlockB
+        //    ^< ElseIfCondC < BlockC
+        //       ^<----------- ElseBlock
         let if_token = input.parse_ident_matching("if")?;
+        let outer_segment = input.enter_next_segment(SegmentKind::PathBased);
+
+        let mut cond_segment = input.enter_path_segment(None, SegmentKind::Sequential);
         let condition = input.parse()?;
+        input.exit_segment(cond_segment);
+
+        let block_segment = input.enter_path_segment(Some(cond_segment), SegmentKind::Sequential);
         let then_code = input.parse()?;
+        input.exit_segment(block_segment);
+
         let mut else_ifs = Vec::new();
         let mut else_code = None;
         while input.peek_ident_matching("else") {
             let _ = input.parse_ident_matching("else")?;
             if input.peek_ident_matching("if") {
                 input.parse_ident_matching("if")?;
-                else_ifs.push((input.parse()?, input.parse()?));
+
+                cond_segment =
+                    input.enter_path_segment(Some(cond_segment), SegmentKind::Sequential);
+                let condition = input.parse()?;
+                input.exit_segment(cond_segment);
+
+                let block_segment =
+                    input.enter_path_segment(Some(cond_segment), SegmentKind::Sequential);
+                let then_code = input.parse()?;
+                input.exit_segment(block_segment);
+
+                else_ifs.push((condition, then_code));
             } else {
+                let block_segment =
+                    input.enter_path_segment(Some(cond_segment), SegmentKind::Sequential);
                 else_code = Some(input.parse()?);
+                input.exit_segment(block_segment);
                 break;
             }
         }
+
+        input.exit_segment(outer_segment);
         Ok(Self {
             if_token,
             condition,
@@ -94,8 +125,12 @@ impl HasSpanRange for WhileExpression {
 impl ParseSource for WhileExpression {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let while_token = input.parse_ident_matching("while")?;
+
+        let segment = input.enter_next_segment(SegmentKind::LoopingSequential);
         let condition = input.parse()?;
         let body = input.parse()?;
+        input.exit_segment(segment);
+
         Ok(Self {
             while_token,
             condition,
@@ -127,6 +162,7 @@ impl WhileExpression {
         let span = self.body.span();
         let mut iteration_counter = interpreter.start_iteration_counter(&span);
 
+        let scope = interpreter.current_scope_id();
         let mut output = vec![];
         while self
             .condition
@@ -134,8 +170,11 @@ impl WhileExpression {
             .resolve_as("A while condition")?
         {
             iteration_counter.increment_and_check()?;
-
-            match self.body.evaluate(interpreter).catch_control_flow()? {
+            match self.body.evaluate(interpreter).catch_control_flow(
+                interpreter,
+                ControlFlowInterrupt::catch_any,
+                scope,
+            )? {
                 ExecutionOutcome::Value(value) => {
                     if is_statement {
                         value.into_statement_result()?;
@@ -170,7 +209,9 @@ impl HasSpanRange for LoopExpression {
 impl ParseSource for LoopExpression {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let loop_token = input.parse_ident_matching("loop")?;
+        let segment = input.enter_next_segment(SegmentKind::LoopingSequential);
         let body = input.parse()?;
+        input.exit_segment(segment);
         Ok(Self { loop_token, body })
     }
 }
@@ -198,11 +239,16 @@ impl LoopExpression {
         let span = self.body.span();
         let mut iteration_counter = interpreter.start_iteration_counter(&span);
 
+        let scope = interpreter.current_scope_id();
         let mut output = vec![];
         loop {
             iteration_counter.increment_and_check()?;
 
-            match self.body.evaluate(interpreter).catch_control_flow()? {
+            match self.body.evaluate(interpreter).catch_control_flow(
+                interpreter,
+                ControlFlowInterrupt::catch_any,
+                scope,
+            )? {
                 ExecutionOutcome::Value(value) => {
                     if is_statement {
                         value.into_statement_result()?;
@@ -224,6 +270,7 @@ impl LoopExpression {
 
 #[derive(Clone)]
 pub(crate) struct ForExpression {
+    iteration_scope: ScopeId,
     for_token: Ident,
     pattern: Pattern,
     _in_token: Ident,
@@ -240,11 +287,24 @@ impl HasSpanRange for ForExpression {
 impl ParseSource for ForExpression {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let for_token = input.parse_ident_matching("for")?;
+
+        let segment = input.enter_next_segment(SegmentKind::LoopingSequential);
+
+        let iteration_scope = input.enter_scope();
         let pattern = input.parse()?;
+        input.exit_scope(iteration_scope);
+
         let in_token = input.parse_ident_matching("in")?;
         let iterable = input.parse()?;
+
+        input.reenter_scope(iteration_scope);
+        input.activate_pending_variable_definitions();
         let body = input.parse()?;
+        input.exit_scope(iteration_scope);
+
+        input.exit_segment(segment);
         Ok(Self {
+            iteration_scope,
             for_token,
             pattern,
             _in_token: in_token,
@@ -280,15 +340,21 @@ impl ForExpression {
             .resolve_as("A for loop iterable")?;
 
         let span = self.body.span();
+        let scope = interpreter.current_scope_id();
         let mut iteration_counter = interpreter.start_iteration_counter(&span);
 
         let mut output = vec![];
         for item in iterable.into_iterator()? {
             iteration_counter.increment_and_check()?;
 
+            interpreter.enter_scope(self.iteration_scope);
             self.pattern.handle_destructure(interpreter, item)?;
 
-            match self.body.evaluate(interpreter).catch_control_flow()? {
+            match self.body.evaluate(interpreter).catch_control_flow(
+                interpreter,
+                ControlFlowInterrupt::catch_any,
+                scope,
+            )? {
                 ExecutionOutcome::Value(value) => {
                     if is_statement {
                         value.into_statement_result()?;
@@ -303,6 +369,7 @@ impl ForExpression {
                     }
                 }
             }
+            interpreter.exit_scope(self.iteration_scope);
         }
         Ok(output.into_owned_value(self.span_range()))
     }

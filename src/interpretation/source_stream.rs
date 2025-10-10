@@ -41,6 +41,7 @@ pub(crate) enum SourceItem {
     Command(Command),
     Variable(EmbeddedVariable),
     EmbeddedExpression(EmbeddedExpression),
+    EmbeddedStatements(EmbeddedStatements),
     SourceGroup(SourceGroup),
     Punct(Punct),
     Ident(Ident),
@@ -56,6 +57,9 @@ impl ParseSource for SourceItem {
             SourcePeekMatch::EmbeddedVariable => SourceItem::Variable(input.parse()?),
             SourcePeekMatch::EmbeddedExpression => {
                 SourceItem::EmbeddedExpression(input.parse()?)
+            }
+            SourcePeekMatch::EmbeddedStatements => {
+                SourceItem::EmbeddedStatements(input.parse()?)
             }
             SourcePeekMatch::ExplicitTransformStream | SourcePeekMatch::Transformer(_) => {
                 return input.parse_err("Destructurings are not supported here. If this wasn't intended to be a destructuring, replace @ with %raw[@]");
@@ -86,6 +90,9 @@ impl Interpret for SourceItem {
             SourceItem::EmbeddedExpression(block) => {
                 block.interpret_into(interpreter, output)?;
             }
+            SourceItem::EmbeddedStatements(statements) => {
+                statements.interpret_into(interpreter, output)?;
+            }
             SourceItem::SourceGroup(group) => {
                 group.interpret_into(interpreter, output)?;
             }
@@ -105,7 +112,8 @@ impl HasSpanRange for SourceItem {
         match self {
             SourceItem::Command(command_invocation) => command_invocation.span_range(),
             SourceItem::Variable(variable) => variable.span_range(),
-            SourceItem::EmbeddedExpression(block) => block.span_range(),
+            SourceItem::EmbeddedExpression(expr) => expr.span_range(),
+            SourceItem::EmbeddedStatements(block) => block.span_range(),
             SourceItem::SourceGroup(group) => group.span_range(),
             SourceItem::Punct(punct) => punct.span_range(),
             SourceItem::Ident(ident) => ident.span_range(),

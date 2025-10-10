@@ -95,7 +95,7 @@ pub(crate) use crate::interpretation::CopyOnWriteValue;
 use crate::stream_interface::method_definitions::assert;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum RequestedValueOwnership {
+pub(crate) enum RequestedValueOwnership {
     /// Receives any of Owned, SharedReference or MutableReference, depending on what
     /// is available.
     /// This can then be used to resolve the value kind, and use the correct one.
@@ -219,7 +219,7 @@ impl ResolvedValueOwnership {
         match self {
             ResolvedValueOwnership::Owned => Ok(ResolvedValue::Owned(owned)),
             ResolvedValueOwnership::CopyOnWrite => Ok(ResolvedValue::CopyOnWrite(CopyOnWrite::owned(owned))),
-            ResolvedValueOwnership::Mutable => owned.execution_err("A mutable reference is required, but an owned value was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.as_mut()` to get a mutable reference."),
+            ResolvedValueOwnership::Mutable => owned.execution_err("A mutable reference is required, but an owned value was received (possibly from a last variable use), this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.as_mut()` to get a mutable reference."),
             ResolvedValueOwnership::Shared => Ok(ResolvedValue::Shared(Shared::new_from_owned(owned))),
         }
     }

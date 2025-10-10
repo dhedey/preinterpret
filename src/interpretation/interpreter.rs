@@ -2,31 +2,103 @@ use super::*;
 
 pub(crate) struct Interpreter {
     config: InterpreterConfig,
-    variable_data: VariableData,
+    scope_definitions: ScopeDefinitions,
+    scopes: Vec<RuntimeScope>,
 }
 
 impl Interpreter {
-    pub(crate) fn new(_scope_definitions: ScopeDefinitions) -> Self {
-        Self {
+    pub(crate) fn new(scope_definitions: ScopeDefinitions) -> Self {
+        let root_scope_id = scope_definitions.root_scope;
+        let mut interpreter = Self {
             config: Default::default(),
-            variable_data: VariableData::new(),
+            scope_definitions,
+            scopes: vec![],
+        };
+        interpreter.enter_scope_inner(root_scope_id, false);
+        interpreter
+    }
+
+    fn scope_mut(&mut self, id: ScopeId) -> &mut RuntimeScope {
+        self.scopes
+            .iter_mut()
+            .rev()
+            .find(|s| s.id == id)
+            .expect("Scope data not found in stack")
+    }
+
+    pub(crate) fn current_scope_id(&self) -> ScopeId {
+        self.scopes.last().unwrap().id
+    }
+
+    pub(crate) fn enter_scope(&mut self, id: ScopeId) {
+        self.enter_scope_inner(id, true);
+    }
+
+    fn enter_scope_inner(&mut self, id: ScopeId, check_parent: bool) {
+        let new_scope = self.scope_definitions.scopes.get(id);
+        if check_parent {
+            assert!(new_scope.parent == Some(self.current_scope_id()));
+        }
+        let variables = {
+            let mut map = HashMap::new();
+            for definition_id in new_scope.definitions.iter() {
+                map.insert(*definition_id, VariableContent::Uninitialized);
+            }
+            map
+        };
+        self.scopes.push(RuntimeScope { id, variables });
+    }
+
+    pub(crate) fn exit_scope(&mut self, scope_id: ScopeId) {
+        assert!(scope_id == self.current_scope_id());
+        self.scopes.pop();
+    }
+
+    pub(crate) fn catch_control_flow<T>(
+        &mut self,
+        input: ExecutionResult<T>,
+        should_catch: impl FnOnce(&ControlFlowInterrupt) -> bool,
+        catch_at_scope: ScopeId,
+    ) -> ExecutionResult<ExecutionOutcome<T>> {
+        let output = match input {
+            Ok(value) => Ok(ExecutionOutcome::Value(value)),
+            Err(interrupt) => interrupt.into_outcome::<T>(should_catch),
+        };
+        if let Ok(ExecutionOutcome::ControlFlow(_)) = &output {
+            self.handle_catch(catch_at_scope)
+        }
+        output
+    }
+
+    fn handle_catch(&mut self, result_scope: ScopeId) {
+        while self.current_scope_id() != result_scope {
+            self.exit_scope(self.current_scope_id());
         }
     }
 
     pub(crate) fn define_variable(
         &mut self,
-        variable: &VariableDefinition,
+        definition_id: VariableDefinitionId,
         value: ExpressionValue,
     ) {
-        self.variable_data.define_variable(variable, value)
+        let definition = self.scope_definitions.definitions.get(definition_id);
+        let scope_data = self.scope_mut(definition.scope);
+        scope_data.define_variable(definition_id, value)
     }
 
-    pub(crate) fn resolve_variable_binding(
-        &self,
+    pub(crate) fn resolve(
+        &mut self,
         variable: &VariableReference,
-        make_error: impl FnOnce() -> SynError,
-    ) -> ExecutionResult<VariableBinding> {
-        self.variable_data.resolve_binding(variable, make_error)
+        ownership: RequestedValueOwnership,
+    ) -> ExecutionResult<LateBoundValue> {
+        let reference = self.scope_definitions.references.get(variable.id);
+        let (definition, span, is_final) = (
+            reference.definition,
+            reference.reference_name_span,
+            reference.is_final_reference,
+        );
+        let scope_data = self.scope_mut(reference.definition_scope);
+        scope_data.resolve(definition, span, is_final, ownership)
     }
 
     pub(crate) fn start_iteration_counter<'s, S: HasSpanRange>(
@@ -45,35 +117,30 @@ impl Interpreter {
     }
 }
 
-struct VariableData {
-    variable_data: HashMap<String, VariableContent>,
+struct RuntimeScope {
+    id: ScopeId,
+    variables: HashMap<VariableDefinitionId, VariableContent>,
 }
 
-impl VariableData {
-    fn new() -> Self {
-        Self {
-            variable_data: HashMap::new(),
-        }
+impl RuntimeScope {
+    fn define_variable(&mut self, definition_id: VariableDefinitionId, value: ExpressionValue) {
+        self.variables
+            .get_mut(&definition_id)
+            .expect("Variable data not found in scope")
+            .define(value);
     }
 
-    fn define_variable(&mut self, variable: &VariableDefinition, value: ExpressionValue) {
-        self.variable_data.insert(
-            variable.get_name(),
-            VariableContent::new(value, variable.span_range()),
-        );
-    }
-
-    fn resolve_binding(
-        &self,
-        variable: &VariableReference,
-        make_error: impl FnOnce() -> SynError,
-    ) -> ExecutionResult<VariableBinding> {
-        let reference = self
-            .variable_data
-            .get(&variable.get_name())
-            .ok_or_else(make_error)?
-            .binding(variable);
-        Ok(reference)
+    fn resolve(
+        &mut self,
+        definition_id: VariableDefinitionId,
+        span: Span,
+        is_final: bool,
+        ownership: RequestedValueOwnership,
+    ) -> ExecutionResult<LateBoundValue> {
+        self.variables
+            .get_mut(&definition_id)
+            .expect("Variable data not found in scope")
+            .resolve(span, is_final, ownership)
     }
 }
 

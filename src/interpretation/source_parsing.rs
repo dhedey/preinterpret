@@ -27,10 +27,10 @@ new_key!(pub(crate) ControlFlowSegmentId);
 
 #[derive(Clone)]
 pub(crate) struct ScopeDefinitions {
-    root_scope: ScopeId,
-    scopes: ReadOnlyArena<ScopeId, ScopeData>,
-    definitions: ReadOnlyArena<VariableDefinitionId, VariableDefinitionData>,
-    references: ReadOnlyArena<VariableReferenceId, VariableReferenceData>,
+    pub(crate) root_scope: ScopeId,
+    pub(crate) scopes: ReadOnlyArena<ScopeId, ScopeData>,
+    pub(crate) definitions: ReadOnlyArena<VariableDefinitionId, VariableDefinitionData>,
+    pub(crate) references: ReadOnlyArena<VariableReferenceId, VariableReferenceData>,
 }
 
 #[allow(unused)]
@@ -58,7 +58,6 @@ impl ParseState {
         let root_segment = segments.add(ControlFlowSegmentData {
             scope: root_scope,
             parent: None,
-            previous_sibling: None,
             segment_kind: SegmentKind::Sequential,
             children: SegmentKind::Sequential.new_children(),
         });
@@ -97,7 +96,7 @@ impl ParseState {
         self.scopes.get_mut(self.current_scope_id())
     }
 
-    pub(crate) fn new_scope(&mut self) -> ScopeId {
+    pub(crate) fn enter_scope(&mut self) -> ScopeId {
         let new_scope = self.scopes.add(ScopeData {
             parent: Some(self.current_scope_id()),
             definitions: Vec::new(),
@@ -106,13 +105,14 @@ impl ParseState {
         new_scope
     }
 
-    pub(crate) fn define_variable(&mut self, name: &Ident) -> VariableDefinitionId {
+    pub(crate) fn define_inactive_variable(&mut self, name: &Ident) -> VariableDefinitionId {
         let id = self.definitions.add(VariableDefinitionData {
             scope: self.current_scope_id(),
             segment: self.current_segment_id(),
             name: name.to_string(),
             definition_name_span: name.span(),
             references: Vec::new(),
+            active: false,
         });
         self.current_scope().definitions.push(id);
         self.current_segment()
@@ -128,17 +128,18 @@ impl ParseState {
             let scope = self.scopes.get(*scope_id);
             for &def_id in scope.definitions.iter().rev() {
                 let def = self.definitions.get(def_id);
-                if def.name == name_str {
+                if def.name == name_str && def.active {
                     let ref_id = self.references.add(VariableReferenceData {
                         definition: def_id,
+                        definition_scope: def.scope,
                         segment: self.current_segment_id(),
                         reference_name_span: span,
-                        is_final_reference: true, // This will be fixed up later
+                        is_final_reference: false, // Some will be set to true later
                     });
                     self.definitions.get_mut(def_id).references.push(ref_id);
                     self.current_segment()
                         .children
-                        .push(ControlFlowChild::VariableReference(ref_id));
+                        .push(ControlFlowChild::VariableReference(ref_id, def_id));
                     return Ok(ref_id);
                 }
             }
@@ -146,8 +147,31 @@ impl ParseState {
         span.parse_err("A variable must be defined before it is referenced.")
     }
 
+    pub(crate) fn activate_pending_variable_definitions(&mut self) {
+        for def_id in self
+            .scopes
+            .get_mut(self.current_scope_id())
+            .definitions
+            .iter()
+        {
+            let def = self.definitions.get_mut(*def_id);
+            def.active = true;
+        }
+    }
+
+    pub(crate) fn reenter_scope(&mut self, scope: ScopeId) {
+        let new_scope = self.scopes.get(scope);
+        let parent = new_scope.parent.expect("Cannot re-enter root scope");
+        assert_eq!(
+            parent,
+            self.current_scope_id(),
+            "Cannot re-enter a scope which is not a child of the current scope"
+        );
+        self.scope_id_stack.push(scope);
+    }
+
     /// The scope parameter is just to help catch bugs.
-    pub(crate) fn pop_scope(&mut self, scope: ScopeId) {
+    pub(crate) fn exit_scope(&mut self, scope: ScopeId) {
         let id = self.scope_id_stack.pop().expect("No scope to pop");
         assert_eq!(id, scope, "Popped scope is not the current scope");
     }
@@ -163,30 +187,17 @@ impl ParseState {
         self.segments.get_mut(self.current_segment_id())
     }
 
-    pub(crate) fn enter_next_segment(
-        &mut self,
-        scope_id: ScopeId,
-        segment_kind: SegmentKind,
-    ) -> ControlFlowSegmentId {
+    pub(crate) fn enter_next_segment(&mut self, segment_kind: SegmentKind) -> ControlFlowSegmentId {
         let parent_id = self.current_segment_id();
         let parent = self.segments.get(parent_id);
-        let previous_sibling_id = match parent.children {
-            SegmentChildren::Sequential { last_cf_child, .. } => last_cf_child,
-            SegmentChildren::TreeBased { .. } => {
-                panic!("enter_next_segment cannot be called with a tree-based parent")
-            }
-        };
-        self.enter_segment_with_valid_previous(
-            scope_id,
-            parent_id,
-            previous_sibling_id,
-            segment_kind,
-        )
+        if !matches!(parent.children, SegmentChildren::Sequential { .. }) {
+            panic!("enter_next_segment can only be called with a sequential parent");
+        }
+        self.enter_segment_with_valid_previous(parent_id, None, segment_kind)
     }
 
-    pub(crate) fn enter_parented_segment(
+    pub(crate) fn enter_path_segment(
         &mut self,
-        scope_id: ScopeId,
         previous_sibling_id: Option<ControlFlowSegmentId>,
         segment_kind: SegmentKind,
     ) -> ControlFlowSegmentId {
@@ -202,15 +213,10 @@ impl ParseState {
             );
         }
         let parent = self.segments.get(parent_id);
-        if !matches!(parent.children, SegmentChildren::TreeBased { .. }) {
-            panic!("enter_parented_segment can only be called with a tree-based parent");
+        if !matches!(parent.children, SegmentChildren::PathBased { .. }) {
+            panic!("enter_path_segment can only be called with a path-based parent");
         }
-        self.enter_segment_with_valid_previous(
-            scope_id,
-            parent_id,
-            previous_sibling_id,
-            segment_kind,
-        )
+        self.enter_segment_with_valid_previous(parent_id, previous_sibling_id, segment_kind)
     }
 
     pub(crate) fn exit_segment(&mut self, segment: ControlFlowSegmentId) {
@@ -220,59 +226,193 @@ impl ParseState {
 
     fn enter_segment_with_valid_previous(
         &mut self,
-        scope_id: ScopeId,
         parent_id: ControlFlowSegmentId,
         previous_sibling_id: Option<ControlFlowSegmentId>,
         segment_kind: SegmentKind,
     ) -> ControlFlowSegmentId {
         let child_id = self.segments.add(ControlFlowSegmentData {
-            scope: scope_id,
+            scope: self.current_scope_id(),
             parent: Some(parent_id),
-            previous_sibling: previous_sibling_id,
             children: segment_kind.new_children(),
             segment_kind,
         });
+        self.segments_stack.push(child_id);
         let parent = self.segments.get_mut(parent_id);
         match &mut parent.children {
-            SegmentChildren::Sequential {
-                ref mut children,
-                last_cf_child,
-            } => {
+            SegmentChildren::Sequential { ref mut children } => {
                 children.push(ControlFlowChild::Segment(child_id));
-                *last_cf_child = Some(child_id);
             }
-            SegmentChildren::TreeBased { ref mut all_nodes } => {
-                all_nodes.push(child_id);
+            SegmentChildren::PathBased {
+                node_previous_map: ref mut node_parent_map,
+            } => {
+                node_parent_map.insert(child_id, previous_sibling_id);
             }
         }
         child_id
     }
 
     fn mark_last_use_of_variables(&mut self) {
-        // todo!();
-        /*
-        During this algorithm, we'll record a piece of state against segments:
-        * (no tag yet) = Unhandled
-        * "Handled" = This segment might have last uses under it, all previous segments have
-          (or one of their ancestors) has been marked NotFinal.
-        * "NotFinal" indicates that all a segment and all its descendents are not a last use.
+        #[derive(PartialEq, Eq)]
+        enum SegmentMarker {
+            AlreadyHandled,
+            NotFinal,
+        }
 
-        For a given variable definition, create a set from its ancestor scopes, then:
-        - Form a set of the segment ids of all the references
-        - For each such segment id:
-          - Mark all but the last reference in its segment as not final
-          - Set `possibly_final = true` for this final reference
-          - Check own segment and all parents in its segment stack:
-            - If the segment has a scope above the variable definition’s scope, break
-            - If the segment is marked dirty or a Loop, set possibly_final = false
-            - If the segment is unmarked (i.e. not yet handled or dirty):
-              - Mark itself as "handled"
-              - Mark all previous siblings at its level as “dirty”
-            - (Repeat with parent segment)
-          - If possibly_final = true, add it to a candidates list, else mark it as not final
-        - Go through all candidates again:
-          - Check all its parents in the segment stack, if any dirty, mark candidate as not final
-        */
+        // ALGORITHM OVERVIEW
+        // ==================
+        //
+        // The goal of this algorithm is to efficiently flag variable references as
+        // "is_final_reference" if they are definitely the last use of a variable
+        // in any possible execution path.
+        //
+        // This is quite subtle because of branching control flow, and loops.
+        //
+        // For each variable definition, this algorithm works in two phases:
+        // 1. Identify segments where references occur, and for each:
+        //    - Add the last reference in the segment as a candidate for last use
+        //    - Mark all previous segments/references as not final.
+        //      This is recursive as "previous siblings" of self and each ancestor segment
+        //      We mark nodes as Handled | NotFinal to save repeated work.
+        // 2. For each candidate, check if it's actually a last use:
+        //    - Check it and all its relevant ancestor segments are:
+        //      - Not marked NotFinal
+        //      - Not loops
+        //    - If all these checks pass, then mark it as a final reference.
+
+        for (definition_id, definition) in self.definitions.iter() {
+            let mut last_use_candidates = Vec::new();
+            let mut segment_markers = HashMap::new();
+            let mut reference_markers = HashMap::new();
+            let ancestor_scopes = {
+                let mut scopes = HashSet::new();
+                let mut current = Some(definition.scope);
+                while let Some(scope) = current {
+                    scopes.insert(scope);
+                    current = self.scopes.get(scope).parent;
+                }
+                scopes
+            };
+            let mut segments_with_references = HashSet::new();
+            for reference_id in definition.references.iter() {
+                let reference = self.references.get(*reference_id);
+                segments_with_references.insert(reference.segment);
+            }
+
+            // ======================================
+            // PHASE 1 - We create a shortlist, and mark NotFinal segments
+            // ======================================
+            for segment_id in segments_with_references {
+                let segment = self.segments.get(segment_id);
+                let mut reference_ids = match segment.children {
+                    SegmentChildren::Sequential { ref children, .. } => children
+                        .iter()
+                        .filter_map(|c| match c {
+                            ControlFlowChild::VariableReference(ref_id, def_id)
+                                if *def_id == definition_id =>
+                            {
+                                Some(*ref_id)
+                            }
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>(),
+                    SegmentChildren::PathBased { .. } => {
+                        panic!("Segment was marked as having references, but is path based")
+                    }
+                };
+                // The last reference in the segment is a candidate for last use
+                assert!(
+                    !reference_ids.is_empty(),
+                    "Segment was marked as having references, but none were found"
+                );
+                let last_reference_id = reference_ids.pop().unwrap();
+                last_use_candidates.push(last_reference_id);
+
+                // For each segment level between current up to the scope of the variable definition:
+                // - Mark all previous segments at its level as NotFinal
+                let mut current_segment_id = Some(segment_id);
+                while let Some(seg_id) = current_segment_id {
+                    let current_segment = self.segments.get(seg_id);
+                    if ancestor_scopes.contains(&current_segment.scope) {
+                        break;
+                    }
+                    let marker = segment_markers.get(&seg_id);
+                    match marker {
+                        Some(SegmentMarker::AlreadyHandled | SegmentMarker::NotFinal) => break,
+                        None => {}
+                    }
+                    segment_markers.insert(seg_id, SegmentMarker::AlreadyHandled);
+                    if let Some(parent_id) = current_segment.parent {
+                        // Mark all previous siblings as NotFinal
+                        let parent = self.segments.get(parent_id);
+                        match parent.children {
+                            SegmentChildren::PathBased {
+                                ref node_previous_map,
+                            } => {
+                                // Walk up the tree of previous siblings, marking all as NotFinal
+                                let mut previous = node_previous_map.get(&seg_id).unwrap();
+                                while let Some(prev_id) = *previous {
+                                    segment_markers.insert(prev_id, SegmentMarker::NotFinal);
+                                    previous = node_previous_map.get(&prev_id).unwrap();
+                                }
+                            }
+                            SegmentChildren::Sequential { ref children } => {
+                                let mut before_current_segment = false;
+                                for sibling in children.iter().rev() {
+                                    if sibling == &ControlFlowChild::Segment(seg_id) {
+                                        before_current_segment = true;
+                                        continue;
+                                    }
+                                    if before_current_segment {
+                                        match sibling {
+                                            ControlFlowChild::Segment(segment_id) => {
+                                                segment_markers
+                                                    .insert(*segment_id, SegmentMarker::NotFinal);
+                                            }
+                                            ControlFlowChild::VariableDefinition(_) => {}
+                                            ControlFlowChild::VariableReference(ref_id, _) => {
+                                                reference_markers
+                                                    .insert(*ref_id, SegmentMarker::NotFinal);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    current_segment_id = current_segment.parent;
+                }
+
+                // ======================================
+                // PHASE 2 - We validate each candidate
+                // ======================================
+                for candidate_id in last_use_candidates.iter() {
+                    if let Some(SegmentMarker::NotFinal) = reference_markers.get(candidate_id) {
+                        continue;
+                    }
+                    let candidate = self.references.get_mut(*candidate_id);
+                    let mut possibly_final = true;
+                    let mut current_segment_id = Some(candidate.segment);
+                    while let Some(seg_id) = current_segment_id {
+                        let current_segment = self.segments.get(seg_id);
+                        if ancestor_scopes.contains(&current_segment.scope) {
+                            break;
+                        }
+                        if current_segment.segment_kind.is_looping() {
+                            possibly_final = false;
+                            break;
+                        }
+                        if let Some(SegmentMarker::NotFinal) = segment_markers.get(&seg_id) {
+                            possibly_final = false;
+                            break;
+                        }
+                        current_segment_id = current_segment.parent;
+                    }
+                    if possibly_final {
+                        candidate.is_final_reference = true;
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -282,48 +422,37 @@ impl ParseState {
 /// * Sequential: Children are instructions and segments, which have a fixed order
 /// * Tree-based: Only has segment children; these form multiple possible execution paths.
 ///
-/// ## Standard Segment
-/// * Children defined with `enter_new_sibling_segment`.
-/// * Linear history
-///
-/// ## If Expression Segment
-/// * Children defined with  `enter_new_child_segment`
-/// * Example children tree
-/// ```text
-/// IfCondA           < BlockA
-/// ^< ElseIfCondB    < BlockB
-///    ^< ElseIfCondC < BlockC
-///       ^<----------- ElseBlock
-/// ```
-///
-/// ## For loop
-/// - Will have `ExecutionCount::Multiple`
-/// - Children defined with `enter_new_child_segment`
-/// - Children are the pattern match segment, and then the body segment/s
+/// See `expressions/control_flow.rs` for some examples of how various segments are created.
 struct ControlFlowSegmentData {
     scope: ScopeId,
     parent: Option<ControlFlowSegmentId>,
-    previous_sibling: Option<ControlFlowSegmentId>,
     children: SegmentChildren,
     segment_kind: SegmentKind,
 }
 
 pub(crate) enum SegmentKind {
     Sequential,
-    TreeBased,
+    PathBased,
     LoopingSequential,
 }
 
 impl SegmentKind {
+    fn is_looping(&self) -> bool {
+        match self {
+            SegmentKind::Sequential => false,
+            SegmentKind::PathBased => false,
+            SegmentKind::LoopingSequential => true,
+        }
+    }
+
     fn new_children(&self) -> SegmentChildren {
         match self {
             SegmentKind::Sequential | SegmentKind::LoopingSequential => {
-                SegmentChildren::Sequential {
-                    children: vec![],
-                    last_cf_child: None,
-                }
+                SegmentChildren::Sequential { children: vec![] }
             }
-            SegmentKind::TreeBased => SegmentChildren::TreeBased { all_nodes: vec![] },
+            SegmentKind::PathBased => SegmentChildren::PathBased {
+                node_previous_map: HashMap::new(),
+            },
         }
     }
 }
@@ -331,10 +460,9 @@ impl SegmentKind {
 enum SegmentChildren {
     Sequential {
         children: Vec<ControlFlowChild>,
-        last_cf_child: Option<ControlFlowSegmentId>,
     },
-    TreeBased {
-        all_nodes: Vec<ControlFlowSegmentId>,
+    PathBased {
+        node_previous_map: HashMap<ControlFlowSegmentId, Option<ControlFlowSegmentId>>,
     },
 }
 
@@ -342,38 +470,43 @@ impl SegmentChildren {
     fn push(&mut self, child: ControlFlowChild) {
         match self {
             SegmentChildren::Sequential { children, .. } => children.push(child),
-            SegmentChildren::TreeBased { .. } => panic!("Cannot push instruction under a tree-based segment. It needs a sequential segment underneath it."),
+            SegmentChildren::PathBased { .. } => panic!("Cannot push instruction under a tree-based segment. It needs a sequential segment underneath it."),
         }
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum ControlFlowChild {
     Segment(ControlFlowSegmentId),
     VariableDefinition(VariableDefinitionId),
-    VariableReference(VariableReferenceId),
+    VariableReference(VariableReferenceId, VariableDefinitionId),
 }
 
-struct ScopeData {
-    parent: Option<ScopeId>,
-    definitions: Vec<VariableDefinitionId>,
+pub(crate) struct ScopeData {
+    pub(crate) parent: Option<ScopeId>,
+    pub(crate) definitions: Vec<VariableDefinitionId>,
 }
 
-struct VariableDefinitionData {
-    scope: ScopeId,
-    segment: ControlFlowSegmentId,
-    name: String,
-    definition_name_span: Span,
-    references: Vec<VariableReferenceId>,
+pub(crate) struct VariableDefinitionData {
+    pub(crate) scope: ScopeId,
+    pub(crate) segment: ControlFlowSegmentId,
+    pub(crate) name: String,
+    pub(crate) definition_name_span: Span,
+    pub(crate) references: Vec<VariableReferenceId>,
+    /// In a `let x = x + 1` statement, the RHS is executed against previous bindings.
+    /// We allow the `let x` to create a binding, but only activate it for matching after the control flow completes.
+    pub(crate) active: bool,
 }
 
-struct VariableReferenceData {
-    definition: VariableDefinitionId,
-    segment: ControlFlowSegmentId,
-    reference_name_span: Span,
+pub(crate) struct VariableReferenceData {
+    pub(crate) definition: VariableDefinitionId,
+    pub(crate) definition_scope: ScopeId,
+    pub(crate) segment: ControlFlowSegmentId,
+    pub(crate) reference_name_span: Span,
     /// If a reference is the last use of a variable in any execution path
     /// then it is able to be taken by value as Owned by the interpreter.
     /// This avoids needing to prompt the code writer from lots of clones.
     ///
     /// This value is calculated during [ParseState::mark_last_use_of_variables].
-    is_final_reference: bool,
+    pub(crate) is_final_reference: bool,
 }

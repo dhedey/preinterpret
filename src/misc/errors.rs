@@ -80,22 +80,30 @@ pub(crate) enum ExecutionOutcome<T> {
 }
 
 pub(crate) trait ExecutionResultExt<T> {
-    fn catch_control_flow(self) -> ExecutionResult<ExecutionOutcome<T>>;
-    fn catch_execution_error(self) -> ExecutionResult<Result<T, syn::Error>>;
+    fn catch_control_flow(
+        self,
+        interpreter: &mut Interpreter,
+        should_catch: impl FnOnce(&ControlFlowInterrupt) -> bool,
+        catch_at_scope: ScopeId,
+    ) -> ExecutionResult<ExecutionOutcome<T>>;
+
+    fn catch_execution_error_at_same_scope(self) -> ExecutionResult<Result<T, syn::Error>>;
 
     /// This is not a `From` because it wants to be explicit
     fn convert_to_final_result(self) -> syn::Result<T>;
 }
 
 impl<T> ExecutionResultExt<T> for ExecutionResult<T> {
-    fn catch_control_flow(self) -> ExecutionResult<ExecutionOutcome<T>> {
-        match self {
-            Ok(value) => Ok(ExecutionOutcome::Value(value)),
-            Err(interrupt) => interrupt.into_outcome::<T>(),
-        }
+    fn catch_control_flow(
+        self,
+        interpreter: &mut Interpreter,
+        should_catch: impl FnOnce(&ControlFlowInterrupt) -> bool,
+        catch_at_scope: ScopeId,
+    ) -> ExecutionResult<ExecutionOutcome<T>> {
+        interpreter.catch_control_flow(self, should_catch, catch_at_scope)
     }
 
-    fn catch_execution_error(self) -> ExecutionResult<Result<T, syn::Error>> {
+    fn catch_execution_error_at_same_scope(self) -> ExecutionResult<Result<T, syn::Error>> {
         match self {
             Ok(value) => Ok(Ok(value)),
             Err(interrupt) => interrupt.into_execution_error::<T>(),
@@ -119,9 +127,14 @@ impl ExecutionInterrupt {
         }
     }
 
-    fn into_outcome<T>(self) -> ExecutionResult<ExecutionOutcome<T>> {
+    pub(crate) fn into_outcome<T>(
+        self,
+        should_catch: impl FnOnce(&ControlFlowInterrupt) -> bool,
+    ) -> ExecutionResult<ExecutionOutcome<T>> {
         match *self.inner {
-            ExecutionInterruptInner::ControlFlow(control_flow_interrupt, _) => {
+            ExecutionInterruptInner::ControlFlow(control_flow_interrupt, _)
+                if should_catch(&control_flow_interrupt) =>
+            {
                 Ok(ExecutionOutcome::ControlFlow(control_flow_interrupt))
             }
             _ => Err(self),
@@ -159,6 +172,12 @@ enum ExecutionInterruptInner {
 pub(crate) enum ControlFlowInterrupt {
     Break,
     Continue,
+}
+
+impl ControlFlowInterrupt {
+    pub(crate) fn catch_any(_: &ControlFlowInterrupt) -> bool {
+        true
+    }
 }
 
 impl From<syn::Error> for ExecutionInterrupt {

@@ -33,6 +33,7 @@ impl HandleTransformation for TransformStream {
 pub(crate) enum TransformItem {
     Command(Command),
     EmbeddedExpression(EmbeddedExpression),
+    EmbeddedStatements(EmbeddedStatements),
     Transformer(Transformer),
     TransformStreamInput(StreamParser),
     ExactPunct(Punct),
@@ -47,6 +48,7 @@ impl ParseSource for TransformItem {
             SourcePeekMatch::Command(_) => Self::Command(input.parse()?),
             SourcePeekMatch::EmbeddedVariable => return input.parse_err("Variable bindings are not supported here. #(x.to_group()) can be inverted with @(#x = @TOKEN_TREE.flatten()). #x can't necessarily be inverted because its contents are flattened, although @(#x = @REST) or @(#x = @[UNTIL ..]) may work in some instances"),
             SourcePeekMatch::EmbeddedExpression => Self::EmbeddedExpression(input.parse()?),
+            SourcePeekMatch::EmbeddedStatements => Self::EmbeddedStatements(input.parse()?),
             SourcePeekMatch::Group(_) => Self::ExactGroup(input.parse()?),
             SourcePeekMatch::ExplicitTransformStream => Self::TransformStreamInput(input.parse()?),
             SourcePeekMatch::Transformer(_) => Self::Transformer(input.parse()?),
@@ -79,6 +81,9 @@ impl HandleTransformation for TransformItem {
             }
             TransformItem::EmbeddedExpression(block) => {
                 block.interpret_into(interpreter, output)?;
+            }
+            TransformItem::EmbeddedStatements(statements) => {
+                statements.interpret_into(interpreter, output)?;
             }
             TransformItem::ExactPunct(punct) => {
                 input.parse_punct_matching(punct.as_char())?;
@@ -204,11 +209,13 @@ impl ParseSource for StreamParserContent {
             let _ = input.parse::<Token![#]>()?;
             if let Some((_, cursor)) = input.cursor().ident() {
                 if cursor.punct_matching('=').is_some() {
-                    return Ok(Self::StoreToVariable {
+                    let output = Ok(Self::StoreToVariable {
                         variable: input.parse()?,
                         equals: input.parse()?,
                         content: input.parse()?,
                     });
+                    input.activate_pending_variable_definitions();
+                    return output;
                 }
                 if cursor.punct_matching('+').is_some() {
                     return Ok(Self::ExtendToVariable {
@@ -247,12 +254,8 @@ impl HandleTransformation for StreamParserContent {
             StreamParserContent::ExtendToVariable {
                 variable, content, ..
             } => {
-                let reference = variable.binding(interpreter)?;
-                content.handle_transform(
-                    input,
-                    interpreter,
-                    reference.into_mut()?.into_stream()?.as_mut(),
-                )?;
+                let mutable = variable.resolve_mutable(interpreter)?;
+                content.handle_transform(input, interpreter, mutable.into_stream()?.as_mut())?;
             }
             StreamParserContent::Discard { content, .. } => {
                 let mut discarded = OutputStream::new();

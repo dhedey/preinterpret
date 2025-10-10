@@ -47,16 +47,69 @@ impl Interpret for EmbeddedExpression {
 }
 
 #[derive(Clone)]
+pub(crate) struct EmbeddedStatements {
+    marker: Token![#],
+    braces: Braces,
+    content: ExpressionBlockContent,
+}
+
+impl ParseSource for EmbeddedStatements {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
+        let marker = input.parse()?;
+        let (braces, inner) = input.parse_braces()?;
+        let content = inner.parse()?;
+        Ok(Self {
+            marker,
+            braces,
+            content,
+        })
+    }
+}
+
+impl HasSpanRange for EmbeddedStatements {
+    fn span_range(&self) -> SpanRange {
+        SpanRange::new_between(self.marker.span, self.braces.close())
+    }
+}
+
+impl EmbeddedStatements {
+    pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
+        self.content.evaluate(interpreter, self.span_range())
+    }
+}
+
+impl Interpret for EmbeddedStatements {
+    fn interpret_into(
+        &self,
+        interpreter: &mut Interpreter,
+        output: &mut OutputStream,
+    ) -> ExecutionResult<()> {
+        self.evaluate(interpreter)?.output_to(
+            Grouping::Flattened,
+            &mut ToStreamContext::new(output, self.span_range()),
+        )?;
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
 pub(crate) struct ExpressionBlock {
     pub(super) braces: Braces,
+    pub(super) scope: ScopeId,
     pub(super) content: ExpressionBlockContent,
 }
 
 impl ParseSource for ExpressionBlock {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let (braces, inner) = input.parse_braces()?;
+        let scope = input.enter_scope();
         let content = inner.parse()?;
-        Ok(Self { braces, content })
+        input.exit_scope(scope);
+        Ok(Self {
+            braces,
+            scope,
+            content,
+        })
     }
 }
 
@@ -68,7 +121,10 @@ impl HasSpan for ExpressionBlock {
 
 impl ExpressionBlock {
     pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
-        self.content.evaluate(interpreter, self.span().into())
+        interpreter.enter_scope(self.scope);
+        let output = self.content.evaluate(interpreter, self.span().into())?;
+        interpreter.exit_scope(self.scope);
+        Ok(output)
     }
 }
 
@@ -206,7 +262,7 @@ impl ParseSource for LetStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let let_token = input.parse()?;
         let pattern = input.parse()?;
-        if input.peek(Token![=]) {
+        let statement = if input.peek(Token![=]) {
             Ok(Self {
                 _let_token: let_token,
                 pattern,
@@ -223,7 +279,9 @@ impl ParseSource for LetStatement {
             })
         } else {
             input.parse_err("Expected = or ;")
-        }
+        };
+        input.activate_pending_variable_definitions();
+        statement
     }
 }
 

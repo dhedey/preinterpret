@@ -16,24 +16,17 @@ impl ExpressionNode {
                     Leaf::Discarded(token) => {
                         return token.execution_err("This cannot be used in a value expression");
                     }
-                    Leaf::Variable(variable) => {
-                        let variable_ref = variable.binding(context.interpreter())?;
-                        match context.requested_ownership() {
-                            RequestedValueOwnership::LateBound => {
-                                context.return_late_bound(variable_ref.into_late_bound()?)?
-                            }
-                            RequestedValueOwnership::Concrete(ownership) => match ownership {
-                                ResolvedValueOwnership::Owned
-                                | ResolvedValueOwnership::CopyOnWrite
-                                | ResolvedValueOwnership::Shared => {
-                                    context.return_shared(variable_ref.into_shared()?)?
-                                }
-                                ResolvedValueOwnership::Mutable => {
-                                    context.return_mutable(variable_ref.into_mut()?)?
-                                }
-                            },
+                    Leaf::Variable(variable) => match context.requested_ownership() {
+                        RequestedValueOwnership::LateBound => {
+                            let late_bound = variable.resolve_late_bound(context.interpreter())?;
+                            context.return_late_bound(late_bound)?
                         }
-                    }
+                        RequestedValueOwnership::Concrete(ownership) => {
+                            let resolved =
+                                variable.resolve_resolved(context.interpreter(), ownership)?;
+                            context.return_resolved_value(resolved)?
+                        }
+                    },
                     Leaf::Block(block) => {
                         // TODO[interpret_to_value]: Allow block to return reference
                         let value = block.evaluate(context.interpreter())?;
@@ -156,8 +149,8 @@ impl ExpressionNode {
     pub(super) fn handle_as_place(&self, mut context: PlaceContext) -> ExecutionResult<NextAction> {
         Ok(match self {
             ExpressionNode::Leaf(Leaf::Variable(variable)) => {
-                let variable_ref = variable.binding(context.interpreter())?;
-                context.return_place(variable_ref.into_mut()?)
+                let mutable = variable.resolve_mutable(context.interpreter())?;
+                context.return_place(mutable)
             }
             ExpressionNode::Index {
                 node,

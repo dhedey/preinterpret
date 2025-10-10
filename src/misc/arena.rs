@@ -38,13 +38,19 @@ impl<K: ArenaKey, D> AppendOnlyArena<K, D> {
         K::from_inner(Key::new(index))
     }
 
-    #[allow(unused)]
     pub(crate) fn get(&self, key: K) -> &D {
         &self.data[key.to_inner().index]
     }
 
     pub(crate) fn get_mut(&mut self, key: K) -> &mut D {
         &mut self.data[key.to_inner().index]
+    }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (K, &D)> {
+        self.data
+            .iter()
+            .enumerate()
+            .map(|(index, v)| (K::from_inner(Key::new(index)), v))
     }
 
     pub(crate) fn into_read_only(self) -> ReadOnlyArena<K, D> {
@@ -81,10 +87,16 @@ pub(crate) trait ArenaKey: Sized {
     fn to_inner(self) -> Key<Self>;
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct Key<K: ArenaKey> {
     index: usize,
     instance_marker: PhantomData<K>,
+}
+
+impl<K: ArenaKey> std::fmt::Debug for Key<K> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.index)
+    }
 }
 
 impl<K: ArenaKey> Key<K> {

@@ -16,6 +16,7 @@ impl ParseBuffer<'_, Source> {
 pub(crate) enum SourcePeekMatch {
     Command(Option<CommandOutputKind>),
     EmbeddedExpression,
+    EmbeddedStatements,
     EmbeddedVariable,
     ExplicitTransformStream,
     Transformer(Option<TransformerKind>),
@@ -35,6 +36,9 @@ fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> SourcePeekMatch {
         }
         if next.group_matching(Delimiter::Parenthesis).is_some() {
             return SourcePeekMatch::EmbeddedExpression;
+        }
+        if next.group_matching(Delimiter::Brace).is_some() {
+            return SourcePeekMatch::EmbeddedStatements;
         }
     }
 
@@ -178,8 +182,46 @@ impl<'a> SourceParseBuffer<'a> {
         }
     }
 
-    pub(crate) fn state<R>(&self, f: impl FnOnce(&mut ParseState) -> R) -> R {
-        self.context.update(f)
+    pub(crate) fn enter_scope(&self) -> ScopeId {
+        self.context.update(|s| s.enter_scope())
+    }
+
+    pub(crate) fn reenter_scope(&self, scope_id: ScopeId) {
+        self.context.update(|s| s.reenter_scope(scope_id))
+    }
+
+    pub(crate) fn exit_scope(&self, scope_id: ScopeId) {
+        self.context.update(|s| s.exit_scope(scope_id))
+    }
+
+    pub(crate) fn enter_next_segment(&self, segment_kind: SegmentKind) -> ControlFlowSegmentId {
+        self.context.update(|s| s.enter_next_segment(segment_kind))
+    }
+
+    pub(crate) fn enter_path_segment(
+        &self,
+        previous_sibling_id: Option<ControlFlowSegmentId>,
+        segment_kind: SegmentKind,
+    ) -> ControlFlowSegmentId {
+        self.context
+            .update(|s| s.enter_path_segment(previous_sibling_id, segment_kind))
+    }
+
+    pub(crate) fn exit_segment(&self, segment_id: ControlFlowSegmentId) {
+        self.context.update(|s| s.exit_segment(segment_id))
+    }
+
+    pub(crate) fn define_inactive_variable(&self, ident: &Ident) -> VariableDefinitionId {
+        self.context.update(|s| s.define_inactive_variable(ident))
+    }
+
+    pub(crate) fn activate_pending_variable_definitions(&self) {
+        self.context
+            .update(|s| s.activate_pending_variable_definitions())
+    }
+
+    pub(crate) fn reference_variable(&self, ident: &Ident) -> ParseResult<VariableReferenceId> {
+        self.context.update(|s| s.reference_variable(ident))
     }
 
     pub(crate) fn fork(&self) -> SourceParseBuffer<'a> {

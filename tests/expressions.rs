@@ -116,7 +116,7 @@ fn test_reinterpret() {
     assert_eq!(
         run!(
             %[
-                %raw[#]({ let my_variable = "the answer"; })
+                %raw[#]{ let my_variable = "the answer"; }
                 %raw[#]my_variable
             ].reinterpret_as_stream()
         ),
@@ -126,7 +126,7 @@ fn test_reinterpret() {
     assert_eq!(
         run!(
             %[
-                %raw[#]({ let my_variable = "the answer"; })
+                %raw[#]{ let my_variable = "the answer"; }
                 %group[#]my_variable
             ].reinterpret_as_stream()
         ),
