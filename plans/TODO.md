@@ -109,15 +109,15 @@ Create the following expressions:
   - [x] Variables are read / written based on binding ids
 - [x] Fix marking references as final:
   - [x] Use a second pass aligned with control flow order to set up scopes, segments and variables.
-- [ ] Improvements to final_value
-  - [ ] EmbeddedX should request value ownership of shared from expression land
-  - [ ] Disable transparent clone for streams
+- [x] Improvements to final_value
+  - [x] EmbeddedX should request value ownership of shared from expression land
+  - [x] Disable transparent clone for streams
 - [ ] Fix all `TODO[scopes]`
 - [ ] Tests
   - [ ] Convert the control flow to a visitor model
   - [ ] Add test macro for asserting variable binding `is_final` information, e.g. with a `x[final]` and `x[not_final]` syntax?
   - [ ] Add tests for things like `let x = %[1]; let x = %[2] + x; x`
-  - [ ] Add tests for things like `y[x] = x + 1``
+  - [ ] Add tests for things like `y[x] = x + 1`
   - [ ] Add tests for things like `let x = %[1]; { let x = %[2] + x; }; x`
   - [ ] Add test that `let x; x = { let x = 123; x = 456; 5 }`. resolves correctly with `x = 5`.
 - [ ] Optionally consider writing `ResolvedReference(Span/ScopeId/DefinitionId/IsFirstUse)` data directly back into the Reference via a `Rc<Cell<ReferenceContent::Resolved(ResolvedReference)>>` to set the values (from a `ReferenceContent::Parsed(Ident, ReferenceId)`)
@@ -324,6 +324,7 @@ Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` doc
 ## Final considerations
 
 * Merge `assignee_frames` into `value_frames` as per comment as the top of `assignee_frames`
+* Rename `EvaluationItem` to `RequestedValue` and consider making `RequestedValue::AssignmentCompletion` wrap an `Owned<()>` so that it becomes truly a value.
 * Add `preinterpret::macro` - can this be a declarative macro? Would be slightly more efficient, as it just needs to wrap a call to `preinterpret::stream` or `preinterpret::run`...
 * Add `LiteralPattern` (wrapping a `Literal`)
 * Add `Eq` support on composite types and streams
@@ -426,7 +427,7 @@ Consider:
 * Using ResolvedValue in place of ExpressionValue e.g. inside arrays / objects, so that we can destructure `let (x, y) = (a, b)` without clone/take
     * But then we end up with nested references which can be confusing!
     * CONCLUSION: Maybe we don't want this - to destructure it needs to be owned anyway?
-* Consider TODO[interpret-to-value] and whether to expand to `ResolvedValue` or `CopyOnWriteValue` instead of `OwnedValue`?
+* Consider whether to expand to storing `ResolvedValue` or `CopyOnWriteValue` in variables instead of `OwnedValue`?
     => The main issue is if it interferes with taking mutable references, but it's possibly OK, would need to see if it's a confusing problem in practice... (e.g. `let b = a[0]; a.push(1)` if `b` is a reference to `a[0]` then this is a problem when we push to `a`)
     => If a mutable reference is created and there are pending references, the variable data RefCell could be replaced with a cloned value and then mutated... But this can be more expensive, because e.g. `let b = a[0]; a.push(1)` results in the whole array `a` being copied in the `CoW` case; but only the `a[0]` being cloned in the "clone on assign" case.
     => Maybe we just stick to assignments being Owned/Cloned as currently
@@ -435,7 +436,6 @@ Consider:
     * `#(x[0])` returns the value at that position of the stream (using `INFER_TOKEN_TREE`)
     * `#(x[0..3])` returns a TokenStream
     * `#(x[0..=3])` returns a TokenStream
-
 
 --------------------------------------------------------------------------------
 

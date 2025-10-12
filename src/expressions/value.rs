@@ -80,10 +80,7 @@ impl ValueKind {
             ValueKind::UnsupportedLiteral => false,
             ValueKind::Array => false,
             ValueKind::Object => false,
-            // It's super common to want to embed a stream in another stream
-            // Having to embed it as #(type_name.clone()) instead of
-            // #type_name would be awkward
-            ValueKind::Stream => true,
+            ValueKind::Stream => false,
             ValueKind::Range => true,
             ValueKind::Iterator => false,
         }

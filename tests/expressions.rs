@@ -44,7 +44,7 @@ fn test_basic_evaluate_works() {
     preinterpret_assert_eq!(#(let six_as_sum = 3 + 3; six_as_sum * six_as_sum), 36);
     preinterpret_assert_eq!(#(
         let partial_sum = %[+ 2];
-        %[#(%[5] + partial_sum) %[=] %raw[#](5 #partial_sum)].reinterpret_as_stream().to_debug_string()
+        %[#(%[5] + partial_sum.clone()) %[=] %raw[#](5 #partial_sum)].reinterpret_as_stream().to_debug_string()
     ), "%[5 + 2 = 7]");
     preinterpret_assert_eq!(#(1 + (1..2) as int), 2);
     preinterpret_assert_eq!(#("hello" == "world"), false);
