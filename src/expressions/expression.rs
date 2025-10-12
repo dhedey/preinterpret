@@ -116,25 +116,6 @@ pub(super) enum ExpressionNode {
     },
 }
 
-impl ExpressionNode {
-    pub(super) fn operator_span_range(&self) -> SpanRange {
-        match self {
-            ExpressionNode::Leaf(leaf) => leaf.span_range(),
-            ExpressionNode::Grouped { delim_span, .. } => delim_span.span_range(),
-            ExpressionNode::Array { brackets, .. } => brackets.span_range(),
-            ExpressionNode::Object { braces, .. } => braces.span_range(),
-            ExpressionNode::MethodCall { method, .. } => method.span_range(),
-            ExpressionNode::Property { access, .. } => access.span_range(),
-            ExpressionNode::Index { access, .. } => access.span_range(),
-            ExpressionNode::UnaryOperation { operation, .. } => operation.span_range(),
-            ExpressionNode::BinaryOperation { operation, .. } => operation.span_range(),
-            ExpressionNode::Range { range_limits, .. } => range_limits.span_range(),
-            ExpressionNode::Assignment { equals_token, .. } => equals_token.span_range(),
-            ExpressionNode::CompoundAssignment { operation, .. } => operation.span_range(),
-        }
-    }
-}
-
 pub(super) enum Leaf {
     Block(ExpressionBlock),
     Command(Command),

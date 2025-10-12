@@ -1,8 +1,10 @@
+use std::fmt::Debug;
+
 use super::*;
 
 macro_rules! new_key {
     ($vis:vis $key:ident) => {
-        #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+        #[derive(Copy, Clone, PartialEq, Eq, Hash)]
         $vis struct $key(Key<$key>);
 
         impl ArenaKey for $key {
@@ -12,6 +14,12 @@ macro_rules! new_key {
 
             fn to_inner(self) -> Key<Self> {
                 self.0
+            }
+        }
+
+        impl std::fmt::Debug for $key {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}({:?})", stringify!($key), self.0)
             }
         }
     }
@@ -76,9 +84,22 @@ impl<K: ArenaKey, D> Clone for ReadOnlyArena<K, D> {
     }
 }
 
+impl<K: ArenaKey + Debug, D: Debug> Debug for ReadOnlyArena<K, D> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_map().entries(self.iter()).finish()
+    }
+}
+
 impl<K: ArenaKey, D> ReadOnlyArena<K, D> {
     pub(crate) fn get(&self, key: K) -> &D {
         &self.data[key.to_inner().index]
+    }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (K, &D)> {
+        self.data
+            .iter()
+            .enumerate()
+            .map(|(index, v)| (K::from_inner(Key::new(index)), v))
     }
 }
 

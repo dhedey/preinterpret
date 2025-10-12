@@ -289,14 +289,15 @@ impl ParseSource for ForExpression {
         let for_token = input.parse_ident_matching("for")?;
 
         let segment = input.enter_next_segment(SegmentKind::LoopingSequential);
-
         let iteration_scope = input.enter_scope();
         let pattern = input.parse()?;
         input.exit_scope(iteration_scope);
+        input.exit_segment(segment);
 
         let in_token = input.parse_ident_matching("in")?;
         let iterable = input.parse()?;
 
+        input.reenter_segment(segment);
         input.reenter_scope(iteration_scope);
         input.activate_pending_variable_definitions();
         let body = input.parse()?;

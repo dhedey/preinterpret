@@ -116,6 +116,9 @@ impl<'a> ExpressionParser<'a> {
                     "loop" => UnaryAtom::Leaf(Leaf::LoopExpression(input.parse()?)),
                     "while" => UnaryAtom::Leaf(Leaf::WhileExpression(input.parse()?)),
                     "for" => UnaryAtom::Leaf(Leaf::ForExpression(input.parse()?)),
+                    "None" => UnaryAtom::Leaf(Leaf::Value(SharedValue::new_from_owned(
+                        ExpressionValue::None.into_owned(input.parse_any_ident()?.span_range()),
+                    ))),
                     _ => UnaryAtom::Leaf(Leaf::Variable(input.parse()?))
                 }
             },

@@ -98,9 +98,9 @@ impl<T> ExecutionResultExt<T> for ExecutionResult<T> {
         self,
         interpreter: &mut Interpreter,
         should_catch: impl FnOnce(&ControlFlowInterrupt) -> bool,
-        catch_at_scope: ScopeId,
+        return_to_scope: ScopeId,
     ) -> ExecutionResult<ExecutionOutcome<T>> {
-        interpreter.catch_control_flow(self, should_catch, catch_at_scope)
+        interpreter.catch_control_flow(self, should_catch, return_to_scope)
     }
 
     fn catch_execution_error_at_same_scope(self) -> ExecutionResult<Result<T, syn::Error>> {

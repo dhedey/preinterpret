@@ -24,20 +24,24 @@ impl VariableContent {
     pub(crate) fn resolve(
         &mut self,
         variable_span: Span,
-        _is_final: bool,
+        is_final: bool,
         ownership: RequestedValueOwnership,
     ) -> ExecutionResult<LateBoundValue> {
         const UNITIALIZED_ERR: &str = "Cannot resolve uninitialized variable. This shouldn't be possible, because all variables are set on first use.";
         const FINISHED_ERR: &str = "Cannot resolve finished variable. This shouldn't be possible, because is_final should be marked correctly. If you see this error, please report a bug to preinterpret on github with a reproduction case.";
 
-        // TODO[scopes]: FIX is_final which is broken
-        let is_final = false;
         let value_rc = if is_final {
             let content = std::mem::replace(self, VariableContent::Finished);
             match content {
                 VariableContent::Uninitialized => panic!("{}", UNITIALIZED_ERR),
                 VariableContent::Value(ref_cell) => match Rc::try_unwrap(ref_cell) {
                     Ok(ref_cell) => {
+                        if matches!(
+                            ownership,
+                            RequestedValueOwnership::Concrete(ResolvedValueOwnership::Assignee)
+                        ) {
+                            return variable_span.execution_err("The final usage of a variable cannot be assigned to. You can use `let _ = ..` to discard a value.");
+                        }
                         return Ok(LateBoundValue::Owned(Owned::new(
                             ref_cell.into_inner(),
                             variable_span.span_range(),
@@ -68,8 +72,9 @@ impl VariableContent {
                     .into_shared()
                     .map(CopyOnWrite::shared_in_place_of_shared)
                     .map(LateBoundValue::CopyOnWrite),
+                ResolvedValueOwnership::Assignee => binding.into_mut().map(LateBoundValue::Mutable),
                 ResolvedValueOwnership::Mutable => binding.into_mut().map(LateBoundValue::Mutable),
-                ResolvedValueOwnership::CopyOnWrite => binding
+                ResolvedValueOwnership::CopyOnWrite | ResolvedValueOwnership::AsIs => binding
                     .into_shared()
                     .map(CopyOnWrite::shared_in_place_of_shared)
                     .map(LateBoundValue::CopyOnWrite),
@@ -355,6 +360,7 @@ impl<T> WithSpanRangeExt for Owned<T> {
 }
 
 pub(crate) type MutableValue = Mutable<ExpressionValue>;
+pub(crate) struct AssigneeValue(pub Mutable<ExpressionValue>);
 
 /// A binding of a unique (mutable) reference to a value
 /// (e.g. inside a variable) along with a span of the whole access.

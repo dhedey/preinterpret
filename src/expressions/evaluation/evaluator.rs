@@ -51,8 +51,8 @@ impl<'a> ExpressionEvaluator<'a> {
                     stack: &mut self.stack,
                 })?
             }
-            NextActionInner::ReadNodeAsAssignee(node, value) => {
-                self.nodes.get(node).handle_as_assignee(
+            NextActionInner::ReadNodeAsAssignmentTarget(node, value) => {
+                self.nodes.get(node).handle_as_assignment_target(
                     Context {
                         stack: &mut self.stack,
                         interpreter,
@@ -63,13 +63,14 @@ impl<'a> ExpressionEvaluator<'a> {
                     value,
                 )?
             }
-            NextActionInner::ReadNodeAsPlace(node) => {
-                self.nodes.get(node).handle_as_place(Context {
+            NextActionInner::ReadNodeAsAssignee(node) => self.nodes.get(node).handle_as_assignee(
+                Context {
                     stack: &mut self.stack,
                     interpreter,
                     request: (),
-                })?
-            }
+                },
+                node,
+            )?,
             NextActionInner::HandleReturnedItem(item) => {
                 let top_of_stack = match self.stack.handlers.pop() {
                     Some(top) => top,
@@ -134,8 +135,8 @@ impl NextAction {
         NextActionInner::HandleReturnedItem(EvaluationItem::LateBound(late_bound)).into()
     }
 
-    pub(super) fn return_place(place: MutableValue) -> Self {
-        NextActionInner::HandleReturnedItem(EvaluationItem::Place(place)).into()
+    pub(super) fn return_assignee(assignee: MutableValue) -> Self {
+        NextActionInner::HandleReturnedItem(EvaluationItem::Assignee(assignee)).into()
     }
 }
 
@@ -143,13 +144,13 @@ enum NextActionInner {
     /// Enters an expression node to output a value
     ReadNodeAsValue(ExpressionNodeId, RequestedValueOwnership),
     // Enters an expression node for assignment purposes
-    // This covers atomic assignments (to places) and composite assignments
+    // This covers atomic assignments and composite assignments
     // (similar to patterns but for existing values/reassignments)
     // let a = ["x", "y"]; let b; [a[1], .. b] = [1, 2, 3, 4]
-    ReadNodeAsAssignee(ExpressionNodeId, ExpressionValue),
-    // Enters an expression node to output a place (a source for an atomic assignment)
+    ReadNodeAsAssignmentTarget(ExpressionNodeId, ExpressionValue),
+    // Enters an expression node as a location for atomic assignment
     // e.g. the a[1] in a[1] = "4"
-    ReadNodeAsPlace(ExpressionNodeId),
+    ReadNodeAsAssignee(ExpressionNodeId),
     HandleReturnedItem(EvaluationItem),
 }
 
@@ -166,12 +167,10 @@ pub(super) enum EvaluationItem {
     Shared(SharedValue),
     Mutable(MutableValue), // Mutable reference to a value
     CopyOnWrite(CopyOnWriteValue),
-
-    // Place items (for assignment targets)
     // Note that places are handled subtly differently than a mutable value,
     // for example with a place, x["a"] creates an entry if it doesn't exist,
     // whereas with a mutable value it would return None without creating the entry.
-    Place(MutableValue),
+    Assignee(MutableValue),
 
     // Assignment items
     AssignmentCompletion(AssignmentCompletion),
@@ -196,6 +195,12 @@ impl EvaluationItem {
         match self {
             EvaluationItem::Mutable(mutable) => mutable,
             _ => panic!("expect_mutable() called on non-mutable EvaluationItem"),
+        }
+    }
+    pub(super) fn expect_assignee_value(self) -> MutableValue {
+        match self {
+            EvaluationItem::Mutable(assignee) => assignee,
+            _ => panic!("expect_assignee_from_value() called on non-mutable EvaluationItem"),
         }
     }
 
@@ -232,10 +237,10 @@ impl EvaluationItem {
         }
     }
 
-    pub(super) fn expect_place(self) -> MutableValue {
+    pub(super) fn expect_assignee(self) -> MutableValue {
         match self {
-            EvaluationItem::Place(place) => place,
-            _ => panic!("expect_place() called on non-place EvaluationItem"),
+            EvaluationItem::Assignee(assignee) => assignee,
+            _ => panic!("expect_assignee() called on non-assignee EvaluationItem"),
         }
     }
 
@@ -265,7 +270,7 @@ impl EvaluationItem {
 /// [rust reference]: https://doc.rust-lang.org/reference/expressions.html#place-expressions-and-value-expressions
 pub(super) enum AnyEvaluationHandler {
     Value(AnyValueFrame, RequestedValueOwnership),
-    Place(AnyPlaceFrame),
+    Assignee(AnyAssigneeFrame),
     Assignment(AnyAssignmentFrame),
 }
 
@@ -285,7 +290,7 @@ impl AnyEvaluationHandler {
                 },
                 item,
             ),
-            AnyEvaluationHandler::Place(handler) => handler.handle_item(
+            AnyEvaluationHandler::Assignee(handler) => handler.handle_item(
                 Context {
                     interpreter,
                     stack,
@@ -360,6 +365,18 @@ impl<'a, T: EvaluationItemType> Context<'a, T> {
         )
     }
 
+    pub(super) fn handle_node_as_assignee_value<H: EvaluationFrame<ReturnType = T>>(
+        self,
+        handler: H,
+        node: ExpressionNodeId,
+    ) -> NextAction {
+        self.handle_node_as_any_value(
+            handler,
+            node,
+            RequestedValueOwnership::Concrete(ResolvedValueOwnership::Assignee),
+        )
+    }
+
     pub(super) fn handle_node_as_late_bound<H: EvaluationFrame<ReturnType = T>>(
         self,
         handler: H,
@@ -380,7 +397,7 @@ impl<'a, T: EvaluationItemType> Context<'a, T> {
         NextActionInner::ReadNodeAsValue(node, requested_ownership).into()
     }
 
-    pub(super) fn handle_node_as_place<H: EvaluationFrame<ReturnType = T>>(
+    pub(super) fn handle_node_as_assignee<H: EvaluationFrame<ReturnType = T>>(
         self,
         handler: H,
         node: ExpressionNodeId,
@@ -388,7 +405,7 @@ impl<'a, T: EvaluationItemType> Context<'a, T> {
         self.stack
             .handlers
             .push(T::into_unkinded_handler(handler.into_any(), self.request));
-        NextActionInner::ReadNodeAsPlace(node).into()
+        NextActionInner::ReadNodeAsAssignee(node).into()
     }
 
     pub(super) fn handle_node_as_assignment<H: EvaluationFrame<ReturnType = T>>(
@@ -400,7 +417,7 @@ impl<'a, T: EvaluationItemType> Context<'a, T> {
         self.stack
             .handlers
             .push(T::into_unkinded_handler(handler.into_any(), self.request));
-        NextActionInner::ReadNodeAsAssignee(node, value).into()
+        NextActionInner::ReadNodeAsAssignmentTarget(node, value).into()
     }
 
     pub(super) fn interpreter(&mut self) -> &mut Interpreter {
@@ -477,9 +494,10 @@ impl<'a> Context<'a, ValueType> {
             EvaluationItem::Owned(owned) => self.return_owned(owned),
             EvaluationItem::Shared(shared) => self.return_shared(shared),
             EvaluationItem::Mutable(mutable) => self.return_mutable(mutable),
+            EvaluationItem::Assignee(assignee) => self.return_mutable(assignee),
             EvaluationItem::LateBound(late_bound_value) => self.return_late_bound(late_bound_value),
             EvaluationItem::CopyOnWrite(copy_on_write) => self.return_copy_on_write(copy_on_write),
-            EvaluationItem::Place { .. } | EvaluationItem::AssignmentCompletion { .. } => {
+            EvaluationItem::AssignmentCompletion { .. } => {
                 panic!("Returning a non-value item from a value context")
             }
         }
@@ -532,25 +550,25 @@ impl<'a> Context<'a, ValueType> {
     }
 }
 
-pub(super) struct PlaceType;
+pub(super) struct AssigneeType;
 
-pub(super) type PlaceContext<'a> = Context<'a, PlaceType>;
+pub(super) type AssigneeContext<'a> = Context<'a, AssigneeType>;
 
-impl EvaluationItemType for PlaceType {
+impl EvaluationItemType for AssigneeType {
     type RequestConstraints = ();
-    type AnyHandler = AnyPlaceFrame;
+    type AnyHandler = AnyAssigneeFrame;
 
     fn into_unkinded_handler(
         handler: Self::AnyHandler,
         (): Self::RequestConstraints,
     ) -> AnyEvaluationHandler {
-        AnyEvaluationHandler::Place(handler)
+        AnyEvaluationHandler::Assignee(handler)
     }
 }
 
-impl<'a> Context<'a, PlaceType> {
-    pub(super) fn return_place(self, place: MutableValue) -> NextAction {
-        NextAction::return_place(place)
+impl<'a> Context<'a, AssigneeType> {
+    pub(super) fn return_assignee(self, assignee: MutableValue) -> NextAction {
+        NextAction::return_assignee(assignee)
     }
 }
 

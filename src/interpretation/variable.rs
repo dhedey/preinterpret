@@ -126,12 +126,12 @@ impl VariableReference {
             .expect_owned())
     }
 
-    pub(crate) fn resolve_mutable(
+    pub(crate) fn resolve_assignee(
         &self,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<MutableValue> {
         Ok(self
-            .resolve_resolved(interpreter, ResolvedValueOwnership::Mutable)?
+            .resolve_resolved(interpreter, ResolvedValueOwnership::Assignee)?
             .expect_mutable())
     }
 

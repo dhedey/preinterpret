@@ -207,6 +207,10 @@ impl<'a> SourceParseBuffer<'a> {
             .update(|s| s.enter_path_segment(previous_sibling_id, segment_kind))
     }
 
+    pub(crate) fn reenter_segment(&self, segment_id: ControlFlowSegmentId) {
+        self.context.update(|s| s.reenter_segment(segment_id))
+    }
+
     pub(crate) fn exit_segment(&self, segment_id: ControlFlowSegmentId) {
         self.context.update(|s| s.exit_segment(segment_id))
     }

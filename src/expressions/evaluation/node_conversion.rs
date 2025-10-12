@@ -14,7 +14,7 @@ impl ExpressionNode {
                         context.return_owned(value.into_owned(command.span_range()))?
                     }
                     Leaf::Discarded(token) => {
-                        return token.execution_err("This cannot be used in a value expression");
+                        return token.execution_err("This cannot be used in a value expression.");
                     }
                     Leaf::Variable(variable) => match context.requested_ownership() {
                         RequestedValueOwnership::LateBound => {
@@ -111,7 +111,7 @@ impl ExpressionNode {
         })
     }
 
-    pub(super) fn handle_as_assignee(
+    pub(super) fn handle_as_assignment_target(
         &self,
         context: AssignmentContext,
         nodes: &ReadOnlyArena<ExpressionNodeId, ExpressionNode>,
@@ -122,9 +122,6 @@ impl ExpressionNode {
         value: ExpressionValue,
     ) -> ExecutionResult<NextAction> {
         Ok(match self {
-            ExpressionNode::Leaf(Leaf::Variable(_))
-            | ExpressionNode::Index { .. }
-            | ExpressionNode::Property { .. } => PlaceAssigner::start(context, self_node_id, value),
             ExpressionNode::Leaf(Leaf::Discarded(underscore)) => {
                 context.return_assignment_completion(underscore.span_range())
             }
@@ -138,34 +135,37 @@ impl ExpressionNode {
                 ObjectBasedAssigner::start(context, braces, entries, value)?
             }
             ExpressionNode::Grouped { inner, .. } => GroupedAssigner::start(context, *inner, value),
-            other => {
-                return other
-                    .operator_span_range()
-                    .execution_err("This type of expression is not supported as an assignee. You may wish to use `_` to ignore the value.");
-            }
+            // This handles:
+            // - Standard Variable assignment
+            // - Property assignment (allowing for creation of fields)
+            // - Index assignment (allowing for creation of keys)
+            // - Assignment to any mutable value (e.g. x.as_mut())
+            _ => AssigneeAssigner::start(context, self_node_id, value),
         })
     }
 
-    pub(super) fn handle_as_place(&self, mut context: PlaceContext) -> ExecutionResult<NextAction> {
+    pub(super) fn handle_as_assignee(
+        &self,
+        mut context: AssigneeContext,
+        self_node_id: ExpressionNodeId,
+    ) -> ExecutionResult<NextAction> {
         Ok(match self {
             ExpressionNode::Leaf(Leaf::Variable(variable)) => {
-                let mutable = variable.resolve_mutable(context.interpreter())?;
-                context.return_place(mutable)
+                let mutable = variable.resolve_assignee(context.interpreter())?;
+                context.return_assignee(mutable)
             }
             ExpressionNode::Index {
                 node,
                 access,
                 index,
-            } => PlaceIndexer::start(context, *node, *access, *index),
+            } => IndexedAssignee::start(context, *node, *access, *index),
             ExpressionNode::Property { node, access, .. } => {
-                PlacePropertyAccessor::start(context, *node, access.clone())
+                PropertyAccessedAssignee::start(context, *node, access.clone())
             }
-            ExpressionNode::Grouped { inner, .. } => PlaceGrouper::start(context, *inner),
-            other => {
-                return other
-                    .operator_span_range()
-                    .execution_err("This expression cannot be resolved into a memory location.");
-            }
+            ExpressionNode::Grouped { inner, .. } => GroupedAssignee::start(context, *inner),
+            // If we don't need special place-based handling (e.g. for creating a new entry in an object)
+            // Then let's just resolve via a mutable value
+            _ => ValueBasedAssignee::start(context, self_node_id),
         })
     }
 }

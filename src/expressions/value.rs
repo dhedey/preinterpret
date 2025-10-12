@@ -126,12 +126,13 @@ define_interface! {
                 this.into_owned_infallible()
             }
 
-            fn take_owned(mut this: MutableValue) -> ExpressionValue {
-                core::mem::replace(this.deref_mut(), ExpressionValue::None)
-            }
-
-            fn as_mut(this: OwnedValue) -> MutableValue {
-                MutableValue::new_from_owned(this)
+            fn as_mut(this: ResolvedValue) -> ExecutionResult<MutableValue> {
+                Ok(match this {
+                    ResolvedValue::Owned(owned) => Mutable::new_from_owned(owned),
+                    ResolvedValue::CopyOnWrite(copy_on_write) => ResolvedValueOwnership::Mutable.map_from_copy_on_write(copy_on_write)?.expect_mutable(),
+                    ResolvedValue::Mutable(mutable) => mutable,
+                    ResolvedValue::Shared(shared) => ResolvedValueOwnership::Mutable.map_from_shared(shared)?.expect_mutable(),
+                })
             }
 
             // NOTE:
@@ -140,8 +141,12 @@ define_interface! {
                 this
             }
 
-            fn swap(mut a: MutableValue, mut b: MutableValue) -> () {
-                core::mem::swap(a.deref_mut(), b.deref_mut());
+            fn swap(mut a: AssigneeValue, mut b: AssigneeValue) -> () {
+                core::mem::swap(a.0.deref_mut(), b.0.deref_mut());
+            }
+
+            fn replace(mut a: AssigneeValue, b: ExpressionValue) -> ExpressionValue {
+                core::mem::replace(a.0.deref_mut(), b)
             }
 
             fn debug(this: CopyOnWriteValue) -> ExecutionResult<()> {
@@ -306,7 +311,7 @@ impl ExpressionValue {
     ) -> ExecutionResult<ExpressionValue> {
         if !self.kind().supports_transparent_cloning() {
             return error_span_range.execution_err(format!(
-                "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .take_owned() or .clone() explicitly.",
+                "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .clone() explicitly.",
                 self.articled_value_type()
             ));
         }

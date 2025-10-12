@@ -109,7 +109,7 @@ fn iterator_next() {
 fn iterator_skip_and_take() {
     run! {
         let iterator = ('A'..).into_iter();
-        %[].assert_eq(iterator.take_owned().skip(1).take(4).to_string(), "BCDE");
+        %[].assert_eq(iterator.skip(1).take(4).to_string(), "BCDE");
     }
 }
 
@@ -222,35 +222,35 @@ fn test_intersperse() {
     assert_eq!(
         run!(
             let settings = %{ add_trailing: true, final_separator: " and " };
-            %[Red Green Blue].intersperse(", ", settings.take_owned()).to_string()
+            %[Red Green Blue].intersperse(", ", settings).to_string()
         ),
         "Red, Green, Blue and "
     );
     assert_eq!(
         run!(
             let settings = %{ add_trailing: true, final_separator: " and " };
-            %[].intersperse(", ", settings.take_owned()).to_string()
+            %[].intersperse(", ", settings).to_string()
         ),
         ""
     );
     assert_eq!(
         run!(
             let settings = %{ final_separator: "!" };
-            %[SingleItem].intersperse(%[","], settings.take_owned()).to_string()
+            %[SingleItem].intersperse(%[","], settings).to_string()
         ),
         "SingleItem"
     );
     assert_eq!(
         run!(
             let settings = %{ final_separator: "!", add_trailing: true };
-            %[SingleItem].intersperse(%[","], settings.take_owned()).to_string()
+            %[SingleItem].intersperse(%[","], settings).to_string()
         ),
         "SingleItem!"
     );
     assert_eq!(
         run!(
             let settings = %{ add_trailing: true };
-            %[SingleItem].intersperse(",", settings.take_owned()).to_string()
+            %[SingleItem].intersperse(",", settings).to_string()
         ),
         "SingleItem,"
     );
@@ -307,8 +307,8 @@ fn complex_cases_for_intersperse_and_input_types() {
             let final_separator = [" and "];
             let add_trailing = false;
             people.intersperse(
-                separator.take_owned(),
-                %{ final_separator: final_separator.take_owned(), add_trailing },
+                separator,
+                %{ final_separator: final_separator, add_trailing },
             ).to_string()
         ),
         "Anna, Barbara and Charlie"
@@ -344,7 +344,7 @@ fn test_zip() {
         #(
             let longer = %[A B C D];
             let shorter = [1, 2, 3];
-            [longer, shorter.take_owned()].zip_truncated().to_debug_string()
+            [longer, shorter].zip_truncated().to_debug_string()
         ),
         r#"[[%[A], 1], [%[B], 2], [%[C], 3]]"#,
     );
@@ -352,7 +352,7 @@ fn test_zip() {
         #(
             let letters = %[A B C];
             let numbers = [1, 2, 3];
-            [letters, numbers.take_owned()].zip().to_debug_string()
+            [letters, numbers].zip().to_debug_string()
         ),
         r#"[[%[A], 1], [%[B], 2], [%[C], 3]]"#,
     );
@@ -360,7 +360,7 @@ fn test_zip() {
         #(
             let letters = %[A B C];
             let numbers = [1, 2, 3];
-            %{ number: numbers.take_owned(), letter: letters }.zip().to_debug_string()
+            %{ number: numbers, letter: letters }.zip().to_debug_string()
         ),
         r#"[%{ letter: %[A], number: 1 }, %{ letter: %[B], number: 2 }, %{ letter: %[C], number: 3 }]"#,
     );
@@ -383,11 +383,11 @@ fn test_zip_with_for() {
             let flags = ["🇫🇷", "🇩🇪", "🇮🇹"];
             let capitals = %["Paris" "Berlin" "Rome"];
             let facts = [];
-            for [country, flag, capital] in [countries, flags.take_owned(), capitals].zip() {
+            for [country, flag, capital] in [countries, flags, capitals].zip() {
                 facts.push(%["=> The capital of " #country " is " #capital " and its flag is " #flag].to_string());
             }
 
-            "The facts are:\n" + facts.take_owned().intersperse("\n").to_string() + "\n"
+            "The facts are:\n" + facts.intersperse("\n").to_string() + "\n"
         },
         r#"The facts are:
 => The capital of France is Paris and its flag is 🇫🇷
@@ -431,7 +431,7 @@ fn test_split() {
                 drop_empty_middle: true,
                 drop_empty_end: true,
             };
-            %[;A;;B;C;D #x E;].split(x, options.take_owned()).to_stream_grouped().to_debug_string()
+            %[;A;;B;C;D #x E;].split(x, options).to_stream_grouped().to_debug_string()
         ),
         "%[%group[A] %group[B] %group[C] %group[D] %group[E]]"
     );
@@ -444,7 +444,7 @@ fn test_split() {
                 drop_empty_middle: false,
                 drop_empty_end: false,
             };
-            %[;A;;B;C;D #x E;].split(x, options.take_owned()).to_stream_grouped().to_debug_string()
+            %[;A;;B;C;D #x E;].split(x, options).to_stream_grouped().to_debug_string()
         ),
         "%[%group[] %group[A] %group[] %group[B] %group[C] %group[D] %group[E] %group[]]"
     );
@@ -456,7 +456,7 @@ fn test_split() {
                 drop_empty_middle: true,
                 drop_empty_end: false,
             };
-            %[;A;;B;;;;E;].split(%[;], options.take_owned()).to_debug_string()
+            %[;A;;B;;;;E;].split(%[;], options).to_debug_string()
         ),
         "[%[], %[A], %[B], %[E], %[]]"
     );

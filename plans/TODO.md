@@ -107,14 +107,20 @@ Create the following expressions:
   - [x] Variable places go through `Unallocated` | `Occupied` | `Removed`
   - [x] Variables are read / written based on binding ids
 - [ ] Fix marking references as final:
-  - [ ] Fix the basic algorithm
   - [ ] Fix bug that the parse order isn't necessarily the execution order, e.g. `y[x] = x + 1`.
-        Maybe the expression has its own segment; and we use some visitor pattern once the expression has been parsed to form a list of children;
-        then re-order the children in the segment?
-  - [ ] Final variable references can be taken as owned, get rid of `.take_owned()` method
-- [ ] Fix `TODO[scopes]`
+  - [ ] Consider multiple passes
+    * Parsing/Assignment pass - the parse, and preallocate ids for scopes, definitions and references
+    * Control-Flow order pass:
+      * The `SourceParse` trait also defines a `visit_in_control_flow_order` method 
+      * So we go in execution order and do the scope entering/exiting and assign ScopeId + segment structure, and define / link DefinitionId and ReferenceId.
+      * Will need an expression visitor mirroring the frames.
+        To not make the manual stack-frames of the parser worthless, it needs to be
+        manually stack based. But each stack-frame can just be a `Vec<(NodeId, Type::Value/Assignment/Assignee)>`
+    * Then calculate the first use
+    * Optionally consider writing `ResolvedReference(Span/ScopeId/DefinitionId/IsFirstUse)` data directly back into the Reference via a `Rc<Cell<ReferenceContent::Resolved(ResolvedReference)>>` to set the values (from a `ReferenceContent::Parsed(Ident, ReferenceId)`)
+- [ ] Fix all `TODO[scopes]`
 - [ ] Tests
-  - [ ] Add test macro for dumping variable binding `is_final` information and create lots of tests, involving if blocks, loops, etc etc. e.g. it could output `x: false, false, true`
+  - [ ] Add test macro for asserting variable binding `is_final` information, e.g. with a `x[final]` and `x[not_final]` syntax?
   - [ ] Add tests for things like `let x = %[1]; let x = %[2] + x; x`
   - [ ] Add tests for things like `let x = %[1]; { let x = %[2] + x; }; x`
   - [ ] Add test that `let x; x = { let x = 123; x = 456; 5 }`. resolves correctly with `x = 5`.
@@ -320,6 +326,7 @@ Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` doc
 
 ## Final considerations
 
+* Merge `assignee_frames` into `value_frames` as per comment as the top of `assignee_frames`
 * Add `preinterpret::macro` - can this be a declarative macro? Would be slightly more efficient, as it just needs to wrap a call to `preinterpret::stream` or `preinterpret::run`...
 * Add `LiteralPattern` (wrapping a `Literal`)
 * Add `Eq` support on composite types and streams

@@ -542,6 +542,33 @@ fn preinterpret_run_internal(input: TokenStream) -> SynResult<TokenStream> {
     }
 }
 
+/// Returns the scope and segment information for the given code.
+#[cfg(feature = "debug")]
+#[proc_macro]
+pub fn scope_debug(token_stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    debug::scope_debug(proc_macro2::TokenStream::from(token_stream))
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
+}
+
+#[cfg(feature = "debug")]
+mod debug {
+    use super::*;
+
+    pub(super) fn scope_debug(input: TokenStream) -> SynResult<TokenStream> {
+        let (_, scopes) = input
+            .clone()
+            .full_source_parse_with(ExpressionBlockContent::parse)
+            .convert_to_final_result()?;
+
+        let output = format!("{:#?}", scopes);
+
+        Ok(TokenStream::from_iter([TokenTree::Literal(
+            Literal::string(output.as_str()),
+        )]))
+    }
+}
+
 /// Interprets its input as a preinterpret expression block, which should return a token stream.
 ///
 /// See the [crate-level documentation](crate) for full details.

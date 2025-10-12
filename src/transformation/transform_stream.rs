@@ -254,7 +254,7 @@ impl HandleTransformation for StreamParserContent {
             StreamParserContent::ExtendToVariable {
                 variable, content, ..
             } => {
-                let mutable = variable.resolve_mutable(interpreter)?;
+                let mutable = variable.resolve_assignee(interpreter)?;
                 content.handle_transform(input, interpreter, mutable.into_stream()?.as_mut())?;
             }
             StreamParserContent::Discard { content, .. } => {

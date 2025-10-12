@@ -7,12 +7,12 @@ macro_rules! capitalize_variants {
         let variants = [];
         for variant in [$(%raw[$variants]),*] {
             let capitalized = variant.to_string().capitalize().to_ident().with_span(variant);
-            variants.push(capitalized.take_owned());
+            variants.push(capitalized);
         }
 
         %[
             enum #enum_name {
-                #(variants.take_owned().intersperse(%[,]))
+                #(variants.intersperse(%[,]))
             }
         ]
     }};

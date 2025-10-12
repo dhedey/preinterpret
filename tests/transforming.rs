@@ -86,10 +86,10 @@ fn test_variable_parsing() {
             (
                 // #>>..x - Matches one tt... and appends it flattened: This is an exciting adventure
                 @(#c = @TOKEN_TREE)
-                #(x += c.take_owned().flatten())
+                #(x += c.flatten())
                 // #..>>..x - Matches stream until end, and appends it flattened: do you agree ?
                 @(#c = @REST)
-                #(x += c.take_owned().flatten())
+                #(x += c.flatten())
             )
         ] = %[Why %group[it is fun to be here] Hello Everyone (%group[This is an exciting adventure] do you agree?)];
         x.to_debug_string()
@@ -193,7 +193,7 @@ fn test_group_transformer() {
         run! {
             let x = %["hello" "world"].to_group();
             let %[I said @(#y = @TOKEN_TREE)!] = %[I said #x!];
-            y.take_owned().flatten().to_debug_string()
+            y.flatten().to_debug_string()
         },
         "%[\"hello\" \"world\"]"
     );
@@ -203,7 +203,7 @@ fn test_group_transformer() {
 fn test_none_output_commands_mid_parse() {
     assert_eq!(
         run! {
-            let %[The "quick" @(#x = @LITERAL) fox #{ let y = x.take_owned().infer(); } @(#x = @IDENT)] = %[The "quick" "brown" fox jumps];
+            let %[The "quick" @(#x = @LITERAL) fox #{ let y = x.infer(); } @(#x = @IDENT)] = %[The "quick" "brown" fox jumps];
             ["#x = ", x.to_debug_string(), "; #y = ", y.to_debug_string()].to_string()
         },
         "#x = %[jumps]; #y = \"brown\""

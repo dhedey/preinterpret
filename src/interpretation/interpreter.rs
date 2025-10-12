@@ -58,14 +58,14 @@ impl Interpreter {
         &mut self,
         input: ExecutionResult<T>,
         should_catch: impl FnOnce(&ControlFlowInterrupt) -> bool,
-        catch_at_scope: ScopeId,
+        return_to_scope: ScopeId,
     ) -> ExecutionResult<ExecutionOutcome<T>> {
         let output = match input {
             Ok(value) => Ok(ExecutionOutcome::Value(value)),
             Err(interrupt) => interrupt.into_outcome::<T>(should_catch),
         };
         if let Ok(ExecutionOutcome::ControlFlow(_)) = &output {
-            self.handle_catch(catch_at_scope)
+            self.handle_catch(return_to_scope)
         }
         output
     }

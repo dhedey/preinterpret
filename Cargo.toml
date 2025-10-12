@@ -26,6 +26,7 @@ required-features = ["benchmark"]
 
 [features]
 benchmark = [] # For internal use only
+debug = [] # Non-stable, for internal use only
 
 [dependencies]
 proc-macro2 = { version = "1.0.93" }
