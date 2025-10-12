@@ -30,23 +30,16 @@ impl HasSpanRange for EmbeddedExpression {
     }
 }
 
-impl EmbeddedExpression {
-    pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
-        self.content.evaluate(interpreter)
-    }
-}
-
 impl Interpret for EmbeddedExpression {
     fn interpret_into(
         &self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        self.evaluate(interpreter)?.output_to(
+        self.content.evaluate_shared(interpreter)?.output_to(
             Grouping::Flattened,
             &mut ToStreamContext::new(output, self.span_range()),
-        )?;
-        Ok(())
+        )
     }
 }
 
@@ -80,22 +73,23 @@ impl HasSpanRange for EmbeddedStatements {
     }
 }
 
-impl EmbeddedStatements {
-    pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
-        self.content.evaluate(interpreter, self.span_range())
-    }
-}
-
 impl Interpret for EmbeddedStatements {
     fn interpret_into(
         &self,
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        self.evaluate(interpreter)?.output_to(
-            Grouping::Flattened,
-            &mut ToStreamContext::new(output, self.span_range()),
-        )?;
+        self.content
+            .evaluate(
+                interpreter,
+                self.span_range(),
+                RequestedValueOwnership::shared(),
+            )?
+            .expect_shared()
+            .output_to(
+                Grouping::Flattened,
+                &mut ToStreamContext::new(output, self.span_range()),
+            )?;
         Ok(())
     }
 }
@@ -134,11 +128,25 @@ impl HasSpan for ExpressionBlock {
 }
 
 impl ExpressionBlock {
-    pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
+    pub(crate) fn evaluate(
+        &self,
+        interpreter: &mut Interpreter,
+        ownership: RequestedValueOwnership,
+    ) -> ExecutionResult<EvaluationItem> {
         interpreter.enter_scope(self.scope);
-        let output = self.content.evaluate(interpreter, self.span().into())?;
+        let output = self
+            .content
+            .evaluate(interpreter, self.span().into(), ownership)?;
         interpreter.exit_scope(self.scope);
         Ok(output)
+    }
+
+    pub(crate) fn evaluate_owned(
+        &self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<OwnedValue> {
+        self.evaluate(interpreter, RequestedValueOwnership::owned())
+            .map(|x| x.expect_owned())
     }
 }
 
@@ -186,17 +194,18 @@ impl ExpressionBlockContent {
         &self,
         interpreter: &mut Interpreter,
         output_span_range: SpanRange,
-    ) -> ExecutionResult<OwnedValue> {
+        ownership: RequestedValueOwnership,
+    ) -> ExecutionResult<EvaluationItem> {
         for (i, (statement, semicolon)) in self.statements.iter().enumerate() {
             let is_last = i == self.statements.len() - 1;
             if is_last && semicolon.is_none() {
-                let owned_value = statement.evaluate_as_returning_expression(interpreter)?;
-                return Ok(owned_value.with_span_range(output_span_range));
+                let value = statement.evaluate_as_returning_expression(interpreter, ownership)?;
+                return Ok(value.with_span_range(output_span_range));
             } else {
                 statement.evaluate_as_statement(interpreter)?;
             }
         }
-        Ok(ExpressionValue::None.into_owned(output_span_range))
+        ownership.map_from_owned(ExpressionValue::None.into_owned(output_span_range))
     }
 }
 
@@ -258,9 +267,10 @@ impl Statement {
     fn evaluate_as_returning_expression(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<OwnedValue> {
+        ownership: RequestedValueOwnership,
+    ) -> ExecutionResult<EvaluationItem> {
         match self {
-            Statement::Expression(expression) => expression.evaluate(interpreter),
+            Statement::Expression(expression) => expression.evaluate(interpreter, ownership),
             Statement::LetStatement(_)
             | Statement::BreakStatement(_)
             | Statement::ContinueStatement(_) => {
@@ -329,7 +339,10 @@ impl LetStatement {
             assignment,
         } = self;
         let value = match assignment {
-            Some(assignment) => assignment.expression.evaluate(interpreter)?.into_inner(),
+            Some(assignment) => assignment
+                .expression
+                .evaluate_owned(interpreter)?
+                .into_inner(),
             None => ExpressionValue::None,
         };
         pattern.handle_destructure(interpreter, value)?;

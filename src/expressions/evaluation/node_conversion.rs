@@ -9,7 +9,6 @@ impl ExpressionNode {
             ExpressionNode::Leaf(leaf) => {
                 match leaf {
                     Leaf::Command(command) => {
-                        // TODO[interpret_to_value]: Allow command to return a reference
                         let value = command.evaluate(context.interpreter())?;
                         context.return_owned(value.into_owned(command.span_range()))?
                     }
@@ -28,22 +27,24 @@ impl ExpressionNode {
                         }
                     },
                     Leaf::Block(block) => {
-                        // TODO[interpret_to_value]: Allow block to return reference
-                        let value = block.evaluate(context.interpreter())?;
-                        context.return_owned(value)?
+                        let ownership = context.requested_ownership();
+                        let item = block.evaluate(context.interpreter(), ownership)?;
+                        context.return_item(item)?
                     }
                     Leaf::Value(value) => {
                         // We return a freely clonable CopyOnWrite in order to delay the clone of the literal if it's not necessary
+                        // This allows something like e.g. x[0][5][2] to only clone the innermost value instead of the full multi-dimensional array
                         let value = CopyOnWrite::shared_in_place_of_owned(Shared::clone(value));
                         context.return_copy_on_write(value)?
                     }
                     Leaf::StreamLiteral(stream_literal) => {
-                        let value = stream_literal.clone().evaluate(context.interpreter())?;
-                        context.return_owned(value.into_owned(stream_literal.span_range()))?
+                        let value = stream_literal.evaluate(context.interpreter())?;
+                        context.return_owned(value.into_owned_value(stream_literal.span_range()))?
                     }
                     Leaf::IfExpression(if_expression) => {
-                        let value = if_expression.evaluate(context.interpreter())?;
-                        context.return_owned(value)?
+                        let ownership = context.requested_ownership();
+                        let item = if_expression.evaluate(context.interpreter(), ownership)?;
+                        context.return_item(item)?
                     }
                     Leaf::LoopExpression(loop_expression) => {
                         let value =

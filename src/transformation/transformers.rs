@@ -241,7 +241,7 @@ impl TransformerDefinition for ExactTransformer {
         // To save confusion about parse order.
         let stream: ExpressionStream = self
             .stream
-            .evaluate(interpreter)?
+            .evaluate_owned(interpreter)?
             .resolve_as("Input to the EXACT parser")?;
         stream.value.parse_exact_match(input, output)
     }

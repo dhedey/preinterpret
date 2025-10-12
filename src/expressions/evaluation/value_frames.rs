@@ -105,12 +105,126 @@ pub(crate) enum RequestedValueOwnership {
 }
 
 impl RequestedValueOwnership {
-    pub(super) fn replace_owned_with_copy_on_write(self) -> Self {
+    pub(crate) fn owned() -> Self {
+        RequestedValueOwnership::Concrete(ResolvedValueOwnership::Owned)
+    }
+
+    pub(crate) fn shared() -> Self {
+        RequestedValueOwnership::Concrete(ResolvedValueOwnership::Shared)
+    }
+
+    pub(crate) fn copy_on_write() -> Self {
+        RequestedValueOwnership::Concrete(ResolvedValueOwnership::CopyOnWrite)
+    }
+
+    pub(crate) fn replace_owned_with_copy_on_write(self) -> Self {
         match self {
             RequestedValueOwnership::Concrete(ResolvedValueOwnership::Owned) => {
                 RequestedValueOwnership::Concrete(ResolvedValueOwnership::CopyOnWrite)
             }
             _ => self,
+        }
+    }
+
+    pub(crate) fn map_from_late_bound(
+        &self,
+        late_bound: LateBoundValue,
+    ) -> ExecutionResult<EvaluationItem> {
+        Ok(match self {
+            RequestedValueOwnership::LateBound => EvaluationItem::LateBound(late_bound),
+            RequestedValueOwnership::Concrete(_) => {
+                panic!("Returning a late-bound reference when concrete ownership was requested")
+            }
+        })
+    }
+
+    pub(crate) fn map_from_resolved(
+        &self,
+        value: ResolvedValue,
+    ) -> ExecutionResult<EvaluationItem> {
+        match value {
+            ResolvedValue::Owned(owned) => self.map_from_owned(owned),
+            ResolvedValue::Mutable(mutable) => self.map_from_mutable(mutable),
+            ResolvedValue::Shared(shared) => self.map_from_shared(shared),
+            ResolvedValue::CopyOnWrite(copy_on_write) => self.map_from_copy_on_write(copy_on_write),
+        }
+    }
+
+    /// This ensures the item's type aligns with the requested ownership.
+    pub(crate) fn map_from_item(&self, value: EvaluationItem) -> ExecutionResult<EvaluationItem> {
+        match value {
+            EvaluationItem::Owned(owned) => self.map_from_owned(owned),
+            EvaluationItem::Shared(shared) => self.map_from_shared(shared),
+            EvaluationItem::Mutable(mutable) => self.map_from_mutable(mutable),
+            EvaluationItem::Assignee(assignee) => self.map_from_mutable(assignee),
+            EvaluationItem::LateBound(late_bound_value) => {
+                self.map_from_late_bound(late_bound_value)
+            }
+            EvaluationItem::CopyOnWrite(copy_on_write) => {
+                self.map_from_copy_on_write(copy_on_write)
+            }
+            EvaluationItem::AssignmentCompletion { .. } => {
+                panic!("Returning a non-value item from a value context")
+            }
+        }
+    }
+
+    pub(crate) fn map_from_owned(&self, value: OwnedValue) -> ExecutionResult<EvaluationItem> {
+        match self {
+            RequestedValueOwnership::LateBound => {
+                Ok(EvaluationItem::LateBound(LateBoundValue::Owned(value)))
+            }
+            RequestedValueOwnership::Concrete(requested) => requested
+                .map_from_owned(value)
+                .map(Self::item_from_resolved),
+        }
+    }
+
+    pub(crate) fn map_from_copy_on_write(
+        &self,
+        cow: CopyOnWriteValue,
+    ) -> ExecutionResult<EvaluationItem> {
+        match self {
+            RequestedValueOwnership::LateBound => {
+                Ok(EvaluationItem::LateBound(LateBoundValue::CopyOnWrite(cow)))
+            }
+            RequestedValueOwnership::Concrete(requested) => requested
+                .map_from_copy_on_write(cow)
+                .map(Self::item_from_resolved),
+        }
+    }
+
+    pub(crate) fn map_from_mutable(
+        &self,
+        mutable: MutableValue,
+    ) -> ExecutionResult<EvaluationItem> {
+        match self {
+            RequestedValueOwnership::LateBound => {
+                Ok(EvaluationItem::LateBound(LateBoundValue::Mutable(mutable)))
+            }
+            RequestedValueOwnership::Concrete(requested) => requested
+                .map_from_mutable(mutable)
+                .map(Self::item_from_resolved),
+        }
+    }
+
+    pub(crate) fn map_from_shared(&self, shared: SharedValue) -> ExecutionResult<EvaluationItem> {
+        match self {
+            RequestedValueOwnership::LateBound => {
+                panic!("Returning a shared reference when late-bound was requested")
+            }
+            RequestedValueOwnership::Concrete(requested) => requested
+                .map_from_shared(shared)
+                .map(Self::item_from_resolved),
+        }
+    }
+
+    fn item_from_resolved(value: ResolvedValue) -> EvaluationItem {
+        match value {
+            ResolvedValue::Owned(owned) => EvaluationItem::Owned(owned),
+            ResolvedValue::Mutable(mutable) => EvaluationItem::Mutable(mutable),
+            ResolvedValue::Shared(shared) => EvaluationItem::Shared(shared),
+            ResolvedValue::CopyOnWrite(copy_on_write) => EvaluationItem::CopyOnWrite(copy_on_write),
         }
     }
 }
@@ -1076,7 +1190,9 @@ impl EvaluationFrame for MethodCallBuilder {
                 let caller = argument_ownerships[0].map_from_late_bound(caller)?;
 
                 // We skip 1 to ignore the caller
-                let non_self_argument_ownerships = argument_ownerships.iter().skip(1);
+                let non_self_argument_ownerships: iter::Skip<
+                    std::slice::Iter<'_, ResolvedValueOwnership>,
+                > = argument_ownerships.iter().skip(1);
                 for ((_, requested_ownership), ownership) in self
                     .unevaluated_parameters_stack
                     .iter_mut()

@@ -140,6 +140,15 @@ impl LateBoundSharedValue {
     }
 }
 
+impl WithSpanRangeExt for LateBoundSharedValue {
+    fn with_span_range(self, span_range: SpanRange) -> Self {
+        Self {
+            shared: self.shared.with_span_range(span_range),
+            reason_not_mutable: self.reason_not_mutable,
+        }
+    }
+}
+
 /// Universal value type that can resolve to any concrete ownership type.
 ///
 /// Sometimes, a value can be accessed, but we don't yet know *how* we need to access it.
@@ -218,6 +227,25 @@ impl HasSpanRange for LateBoundValue {
             LateBoundValue::CopyOnWrite(cow) => cow.span_range(),
             LateBoundValue::Mutable(mutable) => mutable.span_range,
             LateBoundValue::Shared(shared) => shared.shared.span_range,
+        }
+    }
+}
+
+impl WithSpanRangeExt for LateBoundValue {
+    fn with_span_range(self, span_range: SpanRange) -> Self {
+        match self {
+            LateBoundValue::Owned(owned) => {
+                LateBoundValue::Owned(owned.with_span_range(span_range))
+            }
+            LateBoundValue::CopyOnWrite(cow) => {
+                LateBoundValue::CopyOnWrite(cow.with_span_range(span_range))
+            }
+            LateBoundValue::Mutable(mutable) => {
+                LateBoundValue::Mutable(mutable.with_span_range(span_range))
+            }
+            LateBoundValue::Shared(shared) => {
+                LateBoundValue::Shared(shared.with_span_range(span_range))
+            }
         }
     }
 }

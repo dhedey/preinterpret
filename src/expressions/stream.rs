@@ -24,7 +24,7 @@ impl ExpressionStream {
         Ok(match operation.operation {
             PairedBinaryOperation::Addition { .. } => operation.output({
                 let mut stream = lhs;
-                rhs.append_cloned_into(&mut stream);
+                rhs.append_into(&mut stream);
                 stream
             }),
             PairedBinaryOperation::Subtraction { .. }
@@ -228,7 +228,7 @@ define_interface! {
                 // TODO[scopes] fix this! (see comment below)
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(ExpressionBlockContent::parse, ExpressionBlockContent::control_flow_pass)?;
                 let mut inner_interpreter = Interpreter::new(scope_definitions);
-                reparsed.evaluate(&mut inner_interpreter, context.output_span_range)
+                Ok(reparsed.evaluate(&mut inner_interpreter, context.output_span_range, RequestedValueOwnership::owned())?.expect_owned())
             }
 
             [context] fn reinterpret_as_stream(this: Owned<ExpressionStream>) -> ExecutionResult<OutputStream> {
@@ -348,12 +348,12 @@ impl HasSpanRange for StreamLiteral {
 }
 
 impl Evaluate for StreamLiteral {
-    type OutputValue = ExpressionValue;
+    type OutputValue = OutputStream;
 
     fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<Self::OutputValue> {
         match self {
             StreamLiteral::Regular(lit) => lit.evaluate(interpreter),
-            StreamLiteral::Raw(lit) => lit.evaluate(interpreter),
+            StreamLiteral::Raw(lit) => Ok(lit.evaluate()),
             StreamLiteral::Grouped(lit) => lit.evaluate(interpreter),
         }
     }
@@ -401,10 +401,10 @@ impl HasSpanRange for RegularStreamLiteral {
 }
 
 impl Evaluate for RegularStreamLiteral {
-    type OutputValue = ExpressionValue;
+    type OutputValue = OutputStream;
 
     fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<Self::OutputValue> {
-        Ok(self.interpret_to_new_stream(interpreter)?.into_value())
+        self.interpret_to_new_stream(interpreter)
     }
 }
 
@@ -453,12 +453,11 @@ impl HasSpanRange for RawStreamLiteral {
     }
 }
 
-impl Evaluate for RawStreamLiteral {
-    type OutputValue = ExpressionValue;
-
-    fn evaluate(&self, _interpreter: &mut Interpreter) -> ExecutionResult<Self::OutputValue> {
-        // TODO[interpret_to_value] - Consider storing an Owned and returning a Shared here
-        Ok(self.content.clone().into_value())
+impl RawStreamLiteral {
+    fn evaluate(&self) -> OutputStream {
+        // Cloning a token stream is relatively cheap, but we could also
+        // consider storing an Owned<TokenStream> and returning a Shared<TokenStream>
+        OutputStream::raw(self.content.clone())
     }
 }
 
@@ -511,9 +510,9 @@ impl HasSpanRange for GroupedStreamLiteral {
 }
 
 impl Evaluate for GroupedStreamLiteral {
-    type OutputValue = ExpressionValue;
+    type OutputValue = OutputStream;
 
-    fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<Self::OutputValue> {
-        Ok(self.interpret_to_new_stream(interpreter)?.into_value())
+    fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OutputStream> {
+        self.interpret_to_new_stream(interpreter)
     }
 }

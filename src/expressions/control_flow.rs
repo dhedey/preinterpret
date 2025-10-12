@@ -99,30 +99,34 @@ impl ParseSource for IfExpression {
 }
 
 impl IfExpression {
-    pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
+    pub(crate) fn evaluate(
+        &self,
+        interpreter: &mut Interpreter,
+        requested_ownership: RequestedValueOwnership,
+    ) -> ExecutionResult<EvaluationItem> {
         let evaluated_condition: bool = self
             .condition
-            .evaluate(interpreter)?
+            .evaluate_owned(interpreter)?
             .resolve_as("An if condition")?;
 
         if evaluated_condition {
-            return self.then_code.evaluate(interpreter);
+            return self.then_code.evaluate(interpreter, requested_ownership);
         }
 
         for (condition, code) in &self.else_ifs {
             let evaluated_condition: bool = condition
-                .evaluate(interpreter)?
+                .evaluate_owned(interpreter)?
                 .resolve_as("An else if condition")?;
             if evaluated_condition {
-                return code.evaluate(interpreter);
+                return code.evaluate(interpreter, requested_ownership);
             }
         }
 
         if let Some(else_code) = &self.else_code {
-            return else_code.evaluate(interpreter);
+            return else_code.evaluate(interpreter, requested_ownership);
         }
 
-        Ok(ExpressionValue::None.into_owned(self.span_range()))
+        requested_ownership.map_from_owned(ExpressionValue::None.into_owned(self.span_range()))
     }
 }
 
@@ -189,11 +193,11 @@ impl WhileExpression {
         let mut output = vec![];
         while self
             .condition
-            .evaluate(interpreter)?
+            .evaluate_owned(interpreter)?
             .resolve_as("A while condition")?
         {
             iteration_counter.increment_and_check()?;
-            match self.body.evaluate(interpreter).catch_control_flow(
+            match self.body.evaluate_owned(interpreter).catch_control_flow(
                 interpreter,
                 ControlFlowInterrupt::catch_any,
                 scope,
@@ -272,7 +276,7 @@ impl LoopExpression {
         loop {
             iteration_counter.increment_and_check()?;
 
-            match self.body.evaluate(interpreter).catch_control_flow(
+            match self.body.evaluate_owned(interpreter).catch_control_flow(
                 interpreter,
                 ControlFlowInterrupt::catch_any,
                 scope,
@@ -369,7 +373,7 @@ impl ForExpression {
     ) -> ExecutionResult<OwnedValue> {
         let iterable: IterableValue = self
             .iterable
-            .evaluate(interpreter)?
+            .evaluate_owned(interpreter)?
             .resolve_as("A for loop iterable")?;
 
         let span = self.body.span();
@@ -383,7 +387,7 @@ impl ForExpression {
             interpreter.enter_scope(self.iteration_scope);
             self.pattern.handle_destructure(interpreter, item)?;
 
-            match self.body.evaluate(interpreter).catch_control_flow(
+            match self.body.evaluate_owned(interpreter).catch_control_flow(
                 interpreter,
                 ControlFlowInterrupt::catch_any,
                 scope,

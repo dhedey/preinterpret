@@ -24,8 +24,30 @@ impl Expression {
         Self { root, nodes }
     }
 
-    pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
-        ExpressionEvaluator::new(&self.nodes).evaluate(self.root, interpreter)
+    pub(super) fn evaluate(
+        &self,
+        interpreter: &mut Interpreter,
+        ownership: RequestedValueOwnership,
+    ) -> ExecutionResult<EvaluationItem> {
+        ExpressionEvaluator::new(&self.nodes).evaluate(self.root, interpreter, ownership)
+    }
+
+    pub(crate) fn evaluate_owned(
+        &self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<OwnedValue> {
+        Ok(self
+            .evaluate(interpreter, RequestedValueOwnership::owned())?
+            .expect_owned())
+    }
+
+    pub(crate) fn evaluate_shared(
+        &self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<SharedValue> {
+        Ok(self
+            .evaluate(interpreter, RequestedValueOwnership::shared())?
+            .expect_shared())
     }
 
     pub(crate) fn is_valid_as_statement_without_semicolon(&self) -> bool {
@@ -46,12 +68,14 @@ impl Expression {
     ) -> ExecutionResult<()> {
         // This must align with is_valid_as_statement_without_semicolon
         match &self.nodes.get(self.root) {
-            ExpressionNode::Leaf(Leaf::Block(block)) => {
-                block.evaluate(interpreter)?.into_statement_result()
-            }
-            ExpressionNode::Leaf(Leaf::IfExpression(if_expression)) => {
-                if_expression.evaluate(interpreter)?.into_statement_result()
-            }
+            ExpressionNode::Leaf(Leaf::Block(block)) => block
+                .evaluate(interpreter, RequestedValueOwnership::owned())?
+                .expect_owned()
+                .into_statement_result(),
+            ExpressionNode::Leaf(Leaf::IfExpression(if_expression)) => if_expression
+                .evaluate(interpreter, RequestedValueOwnership::owned())?
+                .expect_owned()
+                .into_statement_result(),
             ExpressionNode::Leaf(Leaf::LoopExpression(loop_expression)) => {
                 loop_expression.evaluate_as_statement(interpreter)
             }
@@ -61,7 +85,7 @@ impl Expression {
             ExpressionNode::Leaf(Leaf::ForExpression(for_expression)) => {
                 for_expression.evaluate_as_statement(interpreter)
             }
-            _ => self.evaluate(interpreter)?.into_statement_result(),
+            _ => self.evaluate_owned(interpreter)?.into_statement_result(),
         }
     }
 }

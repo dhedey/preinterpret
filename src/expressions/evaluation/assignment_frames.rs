@@ -1,7 +1,13 @@
 use super::*;
 
-pub(super) struct AssignmentCompletion {
+pub(crate) struct AssignmentCompletion {
     pub(super) span_range: SpanRange,
+}
+
+impl WithSpanRangeExt for AssignmentCompletion {
+    fn with_span_range(self, span_range: SpanRange) -> Self {
+        Self { span_range }
+    }
 }
 
 /// Handlers which return an AssignmentCompletion

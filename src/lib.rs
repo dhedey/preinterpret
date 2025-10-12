@@ -537,8 +537,12 @@ fn preinterpret_run_internal(input: TokenStream) -> SynResult<TokenStream> {
     let mut interpreter = Interpreter::new(parse_state);
 
     let interpreted_stream = content
-        .evaluate(&mut interpreter, Span::call_site().into())
-        .and_then(|x| x.into_stream())
+        .evaluate(
+            &mut interpreter,
+            Span::call_site().into(),
+            RequestedValueOwnership::owned(),
+        )
+        .and_then(|x| x.expect_owned().into_stream())
         .convert_to_final_result()?;
 
     unsafe {
@@ -564,7 +568,10 @@ mod debug {
     pub(super) fn scope_debug(input: TokenStream) -> SynResult<TokenStream> {
         let (_, scopes) = input
             .clone()
-            .full_source_parse_with(ExpressionBlockContent::parse)
+            .source_parse_and_analyze(
+                ExpressionBlockContent::parse,
+                ExpressionBlockContent::control_flow_pass,
+            )
             .convert_to_final_result()?;
 
         let output = format!("{:#?}", scopes);
@@ -614,7 +621,10 @@ mod benchmarking {
         let (block_content, parse_duration) = timed(|| {
             input
                 .clone()
-                .full_source_parse_with(ExpressionBlockContent::parse)
+                .source_parse_and_analyze(
+                    ExpressionBlockContent::parse,
+                    ExpressionBlockContent::control_flow_pass,
+                )
                 .convert_to_final_result()
         });
         let (block_content, scopes) = block_content?;
@@ -622,8 +632,12 @@ mod benchmarking {
         let (interpreted_stream, eval_duration) = timed(|| {
             let mut interpreter = Interpreter::new(scopes.clone());
             block_content
-                .evaluate(&mut interpreter, Span::call_site().into())
-                .and_then(|x| x.into_stream())
+                .evaluate(
+                    &mut interpreter,
+                    Span::call_site().into(),
+                    RequestedValueOwnership::owned(),
+                )
+                .and_then(|x| x.expect_owned().into_stream())
                 .convert_to_final_result()
         });
         let interpreted_stream = interpreted_stream?;
