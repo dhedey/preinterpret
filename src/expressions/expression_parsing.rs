@@ -521,7 +521,7 @@ impl<'a> ExpressionParser<'a> {
                 }
                 ExpressionStackFrame::IncompleteCompoundAssignment { place, operation } => {
                     let node = self.nodes.add_node(ExpressionNode::CompoundAssignment {
-                        place,
+                        assignee: place,
                         operation,
                         value: node,
                     });
@@ -603,7 +603,7 @@ impl<'a> ExpressionParser<'a> {
                     return self.streams.parse_err(ERROR_MESSAGE);
                 }
 
-                let reference_id = self.streams.current().reference_variable(&key)?;
+                let reference_id = self.streams.current().register_variable_reference(&key);
                 let node =
                     self.nodes
                         .add_node(ExpressionNode::Leaf(Leaf::Variable(VariableReference {

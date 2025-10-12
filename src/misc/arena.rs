@@ -61,6 +61,13 @@ impl<K: ArenaKey, D> AppendOnlyArena<K, D> {
             .map(|(index, v)| (K::from_inner(Key::new(index)), v))
     }
 
+    pub(crate) fn map_all<D2>(self, f: impl Fn(D) -> D2) -> AppendOnlyArena<K, D2> {
+        AppendOnlyArena {
+            data: self.data.into_iter().map(f).collect(),
+            instance_marker: PhantomData,
+        }
+    }
+
     pub(crate) fn into_read_only(self) -> ReadOnlyArena<K, D> {
         ReadOnlyArena {
             data: self.data.into(),

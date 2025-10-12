@@ -18,6 +18,10 @@ impl ParseSource for EmbeddedExpression {
             content,
         })
     }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        self.content.control_flow_pass(context)
+    }
 }
 
 impl HasSpanRange for EmbeddedExpression {
@@ -64,6 +68,10 @@ impl ParseSource for EmbeddedStatements {
             content,
         })
     }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        self.content.control_flow_pass(context)
+    }
 }
 
 impl HasSpanRange for EmbeddedStatements {
@@ -102,14 +110,20 @@ pub(crate) struct ExpressionBlock {
 impl ParseSource for ExpressionBlock {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let (braces, inner) = input.parse_braces()?;
-        let scope = input.enter_scope();
+        let scope = input.register_scope();
         let content = inner.parse()?;
-        input.exit_scope(scope);
         Ok(Self {
             braces,
             scope,
             content,
         })
+    }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        context.enter_scope(self.scope);
+        self.content.control_flow_pass(context)?;
+        context.exit_scope(self.scope);
+        Ok(())
     }
 }
 
@@ -157,6 +171,13 @@ impl ParseSource for ExpressionBlockContent {
             }
         }
         Ok(Self { statements })
+    }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        for (statement, _semicolon) in self.statements.iter() {
+            statement.control_flow_pass(context)?;
+        }
+        Ok(())
     }
 }
 
@@ -213,6 +234,15 @@ impl ParseSource for Statement {
             Statement::Expression(input.parse()?)
         })
     }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        match self {
+            Statement::LetStatement(statement) => statement.control_flow_pass(context),
+            Statement::Expression(expression) => expression.control_flow_pass(context),
+            Statement::BreakStatement(statement) => statement.control_flow_pass(context),
+            Statement::ContinueStatement(statement) => statement.control_flow_pass(context),
+        }
+    }
 }
 
 impl Statement {
@@ -262,7 +292,7 @@ impl ParseSource for LetStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let let_token = input.parse()?;
         let pattern = input.parse()?;
-        let statement = if input.peek(Token![=]) {
+        if input.peek(Token![=]) {
             Ok(Self {
                 _let_token: let_token,
                 pattern,
@@ -279,9 +309,15 @@ impl ParseSource for LetStatement {
             })
         } else {
             input.parse_err("Expected = or ;")
-        };
-        input.activate_pending_variable_definitions();
-        statement
+        }
+    }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        if let Some(assignment) = self.assignment.as_ref() {
+            assignment.expression.control_flow_pass(context)?;
+        }
+        self.pattern.control_flow_pass(context)?;
+        Ok(())
     }
 }
 
@@ -317,6 +353,10 @@ impl ParseSource for BreakStatement {
         let break_token = input.parse_ident_matching("break")?;
         Ok(Self { break_token })
     }
+
+    fn control_flow_pass(&self, _context: FlowCapturer) -> ParseResult<()> {
+        Ok(())
+    }
 }
 
 impl BreakStatement {
@@ -343,6 +383,10 @@ impl ParseSource for ContinueStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let continue_token = input.parse_ident_matching("continue")?;
         Ok(Self { continue_token })
+    }
+
+    fn control_flow_pass(&self, _context: FlowCapturer) -> ParseResult<()> {
+        Ok(())
     }
 }
 

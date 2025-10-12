@@ -51,6 +51,16 @@ impl ParseSource for Pattern {
             Err(lookahead.error().into())
         }
     }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        match self {
+            Pattern::Variable(variable) => variable.control_flow_pass(context),
+            Pattern::Array(array) => array.control_flow_pass(context),
+            Pattern::Object(object) => object.control_flow_pass(context),
+            Pattern::Stream(stream) => stream.control_flow_pass(context),
+            Pattern::Discarded(discarded) => discarded.control_flow_pass(context),
+        }
+    }
 }
 
 impl HandleDestructure for Pattern {
@@ -83,6 +93,13 @@ impl ParseSource for ArrayPattern {
             brackets,
             items: inner.parse_terminated()?,
         })
+    }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        for item in self.items.iter() {
+            item.control_flow_pass(context)?;
+        }
+        Ok(())
     }
 }
 
@@ -169,6 +186,13 @@ impl ParseSource for PatternOrDotDot {
             Ok(PatternOrDotDot::Pattern(input.parse()?))
         }
     }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        match self {
+            PatternOrDotDot::Pattern(pattern) => pattern.control_flow_pass(context),
+            PatternOrDotDot::DotDot(_) => Ok(()),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -189,6 +213,13 @@ impl ParseSource for ObjectPattern {
             braces,
             entries: inner.parse_terminated()?,
         })
+    }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        for entry in self.entries.iter() {
+            entry.control_flow_pass(context)?;
+        }
+        Ok(())
     }
 }
 
@@ -265,7 +296,7 @@ impl ParseSource for ObjectEntry {
             } else if input.peek(Token![,]) || input.is_empty() {
                 let pattern = Pattern::Variable(VariablePattern {
                     definition: VariableDefinition {
-                        id: input.define_inactive_variable(&field),
+                        id: input.register_variable_definition(&field),
                     },
                 });
                 Ok(ObjectEntry::KeyOnly { field, pattern })
@@ -285,6 +316,14 @@ impl ParseSource for ObjectEntry {
             })
         } else {
             input.parse_err("Expected `property: <pattern>` or `[\"property\"]: <pattern>`")
+        }
+    }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        match self {
+            ObjectEntry::KeyOnly { pattern, .. } => pattern.control_flow_pass(context),
+            ObjectEntry::KeyValue { pattern, .. } => pattern.control_flow_pass(context),
+            ObjectEntry::IndexValue { pattern, .. } => pattern.control_flow_pass(context),
         }
     }
 }
@@ -307,6 +346,10 @@ impl ParseSource for StreamPattern {
             brackets,
             content: inner.parse()?,
         })
+    }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        self.content.control_flow_pass(context)
     }
 }
 

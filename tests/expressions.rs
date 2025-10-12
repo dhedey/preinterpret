@@ -424,16 +424,15 @@ fn test_array_place_destructurings() {
     );
     // This test demonstrates that the right side executes first.
     // This aligns with the rust behaviour.
-    // TODO[scopes]: Fix me!! (NB: this is caused by bad control flow analysis of expressions)
-    // preinterpret_assert_eq!(
-    //     #(
-    //         let a = [0, 0];
-    //         let b = 0;
-    //         a[b] += { b += 1; 5 };
-    //         a.to_debug_string()
-    //     ),
-    //     "[0, 5]"
-    // );
+    preinterpret_assert_eq!(
+        #(
+            let a = [0, 0];
+            let b = 0;
+            a[b] += { b += 1; 5 };
+            a.to_debug_string()
+        ),
+        "[0, 5]"
+    );
     // This test demonstrates that the assignee operation is executed
     // incrementally, to align with the rust behaviour.
     preinterpret_assert_eq!(

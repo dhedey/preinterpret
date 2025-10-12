@@ -497,7 +497,10 @@ pub fn stream(token_stream: proc_macro::TokenStream) -> proc_macro::TokenStream 
 
 fn preinterpret_stream_internal(input: TokenStream) -> SynResult<TokenStream> {
     let (stream, parse_state) = input
-        .full_source_parse_with(|input| SourceStream::parse_with_span(input, Span::call_site()))
+        .source_parse_and_analyze(
+            |input| SourceStream::parse_with_span(input, Span::call_site()),
+            SourceStream::control_flow_pass,
+        )
         .convert_to_final_result()?;
 
     let mut interpreter = Interpreter::new(parse_state);
@@ -525,7 +528,10 @@ pub fn run(token_stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 fn preinterpret_run_internal(input: TokenStream) -> SynResult<TokenStream> {
     let (content, parse_state) = input
-        .full_source_parse_with(ExpressionBlockContent::parse)
+        .source_parse_and_analyze(
+            ExpressionBlockContent::parse,
+            ExpressionBlockContent::control_flow_pass,
+        )
         .convert_to_final_result()?;
 
     let mut interpreter = Interpreter::new(parse_state);

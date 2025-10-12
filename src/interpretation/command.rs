@@ -262,6 +262,16 @@ impl ParseSource for Command {
             brackets,
         })
     }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        match self.typed.as_ref() {
+            TypedCommand::SettingsCommand(cmd) => cmd.settings.control_flow_pass(context),
+            TypedCommand::ParseCommand(cmd) => {
+                cmd.input.control_flow_pass(context)?;
+                cmd.transformer.control_flow_pass(context)
+            }
+        }
+    }
 }
 
 impl HasSpan for Command {

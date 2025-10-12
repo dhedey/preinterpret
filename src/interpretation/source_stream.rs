@@ -15,6 +15,13 @@ impl SourceStream {
         }
         Ok(Self { items, span })
     }
+
+    pub(crate) fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        for item in self.items.iter() {
+            item.control_flow_pass(context)?;
+        }
+        Ok(())
+    }
 }
 
 impl Interpret for SourceStream {
@@ -71,6 +78,20 @@ impl ParseSource for SourceItem {
             SourcePeekMatch::ObjectLiteral => return input.parse_err("Object literals are only supported in an expression context, not a stream context."),
             SourcePeekMatch::End => return input.parse_err("Expected some item."),
         })
+    }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        match self {
+            SourceItem::Command(command) => command.control_flow_pass(context),
+            SourceItem::Variable(variable) => variable.control_flow_pass(context),
+            SourceItem::EmbeddedExpression(expr) => expr.control_flow_pass(context),
+            SourceItem::EmbeddedStatements(block) => block.control_flow_pass(context),
+            SourceItem::SourceGroup(group) => group.control_flow_pass(context),
+            SourceItem::Punct(punct) => punct.control_flow_pass(context),
+            SourceItem::Ident(ident) => ident.control_flow_pass(context),
+            SourceItem::Literal(literal) => literal.control_flow_pass(context),
+            SourceItem::StreamLiteral(stream_literal) => stream_literal.control_flow_pass(context),
+        }
     }
 }
 
@@ -140,6 +161,10 @@ impl ParseSource for SourceGroup {
             source_delim_span: delim_span,
             content,
         })
+    }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        self.content.control_flow_pass(context)
     }
 }
 

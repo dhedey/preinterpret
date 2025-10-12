@@ -2,7 +2,7 @@ use crate::internal_prelude::*;
 
 #[derive(Clone)]
 pub(crate) struct SettingsCommand {
-    settings: Expression,
+    pub(crate) settings: Expression,
 }
 
 impl CommandType for SettingsCommand {

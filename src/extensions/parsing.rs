@@ -1,9 +1,10 @@
 use crate::internal_prelude::*;
 
 pub(crate) trait TokenStreamParseExt: Sized {
-    fn full_source_parse_with<T, E: From<syn::Error>>(
+    fn source_parse_and_analyze<T, E: From<syn::Error>>(
         self,
         parser: impl FnOnce(SourceParser) -> Result<T, E>,
+        control_flow_analysis: impl FnOnce(&T, FlowCapturer) -> Result<(), E>,
     ) -> Result<(T, ScopeDefinitions), E>;
 
     fn interpreted_parse_with<T, E: From<syn::Error>>(
@@ -13,11 +14,12 @@ pub(crate) trait TokenStreamParseExt: Sized {
 }
 
 impl TokenStreamParseExt for TokenStream {
-    fn full_source_parse_with<T, E: From<syn::Error>>(
+    fn source_parse_and_analyze<T, E: From<syn::Error>>(
         self,
         parser: impl FnOnce(SourceParser) -> Result<T, E>,
+        control_flow_analysis: impl FnOnce(&T, FlowCapturer) -> Result<(), E>,
     ) -> Result<(T, ScopeDefinitions), E> {
-        parse_with(self, wrap_parser(parser))
+        parse_with(self, parse_and_analyze(parser, control_flow_analysis))
     }
 
     fn interpreted_parse_with<T, E: From<syn::Error>>(
@@ -28,7 +30,7 @@ impl TokenStreamParseExt for TokenStream {
     }
 }
 
-fn parse_with<T, K, E: From<syn::Error>>(
+pub(crate) fn parse_with<T, K, E: From<syn::Error>>(
     stream: TokenStream,
     parser: impl FnOnce(ParseStream<K>) -> Result<T, E>,
 ) -> Result<T, E> {

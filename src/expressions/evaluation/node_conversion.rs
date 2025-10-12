@@ -99,10 +99,10 @@ impl ExpressionNode {
                 value,
             } => AssignmentBuilder::start(context, *assignee, *equals_token, *value),
             ExpressionNode::CompoundAssignment {
-                place,
+                assignee,
                 operation,
                 value,
-            } => CompoundAssignmentBuilder::start(context, *place, *operation, *value),
+            } => CompoundAssignmentBuilder::start(context, *assignee, *operation, *value),
             ExpressionNode::MethodCall {
                 node,
                 method,

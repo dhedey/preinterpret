@@ -45,9 +45,9 @@ pub(crate) struct ScopeDefinitions {
 pub(crate) struct ParseState {
     // SCOPE DATA
     scope_id_stack: Vec<ScopeId>,
-    scopes: AppendOnlyArena<ScopeId, ScopeData>,
-    definitions: AppendOnlyArena<VariableDefinitionId, VariableDefinitionData>,
-    references: AppendOnlyArena<VariableReferenceId, VariableReferenceData>,
+    scopes: AppendOnlyArena<ScopeId, AllocatedScope>,
+    definitions: AppendOnlyArena<VariableDefinitionId, AllocatedVariableDefinition>,
+    references: AppendOnlyArena<VariableReferenceId, AllocatedVariableReference>,
     // CONTROL FLOW DATA
     segments_stack: Vec<ControlFlowSegmentId>,
     segments: AppendOnlyArena<ControlFlowSegmentId, ControlFlowSegmentData>,
@@ -58,10 +58,10 @@ impl ParseState {
         let mut scopes = AppendOnlyArena::new();
         let definitions = AppendOnlyArena::new();
         let references = AppendOnlyArena::new();
-        let root_scope = scopes.add(ScopeData {
+        let root_scope = scopes.add(AllocatedScope::Defined(ScopeData {
             parent: None,
             definitions: Vec::new(),
-        });
+        }));
         let mut segments = AppendOnlyArena::new();
         let root_segment = segments.add(ControlFlowSegmentData {
             scope: root_scope,
@@ -80,11 +80,6 @@ impl ParseState {
     }
 
     pub(crate) fn finish(mut self) -> ScopeDefinitions {
-        #[cfg(feature = "debug")] // If debug is off
-        let final_use_debug = self.mark_final_use_of_variables();
-        #[cfg(not(feature = "debug"))]
-        self.mark_final_use_of_variables();
-
         let root_scope = self.scope_id_stack.pop().expect("No scope to pop");
         assert!(
             self.scope_id_stack.is_empty(),
@@ -98,11 +93,27 @@ impl ParseState {
             "Cannot finish - Unpopped segments remain"
         );
 
+        let scopes = self.scopes.map_all(AllocatedScope::into_defined);
+        let definitions = self
+            .definitions
+            .map_all(AllocatedVariableDefinition::into_defined);
+        let mut references = self
+            .references
+            .map_all(AllocatedVariableReference::into_defined);
+
+        let mut analyzer =
+            ControlFlowAnalyzer::new(&definitions, &mut references, &scopes, &self.segments);
+
+        #[cfg(feature = "debug")] // If debug is off
+        let final_use_debug = analyzer.analyze_and_update_references();
+        #[cfg(not(feature = "debug"))]
+        analyzer.analyze_and_update_references();
+
         ScopeDefinitions {
             root_scope,
-            scopes: self.scopes.into_read_only(),
-            definitions: self.definitions.into_read_only(),
-            references: self.references.into_read_only(),
+            scopes: scopes.into_read_only(),
+            definitions: definitions.into_read_only(),
+            references: references.into_read_only(),
             #[cfg(feature = "debug")]
             root_segment,
             #[cfg(feature = "debug")]
@@ -112,86 +123,84 @@ impl ParseState {
         }
     }
 
+    pub(crate) fn allocate_scope(&mut self) -> ScopeId {
+        self.scopes.add(AllocatedScope::Allocated)
+    }
+
+    pub(crate) fn allocate_variable_reference(&mut self, name: &Ident) -> VariableReferenceId {
+        self.references.add(AllocatedVariableReference::Allocated {
+            name: name.to_string(),
+            span: name.span(),
+        })
+    }
+
+    pub(crate) fn allocate_variable_definition(&mut self, name: &Ident) -> VariableDefinitionId {
+        self.definitions
+            .add(AllocatedVariableDefinition::Allocated {
+                name: name.to_string(),
+                span: name.span(),
+            })
+    }
+
     fn current_scope_id(&self) -> ScopeId {
         *self.scope_id_stack.last().unwrap()
     }
 
     fn current_scope(&mut self) -> &mut ScopeData {
-        self.scopes.get_mut(self.current_scope_id())
+        self.scopes.get_mut(self.current_scope_id()).defined_mut()
     }
 
-    pub(crate) fn enter_scope(&mut self) -> ScopeId {
-        let new_scope = self.scopes.add(ScopeData {
+    pub(crate) fn enter_scope(&mut self, scope_id: ScopeId) {
+        *self.scopes.get_mut(scope_id) = AllocatedScope::Defined(ScopeData {
             parent: Some(self.current_scope_id()),
             definitions: Vec::new(),
         });
-        self.scope_id_stack.push(new_scope);
-        new_scope
+        self.scope_id_stack.push(scope_id);
     }
 
-    pub(crate) fn define_inactive_variable(&mut self, name: &Ident) -> VariableDefinitionId {
-        let id = self.definitions.add(VariableDefinitionData {
-            scope: self.current_scope_id(),
-            segment: self.current_segment_id(),
-            name: name.to_string(),
-            definition_name_span: name.span(),
+    pub(crate) fn define_variable(&mut self, id: VariableDefinitionId) {
+        let scope = self.current_scope_id();
+        let segment = self.current_segment_id();
+        let definition = self.definitions.get_mut(id);
+        let (name, definition_name_span) = definition.take_allocated();
+        *definition = AllocatedVariableDefinition::Defined(VariableDefinitionData {
+            scope,
+            segment,
+            name,
+            definition_name_span,
             references: Vec::new(),
-            active: false,
         });
         self.current_scope().definitions.push(id);
         self.current_segment()
             .children
             .push(ControlFlowChild::VariableDefinition(id));
-        id
     }
 
-    pub(crate) fn reference_variable(&mut self, name: &Ident) -> ParseResult<VariableReferenceId> {
-        let name_str = name.to_string();
-        let span = name.span();
+    pub(crate) fn reference_variable(&mut self, id: VariableReferenceId) -> ParseResult<()> {
+        let segment = self.current_segment_id();
+        let reference = self.references.get_mut(id);
+        let (name, reference_name_span) = reference.take_allocated();
         for scope_id in self.scope_id_stack.iter().rev() {
-            let scope = self.scopes.get(*scope_id);
+            let scope = self.scopes.get(*scope_id).defined_ref();
             for &def_id in scope.definitions.iter().rev() {
-                let def = self.definitions.get(def_id);
-                if def.name == name_str && def.active {
-                    let ref_id = self.references.add(VariableReferenceData {
+                let def = self.definitions.get_mut(def_id).defined_mut();
+                if def.name == name {
+                    *reference = AllocatedVariableReference::Defined(VariableReferenceData {
                         definition: def_id,
                         definition_scope: def.scope,
-                        segment: self.current_segment_id(),
-                        reference_name_span: span,
+                        segment,
+                        reference_name_span,
                         is_final_reference: false, // Some will be set to true later
                     });
-                    self.definitions.get_mut(def_id).references.push(ref_id);
+                    def.references.push(id);
                     self.current_segment()
                         .children
-                        .push(ControlFlowChild::VariableReference(ref_id, def_id));
-                    return Ok(ref_id);
+                        .push(ControlFlowChild::VariableReference(id, def_id));
+                    return Ok(());
                 }
             }
         }
-        span.parse_err("A variable must be defined before it is referenced.")
-    }
-
-    pub(crate) fn activate_pending_variable_definitions(&mut self) {
-        for def_id in self
-            .scopes
-            .get_mut(self.current_scope_id())
-            .definitions
-            .iter()
-        {
-            let def = self.definitions.get_mut(*def_id);
-            def.active = true;
-        }
-    }
-
-    pub(crate) fn reenter_scope(&mut self, scope: ScopeId) {
-        let new_scope = self.scopes.get(scope);
-        let parent = new_scope.parent.expect("Cannot re-enter root scope");
-        assert_eq!(
-            parent,
-            self.current_scope_id(),
-            "Cannot re-enter a scope which is not a child of the current scope"
-        );
-        self.scope_id_stack.push(scope);
+        reference_name_span.parse_err("A variable must be defined before it is referenced.")
     }
 
     /// The scope parameter is just to help catch bugs.
@@ -243,17 +252,6 @@ impl ParseState {
         self.enter_segment_with_valid_previous(parent_id, previous_sibling_id, segment_kind)
     }
 
-    pub(crate) fn reenter_segment(&mut self, segment: ControlFlowSegmentId) {
-        let new_segment = self.segments.get(segment);
-        let parent = new_segment.parent.expect("Cannot re-enter root segment");
-        assert_eq!(
-            parent,
-            self.current_segment_id(),
-            "Cannot re-enter a segment which is not a child of the current segment"
-        );
-        self.segments_stack.push(segment);
-    }
-
     pub(crate) fn exit_segment(&mut self, segment: ControlFlowSegmentId) {
         let id = self.segments_stack.pop().expect("No segment to pop");
         assert_eq!(id, segment, "Popped segment is not the current segment");
@@ -285,188 +283,6 @@ impl ParseState {
         }
         child_id
     }
-
-    fn mark_final_use_of_variables(&mut self) -> MarkFinalUseOutput {
-        // ALGORITHM OVERVIEW
-        // ==================
-        //
-        // The goal of this algorithm is to efficiently flag variable references as
-        // "is_final_reference" if they are definitely the last use of a variable
-        // in any possible execution path.
-        //
-        // This is quite subtle because of branching control flow, and loops.
-        //
-        // For each variable definition, this algorithm works in two phases:
-        // 1. Identify segments where references occur, and for each:
-        //    - Add the last reference in the segment as a candidate for last use
-        //    - Mark all previous segments/references as not final.
-        //      This is recursive as "previous siblings" of self and each ancestor segment
-        //      We mark nodes as Handled | NotFinal to save repeated work.
-        // 2. For each candidate, check if it's actually a last use:
-        //    - Check it and all its relevant ancestor segments are:
-        //      - Not marked NotFinal
-        //      - Not loops
-        //    - If all these checks pass, then mark it as a final reference.
-
-        #[cfg(feature = "debug")]
-        let mut output = HashMap::new();
-
-        for (definition_id, definition) in self.definitions.iter() {
-            let mut last_use_candidates = Vec::new();
-            let mut markers = HashMap::new();
-            let ancestor_scopes = {
-                let mut scopes = HashSet::new();
-                let mut current = self.scopes.get(definition.scope).parent;
-                while let Some(scope) = current {
-                    scopes.insert(scope);
-                    current = self.scopes.get(scope).parent;
-                }
-                scopes
-            };
-            let mut segments_with_references = HashSet::new();
-            for reference_id in definition.references.iter() {
-                let reference = self.references.get(*reference_id);
-                segments_with_references.insert(reference.segment);
-            }
-
-            // ======================================
-            // PHASE 1 - We create a shortlist, and mark NotFinal segments
-            // ======================================
-            for segment_id in segments_with_references {
-                let segment = self.segments.get(segment_id);
-                let mut reference_ids = match segment.children {
-                    SegmentChildren::Sequential { ref children, .. } => children
-                        .iter()
-                        .filter_map(|c| match c {
-                            ControlFlowChild::VariableReference(ref_id, def_id)
-                                if *def_id == definition_id =>
-                            {
-                                Some(*ref_id)
-                            }
-                            _ => None,
-                        })
-                        .collect::<Vec<_>>(),
-                    SegmentChildren::PathBased { .. } => {
-                        panic!("Segment was marked as having references, but is path based")
-                    }
-                };
-                // The last reference in the segment is a candidate for last use
-                assert!(
-                    !reference_ids.is_empty(),
-                    "Segment was marked as having references, but none were found"
-                );
-                let last_reference_id = reference_ids.pop().unwrap();
-                last_use_candidates.push(last_reference_id);
-
-                // For each segment level between current up to the scope of the variable definition:
-                // - Mark all previous segments at its level as NotFinal
-                let mut parent_segment_id = Some(segment_id);
-                let mut own_child_id =
-                    ControlFlowChild::VariableReference(last_reference_id, definition_id);
-
-                while let Some(parent_seg_id) = parent_segment_id {
-                    let parent = self.segments.get(parent_seg_id);
-                    let marker = markers.get(&own_child_id);
-                    match marker {
-                        Some(SegmentMarker::AlreadyHandled | SegmentMarker::NotFinal) => {
-                            break;
-                        }
-                        None => {
-                            markers.insert(own_child_id, SegmentMarker::AlreadyHandled);
-                        }
-                    }
-
-                    // Mark all previous siblings as NotFinal
-                    match parent.children {
-                        SegmentChildren::PathBased {
-                            ref node_previous_map,
-                        } => {
-                            // Walk up the tree of previous siblings, marking all as NotFinal
-                            let own_seg_id = match own_child_id {
-                                ControlFlowChild::Segment(id) => id,
-                                _ => panic!("The child of a path-based segment must be a segment"),
-                            };
-                            let mut previous = node_previous_map.get(&own_seg_id).unwrap();
-                            while let Some(prev_id) = *previous {
-                                markers.insert(
-                                    ControlFlowChild::Segment(prev_id),
-                                    SegmentMarker::NotFinal,
-                                );
-                                previous = node_previous_map.get(&prev_id).unwrap();
-                            }
-                        }
-                        SegmentChildren::Sequential { ref children } => {
-                            let mut before_current_segment = false;
-                            for sibling in children.iter().rev() {
-                                if sibling == &own_child_id {
-                                    before_current_segment = true;
-                                    continue;
-                                }
-                                if before_current_segment {
-                                    markers.insert(*sibling, SegmentMarker::NotFinal);
-                                }
-                            }
-                        }
-                    }
-                    if ancestor_scopes.contains(&parent.scope) {
-                        break;
-                    }
-                    own_child_id = ControlFlowChild::Segment(parent_seg_id);
-                    parent_segment_id = parent.parent;
-                }
-            }
-
-            // ======================================
-            // PHASE 2 - We validate each candidate
-            // ======================================
-            for candidate_id in last_use_candidates.iter() {
-                if let Some(SegmentMarker::NotFinal) = markers.get(
-                    &ControlFlowChild::VariableReference(*candidate_id, definition_id),
-                ) {
-                    continue;
-                }
-                let candidate = self.references.get_mut(*candidate_id);
-                let mut possibly_final = true;
-                let mut current_segment_id = Some(candidate.segment);
-                while let Some(seg_id) = current_segment_id {
-                    let current_segment = self.segments.get(seg_id);
-                    if ancestor_scopes.contains(&current_segment.scope) {
-                        break;
-                    }
-                    if current_segment.segment_kind.is_looping() {
-                        possibly_final = false;
-                        break;
-                    }
-                    if let Some(SegmentMarker::NotFinal) =
-                        markers.get(&ControlFlowChild::Segment(seg_id))
-                    {
-                        possibly_final = false;
-                        break;
-                    }
-                    current_segment_id = current_segment.parent;
-                }
-                if possibly_final {
-                    candidate.is_final_reference = true;
-                }
-            }
-            #[cfg(feature = "debug")]
-            output.insert(definition_id, markers);
-        }
-
-        #[cfg(feature = "debug")]
-        return output;
-    }
-}
-
-#[cfg(feature = "debug")]
-type MarkFinalUseOutput = HashMap<VariableDefinitionId, HashMap<ControlFlowChild, SegmentMarker>>;
-#[cfg(not(feature = "debug"))]
-type MarkFinalUseOutput = ();
-
-#[derive(PartialEq, Eq, Debug, Clone, Copy)]
-enum SegmentMarker {
-    AlreadyHandled,
-    NotFinal,
 }
 
 /// A control flow segment captures a section of code which executes in order.
@@ -478,10 +294,10 @@ enum SegmentMarker {
 /// See `expressions/control_flow.rs` for some examples of how various segments are created.
 #[derive(Debug)]
 pub(crate) struct ControlFlowSegmentData {
-    scope: ScopeId,
-    parent: Option<ControlFlowSegmentId>,
-    children: SegmentChildren,
-    segment_kind: SegmentKind,
+    pub(super) scope: ScopeId,
+    pub(super) parent: Option<ControlFlowSegmentId>,
+    pub(super) children: SegmentChildren,
+    pub(super) segment_kind: SegmentKind,
 }
 
 #[derive(Debug)]
@@ -492,7 +308,7 @@ pub(crate) enum SegmentKind {
 }
 
 impl SegmentKind {
-    fn is_looping(&self) -> bool {
+    pub(crate) fn is_looping(&self) -> bool {
         match self {
             SegmentKind::Sequential => false,
             SegmentKind::PathBased => false,
@@ -513,7 +329,7 @@ impl SegmentKind {
 }
 
 #[derive(Debug)]
-enum SegmentChildren {
+pub(super) enum SegmentChildren {
     Sequential {
         children: Vec<ControlFlowChild>,
     },
@@ -532,16 +348,82 @@ impl SegmentChildren {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum ControlFlowChild {
+pub(super) enum ControlFlowChild {
     Segment(ControlFlowSegmentId),
     VariableDefinition(VariableDefinitionId),
     VariableReference(VariableReferenceId, VariableDefinitionId),
+}
+
+enum AllocatedScope {
+    Allocated,
+    Defined(ScopeData),
+}
+
+impl AllocatedScope {
+    fn into_defined(self) -> ScopeData {
+        match self {
+            AllocatedScope::Defined(data) => data,
+            _ => panic!("Scope was not defined"),
+        }
+    }
+
+    fn defined_mut(&mut self) -> &mut ScopeData {
+        match self {
+            AllocatedScope::Defined(data) => data,
+            _ => panic!("Scope was accessed before it was defined"),
+        }
+    }
+
+    fn defined_ref(&self) -> &ScopeData {
+        match self {
+            AllocatedScope::Defined(data) => data,
+            _ => panic!("Scope was accessed before it was defined"),
+        }
+    }
 }
 
 #[derive(Debug)]
 pub(crate) struct ScopeData {
     pub(crate) parent: Option<ScopeId>,
     pub(crate) definitions: Vec<VariableDefinitionId>,
+}
+
+enum AllocatedVariableDefinition {
+    Allocated { name: String, span: Span },
+    Updating,
+    Defined(VariableDefinitionData),
+}
+
+impl AllocatedVariableDefinition {
+    fn into_defined(self) -> VariableDefinitionData {
+        match self {
+            AllocatedVariableDefinition::Defined(data) => data,
+            _ => {
+                panic!("Variable definition was allocated but not instantiated during control flow")
+            }
+        }
+    }
+
+    fn take_allocated(&mut self) -> (String, Span) {
+        match core::mem::replace(self, AllocatedVariableDefinition::Updating) {
+            AllocatedVariableDefinition::Allocated { name, span } => (name, span),
+            _ => panic!("Variable was already defined"),
+        }
+    }
+
+    fn defined_mut(&mut self) -> &mut VariableDefinitionData {
+        match self {
+            AllocatedVariableDefinition::Defined(data) => data,
+            _ => panic!("Variable was not defined"),
+        }
+    }
+
+    fn defined_ref(&self) -> &VariableDefinitionData {
+        match self {
+            AllocatedVariableDefinition::Defined(data) => data,
+            _ => panic!("Variable was not defined"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -551,9 +433,35 @@ pub(crate) struct VariableDefinitionData {
     pub(crate) name: String,
     pub(crate) definition_name_span: Span,
     pub(crate) references: Vec<VariableReferenceId>,
-    /// In a `let x = x + 1` statement, the RHS is executed against previous bindings.
-    /// We allow the `let x` to create a binding, but only activate it for matching after the control flow completes.
-    pub(crate) active: bool,
+}
+
+enum AllocatedVariableReference {
+    Allocated { name: String, span: Span },
+    Updating,
+    Defined(VariableReferenceData),
+}
+
+impl AllocatedVariableReference {
+    fn take_allocated(&mut self) -> (String, Span) {
+        match core::mem::replace(self, AllocatedVariableReference::Updating) {
+            AllocatedVariableReference::Allocated { name, span } => (name, span),
+            _ => panic!("Variable was already defined"),
+        }
+    }
+
+    fn into_defined(self) -> VariableReferenceData {
+        match self {
+            AllocatedVariableReference::Defined(data) => data,
+            _ => panic!("Variable reference was allocated but not defined during control flow"),
+        }
+    }
+
+    fn defined_mut(&mut self) -> &mut VariableReferenceData {
+        match self {
+            AllocatedVariableReference::Defined(data) => data,
+            _ => panic!("Variable was not defined"),
+        }
+    }
 }
 
 #[derive(Debug)]

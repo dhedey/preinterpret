@@ -56,6 +56,7 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
         * Migrate operators incrementally: `+`, `-`, `*`, `/`, `%`, `==`, `!=`, etc.
         * No clone required for testing equality of streams, objects and arrays
     * CompoundAssignment Migration
+    * Ensure all `TODO[operation-refactor]` are done
 
 ```rust
 // Possible UntypedInteger implementation
@@ -106,24 +107,20 @@ Create the following expressions:
   - [x] There needs to be some link between scope and stack frame
   - [x] Variable places go through `Unallocated` | `Occupied` | `Removed`
   - [x] Variables are read / written based on binding ids
-- [ ] Fix marking references as final:
-  - [ ] Fix bug that the parse order isn't necessarily the execution order, e.g. `y[x] = x + 1`.
-  - [ ] Consider multiple passes
-    * Parsing/Assignment pass - the parse, and preallocate ids for scopes, definitions and references
-    * Control-Flow order pass:
-      * The `SourceParse` trait also defines a `visit_in_control_flow_order` method 
-      * So we go in execution order and do the scope entering/exiting and assign ScopeId + segment structure, and define / link DefinitionId and ReferenceId.
-      * Will need an expression visitor mirroring the frames.
-        To not make the manual stack-frames of the parser worthless, it needs to be
-        manually stack based. But each stack-frame can just be a `Vec<(NodeId, Type::Value/Assignment/Assignee)>`
-    * Then calculate the first use
-    * Optionally consider writing `ResolvedReference(Span/ScopeId/DefinitionId/IsFirstUse)` data directly back into the Reference via a `Rc<Cell<ReferenceContent::Resolved(ResolvedReference)>>` to set the values (from a `ReferenceContent::Parsed(Ident, ReferenceId)`)
+- [x] Fix marking references as final:
+  - [x] Use a second pass aligned with control flow order to set up scopes, segments and variables.
+- [ ] Improvements to final_value
+  - [ ] EmbeddedX should request value ownership of shared from expression land
+  - [ ] Disable transparent clone for streams
 - [ ] Fix all `TODO[scopes]`
 - [ ] Tests
+  - [ ] Convert the control flow to a visitor model
   - [ ] Add test macro for asserting variable binding `is_final` information, e.g. with a `x[final]` and `x[not_final]` syntax?
   - [ ] Add tests for things like `let x = %[1]; let x = %[2] + x; x`
+  - [ ] Add tests for things like `y[x] = x + 1``
   - [ ] Add tests for things like `let x = %[1]; { let x = %[2] + x; }; x`
   - [ ] Add test that `let x; x = { let x = 123; x = 456; 5 }`. resolves correctly with `x = 5`.
+- [ ] Optionally consider writing `ResolvedReference(Span/ScopeId/DefinitionId/IsFirstUse)` data directly back into the Reference via a `Rc<Cell<ReferenceContent::Resolved(ResolvedReference)>>` to set the values (from a `ReferenceContent::Parsed(Ident, ReferenceId)`)
 
 We then need to consider whether an embedded expression in a stream literal and/or stream pattern create new scopes or not...
 

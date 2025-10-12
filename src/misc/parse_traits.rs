@@ -128,6 +128,8 @@ pub(crate) struct Output;
 /// as it gives access to the parse context.
 pub(crate) trait ParseSource: Sized {
     fn parse(input: SourceParser) -> ParseResult<Self>;
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()>;
 }
 
 impl<T> ParseSource for T
@@ -137,10 +139,15 @@ where
     fn parse(input: SourceParser) -> ParseResult<Self> {
         <T as Parse<Source>>::parse(&input.buffer)
     }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        Ok(())
+    }
 }
 
-pub(crate) fn wrap_parser<T, E>(
+pub(crate) fn parse_and_analyze<T, E>(
     parser: impl FnOnce(SourceParser) -> Result<T, E>,
+    control_flow_analysis: impl FnOnce(&T, FlowCapturer) -> Result<(), E>,
 ) -> impl FnOnce(ParseStream<Source>) -> Result<(T, ScopeDefinitions), E> {
     move |stream: ParseStream<Source>| {
         // To get access to an owned ParseBuffer we fork it... and advance later!
@@ -155,11 +162,53 @@ pub(crate) fn wrap_parser<T, E>(
                 panic!("Something held onto a parser state after the parser returned");
             }
         };
-        Ok((output, state.finish()))
+        let mut context = ControlFlowContext { state };
+        control_flow_analysis(&output, &mut context)?;
+        Ok((output, context.state.finish()))
     }
 }
 
 pub(crate) type SourceParser<'a> = &'a SourceParseBuffer<'a>;
+pub(crate) type FlowCapturer<'a> = &'a mut ControlFlowContext;
+
+pub(crate) struct ControlFlowContext {
+    state: ParseState,
+}
+
+impl ControlFlowContext {
+    pub(crate) fn enter_scope(&mut self, scope: ScopeId) {
+        self.state.enter_scope(scope);
+    }
+
+    pub(crate) fn exit_scope(&mut self, scope: ScopeId) {
+        self.state.exit_scope(scope);
+    }
+
+    pub(crate) fn define_variable(&mut self, id: VariableDefinitionId) {
+        self.state.define_variable(id);
+    }
+
+    pub(crate) fn reference_variable(&mut self, id: VariableReferenceId) -> ParseResult<()> {
+        self.state.reference_variable(id)
+    }
+
+    pub(crate) fn enter_next_segment(&mut self, segment_kind: SegmentKind) -> ControlFlowSegmentId {
+        self.state.enter_next_segment(segment_kind)
+    }
+
+    pub(crate) fn enter_path_segment(
+        &mut self,
+        previous_sibling_id: Option<ControlFlowSegmentId>,
+        segment_kind: SegmentKind,
+    ) -> ControlFlowSegmentId {
+        self.state
+            .enter_path_segment(previous_sibling_id, segment_kind)
+    }
+
+    pub(crate) fn exit_segment(&mut self, segment_id: ControlFlowSegmentId) {
+        self.state.exit_segment(segment_id);
+    }
+}
 
 pub(crate) struct SourceParseBuffer<'a> {
     pub(crate) buffer: ParseBuffer<'a, Source>,
@@ -182,50 +231,18 @@ impl<'a> SourceParseBuffer<'a> {
         }
     }
 
-    pub(crate) fn enter_scope(&self) -> ScopeId {
-        self.context.update(|s| s.enter_scope())
+    pub(crate) fn register_scope(&self) -> ScopeId {
+        self.context.update(|s| s.allocate_scope())
     }
 
-    pub(crate) fn reenter_scope(&self, scope_id: ScopeId) {
-        self.context.update(|s| s.reenter_scope(scope_id))
-    }
-
-    pub(crate) fn exit_scope(&self, scope_id: ScopeId) {
-        self.context.update(|s| s.exit_scope(scope_id))
-    }
-
-    pub(crate) fn enter_next_segment(&self, segment_kind: SegmentKind) -> ControlFlowSegmentId {
-        self.context.update(|s| s.enter_next_segment(segment_kind))
-    }
-
-    pub(crate) fn enter_path_segment(
-        &self,
-        previous_sibling_id: Option<ControlFlowSegmentId>,
-        segment_kind: SegmentKind,
-    ) -> ControlFlowSegmentId {
+    pub(crate) fn register_variable_definition(&self, ident: &Ident) -> VariableDefinitionId {
         self.context
-            .update(|s| s.enter_path_segment(previous_sibling_id, segment_kind))
+            .update(|s| s.allocate_variable_definition(ident))
     }
 
-    pub(crate) fn reenter_segment(&self, segment_id: ControlFlowSegmentId) {
-        self.context.update(|s| s.reenter_segment(segment_id))
-    }
-
-    pub(crate) fn exit_segment(&self, segment_id: ControlFlowSegmentId) {
-        self.context.update(|s| s.exit_segment(segment_id))
-    }
-
-    pub(crate) fn define_inactive_variable(&self, ident: &Ident) -> VariableDefinitionId {
-        self.context.update(|s| s.define_inactive_variable(ident))
-    }
-
-    pub(crate) fn activate_pending_variable_definitions(&self) {
+    pub(crate) fn register_variable_reference(&self, ident: &Ident) -> VariableReferenceId {
         self.context
-            .update(|s| s.activate_pending_variable_definitions())
-    }
-
-    pub(crate) fn reference_variable(&self, ident: &Ident) -> ParseResult<VariableReferenceId> {
-        self.context.update(|s| s.reference_variable(ident))
+            .update(|s| s.allocate_variable_reference(ident))
     }
 
     pub(crate) fn fork(&self) -> SourceParseBuffer<'a> {
@@ -234,6 +251,22 @@ impl<'a> SourceParseBuffer<'a> {
             buffer: self.buffer.fork(),
             context: self.context.clone(),
         }
+    }
+
+    pub(crate) fn parse_virtual_empty_stream<T>(
+        &self,
+        parser: impl FnOnce(SourceParser) -> ParseResult<T>,
+    ) -> ParseResult<T> {
+        parse_with(TokenStream::new(), |stream| -> ParseResult<T> {
+            let forked = stream.fork();
+            let parse_buffer = SourceParseBuffer {
+                buffer: forked,
+                context: self.context.clone(),
+            };
+            let output = parser(&parse_buffer)?;
+            stream.advance_to(&parse_buffer.buffer);
+            Ok(output)
+        })
     }
 
     fn child_from_buffer<'c>(&self, buffer: ParseBuffer<'c, Source>) -> SourceParseBuffer<'c> {

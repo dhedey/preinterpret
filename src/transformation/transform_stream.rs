@@ -13,6 +13,13 @@ impl ParseSource for TransformStream {
         }
         Ok(Self { inner })
     }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        for item in self.inner.iter() {
+            item.control_flow_pass(context)?;
+        }
+        Ok(())
+    }
 }
 
 impl HandleTransformation for TransformStream {
@@ -59,6 +66,20 @@ impl ParseSource for TransformItem {
             SourcePeekMatch::ObjectLiteral => return input.parse_err("Object literals are not supported here."),
             SourcePeekMatch::End => return input.parse_err("Unexpected end"),
         })
+    }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        match self {
+            TransformItem::Command(command) => command.control_flow_pass(context),
+            TransformItem::EmbeddedExpression(block) => block.control_flow_pass(context),
+            TransformItem::EmbeddedStatements(statements) => statements.control_flow_pass(context),
+            TransformItem::Transformer(transformer) => transformer.control_flow_pass(context),
+            TransformItem::TransformStreamInput(stream) => stream.control_flow_pass(context),
+            TransformItem::ExactPunct(punct) => punct.control_flow_pass(context),
+            TransformItem::ExactIdent(ident) => ident.control_flow_pass(context),
+            TransformItem::ExactLiteral(literal) => literal.control_flow_pass(context),
+            TransformItem::ExactGroup(group) => group.control_flow_pass(context),
+        }
     }
 }
 
@@ -116,6 +137,10 @@ impl ParseSource for TransformGroup {
             inner: content.parse()?,
         })
     }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        self.inner.control_flow_pass(context)
+    }
 }
 
 impl HandleTransformation for TransformGroup {
@@ -156,6 +181,10 @@ impl ParseSource for StreamParser {
             parentheses,
             content: content.parse()?,
         })
+    }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        self.content.control_flow_pass(context)
     }
 }
 
@@ -209,13 +238,11 @@ impl ParseSource for StreamParserContent {
             let _ = input.parse::<Token![#]>()?;
             if let Some((_, cursor)) = input.cursor().ident() {
                 if cursor.punct_matching('=').is_some() {
-                    let output = Ok(Self::StoreToVariable {
+                    return Ok(Self::StoreToVariable {
                         variable: input.parse()?,
                         equals: input.parse()?,
                         content: input.parse()?,
                     });
-                    input.activate_pending_variable_definitions();
-                    return output;
                 }
                 if cursor.punct_matching('+').is_some() {
                     return Ok(Self::ExtendToVariable {
@@ -230,6 +257,35 @@ impl ParseSource for StreamParserContent {
         Ok(Self::Output {
             content: input.parse()?,
         })
+    }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        match self {
+            StreamParserContent::Output { content } => content.control_flow_pass(context),
+            StreamParserContent::StoreToVariable {
+                variable,
+                equals: _,
+                content,
+            } => {
+                content.control_flow_pass(context)?;
+                variable.control_flow_pass(context)
+            }
+            StreamParserContent::ExtendToVariable {
+                variable,
+                plus_equals: _,
+                content,
+            } => {
+                // NB: This is correctly a different order compared to StoreToVariable,
+                // as it aligns with the execution flow below
+                variable.control_flow_pass(context)?;
+                content.control_flow_pass(context)
+            }
+            StreamParserContent::Discard {
+                discard: _,
+                equals: _,
+                content,
+            } => content.control_flow_pass(context),
+        }
     }
 }
 

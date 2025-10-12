@@ -2,10 +2,10 @@ use crate::internal_prelude::*;
 
 #[derive(Clone)]
 pub(crate) struct ParseCommand {
-    input: Expression,
+    pub(crate) input: Expression,
     #[allow(unused)]
     with_token: Ident,
-    transformer: StreamParser,
+    pub(crate) transformer: StreamParser,
 }
 
 impl CommandType for ParseCommand {

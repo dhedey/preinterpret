@@ -11,6 +11,8 @@ pub(crate) trait TransformerDefinition: Clone {
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()>;
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()>;
 }
 
 #[derive(Clone)]
@@ -127,8 +129,8 @@ impl ParseSource for Transformer {
             }
             None => {
                 let span = name.span();
-                let (instance, _) = TokenStream::new()
-                    .full_source_parse_with(|parse_stream| {
+                let instance = input
+                    .parse_virtual_empty_stream(|parse_stream| {
                         let arguments = TransformerArguments::new(parse_stream, name.clone(), span);
                         transformer_kind.parse_instance(arguments)
                     })
@@ -149,6 +151,10 @@ impl ParseSource for Transformer {
                 })
             }
         }
+    }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        self.instance.control_flow_pass(context)
     }
 }
 
@@ -218,6 +224,14 @@ macro_rules! define_transformers {
                 match self {
                     $(
                         Self::$transformer(transformer) => transformer.handle_transform(input, interpreter, output),
+                    )*
+                }
+            }
+
+            fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+                match self {
+                    $(
+                        Self::$transformer(transformer) => transformer.control_flow_pass(context),
                     )*
                 }
             }

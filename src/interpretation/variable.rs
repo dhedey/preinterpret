@@ -13,6 +13,10 @@ impl ParseSource for EmbeddedVariable {
             reference: input.parse()?,
         })
     }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        self.reference.control_flow_pass(context)
+    }
 }
 
 impl Interpret for EmbeddedVariable {
@@ -48,8 +52,13 @@ pub(crate) struct VariableDefinition {
 impl ParseSource for VariableDefinition {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let ident = input.parse()?;
-        let id = input.define_inactive_variable(&ident);
+        let id = input.register_variable_definition(&ident);
         Ok(Self { id })
+    }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        context.define_variable(self.id);
+        Ok(())
     }
 }
 
@@ -79,11 +88,15 @@ pub(crate) struct VariableReference {
 impl ParseSource for VariableReference {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let ident = input.parse()?;
-        let reference_id = input.reference_variable(&ident)?;
+        let reference_id = input.register_variable_reference(&ident);
         Ok(Self {
             ident,
             id: reference_id,
         })
+    }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        context.reference_variable(self.id)
     }
 }
 
@@ -170,13 +183,11 @@ impl ParseSource for VariablePattern {
             definition: input.parse()?,
         })
     }
-}
 
-// impl HasSpan for VariablePattern {
-//     fn span(&self) -> Span {
-//         self.definition.span()
-//     }
-// }
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        self.definition.control_flow_pass(context)
+    }
+}
 
 impl HandleDestructure for VariablePattern {
     fn handle_destructure(

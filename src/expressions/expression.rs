@@ -10,6 +10,10 @@ impl ParseSource for Expression {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         ExpressionParser::parse(input)
     }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        control_flow_visit(self.root, &self.nodes, context)
+    }
 }
 
 impl Expression {
@@ -110,7 +114,7 @@ pub(super) enum ExpressionNode {
         value: ExpressionNodeId,
     },
     CompoundAssignment {
-        place: ExpressionNodeId,
+        assignee: ExpressionNodeId,
         operation: CompoundAssignmentOperation,
         value: ExpressionNodeId,
     },

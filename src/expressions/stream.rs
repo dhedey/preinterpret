@@ -199,7 +199,7 @@ define_interface! {
                 let lhs_value: &ExpressionValue = &lhs;
                 let rhs_value: &ExpressionValue = &rhs;
                 let res = {
-                    // TODO: Replace with eq when we have a solid implementation
+                    // TODO[operation-refactor]: Replace with eq when we have a solid implementation
                     let lhs_debug_str = lhs_value.concat_recursive(&ConcatBehaviour::debug(lhs.span_range()))?;
                     let rhs_debug_str = rhs_value.concat_recursive(&ConcatBehaviour::debug(rhs.span_range()))?;
                     lhs_debug_str == rhs_debug_str
@@ -226,7 +226,7 @@ define_interface! {
                     this.into_inner().value.into_token_stream()
                 };
                 // TODO[scopes] fix this! (see comment below)
-                let (reparsed, scope_definitions) = source.full_source_parse_with(ExpressionBlockContent::parse)?;
+                let (reparsed, scope_definitions) = source.source_parse_and_analyze(ExpressionBlockContent::parse, ExpressionBlockContent::control_flow_pass)?;
                 let mut inner_interpreter = Interpreter::new(scope_definitions);
                 reparsed.evaluate(&mut inner_interpreter, context.output_span_range)
             }
@@ -246,7 +246,10 @@ define_interface! {
                 // > We need to create a new scope on top of the current scope
                 // > ...And continue the parse process from there!
                 // > ...And then adjust the scope
-                let (reparsed, scope_definitions) = source.full_source_parse_with(|input| SourceStream::parse_with_span(input, context.output_span_range.start()))?;
+                let (reparsed, scope_definitions) = source.source_parse_and_analyze(
+                    |input| SourceStream::parse_with_span(input, context.output_span_range.start()),
+                    SourceStream::control_flow_pass,
+                )?;
                 let mut inner_interpreter = Interpreter::new(scope_definitions);
                 // NB: We can't use a StreamOutput here, because it can't capture the Interpreter
                 //     without some lifetime shenanigans.
@@ -310,6 +313,14 @@ impl ParseSource for StreamLiteral {
         }
         input.parse_err("Expected `%[..]`, `%raw[..]` or `%group[..]` to start a stream literal")
     }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        match self {
+            StreamLiteral::Regular(lit) => lit.control_flow_pass(context),
+            StreamLiteral::Raw(lit) => lit.control_flow_pass(context),
+            StreamLiteral::Grouped(lit) => lit.control_flow_pass(context),
+        }
+    }
 }
 
 impl Interpret for StreamLiteral {
@@ -367,6 +378,10 @@ impl ParseSource for RegularStreamLiteral {
             content,
         })
     }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        self.content.control_flow_pass(context)
+    }
 }
 
 impl Interpret for RegularStreamLiteral {
@@ -414,6 +429,10 @@ impl ParseSource for RawStreamLiteral {
             brackets,
             content,
         })
+    }
+
+    fn control_flow_pass(&self, _context: FlowCapturer) -> ParseResult<()> {
+        Ok(())
     }
 }
 
@@ -464,6 +483,10 @@ impl ParseSource for GroupedStreamLiteral {
             brackets,
             content,
         })
+    }
+
+    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+        self.content.control_flow_pass(context)
     }
 }
 
