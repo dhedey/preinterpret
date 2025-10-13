@@ -246,7 +246,9 @@ impl<'a> SourceParseBuffer<'a> {
     }
 
     pub(crate) fn fork(&self) -> SourceParseBuffer<'a> {
-        // TODO[scopes] See if we need to protect better against context mutating on the fork
+        // TODO[scopes] See if we need to protect better against context mutating on the fork:
+        // * Banning context mutation on forks?
+        // * Using copy-on-write and clone the context on mutation?
         SourceParseBuffer {
             buffer: self.buffer.fork(),
             context: self.context.clone(),

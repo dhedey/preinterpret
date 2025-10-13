@@ -113,6 +113,7 @@ Create the following expressions:
   - [x] EmbeddedX should request value ownership of shared from expression land
   - [x] Disable transparent clone for streams
 - [ ] Fix all `TODO[scopes]`
+  - [ ] Currently parsing `let top = 'z'; let _ = 'a'..top;` will error
 - [ ] Tests
   - [ ] Convert the control flow to a visitor model
   - [ ] Add test macro for asserting variable binding `is_final` information, e.g. with a `x[final]` and `x[not_final]` syntax?
