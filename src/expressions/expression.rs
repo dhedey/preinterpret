@@ -2,7 +2,7 @@ use super::*;
 
 pub(crate) struct Expression {
     root: ExpressionNodeId,
-    nodes: ReadOnlyArena<ExpressionNodeId, ExpressionNode>,
+    nodes: Arena<ExpressionNodeId, ExpressionNode>,
 }
 
 impl ParseSource for Expression {
@@ -18,7 +18,7 @@ impl ParseSource for Expression {
 impl Expression {
     pub(super) fn new(
         root: ExpressionNodeId,
-        nodes: ReadOnlyArena<ExpressionNodeId, ExpressionNode>,
+        nodes: Arena<ExpressionNodeId, ExpressionNode>,
     ) -> Self {
         Self { root, nodes }
     }

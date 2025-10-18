@@ -25,18 +25,18 @@ new_key!(pub(crate) VariableDefinitionId);
 new_key!(pub(crate) VariableReferenceId);
 new_key!(pub(crate) ControlFlowSegmentId);
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub(crate) struct ScopeDefinitions {
     // Scopes
     pub(crate) root_scope: ScopeId,
-    pub(crate) scopes: ReadOnlyArena<ScopeId, ScopeData>,
-    pub(crate) definitions: ReadOnlyArena<VariableDefinitionId, VariableDefinitionData>,
-    pub(crate) references: ReadOnlyArena<VariableReferenceId, VariableReferenceData>,
+    pub(crate) scopes: Arena<ScopeId, ScopeData>,
+    pub(crate) definitions: Arena<VariableDefinitionId, VariableDefinitionData>,
+    pub(crate) references: Arena<VariableReferenceId, VariableReferenceData>,
     // Segments
     #[cfg(feature = "debug")]
     root_segment: ControlFlowSegmentId,
     #[cfg(feature = "debug")]
-    segments: ReadOnlyArena<ControlFlowSegmentId, ControlFlowSegmentData>,
+    segments: Arena<ControlFlowSegmentId, ControlFlowSegmentData>,
     #[cfg(feature = "debug")]
     final_use_debug: MarkFinalUseOutput,
 }
@@ -45,24 +45,24 @@ pub(crate) struct ScopeDefinitions {
 pub(crate) struct ParseState {
     // SCOPE DATA
     scope_id_stack: Vec<ScopeId>,
-    scopes: AppendOnlyArena<ScopeId, AllocatedScope>,
-    definitions: AppendOnlyArena<VariableDefinitionId, AllocatedVariableDefinition>,
-    references: AppendOnlyArena<VariableReferenceId, AllocatedVariableReference>,
+    scopes: Arena<ScopeId, AllocatedScope>,
+    definitions: Arena<VariableDefinitionId, AllocatedVariableDefinition>,
+    references: Arena<VariableReferenceId, AllocatedVariableReference>,
     // CONTROL FLOW DATA
     segments_stack: Vec<ControlFlowSegmentId>,
-    segments: AppendOnlyArena<ControlFlowSegmentId, ControlFlowSegmentData>,
+    segments: Arena<ControlFlowSegmentId, ControlFlowSegmentData>,
 }
 
 impl ParseState {
     fn new() -> Self {
-        let mut scopes = AppendOnlyArena::new();
-        let definitions = AppendOnlyArena::new();
-        let references = AppendOnlyArena::new();
+        let mut scopes = Arena::new();
+        let definitions = Arena::new();
+        let references = Arena::new();
         let root_scope = scopes.add(AllocatedScope::Defined(ScopeData {
             parent: None,
             definitions: Vec::new(),
         }));
-        let mut segments = AppendOnlyArena::new();
+        let mut segments = Arena::new();
         let root_segment = segments.add(ControlFlowSegmentData {
             scope: root_scope,
             parent: None,
@@ -111,13 +111,13 @@ impl ParseState {
 
         ScopeDefinitions {
             root_scope,
-            scopes: scopes.into_read_only(),
-            definitions: definitions.into_read_only(),
-            references: references.into_read_only(),
+            scopes,
+            definitions,
+            references,
             #[cfg(feature = "debug")]
             root_segment,
             #[cfg(feature = "debug")]
-            segments: self.segments.into_read_only(),
+            segments: self.segments,
             #[cfg(feature = "debug")]
             final_use_debug,
         }

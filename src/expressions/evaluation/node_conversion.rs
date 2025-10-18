@@ -115,7 +115,7 @@ impl ExpressionNode {
     pub(super) fn handle_as_assignment_target(
         &self,
         context: AssignmentContext,
-        nodes: &ReadOnlyArena<ExpressionNodeId, ExpressionNode>,
+        nodes: &Arena<ExpressionNodeId, ExpressionNode>,
         self_node_id: ExpressionNodeId,
         // NB: This might intrisically be a part of a larger value, and might have been
         // created many lines previously, so doesn't have an obvious span associated with it

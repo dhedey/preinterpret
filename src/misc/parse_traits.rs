@@ -210,6 +210,9 @@ impl ControlFlowContext {
     }
 }
 
+// This was originally created so that we could modify a stateful context
+// during parsing, but this was later moved to the control_flow pass instead.
+// We might be able to remove this and go back to ParseBuffer<'a, Source> in future.
 pub(crate) struct SourceParseBuffer<'a> {
     pub(crate) buffer: ParseBuffer<'a, Source>,
     pub(crate) context: ParseContext,

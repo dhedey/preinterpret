@@ -108,7 +108,7 @@ pub(super) struct ArrayBasedAssigner {
 impl ArrayBasedAssigner {
     pub(super) fn start(
         context: AssignmentContext,
-        nodes: &ReadOnlyArena<ExpressionNodeId, ExpressionNode>,
+        nodes: &Arena<ExpressionNodeId, ExpressionNode>,
         brackets: &Brackets,
         assignee_item_node_ids: &[ExpressionNodeId],
         value: ExpressionValue,
@@ -119,7 +119,7 @@ impl ArrayBasedAssigner {
 
     /// See also `ArrayPattern` in `patterns.rs`
     fn new(
-        nodes: &ReadOnlyArena<ExpressionNodeId, ExpressionNode>,
+        nodes: &Arena<ExpressionNodeId, ExpressionNode>,
         assignee_span: Span,
         assignee_item_node_ids: &[ExpressionNodeId],
         value: ExpressionValue,

@@ -1,18 +1,18 @@
 use super::*;
 
 pub(super) struct ControlFlowAnalyzer<'a> {
-    definitions: &'a AppendOnlyArena<VariableDefinitionId, VariableDefinitionData>,
-    references: &'a mut AppendOnlyArena<VariableReferenceId, VariableReferenceData>,
-    scopes: &'a AppendOnlyArena<ScopeId, ScopeData>,
-    segments: &'a AppendOnlyArena<ControlFlowSegmentId, ControlFlowSegmentData>,
+    definitions: &'a Arena<VariableDefinitionId, VariableDefinitionData>,
+    references: &'a mut Arena<VariableReferenceId, VariableReferenceData>,
+    scopes: &'a Arena<ScopeId, ScopeData>,
+    segments: &'a Arena<ControlFlowSegmentId, ControlFlowSegmentData>,
 }
 
 impl<'a> ControlFlowAnalyzer<'a> {
     pub(super) fn new(
-        definitions: &'a AppendOnlyArena<VariableDefinitionId, VariableDefinitionData>,
-        references: &'a mut AppendOnlyArena<VariableReferenceId, VariableReferenceData>,
-        scopes: &'a AppendOnlyArena<ScopeId, ScopeData>,
-        segments: &'a AppendOnlyArena<ControlFlowSegmentId, ControlFlowSegmentData>,
+        definitions: &'a Arena<VariableDefinitionId, VariableDefinitionData>,
+        references: &'a mut Arena<VariableReferenceId, VariableReferenceData>,
+        scopes: &'a Arena<ScopeId, ScopeData>,
+        segments: &'a Arena<ControlFlowSegmentId, ControlFlowSegmentData>,
     ) -> ControlFlowAnalyzer<'a> {
         ControlFlowAnalyzer {
             definitions,

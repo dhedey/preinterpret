@@ -2,7 +2,7 @@ use super::*;
 
 pub(in super::super) fn control_flow_visit(
     root: ExpressionNodeId,
-    nodes: &ReadOnlyArena<ExpressionNodeId, ExpressionNode>,
+    nodes: &Arena<ExpressionNodeId, ExpressionNode>,
     context: FlowCapturer,
 ) -> ParseResult<()> {
     let mut stack = ControlFlowStack::new();

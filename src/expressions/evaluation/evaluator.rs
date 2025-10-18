@@ -2,13 +2,13 @@
 use super::*;
 
 pub(in crate::expressions) struct ExpressionEvaluator<'a> {
-    nodes: &'a ReadOnlyArena<ExpressionNodeId, ExpressionNode>,
+    nodes: &'a Arena<ExpressionNodeId, ExpressionNode>,
     stack: EvaluationStack,
 }
 
 impl<'a> ExpressionEvaluator<'a> {
     pub(in super::super) fn new(
-        nodes: &'a ReadOnlyArena<ExpressionNodeId, ExpressionNode>,
+        nodes: &'a Arena<ExpressionNodeId, ExpressionNode>,
     ) -> Self {
         Self {
             nodes,

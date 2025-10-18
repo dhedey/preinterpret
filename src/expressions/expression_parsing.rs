@@ -657,13 +657,13 @@ impl<'a> ExpressionParser<'a> {
 new_key!(pub(crate) ExpressionNodeId);
 
 pub(super) struct ExpressionNodes {
-    nodes: AppendOnlyArena<ExpressionNodeId, ExpressionNode>,
+    nodes: Arena<ExpressionNodeId, ExpressionNode>,
 }
 
 impl ExpressionNodes {
     pub(super) fn new() -> Self {
         Self {
-            nodes: AppendOnlyArena::new(),
+            nodes: Arena::new(),
         }
     }
 
@@ -672,7 +672,7 @@ impl ExpressionNodes {
     }
 
     pub(super) fn complete(self, root: ExpressionNodeId) -> Expression {
-        Expression::new(root, self.nodes.into_read_only())
+        Expression::new(root, self.nodes)
     }
 }
 

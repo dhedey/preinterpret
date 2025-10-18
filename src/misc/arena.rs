@@ -27,12 +27,12 @@ macro_rules! new_key {
 
 pub(crate) use new_key;
 
-pub(crate) struct AppendOnlyArena<K: ArenaKey, Data> {
+pub(crate) struct Arena<K: ArenaKey, Data> {
     data: Vec<Data>,
     instance_marker: PhantomData<K>,
 }
 
-impl<K: ArenaKey, D> AppendOnlyArena<K, D> {
+impl<K: ArenaKey, D> Arena<K, D> {
     pub(crate) fn new() -> Self {
         Self {
             data: Vec::new(),
@@ -61,52 +61,17 @@ impl<K: ArenaKey, D> AppendOnlyArena<K, D> {
             .map(|(index, v)| (K::from_inner(Key::new(index)), v))
     }
 
-    pub(crate) fn map_all<D2>(self, f: impl Fn(D) -> D2) -> AppendOnlyArena<K, D2> {
-        AppendOnlyArena {
+    pub(crate) fn map_all<D2>(self, f: impl Fn(D) -> D2) -> Arena<K, D2> {
+        Arena {
             data: self.data.into_iter().map(f).collect(),
             instance_marker: PhantomData,
         }
     }
-
-    pub(crate) fn into_read_only(self) -> ReadOnlyArena<K, D> {
-        ReadOnlyArena {
-            data: self.data.into(),
-            instance_marker: PhantomData,
-        }
-    }
 }
 
-/// A cheaply clonable read-only arena.
-pub(crate) struct ReadOnlyArena<K: ArenaKey, D> {
-    data: Rc<[D]>,
-    instance_marker: PhantomData<K>,
-}
-
-impl<K: ArenaKey, D> Clone for ReadOnlyArena<K, D> {
-    fn clone(&self) -> Self {
-        Self {
-            data: Rc::clone(&self.data),
-            instance_marker: PhantomData,
-        }
-    }
-}
-
-impl<K: ArenaKey + Debug, D: Debug> Debug for ReadOnlyArena<K, D> {
+impl<K: ArenaKey + Debug, D: Debug> Debug for Arena<K, D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_map().entries(self.iter()).finish()
-    }
-}
-
-impl<K: ArenaKey, D> ReadOnlyArena<K, D> {
-    pub(crate) fn get(&self, key: K) -> &D {
-        &self.data[key.to_inner().index]
-    }
-
-    pub(crate) fn iter(&self) -> impl Iterator<Item = (K, &D)> {
-        self.data
-            .iter()
-            .enumerate()
-            .map(|(index, v)| (K::from_inner(Key::new(index)), v))
     }
 }
 
