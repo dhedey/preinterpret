@@ -1,6 +1,5 @@
 use crate::internal_prelude::*;
 
-#[derive(Clone)]
 pub(crate) struct SettingsCommand {
     pub(crate) settings: Expression,
 }

@@ -1,6 +1,5 @@
 use super::*;
 
-#[derive(Clone)]
 pub(crate) struct IfExpression {
     if_token: Ident,
     condition: Expression,
@@ -130,7 +129,6 @@ impl IfExpression {
     }
 }
 
-#[derive(Clone)]
 pub(crate) struct WhileExpression {
     while_token: Ident,
     condition: Expression,
@@ -221,7 +219,6 @@ impl WhileExpression {
     }
 }
 
-#[derive(Clone)]
 pub(crate) struct LoopExpression {
     loop_token: Ident,
     body: ExpressionBlock,
@@ -300,7 +297,6 @@ impl LoopExpression {
     }
 }
 
-#[derive(Clone)]
 pub(crate) struct ForExpression {
     iteration_scope: ScopeId,
     for_token: Ident,

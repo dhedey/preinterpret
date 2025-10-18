@@ -1,7 +1,6 @@
 use crate::internal_prelude::*;
 
 /// A parsed stream ready for interpretation
-#[derive(Clone)]
 pub(crate) struct SourceStream {
     items: Vec<SourceItem>,
     span: Span,
@@ -43,7 +42,6 @@ impl HasSpan for SourceStream {
     }
 }
 
-#[derive(Clone)]
 pub(crate) enum SourceItem {
     Command(Command),
     Variable(EmbeddedVariable),
@@ -145,7 +143,6 @@ impl HasSpanRange for SourceItem {
 }
 
 /// A parsed group ready for interpretation
-#[derive(Clone)]
 pub(crate) struct SourceGroup {
     source_delimiter: Delimiter,
     source_delim_span: DelimSpan,

@@ -1,6 +1,5 @@
 use super::*;
 
-#[derive(Clone)]
 pub(crate) struct EmbeddedExpression {
     marker: Token![#],
     parentheses: Parentheses,
@@ -43,7 +42,6 @@ impl Interpret for EmbeddedExpression {
     }
 }
 
-#[derive(Clone)]
 pub(crate) struct EmbeddedStatements {
     marker: Token![#],
     braces: Braces,
@@ -94,7 +92,6 @@ impl Interpret for EmbeddedStatements {
     }
 }
 
-#[derive(Clone)]
 pub(crate) struct ExpressionBlock {
     pub(super) braces: Braces,
     pub(super) scope: ScopeId,
@@ -150,7 +147,6 @@ impl ExpressionBlock {
     }
 }
 
-#[derive(Clone)]
 pub(crate) struct ExpressionBlockContent {
     statements: Vec<(Statement, Option<Token![;]>)>,
 }
@@ -209,7 +205,6 @@ impl ExpressionBlockContent {
     }
 }
 
-#[derive(Clone)]
 pub(crate) enum Statement {
     LetStatement(LetStatement),
     BreakStatement(BreakStatement),
@@ -284,14 +279,12 @@ impl Statement {
 /// In the former, `x` is a pattern, and any identifiers creates new variable/bindings.
 /// In the latter, `x` is a place expression, and identifiers can be either place references or
 /// values, e.g. `a.x[y[0]][3] = ...` has `y[0]` evaluated as a value.
-#[derive(Clone)]
 pub(crate) struct LetStatement {
     _let_token: Token![let],
     pattern: Pattern,
     assignment: Option<LetStatementAssignment>,
 }
 
-#[derive(Clone)]
 struct LetStatementAssignment {
     #[allow(unused)]
     equals: Token![=],

@@ -1,6 +1,6 @@
 use crate::internal_prelude::*;
 
-pub(crate) trait TransformerDefinition: Clone {
+pub(crate) trait TransformerDefinition: Sized {
     const TRANSFORMER_NAME: &'static str;
 
     fn parse(arguments: TransformerArguments) -> ParseResult<Self>;
@@ -83,7 +83,6 @@ impl<'a> TransformerArguments<'a> {
     }
 }
 
-#[derive(Clone)]
 pub(crate) struct Transformer {
     #[allow(unused)]
     transformer_token: Token![@],
@@ -211,7 +210,6 @@ macro_rules! define_transformers {
             }
         }
 
-        #[derive(Clone)]
         #[allow(clippy::enum_variant_names)]
         pub(crate) enum NamedTransformer {
             $(

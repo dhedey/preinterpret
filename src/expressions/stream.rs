@@ -275,7 +275,6 @@ define_interface! {
     }
 }
 
-#[derive(Clone)]
 pub(crate) enum StreamLiteral {
     Regular(RegularStreamLiteral),
     Raw(RawStreamLiteral),
@@ -349,7 +348,6 @@ impl Evaluate for StreamLiteral {
     }
 }
 
-#[derive(Clone)]
 #[allow(unused)]
 pub(crate) struct RegularStreamLiteral {
     prefix: Token![%],
@@ -451,7 +449,6 @@ impl RawStreamLiteral {
     }
 }
 
-#[derive(Clone)]
 #[allow(unused)]
 pub(crate) struct GroupedStreamLiteral {
     prefix: Token![%],

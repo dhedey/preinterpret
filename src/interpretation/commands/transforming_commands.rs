@@ -1,6 +1,5 @@
 use crate::internal_prelude::*;
 
-#[derive(Clone)]
 pub(crate) struct ParseCommand {
     pub(crate) input: Expression,
     #[allow(unused)]

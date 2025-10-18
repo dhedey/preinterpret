@@ -1,6 +1,5 @@
 use super::*;
 
-#[derive(Clone)]
 pub(crate) struct Expression {
     root: ExpressionNodeId,
     nodes: ReadOnlyArena<ExpressionNodeId, ExpressionNode>,

@@ -191,7 +191,6 @@ macro_rules! define_command_enums {
         }
 
         #[allow(clippy::enum_variant_names)]
-        #[derive(Clone)]
         enum TypedCommand {
             $(
                 $command($command),
@@ -230,7 +229,6 @@ define_command_enums! {
     ParseCommand,
 }
 
-#[derive(Clone)]
 pub(crate) struct Command {
     typed: Box<TypedCommand>,
     brackets: Brackets,

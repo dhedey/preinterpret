@@ -8,7 +8,6 @@ pub(crate) trait HandleDestructure {
     ) -> ExecutionResult<()>;
 }
 
-#[derive(Clone)]
 pub(crate) enum Pattern {
     Variable(VariablePattern),
     Array(ArrayPattern),
@@ -79,7 +78,6 @@ impl HandleDestructure for Pattern {
     }
 }
 
-#[derive(Clone)]
 pub struct ArrayPattern {
     #[allow(unused)]
     brackets: Brackets,
@@ -172,7 +170,6 @@ impl HandleDestructure for ArrayPattern {
     }
 }
 
-#[derive(Clone)]
 enum PatternOrDotDot {
     Pattern(Pattern),
     DotDot(Token![..]),
@@ -195,7 +192,6 @@ impl ParseSource for PatternOrDotDot {
     }
 }
 
-#[derive(Clone)]
 pub struct ObjectPattern {
     #[allow(unused)]
     prefix: Token![%],
@@ -264,7 +260,6 @@ impl HandleDestructure for ObjectPattern {
     }
 }
 
-#[derive(Clone)]
 enum ObjectEntry {
     KeyOnly {
         field: Ident,
@@ -328,7 +323,6 @@ impl ParseSource for ObjectEntry {
     }
 }
 
-#[derive(Clone)]
 pub struct StreamPattern {
     #[allow(unused)]
     prefix: Token![%],

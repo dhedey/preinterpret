@@ -180,7 +180,6 @@ impl TransformerDefinition for PunctTransformer {
     }
 }
 
-#[derive(Clone)]
 pub(crate) struct GroupTransformer {
     inner: TransformStream,
 }
@@ -209,7 +208,6 @@ impl TransformerDefinition for GroupTransformer {
     }
 }
 
-#[derive(Clone)]
 pub(crate) struct ExactTransformer {
     _parentheses: Parentheses,
     stream: Expression,

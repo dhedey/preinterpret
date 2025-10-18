@@ -1,6 +1,5 @@
 use crate::internal_prelude::*;
 
-#[derive(Clone)]
 pub(crate) struct TransformStream {
     inner: Vec<TransformItem>,
 }
@@ -36,7 +35,6 @@ impl HandleTransformation for TransformStream {
     }
 }
 
-#[derive(Clone)]
 pub(crate) enum TransformItem {
     Command(Command),
     EmbeddedExpression(EmbeddedExpression),
@@ -92,7 +90,7 @@ impl HandleTransformation for TransformItem {
     ) -> ExecutionResult<()> {
         match self {
             TransformItem::Command(command) => {
-                command.clone().interpret_into(interpreter, output)?;
+                command.interpret_into(interpreter, output)?;
             }
             TransformItem::Transformer(transformer) => {
                 transformer.handle_transform(input, interpreter, output)?;
@@ -123,7 +121,6 @@ impl HandleTransformation for TransformItem {
     }
 }
 
-#[derive(Clone)]
 pub(crate) struct TransformGroup {
     delimiter: Delimiter,
     inner: TransformStream,
@@ -162,7 +159,6 @@ impl HandleTransformation for TransformGroup {
     }
 }
 
-#[derive(Clone)]
 pub(crate) struct StreamParser {
     #[allow(unused)]
     transformer_token: Token![@],
@@ -199,7 +195,6 @@ impl HandleTransformation for StreamParser {
     }
 }
 
-#[derive(Clone)]
 pub(crate) enum StreamParserContent {
     Output {
         content: TransformStream,
