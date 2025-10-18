@@ -225,7 +225,6 @@ define_interface! {
                     // which handles groups/missing groups reasonably well (see tests)
                     this.into_inner().value.into_token_stream()
                 };
-                // TODO[scopes] fix this! (see comment below)
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(ExpressionBlockContent::parse, ExpressionBlockContent::control_flow_pass)?;
                 let mut inner_interpreter = Interpreter::new(scope_definitions);
                 Ok(reparsed.evaluate(&mut inner_interpreter, context.output_span_range, RequestedValueOwnership::owned())?.expect_owned())
@@ -237,15 +236,6 @@ define_interface! {
                     // which handles groups/missing groups reasonably well (see tests)
                     this.into_inner().value.into_token_stream()
                 };
-                // TODO[scopes] consider fixing this to have access to the parent scope
-                // EITHER (simplest)
-                // > We create a new interpreter for the reinterpretation
-                //   (i.e. we can't access existing variables, it's pure, returning a value)
-                // > And we'll need to update the docs
-                // OR (harder)
-                // > We need to create a new scope on top of the current scope
-                // > ...And continue the parse process from there!
-                // > ...And then adjust the scope
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(
                     |input| SourceStream::parse_with_span(input, context.output_span_range.start()),
                     SourceStream::control_flow_pass,

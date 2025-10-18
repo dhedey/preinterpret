@@ -144,23 +144,15 @@ fn test_reinterpret() {
         ),
         1
     );
-    // TODO[scopes]: Uncomment when scopes are fully implemented
-    // Expect reinterpret to run in its own scope, inside the parent scope.
-    // So it can't create variables in the parent scope, but it can change them
-    // assert_eq!(
-    //     run!(
-    //         let my_variable = "before";
-    //         %[my_variable = "updated";].reinterpret_as_run();
-    //         my_variable
-    //     ),
-    //     "updated"
-    // );
-    // TODO[scopes]: Uncomment when scopes are implemented
-    // assert_eq!(run!(
-    //     let my_variable = "before";
-    //     %[let my_variable = "replaced";].reinterpret_as_run();
-    //     my_variable
-    // ), "before");
+    // Reinterpreted code doesn't see parent scope variables
+    assert_eq!(
+        run!(
+            let my_variable = "before";
+            %[let my_variable = "replaced";].reinterpret_as_run();
+            my_variable
+        ),
+        "before"
+    );
 }
 
 #[test]
