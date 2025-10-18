@@ -13,8 +13,8 @@ impl ParseSource for TransformStream {
         Ok(Self { inner })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
-        for item in self.inner.iter() {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        for item in self.inner.iter_mut() {
             item.control_flow_pass(context)?;
         }
         Ok(())
@@ -66,7 +66,7 @@ impl ParseSource for TransformItem {
         })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         match self {
             TransformItem::Command(command) => command.control_flow_pass(context),
             TransformItem::EmbeddedExpression(block) => block.control_flow_pass(context),
@@ -135,7 +135,7 @@ impl ParseSource for TransformGroup {
         })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         self.inner.control_flow_pass(context)
     }
 }
@@ -179,7 +179,7 @@ impl ParseSource for StreamParser {
         })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         self.content.control_flow_pass(context)
     }
 }
@@ -254,7 +254,7 @@ impl ParseSource for StreamParserContent {
         })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         match self {
             StreamParserContent::Output { content } => content.control_flow_pass(context),
             StreamParserContent::StoreToVariable {

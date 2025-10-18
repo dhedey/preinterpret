@@ -12,7 +12,7 @@ pub(crate) trait TransformerDefinition: Sized {
         output: &mut OutputStream,
     ) -> ExecutionResult<()>;
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()>;
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()>;
 }
 
 #[derive(Clone)]
@@ -152,7 +152,7 @@ impl ParseSource for Transformer {
         }
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         self.instance.control_flow_pass(context)
     }
 }
@@ -226,7 +226,7 @@ macro_rules! define_transformers {
                 }
             }
 
-            fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+            fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
                 match self {
                     $(
                         Self::$transformer(transformer) => transformer.control_flow_pass(context),

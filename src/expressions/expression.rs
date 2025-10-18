@@ -10,8 +10,8 @@ impl ParseSource for Expression {
         ExpressionParser::parse(input)
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
-        control_flow_visit(self.root, &self.nodes, context)
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        control_flow_visit(self.root, &mut self.nodes, context)
     }
 }
 

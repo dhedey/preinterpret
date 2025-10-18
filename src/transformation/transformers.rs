@@ -20,7 +20,7 @@ impl TransformerDefinition for TokenTreeTransformer {
         Ok(())
     }
 
-    fn control_flow_pass(&self, _context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
         Ok(())
     }
 }
@@ -44,7 +44,7 @@ impl TransformerDefinition for RestTransformer {
         ParseUntil::End.handle_parse_into(input, output)
     }
 
-    fn control_flow_pass(&self, _context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
         Ok(())
     }
 }
@@ -88,7 +88,7 @@ impl TransformerDefinition for UntilTransformer {
         self.until.handle_parse_into(input, output)
     }
 
-    fn control_flow_pass(&self, _context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
         Ok(())
     }
 }
@@ -117,7 +117,7 @@ impl TransformerDefinition for IdentTransformer {
         }
     }
 
-    fn control_flow_pass(&self, _context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
         Ok(())
     }
 }
@@ -146,7 +146,7 @@ impl TransformerDefinition for LiteralTransformer {
         }
     }
 
-    fn control_flow_pass(&self, _context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
         Ok(())
     }
 }
@@ -175,7 +175,7 @@ impl TransformerDefinition for PunctTransformer {
         }
     }
 
-    fn control_flow_pass(&self, _context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
         Ok(())
     }
 }
@@ -203,7 +203,7 @@ impl TransformerDefinition for GroupTransformer {
         self.inner.handle_transform(&inner, interpreter, output)
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         self.inner.control_flow_pass(context)
     }
 }
@@ -244,7 +244,7 @@ impl TransformerDefinition for ExactTransformer {
         stream.value.parse_exact_match(input, output)
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         self.stream.control_flow_pass(context)
     }
 }

@@ -15,8 +15,8 @@ impl SourceStream {
         Ok(Self { items, span })
     }
 
-    pub(crate) fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
-        for item in self.items.iter() {
+    pub(crate) fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        for item in self.items.iter_mut() {
             item.control_flow_pass(context)?;
         }
         Ok(())
@@ -78,7 +78,7 @@ impl ParseSource for SourceItem {
         })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         match self {
             SourceItem::Command(command) => command.control_flow_pass(context),
             SourceItem::Variable(variable) => variable.control_flow_pass(context),
@@ -160,7 +160,7 @@ impl ParseSource for SourceGroup {
         })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         self.content.control_flow_pass(context)
     }
 }

@@ -18,7 +18,7 @@ impl ParseSource for EmbeddedExpression {
         })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         self.content.control_flow_pass(context)
     }
 }
@@ -60,7 +60,7 @@ impl ParseSource for EmbeddedStatements {
         })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         self.content.control_flow_pass(context)
     }
 }
@@ -101,16 +101,16 @@ pub(crate) struct ExpressionBlock {
 impl ParseSource for ExpressionBlock {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let (braces, inner) = input.parse_braces()?;
-        let scope = input.register_scope();
         let content = inner.parse()?;
         Ok(Self {
             braces,
-            scope,
+            scope: ScopeId::new_placeholder(),
             content,
         })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        context.register_scope(&mut self.scope);
         context.enter_scope(self.scope);
         self.content.control_flow_pass(context)?;
         context.exit_scope(self.scope);
@@ -177,8 +177,8 @@ impl ParseSource for ExpressionBlockContent {
         Ok(Self { statements })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
-        for (statement, _semicolon) in self.statements.iter() {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        for (statement, _semicolon) in self.statements.iter_mut() {
             statement.control_flow_pass(context)?;
         }
         Ok(())
@@ -239,7 +239,7 @@ impl ParseSource for Statement {
         })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         match self {
             Statement::LetStatement(statement) => statement.control_flow_pass(context),
             Statement::Expression(expression) => expression.control_flow_pass(context),
@@ -315,8 +315,8 @@ impl ParseSource for LetStatement {
         }
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
-        if let Some(assignment) = self.assignment.as_ref() {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        if let Some(assignment) = self.assignment.as_mut() {
             assignment.expression.control_flow_pass(context)?;
         }
         self.pattern.control_flow_pass(context)?;
@@ -360,7 +360,7 @@ impl ParseSource for BreakStatement {
         Ok(Self { break_token })
     }
 
-    fn control_flow_pass(&self, _context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
         Ok(())
     }
 }
@@ -391,7 +391,7 @@ impl ParseSource for ContinueStatement {
         Ok(Self { continue_token })
     }
 
-    fn control_flow_pass(&self, _context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
         Ok(())
     }
 }

@@ -261,8 +261,8 @@ impl ParseSource for Command {
         })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
-        match self.typed.as_ref() {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        match self.typed.as_mut() {
             TypedCommand::SettingsCommand(cmd) => cmd.settings.control_flow_pass(context),
             TypedCommand::ParseCommand(cmd) => {
                 cmd.input.control_flow_pass(context)?;

@@ -1,24 +1,5 @@
 #![allow(unused)]
 use super::*;
-use std::cell::RefCell;
-
-#[derive(Clone)]
-pub(crate) struct ParseContext {
-    #[allow(unused)]
-    pub(crate) full_state: Rc<RefCell<ParseState>>,
-}
-
-impl ParseContext {
-    pub(crate) fn new() -> Self {
-        Self {
-            full_state: Rc::new(RefCell::new(ParseState::new())),
-        }
-    }
-
-    pub(crate) fn update<R>(&self, f: impl FnOnce(&mut ParseState) -> R) -> R {
-        f(&mut self.full_state.borrow_mut())
-    }
-}
 
 new_key!(pub(crate) ScopeId);
 new_key!(pub(crate) VariableDefinitionId);
@@ -42,7 +23,7 @@ pub(crate) struct ScopeDefinitions {
 }
 
 #[allow(unused)]
-pub(crate) struct ParseState {
+pub(crate) struct FlowAnalysisState {
     // SCOPE DATA
     scope_id_stack: Vec<ScopeId>,
     scopes: Arena<ScopeId, AllocatedScope>,
@@ -53,8 +34,8 @@ pub(crate) struct ParseState {
     segments: Arena<ControlFlowSegmentId, ControlFlowSegmentData>,
 }
 
-impl ParseState {
-    fn new() -> Self {
+impl FlowAnalysisState {
+    pub(crate) fn new() -> Self {
         let mut scopes = Arena::new();
         let definitions = Arena::new();
         let references = Arena::new();

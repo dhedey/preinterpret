@@ -303,7 +303,7 @@ impl ParseSource for StreamLiteral {
         input.parse_err("Expected `%[..]`, `%raw[..]` or `%group[..]` to start a stream literal")
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         match self {
             StreamLiteral::Regular(lit) => lit.control_flow_pass(context),
             StreamLiteral::Raw(lit) => lit.control_flow_pass(context),
@@ -367,7 +367,7 @@ impl ParseSource for RegularStreamLiteral {
         })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         self.content.control_flow_pass(context)
     }
 }
@@ -419,7 +419,7 @@ impl ParseSource for RawStreamLiteral {
         })
     }
 
-    fn control_flow_pass(&self, _context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
         Ok(())
     }
 }
@@ -471,7 +471,7 @@ impl ParseSource for GroupedStreamLiteral {
         })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         self.content.control_flow_pass(context)
     }
 }

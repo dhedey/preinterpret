@@ -15,6 +15,10 @@ macro_rules! new_key {
             fn to_inner(self) -> Key<Self> {
                 self.0
             }
+
+            fn as_inner(&self) -> &Key<Self> {
+                &self.0
+            }
         }
 
         impl std::fmt::Debug for $key {
@@ -78,6 +82,13 @@ impl<K: ArenaKey + Debug, D: Debug> Debug for Arena<K, D> {
 pub(crate) trait ArenaKey: Sized {
     fn from_inner(value: Key<Self>) -> Self;
     fn to_inner(self) -> Key<Self>;
+    fn as_inner(&self) -> &Key<Self>;
+    fn new_placeholder() -> Self {
+        Self::from_inner(Key::new(usize::MAX))
+    }
+    fn is_placeholder(&self) -> bool {
+        self.as_inner().index == usize::MAX
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]

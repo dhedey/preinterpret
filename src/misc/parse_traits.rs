@@ -129,7 +129,7 @@ pub(crate) struct Output;
 pub(crate) trait ParseSource: Sized {
     fn parse(input: SourceParser) -> ParseResult<Self>;
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()>;
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()>;
 }
 
 impl<T> ParseSource for T
@@ -140,30 +140,26 @@ where
         <T as Parse<Source>>::parse(&input.buffer)
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         Ok(())
     }
 }
 
 pub(crate) fn parse_and_analyze<T, E>(
     parser: impl FnOnce(SourceParser) -> Result<T, E>,
-    control_flow_analysis: impl FnOnce(&T, FlowCapturer) -> Result<(), E>,
+    control_flow_analysis: impl FnOnce(&mut T, FlowCapturer) -> Result<(), E>,
 ) -> impl FnOnce(ParseStream<Source>) -> Result<(T, ScopeDefinitions), E> {
     move |stream: ParseStream<Source>| {
         // To get access to an owned ParseBuffer we fork it... and advance later!
         let forked = stream.fork();
         let parse_buffer = SourceParseBuffer::new(forked);
-        let output = parser(&parse_buffer)?;
+        let mut output = parser(&parse_buffer)?;
         stream.advance_to(&parse_buffer.buffer);
 
-        let state = match Rc::try_unwrap(parse_buffer.context.full_state).ok() {
-            Some(state) => state.into_inner(),
-            None => {
-                panic!("Something held onto a parser state after the parser returned");
-            }
+        let mut context = ControlFlowContext {
+            state: FlowAnalysisState::new(),
         };
-        let mut context = ControlFlowContext { state };
-        control_flow_analysis(&output, &mut context)?;
+        control_flow_analysis(&mut output, &mut context)?;
         Ok((output, context.state.finish()))
     }
 }
@@ -172,10 +168,25 @@ pub(crate) type SourceParser<'a> = &'a SourceParseBuffer<'a>;
 pub(crate) type FlowCapturer<'a> = &'a mut ControlFlowContext;
 
 pub(crate) struct ControlFlowContext {
-    state: ParseState,
+    state: FlowAnalysisState,
 }
 
 impl ControlFlowContext {
+    pub(crate) fn register_scope(&mut self, id: &mut ScopeId) {
+        assert!(id.is_placeholder());
+        *id = self.state.allocate_scope();
+    }
+
+    pub(crate) fn register_variable_definition(&mut self, ident: &Ident, id: &mut VariableDefinitionId) {
+        assert!(id.is_placeholder());
+        *id = self.state.allocate_variable_definition(ident);
+    }
+
+    pub(crate) fn register_variable_reference(&mut self, ident: &Ident, id: &mut VariableReferenceId) {
+        assert!(id.is_placeholder());
+        *id = self.state.allocate_variable_reference(ident);
+    }
+
     pub(crate) fn enter_scope(&mut self, scope: ScopeId) {
         self.state.enter_scope(scope);
     }
@@ -215,7 +226,6 @@ impl ControlFlowContext {
 // We might be able to remove this and go back to ParseBuffer<'a, Source> in future.
 pub(crate) struct SourceParseBuffer<'a> {
     pub(crate) buffer: ParseBuffer<'a, Source>,
-    pub(crate) context: ParseContext,
 }
 
 impl<'a> Deref for SourceParseBuffer<'a> {
@@ -230,31 +240,12 @@ impl<'a> SourceParseBuffer<'a> {
     fn new(buffer: ParseBuffer<'a, Source>) -> Self {
         Self {
             buffer,
-            context: ParseContext::new(),
         }
     }
 
-    pub(crate) fn register_scope(&self) -> ScopeId {
-        self.context.update(|s| s.allocate_scope())
-    }
-
-    pub(crate) fn register_variable_definition(&self, ident: &Ident) -> VariableDefinitionId {
-        self.context
-            .update(|s| s.allocate_variable_definition(ident))
-    }
-
-    pub(crate) fn register_variable_reference(&self, ident: &Ident) -> VariableReferenceId {
-        self.context
-            .update(|s| s.allocate_variable_reference(ident))
-    }
-
     pub(crate) fn fork(&self) -> SourceParseBuffer<'a> {
-        // TODO[scopes] See if we need to protect better against context mutating on the fork:
-        // * Banning context mutation on forks?
-        // * Using copy-on-write and clone the context on mutation?
         SourceParseBuffer {
             buffer: self.buffer.fork(),
-            context: self.context.clone(),
         }
     }
 
@@ -266,7 +257,6 @@ impl<'a> SourceParseBuffer<'a> {
             let forked = stream.fork();
             let parse_buffer = SourceParseBuffer {
                 buffer: forked,
-                context: self.context.clone(),
             };
             let output = parser(&parse_buffer)?;
             stream.advance_to(&parse_buffer.buffer);
@@ -277,7 +267,6 @@ impl<'a> SourceParseBuffer<'a> {
     fn child_from_buffer<'c>(&self, buffer: ParseBuffer<'c, Source>) -> SourceParseBuffer<'c> {
         SourceParseBuffer {
             buffer,
-            context: self.context.clone(),
         }
     }
 

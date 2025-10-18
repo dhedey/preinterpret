@@ -14,7 +14,7 @@ impl ParseSource for EmbeddedVariable {
         })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         self.reference.control_flow_pass(context)
     }
 }
@@ -46,17 +46,19 @@ impl HasSpanRange for EmbeddedVariable {
 
 #[derive(Clone)]
 pub(crate) struct VariableDefinition {
+    pub(crate) ident: Ident,
     pub(crate) id: VariableDefinitionId,
 }
 
 impl ParseSource for VariableDefinition {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let ident = input.parse()?;
-        let id = input.register_variable_definition(&ident);
-        Ok(Self { id })
+        let id = VariableDefinitionId::new_placeholder();
+        Ok(Self { ident, id })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        context.register_variable_definition(&self.ident, &mut self.id);
         context.define_variable(self.id);
         Ok(())
     }
@@ -88,14 +90,14 @@ pub(crate) struct VariableReference {
 impl ParseSource for VariableReference {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let ident = input.parse()?;
-        let reference_id = input.register_variable_reference(&ident);
         Ok(Self {
             ident,
-            id: reference_id,
+            id: VariableReferenceId::new_placeholder(),
         })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        context.register_variable_reference(&self.ident, &mut self.id);
         context.reference_variable(self.id)
     }
 }
@@ -184,7 +186,7 @@ impl ParseSource for VariablePattern {
         })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         self.definition.control_flow_pass(context)
     }
 }

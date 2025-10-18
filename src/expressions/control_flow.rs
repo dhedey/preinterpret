@@ -55,7 +55,7 @@ impl ParseSource for IfExpression {
         })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         // In terms of control-flow segments, the possible execution paths
         // look like this, so we model that with path-based segments:
         //
@@ -73,7 +73,7 @@ impl ParseSource for IfExpression {
         self.then_code.control_flow_pass(context)?;
         context.exit_segment(block_segment);
 
-        for (condition, code) in &self.else_ifs {
+        for (condition, code) in &mut self.else_ifs {
             cond_segment = context.enter_path_segment(Some(cond_segment), SegmentKind::Sequential);
             condition.control_flow_pass(context)?;
             context.exit_segment(cond_segment);
@@ -84,7 +84,7 @@ impl ParseSource for IfExpression {
             context.exit_segment(block_segment);
         }
 
-        if let Some(else_code) = &self.else_code {
+        if let Some(else_code) = &mut self.else_code {
             let block_segment =
                 context.enter_path_segment(Some(cond_segment), SegmentKind::Sequential);
             else_code.control_flow_pass(context)?;
@@ -155,7 +155,7 @@ impl ParseSource for WhileExpression {
         })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         let segment = context.enter_next_segment(SegmentKind::LoopingSequential);
         self.condition.control_flow_pass(context)?;
         self.body.control_flow_pass(context)?;
@@ -237,7 +237,7 @@ impl ParseSource for LoopExpression {
         Ok(Self { loop_token, body })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         let segment = context.enter_next_segment(SegmentKind::LoopingSequential);
         self.body.control_flow_pass(context)?;
         context.exit_segment(segment);
@@ -315,14 +315,13 @@ impl HasSpanRange for ForExpression {
 impl ParseSource for ForExpression {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let for_token = input.parse_ident_matching("for")?;
-        let iteration_scope = input.register_scope();
         let pattern = input.parse()?;
         let in_token = input.parse_ident_matching("in")?;
         let iterable = input.parse()?;
         let body = input.parse()?;
 
         Ok(Self {
-            iteration_scope,
+            iteration_scope: ScopeId::new_placeholder(),
             for_token,
             pattern,
             _in_token: in_token,
@@ -331,7 +330,8 @@ impl ParseSource for ForExpression {
         })
     }
 
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        context.register_scope(&mut self.iteration_scope);
         self.iterable.control_flow_pass(context)?;
 
         let segment = context.enter_next_segment(SegmentKind::LoopingSequential);

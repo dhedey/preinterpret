@@ -2,13 +2,13 @@ use super::*;
 
 pub(in super::super) fn control_flow_visit(
     root: ExpressionNodeId,
-    nodes: &Arena<ExpressionNodeId, ExpressionNode>,
+    nodes: &mut Arena<ExpressionNodeId, ExpressionNode>,
     context: FlowCapturer,
 ) -> ParseResult<()> {
     let mut stack = ControlFlowStack::new();
     stack.push_as_value(root);
     while let Some((as_kind, node_id)) = stack.pop() {
-        let node = nodes.get(node_id);
+        let node = nodes.get_mut(node_id);
         match as_kind {
             NodeAs::ValueOrAtomicAssignee => {
                 // As per node-conversion / value_frames / assignee_frames
@@ -173,7 +173,7 @@ impl ControlFlowStack {
 }
 
 impl Leaf {
-    fn control_flow_pass(&self, context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         match self {
             Leaf::Command(command) => command.control_flow_pass(context),
             Leaf::Variable(variable) => variable.control_flow_pass(context),
