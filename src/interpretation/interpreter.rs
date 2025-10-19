@@ -159,7 +159,7 @@ impl<S: HasSpanRange> IterationCounter<'_, S> {
     pub(crate) fn check(&self) -> ExecutionResult<()> {
         if let Some(limit) = self.iteration_limit {
             if self.count > limit {
-                return self.span_source.execution_err(format!("Iteration limit of {} exceeded.\nIf needed, the limit can be reconfigured with [!settings! {{ iteration_limit: X }}]", limit));
+                return self.span_source.execution_err(format!("Iteration limit of {} exceeded.\nIf needed, the limit can be reconfigured with None.configure_preinterpret(%{{ iteration_limit: XXX }})", limit));
             }
         }
         Ok(())

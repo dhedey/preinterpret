@@ -124,7 +124,9 @@ Create the following expressions:
 
 ## Attempt Expression (requires Scopes & Blocks)
 
-- [ ] Migrate remaining commands. Even using `{}.settings()` for now?
+- [x] Migrate remaining commands
+  - [ ] 
+  - [ ] Use `None.configure_preinterpret()` for now
 - [ ] Add `attempt` expression - See @./2025-09-vision.md
 
 ## Loop return behaviour
@@ -327,6 +329,11 @@ Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` doc
 * Add `LiteralPattern` (wrapping a `Literal`)
 * Add `Eq` support on composite types and streams
 * See `TODO[untyped]` - Have UntypedInteger/UntypedFloat have an inner representation of either value or literal, for improved efficiency / less weird `Span::call_site()` error handling
+* Merge `HasValueType` into `ValueKind`
+* Better handling of `configure_preinterpret` aligned with future parsers:
+  * Add a `BespokeObject` value type, with an example subtype of `PreinterpretInterface`
+  * Add a `preinterpret` variable to global scope of type `PreinterpretInterface`
+  * Move `None.configure_preinterpret` to `PreinterpretInterface` and possibly split it out as `set_iteration_limit(..)`
 * CastTarget revision:
   * The `as int` operator is not supported for string values
   * The `as char` operator is not supported for untyped integer values

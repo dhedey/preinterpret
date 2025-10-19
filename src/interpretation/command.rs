@@ -63,39 +63,6 @@ impl<C: CommandType + CommandInvocationAs<C::OutputKind>> CommandInvocation for 
     }
 }
 
-//===============
-// OutputKindNone
-//===============
-
-pub(crate) struct OutputKindNone;
-impl OutputKind for OutputKindNone {
-    type Output = ();
-
-    fn resolve_enum_kind() -> CommandOutputKind {
-        CommandOutputKind::None
-    }
-}
-
-pub(crate) trait NoOutputCommandDefinition:
-    Sized + CommandType<OutputKind = OutputKindNone>
-{
-    const COMMAND_NAME: &'static str;
-    fn parse(arguments: CommandArguments) -> ParseResult<Self>;
-    fn execute(&self, interpreter: &mut Interpreter) -> ExecutionResult<()>;
-}
-
-impl<C: NoOutputCommandDefinition> CommandInvocationAs<OutputKindNone> for C {
-    fn execute_into(&self, context: ExecutionContext, _: &mut OutputStream) -> ExecutionResult<()> {
-        self.execute(context.interpreter)?;
-        Ok(())
-    }
-
-    fn execute_to_value(&self, context: ExecutionContext) -> ExecutionResult<ExpressionValue> {
-        self.execute(context.interpreter)?;
-        Ok(ExpressionValue::None)
-    }
-}
-
 //=================
 // OutputKindStream
 //=================
@@ -222,9 +189,6 @@ macro_rules! define_command_enums {
 }
 
 define_command_enums! {
-    // Core Commands
-    SettingsCommand,
-
     // Destructuring Commands
     ParseCommand,
 }
@@ -263,7 +227,6 @@ impl ParseSource for Command {
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         match self.typed.as_mut() {
-            TypedCommand::SettingsCommand(cmd) => cmd.settings.control_flow_pass(context),
             TypedCommand::ParseCommand(cmd) => {
                 cmd.input.control_flow_pass(context)?;
                 cmd.transformer.control_flow_pass(context)

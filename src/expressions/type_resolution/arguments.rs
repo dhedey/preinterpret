@@ -443,6 +443,22 @@ macro_rules! impl_delegated_resolvable_argument_for {
 
 pub(crate) use impl_resolvable_argument_for;
 
+impl ResolvableArgumentTarget for () {
+    type ValueType = NoneTypeData;
+}
+
+impl ResolvableArgumentOwned for () {
+    fn resolve_from_value(
+        value: ExpressionValue,
+        context: ResolutionContext,
+    ) -> ExecutionResult<Self> {
+        match value {
+            ExpressionValue::None => Ok(()),
+            other => context.err("None", other),
+        }
+    }
+}
+
 impl_resolvable_argument_for! {
     BooleanTypeData,
     (value, context) -> ExpressionBoolean {
