@@ -74,31 +74,51 @@ impl VariableDefinition {
     }
 }
 
-// impl HasSpan for VariableDefinition {
-//     fn span(&self) -> Span {
-//         self.ident.span()
-//     }
-// }
-
 #[derive(Clone)]
 pub(crate) struct VariableReference {
     pub(crate) ident: Ident,
     #[allow(unused)]
     pub(crate) id: VariableReferenceId,
+    #[cfg(feature = "debug")]
+    pub(crate) assertion: FinalUseAssertion,
 }
 
 impl ParseSource for VariableReference {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let ident = input.parse()?;
+        #[cfg(feature = "debug")]
+        let assertion = {
+            if let Some((_, next)) = input.cursor().punct_matching(':') {
+                if let Some(_) = next.ident_matching("FINAL") {
+                    let _ = input.parse_punct_matching(':')?;
+                    let ident = input.parse_any_ident()?;
+                    FinalUseAssertion::IsFinal(ident.span())
+                } else if let Some(_) = next.ident_matching("NONFINAL") {
+                    let _ = input.parse_punct_matching(':')?;
+                    let ident = input.parse_any_ident()?;
+                    FinalUseAssertion::IsNotFinal(ident.span())
+                } else {
+                    FinalUseAssertion::None
+                }
+            } else {
+                FinalUseAssertion::None
+            }
+        };
         Ok(Self {
             ident,
             id: VariableReferenceId::new_placeholder(),
+            #[cfg(feature = "debug")]
+            assertion,
         })
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         context.register_variable_reference(&self.ident, &mut self.id);
-        context.reference_variable(self.id)
+        context.reference_variable(
+            self.id,
+            #[cfg(feature = "debug")]
+            self.assertion,
+        )
     }
 }
 

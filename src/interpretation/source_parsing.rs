@@ -6,6 +6,14 @@ new_key!(pub(crate) VariableDefinitionId);
 new_key!(pub(crate) VariableReferenceId);
 new_key!(pub(crate) ControlFlowSegmentId);
 
+#[cfg(feature = "debug")]
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum FinalUseAssertion {
+    None,
+    IsFinal(Span),
+    IsNotFinal(Span),
+}
+
 #[derive(Debug)]
 pub(crate) struct ScopeDefinitions {
     // Scopes
@@ -60,7 +68,7 @@ impl FlowAnalysisState {
         }
     }
 
-    pub(crate) fn finish(mut self) -> ScopeDefinitions {
+    pub(crate) fn finish(mut self) -> ParseResult<ScopeDefinitions> {
         let root_scope = self.scope_id_stack.pop().expect("No scope to pop");
         assert!(
             self.scope_id_stack.is_empty(),
@@ -90,7 +98,25 @@ impl FlowAnalysisState {
         #[cfg(not(feature = "debug"))]
         analyzer.analyze_and_update_references();
 
-        ScopeDefinitions {
+        #[cfg(feature = "debug")]
+        {
+            for (_, data) in references.iter() {
+                match data.assertion {
+                    FinalUseAssertion::IsFinal(span) if !data.is_final_reference => {
+                        return span.parse_err(
+                            "Assertion failed. Reference was calculated to be non-final.",
+                        );
+                    }
+                    FinalUseAssertion::IsNotFinal(span) if data.is_final_reference => {
+                        return span
+                            .parse_err("Assertion failed. Reference was calculated to be final.");
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        Ok(ScopeDefinitions {
             root_scope,
             scopes,
             definitions,
@@ -101,7 +127,7 @@ impl FlowAnalysisState {
             segments: self.segments,
             #[cfg(feature = "debug")]
             final_use_debug,
-        }
+        })
     }
 
     pub(crate) fn allocate_scope(&mut self) -> ScopeId {
@@ -157,7 +183,11 @@ impl FlowAnalysisState {
             .push(ControlFlowChild::VariableDefinition(id));
     }
 
-    pub(crate) fn reference_variable(&mut self, id: VariableReferenceId) -> ParseResult<()> {
+    pub(crate) fn reference_variable(
+        &mut self,
+        id: VariableReferenceId,
+        #[cfg(feature = "debug")] assertion: FinalUseAssertion,
+    ) -> ParseResult<()> {
         let segment = self.current_segment_id();
         let reference = self.references.get_mut(id);
         let (name, reference_name_span) = reference.take_allocated();
@@ -172,6 +202,8 @@ impl FlowAnalysisState {
                         segment,
                         reference_name_span,
                         is_final_reference: false, // Some will be set to true later
+                        #[cfg(feature = "debug")]
+                        assertion,
                     });
                     def.references.push(id);
                     self.current_segment()
@@ -457,4 +489,6 @@ pub(crate) struct VariableReferenceData {
     ///
     /// This value is calculated during [ParseState::mark_final_use_of_variables].
     pub(crate) is_final_reference: bool,
+    #[cfg(feature = "debug")]
+    pub(crate) assertion: FinalUseAssertion,
 }

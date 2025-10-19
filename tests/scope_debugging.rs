@@ -16,3 +16,36 @@ fn test() {
     };
     eprintln!("{}", output);
 }
+
+#[test]
+fn last_use_assertions() {
+    let _ = run! {
+        let x = 1;
+        x:FINAL
+    };
+    run! {
+        let x = %[1];
+        let x = %[2] + x:FINAL; // Because the x below is a new binding!
+        let _ = x:FINAL;
+    };
+    run! {
+        let x = 0;
+        let y = [None];
+        y[x:FINAL] = x:NONFINAL + 1; // Demonstrates that the RHS is calculated before the LHS
+        let _ = y;
+    };
+    run! {
+        let x = %[1];
+        { let x = %[2] + x:NONFINAL.clone(); };
+        let _ = x:FINAL; // This refers to the outer x
+    }
+    run! {
+        let x;
+        x:NONFINAL = {
+            let x = 123; // Inner x
+            x:NONFINAL = 456;
+            let _ = x;
+        };
+        let _ = x;
+    }
+}

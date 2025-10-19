@@ -608,6 +608,8 @@ impl<'a> ExpressionParser<'a> {
                         .add_node(ExpressionNode::Leaf(Leaf::Variable(VariableReference {
                             ident: key.clone(),
                             id: VariableReferenceId::new_placeholder(),
+                            #[cfg(feature = "debug")]
+                            assertion: FinalUseAssertion::None,
                         })));
                 complete_entries.push((ObjectKey::Identifier(key), node));
                 continue;

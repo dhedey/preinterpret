@@ -114,12 +114,13 @@ Create the following expressions:
   - [x] Disable transparent clone for streams
 - [x] Fix all `TODO[scopes]`
   - [x] Fix / remove expensive parse stream forks
-- [ ] Tests
-  - [ ] Add test macro for asserting variable binding `is_final` information, e.g. with a `x[final]` and `x[not_final]` syntax?
-  - [ ] Add tests for things like `let x = %[1]; let x = %[2] + x; x`
-  - [ ] Add tests for things like `y[x] = x + 1`
-  - [ ] Add tests for things like `let x = %[1]; { let x = %[2] + x; }; x`
-  - [ ] Add test that `let x; x = { let x = 123; x = 456; 5 }`. resolves correctly with `x = 5`.
+- [x] Tests
+  - [x] Add test macro for asserting variable binding `is_final` information, e.g. with a `x[final]` and `x[not_final]` syntax?
+  - [x] Add tests for things like `let x = %[1]; let x = %[2] + x; x`
+  - [x] Add tests for things like `y[x] = x + 1`
+  - [x] Add tests for things like `let x = %[1]; { let x = %[2] + x; }; x`
+  - [x] Add test that `let x; x = { let x = 123; x = 456; 5 }`. resolves correctly with `x = 5`.
+  - [ ] Add tests involving for loops; and if/elsif/else blocks
 - [ ] Optionally consider writing `ResolvedReference(Span/ScopeId/DefinitionId/IsFirstUse)` data directly back into the Reference via a `Rc<Cell<ReferenceContent::Resolved(ResolvedReference)>>` to set the values (from a `ReferenceContent::Parsed(Ident, ReferenceId)`)
 
 We then need to consider whether an embedded expression in a stream literal and/or stream pattern create new scopes or not...

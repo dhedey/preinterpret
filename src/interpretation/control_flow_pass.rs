@@ -234,12 +234,13 @@ impl<'a> ControlFlowAnalyzer<'a> {
 }
 
 #[cfg(feature = "debug")]
-type MarkFinalUseOutput = HashMap<VariableDefinitionId, HashMap<ControlFlowChild, SegmentMarker>>;
+pub(super) type MarkFinalUseOutput =
+    HashMap<VariableDefinitionId, HashMap<ControlFlowChild, SegmentMarker>>;
 #[cfg(not(feature = "debug"))]
-type MarkFinalUseOutput = ();
+pub(super) type MarkFinalUseOutput = ();
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
-enum SegmentMarker {
+pub(super) enum SegmentMarker {
     AlreadyHandled,
     NotFinal,
 }

@@ -145,10 +145,10 @@ where
     }
 }
 
-pub(crate) fn parse_and_analyze<T, E>(
-    parser: impl FnOnce(SourceParser) -> Result<T, E>,
-    control_flow_analysis: impl FnOnce(&mut T, FlowCapturer) -> Result<(), E>,
-) -> impl FnOnce(ParseStream<Source>) -> Result<(T, ScopeDefinitions), E> {
+pub(crate) fn parse_and_analyze<T>(
+    parser: impl FnOnce(SourceParser) -> ParseResult<T>,
+    control_flow_analysis: impl FnOnce(&mut T, FlowCapturer) -> ParseResult<()>,
+) -> impl FnOnce(ParseStream<Source>) -> ParseResult<(T, ScopeDefinitions)> {
     move |stream: ParseStream<Source>| {
         // To get access to an owned ParseBuffer we fork it... and advance later!
         let forked = stream.fork();
@@ -160,7 +160,7 @@ pub(crate) fn parse_and_analyze<T, E>(
             state: FlowAnalysisState::new(),
         };
         control_flow_analysis(&mut output, &mut context)?;
-        Ok((output, context.state.finish()))
+        Ok((output, context.state.finish()?))
     }
 }
 
@@ -207,8 +207,16 @@ impl ControlFlowContext {
         self.state.define_variable(id);
     }
 
-    pub(crate) fn reference_variable(&mut self, id: VariableReferenceId) -> ParseResult<()> {
-        self.state.reference_variable(id)
+    pub(crate) fn reference_variable(
+        &mut self,
+        id: VariableReferenceId,
+        #[cfg(feature = "debug")] assertion: FinalUseAssertion,
+    ) -> ParseResult<()> {
+        self.state.reference_variable(
+            id,
+            #[cfg(feature = "debug")]
+            assertion,
+        )
     }
 
     pub(crate) fn enter_next_segment(&mut self, segment_kind: SegmentKind) -> ControlFlowSegmentId {
