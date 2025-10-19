@@ -588,7 +588,7 @@ fn test_method_calls() {
     );
     run!(
         let a = "a";
-        let out = a.replace({});
+        let out = a.replace({ None });
         %[_].assert_eq(a, None);
         %[_].assert_eq(out, "a");
     );
