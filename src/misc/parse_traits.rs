@@ -145,22 +145,16 @@ where
     }
 }
 
-pub(crate) fn parse_and_analyze<T>(
+pub(crate) fn parse_without_analysis<T>(
     parser: impl FnOnce(SourceParser) -> ParseResult<T>,
-    control_flow_analysis: impl FnOnce(&mut T, FlowCapturer) -> ParseResult<()>,
-) -> impl FnOnce(ParseStream<Source>) -> ParseResult<(T, ScopeDefinitions)> {
+) -> impl FnOnce(ParseStream<Source>) -> ParseResult<T> {
     move |stream: ParseStream<Source>| {
         // To get access to an owned ParseBuffer we fork it... and advance later!
         let forked = stream.fork();
         let parse_buffer = SourceParseBuffer::new(forked);
         let mut output = parser(&parse_buffer)?;
         stream.advance_to(&parse_buffer.buffer);
-
-        let mut context = ControlFlowContext {
-            state: FlowAnalysisState::new(),
-        };
-        control_flow_analysis(&mut output, &mut context)?;
-        Ok((output, context.state.finish()?))
+        Ok(output)
     }
 }
 
@@ -172,6 +166,17 @@ pub(crate) struct ControlFlowContext {
 }
 
 impl ControlFlowContext {
+    pub(crate) fn analyze<T>(
+        parsed: &mut T,
+        inner: impl FnOnce(&mut T, FlowCapturer) -> ParseResult<()>,
+    ) -> ParseResult<ScopeDefinitions> {
+        let mut context = Self {
+            state: FlowAnalysisState::new(),
+        };
+        inner(parsed, &mut context)?;
+        context.state.finish()
+    }
+
     pub(crate) fn register_scope(&mut self, id: &mut ScopeId) {
         assert!(id.is_placeholder());
         *id = self.state.allocate_scope();

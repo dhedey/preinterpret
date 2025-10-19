@@ -19,7 +19,9 @@ impl TokenStreamParseExt for TokenStream {
         parser: impl FnOnce(SourceParser) -> ParseResult<T>,
         control_flow_analysis: impl FnOnce(&mut T, FlowCapturer) -> ParseResult<()>,
     ) -> ParseResult<(T, ScopeDefinitions)> {
-        parse_with(self, parse_and_analyze(parser, control_flow_analysis))
+        let mut parsed = parse_with(self, parse_without_analysis(parser))?;
+        let definitions = ControlFlowContext::analyze(&mut parsed, control_flow_analysis)?;
+        Ok((parsed, definitions))
     }
 
     fn interpreted_parse_with<T, E: From<syn::Error>>(

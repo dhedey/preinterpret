@@ -13,4 +13,7 @@ cd "$(dirname "$0")"
 #     - The measured Parsing + Evaluation + Output time in the benchmark
 # - So the benchmark is useful, but should be considered alongside the compile time
 #   of preinterpret itself...
+
+cargo bench --features benchmark --profile=dev;
+
 cargo bench --features benchmark;

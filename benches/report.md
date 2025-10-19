@@ -31,37 +31,44 @@ Script: `cargo bench --features benchmark --profile=dev`
 // October 2025, run on Apple Silicon M2 Pro
 Trivial Sum
 - Parsing    |     8ns
-- Evaluation |     3ns
+- Analysis   |     1ns
+- Evaluation |     4ns
 - Output     |     0ns
 
 For loop adding up 1000 times
-- Parsing    |    21ns
-- Evaluation |  5704ns
+- Parsing    |    24ns
+- Analysis   |    12ns
+- Evaluation |  6123ns
 - Output     |     0ns
 
 For loop concatenating to stream 1000 tokens
-- Parsing    |    27ns
-- Evaluation |  3042ns
+- Parsing    |    29ns
+- Analysis   |     9ns
+- Evaluation |  3402ns
 - Output     |   163ns
 
 Lots of casts
 - Parsing    |     7ns
-- Evaluation |     3ns
+- Analysis   |     1ns
+- Evaluation |     4ns
 - Output     |     0ns
 
 Simple tuple impls
-- Parsing    |    53ns
-- Evaluation |   826ns
-- Output     |    44ns
+- Parsing    |    54ns
+- Analysis   |    25ns
+- Evaluation |   853ns
+- Output     |    42ns
 
 Accessing single elements of a large array
-- Parsing    |    52ns
-- Evaluation |  4283ns
+- Parsing    |    67ns
+- Analysis   |    32ns
+- Evaluation |  5797ns
 - Output     |     0ns
 
 Lazy iterator
-- Parsing    |    48ns
-- Evaluation |    34ns
+- Parsing    |    45ns
+- Analysis   |    21ns
+- Evaluation |    41ns
 - Output     |     0ns
 ```
 
@@ -84,37 +91,44 @@ Script: `cargo bench --features benchmark`
 ```text
 // October 2025, run on Apple Silicon M2 Pro
 Trivial Sum
-- Parsing    |     7ns
-- Evaluation |     3ns
+- Parsing    |     8ns
+- Analysis   |     1ns
+- Evaluation |     4ns
 - Output     |     0ns
 
 For loop adding up 1000 times
-- Parsing    |    19ns
-- Evaluation |  4819ns
+- Parsing    |    25ns
+- Analysis   |    12ns
+- Evaluation |  5335ns
 - Output     |     0ns
 
 For loop concatenating to stream 1000 tokens
-- Parsing    |    24ns
-- Evaluation |  2582ns
-- Output     |   129ns
+- Parsing    |    26ns
+- Analysis   |     8ns
+- Evaluation |  2996ns
+- Output     |   125ns
 
 Lots of casts
 - Parsing    |     6ns
-- Evaluation |     3ns
+- Analysis   |     0ns
+- Evaluation |     4ns
 - Output     |     0ns
 
 Simple tuple impls
-- Parsing    |    47ns
-- Evaluation |   725ns
-- Output     |    34ns
+- Parsing    |    49ns
+- Analysis   |    22ns
+- Evaluation |   765ns
+- Output     |    33ns
 
 Accessing single elements of a large array
-- Parsing    |    45ns
-- Evaluation |  3677ns
+- Parsing    |    46ns
+- Analysis   |    20ns
+- Evaluation |  4137ns
 - Output     |     0ns
 
 Lazy iterator
-- Parsing    |    40ns
-- Evaluation |    30ns
+- Parsing    |    38ns
+- Analysis   |    18ns
+- Evaluation |    36ns
 - Output     |     0ns
 ```

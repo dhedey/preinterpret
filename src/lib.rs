@@ -598,63 +598,93 @@ mod benchmarking {
     use super::*;
     use std::time::{Duration, Instant};
 
-    fn timed<T>(f: impl Fn() -> T) -> (T, Duration) {
+    struct TimingContext {
+        section_totals: HashMap<&'static str, (Duration, usize)>,
+    }
+
+    impl TimingContext {
+        fn new() -> Self {
+            Self {
+                section_totals: HashMap::new(),
+            }
+        }
+
+        fn time<T>(&mut self, section: &'static str, f: impl FnOnce() -> T) -> T {
+            let start = Instant::now();
+            let output = f();
+            let duration = start.elapsed();
+            let totals = self
+                .section_totals
+                .entry(section)
+                .or_insert((Duration::ZERO, 0));
+            totals.0 += duration;
+            totals.1 += 1;
+            output
+        }
+
+        fn average_duration(&self, section: &'static str) -> Option<Duration> {
+            self.section_totals
+                .get(section)
+                .map(|(total, count)| *total / (*count as u32))
+        }
+    }
+
+    fn timed<T, E>(f: impl Fn(&mut TimingContext) -> Result<T, E>) -> Result<TimingContext, E> {
         const WARMUP: u32 = 100;
         const REPEATS: u32 = 1000;
         for _ in 0..WARMUP {
-            let _ = f();
+            let _ = f(&mut TimingContext::new());
         }
-        let mut i = 0;
-        let start = Instant::now();
-        let output = loop {
-            let output = f();
-            if i >= REPEATS {
-                break output;
-            }
-            i += 1;
-        };
-        let duration = start.elapsed() / REPEATS;
-        (output, duration)
+        let mut context = TimingContext::new();
+        for _ in 0..REPEATS {
+            f(&mut context)?;
+        }
+        Ok(context)
     }
 
     pub(super) fn benchmark_run(input: TokenStream) -> SynResult<TokenStream> {
-        let (block_content, parse_duration) = timed(|| {
-            input
-                .clone()
-                .source_parse_and_analyze(
-                    ExpressionBlockContent::parse,
-                    ExpressionBlockContent::control_flow_pass,
-                )
-                .convert_to_final_result()
-        });
-        let (block_content, scopes) = block_content?;
+        let results = timed(|context| -> SynResult<()> {
+            let input = input.clone();
+            let mut parsed = context.time("parsing", || {
+                parse_with(input, parse_without_analysis(ExpressionBlockContent::parse))
+                    .convert_to_final_result()
+            })?;
 
-        let (interpreted_stream, eval_duration) = timed(|| {
-            let mut interpreter = Interpreter::new(scopes.clone());
-            block_content
-                .evaluate(
-                    &mut interpreter,
-                    Span::call_site().into(),
-                    RequestedValueOwnership::owned(),
-                )
-                .and_then(|x| x.expect_owned().into_stream())
-                .convert_to_final_result()
-        });
-        let interpreted_stream = interpreted_stream?;
+            let scopes = context.time("analysis", || {
+                ControlFlowContext::analyze(&mut parsed, ExpressionBlockContent::control_flow_pass)
+                    .convert_to_final_result()
+            })?;
 
-        let (_, output_duration) = timed(|| {
-            unsafe {
-                // RUST-ANALYZER-SAFETY: This might drop transparent groups in the output of
-                // rust-analyzer. There's not much we can do here...
-                interpreted_stream.clone().into_token_stream()
-            }
-        });
+            let mut interpreter = Interpreter::new(scopes);
+
+            let interpreted_stream = context.time("evaluation", || {
+                parsed
+                    .evaluate(
+                        &mut interpreter,
+                        Span::call_site().into(),
+                        RequestedValueOwnership::owned(),
+                    )
+                    .and_then(|x| x.expect_owned().into_stream())
+                    .convert_to_final_result()
+            })?;
+
+            let _ = context.time("output", || {
+                unsafe {
+                    // RUST-ANALYZER-SAFETY: This might drop transparent groups in the output of
+                    // rust-analyzer. There's not much we can do here...
+                    interpreted_stream.clone().into_token_stream()
+                }
+            });
+
+            Ok(())
+        })?;
 
         let output = format!(
-            "- Parsing    | {: >5}ns\n- Evaluation | {: >5}ns\n- Output     | {: >5}ns",
-            parse_duration.as_micros(),
-            eval_duration.as_micros(),
-            output_duration.as_micros()
+            "- Parsing    | {: >5}ns\n- Analysis   | {: >5}ns\n- Evaluation | {: >5}ns\n- Output     | {: >5}ns",
+            results.average_duration("parsing").unwrap().as_micros(),
+            results.average_duration("analysis").unwrap().as_micros(),
+            results.average_duration("evaluation").unwrap().as_micros(),
+            results.average_duration("output").unwrap().as_micros()
         );
 
         Ok(TokenStream::from_iter([TokenTree::Literal(
