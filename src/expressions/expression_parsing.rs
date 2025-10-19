@@ -554,9 +554,9 @@ impl<'a> ExpressionParser<'a> {
         // we can parse a UnaryAtom to be the right side of the range or whether
         // it will have no right side.
         // * Has right side: 1..2 or x..y or '1'..'3'
-        // * Has no rhs: `[3.., 4]`, `[3..]`, `let x = 3..;`, `3...first()`
+        // * Has no rhs: `[3.., 4]`, `[3..]`, `let x = 3..;`, `3...take(10)`
         let should_parse_range_lhs = match self.streams.peek_grammar() {
-            SourcePeekMatch::Punct(punct) => !matches!(punct.as_char(), ',' | ';'),
+            SourcePeekMatch::Punct(punct) => !matches!(punct.as_char(), ',' | ';' | '.'),
             SourcePeekMatch::End => false,
             _ => true, // Literals, Idents(variables/methods), Commands/expressions
         };
