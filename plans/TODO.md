@@ -120,16 +120,8 @@ Create the following expressions:
   - [x] Add tests for things like `y[x] = x + 1`
   - [x] Add tests for things like `let x = %[1]; { let x = %[2] + x; }; x`
   - [x] Add test that `let x; x = { let x = 123; x = 456; 5 }`. resolves correctly with `x = 5`.
-  - [ ] Add tests involving for loops; and if/elsif/else blocks
-- [ ] Optionally consider writing `ResolvedReference(Span/ScopeId/DefinitionId/IsFirstUse)` data directly back into the Reference via a `Rc<Cell<ReferenceContent::Resolved(ResolvedReference)>>` to set the values (from a `ReferenceContent::Parsed(Ident, ReferenceId)`)
+  - [x] Add tests involving for loops; and if/elsif/else blocks
 
-We then need to consider whether an embedded expression in a stream literal and/or stream pattern create new scopes or not...
-
-* In an output-stream  `#var` or `#(..)` are possible
-* In an stream-pattern, only `#{ .. }` is possible, and should return `None`
-  * If looking to match on a value, you should use  `@[EXACT({ tokens: %[] })]` instead
-  * We could consider allowing `%[]` directly in the stream, but this is probably confusing as it has different meaning in the outer/in values
-  * We could also consider just allowing embeddings directly into the token stream? But I think this is an unlikely scenario; AND it might mean that `#{ ... }` returning a value might be confusing
 
 ## Attempt Expression (requires Scopes & Blocks)
 
@@ -317,6 +309,11 @@ preinterpret::run! {
 * Distinguish a runtime error from a coding error (e.g. parse error, or "no method of type")
   * The latter should not be caught by `attempt` blocks
 * If method resolution fails, perhaps we try finding a method with that name on other types
+
+## Optimizations 
+
+- [ ] Look at benchmarks and if anything should be sped up
+- [ ] Optionally consider writing `ResolvedReference(Span/ScopeId/DefinitionId/IsFirstUse)` data directly back into the Reference via a `Rc<Cell<ReferenceContent::Resolved(ResolvedReference)>>` to set the values (from a `ReferenceContent::Parsed(Ident, ReferenceId)`)
 
 ## Coding challenges
 
