@@ -160,9 +160,9 @@ fn test_reinterpret() {
 fn test_very_long_expression_works() {
     assert_eq!(
         run! {
-            [!settings! %{
+            None.configure_preinterpret(%{
                 iteration_limit: 100000,
-            }];
+            });
             let expression = %[];
             for _ in 0..100000 {
                 expression += %[1 +]

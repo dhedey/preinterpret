@@ -242,31 +242,23 @@ fn test_exact_transformer() {
 #[test]
 fn test_parse_command_and_exact_transformer() {
     // The output stream is additive
-    preinterpret_assert_eq!(
-        #([!parse! %[Hello World] with @(@IDENT @IDENT)].to_debug_string()),
-        "%[Hello World]"
-    );
+    run! {
+        let %[@(#out = @IDENT @IDENT)] = %[Hello World];
+        %[_].assert_eq(out, %[Hello World]);
+    }
     // Substreams redirected to a variable are not included in the output
-    preinterpret_assert_eq!(
-        #(
-            [!parse! %[The quick brown fox] with @(
-                @[EXACT(%[The])] quick @IDENT @(#x = @IDENT)
-            )].to_debug_string()
-        ),
-        "%[The brown]"
-    );
+    run! {
+        let %[@(#out = @[EXACT(%[The])] quick @IDENT @(#x = @IDENT))] = %[The quick brown fox];
+        %[_].assert_eq(out, %[The brown]);
+    }
     // This tests that:
     // * Can nest EXACT and transform streams
     // * Can discard output with @(_ = ...)
     // * That EXACT ignores none-delimited groups, to make it more intuitive
-    preinterpret_assert_eq!(
-        #(
-            let x = %[%group[fox]];
-            [!parse! %[The quick brown fox is a fox - right?!] with @(
-                // The outputs are only from the EXACT transformer
-                The quick @(_ = @IDENT) @[EXACT(%[#x])] @(_ = @IDENT a) @[EXACT(%[#x - right?!])]
-            )].to_debug_string()
-        ),
-        "%[fox fox - right ?!]"
-    );
+    run! {
+        let to_parse = %[The quick brown fox is a fox - right?!];
+        let x = %group[fox];
+        let %[@(#out = The quick @(_ = @IDENT) @[EXACT(%[#x])] @(_ = @IDENT a) @[EXACT(%[#x - right?!])])] = to_parse;
+        %[_].assert_eq(out, %[fox fox - right ?!]);
+    }
 }

@@ -175,7 +175,6 @@ impl ControlFlowStack {
 impl Leaf {
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         match self {
-            Leaf::Command(command) => command.control_flow_pass(context),
             Leaf::Variable(variable) => variable.control_flow_pass(context),
             Leaf::Block(block) => block.control_flow_pass(context),
             Leaf::StreamLiteral(stream_literal) => stream_literal.control_flow_pass(context),

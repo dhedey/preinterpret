@@ -43,7 +43,6 @@ impl HasSpan for SourceStream {
 }
 
 pub(crate) enum SourceItem {
-    Command(Command),
     Variable(EmbeddedVariable),
     EmbeddedExpression(EmbeddedExpression),
     EmbeddedStatements(EmbeddedStatements),
@@ -57,7 +56,6 @@ pub(crate) enum SourceItem {
 impl ParseSource for SourceItem {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         Ok(match input.peek_grammar() {
-            SourcePeekMatch::Command(_) => SourceItem::Command(input.parse()?),
             SourcePeekMatch::Group(_) => SourceItem::SourceGroup(input.parse()?),
             SourcePeekMatch::EmbeddedVariable => SourceItem::Variable(input.parse()?),
             SourcePeekMatch::EmbeddedExpression => {
@@ -80,7 +78,6 @@ impl ParseSource for SourceItem {
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         match self {
-            SourceItem::Command(command) => command.control_flow_pass(context),
             SourceItem::Variable(variable) => variable.control_flow_pass(context),
             SourceItem::EmbeddedExpression(expr) => expr.control_flow_pass(context),
             SourceItem::EmbeddedStatements(block) => block.control_flow_pass(context),
@@ -100,9 +97,6 @@ impl Interpret for SourceItem {
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         match self {
-            SourceItem::Command(command_invocation) => {
-                command_invocation.interpret_into(interpreter, output)?;
-            }
             SourceItem::Variable(variable) => {
                 variable.interpret_into(interpreter, output)?;
             }
@@ -129,7 +123,6 @@ impl Interpret for SourceItem {
 impl HasSpanRange for SourceItem {
     fn span_range(&self) -> SpanRange {
         match self {
-            SourceItem::Command(command_invocation) => command_invocation.span_range(),
             SourceItem::Variable(variable) => variable.span_range(),
             SourceItem::EmbeddedExpression(expr) => expr.span_range(),
             SourceItem::EmbeddedStatements(block) => block.span_range(),
