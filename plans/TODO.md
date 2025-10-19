@@ -125,8 +125,8 @@ Create the following expressions:
 ## Attempt Expression (requires Scopes & Blocks)
 
 - [x] Migrate remaining commands
-  - [ ] 
-  - [ ] Use `None.configure_preinterpret()` for now
+  - [x] Use `None.configure_preinterpret()` for now
+  - [x] Remove `!parse!`
 - [ ] Add `attempt` expression - See @./2025-09-vision.md
 
 ## Loop return behaviour
@@ -162,6 +162,7 @@ First, read the @./2025-09-vision.md
   * Scopes/frames can have a parse stream associated with them.
     * This can be read/resolved (as the nearest parent) by parsers, even in expression blocks
   * Don't support `@(#x = ...)` - instead we can have `#(let x = @[STREAM ...])`
+  * Consider a `parse %[ .. ] { /* parsers * / }` expression / block (no new scope!)
 
 * Various other changes from the vision doc
 

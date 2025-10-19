@@ -145,7 +145,6 @@ pub(super) enum ExpressionNode {
 
 pub(super) enum Leaf {
     Block(ExpressionBlock),
-    Command(Command),
     Variable(VariableReference),
     Discarded(Token![_]),
     Value(SharedValue),
@@ -159,7 +158,6 @@ pub(super) enum Leaf {
 impl HasSpanRange for Leaf {
     fn span_range(&self) -> SpanRange {
         match self {
-            Leaf::Command(command) => command.span_range(),
             Leaf::Variable(variable) => variable.span_range(),
             Leaf::Discarded(token) => token.span_range(),
             Leaf::Block(block) => block.span_range(),

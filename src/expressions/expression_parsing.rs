@@ -67,7 +67,6 @@ impl<'a> ExpressionParser<'a> {
 
     fn parse_unary_atom(input: &mut ParseStreamStack) -> ParseResult<UnaryAtom> {
         Ok(match input.peek_grammar() {
-            SourcePeekMatch::Command(_) => UnaryAtom::Leaf(Leaf::Command(input.parse()?)),
             SourcePeekMatch::EmbeddedVariable | SourcePeekMatch::EmbeddedExpression | SourcePeekMatch::EmbeddedStatements => {
                 return input.parse_err(
                     "In an expression, the # variable prefix is not allowed. The # prefix should only be used when embedding a variable into an output stream, e.g. %[#var + #(..expressions..)]",

@@ -36,7 +36,6 @@ impl HandleTransformation for TransformStream {
 }
 
 pub(crate) enum TransformItem {
-    Command(Command),
     EmbeddedExpression(EmbeddedExpression),
     EmbeddedStatements(EmbeddedStatements),
     Transformer(Transformer),
@@ -50,7 +49,6 @@ pub(crate) enum TransformItem {
 impl ParseSource for TransformItem {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         Ok(match input.peek_grammar() {
-            SourcePeekMatch::Command(_) => Self::Command(input.parse()?),
             SourcePeekMatch::EmbeddedVariable => return input.parse_err("Variable bindings are not supported here. #(x.to_group()) can be inverted with @(#x = @TOKEN_TREE.flatten()). #x can't necessarily be inverted because its contents are flattened, although @(#x = @REST) or @(#x = @[UNTIL ..]) may work in some instances"),
             SourcePeekMatch::EmbeddedExpression => Self::EmbeddedExpression(input.parse()?),
             SourcePeekMatch::EmbeddedStatements => Self::EmbeddedStatements(input.parse()?),
@@ -68,7 +66,6 @@ impl ParseSource for TransformItem {
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         match self {
-            TransformItem::Command(command) => command.control_flow_pass(context),
             TransformItem::EmbeddedExpression(block) => block.control_flow_pass(context),
             TransformItem::EmbeddedStatements(statements) => statements.control_flow_pass(context),
             TransformItem::Transformer(transformer) => transformer.control_flow_pass(context),
@@ -89,9 +86,6 @@ impl HandleTransformation for TransformItem {
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         match self {
-            TransformItem::Command(command) => {
-                command.interpret_into(interpreter, output)?;
-            }
             TransformItem::Transformer(transformer) => {
                 transformer.handle_transform(input, interpreter, output)?;
             }

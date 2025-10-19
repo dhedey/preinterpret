@@ -8,10 +8,6 @@ impl ExpressionNode {
         Ok(match self {
             ExpressionNode::Leaf(leaf) => {
                 match leaf {
-                    Leaf::Command(command) => {
-                        let value = command.evaluate(context.interpreter())?;
-                        context.return_owned(value.into_owned(command.span_range()))?
-                    }
                     Leaf::Discarded(token) => {
                         return token.execution_err("This cannot be used in a value expression.");
                     }

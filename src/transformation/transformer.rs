@@ -53,10 +53,6 @@ impl<'a> TransformerArguments<'a> {
         self.parse_stream.parse()
     }
 
-    pub(crate) fn fully_parse_as<T: ArgumentsContent>(&self) -> ParseResult<T> {
-        self.fully_parse_or_error(T::parse, T::error_message())
-    }
-
     pub(crate) fn fully_parse_or_error<T>(
         &self,
         parse_function: impl FnOnce(SourceParser) -> ParseResult<T>,

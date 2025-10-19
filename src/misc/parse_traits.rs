@@ -14,7 +14,6 @@ impl ParseBuffer<'_, Source> {
 
 #[allow(unused)]
 pub(crate) enum SourcePeekMatch {
-    Command(Option<CommandOutputKind>),
     EmbeddedExpression,
     EmbeddedStatements,
     EmbeddedVariable,
@@ -81,18 +80,6 @@ fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> SourcePeekMatch {
     }
 
     if let Some((next, delimiter, _, _)) = cursor.any_group() {
-        if delimiter == Delimiter::Bracket {
-            if let Some((_, next)) = next.punct_matching('!') {
-                if let Some((ident, next)) = next.ident() {
-                    if next.punct_matching('!').is_some() {
-                        let output_kind =
-                            CommandKind::for_ident(&ident).map(|kind| kind.resolve_output_kind());
-                        return SourcePeekMatch::Command(output_kind);
-                    }
-                }
-            }
-        }
-
         // Ideally we'd like to detect $($tt)* substitutions from macros and interpret them as
         // a Raw (uninterpreted) group, because typically that's what a user would typically intend.
         //
