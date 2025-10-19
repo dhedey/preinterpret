@@ -122,7 +122,6 @@ Create the following expressions:
   - [x] Add test that `let x; x = { let x = 123; x = 456; 5 }`. resolves correctly with `x = 5`.
   - [x] Add tests involving for loops; and if/elsif/else blocks
 
-
 ## Attempt Expression (requires Scopes & Blocks)
 
 - [ ] Migrate remaining commands. Even using `{}.settings()` for now?
@@ -146,6 +145,7 @@ So some possible things we can explore / consider:
 - [ ] Trial exposing the output stream as a variable binding `stream`. We need to have some way to make it kinda efficient though.
   - Conceptually considering some optimizations further down, this `stream` might actually be from some few levels above, using tail-return optimizations
   - Maybe we just have an `output(%[...])` command instead of exposing the stream variable?
+  - Or even `output` statement so that we can do e.g. `output 'a %[..]` to reference a particular block.
 - [ ] `break` / `continue` improvements:
   - Can return a value (from the last iteration of for / while loops)
   - Can specify a label, and return from a labelled block (https://blog.rust-lang.org/2022/11/03/Rust-1.65.0/#break-from-labeled-blocks)
@@ -267,7 +267,7 @@ preinterpret::run! {
   for N in 0..=10 {
     let types = %[A B C D E F G H I J K L M N O P Q R S T].take(N);
     %[
-        impl<%,*(#types)> MyTrait for (%*(#types,)) {}
+        impl<%(#types),*> MyTrait for (%(#types,)*) {}
     ]
   }
 }
