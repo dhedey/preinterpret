@@ -112,10 +112,9 @@ Create the following expressions:
 - [x] Improvements to final_value
   - [x] EmbeddedX should request value ownership of shared from expression land
   - [x] Disable transparent clone for streams
-- [ ] Fix all `TODO[scopes]`
-  - [ ] Currently parsing `let top = 'z'; let _ = 'a'..top;` will error
+- [x] Fix all `TODO[scopes]`
+  - [x] Fix / remove expensive parse stream forks
 - [ ] Tests
-  - [ ] Convert the control flow to a visitor model
   - [ ] Add test macro for asserting variable binding `is_final` information, e.g. with a `x[final]` and `x[not_final]` syntax?
   - [ ] Add tests for things like `let x = %[1]; let x = %[2] + x; x`
   - [ ] Add tests for things like `y[x] = x + 1`

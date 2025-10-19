@@ -553,14 +553,14 @@ impl<'a> ExpressionParser<'a> {
         // Otherwise, we have a half-open range, and need to work out whether
         // we can parse a UnaryAtom to be the right side of the range or whether
         // it will have no right side.
-        // Some examples of such ranges include: `[3.., 4]`, `[3..]`, `let x = 3..;`,
-        // `(3..).first()` or even `3...first()`
-        let can_parse_unary_atom = {
-            let forked = self.streams.fork_current();
-            let mut forked_stack = ParseStreamStack::new(&forked);
-            Self::parse_unary_atom(&mut forked_stack).is_ok()
+        // * Has right side: 1..2 or x..y or '1'..'3'
+        // * Has no rhs: `[3.., 4]`, `[3..]`, `let x = 3..;`, `3...first()`
+        let should_parse_range_lhs = match self.streams.peek_grammar() {
+            SourcePeekMatch::Punct(punct) => !matches!(punct.as_char(), ',' | ';'),
+            SourcePeekMatch::End => false,
+            _ => true, // Literals, Idents(variables/methods), Commands/expressions
         };
-        if can_parse_unary_atom {
+        if should_parse_range_lhs {
             // A unary atom can be parsed so let's attempt to complete the range with it
             Ok(self.push_stack_frame(ExpressionStackFrame::IncompleteRange { lhs, range_limits }))
         } else {

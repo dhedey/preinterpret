@@ -177,12 +177,20 @@ impl ControlFlowContext {
         *id = self.state.allocate_scope();
     }
 
-    pub(crate) fn register_variable_definition(&mut self, ident: &Ident, id: &mut VariableDefinitionId) {
+    pub(crate) fn register_variable_definition(
+        &mut self,
+        ident: &Ident,
+        id: &mut VariableDefinitionId,
+    ) {
         assert!(id.is_placeholder());
         *id = self.state.allocate_variable_definition(ident);
     }
 
-    pub(crate) fn register_variable_reference(&mut self, ident: &Ident, id: &mut VariableReferenceId) {
+    pub(crate) fn register_variable_reference(
+        &mut self,
+        ident: &Ident,
+        id: &mut VariableReferenceId,
+    ) {
         assert!(id.is_placeholder());
         *id = self.state.allocate_variable_reference(ident);
     }
@@ -238,9 +246,7 @@ impl<'a> Deref for SourceParseBuffer<'a> {
 
 impl<'a> SourceParseBuffer<'a> {
     fn new(buffer: ParseBuffer<'a, Source>) -> Self {
-        Self {
-            buffer,
-        }
+        Self { buffer }
     }
 
     pub(crate) fn fork(&self) -> SourceParseBuffer<'a> {
@@ -255,9 +261,7 @@ impl<'a> SourceParseBuffer<'a> {
     ) -> ParseResult<T> {
         parse_with(TokenStream::new(), |stream| -> ParseResult<T> {
             let forked = stream.fork();
-            let parse_buffer = SourceParseBuffer {
-                buffer: forked,
-            };
+            let parse_buffer = SourceParseBuffer { buffer: forked };
             let output = parser(&parse_buffer)?;
             stream.advance_to(&parse_buffer.buffer);
             Ok(output)
@@ -265,9 +269,7 @@ impl<'a> SourceParseBuffer<'a> {
     }
 
     fn child_from_buffer<'c>(&self, buffer: ParseBuffer<'c, Source>) -> SourceParseBuffer<'c> {
-        SourceParseBuffer {
-            buffer,
-        }
+        SourceParseBuffer { buffer }
     }
 
     pub(crate) fn parse<T: ParseSource>(&self) -> ParseResult<T> {

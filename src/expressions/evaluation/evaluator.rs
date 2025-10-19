@@ -7,9 +7,7 @@ pub(in crate::expressions) struct ExpressionEvaluator<'a> {
 }
 
 impl<'a> ExpressionEvaluator<'a> {
-    pub(in super::super) fn new(
-        nodes: &'a Arena<ExpressionNodeId, ExpressionNode>,
-    ) -> Self {
+    pub(in super::super) fn new(nodes: &'a Arena<ExpressionNodeId, ExpressionNode>) -> Self {
         Self {
             nodes,
             stack: EvaluationStack::new(),
