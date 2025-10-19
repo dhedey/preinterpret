@@ -1,11 +1,11 @@
 use crate::internal_prelude::*;
 
 pub(crate) trait TokenStreamParseExt: Sized {
-    fn source_parse_as<T: Parse<Source>>(self) -> ParseResult<T>;
-    fn source_parse_with<T, E: From<syn::Error>>(
+    fn source_parse_and_analyze<T>(
         self,
-        parser: impl FnOnce(ParseStream<Source>) -> Result<T, E>,
-    ) -> Result<T, E>;
+        parser: impl FnOnce(SourceParser) -> ParseResult<T>,
+        control_flow_analysis: impl FnOnce(&mut T, FlowCapturer) -> ParseResult<()>,
+    ) -> ParseResult<(T, ScopeDefinitions)>;
 
     fn interpreted_parse_with<T, E: From<syn::Error>>(
         self,
@@ -14,15 +14,14 @@ pub(crate) trait TokenStreamParseExt: Sized {
 }
 
 impl TokenStreamParseExt for TokenStream {
-    fn source_parse_as<T: Parse<Source>>(self) -> ParseResult<T> {
-        self.source_parse_with(T::parse)
-    }
-
-    fn source_parse_with<T, E: From<syn::Error>>(
+    fn source_parse_and_analyze<T>(
         self,
-        parser: impl FnOnce(ParseStream<Source>) -> Result<T, E>,
-    ) -> Result<T, E> {
-        parse_with(self, parser)
+        parser: impl FnOnce(SourceParser) -> ParseResult<T>,
+        control_flow_analysis: impl FnOnce(&mut T, FlowCapturer) -> ParseResult<()>,
+    ) -> ParseResult<(T, ScopeDefinitions)> {
+        let mut parsed = parse_with(self, parse_without_analysis(parser))?;
+        let definitions = ControlFlowContext::analyze(&mut parsed, control_flow_analysis)?;
+        Ok((parsed, definitions))
     }
 
     fn interpreted_parse_with<T, E: From<syn::Error>>(
@@ -33,7 +32,7 @@ impl TokenStreamParseExt for TokenStream {
     }
 }
 
-fn parse_with<T, K, E: From<syn::Error>>(
+pub(crate) fn parse_with<T, K, E: From<syn::Error>>(
     stream: TokenStream,
     parser: impl FnOnce(ParseStream<K>) -> Result<T, E>,
 ) -> Result<T, E> {
@@ -143,24 +142,20 @@ impl DelimiterExt for Delimiter {
 
 /// Allows storing a stack of parse buffers for certain parse strategies which require
 /// handling multiple groups in parallel.
-pub(crate) struct ParseStreamStack<'a, K> {
-    base: ParseStream<'a, K>,
-    group_stack: Vec<ParseBuffer<'a, K>>,
+pub(crate) struct ParseStreamStack<'a> {
+    base: SourceParser<'a>,
+    group_stack: Vec<SourceParseBuffer<'a>>,
 }
 
-impl<'a, K> ParseStreamStack<'a, K> {
-    pub(crate) fn new(base: ParseStream<'a, K>) -> Self {
+impl<'a> ParseStreamStack<'a> {
+    pub(crate) fn new(base: SourceParser<'a>) -> Self {
         Self {
             base,
             group_stack: Vec::new(),
         }
     }
 
-    pub(crate) fn fork_current(&self) -> ParseBuffer<'_, K> {
-        self.current().fork()
-    }
-
-    pub(crate) fn current(&self) -> ParseStream<'_, K> {
+    pub(crate) fn current(&self) -> SourceParser<'_> {
         self.group_stack.last().unwrap_or(self.base)
     }
 
@@ -172,12 +167,16 @@ impl<'a, K> ParseStreamStack<'a, K> {
         self.current().parse_err(message)
     }
 
-    pub(crate) fn parse<T: Parse<K>>(&mut self) -> ParseResult<T> {
+    pub(crate) fn parse<T: ParseSource>(&mut self) -> ParseResult<T> {
         self.current().parse()
     }
 
     pub(crate) fn is_current_empty(&self) -> bool {
         self.current().is_empty()
+    }
+
+    pub(crate) fn peek_grammar(&mut self) -> SourcePeekMatch {
+        self.current().peek_grammar()
     }
 
     #[allow(unused)]
@@ -194,7 +193,7 @@ impl<'a, K> ParseStreamStack<'a, K> {
         self.current().parse_any_ident()
     }
 
-    pub(crate) fn try_parse_or_revert<T: Parse<K>>(&mut self) -> ParseResult<T> {
+    pub(crate) fn try_parse_or_revert<T: ParseSource>(&mut self) -> ParseResult<T> {
         let current = self.current();
         let fork = current.fork();
         match fork.parse::<T>() {
@@ -220,7 +219,7 @@ impl<'a, K> ParseStreamStack<'a, K> {
             // ==> exit_group() ensures the parse buffers are dropped in the correct order
             // ==> If a user forgets to do it (or e.g. an error path or panic causes exit_group not to be called)
             //     Then the drop glue ensures the groups are dropped in the correct order.
-            std::mem::transmute::<ParseBuffer<'_, K>, ParseBuffer<'a, K>>(inner)
+            std::mem::transmute::<SourceParseBuffer<'_>, SourceParseBuffer<'a>>(inner)
         };
         self.group_stack.push(inner);
         Ok((delimiter, delim_span))
@@ -240,13 +239,7 @@ impl<'a, K> ParseStreamStack<'a, K> {
     }
 }
 
-impl ParseStreamStack<'_, Source> {
-    pub(crate) fn peek_grammar(&mut self) -> SourcePeekMatch {
-        self.current().peek_grammar()
-    }
-}
-
-impl<K> Drop for ParseStreamStack<'_, K> {
+impl Drop for ParseStreamStack<'_> {
     fn drop(&mut self) {
         while !self.group_stack.is_empty() {
             self.exit_group();

@@ -56,6 +56,7 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
         * Migrate operators incrementally: `+`, `-`, `*`, `/`, `%`, `==`, `!=`, etc.
         * No clone required for testing equality of streams, objects and arrays
     * CompoundAssignment Migration
+    * Ensure all `TODO[operation-refactor]` are done
 
 ```rust
 // Possible UntypedInteger implementation
@@ -98,34 +99,28 @@ Create the following expressions:
 
 ## Scopes & Blocks (requires control flow expressions, or at least no `!let!` command)
 
-- [ ] Scopes exist at compile time, e.g. as a `ScopeId(usize)` and include:
-  * A definition about whether the scope is irrevertible or not
-  * Variable definitions ...and the last use of them (as a value irrevertible - if at all) - that usage can do a take for free, like in Rust
-  * A parent scope
-  * Each variable usage can be tied back to a definition
-  * Each let expression
-- [ ] Spans are only kept from source inside streams, otherwise it refers to a binding
-- [ ] At execution time, there needs to be some link between scope and stack frame
-- [ ] Fix `TODO[scopes]`
-- [ ] Add test that `let x; x = { let x = 123; x = 456; 5 }`. resolves correctly with `x = 5`.
-
-We then need ot consider whether an embedded expression in a stream literal and/or stream pattern create new scopes or not...
-
-* Should we let `#( ... )` have block content again? but not define a new scope? Or should we remove `preinterpret::stream!` and allow `#{}` for blocks?
-  * Current thinking is we allow `#{ ... }` but it doesn't define a new scope. 
-* What should the scoping rules be?
-  * If we support `preinterpret::stream!` then all blocks in a stream literal should be part of a wider scope under that stream; otherwise we won't be able to define variables and use them in the output stream itself.
-  * In a stream literal pattern, we likely want `let` to also work and apply to the wider scope.
-  * In a parse expression, it would be nice if we could define let variables, but it's not strictly necessary.
-... in all cases, we want a wider scope than "last open brace `{}`", so we need to use one of two approaches:
-    * We consider `{}` to be more associated with "combined statements" and consider breaking that cardinal scoping rule that `{}` introduce a new scope
-    * We use `()` for blocks which don't introduce a new scope, e.g. parse blocks and embedded expressions `#(...)`
-* `ExpressionBlock` with a `#` prefix `#{ .. }` shouldn't exist
-* In an output-stream  `#var` or `#(..)` are possible
-* In an stream-pattern, only `#{ .. }` is possible, and should return `None`
-  * If looking to match on a value, you should use  `@[EXACT({ tokens: %[] })]` instead
-  * We could consider allowing `%[]` directly in the stream, but this is probably confusing as it has different meaning in the outer/in values
-  * We could also consider just allowing embeddings directly into the token stream? But I think this is an unlikely scenario; AND it might mean that `#{ ... }` returning a value might be confusing
+- [x] Add back `#{  }` in stream literals. Despite the brackets, the code/definitions get executed *in the parent scope*.
+- [x] Scopes, Definitions, References and ControlFlowSegments exist at compile time:
+  - [x] Scopes and segments are created everywhere they're needed
+  - [x] Add in algorithm to mark references as final
+- [x] At execution time:
+  - [x] There needs to be some link between scope and stack frame
+  - [x] Variable places go through `Unallocated` | `Occupied` | `Removed`
+  - [x] Variables are read / written based on binding ids
+- [x] Fix marking references as final:
+  - [x] Use a second pass aligned with control flow order to set up scopes, segments and variables.
+- [x] Improvements to final_value
+  - [x] EmbeddedX should request value ownership of shared from expression land
+  - [x] Disable transparent clone for streams
+- [x] Fix all `TODO[scopes]`
+  - [x] Fix / remove expensive parse stream forks
+- [x] Tests
+  - [x] Add test macro for asserting variable binding `is_final` information, e.g. with a `x[final]` and `x[not_final]` syntax?
+  - [x] Add tests for things like `let x = %[1]; let x = %[2] + x; x`
+  - [x] Add tests for things like `y[x] = x + 1`
+  - [x] Add tests for things like `let x = %[1]; { let x = %[2] + x; }; x`
+  - [x] Add test that `let x; x = { let x = 123; x = 456; 5 }`. resolves correctly with `x = 5`.
+  - [x] Add tests involving for loops; and if/elsif/else blocks
 
 ## Attempt Expression (requires Scopes & Blocks)
 
@@ -148,9 +143,9 @@ So some possible things we can explore / consider:
   - A: We remove vec-returns from loops
   - B: We only store values which are non-None in the array, we can therefore use `loop { break X }[0]` to get the return value
 - [ ] Trial exposing the output stream as a variable binding `stream`. We need to have some way to make it kinda efficient though.
-  - Conceptually considering some optimizations further down, this `stream` might actually be from some few levels above,
-    using tail-return optimizations
+  - Conceptually considering some optimizations further down, this `stream` might actually be from some few levels above, using tail-return optimizations
   - Maybe we just have an `output(%[...])` command instead of exposing the stream variable?
+  - Or even `output` statement so that we can do e.g. `output 'a %[..]` to reference a particular block.
 - [ ] `break` / `continue` improvements:
   - Can return a value (from the last iteration of for / while loops)
   - Can specify a label, and return from a labelled block (https://blog.rust-lang.org/2022/11/03/Rust-1.65.0/#break-from-labeled-blocks)
@@ -272,7 +267,7 @@ preinterpret::run! {
   for N in 0..=10 {
     let types = %[A B C D E F G H I J K L M N O P Q R S T].take(N);
     %[
-        impl<%,*(#types)> MyTrait for (%*(#types,)) {}
+        impl<%(#types),*> MyTrait for (%(#types,)*) {}
     ]
   }
 }
@@ -315,12 +310,19 @@ preinterpret::run! {
   * The latter should not be caught by `attempt` blocks
 * If method resolution fails, perhaps we try finding a method with that name on other types
 
+## Optimizations 
+
+- [ ] Look at benchmarks and if anything should be sped up
+- [ ] Optionally consider writing `ResolvedReference(Span/ScopeId/DefinitionId/IsFirstUse)` data directly back into the Reference via a `Rc<Cell<ReferenceContent::Resolved(ResolvedReference)>>` to set the values (from a `ReferenceContent::Parsed(Ident, ReferenceId)`)
+
 ## Coding challenges
 
 Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` docs) to ensure that the language is sufficiently comprehensive to use in practice.
 
 ## Final considerations
 
+* Merge `assignee_frames` into `value_frames` as per comment as the top of `assignee_frames`
+* Rename `EvaluationItem` to `RequestedValue` and consider making `RequestedValue::AssignmentCompletion` wrap an `Owned<()>` so that it becomes truly a value.
 * Add `preinterpret::macro` - can this be a declarative macro? Would be slightly more efficient, as it just needs to wrap a call to `preinterpret::stream` or `preinterpret::run`...
 * Add `LiteralPattern` (wrapping a `Literal`)
 * Add `Eq` support on composite types and streams
@@ -423,7 +425,7 @@ Consider:
 * Using ResolvedValue in place of ExpressionValue e.g. inside arrays / objects, so that we can destructure `let (x, y) = (a, b)` without clone/take
     * But then we end up with nested references which can be confusing!
     * CONCLUSION: Maybe we don't want this - to destructure it needs to be owned anyway?
-* Consider TODO[interpret-to-value] and whether to expand to `ResolvedValue` or `CopyOnWriteValue` instead of `OwnedValue`?
+* Consider whether to expand to storing `ResolvedValue` or `CopyOnWriteValue` in variables instead of `OwnedValue`?
     => The main issue is if it interferes with taking mutable references, but it's possibly OK, would need to see if it's a confusing problem in practice... (e.g. `let b = a[0]; a.push(1)` if `b` is a reference to `a[0]` then this is a problem when we push to `a`)
     => If a mutable reference is created and there are pending references, the variable data RefCell could be replaced with a cloned value and then mutated... But this can be more expensive, because e.g. `let b = a[0]; a.push(1)` results in the whole array `a` being copied in the `CoW` case; but only the `a[0]` being cloned in the "clone on assign" case.
     => Maybe we just stick to assignments being Owned/Cloned as currently
@@ -432,7 +434,6 @@ Consider:
     * `#(x[0])` returns the value at that position of the stream (using `INFER_TOKEN_TREE`)
     * `#(x[0..3])` returns a TokenStream
     * `#(x[0..=3])` returns a TokenStream
-
 
 --------------------------------------------------------------------------------
 

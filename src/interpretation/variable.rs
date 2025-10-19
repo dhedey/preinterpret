@@ -1,69 +1,21 @@
 use crate::internal_prelude::*;
 
-pub(crate) trait IsVariable: HasSpanRange {
-    fn get_name(&self) -> String;
-
-    fn define(&self, interpreter: &mut Interpreter, value_source: impl ToExpressionValue) {
-        interpreter.define_variable(self, value_source.into_value())
-    }
-
-    #[allow(unused)]
-    fn define_coerced(&self, interpreter: &mut Interpreter, content: OutputStream) {
-        interpreter.define_variable(self, content.coerce_into_value())
-    }
-
-    fn get_transparently_cloned_value(
-        &self,
-        interpreter: &Interpreter,
-    ) -> ExecutionResult<ExpressionValue> {
-        Ok(self
-            .binding(interpreter)?
-            .into_transparently_cloned()?
-            .into())
-    }
-
-    fn substitute_into(
-        &self,
-        interpreter: &mut Interpreter,
-        grouping: Grouping,
-        output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
-        self.binding(interpreter)?.into_shared()?.output_to(
-            grouping,
-            &mut ToStreamContext::new(output, self.span_range()),
-        )
-    }
-
-    fn binding(&self, interpreter: &Interpreter) -> ExecutionResult<VariableBinding> {
-        interpreter.resolve_variable_binding(self, || {
-            self.error("The variable does not already exist in the current scope")
-        })
-    }
-}
-
 #[derive(Clone)]
 pub(crate) struct EmbeddedVariable {
     marker: Token![#],
-    variable_name: Ident,
+    reference: VariableReference,
 }
 
-impl Parse<Source> for EmbeddedVariable {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
-        input.try_parse_or_error(
-            |input| {
-                Ok(Self {
-                    marker: input.parse()?,
-                    variable_name: input.parse_any_ident()?,
-                })
-            },
-            "Expected #variable",
-        )
+impl ParseSource for EmbeddedVariable {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
+        Ok(Self {
+            marker: input.parse()?,
+            reference: input.parse()?,
+        })
     }
-}
 
-impl IsVariable for EmbeddedVariable {
-    fn get_name(&self) -> String {
-        self.variable_name.to_string()
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        self.reference.control_flow_pass(context)
     }
 }
 
@@ -73,92 +25,189 @@ impl Interpret for EmbeddedVariable {
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        self.substitute_into(interpreter, Grouping::Flattened, output)
+        self.reference
+            .substitute_into(interpreter, Grouping::Flattened, output)
     }
 }
 
 impl Evaluate for EmbeddedVariable {
-    type OutputValue = ExpressionValue;
+    type OutputValue = OwnedValue;
 
     fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<Self::OutputValue> {
-        self.get_transparently_cloned_value(interpreter)
+        self.reference.evaluate(interpreter)
     }
 }
 
 impl HasSpanRange for EmbeddedVariable {
     fn span_range(&self) -> SpanRange {
-        SpanRange::new_between(self.marker.span, self.variable_name.span())
+        SpanRange::new_between(self.marker.span, self.reference.span())
     }
 }
 
-impl HasSpanRange for &EmbeddedVariable {
-    fn span_range(&self) -> SpanRange {
-        <EmbeddedVariable as HasSpanRange>::span_range(self)
-    }
-}
-
-impl core::fmt::Display for EmbeddedVariable {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "#{}", self.variable_name)
-    }
-}
-
-// An identifier for a variable path in an expression
 #[derive(Clone)]
-pub(crate) struct VariableIdentifier {
+pub(crate) struct VariableDefinition {
     pub(crate) ident: Ident,
+    pub(crate) id: VariableDefinitionId,
 }
 
-impl Parse<Source> for VariableIdentifier {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for VariableDefinition {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
+        let ident = input.parse()?;
+        let id = VariableDefinitionId::new_placeholder();
+        Ok(Self { ident, id })
+    }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        context.register_variable_definition(&self.ident, &mut self.id);
+        context.define_variable(self.id);
+        Ok(())
+    }
+}
+
+impl VariableDefinition {
+    pub(crate) fn define(
+        &self,
+        interpreter: &mut Interpreter,
+        value_source: impl ToExpressionValue,
+    ) {
+        interpreter.define_variable(self.id, value_source.into_value());
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct VariableReference {
+    pub(crate) ident: Ident,
+    #[allow(unused)]
+    pub(crate) id: VariableReferenceId,
+    #[cfg(feature = "debug")]
+    pub(crate) assertion: FinalUseAssertion,
+}
+
+impl ParseSource for VariableReference {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
+        let ident = input.parse()?;
+        #[cfg(feature = "debug")]
+        let assertion = {
+            if let Some((_, next)) = input.cursor().punct_matching(':') {
+                if let Some(_) = next.ident_matching("FINAL") {
+                    let _ = input.parse_punct_matching(':')?;
+                    let ident = input.parse_any_ident()?;
+                    FinalUseAssertion::IsFinal(ident.span())
+                } else if let Some(_) = next.ident_matching("NONFINAL") {
+                    let _ = input.parse_punct_matching(':')?;
+                    let ident = input.parse_any_ident()?;
+                    FinalUseAssertion::IsNotFinal(ident.span())
+                } else {
+                    FinalUseAssertion::None
+                }
+            } else {
+                FinalUseAssertion::None
+            }
+        };
         Ok(Self {
-            ident: input.parse()?,
+            ident,
+            id: VariableReferenceId::new_placeholder(),
+            #[cfg(feature = "debug")]
+            assertion,
         })
     }
-}
 
-impl IsVariable for VariableIdentifier {
-    fn get_name(&self) -> String {
-        self.ident.to_string()
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        context.register_variable_reference(&self.ident, &mut self.id);
+        context.reference_variable(
+            self.id,
+            #[cfg(feature = "debug")]
+            self.assertion,
+        )
     }
 }
 
-impl HasSpan for VariableIdentifier {
+impl VariableReference {
+    fn substitute_into(
+        &self,
+        interpreter: &mut Interpreter,
+        grouping: Grouping,
+        output: &mut OutputStream,
+    ) -> ExecutionResult<()> {
+        self.resolve_shared(interpreter)?.output_to(
+            grouping,
+            &mut ToStreamContext::new(output, self.span_range()),
+        )
+    }
+
+    pub(crate) fn resolve_late_bound(
+        &self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<LateBoundValue> {
+        interpreter.resolve(self, RequestedValueOwnership::LateBound)
+    }
+
+    pub(crate) fn resolve_resolved(
+        &self,
+        interpreter: &mut Interpreter,
+        ownership: ResolvedValueOwnership,
+    ) -> ExecutionResult<ResolvedValue> {
+        interpreter
+            .resolve(self, RequestedValueOwnership::Concrete(ownership))?
+            .resolve(ownership)
+    }
+
+    pub(crate) fn resolve_owned(
+        &self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<OwnedValue> {
+        Ok(self
+            .resolve_resolved(interpreter, ResolvedValueOwnership::Owned)?
+            .expect_owned())
+    }
+
+    pub(crate) fn resolve_assignee(
+        &self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<MutableValue> {
+        Ok(self
+            .resolve_resolved(interpreter, ResolvedValueOwnership::Assignee)?
+            .expect_mutable())
+    }
+
+    pub(crate) fn resolve_shared(
+        &self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<SharedValue> {
+        Ok(self
+            .resolve_resolved(interpreter, ResolvedValueOwnership::Shared)?
+            .expect_shared())
+    }
+}
+
+impl HasSpan for VariableReference {
     fn span(&self) -> Span {
         self.ident.span()
     }
 }
 
-impl Evaluate for VariableIdentifier {
-    type OutputValue = ExpressionValue;
+impl Evaluate for VariableReference {
+    type OutputValue = OwnedValue;
 
     fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<Self::OutputValue> {
-        self.get_transparently_cloned_value(interpreter)
+        self.resolve_owned(interpreter)
     }
 }
 
 #[derive(Clone)]
 pub(crate) struct VariablePattern {
-    pub(crate) name: Ident,
+    pub(crate) definition: VariableDefinition,
 }
 
-impl Parse<Source> for VariablePattern {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for VariablePattern {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         Ok(Self {
-            name: input.parse()?,
+            definition: input.parse()?,
         })
     }
-}
 
-impl IsVariable for VariablePattern {
-    fn get_name(&self) -> String {
-        self.name.to_string()
-    }
-}
-
-impl HasSpan for VariablePattern {
-    fn span(&self) -> Span {
-        self.name.span()
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        self.definition.control_flow_pass(context)
     }
 }
 
@@ -168,7 +217,7 @@ impl HandleDestructure for VariablePattern {
         interpreter: &mut Interpreter,
         value: ExpressionValue,
     ) -> ExecutionResult<()> {
-        self.define(interpreter, value);
+        self.definition.define(interpreter, value);
         Ok(())
     }
 }

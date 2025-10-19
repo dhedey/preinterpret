@@ -1,12 +1,18 @@
 use super::*;
 
-pub(super) struct AssignmentCompletion {
+pub(crate) struct AssignmentCompletion {
     pub(super) span_range: SpanRange,
+}
+
+impl WithSpanRangeExt for AssignmentCompletion {
+    fn with_span_range(self, span_range: SpanRange) -> Self {
+        Self { span_range }
+    }
 }
 
 /// Handlers which return an AssignmentCompletion
 pub(super) enum AnyAssignmentFrame {
-    Place(PlaceAssigner),
+    Assignee(AssigneeAssigner),
     Grouped(GroupedAssigner),
     Array(ArrayBasedAssigner),
     Object(Box<ObjectBasedAssigner>),
@@ -19,7 +25,7 @@ impl AnyAssignmentFrame {
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
         match self {
-            Self::Place(frame) => frame.handle_item(context, item),
+            Self::Assignee(frame) => frame.handle_item(context, item),
             Self::Grouped(frame) => frame.handle_item(context, item),
             Self::Object(frame) => frame.handle_item(context, item),
             Self::Array(frame) => frame.handle_item(context, item),
@@ -29,26 +35,26 @@ impl AnyAssignmentFrame {
 
 struct PrivateUnit;
 
-pub(super) struct PlaceAssigner {
+pub(super) struct AssigneeAssigner {
     value: ExpressionValue,
 }
 
-impl PlaceAssigner {
+impl AssigneeAssigner {
     pub(super) fn start(
         context: AssignmentContext,
-        place: ExpressionNodeId,
+        assignee: ExpressionNodeId,
         value: ExpressionValue,
     ) -> NextAction {
         let frame = Self { value };
-        context.handle_node_as_place(frame, place)
+        context.handle_node_as_assignee(frame, assignee)
     }
 }
 
-impl EvaluationFrame for PlaceAssigner {
+impl EvaluationFrame for AssigneeAssigner {
     type ReturnType = AssignmentType;
 
     fn into_any(self) -> AnyAssignmentFrame {
-        AnyAssignmentFrame::Place(self)
+        AnyAssignmentFrame::Assignee(self)
     }
 
     fn handle_item(
@@ -56,7 +62,7 @@ impl EvaluationFrame for PlaceAssigner {
         context: AssignmentContext,
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
-        let mut mutable_place = item.expect_place();
+        let mut mutable_place = item.expect_assignee();
         let value = self.value;
         let span_range = mutable_place.span_range();
         mutable_place.set(value);
@@ -102,7 +108,7 @@ pub(super) struct ArrayBasedAssigner {
 impl ArrayBasedAssigner {
     pub(super) fn start(
         context: AssignmentContext,
-        nodes: &[ExpressionNode],
+        nodes: &Arena<ExpressionNodeId, ExpressionNode>,
         brackets: &Brackets,
         assignee_item_node_ids: &[ExpressionNodeId],
         value: ExpressionValue,
@@ -113,7 +119,7 @@ impl ArrayBasedAssigner {
 
     /// See also `ArrayPattern` in `patterns.rs`
     fn new(
-        nodes: &[ExpressionNode],
+        nodes: &Arena<ExpressionNodeId, ExpressionNode>,
         assignee_span: Span,
         assignee_item_node_ids: &[ExpressionNodeId],
         value: ExpressionValue,
@@ -126,7 +132,7 @@ impl ArrayBasedAssigner {
         let mut prefix_assignees = Vec::new();
         let mut suffix_assignees = Vec::new();
         for node in assignee_item_node_ids.iter() {
-            match nodes[node.0] {
+            match nodes.get(*node) {
                 ExpressionNode::Range {
                     left: None,
                     range_limits: syn::RangeLimits::HalfOpen(_),

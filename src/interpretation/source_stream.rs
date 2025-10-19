@@ -1,21 +1,25 @@
 use crate::internal_prelude::*;
 
 /// A parsed stream ready for interpretation
-#[derive(Clone)]
 pub(crate) struct SourceStream {
     items: Vec<SourceItem>,
     span: Span,
 }
 
-impl ContextualParse<Source> for SourceStream {
-    type Context = Span;
-
-    fn parse(input: ParseStream<Source>, span: Self::Context) -> ParseResult<Self> {
+impl SourceStream {
+    pub(crate) fn parse_with_span(input: SourceParser, span: Span) -> ParseResult<Self> {
         let mut items = Vec::new();
         while !input.is_empty() {
             items.push(input.parse()?);
         }
         Ok(Self { items, span })
+    }
+
+    pub(crate) fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        for item in self.items.iter_mut() {
+            item.control_flow_pass(context)?;
+        }
+        Ok(())
     }
 }
 
@@ -38,11 +42,11 @@ impl HasSpan for SourceStream {
     }
 }
 
-#[derive(Clone)]
 pub(crate) enum SourceItem {
     Command(Command),
     Variable(EmbeddedVariable),
     EmbeddedExpression(EmbeddedExpression),
+    EmbeddedStatements(EmbeddedStatements),
     SourceGroup(SourceGroup),
     Punct(Punct),
     Ident(Ident),
@@ -50,14 +54,17 @@ pub(crate) enum SourceItem {
     StreamLiteral(StreamLiteral),
 }
 
-impl Parse<Source> for SourceItem {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for SourceItem {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => SourceItem::Command(input.parse()?),
             SourcePeekMatch::Group(_) => SourceItem::SourceGroup(input.parse()?),
             SourcePeekMatch::EmbeddedVariable => SourceItem::Variable(input.parse()?),
             SourcePeekMatch::EmbeddedExpression => {
                 SourceItem::EmbeddedExpression(input.parse()?)
+            }
+            SourcePeekMatch::EmbeddedStatements => {
+                SourceItem::EmbeddedStatements(input.parse()?)
             }
             SourcePeekMatch::ExplicitTransformStream | SourcePeekMatch::Transformer(_) => {
                 return input.parse_err("Destructurings are not supported here. If this wasn't intended to be a destructuring, replace @ with %raw[@]");
@@ -69,6 +76,20 @@ impl Parse<Source> for SourceItem {
             SourcePeekMatch::ObjectLiteral => return input.parse_err("Object literals are only supported in an expression context, not a stream context."),
             SourcePeekMatch::End => return input.parse_err("Expected some item."),
         })
+    }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        match self {
+            SourceItem::Command(command) => command.control_flow_pass(context),
+            SourceItem::Variable(variable) => variable.control_flow_pass(context),
+            SourceItem::EmbeddedExpression(expr) => expr.control_flow_pass(context),
+            SourceItem::EmbeddedStatements(block) => block.control_flow_pass(context),
+            SourceItem::SourceGroup(group) => group.control_flow_pass(context),
+            SourceItem::Punct(punct) => punct.control_flow_pass(context),
+            SourceItem::Ident(ident) => ident.control_flow_pass(context),
+            SourceItem::Literal(literal) => literal.control_flow_pass(context),
+            SourceItem::StreamLiteral(stream_literal) => stream_literal.control_flow_pass(context),
+        }
     }
 }
 
@@ -87,6 +108,9 @@ impl Interpret for SourceItem {
             }
             SourceItem::EmbeddedExpression(block) => {
                 block.interpret_into(interpreter, output)?;
+            }
+            SourceItem::EmbeddedStatements(statements) => {
+                statements.interpret_into(interpreter, output)?;
             }
             SourceItem::SourceGroup(group) => {
                 group.interpret_into(interpreter, output)?;
@@ -107,7 +131,8 @@ impl HasSpanRange for SourceItem {
         match self {
             SourceItem::Command(command_invocation) => command_invocation.span_range(),
             SourceItem::Variable(variable) => variable.span_range(),
-            SourceItem::EmbeddedExpression(block) => block.span_range(),
+            SourceItem::EmbeddedExpression(expr) => expr.span_range(),
+            SourceItem::EmbeddedStatements(block) => block.span_range(),
             SourceItem::SourceGroup(group) => group.span_range(),
             SourceItem::Punct(punct) => punct.span_range(),
             SourceItem::Ident(ident) => ident.span_range(),
@@ -118,22 +143,25 @@ impl HasSpanRange for SourceItem {
 }
 
 /// A parsed group ready for interpretation
-#[derive(Clone)]
 pub(crate) struct SourceGroup {
     source_delimiter: Delimiter,
     source_delim_span: DelimSpan,
     content: SourceStream,
 }
 
-impl Parse<Source> for SourceGroup {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for SourceGroup {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let (delimiter, delim_span, content) = input.parse_any_group()?;
-        let content = content.parse_with_context(delim_span.join())?;
+        let content = SourceStream::parse_with_span(&content, delim_span.join())?;
         Ok(Self {
             source_delimiter: delimiter,
             source_delim_span: delim_span,
             content,
         })
+    }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        self.content.control_flow_pass(context)
     }
 }
 

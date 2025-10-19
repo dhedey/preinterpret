@@ -36,6 +36,24 @@ pub(crate) trait FromResolved: Sized {
     fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self>;
 }
 
+impl FromResolved for ResolvedValue {
+    type ValueType = ValueTypeData;
+    const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::AsIs;
+
+    fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
+        Ok(value)
+    }
+}
+
+impl FromResolved for AssigneeValue {
+    type ValueType = ValueTypeData;
+    const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Assignee;
+
+    fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
+        Ok(AssigneeValue(value.expect_mutable()))
+    }
+}
+
 impl<T: ResolvableArgumentShared + ResolvableArgumentTarget + ?Sized> FromResolved for Shared<T> {
     type ValueType = T::ValueType;
     const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Shared;

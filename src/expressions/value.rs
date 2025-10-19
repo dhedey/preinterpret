@@ -80,10 +80,7 @@ impl ValueKind {
             ValueKind::UnsupportedLiteral => false,
             ValueKind::Array => false,
             ValueKind::Object => false,
-            // It's super common to want to embed a stream in another stream
-            // Having to embed it as #(type_name.clone()) instead of
-            // #type_name would be awkward
-            ValueKind::Stream => true,
+            ValueKind::Stream => false,
             ValueKind::Range => true,
             ValueKind::Iterator => false,
         }
@@ -126,12 +123,13 @@ define_interface! {
                 this.into_owned_infallible()
             }
 
-            fn take_owned(mut this: MutableValue) -> ExpressionValue {
-                core::mem::replace(this.deref_mut(), ExpressionValue::None)
-            }
-
-            fn as_mut(this: OwnedValue) -> MutableValue {
-                MutableValue::new_from_owned(this)
+            fn as_mut(this: ResolvedValue) -> ExecutionResult<MutableValue> {
+                Ok(match this {
+                    ResolvedValue::Owned(owned) => Mutable::new_from_owned(owned),
+                    ResolvedValue::CopyOnWrite(copy_on_write) => ResolvedValueOwnership::Mutable.map_from_copy_on_write(copy_on_write)?.expect_mutable(),
+                    ResolvedValue::Mutable(mutable) => mutable,
+                    ResolvedValue::Shared(shared) => ResolvedValueOwnership::Mutable.map_from_shared(shared)?.expect_mutable(),
+                })
             }
 
             // NOTE:
@@ -140,8 +138,12 @@ define_interface! {
                 this
             }
 
-            fn swap(mut a: MutableValue, mut b: MutableValue) -> () {
-                core::mem::swap(a.deref_mut(), b.deref_mut());
+            fn swap(mut a: AssigneeValue, mut b: AssigneeValue) -> () {
+                core::mem::swap(a.0.deref_mut(), b.0.deref_mut());
+            }
+
+            fn replace(mut a: AssigneeValue, b: ExpressionValue) -> ExpressionValue {
+                core::mem::replace(a.0.deref_mut(), b)
             }
 
             fn debug(this: CopyOnWriteValue) -> ExecutionResult<()> {
@@ -267,7 +269,12 @@ impl ExpressionValue {
     pub(crate) fn for_literal(literal: Literal) -> OwnedValue {
         // The unwrap should be safe because all Literal should be parsable
         // as syn::Lit; falling back to syn::Lit::Verbatim if necessary.
-        Self::for_syn_lit(literal.to_token_stream().source_parse_as().unwrap())
+        Self::for_syn_lit(
+            literal
+                .to_token_stream()
+                .interpreted_parse_with(|input| input.parse())
+                .unwrap(),
+        )
     }
 
     pub(crate) fn for_syn_lit(lit: syn::Lit) -> OwnedValue {
@@ -301,7 +308,7 @@ impl ExpressionValue {
     ) -> ExecutionResult<ExpressionValue> {
         if !self.kind().supports_transparent_cloning() {
             return error_span_range.execution_err(format!(
-                "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .take_owned() or .clone() explicitly.",
+                "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .clone() explicitly.",
                 self.articled_value_type()
             ));
         }

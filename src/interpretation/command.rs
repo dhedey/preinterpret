@@ -191,7 +191,6 @@ macro_rules! define_command_enums {
         }
 
         #[allow(clippy::enum_variant_names)]
-        #[derive(Clone)]
         enum TypedCommand {
             $(
                 $command($command),
@@ -230,14 +229,13 @@ define_command_enums! {
     ParseCommand,
 }
 
-#[derive(Clone)]
 pub(crate) struct Command {
     typed: Box<TypedCommand>,
     brackets: Brackets,
 }
 
-impl Parse<Source> for Command {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for Command {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let (brackets, content) = input.parse_brackets()?;
         content.parse::<Token![!]>()?;
         let command_name = content.parse_any_ident()?;
@@ -261,6 +259,16 @@ impl Parse<Source> for Command {
             typed: Box::new(typed),
             brackets,
         })
+    }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        match self.typed.as_mut() {
+            TypedCommand::SettingsCommand(cmd) => cmd.settings.control_flow_pass(context),
+            TypedCommand::ParseCommand(cmd) => {
+                cmd.input.control_flow_pass(context)?;
+                cmd.transformer.control_flow_pass(context)
+            }
+        }
     }
 }
 

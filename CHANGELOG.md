@@ -25,8 +25,7 @@ This moves preinterpet to an expression-based language, inspired by Rust, but wi
   * `#(x += %[...];)` to add extra tokens to a variable's stream.
   * `#(let _ = %[...];)` interprets its arguments but then ignores any outputs.
   * `%[...]` can be used to just output its interpreted contents. It's useful to create a stream value inside an expression.
-  * `%[...].reinterpret_as_run()` is like an `eval` command in scripting languages. It takes a stream, and runs it as a preinterpret expression block content like `run!{ ... }`. Similarly, `%[...].reinterpret_as_stream()` runs it as a stream
-  literal, like `stream!{ ... }`
+  * `%[...].reinterpret_as_run()` is like an `eval` command in scripting languages. It takes a stream, and runs it as a preinterpret expression block content like `run!{ ... }`. Similarly, `%[...].reinterpret_as_stream()` runs it as a stream literal, like `stream!{ ... }`. Each is pure - the reinterpreted code can't read from or write to variables, and can only return values.
   * `[!settings! { ... }]` can be used to adjust the iteration limit.
 * Expression commands:
   * The expression block `#(let x = 123; let y = 1.0; y /= x; y + 1)` which is discussed in more detail below.

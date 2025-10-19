@@ -4,24 +4,81 @@ use std::borrow::{Borrow, ToOwned};
 use std::cell::*;
 use std::rc::Rc;
 
-pub(super) struct VariableContent {
-    value: Rc<RefCell<ExpressionValue>>,
-    #[allow(unused)]
-    definition_span_range: SpanRange,
+pub(super) enum VariableContent {
+    Uninitialized,
+    Value(Rc<RefCell<ExpressionValue>>),
+    Finished,
 }
 
 impl VariableContent {
-    pub(super) fn new(tokens: ExpressionValue, definition_span_range: SpanRange) -> Self {
-        Self {
-            value: Rc::new(RefCell::new(tokens)),
-            definition_span_range,
+    pub(crate) fn define(&mut self, value: ExpressionValue) {
+        match self {
+            content @ VariableContent::Uninitialized => {
+                *content = VariableContent::Value(Rc::new(RefCell::new(value)));
+            }
+            VariableContent::Value(_) => panic!("Cannot define existing variable"),
+            VariableContent::Finished => panic!("Cannot define finished variable"),
         }
     }
 
-    pub(super) fn binding(&self, variable: &(impl IsVariable + ?Sized)) -> VariableBinding {
-        VariableBinding {
-            data: self.value.clone(),
-            variable_span_range: variable.span_range(),
+    pub(crate) fn resolve(
+        &mut self,
+        variable_span: Span,
+        is_final: bool,
+        ownership: RequestedValueOwnership,
+    ) -> ExecutionResult<LateBoundValue> {
+        const UNITIALIZED_ERR: &str = "Cannot resolve uninitialized variable. This shouldn't be possible, because all variables are set on first use.";
+        const FINISHED_ERR: &str = "Cannot resolve finished variable. This shouldn't be possible, because is_final should be marked correctly. If you see this error, please report a bug to preinterpret on github with a reproduction case.";
+
+        let value_rc = if is_final {
+            let content = std::mem::replace(self, VariableContent::Finished);
+            match content {
+                VariableContent::Uninitialized => panic!("{}", UNITIALIZED_ERR),
+                VariableContent::Value(ref_cell) => match Rc::try_unwrap(ref_cell) {
+                    Ok(ref_cell) => {
+                        if matches!(
+                            ownership,
+                            RequestedValueOwnership::Concrete(ResolvedValueOwnership::Assignee)
+                        ) {
+                            return variable_span.execution_err("The final usage of a variable cannot be assigned to. You can use `let _ = ..` to discard a value.");
+                        }
+                        return Ok(LateBoundValue::Owned(Owned::new(
+                            ref_cell.into_inner(),
+                            variable_span.span_range(),
+                        )));
+                    }
+                    Err(rc) => rc,
+                },
+                VariableContent::Finished => panic!("{}", FINISHED_ERR),
+            }
+        } else {
+            match self {
+                VariableContent::Uninitialized => panic!("{}", UNITIALIZED_ERR),
+                VariableContent::Value(ref_cell) => Rc::clone(ref_cell),
+                VariableContent::Finished => panic!("{}", FINISHED_ERR),
+            }
+        };
+        let binding = VariableBinding {
+            data: value_rc,
+            variable_span,
+        };
+        match ownership {
+            RequestedValueOwnership::LateBound => binding.into_late_bound(),
+            RequestedValueOwnership::Concrete(ownership) => match ownership {
+                ResolvedValueOwnership::Owned => binding
+                    .into_transparently_cloned()
+                    .map(LateBoundValue::Owned),
+                ResolvedValueOwnership::Shared => binding
+                    .into_shared()
+                    .map(CopyOnWrite::shared_in_place_of_shared)
+                    .map(LateBoundValue::CopyOnWrite),
+                ResolvedValueOwnership::Assignee => binding.into_mut().map(LateBoundValue::Mutable),
+                ResolvedValueOwnership::Mutable => binding.into_mut().map(LateBoundValue::Mutable),
+                ResolvedValueOwnership::CopyOnWrite | ResolvedValueOwnership::AsIs => binding
+                    .into_shared()
+                    .map(CopyOnWrite::shared_in_place_of_shared)
+                    .map(LateBoundValue::CopyOnWrite),
+            },
         }
     }
 }
@@ -29,7 +86,7 @@ impl VariableContent {
 #[derive(Clone)]
 pub(crate) struct VariableBinding {
     data: Rc<RefCell<ExpressionValue>>,
-    variable_span_range: SpanRange,
+    variable_span: Span,
 }
 
 #[allow(unused)]
@@ -38,12 +95,6 @@ impl VariableBinding {
     /// This only works if the value can be transparently cloned
     pub(crate) fn into_transparently_cloned(self) -> ExecutionResult<OwnedValue> {
         self.into_shared()?.transparent_clone()
-    }
-
-    /// Gets the cloned expression value, setting the span range appropriately
-    /// This works for any value, but may be more expensive
-    pub(crate) fn into_infallibly_cloned(self) -> ExecutionResult<OwnedValue> {
-        Ok(self.into_shared()?.infallible_clone())
     }
 
     pub(crate) fn into_mut(self) -> ExecutionResult<MutableValue> {
@@ -55,7 +106,11 @@ impl VariableBinding {
     }
 
     pub(crate) fn into_late_bound(self) -> ExecutionResult<LateBoundValue> {
-        match self.clone().into_mut().catch_execution_error()? {
+        match self
+            .clone()
+            .into_mut()
+            .catch_execution_error_at_same_scope()?
+        {
             Ok(value) => Ok(LateBoundValue::Mutable(value)),
             Err(reason_not_mutable) => {
                 // If we get an error with a mutable and shared reference, a mutable reference must already exist.
@@ -70,12 +125,6 @@ impl VariableBinding {
     }
 }
 
-impl HasSpanRange for VariableBinding {
-    fn span_range(&self) -> SpanRange {
-        self.variable_span_range
-    }
-}
-
 /// A shared value where mutable access failed for a specific reason
 pub(crate) struct LateBoundSharedValue {
     pub(crate) shared: SharedValue,
@@ -87,6 +136,15 @@ impl LateBoundSharedValue {
         Self {
             shared,
             reason_not_mutable,
+        }
+    }
+}
+
+impl WithSpanRangeExt for LateBoundSharedValue {
+    fn with_span_range(self, span_range: SpanRange) -> Self {
+        Self {
+            shared: self.shared.with_span_range(span_range),
+            reason_not_mutable: self.reason_not_mutable,
         }
     }
 }
@@ -169,6 +227,25 @@ impl HasSpanRange for LateBoundValue {
             LateBoundValue::CopyOnWrite(cow) => cow.span_range(),
             LateBoundValue::Mutable(mutable) => mutable.span_range,
             LateBoundValue::Shared(shared) => shared.shared.span_range,
+        }
+    }
+}
+
+impl WithSpanRangeExt for LateBoundValue {
+    fn with_span_range(self, span_range: SpanRange) -> Self {
+        match self {
+            LateBoundValue::Owned(owned) => {
+                LateBoundValue::Owned(owned.with_span_range(span_range))
+            }
+            LateBoundValue::CopyOnWrite(cow) => {
+                LateBoundValue::CopyOnWrite(cow.with_span_range(span_range))
+            }
+            LateBoundValue::Mutable(mutable) => {
+                LateBoundValue::Mutable(mutable.with_span_range(span_range))
+            }
+            LateBoundValue::Shared(shared) => {
+                LateBoundValue::Shared(shared.with_span_range(span_range))
+            }
         }
     }
 }
@@ -311,6 +388,7 @@ impl<T> WithSpanRangeExt for Owned<T> {
 }
 
 pub(crate) type MutableValue = Mutable<ExpressionValue>;
+pub(crate) struct AssigneeValue(pub Mutable<ExpressionValue>);
 
 /// A binding of a unique (mutable) reference to a value
 /// (e.g. inside a variable) along with a span of the whole access.
@@ -384,11 +462,11 @@ impl Mutable<ExpressionValue> {
     fn new_from_variable(reference: VariableBinding) -> ExecutionResult<Self> {
         Ok(Self {
             mut_cell: MutSubRcRefCell::new(reference.data).map_err(|_| {
-                reference.variable_span_range.execution_error(
+                reference.variable_span.execution_error(
                     "The variable cannot be modified as it is already being modified",
                 )
             })?,
-            span_range: reference.variable_span_range,
+            span_range: reference.variable_span.span_range(),
         })
     }
 
@@ -546,10 +624,10 @@ impl Shared<ExpressionValue> {
         Ok(Self {
             shared_cell: SharedSubRcRefCell::new(reference.data).map_err(|_| {
                 reference
-                    .variable_span_range
+                    .variable_span
                     .execution_error("The variable cannot be read as it is already being modified")
             })?,
-            span_range: reference.variable_span_range,
+            span_range: reference.variable_span.span_range(),
         })
     }
 

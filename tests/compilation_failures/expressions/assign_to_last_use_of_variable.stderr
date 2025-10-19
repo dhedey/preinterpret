@@ -1,0 +1,5 @@
+error: The final usage of a variable cannot be assigned to. You can use `let _ = ..` to discard a value.
+ --> tests/compilation_failures/expressions/assign_to_last_use_of_variable.rs:6:9
+  |
+6 |         a = 4;
+  |         ^

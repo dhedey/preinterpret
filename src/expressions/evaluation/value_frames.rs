@@ -95,7 +95,7 @@ pub(crate) use crate::interpretation::CopyOnWriteValue;
 use crate::stream_interface::method_definitions::assert;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum RequestedValueOwnership {
+pub(crate) enum RequestedValueOwnership {
     /// Receives any of Owned, SharedReference or MutableReference, depending on what
     /// is available.
     /// This can then be used to resolve the value kind, and use the correct one.
@@ -105,12 +105,126 @@ pub(super) enum RequestedValueOwnership {
 }
 
 impl RequestedValueOwnership {
-    pub(super) fn replace_owned_with_copy_on_write(self) -> Self {
+    pub(crate) fn owned() -> Self {
+        RequestedValueOwnership::Concrete(ResolvedValueOwnership::Owned)
+    }
+
+    pub(crate) fn shared() -> Self {
+        RequestedValueOwnership::Concrete(ResolvedValueOwnership::Shared)
+    }
+
+    pub(crate) fn copy_on_write() -> Self {
+        RequestedValueOwnership::Concrete(ResolvedValueOwnership::CopyOnWrite)
+    }
+
+    pub(crate) fn replace_owned_with_copy_on_write(self) -> Self {
         match self {
             RequestedValueOwnership::Concrete(ResolvedValueOwnership::Owned) => {
                 RequestedValueOwnership::Concrete(ResolvedValueOwnership::CopyOnWrite)
             }
             _ => self,
+        }
+    }
+
+    pub(crate) fn map_from_late_bound(
+        &self,
+        late_bound: LateBoundValue,
+    ) -> ExecutionResult<EvaluationItem> {
+        Ok(match self {
+            RequestedValueOwnership::LateBound => EvaluationItem::LateBound(late_bound),
+            RequestedValueOwnership::Concrete(_) => {
+                panic!("Returning a late-bound reference when concrete ownership was requested")
+            }
+        })
+    }
+
+    pub(crate) fn map_from_resolved(
+        &self,
+        value: ResolvedValue,
+    ) -> ExecutionResult<EvaluationItem> {
+        match value {
+            ResolvedValue::Owned(owned) => self.map_from_owned(owned),
+            ResolvedValue::Mutable(mutable) => self.map_from_mutable(mutable),
+            ResolvedValue::Shared(shared) => self.map_from_shared(shared),
+            ResolvedValue::CopyOnWrite(copy_on_write) => self.map_from_copy_on_write(copy_on_write),
+        }
+    }
+
+    /// This ensures the item's type aligns with the requested ownership.
+    pub(crate) fn map_from_item(&self, value: EvaluationItem) -> ExecutionResult<EvaluationItem> {
+        match value {
+            EvaluationItem::Owned(owned) => self.map_from_owned(owned),
+            EvaluationItem::Shared(shared) => self.map_from_shared(shared),
+            EvaluationItem::Mutable(mutable) => self.map_from_mutable(mutable),
+            EvaluationItem::Assignee(assignee) => self.map_from_mutable(assignee),
+            EvaluationItem::LateBound(late_bound_value) => {
+                self.map_from_late_bound(late_bound_value)
+            }
+            EvaluationItem::CopyOnWrite(copy_on_write) => {
+                self.map_from_copy_on_write(copy_on_write)
+            }
+            EvaluationItem::AssignmentCompletion { .. } => {
+                panic!("Returning a non-value item from a value context")
+            }
+        }
+    }
+
+    pub(crate) fn map_from_owned(&self, value: OwnedValue) -> ExecutionResult<EvaluationItem> {
+        match self {
+            RequestedValueOwnership::LateBound => {
+                Ok(EvaluationItem::LateBound(LateBoundValue::Owned(value)))
+            }
+            RequestedValueOwnership::Concrete(requested) => requested
+                .map_from_owned(value)
+                .map(Self::item_from_resolved),
+        }
+    }
+
+    pub(crate) fn map_from_copy_on_write(
+        &self,
+        cow: CopyOnWriteValue,
+    ) -> ExecutionResult<EvaluationItem> {
+        match self {
+            RequestedValueOwnership::LateBound => {
+                Ok(EvaluationItem::LateBound(LateBoundValue::CopyOnWrite(cow)))
+            }
+            RequestedValueOwnership::Concrete(requested) => requested
+                .map_from_copy_on_write(cow)
+                .map(Self::item_from_resolved),
+        }
+    }
+
+    pub(crate) fn map_from_mutable(
+        &self,
+        mutable: MutableValue,
+    ) -> ExecutionResult<EvaluationItem> {
+        match self {
+            RequestedValueOwnership::LateBound => {
+                Ok(EvaluationItem::LateBound(LateBoundValue::Mutable(mutable)))
+            }
+            RequestedValueOwnership::Concrete(requested) => requested
+                .map_from_mutable(mutable)
+                .map(Self::item_from_resolved),
+        }
+    }
+
+    pub(crate) fn map_from_shared(&self, shared: SharedValue) -> ExecutionResult<EvaluationItem> {
+        match self {
+            RequestedValueOwnership::LateBound => {
+                panic!("Returning a shared reference when late-bound was requested")
+            }
+            RequestedValueOwnership::Concrete(requested) => requested
+                .map_from_shared(shared)
+                .map(Self::item_from_resolved),
+        }
+    }
+
+    fn item_from_resolved(value: ResolvedValue) -> EvaluationItem {
+        match value {
+            ResolvedValue::Owned(owned) => EvaluationItem::Owned(owned),
+            ResolvedValue::Mutable(mutable) => EvaluationItem::Mutable(mutable),
+            ResolvedValue::Shared(shared) => EvaluationItem::Shared(shared),
+            ResolvedValue::CopyOnWrite(copy_on_write) => EvaluationItem::CopyOnWrite(copy_on_write),
         }
     }
 }
@@ -121,11 +235,30 @@ pub(crate) enum ResolvedValueOwnership {
     Owned,
     Shared,
     Mutable,
+    /// Approximately equivalent to Mutable, but explicitly for use as an assignee.
+    /// (e.g. `x[0] = 1` or `obj.field = 2` or `x.swap(y)`)
+    /// In rust, an assignee is a special type of place, and if you want to assign
+    /// to a mutable reference, you have to explicitly dereference it with *.
+    /// (Under Niko's Overwrite proposal, this would require that the value is also
+    /// Overwrite).
+    ///
+    /// The distinction from mutable allows for different handling in ownership conversion.
+    /// For example, whilst an owned value can be freely converted to a mutable reference
+    /// for use in a method, it cannot be freely converted to an assignee.
+    /// This prevents (1 = 2) = 3 style issues, where it would be insane to allow assignment
+    /// to a floating owned value.
+    Assignee,
     /// Approximately equivalent to Owned, but more flexible to avoid cloning large values unnecessarily
     /// e.g. array indexing operations should take CopyOnWrite instead of Owned
     /// If a method needs to create an owned value, that method can transparently or infallibly copy it,
     /// as per the method's own requirements/expectations.
     CopyOnWrite,
+    /// A niche resolved value which passes through the value uncoerced, for
+    /// handling in the method itself - notably this is used in the `.as_mut()` method.
+    ///
+    /// Currently this is handled as a ResolvedValue, but it might be better to handle
+    /// it as LateBound (so that we don't drop the shared-conversion error reason).
+    AsIs,
 }
 
 impl ResolvedValueOwnership {
@@ -159,12 +292,23 @@ impl ResolvedValueOwnership {
             }
             ResolvedValueOwnership::Mutable => {
                 if copy_on_write.acts_as_shared_reference() {
-                    copy_on_write.execution_err("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone().as_mut()` to get a mutable reference.")
+                    copy_on_write.execution_err("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone()` to get a mutable reference to a cloned value.")
                 } else {
-                    copy_on_write.execution_err("A mutable reference is required, but an owned value was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.as_mut()` to get a mutable reference.")
+                    Ok(ResolvedValue::Mutable(Mutable::new_from_owned(
+                        copy_on_write.into_owned_transparently()?,
+                    )))
                 }
             }
-            ResolvedValueOwnership::CopyOnWrite => Ok(ResolvedValue::CopyOnWrite(copy_on_write)),
+            ResolvedValueOwnership::Assignee => {
+                if copy_on_write.acts_as_shared_reference() {
+                    copy_on_write.execution_err("A shared reference cannot be assigned to.")
+                } else {
+                    copy_on_write.execution_err("An owned value cannot be assigned to.")
+                }
+            }
+            ResolvedValueOwnership::CopyOnWrite | ResolvedValueOwnership::AsIs => {
+                Ok(ResolvedValue::CopyOnWrite(copy_on_write))
+            }
         }
     }
 
@@ -185,8 +329,11 @@ impl ResolvedValueOwnership {
             ResolvedValueOwnership::CopyOnWrite => Ok(ResolvedValue::CopyOnWrite(
                 CopyOnWrite::shared_in_place_of_shared(shared),
             )),
+            ResolvedValueOwnership::Assignee => Err(mutable_error(shared)),
             ResolvedValueOwnership::Mutable => Err(mutable_error(shared)),
-            ResolvedValueOwnership::Shared => Ok(ResolvedValue::Shared(shared)),
+            ResolvedValueOwnership::Shared | ResolvedValueOwnership::AsIs => {
+                Ok(ResolvedValue::Shared(shared))
+            }
         }
     }
 
@@ -204,23 +351,37 @@ impl ResolvedValueOwnership {
                 if is_late_bound {
                     Ok(ResolvedValue::Owned(mutable.transparent_clone()?))
                 } else {
-                    mutable.execution_err("An owned value is required, but a mutable reference was received. This indicates a possible bug. If this was intended, use `.take()` or `.clone()` to get an owned value.")
+                    mutable.execution_err("An owned value is required, but a mutable reference was received. This indicates a possible bug. If this was intended, use `.clone()` to get an owned value.")
                 }
             }
             ResolvedValueOwnership::CopyOnWrite => Ok(ResolvedValue::CopyOnWrite(
                 CopyOnWrite::shared_in_place_of_shared(mutable.into_shared()),
             )),
-            ResolvedValueOwnership::Mutable => Ok(ResolvedValue::Mutable(mutable)),
+            ResolvedValueOwnership::Mutable | ResolvedValueOwnership::AsIs => {
+                Ok(ResolvedValue::Mutable(mutable))
+            }
+            ResolvedValueOwnership::Assignee => Ok(ResolvedValue::Mutable(mutable)),
             ResolvedValueOwnership::Shared => Ok(ResolvedValue::Shared(mutable.into_shared())),
         }
     }
 
     pub(crate) fn map_from_owned(&self, owned: OwnedValue) -> ExecutionResult<ResolvedValue> {
         match self {
-            ResolvedValueOwnership::Owned => Ok(ResolvedValue::Owned(owned)),
-            ResolvedValueOwnership::CopyOnWrite => Ok(ResolvedValue::CopyOnWrite(CopyOnWrite::owned(owned))),
-            ResolvedValueOwnership::Mutable => owned.execution_err("A mutable reference is required, but an owned value was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.as_mut()` to get a mutable reference."),
-            ResolvedValueOwnership::Shared => Ok(ResolvedValue::Shared(Shared::new_from_owned(owned))),
+            ResolvedValueOwnership::Owned | ResolvedValueOwnership::AsIs => {
+                Ok(ResolvedValue::Owned(owned))
+            }
+            ResolvedValueOwnership::CopyOnWrite => {
+                Ok(ResolvedValue::CopyOnWrite(CopyOnWrite::owned(owned)))
+            }
+            ResolvedValueOwnership::Mutable => {
+                Ok(ResolvedValue::Mutable(Mutable::new_from_owned(owned)))
+            }
+            ResolvedValueOwnership::Assignee => {
+                owned.execution_err("An owned value cannot be assigned to.")
+            }
+            ResolvedValueOwnership::Shared => {
+                Ok(ResolvedValue::Shared(Shared::new_from_owned(owned)))
+            }
         }
     }
 }
@@ -918,10 +1079,10 @@ impl EvaluationFrame for CompoundAssignmentBuilder {
                 let value = item.expect_owned();
                 self.state = CompoundAssignmentPath::OnTargetBranch { value };
                 // TODO[compound-assignment-refactor]: Resolve as LateBound, and then convert to what is needed based on the operation
-                context.handle_node_as_mutable(self, target)
+                context.handle_node_as_assignee_value(self, target)
             }
             CompoundAssignmentPath::OnTargetBranch { value } => {
-                let mut mutable = item.expect_mutable();
+                let mut mutable = item.expect_assignee_value();
                 let span_range = SpanRange::new_between(mutable.span_range(), value.span_range());
                 SpannedAnyRefMut::from(mutable)
                     .handle_compound_assignment(&self.operation, value)?;
@@ -1029,7 +1190,9 @@ impl EvaluationFrame for MethodCallBuilder {
                 let caller = argument_ownerships[0].map_from_late_bound(caller)?;
 
                 // We skip 1 to ignore the caller
-                let non_self_argument_ownerships = argument_ownerships.iter().skip(1);
+                let non_self_argument_ownerships: iter::Skip<
+                    std::slice::Iter<'_, ResolvedValueOwnership>,
+                > = argument_ownerships.iter().skip(1);
                 for ((_, requested_ownership), ownership) in self
                     .unevaluated_parameters_stack
                     .iter_mut()

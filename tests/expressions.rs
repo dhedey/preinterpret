@@ -44,7 +44,7 @@ fn test_basic_evaluate_works() {
     preinterpret_assert_eq!(#(let six_as_sum = 3 + 3; six_as_sum * six_as_sum), 36);
     preinterpret_assert_eq!(#(
         let partial_sum = %[+ 2];
-        %[#(%[5] + partial_sum) %[=] %raw[#](5 #partial_sum)].reinterpret_as_stream().to_debug_string()
+        %[#(%[5] + partial_sum.clone()) %[=] %raw[#](5 #partial_sum)].reinterpret_as_stream().to_debug_string()
     ), "%[5 + 2 = 7]");
     preinterpret_assert_eq!(#(1 + (1..2) as int), 2);
     preinterpret_assert_eq!(#("hello" == "world"), false);
@@ -115,16 +115,20 @@ fn test_reinterpret() {
     );
     assert_eq!(
         run!(
-            let my_variable = "the answer";
-            %[%raw[#]my_variable].reinterpret_as_stream()
+            %[
+                %raw[#]{ let my_variable = "the answer"; }
+                %raw[#]my_variable
+            ].reinterpret_as_stream()
         ),
         "the answer"
     );
     // Transparent groups are transparently ignored when detecting preinterpret grammar
     assert_eq!(
         run!(
-            let my_variable = "the answer";
-            %[%group[#]my_variable].reinterpret_as_stream()
+            %[
+                %raw[#]{ let my_variable = "the answer"; }
+                %group[#]my_variable
+            ].reinterpret_as_stream()
         ),
         "the answer"
     );
@@ -133,27 +137,22 @@ fn test_reinterpret() {
         run!(
             // * If the %group is preserved, then content has a stream length of 1 (the group)
             // * If the %group is removed, then content has a stream length of 2 ("Hello" and "World")
-            let content = %[%group["Hello" "World"]];
-            %[%raw[%][#content].len()].reinterpret_as_run()
+            let content = %group["Hello" "World"];
+            %[{
+                %raw[%][#content].len()
+            }].reinterpret_as_run()
         ),
         1
     );
-    // Expect reinterpret to run in its own scope, inside the parent scope.
-    // So it can't create variables in the parent scope, but it can change them
+    // Reinterpreted code doesn't see parent scope variables
     assert_eq!(
         run!(
             let my_variable = "before";
-            %[my_variable = "updated";].reinterpret_as_run();
+            %[let my_variable = "replaced";].reinterpret_as_run();
             my_variable
         ),
-        "updated"
+        "before"
     );
-    // TODO[scopes]: Uncomment when scopes are implemented
-    // assert_eq!(run!(
-    //     let my_variable = "before";
-    //     %[let my_variable = "replaced";].reinterpret_as_run();
-    //     my_variable
-    // ), "before");
 }
 
 #[test]
@@ -287,6 +286,9 @@ fn test_range() {
         },
         5
     );
+    run! {
+        %[_].assert_eq('A'.. .into_iter().take(5).to_string(), "ABCDE");
+    }
 }
 
 #[test]
@@ -311,42 +313,42 @@ fn test_array_indexing() {
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3, 4, 5];
-            x.take_owned()[..].to_debug_string()
+            x[..].to_debug_string()
         ),
         "[1, 2, 3, 4, 5]"
     );
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3, 4, 5];
-            x.take_owned()[0..0].to_debug_string()
+            x[0..0].to_debug_string()
         ),
         "[]"
     );
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3, 4, 5];
-            x.take_owned()[2..=2].to_debug_string()
+            x[2..=2].to_debug_string()
         ),
         "[3]"
     );
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3, 4, 5];
-            x.take_owned()[..=2].to_debug_string()
+            x[..=2].to_debug_string()
         ),
         "[1, 2, 3]"
     );
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3, 4, 5];
-            x.take_owned()[..4].to_debug_string()
+            x[..4].to_debug_string()
         ),
         "[1, 2, 3, 4]"
     );
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3, 4, 5];
-            x.take_owned()[2..].to_debug_string()
+            x[2..].to_debug_string()
         ),
         "[3, 4, 5]"
     );
@@ -359,7 +361,7 @@ fn test_array_place_destructurings() {
         #(
             let a = 0; let b = 0; let c = 0;
             let x = [1, 2, 3, 4, 5];
-            [a, b, _, _, c] = x.take_owned();
+            [a, b, _, _, c] = x;
             [a, b, c].to_debug_string()
         ),
         "[1, 2, 5]"
@@ -368,7 +370,7 @@ fn test_array_place_destructurings() {
         #(
             let a = 0; let b = 0; let c = 0;
             let x = [1, 2, 3, 4, 5];
-            [a, b, c, ..] = x.take_owned();
+            [a, b, c, ..] = x;
             [a, b, c].to_debug_string()
         ),
         "[1, 2, 3]"
@@ -377,7 +379,7 @@ fn test_array_place_destructurings() {
         #(
             let a = 0; let b = 0; let c = 0;
             let x = [1, 2, 3, 4, 5];
-            [.., a, b] = x.take_owned();
+            [.., a, b] = x;
             [a, b, c].to_debug_string()
         ),
         "[4, 5, 0]"
@@ -386,7 +388,7 @@ fn test_array_place_destructurings() {
         #(
             let a = 0; let b = 0; let c = 0;
             let x = [1, 2, 3, 4, 5];
-            [a, .., b, c] = x.take_owned();
+            [a, .., b, c] = x;
             [a, b, c].to_debug_string()
         ),
         "[1, 4, 5]"
@@ -411,7 +413,7 @@ fn test_array_place_destructurings() {
             let _ = c = [a[2], _] = [4, 5];
             let _ = a[1] += 2;
             let _ = b = 2;
-            [a.take_owned(), b, c].to_debug_string()
+            [a, b, c].to_debug_string()
         ),
         "[[0, 2, 4, 0, 0], 2, None]"
     );
@@ -434,7 +436,7 @@ fn test_array_place_destructurings() {
             let arr2 = [0, 0];
             // The first assignment arr[0] = 1 occurs before being overwritten
             // by the arr[0] = 5 in the second index.
-            [arr[0], arr2[{ arr[0] = 5; 1 }]] = [1, 1];
+            [arr[0], arr2.as_mut()[{ arr[0] = 5; 1 }]] = [1, 1];
             arr[0]
         ),
         5
@@ -475,7 +477,7 @@ fn test_array_pattern_destructurings() {
     preinterpret_assert_eq!(
         #(
             let [a, .., b, c] = [[1, "a"], 2, 3, 4, 5];
-            [a.take_owned(), b, c].to_debug_string()
+            [a, b, c].to_debug_string()
         ),
         r#"[[1, "a"], 4, 5]"#
     );
@@ -526,7 +528,7 @@ fn test_objects() {
     preinterpret_assert_eq!(
         #(
             let %{ a, y: [_, b], ["c"]: c, [r#"two "words"#]: x, z } = %{ a: 1, y: [5, 7], ["two \"words"]: %{}, };
-            %{ a, b, c, x: x.take_owned(), z }.to_debug_string()
+            %{ a, b, c, x: x, z }.to_debug_string()
         ),
         r#"%{ a: 1, b: 7, c: None, x: %{}, z: None }"#
     );
@@ -563,20 +565,32 @@ fn test_method_calls() {
     preinterpret_assert_eq!(
         #(
             let x = [1, 2, 3];
-            let y = x.take_owned();
-            // x is now None
+            let y = x.clone();
             x.to_debug_string() + " - " + y.to_debug_string()
         ),
-        "None - [1, 2, 3]"
+        "[1, 2, 3] - [1, 2, 3]"
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let a = "a";
             let b = "b";
             a.swap(b);
             %[#a " - " #b].to_string()
         ),
         "b - a"
+    );
+    run!(
+        let a = "a";
+        let b = ["b"];
+        let out = a.replace(b);
+        %[_].assert_eq(a, ["b"]);
+        %[_].assert_eq(out, "a");
+    );
+    run!(
+        let a = "a";
+        let out = a.replace({ None });
+        %[_].assert_eq(a, None);
+        %[_].assert_eq(out, "a");
     );
 }
 
@@ -607,5 +621,19 @@ fn stream_append_can_use_self_in_appender() {
             variable.to_debug_string()
         },
         "%[Hello2 World]"
+    );
+}
+
+#[test]
+fn can_assign_to_mutable_references() {
+    run!(
+        let x = 5;
+        x.as_mut() += 2;
+        %[_].assert_eq(x, 7);
+    );
+    run!(
+        let y = 3;
+        y.as_mut() = 1;
+        %[_].assert_eq(y, 1);
     );
 }

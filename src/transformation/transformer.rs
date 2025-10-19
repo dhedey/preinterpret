@@ -1,6 +1,6 @@
 use crate::internal_prelude::*;
 
-pub(crate) trait TransformerDefinition: Clone {
+pub(crate) trait TransformerDefinition: Sized {
     const TRANSFORMER_NAME: &'static str;
 
     fn parse(arguments: TransformerArguments) -> ParseResult<Self>;
@@ -11,11 +11,13 @@ pub(crate) trait TransformerDefinition: Clone {
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()>;
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()>;
 }
 
 #[derive(Clone)]
 pub(crate) struct TransformerArguments<'a> {
-    parse_stream: ParseStream<'a, Source>,
+    parse_stream: SourceParser<'a>,
     transformer_name: Ident,
     full_span: Span,
 }
@@ -23,7 +25,7 @@ pub(crate) struct TransformerArguments<'a> {
 #[allow(unused)]
 impl<'a> TransformerArguments<'a> {
     pub(crate) fn new(
-        parse_stream: ParseStream<'a, Source>,
+        parse_stream: SourceParser<'a>,
         transformer_name: Ident,
         full_span: Span,
     ) -> Self {
@@ -47,7 +49,7 @@ impl<'a> TransformerArguments<'a> {
         }
     }
 
-    pub(crate) fn fully_parse_no_error_override<T: Parse<Source>>(&self) -> ParseResult<T> {
+    pub(crate) fn fully_parse_no_error_override<T: ParseSource>(&self) -> ParseResult<T> {
         self.parse_stream.parse()
     }
 
@@ -57,7 +59,7 @@ impl<'a> TransformerArguments<'a> {
 
     pub(crate) fn fully_parse_or_error<T>(
         &self,
-        parse_function: impl FnOnce(ParseStream<Source>) -> ParseResult<T>,
+        parse_function: impl FnOnce(SourceParser) -> ParseResult<T>,
         error_message: impl std::fmt::Display,
     ) -> ParseResult<T> {
         // In future, when the diagnostic API is stable,
@@ -81,7 +83,6 @@ impl<'a> TransformerArguments<'a> {
     }
 }
 
-#[derive(Clone)]
 pub(crate) struct Transformer {
     #[allow(unused)]
     transformer_token: Token![@],
@@ -90,8 +91,8 @@ pub(crate) struct Transformer {
     source_brackets: Option<Brackets>,
 }
 
-impl Parse<Source> for Transformer {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for Transformer {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let transformer_token = input.parse()?;
 
         let (name, arguments) = if input.cursor().ident().is_some() {
@@ -127,8 +128,8 @@ impl Parse<Source> for Transformer {
             }
             None => {
                 let span = name.span();
-                let instance = TokenStream::new()
-                    .source_parse_with(|parse_stream| {
+                let instance = input
+                    .parse_virtual_empty_stream(|parse_stream| {
                         let arguments = TransformerArguments::new(parse_stream, name.clone(), span);
                         transformer_kind.parse_instance(arguments)
                     })
@@ -149,6 +150,10 @@ impl Parse<Source> for Transformer {
                 })
             }
         }
+    }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        self.instance.control_flow_pass(context)
     }
 }
 
@@ -205,7 +210,6 @@ macro_rules! define_transformers {
             }
         }
 
-        #[derive(Clone)]
         #[allow(clippy::enum_variant_names)]
         pub(crate) enum NamedTransformer {
             $(
@@ -218,6 +222,14 @@ macro_rules! define_transformers {
                 match self {
                     $(
                         Self::$transformer(transformer) => transformer.handle_transform(input, interpreter, output),
+                    )*
+                }
+            }
+
+            fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+                match self {
+                    $(
+                        Self::$transformer(transformer) => transformer.control_flow_pass(context),
                     )*
                 }
             }

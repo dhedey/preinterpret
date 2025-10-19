@@ -22,13 +22,13 @@ use super::*;
 ///
 /// See the rust doc on the [`ExpressionStackFrame`] for further details.
 pub(super) struct ExpressionParser<'a> {
-    streams: ParseStreamStack<'a, Source>,
+    streams: ParseStreamStack<'a>,
     nodes: ExpressionNodes,
     expression_stack: Vec<ExpressionStackFrame>,
 }
 
 impl<'a> ExpressionParser<'a> {
-    pub(super) fn parse(input: ParseStream<'a, Source>) -> ParseResult<Expression> {
+    pub(super) fn parse(input: SourceParser<'a>) -> ParseResult<Expression> {
         Self {
             streams: ParseStreamStack::new(input),
             nodes: ExpressionNodes::new(),
@@ -65,10 +65,10 @@ impl<'a> ExpressionParser<'a> {
         }
     }
 
-    fn parse_unary_atom(input: &mut ParseStreamStack<Source>) -> ParseResult<UnaryAtom> {
+    fn parse_unary_atom(input: &mut ParseStreamStack) -> ParseResult<UnaryAtom> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::Command(_) => UnaryAtom::Leaf(Leaf::Command(input.parse()?)),
-            SourcePeekMatch::EmbeddedVariable | SourcePeekMatch::EmbeddedExpression => {
+            SourcePeekMatch::EmbeddedVariable | SourcePeekMatch::EmbeddedExpression | SourcePeekMatch::EmbeddedStatements => {
                 return input.parse_err(
                     "In an expression, the # variable prefix is not allowed. The # prefix should only be used when embedding a variable into an output stream, e.g. %[#var + #(..expressions..)]",
                 )
@@ -82,6 +82,9 @@ impl<'a> ExpressionParser<'a> {
             }
             SourcePeekMatch::Group(Delimiter::Brace) => {
                 let (inner, _, delim_span, _) = input.cursor().any_group().unwrap();
+                if inner.eof() {
+                    return delim_span.open().parse_err("An empty object literal is written `%{}` with a `%` prefix. If you intend to use an empty block here, instead use `{ None }`.");
+                }
                 if let Some((_, next)) = inner.ident() {
                     if next.punct_matching(':').is_some() || next.punct_matching(',').is_some() {
                         return delim_span.open().parse_err("An object literal must be prefixed with %, e.g. `%{ field: 1 }`. Without such a prefix, { .. } defines a block.");
@@ -116,6 +119,9 @@ impl<'a> ExpressionParser<'a> {
                     "loop" => UnaryAtom::Leaf(Leaf::LoopExpression(input.parse()?)),
                     "while" => UnaryAtom::Leaf(Leaf::WhileExpression(input.parse()?)),
                     "for" => UnaryAtom::Leaf(Leaf::ForExpression(input.parse()?)),
+                    "None" => UnaryAtom::Leaf(Leaf::Value(SharedValue::new_from_owned(
+                        ExpressionValue::None.into_owned(input.parse_any_ident()?.span_range()),
+                    ))),
                     _ => UnaryAtom::Leaf(Leaf::Variable(input.parse()?))
                 }
             },
@@ -136,7 +142,7 @@ impl<'a> ExpressionParser<'a> {
     }
 
     fn parse_extension(
-        input: &mut ParseStreamStack<Source>,
+        input: &mut ParseStreamStack,
         parent_stack_frame: &ExpressionStackFrame,
     ) -> ParseResult<NodeExtension> {
         // We fall through if we have no match
@@ -518,7 +524,7 @@ impl<'a> ExpressionParser<'a> {
                 }
                 ExpressionStackFrame::IncompleteCompoundAssignment { place, operation } => {
                     let node = self.nodes.add_node(ExpressionNode::CompoundAssignment {
-                        place,
+                        assignee: place,
                         operation,
                         value: node,
                     });
@@ -550,14 +556,14 @@ impl<'a> ExpressionParser<'a> {
         // Otherwise, we have a half-open range, and need to work out whether
         // we can parse a UnaryAtom to be the right side of the range or whether
         // it will have no right side.
-        // Some examples of such ranges include: `[3.., 4]`, `[3..]`, `let x = 3..;`,
-        // `(3..).first()` or even `3...first()`
-        let can_parse_unary_atom = {
-            let forked = self.streams.fork_current();
-            let mut forked_stack = ParseStreamStack::new(&forked);
-            Self::parse_unary_atom(&mut forked_stack).is_ok()
+        // * Has right side: 1..2 or x..y or '1'..'3'
+        // * Has no rhs: `[3.., 4]`, `[3..]`, `let x = 3..;`, `3...take(10)`
+        let should_parse_range_lhs = match self.streams.peek_grammar() {
+            SourcePeekMatch::Punct(punct) => !matches!(punct.as_char(), ',' | ';' | '.'),
+            SourcePeekMatch::End => false,
+            _ => true, // Literals, Idents(variables/methods), Commands/expressions
         };
-        if can_parse_unary_atom {
+        if should_parse_range_lhs {
             // A unary atom can be parsed so let's attempt to complete the range with it
             Ok(self.push_stack_frame(ExpressionStackFrame::IncompleteRange { lhs, range_limits }))
         } else {
@@ -577,44 +583,48 @@ impl<'a> ExpressionParser<'a> {
         mut complete_entries: Vec<(ObjectKey, ExpressionNodeId)>,
     ) -> ParseResult<WorkItem> {
         const ERROR_MESSAGE: &str = r##"Expected an object entry (`field,` `field: ..,` or `["field"]: ..,`). If you meant to start a new block, use #{ ... } instead."##;
-        let state =
-            loop {
+        let state = loop {
+            if self.streams.is_current_empty() {
+                self.streams.exit_group();
+                let node = self.nodes.add_node(ExpressionNode::Object {
+                    braces,
+                    entries: complete_entries,
+                });
+                return Ok(WorkItem::TryParseAndApplyExtension { node });
+            } else if self.streams.peek(syn::Ident) {
+                let key: Ident = self.streams.parse()?;
+
                 if self.streams.is_current_empty() {
-                    self.streams.exit_group();
-                    let node = self.nodes.add_node(ExpressionNode::Object {
-                        braces,
-                        entries: complete_entries,
-                    });
-                    return Ok(WorkItem::TryParseAndApplyExtension { node });
-                } else if self.streams.peek(syn::Ident) {
-                    let key: Ident = self.streams.parse()?;
-
-                    if self.streams.is_current_empty() {
-                        // Fall through
-                    } else if self.streams.peek(token::Comma) {
-                        self.streams.parse::<Token![,]>()?;
-                        // Fall through
-                    } else if self.streams.peek(token::Colon) {
-                        let colon = self.streams.parse()?;
-                        break ObjectStackFrameState::EntryValue(ObjectKey::Identifier(key), colon);
-                    } else {
-                        return self.streams.parse_err(ERROR_MESSAGE);
-                    }
-
-                    let node = self.nodes.add_node(ExpressionNode::Leaf(Leaf::Variable(
-                        VariableIdentifier { ident: key.clone() },
-                    )));
-                    complete_entries.push((ObjectKey::Identifier(key), node));
-                    continue;
-                } else if self.streams.peek(token::Bracket) {
-                    let (_, delim_span) = self.streams.parse_and_enter_group()?;
-                    break ObjectStackFrameState::EntryIndex(IndexAccess {
-                        brackets: Brackets { delim_span },
-                    });
+                    // Fall through
+                } else if self.streams.peek(token::Comma) {
+                    self.streams.parse::<Token![,]>()?;
+                    // Fall through
+                } else if self.streams.peek(token::Colon) {
+                    let colon = self.streams.parse()?;
+                    break ObjectStackFrameState::EntryValue(ObjectKey::Identifier(key), colon);
                 } else {
                     return self.streams.parse_err(ERROR_MESSAGE);
                 }
-            };
+
+                let node =
+                    self.nodes
+                        .add_node(ExpressionNode::Leaf(Leaf::Variable(VariableReference {
+                            ident: key.clone(),
+                            id: VariableReferenceId::new_placeholder(),
+                            #[cfg(feature = "debug")]
+                            assertion: FinalUseAssertion::None,
+                        })));
+                complete_entries.push((ObjectKey::Identifier(key), node));
+                continue;
+            } else if self.streams.peek(token::Bracket) {
+                let (_, delim_span) = self.streams.parse_and_enter_group()?;
+                break ObjectStackFrameState::EntryIndex(IndexAccess {
+                    brackets: Brackets { delim_span },
+                });
+            } else {
+                return self.streams.parse_err(ERROR_MESSAGE);
+            }
+        };
         Ok(self.push_stack_frame(ExpressionStackFrame::NonEmptyObject {
             braces,
             complete_entries,
@@ -648,19 +658,21 @@ impl<'a> ExpressionParser<'a> {
     }
 }
 
+new_key!(pub(crate) ExpressionNodeId);
+
 pub(super) struct ExpressionNodes {
-    nodes: Vec<ExpressionNode>,
+    nodes: Arena<ExpressionNodeId, ExpressionNode>,
 }
 
 impl ExpressionNodes {
     pub(super) fn new() -> Self {
-        Self { nodes: Vec::new() }
+        Self {
+            nodes: Arena::new(),
+        }
     }
 
     pub(super) fn add_node(&mut self, node: ExpressionNode) -> ExpressionNodeId {
-        let node_id = ExpressionNodeId(self.nodes.len());
-        self.nodes.push(node);
-        node_id
+        self.nodes.add(node)
     }
 
     pub(super) fn complete(self, root: ExpressionNodeId) -> Expression {

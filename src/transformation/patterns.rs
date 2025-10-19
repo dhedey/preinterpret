@@ -8,7 +8,6 @@ pub(crate) trait HandleDestructure {
     ) -> ExecutionResult<()>;
 }
 
-#[derive(Clone)]
 pub(crate) enum Pattern {
     Variable(VariablePattern),
     Array(ArrayPattern),
@@ -18,8 +17,8 @@ pub(crate) enum Pattern {
     Discarded(Token![_]),
 }
 
-impl Parse<Source> for Pattern {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for Pattern {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let lookahead = input.lookahead1();
         if lookahead.peek(syn::Ident) {
             Ok(Pattern::Variable(input.parse()?))
@@ -51,6 +50,16 @@ impl Parse<Source> for Pattern {
             Err(lookahead.error().into())
         }
     }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        match self {
+            Pattern::Variable(variable) => variable.control_flow_pass(context),
+            Pattern::Array(array) => array.control_flow_pass(context),
+            Pattern::Object(object) => object.control_flow_pass(context),
+            Pattern::Stream(stream) => stream.control_flow_pass(context),
+            Pattern::Discarded(discarded) => discarded.control_flow_pass(context),
+        }
+    }
 }
 
 impl HandleDestructure for Pattern {
@@ -69,20 +78,26 @@ impl HandleDestructure for Pattern {
     }
 }
 
-#[derive(Clone)]
 pub struct ArrayPattern {
     #[allow(unused)]
     brackets: Brackets,
     items: Punctuated<PatternOrDotDot, Token![,]>,
 }
 
-impl Parse<Source> for ArrayPattern {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for ArrayPattern {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let (brackets, inner) = input.parse_brackets()?;
         Ok(Self {
             brackets,
             items: inner.parse_terminated()?,
         })
+    }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        for item in self.items.iter_mut() {
+            item.control_flow_pass(context)?;
+        }
+        Ok(())
     }
 }
 
@@ -155,23 +170,28 @@ impl HandleDestructure for ArrayPattern {
     }
 }
 
-#[derive(Clone)]
 enum PatternOrDotDot {
     Pattern(Pattern),
     DotDot(Token![..]),
 }
 
-impl Parse<Source> for PatternOrDotDot {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for PatternOrDotDot {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         if input.peek(Token![..]) {
             Ok(PatternOrDotDot::DotDot(input.parse()?))
         } else {
             Ok(PatternOrDotDot::Pattern(input.parse()?))
         }
     }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        match self {
+            PatternOrDotDot::Pattern(pattern) => pattern.control_flow_pass(context),
+            PatternOrDotDot::DotDot(_) => Ok(()),
+        }
+    }
 }
 
-#[derive(Clone)]
 pub struct ObjectPattern {
     #[allow(unused)]
     prefix: Token![%],
@@ -180,8 +200,8 @@ pub struct ObjectPattern {
     entries: Punctuated<ObjectEntry, Token![,]>,
 }
 
-impl Parse<Source> for ObjectPattern {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for ObjectPattern {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let prefix = input.parse()?;
         let (braces, inner) = input.parse_braces()?;
         Ok(Self {
@@ -189,6 +209,13 @@ impl Parse<Source> for ObjectPattern {
             braces,
             entries: inner.parse_terminated()?,
         })
+    }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        for entry in self.entries.iter_mut() {
+            entry.control_flow_pass(context)?;
+        }
+        Ok(())
     }
 }
 
@@ -233,7 +260,6 @@ impl HandleDestructure for ObjectPattern {
     }
 }
 
-#[derive(Clone)]
 enum ObjectEntry {
     KeyOnly {
         field: Ident,
@@ -252,8 +278,8 @@ enum ObjectEntry {
     },
 }
 
-impl Parse<Source> for ObjectEntry {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for ObjectEntry {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         if input.peek(syn::Ident) {
             let field = input.parse()?;
             if input.peek(Token![:]) {
@@ -264,7 +290,10 @@ impl Parse<Source> for ObjectEntry {
                 })
             } else if input.peek(Token![,]) || input.is_empty() {
                 let pattern = Pattern::Variable(VariablePattern {
-                    name: field.clone(),
+                    definition: VariableDefinition {
+                        ident: field.clone(),
+                        id: VariableDefinitionId::new_placeholder(),
+                    },
                 });
                 Ok(ObjectEntry::KeyOnly { field, pattern })
             } else {
@@ -285,9 +314,16 @@ impl Parse<Source> for ObjectEntry {
             input.parse_err("Expected `property: <pattern>` or `[\"property\"]: <pattern>`")
         }
     }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        match self {
+            ObjectEntry::KeyOnly { pattern, .. } => pattern.control_flow_pass(context),
+            ObjectEntry::KeyValue { pattern, .. } => pattern.control_flow_pass(context),
+            ObjectEntry::IndexValue { pattern, .. } => pattern.control_flow_pass(context),
+        }
+    }
 }
 
-#[derive(Clone)]
 pub struct StreamPattern {
     #[allow(unused)]
     prefix: Token![%],
@@ -296,8 +332,8 @@ pub struct StreamPattern {
     content: TransformStream,
 }
 
-impl Parse<Source> for StreamPattern {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for StreamPattern {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let prefix = input.parse()?;
         let (brackets, inner) = input.parse_brackets()?;
         Ok(Self {
@@ -305,6 +341,10 @@ impl Parse<Source> for StreamPattern {
             brackets,
             content: inner.parse()?,
         })
+    }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        self.content.control_flow_pass(context)
     }
 }
 

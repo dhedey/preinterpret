@@ -1,14 +1,13 @@
 use super::*;
 
-#[derive(Clone)]
 pub(crate) struct EmbeddedExpression {
     marker: Token![#],
     parentheses: Parentheses,
     content: Expression,
 }
 
-impl Parse<Source> for EmbeddedExpression {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for EmbeddedExpression {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let marker = input.parse()?;
         let (parentheses, inner) = input.parse_parentheses()?;
         let content = inner.parse()?;
@@ -18,17 +17,15 @@ impl Parse<Source> for EmbeddedExpression {
             content,
         })
     }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        self.content.control_flow_pass(context)
+    }
 }
 
 impl HasSpanRange for EmbeddedExpression {
     fn span_range(&self) -> SpanRange {
         SpanRange::new_between(self.marker.span, self.parentheses.close())
-    }
-}
-
-impl EmbeddedExpression {
-    pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
-        self.content.evaluate(interpreter)
     }
 }
 
@@ -38,25 +35,86 @@ impl Interpret for EmbeddedExpression {
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        self.evaluate(interpreter)?.output_to(
+        self.content.evaluate_shared(interpreter)?.output_to(
             Grouping::Flattened,
             &mut ToStreamContext::new(output, self.span_range()),
-        )?;
+        )
+    }
+}
+
+pub(crate) struct EmbeddedStatements {
+    marker: Token![#],
+    braces: Braces,
+    content: ExpressionBlockContent,
+}
+
+impl ParseSource for EmbeddedStatements {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
+        let marker = input.parse()?;
+        let (braces, inner) = input.parse_braces()?;
+        let content = inner.parse()?;
+        Ok(Self {
+            marker,
+            braces,
+            content,
+        })
+    }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        self.content.control_flow_pass(context)
+    }
+}
+
+impl HasSpanRange for EmbeddedStatements {
+    fn span_range(&self) -> SpanRange {
+        SpanRange::new_between(self.marker.span, self.braces.close())
+    }
+}
+
+impl Interpret for EmbeddedStatements {
+    fn interpret_into(
+        &self,
+        interpreter: &mut Interpreter,
+        output: &mut OutputStream,
+    ) -> ExecutionResult<()> {
+        self.content
+            .evaluate(
+                interpreter,
+                self.span_range(),
+                RequestedValueOwnership::shared(),
+            )?
+            .expect_shared()
+            .output_to(
+                Grouping::Flattened,
+                &mut ToStreamContext::new(output, self.span_range()),
+            )?;
         Ok(())
     }
 }
 
-#[derive(Clone)]
 pub(crate) struct ExpressionBlock {
     pub(super) braces: Braces,
+    pub(super) scope: ScopeId,
     pub(super) content: ExpressionBlockContent,
 }
 
-impl Parse<Source> for ExpressionBlock {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for ExpressionBlock {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let (braces, inner) = input.parse_braces()?;
         let content = inner.parse()?;
-        Ok(Self { braces, content })
+        Ok(Self {
+            braces,
+            scope: ScopeId::new_placeholder(),
+            content,
+        })
+    }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        context.register_scope(&mut self.scope);
+        context.enter_scope(self.scope);
+        self.content.control_flow_pass(context)?;
+        context.exit_scope(self.scope);
+        Ok(())
     }
 }
 
@@ -67,18 +125,34 @@ impl HasSpan for ExpressionBlock {
 }
 
 impl ExpressionBlock {
-    pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
-        self.content.evaluate(interpreter, self.span().into())
+    pub(crate) fn evaluate(
+        &self,
+        interpreter: &mut Interpreter,
+        ownership: RequestedValueOwnership,
+    ) -> ExecutionResult<EvaluationItem> {
+        interpreter.enter_scope(self.scope);
+        let output = self
+            .content
+            .evaluate(interpreter, self.span().into(), ownership)?;
+        interpreter.exit_scope(self.scope);
+        Ok(output)
+    }
+
+    pub(crate) fn evaluate_owned(
+        &self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<OwnedValue> {
+        self.evaluate(interpreter, RequestedValueOwnership::owned())
+            .map(|x| x.expect_owned())
     }
 }
 
-#[derive(Clone)]
 pub(crate) struct ExpressionBlockContent {
     statements: Vec<(Statement, Option<Token![;]>)>,
 }
 
-impl Parse<Source> for ExpressionBlockContent {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for ExpressionBlockContent {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let mut statements = Vec::new();
         while !input.is_empty() {
             let statement: Statement = input.parse()?;
@@ -102,6 +176,13 @@ impl Parse<Source> for ExpressionBlockContent {
         }
         Ok(Self { statements })
     }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        for (statement, _semicolon) in self.statements.iter_mut() {
+            statement.control_flow_pass(context)?;
+        }
+        Ok(())
+    }
 }
 
 impl ExpressionBlockContent {
@@ -109,21 +190,21 @@ impl ExpressionBlockContent {
         &self,
         interpreter: &mut Interpreter,
         output_span_range: SpanRange,
-    ) -> ExecutionResult<OwnedValue> {
+        ownership: RequestedValueOwnership,
+    ) -> ExecutionResult<EvaluationItem> {
         for (i, (statement, semicolon)) in self.statements.iter().enumerate() {
             let is_last = i == self.statements.len() - 1;
             if is_last && semicolon.is_none() {
-                let owned_value = statement.evaluate_as_returning_expression(interpreter)?;
-                return Ok(owned_value.with_span_range(output_span_range));
+                let value = statement.evaluate_as_returning_expression(interpreter, ownership)?;
+                return Ok(value.with_span_range(output_span_range));
             } else {
                 statement.evaluate_as_statement(interpreter)?;
             }
         }
-        Ok(ExpressionValue::None.into_owned(output_span_range))
+        ownership.map_from_owned(ExpressionValue::None.into_owned(output_span_range))
     }
 }
 
-#[derive(Clone)]
 pub(crate) enum Statement {
     LetStatement(LetStatement),
     BreakStatement(BreakStatement),
@@ -144,8 +225,8 @@ impl Statement {
     }
 }
 
-impl Parse<Source> for Statement {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for Statement {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         Ok(if let Some((ident, _)) = input.cursor().ident() {
             match ident.to_string().as_str() {
                 "let" => Statement::LetStatement(input.parse()?),
@@ -156,6 +237,15 @@ impl Parse<Source> for Statement {
         } else {
             Statement::Expression(input.parse()?)
         })
+    }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        match self {
+            Statement::LetStatement(statement) => statement.control_flow_pass(context),
+            Statement::Expression(expression) => expression.control_flow_pass(context),
+            Statement::BreakStatement(statement) => statement.control_flow_pass(context),
+            Statement::ContinueStatement(statement) => statement.control_flow_pass(context),
+        }
     }
 }
 
@@ -172,9 +262,10 @@ impl Statement {
     fn evaluate_as_returning_expression(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<OwnedValue> {
+        ownership: RequestedValueOwnership,
+    ) -> ExecutionResult<EvaluationItem> {
         match self {
-            Statement::Expression(expression) => expression.evaluate(interpreter),
+            Statement::Expression(expression) => expression.evaluate(interpreter, ownership),
             Statement::LetStatement(_)
             | Statement::BreakStatement(_)
             | Statement::ContinueStatement(_) => {
@@ -188,22 +279,20 @@ impl Statement {
 /// In the former, `x` is a pattern, and any identifiers creates new variable/bindings.
 /// In the latter, `x` is a place expression, and identifiers can be either place references or
 /// values, e.g. `a.x[y[0]][3] = ...` has `y[0]` evaluated as a value.
-#[derive(Clone)]
 pub(crate) struct LetStatement {
     _let_token: Token![let],
     pattern: Pattern,
     assignment: Option<LetStatementAssignment>,
 }
 
-#[derive(Clone)]
 struct LetStatementAssignment {
     #[allow(unused)]
     equals: Token![=],
     expression: Expression,
 }
 
-impl Parse<Source> for LetStatement {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for LetStatement {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let let_token = input.parse()?;
         let pattern = input.parse()?;
         if input.peek(Token![=]) {
@@ -225,6 +314,14 @@ impl Parse<Source> for LetStatement {
             input.parse_err("Expected = or ;")
         }
     }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        if let Some(assignment) = self.assignment.as_mut() {
+            assignment.expression.control_flow_pass(context)?;
+        }
+        self.pattern.control_flow_pass(context)?;
+        Ok(())
+    }
 }
 
 impl LetStatement {
@@ -235,7 +332,10 @@ impl LetStatement {
             assignment,
         } = self;
         let value = match assignment {
-            Some(assignment) => assignment.expression.evaluate(interpreter)?.into_inner(),
+            Some(assignment) => assignment
+                .expression
+                .evaluate_owned(interpreter)?
+                .into_inner(),
             None => ExpressionValue::None,
         };
         pattern.handle_destructure(interpreter, value)?;
@@ -254,10 +354,14 @@ impl HasSpan for BreakStatement {
     }
 }
 
-impl Parse<Source> for BreakStatement {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for BreakStatement {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let break_token = input.parse_ident_matching("break")?;
         Ok(Self { break_token })
+    }
+
+    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
+        Ok(())
     }
 }
 
@@ -281,10 +385,14 @@ impl HasSpan for ContinueStatement {
     }
 }
 
-impl Parse<Source> for ContinueStatement {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for ContinueStatement {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let continue_token = input.parse_ident_matching("continue")?;
         Ok(Self { continue_token })
+    }
+
+    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
+        Ok(())
     }
 }
 

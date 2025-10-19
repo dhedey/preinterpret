@@ -2,31 +2,57 @@ use super::*;
 
 pub(crate) struct Expression {
     root: ExpressionNodeId,
-    nodes: std::rc::Rc<[ExpressionNode]>,
+    nodes: Arena<ExpressionNodeId, ExpressionNode>,
 }
 
-impl Parse<Source> for Expression {
-    fn parse(input: ParseStream<Source>) -> ParseResult<Self> {
+impl ParseSource for Expression {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         ExpressionParser::parse(input)
+    }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        control_flow_visit(self.root, &mut self.nodes, context)
     }
 }
 
 impl Expression {
-    pub(super) fn new(root: ExpressionNodeId, nodes: Vec<ExpressionNode>) -> Self {
-        Self {
-            root,
-            nodes: nodes.into(),
-        }
+    pub(super) fn new(
+        root: ExpressionNodeId,
+        nodes: Arena<ExpressionNodeId, ExpressionNode>,
+    ) -> Self {
+        Self { root, nodes }
     }
 
-    pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
-        ExpressionEvaluator::new(&self.nodes).evaluate(self.root, interpreter)
+    pub(super) fn evaluate(
+        &self,
+        interpreter: &mut Interpreter,
+        ownership: RequestedValueOwnership,
+    ) -> ExecutionResult<EvaluationItem> {
+        ExpressionEvaluator::new(&self.nodes).evaluate(self.root, interpreter, ownership)
+    }
+
+    pub(crate) fn evaluate_owned(
+        &self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<OwnedValue> {
+        Ok(self
+            .evaluate(interpreter, RequestedValueOwnership::owned())?
+            .expect_owned())
+    }
+
+    pub(crate) fn evaluate_shared(
+        &self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<SharedValue> {
+        Ok(self
+            .evaluate(interpreter, RequestedValueOwnership::shared())?
+            .expect_shared())
     }
 
     pub(crate) fn is_valid_as_statement_without_semicolon(&self) -> bool {
         // Must align with evaluate_as_statement
         matches!(
-            &self.nodes[self.root.0],
+            &self.nodes.get(self.root),
             ExpressionNode::Leaf(Leaf::Block(_))
                 | ExpressionNode::Leaf(Leaf::IfExpression(_))
                 | ExpressionNode::Leaf(Leaf::LoopExpression(_))
@@ -40,13 +66,15 @@ impl Expression {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         // This must align with is_valid_as_statement_without_semicolon
-        match &self.nodes[self.root.0] {
-            ExpressionNode::Leaf(Leaf::Block(block)) => {
-                block.evaluate(interpreter)?.into_statement_result()
-            }
-            ExpressionNode::Leaf(Leaf::IfExpression(if_expression)) => {
-                if_expression.evaluate(interpreter)?.into_statement_result()
-            }
+        match &self.nodes.get(self.root) {
+            ExpressionNode::Leaf(Leaf::Block(block)) => block
+                .evaluate(interpreter, RequestedValueOwnership::owned())?
+                .expect_owned()
+                .into_statement_result(),
+            ExpressionNode::Leaf(Leaf::IfExpression(if_expression)) => if_expression
+                .evaluate(interpreter, RequestedValueOwnership::owned())?
+                .expect_owned()
+                .into_statement_result(),
             ExpressionNode::Leaf(Leaf::LoopExpression(loop_expression)) => {
                 loop_expression.evaluate_as_statement(interpreter)
             }
@@ -56,22 +84,10 @@ impl Expression {
             ExpressionNode::Leaf(Leaf::ForExpression(for_expression)) => {
                 for_expression.evaluate_as_statement(interpreter)
             }
-            _ => self.evaluate(interpreter)?.into_statement_result(),
+            _ => self.evaluate_owned(interpreter)?.into_statement_result(),
         }
     }
 }
-
-impl Clone for Expression {
-    fn clone(&self) -> Self {
-        Self {
-            root: self.root,
-            nodes: self.nodes.clone(),
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) struct ExpressionNodeId(pub(super) usize);
 
 pub(super) enum ExpressionNode {
     Leaf(Leaf),
@@ -121,35 +137,16 @@ pub(super) enum ExpressionNode {
         value: ExpressionNodeId,
     },
     CompoundAssignment {
-        place: ExpressionNodeId,
+        assignee: ExpressionNodeId,
         operation: CompoundAssignmentOperation,
         value: ExpressionNodeId,
     },
 }
 
-impl ExpressionNode {
-    pub(super) fn operator_span_range(&self) -> SpanRange {
-        match self {
-            ExpressionNode::Leaf(leaf) => leaf.span_range(),
-            ExpressionNode::Grouped { delim_span, .. } => delim_span.span_range(),
-            ExpressionNode::Array { brackets, .. } => brackets.span_range(),
-            ExpressionNode::Object { braces, .. } => braces.span_range(),
-            ExpressionNode::MethodCall { method, .. } => method.span_range(),
-            ExpressionNode::Property { access, .. } => access.span_range(),
-            ExpressionNode::Index { access, .. } => access.span_range(),
-            ExpressionNode::UnaryOperation { operation, .. } => operation.span_range(),
-            ExpressionNode::BinaryOperation { operation, .. } => operation.span_range(),
-            ExpressionNode::Range { range_limits, .. } => range_limits.span_range(),
-            ExpressionNode::Assignment { equals_token, .. } => equals_token.span_range(),
-            ExpressionNode::CompoundAssignment { operation, .. } => operation.span_range(),
-        }
-    }
-}
-
 pub(super) enum Leaf {
     Block(ExpressionBlock),
     Command(Command),
-    Variable(VariableIdentifier),
+    Variable(VariableReference),
     Discarded(Token![_]),
     Value(SharedValue),
     StreamLiteral(StreamLiteral),

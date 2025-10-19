@@ -9,48 +9,42 @@ impl ExpressionNode {
             ExpressionNode::Leaf(leaf) => {
                 match leaf {
                     Leaf::Command(command) => {
-                        // TODO[interpret_to_value]: Allow command to return a reference
                         let value = command.evaluate(context.interpreter())?;
                         context.return_owned(value.into_owned(command.span_range()))?
                     }
                     Leaf::Discarded(token) => {
-                        return token.execution_err("This cannot be used in a value expression");
+                        return token.execution_err("This cannot be used in a value expression.");
                     }
-                    Leaf::Variable(variable_path) => {
-                        let variable_ref = variable_path.binding(context.interpreter())?;
-                        match context.requested_ownership() {
-                            RequestedValueOwnership::LateBound => {
-                                context.return_late_bound(variable_ref.into_late_bound()?)?
-                            }
-                            RequestedValueOwnership::Concrete(ownership) => match ownership {
-                                ResolvedValueOwnership::Owned
-                                | ResolvedValueOwnership::CopyOnWrite
-                                | ResolvedValueOwnership::Shared => {
-                                    context.return_shared(variable_ref.into_shared()?)?
-                                }
-                                ResolvedValueOwnership::Mutable => {
-                                    context.return_mutable(variable_ref.into_mut()?)?
-                                }
-                            },
+                    Leaf::Variable(variable) => match context.requested_ownership() {
+                        RequestedValueOwnership::LateBound => {
+                            let late_bound = variable.resolve_late_bound(context.interpreter())?;
+                            context.return_late_bound(late_bound)?
                         }
-                    }
+                        RequestedValueOwnership::Concrete(ownership) => {
+                            let resolved =
+                                variable.resolve_resolved(context.interpreter(), ownership)?;
+                            context.return_resolved_value(resolved)?
+                        }
+                    },
                     Leaf::Block(block) => {
-                        // TODO[interpret_to_value]: Allow block to return reference
-                        let value = block.evaluate(context.interpreter())?;
-                        context.return_owned(value)?
+                        let ownership = context.requested_ownership();
+                        let item = block.evaluate(context.interpreter(), ownership)?;
+                        context.return_item(item)?
                     }
                     Leaf::Value(value) => {
                         // We return a freely clonable CopyOnWrite in order to delay the clone of the literal if it's not necessary
+                        // This allows something like e.g. x[0][5][2] to only clone the innermost value instead of the full multi-dimensional array
                         let value = CopyOnWrite::shared_in_place_of_owned(Shared::clone(value));
                         context.return_copy_on_write(value)?
                     }
                     Leaf::StreamLiteral(stream_literal) => {
-                        let value = stream_literal.clone().evaluate(context.interpreter())?;
-                        context.return_owned(value.into_owned(stream_literal.span_range()))?
+                        let value = stream_literal.evaluate(context.interpreter())?;
+                        context.return_owned(value.into_owned_value(stream_literal.span_range()))?
                     }
                     Leaf::IfExpression(if_expression) => {
-                        let value = if_expression.evaluate(context.interpreter())?;
-                        context.return_owned(value)?
+                        let ownership = context.requested_ownership();
+                        let item = if_expression.evaluate(context.interpreter(), ownership)?;
+                        context.return_item(item)?
                     }
                     Leaf::LoopExpression(loop_expression) => {
                         let value =
@@ -106,10 +100,10 @@ impl ExpressionNode {
                 value,
             } => AssignmentBuilder::start(context, *assignee, *equals_token, *value),
             ExpressionNode::CompoundAssignment {
-                place,
+                assignee,
                 operation,
                 value,
-            } => CompoundAssignmentBuilder::start(context, *place, *operation, *value),
+            } => CompoundAssignmentBuilder::start(context, *assignee, *operation, *value),
             ExpressionNode::MethodCall {
                 node,
                 method,
@@ -118,10 +112,10 @@ impl ExpressionNode {
         })
     }
 
-    pub(super) fn handle_as_assignee(
+    pub(super) fn handle_as_assignment_target(
         &self,
         context: AssignmentContext,
-        nodes: &[ExpressionNode],
+        nodes: &Arena<ExpressionNodeId, ExpressionNode>,
         self_node_id: ExpressionNodeId,
         // NB: This might intrisically be a part of a larger value, and might have been
         // created many lines previously, so doesn't have an obvious span associated with it
@@ -129,9 +123,6 @@ impl ExpressionNode {
         value: ExpressionValue,
     ) -> ExecutionResult<NextAction> {
         Ok(match self {
-            ExpressionNode::Leaf(Leaf::Variable(_))
-            | ExpressionNode::Index { .. }
-            | ExpressionNode::Property { .. } => PlaceAssigner::start(context, self_node_id, value),
             ExpressionNode::Leaf(Leaf::Discarded(underscore)) => {
                 context.return_assignment_completion(underscore.span_range())
             }
@@ -145,34 +136,37 @@ impl ExpressionNode {
                 ObjectBasedAssigner::start(context, braces, entries, value)?
             }
             ExpressionNode::Grouped { inner, .. } => GroupedAssigner::start(context, *inner, value),
-            other => {
-                return other
-                    .operator_span_range()
-                    .execution_err("This type of expression is not supported as an assignee. You may wish to use `_` to ignore the value.");
-            }
+            // This handles:
+            // - Standard Variable assignment
+            // - Property assignment (allowing for creation of fields)
+            // - Index assignment (allowing for creation of keys)
+            // - Assignment to any mutable value (e.g. x.as_mut())
+            _ => AssigneeAssigner::start(context, self_node_id, value),
         })
     }
 
-    pub(super) fn handle_as_place(&self, mut context: PlaceContext) -> ExecutionResult<NextAction> {
+    pub(super) fn handle_as_assignee(
+        &self,
+        mut context: AssigneeContext,
+        self_node_id: ExpressionNodeId,
+    ) -> ExecutionResult<NextAction> {
         Ok(match self {
             ExpressionNode::Leaf(Leaf::Variable(variable)) => {
-                let variable_ref = variable.binding(context.interpreter())?;
-                context.return_place(variable_ref.into_mut()?)
+                let mutable = variable.resolve_assignee(context.interpreter())?;
+                context.return_assignee(mutable)
             }
             ExpressionNode::Index {
                 node,
                 access,
                 index,
-            } => PlaceIndexer::start(context, *node, *access, *index),
+            } => IndexedAssignee::start(context, *node, *access, *index),
             ExpressionNode::Property { node, access, .. } => {
-                PlacePropertyAccessor::start(context, *node, access.clone())
+                PropertyAccessedAssignee::start(context, *node, access.clone())
             }
-            ExpressionNode::Grouped { inner, .. } => PlaceGrouper::start(context, *inner),
-            other => {
-                return other
-                    .operator_span_range()
-                    .execution_err("This expression cannot be resolved into a memory location.");
-            }
+            ExpressionNode::Grouped { inner, .. } => GroupedAssignee::start(context, *inner),
+            // If we don't need special place-based handling (e.g. for creating a new entry in an object)
+            // Then let's just resolve via a mutable value
+            _ => ValueBasedAssignee::start(context, self_node_id),
         })
     }
 }

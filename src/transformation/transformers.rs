@@ -19,6 +19,10 @@ impl TransformerDefinition for TokenTreeTransformer {
         output.push_raw_token_tree(input.parse::<TokenTree>()?);
         Ok(())
     }
+
+    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
@@ -38,6 +42,10 @@ impl TransformerDefinition for RestTransformer {
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         ParseUntil::End.handle_parse_into(input, output)
+    }
+
+    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
+        Ok(())
     }
 }
 
@@ -79,6 +87,10 @@ impl TransformerDefinition for UntilTransformer {
     ) -> ExecutionResult<()> {
         self.until.handle_parse_into(input, output)
     }
+
+    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
@@ -103,6 +115,10 @@ impl TransformerDefinition for IdentTransformer {
         } else {
             input.parse_err("Expected an ident")?
         }
+    }
+
+    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
+        Ok(())
     }
 }
 
@@ -129,6 +145,10 @@ impl TransformerDefinition for LiteralTransformer {
             input.parse_err("Expected a literal")?
         }
     }
+
+    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
@@ -154,9 +174,12 @@ impl TransformerDefinition for PunctTransformer {
             input.parse_err("Expected a punct")?
         }
     }
+
+    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
+        Ok(())
+    }
 }
 
-#[derive(Clone)]
 pub(crate) struct GroupTransformer {
     inner: TransformStream,
 }
@@ -179,9 +202,12 @@ impl TransformerDefinition for GroupTransformer {
         let (_, inner) = input.parse_transparent_group()?;
         self.inner.handle_transform(&inner, interpreter, output)
     }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        self.inner.control_flow_pass(context)
+    }
 }
 
-#[derive(Clone)]
 pub(crate) struct ExactTransformer {
     _parentheses: Parentheses,
     stream: Expression,
@@ -213,8 +239,12 @@ impl TransformerDefinition for ExactTransformer {
         // To save confusion about parse order.
         let stream: ExpressionStream = self
             .stream
-            .evaluate(interpreter)?
+            .evaluate_owned(interpreter)?
             .resolve_as("Input to the EXACT parser")?;
         stream.value.parse_exact_match(input, output)
+    }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        self.stream.control_flow_pass(context)
     }
 }
