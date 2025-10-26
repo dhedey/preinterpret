@@ -47,13 +47,13 @@ impl Interpreter {
         self.no_mutation_above.pop();
         match result {
             Ok(value) => Ok(AttemptOutcome::Completed(value)),
-            Err(err) if err.is_catchable_error() => {
+            Err(err) if err.is_catchable() => {
                 self.handle_catch(id);
                 Ok(AttemptOutcome::Reverted)
             }
             Err(mut err) => {
                 if let Some((kind, error)) = err.error_mut() {
-                    *error = core::mem::take(error).add_context_if_none(format!("NOTE: {} is a not caught by attempt blocks. If you wish to catch this, throw an error with %[].error(\"..\") instead.", kind.as_str().upper_indefinite_articled()));
+                    *error = core::mem::take(error).add_context_if_none(format!("NOTE: {} is not caught by an attempt block. If you wish to catch this, detect it before it is thrown and use the `revert` statement.", kind.as_str().upper_indefinite_articled()));
                 }
                 Err(err)
             }

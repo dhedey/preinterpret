@@ -91,7 +91,7 @@ impl VariableContent {
         if blocked_from_mutation {
             match resolved {
                 Ok(LateBoundValue::Mutable(mutable)) => {
-                    let reason_not_mutable = mutable.syn_error("It is not possible to mutate this variable because it is defined outside of a conditional scope. If in an attempt/match block, you should define variables in the conditional part of the arm, and move mutations to the unconditional part of the arm.");
+                    let reason_not_mutable = mutable.syn_error("It is not possible to mutate this variable here. In an attempt arm, you should define variables in the first conditional part, and move mutations of external variables to the second unconditional part.");
                     Ok(LateBoundValue::Shared(LateBoundSharedValue {
                         shared: mutable.into_shared(),
                         reason_not_mutable,

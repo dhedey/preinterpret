@@ -197,7 +197,7 @@ impl WhileExpression {
             iteration_counter.increment_and_check()?;
             match self.body.evaluate_owned(interpreter).catch_control_flow(
                 interpreter,
-                ControlFlowInterrupt::catch_any,
+                ControlFlowInterrupt::catch_loop_related,
                 scope,
             )? {
                 ExecutionOutcome::Value(value) => {
@@ -211,6 +211,9 @@ impl WhileExpression {
                     match control_flow_interrupt {
                         ControlFlowInterrupt::Break => break,
                         ControlFlowInterrupt::Continue => continue,
+                        ControlFlowInterrupt::Revert => {
+                            unreachable!("catch_loop_related should filter this out")
+                        }
                     }
                 }
             }
@@ -275,7 +278,7 @@ impl LoopExpression {
 
             match self.body.evaluate_owned(interpreter).catch_control_flow(
                 interpreter,
-                ControlFlowInterrupt::catch_any,
+                ControlFlowInterrupt::catch_loop_related,
                 scope,
             )? {
                 ExecutionOutcome::Value(value) => {
@@ -289,6 +292,9 @@ impl LoopExpression {
                     match control_flow_interrupt {
                         ControlFlowInterrupt::Break => break,
                         ControlFlowInterrupt::Continue => continue,
+                        ControlFlowInterrupt::Revert => {
+                            unreachable!("catch_loop_related should filter this out")
+                        }
                     }
                 }
             }
@@ -385,7 +391,7 @@ impl ForExpression {
 
             match self.body.evaluate_owned(interpreter).catch_control_flow(
                 interpreter,
-                ControlFlowInterrupt::catch_any,
+                ControlFlowInterrupt::catch_loop_related,
                 scope,
             )? {
                 ExecutionOutcome::Value(value) => {
@@ -399,6 +405,9 @@ impl ForExpression {
                     match control_flow_interrupt {
                         ControlFlowInterrupt::Break => break,
                         ControlFlowInterrupt::Continue => continue,
+                        ControlFlowInterrupt::Revert => {
+                            unreachable!("catch_loop_related should filter this out")
+                        }
                     }
                 }
             }
@@ -520,9 +529,10 @@ impl AttemptExpression {
                             .resolve_as("The guard condition of an attempt arm")?;
                         if !guard_value {
                             // This will be immediately caught
-                            return if_token
-                                .span
-                                .assertion_err("Guard condition evaluated to false.");
+                            return Err(ExecutionInterrupt::control_flow(
+                                ControlFlowInterrupt::Revert,
+                                if_token.span,
+                            ));
                         }
                     }
                     unit

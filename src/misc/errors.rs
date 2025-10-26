@@ -186,7 +186,7 @@ impl ExecutionInterrupt {
     ///
     /// This allows the attempt block to use the first valid branch given the data
     /// it encounters.
-    pub(crate) fn is_catchable_error(&self) -> bool {
+    pub(crate) fn is_catchable(&self) -> bool {
         match self.inner.as_ref() {
             ExecutionInterruptInner::Error(ErrorKind::Syntax, _) => false,
             ExecutionInterruptInner::Error(ErrorKind::Type, _) => false,
@@ -196,7 +196,8 @@ impl ExecutionInterrupt {
             ExecutionInterruptInner::Error(ErrorKind::Value, _) => true,
             ExecutionInterruptInner::Error(ErrorKind::ControlFlow, _) => false,
             ExecutionInterruptInner::Error(ErrorKind::Parse, _) => true,
-            ExecutionInterruptInner::ControlFlowInterrupt { .. } => false,
+            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Revert, _) => true,
+            ExecutionInterruptInner::ControlFlowInterrupt(_, _) => false,
         }
     }
 
@@ -301,11 +302,15 @@ enum ExecutionInterruptInner {
 pub(crate) enum ControlFlowInterrupt {
     Break,
     Continue,
+    Revert,
 }
 
 impl ControlFlowInterrupt {
-    pub(crate) fn catch_any(_: &ControlFlowInterrupt) -> bool {
-        true
+    pub(crate) fn catch_loop_related(this: &ControlFlowInterrupt) -> bool {
+        match this {
+            ControlFlowInterrupt::Break | ControlFlowInterrupt::Continue => true,
+            ControlFlowInterrupt::Revert => false,
+        }
     }
 }
 
@@ -314,10 +319,16 @@ impl ExecutionInterrupt {
         match *self.inner {
             ExecutionInterruptInner::Error(_, e) => e.convert_to_final_error(),
             ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Break, span) => {
-                syn::Error::new(span, "Break can only be used inside a loop")
+                syn::Error::new(span, "break can only be used inside a loop")
             }
             ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Continue, span) => {
-                syn::Error::new(span, "Continue can only be used inside a loop")
+                syn::Error::new(span, "continue can only be used inside a loop")
+            }
+            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Revert, span) => {
+                syn::Error::new(
+                    span,
+                    "revert can only be used in the conditional part of an attempt arm",
+                )
             }
         }
     }

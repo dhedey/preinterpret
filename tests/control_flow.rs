@@ -202,6 +202,26 @@ fn test_attempt() {
             %[_].error("Should be unreachable");
         }
     }
+    run! {
+        let value = attempt {
+            { revert; } => { None }
+            { } => 1,
+        };
+        %[_].assert_eq(value, 1);
+    }
+    run!(
+        let value = attempt {
+            {
+                // This revert propagates to the LHS of the outer attempt
+                attempt {
+                    { } => { revert; }
+                    { } => { None }
+                }
+            } => { 1 }
+            { } => { 2 }
+        };
+        %[_].assert_eq(value, 2);
+    );
 }
 
 #[test]

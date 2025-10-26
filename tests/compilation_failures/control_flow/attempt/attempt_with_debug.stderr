@@ -1,5 +1,5 @@
 error: "A debug call should propogate out of an attempt arm."
-       NOTE: A DebugError is a not caught by attempt blocks. If you wish to catch this, throw an error with %[].error("..") instead.
+       NOTE: A DebugError is not caught by an attempt block. If you wish to catch this, detect it before it is thrown and use the `revert` statement.
  --> tests/compilation_failures/control_flow/attempt/attempt_with_debug.rs:7:15
   |
 7 |             { x.debug() } => { None }
