@@ -40,13 +40,17 @@ impl VariableContent {
                             ownership,
                             RequestedValueOwnership::Concrete(ResolvedValueOwnership::Assignee)
                         ) {
-                            return variable_span.execution_err("The final usage of a variable cannot be assigned to. You can use `let _ = ..` to discard a value.");
+                            return variable_span.control_flow_err("The final usage of a variable cannot be assigned to. You can use `let _ = ..` to discard a value.");
                         }
                         return Ok(LateBoundValue::Owned(Owned::new(
                             ref_cell.into_inner(),
                             variable_span.span_range(),
                         )));
                     }
+                    // It's currently referenced, proceed with normal late-bound resolution.
+                    // e.g.
+                    // * `let x = %[]; x.assert_eq(x, %[]);` - the final `x` resolves to a shared reference
+                    // * `let x = %[]; x.assert_eq(x + %[], %[]);` - errors because the final `x` is shared but it needs to be owned
                     Err(rc) => rc,
                 },
                 VariableContent::Finished => panic!("{}", FINISHED_ERR),
@@ -98,19 +102,15 @@ impl VariableBinding {
     }
 
     pub(crate) fn into_mut(self) -> ExecutionResult<MutableValue> {
-        MutableValue::new_from_variable(self)
+        MutableValue::new_from_variable(self).map_err(ExecutionInterrupt::ownership_error)
     }
 
     pub(crate) fn into_shared(self) -> ExecutionResult<SharedValue> {
-        SharedValue::new_from_variable(self)
+        SharedValue::new_from_variable(self).map_err(ExecutionInterrupt::ownership_error)
     }
 
     pub(crate) fn into_late_bound(self) -> ExecutionResult<LateBoundValue> {
-        match self
-            .clone()
-            .into_mut()
-            .catch_execution_error_at_same_scope()?
-        {
+        match MutableValue::new_from_variable(self.clone()) {
             Ok(value) => Ok(LateBoundValue::Mutable(value)),
             Err(reason_not_mutable) => {
                 // If we get an error with a mutable and shared reference, a mutable reference must already exist.
@@ -333,7 +333,7 @@ impl OwnedValue {
             ExpressionValue::None => Ok(()),
             _ => self
                 .span_range
-                .execution_err("A non-returning statement must not return a value. If you wish to explicitly discard the expression's result, use `let _ = ...;`"),
+                .control_flow_err("A non-returning statement must not return a value. If you wish to explicitly discard the expression's result, use `let _ = ...;`"),
         }
     }
 }
@@ -459,12 +459,12 @@ impl Mutable<ExpressionValue> {
         Ok(OwnedValue::new(value, self.span_range))
     }
 
-    fn new_from_variable(reference: VariableBinding) -> ExecutionResult<Self> {
+    fn new_from_variable(reference: VariableBinding) -> syn::Result<Self> {
         Ok(Self {
             mut_cell: MutSubRcRefCell::new(reference.data).map_err(|_| {
-                reference.variable_span.execution_error(
-                    "The variable cannot be modified as it is already being modified",
-                )
+                reference
+                    .variable_span
+                    .syn_error("The variable cannot be modified as it is already being modified")
             })?,
             span_range: reference.variable_span.span_range(),
         })
@@ -473,7 +473,7 @@ impl Mutable<ExpressionValue> {
     pub(crate) fn into_stream(self) -> ExecutionResult<Mutable<OutputStream>> {
         self.try_map(|value, span_range| match value {
             ExpressionValue::Stream(stream) => Ok(&mut stream.value),
-            _ => span_range.execution_err("The variable is not a stream"),
+            _ => span_range.type_err("The variable is not a stream"),
         })
     }
 
@@ -620,12 +620,12 @@ impl Shared<ExpressionValue> {
         self.as_ref().clone().into_owned(self.span_range)
     }
 
-    fn new_from_variable(reference: VariableBinding) -> ExecutionResult<Self> {
+    fn new_from_variable(reference: VariableBinding) -> syn::Result<Self> {
         Ok(Self {
             shared_cell: SharedSubRcRefCell::new(reference.data).map_err(|_| {
                 reference
                     .variable_span
-                    .execution_error("The variable cannot be read as it is already being modified")
+                    .syn_error("The variable cannot be read as it is already being modified")
             })?,
             span_range: reference.variable_span.span_range(),
         })

@@ -417,7 +417,7 @@ impl<'a, K> ParseBuffer<'a, K> {
         message: M,
     ) -> ParseResult<T> {
         let error_span = self.span();
-        parse(self).map_err(|_| error_span.error(message).into())
+        parse(self).map_err(|_| error_span.parse_error(message))
     }
 
     pub(crate) fn parse_any_punct(&self) -> ParseResult<Punct> {
@@ -441,7 +441,7 @@ impl<'a, K> ParseBuffer<'a, K> {
         Ok(self.inner.step(|cursor| {
             cursor
                 .ident_matching(content)
-                .ok_or_else(|| cursor.span().error(format!("expected {}", content)))
+                .ok_or_else(|| cursor.syn_error(format!("expected {}", content)))
         })?)
     }
 
@@ -453,7 +453,7 @@ impl<'a, K> ParseBuffer<'a, K> {
         Ok(self.inner.step(|cursor| {
             cursor
                 .punct_matching(punct)
-                .ok_or_else(|| cursor.span().error(format!("expected {}", punct)))
+                .ok_or_else(|| cursor.syn_error(format!("expected {}", punct)))
         })?)
     }
 
@@ -465,7 +465,7 @@ impl<'a, K> ParseBuffer<'a, K> {
         Ok(self.inner.step(|cursor| {
             cursor
                 .literal_matching(content)
-                .ok_or_else(|| cursor.span().error(format!("expected {}", content)))
+                .ok_or_else(|| cursor.syn_error(format!("expected {}", content)))
         })?)
     }
 

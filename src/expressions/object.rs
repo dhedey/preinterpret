@@ -86,7 +86,7 @@ impl ExpressionObject {
     ) -> ExecutionResult<&ExpressionValue> {
         let key: Spanned<&str> = index.resolve_as("An object key")?;
         let entry = self.entries.get(key.value).ok_or_else(|| {
-            key.execution_error(format!(
+            key.value_error(format!(
                 "The object does not have a field named `{}`",
                 key.value
             ))
@@ -111,7 +111,7 @@ impl ExpressionObject {
     ) -> ExecutionResult<&ExpressionValue> {
         let key = access.property.to_string();
         let entry = self.entries.get(&key).ok_or_else(|| {
-            access.execution_error(format!("The object does not have a field named `{}`", key))
+            access.value_error(format!("The object does not have a field named `{}`", key))
         })?;
         Ok(&entry.value)
     }
@@ -134,10 +134,8 @@ impl ExpressionObject {
                         })
                         .value
                 } else {
-                    return key_span.execution_err(format!(
-                        "No property found for key `{}`",
-                        entry.into_key()
-                    ));
+                    return key_span
+                        .value_err(format!("No property found for key `{}`", entry.into_key()));
                 }
             }
         })
@@ -151,7 +149,7 @@ impl ExpressionObject {
         if !behaviour.use_debug_literal_syntax {
             return behaviour
                 .error_span_range
-                .execution_err("An object can't be converted to a non-debug string");
+                .value_err("An object can't be converted to a non-debug string");
         }
         if behaviour.output_literal_structure {
             if self.entries.is_empty() {
@@ -238,7 +236,7 @@ impl Spanned<&ExpressionObject> {
             error_message.push_str(&unexpected_fields.join(", "));
         }
 
-        self.execution_err(error_message)
+        self.value_err(error_message)
     }
 }
 

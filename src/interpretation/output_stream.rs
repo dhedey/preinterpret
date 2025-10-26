@@ -131,10 +131,10 @@ impl OutputStream {
     /// Use only where that doesn't matter: https://github.com/rust-lang/rust-analyzer/issues/18211#issuecomment-2604547032
     ///
     /// Annotate usages with // RUST-ANALYZER SAFETY: ... to explain why the use of this function is OK.
-    pub(crate) unsafe fn parse_with<T, E: From<syn::Error>>(
+    pub(crate) unsafe fn parse_with<T>(
         self,
-        parser: impl FnOnce(ParseStream<Output>) -> Result<T, E>,
-    ) -> Result<T, E> {
+        parser: impl FnOnce(ParseStream<Output>) -> ExecutionResult<T>,
+    ) -> ExecutionResult<T> {
         self.into_token_stream().interpreted_parse_with(parser)
     }
 

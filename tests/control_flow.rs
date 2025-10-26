@@ -133,3 +133,26 @@ fn test_for() {
         "ab"
     );
 }
+
+#[test]
+fn test_attempt() {
+    let x = run! {
+        attempt {
+            {} => { 1 }
+            {} => { 2 }
+        }
+    };
+    assert_eq!(x, 1);
+    run! {
+        let x = 0;
+        let output = attempt {
+            { %[_].assert_eq(x, 1) } => { 1 }
+            { let x = 2; } => { x }
+        };
+        %[_].assert_eq(output, 2);
+    }
+    // Add compile tests:
+    // - attempt with no successful arms
+    // - None.debug() should propogate the error
+    // - Mutations of parent state are not allowed in
+}

@@ -103,7 +103,7 @@ impl FromResolved for IterableRef<'static> {
             ValueKind::Object => IterableRef::Object(FromResolved::from_resolved(value)?),
             ValueKind::String => IterableRef::String(FromResolved::from_resolved(value)?),
             _ => {
-                return value.execution_err(
+                return value.type_err(
                     "Expected iterable (iterator, array, object, stream, range or string)",
                 )
             }
@@ -194,7 +194,7 @@ impl ExpressionIterator {
         if max == Some(min) {
             Ok(min)
         } else {
-            error_span_range.execution_err("Iterator has an inexact length")
+            error_span_range.value_err("Iterator has an inexact length")
         }
     }
 
@@ -215,7 +215,7 @@ impl ExpressionIterator {
         const LIMIT: usize = 10_000;
         for (i, item) in self.enumerate() {
             if i > LIMIT {
-                return output.execution_err(format!("Only a maximum of {} items can be output to a stream from an iterator, to protect you from infinite loops. This can't currently be reconfigured with the iteration limit.", LIMIT));
+                return output.debug_err(format!("Only a maximum of {} items can be output to a stream from an iterator, to protect you from infinite loops. This can't currently be reconfigured with the iteration limit.", LIMIT));
             }
             item.output_to(grouping, output)?;
         }
@@ -258,7 +258,7 @@ impl ExpressionIterator {
             }
             if possibly_unbounded && i >= behaviour.iterator_limit {
                 if behaviour.error_after_iterator_limit {
-                    return behaviour.error_span_range.execution_err(format!("To protect against infinite loops, only a maximum of {} items can be output to a string from an iterator. You can use .to_vec() to avoid this limit. This can't currently be reconfigured with the iteration limit.", behaviour.iterator_limit));
+                    return behaviour.error_span_range.debug_err(format!("To protect against infinite loops, only a maximum of {} items can be output to a string from an iterator. You can use .to_vec() to avoid this limit. This can't currently be reconfigured with the iteration limit.", behaviour.iterator_limit));
                 } else {
                     if behaviour.output_literal_structure {
                         match max {
@@ -399,7 +399,7 @@ define_interface! {
                 let (this, input_span_range) = this.deconstruct();
                 match this.singleton_value() {
                     Some(value) => context.operation.evaluate(Owned::new(value, input_span_range)),
-                    None => input_span_range.execution_err("Only an iterator with one item can be cast to this value")
+                    None => input_span_range.value_err("Only an iterator with one item can be cast to this value")
                 }
             }
         }

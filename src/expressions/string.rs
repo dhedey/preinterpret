@@ -93,7 +93,7 @@ define_interface! {
             [context] fn to_ident(this: SpannedAnyRef<str>) -> ExecutionResult<Ident> {
                 let str: &str = &this;
                 let ident = parse_str::<Ident>(str)
-                    .map_err(|err| this.error(format!("`{}` is not a valid ident: {:?}", str, err)))?
+                    .map_err(|err| this.value_error(format!("`{}` is not a valid ident: {:?}", str, err)))?
                     .with_span(context.span_from_join_else_start());
                 Ok(ident)
             }
@@ -101,7 +101,7 @@ define_interface! {
             [context] fn to_ident_camel(this: SpannedAnyRef<str>) -> ExecutionResult<Ident> {
                 let str = string_conversion::to_upper_camel_case(&this);
                 let ident = parse_str::<Ident>(&str)
-                    .map_err(|err| this.error(format!("`{}` is not a valid ident: {:?}", str, err)))?
+                    .map_err(|err| this.value_error(format!("`{}` is not a valid ident: {:?}", str, err)))?
                     .with_span(context.span_from_join_else_start());
                 Ok(ident)
             }
@@ -109,7 +109,7 @@ define_interface! {
             [context] fn to_ident_snake(this: SpannedAnyRef<str>) -> ExecutionResult<Ident> {
                 let str = string_conversion::to_lower_snake_case(&this);
                 let ident = parse_str::<Ident>(&str)
-                    .map_err(|err| this.error(format!("`{}` is not a valid ident: {:?}", str, err)))?
+                    .map_err(|err| this.value_error(format!("`{}` is not a valid ident: {:?}", str, err)))?
                     .with_span(context.span_from_join_else_start());
                 Ok(ident)
             }
@@ -117,7 +117,7 @@ define_interface! {
             [context] fn to_ident_upper_snake(this: SpannedAnyRef<str>) -> ExecutionResult<Ident> {
                 let str = string_conversion::to_upper_snake_case(&this);
                 let ident = parse_str::<Ident>(&str)
-                    .map_err(|err| this.error(format!("`{}` is not a valid ident: {:?}", str, err)))?
+                    .map_err(|err| this.value_error(format!("`{}` is not a valid ident: {:?}", str, err)))?
                     .with_span(context.span_from_join_else_start());
                 Ok(ident)
             }
@@ -126,7 +126,7 @@ define_interface! {
                 let str: &str = &this;
                 let literal = Literal::from_str(str)
                     .map_err(|err| {
-                        this.error(format!("`{}` is not a valid literal: {:?}", str, err))
+                        this.value_error(format!("`{}` is not a valid literal: {:?}", str, err))
                     })?
                     .with_span(context.span_from_join_else_start());
                 Ok(literal)

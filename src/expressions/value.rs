@@ -161,7 +161,7 @@ define_interface! {
             fn debug(this: CopyOnWriteValue) -> ExecutionResult<()> {
                 let (value, span_range) = this.into_owned_infallible().deconstruct();
                 let message = value.concat_recursive(&ConcatBehaviour::debug(span_range))?;
-                span_range.execution_err(message)
+                span_range.debug_err(message)
             }
 
             fn to_debug_string(this: CopyOnWriteValue) -> ExecutionResult<String> {
@@ -319,7 +319,7 @@ impl ExpressionValue {
         error_span_range: SpanRange,
     ) -> ExecutionResult<ExpressionValue> {
         if !self.kind().supports_transparent_cloning() {
-            return error_span_range.execution_err(format!(
+            return error_span_range.ownership_err(format!(
                 "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .clone() explicitly.",
                 self.articled_value_type()
             ));
@@ -454,7 +454,7 @@ impl ExpressionValue {
                         ExpressionIntegerValuePair::Isize(lhs, rhs)
                     }
                     (left_value, right_value) => {
-                        return operation.execution_err(format!("The {} operator cannot infer a common integer operand type from {} and {}. Consider using `as` to cast to matching types.", operation.symbolic_description(), left_value.value_type(), right_value.value_type()));
+                        return operation.type_err(format!("The {} operator cannot infer a common integer operand type from {} and {}. Consider using `as` to cast to matching types.", operation.symbolic_description(), left_value.value_type(), right_value.value_type()));
                     }
                 };
                 ExpressionValuePair::Integer(integer_pair)
@@ -493,7 +493,7 @@ impl ExpressionValue {
                         ExpressionFloatValuePair::F64(lhs, rhs)
                     }
                     (left_value, right_value) => {
-                        return operation.execution_err(format!("The {} operator cannot infer a common float operand type from {} and {}. Consider using `as` to cast to matching types.", operation.symbolic_description(), left_value.value_type(), right_value.value_type()));
+                        return operation.type_err(format!("The {} operator cannot infer a common float operand type from {} and {}. Consider using `as` to cast to matching types.", operation.symbolic_description(), left_value.value_type(), right_value.value_type()));
                     }
                 };
                 ExpressionValuePair::Float(float_pair)
@@ -514,7 +514,7 @@ impl ExpressionValue {
                 ExpressionValuePair::StreamPair(left, right)
             }
             (left, right) => {
-                return operation.execution_err(format!("Cannot infer common type from {} {} {}. Consider using `as` to cast the operands to matching types.", left.value_type(), operation.symbolic_description(), right.value_type()));
+                return operation.type_err(format!("Cannot infer common type from {} {} {}. Consider using `as` to cast the operands to matching types.", left.value_type(), operation.symbolic_description(), right.value_type()));
             }
         })
     }
@@ -590,7 +590,7 @@ impl ExpressionValue {
         match self {
             ExpressionValue::Array(array) => array.into_indexed(index),
             ExpressionValue::Object(object) => object.into_indexed(index),
-            other => access.execution_err(format!("Cannot index into a {}", other.value_type())),
+            other => access.type_err(format!("Cannot index into a {}", other.value_type())),
         }
     }
 
@@ -603,7 +603,7 @@ impl ExpressionValue {
         match self {
             ExpressionValue::Array(array) => array.index_mut(index),
             ExpressionValue::Object(object) => object.index_mut(index, auto_create),
-            other => access.execution_err(format!("Cannot index into a {}", other.value_type())),
+            other => access.type_err(format!("Cannot index into a {}", other.value_type())),
         }
     }
 
@@ -615,14 +615,14 @@ impl ExpressionValue {
         match self {
             ExpressionValue::Array(array) => array.index_ref(index),
             ExpressionValue::Object(object) => object.index_ref(index),
-            other => access.execution_err(format!("Cannot index into a {}", other.value_type())),
+            other => access.type_err(format!("Cannot index into a {}", other.value_type())),
         }
     }
 
     pub(crate) fn into_property(self, access: &PropertyAccess) -> ExecutionResult<Self> {
         match self {
             ExpressionValue::Object(object) => object.into_property(access),
-            other => access.execution_err(format!(
+            other => access.type_err(format!(
                 "Cannot access properties on a {}",
                 other.value_type()
             )),
@@ -636,7 +636,7 @@ impl ExpressionValue {
     ) -> ExecutionResult<&mut Self> {
         match self {
             ExpressionValue::Object(object) => object.property_mut(access, auto_create),
-            other => access.execution_err(format!(
+            other => access.type_err(format!(
                 "Cannot access properties on a {}",
                 other.value_type()
             )),
@@ -646,7 +646,7 @@ impl ExpressionValue {
     pub(crate) fn property_ref(&self, access: &PropertyAccess) -> ExecutionResult<&Self> {
         match self {
             ExpressionValue::Object(object) => object.property_ref(access),
-            other => access.execution_err(format!(
+            other => access.type_err(format!(
                 "Cannot access properties on a {}",
                 other.value_type()
             )),
@@ -730,7 +730,7 @@ impl ExpressionValue {
                 output.extend_raw_tokens(literal.lit.to_token_stream())
             }
             Self::Object(_) => {
-                return output.execution_err("Objects cannot be output to a stream");
+                return output.type_err("Objects cannot be output to a stream");
             }
             Self::Array(array) => array.output_items_to(output, Grouping::Flattened)?,
             Self::Stream(value) => value.value.append_cloned_into(output.output_stream),

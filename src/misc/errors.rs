@@ -87,8 +87,6 @@ pub(crate) trait ExecutionResultExt<T> {
         catch_at_scope: ScopeId,
     ) -> ExecutionResult<ExecutionOutcome<T>>;
 
-    fn catch_execution_error_at_same_scope(self) -> ExecutionResult<Result<T, syn::Error>>;
-
     /// This is not a `From` because it wants to be explicit
     fn convert_to_final_result(self) -> syn::Result<T>;
 }
@@ -101,13 +99,6 @@ impl<T> ExecutionResultExt<T> for ExecutionResult<T> {
         return_to_scope: ScopeId,
     ) -> ExecutionResult<ExecutionOutcome<T>> {
         interpreter.catch_control_flow(self, should_catch, return_to_scope)
-    }
-
-    fn catch_execution_error_at_same_scope(self) -> ExecutionResult<Result<T, syn::Error>> {
-        match self {
-            Ok(value) => Ok(Ok(value)),
-            Err(interrupt) => interrupt.into_execution_error::<T>(),
-        }
     }
 
     fn convert_to_final_result(self) -> syn::Result<T> {
@@ -132,7 +123,7 @@ impl ExecutionInterrupt {
         should_catch: impl FnOnce(&ControlFlowInterrupt) -> bool,
     ) -> ExecutionResult<ExecutionOutcome<T>> {
         match *self.inner {
-            ExecutionInterruptInner::ControlFlow(control_flow_interrupt, _)
+            ExecutionInterruptInner::ControlFlowInterrupt(control_flow_interrupt, _)
                 if should_catch(&control_flow_interrupt) =>
             {
                 Ok(ExecutionOutcome::ControlFlow(control_flow_interrupt))
@@ -141,31 +132,95 @@ impl ExecutionInterrupt {
         }
     }
 
-    fn into_execution_error<T>(self) -> ExecutionResult<Result<T, syn::Error>> {
-        match *self.inner {
-            ExecutionInterruptInner::Error(error) => Ok(Err(error)),
-            _ => Err(self),
+    /// Determines which errors can be caught by an attempt block.
+    ///
+    /// Generally, coding errors should be propogated, while user-thrown errors
+    /// and runtime errors which are indicative of invalid values being
+    /// present should be caught.
+    ///
+    /// This allows the attempt block to use the first valid branch given the data
+    /// it encounters.
+    pub(crate) fn is_catchable_error(&self) -> bool {
+        match self.inner.as_ref() {
+            ExecutionInterruptInner::SyntaxError { .. } => false,
+            ExecutionInterruptInner::TypeError { .. } => false,
+            ExecutionInterruptInner::OwnershipError { .. } => false,
+            ExecutionInterruptInner::DebugError { .. } => false,
+            ExecutionInterruptInner::AssertionError { .. } => true,
+            ExecutionInterruptInner::ValueError { .. } => true,
+            ExecutionInterruptInner::ControlFlowError { .. } => false,
+            ExecutionInterruptInner::RuntimeParseError { .. } => true,
+            ExecutionInterruptInner::ControlFlowInterrupt { .. } => false,
         }
     }
 
-    pub(crate) fn parse_error(error: ParseError) -> Self {
-        Self::new(ExecutionInterruptInner::ParseError(error))
+    pub(crate) fn syntax_error(error: syn::Error) -> Self {
+        Self::new(ExecutionInterruptInner::SyntaxError(error))
     }
 
-    pub(crate) fn error(error: syn::Error) -> Self {
-        Self::new(ExecutionInterruptInner::Error(error))
+    pub(crate) fn type_error(error: syn::Error) -> Self {
+        Self::new(ExecutionInterruptInner::TypeError(error))
+    }
+
+    pub(crate) fn ownership_error(error: syn::Error) -> Self {
+        Self::new(ExecutionInterruptInner::OwnershipError(error))
+    }
+
+    pub(crate) fn debug_error(error: syn::Error) -> Self {
+        Self::new(ExecutionInterruptInner::DebugError(error))
+    }
+
+    pub(crate) fn assertion_error(error: syn::Error) -> Self {
+        Self::new(ExecutionInterruptInner::AssertionError(error))
+    }
+
+    pub(crate) fn runtime_parse_error(error: ParseError) -> Self {
+        Self::new(ExecutionInterruptInner::RuntimeParseError(error))
+    }
+
+    pub(crate) fn value_error(error: syn::Error) -> Self {
+        Self::new(ExecutionInterruptInner::ValueError(error))
+    }
+
+    pub(crate) fn control_flow_error(error: syn::Error) -> Self {
+        Self::new(ExecutionInterruptInner::ControlFlowError(error))
     }
 
     pub(crate) fn control_flow(control_flow: ControlFlowInterrupt, span: Span) -> Self {
-        Self::new(ExecutionInterruptInner::ControlFlow(control_flow, span))
+        Self::new(ExecutionInterruptInner::ControlFlowInterrupt(
+            control_flow,
+            span,
+        ))
+    }
+}
+
+impl From<ParseError> for ExecutionInterrupt {
+    fn from(e: ParseError) -> Self {
+        ExecutionInterrupt::runtime_parse_error(e)
     }
 }
 
 #[derive(Debug)]
 enum ExecutionInterruptInner {
-    Error(syn::Error),
-    ParseError(ParseError),
-    ControlFlow(ControlFlowInterrupt, Span),
+    /// Some error with preinterpet syntax
+    SyntaxError(syn::Error),
+    /// Method doesn't exist on value, etc
+    TypeError(syn::Error),
+    /// Some violation of borrowing rules or unique ownership
+    OwnershipError(syn::Error),
+    /// An error from `.debug()` which shouldn't be caught
+    DebugError(syn::Error),
+    /// User-thrown errors
+    AssertionError(syn::Error),
+    /// An unexpected value (e.g. out-of-bounds index)
+    ValueError(syn::Error),
+    /// An error caused by invalid control flow (e.g. no matching attempt arm)
+    ControlFlowError(syn::Error),
+    /// A parse error which occurred during runtime
+    /// (e.g. from parsing macro arguments in a preinterpret parser)
+    RuntimeParseError(ParseError),
+    /// Indicates unwinding due to control flow (break/continue)
+    ControlFlowInterrupt(ControlFlowInterrupt, Span),
 }
 
 #[derive(Debug)]
@@ -180,27 +235,21 @@ impl ControlFlowInterrupt {
     }
 }
 
-impl From<syn::Error> for ExecutionInterrupt {
-    fn from(e: syn::Error) -> Self {
-        ExecutionInterrupt::error(e)
-    }
-}
-
-impl From<ParseError> for ExecutionInterrupt {
-    fn from(e: ParseError) -> Self {
-        ExecutionInterrupt::parse_error(e)
-    }
-}
-
 impl ExecutionInterrupt {
     pub(crate) fn convert_to_final_error(self) -> syn::Error {
         match *self.inner {
-            ExecutionInterruptInner::Error(e) => e,
-            ExecutionInterruptInner::ParseError(e) => e.convert_to_final_error(),
-            ExecutionInterruptInner::ControlFlow(ControlFlowInterrupt::Break, span) => {
+            ExecutionInterruptInner::SyntaxError(error) => error,
+            ExecutionInterruptInner::TypeError(error) => error,
+            ExecutionInterruptInner::OwnershipError(error) => error,
+            ExecutionInterruptInner::DebugError(error) => error,
+            ExecutionInterruptInner::AssertionError(error) => error,
+            ExecutionInterruptInner::ValueError(error) => error,
+            ExecutionInterruptInner::ControlFlowError(error) => error,
+            ExecutionInterruptInner::RuntimeParseError(e) => e.convert_to_final_error(),
+            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Break, span) => {
                 syn::Error::new(span, "Break can only be used inside a loop")
             }
-            ExecutionInterruptInner::ControlFlow(ControlFlowInterrupt::Continue, span) => {
+            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Continue, span) => {
                 syn::Error::new(span, "Continue can only be used inside a loop")
             }
         }

@@ -128,6 +128,12 @@ Create the following expressions:
   - [x] Use `None.configure_preinterpret()` for now
   - [x] Remove `!parse!`
 - [ ] Add `attempt` expression - See @./2025-09-vision.md
+  - [x] Replace `execution_err` with explicit error kinds, so we can handle them differently with respect to catching, e.g. `destructure_err`, `panic_err`, `user_err`, `assert_err`, `resolution_err`, `operation_err`
+  - [ ] Add a message to uncatchable errors explaining why the attempt block does not
+  catch them, advising to use an assertion if these errors are intended to be caught.
+  - [ ] Prevent mutating parent state in revertible block
+- [ ] Side-project: Make LateBound better to allow this, by upgrading to mutable before use
+  - [ ] https://rust-lang.github.io/rfcs/2025-nested-method-calls.html
 
 ## Loop return behaviour
 
@@ -145,9 +151,15 @@ So some possible things we can explore / consider:
   - A: We remove vec-returns from loops
   - B: We only store values which are non-None in the array, we can therefore use `loop { break X }[0]` to get the return value
 - [ ] Trial exposing the output stream as a variable binding `stream`. We need to have some way to make it kinda efficient though.
-  - Conceptually considering some optimizations further down, this `stream` might actually be from some few levels above, using tail-return optimizations
+  - One kinda issue is that `stream` is a `&mut OutputStream` rather than a `Mutable<OutputStream>` if that's a problem. It's expensive to inter-convert these.
+  - We also don't want people to be able to read from it - only mutate it: Conceptually considering some optimizations further down, this `stream` might actually be from some few levels above, using tail-return optimizations
   - Maybe we just have an `output(%[...])` command instead of exposing the stream variable?
   - Or even `output` statement so that we can do e.g. `output 'a %[..]` to reference a particular block.
+  - But what does it mean in terms of the `Mutable<OutputStream>` to output to a parent stream?
+    - It might be the same stream or not; depending on if there is an `output`
+    expression in the middle layer. I think this is reasonable. Conceptually we may need to know that two labels refer to the same stream in some map somewhere.
+    - It suggests that `output` is not a variable, but a statement so that it can be
+    bound as late as possible.
 - [ ] `break` / `continue` improvements:
   - Can return a value (from the last iteration of for / while loops)
   - Can specify a label, and return from a labelled block (https://blog.rust-lang.org/2022/11/03/Rust-1.65.0/#break-from-labeled-blocks)
@@ -165,6 +177,25 @@ First, read the @./2025-09-vision.md
   * Consider a `parse %[ .. ] { /* parsers * / }` expression / block (no new scope!)
 
 * Various other changes from the vision doc
+* (Side thought) - How does selecting a parse stream come into it? And e.g. when we extend to method/function definitions... Some options:
+  * `@'1 IDENT`
+  * `@>ident`, `@'1>ident`
+  * Pseudo-variables:
+    * `@.ident()`, `@'1.ident()` and similarly `out += %[..]`, `out'x += %[..]`
+    * Could define own method such as `assert_identical(@'1, @'2)`
+  * `#(IDENT(@))` or `@IDENT` shorthand for `#(IDENT(@))`
+  * `input.ident()`
+  * One option - @ is sugar, we use labels (lifetimes) to define parsers:
+    * `@IDENT` is sugar for `#(@IDENT)` which is sugar for `#(IDENT::<'current>())`.
+    * `@x=IDENT` is shorthand for `#{ let x = @IDENT; }` (only in stream parser mode)
+    * Any parsers with custom syntax require expression mode:
+      `#{ let full = @CAPTURE { ..inner parser.. } }`
+    * But then what is `@(..)` and repeat-friends syntax sugar for?
+      * Something like `STREAM::<'current> { /* desugared */ }` could work
+      * `@::<'current>(..)` could work, but it's a little weird to have the `@` and the identifier.
+      * Or just don't allow an unsugared form, and require, `parse '1 { @( .. ) }` could work, where parse takes a label instead of a variable.
+    * How would a parser take multiple input streams?
+      * `let x = parse_same_ident::<'1, '2>(...)`
 
 * Named parsers:
   * `@[CAPTURE_INPUT_STREAM <expression>]`
@@ -178,13 +209,13 @@ First, read the @./2025-09-vision.md
   * `@TOKEN_OR_GROUP_CONTENT` - Literal, Ident, Punct or None-group content (using `ParsedTokenTree`) - (do we need this?)
   * `@INFER_TOKEN_TREE` - Infers parsing as a value, falls back to Stream - OR maybe we just do `@TOKEN_TREE.infer()` - possibly this should also strip none-groups
   * `@INTEGER`
-  * `@[ANY_GROUP ...]`
-  * `@[FORK @{ ...parser... }]` the parser block creates a `commit=false` variable, if this is set to `commit=true` then it commits the fork.
-  * `@[PEEK ...]` which does a `@[FORK ...]` internally but never commits... question: Should it use it error (for use in an `attempt` block)? Or return a bool? Maybe we have two?
+  * `@[ANY_GROUP { ...inner parser... }]`
+  * `@[FORK { ...parser... }]` the parser block creates a `commit=false` variable, if this is set to `commit=true` then it commits the fork.
+  * `@[PEEK { ... }]` which does a `@[FORK ...]` internally but never commits... question: Should it use it error (for use in an `attempt` block)? Or return a bool? Maybe we have two?
   * `@[FIELDS { ... }]` and `@[SUBFIELDS { ... }]`
   * Add ability to add scope to interpreter state (see `Parsers Revisited`) and can then add:
     * `@[REPEATED { ... }]` (see below)
-    * `@[UNTIL @{...}]` - takes an explicit parse block or parser. Reverts any state change if it doesn't match.
+    * `@[UNTIL { ... }]` - takes an explicit parse block or parser. Reverts any state change if it doesn't match.
 ```rust
 @[REPEATED({
     separator?: %[], // Could really be a parse stream, but it has to be a value here, and realistically it's not important. This is evaluated only once at the start.
@@ -316,7 +347,12 @@ preinterpret::run! {
 ## Optimizations 
 
 - [ ] Look at benchmarks and if anything should be sped up
-- [ ] Optionally consider writing `ResolvedReference(Span/ScopeId/DefinitionId/IsFirstUse)` data directly back into the Reference via a `Rc<Cell<ReferenceContent::Resolved(ResolvedReference)>>` to set the values (from a `ReferenceContent::Parsed(Ident, ReferenceId)`)
+- [ ] Speeding up scopes at runtime:
+  - [ ] In the interpreter, store a flattened stack of variable values
+  - [ ] `no_mutation_above` can be a stack offset
+  - [ ] References store on them cached information - either up-front, via an `Rc<Cell<ReferenceContent::Resolved(ResolvedReference)>>` or via a "resolve on first execute"
+    - Value's relative offset from the top of the stack
+    - An is last use flag
 
 ## Coding challenges
 

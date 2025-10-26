@@ -135,18 +135,14 @@ impl MethodInterface {
         match self {
             MethodInterface::Arity0 { method, .. } => {
                 if !arguments.is_empty() {
-                    return context
-                        .output_span_range
-                        .execution_err("Expected 0 arguments");
+                    return context.output_span_range.type_err("Expected 0 arguments");
                 }
                 method(context)
             }
             MethodInterface::Arity1 { method, .. } => {
                 match <[ResolvedValue; 1]>::try_from(arguments) {
                     Ok([a]) => method(context, a),
-                    Err(_) => context
-                        .output_span_range
-                        .execution_err("Expected 1 argument"),
+                    Err(_) => context.output_span_range.type_err("Expected 1 argument"),
                 }
             }
             MethodInterface::Arity1PlusOptional1 { method, .. } => match arguments.len() {
@@ -160,14 +156,12 @@ impl MethodInterface {
                 }
                 _ => context
                     .output_span_range
-                    .execution_err("Expected 1 or 2 arguments"),
+                    .type_err("Expected 1 or 2 arguments"),
             },
             MethodInterface::Arity2 { method, .. } => {
                 match <[ResolvedValue; 2]>::try_from(arguments) {
                     Ok([a, b]) => method(context, a, b),
-                    Err(_) => context
-                        .output_span_range
-                        .execution_err("Expected 2 arguments"),
+                    Err(_) => context.output_span_range.type_err("Expected 2 arguments"),
                 }
             }
             MethodInterface::Arity2PlusOptional1 { method, .. } => match arguments.len() {
@@ -181,14 +175,12 @@ impl MethodInterface {
                 }
                 _ => context
                     .output_span_range
-                    .execution_err("Expected 2 or 3 arguments"),
+                    .type_err("Expected 2 or 3 arguments"),
             },
             MethodInterface::Arity3 { method, .. } => {
                 match <[ResolvedValue; 3]>::try_from(arguments) {
                     Ok([a, b, c]) => method(context, a, b, c),
-                    Err(_) => context
-                        .output_span_range
-                        .execution_err("Expected 3 arguments"),
+                    Err(_) => context.output_span_range.type_err("Expected 3 arguments"),
                 }
             }
             MethodInterface::Arity3PlusOptional1 { method, .. } => match arguments.len() {
@@ -202,7 +194,7 @@ impl MethodInterface {
                 }
                 _ => context
                     .output_span_range
-                    .execution_err("Expected 3 or 4 arguments"),
+                    .type_err("Expected 3 or 4 arguments"),
             },
             MethodInterface::ArityAny { method, .. } => method(context, arguments),
         }

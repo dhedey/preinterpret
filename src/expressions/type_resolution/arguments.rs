@@ -21,7 +21,7 @@ impl<'a> ResolutionContext<'a> {
         expected_value_kind: &str,
         value: impl Borrow<ExpressionValue>,
     ) -> ExecutionResult<T> {
-        self.span_range.execution_err(format!(
+        self.span_range.type_err(format!(
             "{} is expected to be {}, but it is {}",
             self.resolution_target,
             expected_value_kind,

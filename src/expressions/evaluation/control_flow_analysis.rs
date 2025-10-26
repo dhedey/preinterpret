@@ -182,6 +182,9 @@ impl Leaf {
             Leaf::LoopExpression(loop_expression) => loop_expression.control_flow_pass(context),
             Leaf::WhileExpression(while_expression) => while_expression.control_flow_pass(context),
             Leaf::ForExpression(for_expression) => for_expression.control_flow_pass(context),
+            Leaf::AttemptExpression(attempt_expression) => {
+                attempt_expression.control_flow_pass(context)
+            }
             Leaf::Discarded(_) => Ok(()),
             Leaf::Value(_) => Ok(()),
         }

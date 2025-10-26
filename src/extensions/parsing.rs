@@ -7,7 +7,7 @@ pub(crate) trait TokenStreamParseExt: Sized {
         control_flow_analysis: impl FnOnce(&mut T, FlowCapturer) -> ParseResult<()>,
     ) -> ParseResult<(T, ScopeDefinitions)>;
 
-    fn interpreted_parse_with<T, E: From<syn::Error>>(
+    fn interpreted_parse_with<T, E: From<ParseError>>(
         self,
         parser: impl FnOnce(ParseStream<Output>) -> Result<T, E>,
     ) -> Result<T, E>;
@@ -24,7 +24,7 @@ impl TokenStreamParseExt for TokenStream {
         Ok((parsed, definitions))
     }
 
-    fn interpreted_parse_with<T, E: From<syn::Error>>(
+    fn interpreted_parse_with<T, E: From<ParseError>>(
         self,
         parser: impl FnOnce(ParseStream<Output>) -> Result<T, E>,
     ) -> Result<T, E> {
@@ -32,7 +32,7 @@ impl TokenStreamParseExt for TokenStream {
     }
 }
 
-pub(crate) fn parse_with<T, K, E: From<syn::Error>>(
+pub(crate) fn parse_with<T, K, E: From<ParseError>>(
     stream: TokenStream,
     parser: impl FnOnce(ParseStream<K>) -> Result<T, E>,
 ) -> Result<T, E> {
@@ -53,7 +53,7 @@ pub(crate) fn parse_with<T, K, E: From<syn::Error>>(
         // If the inner result was Ok, but the parse result was an error, this indicates that the parse2
         // hit the "unexpected" path, indicating that some parse buffer (i.e. group) wasn't fully consumed.
         // So we propagate this error.
-        (Some(Ok(_)), Err(error)) => Err(error.into()),
+        (Some(Ok(_)), Err(error)) => Err(E::from(ParseError::Standard(error))),
         (None, _) => unreachable!(),
     }
 }

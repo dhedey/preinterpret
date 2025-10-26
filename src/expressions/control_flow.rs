@@ -407,3 +407,117 @@ impl ForExpression {
         Ok(output.into_owned_value(self.span_range()))
     }
 }
+
+pub(crate) struct AttemptExpression {
+    attempt_token: Ident,
+    braces: Braces,
+    arms: Vec<AttemptArm>,
+}
+
+struct AttemptArm {
+    arm_scope: ScopeId,
+    // We don't use ExpressionBlock here because we need lhs's scope to extend into the rhs
+    lhs_braces: Braces,
+    lhs: ExpressionBlockContent,
+    _arrow: Token![=>],
+    rhs_braces: Braces,
+    rhs: ExpressionBlockContent,
+}
+
+impl HasSpanRange for AttemptExpression {
+    fn span_range(&self) -> SpanRange {
+        SpanRange::new_between(self.attempt_token.span(), self.braces.close())
+    }
+}
+
+impl ParseSource for AttemptExpression {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
+        let attempt_token = input.parse_ident_matching("attempt")?;
+        let (braces, inner) = input.parse_braces()?;
+        let mut arms = vec![];
+        while !inner.is_empty() {
+            let (lhs_braces, lhs_inner) = inner.parse_braces()?;
+            let lhs = lhs_inner.parse()?;
+            let arrow = inner.parse()?;
+            let (rhs_braces, rhs_inner) = inner.parse_braces()?;
+            let rhs = rhs_inner.parse()?;
+            if inner.peek(Token![,]) {
+                let _ = inner.parse::<Token![,]>()?;
+            }
+            arms.push(AttemptArm {
+                arm_scope: ScopeId::new_placeholder(),
+                lhs_braces,
+                lhs,
+                _arrow: arrow,
+                rhs_braces,
+                rhs,
+            });
+        }
+        Ok(Self {
+            attempt_token,
+            braces,
+            arms,
+        })
+    }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        let segment = context.enter_next_segment(SegmentKind::PathBased);
+        let mut previous_attempt_segment = None;
+        for arm in &mut self.arms {
+            context.register_scope(&mut arm.arm_scope);
+
+            context.enter_scope(arm.arm_scope);
+            let attempt_segment = context
+                .enter_path_segment(previous_attempt_segment, SegmentKind::RevertibleSequential);
+            previous_attempt_segment = Some(attempt_segment);
+            arm.lhs.control_flow_pass(context)?;
+            context.exit_segment(attempt_segment);
+
+            let action_segment =
+                context.enter_path_segment(previous_attempt_segment, SegmentKind::Sequential);
+            arm.rhs.control_flow_pass(context)?;
+            context.exit_segment(action_segment);
+            context.exit_scope(arm.arm_scope);
+        }
+        context.exit_segment(segment);
+
+        Ok(())
+    }
+}
+
+impl AttemptExpression {
+    pub(crate) fn evaluate(
+        &self,
+        interpreter: &mut Interpreter,
+        ownership: RequestedValueOwnership,
+    ) -> ExecutionResult<EvaluationItem> {
+        for arm in self.arms.iter() {
+            let attempt_outcome = interpreter.enter_scope_starting_with_revertible_segment(
+                arm.arm_scope,
+                |interpreter| -> ExecutionResult<()> {
+                    let output = arm.lhs.evaluate(
+                        interpreter,
+                        arm.lhs_braces.join().into(),
+                        RequestedValueOwnership::owned(),
+                    )?;
+                    output
+                        .expect_owned()
+                        .resolve_as("The returned value from the left half of an attempt arm")
+                },
+            )?;
+            match attempt_outcome {
+                AttemptOutcome::Completed(()) => { /* proceed to rhs */ }
+                AttemptOutcome::Reverted => {
+                    interpreter.exit_scope(arm.arm_scope);
+                    continue;
+                }
+            }
+            let output = arm
+                .rhs
+                .evaluate(interpreter, arm.rhs_braces.join().into(), ownership)?;
+            interpreter.exit_scope(arm.arm_scope);
+            return Ok(output);
+        }
+        self.braces.control_flow_err("No attempt arm ran successfully. You may wish to add a fallback arm `{} => {}` to ignore the error or to propogate a better message: `{} => { %[<tokens for error span>].error(\"Error message\") }`.")
+    }
+}

@@ -53,11 +53,7 @@ impl Expression {
         // Must align with evaluate_as_statement
         matches!(
             &self.nodes.get(self.root),
-            ExpressionNode::Leaf(Leaf::Block(_))
-                | ExpressionNode::Leaf(Leaf::IfExpression(_))
-                | ExpressionNode::Leaf(Leaf::LoopExpression(_))
-                | ExpressionNode::Leaf(Leaf::WhileExpression(_))
-                | ExpressionNode::Leaf(Leaf::ForExpression(_))
+            ExpressionNode::Leaf(x) if x.is_valid_as_statement_without_semicolon(),
         )
     }
 
@@ -153,6 +149,7 @@ pub(super) enum Leaf {
     LoopExpression(LoopExpression),
     WhileExpression(WhileExpression),
     ForExpression(ForExpression),
+    AttemptExpression(AttemptExpression),
 }
 
 impl HasSpanRange for Leaf {
@@ -167,6 +164,23 @@ impl HasSpanRange for Leaf {
             Leaf::LoopExpression(expression) => expression.span_range(),
             Leaf::WhileExpression(expression) => expression.span_range(),
             Leaf::ForExpression(expression) => expression.span_range(),
+            Leaf::AttemptExpression(expression) => expression.span_range(),
+        }
+    }
+}
+
+impl Leaf {
+    fn is_valid_as_statement_without_semicolon(&self) -> bool {
+        match self {
+            Leaf::Block(_)
+            | Leaf::IfExpression(_)
+            | Leaf::LoopExpression(_)
+            | Leaf::WhileExpression(_)
+            | Leaf::ForExpression(_)
+            | Leaf::AttemptExpression(_) => true,
+            Leaf::Variable(_) | Leaf::Discarded(_) | Leaf::Value(_) | Leaf::StreamLiteral(_) => {
+                false
+            }
         }
     }
 }
