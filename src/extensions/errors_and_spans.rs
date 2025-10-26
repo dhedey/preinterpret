@@ -16,7 +16,7 @@ pub(crate) trait SpanErrorExt {
     fn syn_error(&self, message: impl std::fmt::Display) -> syn::Error;
 
     fn parse_error(&self, message: impl std::fmt::Display) -> ParseError {
-        ParseError::Standard(self.syn_error(message))
+        ParseError::new(self.syn_error(message))
     }
 
     fn parse_err<T>(&self, message: impl std::fmt::Display) -> ParseResult<T> {

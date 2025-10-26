@@ -129,9 +129,9 @@ Create the following expressions:
   - [x] Remove `!parse!`
 - [ ] Add `attempt` expression - See @./2025-09-vision.md
   - [x] Replace `execution_err` with explicit error kinds, so we can handle them differently with respect to catching, e.g. `destructure_err`, `panic_err`, `user_err`, `assert_err`, `resolution_err`, `operation_err`
-  - [ ] Add a message to uncatchable errors explaining why the attempt block does not
-  catch them, advising to use an assertion if these errors are intended to be caught.
-  - [ ] Prevent mutating parent state in revertible block
+  - [x] Prevent mutating parent state in revertible block
+  - [x] Add `if X` guards to attempt block
+  - [x] Add a message to uncatchable errors explaining why the attempt block does not catch them, advising to use an assertion if these errors are intended to be caught.
 - [ ] Side-project: Make LateBound better to allow this, by upgrading to mutable before use
   - [ ] https://rust-lang.github.io/rfcs/2025-nested-method-calls.html
 
@@ -353,6 +353,14 @@ preinterpret::run! {
   - [ ] References store on them cached information - either up-front, via an `Rc<Cell<ReferenceContent::Resolved(ResolvedReference)>>` or via a "resolve on first execute"
     - Value's relative offset from the top of the stack
     - An is last use flag
+
+## Match block [blocked on slices]
+
+* Delay this probably - without enums it's not super important.
+* We'll need to add destructuring references, and allow destructuring `x.as_ref()`
+  and maybe `x.as_mut()`.
+* To destructure owned objects, we probably want to do it as_ref first, and if that succeeds, we can commit to a proper owned destructuring.
+* Poor man's enum with `{ type: "a", ... }` and `{ type: "b", ... }`
 
 ## Coding challenges
 

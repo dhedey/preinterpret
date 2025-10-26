@@ -12,7 +12,7 @@ fn test_control_flow_compilation_failures() {
         return;
     }
     let t = trybuild::TestCases::new();
-    t.compile_fail("tests/compilation_failures/control_flow/*.rs");
+    t.compile_fail("tests/compilation_failures/control_flow/**/*.rs");
 }
 
 #[test]
@@ -151,8 +151,80 @@ fn test_attempt() {
         };
         %[_].assert_eq(output, 2);
     }
-    // Add compile tests:
-    // - attempt with no successful arms
-    // - None.debug() should propogate the error
-    // - Mutations of parent state are not allowed in
+    // Mutating a variable defined inside the arm works.
+    // (Not being able to mutate parent scope variables is tested as a compilation failure.)
+    run! {
+        let value = attempt {
+            { let x = 0; x += 1; } => { x }
+        };
+        %[_].assert_eq(value, 1);
+    }
+    run! {
+        let x = 0;
+        attempt {
+            { } => { x += 1; }
+        };
+        %[_].assert_eq(x, 1);
+    }
+    run! {
+        let y = 3;
+        let value = attempt {
+            { let x = y + 1; } => { x }
+        };
+        %[_].assert_eq(value, 4);
+    }
+    run! {
+        let value = attempt {
+            {
+                let y = 1;
+                attempt {
+                    {} => { y += 1; }
+                }
+            } => { y }
+        };
+        %[_].assert_eq(value, 2);
+    }
+    // Control flow interrupts can be inside attempt arm LHS.
+    run! {
+        loop {
+            attempt {
+                { break; } => { None }
+            }
+            %[_].error("Should be unreachable");
+        }
+    }
+    // Control flow interrupts can be inside attempt arm RHS.
+    run! {
+        loop {
+            attempt {
+                {} => { break; }
+            }
+            %[_].error("Should be unreachable");
+        }
+    }
+}
+
+#[test]
+fn test_attempt_guard_clauses() {
+    run! {
+        let output = attempt {
+            { } if false => 1,
+            { } => 2,
+        };
+        %[_].assert_eq(output, 2);
+    }
+    run! {
+        let output = attempt {
+            { let x = 4; } if { x += 1; true } => { x }
+            { } => { 2 }
+        };
+        %[_].assert_eq(output, 5);
+    }
+    run! {
+        let output = attempt {
+            { let x = 2; } if x >= 3 => x,
+            { let x = 5; } if x >= 3 => x,
+        };
+        %[_].assert_eq(output, 5);
+    }
 }

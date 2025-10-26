@@ -23,6 +23,13 @@ impl Expression {
         Self { root, nodes }
     }
 
+    pub(super) fn is_block(&self) -> bool {
+        matches!(
+            self.nodes.get(self.root),
+            ExpressionNode::Leaf(Leaf::Block(_))
+        )
+    }
+
     pub(super) fn evaluate(
         &self,
         interpreter: &mut Interpreter,

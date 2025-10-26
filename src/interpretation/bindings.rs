@@ -26,11 +26,15 @@ impl VariableContent {
         variable_span: Span,
         is_final: bool,
         ownership: RequestedValueOwnership,
+        blocked_from_mutation: bool,
     ) -> ExecutionResult<LateBoundValue> {
         const UNITIALIZED_ERR: &str = "Cannot resolve uninitialized variable. This shouldn't be possible, because all variables are set on first use.";
         const FINISHED_ERR: &str = "Cannot resolve finished variable. This shouldn't be possible, because is_final should be marked correctly. If you see this error, please report a bug to preinterpret on github with a reproduction case.";
 
-        let value_rc = if is_final {
+        // If blocked from mutation, we technically could allow is_final to work and
+        // return a fully owned value without observable mutation,
+        // but it's likely confusingly inconsistent, so it's better to just block it entirely.
+        let value_rc = if is_final && !blocked_from_mutation {
             let content = std::mem::replace(self, VariableContent::Finished);
             match content {
                 VariableContent::Uninitialized => panic!("{}", UNITIALIZED_ERR),
@@ -66,7 +70,7 @@ impl VariableContent {
             data: value_rc,
             variable_span,
         };
-        match ownership {
+        let resolved = match ownership {
             RequestedValueOwnership::LateBound => binding.into_late_bound(),
             RequestedValueOwnership::Concrete(ownership) => match ownership {
                 ResolvedValueOwnership::Owned => binding
@@ -83,6 +87,20 @@ impl VariableContent {
                     .map(CopyOnWrite::shared_in_place_of_shared)
                     .map(LateBoundValue::CopyOnWrite),
             },
+        };
+        if blocked_from_mutation {
+            match resolved {
+                Ok(LateBoundValue::Mutable(mutable)) => {
+                    let reason_not_mutable = mutable.syn_error("It is not possible to mutate this variable because it is defined outside of a conditional scope. If in an attempt/match block, you should define variables in the conditional part of the arm, and move mutations to the unconditional part of the arm.");
+                    Ok(LateBoundValue::Shared(LateBoundSharedValue {
+                        shared: mutable.into_shared(),
+                        reason_not_mutable,
+                    }))
+                }
+                x => x,
+            }
+        } else {
+            resolved
         }
     }
 }

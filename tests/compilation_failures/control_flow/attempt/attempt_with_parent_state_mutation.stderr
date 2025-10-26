@@ -1,0 +1,6 @@
+error: It is not possible to mutate this variable because it is defined outside of a conditional scope. If in an attempt/match block, you should define variables in the conditional part of the arm, and move mutations to the unconditional part of the arm.
+       NOTE: An OwnershipError is a not caught by attempt blocks. If you wish to catch this, throw an error with %[].error("..") instead.
+ --> tests/compilation_failures/control_flow/attempt/attempt_with_parent_state_mutation.rs:7:15
+  |
+7 |             { x += 1; } => { None }
+  |               ^

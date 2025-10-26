@@ -51,7 +51,12 @@ impl Interpreter {
                 self.handle_catch(id);
                 Ok(AttemptOutcome::Reverted)
             }
-            Err(err) => Err(err),
+            Err(mut err) => {
+                if let Some((kind, error)) = err.error_mut() {
+                    *error = core::mem::take(error).add_context_if_none(format!("NOTE: {} is a not caught by attempt blocks. If you wish to catch this, throw an error with %[].error(\"..\") instead.", kind.as_str().upper_indefinite_articled()));
+                }
+                Err(err)
+            }
         }
     }
 
@@ -118,8 +123,21 @@ impl Interpreter {
             reference.reference_name_span,
             reference.is_final_reference,
         );
+        let blocked_from_mutation = match self.no_mutation_above.last() {
+            Some(&no_mutation_above_scope) => 'result: {
+                for scope in self.scopes.iter().rev() {
+                    match scope.id {
+                        id if id == reference.definition_scope => break 'result false,
+                        id if id == no_mutation_above_scope => break 'result true,
+                        _ => {}
+                    }
+                }
+                panic!("Definition scope expected in scope stack due to control flow analysis");
+            }
+            None => false,
+        };
         let scope_data = self.scope_mut(reference.definition_scope);
-        scope_data.resolve(definition, span, is_final, ownership)
+        scope_data.resolve(definition, span, is_final, ownership, blocked_from_mutation)
     }
 
     pub(crate) fn start_iteration_counter<'s, S: HasSpanRange>(
@@ -163,11 +181,12 @@ impl RuntimeScope {
         span: Span,
         is_final: bool,
         ownership: RequestedValueOwnership,
+        blocked_from_mutation: bool,
     ) -> ExecutionResult<LateBoundValue> {
         self.variables
             .get_mut(&definition_id)
             .expect("Variable data not found in scope")
-            .resolve(span, is_final, ownership)
+            .resolve(span, is_final, ownership, blocked_from_mutation)
     }
 }
 

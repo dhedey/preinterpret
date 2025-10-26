@@ -213,7 +213,7 @@ impl FlowAnalysisState {
                 }
             }
         }
-        reference_name_span.parse_err("A variable must be defined before it is referenced.")
+        reference_name_span.parse_err(format!("Cannot find variable `{}` in this scope", name))
     }
 
     /// The scope parameter is just to help catch bugs.

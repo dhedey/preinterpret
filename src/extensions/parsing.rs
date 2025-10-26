@@ -53,7 +53,7 @@ pub(crate) fn parse_with<T, K, E: From<ParseError>>(
         // If the inner result was Ok, but the parse result was an error, this indicates that the parse2
         // hit the "unexpected" path, indicating that some parse buffer (i.e. group) wasn't fully consumed.
         // So we propagate this error.
-        (Some(Ok(_)), Err(error)) => Err(E::from(ParseError::Standard(error))),
+        (Some(Ok(_)), Err(error)) => Err(E::from(ParseError::new(error))),
         (None, _) => unreachable!(),
     }
 }

@@ -928,11 +928,7 @@ pub(super) trait HasValueType {
         if value_type.is_empty() {
             return value_type.to_string();
         }
-        let first_char = value_type.chars().next().unwrap();
-        match first_char {
-            'a' | 'e' | 'i' | 'o' | 'u' => format!("an {}", value_type),
-            _ => format!("a {}", value_type),
-        }
+        value_type.lower_indefinite_articled()
     }
 }
 

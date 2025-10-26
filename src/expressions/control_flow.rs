@@ -419,9 +419,9 @@ struct AttemptArm {
     // We don't use ExpressionBlock here because we need lhs's scope to extend into the rhs
     lhs_braces: Braces,
     lhs: ExpressionBlockContent,
+    guard: Option<(Token![if], Expression)>,
     _arrow: Token![=>],
-    rhs_braces: Braces,
-    rhs: ExpressionBlockContent,
+    rhs: Expression,
 }
 
 impl HasSpanRange for AttemptExpression {
@@ -438,18 +438,26 @@ impl ParseSource for AttemptExpression {
         while !inner.is_empty() {
             let (lhs_braces, lhs_inner) = inner.parse_braces()?;
             let lhs = lhs_inner.parse()?;
+            let guard = if inner.peek_ident_matching("if") {
+                let if_token = inner.parse()?;
+                let condition = inner.parse()?;
+                Some((if_token, condition))
+            } else {
+                None
+            };
             let arrow = inner.parse()?;
-            let (rhs_braces, rhs_inner) = inner.parse_braces()?;
-            let rhs = rhs_inner.parse()?;
+            let rhs: Expression = inner.parse()?;
             if inner.peek(Token![,]) {
                 let _ = inner.parse::<Token![,]>()?;
+            } else if !rhs.is_block() {
+                inner.parse_err("Expected trailing comma after previous non-block attempt arm")?;
             }
             arms.push(AttemptArm {
                 arm_scope: ScopeId::new_placeholder(),
                 lhs_braces,
                 lhs,
+                guard,
                 _arrow: arrow,
-                rhs_braces,
                 rhs,
             });
         }
@@ -469,9 +477,12 @@ impl ParseSource for AttemptExpression {
             context.enter_scope(arm.arm_scope);
             let attempt_segment = context
                 .enter_path_segment(previous_attempt_segment, SegmentKind::RevertibleSequential);
-            previous_attempt_segment = Some(attempt_segment);
             arm.lhs.control_flow_pass(context)?;
+            if let Some((_, guard_expression)) = &mut arm.guard {
+                guard_expression.control_flow_pass(context)?;
+            }
             context.exit_segment(attempt_segment);
+            previous_attempt_segment = Some(attempt_segment);
 
             let action_segment =
                 context.enter_path_segment(previous_attempt_segment, SegmentKind::Sequential);
@@ -500,9 +511,21 @@ impl AttemptExpression {
                         arm.lhs_braces.join().into(),
                         RequestedValueOwnership::owned(),
                     )?;
-                    output
+                    let unit = output
                         .expect_owned()
-                        .resolve_as("The returned value from the left half of an attempt arm")
+                        .resolve_as("The returned value from the left half of an attempt arm");
+                    if let Some((if_token, guard_expression)) = &arm.guard {
+                        let guard_value: bool = guard_expression
+                            .evaluate_owned(interpreter)?
+                            .resolve_as("The guard condition of an attempt arm")?;
+                        if !guard_value {
+                            // This will be immediately caught
+                            return if_token
+                                .span
+                                .assertion_err("Guard condition evaluated to false.");
+                        }
+                    }
+                    unit
                 },
             )?;
             match attempt_outcome {
@@ -512,9 +535,7 @@ impl AttemptExpression {
                     continue;
                 }
             }
-            let output = arm
-                .rhs
-                .evaluate(interpreter, arm.rhs_braces.join().into(), ownership)?;
+            let output = arm.rhs.evaluate(interpreter, ownership)?;
             interpreter.exit_scope(arm.arm_scope);
             return Ok(output);
         }
