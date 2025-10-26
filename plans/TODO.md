@@ -132,6 +132,7 @@ Create the following expressions:
   - [x] Prevent mutating parent state in revertible block
   - [x] Add `if X` guards to attempt block
   - [x] Add a message to uncatchable errors explaining why the attempt block does not catch them, advising to use an assertion if these errors are intended to be caught.
+  - [ ] Add `revert` keyword and replace error `is a not caught by attempt blocks` and `Guard condition evaluated to false.` with using it)
 - [ ] Side-project: Make LateBound better to allow this, by upgrading to mutable before use
   - [ ] https://rust-lang.github.io/rfcs/2025-nested-method-calls.html
 
