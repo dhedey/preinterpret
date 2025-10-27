@@ -28,16 +28,16 @@ impl<T: Operation> WrappedOp<'_, T> {
     ) -> ExecutionResult<ExpressionValue> {
         match output_value {
             Some(output_value) => Ok(self.output(output_value)),
-            None => self.operation.execution_err(error_message()),
+            None => self.operation.value_err(error_message()),
         }
     }
 
     pub(super) fn unsupported(&self, value: impl HasValueType) -> ExecutionResult<ExpressionValue> {
-        Err(self.operation.execution_error(format!(
+        self.operation.type_err(format!(
             "The {} operator is not supported for {} values",
             self.operation.symbolic_description(),
             value.value_type(),
-        )))
+        ))
     }
 }
 
@@ -124,7 +124,7 @@ impl UnaryOperation {
     ) -> ExecutionResult<ResolvedValue> {
         let input = input.into_owned_value();
         let method = input.kind().resolve_unary_operation(self).ok_or_else(|| {
-            self.execution_error(format!(
+            self.type_error(format!(
                 "The {} operator is not supported for {} values",
                 self.symbolic_description(),
                 input.value_type(),
@@ -359,7 +359,7 @@ impl BinaryOperation {
             BinaryOperation::Integer(operation) => {
                 let right = right
                     .into_integer()
-                    .ok_or_else(|| self.execution_error("The shift amount must be an integer"))?;
+                    .ok_or_else(|| self.type_error("The shift amount must be an integer"))?;
                 left.handle_integer_binary_operation(right, operation.wrap())?
                     .into_owned(span_range)
             }

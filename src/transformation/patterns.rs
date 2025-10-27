@@ -118,7 +118,7 @@ impl HandleDestructure for ArrayPattern {
             match pattern {
                 PatternOrDotDot::DotDot(dot_dot) => {
                     if has_seen_dot_dot {
-                        return dot_dot.execution_err("Only one .. is allowed in an array pattern");
+                        return dot_dot.syntax_err("Only one .. is allowed in an array pattern");
                     }
                     has_seen_dot_dot = true;
                 }
@@ -136,7 +136,7 @@ impl HandleDestructure for ArrayPattern {
         let assignee_pairs: Vec<_> = if has_seen_dot_dot {
             let total_assignees = prefix_assignees.len() + suffix_assignees.len();
             if total_assignees > array_length {
-                return self.brackets.execution_err(format!(
+                return self.brackets.value_err(format!(
                     "The array has {} items, but the pattern expected at least {}",
                     array_length, total_assignees,
                 ));
@@ -156,7 +156,7 @@ impl HandleDestructure for ArrayPattern {
         } else {
             let total_assignees = prefix_assignees.len();
             if total_assignees != array_length {
-                return self.brackets.execution_err(format!(
+                return self.brackets.value_err(format!(
                     "The array has {} items, but the pattern expected {}",
                     array_length, total_assignees,
                 ));
@@ -247,7 +247,7 @@ impl HandleDestructure for ObjectPattern {
                 } => (key.value(), access.span(), pattern),
             };
             if already_used_keys.contains(&key) {
-                return key_span.execution_err(format!("The key `{}` has already used", key));
+                return key_span.syntax_err(format!("The key `{}` has already used", key));
             }
             let value = value_map
                 .remove(&key)

@@ -417,7 +417,7 @@ impl UntypedInteger {
 
     pub(super) fn parse_fallback(&self) -> ExecutionResult<FallbackInteger> {
         self.0.base10_digits().parse().map_err(|err| {
-            self.0.execution_error(format!(
+            self.0.value_error(format!(
                 "Could not parse as the default inferred type {}: {}",
                 core::any::type_name::<FallbackInteger>(),
                 err
@@ -431,7 +431,7 @@ impl UntypedInteger {
         N::Err: core::fmt::Display,
     {
         self.0.base10_digits().parse().map_err(|err| {
-            self.0.execution_error(format!(
+            self.0.value_error(format!(
                 "Could not parse as {}: {}",
                 core::any::type_name::<N>(),
                 err
@@ -464,7 +464,7 @@ define_interface! {
                 let input = value.parse_fallback()?;
                 match input.checked_neg() {
                     Some(negated) => Ok(UntypedInteger::from_fallback(negated)),
-                    None => span_range.execution_err("Negating this value would overflow in i128 space"),
+                    None => span_range.value_err("Negating this value would overflow in i128 space"),
                 }
             }
 
@@ -585,7 +585,7 @@ macro_rules! impl_int_operations {
                             let (value, span_range) = this.deconstruct();
                             match value.checked_neg() {
                                 Some(negated) => Ok(negated),
-                                None => span_range.execution_err("Negating this value would overflow"),
+                                None => span_range.value_err("Negating this value would overflow"),
                             }
                         }
                     )?

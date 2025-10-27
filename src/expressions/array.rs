@@ -76,7 +76,7 @@ impl ExpressionArray {
                 let new_items: Vec<_> = self.items.drain(range).collect();
                 new_items.into_value()
             }
-            _ => return span_range.execution_err("The index must be an integer or a range"),
+            _ => return span_range.type_err("The index must be an integer or a range"),
         })
     }
 
@@ -93,9 +93,9 @@ impl ExpressionArray {
             }
             ExpressionValue::Range(..) => {
                 // Temporary until we add slice types - we error here
-                return span_range.execution_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]");
+                return span_range.ownership_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]");
             }
-            _ => return span_range.execution_err("The index must be an integer or a range"),
+            _ => return span_range.type_err("The index must be an integer or a range"),
         })
     }
 
@@ -112,9 +112,9 @@ impl ExpressionArray {
             }
             ExpressionValue::Range(..) => {
                 // Temporary until we add slice types - we error here
-                return span_range.execution_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]");
+                return span_range.ownership_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]");
             }
-            _ => return span_range.execution_err("The index must be an integer or a range"),
+            _ => return span_range.type_err("The index must be an integer or a range"),
         })
     }
 
@@ -128,7 +128,7 @@ impl ExpressionArray {
             ExpressionValue::Integer(int) => {
                 self.resolve_valid_index_from_integer(int.spanned(span_range), is_exclusive)
             }
-            _ => span_range.execution_err("The index must be an integer"),
+            _ => span_range.type_err("The index must be an integer"),
         }
     }
 
@@ -145,7 +145,7 @@ impl ExpressionArray {
             if index <= self.items.len() {
                 Ok(index)
             } else {
-                integer.execution_err(format!(
+                integer.value_err(format!(
                     "Exclusive index of {} must be less than or equal to the array length of {}",
                     index,
                     self.items.len()
@@ -154,7 +154,7 @@ impl ExpressionArray {
         } else if index < self.items.len() {
             Ok(index)
         } else {
-            integer.execution_err(format!(
+            integer.value_err(format!(
                 "Inclusive index of {} must be less than the array length of {}",
                 index,
                 self.items.len()
@@ -225,7 +225,7 @@ define_interface! {
                 if length == 1 {
                     context.operation.evaluate(this.items.pop().unwrap().into_owned(span_range))
                 } else {
-                    context.operation.execution_err(format!(
+                    context.operation.value_err(format!(
                         "Only a singleton array can be cast to this value but the array has {} elements",
                         length,
                     ))

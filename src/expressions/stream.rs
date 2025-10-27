@@ -179,7 +179,7 @@ define_interface! {
 
             fn error(this: Shared<ExpressionStream>, message: Shared<String>) -> ExecutionResult<Never> {
                 let error_span_range = this.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
-                error_span_range.execution_err(message.as_str())
+                error_span_range.assertion_err(message.as_str())
             }
 
             fn assert(this: Shared<ExpressionStream>, condition: bool, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
@@ -191,7 +191,7 @@ define_interface! {
                         Some(ref m) => m,
                         None => "Assertion failed",
                     };
-                    error_span_range.execution_err(message)
+                    error_span_range.assertion_err(message)
                 }
             }
 
@@ -215,7 +215,7 @@ define_interface! {
                             rhs.concat_recursive(&ConcatBehaviour::debug(rhs.span_range()))?,
                         ),
                     };
-                    error_span_range.execution_err(message)
+                    error_span_range.assertion_err(message)
                 }
             }
 
@@ -251,7 +251,7 @@ define_interface! {
                 let (this, span_range) = this.deconstruct();
                 let coerced = this.value.coerce_into_value();
                 if let ExpressionValue::Stream(_) = &coerced {
-                    return span_range.execution_err("The stream could not be coerced into a single value");
+                    return span_range.value_err("The stream could not be coerced into a single value");
                 }
                 // Re-run the cast operation on the coerced value
                 context.operation.evaluate(coerced.into_owned(span_range))

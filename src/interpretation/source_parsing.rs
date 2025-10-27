@@ -213,7 +213,7 @@ impl FlowAnalysisState {
                 }
             }
         }
-        reference_name_span.parse_err("A variable must be defined before it is referenced.")
+        reference_name_span.parse_err(format!("Cannot find variable `{}` in this scope", name))
     }
 
     /// The scope parameter is just to help catch bugs.
@@ -318,6 +318,7 @@ pub(crate) enum SegmentKind {
     Sequential,
     PathBased,
     LoopingSequential,
+    RevertibleSequential,
 }
 
 impl SegmentKind {
@@ -326,14 +327,15 @@ impl SegmentKind {
             SegmentKind::Sequential => false,
             SegmentKind::PathBased => false,
             SegmentKind::LoopingSequential => true,
+            SegmentKind::RevertibleSequential => false,
         }
     }
 
     fn new_children(&self) -> SegmentChildren {
         match self {
-            SegmentKind::Sequential | SegmentKind::LoopingSequential => {
-                SegmentChildren::Sequential { children: vec![] }
-            }
+            SegmentKind::Sequential
+            | SegmentKind::LoopingSequential
+            | SegmentKind::RevertibleSequential => SegmentChildren::Sequential { children: vec![] },
             SegmentKind::PathBased => SegmentChildren::PathBased {
                 node_previous_map: HashMap::new(),
             },

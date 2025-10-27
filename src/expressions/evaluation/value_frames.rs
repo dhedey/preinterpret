@@ -274,7 +274,7 @@ impl ResolvedValueOwnership {
             LateBoundValue::Mutable(mutable) => self.map_from_mutable_inner(mutable, true),
             LateBoundValue::Shared(late_bound_shared) => self
                 .map_from_shared_with_error_reason(late_bound_shared.shared, |_| {
-                    late_bound_shared.reason_not_mutable.into()
+                    ExecutionInterrupt::ownership_error(late_bound_shared.reason_not_mutable)
                 }),
         }
     }
@@ -292,7 +292,7 @@ impl ResolvedValueOwnership {
             }
             ResolvedValueOwnership::Mutable => {
                 if copy_on_write.acts_as_shared_reference() {
-                    copy_on_write.execution_err("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone()` to get a mutable reference to a cloned value.")
+                    copy_on_write.ownership_err("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone()` to get a mutable reference to a cloned value.")
                 } else {
                     Ok(ResolvedValue::Mutable(Mutable::new_from_owned(
                         copy_on_write.into_owned_transparently()?,
@@ -301,9 +301,9 @@ impl ResolvedValueOwnership {
             }
             ResolvedValueOwnership::Assignee => {
                 if copy_on_write.acts_as_shared_reference() {
-                    copy_on_write.execution_err("A shared reference cannot be assigned to.")
+                    copy_on_write.ownership_err("A shared reference cannot be assigned to.")
                 } else {
-                    copy_on_write.execution_err("An owned value cannot be assigned to.")
+                    copy_on_write.ownership_err("An owned value cannot be assigned to.")
                 }
             }
             ResolvedValueOwnership::CopyOnWrite | ResolvedValueOwnership::AsIs => {
@@ -315,7 +315,7 @@ impl ResolvedValueOwnership {
     pub(crate) fn map_from_shared(&self, shared: SharedValue) -> ExecutionResult<ResolvedValue> {
         self.map_from_shared_with_error_reason(
             shared,
-            |shared| shared.execution_error("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone().as_mut()` to get a mutable reference."),
+            |shared| shared.ownership_error("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone().as_mut()` to get a mutable reference."),
         )
     }
 
@@ -351,7 +351,7 @@ impl ResolvedValueOwnership {
                 if is_late_bound {
                     Ok(ResolvedValue::Owned(mutable.transparent_clone()?))
                 } else {
-                    mutable.execution_err("An owned value is required, but a mutable reference was received. This indicates a possible bug. If this was intended, use `.clone()` to get an owned value.")
+                    mutable.ownership_err("An owned value is required, but a mutable reference was received. This indicates a possible bug. If this was intended, use `.clone()` to get an owned value.")
                 }
             }
             ResolvedValueOwnership::CopyOnWrite => Ok(ResolvedValue::CopyOnWrite(
@@ -377,7 +377,7 @@ impl ResolvedValueOwnership {
                 Ok(ResolvedValue::Mutable(Mutable::new_from_owned(owned)))
             }
             ResolvedValueOwnership::Assignee => {
-                owned.execution_err("An owned value cannot be assigned to.")
+                owned.ownership_err("An owned value cannot be assigned to.")
             }
             ResolvedValueOwnership::Shared => {
                 Ok(ResolvedValue::Shared(Shared::new_from_owned(owned)))
@@ -557,8 +557,7 @@ impl ObjectBuilder {
                 Some((ObjectKey::Identifier(ident), value_node)) => {
                     let key = ident.to_string();
                     if self.evaluated_entries.contains_key(&key) {
-                        return ident
-                            .execution_err(format!("The key {} has already been set", key));
+                        return ident.syntax_err(format!("The key {} has already been set", key));
                     }
                     self.pending = Some(PendingEntryPath::OnValueBranch {
                         key,
@@ -595,7 +594,7 @@ impl EvaluationFrame for Box<ObjectBuilder> {
                 let value = item.expect_owned();
                 let key: String = value.resolve_as("An object key")?;
                 if self.evaluated_entries.contains_key(&key) {
-                    return access.execution_err(format!("The key {} has already been set", key));
+                    return access.syntax_err(format!("The key {} has already been set", key));
                 }
                 self.pending = Some(PendingEntryPath::OnValueBranch {
                     key,
@@ -653,7 +652,7 @@ impl EvaluationFrame for UnaryOperationBuilder {
             let result = interface.execute(resolved_value, &self.operation)?;
             return context.return_resolved_value(result);
         }
-        self.operation.execution_err(format!(
+        self.operation.type_err(format!(
             "The {} operator is not supported for {} values",
             self.operation.symbolic_description(),
             late_bound_value.value_type(),
@@ -1152,7 +1151,7 @@ impl EvaluationFrame for MethodCallBuilder {
                 let method = match method {
                     Some(m) => m,
                     None => {
-                        return self.method.method.execution_err(format!(
+                        return self.method.method.type_err(format!(
                             "The method {} does not exist on {}",
                             self.method.method,
                             caller.as_ref().articled_value_type(),
@@ -1172,7 +1171,7 @@ impl EvaluationFrame for MethodCallBuilder {
                 if non_caller_arguments < non_caller_min_arguments
                     || non_caller_arguments > non_caller_max_arguments
                 {
-                    return self.method.method.execution_err(format!(
+                    return self.method.method.type_err(format!(
                         "The method {} expects {} non-self argument/s, but {} were provided",
                         self.method.method,
                         if non_caller_min_arguments == non_caller_max_arguments {

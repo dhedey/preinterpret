@@ -118,6 +118,7 @@ impl<'a> ExpressionParser<'a> {
                     "loop" => UnaryAtom::Leaf(Leaf::LoopExpression(input.parse()?)),
                     "while" => UnaryAtom::Leaf(Leaf::WhileExpression(input.parse()?)),
                     "for" => UnaryAtom::Leaf(Leaf::ForExpression(input.parse()?)),
+                    "attempt" => UnaryAtom::Leaf(Leaf::AttemptExpression(input.parse()?)),
                     "None" => UnaryAtom::Leaf(Leaf::Value(SharedValue::new_from_owned(
                         ExpressionValue::None.into_owned(input.parse_any_ident()?.span_range()),
                     ))),
@@ -200,8 +201,11 @@ impl<'a> ExpressionParser<'a> {
                 if let Ok(range_limits) = input.try_parse_or_revert() {
                     return Ok(NodeExtension::Range(range_limits));
                 }
-                if let Ok(eq) = input.try_parse_or_revert() {
-                    return Ok(NodeExtension::AssignmentOperation(eq));
+                // Ensure that a guard expression `{} if XX => ` can be parsed correctly.
+                if !input.peek(Token![=>]) {
+                    if let Ok(eq) = input.try_parse_or_revert() {
+                        return Ok(NodeExtension::AssignmentOperation(eq));
+                    }
                 }
             }
             SourcePeekMatch::Ident(ident) if ident == "as" => {

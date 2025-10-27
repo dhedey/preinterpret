@@ -223,7 +223,7 @@ impl UntypedFloat {
 
     pub(super) fn parse_fallback(&self) -> ExecutionResult<FallbackFloat> {
         self.0.base10_digits().parse().map_err(|err| {
-            self.0.execution_error(format!(
+            self.0.value_error(format!(
                 "Could not parse as the default inferred type {}: {}",
                 core::any::type_name::<FallbackFloat>(),
                 err
@@ -237,7 +237,7 @@ impl UntypedFloat {
         N::Err: core::fmt::Display,
     {
         self.0.base10_digits().parse().map_err(|err| {
-            self.0.execution_error(format!(
+            self.0.value_error(format!(
                 "Could not parse as {}: {}",
                 core::any::type_name::<N>(),
                 err

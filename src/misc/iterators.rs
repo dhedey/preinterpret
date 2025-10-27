@@ -63,7 +63,7 @@ impl ZipIterators {
             })
             .collect::<Result<Vec<_>, _>>()?;
         if entries.len() == 101 {
-            return span_range.execution_err("A maximum of 100 iterators are allowed");
+            return span_range.value_err("A maximum of 100 iterators are allowed");
         }
         Ok(ZipIterators::Object(entries, span_range))
     }
@@ -81,7 +81,7 @@ impl ZipIterators {
             })
             .collect::<Result<Vec<_>, _>>()?;
         if vec.len() == 101 {
-            return span_range.execution_err("A maximum of 100 iterators are allowed");
+            return span_range.value_err("A maximum of 100 iterators are allowed");
         }
         Ok(ZipIterators::Array(vec, span_range))
     }
@@ -105,7 +105,7 @@ impl ZipIterators {
         let (min_iterator_min_length, max_iterator_max_length) = iterators.size_hint_range();
 
         if error_on_length_mismatch && Some(min_iterator_min_length) != max_iterator_max_length {
-            return error_span_range.execution_err(format!(
+            return error_span_range.value_err(format!(
                 "The iterables have different lengths. The lengths vary from {} to {}. To truncate to the shortest, use `zip_truncated` instead of `zip`",
                 min_iterator_min_length,
                 match max_iterator_max_length {

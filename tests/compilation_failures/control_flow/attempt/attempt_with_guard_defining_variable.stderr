@@ -1,0 +1,5 @@
+error: Cannot find variable `x` in this scope
+ --> tests/compilation_failures/control_flow/attempt/attempt_with_guard_defining_variable.rs:9:45
+  |
+9 |             { } if { let x = 4; true } => { x }
+  |                                             ^

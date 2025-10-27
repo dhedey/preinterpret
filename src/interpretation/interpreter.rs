@@ -4,6 +4,7 @@ pub(crate) struct Interpreter {
     config: InterpreterConfig,
     scope_definitions: ScopeDefinitions,
     scopes: Vec<RuntimeScope>,
+    no_mutation_above: Vec<ScopeId>,
 }
 
 impl Interpreter {
@@ -13,6 +14,7 @@ impl Interpreter {
             config: Default::default(),
             scope_definitions,
             scopes: vec![],
+            no_mutation_above: vec![],
         };
         interpreter.enter_scope_inner(root_scope_id, false);
         interpreter
@@ -32,6 +34,30 @@ impl Interpreter {
 
     pub(crate) fn enter_scope(&mut self, id: ScopeId) {
         self.enter_scope_inner(id, true);
+    }
+
+    pub(crate) fn enter_scope_starting_with_revertible_segment<T>(
+        &mut self,
+        id: ScopeId,
+        f: impl FnOnce(&mut Self) -> ExecutionResult<T>,
+    ) -> ExecutionResult<AttemptOutcome<T>> {
+        self.enter_scope_inner(id, true);
+        self.no_mutation_above.push(id);
+        let result = f(self);
+        self.no_mutation_above.pop();
+        match result {
+            Ok(value) => Ok(AttemptOutcome::Completed(value)),
+            Err(err) if err.is_catchable() => {
+                self.handle_catch(id);
+                Ok(AttemptOutcome::Reverted)
+            }
+            Err(mut err) => {
+                if let Some((kind, error)) = err.error_mut() {
+                    *error = core::mem::take(error).add_context_if_none(format!("NOTE: {} is not caught by an attempt block. If you wish to catch this, detect it before it is thrown and use the `revert` statement.", kind.as_str().upper_indefinite_articled()));
+                }
+                Err(err)
+            }
+        }
     }
 
     fn enter_scope_inner(&mut self, id: ScopeId, check_parent: bool) {
@@ -97,8 +123,21 @@ impl Interpreter {
             reference.reference_name_span,
             reference.is_final_reference,
         );
+        let blocked_from_mutation = match self.no_mutation_above.last() {
+            Some(&no_mutation_above_scope) => 'result: {
+                for scope in self.scopes.iter().rev() {
+                    match scope.id {
+                        id if id == reference.definition_scope => break 'result false,
+                        id if id == no_mutation_above_scope => break 'result true,
+                        _ => {}
+                    }
+                }
+                panic!("Definition scope expected in scope stack due to control flow analysis");
+            }
+            None => false,
+        };
         let scope_data = self.scope_mut(reference.definition_scope);
-        scope_data.resolve(definition, span, is_final, ownership)
+        scope_data.resolve(definition, span, is_final, ownership, blocked_from_mutation)
     }
 
     pub(crate) fn start_iteration_counter<'s, S: HasSpanRange>(
@@ -115,6 +154,12 @@ impl Interpreter {
     pub(crate) fn set_iteration_limit(&mut self, limit: Option<usize>) {
         self.config.iteration_limit = limit;
     }
+}
+
+#[must_use]
+pub(crate) enum AttemptOutcome<T> {
+    Completed(T),
+    Reverted,
 }
 
 struct RuntimeScope {
@@ -136,11 +181,12 @@ impl RuntimeScope {
         span: Span,
         is_final: bool,
         ownership: RequestedValueOwnership,
+        blocked_from_mutation: bool,
     ) -> ExecutionResult<LateBoundValue> {
         self.variables
             .get_mut(&definition_id)
             .expect("Variable data not found in scope")
-            .resolve(span, is_final, ownership)
+            .resolve(span, is_final, ownership, blocked_from_mutation)
     }
 }
 
@@ -159,7 +205,7 @@ impl<S: HasSpanRange> IterationCounter<'_, S> {
     pub(crate) fn check(&self) -> ExecutionResult<()> {
         if let Some(limit) = self.iteration_limit {
             if self.count > limit {
-                return self.span_source.execution_err(format!("Iteration limit of {} exceeded.\nIf needed, the limit can be reconfigured with None.configure_preinterpret(%{{ iteration_limit: XXX }})", limit));
+                return self.span_source.control_flow_err(format!("Iteration limit of {} exceeded.\nIf needed, the limit can be reconfigured with None.configure_preinterpret(%{{ iteration_limit: XXX }})", limit));
             }
         }
         Ok(())

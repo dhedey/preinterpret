@@ -1,0 +1,5 @@
+error: No attempt arm ran successfully. You may wish to add a fallback arm `{} => { None }` to ignore the error or to propogate a better message: `{} => { %[<tokens for error span>].error("Error message") }`.
+ --> tests/compilation_failures/control_flow/attempt/attempt_with_no_arms.rs:5:17
+  |
+5 |         attempt {}
+  |                 ^^

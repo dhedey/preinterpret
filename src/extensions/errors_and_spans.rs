@@ -13,31 +13,75 @@ impl SynErrorExt for syn::Error {
 }
 
 pub(crate) trait SpanErrorExt {
-    fn parse_err<T>(&self, message: impl std::fmt::Display) -> ParseResult<T> {
-        Err(self.error(message).into())
-    }
-
-    fn execution_err<T>(&self, message: impl std::fmt::Display) -> ExecutionResult<T> {
-        Err(self.error(message).into())
-    }
-
-    fn err<T>(&self, message: impl std::fmt::Display) -> syn::Result<T> {
-        Err(self.error(message))
-    }
-
-    fn error(&self, message: impl std::fmt::Display) -> syn::Error;
-
-    fn execution_error(&self, message: impl std::fmt::Display) -> ExecutionInterrupt {
-        ExecutionInterrupt::error(self.error(message))
-    }
+    fn syn_error(&self, message: impl std::fmt::Display) -> syn::Error;
 
     fn parse_error(&self, message: impl std::fmt::Display) -> ParseError {
-        ParseError::Standard(self.error(message))
+        ParseError::new(self.syn_error(message))
+    }
+
+    fn parse_err<T>(&self, message: impl std::fmt::Display) -> ParseResult<T> {
+        Err(self.syn_error(message).into())
+    }
+
+    fn syntax_err<T>(&self, message: impl std::fmt::Display) -> ExecutionResult<T> {
+        Err(self.syntax_error(message))
+    }
+
+    fn syntax_error(&self, message: impl std::fmt::Display) -> ExecutionInterrupt {
+        ExecutionInterrupt::syntax_error(self.syn_error(message))
+    }
+
+    fn type_err<T>(&self, message: impl std::fmt::Display) -> ExecutionResult<T> {
+        Err(self.type_error(message))
+    }
+
+    fn type_error(&self, message: impl std::fmt::Display) -> ExecutionInterrupt {
+        ExecutionInterrupt::type_error(self.syn_error(message))
+    }
+
+    fn control_flow_err<T>(&self, message: impl std::fmt::Display) -> ExecutionResult<T> {
+        Err(self.control_flow_error(message))
+    }
+
+    fn control_flow_error(&self, message: impl std::fmt::Display) -> ExecutionInterrupt {
+        ExecutionInterrupt::control_flow_error(self.syn_error(message))
+    }
+
+    fn ownership_err<T>(&self, message: impl std::fmt::Display) -> ExecutionResult<T> {
+        Err(self.ownership_error(message))
+    }
+
+    fn ownership_error(&self, message: impl std::fmt::Display) -> ExecutionInterrupt {
+        ExecutionInterrupt::ownership_error(self.syn_error(message))
+    }
+
+    fn assertion_err<T>(&self, message: impl std::fmt::Display) -> ExecutionResult<T> {
+        Err(self.assertion_error(message))
+    }
+
+    fn debug_error(&self, message: impl std::fmt::Display) -> ExecutionInterrupt {
+        ExecutionInterrupt::debug_error(self.syn_error(message))
+    }
+
+    fn debug_err<T>(&self, message: impl std::fmt::Display) -> ExecutionResult<T> {
+        Err(self.debug_error(message))
+    }
+
+    fn assertion_error(&self, message: impl std::fmt::Display) -> ExecutionInterrupt {
+        ExecutionInterrupt::assertion_error(self.syn_error(message))
+    }
+
+    fn value_err<T>(&self, message: impl std::fmt::Display) -> ExecutionResult<T> {
+        Err(self.value_error(message))
+    }
+
+    fn value_error(&self, message: impl std::fmt::Display) -> ExecutionInterrupt {
+        ExecutionInterrupt::value_error(self.syn_error(message))
     }
 }
 
 impl<T: HasSpanRange + ?Sized> SpanErrorExt for T {
-    fn error(&self, message: impl std::fmt::Display) -> syn::Error {
+    fn syn_error(&self, message: impl std::fmt::Display) -> syn::Error {
         self.span_range().create_error(message)
     }
 }
@@ -161,39 +205,45 @@ impl HasSpan for Span {
     }
 }
 
+impl<'a> HasSpan for Cursor<'a> {
+    fn span(&self) -> Span {
+        Cursor::span(*self)
+    }
+}
+
 impl HasSpan for TokenTree {
     fn span(&self) -> Span {
-        self.span()
+        TokenTree::span(self)
     }
 }
 
 impl HasSpan for Group {
     fn span(&self) -> Span {
-        self.span()
+        Group::span(self)
     }
 }
 
 impl HasSpan for DelimSpan {
     fn span(&self) -> Span {
-        self.join()
+        DelimSpan::join(self)
     }
 }
 
 impl HasSpan for Ident {
     fn span(&self) -> Span {
-        self.span()
+        Ident::span(self)
     }
 }
 
 impl HasSpan for Punct {
     fn span(&self) -> Span {
-        self.span()
+        Punct::span(self)
     }
 }
 
 impl HasSpan for Literal {
     fn span(&self) -> Span {
-        self.span()
+        Literal::span(self)
     }
 }
 

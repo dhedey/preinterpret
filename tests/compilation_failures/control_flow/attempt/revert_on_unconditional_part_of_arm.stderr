@@ -1,0 +1,5 @@
+error: revert can only be used in the conditional part of an attempt arm
+ --> tests/compilation_failures/control_flow/attempt/revert_on_unconditional_part_of_arm.rs:6:22
+  |
+6 |             { } => { revert; }
+  |                      ^^^^^^

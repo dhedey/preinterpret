@@ -197,7 +197,7 @@ impl WhileExpression {
             iteration_counter.increment_and_check()?;
             match self.body.evaluate_owned(interpreter).catch_control_flow(
                 interpreter,
-                ControlFlowInterrupt::catch_any,
+                ControlFlowInterrupt::catch_loop_related,
                 scope,
             )? {
                 ExecutionOutcome::Value(value) => {
@@ -211,6 +211,9 @@ impl WhileExpression {
                     match control_flow_interrupt {
                         ControlFlowInterrupt::Break => break,
                         ControlFlowInterrupt::Continue => continue,
+                        ControlFlowInterrupt::Revert => {
+                            unreachable!("catch_loop_related should filter this out")
+                        }
                     }
                 }
             }
@@ -275,7 +278,7 @@ impl LoopExpression {
 
             match self.body.evaluate_owned(interpreter).catch_control_flow(
                 interpreter,
-                ControlFlowInterrupt::catch_any,
+                ControlFlowInterrupt::catch_loop_related,
                 scope,
             )? {
                 ExecutionOutcome::Value(value) => {
@@ -289,6 +292,9 @@ impl LoopExpression {
                     match control_flow_interrupt {
                         ControlFlowInterrupt::Break => break,
                         ControlFlowInterrupt::Continue => continue,
+                        ControlFlowInterrupt::Revert => {
+                            unreachable!("catch_loop_related should filter this out")
+                        }
                     }
                 }
             }
@@ -385,7 +391,7 @@ impl ForExpression {
 
             match self.body.evaluate_owned(interpreter).catch_control_flow(
                 interpreter,
-                ControlFlowInterrupt::catch_any,
+                ControlFlowInterrupt::catch_loop_related,
                 scope,
             )? {
                 ExecutionOutcome::Value(value) => {
@@ -399,11 +405,150 @@ impl ForExpression {
                     match control_flow_interrupt {
                         ControlFlowInterrupt::Break => break,
                         ControlFlowInterrupt::Continue => continue,
+                        ControlFlowInterrupt::Revert => {
+                            unreachable!("catch_loop_related should filter this out")
+                        }
                     }
                 }
             }
             interpreter.exit_scope(self.iteration_scope);
         }
         Ok(output.into_owned_value(self.span_range()))
+    }
+}
+
+pub(crate) struct AttemptExpression {
+    attempt_token: Ident,
+    braces: Braces,
+    arms: Vec<AttemptArm>,
+}
+
+struct AttemptArm {
+    arm_scope: ScopeId,
+    // We don't use ExpressionBlock here because we need lhs's scope to extend into the rhs
+    lhs_braces: Braces,
+    lhs: ExpressionBlockContent,
+    guard: Option<(Token![if], Expression)>,
+    _arrow: Token![=>],
+    rhs: Expression,
+}
+
+impl HasSpanRange for AttemptExpression {
+    fn span_range(&self) -> SpanRange {
+        SpanRange::new_between(self.attempt_token.span(), self.braces.close())
+    }
+}
+
+impl ParseSource for AttemptExpression {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
+        let attempt_token = input.parse_ident_matching("attempt")?;
+        let (braces, inner) = input.parse_braces()?;
+        let mut arms = vec![];
+        while !inner.is_empty() {
+            let (lhs_braces, lhs_inner) = inner.parse_braces()?;
+            let lhs = lhs_inner.parse()?;
+            let guard = if inner.peek_ident_matching("if") {
+                let if_token = inner.parse()?;
+                let condition = inner.parse()?;
+                Some((if_token, condition))
+            } else {
+                None
+            };
+            let arrow = inner.parse()?;
+            let rhs: Expression = inner.parse()?;
+            if inner.peek(Token![,]) {
+                let _ = inner.parse::<Token![,]>()?;
+            } else if !rhs.is_block() {
+                inner.parse_err("Expected trailing comma after previous non-block attempt arm")?;
+            }
+            arms.push(AttemptArm {
+                arm_scope: ScopeId::new_placeholder(),
+                lhs_braces,
+                lhs,
+                guard,
+                _arrow: arrow,
+                rhs,
+            });
+        }
+        Ok(Self {
+            attempt_token,
+            braces,
+            arms,
+        })
+    }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        let segment = context.enter_next_segment(SegmentKind::PathBased);
+        let mut previous_attempt_segment = None;
+        for arm in &mut self.arms {
+            context.register_scope(&mut arm.arm_scope);
+
+            context.enter_scope(arm.arm_scope);
+            let attempt_segment = context
+                .enter_path_segment(previous_attempt_segment, SegmentKind::RevertibleSequential);
+            arm.lhs.control_flow_pass(context)?;
+            if let Some((_, guard_expression)) = &mut arm.guard {
+                guard_expression.control_flow_pass(context)?;
+            }
+            context.exit_segment(attempt_segment);
+            previous_attempt_segment = Some(attempt_segment);
+
+            let action_segment =
+                context.enter_path_segment(previous_attempt_segment, SegmentKind::Sequential);
+            arm.rhs.control_flow_pass(context)?;
+            context.exit_segment(action_segment);
+            context.exit_scope(arm.arm_scope);
+        }
+        context.exit_segment(segment);
+
+        Ok(())
+    }
+}
+
+impl AttemptExpression {
+    pub(crate) fn evaluate(
+        &self,
+        interpreter: &mut Interpreter,
+        ownership: RequestedValueOwnership,
+    ) -> ExecutionResult<EvaluationItem> {
+        for arm in self.arms.iter() {
+            let attempt_outcome = interpreter.enter_scope_starting_with_revertible_segment(
+                arm.arm_scope,
+                |interpreter| -> ExecutionResult<()> {
+                    let output = arm.lhs.evaluate(
+                        interpreter,
+                        arm.lhs_braces.join().into(),
+                        RequestedValueOwnership::owned(),
+                    )?;
+                    let unit = output
+                        .expect_owned()
+                        .resolve_as("The returned value from the left half of an attempt arm");
+                    if let Some((if_token, guard_expression)) = &arm.guard {
+                        let guard_value: bool = guard_expression
+                            .evaluate_owned(interpreter)?
+                            .resolve_as("The guard condition of an attempt arm")?;
+                        if !guard_value {
+                            // This will be immediately caught
+                            return Err(ExecutionInterrupt::control_flow(
+                                ControlFlowInterrupt::Revert,
+                                if_token.span,
+                            ));
+                        }
+                    }
+                    unit
+                },
+            )?;
+            match attempt_outcome {
+                AttemptOutcome::Completed(()) => { /* proceed to rhs */ }
+                AttemptOutcome::Reverted => {
+                    interpreter.exit_scope(arm.arm_scope);
+                    continue;
+                }
+            }
+            let output = arm.rhs.evaluate(interpreter, ownership)?;
+            interpreter.exit_scope(arm.arm_scope);
+            return Ok(output);
+        }
+        self.braces.control_flow_err("No attempt arm ran successfully. You may wish to add a fallback arm `{} => { None }` to ignore the error or to propogate a better message: `{} => { %[<tokens for error span>].error(\"Error message\") }`.")
     }
 }

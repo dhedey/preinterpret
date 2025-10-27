@@ -188,7 +188,7 @@ impl ExpressionRangeInner {
             other => {
                 return other
                     .operator_span_range()
-                    .execution_err("This range has no start so is not iterable")
+                    .value_err("This range has no start so is not iterable")
             }
         })
     }
@@ -324,8 +324,7 @@ impl IterableExpressionRange<ExpressionValue> {
                         }
                         .resolve()
                     }
-                    _ => dots
-                        .execution_err("The range must be between two integers or two characters"),
+                    _ => dots.value_err("The range must be between two integers or two characters"),
                 }
             }
             Self::RangeFrom { start, dots } => match start {
@@ -375,7 +374,7 @@ impl IterableExpressionRange<ExpressionValue> {
                     dots,
                 }
                 .resolve(),
-                _ => dots.execution_err("The range must be from an integer or a character"),
+                _ => dots.type_err("The range must be from an integer or a character"),
             },
         }
     }

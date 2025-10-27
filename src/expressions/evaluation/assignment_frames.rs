@@ -140,7 +140,7 @@ impl ArrayBasedAssigner {
                 } => {
                     if has_seen_dot_dot {
                         return assignee_span
-                            .execution_err("Only one .. is allowed in an array assignee");
+                            .syntax_err("Only one .. is allowed in an array assignee");
                     }
                     has_seen_dot_dot = true;
                 }
@@ -159,7 +159,7 @@ impl ArrayBasedAssigner {
         let mut assignee_pairs: Vec<_> = if has_seen_dot_dot {
             let total_assignees = prefix_assignees.len() + suffix_assignees.len();
             if total_assignees > array_length {
-                return assignee_span.execution_err(format!(
+                return assignee_span.value_err(format!(
                     "The array has {} items, but the assignee expected at least {}",
                     array_length, total_assignees,
                 ));
@@ -179,7 +179,7 @@ impl ArrayBasedAssigner {
         } else {
             let total_assignees = prefix_assignees.len();
             if total_assignees != array_length {
-                return assignee_span.execution_err(format!(
+                return assignee_span.value_err(format!(
                     "The array has {} items, but the assignee expected {}",
                     array_length, total_assignees,
                 ));
@@ -302,7 +302,7 @@ impl ObjectBasedAssigner {
 
     fn resolve_value(&mut self, key: String, key_span: Span) -> ExecutionResult<ExpressionValue> {
         if self.already_used_keys.contains(&key) {
-            return key_span.execution_err(format!("The key `{}` has already used", key));
+            return key_span.syntax_err(format!("The key `{}` has already used", key));
         }
         let value = self
             .entries

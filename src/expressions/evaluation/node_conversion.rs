@@ -9,7 +9,7 @@ impl ExpressionNode {
             ExpressionNode::Leaf(leaf) => {
                 match leaf {
                     Leaf::Discarded(token) => {
-                        return token.execution_err("This cannot be used in a value expression.");
+                        return token.syntax_err("This cannot be used in a value expression.");
                     }
                     Leaf::Variable(variable) => match context.requested_ownership() {
                         RequestedValueOwnership::LateBound => {
@@ -55,6 +55,12 @@ impl ExpressionNode {
                     Leaf::ForExpression(for_expression) => {
                         let value = for_expression.evaluate_as_expression(context.interpreter())?;
                         context.return_owned(value)?
+                    }
+                    Leaf::AttemptExpression(attempt_expression) => {
+                        let ownership = context.requested_ownership();
+                        let value =
+                            attempt_expression.evaluate(context.interpreter(), ownership)?;
+                        context.return_item(value)?
                     }
                 }
             }
