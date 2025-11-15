@@ -35,7 +35,8 @@ impl Interpret for EmbeddedExpression {
         interpreter: &mut Interpreter,
         output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        self.content.evaluate_shared(interpreter)?.output_to(
+        let value = self.content.evaluate_shared(interpreter)?;
+        value.output_to(
             Grouping::Flattened,
             &mut ToStreamContext::new(output, self.span_range()),
         )
