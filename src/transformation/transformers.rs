@@ -13,10 +13,11 @@ impl TransformerDefinition for TokenTreeTransformer {
     fn handle_transform(
         &self,
         input: ParseStream<Output>,
-        _: &mut Interpreter,
-        output: &mut OutputStream,
+        interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
-        output.push_raw_token_tree(input.parse::<TokenTree>()?);
+        interpreter
+            .output()?
+            .push_raw_token_tree(input.parse::<TokenTree>()?);
         Ok(())
     }
 
@@ -38,10 +39,9 @@ impl TransformerDefinition for RestTransformer {
     fn handle_transform(
         &self,
         input: ParseStream<Output>,
-        _: &mut Interpreter,
-        output: &mut OutputStream,
+        interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
-        ParseUntil::End.handle_parse_into(input, output)
+        ParseUntil::End.handle_parse_into(input, interpreter)
     }
 
     fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
@@ -82,10 +82,9 @@ impl TransformerDefinition for UntilTransformer {
     fn handle_transform(
         &self,
         input: ParseStream<Output>,
-        _: &mut Interpreter,
-        output: &mut OutputStream,
+        interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
-        self.until.handle_parse_into(input, output)
+        self.until.handle_parse_into(input, interpreter)
     }
 
     fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
@@ -106,11 +105,11 @@ impl TransformerDefinition for IdentTransformer {
     fn handle_transform(
         &self,
         input: ParseStream<Output>,
-        _: &mut Interpreter,
-        output: &mut OutputStream,
+        interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         if input.cursor().ident().is_some() {
-            output.push_ident(input.parse_any_ident()?);
+            let ident = input.parse_any_ident()?;
+            interpreter.output()?.push_ident(ident);
             Ok(())
         } else {
             input.parse_err("Expected an ident")?
@@ -135,11 +134,11 @@ impl TransformerDefinition for LiteralTransformer {
     fn handle_transform(
         &self,
         input: ParseStream<Output>,
-        _: &mut Interpreter,
-        output: &mut OutputStream,
+        interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         if input.cursor().literal().is_some() {
-            output.push_literal(input.parse()?);
+            let literal = input.parse()?;
+            interpreter.output()?.push_literal(literal);
             Ok(())
         } else {
             input.parse_err("Expected a literal")?
@@ -164,11 +163,10 @@ impl TransformerDefinition for PunctTransformer {
     fn handle_transform(
         &self,
         input: ParseStream<Output>,
-        _: &mut Interpreter,
-        output: &mut OutputStream,
+        interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         if input.cursor().any_punct().is_some() {
-            output.push_punct(input.parse_any_punct()?);
+            interpreter.output()?.push_punct(input.parse_any_punct()?);
             Ok(())
         } else {
             input.parse_err("Expected a punct")?
@@ -197,10 +195,9 @@ impl TransformerDefinition for GroupTransformer {
         &self,
         input: ParseStream<Output>,
         interpreter: &mut Interpreter,
-        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         let (_, inner) = input.parse_transparent_group()?;
-        self.inner.handle_transform(&inner, interpreter, output)
+        self.inner.handle_transform(&inner, interpreter)
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
@@ -233,7 +230,6 @@ impl TransformerDefinition for ExactTransformer {
         &self,
         input: ParseStream<Output>,
         interpreter: &mut Interpreter,
-        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         // TODO[parsers]: Ensure that no contextual parser is available when interpreting
         // To save confusion about parse order.
@@ -241,7 +237,7 @@ impl TransformerDefinition for ExactTransformer {
             .stream
             .evaluate_owned(interpreter)?
             .resolve_as("Input to the EXACT parser")?;
-        stream.value.parse_exact_match(input, output)
+        stream.value.parse_exact_match(input, interpreter.output()?)
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {

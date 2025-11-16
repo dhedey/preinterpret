@@ -34,7 +34,9 @@ impl ExpressionNode {
                         context.return_copy_on_write(value)?
                     }
                     Leaf::StreamLiteral(stream_literal) => {
-                        let value = stream_literal.evaluate(context.interpreter())?;
+                        let value = context
+                            .interpreter()
+                            .capture_output(|interpreter| stream_literal.interpret(interpreter))?;
                         context.return_owned(value.into_owned_value(stream_literal.span_range()))?
                     }
                     Leaf::IfExpression(if_expression) => {

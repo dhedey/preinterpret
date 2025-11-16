@@ -15,16 +15,20 @@ impl ParseUntil {
     pub(crate) fn handle_parse_into(
         &self,
         input: ParseStream<Output>,
-        output: &mut OutputStream,
+        interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         match self {
-            ParseUntil::End => output.extend_raw_tokens(input.parse::<TokenStream>()?),
+            ParseUntil::End => {
+                let remaining = input.parse::<TokenStream>()?;
+                interpreter.output()?.extend_raw_tokens(remaining);
+            }
             ParseUntil::Group(delimiter) => {
                 while !input.is_empty() {
                     if input.peek_specific_group(*delimiter) {
                         return Ok(());
                     }
-                    output.push_raw_token_tree(input.parse()?);
+                    let next = input.parse()?;
+                    interpreter.output()?.push_raw_token_tree(next);
                 }
             }
             ParseUntil::Ident(ident) => {
@@ -33,7 +37,8 @@ impl ParseUntil {
                     if input.peek_ident_matching(&content) {
                         return Ok(());
                     }
-                    output.push_raw_token_tree(input.parse()?);
+                    let next = input.parse()?;
+                    interpreter.output()?.push_raw_token_tree(next);
                 }
             }
             ParseUntil::Punct(punct) => {
@@ -42,7 +47,8 @@ impl ParseUntil {
                     if input.peek_punct_matching(punct) {
                         return Ok(());
                     }
-                    output.push_raw_token_tree(input.parse()?);
+                    let next = input.parse()?;
+                    interpreter.output()?.push_raw_token_tree(next);
                 }
             }
             ParseUntil::Literal(literal) => {
@@ -51,7 +57,8 @@ impl ParseUntil {
                     if input.peek_literal_matching(&content) {
                         return Ok(());
                     }
-                    output.push_raw_token_tree(input.parse()?);
+                    let next = input.parse()?;
+                    interpreter.output()?.push_raw_token_tree(next);
                 }
             }
         }

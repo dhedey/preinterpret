@@ -5,13 +5,12 @@ pub(crate) trait HandleTransformation {
         &self,
         input: OutputStream,
         interpreter: &mut Interpreter,
-        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         unsafe {
             // RUST-ANALYZER-SAFETY: ...this isn't generally safe...
             // We should only do this when we know that either the input or parser doesn't require
             // analysis of nested None-delimited groups.
-            input.parse_with(|input| self.handle_transform(input, interpreter, output))
+            input.parse_with(|input| self.handle_transform(input, interpreter))
         }
     }
 
@@ -19,6 +18,5 @@ pub(crate) trait HandleTransformation {
         &self,
         input: ParseStream<Output>,
         interpreter: &mut Interpreter,
-        output: &mut OutputStream,
     ) -> ExecutionResult<()>;
 }

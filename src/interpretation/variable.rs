@@ -20,21 +20,9 @@ impl ParseSource for EmbeddedVariable {
 }
 
 impl Interpret for EmbeddedVariable {
-    fn interpret_into(
-        &self,
-        interpreter: &mut Interpreter,
-        output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
+    fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         self.reference
-            .substitute_into(interpreter, Grouping::Flattened, output)
-    }
-}
-
-impl Evaluate for EmbeddedVariable {
-    type OutputValue = OwnedValue;
-
-    fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<Self::OutputValue> {
-        self.reference.evaluate(interpreter)
+            .substitute_into_output(interpreter, Grouping::Flattened)
     }
 }
 
@@ -123,15 +111,15 @@ impl ParseSource for VariableReference {
 }
 
 impl VariableReference {
-    fn substitute_into(
+    fn substitute_into_output(
         &self,
         interpreter: &mut Interpreter,
         grouping: Grouping,
-        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
-        self.resolve_shared(interpreter)?.output_to(
+        let value = self.resolve_shared(interpreter)?;
+        value.output_to(
             grouping,
-            &mut ToStreamContext::new(output, self.span_range()),
+            &mut ToStreamContext::new(interpreter.output()?, self.span_range()),
         )
     }
 
@@ -150,15 +138,6 @@ impl VariableReference {
         interpreter
             .resolve(self, RequestedValueOwnership::Concrete(ownership))?
             .resolve(ownership)
-    }
-
-    pub(crate) fn resolve_owned(
-        &self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<OwnedValue> {
-        Ok(self
-            .resolve_resolved(interpreter, ResolvedValueOwnership::Owned)?
-            .expect_owned())
     }
 
     pub(crate) fn resolve_assignee(
@@ -183,14 +162,6 @@ impl VariableReference {
 impl HasSpan for VariableReference {
     fn span(&self) -> Span {
         self.ident.span()
-    }
-}
-
-impl Evaluate for VariableReference {
-    type OutputValue = OwnedValue;
-
-    fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<Self::OutputValue> {
-        self.resolve_owned(interpreter)
     }
 }
 

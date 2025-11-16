@@ -628,3 +628,69 @@ impl HasSpan for OutputTokenTree {
         }
     }
 }
+
+pub(super) struct OutputHandler {
+    output_stack: Vec<OutputStream>,
+}
+
+impl OutputHandler {
+    pub(super) fn new(initial_output: OutputStream) -> Self {
+        Self {
+            output_stack: vec![initial_output],
+        }
+    }
+
+    pub(super) fn complete(self) -> OutputStream {
+        let [final_output] = self
+            .output_stack
+            .try_into()
+            .map_err(|_| ())
+            .expect("Output stack should have height one at completion");
+        final_output
+    }
+
+    pub(super) fn current_output_mut(&mut self) -> &mut OutputStream {
+        self.output_stack
+            .last_mut()
+            .expect("Output stack should never be empty")
+    }
+
+    /// SAFETY: Must be paired with a later `finish_inner_buffer_*` call, even in 
+    /// the face of control flow interrupts.
+    pub(super) unsafe fn start_inner_buffer(&mut self) {
+        self.output_stack.push(OutputStream::new());
+    }
+
+    /// SAFETY: Must be paired with a prior `start_inner_buffer` call.
+    pub(super) unsafe fn finish_inner_buffer_as_group(&mut self, delimiter: Delimiter, span: Span) {
+        let inner_buffer = self.finish_inner_buffer_as_separate_stream();
+        self.push_new_group(inner_buffer, delimiter, span);
+    }
+
+    /// SAFETY: Must be paired with a prior `start_inner_buffer` call.
+    pub(super) unsafe fn finish_inner_buffer_as_separate_stream(&mut self) -> OutputStream {
+        if self.output_stack.len() == 1 {
+            panic!("Cannot pop the last output stream from the output stack");
+        }
+
+        self.output_stack
+            .pop()
+            .expect("Output stack should never be empty")
+    }
+}
+
+impl Deref for OutputHandler {
+    type Target = OutputStream;
+
+    fn deref(&self) -> &Self::Target {
+        self.output_stack
+            .last()
+            .expect("Output stack should never be empty")
+    }
+}
+
+impl DerefMut for OutputHandler {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.current_output_mut()
+    }
+}

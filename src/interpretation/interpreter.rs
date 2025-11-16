@@ -5,6 +5,7 @@ pub(crate) struct Interpreter {
     scope_definitions: ScopeDefinitions,
     scopes: Vec<RuntimeScope>,
     no_mutation_above: Vec<ScopeId>,
+    output_handler: OutputHandler,
 }
 
 impl Interpreter {
@@ -15,6 +16,7 @@ impl Interpreter {
             scope_definitions,
             scopes: vec![],
             no_mutation_above: vec![],
+            output_handler: OutputHandler::new(OutputStream::new()),
         };
         interpreter.enter_scope_inner(root_scope_id, false);
         interpreter
@@ -97,6 +99,7 @@ impl Interpreter {
     }
 
     fn handle_catch(&mut self, result_scope: ScopeId) {
+        // Note: OutputHandler safety upon error control flow is handled in that code.
         while self.current_scope_id() != result_scope {
             self.exit_scope(self.current_scope_id());
         }
@@ -153,6 +156,56 @@ impl Interpreter {
 
     pub(crate) fn set_iteration_limit(&mut self, limit: Option<usize>) {
         self.config.iteration_limit = limit;
+    }
+
+    // Output
+    pub(crate) fn in_output_group<F, R>(
+        &mut self,
+        delimiter: Delimiter,
+        span: Span,
+        f: F,
+    ) -> ExecutionResult<R>
+    where
+        F: FnOnce(&mut Interpreter) -> ExecutionResult<R>,
+    {
+        unsafe {
+            // SAFETY: This is paired with `finish_inner_buffer_as_group`
+            self.output_handler.start_inner_buffer();
+        }
+        let result = f(self);
+        unsafe {
+            // SAFETY: This is paired with `start_inner_buffer`,
+            // even if `f` returns an Err propogating a control flow interrupt.
+            self.output_handler
+                .finish_inner_buffer_as_group(delimiter, span);
+        }
+        result
+    }
+
+    pub(crate) fn capture_output<F>(&mut self, f: F) -> ExecutionResult<OutputStream>
+    where
+        F: FnOnce(&mut Interpreter) -> ExecutionResult<()>,
+    {
+        unsafe {
+            // SAFETY: This is paired with `finish_inner_buffer_as_separate_stream`
+            self.output_handler.start_inner_buffer();
+        }
+        let result = f(self);
+        let output = unsafe {
+            // SAFETY: This is paired with `start_inner_buffer`,
+            // even if `f` returns an Err propogating a control flow interrupt.
+            self.output_handler.finish_inner_buffer_as_separate_stream()
+        };
+        let () = result?;
+        Ok(output)
+    }
+
+    pub(crate) fn output(&mut self) -> ExecutionResult<&mut OutputStream> {
+        Ok(&mut self.output_handler)
+    }
+
+    pub(crate) fn complete(self) -> OutputStream {
+        self.output_handler.complete()
     }
 }
 

@@ -148,12 +148,12 @@ Alternatively, we could have consider:
 
 So some possible things we can explore / consider:
 
-- [ ] Add an `OutputHandler` to the interpreter, with a stack of `OutputStream`.
-- [ ] Add methods like `interpreter.append_grouped(delimiter, |interpreter| { })`, `interpreter.append_to_stream(..)` (appends to stream at top of stack)
-- [ ] Replace the Interpret trait with this
+- [x] Add an `OutputHandler` to the interpreter, with a stack of `OutputStream`.
+- [x] Ensure `OutputHandler` is reverted when we catch/revert
 - [ ] Add `output` statement which outputs into the parent stream literal
 - [ ] Allow adding lifetimes to stream literals `%'a[]` and then `output 'a`, with `'root` being the topmost. Or maybe just `output 'root` honestly. Can't really see the use case for the others.
   - [ ] Note that `%'a[((#{ output 'a %[x] }))]` should yield `((x))` not `x(())`
+  - [ ] Note that we need to prevent or revert outputting to root in revertible segments
 - [ ] Remove vec-returns from loops, replace with `output`
 - [ ] `break` / `continue` improvements:
   - Can return a value (from the last iteration of for / while loops)
@@ -166,6 +166,7 @@ First, read the @./2025-09-vision.md
 * Manually search for transform and rename to parse in folder names and file.
 * Initial changes:
   * Parsers no longer output to a stream.
+  * Sort out `TODO[parser-no-output]`
   * Scopes/frames can have a parse stream associated with them.
     * This can be read/resolved (as the nearest parent) by parsers, even in expression blocks
   * Don't support `@(#x = ...)` - instead we can have `#(let x = @[STREAM ...])`
