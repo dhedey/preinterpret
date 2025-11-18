@@ -641,7 +641,7 @@ impl OutputHandler {
     }
 
     pub(super) fn complete(self) -> OutputStream {
-        let [final_output] = self
+        let [final_output]: [OutputStream; 1] = self
             .output_stack
             .try_into()
             .map_err(|_| ())
@@ -655,7 +655,7 @@ impl OutputHandler {
             .expect("Output stack should never be empty")
     }
 
-    /// SAFETY: Must be paired with a later `finish_inner_buffer_*` call, even in 
+    /// SAFETY: Must be paired with a later `finish_inner_buffer_*` call, even in
     /// the face of control flow interrupts.
     pub(super) unsafe fn start_inner_buffer(&mut self) {
         self.output_stack.push(OutputStream::new());

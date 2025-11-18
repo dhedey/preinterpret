@@ -666,7 +666,7 @@ mod benchmarking {
                     .convert_to_final_result()
             })?;
 
-            let output = context.time("evaluation", move || {
+            let output = context.time("evaluation", move || -> SynResult<OutputStream> {
                 let mut interpreter = Interpreter::new(scopes);
                 let returned_stream = parsed
                     .evaluate(
@@ -675,16 +675,16 @@ mod benchmarking {
                         RequestedValueOwnership::owned(),
                     )
                     .and_then(|x| x.expect_owned().into_stream())
-                    .convert_to_final_result();
+                    .convert_to_final_result()?;
 
                 let mut output_stream = interpreter.complete();
 
-                if output_stream.is_empty() {
+                Ok(if output_stream.is_empty() {
                     returned_stream
                 } else {
                     returned_stream.append_into(&mut output_stream);
                     output_stream
-                }
+                })
             })?;
 
             let _ = context.time("output", move || {
