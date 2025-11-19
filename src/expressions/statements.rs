@@ -5,6 +5,7 @@ pub(crate) enum Statement {
     BreakStatement(BreakStatement),
     ContinueStatement(ContinueStatement),
     RevertStatement(RevertStatement),
+    OutputStatement(OutputStatement),
     Expression(Expression),
 }
 
@@ -15,6 +16,7 @@ impl Statement {
             Statement::BreakStatement(_) => true,
             Statement::ContinueStatement(_) => true,
             Statement::RevertStatement(_) => true,
+            Statement::OutputStatement(_) => true,
             Statement::Expression(expression) => {
                 !(expression.is_valid_as_statement_without_semicolon() || last_line)
             }
@@ -30,6 +32,7 @@ impl ParseSource for Statement {
                 "break" => Statement::BreakStatement(input.parse()?),
                 "continue" => Statement::ContinueStatement(input.parse()?),
                 "revert" => Statement::RevertStatement(input.parse()?),
+                "output" => Statement::OutputStatement(input.parse()?),
                 _ => Statement::Expression(input.parse()?),
             }
         } else {
@@ -44,6 +47,7 @@ impl ParseSource for Statement {
             Statement::BreakStatement(statement) => statement.control_flow_pass(context),
             Statement::ContinueStatement(statement) => statement.control_flow_pass(context),
             Statement::RevertStatement(statement) => statement.control_flow_pass(context),
+            Statement::OutputStatement(statement) => statement.control_flow_pass(context),
         }
     }
 }
@@ -59,6 +63,7 @@ impl Statement {
             Statement::BreakStatement(statement) => statement.evaluate_as_statement(interpreter),
             Statement::ContinueStatement(statement) => statement.evaluate_as_statement(interpreter),
             Statement::RevertStatement(statement) => statement.evaluate_as_statement(interpreter),
+            Statement::OutputStatement(statement) => statement.evaluate_as_statement(interpreter),
         }
     }
 
@@ -72,7 +77,8 @@ impl Statement {
             Statement::LetStatement(_)
             | Statement::BreakStatement(_)
             | Statement::ContinueStatement(_)
-            | Statement::RevertStatement(_) => {
+            | Statement::RevertStatement(_)
+            | Statement::OutputStatement(_) => {
                 panic!("Statements cannot be used as returning expressions")
             }
         }
@@ -234,5 +240,41 @@ impl RevertStatement {
             ControlFlowInterrupt::Revert,
             self.revert_token.span(),
         ))
+    }
+}
+
+pub(crate) struct OutputStatement {
+    output_token: Ident,
+    expression: Expression,
+}
+
+impl HasSpan for OutputStatement {
+    fn span(&self) -> Span {
+        self.output_token.span()
+    }
+}
+
+impl ParseSource for OutputStatement {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
+        let output_token = input.parse_ident_matching("output")?;
+        let expression = input.parse()?;
+        Ok(Self { output_token, expression })
+    }
+
+    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
+        Ok(())
+    }
+}
+
+impl OutputStatement {
+    pub(crate) fn evaluate_as_statement(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        let value= self.expression.evaluate_owned(interpreter)?;
+        value.output_to(
+            Grouping::Flattened,
+            &mut ToStreamContext::new(
+                interpreter.output()?,
+                value.span_range(),
+            ),
+        )
     }
 }

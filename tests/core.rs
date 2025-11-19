@@ -19,8 +19,8 @@ fn test_core_compilation_failures() {
 fn test_simple_let() {
     assert_eq!(
         run! {
-            let output = %["Hello World!"];
-            output
+            let output1 = %["Hello World!"];
+            output1
         },
         "Hello World!"
     );
@@ -28,9 +28,9 @@ fn test_simple_let() {
         run! {
             let hello = %["Hello"];
             let world = %["World"];
-            let output = %[#hello " " #world "!"];
-            let output = output.to_string();
-            output
+            let output1 = %[#hello " " #world "!"];
+            let output1 = output1.to_string();
+            output1
         },
         "Hello World!"
     );
@@ -57,15 +57,15 @@ fn test_extend() {
     assert_eq!(
         run! {
             let i = 1;
-            let output = %[];
+            let output1 = %[];
             while i <= 4 {
-                output += %[#i];
+                output1 += %[#i];
                 if i <= 3 {
-                    output += %[", "];
+                    output1 += %[", "];
                 }
                 i += 1;
             }
-            output.to_string()
+            output1.to_string()
         },
         "1, 2, 3, 4"
     );

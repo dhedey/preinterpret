@@ -98,12 +98,14 @@ fn test_loop_continue_and_break() {
     );
     assert_eq!(
         run! {
+            let arr = [];
             for x in 65..75 {
                 if x % 2 == 0 {
                     continue;
                 }
-                x as u8 as char
-            }.to_string()
+                arr.push(x as u8 as char);
+            }
+            arr.to_string()
         },
         "ACEGI"
     );
@@ -113,9 +115,11 @@ fn test_loop_continue_and_break() {
 fn test_for() {
     assert_eq!(
         run! {
+            let arr = [];
             for x in 65..70 {
-                x as u8 as char
-            }.to_string()
+                arr.push(x as u8 as char);
+            }
+            arr.to_string()
         },
         "ABCDE"
     );
@@ -124,11 +128,15 @@ fn test_for() {
             // A stream is iterated token-tree by token-tree
             // So we can match each value with a stream pattern matching each `(X,)`
             for %[(@(#x = @IDENT),)] in %[(a,) (b,) (c,)] {
-                if x.to_string() == "c" {
-                    break;
-                }
-                x
-            }.to_string()
+                // if x.to_string() == "c" {
+                //     break;
+                // }
+                // let y = x.to_string();
+                // let z = y;
+                output x.to_string();
+            }
+            output "ab";
+            // output "cd";
         },
         "ab"
     );

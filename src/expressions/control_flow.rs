@@ -165,30 +165,14 @@ impl ParseSource for WhileExpression {
 }
 
 impl WhileExpression {
-    pub(crate) fn evaluate_as_expression(
+    pub(crate) fn evaluate(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<OwnedValue> {
-        self.evaluate(interpreter, false)
-    }
-
-    pub(crate) fn evaluate_as_statement(
-        &self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
-        self.evaluate(interpreter, true).map(|_| ())
-    }
-
-    fn evaluate(
-        &self,
-        interpreter: &mut Interpreter,
-        is_statement: bool,
     ) -> ExecutionResult<OwnedValue> {
         let span = self.body.span();
         let mut iteration_counter = interpreter.start_iteration_counter(&span);
 
         let scope = interpreter.current_scope_id();
-        let mut output = vec![];
         while self
             .condition
             .evaluate_owned(interpreter)?
@@ -201,11 +185,7 @@ impl WhileExpression {
                 scope,
             )? {
                 ExecutionOutcome::Value(value) => {
-                    if is_statement {
-                        value.into_statement_result()?;
-                    } else {
-                        output.push(value.into_inner());
-                    }
+                    value.into_statement_result()?;
                 }
                 ExecutionOutcome::ControlFlow(control_flow_interrupt) => {
                     match control_flow_interrupt {
@@ -218,7 +198,7 @@ impl WhileExpression {
                 }
             }
         }
-        Ok(output.into_owned_value(self.span_range()))
+        Ok(().into_owned_value(self.span_range()))
     }
 }
 
@@ -249,30 +229,14 @@ impl ParseSource for LoopExpression {
 }
 
 impl LoopExpression {
-    pub(crate) fn evaluate_as_expression(
+    pub(crate) fn evaluate(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<OwnedValue> {
-        self.evaluate(interpreter, false)
-    }
-
-    pub(crate) fn evaluate_as_statement(
-        &self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
-        self.evaluate(interpreter, true).map(|_| ())
-    }
-
-    fn evaluate(
-        &self,
-        interpreter: &mut Interpreter,
-        is_statement: bool,
     ) -> ExecutionResult<OwnedValue> {
         let span = self.body.span();
         let mut iteration_counter = interpreter.start_iteration_counter(&span);
 
         let scope = interpreter.current_scope_id();
-        let mut output = vec![];
         loop {
             iteration_counter.increment_and_check()?;
 
@@ -282,11 +246,7 @@ impl LoopExpression {
                 scope,
             )? {
                 ExecutionOutcome::Value(value) => {
-                    if is_statement {
-                        value.into_statement_result()?;
-                    } else {
-                        output.push(value.into_inner());
-                    }
+                    value.into_statement_result()?;
                 }
                 ExecutionOutcome::ControlFlow(control_flow_interrupt) => {
                     match control_flow_interrupt {
@@ -299,7 +259,7 @@ impl LoopExpression {
                 }
             }
         }
-        Ok(output.into_owned_value(self.span_range()))
+        Ok(().into_owned_value(self.span_range()))
     }
 }
 
@@ -354,24 +314,9 @@ impl ParseSource for ForExpression {
 }
 
 impl ForExpression {
-    pub(crate) fn evaluate_as_expression(
+    pub(crate) fn evaluate(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<OwnedValue> {
-        self.evaluate(interpreter, false)
-    }
-
-    pub(crate) fn evaluate_as_statement(
-        &self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
-        self.evaluate(interpreter, true).map(|_| ())
-    }
-
-    fn evaluate(
-        &self,
-        interpreter: &mut Interpreter,
-        is_statement: bool,
     ) -> ExecutionResult<OwnedValue> {
         let iterable: IterableValue = self
             .iterable
@@ -382,7 +327,6 @@ impl ForExpression {
         let scope = interpreter.current_scope_id();
         let mut iteration_counter = interpreter.start_iteration_counter(&span);
 
-        let mut output = vec![];
         for item in iterable.into_iterator()? {
             iteration_counter.increment_and_check()?;
 
@@ -395,11 +339,7 @@ impl ForExpression {
                 scope,
             )? {
                 ExecutionOutcome::Value(value) => {
-                    if is_statement {
-                        value.into_statement_result()?;
-                    } else {
-                        output.push(value.into_inner());
-                    }
+                    value.into_statement_result()?;
                 }
                 ExecutionOutcome::ControlFlow(control_flow_interrupt) => {
                     match control_flow_interrupt {
@@ -413,7 +353,7 @@ impl ForExpression {
             }
             interpreter.exit_scope(self.iteration_scope);
         }
-        Ok(output.into_owned_value(self.span_range()))
+        Ok(().into_owned_value(self.span_range()))
     }
 }
 

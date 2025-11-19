@@ -275,14 +275,14 @@ fn test_range() {
     assert_eq!(run! {((4 + 7..=10).to_debug_string())}, "11..=10");
     assert_eq!(
         run! {
-            let output = 0;
+            let output1 = 0;
             for i in 0..10000000 {
                 if i == 5 {
-                    output = i;
+                    output1 = i;
                     break;
                 }
             }
-            output
+            output1
         },
         5
     );

@@ -149,10 +149,12 @@ Alternatively, we could have consider:
 So some possible things we can explore / consider:
 
 - [x] Add an `OutputHandler` to the interpreter, with a stack of `OutputStream`.
-- [x] Ensure `OutputHandler` is reverted when we catch/revert
-- [ ] Add `output` statement which outputs into the parent stream literal
+- [x] Add `output` statement which outputs into the parent stream literal
+- [ ] Change to error at parse if people use preinterpret keywords including `output`, `attempt` and `revert` as variable names.
+- [ ] Fix test where `message: index out of bounds: the len is 0 but the index is 184467440737095516` - seems to be related to number of none-`output` lines in the for loop... Possibly
+- [ ] Disallow `output` in revertible segment into stream outside of segment
 - [ ] Allow adding lifetimes to stream literals `%'a[]` and then `output 'a`, with `'root` being the topmost. Or maybe just `output 'root` honestly. Can't really see the use case for the others.
-  - [ ] Note that `%'a[((#{ output 'a %[x] }))]` should yield `((x))` not `x(())`
+  - [ ] Note that `%'a[((#{ output 'a %[x] }))]` should yield `x(())`
   - [ ] Note that we need to prevent or revert outputting to root in revertible segments
 - [ ] Remove vec-returns from loops, replace with `output`
 - [ ] `break` / `continue` improvements:
@@ -163,14 +165,13 @@ So some possible things we can explore / consider:
 
 First, read the @./2025-09-vision.md
 
-* Manually search for transform and rename to parse in folder names and file.
-* Initial changes:
-  * Parsers no longer output to a stream.
-  * Sort out `TODO[parser-no-output]`
-  * Scopes/frames can have a parse stream associated with them.
-    * This can be read/resolved (as the nearest parent) by parsers, even in expression blocks
-  * Don't support `@(#x = ...)` - instead we can have `#(let x = @[STREAM ...])`
-  * Consider a `parse %[ .. ] { /* parsers * / }` expression / block (no new scope!)
+- [ ] Manually search for transform and rename to parse in folder names and file.
+- [ ] Initial changes:
+  - [ ] Parsers no longer output to a stream, instead the output values.
+  - [ ] Sort out `TODO[parser-no-output]`
+  - [ ] Scopes/frames can have a parse stream associated with them. This can be read/resolved (as the nearest parent) by parsers, even in expression blocks
+  - [ ] Don't support `@(#x = ...)` - instead we can have `#(let x = @[STREAM ...])`
+  - [ ] Consider a `parse %[ .. ] { /* parsers * / }` expression / block (no new scope!)
 
 * Various other changes from the vision doc
 * (Side thought) - How does selecting a parse stream come into it? And e.g. when we extend to method/function definitions... Some options:
@@ -219,6 +220,8 @@ First, read the @./2025-09-vision.md
     max?: 1000000,
 }) { <block> }]
 ```
+
+- [ ] Ensure `TODO[parsers]` are addressed
 
 ## Methods and closures
 

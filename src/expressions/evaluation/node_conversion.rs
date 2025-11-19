@@ -46,16 +46,16 @@ impl ExpressionNode {
                     }
                     Leaf::LoopExpression(loop_expression) => {
                         let value =
-                            loop_expression.evaluate_as_expression(context.interpreter())?;
+                            loop_expression.evaluate(context.interpreter())?;
                         context.return_owned(value)?
                     }
                     Leaf::WhileExpression(while_expression) => {
                         let value =
-                            while_expression.evaluate_as_expression(context.interpreter())?;
+                            while_expression.evaluate(context.interpreter())?;
                         context.return_owned(value)?
                     }
                     Leaf::ForExpression(for_expression) => {
-                        let value = for_expression.evaluate_as_expression(context.interpreter())?;
+                        let value = for_expression.evaluate(context.interpreter())?;
                         context.return_owned(value)?
                     }
                     Leaf::AttemptExpression(attempt_expression) => {
