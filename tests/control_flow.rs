@@ -127,16 +127,14 @@ fn test_for() {
         run! {
             // A stream is iterated token-tree by token-tree
             // So we can match each value with a stream pattern matching each `(X,)`
+            let arr = [];
             for %[(@(#x = @IDENT),)] in %[(a,) (b,) (c,)] {
-                // if x.to_string() == "c" {
-                //     break;
-                // }
-                // let y = x.to_string();
-                // let z = y;
-                output x.to_string();
+                if x.to_string() == "c" {
+                    break;
+                }
+                arr.push(x.to_string());
             }
-            output "ab";
-            // output "cd";
+            output arr.to_string();
         },
         "ab"
     );
