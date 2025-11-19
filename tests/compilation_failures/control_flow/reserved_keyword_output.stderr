@@ -1,5 +1,0 @@
-error: Cannot use preinterpret keyword `output` as a variable name
- --> tests/compilation_failures/control_flow/reserved_keyword_output.rs:5:13
-  |
-5 |         let output = 5;
-  |             ^^^^^^

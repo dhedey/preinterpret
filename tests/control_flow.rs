@@ -134,7 +134,7 @@ fn test_for() {
                 }
                 arr.push(x.to_string());
             }
-            output arr.to_string();
+            emit arr.to_string();
         },
         "ab"
     );
@@ -151,11 +151,11 @@ fn test_attempt() {
     assert_eq!(x, 1);
     run! {
         let x = 0;
-        let result = attempt {
+        let output = attempt {
             { %[_].assert_eq(x, 1) } => { 1 }
             { let x = 2; } => { x }
         };
-        %[_].assert_eq(result, 2);
+        %[_].assert_eq(output, 2);
     }
     // Mutating a variable defined inside the arm works.
     // (Not being able to mutate parent scope variables is tested as a compilation failure.)
@@ -233,40 +233,40 @@ fn test_attempt() {
 #[test]
 fn test_attempt_guard_clauses() {
     run! {
-        let result = attempt {
+        let output = attempt {
             { } if false => 1,
             { } => 2,
         };
-        %[_].assert_eq(result, 2);
+        %[_].assert_eq(output, 2);
     }
     run! {
-        let result = attempt {
+        let output = attempt {
             { let x = 4; } if { x += 1; true } => { x }
             { } => { 2 }
         };
-        %[_].assert_eq(result, 5);
+        %[_].assert_eq(output, 5);
     }
     run! {
-        let result = attempt {
+        let output = attempt {
             { let x = 2; } if x >= 3 => x,
             { let x = 5; } if x >= 3 => x,
         };
-        %[_].assert_eq(result, 5);
+        %[_].assert_eq(output, 5);
     }
 }
 
 #[test]
-fn test_output_statement() {
-    // Basic output statement - simple case
+fn test_emit_statement() {
+    // Basic emit statement - simple case
     assert_eq!(
         run! {
             let s = "Hello";
-            output s.to_string();
+            emit s.to_string();
         },
         "Hello"
     );
 
-    // Multiple outputs in a loop (like the existing test on line 127-140)
+    // Multiple emits in a loop
     assert_eq!(
         run! {
             let arr = [];
@@ -276,12 +276,12 @@ fn test_output_statement() {
                     arr.push(", ".to_string());
                 }
             }
-            output arr.to_string();
+            emit arr.to_string();
         },
         "1, 2, 3"
     );
 
-    // Output with conditional
+    // Emit with conditional
     assert_eq!(
         run! {
             let arr = [];
@@ -291,21 +291,21 @@ fn test_output_statement() {
                     arr.push(" ".to_string());
                 }
             }
-            output arr.to_string();
+            emit arr.to_string();
         },
         "2 4 "
     );
 
-    // Output in if/else
+    // Emit in if/else
     assert_eq!(
         run! {
             let x = 5;
-            let result = if x > 3 {
+            let output = if x > 3 {
                 "large"
             } else {
                 "small"
             };
-            output result.to_string();
+            emit output.to_string();
         },
         "large"
     );

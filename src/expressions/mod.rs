@@ -28,6 +28,9 @@ pub(crate) use object::*;
 pub(crate) use operations::*;
 pub(crate) use stream::*;
 pub(crate) use type_resolution::*;
+
+// Re-export keyword constants for use in other modules
+pub(crate) use statements::{KEYWORD_ATTEMPT, KEYWORD_EMIT, KEYWORD_REVERT};
 pub(crate) use value::*;
 
 // Marked as use for expression sub-modules to use with a `use super::*` statement
