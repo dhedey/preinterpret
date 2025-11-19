@@ -258,7 +258,10 @@ impl ParseSource for OutputStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let output_token = input.parse_ident_matching("output")?;
         let expression = input.parse()?;
-        Ok(Self { output_token, expression })
+        Ok(Self {
+            output_token,
+            expression,
+        })
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
@@ -267,14 +270,14 @@ impl ParseSource for OutputStatement {
 }
 
 impl OutputStatement {
-    pub(crate) fn evaluate_as_statement(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        let value= self.expression.evaluate_owned(interpreter)?;
+    pub(crate) fn evaluate_as_statement(
+        &self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<()> {
+        let value = self.expression.evaluate_owned(interpreter)?;
         value.output_to(
             Grouping::Flattened,
-            &mut ToStreamContext::new(
-                interpreter.output()?,
-                value.span_range(),
-            ),
+            &mut ToStreamContext::new(interpreter.output()?, value.span_range()),
         )
     }
 }

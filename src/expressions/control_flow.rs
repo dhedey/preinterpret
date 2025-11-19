@@ -165,10 +165,7 @@ impl ParseSource for WhileExpression {
 }
 
 impl WhileExpression {
-    pub(crate) fn evaluate(
-        &self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<OwnedValue> {
+    pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
         let span = self.body.span();
         let mut iteration_counter = interpreter.start_iteration_counter(&span);
 
@@ -229,10 +226,7 @@ impl ParseSource for LoopExpression {
 }
 
 impl LoopExpression {
-    pub(crate) fn evaluate(
-        &self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<OwnedValue> {
+    pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
         let span = self.body.span();
         let mut iteration_counter = interpreter.start_iteration_counter(&span);
 
@@ -314,10 +308,7 @@ impl ParseSource for ForExpression {
 }
 
 impl ForExpression {
-    pub(crate) fn evaluate(
-        &self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<OwnedValue> {
+    pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
         let iterable: IterableValue = self
             .iterable
             .evaluate_owned(interpreter)?
