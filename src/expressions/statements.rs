@@ -261,8 +261,8 @@ impl ParseSource for OutputStatement {
         Ok(Self { output_token, expression })
     }
 
-    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
-        Ok(())
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        self.expression.control_flow_pass(context)
     }
 }
 
