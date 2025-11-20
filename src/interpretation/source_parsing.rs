@@ -5,6 +5,7 @@ new_key!(pub(crate) ScopeId);
 new_key!(pub(crate) VariableDefinitionId);
 new_key!(pub(crate) VariableReferenceId);
 new_key!(pub(crate) ControlFlowSegmentId);
+new_key!(pub(crate) CatchLocationId);
 
 #[cfg(feature = "debug")]
 #[derive(Clone, Copy, Debug)]
@@ -16,12 +17,11 @@ pub(crate) enum FinalUseAssertion {
 
 #[derive(Debug)]
 pub(crate) struct ScopeDefinitions {
-    // Scopes
     pub(crate) root_scope: ScopeId,
     pub(crate) scopes: Arena<ScopeId, ScopeData>,
     pub(crate) definitions: Arena<VariableDefinitionId, VariableDefinitionData>,
     pub(crate) references: Arena<VariableReferenceId, VariableReferenceData>,
-    // Segments
+    pub(crate) catch_locations: Arena<CatchLocationId, CatchLocationData>,
     #[cfg(feature = "debug")]
     root_segment: ControlFlowSegmentId,
     #[cfg(feature = "debug")]
@@ -32,12 +32,12 @@ pub(crate) struct ScopeDefinitions {
 
 #[allow(unused)]
 pub(crate) struct FlowAnalysisState {
-    // SCOPE DATA
     scope_id_stack: Vec<ScopeId>,
     scopes: Arena<ScopeId, AllocatedScope>,
     definitions: Arena<VariableDefinitionId, AllocatedVariableDefinition>,
     references: Arena<VariableReferenceId, AllocatedVariableReference>,
-    // CONTROL FLOW DATA
+    catch_locations: Arena<CatchLocationId, CatchLocationData>,
+    labeled_catch_locations: HashMap<String, CatchLocationId>,
     segments_stack: Vec<ControlFlowSegmentId>,
     segments: Arena<ControlFlowSegmentId, ControlFlowSegmentData>,
 }
@@ -63,6 +63,8 @@ impl FlowAnalysisState {
             scopes,
             definitions,
             references,
+            catch_locations: Arena::new(),
+            labeled_catch_locations: HashMap::new(),
             segments_stack: vec![root_segment],
             segments,
         }
@@ -121,6 +123,7 @@ impl FlowAnalysisState {
             scopes,
             definitions,
             references,
+            catch_locations: self.catch_locations,
             #[cfg(feature = "debug")]
             root_segment,
             #[cfg(feature = "debug")]
@@ -147,6 +150,18 @@ impl FlowAnalysisState {
                 name: name.to_string(),
                 span: name.span(),
             })
+    }
+
+    pub(crate) fn allocate_catch_location(&mut self, kind: CatchLocationKind) -> CatchLocationId {
+        self.catch_locations.add(CatchLocationData { kind })
+    }
+
+    pub(crate) fn register_labeled_catch_location(&mut self, label: &str, id: CatchLocationId) {
+        self.labeled_catch_locations.insert(label.to_string(), id);
+    }
+
+    pub(crate) fn resolve_label_to_catch_location(&self, label: &str) -> Option<CatchLocationId> {
+        self.labeled_catch_locations.get(label).copied()
     }
 
     fn current_scope_id(&self) -> ScopeId {
@@ -401,6 +416,18 @@ impl AllocatedScope {
 pub(crate) struct ScopeData {
     pub(crate) parent: Option<ScopeId>,
     pub(crate) definitions: Vec<VariableDefinitionId>,
+}
+
+#[derive(Debug)]
+pub(crate) struct CatchLocationData {
+    pub(crate) kind: CatchLocationKind,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub(crate) enum CatchLocationKind {
+    Loop,
+    LabeledBlock,
+    AttemptArm,
 }
 
 enum AllocatedVariableDefinition {

@@ -157,6 +157,7 @@ pub(crate) struct BreakStatement {
     break_token: Token![break],
     label: Option<syn::Lifetime>,
     value: Option<Expression>,
+    target_catch_location: Option<CatchLocationId>,
 }
 
 impl HasSpan for BreakStatement {
@@ -186,12 +187,22 @@ impl ParseSource for BreakStatement {
             break_token,
             label,
             value,
+            target_catch_location: None,
         })
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         if let Some(value) = &mut self.value {
             value.control_flow_pass(context)?;
+        }
+        if let Some(label) = &self.label {
+            self.target_catch_location =
+                context.resolve_label_to_catch_location(&label.ident.to_string());
+            if self.target_catch_location.is_none() {
+                return label
+                    .apostrophe
+                    .parse_err(format!("use of undeclared label '{}'", label.ident));
+            }
         }
         Ok(())
     }
@@ -210,6 +221,7 @@ impl BreakStatement {
 
         Err(ExecutionInterrupt::control_flow(
             ControlFlowInterrupt::new_break(
+                self.target_catch_location,
                 self.label.as_ref().map(|l| l.ident.to_string()),
                 value,
             ),
@@ -221,6 +233,7 @@ impl BreakStatement {
 pub(crate) struct ContinueStatement {
     continue_token: Token![continue],
     label: Option<syn::Lifetime>,
+    target_catch_location: Option<CatchLocationId>,
 }
 
 impl HasSpan for ContinueStatement {
@@ -242,10 +255,20 @@ impl ParseSource for ContinueStatement {
         Ok(Self {
             continue_token,
             label,
+            target_catch_location: None,
         })
     }
 
-    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        if let Some(label) = &self.label {
+            self.target_catch_location =
+                context.resolve_label_to_catch_location(&label.ident.to_string());
+            if self.target_catch_location.is_none() {
+                return label
+                    .apostrophe
+                    .parse_err(format!("use of undeclared label '{}'", label.ident));
+            }
+        }
         Ok(())
     }
 }
@@ -253,7 +276,10 @@ impl ParseSource for ContinueStatement {
 impl ContinueStatement {
     pub(crate) fn evaluate_as_statement(&self, _: &mut Interpreter) -> ExecutionResult<()> {
         Err(ExecutionInterrupt::control_flow(
-            ControlFlowInterrupt::new_continue(self.label.as_ref().map(|l| l.ident.to_string())),
+            ControlFlowInterrupt::new_continue(
+                self.target_catch_location,
+                self.label.as_ref().map(|l| l.ident.to_string()),
+            ),
             self.continue_token.span,
         ))
     }
@@ -261,6 +287,7 @@ impl ContinueStatement {
 
 pub(crate) struct RevertStatement {
     revert: RevertKeyword,
+    target_catch_location: Option<CatchLocationId>,
 }
 
 impl HasSpan for RevertStatement {
@@ -272,7 +299,10 @@ impl HasSpan for RevertStatement {
 impl ParseSource for RevertStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let revert = input.parse()?;
-        Ok(Self { revert })
+        Ok(Self {
+            revert,
+            target_catch_location: None,
+        })
     }
 
     fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {

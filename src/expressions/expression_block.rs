@@ -86,7 +86,7 @@ impl Interpret for EmbeddedStatements {
 }
 
 pub(crate) struct ExpressionBlock {
-    pub(super) label: Option<ExpressionLabel>,
+    pub(super) label: Option<CatchLabel>,
     pub(super) scoped_block: ScopedBlock,
 }
 
@@ -101,6 +101,12 @@ impl ParseSource for ExpressionBlock {
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        if let Some(label) = &mut self.label {
+            let catch_location_id =
+                context.allocate_catch_location(CatchLocationKind::LabeledBlock);
+            label.catch_location_id = catch_location_id;
+            context.register_labeled_catch_location(&label.ident_string(), catch_location_id);
+        }
         self.scoped_block.control_flow_pass(context)
     }
 }
@@ -124,18 +130,22 @@ impl ExpressionBlock {
         let scope = interpreter.current_scope_id();
         let output_result = self.scoped_block.evaluate(interpreter, ownership);
 
-        let output = match interpreter.catch_control_flow(
-            output_result,
-            |ctrl| ControlFlowInterrupt::catch_labelled_break(ctrl, self.label.as_ref()),
-            scope,
-        )? {
-            ExecutionOutcome::Value(value) => value,
-            ExecutionOutcome::ControlFlow(ControlFlowInterrupt::Break(break_interrupt)) => {
-                break_interrupt.into_value(self.span_range(), ownership)?
+        let output = if let Some(label) = &self.label {
+            match interpreter.catch_control_flow(
+                output_result,
+                |ctrl| ControlFlowInterrupt::catch_labelled_break(ctrl, label.catch_location_id),
+                scope,
+            )? {
+                ExecutionOutcome::Value(value) => value,
+                ExecutionOutcome::ControlFlow(ControlFlowInterrupt::Break(break_interrupt)) => {
+                    break_interrupt.into_value(self.span_range(), ownership)?
+                }
+                ExecutionOutcome::ControlFlow(_) => {
+                    unreachable!("Only break control flow should be catchable by labeled blocks")
+                }
             }
-            ExecutionOutcome::ControlFlow(_) => {
-                unreachable!("Only break control flow should be catchable by labeled blocks")
-            }
+        } else {
+            output_result?
         };
         Ok(output)
     }

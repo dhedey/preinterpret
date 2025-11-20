@@ -299,47 +299,56 @@ impl std::fmt::Debug for ControlFlowInterrupt {
 }
 
 impl ControlFlowInterrupt {
-    pub(crate) fn new_break(label: Option<String>, value: Option<OwnedValue>) -> Self {
-        ControlFlowInterrupt::Break(BreakInterrupt { label, value })
+    pub(crate) fn new_break(
+        target_catch_location: Option<CatchLocationId>,
+        label: Option<String>,
+        value: Option<OwnedValue>,
+    ) -> Self {
+        ControlFlowInterrupt::Break(BreakInterrupt {
+            target_catch_location,
+            label,
+            value,
+        })
     }
 
-    pub(crate) fn new_continue(label: Option<String>) -> Self {
-        ControlFlowInterrupt::Continue(ContinueInterrupt { label })
+    pub(crate) fn new_continue(
+        target_catch_location: Option<CatchLocationId>,
+        label: Option<String>,
+    ) -> Self {
+        ControlFlowInterrupt::Continue(ContinueInterrupt {
+            target_catch_location,
+            label,
+        })
     }
 
     pub(crate) fn catch_labelled_break(
         this: &ControlFlowInterrupt,
-        target_label: Option<&ExpressionLabel>,
+        target_catch_location: CatchLocationId,
     ) -> bool {
-        match (this, target_label) {
-            (
-                ControlFlowInterrupt::Break(BreakInterrupt {
-                    label: Some(break_label),
-                    ..
-                }),
-                Some(target_label),
-            ) => break_label == target_label.ident_string().as_str(),
+        match this {
+            ControlFlowInterrupt::Break(BreakInterrupt {
+                target_catch_location: Some(break_target),
+                ..
+            }) => *break_target == target_catch_location,
             _ => false,
         }
     }
 
     pub(crate) fn catch_loop_related(
         this: &ControlFlowInterrupt,
-        target_label: Option<&ExpressionLabel>,
+        target_catch_location: CatchLocationId,
     ) -> bool {
         match this {
             ControlFlowInterrupt::Break(BreakInterrupt {
-                label: interrupt_label,
+                target_catch_location: interrupt_target,
                 ..
             })
             | ControlFlowInterrupt::Continue(ContinueInterrupt {
-                label: interrupt_label,
-            }) => match (interrupt_label, target_label) {
-                (None, _) => true,
-                (Some(interrupt_label), Some(target_label)) => {
-                    interrupt_label == target_label.ident_string().as_str()
-                }
-                (Some(_), None) => false,
+                target_catch_location: interrupt_target,
+                ..
+            }) => match interrupt_target {
+                None => true,
+                Some(target) => *target == target_catch_location,
             },
             ControlFlowInterrupt::Revert => false,
         }
@@ -347,6 +356,7 @@ impl ControlFlowInterrupt {
 }
 
 pub(crate) struct BreakInterrupt {
+    target_catch_location: Option<CatchLocationId>,
     label: Option<String>,
     value: Option<OwnedValue>,
 }
@@ -366,6 +376,7 @@ impl BreakInterrupt {
 }
 
 pub(crate) struct ContinueInterrupt {
+    target_catch_location: Option<CatchLocationId>,
     label: Option<String>,
 }
 
@@ -378,7 +389,13 @@ impl ExecutionInterrupt {
                 span,
             ) => {
                 if let Some(label) = label {
-                    syn::Error::new(span, format!("break with label {} can only be used inside a loop or block with that label", label))
+                    syn::Error::new(
+                        span,
+                        format!(
+                            "break with label {} can only be used inside a loop or block with that label",
+                            label
+                        ),
+                    )
                 } else {
                     syn::Error::new(
                         span,
@@ -387,7 +404,7 @@ impl ExecutionInterrupt {
                 }
             }
             ExecutionInterruptInner::ControlFlowInterrupt(
-                ControlFlowInterrupt::Continue(ContinueInterrupt { label }),
+                ControlFlowInterrupt::Continue(ContinueInterrupt { label, .. }),
                 span,
             ) => {
                 if let Some(label) = label {

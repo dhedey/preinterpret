@@ -242,6 +242,18 @@ impl ControlFlowContext {
     pub(crate) fn exit_segment(&mut self, segment_id: ControlFlowSegmentId) {
         self.state.exit_segment(segment_id);
     }
+
+    pub(crate) fn allocate_catch_location(&mut self, kind: CatchLocationKind) -> CatchLocationId {
+        self.state.allocate_catch_location(kind)
+    }
+
+    pub(crate) fn register_labeled_catch_location(&mut self, label: &str, id: CatchLocationId) {
+        self.state.register_labeled_catch_location(label, id);
+    }
+
+    pub(crate) fn resolve_label_to_catch_location(&self, label: &str) -> Option<CatchLocationId> {
+        self.state.resolve_label_to_catch_location(label)
+    }
 }
 
 // This was originally created so that we could modify a stateful context
