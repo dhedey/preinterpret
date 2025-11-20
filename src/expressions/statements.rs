@@ -193,7 +193,11 @@ impl ParseSource for BreakStatement {
             None
         };
 
-        Ok(Self { break_token, label, value })
+        Ok(Self {
+            break_token,
+            label,
+            value,
+        })
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
@@ -205,7 +209,10 @@ impl ParseSource for BreakStatement {
 }
 
 impl BreakStatement {
-    pub(crate) fn evaluate_as_statement(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+    pub(crate) fn evaluate_as_statement(
+        &self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<()> {
         let value = if let Some(expr) = &self.value {
             Some(expr.evaluate_owned(interpreter)?)
         } else {
@@ -244,7 +251,10 @@ impl ParseSource for ContinueStatement {
             None
         };
 
-        Ok(Self { continue_token, label })
+        Ok(Self {
+            continue_token,
+            label,
+        })
     }
 
     fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {

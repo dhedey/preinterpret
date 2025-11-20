@@ -312,36 +312,35 @@ pub(crate) enum ControlFlowInterrupt {
 impl std::fmt::Debug for ControlFlowInterrupt {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ControlFlowInterrupt::Break { label, value } => {
-                let mut debug_struct = f.debug_struct("Break");
-                debug_struct.field("label", &label.as_ref().map(|l| l.to_string()));
-                debug_struct.field("value", &value.as_ref().map(|_| "<value>"));
-                debug_struct.finish()
-            }
-            ControlFlowInterrupt::Continue { label } => {
-                let mut debug_struct = f.debug_struct("Continue");
-                debug_struct.field("label", &label.as_ref().map(|l| l.to_string()));
-                debug_struct.finish()
-            }
-            ControlFlowInterrupt::Revert => write!(f, "Revert"),
+            Self::Break { label, .. } => f
+                .debug_struct("Break")
+                .field("label", &label.as_ref().map(|l| l.ident.to_string()))
+                .field("value", &"<value>")
+                .finish(),
+            Self::Continue { label } => f
+                .debug_struct("Continue")
+                .field("label", &label.as_ref().map(|l| l.ident.to_string()))
+                .finish(),
+            Self::Revert => f.debug_struct("Revert").finish(),
         }
     }
 }
 
 impl ControlFlowInterrupt {
-    pub(crate) fn catch_loop_related(this: &ControlFlowInterrupt) -> bool {
+    pub(crate) fn catch_loop_related(
+        this: &ControlFlowInterrupt,
+        target_label: Option<&crate::expressions::ExpressionLabel>,
+    ) -> bool {
         match this {
-            ControlFlowInterrupt::Break { .. } | ControlFlowInterrupt::Continue { .. } => true,
+            ControlFlowInterrupt::Break { label, .. }
+            | ControlFlowInterrupt::Continue { label } => match (label, target_label) {
+                (None, _) => true,
+                (Some(break_label), Some(loop_label)) => {
+                    break_label.ident == loop_label.ident_string()
+                }
+                (Some(_), None) => false,
+            },
             ControlFlowInterrupt::Revert => false,
-        }
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn label(&self) -> Option<&syn::Lifetime> {
-        match self {
-            ControlFlowInterrupt::Break { label, .. } => label.as_ref(),
-            ControlFlowInterrupt::Continue { label } => label.as_ref(),
-            ControlFlowInterrupt::Revert => None,
         }
     }
 }
@@ -350,16 +349,31 @@ impl ExecutionInterrupt {
     pub(crate) fn convert_to_final_error(self) -> syn::Error {
         match *self.inner {
             ExecutionInterruptInner::Error(_, e) => e.convert_to_final_error(),
-            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Break { label, .. }, span) => {
+            ExecutionInterruptInner::ControlFlowInterrupt(
+                ControlFlowInterrupt::Break { label, .. },
+                span,
+            ) => {
                 if let Some(label) = label {
                     syn::Error::new(span, format!("break with label {} can only be used inside a loop or block with that label", label.ident))
                 } else {
-                    syn::Error::new(span, "break can only be used inside a loop or labeled block")
+                    syn::Error::new(
+                        span,
+                        "break can only be used inside a loop or labeled block",
+                    )
                 }
             }
-            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Continue { label }, span) => {
+            ExecutionInterruptInner::ControlFlowInterrupt(
+                ControlFlowInterrupt::Continue { label },
+                span,
+            ) => {
                 if let Some(label) = label {
-                    syn::Error::new(span, format!("continue with label {} can only be used inside a loop with that label", label.ident))
+                    syn::Error::new(
+                        span,
+                        format!(
+                            "continue with label {} can only be used inside a loop with that label",
+                            label.ident
+                        ),
+                    )
                 } else {
                     syn::Error::new(span, "continue can only be used inside a loop")
                 }

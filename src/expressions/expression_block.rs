@@ -86,7 +86,7 @@ impl Interpret for EmbeddedStatements {
 }
 
 pub(crate) struct ExpressionBlock {
-    pub(super) label: Option<syn::Lifetime>,
+    pub(super) label: Option<ExpressionLabel>,
     pub(super) braces: Braces,
     pub(super) scope: ScopeId,
     pub(super) content: ExpressionBlockContent,
@@ -94,11 +94,8 @@ pub(crate) struct ExpressionBlock {
 
 impl ParseSource for ExpressionBlock {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        // Check if there's a label before the block
         let label = if input.cursor().lifetime().is_some() {
-            let lifetime: syn::Lifetime = input.parse()?;
-            input.parse::<Token![:]>()?;
-            Some(lifetime)
+            Some(input.parse()?)
         } else {
             None
         };
@@ -125,7 +122,11 @@ impl ParseSource for ExpressionBlock {
 impl HasSpan for ExpressionBlock {
     fn span(&self) -> Span {
         if let Some(label) = &self.label {
-            label.apostrophe.join(self.braces.close()).unwrap_or(self.braces.join())
+            label
+                .span_range()
+                .start()
+                .join(self.braces.close())
+                .unwrap_or(self.braces.join())
         } else {
             self.braces.join()
         }
@@ -143,17 +144,13 @@ impl ExpressionBlock {
             .content
             .evaluate(interpreter, self.span().into(), ownership);
 
-        // If this block has a label, check if a break with matching label occurred
         if let Some(block_label) = &self.label {
             let scope = self.scope;
             match output_result.catch_control_flow(
                 interpreter,
                 |ctrl| {
-                    // Catch breaks with our label
-                    matches!(ctrl,
-                        ControlFlowInterrupt::Break { label: Some(l), .. }
-                        if l.ident.to_string() == block_label.ident.to_string()
-                    )
+                    matches!(ctrl, ControlFlowInterrupt::Break { label: Some(_), .. })
+                        && ControlFlowInterrupt::catch_loop_related(ctrl, Some(block_label))
                 },
                 scope,
             )? {
@@ -162,21 +159,17 @@ impl ExpressionBlock {
                     Ok(value)
                 }
                 ExecutionOutcome::ControlFlow(ControlFlowInterrupt::Break { value, .. }) => {
-                    // This break is for us! Return the value
                     interpreter.exit_scope(self.scope);
                     let span_range: SpanRange = self.span().into();
-                    ownership.map_from_owned(
-                        value.unwrap_or_else(|| ().into_owned_value(span_range))
-                    )
+                    ownership
+                        .map_from_owned(value.unwrap_or_else(|| ().into_owned_value(span_range)))
                 }
                 ExecutionOutcome::ControlFlow(other) => {
-                    // Shouldn't happen, but propagate it
                     interpreter.exit_scope(self.scope);
                     Err(ExecutionInterrupt::control_flow(other, self.span()))
                 }
             }
         } else {
-            // No label, just return the result normally
             let output = output_result?;
             interpreter.exit_scope(self.scope);
             Ok(output)

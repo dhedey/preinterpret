@@ -163,11 +163,11 @@ The following are only maybes:
 
 ## Break / Continue Improvements
 
-- [ ] `break` can include an optional expresion, and can be used to return a value
-- [ ] Loops can be labelled, e.g. with `'outer: loop { .. }` or `'inner: for { .. }`.
-- [ ] `break` / `continue` can specify a label, and return from that label
-- [ ] Add tests to control_flow.rs and compilation failure tests covering various scenarios
-- [ ] Blocks can be labelled, and `break` can be used to return from a labelled block (https://blog.rust-lang.org/2022/11/03/Rust-1.65.0/#break-from-labeled-blocks)
+- [x] `break` can include an optional expresion, and can be used to return a value
+- [x] Loops can be labelled, e.g. with `'outer: loop { .. }` or `'inner: for { .. }`.
+- [x] `break` / `continue` can specify a label, and return from that label
+- [x] Add tests to control_flow.rs and compilation failure tests covering various scenarios
+- [x] Blocks can be labelled, and `break` can be used to return from a labelled block (https://blog.rust-lang.org/2022/11/03/Rust-1.65.0/#break-from-labeled-blocks)
 
 ## Parser Changes
 
@@ -247,6 +247,10 @@ First, read the @./2025-09-vision.md
     * If invocation is on an owned function, then owned values from the closure can be consumed
       by the invocation
     * Otherwise, the values are only available as shared/mut
+- [ ] Break/continue label resolution in functions/closures
+  * Functions and closures must resolve break/continue labels statically
+  * Break and continue statements should not leak out of function boundaries
+  * This needs to be validated during the control flow pass
 - [ ] Optional arguments
 - [ ] Add `map`, `filter`, `flatten`, `flatmap`
 
