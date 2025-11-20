@@ -1,4 +1,4 @@
-error: break with label outer can only be used inside a loop or block with that label
+error: label 'outer' not found in scope
  --> tests/compilation_failures/control_flow/break_with_wrong_label_in_nested_loop.rs:6:13
   |
 6 |             break 'outer;

@@ -130,10 +130,11 @@ impl IfExpression {
 }
 
 pub(crate) struct WhileExpression {
-    label: Option<ExpressionLabel>,
+    label: Option<CatchLabel>,
     while_token: Ident,
     condition: Expression,
     body: ScopedBlock,
+    catch_location_id: CatchLocationId,
 }
 
 impl HasSpanRange for WhileExpression {
@@ -158,10 +159,20 @@ impl ParseSource for WhileExpression {
             while_token,
             condition,
             body,
+            catch_location_id: CatchLocationId::new_placeholder(),
         })
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        // Register a catch location for this loop
+        self.catch_location_id = context.register_catch_location(CatchLocationKind::Loop);
+
+        // If the loop has a label, register it with the catch location
+        if let Some(label) = &mut self.label {
+            label.catch_location_id = self.catch_location_id;
+            context.register_labeled_catch_location(&label.ident_string(), self.catch_location_id);
+        }
+
         let segment = context.enter_next_segment(SegmentKind::LoopingSequential);
         self.condition.control_flow_pass(context)?;
         self.body.control_flow_pass(context)?;
@@ -189,7 +200,7 @@ impl WhileExpression {
             let body_result = self.body.evaluate_owned(interpreter);
             match interpreter.catch_control_flow(
                 body_result,
-                |ctrl| ControlFlowInterrupt::catch_loop_related(ctrl, self.label.as_ref()),
+                |ctrl| ControlFlowInterrupt::catch_loop_related(ctrl, self.catch_location_id),
                 scope,
             )? {
                 ExecutionOutcome::Value(value) => {
@@ -215,9 +226,10 @@ impl WhileExpression {
 }
 
 pub(crate) struct LoopExpression {
-    label: Option<ExpressionLabel>,
+    label: Option<CatchLabel>,
     loop_token: Ident,
     body: ScopedBlock,
+    catch_location_id: CatchLocationId,
 }
 
 impl HasSpanRange for LoopExpression {
@@ -239,10 +251,20 @@ impl ParseSource for LoopExpression {
             label,
             loop_token,
             body,
+            catch_location_id: CatchLocationId::new_placeholder(),
         })
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        // Register a catch location for this loop
+        self.catch_location_id = context.register_catch_location(CatchLocationKind::Loop);
+
+        // If the loop has a label, register it with the catch location
+        if let Some(label) = &mut self.label {
+            label.catch_location_id = self.catch_location_id;
+            context.register_labeled_catch_location(&label.ident_string(), self.catch_location_id);
+        }
+
         let segment = context.enter_next_segment(SegmentKind::LoopingSequential);
         self.body.control_flow_pass(context)?;
         context.exit_segment(segment);
@@ -266,7 +288,7 @@ impl LoopExpression {
             let body_result = self.body.evaluate_owned(interpreter);
             match interpreter.catch_control_flow(
                 body_result,
-                |ctrl| ControlFlowInterrupt::catch_loop_related(ctrl, self.label.as_ref()),
+                |ctrl| ControlFlowInterrupt::catch_loop_related(ctrl, self.catch_location_id),
                 scope,
             )? {
                 ExecutionOutcome::Value(value) => {
@@ -292,12 +314,13 @@ impl LoopExpression {
 
 pub(crate) struct ForExpression {
     iteration_scope: ScopeId,
-    label: Option<ExpressionLabel>,
+    label: Option<CatchLabel>,
     for_token: Ident,
     pattern: Pattern,
     _in_token: Ident,
     iterable: Expression,
     body: ScopedBlock,
+    catch_location_id: CatchLocationId,
 }
 
 impl HasSpanRange for ForExpression {
@@ -327,10 +350,20 @@ impl ParseSource for ForExpression {
             _in_token: in_token,
             iterable,
             body,
+            catch_location_id: CatchLocationId::new_placeholder(),
         })
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        // Register a catch location for this loop
+        self.catch_location_id = context.register_catch_location(CatchLocationKind::Loop);
+
+        // If the loop has a label, register it with the catch location
+        if let Some(label) = &mut self.label {
+            label.catch_location_id = self.catch_location_id;
+            context.register_labeled_catch_location(&label.ident_string(), self.catch_location_id);
+        }
+
         context.register_scope(&mut self.iteration_scope);
         self.iterable.control_flow_pass(context)?;
 
@@ -371,7 +404,7 @@ impl ForExpression {
             let body_result = self.body.evaluate_owned(interpreter);
             match interpreter.catch_control_flow(
                 body_result,
-                |ctrl| ControlFlowInterrupt::catch_loop_related(ctrl, self.label.as_ref()),
+                |ctrl| ControlFlowInterrupt::catch_loop_related(ctrl, self.catch_location_id),
                 scope,
             )? {
                 ExecutionOutcome::Value(value) => {

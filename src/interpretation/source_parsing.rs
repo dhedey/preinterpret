@@ -5,6 +5,7 @@ new_key!(pub(crate) ScopeId);
 new_key!(pub(crate) VariableDefinitionId);
 new_key!(pub(crate) VariableReferenceId);
 new_key!(pub(crate) ControlFlowSegmentId);
+new_key!(pub(crate) CatchLocationId);
 
 #[cfg(feature = "debug")]
 #[derive(Clone, Copy, Debug)]
@@ -21,6 +22,8 @@ pub(crate) struct ScopeDefinitions {
     pub(crate) scopes: Arena<ScopeId, ScopeData>,
     pub(crate) definitions: Arena<VariableDefinitionId, VariableDefinitionData>,
     pub(crate) references: Arena<VariableReferenceId, VariableReferenceData>,
+    // Catch locations
+    pub(crate) catch_locations: Arena<CatchLocationId, CatchLocationData>,
     // Segments
     #[cfg(feature = "debug")]
     root_segment: ControlFlowSegmentId,
@@ -37,6 +40,9 @@ pub(crate) struct FlowAnalysisState {
     scopes: Arena<ScopeId, AllocatedScope>,
     definitions: Arena<VariableDefinitionId, AllocatedVariableDefinition>,
     references: Arena<VariableReferenceId, AllocatedVariableReference>,
+    // CATCH LOCATION DATA
+    catch_locations: Arena<CatchLocationId, CatchLocationData>,
+    labeled_catch_locations: HashMap<String, CatchLocationId>,
     // CONTROL FLOW DATA
     segments_stack: Vec<ControlFlowSegmentId>,
     segments: Arena<ControlFlowSegmentId, ControlFlowSegmentData>,
@@ -63,6 +69,8 @@ impl FlowAnalysisState {
             scopes,
             definitions,
             references,
+            catch_locations: Arena::new(),
+            labeled_catch_locations: HashMap::new(),
             segments_stack: vec![root_segment],
             segments,
         }
@@ -121,6 +129,7 @@ impl FlowAnalysisState {
             scopes,
             definitions,
             references,
+            catch_locations: self.catch_locations,
             #[cfg(feature = "debug")]
             root_segment,
             #[cfg(feature = "debug")]
@@ -296,11 +305,44 @@ impl FlowAnalysisState {
         }
         child_id
     }
+
+    pub(crate) fn register_catch_location(&mut self, kind: CatchLocationKind) -> CatchLocationId {
+        self.catch_locations.add(CatchLocationData { kind })
+    }
+
+    pub(crate) fn register_labeled_catch_location(
+        &mut self,
+        label: &str,
+        location_id: CatchLocationId,
+    ) {
+        self.labeled_catch_locations
+            .insert(label.to_string(), location_id);
+    }
+
+    pub(crate) fn resolve_label_to_catch_location(&self, label: &str) -> Option<CatchLocationId> {
+        self.labeled_catch_locations.get(label).copied()
+    }
 }
 
 /// A control flow segment captures a section of code which executes in order.
 ///
 /// A segment may have children, either:
+/// Represents a location where control flow interrupts (break, continue, revert) can be caught.
+#[derive(Debug)]
+pub(crate) struct CatchLocationData {
+    pub(crate) kind: CatchLocationKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CatchLocationKind {
+    /// A loop (can catch unlabeled break/continue, or labeled if this location has a label)
+    Loop,
+    /// A labeled block (can only catch labeled break with matching label)
+    LabeledBlock,
+    /// An attempt block (can catch revert)
+    AttemptBlock,
+}
+
 /// * Sequential: Children are instructions and segments, which have a fixed order
 /// * Tree-based: Only has segment children; these form multiple possible execution paths.
 ///
