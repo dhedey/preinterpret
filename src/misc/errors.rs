@@ -298,18 +298,50 @@ enum ExecutionInterruptInner {
     ControlFlowInterrupt(ControlFlowInterrupt, Span),
 }
 
-#[derive(Debug)]
 pub(crate) enum ControlFlowInterrupt {
-    Break,
-    Continue,
+    Break {
+        label: Option<syn::Lifetime>,
+        value: Option<crate::interpretation::OwnedValue>,
+    },
+    Continue {
+        label: Option<syn::Lifetime>,
+    },
     Revert,
+}
+
+impl std::fmt::Debug for ControlFlowInterrupt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ControlFlowInterrupt::Break { label, value } => {
+                let mut debug_struct = f.debug_struct("Break");
+                debug_struct.field("label", &label.as_ref().map(|l| l.to_string()));
+                debug_struct.field("value", &value.as_ref().map(|_| "<value>"));
+                debug_struct.finish()
+            }
+            ControlFlowInterrupt::Continue { label } => {
+                let mut debug_struct = f.debug_struct("Continue");
+                debug_struct.field("label", &label.as_ref().map(|l| l.to_string()));
+                debug_struct.finish()
+            }
+            ControlFlowInterrupt::Revert => write!(f, "Revert"),
+        }
+    }
 }
 
 impl ControlFlowInterrupt {
     pub(crate) fn catch_loop_related(this: &ControlFlowInterrupt) -> bool {
         match this {
-            ControlFlowInterrupt::Break | ControlFlowInterrupt::Continue => true,
+            ControlFlowInterrupt::Break { .. } | ControlFlowInterrupt::Continue { .. } => true,
             ControlFlowInterrupt::Revert => false,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn label(&self) -> Option<&syn::Lifetime> {
+        match self {
+            ControlFlowInterrupt::Break { label, .. } => label.as_ref(),
+            ControlFlowInterrupt::Continue { label } => label.as_ref(),
+            ControlFlowInterrupt::Revert => None,
         }
     }
 }
@@ -318,11 +350,19 @@ impl ExecutionInterrupt {
     pub(crate) fn convert_to_final_error(self) -> syn::Error {
         match *self.inner {
             ExecutionInterruptInner::Error(_, e) => e.convert_to_final_error(),
-            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Break, span) => {
-                syn::Error::new(span, "break can only be used inside a loop")
+            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Break { label, .. }, span) => {
+                if let Some(label) = label {
+                    syn::Error::new(span, format!("break with label {} can only be used inside a loop or block with that label", label.ident))
+                } else {
+                    syn::Error::new(span, "break can only be used inside a loop or labeled block")
+                }
             }
-            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Continue, span) => {
-                syn::Error::new(span, "continue can only be used inside a loop")
+            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Continue { label }, span) => {
+                if let Some(label) = label {
+                    syn::Error::new(span, format!("continue with label {} can only be used inside a loop with that label", label.ident))
+                } else {
+                    syn::Error::new(span, "continue can only be used inside a loop")
+                }
             }
             ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Revert, span) => {
                 syn::Error::new(

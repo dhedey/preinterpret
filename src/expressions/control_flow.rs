@@ -130,6 +130,7 @@ impl IfExpression {
 }
 
 pub(crate) struct WhileExpression {
+    label: Option<syn::Lifetime>,
     while_token: Ident,
     condition: Expression,
     body: ExpressionBlock,
@@ -137,18 +138,31 @@ pub(crate) struct WhileExpression {
 
 impl HasSpanRange for WhileExpression {
     fn span_range(&self) -> SpanRange {
-        SpanRange::new_between(self.while_token.span(), self.body.span())
+        if let Some(label) = &self.label {
+            SpanRange::new_between(label.apostrophe, self.body.span())
+        } else {
+            SpanRange::new_between(self.while_token.span(), self.body.span())
+        }
     }
 }
 
 impl ParseSource for WhileExpression {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        let while_token = input.parse_ident_matching("while")?;
+        // Try to parse an optional label
+        let label = if input.cursor().lifetime().is_some() {
+            let lifetime: syn::Lifetime = input.parse()?;
+            input.parse::<Token![:]>()?;
+            Some(lifetime)
+        } else {
+            None
+        };
 
+        let while_token = input.parse_ident_matching("while")?;
         let condition = input.parse()?;
         let body = input.parse()?;
 
         Ok(Self {
+            label,
             while_token,
             condition,
             body,
@@ -176,9 +190,18 @@ impl WhileExpression {
             .resolve_as("A while condition")?
         {
             iteration_counter.increment_and_check()?;
+            let loop_label = self.label.as_ref().map(|l| l.ident.to_string());
             match self.body.evaluate_owned(interpreter).catch_control_flow(
                 interpreter,
-                ControlFlowInterrupt::catch_loop_related,
+                |ctrl| {
+                    ControlFlowInterrupt::catch_loop_related(ctrl) && {
+                        // Only catch if the label matches or there's no label
+                        match ctrl.label() {
+                            None => true,
+                            Some(label) => loop_label.as_ref().map(|l| l == &label.ident.to_string()).unwrap_or(false),
+                        }
+                    }
+                },
                 scope,
             )? {
                 ExecutionOutcome::Value(value) => {
@@ -186,8 +209,14 @@ impl WhileExpression {
                 }
                 ExecutionOutcome::ControlFlow(control_flow_interrupt) => {
                     match control_flow_interrupt {
-                        ControlFlowInterrupt::Break => break,
-                        ControlFlowInterrupt::Continue => continue,
+                        ControlFlowInterrupt::Break { value, .. } => {
+                            // We only catch breaks with matching labels, so just return the value
+                            return Ok(value.unwrap_or_else(|| ().into_owned_value(self.span_range())));
+                        }
+                        ControlFlowInterrupt::Continue { .. } => {
+                            // We only catch continues with matching labels, so just continue
+                            continue;
+                        }
                         ControlFlowInterrupt::Revert => {
                             unreachable!("catch_loop_related should filter this out")
                         }
@@ -200,21 +229,35 @@ impl WhileExpression {
 }
 
 pub(crate) struct LoopExpression {
+    label: Option<syn::Lifetime>,
     loop_token: Ident,
     body: ExpressionBlock,
 }
 
 impl HasSpanRange for LoopExpression {
     fn span_range(&self) -> SpanRange {
-        SpanRange::new_between(self.loop_token.span(), self.body.span())
+        if let Some(label) = &self.label {
+            SpanRange::new_between(label.apostrophe, self.body.span())
+        } else {
+            SpanRange::new_between(self.loop_token.span(), self.body.span())
+        }
     }
 }
 
 impl ParseSource for LoopExpression {
     fn parse(input: SourceParser) -> ParseResult<Self> {
+        // Try to parse an optional label
+        let label = if input.cursor().lifetime().is_some() {
+            let lifetime: syn::Lifetime = input.parse()?;
+            input.parse::<Token![:]>()?;
+            Some(lifetime)
+        } else {
+            None
+        };
+
         let loop_token = input.parse_ident_matching("loop")?;
         let body = input.parse()?;
-        Ok(Self { loop_token, body })
+        Ok(Self { label, loop_token, body })
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
@@ -234,9 +277,18 @@ impl LoopExpression {
         loop {
             iteration_counter.increment_and_check()?;
 
+            let loop_label = self.label.as_ref().map(|l| l.ident.to_string());
             match self.body.evaluate_owned(interpreter).catch_control_flow(
                 interpreter,
-                ControlFlowInterrupt::catch_loop_related,
+                |ctrl| {
+                    ControlFlowInterrupt::catch_loop_related(ctrl) && {
+                        // Only catch if the label matches or there's no label
+                        match ctrl.label() {
+                            None => true,
+                            Some(label) => loop_label.as_ref().map(|l| l == &label.ident.to_string()).unwrap_or(false),
+                        }
+                    }
+                },
                 scope,
             )? {
                 ExecutionOutcome::Value(value) => {
@@ -244,8 +296,14 @@ impl LoopExpression {
                 }
                 ExecutionOutcome::ControlFlow(control_flow_interrupt) => {
                     match control_flow_interrupt {
-                        ControlFlowInterrupt::Break => break,
-                        ControlFlowInterrupt::Continue => continue,
+                        ControlFlowInterrupt::Break { value, .. } => {
+                            // We only catch breaks with matching labels, so just return the value
+                            return Ok(value.unwrap_or_else(|| ().into_owned_value(self.span_range())));
+                        }
+                        ControlFlowInterrupt::Continue { .. } => {
+                            // We only catch continues with matching labels, so just continue
+                            continue;
+                        }
                         ControlFlowInterrupt::Revert => {
                             unreachable!("catch_loop_related should filter this out")
                         }
@@ -253,12 +311,12 @@ impl LoopExpression {
                 }
             }
         }
-        Ok(().into_owned_value(self.span_range()))
     }
 }
 
 pub(crate) struct ForExpression {
     iteration_scope: ScopeId,
+    label: Option<syn::Lifetime>,
     for_token: Ident,
     pattern: Pattern,
     _in_token: Ident,
@@ -268,12 +326,25 @@ pub(crate) struct ForExpression {
 
 impl HasSpanRange for ForExpression {
     fn span_range(&self) -> SpanRange {
-        SpanRange::new_between(self.for_token.span(), self.body.span())
+        if let Some(label) = &self.label {
+            SpanRange::new_between(label.apostrophe, self.body.span())
+        } else {
+            SpanRange::new_between(self.for_token.span(), self.body.span())
+        }
     }
 }
 
 impl ParseSource for ForExpression {
     fn parse(input: SourceParser) -> ParseResult<Self> {
+        // Try to parse an optional label
+        let label = if input.cursor().lifetime().is_some() {
+            let lifetime: syn::Lifetime = input.parse()?;
+            input.parse::<Token![:]>()?;
+            Some(lifetime)
+        } else {
+            None
+        };
+
         let for_token = input.parse_ident_matching("for")?;
         let pattern = input.parse()?;
         let in_token = input.parse_ident_matching("in")?;
@@ -282,6 +353,7 @@ impl ParseSource for ForExpression {
 
         Ok(Self {
             iteration_scope: ScopeId::new_placeholder(),
+            label,
             for_token,
             pattern,
             _in_token: in_token,
@@ -324,9 +396,18 @@ impl ForExpression {
             interpreter.enter_scope(self.iteration_scope);
             self.pattern.handle_destructure(interpreter, item)?;
 
+            let loop_label = self.label.as_ref().map(|l| l.ident.to_string());
             match self.body.evaluate_owned(interpreter).catch_control_flow(
                 interpreter,
-                ControlFlowInterrupt::catch_loop_related,
+                |ctrl| {
+                    ControlFlowInterrupt::catch_loop_related(ctrl) && {
+                        // Only catch if the label matches or there's no label
+                        match ctrl.label() {
+                            None => true,
+                            Some(label) => loop_label.as_ref().map(|l| l == &label.ident.to_string()).unwrap_or(false),
+                        }
+                    }
+                },
                 scope,
             )? {
                 ExecutionOutcome::Value(value) => {
@@ -334,8 +415,18 @@ impl ForExpression {
                 }
                 ExecutionOutcome::ControlFlow(control_flow_interrupt) => {
                     match control_flow_interrupt {
-                        ControlFlowInterrupt::Break => break,
-                        ControlFlowInterrupt::Continue => continue,
+                        ControlFlowInterrupt::Break { value, .. } => {
+                            // We only catch breaks with matching labels
+                            // catch_control_flow already unwound scopes back to our scope,
+                            // which exited the iteration_scope, so just return the value
+                            return Ok(value.unwrap_or_else(|| ().into_owned_value(self.span_range())));
+                        }
+                        ControlFlowInterrupt::Continue { .. } => {
+                            // We only catch continues with matching labels
+                            // catch_control_flow already unwound scopes back to our scope,
+                            // which exited the iteration_scope, so just continue
+                            continue;
+                        }
                         ControlFlowInterrupt::Revert => {
                             unreachable!("catch_loop_related should filter this out")
                         }

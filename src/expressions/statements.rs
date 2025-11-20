@@ -165,6 +165,8 @@ impl LetStatement {
 
 pub(crate) struct BreakStatement {
     break_token: Ident,
+    label: Option<syn::Lifetime>,
+    value: Option<Expression>,
 }
 
 impl HasSpan for BreakStatement {
@@ -176,18 +178,45 @@ impl HasSpan for BreakStatement {
 impl ParseSource for BreakStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let break_token = input.parse_ident_matching("break")?;
-        Ok(Self { break_token })
+
+        // Try to parse an optional label
+        let label = if input.cursor().lifetime().is_some() {
+            Some(input.parse()?)
+        } else {
+            None
+        };
+
+        // Try to parse an optional expression value
+        let value = if !input.is_empty() && !input.peek(Token![;]) {
+            Some(input.parse()?)
+        } else {
+            None
+        };
+
+        Ok(Self { break_token, label, value })
     }
 
-    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        if let Some(value) = &mut self.value {
+            value.control_flow_pass(context)?;
+        }
         Ok(())
     }
 }
 
 impl BreakStatement {
-    pub(crate) fn evaluate_as_statement(&self, _: &mut Interpreter) -> ExecutionResult<()> {
+    pub(crate) fn evaluate_as_statement(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        let value = if let Some(expr) = &self.value {
+            Some(expr.evaluate_owned(interpreter)?)
+        } else {
+            None
+        };
+
         Err(ExecutionInterrupt::control_flow(
-            ControlFlowInterrupt::Break,
+            ControlFlowInterrupt::Break {
+                label: self.label.clone(),
+                value,
+            },
             self.break_token.span(),
         ))
     }
@@ -195,6 +224,7 @@ impl BreakStatement {
 
 pub(crate) struct ContinueStatement {
     continue_token: Ident,
+    label: Option<syn::Lifetime>,
 }
 
 impl HasSpan for ContinueStatement {
@@ -206,7 +236,15 @@ impl HasSpan for ContinueStatement {
 impl ParseSource for ContinueStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let continue_token = input.parse_ident_matching("continue")?;
-        Ok(Self { continue_token })
+
+        // Try to parse an optional label
+        let label = if input.cursor().lifetime().is_some() {
+            Some(input.parse()?)
+        } else {
+            None
+        };
+
+        Ok(Self { continue_token, label })
     }
 
     fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
@@ -217,7 +255,9 @@ impl ParseSource for ContinueStatement {
 impl ContinueStatement {
     pub(crate) fn evaluate_as_statement(&self, _: &mut Interpreter) -> ExecutionResult<()> {
         Err(ExecutionInterrupt::control_flow(
-            ControlFlowInterrupt::Continue,
+            ControlFlowInterrupt::Continue {
+                label: self.label.clone(),
+            },
             self.continue_token.span(),
         ))
     }

@@ -66,6 +66,28 @@ impl<'a> ExpressionParser<'a> {
     }
 
     fn parse_unary_atom(input: &mut ParseStreamStack) -> ParseResult<UnaryAtom> {
+        // Check for labeled loops or blocks first (lifetime followed by : and loop/while/for or {)
+        if input.cursor().lifetime().is_some() {
+            // Peek ahead to see what follows the label
+            if let Some((_, cursor_after_lifetime)) = input.cursor().lifetime() {
+                if let Some((_, cursor_after_colon)) = cursor_after_lifetime.punct_matching(':') {
+                    // Check if it's followed by a loop keyword or block
+                    if let Some((ident, _)) = cursor_after_colon.ident() {
+                        match ident.to_string().as_str() {
+                            "loop" => return Ok(UnaryAtom::Leaf(Leaf::LoopExpression(input.parse()?))),
+                            "while" => return Ok(UnaryAtom::Leaf(Leaf::WhileExpression(input.parse()?))),
+                            "for" => return Ok(UnaryAtom::Leaf(Leaf::ForExpression(input.parse()?))),
+                            _ => {}
+                        }
+                    }
+                    // Check if it's followed by a block
+                    if cursor_after_colon.group_matching(Delimiter::Brace).is_some() {
+                        return Ok(UnaryAtom::Leaf(Leaf::Block(input.parse()?)));
+                    }
+                }
+            }
+        }
+
         Ok(match input.peek_grammar() {
             SourcePeekMatch::EmbeddedVariable | SourcePeekMatch::EmbeddedExpression | SourcePeekMatch::EmbeddedStatements => {
                 return input.parse_err(
