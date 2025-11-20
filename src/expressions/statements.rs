@@ -1,5 +1,3 @@
-use syn::spanned::Spanned;
-
 use super::*;
 
 pub(crate) enum Statement {
@@ -163,7 +161,7 @@ pub(crate) struct BreakStatement {
 
 impl HasSpan for BreakStatement {
     fn span(&self) -> Span {
-        self.break_token.span()
+        self.break_token.span
     }
 }
 
@@ -215,7 +213,7 @@ impl BreakStatement {
                 self.label.as_ref().map(|l| l.ident.to_string()),
                 value,
             ),
-            self.break_token.span(),
+            self.break_token.span,
         ))
     }
 }
@@ -227,7 +225,7 @@ pub(crate) struct ContinueStatement {
 
 impl HasSpan for ContinueStatement {
     fn span(&self) -> Span {
-        self.continue_token.span()
+        self.continue_token.span
     }
 }
 
@@ -256,7 +254,7 @@ impl ContinueStatement {
     pub(crate) fn evaluate_as_statement(&self, _: &mut Interpreter) -> ExecutionResult<()> {
         Err(ExecutionInterrupt::control_flow(
             ControlFlowInterrupt::new_continue(self.label.as_ref().map(|l| l.ident.to_string())),
-            self.continue_token.span(),
+            self.continue_token.span,
         ))
     }
 }
