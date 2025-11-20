@@ -1,11 +1,16 @@
 use super::*;
 
+// Preinterpret keyword constants
+pub(crate) const KEYWORD_EMIT: &str = "emit";
+pub(crate) const KEYWORD_ATTEMPT: &str = "attempt";
+pub(crate) const KEYWORD_REVERT: &str = "revert";
+
 pub(crate) enum Statement {
     LetStatement(LetStatement),
     BreakStatement(BreakStatement),
     ContinueStatement(ContinueStatement),
     RevertStatement(RevertStatement),
-    OutputStatement(OutputStatement),
+    EmitStatement(EmitStatement),
     Expression(Expression),
 }
 
@@ -16,7 +21,7 @@ impl Statement {
             Statement::BreakStatement(_) => true,
             Statement::ContinueStatement(_) => true,
             Statement::RevertStatement(_) => true,
-            Statement::OutputStatement(_) => true,
+            Statement::EmitStatement(_) => true,
             Statement::Expression(expression) => {
                 !(expression.is_valid_as_statement_without_semicolon() || last_line)
             }
@@ -31,8 +36,8 @@ impl ParseSource for Statement {
                 "let" => Statement::LetStatement(input.parse()?),
                 "break" => Statement::BreakStatement(input.parse()?),
                 "continue" => Statement::ContinueStatement(input.parse()?),
-                "revert" => Statement::RevertStatement(input.parse()?),
-                "output" => Statement::OutputStatement(input.parse()?),
+                KEYWORD_REVERT => Statement::RevertStatement(input.parse()?),
+                KEYWORD_EMIT => Statement::EmitStatement(input.parse()?),
                 _ => Statement::Expression(input.parse()?),
             }
         } else {
@@ -47,7 +52,7 @@ impl ParseSource for Statement {
             Statement::BreakStatement(statement) => statement.control_flow_pass(context),
             Statement::ContinueStatement(statement) => statement.control_flow_pass(context),
             Statement::RevertStatement(statement) => statement.control_flow_pass(context),
-            Statement::OutputStatement(statement) => statement.control_flow_pass(context),
+            Statement::EmitStatement(statement) => statement.control_flow_pass(context),
         }
     }
 }
@@ -63,7 +68,7 @@ impl Statement {
             Statement::BreakStatement(statement) => statement.evaluate_as_statement(interpreter),
             Statement::ContinueStatement(statement) => statement.evaluate_as_statement(interpreter),
             Statement::RevertStatement(statement) => statement.evaluate_as_statement(interpreter),
-            Statement::OutputStatement(statement) => statement.evaluate_as_statement(interpreter),
+            Statement::EmitStatement(statement) => statement.evaluate_as_statement(interpreter),
         }
     }
 
@@ -78,7 +83,7 @@ impl Statement {
             | Statement::BreakStatement(_)
             | Statement::ContinueStatement(_)
             | Statement::RevertStatement(_)
-            | Statement::OutputStatement(_) => {
+            | Statement::EmitStatement(_) => {
                 panic!("Statements cannot be used as returning expressions")
             }
         }
@@ -225,7 +230,7 @@ impl HasSpan for RevertStatement {
 
 impl ParseSource for RevertStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        let revert_token = input.parse_ident_matching("revert")?;
+        let revert_token = input.parse_ident_matching(KEYWORD_REVERT)?;
         Ok(Self { revert_token })
     }
 
@@ -243,23 +248,23 @@ impl RevertStatement {
     }
 }
 
-pub(crate) struct OutputStatement {
-    output_token: Ident,
+pub(crate) struct EmitStatement {
+    emit_token: Ident,
     expression: Expression,
 }
 
-impl HasSpan for OutputStatement {
+impl HasSpan for EmitStatement {
     fn span(&self) -> Span {
-        self.output_token.span()
+        self.emit_token.span()
     }
 }
 
-impl ParseSource for OutputStatement {
+impl ParseSource for EmitStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        let output_token = input.parse_ident_matching("output")?;
+        let emit_token = input.parse_ident_matching(KEYWORD_EMIT)?;
         let expression = input.parse()?;
         Ok(Self {
-            output_token,
+            emit_token,
             expression,
         })
     }
@@ -269,7 +274,7 @@ impl ParseSource for OutputStatement {
     }
 }
 
-impl OutputStatement {
+impl EmitStatement {
     pub(crate) fn evaluate_as_statement(
         &self,
         interpreter: &mut Interpreter,

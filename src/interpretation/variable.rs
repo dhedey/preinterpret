@@ -40,7 +40,24 @@ pub(crate) struct VariableDefinition {
 
 impl ParseSource for VariableDefinition {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        let ident = input.parse()?;
+        use crate::expressions::{KEYWORD_ATTEMPT, KEYWORD_EMIT, KEYWORD_REVERT};
+
+        let ident: Ident = input.parse()?;
+
+        // Check if the identifier is a reserved keyword
+        let ident_str = ident.to_string();
+        let ident_str_ref = ident_str.as_str();
+
+        if ident_str_ref == KEYWORD_EMIT
+            || ident_str_ref == KEYWORD_ATTEMPT
+            || ident_str_ref == KEYWORD_REVERT
+        {
+            return ident.span().parse_err(format!(
+                "Cannot use preinterpret keyword `{}` as a variable name",
+                ident_str
+            ));
+        }
+
         let id = VariableDefinitionId::new_placeholder();
         Ok(Self { ident, id })
     }
