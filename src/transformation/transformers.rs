@@ -1,13 +1,22 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct TokenTreeTransformer;
+pub(crate) struct TokenTreeTransformer {
+    span: Span,
+}
 
 impl TransformerDefinition for TokenTreeTransformer {
     const TRANSFORMER_NAME: &'static str = "TOKEN_TREE";
 
     fn parse(arguments: TransformerArguments) -> ParseResult<Self> {
-        arguments.fully_parse_or_error(|_| Ok(Self), "Expected @TOKEN_TREE or @[TOKEN_TREE]")
+        arguments.fully_parse_or_error(
+            |_| {
+                Ok(Self {
+                    span: arguments.full_span(),
+                })
+            },
+            "Expected @TOKEN_TREE or @[TOKEN_TREE]",
+        )
     }
 
     fn handle_transform(
@@ -16,7 +25,7 @@ impl TransformerDefinition for TokenTreeTransformer {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         interpreter
-            .output()?
+            .output(&self.span)?
             .push_raw_token_tree(input.parse::<TokenTree>()?);
         Ok(())
     }
@@ -27,13 +36,22 @@ impl TransformerDefinition for TokenTreeTransformer {
 }
 
 #[derive(Clone)]
-pub(crate) struct RestTransformer;
+pub(crate) struct RestTransformer {
+    span: Span,
+}
 
 impl TransformerDefinition for RestTransformer {
     const TRANSFORMER_NAME: &'static str = "REST";
 
     fn parse(arguments: TransformerArguments) -> ParseResult<Self> {
-        arguments.fully_parse_or_error(|_| Ok(Self), "Expected @REST or @[REST]")
+        arguments.fully_parse_or_error(
+            |_| {
+                Ok(Self {
+                    span: arguments.full_span(),
+                })
+            },
+            "Expected @REST or @[REST]",
+        )
     }
 
     fn handle_transform(
@@ -41,7 +59,7 @@ impl TransformerDefinition for RestTransformer {
         input: ParseStream<Output>,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
-        ParseUntil::End.handle_parse_into(input, interpreter)
+        ParseUntil::End.handle_parse_into(input, interpreter, &self.span.span_range())
     }
 
     fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
@@ -51,6 +69,7 @@ impl TransformerDefinition for RestTransformer {
 
 #[derive(Clone)]
 pub(crate) struct UntilTransformer {
+    span: Span,
     until: ParseUntil,
 }
 
@@ -74,6 +93,7 @@ impl TransformerDefinition for UntilTransformer {
                 TokenTree::Literal(literal) => ParseUntil::Literal(literal),
             };
             Ok(Self {
+                span: arguments.full_span(),
                 until,
             })
         }, "Expected @[UNTIL x] where x is an ident, punct, literal or empty group such as ()")
@@ -84,7 +104,8 @@ impl TransformerDefinition for UntilTransformer {
         input: ParseStream<Output>,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
-        self.until.handle_parse_into(input, interpreter)
+        self.until
+            .handle_parse_into(input, interpreter, &self.span.span_range())
     }
 
     fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
@@ -93,13 +114,22 @@ impl TransformerDefinition for UntilTransformer {
 }
 
 #[derive(Clone)]
-pub(crate) struct IdentTransformer;
+pub(crate) struct IdentTransformer {
+    span: Span,
+}
 
 impl TransformerDefinition for IdentTransformer {
     const TRANSFORMER_NAME: &'static str = "IDENT";
 
     fn parse(arguments: TransformerArguments) -> ParseResult<Self> {
-        arguments.fully_parse_or_error(|_| Ok(Self), "Expected @IDENT or @[IDENT]")
+        arguments.fully_parse_or_error(
+            |_| {
+                Ok(Self {
+                    span: arguments.full_span(),
+                })
+            },
+            "Expected @IDENT or @[IDENT]",
+        )
     }
 
     fn handle_transform(
@@ -109,7 +139,9 @@ impl TransformerDefinition for IdentTransformer {
     ) -> ExecutionResult<()> {
         if input.cursor().ident().is_some() {
             let ident = input.parse_any_ident()?;
-            interpreter.output()?.push_ident(ident);
+            interpreter
+                .output(&self.span.span_range())?
+                .push_ident(ident);
             Ok(())
         } else {
             input.parse_err("Expected an ident")?
@@ -122,13 +154,22 @@ impl TransformerDefinition for IdentTransformer {
 }
 
 #[derive(Clone)]
-pub(crate) struct LiteralTransformer;
+pub(crate) struct LiteralTransformer {
+    span: Span,
+}
 
 impl TransformerDefinition for LiteralTransformer {
     const TRANSFORMER_NAME: &'static str = "LITERAL";
 
     fn parse(arguments: TransformerArguments) -> ParseResult<Self> {
-        arguments.fully_parse_or_error(|_| Ok(Self), "Expected @LITERAL or @[LITERAL]")
+        arguments.fully_parse_or_error(
+            |_| {
+                Ok(Self {
+                    span: arguments.full_span(),
+                })
+            },
+            "Expected @LITERAL or @[LITERAL]",
+        )
     }
 
     fn handle_transform(
@@ -138,7 +179,9 @@ impl TransformerDefinition for LiteralTransformer {
     ) -> ExecutionResult<()> {
         if input.cursor().literal().is_some() {
             let literal = input.parse()?;
-            interpreter.output()?.push_literal(literal);
+            interpreter
+                .output(&self.span.span_range())?
+                .push_literal(literal);
             Ok(())
         } else {
             input.parse_err("Expected a literal")?
@@ -151,13 +194,22 @@ impl TransformerDefinition for LiteralTransformer {
 }
 
 #[derive(Clone)]
-pub(crate) struct PunctTransformer;
+pub(crate) struct PunctTransformer {
+    span: Span,
+}
 
 impl TransformerDefinition for PunctTransformer {
     const TRANSFORMER_NAME: &'static str = "PUNCT";
 
     fn parse(arguments: TransformerArguments) -> ParseResult<Self> {
-        arguments.fully_parse_or_error(|_| Ok(Self), "Expected @PUNCT or @[PUNCT]")
+        arguments.fully_parse_or_error(
+            |_| {
+                Ok(Self {
+                    span: arguments.full_span(),
+                })
+            },
+            "Expected @PUNCT or @[PUNCT]",
+        )
     }
 
     fn handle_transform(
@@ -166,7 +218,9 @@ impl TransformerDefinition for PunctTransformer {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         if input.cursor().any_punct().is_some() {
-            interpreter.output()?.push_punct(input.parse_any_punct()?);
+            interpreter
+                .output(&self.span.span_range())?
+                .push_punct(input.parse_any_punct()?);
             Ok(())
         } else {
             input.parse_err("Expected a punct")?
@@ -206,6 +260,7 @@ impl TransformerDefinition for GroupTransformer {
 }
 
 pub(crate) struct ExactTransformer {
+    span: Span,
     _parentheses: Parentheses,
     stream: Expression,
 }
@@ -218,6 +273,7 @@ impl TransformerDefinition for ExactTransformer {
             |input| {
                 let (parentheses, inner) = input.parse_parentheses()?;
                 Ok(Self {
+                    span: arguments.full_span(),
                     _parentheses: parentheses,
                     stream: inner.parse()?,
                 })
@@ -237,7 +293,9 @@ impl TransformerDefinition for ExactTransformer {
             .stream
             .evaluate_owned(interpreter)?
             .resolve_as("Input to the EXACT parser")?;
-        stream.value.parse_exact_match(input, interpreter.output()?)
+        stream
+            .value
+            .parse_exact_match(input, interpreter.output(&self.span.span_range())?)
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {

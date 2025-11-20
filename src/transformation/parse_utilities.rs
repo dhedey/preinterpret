@@ -16,11 +16,14 @@ impl ParseUntil {
         &self,
         input: ParseStream<Output>,
         interpreter: &mut Interpreter,
+        error_span_range: &SpanRange,
     ) -> ExecutionResult<()> {
         match self {
             ParseUntil::End => {
                 let remaining = input.parse::<TokenStream>()?;
-                interpreter.output()?.extend_raw_tokens(remaining);
+                interpreter
+                    .output(error_span_range)?
+                    .extend_raw_tokens(remaining);
             }
             ParseUntil::Group(delimiter) => {
                 while !input.is_empty() {
@@ -28,7 +31,9 @@ impl ParseUntil {
                         return Ok(());
                     }
                     let next = input.parse()?;
-                    interpreter.output()?.push_raw_token_tree(next);
+                    interpreter
+                        .output(error_span_range)?
+                        .push_raw_token_tree(next);
                 }
             }
             ParseUntil::Ident(ident) => {
@@ -38,17 +43,21 @@ impl ParseUntil {
                         return Ok(());
                     }
                     let next = input.parse()?;
-                    interpreter.output()?.push_raw_token_tree(next);
+                    interpreter
+                        .output(error_span_range)?
+                        .push_raw_token_tree(next);
                 }
             }
             ParseUntil::Punct(punct) => {
-                let punct = punct.as_char();
+                let punct_char = punct.as_char();
                 while !input.is_empty() {
-                    if input.peek_punct_matching(punct) {
+                    if input.peek_punct_matching(punct_char) {
                         return Ok(());
                     }
                     let next = input.parse()?;
-                    interpreter.output()?.push_raw_token_tree(next);
+                    interpreter
+                        .output(error_span_range)?
+                        .push_raw_token_tree(next);
                 }
             }
             ParseUntil::Literal(literal) => {
@@ -58,7 +67,9 @@ impl ParseUntil {
                         return Ok(());
                     }
                     let next = input.parse()?;
-                    interpreter.output()?.push_raw_token_tree(next);
+                    interpreter
+                        .output(error_span_range)?
+                        .push_raw_token_tree(next);
                 }
             }
         }

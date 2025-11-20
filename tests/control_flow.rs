@@ -276,4 +276,26 @@ fn test_emit_statement() {
         },
         [1, 2, 3, 4, 5]
     );
+
+    run! {
+        emit %[
+            fn my_add(a: i32, b: i32) -> i32 {
+                a + b
+            }
+        ];
+        emit %[
+            fn my_sub(a: i32, b: i32) -> i32 {
+                a - b
+            }
+        ];
+        // Final return is also emitted
+        %[
+            fn my_mul(a: i32, b: i32) -> i32 {
+                a * b
+            }
+        ]
+    };
+    assert!(my_add(5, 3) == 8);
+    assert!(my_sub(5, 3) == 2);
+    assert!(my_mul(5, 3) == 15);
 }

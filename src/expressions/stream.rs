@@ -402,7 +402,7 @@ impl ParseSource for RawStreamLiteral {
 impl Interpret for RawStreamLiteral {
     fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         interpreter
-            .output()?
+            .output(self)?
             .extend_raw_tokens(self.content.clone());
         Ok(())
     }

@@ -468,6 +468,7 @@ impl AttemptExpression {
                     }
                     unit
                 },
+                MutationBlockReason::AttemptRevertibleSegment,
             )?;
             match attempt_outcome {
                 AttemptOutcome::Completed(()) => { /* proceed to rhs */ }

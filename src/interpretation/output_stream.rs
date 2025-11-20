@@ -629,14 +629,21 @@ impl HasSpan for OutputTokenTree {
     }
 }
 
+#[derive(Debug)]
+pub(super) enum OutputHandlerError {
+    FrozenOutputModification(MutationBlockReason),
+}
+
 pub(super) struct OutputHandler {
     output_stack: Vec<OutputStream>,
+    freeze_stack_indices_at_or_below: Vec<(usize, MutationBlockReason)>,
 }
 
 impl OutputHandler {
     pub(super) fn new(initial_output: OutputStream) -> Self {
         Self {
             output_stack: vec![initial_output],
+            freeze_stack_indices_at_or_below: vec![],
         }
     }
 
@@ -649,10 +656,12 @@ impl OutputHandler {
         final_output
     }
 
-    pub(super) fn current_output_mut(&mut self) -> &mut OutputStream {
-        self.output_stack
-            .last_mut()
-            .expect("Output stack should never be empty")
+    pub(super) fn current_output_mut(&mut self) -> Result<&mut OutputStream, OutputHandlerError> {
+        let index = self.index_of_last_output();
+
+        self.validate_index(index)?;
+
+        Ok(&mut self.output_stack[index])
     }
 
     /// SAFETY: Must be paired with a later `finish_inner_buffer_*` call, even in
@@ -664,7 +673,9 @@ impl OutputHandler {
     /// SAFETY: Must be paired with a prior `start_inner_buffer` call.
     pub(super) unsafe fn finish_inner_buffer_as_group(&mut self, delimiter: Delimiter, span: Span) {
         let inner_buffer = self.finish_inner_buffer_as_separate_stream();
-        self.push_new_group(inner_buffer, delimiter, span);
+        self.current_output_mut()
+            .expect("Output stack should not be frozen if SAFETY conditions are met")
+            .push_new_group(inner_buffer, delimiter, span);
     }
 
     /// SAFETY: Must be paired with a prior `start_inner_buffer` call.
@@ -677,20 +688,35 @@ impl OutputHandler {
             .pop()
             .expect("Output stack should never be empty")
     }
-}
 
-impl Deref for OutputHandler {
-    type Target = OutputStream;
-
-    fn deref(&self) -> &Self::Target {
-        self.output_stack
-            .last()
-            .expect("Output stack should never be empty")
+    fn index_of_last_output(&self) -> usize {
+        // OVERFLOW: Safe as we maintain the invariant that output_stack is never empty
+        self.output_stack.len() - 1
     }
-}
 
-impl DerefMut for OutputHandler {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.current_output_mut()
+    /// SAFETY: Must be paired with unfreeze_existing.
+    pub(super) unsafe fn freeze_existing(&mut self, reason: MutationBlockReason) {
+        self.freeze_stack_indices_at_or_below
+            .push((self.index_of_last_output(), reason));
+    }
+
+    /// SAFETY: Must be paired with freeze_existing.
+    pub(super) unsafe fn unfreeze_existing(&mut self) {
+        let (popped, _reason) = self.freeze_stack_indices_at_or_below.pop().unwrap();
+        assert_eq!(
+            popped, self.index_of_last_output(),
+            "Any additional output streams added during the freeze must be removed before unfreezing"
+        );
+    }
+
+    fn validate_index(&self, index: usize) -> Result<(), OutputHandlerError> {
+        if let Some(&(freeze_at_or_below_depth, reason)) =
+            self.freeze_stack_indices_at_or_below.last()
+        {
+            if index <= freeze_at_or_below_depth {
+                return Err(OutputHandlerError::FrozenOutputModification(reason));
+            }
+        }
+        Ok(())
     }
 }

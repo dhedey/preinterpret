@@ -131,7 +131,7 @@ impl VariableReference {
         let value = self.resolve_shared(interpreter)?;
         value.output_to(
             grouping,
-            &mut ToStreamContext::new(interpreter.output()?, self.span_range()),
+            &mut ToStreamContext::new(interpreter.output(self)?, self.span_range()),
         )
     }
 

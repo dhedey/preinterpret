@@ -101,9 +101,11 @@ impl Interpret for SourceItem {
             SourceItem::SourceGroup(group) => {
                 group.interpret(interpreter)?;
             }
-            SourceItem::Punct(punct) => interpreter.output()?.push_punct(punct.clone()),
-            SourceItem::Ident(ident) => interpreter.output()?.push_ident(ident.clone()),
-            SourceItem::Literal(literal) => interpreter.output()?.push_literal(literal.clone()),
+            SourceItem::Punct(punct) => interpreter.output(punct)?.push_punct(punct.clone()),
+            SourceItem::Ident(ident) => interpreter.output(ident)?.push_ident(ident.clone()),
+            SourceItem::Literal(literal) => {
+                interpreter.output(literal)?.push_literal(literal.clone())
+            }
             SourceItem::StreamLiteral(stream_literal) => stream_literal.interpret(interpreter)?,
         }
         Ok(())

@@ -287,7 +287,7 @@ impl EmitStatement {
         let value = self.expression.evaluate_owned(interpreter)?;
         value.output_to(
             Grouping::Flattened,
-            &mut ToStreamContext::new(interpreter.output()?, value.span_range()),
+            &mut ToStreamContext::new(interpreter.output(&self.emit_token)?, value.span_range()),
         )
     }
 }

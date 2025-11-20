@@ -4,7 +4,7 @@ pub(crate) struct Interpreter {
     config: InterpreterConfig,
     scope_definitions: ScopeDefinitions,
     scopes: Vec<RuntimeScope>,
-    no_mutation_above: Vec<ScopeId>,
+    no_mutation_above: Vec<(ScopeId, MutationBlockReason)>,
     output_handler: OutputHandler,
 }
 
@@ -42,10 +42,19 @@ impl Interpreter {
         &mut self,
         id: ScopeId,
         f: impl FnOnce(&mut Self) -> ExecutionResult<T>,
+        reason: MutationBlockReason,
     ) -> ExecutionResult<AttemptOutcome<T>> {
         self.enter_scope_inner(id, true);
-        self.no_mutation_above.push(id);
+        self.no_mutation_above.push((id, reason));
+        unsafe {
+            // SAFETY: This is paired with `unfreeze_existing` below
+            self.output_handler.freeze_existing(reason);
+        }
         let result = f(self);
+        unsafe {
+            // SAFETY: This is paired with `freeze_existing` above
+            self.output_handler.unfreeze_existing();
+        }
         self.no_mutation_above.pop();
         match result {
             Ok(value) => Ok(AttemptOutcome::Completed(value)),
@@ -127,17 +136,17 @@ impl Interpreter {
             reference.is_final_reference,
         );
         let blocked_from_mutation = match self.no_mutation_above.last() {
-            Some(&no_mutation_above_scope) => 'result: {
+            Some(&(no_mutation_above_scope, reason)) => 'result: {
                 for scope in self.scopes.iter().rev() {
                     match scope.id {
-                        id if id == reference.definition_scope => break 'result false,
-                        id if id == no_mutation_above_scope => break 'result true,
+                        id if id == reference.definition_scope => break 'result None,
+                        id if id == no_mutation_above_scope => break 'result Some(reason),
                         _ => {}
                     }
                 }
                 panic!("Definition scope expected in scope stack due to control flow analysis");
             }
-            None => false,
+            None => None,
         };
         let scope_data = self.scope_mut(reference.definition_scope);
         scope_data.resolve(definition, span, is_final, ownership, blocked_from_mutation)
@@ -200,12 +209,35 @@ impl Interpreter {
         Ok(output)
     }
 
-    pub(crate) fn output(&mut self) -> ExecutionResult<&mut OutputStream> {
-        Ok(&mut self.output_handler)
+    pub(crate) fn output(
+        &mut self,
+        span_source: &impl HasSpanRange,
+    ) -> ExecutionResult<&mut OutputStream> {
+        match self.output_handler.current_output_mut() {
+            Ok(output) => Ok(output),
+            Err(OutputHandlerError::FrozenOutputModification(reason)) => {
+                span_source.control_flow_err(reason.error_message("emit"))
+            }
+        }
     }
 
     pub(crate) fn complete(self) -> OutputStream {
         self.output_handler.complete()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum MutationBlockReason {
+    AttemptRevertibleSegment,
+}
+
+impl MutationBlockReason {
+    pub(crate) fn error_message(&self, mutation_kind: &str) -> String {
+        match self {
+            MutationBlockReason::AttemptRevertibleSegment => {
+                format!("It is not possible to {mutation_kind} here. An attempt arm is in two parts: {{ /* revertible */ }} => {{ /* unconditional */ }}. You may define variables in the revertible part, but all mutations of state outside the attempt block must be moved to the unconditional part")
+            }
+        }
     }
 }
 
@@ -234,7 +266,7 @@ impl RuntimeScope {
         span: Span,
         is_final: bool,
         ownership: RequestedValueOwnership,
-        blocked_from_mutation: bool,
+        blocked_from_mutation: Option<MutationBlockReason>,
     ) -> ExecutionResult<LateBoundValue> {
         self.variables
             .get_mut(&definition_id)

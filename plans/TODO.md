@@ -149,20 +149,25 @@ Alternatively, we could have consider:
 These are things we definitely want to do:
 
 - [x] Add an `OutputHandler` to the interpreter, with a stack of `OutputStream`.
-- [x] Add `output` statement which outputs into the parent stream literal
-- [x] Remove vec-returns from loops, replace with `output`
-- [ ] Change to error at parse if people use preinterpret keywords including `output`, `attempt` and `revert` as variable names.
-- [ ] Add sensible use-case tests and compilation failure tests using `output`
-- [ ] Disallow `output` in revertible segment into stream outside of segment
-- [ ] `break` / `continue` improvements:
-  - Can return a value (from the last iteration of for / while loops)
-  - Can specify a label, and return from a labelled block (https://blog.rust-lang.org/2022/11/03/Rust-1.65.0/#break-from-labeled-blocks)
+- [x] Add `emit` statement which outputs into the parent stream literal
+- [x] Remove vec-returns from loops, replace with `emit`
+- [x] Change to error at parse if people use preinterpret keywords including `emit`, `attempt` and `revert` as variable names.
+- [x] Add sensible use-case tests and compilation failure tests using `emit`
+- [x] Disallow `emit` in revertible segment into stream outside of segment
 
 The following are only maybes:
 
-- [ ] Allow adding lifetimes to stream literals `%'a[]` and then `output 'a`, with `'root` being the topmost. Or maybe just `output 'root` honestly. Can't really see the use case for the others.
-  - [ ] Note that `%'a[((#{ output 'a %[x] }))]` should yield `x(())`
+- [ ] Allow adding lifetimes to stream literals `%'a[]` and then `emit 'a`, with `'root` being the topmost. Or maybe just `emit 'root` honestly. Can't really see the use case for the others.
+  - [ ] Note that `%'a[((#{ emit 'a %[x] }))]` should yield `x(())`
   - [ ] Note that we need to prevent or revert outputting to root in revertible segments
+
+## Break / Continue Improvements
+
+- [ ] `break` can include an optional expresion, and can be used to return a value
+- [ ] Loops can be labelled, e.g. with `'outer: loop { .. }` or `'inner: for { .. }`.
+- [ ] `break` / `continue` can specify a label, and return from that label
+- [ ] Add tests to control_flow.rs and compilation failure tests covering various scenarios
+- [ ] Blocks can be labelled, and `break` can be used to return from a labelled block (https://blog.rust-lang.org/2022/11/03/Rust-1.65.0/#break-from-labeled-blocks)
 
 ## Parser Changes
 

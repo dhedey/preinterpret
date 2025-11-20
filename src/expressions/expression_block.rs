@@ -34,7 +34,7 @@ impl Interpret for EmbeddedExpression {
         let value = self.content.evaluate_shared(interpreter)?;
         value.output_to(
             Grouping::Flattened,
-            &mut ToStreamContext::new(interpreter.output()?, self.span_range()),
+            &mut ToStreamContext::new(interpreter.output(self)?, self.span_range()),
         )
     }
 }
@@ -80,7 +80,7 @@ impl Interpret for EmbeddedStatements {
             .expect_shared();
         value.output_to(
             Grouping::Flattened,
-            &mut ToStreamContext::new(interpreter.output()?, self.span_range()),
+            &mut ToStreamContext::new(interpreter.output(self)?, self.span_range()),
         )
     }
 }
