@@ -132,6 +132,21 @@ where
     }
 }
 
+pub(crate) trait ParseSourceOptional: ParseSource {
+    /// This may want to  be overwritten to have a peek/commit behaviour
+    /// to give clearer errors.
+    fn parse_optional(input: SourceParser) -> ParseResult<Option<Self>> {
+        let fork = input.fork();
+        match Self::parse(&fork) {
+            Ok(value) => {
+                input.advance_to(&fork.buffer);
+                Ok(Some(value))
+            }
+            Err(_) => Ok(None),
+        }
+    }
+}
+
 pub(crate) fn parse_without_analysis<T>(
     parser: impl FnOnce(SourceParser) -> ParseResult<T>,
 ) -> impl FnOnce(ParseStream<Source>) -> ParseResult<T> {
@@ -274,6 +289,10 @@ impl<'a> SourceParseBuffer<'a> {
 
     pub(crate) fn parse<T: ParseSource>(&self) -> ParseResult<T> {
         T::parse(self)
+    }
+
+    pub(crate) fn parse_optional<T: ParseSourceOptional>(&self) -> ParseResult<Option<T>> {
+        T::parse_optional(self)
     }
 
     pub fn parse_terminated<T: ParseSource, P: ParseSource>(
@@ -627,5 +646,27 @@ impl<'a, K> AnyParseStream for ParseStream<'a, K> {
 impl<'a> AnyParseStream for SourceParser<'a> {
     fn is_empty(&self) -> bool {
         self.inner.is_empty()
+    }
+}
+
+/// This allows parsing of a type, but discarding the result.
+///
+/// This is useful for keywords or syntax which we'd like to parse
+/// in a uniform way, but don't need to keep around bloating the
+/// size of our types.
+pub(crate) struct Unused<T> {
+    _marker: std::marker::PhantomData<T>,
+}
+
+impl<T: ParseSource> ParseSource for Unused<T> {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
+        let _ = input.parse::<T>()?;
+        Ok(Self {
+            _marker: std::marker::PhantomData,
+        })
+    }
+
+    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
+        unreachable!("An unused value should not have a control flow pass")
     }
 }

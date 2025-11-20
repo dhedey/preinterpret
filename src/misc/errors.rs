@@ -117,27 +117,11 @@ pub(crate) enum ExecutionOutcome<T> {
 }
 
 pub(crate) trait ExecutionResultExt<T> {
-    fn catch_control_flow(
-        self,
-        interpreter: &mut Interpreter,
-        should_catch: impl FnOnce(&ControlFlowInterrupt) -> bool,
-        catch_at_scope: ScopeId,
-    ) -> ExecutionResult<ExecutionOutcome<T>>;
-
     /// This is not a `From` because it wants to be explicit
     fn convert_to_final_result(self) -> syn::Result<T>;
 }
 
 impl<T> ExecutionResultExt<T> for ExecutionResult<T> {
-    fn catch_control_flow(
-        self,
-        interpreter: &mut Interpreter,
-        should_catch: impl FnOnce(&ControlFlowInterrupt) -> bool,
-        return_to_scope: ScopeId,
-    ) -> ExecutionResult<ExecutionOutcome<T>> {
-        interpreter.catch_control_flow(self, should_catch, return_to_scope)
-    }
-
     fn convert_to_final_result(self) -> syn::Result<T> {
         self.map_err(|error| error.convert_to_final_error())
     }
@@ -299,44 +283,61 @@ enum ExecutionInterruptInner {
 }
 
 pub(crate) enum ControlFlowInterrupt {
-    Break {
-        label: Option<syn::Lifetime>,
-        value: Option<crate::interpretation::OwnedValue>,
-    },
-    Continue {
-        label: Option<syn::Lifetime>,
-    },
+    Break(BreakInterrupt),
+    Continue(ContinueInterrupt),
     Revert,
 }
 
 impl std::fmt::Debug for ControlFlowInterrupt {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Break { label, .. } => f
-                .debug_struct("Break")
-                .field("label", &label.as_ref().map(|l| l.ident.to_string()))
-                .field("value", &"<value>")
-                .finish(),
-            Self::Continue { label } => f
-                .debug_struct("Continue")
-                .field("label", &label.as_ref().map(|l| l.ident.to_string()))
-                .finish(),
-            Self::Revert => f.debug_struct("Revert").finish(),
+            ControlFlowInterrupt::Break(_) => f.write_str("Break"),
+            ControlFlowInterrupt::Continue(_) => f.write_str("Continue"),
+            ControlFlowInterrupt::Revert => f.write_str("Revert"),
         }
     }
 }
 
 impl ControlFlowInterrupt {
+    pub(crate) fn new_break(label: Option<String>, value: Option<OwnedValue>) -> Self {
+        ControlFlowInterrupt::Break(BreakInterrupt { label, value })
+    }
+
+    pub(crate) fn new_continue(label: Option<String>) -> Self {
+        ControlFlowInterrupt::Continue(ContinueInterrupt { label })
+    }
+
+    pub(crate) fn catch_labelled_break(
+        this: &ControlFlowInterrupt,
+        target_label: Option<&ExpressionLabel>,
+    ) -> bool {
+        match (this, target_label) {
+            (
+                ControlFlowInterrupt::Break(BreakInterrupt {
+                    label: Some(break_label),
+                    ..
+                }),
+                Some(target_label),
+            ) => break_label == target_label.ident_string().as_str(),
+            _ => false,
+        }
+    }
+
     pub(crate) fn catch_loop_related(
         this: &ControlFlowInterrupt,
-        target_label: Option<&crate::expressions::ExpressionLabel>,
+        target_label: Option<&ExpressionLabel>,
     ) -> bool {
         match this {
-            ControlFlowInterrupt::Break { label, .. }
-            | ControlFlowInterrupt::Continue { label } => match (label, target_label) {
+            ControlFlowInterrupt::Break(BreakInterrupt {
+                label: interrupt_label,
+                ..
+            })
+            | ControlFlowInterrupt::Continue(ContinueInterrupt {
+                label: interrupt_label,
+            }) => match (interrupt_label, target_label) {
                 (None, _) => true,
-                (Some(break_label), Some(loop_label)) => {
-                    break_label.ident == loop_label.ident_string()
+                (Some(interrupt_label), Some(target_label)) => {
+                    interrupt_label == target_label.ident_string().as_str()
                 }
                 (Some(_), None) => false,
             },
@@ -345,16 +346,39 @@ impl ControlFlowInterrupt {
     }
 }
 
+pub(crate) struct BreakInterrupt {
+    label: Option<String>,
+    value: Option<OwnedValue>,
+}
+
+impl BreakInterrupt {
+    pub(crate) fn into_value(
+        self,
+        span_range: SpanRange,
+        ownership: RequestedValueOwnership,
+    ) -> ExecutionResult<EvaluationItem> {
+        let value = match self.value {
+            Some(value) => value,
+            None => ().into_owned_value(span_range),
+        };
+        ownership.map_from_owned(value)
+    }
+}
+
+pub(crate) struct ContinueInterrupt {
+    label: Option<String>,
+}
+
 impl ExecutionInterrupt {
     pub(crate) fn convert_to_final_error(self) -> syn::Error {
         match *self.inner {
             ExecutionInterruptInner::Error(_, e) => e.convert_to_final_error(),
             ExecutionInterruptInner::ControlFlowInterrupt(
-                ControlFlowInterrupt::Break { label, .. },
+                ControlFlowInterrupt::Break(BreakInterrupt { label, .. }),
                 span,
             ) => {
                 if let Some(label) = label {
-                    syn::Error::new(span, format!("break with label {} can only be used inside a loop or block with that label", label.ident))
+                    syn::Error::new(span, format!("break with label {} can only be used inside a loop or block with that label", label))
                 } else {
                     syn::Error::new(
                         span,
@@ -363,7 +387,7 @@ impl ExecutionInterrupt {
                 }
             }
             ExecutionInterruptInner::ControlFlowInterrupt(
-                ControlFlowInterrupt::Continue { label },
+                ControlFlowInterrupt::Continue(ContinueInterrupt { label }),
                 span,
             ) => {
                 if let Some(label) = label {
@@ -371,7 +395,7 @@ impl ExecutionInterrupt {
                         span,
                         format!(
                             "continue with label {} can only be used inside a loop with that label",
-                            label.ident
+                            label
                         ),
                     )
                 } else {

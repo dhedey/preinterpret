@@ -45,22 +45,24 @@ impl ExpressionNode {
                         context.return_item(item)?
                     }
                     Leaf::LoopExpression(loop_expression) => {
-                        let value = loop_expression.evaluate(context.interpreter())?;
-                        context.return_owned(value)?
+                        let ownership = context.requested_ownership();
+                        let item = loop_expression.evaluate(context.interpreter(), ownership)?;
+                        context.return_item(item)?
                     }
                     Leaf::WhileExpression(while_expression) => {
-                        let value = while_expression.evaluate(context.interpreter())?;
-                        context.return_owned(value)?
+                        let ownership = context.requested_ownership();
+                        let item = while_expression.evaluate(context.interpreter(), ownership)?;
+                        context.return_item(item)?
                     }
                     Leaf::ForExpression(for_expression) => {
-                        let value = for_expression.evaluate(context.interpreter())?;
-                        context.return_owned(value)?
+                        let ownership = context.requested_ownership();
+                        let item = for_expression.evaluate(context.interpreter(), ownership)?;
+                        context.return_item(item)?
                     }
                     Leaf::AttemptExpression(attempt_expression) => {
                         let ownership = context.requested_ownership();
-                        let value =
-                            attempt_expression.evaluate(context.interpreter(), ownership)?;
-                        context.return_item(value)?
+                        let item = attempt_expression.evaluate(context.interpreter(), ownership)?;
+                        context.return_item(item)?
                     }
                 }
             }

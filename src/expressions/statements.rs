@@ -1,14 +1,6 @@
+use syn::spanned::Spanned;
+
 use super::*;
-
-pub(crate) mod keywords {
-    pub(crate) const REVERT: &str = "revert";
-    pub(crate) const EMIT: &str = "emit";
-    pub(crate) const ATTEMPT: &str = "attempt";
-}
-
-pub(crate) fn is_keyword(ident: &str) -> bool {
-    matches!(ident, keywords::REVERT | keywords::EMIT | keywords::ATTEMPT)
-}
 
 pub(crate) enum Statement {
     LetStatement(LetStatement),
@@ -41,8 +33,8 @@ impl ParseSource for Statement {
                 "let" => Statement::LetStatement(input.parse()?),
                 "break" => Statement::BreakStatement(input.parse()?),
                 "continue" => Statement::ContinueStatement(input.parse()?),
-                keywords::REVERT => Statement::RevertStatement(input.parse()?),
-                keywords::EMIT => Statement::EmitStatement(input.parse()?),
+                keyword::REVERT => Statement::RevertStatement(input.parse()?),
+                keyword::EMIT => Statement::EmitStatement(input.parse()?),
                 _ => Statement::Expression(input.parse()?),
             }
         } else {
@@ -164,7 +156,7 @@ impl LetStatement {
 }
 
 pub(crate) struct BreakStatement {
-    break_token: Ident,
+    break_token: Token![break],
     label: Option<syn::Lifetime>,
     value: Option<Expression>,
 }
@@ -177,9 +169,8 @@ impl HasSpan for BreakStatement {
 
 impl ParseSource for BreakStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        let break_token = input.parse_ident_matching("break")?;
+        let break_token = input.parse()?;
 
-        // Try to parse an optional label
         let label = if input.cursor().lifetime().is_some() {
             Some(input.parse()?)
         } else {
@@ -220,17 +211,17 @@ impl BreakStatement {
         };
 
         Err(ExecutionInterrupt::control_flow(
-            ControlFlowInterrupt::Break {
-                label: self.label.clone(),
+            ControlFlowInterrupt::new_break(
+                self.label.as_ref().map(|l| l.ident.to_string()),
                 value,
-            },
+            ),
             self.break_token.span(),
         ))
     }
 }
 
 pub(crate) struct ContinueStatement {
-    continue_token: Ident,
+    continue_token: Token![continue],
     label: Option<syn::Lifetime>,
 }
 
@@ -242,9 +233,8 @@ impl HasSpan for ContinueStatement {
 
 impl ParseSource for ContinueStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        let continue_token = input.parse_ident_matching("continue")?;
+        let continue_token = input.parse()?;
 
-        // Try to parse an optional label
         let label = if input.cursor().lifetime().is_some() {
             Some(input.parse()?)
         } else {
@@ -265,28 +255,26 @@ impl ParseSource for ContinueStatement {
 impl ContinueStatement {
     pub(crate) fn evaluate_as_statement(&self, _: &mut Interpreter) -> ExecutionResult<()> {
         Err(ExecutionInterrupt::control_flow(
-            ControlFlowInterrupt::Continue {
-                label: self.label.clone(),
-            },
+            ControlFlowInterrupt::new_continue(self.label.as_ref().map(|l| l.ident.to_string())),
             self.continue_token.span(),
         ))
     }
 }
 
 pub(crate) struct RevertStatement {
-    revert_token: Ident,
+    revert: RevertKeyword,
 }
 
 impl HasSpan for RevertStatement {
     fn span(&self) -> Span {
-        self.revert_token.span()
+        self.revert.span()
     }
 }
 
 impl ParseSource for RevertStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        let revert_token = input.parse_ident_matching(keywords::REVERT)?;
-        Ok(Self { revert_token })
+        let revert = input.parse()?;
+        Ok(Self { revert })
     }
 
     fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
@@ -298,30 +286,27 @@ impl RevertStatement {
     pub(crate) fn evaluate_as_statement(&self, _: &mut Interpreter) -> ExecutionResult<()> {
         Err(ExecutionInterrupt::control_flow(
             ControlFlowInterrupt::Revert,
-            self.revert_token.span(),
+            self.revert.span(),
         ))
     }
 }
 
 pub(crate) struct EmitStatement {
-    emit_token: Ident,
+    emit: EmitKeyword,
     expression: Expression,
 }
 
 impl HasSpan for EmitStatement {
     fn span(&self) -> Span {
-        self.emit_token.span()
+        self.emit.span()
     }
 }
 
 impl ParseSource for EmitStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        let emit_token = input.parse_ident_matching(keywords::EMIT)?;
+        let emit = input.parse()?;
         let expression = input.parse()?;
-        Ok(Self {
-            emit_token,
-            expression,
-        })
+        Ok(Self { emit, expression })
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
@@ -337,7 +322,7 @@ impl EmitStatement {
         let value = self.expression.evaluate_owned(interpreter)?;
         value.output_to(
             Grouping::Flattened,
-            &mut ToStreamContext::new(interpreter.output(&self.emit_token)?, value.span_range()),
+            &mut ToStreamContext::new(interpreter.output(&self.emit)?, value.span_range()),
         )
     }
 }

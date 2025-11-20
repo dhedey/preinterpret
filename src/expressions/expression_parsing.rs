@@ -89,7 +89,7 @@ impl<'a> ExpressionParser<'a> {
                         return delim_span.open().parse_err("An object literal must be prefixed with %, e.g. `%{ field: 1 }`. Without such a prefix, { .. } defines a block.");
                     }
                 }
-                UnaryAtom::Leaf(Leaf::Block(input.parse()?))
+                UnaryAtom::Leaf(Leaf::Block(Box::new(input.parse()?)))
             }
             SourcePeekMatch::Group(Delimiter::Bracket) => {
                 // This could be handled as parsing a vector of SourceExpressions,
@@ -104,14 +104,14 @@ impl<'a> ExpressionParser<'a> {
                         if let Some((_, cursor_after_colon)) = cursor_after_lifetime.punct_matching(':') {
                             if let Some((ident, _)) = cursor_after_colon.ident() {
                                 match ident.to_string().as_str() {
-                                    "loop" => return Ok(UnaryAtom::Leaf(Leaf::LoopExpression(input.parse()?))),
-                                    "while" => return Ok(UnaryAtom::Leaf(Leaf::WhileExpression(input.parse()?))),
-                                    "for" => return Ok(UnaryAtom::Leaf(Leaf::ForExpression(input.parse()?))),
+                                    "loop" => return Ok(UnaryAtom::Leaf(Leaf::LoopExpression(Box::new(input.parse()?)))),
+                                    "while" => return Ok(UnaryAtom::Leaf(Leaf::WhileExpression(Box::new(input.parse()?)))),
+                                    "for" => return Ok(UnaryAtom::Leaf(Leaf::ForExpression(Box::new(input.parse()?)))),
                                     _ => {}
                                 }
                             }
                             if cursor_after_colon.group_matching(Delimiter::Brace).is_some() {
-                                return Ok(UnaryAtom::Leaf(Leaf::Block(input.parse()?)));
+                                return Ok(UnaryAtom::Leaf(Leaf::Block(Box::new(input.parse()?))));
                             }
                         }
                     }
@@ -132,11 +132,11 @@ impl<'a> ExpressionParser<'a> {
                             ExpressionBoolean::for_litbool(&bool).into_owned_value(),
                         )))
                     }
-                    "if" => UnaryAtom::Leaf(Leaf::IfExpression(input.parse()?)),
-                    "loop" => UnaryAtom::Leaf(Leaf::LoopExpression(input.parse()?)),
-                    "while" => UnaryAtom::Leaf(Leaf::WhileExpression(input.parse()?)),
-                    "for" => UnaryAtom::Leaf(Leaf::ForExpression(input.parse()?)),
-                    "attempt" => UnaryAtom::Leaf(Leaf::AttemptExpression(input.parse()?)),
+                    "if" => UnaryAtom::Leaf(Leaf::IfExpression(Box::new(input.parse()?))),
+                    "loop" => UnaryAtom::Leaf(Leaf::LoopExpression(Box::new(input.parse()?))),
+                    "while" => UnaryAtom::Leaf(Leaf::WhileExpression(Box::new(input.parse()?))),
+                    "for" => UnaryAtom::Leaf(Leaf::ForExpression(Box::new(input.parse()?))),
+                    "attempt" => UnaryAtom::Leaf(Leaf::AttemptExpression(Box::new(input.parse()?))),
                     "None" => UnaryAtom::Leaf(Leaf::Value(SharedValue::new_from_owned(
                         ExpressionValue::None.into_owned(input.parse_any_ident()?.span_range()),
                     ))),

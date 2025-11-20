@@ -87,23 +87,71 @@ impl Interpret for EmbeddedStatements {
 
 pub(crate) struct ExpressionBlock {
     pub(super) label: Option<ExpressionLabel>,
+    pub(super) scoped_block: ScopedBlock,
+}
+
+impl ParseSource for ExpressionBlock {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
+        let label = input.parse_optional()?;
+        let scoped_block = input.parse()?;
+        Ok(Self {
+            label,
+            scoped_block,
+        })
+    }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        self.scoped_block.control_flow_pass(context)
+    }
+}
+
+impl HasSpanRange for ExpressionBlock {
+    fn span_range(&self) -> SpanRange {
+        if let Some(label) = &self.label {
+            SpanRange::new_between(label.span_range(), self.scoped_block.span_range())
+        } else {
+            self.scoped_block.span_range()
+        }
+    }
+}
+
+impl ExpressionBlock {
+    pub(crate) fn evaluate(
+        &self,
+        interpreter: &mut Interpreter,
+        ownership: RequestedValueOwnership,
+    ) -> ExecutionResult<EvaluationItem> {
+        let scope = interpreter.current_scope_id();
+        let output_result = self.scoped_block.evaluate(interpreter, ownership);
+
+        let output = match interpreter.catch_control_flow(
+            output_result,
+            |ctrl| ControlFlowInterrupt::catch_labelled_break(ctrl, self.label.as_ref()),
+            scope,
+        )? {
+            ExecutionOutcome::Value(value) => value,
+            ExecutionOutcome::ControlFlow(ControlFlowInterrupt::Break(break_interrupt)) => {
+                break_interrupt.into_value(self.span_range(), ownership)?
+            }
+            ExecutionOutcome::ControlFlow(_) => {
+                unreachable!("Only break control flow should be catchable by labeled blocks")
+            }
+        };
+        Ok(output)
+    }
+}
+
+pub(crate) struct ScopedBlock {
     pub(super) braces: Braces,
     pub(super) scope: ScopeId,
     pub(super) content: ExpressionBlockContent,
 }
 
-impl ParseSource for ExpressionBlock {
+impl ParseSource for ScopedBlock {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        let label = if input.cursor().lifetime().is_some() {
-            Some(input.parse()?)
-        } else {
-            None
-        };
-
         let (braces, inner) = input.parse_braces()?;
         let content = inner.parse()?;
         Ok(Self {
-            label,
             braces,
             scope: ScopeId::new_placeholder(),
             content,
@@ -119,61 +167,66 @@ impl ParseSource for ExpressionBlock {
     }
 }
 
-impl HasSpan for ExpressionBlock {
+impl HasSpan for ScopedBlock {
     fn span(&self) -> Span {
-        if let Some(label) = &self.label {
-            label
-                .span_range()
-                .start()
-                .join(self.braces.close())
-                .unwrap_or(self.braces.join())
-        } else {
-            self.braces.join()
-        }
+        self.braces.join()
     }
 }
 
-impl ExpressionBlock {
+impl ScopedBlock {
     pub(crate) fn evaluate(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedValueOwnership,
     ) -> ExecutionResult<EvaluationItem> {
         interpreter.enter_scope(self.scope);
-        let output_result = self
+        let output = self
             .content
-            .evaluate(interpreter, self.span().into(), ownership);
+            .evaluate(interpreter, self.span().into(), ownership)?;
+        interpreter.exit_scope(self.scope);
+        Ok(output)
+    }
 
-        if let Some(block_label) = &self.label {
-            let scope = self.scope;
-            match output_result.catch_control_flow(
-                interpreter,
-                |ctrl| {
-                    matches!(ctrl, ControlFlowInterrupt::Break { label: Some(_), .. })
-                        && ControlFlowInterrupt::catch_loop_related(ctrl, Some(block_label))
-                },
-                scope,
-            )? {
-                ExecutionOutcome::Value(value) => {
-                    interpreter.exit_scope(self.scope);
-                    Ok(value)
-                }
-                ExecutionOutcome::ControlFlow(ControlFlowInterrupt::Break { value, .. }) => {
-                    interpreter.exit_scope(self.scope);
-                    let span_range: SpanRange = self.span().into();
-                    ownership
-                        .map_from_owned(value.unwrap_or_else(|| ().into_owned_value(span_range)))
-                }
-                ExecutionOutcome::ControlFlow(other) => {
-                    interpreter.exit_scope(self.scope);
-                    Err(ExecutionInterrupt::control_flow(other, self.span()))
-                }
-            }
-        } else {
-            let output = output_result?;
-            interpreter.exit_scope(self.scope);
-            Ok(output)
-        }
+    pub(crate) fn evaluate_owned(
+        &self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<OwnedValue> {
+        self.evaluate(interpreter, RequestedValueOwnership::owned())
+            .map(|x| x.expect_owned())
+    }
+}
+
+pub(crate) struct UnscopedBlock {
+    pub(super) braces: Braces,
+    pub(super) content: ExpressionBlockContent,
+}
+
+impl ParseSource for UnscopedBlock {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
+        let (braces, inner) = input.parse_braces()?;
+        let content = inner.parse()?;
+        Ok(Self { braces, content })
+    }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        self.content.control_flow_pass(context)
+    }
+}
+
+impl HasSpan for UnscopedBlock {
+    fn span(&self) -> Span {
+        self.braces.join()
+    }
+}
+
+impl UnscopedBlock {
+    pub(crate) fn evaluate(
+        &self,
+        interpreter: &mut Interpreter,
+        ownership: RequestedValueOwnership,
+    ) -> ExecutionResult<EvaluationItem> {
+        self.content
+            .evaluate(interpreter, self.span().into(), ownership)
     }
 
     pub(crate) fn evaluate_owned(
