@@ -400,6 +400,7 @@ Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` doc
   * Should we remove/replace any CastTargets?
 * TODO check
 * Check all `#[allow(unused)]` and remove any which aren't needed
+  We can use `_xyz: Unused<T>` in some places to reduce the size of types.
 
 NB: `define_command`, `define_parser`, and parsing of Rust code pushed to v1.1
 
