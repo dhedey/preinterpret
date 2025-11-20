@@ -298,4 +298,16 @@ fn test_emit_statement() {
     assert!(my_add(5, 3) == 8);
     assert!(my_sub(5, 3) == 2);
     assert!(my_mul(5, 3) == 15);
+
+    // Internal emits inside revertible segments are OK
+    assert_eq!(
+        run! {
+            attempt {
+                {
+                    let x = %[#{ emit 1; }];
+                } => { emit %[#x + #x]; }
+            }
+        },
+        2
+    );
 }
