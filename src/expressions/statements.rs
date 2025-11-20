@@ -1,9 +1,14 @@
 use super::*;
 
-// Preinterpret keyword constants
-pub(crate) const KEYWORD_EMIT: &str = "emit";
-pub(crate) const KEYWORD_ATTEMPT: &str = "attempt";
-pub(crate) const KEYWORD_REVERT: &str = "revert";
+pub(crate) mod keywords {
+    pub(crate) const REVERT: &str = "revert";
+    pub(crate) const EMIT: &str = "emit";
+    pub(crate) const ATTEMPT: &str = "attempt";
+}
+
+pub(crate) fn is_keyword(ident: &str) -> bool {
+    matches!(ident, keywords::REVERT | keywords::EMIT | keywords::ATTEMPT)
+}
 
 pub(crate) enum Statement {
     LetStatement(LetStatement),
@@ -36,8 +41,8 @@ impl ParseSource for Statement {
                 "let" => Statement::LetStatement(input.parse()?),
                 "break" => Statement::BreakStatement(input.parse()?),
                 "continue" => Statement::ContinueStatement(input.parse()?),
-                KEYWORD_REVERT => Statement::RevertStatement(input.parse()?),
-                KEYWORD_EMIT => Statement::EmitStatement(input.parse()?),
+                keywords::REVERT => Statement::RevertStatement(input.parse()?),
+                keywords::EMIT => Statement::EmitStatement(input.parse()?),
                 _ => Statement::Expression(input.parse()?),
             }
         } else {
@@ -230,7 +235,7 @@ impl HasSpan for RevertStatement {
 
 impl ParseSource for RevertStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        let revert_token = input.parse_ident_matching(KEYWORD_REVERT)?;
+        let revert_token = input.parse_ident_matching(keywords::REVERT)?;
         Ok(Self { revert_token })
     }
 
@@ -261,7 +266,7 @@ impl HasSpan for EmitStatement {
 
 impl ParseSource for EmitStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        let emit_token = input.parse_ident_matching(KEYWORD_EMIT)?;
+        let emit_token = input.parse_ident_matching(keywords::EMIT)?;
         let expression = input.parse()?;
         Ok(Self {
             emit_token,

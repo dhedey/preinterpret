@@ -40,20 +40,14 @@ pub(crate) struct VariableDefinition {
 
 impl ParseSource for VariableDefinition {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        use crate::expressions::{KEYWORD_ATTEMPT, KEYWORD_EMIT, KEYWORD_REVERT};
-
         let ident: Ident = input.parse()?;
 
         let ident_str = ident.to_string();
-        let ident_str_ref = ident_str.as_str();
 
         // Ident::parse() already errors on rust identifiers, so we only need
         // to check preinterpret-exclusive keywords here.
-        if ident_str_ref == KEYWORD_EMIT
-            || ident_str_ref == KEYWORD_ATTEMPT
-            || ident_str_ref == KEYWORD_REVERT
-        {
-            return ident.span().parse_err(format!(
+        if is_keyword(ident_str.as_str()) {
+            return ident.parse_err(format!(
                 "Cannot use preinterpret keyword `{}` as a variable name",
                 ident_str
             ));
