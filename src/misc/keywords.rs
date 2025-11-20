@@ -23,6 +23,10 @@ macro_rules! ExactIdent {
     }
 }
 
+// FULL KEYWORDS
+// These are keywords which have special meaning in the language
+// and cannot be used as identifiers.
+
 pub(crate) mod keyword {
     pub(crate) const REVERT: &str = "revert";
     pub(crate) const EMIT: &str = "emit";
@@ -33,8 +37,12 @@ pub(crate) fn is_keyword(ident: &str) -> bool {
     matches!(ident, keyword::REVERT | keyword::EMIT | keyword::ATTEMPT)
 }
 
-ExactIdent![group as GroupKeyword];
-ExactIdent![raw as RawKeyword];
 ExactIdent![emit as EmitKeyword];
 ExactIdent![revert as RevertKeyword];
 ExactIdent![attempt as AttemptKeyword];
+
+// CONTEXTUAL KEYWORDS
+// These can still be used as identifiers in other contexts.
+
+ExactIdent![group as GroupKeyword];
+ExactIdent![raw as RawKeyword];
