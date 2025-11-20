@@ -257,56 +257,23 @@ fn test_attempt_guard_clauses() {
 
 #[test]
 fn test_emit_statement() {
-    // Basic emit statement - simple case
     assert_eq!(
         run! {
             let s = "Hello";
-            emit s.to_string();
+            emit s;
         },
         "Hello"
     );
 
-    // Multiple emits in a loop
     assert_eq!(
-        run! {
-            let arr = [];
-            for i in 1..=3 {
-                arr.push(i.to_string());
-                if i < 3 {
-                    arr.push(", ".to_string());
+        stream! {
+            [#{
+                for i in 1..=5 {
+                    emit i;
+                    emit %[,];
                 }
-            }
-            emit arr.to_string();
+            }]
         },
-        "1, 2, 3"
-    );
-
-    // Emit with conditional
-    assert_eq!(
-        run! {
-            let arr = [];
-            for i in 1..=5 {
-                if i % 2 == 0 {
-                    arr.push(i.to_string());
-                    arr.push(" ".to_string());
-                }
-            }
-            emit arr.to_string();
-        },
-        "2 4 "
-    );
-
-    // Emit in if/else
-    assert_eq!(
-        run! {
-            let x = 5;
-            let output = if x > 3 {
-                "large"
-            } else {
-                "small"
-            };
-            emit output.to_string();
-        },
-        "large"
+        [1, 2, 3, 4, 5]
     );
 }

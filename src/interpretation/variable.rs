@@ -44,10 +44,11 @@ impl ParseSource for VariableDefinition {
 
         let ident: Ident = input.parse()?;
 
-        // Check if the identifier is a reserved keyword
         let ident_str = ident.to_string();
         let ident_str_ref = ident_str.as_str();
 
+        // Ident::parse() already errors on rust identifiers, so we only need
+        // to check preinterpret-exclusive keywords here.
         if ident_str_ref == KEYWORD_EMIT
             || ident_str_ref == KEYWORD_ATTEMPT
             || ident_str_ref == KEYWORD_REVERT
