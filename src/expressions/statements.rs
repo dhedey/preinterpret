@@ -1,10 +1,21 @@
 use super::*;
 
+pub(crate) mod keywords {
+    pub(crate) const REVERT: &str = "revert";
+    pub(crate) const EMIT: &str = "emit";
+    pub(crate) const ATTEMPT: &str = "attempt";
+}
+
+pub(crate) fn is_keyword(ident: &str) -> bool {
+    matches!(ident, keywords::REVERT | keywords::EMIT | keywords::ATTEMPT)
+}
+
 pub(crate) enum Statement {
     LetStatement(LetStatement),
     BreakStatement(BreakStatement),
     ContinueStatement(ContinueStatement),
     RevertStatement(RevertStatement),
+    EmitStatement(EmitStatement),
     Expression(Expression),
 }
 
@@ -15,6 +26,7 @@ impl Statement {
             Statement::BreakStatement(_) => true,
             Statement::ContinueStatement(_) => true,
             Statement::RevertStatement(_) => true,
+            Statement::EmitStatement(_) => true,
             Statement::Expression(expression) => {
                 !(expression.is_valid_as_statement_without_semicolon() || last_line)
             }
@@ -29,7 +41,8 @@ impl ParseSource for Statement {
                 "let" => Statement::LetStatement(input.parse()?),
                 "break" => Statement::BreakStatement(input.parse()?),
                 "continue" => Statement::ContinueStatement(input.parse()?),
-                "revert" => Statement::RevertStatement(input.parse()?),
+                keywords::REVERT => Statement::RevertStatement(input.parse()?),
+                keywords::EMIT => Statement::EmitStatement(input.parse()?),
                 _ => Statement::Expression(input.parse()?),
             }
         } else {
@@ -44,6 +57,7 @@ impl ParseSource for Statement {
             Statement::BreakStatement(statement) => statement.control_flow_pass(context),
             Statement::ContinueStatement(statement) => statement.control_flow_pass(context),
             Statement::RevertStatement(statement) => statement.control_flow_pass(context),
+            Statement::EmitStatement(statement) => statement.control_flow_pass(context),
         }
     }
 }
@@ -59,6 +73,7 @@ impl Statement {
             Statement::BreakStatement(statement) => statement.evaluate_as_statement(interpreter),
             Statement::ContinueStatement(statement) => statement.evaluate_as_statement(interpreter),
             Statement::RevertStatement(statement) => statement.evaluate_as_statement(interpreter),
+            Statement::EmitStatement(statement) => statement.evaluate_as_statement(interpreter),
         }
     }
 
@@ -72,7 +87,8 @@ impl Statement {
             Statement::LetStatement(_)
             | Statement::BreakStatement(_)
             | Statement::ContinueStatement(_)
-            | Statement::RevertStatement(_) => {
+            | Statement::RevertStatement(_)
+            | Statement::EmitStatement(_) => {
                 panic!("Statements cannot be used as returning expressions")
             }
         }
@@ -219,7 +235,7 @@ impl HasSpan for RevertStatement {
 
 impl ParseSource for RevertStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        let revert_token = input.parse_ident_matching("revert")?;
+        let revert_token = input.parse_ident_matching(keywords::REVERT)?;
         Ok(Self { revert_token })
     }
 
@@ -234,5 +250,44 @@ impl RevertStatement {
             ControlFlowInterrupt::Revert,
             self.revert_token.span(),
         ))
+    }
+}
+
+pub(crate) struct EmitStatement {
+    emit_token: Ident,
+    expression: Expression,
+}
+
+impl HasSpan for EmitStatement {
+    fn span(&self) -> Span {
+        self.emit_token.span()
+    }
+}
+
+impl ParseSource for EmitStatement {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
+        let emit_token = input.parse_ident_matching(keywords::EMIT)?;
+        let expression = input.parse()?;
+        Ok(Self {
+            emit_token,
+            expression,
+        })
+    }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        self.expression.control_flow_pass(context)
+    }
+}
+
+impl EmitStatement {
+    pub(crate) fn evaluate_as_statement(
+        &self,
+        interpreter: &mut Interpreter,
+    ) -> ExecutionResult<()> {
+        let value = self.expression.evaluate_owned(interpreter)?;
+        value.output_to(
+            Grouping::Flattened,
+            &mut ToStreamContext::new(interpreter.output(&self.emit_token)?, value.span_range()),
+        )
     }
 }

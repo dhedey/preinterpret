@@ -357,9 +357,11 @@ impl HandleDestructure for StreamPattern {
         let stream: ExpressionStream = value
             .into_owned(self.brackets.span_range())
             .resolve_as("The value destructured with a stream pattern")?;
-        let mut discarded = OutputStream::new();
-        self.content
-            .handle_transform_from_stream(stream.value, interpreter, &mut discarded)?;
+        // TODO[parser-no-output]: Remove this once transformers no longer output
+        let _ = interpreter.capture_output(|interpreter| {
+            self.content
+                .handle_transform_from_stream(stream.value, interpreter)
+        })?;
         Ok(())
     }
 }

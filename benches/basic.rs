@@ -35,9 +35,9 @@ fn main() {
                 let ident = name.to_ident();
                 comma_separated_types += %[#ident,];
             }
-            %[
+            emit %[
                 impl<#comma_separated_types> MyTrait for (#comma_separated_types) {}
-            ]
+            ];
         }
     });
     benchmark!("Accessing single elements of a large array", {

@@ -26,7 +26,7 @@ impl VariableContent {
         variable_span: Span,
         is_final: bool,
         ownership: RequestedValueOwnership,
-        blocked_from_mutation: bool,
+        blocked_from_mutation: Option<MutationBlockReason>,
     ) -> ExecutionResult<LateBoundValue> {
         const UNITIALIZED_ERR: &str = "Cannot resolve uninitialized variable. This shouldn't be possible, because all variables are set on first use.";
         const FINISHED_ERR: &str = "Cannot resolve finished variable. This shouldn't be possible, because is_final should be marked correctly. If you see this error, please report a bug to preinterpret on github with a reproduction case.";
@@ -34,7 +34,7 @@ impl VariableContent {
         // If blocked from mutation, we technically could allow is_final to work and
         // return a fully owned value without observable mutation,
         // but it's likely confusingly inconsistent, so it's better to just block it entirely.
-        let value_rc = if is_final && !blocked_from_mutation {
+        let value_rc = if is_final && blocked_from_mutation.is_none() {
             let content = std::mem::replace(self, VariableContent::Finished);
             match content {
                 VariableContent::Uninitialized => panic!("{}", UNITIALIZED_ERR),
@@ -88,10 +88,11 @@ impl VariableContent {
                     .map(LateBoundValue::CopyOnWrite),
             },
         };
-        if blocked_from_mutation {
+        if let Some(mutation_block_reason) = blocked_from_mutation {
             match resolved {
                 Ok(LateBoundValue::Mutable(mutable)) => {
-                    let reason_not_mutable = mutable.syn_error("It is not possible to mutate this variable here. In an attempt arm, you should define variables in the first conditional part, and move mutations of external variables to the second unconditional part.");
+                    let reason_not_mutable = mutable
+                        .syn_error(mutation_block_reason.error_message("mutate this variable"));
                     Ok(LateBoundValue::Shared(LateBoundSharedValue {
                         shared: mutable.into_shared(),
                         reason_not_mutable,
@@ -351,7 +352,7 @@ impl OwnedValue {
             ExpressionValue::None => Ok(()),
             _ => self
                 .span_range
-                .control_flow_err("A non-returning statement must not return a value. If you wish to explicitly discard the expression's result, use `let _ = ...;`"),
+                .control_flow_err("A non-returning statement must not return a value. If you wish to explicitly discard the expression's result, use `let _ = ...;`. Alternatively, If you wish to output the value into the parent token stream, use `emit ...;`"),
         }
     }
 }

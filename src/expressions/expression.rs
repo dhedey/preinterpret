@@ -78,15 +78,15 @@ impl Expression {
                 .evaluate(interpreter, RequestedValueOwnership::owned())?
                 .expect_owned()
                 .into_statement_result(),
-            ExpressionNode::Leaf(Leaf::LoopExpression(loop_expression)) => {
-                loop_expression.evaluate_as_statement(interpreter)
-            }
-            ExpressionNode::Leaf(Leaf::WhileExpression(while_expression)) => {
-                while_expression.evaluate_as_statement(interpreter)
-            }
-            ExpressionNode::Leaf(Leaf::ForExpression(for_expression)) => {
-                for_expression.evaluate_as_statement(interpreter)
-            }
+            ExpressionNode::Leaf(Leaf::LoopExpression(loop_expression)) => loop_expression
+                .evaluate(interpreter)?
+                .into_statement_result(),
+            ExpressionNode::Leaf(Leaf::WhileExpression(while_expression)) => while_expression
+                .evaluate(interpreter)?
+                .into_statement_result(),
+            ExpressionNode::Leaf(Leaf::ForExpression(for_expression)) => for_expression
+                .evaluate(interpreter)?
+                .into_statement_result(),
             _ => self.evaluate_owned(interpreter)?.into_statement_result(),
         }
     }

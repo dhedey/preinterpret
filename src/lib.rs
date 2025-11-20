@@ -505,14 +505,16 @@ fn preinterpret_stream_internal(input: TokenStream) -> SynResult<TokenStream> {
 
     let mut interpreter = Interpreter::new(parse_state);
 
-    let interpreted_stream = stream
-        .interpret_to_new_stream(&mut interpreter)
+    stream
+        .interpret(&mut interpreter)
         .convert_to_final_result()?;
+
+    let output_stream = interpreter.complete();
 
     unsafe {
         // RUST-ANALYZER-SAFETY: This might drop transparent groups in the output of
         // rust-analyzer. There's not much we can do here...
-        Ok(interpreted_stream.into_token_stream())
+        Ok(output_stream.into_token_stream())
     }
 }
 
@@ -536,7 +538,7 @@ fn preinterpret_run_internal(input: TokenStream) -> SynResult<TokenStream> {
 
     let mut interpreter = Interpreter::new(parse_state);
 
-    let interpreted_stream = content
+    let returned_stream = content
         .evaluate(
             &mut interpreter,
             Span::call_site().into(),
@@ -545,10 +547,19 @@ fn preinterpret_run_internal(input: TokenStream) -> SynResult<TokenStream> {
         .and_then(|x| x.expect_owned().into_stream())
         .convert_to_final_result()?;
 
+    let mut output_stream = interpreter.complete();
+
+    let output = if output_stream.is_empty() {
+        returned_stream
+    } else {
+        returned_stream.append_into(&mut output_stream);
+        output_stream
+    };
+
     unsafe {
         // RUST-ANALYZER-SAFETY: This might drop transparent groups in the output of
         // rust-analyzer. There's not much we can do here...
-        Ok(interpreted_stream.into_token_stream())
+        Ok(output.into_token_stream())
     }
 }
 
@@ -655,24 +666,32 @@ mod benchmarking {
                     .convert_to_final_result()
             })?;
 
-            let mut interpreter = Interpreter::new(scopes);
-
-            let interpreted_stream = context.time("evaluation", || {
-                parsed
+            let output = context.time("evaluation", move || -> SynResult<OutputStream> {
+                let mut interpreter = Interpreter::new(scopes);
+                let returned_stream = parsed
                     .evaluate(
                         &mut interpreter,
                         Span::call_site().into(),
                         RequestedValueOwnership::owned(),
                     )
                     .and_then(|x| x.expect_owned().into_stream())
-                    .convert_to_final_result()
+                    .convert_to_final_result()?;
+
+                let mut output_stream = interpreter.complete();
+
+                Ok(if output_stream.is_empty() {
+                    returned_stream
+                } else {
+                    returned_stream.append_into(&mut output_stream);
+                    output_stream
+                })
             })?;
 
-            let _ = context.time("output", || {
+            let _ = context.time("output", move || {
                 unsafe {
                     // RUST-ANALYZER-SAFETY: This might drop transparent groups in the output of
                     // rust-analyzer. There's not much we can do here...
-                    interpreted_stream.clone().into_token_stream()
+                    output.into_token_stream()
                 }
             });
 

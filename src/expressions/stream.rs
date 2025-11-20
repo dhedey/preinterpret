@@ -227,7 +227,11 @@ define_interface! {
                 };
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(ExpressionBlockContent::parse, ExpressionBlockContent::control_flow_pass)?;
                 let mut inner_interpreter = Interpreter::new(scope_definitions);
-                Ok(reparsed.evaluate(&mut inner_interpreter, context.output_span_range, RequestedValueOwnership::owned())?.expect_owned())
+                let return_value = reparsed.evaluate(&mut inner_interpreter, context.output_span_range, RequestedValueOwnership::owned())?.expect_owned();
+                if !inner_interpreter.complete().is_empty() {
+                    return context.control_flow_err("reinterpret_as_run does not allow non-empty stream output")
+                }
+                Ok(return_value)
             }
 
             [context] fn reinterpret_as_stream(this: Owned<ExpressionStream>) -> ExecutionResult<OutputStream> {
@@ -241,9 +245,8 @@ define_interface! {
                     SourceStream::control_flow_pass,
                 )?;
                 let mut inner_interpreter = Interpreter::new(scope_definitions);
-                // NB: We can't use a StreamOutput here, because it can't capture the Interpreter
-                //     without some lifetime shenanigans.
-                reparsed.interpret_to_new_stream(&mut inner_interpreter)
+                reparsed.interpret(&mut inner_interpreter)?;
+                Ok(inner_interpreter.complete())
             }
         }
         pub(crate) mod unary_operations {
@@ -313,15 +316,11 @@ impl ParseSource for StreamLiteral {
 }
 
 impl Interpret for StreamLiteral {
-    fn interpret_into(
-        &self,
-        interpreter: &mut Interpreter,
-        output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
+    fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         match self {
-            StreamLiteral::Regular(lit) => lit.interpret_into(interpreter, output),
-            StreamLiteral::Raw(lit) => lit.interpret_into(interpreter, output),
-            StreamLiteral::Grouped(lit) => lit.interpret_into(interpreter, output),
+            StreamLiteral::Regular(lit) => lit.interpret(interpreter),
+            StreamLiteral::Raw(lit) => lit.interpret(interpreter),
+            StreamLiteral::Grouped(lit) => lit.interpret(interpreter),
         }
     }
 }
@@ -332,18 +331,6 @@ impl HasSpanRange for StreamLiteral {
             StreamLiteral::Regular(lit) => lit.span_range(),
             StreamLiteral::Raw(lit) => lit.span_range(),
             StreamLiteral::Grouped(lit) => lit.span_range(),
-        }
-    }
-}
-
-impl Evaluate for StreamLiteral {
-    type OutputValue = OutputStream;
-
-    fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<Self::OutputValue> {
-        match self {
-            StreamLiteral::Regular(lit) => lit.evaluate(interpreter),
-            StreamLiteral::Raw(lit) => Ok(lit.evaluate()),
-            StreamLiteral::Grouped(lit) => lit.evaluate(interpreter),
         }
     }
 }
@@ -373,26 +360,14 @@ impl ParseSource for RegularStreamLiteral {
 }
 
 impl Interpret for RegularStreamLiteral {
-    fn interpret_into(
-        &self,
-        interpreter: &mut Interpreter,
-        output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
-        self.content.interpret_into(interpreter, output)
+    fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        self.content.interpret(interpreter)
     }
 }
 
 impl HasSpanRange for RegularStreamLiteral {
     fn span_range(&self) -> SpanRange {
         SpanRange::new_between(self.prefix.span, self.brackets.span())
-    }
-}
-
-impl Evaluate for RegularStreamLiteral {
-    type OutputValue = OutputStream;
-
-    fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<Self::OutputValue> {
-        self.interpret_to_new_stream(interpreter)
     }
 }
 
@@ -425,12 +400,10 @@ impl ParseSource for RawStreamLiteral {
 }
 
 impl Interpret for RawStreamLiteral {
-    fn interpret_into(
-        &self,
-        _interpreter: &mut Interpreter,
-        output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
-        output.extend_raw_tokens(self.content.clone());
+    fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        interpreter
+            .output(self)?
+            .extend_raw_tokens(self.content.clone());
         Ok(())
     }
 }
@@ -438,14 +411,6 @@ impl Interpret for RawStreamLiteral {
 impl HasSpanRange for RawStreamLiteral {
     fn span_range(&self) -> SpanRange {
         SpanRange::new_between(self.prefix.span, self.brackets.span())
-    }
-}
-
-impl RawStreamLiteral {
-    fn evaluate(&self) -> OutputStream {
-        // Cloning a token stream is relatively cheap, but we could also
-        // consider storing an Owned<TokenStream> and returning a Shared<TokenStream>
-        OutputStream::raw(self.content.clone())
     }
 }
 
@@ -477,29 +442,15 @@ impl ParseSource for GroupedStreamLiteral {
 }
 
 impl Interpret for GroupedStreamLiteral {
-    fn interpret_into(
-        &self,
-        interpreter: &mut Interpreter,
-        output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
-        output.push_grouped(
-            |inner| self.content.interpret_into(interpreter, inner),
-            Delimiter::None,
-            self.brackets.span(),
-        )
+    fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        interpreter.in_output_group(Delimiter::None, self.brackets.span(), |interpreter| {
+            self.content.interpret(interpreter)
+        })
     }
 }
 
 impl HasSpanRange for GroupedStreamLiteral {
     fn span_range(&self) -> SpanRange {
         SpanRange::new_between(self.prefix.span, self.brackets.span())
-    }
-}
-
-impl Evaluate for GroupedStreamLiteral {
-    type OutputValue = OutputStream;
-
-    fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OutputStream> {
-        self.interpret_to_new_stream(interpreter)
     }
 }

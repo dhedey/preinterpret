@@ -98,12 +98,14 @@ fn test_loop_continue_and_break() {
     );
     assert_eq!(
         run! {
+            let arr = [];
             for x in 65..75 {
                 if x % 2 == 0 {
                     continue;
                 }
-                x as u8 as char
-            }.to_string()
+                arr.push(x as u8 as char);
+            }
+            arr.to_string()
         },
         "ACEGI"
     );
@@ -113,9 +115,11 @@ fn test_loop_continue_and_break() {
 fn test_for() {
     assert_eq!(
         run! {
+            let arr = [];
             for x in 65..70 {
-                x as u8 as char
-            }.to_string()
+                arr.push(x as u8 as char);
+            }
+            arr.to_string()
         },
         "ABCDE"
     );
@@ -123,12 +127,14 @@ fn test_for() {
         run! {
             // A stream is iterated token-tree by token-tree
             // So we can match each value with a stream pattern matching each `(X,)`
+            let arr = [];
             for %[(@(#x = @IDENT),)] in %[(a,) (b,) (c,)] {
                 if x.to_string() == "c" {
                     break;
                 }
-                x
-            }.to_string()
+                arr.push(x.to_string());
+            }
+            emit arr.to_string();
         },
         "ab"
     );
@@ -247,4 +253,61 @@ fn test_attempt_guard_clauses() {
         };
         %[_].assert_eq(output, 5);
     }
+}
+
+#[test]
+fn test_emit_statement() {
+    assert_eq!(
+        run! {
+            let s = "Hello";
+            emit s;
+        },
+        "Hello"
+    );
+
+    assert_eq!(
+        stream! {
+            [#{
+                for i in 1..=5 {
+                    emit i;
+                    emit %[,];
+                }
+            }]
+        },
+        [1, 2, 3, 4, 5]
+    );
+
+    run! {
+        emit %[
+            fn my_add(a: i32, b: i32) -> i32 {
+                a + b
+            }
+        ];
+        emit %[
+            fn my_sub(a: i32, b: i32) -> i32 {
+                a - b
+            }
+        ];
+        // Final return is also emitted
+        %[
+            fn my_mul(a: i32, b: i32) -> i32 {
+                a * b
+            }
+        ]
+    };
+    assert!(my_add(5, 3) == 8);
+    assert!(my_sub(5, 3) == 2);
+    assert!(my_mul(5, 3) == 15);
+
+    // Internal emits inside revertible segments are OK
+    assert_eq!(
+        run! {
+            attempt {
+                {
+                    let x = %[#{ emit 1; }];
+                } => { emit %[#x + #x]; }
+            }
+        },
+        2
+    );
 }

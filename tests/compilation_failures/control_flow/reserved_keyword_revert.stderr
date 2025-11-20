@@ -1,0 +1,5 @@
+error: Cannot use preinterpret keyword `revert` as a variable name
+ --> tests/compilation_failures/control_flow/reserved_keyword_revert.rs:5:13
+  |
+5 |         let revert = 5;
+  |             ^^^^^^

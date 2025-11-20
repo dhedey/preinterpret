@@ -30,14 +30,11 @@ impl HasSpanRange for EmbeddedExpression {
 }
 
 impl Interpret for EmbeddedExpression {
-    fn interpret_into(
-        &self,
-        interpreter: &mut Interpreter,
-        output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
-        self.content.evaluate_shared(interpreter)?.output_to(
+    fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        let value = self.content.evaluate_shared(interpreter)?;
+        value.output_to(
             Grouping::Flattened,
-            &mut ToStreamContext::new(output, self.span_range()),
+            &mut ToStreamContext::new(interpreter.output(self)?, self.span_range()),
         )
     }
 }
@@ -72,23 +69,19 @@ impl HasSpanRange for EmbeddedStatements {
 }
 
 impl Interpret for EmbeddedStatements {
-    fn interpret_into(
-        &self,
-        interpreter: &mut Interpreter,
-        output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
-        self.content
+    fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        let value = self
+            .content
             .evaluate(
                 interpreter,
                 self.span_range(),
                 RequestedValueOwnership::shared(),
             )?
-            .expect_shared()
-            .output_to(
-                Grouping::Flattened,
-                &mut ToStreamContext::new(output, self.span_range()),
-            )?;
-        Ok(())
+            .expect_shared();
+        value.output_to(
+            Grouping::Flattened,
+            &mut ToStreamContext::new(interpreter.output(self)?, self.span_range()),
+        )
     }
 }
 

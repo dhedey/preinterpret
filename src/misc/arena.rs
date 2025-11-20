@@ -51,11 +51,19 @@ impl<K: ArenaKey, D> Arena<K, D> {
     }
 
     pub(crate) fn get(&self, key: K) -> &D {
-        &self.data[key.to_inner().index]
+        let index = key.to_inner().index;
+        match self.data.get(index) {
+            Some(value) => value,
+            None => panic!("{}", invalid_key_message(index)),
+        }
     }
 
     pub(crate) fn get_mut(&mut self, key: K) -> &mut D {
-        &mut self.data[key.to_inner().index]
+        let index = key.to_inner().index;
+        match self.data.get_mut(index) {
+            Some(value) => value,
+            None => panic!("{}", invalid_key_message(index)),
+        }
     }
 
     pub(crate) fn iter(&self) -> impl Iterator<Item = (K, &D)> {
@@ -73,6 +81,14 @@ impl<K: ArenaKey, D> Arena<K, D> {
     }
 }
 
+fn invalid_key_message(key_index: usize) -> &'static str {
+    if key_index == PLACEHOLDER_KEY_INDEX {
+        "Attempted to access an arena with a placeholder key. The key must be properly initialized before use."
+    } else {
+        "Arena key does not exist in this arena."
+    }
+}
+
 impl<K: ArenaKey + Debug, D: Debug> Debug for Arena<K, D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_map().entries(self.iter()).finish()
@@ -84,12 +100,14 @@ pub(crate) trait ArenaKey: Sized {
     fn to_inner(self) -> Key<Self>;
     fn as_inner(&self) -> &Key<Self>;
     fn new_placeholder() -> Self {
-        Self::from_inner(Key::new(usize::MAX))
+        Self::from_inner(Key::new(PLACEHOLDER_KEY_INDEX))
     }
     fn is_placeholder(&self) -> bool {
-        self.as_inner().index == usize::MAX
+        self.as_inner().index == PLACEHOLDER_KEY_INDEX
     }
 }
+
+const PLACEHOLDER_KEY_INDEX: usize = usize::MAX;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct Key<K: ArenaKey> {

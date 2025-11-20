@@ -34,7 +34,9 @@ impl ExpressionNode {
                         context.return_copy_on_write(value)?
                     }
                     Leaf::StreamLiteral(stream_literal) => {
-                        let value = stream_literal.evaluate(context.interpreter())?;
+                        let value = context
+                            .interpreter()
+                            .capture_output(|interpreter| stream_literal.interpret(interpreter))?;
                         context.return_owned(value.into_owned_value(stream_literal.span_range()))?
                     }
                     Leaf::IfExpression(if_expression) => {
@@ -43,17 +45,15 @@ impl ExpressionNode {
                         context.return_item(item)?
                     }
                     Leaf::LoopExpression(loop_expression) => {
-                        let value =
-                            loop_expression.evaluate_as_expression(context.interpreter())?;
+                        let value = loop_expression.evaluate(context.interpreter())?;
                         context.return_owned(value)?
                     }
                     Leaf::WhileExpression(while_expression) => {
-                        let value =
-                            while_expression.evaluate_as_expression(context.interpreter())?;
+                        let value = while_expression.evaluate(context.interpreter())?;
                         context.return_owned(value)?
                     }
                     Leaf::ForExpression(for_expression) => {
-                        let value = for_expression.evaluate_as_expression(context.interpreter())?;
+                        let value = for_expression.evaluate(context.interpreter())?;
                         context.return_owned(value)?
                     }
                     Leaf::AttemptExpression(attempt_expression) => {

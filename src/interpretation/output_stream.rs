@@ -629,121 +629,94 @@ impl HasSpan for OutputTokenTree {
     }
 }
 
-// ======================================
-// How syn fits with preinterpret parsing
-// ======================================
-//
-// TLDR: This is discussed on this syn issue, where David Tolnay suggested
-// forking syn to get what we want (i.e. a more versatile TokenBuffer):
-// ==> https://github.com/dtolnay/syn/issues/1842
-//
-// There are a few places where we support (or might wish to support) parsing
-// as part of interpretation:
-// * e.g. of a token stream in `SourceValue`
-// * e.g. as part of a PARSER, from an OutputStream
-// * e.g. of a variable, as part of incremental parsing (while_parse style loops)
-//
-// I spent quite a while considering whether this could be wrapping a
-// `syn::parse::ParseBuffer<'a>` or `syn::buffer::Cursor<'a>`...
-//
-// Some commands want to performantly parse a variable or other token stream.
-//
-// Here we want variables to support:
-// * Easy appending of tokens
-// * Incremental parsing
-//
-// Ideally we'd want to be able to store a syn::TokenBuffer, and be able to
-// append to it, and freely convert it to a syn::ParseStream, possibly even storing
-// a cursor position into it.
-//
-// Unfortunately this isn't at all possible:
-// * TokenBuffer appending isn't a thing, you can only create one (recursively) from
-//   a TokenStream
-// * TokenBuffer can't be converted to a ParseStream outside of the syn crate
-// * For performance, a cursor stores a pointer into a TokenBuffer, so it can only be
-//   used against a fixed buffer.
-//
-// We could probably work around these limitations by sacrificing performance and transforming
-// to TokenStream and back, but probably there's a better way.
-//
-// What we probably want is our own abstraction, likely a fork from `syn`, which supports
-// converting a Cursor into an indexed based cursor, which can safely be stored separately
-// from the TokenBuffer.
-//
-// We could use this abstraction for OutputStream; and our variables could store a
-// tuple of (IndexCursor, PreinterpretTokenBuffer)
+#[derive(Debug)]
+pub(super) enum OutputHandlerError {
+    FrozenOutputModification(MutationBlockReason),
+}
 
-/// Inspired/ forked from [`syn::buffer::TokenBuffer`], in order to support appending tokens,
-/// as per the issue here: https://github.com/dtolnay/syn/issues/1842
-///
-/// Syn is dual-licensed under MIT and Apache, and a subset of it is reproduced from version 2.0.96
-/// of syn, and then further edited as a derivative work as part of preinterpret, which is released
-/// under the same licenses.
-///
-/// LICENSE-MIT: https://github.com/dtolnay/syn/blob/2.0.96/LICENSE-MIT
-/// LICENSE-APACHE: https://github.com/dtolnay/syn/blob/2.0.96/LICENSE-APACHE
-#[allow(unused)]
-mod token_buffer {
-    use super::*;
+pub(super) struct OutputHandler {
+    output_stack: Vec<OutputStream>,
+    freeze_stack_indices_at_or_below: Vec<(usize, MutationBlockReason)>,
+}
 
-    /// Inspired by [`syn::buffer::Entry`]
-    /// Internal type which is used instead of `TokenTree` to represent a token tree
-    /// within a `TokenBuffer`.
-    enum TokenBufferEntry {
-        // Mimicking types from proc-macro.
-        // Group entries contain the offset to the matching End entry.
-        Group(Group, usize),
-        Ident(Ident),
-        Punct(Punct),
-        Literal(Literal),
-        // End entries contain the offset (negative) to the start of the buffer, and
-        // offset (negative) to the matching Group entry.
-        End(isize, isize),
+impl OutputHandler {
+    pub(super) fn new(initial_output: OutputStream) -> Self {
+        Self {
+            output_stack: vec![initial_output],
+            freeze_stack_indices_at_or_below: vec![],
+        }
     }
 
-    /// Inspired by [`syn::buffer::TokenBuffer`], but with the ability to append tokens.
-    pub(super) struct TokenBuffer {
-        entries: Vec<TokenBufferEntry>,
+    pub(super) fn complete(self) -> OutputStream {
+        let [final_output]: [OutputStream; 1] = self
+            .output_stack
+            .try_into()
+            .map_err(|_| ())
+            .expect("Output stack should have height one at completion");
+        final_output
     }
 
-    impl TokenBuffer {
-        pub(crate) fn new(tokens: impl IntoIterator<Item = TokenTree>) -> Self {
-            let mut entries = vec![];
-            Self::recursive_new(&mut entries, tokens);
-            entries.push(TokenBufferEntry::End(-(entries.len() as isize), 0));
-            Self { entries }
+    pub(super) fn current_output_mut(&mut self) -> Result<&mut OutputStream, OutputHandlerError> {
+        let index = self.index_of_last_output();
+
+        self.validate_index(index)?;
+
+        Ok(&mut self.output_stack[index])
+    }
+
+    /// SAFETY: Must be paired with a later `finish_inner_buffer_*` call, even in
+    /// the face of control flow interrupts.
+    pub(super) unsafe fn start_inner_buffer(&mut self) {
+        self.output_stack.push(OutputStream::new());
+    }
+
+    /// SAFETY: Must be paired with a prior `start_inner_buffer` call.
+    pub(super) unsafe fn finish_inner_buffer_as_group(&mut self, delimiter: Delimiter, span: Span) {
+        let inner_buffer = self.finish_inner_buffer_as_separate_stream();
+        self.current_output_mut()
+            .expect("Output stack should not be frozen if SAFETY conditions are met")
+            .push_new_group(inner_buffer, delimiter, span);
+    }
+
+    /// SAFETY: Must be paired with a prior `start_inner_buffer` call.
+    pub(super) unsafe fn finish_inner_buffer_as_separate_stream(&mut self) -> OutputStream {
+        if self.output_stack.len() == 1 {
+            panic!("Cannot pop the last output stream from the output stack");
         }
 
-        pub(crate) fn append(&mut self, tokens: impl IntoIterator<Item = TokenTree>) {
-            self.entries.pop();
-            Self::recursive_new(&mut self.entries, tokens);
-            self.entries
-                .push(TokenBufferEntry::End(-(self.entries.len() as isize), 0));
-        }
+        self.output_stack
+            .pop()
+            .expect("Output stack should never be empty")
+    }
 
-        fn recursive_new(
-            entries: &mut Vec<TokenBufferEntry>,
-            stream: impl IntoIterator<Item = TokenTree>,
-        ) {
-            for tt in stream {
-                match tt {
-                    TokenTree::Ident(ident) => entries.push(TokenBufferEntry::Ident(ident)),
-                    TokenTree::Punct(punct) => entries.push(TokenBufferEntry::Punct(punct)),
-                    TokenTree::Literal(literal) => entries.push(TokenBufferEntry::Literal(literal)),
-                    TokenTree::Group(group) => {
-                        let group_start_index = entries.len();
-                        entries.push(TokenBufferEntry::End(0, 0)); // we replace this below
-                        Self::recursive_new(entries, group.stream());
-                        let group_end_index = entries.len();
-                        let group_offset = group_end_index - group_start_index;
-                        entries.push(TokenBufferEntry::End(
-                            -(group_end_index as isize),
-                            -(group_offset as isize),
-                        ));
-                        entries[group_start_index] = TokenBufferEntry::Group(group, group_offset);
-                    }
-                }
+    fn index_of_last_output(&self) -> usize {
+        // OVERFLOW: Safe as we maintain the invariant that output_stack is never empty
+        self.output_stack.len() - 1
+    }
+
+    /// SAFETY: Must be paired with unfreeze_existing.
+    pub(super) unsafe fn freeze_existing(&mut self, reason: MutationBlockReason) {
+        self.freeze_stack_indices_at_or_below
+            .push((self.index_of_last_output(), reason));
+    }
+
+    /// SAFETY: Must be paired with freeze_existing.
+    pub(super) unsafe fn unfreeze_existing(&mut self) {
+        let (popped, _reason) = self.freeze_stack_indices_at_or_below.pop().unwrap();
+        assert_eq!(
+            popped, self.index_of_last_output(),
+            "Any additional output streams added during the freeze must be removed before unfreezing"
+        );
+    }
+
+    fn validate_index(&self, index: usize) -> Result<(), OutputHandlerError> {
+        if let Some(&(freeze_at_or_below_depth, reason)) =
+            self.freeze_stack_indices_at_or_below.last()
+        {
+            if index <= freeze_at_or_below_depth {
+                return Err(OutputHandlerError::FrozenOutputModification(reason));
             }
         }
+        Ok(())
     }
 }

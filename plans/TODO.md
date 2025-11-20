@@ -127,7 +127,7 @@ Create the following expressions:
 - [x] Migrate remaining commands
   - [x] Use `None.configure_preinterpret()` for now
   - [x] Remove `!parse!`
-- [ ] Add `attempt` expression - See @./2025-09-vision.md
+- [x] Add `attempt` expression - See @./2025-09-vision.md
   - [x] Replace `execution_err` with explicit error kinds, so we can handle them differently with respect to catching, e.g. `destructure_err`, `panic_err`, `user_err`, `assert_err`, `resolution_err`, `operation_err`
   - [x] Prevent mutating parent state in revertible block
   - [x] Add `if X` guards to attempt block
@@ -146,36 +146,40 @@ Alternatively, we could have consider:
 * Loops not returning anything (unless a `loop` uses a `break` perhaps, like in Rust)
 * Embedded expressions having access to a `stream` variable, bound to the current contents of the stream, which they can append to.
 
-So some possible things we can explore / consider:
+These are things we definitely want to do:
 
-- [ ] Either:
-  - A: We remove vec-returns from loops
-  - B: We only store values which are non-None in the array, we can therefore use `loop { break X }[0]` to get the return value
-- [ ] Trial exposing the output stream as a variable binding `stream`. We need to have some way to make it kinda efficient though.
-  - One kinda issue is that `stream` is a `&mut OutputStream` rather than a `Mutable<OutputStream>` if that's a problem. It's expensive to inter-convert these.
-  - We also don't want people to be able to read from it - only mutate it: Conceptually considering some optimizations further down, this `stream` might actually be from some few levels above, using tail-return optimizations
-  - Maybe we just have an `output(%[...])` command instead of exposing the stream variable?
-  - Or even `output` statement so that we can do e.g. `output 'a %[..]` to reference a particular block.
-  - But what does it mean in terms of the `Mutable<OutputStream>` to output to a parent stream?
-    - It might be the same stream or not; depending on if there is an `output`
-    expression in the middle layer. I think this is reasonable. Conceptually we may need to know that two labels refer to the same stream in some map somewhere.
-    - It suggests that `output` is not a variable, but a statement so that it can be
-    bound as late as possible.
-- [ ] `break` / `continue` improvements:
-  - Can return a value (from the last iteration of for / while loops)
-  - Can specify a label, and return from a labelled block (https://blog.rust-lang.org/2022/11/03/Rust-1.65.0/#break-from-labeled-blocks)
+- [x] Add an `OutputHandler` to the interpreter, with a stack of `OutputStream`.
+- [x] Add `emit` statement which outputs into the parent stream literal
+- [x] Remove vec-returns from loops, replace with `emit`
+- [x] Change to error at parse if people use preinterpret keywords including `emit`, `attempt` and `revert` as variable names.
+- [x] Add sensible use-case tests and compilation failure tests using `emit`
+- [x] Disallow `emit` in revertible segment into stream outside of segment
+
+The following are only maybes:
+
+- [ ] Allow adding lifetimes to stream literals `%'a[]` and then `emit 'a`, with `'root` being the topmost. Or maybe just `emit 'root` honestly. Can't really see the use case for the others.
+  - [ ] Note that `%'a[((#{ emit 'a %[x] }))]` should yield `x(())`
+  - [ ] Note that we need to prevent or revert outputting to root in revertible segments
+
+## Break / Continue Improvements
+
+- [ ] `break` can include an optional expresion, and can be used to return a value
+- [ ] Loops can be labelled, e.g. with `'outer: loop { .. }` or `'inner: for { .. }`.
+- [ ] `break` / `continue` can specify a label, and return from that label
+- [ ] Add tests to control_flow.rs and compilation failure tests covering various scenarios
+- [ ] Blocks can be labelled, and `break` can be used to return from a labelled block (https://blog.rust-lang.org/2022/11/03/Rust-1.65.0/#break-from-labeled-blocks)
 
 ## Parser Changes
 
 First, read the @./2025-09-vision.md
 
-* Manually search for transform and rename to parse in folder names and file.
-* Initial changes:
-  * Parsers no longer output to a stream.
-  * Scopes/frames can have a parse stream associated with them.
-    * This can be read/resolved (as the nearest parent) by parsers, even in expression blocks
-  * Don't support `@(#x = ...)` - instead we can have `#(let x = @[STREAM ...])`
-  * Consider a `parse %[ .. ] { /* parsers * / }` expression / block (no new scope!)
+- [ ] Manually search for transform and rename to parse in folder names and file.
+- [ ] Initial changes:
+  - [ ] Parsers no longer output to a stream, instead the output values.
+  - [ ] Sort out `TODO[parser-no-output]`
+  - [ ] Scopes/frames can have a parse stream associated with them. This can be read/resolved (as the nearest parent) by parsers, even in expression blocks
+  - [ ] Don't support `@(#x = ...)` - instead we can have `#(let x = @[STREAM ...])`
+  - [ ] Consider a `parse %[ .. ] { /* parsers * / }` expression / block (no new scope!)
 
 * Various other changes from the vision doc
 * (Side thought) - How does selecting a parse stream come into it? And e.g. when we extend to method/function definitions... Some options:
@@ -225,6 +229,8 @@ First, read the @./2025-09-vision.md
 }) { <block> }]
 ```
 
+- [ ] Ensure `TODO[parsers]` are addressed
+
 ## Methods and closures
 
 - [ ] Introduce basic functions
@@ -242,6 +248,7 @@ First, read the @./2025-09-vision.md
       by the invocation
     * Otherwise, the values are only available as shared/mut
 - [ ] Optional arguments
+- [ ] Add `map`, `filter`, `flatten`, `flatmap`
 
 ## Utility methods
 
@@ -253,6 +260,9 @@ Implement the following:
 
 ## Repeat output bindings
 
+- [ ] Implement option 1 below (i.e. repeat syntax). Maps will follow separately.
+
+--
 * Use case: Easily create the below code, similar to a procedural macro. Notably creating tuples of all sizes.
   => Honestly, `map(|x| x.to_ident())` and existing `.intersperse(%[,])` is probably the cleanest combination
 * We need maps or repeats. A simple join isn't enough for . Consider alternatives to the below syntax.
@@ -341,9 +351,8 @@ preinterpret::run! {
 
 ## Error improvements
 
-* Distinguish a runtime error from a coding error (e.g. parse error, or "no method of type")
-  * The latter should not be caught by `attempt` blocks
-* If method resolution fails, perhaps we try finding a method with that name on other types
+- [x] Distinguish a runtime error from a coding error (e.g. parse error, or "no method of type")
+- [ ] If method resolution fails, perhaps we try finding a method with that name on other types
 
 ## Optimizations 
 

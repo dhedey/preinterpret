@@ -1,0 +1,5 @@
+error: Cannot use preinterpret keyword `attempt` as a variable name
+ --> tests/compilation_failures/control_flow/reserved_keyword_attempt.rs:5:13
+  |
+5 |         let attempt = 5;
+  |             ^^^^^^^

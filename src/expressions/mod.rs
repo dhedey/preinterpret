@@ -28,6 +28,8 @@ pub(crate) use object::*;
 pub(crate) use operations::*;
 pub(crate) use stream::*;
 pub(crate) use type_resolution::*;
+
+pub(crate) use statements::*;
 pub(crate) use value::*;
 
 // Marked as use for expression sub-modules to use with a `use super::*` statement
@@ -38,5 +40,4 @@ use expression_parsing::*;
 use float::*;
 use integer::*;
 use range::*;
-use statements::*;
 use string::*;

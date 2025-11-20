@@ -256,7 +256,7 @@ impl From<ParseError> for ExecutionInterrupt {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum ErrorKind {
-    /// Some error with preinterpet syntax
+    /// Some error with preinterpret syntax
     Syntax,
     /// Method doesn't exist on value, etc
     Type,
