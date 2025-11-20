@@ -87,7 +87,12 @@ impl Interpreter {
     }
 
     pub(crate) fn exit_scope(&mut self, scope_id: ScopeId) {
-        assert!(scope_id == self.current_scope_id());
+        assert!(
+            scope_id == self.current_scope_id(),
+            "Attempted to exit scope {:?} but current scope is {:?}",
+            scope_id,
+            self.current_scope_id()
+        );
         self.scopes.pop();
     }
 

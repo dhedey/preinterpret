@@ -126,6 +126,10 @@ impl RequestedValueOwnership {
         }
     }
 
+    pub(crate) fn map_none(self, span_range: SpanRange) -> ExecutionResult<EvaluationItem> {
+        self.map_from_owned(().into_owned_value(span_range))
+    }
+
     pub(crate) fn map_from_late_bound(
         &self,
         late_bound: LateBoundValue,

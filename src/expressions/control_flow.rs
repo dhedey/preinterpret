@@ -3,9 +3,9 @@ use super::*;
 pub(crate) struct IfExpression {
     if_token: Ident,
     condition: Expression,
-    then_code: ExpressionBlock,
-    else_ifs: Vec<(Expression, ExpressionBlock)>,
-    else_code: Option<ExpressionBlock>,
+    then_code: ScopedBlock,
+    else_ifs: Vec<(Expression, ScopedBlock)>,
+    else_code: Option<ScopedBlock>,
 }
 
 impl HasSpanRange for IfExpression {
@@ -130,25 +130,31 @@ impl IfExpression {
 }
 
 pub(crate) struct WhileExpression {
+    label: Option<ExpressionLabel>,
     while_token: Ident,
     condition: Expression,
-    body: ExpressionBlock,
+    body: ScopedBlock,
 }
 
 impl HasSpanRange for WhileExpression {
     fn span_range(&self) -> SpanRange {
-        SpanRange::new_between(self.while_token.span(), self.body.span())
+        if let Some(label) = &self.label {
+            SpanRange::new_between(label.span_range().start(), self.body.span())
+        } else {
+            SpanRange::new_between(self.while_token.span(), self.body.span())
+        }
     }
 }
 
 impl ParseSource for WhileExpression {
     fn parse(input: SourceParser) -> ParseResult<Self> {
+        let label = input.parse_optional()?;
         let while_token = input.parse_ident_matching("while")?;
-
         let condition = input.parse()?;
         let body = input.parse()?;
 
         Ok(Self {
+            label,
             while_token,
             condition,
             body,
@@ -165,7 +171,11 @@ impl ParseSource for WhileExpression {
 }
 
 impl WhileExpression {
-    pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
+    pub(crate) fn evaluate(
+        &self,
+        interpreter: &mut Interpreter,
+        ownership: RequestedValueOwnership,
+    ) -> ExecutionResult<EvaluationItem> {
         let span = self.body.span();
         let mut iteration_counter = interpreter.start_iteration_counter(&span);
 
@@ -176,9 +186,10 @@ impl WhileExpression {
             .resolve_as("A while condition")?
         {
             iteration_counter.increment_and_check()?;
-            match self.body.evaluate_owned(interpreter).catch_control_flow(
-                interpreter,
-                ControlFlowInterrupt::catch_loop_related,
+            let body_result = self.body.evaluate_owned(interpreter);
+            match interpreter.catch_control_flow(
+                body_result,
+                |ctrl| ControlFlowInterrupt::catch_loop_related(ctrl, self.label.as_ref()),
                 scope,
             )? {
                 ExecutionOutcome::Value(value) => {
@@ -186,8 +197,12 @@ impl WhileExpression {
                 }
                 ExecutionOutcome::ControlFlow(control_flow_interrupt) => {
                     match control_flow_interrupt {
-                        ControlFlowInterrupt::Break => break,
-                        ControlFlowInterrupt::Continue => continue,
+                        ControlFlowInterrupt::Break(break_interrupt) => {
+                            return break_interrupt.into_value(self.span_range(), ownership);
+                        }
+                        ControlFlowInterrupt::Continue { .. } => {
+                            continue;
+                        }
                         ControlFlowInterrupt::Revert => {
                             unreachable!("catch_loop_related should filter this out")
                         }
@@ -195,26 +210,36 @@ impl WhileExpression {
                 }
             }
         }
-        Ok(().into_owned_value(self.span_range()))
+        ownership.map_none(self.span_range())
     }
 }
 
 pub(crate) struct LoopExpression {
+    label: Option<ExpressionLabel>,
     loop_token: Ident,
-    body: ExpressionBlock,
+    body: ScopedBlock,
 }
 
 impl HasSpanRange for LoopExpression {
     fn span_range(&self) -> SpanRange {
-        SpanRange::new_between(self.loop_token.span(), self.body.span())
+        if let Some(label) = &self.label {
+            SpanRange::new_between(label.span_range().start(), self.body.span())
+        } else {
+            SpanRange::new_between(self.loop_token.span(), self.body.span())
+        }
     }
 }
 
 impl ParseSource for LoopExpression {
     fn parse(input: SourceParser) -> ParseResult<Self> {
+        let label = input.parse_optional()?;
         let loop_token = input.parse_ident_matching("loop")?;
         let body = input.parse()?;
-        Ok(Self { loop_token, body })
+        Ok(Self {
+            label,
+            loop_token,
+            body,
+        })
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
@@ -226,7 +251,11 @@ impl ParseSource for LoopExpression {
 }
 
 impl LoopExpression {
-    pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
+    pub(crate) fn evaluate(
+        &self,
+        interpreter: &mut Interpreter,
+        ownership: RequestedValueOwnership,
+    ) -> ExecutionResult<EvaluationItem> {
         let span = self.body.span();
         let mut iteration_counter = interpreter.start_iteration_counter(&span);
 
@@ -234,9 +263,10 @@ impl LoopExpression {
         loop {
             iteration_counter.increment_and_check()?;
 
-            match self.body.evaluate_owned(interpreter).catch_control_flow(
-                interpreter,
-                ControlFlowInterrupt::catch_loop_related,
+            let body_result = self.body.evaluate_owned(interpreter);
+            match interpreter.catch_control_flow(
+                body_result,
+                |ctrl| ControlFlowInterrupt::catch_loop_related(ctrl, self.label.as_ref()),
                 scope,
             )? {
                 ExecutionOutcome::Value(value) => {
@@ -244,8 +274,12 @@ impl LoopExpression {
                 }
                 ExecutionOutcome::ControlFlow(control_flow_interrupt) => {
                     match control_flow_interrupt {
-                        ControlFlowInterrupt::Break => break,
-                        ControlFlowInterrupt::Continue => continue,
+                        ControlFlowInterrupt::Break(break_interrupt) => {
+                            return break_interrupt.into_value(self.span_range(), ownership);
+                        }
+                        ControlFlowInterrupt::Continue { .. } => {
+                            continue;
+                        }
                         ControlFlowInterrupt::Revert => {
                             unreachable!("catch_loop_related should filter this out")
                         }
@@ -253,27 +287,32 @@ impl LoopExpression {
                 }
             }
         }
-        Ok(().into_owned_value(self.span_range()))
     }
 }
 
 pub(crate) struct ForExpression {
     iteration_scope: ScopeId,
+    label: Option<ExpressionLabel>,
     for_token: Ident,
     pattern: Pattern,
     _in_token: Ident,
     iterable: Expression,
-    body: ExpressionBlock,
+    body: ScopedBlock,
 }
 
 impl HasSpanRange for ForExpression {
     fn span_range(&self) -> SpanRange {
-        SpanRange::new_between(self.for_token.span(), self.body.span())
+        if let Some(label) = &self.label {
+            SpanRange::new_between(label.span_range().start(), self.body.span())
+        } else {
+            SpanRange::new_between(self.for_token.span(), self.body.span())
+        }
     }
 }
 
 impl ParseSource for ForExpression {
     fn parse(input: SourceParser) -> ParseResult<Self> {
+        let label = input.parse_optional()?;
         let for_token = input.parse_ident_matching("for")?;
         let pattern = input.parse()?;
         let in_token = input.parse_ident_matching("in")?;
@@ -282,6 +321,7 @@ impl ParseSource for ForExpression {
 
         Ok(Self {
             iteration_scope: ScopeId::new_placeholder(),
+            label,
             for_token,
             pattern,
             _in_token: in_token,
@@ -308,7 +348,11 @@ impl ParseSource for ForExpression {
 }
 
 impl ForExpression {
-    pub(crate) fn evaluate(&self, interpreter: &mut Interpreter) -> ExecutionResult<OwnedValue> {
+    pub(crate) fn evaluate(
+        &self,
+        interpreter: &mut Interpreter,
+        ownership: RequestedValueOwnership,
+    ) -> ExecutionResult<EvaluationItem> {
         let iterable: IterableValue = self
             .iterable
             .evaluate_owned(interpreter)?
@@ -324,9 +368,10 @@ impl ForExpression {
             interpreter.enter_scope(self.iteration_scope);
             self.pattern.handle_destructure(interpreter, item)?;
 
-            match self.body.evaluate_owned(interpreter).catch_control_flow(
-                interpreter,
-                ControlFlowInterrupt::catch_loop_related,
+            let body_result = self.body.evaluate_owned(interpreter);
+            match interpreter.catch_control_flow(
+                body_result,
+                |ctrl| ControlFlowInterrupt::catch_loop_related(ctrl, self.label.as_ref()),
                 scope,
             )? {
                 ExecutionOutcome::Value(value) => {
@@ -334,8 +379,12 @@ impl ForExpression {
                 }
                 ExecutionOutcome::ControlFlow(control_flow_interrupt) => {
                     match control_flow_interrupt {
-                        ControlFlowInterrupt::Break => break,
-                        ControlFlowInterrupt::Continue => continue,
+                        ControlFlowInterrupt::Break(break_interrupt) => {
+                            return break_interrupt.into_value(self.span_range(), ownership);
+                        }
+                        ControlFlowInterrupt::Continue { .. } => {
+                            continue;
+                        }
                         ControlFlowInterrupt::Revert => {
                             unreachable!("catch_loop_related should filter this out")
                         }
@@ -344,21 +393,20 @@ impl ForExpression {
             }
             interpreter.exit_scope(self.iteration_scope);
         }
-        Ok(().into_owned_value(self.span_range()))
+        ownership.map_none(self.span_range())
     }
 }
 
 pub(crate) struct AttemptExpression {
-    attempt_token: Ident,
+    attempt: AttemptKeyword,
     braces: Braces,
     arms: Vec<AttemptArm>,
 }
 
 struct AttemptArm {
     arm_scope: ScopeId,
-    // We don't use ExpressionBlock here because we need lhs's scope to extend into the rhs
-    lhs_braces: Braces,
-    lhs: ExpressionBlockContent,
+    // The LHS's scope extends into the RHS
+    lhs: UnscopedBlock,
     guard: Option<(Token![if], Expression)>,
     _arrow: Token![=>],
     rhs: Expression,
@@ -366,18 +414,17 @@ struct AttemptArm {
 
 impl HasSpanRange for AttemptExpression {
     fn span_range(&self) -> SpanRange {
-        SpanRange::new_between(self.attempt_token.span(), self.braces.close())
+        SpanRange::new_between(self.attempt.span(), self.braces.close())
     }
 }
 
 impl ParseSource for AttemptExpression {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        let attempt_token = input.parse_ident_matching("attempt")?;
+        let attempt = input.parse()?;
         let (braces, inner) = input.parse_braces()?;
         let mut arms = vec![];
         while !inner.is_empty() {
-            let (lhs_braces, lhs_inner) = inner.parse_braces()?;
-            let lhs = lhs_inner.parse()?;
+            let lhs = inner.parse()?;
             let guard = if inner.peek_ident_matching("if") {
                 let if_token = inner.parse()?;
                 let condition = inner.parse()?;
@@ -394,7 +441,6 @@ impl ParseSource for AttemptExpression {
             }
             arms.push(AttemptArm {
                 arm_scope: ScopeId::new_placeholder(),
-                lhs_braces,
                 lhs,
                 guard,
                 _arrow: arrow,
@@ -402,7 +448,7 @@ impl ParseSource for AttemptExpression {
             });
         }
         Ok(Self {
-            attempt_token,
+            attempt,
             braces,
             arms,
         })
@@ -446,14 +492,9 @@ impl AttemptExpression {
             let attempt_outcome = interpreter.enter_scope_starting_with_revertible_segment(
                 arm.arm_scope,
                 |interpreter| -> ExecutionResult<()> {
-                    let output = arm.lhs.evaluate(
-                        interpreter,
-                        arm.lhs_braces.join().into(),
-                        RequestedValueOwnership::owned(),
-                    )?;
-                    let unit = output
-                        .expect_owned()
-                        .resolve_as("The returned value from the left half of an attempt arm");
+                    let output = arm.lhs.evaluate_owned(interpreter)?;
+                    let () = output
+                        .resolve_as("The returned value from the left half of an attempt arm")?;
                     if let Some((if_token, guard_expression)) = &arm.guard {
                         let guard_value: bool = guard_expression
                             .evaluate_owned(interpreter)?
@@ -466,7 +507,7 @@ impl AttemptExpression {
                             ));
                         }
                     }
-                    unit
+                    Ok(())
                 },
                 MutationBlockReason::AttemptRevertibleSegment,
             )?;

@@ -335,7 +335,6 @@ impl HasSpanRange for StreamLiteral {
     }
 }
 
-#[allow(unused)]
 pub(crate) struct RegularStreamLiteral {
     prefix: Token![%],
     brackets: Brackets,
@@ -371,11 +370,9 @@ impl HasSpanRange for RegularStreamLiteral {
     }
 }
 
-#[derive(Clone)]
-#[allow(unused)]
 pub(crate) struct RawStreamLiteral {
     prefix: Token![%],
-    raw: Ident,
+    _raw: Unused<RawKeyword>,
     brackets: Brackets,
     content: TokenStream,
 }
@@ -383,12 +380,12 @@ pub(crate) struct RawStreamLiteral {
 impl ParseSource for RawStreamLiteral {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let prefix = input.parse()?;
-        let raw = input.parse_ident_matching("raw")?;
+        let _raw = input.parse()?;
         let (brackets, inner) = input.parse_brackets()?;
         let content = inner.parse()?;
         Ok(Self {
             prefix,
-            raw,
+            _raw,
             brackets,
             content,
         })
@@ -414,10 +411,9 @@ impl HasSpanRange for RawStreamLiteral {
     }
 }
 
-#[allow(unused)]
 pub(crate) struct GroupedStreamLiteral {
     prefix: Token![%],
-    group: Ident,
+    _group: Unused<GroupKeyword>,
     brackets: Brackets,
     content: SourceStream,
 }
@@ -425,12 +421,12 @@ pub(crate) struct GroupedStreamLiteral {
 impl ParseSource for GroupedStreamLiteral {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let prefix = input.parse()?;
-        let group = input.parse_ident_matching("group")?;
+        let _group = input.parse()?;
         let (brackets, inner) = input.parse_brackets()?;
         let content = SourceStream::parse_with_span(&inner, brackets.span())?;
         Ok(Self {
             prefix,
-            group,
+            _group,
             brackets,
             content,
         })

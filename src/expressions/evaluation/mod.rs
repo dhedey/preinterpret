@@ -9,5 +9,5 @@ use super::*;
 use assignee_frames::*;
 use assignment_frames::*;
 pub(super) use control_flow_analysis::*;
-pub(in crate::expressions) use evaluator::*;
+pub(crate) use evaluator::*;
 pub(crate) use value_frames::*;

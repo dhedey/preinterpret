@@ -79,13 +79,16 @@ impl Expression {
                 .expect_owned()
                 .into_statement_result(),
             ExpressionNode::Leaf(Leaf::LoopExpression(loop_expression)) => loop_expression
-                .evaluate(interpreter)?
+                .evaluate(interpreter, RequestedValueOwnership::owned())?
+                .expect_owned()
                 .into_statement_result(),
             ExpressionNode::Leaf(Leaf::WhileExpression(while_expression)) => while_expression
-                .evaluate(interpreter)?
+                .evaluate(interpreter, RequestedValueOwnership::owned())?
+                .expect_owned()
                 .into_statement_result(),
             ExpressionNode::Leaf(Leaf::ForExpression(for_expression)) => for_expression
-                .evaluate(interpreter)?
+                .evaluate(interpreter, RequestedValueOwnership::owned())?
+                .expect_owned()
                 .into_statement_result(),
             _ => self.evaluate_owned(interpreter)?.into_statement_result(),
         }
@@ -146,17 +149,18 @@ pub(super) enum ExpressionNode {
     },
 }
 
+// We Box some of these variants to reduce the size of ExpressionNode
 pub(super) enum Leaf {
-    Block(ExpressionBlock),
+    Block(Box<ExpressionBlock>),
     Variable(VariableReference),
     Discarded(Token![_]),
     Value(SharedValue),
     StreamLiteral(StreamLiteral),
-    IfExpression(IfExpression),
-    LoopExpression(LoopExpression),
-    WhileExpression(WhileExpression),
-    ForExpression(ForExpression),
-    AttemptExpression(AttemptExpression),
+    IfExpression(Box<IfExpression>),
+    LoopExpression(Box<LoopExpression>),
+    WhileExpression(Box<WhileExpression>),
+    ForExpression(Box<ForExpression>),
+    AttemptExpression(Box<AttemptExpression>),
 }
 
 impl HasSpanRange for Leaf {
