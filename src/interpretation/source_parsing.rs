@@ -7,6 +7,16 @@ new_key!(pub(crate) VariableReferenceId);
 new_key!(pub(crate) ControlFlowSegmentId);
 new_key!(pub(crate) CatchLocationId);
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum InterruptKind {
+    /// Break statement (targets loops or labeled blocks)
+    Break,
+    /// Continue statement (targets loops only)
+    Continue,
+    /// Revert statement (targets attempt blocks)
+    Revert,
+}
+
 #[cfg(feature = "debug")]
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum FinalUseAssertion {
@@ -357,6 +367,38 @@ impl FlowAnalysisState {
 
     pub(crate) fn current_attempt_catch_location(&self) -> Option<CatchLocationId> {
         self.attempt_stack.last().copied()
+    }
+
+    /// Resolve a catch location for a control flow interrupt (break/continue/revert).
+    /// For labeled interrupts, looks up the label. For unlabeled interrupts, returns
+    /// the current loop or attempt context depending on the interrupt kind.
+    ///
+    /// Note: For labeled break/continue, this returns the label's catch location without
+    /// validating the kind. The caller should validate that continue doesn't target a
+    /// labeled block (only loops).
+    pub(crate) fn resolve_catch_location_for_interrupt(
+        &self,
+        interrupt_kind: InterruptKind,
+        label: Option<&str>,
+    ) -> Option<CatchLocationId> {
+        if let Some(label) = label {
+            // Labeled - look up the label (works for break on loops/blocks, continue on loops)
+            self.labeled_catch_locations.get(label).copied()
+        } else {
+            // Unlabeled - use the current context stack
+            match interrupt_kind {
+                InterruptKind::Break | InterruptKind::Continue => {
+                    // Both break and continue without labels target the current loop
+                    self.loop_stack.last().copied()
+                }
+                InterruptKind::Revert => self.attempt_stack.last().copied(),
+            }
+        }
+    }
+
+    /// Get the kind of a catch location
+    pub(crate) fn get_catch_location_kind(&self, id: CatchLocationId) -> CatchLocationKind {
+        self.catch_locations.get(id).kind
     }
 }
 

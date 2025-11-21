@@ -196,27 +196,21 @@ impl ParseSource for BreakStatement {
             value.control_flow_pass(context)?;
         }
         // Resolve to either labeled loop/block or immediate parent loop
-        if let Some(label) = &self.label {
-            if let Some(location) =
-                context.resolve_label_to_catch_location(&label.ident.to_string())
-            {
-                self.target_catch_location = location;
-            } else {
-                return self
-                    .break_token
-                    .span
-                    .parse_err(format!("label '{}' not found in scope", label.ident));
-            }
+        let label = self.label.as_ref().map(|l| l.ident.to_string());
+        if let Some(location) =
+            context.resolve_catch_location_for_interrupt(InterruptKind::Break, label.as_deref())
+        {
+            self.target_catch_location = location;
+        } else if let Some(label) = &label {
+            return self
+                .break_token
+                .span
+                .parse_err(format!("label '{}' not found in scope", label));
         } else {
-            // No label - resolve to immediate parent loop
-            if let Some(location) = context.current_loop_catch_location() {
-                self.target_catch_location = location;
-            } else {
-                return self
-                    .break_token
-                    .span
-                    .parse_err("break can only be used inside a loop or labeled block");
-            }
+            return self
+                .break_token
+                .span
+                .parse_err("break can only be used inside a loop or labeled block");
         }
         Ok(())
     }
@@ -271,27 +265,29 @@ impl ParseSource for ContinueStatement {
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         // Resolve to either labeled loop or immediate parent loop
-        if let Some(label) = &self.label {
-            if let Some(location) =
-                context.resolve_label_to_catch_location(&label.ident.to_string())
-            {
-                self.target_catch_location = location;
-            } else {
+        let label = self.label.as_ref().map(|l| l.ident.to_string());
+        if let Some(location) =
+            context.resolve_catch_location_for_interrupt(InterruptKind::Continue, label.as_deref())
+        {
+            // Validate that continue doesn't target a labeled block (only loops)
+            let kind = context.get_catch_location_kind(location);
+            if kind == CatchLocationKind::LabeledBlock {
                 return self
                     .continue_token
                     .span
-                    .parse_err(format!("label '{}' not found in scope", label.ident));
+                    .parse_err("continue cannot target a labeled block (only loops)");
             }
+            self.target_catch_location = location;
+        } else if let Some(label) = &label {
+            return self
+                .continue_token
+                .span
+                .parse_err(format!("label '{}' not found in scope", label));
         } else {
-            // No label - resolve to immediate parent loop
-            if let Some(location) = context.current_loop_catch_location() {
-                self.target_catch_location = location;
-            } else {
-                return self
-                    .continue_token
-                    .span
-                    .parse_err("continue can only be used inside a loop");
-            }
+            return self
+                .continue_token
+                .span
+                .parse_err("continue can only be used inside a loop");
         }
         Ok(())
     }
@@ -328,7 +324,9 @@ impl ParseSource for RevertStatement {
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         // Resolve to immediate parent attempt block
-        if let Some(location) = context.current_attempt_catch_location() {
+        if let Some(location) =
+            context.resolve_catch_location_for_interrupt(InterruptKind::Revert, None)
+        {
             self.target_catch_location = location;
         } else {
             return self

@@ -298,6 +298,23 @@ impl ControlFlowContext {
     pub(crate) fn current_attempt_catch_location(&self) -> Option<CatchLocationId> {
         self.state.current_attempt_catch_location()
     }
+
+    /// Resolve a catch location for a control flow interrupt (break/continue/revert).
+    /// For labeled interrupts, looks up the label. For unlabeled interrupts, returns
+    /// the current loop or attempt context depending on the interrupt kind.
+    pub(crate) fn resolve_catch_location_for_interrupt(
+        &self,
+        interrupt_kind: InterruptKind,
+        label: Option<&str>,
+    ) -> Option<CatchLocationId> {
+        self.state
+            .resolve_catch_location_for_interrupt(interrupt_kind, label)
+    }
+
+    /// Get the kind of a catch location
+    pub(crate) fn get_catch_location_kind(&self, id: CatchLocationId) -> CatchLocationKind {
+        self.state.get_catch_location_kind(id)
+    }
 }
 
 // This was originally created so that we could modify a stateful context
