@@ -43,6 +43,7 @@ pub(crate) struct FlowAnalysisState {
     // CATCH LOCATION DATA
     catch_locations: Arena<CatchLocationId, CatchLocationData>,
     labeled_catch_locations: HashMap<String, CatchLocationId>,
+    loop_stack: Vec<CatchLocationId>,
     // CONTROL FLOW DATA
     segments_stack: Vec<ControlFlowSegmentId>,
     segments: Arena<ControlFlowSegmentId, ControlFlowSegmentData>,
@@ -71,6 +72,7 @@ impl FlowAnalysisState {
             references,
             catch_locations: Arena::new(),
             labeled_catch_locations: HashMap::new(),
+            loop_stack: Vec::new(),
             segments_stack: vec![root_segment],
             segments,
         }
@@ -321,6 +323,22 @@ impl FlowAnalysisState {
 
     pub(crate) fn resolve_label_to_catch_location(&self, label: &str) -> Option<CatchLocationId> {
         self.labeled_catch_locations.get(label).copied()
+    }
+
+    pub(crate) fn enter_loop(&mut self, catch_location_id: CatchLocationId) {
+        self.loop_stack.push(catch_location_id);
+    }
+
+    pub(crate) fn exit_loop(&mut self, catch_location_id: CatchLocationId) {
+        let popped = self.loop_stack.pop().expect("No loop to pop");
+        assert_eq!(
+            popped, catch_location_id,
+            "Popped loop is not the expected loop"
+        );
+    }
+
+    pub(crate) fn current_loop_catch_location(&self) -> Option<CatchLocationId> {
+        self.loop_stack.last().copied()
     }
 }
 

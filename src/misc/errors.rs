@@ -323,9 +323,7 @@ impl ControlFlowInterrupt {
             ControlFlowInterrupt::Break(BreakInterrupt {
                 target_catch_location,
                 ..
-            }) => {
-                !target_catch_location.is_placeholder() && *target_catch_location == target_location
-            }
+            }) => *target_catch_location == target_location,
             _ => false,
         }
     }
@@ -341,10 +339,7 @@ impl ControlFlowInterrupt {
             })
             | ControlFlowInterrupt::Continue(ContinueInterrupt {
                 target_catch_location,
-            }) => {
-                // Placeholder means unlabeled (catch at any loop)
-                target_catch_location.is_placeholder() || *target_catch_location == target_location
-            }
+            }) => *target_catch_location == target_location,
             ControlFlowInterrupt::Revert => false,
         }
     }
@@ -378,38 +373,22 @@ impl ExecutionInterrupt {
         match *self.inner {
             ExecutionInterruptInner::Error(_, e) => e.convert_to_final_error(),
             ExecutionInterruptInner::ControlFlowInterrupt(
-                ControlFlowInterrupt::Break(BreakInterrupt {
-                    target_catch_location,
-                    ..
-                }),
-                span,
+                ControlFlowInterrupt::Break(_),
+                _,
             ) => {
-                if !target_catch_location.is_placeholder() {
-                    syn::Error::new(
-                        span,
-                        "break with label can only be used inside a loop or block with that label",
-                    )
-                } else {
-                    syn::Error::new(
-                        span,
-                        "break can only be used inside a loop or labeled block",
-                    )
-                }
+                panic!(
+                    "Internal error: break escaped to root (should be caught at parse time). \
+                     Please report this bug at https://github.com/dhedey/preinterpret/issues"
+                )
             }
             ExecutionInterruptInner::ControlFlowInterrupt(
-                ControlFlowInterrupt::Continue(ContinueInterrupt {
-                    target_catch_location,
-                }),
-                span,
+                ControlFlowInterrupt::Continue(_),
+                _,
             ) => {
-                if !target_catch_location.is_placeholder() {
-                    syn::Error::new(
-                        span,
-                        "continue with label can only be used inside a loop with that label",
-                    )
-                } else {
-                    syn::Error::new(span, "continue can only be used inside a loop")
-                }
+                panic!(
+                    "Internal error: continue escaped to root (should be caught at parse time). \
+                     Please report this bug at https://github.com/dhedey/preinterpret/issues"
+                )
             }
             ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Revert, span) => {
                 syn::Error::new(

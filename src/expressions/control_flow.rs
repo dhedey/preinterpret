@@ -172,7 +172,12 @@ impl ParseSource for WhileExpression {
 
         let segment = context.enter_next_segment(SegmentKind::LoopingSequential);
         self.condition.control_flow_pass(context)?;
+
+        // Enter loop context so break/continue can resolve to this loop
+        context.enter_loop(self.catch_location_id);
         self.body.control_flow_pass(context)?;
+        context.exit_loop(self.catch_location_id);
+
         context.exit_segment(segment);
         Ok(())
     }
@@ -260,7 +265,12 @@ impl ParseSource for LoopExpression {
         );
 
         let segment = context.enter_next_segment(SegmentKind::LoopingSequential);
+
+        // Enter loop context so break/continue can resolve to this loop
+        context.enter_loop(self.catch_location_id);
         self.body.control_flow_pass(context)?;
+        context.exit_loop(self.catch_location_id);
+
         context.exit_segment(segment);
         Ok(())
     }
@@ -361,8 +371,11 @@ impl ParseSource for ForExpression {
         let segment = context.enter_next_segment(SegmentKind::LoopingSequential);
         context.enter_scope(self.iteration_scope);
 
+        // Enter loop context so break/continue can resolve to this loop
+        context.enter_loop(self.catch_location_id);
         self.pattern.control_flow_pass(context)?;
         self.body.control_flow_pass(context)?;
+        context.exit_loop(self.catch_location_id);
 
         context.exit_scope(self.iteration_scope);
         context.exit_segment(segment);

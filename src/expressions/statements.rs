@@ -195,7 +195,7 @@ impl ParseSource for BreakStatement {
         if let Some(value) = &mut self.value {
             value.control_flow_pass(context)?;
         }
-        // Resolve label to catch location if present
+        // Resolve to either labeled loop/block or immediate parent loop
         if let Some(label) = &self.label {
             if let Some(location) =
                 context.resolve_label_to_catch_location(&label.ident.to_string())
@@ -207,8 +207,17 @@ impl ParseSource for BreakStatement {
                     .span
                     .parse_err(format!("label '{}' not found in scope", label.ident));
             }
+        } else {
+            // No label - resolve to immediate parent loop
+            if let Some(location) = context.current_loop_catch_location() {
+                self.target_catch_location = location;
+            } else {
+                return self
+                    .break_token
+                    .span
+                    .parse_err("break can only be used inside a loop or labeled block");
+            }
         }
-        // If no label, target_catch_location remains as placeholder
         Ok(())
     }
 }
@@ -261,7 +270,7 @@ impl ParseSource for ContinueStatement {
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
-        // Resolve label to catch location if present
+        // Resolve to either labeled loop or immediate parent loop
         if let Some(label) = &self.label {
             if let Some(location) =
                 context.resolve_label_to_catch_location(&label.ident.to_string())
@@ -273,8 +282,17 @@ impl ParseSource for ContinueStatement {
                     .span
                     .parse_err(format!("label '{}' not found in scope", label.ident));
             }
+        } else {
+            // No label - resolve to immediate parent loop
+            if let Some(location) = context.current_loop_catch_location() {
+                self.target_catch_location = location;
+            } else {
+                return self
+                    .continue_token
+                    .span
+                    .parse_err("continue can only be used inside a loop");
+            }
         }
-        // If no label, target_catch_location remains as placeholder
         Ok(())
     }
 }

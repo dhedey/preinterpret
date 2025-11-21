@@ -274,6 +274,18 @@ impl ControlFlowContext {
         }
         id
     }
+
+    pub(crate) fn enter_loop(&mut self, catch_location_id: CatchLocationId) {
+        self.state.enter_loop(catch_location_id);
+    }
+
+    pub(crate) fn exit_loop(&mut self, catch_location_id: CatchLocationId) {
+        self.state.exit_loop(catch_location_id);
+    }
+
+    pub(crate) fn current_loop_catch_location(&self) -> Option<CatchLocationId> {
+        self.state.current_loop_catch_location()
+    }
 }
 
 // This was originally created so that we could modify a stateful context
