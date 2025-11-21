@@ -216,7 +216,7 @@ impl WhileExpression {
                         ControlFlowInterrupt::Continue { .. } => {
                             continue;
                         }
-                        ControlFlowInterrupt::Revert => {
+                        ControlFlowInterrupt::Revert(_) => {
                             unreachable!("catch_loop_related should filter this out")
                         }
                     }
@@ -306,7 +306,7 @@ impl LoopExpression {
                         ControlFlowInterrupt::Continue { .. } => {
                             continue;
                         }
-                        ControlFlowInterrupt::Revert => {
+                        ControlFlowInterrupt::Revert(_) => {
                             unreachable!("catch_loop_related should filter this out")
                         }
                     }
@@ -422,7 +422,7 @@ impl ForExpression {
                         ControlFlowInterrupt::Continue { .. } => {
                             continue;
                         }
-                        ControlFlowInterrupt::Revert => {
+                        ControlFlowInterrupt::Revert(_) => {
                             unreachable!("catch_loop_related should filter this out")
                         }
                     }
@@ -438,6 +438,7 @@ pub(crate) struct AttemptExpression {
     attempt: AttemptKeyword,
     braces: Braces,
     arms: Vec<AttemptArm>,
+    catch_location_id: CatchLocationId,
 }
 
 struct AttemptArm {
@@ -488,10 +489,14 @@ impl ParseSource for AttemptExpression {
             attempt,
             braces,
             arms,
+            catch_location_id: CatchLocationId::new_placeholder(),
         })
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        // Register a catch location for this attempt block
+        self.catch_location_id = context.register_catch_location(CatchLocationKind::AttemptBlock);
+
         let segment = context.enter_next_segment(SegmentKind::PathBased);
         let mut previous_attempt_segment = None;
         for arm in &mut self.arms {
@@ -500,10 +505,15 @@ impl ParseSource for AttemptExpression {
             context.enter_scope(arm.arm_scope);
             let attempt_segment = context
                 .enter_path_segment(previous_attempt_segment, SegmentKind::RevertibleSequential);
+
+            // Enter attempt context so revert can resolve to this attempt
+            context.enter_attempt(self.catch_location_id);
             arm.lhs.control_flow_pass(context)?;
             if let Some((_, guard_expression)) = &mut arm.guard {
                 guard_expression.control_flow_pass(context)?;
             }
+            context.exit_attempt(self.catch_location_id);
+
             context.exit_segment(attempt_segment);
             previous_attempt_segment = Some(attempt_segment);
 
@@ -528,6 +538,7 @@ impl AttemptExpression {
         for arm in self.arms.iter() {
             let attempt_outcome = interpreter.enter_scope_starting_with_revertible_segment(
                 arm.arm_scope,
+                self.catch_location_id,
                 |interpreter| -> ExecutionResult<()> {
                     let output = arm.lhs.evaluate_owned(interpreter)?;
                     let () = output
@@ -537,9 +548,9 @@ impl AttemptExpression {
                             .evaluate_owned(interpreter)?
                             .resolve_as("The guard condition of an attempt arm")?;
                         if !guard_value {
-                            // This will be immediately caught
+                            // This will be immediately caught by this attempt block
                             return Err(ExecutionInterrupt::control_flow(
-                                ControlFlowInterrupt::Revert,
+                                ControlFlowInterrupt::new_revert(self.catch_location_id),
                                 if_token.span,
                             ));
                         }

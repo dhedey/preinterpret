@@ -180,7 +180,9 @@ impl ExecutionInterrupt {
             ExecutionInterruptInner::Error(ErrorKind::Value, _) => true,
             ExecutionInterruptInner::Error(ErrorKind::ControlFlow, _) => false,
             ExecutionInterruptInner::Error(ErrorKind::Parse, _) => true,
-            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Revert, _) => true,
+            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Revert(_), _) => {
+                true
+            }
             ExecutionInterruptInner::ControlFlowInterrupt(_, _) => false,
         }
     }
@@ -285,7 +287,7 @@ enum ExecutionInterruptInner {
 pub(crate) enum ControlFlowInterrupt {
     Break(BreakInterrupt),
     Continue(ContinueInterrupt),
-    Revert,
+    Revert(RevertInterrupt),
 }
 
 impl std::fmt::Debug for ControlFlowInterrupt {
@@ -293,7 +295,7 @@ impl std::fmt::Debug for ControlFlowInterrupt {
         match self {
             ControlFlowInterrupt::Break(_) => f.write_str("Break"),
             ControlFlowInterrupt::Continue(_) => f.write_str("Continue"),
-            ControlFlowInterrupt::Revert => f.write_str("Revert"),
+            ControlFlowInterrupt::Revert(_) => f.write_str("Revert"),
         }
     }
 }
@@ -311,6 +313,12 @@ impl ControlFlowInterrupt {
 
     pub(crate) fn new_continue(target_catch_location: CatchLocationId) -> Self {
         ControlFlowInterrupt::Continue(ContinueInterrupt {
+            target_catch_location,
+        })
+    }
+
+    pub(crate) fn new_revert(target_catch_location: CatchLocationId) -> Self {
+        ControlFlowInterrupt::Revert(RevertInterrupt {
             target_catch_location,
         })
     }
@@ -340,7 +348,19 @@ impl ControlFlowInterrupt {
             | ControlFlowInterrupt::Continue(ContinueInterrupt {
                 target_catch_location,
             }) => *target_catch_location == target_location,
-            ControlFlowInterrupt::Revert => false,
+            ControlFlowInterrupt::Revert(_) => false,
+        }
+    }
+
+    pub(crate) fn catch_attempt_revert(
+        this: &ControlFlowInterrupt,
+        target_location: CatchLocationId,
+    ) -> bool {
+        match this {
+            ControlFlowInterrupt::Revert(RevertInterrupt {
+                target_catch_location,
+            }) => *target_catch_location == target_location,
+            _ => false,
         }
     }
 }
@@ -368,32 +388,30 @@ pub(crate) struct ContinueInterrupt {
     target_catch_location: CatchLocationId,
 }
 
+pub(crate) struct RevertInterrupt {
+    target_catch_location: CatchLocationId,
+}
+
 impl ExecutionInterrupt {
     pub(crate) fn convert_to_final_error(self) -> syn::Error {
         match *self.inner {
             ExecutionInterruptInner::Error(_, e) => e.convert_to_final_error(),
-            ExecutionInterruptInner::ControlFlowInterrupt(
-                ControlFlowInterrupt::Break(_),
-                _,
-            ) => {
+            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Break(_), _) => {
                 panic!(
                     "Internal error: break escaped to root (should be caught at parse time). \
                      Please report this bug at https://github.com/dhedey/preinterpret/issues"
                 )
             }
-            ExecutionInterruptInner::ControlFlowInterrupt(
-                ControlFlowInterrupt::Continue(_),
-                _,
-            ) => {
+            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Continue(_), _) => {
                 panic!(
                     "Internal error: continue escaped to root (should be caught at parse time). \
                      Please report this bug at https://github.com/dhedey/preinterpret/issues"
                 )
             }
-            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Revert, span) => {
-                syn::Error::new(
-                    span,
-                    "revert can only be used in the conditional part of an attempt arm",
+            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Revert(_), _) => {
+                panic!(
+                    "Internal error: revert escaped to root (should be caught at parse time). \
+                     Please report this bug at https://github.com/dhedey/preinterpret/issues"
                 )
             }
         }

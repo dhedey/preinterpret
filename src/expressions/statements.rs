@@ -308,6 +308,7 @@ impl ContinueStatement {
 
 pub(crate) struct RevertStatement {
     revert: RevertKeyword,
+    target_catch_location: CatchLocationId,
 }
 
 impl HasSpan for RevertStatement {
@@ -319,12 +320,22 @@ impl HasSpan for RevertStatement {
 impl ParseSource for RevertStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let revert = input.parse()?;
-        Ok(Self { revert })
+        Ok(Self {
+            revert,
+            target_catch_location: CatchLocationId::new_placeholder(),
+        })
     }
 
-    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
-        // For now, revert doesn't resolve to a specific catch location during parse
-        // It will be caught by the nearest attempt block at runtime
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        // Resolve to immediate parent attempt block
+        if let Some(location) = context.current_attempt_catch_location() {
+            self.target_catch_location = location;
+        } else {
+            return self
+                .revert
+                .span()
+                .parse_err("revert can only be used in the conditional part of an attempt arm");
+        }
         Ok(())
     }
 }
@@ -332,7 +343,7 @@ impl ParseSource for RevertStatement {
 impl RevertStatement {
     pub(crate) fn evaluate_as_statement(&self, _: &mut Interpreter) -> ExecutionResult<()> {
         Err(ExecutionInterrupt::control_flow(
-            ControlFlowInterrupt::Revert,
+            ControlFlowInterrupt::new_revert(self.target_catch_location),
             self.revert.span(),
         ))
     }

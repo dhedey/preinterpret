@@ -41,6 +41,7 @@ impl Interpreter {
     pub(crate) fn enter_scope_starting_with_revertible_segment<T>(
         &mut self,
         id: ScopeId,
+        _catch_location_id: CatchLocationId,
         f: impl FnOnce(&mut Self) -> ExecutionResult<T>,
         reason: MutationBlockReason,
     ) -> ExecutionResult<AttemptOutcome<T>> {
