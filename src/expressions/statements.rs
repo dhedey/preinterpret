@@ -157,7 +157,7 @@ pub(crate) struct BreakStatement {
     break_token: Token![break],
     label: Option<syn::Lifetime>,
     value: Option<Expression>,
-    target_catch_location: Option<CatchLocationId>,
+    target_catch_location: CatchLocationId,
 }
 
 impl HasSpan for BreakStatement {
@@ -187,7 +187,7 @@ impl ParseSource for BreakStatement {
             break_token,
             label,
             value,
-            target_catch_location: None,
+            target_catch_location: CatchLocationId::new_placeholder(),
         })
     }
 
@@ -197,16 +197,18 @@ impl ParseSource for BreakStatement {
         }
         // Resolve label to catch location if present
         if let Some(label) = &self.label {
-            self.target_catch_location =
-                context.resolve_label_to_catch_location(&label.ident.to_string());
-            // If label doesn't resolve, it's an error
-            if self.target_catch_location.is_none() {
+            if let Some(location) =
+                context.resolve_label_to_catch_location(&label.ident.to_string())
+            {
+                self.target_catch_location = location;
+            } else {
                 return self
                     .break_token
                     .span
                     .parse_err(format!("label '{}' not found in scope", label.ident));
             }
         }
+        // If no label, target_catch_location remains as placeholder
         Ok(())
     }
 }
@@ -232,7 +234,7 @@ impl BreakStatement {
 pub(crate) struct ContinueStatement {
     continue_token: Token![continue],
     label: Option<syn::Lifetime>,
-    target_catch_location: Option<CatchLocationId>,
+    target_catch_location: CatchLocationId,
 }
 
 impl HasSpan for ContinueStatement {
@@ -254,23 +256,25 @@ impl ParseSource for ContinueStatement {
         Ok(Self {
             continue_token,
             label,
-            target_catch_location: None,
+            target_catch_location: CatchLocationId::new_placeholder(),
         })
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         // Resolve label to catch location if present
         if let Some(label) = &self.label {
-            self.target_catch_location =
-                context.resolve_label_to_catch_location(&label.ident.to_string());
-            // If label doesn't resolve, it's an error
-            if self.target_catch_location.is_none() {
+            if let Some(location) =
+                context.resolve_label_to_catch_location(&label.ident.to_string())
+            {
+                self.target_catch_location = location;
+            } else {
                 return self
                     .continue_token
                     .span
                     .parse_err(format!("label '{}' not found in scope", label.ident));
             }
         }
+        // If no label, target_catch_location remains as placeholder
         Ok(())
     }
 }
@@ -286,7 +290,6 @@ impl ContinueStatement {
 
 pub(crate) struct RevertStatement {
     revert: RevertKeyword,
-    target_catch_location: Option<CatchLocationId>,
 }
 
 impl HasSpan for RevertStatement {
@@ -298,10 +301,7 @@ impl HasSpan for RevertStatement {
 impl ParseSource for RevertStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let revert = input.parse()?;
-        Ok(Self {
-            revert,
-            target_catch_location: None,
-        })
+        Ok(Self { revert })
     }
 
     fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {

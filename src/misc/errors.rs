@@ -300,7 +300,7 @@ impl std::fmt::Debug for ControlFlowInterrupt {
 
 impl ControlFlowInterrupt {
     pub(crate) fn new_break(
-        target_catch_location: Option<CatchLocationId>,
+        target_catch_location: CatchLocationId,
         value: Option<OwnedValue>,
     ) -> Self {
         ControlFlowInterrupt::Break(BreakInterrupt {
@@ -309,7 +309,7 @@ impl ControlFlowInterrupt {
         })
     }
 
-    pub(crate) fn new_continue(target_catch_location: Option<CatchLocationId>) -> Self {
+    pub(crate) fn new_continue(target_catch_location: CatchLocationId) -> Self {
         ControlFlowInterrupt::Continue(ContinueInterrupt {
             target_catch_location,
         })
@@ -321,9 +321,11 @@ impl ControlFlowInterrupt {
     ) -> bool {
         match this {
             ControlFlowInterrupt::Break(BreakInterrupt {
-                target_catch_location: Some(location),
+                target_catch_location,
                 ..
-            }) => *location == target_location,
+            }) => {
+                !target_catch_location.is_placeholder() && *target_catch_location == target_location
+            }
             _ => false,
         }
     }
@@ -339,17 +341,17 @@ impl ControlFlowInterrupt {
             })
             | ControlFlowInterrupt::Continue(ContinueInterrupt {
                 target_catch_location,
-            }) => match target_catch_location {
-                None => true, // Unlabeled break/continue catches at any loop
-                Some(location) => *location == target_location,
-            },
+            }) => {
+                // Placeholder means unlabeled (catch at any loop)
+                target_catch_location.is_placeholder() || *target_catch_location == target_location
+            }
             ControlFlowInterrupt::Revert => false,
         }
     }
 }
 
 pub(crate) struct BreakInterrupt {
-    target_catch_location: Option<CatchLocationId>,
+    target_catch_location: CatchLocationId,
     value: Option<OwnedValue>,
 }
 
@@ -368,7 +370,7 @@ impl BreakInterrupt {
 }
 
 pub(crate) struct ContinueInterrupt {
-    target_catch_location: Option<CatchLocationId>,
+    target_catch_location: CatchLocationId,
 }
 
 impl ExecutionInterrupt {
@@ -382,7 +384,7 @@ impl ExecutionInterrupt {
                 }),
                 span,
             ) => {
-                if target_catch_location.is_some() {
+                if !target_catch_location.is_placeholder() {
                     syn::Error::new(
                         span,
                         "break with label can only be used inside a loop or block with that label",
@@ -400,7 +402,7 @@ impl ExecutionInterrupt {
                 }),
                 span,
             ) => {
-                if target_catch_location.is_some() {
+                if !target_catch_location.is_placeholder() {
                     syn::Error::new(
                         span,
                         "continue with label can only be used inside a loop with that label",

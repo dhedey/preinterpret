@@ -259,6 +259,21 @@ impl ControlFlowContext {
     pub(crate) fn resolve_label_to_catch_location(&self, label: &str) -> Option<CatchLocationId> {
         self.state.resolve_label_to_catch_location(label)
     }
+
+    /// Helper method to register a catch location and optionally assign it to a label.
+    /// This reduces boilerplate when loops/blocks need to register catch locations.
+    pub(crate) fn register_catch_location_with_optional_label(
+        &mut self,
+        label: Option<&mut CatchLabel>,
+        kind: CatchLocationKind,
+    ) -> CatchLocationId {
+        let id = self.register_catch_location(kind);
+        if let Some(label) = label {
+            label.catch_location_id = id;
+            self.register_labeled_catch_location(&label.ident_string(), id);
+        }
+        id
+    }
 }
 
 // This was originally created so that we could modify a stateful context

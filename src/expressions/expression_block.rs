@@ -102,11 +102,11 @@ impl ParseSource for ExpressionBlock {
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         // If this block has a label, register a catch location for it
-        if let Some(label) = &mut self.label {
-            let catch_location_id =
-                context.register_catch_location(CatchLocationKind::LabeledBlock);
-            label.catch_location_id = catch_location_id;
-            context.register_labeled_catch_location(&label.ident_string(), catch_location_id);
+        if self.label.is_some() {
+            context.register_catch_location_with_optional_label(
+                self.label.as_mut(),
+                CatchLocationKind::LabeledBlock,
+            );
         }
         self.scoped_block.control_flow_pass(context)
     }

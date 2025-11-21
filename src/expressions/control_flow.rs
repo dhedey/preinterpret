@@ -164,14 +164,11 @@ impl ParseSource for WhileExpression {
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
-        // Register a catch location for this loop
-        self.catch_location_id = context.register_catch_location(CatchLocationKind::Loop);
-
-        // If the loop has a label, register it with the catch location
-        if let Some(label) = &mut self.label {
-            label.catch_location_id = self.catch_location_id;
-            context.register_labeled_catch_location(&label.ident_string(), self.catch_location_id);
-        }
+        // Register a catch location for this loop (and assign to label if present)
+        self.catch_location_id = context.register_catch_location_with_optional_label(
+            self.label.as_mut(),
+            CatchLocationKind::Loop,
+        );
 
         let segment = context.enter_next_segment(SegmentKind::LoopingSequential);
         self.condition.control_flow_pass(context)?;
@@ -256,14 +253,11 @@ impl ParseSource for LoopExpression {
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
-        // Register a catch location for this loop
-        self.catch_location_id = context.register_catch_location(CatchLocationKind::Loop);
-
-        // If the loop has a label, register it with the catch location
-        if let Some(label) = &mut self.label {
-            label.catch_location_id = self.catch_location_id;
-            context.register_labeled_catch_location(&label.ident_string(), self.catch_location_id);
-        }
+        // Register a catch location for this loop (and assign to label if present)
+        self.catch_location_id = context.register_catch_location_with_optional_label(
+            self.label.as_mut(),
+            CatchLocationKind::Loop,
+        );
 
         let segment = context.enter_next_segment(SegmentKind::LoopingSequential);
         self.body.control_flow_pass(context)?;
@@ -355,14 +349,11 @@ impl ParseSource for ForExpression {
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
-        // Register a catch location for this loop
-        self.catch_location_id = context.register_catch_location(CatchLocationKind::Loop);
-
-        // If the loop has a label, register it with the catch location
-        if let Some(label) = &mut self.label {
-            label.catch_location_id = self.catch_location_id;
-            context.register_labeled_catch_location(&label.ident_string(), self.catch_location_id);
-        }
+        // Register a catch location for this loop (and assign to label if present)
+        self.catch_location_id = context.register_catch_location_with_optional_label(
+            self.label.as_mut(),
+            CatchLocationKind::Loop,
+        );
 
         context.register_scope(&mut self.iteration_scope);
         self.iterable.control_flow_pass(context)?;
