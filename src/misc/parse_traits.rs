@@ -243,77 +243,24 @@ impl ControlFlowContext {
         self.state.exit_segment(segment_id);
     }
 
-    pub(crate) fn register_catch_location(&mut self, kind: CatchLocationKind) -> CatchLocationId {
-        self.state.register_catch_location(kind)
+    pub(crate) fn register_catch_location(&mut self, data: CatchLocationData) -> CatchLocationId {
+        self.state.register_catch_location(data)
     }
 
-    pub(crate) fn register_labeled_catch_location(
-        &mut self,
-        label: &str,
-        location_id: CatchLocationId,
-    ) {
-        self.state
-            .register_labeled_catch_location(label, location_id);
+    pub(crate) fn enter_catch(&mut self, catch_location_id: CatchLocationId) {
+        self.state.enter_catch(catch_location_id);
     }
 
-    pub(crate) fn resolve_label_to_catch_location(&self, label: &str) -> Option<CatchLocationId> {
-        self.state.resolve_label_to_catch_location(label)
+    pub(crate) fn exit_catch(&mut self, catch_location_id: CatchLocationId) {
+        self.state.exit_catch(catch_location_id);
     }
 
-    /// Helper method to register a catch location and optionally assign it to a label.
-    /// This reduces boilerplate when loops/blocks need to register catch locations.
-    pub(crate) fn register_catch_location_with_optional_label(
-        &mut self,
-        label: Option<&mut CatchLabel>,
-        kind: CatchLocationKind,
-    ) -> CatchLocationId {
-        let id = self.register_catch_location(kind);
-        if let Some(label) = label {
-            label.catch_location_id = id;
-            self.register_labeled_catch_location(&label.ident_string(), id);
-        }
-        id
-    }
-
-    pub(crate) fn enter_loop(&mut self, catch_location_id: CatchLocationId) {
-        self.state.enter_loop(catch_location_id);
-    }
-
-    pub(crate) fn exit_loop(&mut self, catch_location_id: CatchLocationId) {
-        self.state.exit_loop(catch_location_id);
-    }
-
-    pub(crate) fn current_loop_catch_location(&self) -> Option<CatchLocationId> {
-        self.state.current_loop_catch_location()
-    }
-
-    pub(crate) fn enter_attempt(&mut self, catch_location_id: CatchLocationId) {
-        self.state.enter_attempt(catch_location_id);
-    }
-
-    pub(crate) fn exit_attempt(&mut self, catch_location_id: CatchLocationId) {
-        self.state.exit_attempt(catch_location_id);
-    }
-
-    pub(crate) fn current_attempt_catch_location(&self) -> Option<CatchLocationId> {
-        self.state.current_attempt_catch_location()
-    }
-
-    /// Resolve a catch location for a control flow interrupt (break/continue/revert).
-    /// For labeled interrupts, looks up the label. For unlabeled interrupts, returns
-    /// the current loop or attempt context depending on the interrupt kind.
-    pub(crate) fn resolve_catch_location_for_interrupt(
+    pub(crate) fn resolve_catch_for_interrupt(
         &self,
-        interrupt_kind: InterruptKind,
-        label: Option<&str>,
-    ) -> Option<CatchLocationId> {
+        interrupt_details: InterruptDetails,
+    ) -> ParseResult<CatchLocationId> {
         self.state
-            .resolve_catch_location_for_interrupt(interrupt_kind, label)
-    }
-
-    /// Get the kind of a catch location
-    pub(crate) fn get_catch_location_kind(&self, id: CatchLocationId) -> CatchLocationKind {
-        self.state.get_catch_location_kind(id)
+            .resolve_catch_for_interrupt(interrupt_details)
     }
 }
 

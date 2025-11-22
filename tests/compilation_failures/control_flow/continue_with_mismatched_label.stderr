@@ -1,5 +1,5 @@
-error: label 'outer' not found in scope
- --> tests/compilation_failures/control_flow/continue_with_mismatched_label.rs:6:13
+error: A labelled continue must be used inside a loop with a matching label
+ --> tests/compilation_failures/control_flow/continue_with_mismatched_label.rs:6:22
   |
 6 |             continue 'outer;
-  |             ^^^^^^^^
+  |                      ^^^^^^

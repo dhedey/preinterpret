@@ -7,14 +7,21 @@ new_key!(pub(crate) VariableReferenceId);
 new_key!(pub(crate) ControlFlowSegmentId);
 new_key!(pub(crate) CatchLocationId);
 
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum InterruptKind {
+pub(crate) enum InterruptDetails<'a> {
     /// Break statement (targets loops or labeled blocks)
-    Break,
+    Break {
+        break_token: &'a Token![break],
+        label: Option<&'a InterruptLabel>,
+    },
     /// Continue statement (targets loops only)
-    Continue,
+    Continue {
+        continue_token: &'a Token![continue],
+        label: Option<&'a InterruptLabel>,
+    },
     /// Revert statement (targets attempt blocks)
-    Revert,
+    Revert {
+        revert_token: &'a RevertKeyword,
+    }
 }
 
 #[cfg(feature = "debug")]
@@ -52,9 +59,7 @@ pub(crate) struct FlowAnalysisState {
     references: Arena<VariableReferenceId, AllocatedVariableReference>,
     // CATCH LOCATION DATA
     catch_locations: Arena<CatchLocationId, CatchLocationData>,
-    labeled_catch_locations: HashMap<String, CatchLocationId>,
-    loop_stack: Vec<CatchLocationId>,
-    attempt_stack: Vec<CatchLocationId>,
+    catch_location_stack: Vec<CatchLocationId>,
     // CONTROL FLOW DATA
     segments_stack: Vec<ControlFlowSegmentId>,
     segments: Arena<ControlFlowSegmentId, ControlFlowSegmentData>,
@@ -82,9 +87,7 @@ impl FlowAnalysisState {
             definitions,
             references,
             catch_locations: Arena::new(),
-            labeled_catch_locations: HashMap::new(),
-            loop_stack: Vec::new(),
-            attempt_stack: Vec::new(),
+            catch_location_stack: Vec::new(),
             segments_stack: vec![root_segment],
             segments,
         }
@@ -320,103 +323,105 @@ impl FlowAnalysisState {
         child_id
     }
 
-    pub(crate) fn register_catch_location(&mut self, kind: CatchLocationKind) -> CatchLocationId {
-        self.catch_locations.add(CatchLocationData { kind })
+    pub(crate) fn register_catch_location(&mut self, data: CatchLocationData) -> CatchLocationId {
+        self.catch_locations.add(data)
     }
 
-    pub(crate) fn register_labeled_catch_location(
-        &mut self,
-        label: &str,
-        location_id: CatchLocationId,
-    ) {
-        self.labeled_catch_locations
-            .insert(label.to_string(), location_id);
+    pub(crate) fn enter_catch(&mut self, catch_location_id: CatchLocationId) {
+        self.catch_location_stack.push(catch_location_id);
     }
 
-    pub(crate) fn resolve_label_to_catch_location(&self, label: &str) -> Option<CatchLocationId> {
-        self.labeled_catch_locations.get(label).copied()
-    }
-
-    pub(crate) fn enter_loop(&mut self, catch_location_id: CatchLocationId) {
-        self.loop_stack.push(catch_location_id);
-    }
-
-    pub(crate) fn exit_loop(&mut self, catch_location_id: CatchLocationId) {
-        let popped = self.loop_stack.pop().expect("No loop to pop");
+    pub(crate) fn exit_catch(&mut self, catch_location_id: CatchLocationId) {
+        let popped = self.catch_location_stack.pop().expect("No catch to pop");
         assert_eq!(
             popped, catch_location_id,
-            "Popped loop is not the expected loop"
+            "Popped catch location is not the expected catch location"
         );
     }
 
-    pub(crate) fn current_loop_catch_location(&self) -> Option<CatchLocationId> {
-        self.loop_stack.last().copied()
-    }
-
-    pub(crate) fn enter_attempt(&mut self, catch_location_id: CatchLocationId) {
-        self.attempt_stack.push(catch_location_id);
-    }
-
-    pub(crate) fn exit_attempt(&mut self, catch_location_id: CatchLocationId) {
-        let popped = self.attempt_stack.pop().expect("No attempt to pop");
-        assert_eq!(
-            popped, catch_location_id,
-            "Popped attempt is not the expected attempt"
-        );
-    }
-
-    pub(crate) fn current_attempt_catch_location(&self) -> Option<CatchLocationId> {
-        self.attempt_stack.last().copied()
-    }
-
-    /// Resolve a catch location for a control flow interrupt (break/continue/revert).
-    /// For labeled interrupts, looks up the label. For unlabeled interrupts, returns
-    /// the current loop or attempt context depending on the interrupt kind.
-    ///
-    /// Note: For labeled break/continue, this returns the label's catch location without
-    /// validating the kind. The caller should validate that continue doesn't target a
-    /// labeled block (only loops).
-    pub(crate) fn resolve_catch_location_for_interrupt(
+    pub(crate) fn resolve_catch_for_interrupt(
         &self,
-        interrupt_kind: InterruptKind,
-        label: Option<&str>,
-    ) -> Option<CatchLocationId> {
-        if let Some(label) = label {
-            // Labeled - look up the label (works for break on loops/blocks, continue on loops)
-            self.labeled_catch_locations.get(label).copied()
-        } else {
-            // Unlabeled - use the current context stack
-            match interrupt_kind {
-                InterruptKind::Break | InterruptKind::Continue => {
-                    // Both break and continue without labels target the current loop
-                    self.loop_stack.last().copied()
+        interrupt_details: InterruptDetails,
+    ) -> ParseResult<CatchLocationId> {
+        match interrupt_details {
+            InterruptDetails::Break { label: Some(label), .. } => {
+                let label_str = label.ident_string();
+                for &catch_location_id in self.catch_location_stack.iter().rev() {
+                    let catch_location = self.catch_locations.get(catch_location_id);
+                    match catch_location {
+                        CatchLocationData::Loop { label: loc_label } => {
+                            if loc_label.as_ref() == Some(&label_str) {
+                                return Ok(catch_location_id);
+                            }
+                        }
+                        CatchLocationData::LabeledBlock { label: loc_label } => {
+                            if loc_label == &label_str {
+                                return Ok(catch_location_id);
+                            }
+                        }
+                        _ => {}
+                    }
                 }
-                InterruptKind::Revert => self.attempt_stack.last().copied(),
+                label.parse_err("A labelled break must be used inside a loop or block with a matching label")
+            }
+            InterruptDetails::Break { label: None, break_token, } => {
+                for &catch_location_id in self.catch_location_stack.iter().rev() {
+                    let catch_location = self.catch_locations.get(catch_location_id);
+                    if let CatchLocationData::Loop { .. } = catch_location {
+                        return Ok(catch_location_id);
+                    }
+                }
+                break_token.span
+                    .parse_err("A break must be used inside a loop")
+            }
+            InterruptDetails::Continue { label: Some(label), .. } => {
+                let label_str = label.ident_string();
+                for &catch_location_id in self.catch_location_stack.iter().rev() {
+                    let catch_location = self.catch_locations.get(catch_location_id);
+                    if let CatchLocationData::Loop { label: loc_label } = catch_location {
+                        if let Some(loc_label) = loc_label {
+                            if loc_label == &label_str {
+                                return Ok(catch_location_id);
+                            }
+                        }
+                    }
+                }
+                label.parse_err("A labelled continue must be used inside a loop with a matching label")
+            },
+            InterruptDetails::Continue { label: None, continue_token, } => {
+                for &catch_location_id in self.catch_location_stack.iter().rev() {
+                    let catch_location = self.catch_locations.get(catch_location_id);
+                    if let CatchLocationData::Loop { .. } = catch_location {
+                        return Ok(catch_location_id);
+                    }
+                }
+                continue_token.span
+                    .parse_err("A continue must be used inside a loop")
+            }
+            InterruptDetails::Revert { revert_token, } => {
+                for &catch_location_id in self.catch_location_stack.iter().rev() {
+                    let catch_location = self.catch_locations.get(catch_location_id);
+                    if let CatchLocationData::AttemptBlock = catch_location {
+                        return Ok(catch_location_id);
+                    }
+                }
+                revert_token
+                    .parse_err("A revert must be used inside the left revertible part of an attempt arm")
             }
         }
     }
-
-    /// Get the kind of a catch location
-    pub(crate) fn get_catch_location_kind(&self, id: CatchLocationId) -> CatchLocationKind {
-        self.catch_locations.get(id).kind
-    }
 }
 
-/// A control flow segment captures a section of code which executes in order.
-///
-/// A segment may have children, either:
-/// Represents a location where control flow interrupts (break, continue, revert) can be caught.
 #[derive(Debug)]
-pub(crate) struct CatchLocationData {
-    pub(crate) kind: CatchLocationKind,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum CatchLocationKind {
+pub(crate) enum CatchLocationData {
     /// A loop (can catch unlabeled break/continue, or labeled if this location has a label)
-    Loop,
+    Loop {
+        label: Option<String>,
+    },
     /// A labeled block (can only catch labeled break with matching label)
-    LabeledBlock,
+    LabeledBlock {
+        label: String,
+    },
     /// An attempt block (can catch revert)
     AttemptBlock,
 }

@@ -40,27 +40,72 @@ impl Interpreter {
 
     pub(crate) fn enter_scope_starting_with_revertible_segment<T>(
         &mut self,
-        id: ScopeId,
-        _catch_location_id: CatchLocationId,
-        f: impl FnOnce(&mut Self) -> ExecutionResult<T>,
+        scope_id: ScopeId,
+        catch_location_id: CatchLocationId,
+        revertible_segment: impl FnOnce(&mut Self) -> ExecutionResult<T>,
+        guard_clause: Option<impl FnOnce(&mut Self) -> ExecutionResult<bool>>,
         reason: MutationBlockReason,
     ) -> ExecutionResult<AttemptOutcome<T>> {
-        self.enter_scope_inner(id, true);
-        self.no_mutation_above.push((id, reason));
+        self.enter_scope_inner(scope_id, true);
+        self.no_mutation_above.push((scope_id, reason));
         unsafe {
-            // SAFETY: This is paired with `unfreeze_existing` below
+            // SAFETY: This is paired with `unfreeze_existing` below,
+            // without any early returns in the middle
             self.output_handler.freeze_existing(reason);
         }
-        let result = f(self);
+        let revertible_result = revertible_segment(self);
+        let revert_mutations = || {
+            // TODO[parser-input-in-interpreter]: When input handling is added, we may need to commit fork on success / revert on failure
+        };
+        let result = self.convert_revertible_result(
+            revertible_result,
+            guard_clause,
+            revert_mutations,
+            catch_location_id,
+            scope_id,
+        );
         unsafe {
             // SAFETY: This is paired with `freeze_existing` above
             self.output_handler.unfreeze_existing();
         }
         self.no_mutation_above.pop();
-        match result {
-            Ok(value) => Ok(AttemptOutcome::Completed(value)),
-            Err(err) if err.is_catchable() => {
-                self.handle_catch(id);
+        return result;
+    }
+    
+    // Creating a separate function makes it easier to verify safety invariants
+    // around early returns
+    fn convert_revertible_result<T>(
+        &mut self,
+        revertible_result: ExecutionResult<T>,
+        guard_clause: Option<impl FnOnce(&mut Self) -> ExecutionResult<bool>>,
+        revert_mutations: impl FnOnce(),
+        catch_location_id: CatchLocationId,
+        scope_id: ScopeId,
+    ) -> ExecutionResult<AttemptOutcome<T>> {
+        match revertible_result {
+            Ok(value) => {
+                let guard_result = if let Some(guard_clause) = guard_clause {
+                    guard_clause(self)
+                } else {
+                    Ok(true)
+                };
+                // If a guard clause errors, we treat this as a standard error
+                // outside of the attempt arm catch. BUT we should still revert
+                // any mutations made in the arm.
+                match guard_result {
+                    Ok(true) => Ok(AttemptOutcome::Completed(value)),
+                    Ok(false) => {
+                        Ok(AttemptOutcome::Reverted)
+                    },
+                    Err(err) => {
+                        revert_mutations();
+                        Err(err)
+                    }
+                }
+            }
+            Err(err) if err.is_catchable_by_attempt_block(catch_location_id) => {
+                self.handle_catch(scope_id);
+                revert_mutations();
                 Ok(AttemptOutcome::Reverted)
             }
             Err(mut err) => {
@@ -100,12 +145,12 @@ impl Interpreter {
     pub(crate) fn catch_control_flow<T>(
         &mut self,
         input: ExecutionResult<T>,
-        should_catch: impl FnOnce(&ControlFlowInterrupt) -> bool,
+        catch_location_id: CatchLocationId,
         return_to_scope: ScopeId,
     ) -> ExecutionResult<ExecutionOutcome<T>> {
         let output = match input {
             Ok(value) => Ok(ExecutionOutcome::Value(value)),
-            Err(interrupt) => interrupt.into_outcome::<T>(should_catch),
+            Err(interrupt) => interrupt.into_outcome::<T>(catch_location_id),
         };
         if let Ok(ExecutionOutcome::ControlFlow(_)) = &output {
             self.handle_catch(return_to_scope)

@@ -175,6 +175,7 @@ First, read the @./2025-09-vision.md
 
 - [ ] Manually search for transform and rename to parse in folder names and file.
 - [ ] Initial changes:
+  - [ ] We store input in the interpreter `TODO[parser-input-in-interpreter]`
   - [ ] Parsers no longer output to a stream, instead the output values.
   - [ ] Sort out `TODO[parser-no-output]`
   - [ ] Scopes/frames can have a parse stream associated with them. This can be read/resolved (as the nearest parent) by parsers, even in expression blocks

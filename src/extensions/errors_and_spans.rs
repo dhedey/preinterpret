@@ -318,6 +318,12 @@ impl HasSpan for LitInt {
     }
 }
 
+impl HasSpanRange for syn::Lifetime {
+    fn span_range(&self) -> SpanRange {
+        SpanRange::new_between(self.apostrophe, self.ident.span())
+    }
+}
+
 #[derive(Copy, Clone)]
 pub(crate) struct TransparentDelimiters {
     pub(crate) delim_span: DelimSpan,

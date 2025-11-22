@@ -134,16 +134,13 @@ pub(crate) struct WhileExpression {
     while_token: Ident,
     condition: Expression,
     body: ScopedBlock,
-    catch_location_id: CatchLocationId,
+    catch_location: CatchLocationId,
 }
 
 impl HasSpanRange for WhileExpression {
     fn span_range(&self) -> SpanRange {
-        if let Some(label) = &self.label {
-            SpanRange::new_between(label.span_range().start(), self.body.span())
-        } else {
-            SpanRange::new_between(self.while_token.span(), self.body.span())
-        }
+        // We ignore the label, as it's not really part of the expression
+        SpanRange::new_between(self.while_token.span(), self.body.span())
     }
 }
 
@@ -159,24 +156,23 @@ impl ParseSource for WhileExpression {
             while_token,
             condition,
             body,
-            catch_location_id: CatchLocationId::new_placeholder(),
+            catch_location: CatchLocationId::new_placeholder(),
         })
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
-        // Register a catch location for this loop (and assign to label if present)
-        self.catch_location_id = context.register_catch_location_with_optional_label(
-            self.label.as_mut(),
-            CatchLocationKind::Loop,
+        self.catch_location = context.register_catch_location(
+            CatchLocationData::Loop {
+                label: self.label.as_ref().map(|l| l.ident_string()),
+            },
         );
 
         let segment = context.enter_next_segment(SegmentKind::LoopingSequential);
         self.condition.control_flow_pass(context)?;
 
-        // Enter loop context so break/continue can resolve to this loop
-        context.enter_loop(self.catch_location_id);
+        context.enter_catch(self.catch_location);
         self.body.control_flow_pass(context)?;
-        context.exit_loop(self.catch_location_id);
+        context.exit_catch(self.catch_location);
 
         context.exit_segment(segment);
         Ok(())
@@ -202,7 +198,7 @@ impl WhileExpression {
             let body_result = self.body.evaluate_owned(interpreter);
             match interpreter.catch_control_flow(
                 body_result,
-                |ctrl| ControlFlowInterrupt::catch_loop_related(ctrl, self.catch_location_id),
+                self.catch_location,
                 scope,
             )? {
                 ExecutionOutcome::Value(value) => {
@@ -217,7 +213,7 @@ impl WhileExpression {
                             continue;
                         }
                         ControlFlowInterrupt::Revert(_) => {
-                            unreachable!("catch_loop_related should filter this out")
+                            unreachable!("A revert should not match to a loop catch location")
                         }
                     }
                 }
@@ -228,19 +224,16 @@ impl WhileExpression {
 }
 
 pub(crate) struct LoopExpression {
+    catch_location: CatchLocationId,
     label: Option<CatchLabel>,
     loop_token: Ident,
     body: ScopedBlock,
-    catch_location_id: CatchLocationId,
 }
 
 impl HasSpanRange for LoopExpression {
     fn span_range(&self) -> SpanRange {
-        if let Some(label) = &self.label {
-            SpanRange::new_between(label.span_range().start(), self.body.span())
-        } else {
-            SpanRange::new_between(self.loop_token.span(), self.body.span())
-        }
+        // We ignore the label, because it's not really part of the span of the resultant value
+        SpanRange::new_between(self.loop_token.span(), self.body.span())
     }
 }
 
@@ -250,26 +243,25 @@ impl ParseSource for LoopExpression {
         let loop_token = input.parse_ident_matching("loop")?;
         let body = input.parse()?;
         Ok(Self {
+            catch_location: CatchLocationId::new_placeholder(),
             label,
             loop_token,
             body,
-            catch_location_id: CatchLocationId::new_placeholder(),
         })
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
-        // Register a catch location for this loop (and assign to label if present)
-        self.catch_location_id = context.register_catch_location_with_optional_label(
-            self.label.as_mut(),
-            CatchLocationKind::Loop,
+        self.catch_location = context.register_catch_location(
+        CatchLocationData::Loop {
+                label: self.label.as_ref().map(|l| l.ident_string()),
+            },
         );
 
         let segment = context.enter_next_segment(SegmentKind::LoopingSequential);
 
-        // Enter loop context so break/continue can resolve to this loop
-        context.enter_loop(self.catch_location_id);
+        context.enter_catch(self.catch_location);
         self.body.control_flow_pass(context)?;
-        context.exit_loop(self.catch_location_id);
+        context.exit_catch(self.catch_location);
 
         context.exit_segment(segment);
         Ok(())
@@ -292,7 +284,7 @@ impl LoopExpression {
             let body_result = self.body.evaluate_owned(interpreter);
             match interpreter.catch_control_flow(
                 body_result,
-                |ctrl| ControlFlowInterrupt::catch_loop_related(ctrl, self.catch_location_id),
+                self.catch_location,
                 scope,
             )? {
                 ExecutionOutcome::Value(value) => {
@@ -307,7 +299,7 @@ impl LoopExpression {
                             continue;
                         }
                         ControlFlowInterrupt::Revert(_) => {
-                            unreachable!("catch_loop_related should filter this out")
+                            unreachable!("A revert should not match to a loop catch location")
                         }
                     }
                 }
@@ -318,22 +310,19 @@ impl LoopExpression {
 
 pub(crate) struct ForExpression {
     iteration_scope: ScopeId,
+    catch_location: CatchLocationId,
     label: Option<CatchLabel>,
     for_token: Ident,
     pattern: Pattern,
     _in_token: Ident,
     iterable: Expression,
     body: ScopedBlock,
-    catch_location_id: CatchLocationId,
 }
 
 impl HasSpanRange for ForExpression {
     fn span_range(&self) -> SpanRange {
-        if let Some(label) = &self.label {
-            SpanRange::new_between(label.span_range().start(), self.body.span())
-        } else {
-            SpanRange::new_between(self.for_token.span(), self.body.span())
-        }
+        // We ignore the label, because it's not really part of the span of the resultant value
+        SpanRange::new_between(self.for_token.span(), self.body.span())
     }
 }
 
@@ -348,21 +337,21 @@ impl ParseSource for ForExpression {
 
         Ok(Self {
             iteration_scope: ScopeId::new_placeholder(),
+            catch_location: CatchLocationId::new_placeholder(),
             label,
             for_token,
             pattern,
             _in_token: in_token,
             iterable,
             body,
-            catch_location_id: CatchLocationId::new_placeholder(),
         })
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
-        // Register a catch location for this loop (and assign to label if present)
-        self.catch_location_id = context.register_catch_location_with_optional_label(
-            self.label.as_mut(),
-            CatchLocationKind::Loop,
+        self.catch_location = context.register_catch_location(
+            CatchLocationData::Loop {
+                label: self.label.as_ref().map(|l| l.ident_string()),
+            },
         );
 
         context.register_scope(&mut self.iteration_scope);
@@ -371,11 +360,10 @@ impl ParseSource for ForExpression {
         let segment = context.enter_next_segment(SegmentKind::LoopingSequential);
         context.enter_scope(self.iteration_scope);
 
-        // Enter loop context so break/continue can resolve to this loop
-        context.enter_loop(self.catch_location_id);
+        context.enter_catch(self.catch_location);
         self.pattern.control_flow_pass(context)?;
         self.body.control_flow_pass(context)?;
-        context.exit_loop(self.catch_location_id);
+        context.exit_catch(self.catch_location);
 
         context.exit_scope(self.iteration_scope);
         context.exit_segment(segment);
@@ -408,7 +396,7 @@ impl ForExpression {
             let body_result = self.body.evaluate_owned(interpreter);
             match interpreter.catch_control_flow(
                 body_result,
-                |ctrl| ControlFlowInterrupt::catch_loop_related(ctrl, self.catch_location_id),
+                self.catch_location,
                 scope,
             )? {
                 ExecutionOutcome::Value(value) => {
@@ -423,7 +411,7 @@ impl ForExpression {
                             continue;
                         }
                         ControlFlowInterrupt::Revert(_) => {
-                            unreachable!("catch_loop_related should filter this out")
+                            unreachable!("A revert should not match to a loop catch location")
                         }
                     }
                 }
@@ -435,10 +423,10 @@ impl ForExpression {
 }
 
 pub(crate) struct AttemptExpression {
+    catch_location: CatchLocationId,
     attempt: AttemptKeyword,
     braces: Braces,
     arms: Vec<AttemptArm>,
-    catch_location_id: CatchLocationId,
 }
 
 struct AttemptArm {
@@ -486,16 +474,15 @@ impl ParseSource for AttemptExpression {
             });
         }
         Ok(Self {
+            catch_location: CatchLocationId::new_placeholder(),
             attempt,
             braces,
             arms,
-            catch_location_id: CatchLocationId::new_placeholder(),
         })
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
-        // Register a catch location for this attempt block
-        self.catch_location_id = context.register_catch_location(CatchLocationKind::AttemptBlock);
+        self.catch_location = context.register_catch_location(CatchLocationData::AttemptBlock);
 
         let segment = context.enter_next_segment(SegmentKind::PathBased);
         let mut previous_attempt_segment = None;
@@ -506,13 +493,12 @@ impl ParseSource for AttemptExpression {
             let attempt_segment = context
                 .enter_path_segment(previous_attempt_segment, SegmentKind::RevertibleSequential);
 
-            // Enter attempt context so revert can resolve to this attempt
-            context.enter_attempt(self.catch_location_id);
+            context.enter_catch(self.catch_location);
             arm.lhs.control_flow_pass(context)?;
             if let Some((_, guard_expression)) = &mut arm.guard {
                 guard_expression.control_flow_pass(context)?;
             }
-            context.exit_attempt(self.catch_location_id);
+            context.exit_catch(self.catch_location);
 
             context.exit_segment(attempt_segment);
             previous_attempt_segment = Some(attempt_segment);
@@ -535,28 +521,27 @@ impl AttemptExpression {
         interpreter: &mut Interpreter,
         ownership: RequestedValueOwnership,
     ) -> ExecutionResult<EvaluationItem> {
+        // We need a separate method to correctly capture the lifetimes of the guard clause
+        fn guard_clause<'a>(
+            guard: Option<&'a (Token![if], Expression)>,
+        ) -> Option<impl for<'b> FnOnce(&'b mut Interpreter) -> ExecutionResult<bool> + 'a> {
+            guard.map(|(_, guard_expression)| {
+                move |interpreter: &mut Interpreter| -> ExecutionResult<bool> {
+                    guard_expression
+                        .evaluate_owned(interpreter)?
+                        .resolve_as("The guard condition of an attempt arm")
+                }
+            })
+        }
         for arm in self.arms.iter() {
             let attempt_outcome = interpreter.enter_scope_starting_with_revertible_segment(
                 arm.arm_scope,
-                self.catch_location_id,
+                self.catch_location,
                 |interpreter| -> ExecutionResult<()> {
-                    let output = arm.lhs.evaluate_owned(interpreter)?;
-                    let () = output
-                        .resolve_as("The returned value from the left half of an attempt arm")?;
-                    if let Some((if_token, guard_expression)) = &arm.guard {
-                        let guard_value: bool = guard_expression
-                            .evaluate_owned(interpreter)?
-                            .resolve_as("The guard condition of an attempt arm")?;
-                        if !guard_value {
-                            // This will be immediately caught by this attempt block
-                            return Err(ExecutionInterrupt::control_flow(
-                                ControlFlowInterrupt::new_revert(self.catch_location_id),
-                                if_token.span,
-                            ));
-                        }
-                    }
-                    Ok(())
+                    arm.lhs.evaluate_owned(interpreter)?
+                        .resolve_as("The returned value from the left half of an attempt arm")
                 },
+                guard_clause(arm.guard.as_ref()),
                 MutationBlockReason::AttemptRevertibleSegment,
             )?;
             match attempt_outcome {

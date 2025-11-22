@@ -153,9 +153,38 @@ impl LetStatement {
     }
 }
 
+pub(crate) struct InterruptLabel {
+    label: syn::Lifetime,
+}
+
+impl ParseSource for InterruptLabel {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
+        let label = input.parse()?;
+        Ok(Self { label })
+    }
+
+    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
+        Ok(())
+    }
+}
+
+impl ParseSourceOptional for InterruptLabel {}
+
+impl HasSpanRange for InterruptLabel {
+    fn span_range(&self) -> SpanRange {
+        self.label.span_range()
+    }
+}
+
+impl InterruptLabel {
+    pub(crate) fn ident_string(&self) -> String {
+        self.label.ident.to_string()
+    }
+}
+
 pub(crate) struct BreakStatement {
     break_token: Token![break],
-    label: Option<syn::Lifetime>,
+    label: Option<InterruptLabel>,
     value: Option<Expression>,
     target_catch_location: CatchLocationId,
 }
@@ -169,12 +198,7 @@ impl HasSpan for BreakStatement {
 impl ParseSource for BreakStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let break_token = input.parse()?;
-
-        let label = if input.cursor().lifetime().is_some() {
-            Some(input.parse()?)
-        } else {
-            None
-        };
+        let label = input.parse_optional()?;
 
         // Try to parse an optional expression value
         let value = if !input.is_empty() && !input.peek(Token![;]) {
@@ -192,25 +216,14 @@ impl ParseSource for BreakStatement {
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        self.target_catch_location = context.resolve_catch_for_interrupt(
+            InterruptDetails::Break {
+                break_token: &self.break_token,
+                label: self.label.as_ref(),
+            },
+        )?;
         if let Some(value) = &mut self.value {
             value.control_flow_pass(context)?;
-        }
-        // Resolve to either labeled loop/block or immediate parent loop
-        let label = self.label.as_ref().map(|l| l.ident.to_string());
-        if let Some(location) =
-            context.resolve_catch_location_for_interrupt(InterruptKind::Break, label.as_deref())
-        {
-            self.target_catch_location = location;
-        } else if let Some(label) = &label {
-            return self
-                .break_token
-                .span
-                .parse_err(format!("label '{}' not found in scope", label));
-        } else {
-            return self
-                .break_token
-                .span
-                .parse_err("break can only be used inside a loop or labeled block");
         }
         Ok(())
     }
@@ -228,16 +241,15 @@ impl BreakStatement {
         };
 
         Err(ExecutionInterrupt::control_flow(
-            ControlFlowInterrupt::new_break(self.target_catch_location, value),
-            self.break_token.span,
+            ControlFlowInterrupt::new_break(self.target_catch_location, value)
         ))
     }
 }
 
 pub(crate) struct ContinueStatement {
-    continue_token: Token![continue],
-    label: Option<syn::Lifetime>,
     target_catch_location: CatchLocationId,
+    continue_token: Token![continue],
+    label: Option<InterruptLabel>,
 }
 
 impl HasSpan for ContinueStatement {
@@ -249,46 +261,22 @@ impl HasSpan for ContinueStatement {
 impl ParseSource for ContinueStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let continue_token = input.parse()?;
-
-        let label = if input.cursor().lifetime().is_some() {
-            Some(input.parse()?)
-        } else {
-            None
-        };
+        let label = input.parse_optional()?;
 
         Ok(Self {
+            target_catch_location: CatchLocationId::new_placeholder(),
             continue_token,
             label,
-            target_catch_location: CatchLocationId::new_placeholder(),
         })
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
-        // Resolve to either labeled loop or immediate parent loop
-        let label = self.label.as_ref().map(|l| l.ident.to_string());
-        if let Some(location) =
-            context.resolve_catch_location_for_interrupt(InterruptKind::Continue, label.as_deref())
-        {
-            // Validate that continue doesn't target a labeled block (only loops)
-            let kind = context.get_catch_location_kind(location);
-            if kind == CatchLocationKind::LabeledBlock {
-                return self
-                    .continue_token
-                    .span
-                    .parse_err("continue cannot target a labeled block (only loops)");
-            }
-            self.target_catch_location = location;
-        } else if let Some(label) = &label {
-            return self
-                .continue_token
-                .span
-                .parse_err(format!("label '{}' not found in scope", label));
-        } else {
-            return self
-                .continue_token
-                .span
-                .parse_err("continue can only be used inside a loop");
-        }
+        self.target_catch_location = context.resolve_catch_for_interrupt(
+            InterruptDetails::Continue {
+                label: self.label.as_ref(),
+                continue_token: &self.continue_token,
+            },
+        )?;
         Ok(())
     }
 }
@@ -296,8 +284,7 @@ impl ParseSource for ContinueStatement {
 impl ContinueStatement {
     pub(crate) fn evaluate_as_statement(&self, _: &mut Interpreter) -> ExecutionResult<()> {
         Err(ExecutionInterrupt::control_flow(
-            ControlFlowInterrupt::new_continue(self.target_catch_location),
-            self.continue_token.span,
+            ControlFlowInterrupt::new_continue(self.target_catch_location)
         ))
     }
 }
@@ -323,17 +310,11 @@ impl ParseSource for RevertStatement {
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
-        // Resolve to immediate parent attempt block
-        if let Some(location) =
-            context.resolve_catch_location_for_interrupt(InterruptKind::Revert, None)
-        {
-            self.target_catch_location = location;
-        } else {
-            return self
-                .revert
-                .span()
-                .parse_err("revert can only be used in the conditional part of an attempt arm");
-        }
+        self.target_catch_location = context.resolve_catch_for_interrupt(
+            InterruptDetails::Revert {
+                revert_token: &self.revert,
+            },
+        )?;
         Ok(())
     }
 }
@@ -342,7 +323,6 @@ impl RevertStatement {
     pub(crate) fn evaluate_as_statement(&self, _: &mut Interpreter) -> ExecutionResult<()> {
         Err(ExecutionInterrupt::control_flow(
             ControlFlowInterrupt::new_revert(self.target_catch_location),
-            self.revert.span(),
         ))
     }
 }

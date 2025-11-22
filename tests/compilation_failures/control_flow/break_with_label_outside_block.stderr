@@ -1,5 +1,5 @@
-error: label 'outer' not found in scope
- --> tests/compilation_failures/control_flow/break_with_label_outside_block.rs:5:9
+error: A labelled break must be used inside a loop or block with a matching label
+ --> tests/compilation_failures/control_flow/break_with_label_outside_block.rs:5:15
   |
 5 |         break 'outer;
-  |         ^^^^^
+  |               ^^^^^^
