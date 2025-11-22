@@ -1,0 +1,5 @@
+error: A labelled revert must be used inside the left revertible part of an attempt arm, where the attempt has a matching label
+ --> tests/compilation_failures/control_flow/attempt/revert_with_mismatched_label.rs:6:15
+  |
+6 |             { revert 'inner; } => { 1 }
+  |               ^^^^^^

@@ -1,0 +1,5 @@
+error: A labelled revert must be used inside the left revertible part of an attempt arm, where the attempt has a matching label
+ --> tests/compilation_failures/control_flow/attempt/labeled_revert_in_guard_clause.rs:6:33
+  |
+6 |             { let x = 1; } if { revert 'outer; true } => { x }
+  |                                 ^^^^^^

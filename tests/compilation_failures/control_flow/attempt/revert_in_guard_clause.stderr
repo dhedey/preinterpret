@@ -1,0 +1,5 @@
+error: A revert must be used inside the left revertible part of an attempt arm
+ --> tests/compilation_failures/control_flow/attempt/revert_in_guard_clause.rs:6:33
+  |
+6 |             { let x = 1; } if { revert; true } => { x }
+  |                                 ^^^^^^
