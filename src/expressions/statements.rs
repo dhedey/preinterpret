@@ -189,9 +189,14 @@ pub(crate) struct BreakStatement {
     target_catch_location: CatchLocationId,
 }
 
-impl HasSpan for BreakStatement {
-    fn span(&self) -> Span {
-        self.break_token.span
+impl HasSpanRange for BreakStatement {
+    fn span_range(&self) -> SpanRange {
+        let last = self
+            .label
+            .as_ref()
+            .map(|l| l.end_span())
+            .unwrap_or_else(|| self.break_token.span);
+        SpanRange::new_between(self.break_token.span, last)
     }
 }
 
@@ -216,12 +221,11 @@ impl ParseSource for BreakStatement {
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
-        self.target_catch_location = context.resolve_catch_for_interrupt(
-            InterruptDetails::Break {
+        self.target_catch_location =
+            context.resolve_catch_for_interrupt(InterruptDetails::Break {
                 break_token: &self.break_token,
                 label: self.label.as_ref(),
-            },
-        )?;
+            })?;
         if let Some(value) = &mut self.value {
             value.control_flow_pass(context)?;
         }
@@ -241,7 +245,7 @@ impl BreakStatement {
         };
 
         Err(ExecutionInterrupt::control_flow(
-            ControlFlowInterrupt::new_break(self.target_catch_location, value)
+            ControlFlowInterrupt::new_break(self.target_catch_location, value),
         ))
     }
 }
@@ -252,9 +256,14 @@ pub(crate) struct ContinueStatement {
     label: Option<InterruptLabel>,
 }
 
-impl HasSpan for ContinueStatement {
-    fn span(&self) -> Span {
-        self.continue_token.span
+impl HasSpanRange for ContinueStatement {
+    fn span_range(&self) -> SpanRange {
+        let last = self
+            .label
+            .as_ref()
+            .map(|l| l.end_span())
+            .unwrap_or_else(|| self.continue_token.span);
+        SpanRange::new_between(self.continue_token.span, last)
     }
 }
 
@@ -271,12 +280,11 @@ impl ParseSource for ContinueStatement {
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
-        self.target_catch_location = context.resolve_catch_for_interrupt(
-            InterruptDetails::Continue {
+        self.target_catch_location =
+            context.resolve_catch_for_interrupt(InterruptDetails::Continue {
                 label: self.label.as_ref(),
                 continue_token: &self.continue_token,
-            },
-        )?;
+            })?;
         Ok(())
     }
 }
@@ -284,37 +292,43 @@ impl ParseSource for ContinueStatement {
 impl ContinueStatement {
     pub(crate) fn evaluate_as_statement(&self, _: &mut Interpreter) -> ExecutionResult<()> {
         Err(ExecutionInterrupt::control_flow(
-            ControlFlowInterrupt::new_continue(self.target_catch_location)
+            ControlFlowInterrupt::new_continue(self.target_catch_location),
         ))
     }
 }
 
 pub(crate) struct RevertStatement {
     revert: RevertKeyword,
+    label: Option<InterruptLabel>,
     target_catch_location: CatchLocationId,
 }
 
-impl HasSpan for RevertStatement {
-    fn span(&self) -> Span {
-        self.revert.span()
+impl HasSpanRange for RevertStatement {
+    fn span_range(&self) -> SpanRange {
+        let last = self
+            .label
+            .as_ref()
+            .map(|l| l.end_span())
+            .unwrap_or_else(|| self.revert.span());
+        SpanRange::new_between(self.revert.span(), last)
     }
 }
 
 impl ParseSource for RevertStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        let revert = input.parse()?;
         Ok(Self {
-            revert,
+            revert: input.parse()?,
+            label: input.parse_optional()?,
             target_catch_location: CatchLocationId::new_placeholder(),
         })
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
-        self.target_catch_location = context.resolve_catch_for_interrupt(
-            InterruptDetails::Revert {
+        self.target_catch_location =
+            context.resolve_catch_for_interrupt(InterruptDetails::Revert {
                 revert_token: &self.revert,
-            },
-        )?;
+                label: self.label.as_ref(),
+            })?;
         Ok(())
     }
 }

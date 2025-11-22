@@ -69,9 +69,9 @@ impl Interpreter {
             self.output_handler.unfreeze_existing();
         }
         self.no_mutation_above.pop();
-        return result;
+        result
     }
-    
+
     // Creating a separate function makes it easier to verify safety invariants
     // around early returns
     fn convert_revertible_result<T>(
@@ -94,9 +94,7 @@ impl Interpreter {
                 // any mutations made in the arm.
                 match guard_result {
                     Ok(true) => Ok(AttemptOutcome::Completed(value)),
-                    Ok(false) => {
-                        Ok(AttemptOutcome::Reverted)
-                    },
+                    Ok(false) => Ok(AttemptOutcome::Reverted),
                     Err(err) => {
                         revert_mutations();
                         Err(err)

@@ -80,15 +80,6 @@ impl<'a> ExpressionParser<'a> {
                 UnaryAtom::Group(delim_span)
             }
             SourcePeekMatch::Group(Delimiter::Brace) => {
-                let (inner, _, delim_span, _) = input.cursor().any_group().unwrap();
-                if inner.eof() {
-                    return delim_span.open().parse_err("An empty object literal is written `%{}` with a `%` prefix. If you intend to use an empty block here, instead use `{ None }`.");
-                }
-                if let Some((_, next)) = inner.ident() {
-                    if next.punct_matching(':').is_some() || next.punct_matching(',').is_some() {
-                        return delim_span.open().parse_err("An object literal must be prefixed with %, e.g. `%{ field: 1 }`. Without such a prefix, { .. } defines a block.");
-                    }
-                }
                 UnaryAtom::Leaf(Leaf::Block(Box::new(input.parse()?)))
             }
             SourcePeekMatch::Group(Delimiter::Bracket) => {
@@ -107,6 +98,7 @@ impl<'a> ExpressionParser<'a> {
                                     "loop" => return Ok(UnaryAtom::Leaf(Leaf::LoopExpression(Box::new(input.parse()?)))),
                                     "while" => return Ok(UnaryAtom::Leaf(Leaf::WhileExpression(Box::new(input.parse()?)))),
                                     "for" => return Ok(UnaryAtom::Leaf(Leaf::ForExpression(Box::new(input.parse()?)))),
+                                    "attempt" => return Ok(UnaryAtom::Leaf(Leaf::AttemptExpression(Box::new(input.parse()?)))),
                                     _ => {}
                                 }
                             }

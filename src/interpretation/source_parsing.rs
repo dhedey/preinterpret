@@ -21,7 +21,8 @@ pub(crate) enum InterruptDetails<'a> {
     /// Revert statement (targets attempt blocks)
     Revert {
         revert_token: &'a RevertKeyword,
-    }
+        label: Option<&'a InterruptLabel>,
+    },
 }
 
 #[cfg(feature = "debug")]
@@ -344,13 +345,17 @@ impl FlowAnalysisState {
         interrupt_details: InterruptDetails,
     ) -> ParseResult<CatchLocationId> {
         match interrupt_details {
-            InterruptDetails::Break { label: Some(label), .. } => {
+            InterruptDetails::Break {
+                label: Some(label), ..
+            } => {
                 let label_str = label.ident_string();
                 for &catch_location_id in self.catch_location_stack.iter().rev() {
                     let catch_location = self.catch_locations.get(catch_location_id);
                     match catch_location {
-                        CatchLocationData::Loop { label: loc_label } => {
-                            if loc_label.as_ref() == Some(&label_str) {
+                        CatchLocationData::Loop {
+                            label: Some(loc_label),
+                        } => {
+                            if loc_label == &label_str {
                                 return Ok(catch_location_id);
                             }
                         }
@@ -362,51 +367,89 @@ impl FlowAnalysisState {
                         _ => {}
                     }
                 }
-                label.parse_err("A labelled break must be used inside a loop or block with a matching label")
+                label.parse_err(
+                    "A labelled break must be used inside a loop or block with a matching label",
+                )
             }
-            InterruptDetails::Break { label: None, break_token, } => {
+            InterruptDetails::Break {
+                label: None,
+                break_token,
+            } => {
                 for &catch_location_id in self.catch_location_stack.iter().rev() {
                     let catch_location = self.catch_locations.get(catch_location_id);
                     if let CatchLocationData::Loop { .. } = catch_location {
                         return Ok(catch_location_id);
                     }
                 }
-                break_token.span
+                break_token
+                    .span
                     .parse_err("A break must be used inside a loop")
             }
-            InterruptDetails::Continue { label: Some(label), .. } => {
+            InterruptDetails::Continue {
+                label: Some(label), ..
+            } => {
                 let label_str = label.ident_string();
                 for &catch_location_id in self.catch_location_stack.iter().rev() {
                     let catch_location = self.catch_locations.get(catch_location_id);
-                    if let CatchLocationData::Loop { label: loc_label } = catch_location {
-                        if let Some(loc_label) = loc_label {
-                            if loc_label == &label_str {
-                                return Ok(catch_location_id);
-                            }
+                    if let CatchLocationData::Loop {
+                        label: Some(loc_label),
+                    } = catch_location
+                    {
+                        if loc_label == &label_str {
+                            return Ok(catch_location_id);
                         }
                     }
                 }
-                label.parse_err("A labelled continue must be used inside a loop with a matching label")
-            },
-            InterruptDetails::Continue { label: None, continue_token, } => {
+                label.parse_err(
+                    "A labelled continue must be used inside a loop with a matching label",
+                )
+            }
+            InterruptDetails::Continue {
+                label: None,
+                continue_token,
+            } => {
                 for &catch_location_id in self.catch_location_stack.iter().rev() {
                     let catch_location = self.catch_locations.get(catch_location_id);
                     if let CatchLocationData::Loop { .. } = catch_location {
                         return Ok(catch_location_id);
                     }
                 }
-                continue_token.span
+                continue_token
+                    .span
                     .parse_err("A continue must be used inside a loop")
             }
-            InterruptDetails::Revert { revert_token, } => {
+            InterruptDetails::Revert {
+                revert_token,
+                label: Some(label),
+            } => {
+                let label_str = label.ident_string();
                 for &catch_location_id in self.catch_location_stack.iter().rev() {
                     let catch_location = self.catch_locations.get(catch_location_id);
-                    if let CatchLocationData::AttemptBlock = catch_location {
-                        return Ok(catch_location_id);
+                    if let CatchLocationData::AttemptBlock {
+                        label: Some(loc_label),
+                    } = catch_location
+                    {
+                        if loc_label == &label_str {
+                            return Ok(catch_location_id);
+                        }
                     }
                 }
                 revert_token
-                    .parse_err("A revert must be used inside the left revertible part of an attempt arm")
+                    .parse_err("A labelled revert must be used inside the left revertible part of an attempt arm, where the attempt has a matching label")
+            }
+            InterruptDetails::Revert {
+                revert_token,
+                label: None,
+            } => {
+                for &catch_location_id in self.catch_location_stack.iter().rev() {
+                    let catch_location = self.catch_locations.get(catch_location_id);
+                    if let CatchLocationData::AttemptBlock { .. } = catch_location {
+                        return Ok(catch_location_id);
+                    }
+                }
+                revert_token.parse_err(
+                    "A revert must be used inside the left revertible part of an attempt arm",
+                )
             }
         }
     }
@@ -415,15 +458,11 @@ impl FlowAnalysisState {
 #[derive(Debug)]
 pub(crate) enum CatchLocationData {
     /// A loop (can catch unlabeled break/continue, or labeled if this location has a label)
-    Loop {
-        label: Option<String>,
-    },
+    Loop { label: Option<String> },
     /// A labeled block (can only catch labeled break with matching label)
-    LabeledBlock {
-        label: String,
-    },
+    LabeledBlock { label: String },
     /// An attempt block (can catch revert)
-    AttemptBlock,
+    AttemptBlock { label: Option<String> },
 }
 
 /// * Sequential: Children are instructions and segments, which have a fixed order

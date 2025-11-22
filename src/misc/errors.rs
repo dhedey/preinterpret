@@ -180,7 +180,7 @@ impl ExecutionInterrupt {
             ExecutionInterruptInner::Error(ErrorKind::Parse, _) => true,
             ExecutionInterruptInner::ControlFlowInterrupt(interrupt) => {
                 interrupt.catch_location_id() == catch_location_id
-            },
+            }
         }
     }
 
@@ -224,9 +224,7 @@ impl ExecutionInterrupt {
     }
 
     pub(crate) fn control_flow(control_flow: ControlFlowInterrupt) -> Self {
-        Self::new(ExecutionInterruptInner::ControlFlowInterrupt(
-            control_flow,
-        ))
+        Self::new(ExecutionInterruptInner::ControlFlowInterrupt(control_flow))
     }
 }
 
@@ -321,9 +319,7 @@ impl ControlFlowInterrupt {
 
     fn catch_location_id(&self) -> CatchLocationId {
         match self {
-            ControlFlowInterrupt::Break(break_interrupt) => {
-                break_interrupt.target_catch_location
-            }
+            ControlFlowInterrupt::Break(break_interrupt) => break_interrupt.target_catch_location,
             ControlFlowInterrupt::Continue(continue_interrupt) => {
                 continue_interrupt.target_catch_location
             }

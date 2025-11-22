@@ -93,13 +93,24 @@ pub(crate) trait HasSpan {
     fn span(&self) -> Span;
 }
 
-/// This is intended to be implemented only for types which have a cheap SpanRange.
+/// This is intended to be implemented only for types which have a cheap [`SpanRange`].
+///
 /// It is cheaper than [`syn::spanned`], which requires streaming the whole type,
-/// and can be very slow for e.g. large expressions.
+/// and can be very slow for e.g. large expressions. [`syn::spanned`] also only returns
+/// a single [`Span`], which is not sufficient for multi-token ranges on stable rust.
 ///
 /// See also [`SlowSpanRange`] for the equivalent of [`syn::spanned`].
 pub(crate) trait HasSpanRange {
     fn span_range(&self) -> SpanRange;
+
+    #[allow(unused)]
+    fn start_span(&self) -> Span {
+        self.span_range().start()
+    }
+
+    fn end_span(&self) -> Span {
+        self.span_range().end()
+    }
 
     fn span_from_join_else_start(&self) -> Span {
         self.span_range().join_into_span_else_start()
@@ -118,15 +129,18 @@ impl HasSpanRange for &SpanRange {
     }
 }
 
-/// [`syn::spanned`] is potentially unexpectedly expensive, and has the
-/// limitation that it uses [`proc_macro::Span::join`] and falls back to the
-/// span of the first token when not available.
+/// In many cases, we want to be able to show an error message over several tokens.
 ///
-/// Instead, [`syn::Error`] uses a trick involving a span range. This effectively
-/// allows capturing this trick when we're not immediately creating an error.
+/// The "correct" solution to this is to use [`proc_macro::Span::join`], BUT
+/// this is currently only available on nightly Rust.
 ///
-/// When [`proc_macro::Span::join`] is stabilised and [`syn::spanned`] works,
-/// we can swap [`SpanRange`] contents for [`Span`] (or even remove it and [`HasSpanRange`]).
+/// Instead, [`syn::Error`] uses a trick involving a start and end span. This works
+/// on stable, but we need to keep around these two spans explicitly.
+///
+/// Hence [`SpanRange`] was born.
+///
+/// When [`proc_macro::Span::join`] is stabilised, we can swap [`SpanRange`]
+/// for [`Span`] (or even remove it and [`HasSpanRange`]).
 #[derive(Copy, Clone)]
 pub(crate) struct SpanRange {
     start: Span,

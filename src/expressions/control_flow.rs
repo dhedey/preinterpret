@@ -161,11 +161,9 @@ impl ParseSource for WhileExpression {
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
-        self.catch_location = context.register_catch_location(
-            CatchLocationData::Loop {
-                label: self.label.as_ref().map(|l| l.ident_string()),
-            },
-        );
+        self.catch_location = context.register_catch_location(CatchLocationData::Loop {
+            label: self.label.as_ref().map(|l| l.ident_string()),
+        });
 
         let segment = context.enter_next_segment(SegmentKind::LoopingSequential);
         self.condition.control_flow_pass(context)?;
@@ -196,11 +194,7 @@ impl WhileExpression {
         {
             iteration_counter.increment_and_check()?;
             let body_result = self.body.evaluate_owned(interpreter);
-            match interpreter.catch_control_flow(
-                body_result,
-                self.catch_location,
-                scope,
-            )? {
+            match interpreter.catch_control_flow(body_result, self.catch_location, scope)? {
                 ExecutionOutcome::Value(value) => {
                     value.into_statement_result()?;
                 }
@@ -251,11 +245,9 @@ impl ParseSource for LoopExpression {
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
-        self.catch_location = context.register_catch_location(
-        CatchLocationData::Loop {
-                label: self.label.as_ref().map(|l| l.ident_string()),
-            },
-        );
+        self.catch_location = context.register_catch_location(CatchLocationData::Loop {
+            label: self.label.as_ref().map(|l| l.ident_string()),
+        });
 
         let segment = context.enter_next_segment(SegmentKind::LoopingSequential);
 
@@ -282,11 +274,7 @@ impl LoopExpression {
             iteration_counter.increment_and_check()?;
 
             let body_result = self.body.evaluate_owned(interpreter);
-            match interpreter.catch_control_flow(
-                body_result,
-                self.catch_location,
-                scope,
-            )? {
+            match interpreter.catch_control_flow(body_result, self.catch_location, scope)? {
                 ExecutionOutcome::Value(value) => {
                     value.into_statement_result()?;
                 }
@@ -348,11 +336,9 @@ impl ParseSource for ForExpression {
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
-        self.catch_location = context.register_catch_location(
-            CatchLocationData::Loop {
-                label: self.label.as_ref().map(|l| l.ident_string()),
-            },
-        );
+        self.catch_location = context.register_catch_location(CatchLocationData::Loop {
+            label: self.label.as_ref().map(|l| l.ident_string()),
+        });
 
         context.register_scope(&mut self.iteration_scope);
         self.iterable.control_flow_pass(context)?;
@@ -394,11 +380,7 @@ impl ForExpression {
             self.pattern.handle_destructure(interpreter, item)?;
 
             let body_result = self.body.evaluate_owned(interpreter);
-            match interpreter.catch_control_flow(
-                body_result,
-                self.catch_location,
-                scope,
-            )? {
+            match interpreter.catch_control_flow(body_result, self.catch_location, scope)? {
                 ExecutionOutcome::Value(value) => {
                     value.into_statement_result()?;
                 }
@@ -424,6 +406,7 @@ impl ForExpression {
 
 pub(crate) struct AttemptExpression {
     catch_location: CatchLocationId,
+    label: Option<CatchLabel>,
     attempt: AttemptKeyword,
     braces: Braces,
     arms: Vec<AttemptArm>,
@@ -446,6 +429,7 @@ impl HasSpanRange for AttemptExpression {
 
 impl ParseSource for AttemptExpression {
     fn parse(input: SourceParser) -> ParseResult<Self> {
+        let label = input.parse_optional()?;
         let attempt = input.parse()?;
         let (braces, inner) = input.parse_braces()?;
         let mut arms = vec![];
@@ -475,6 +459,7 @@ impl ParseSource for AttemptExpression {
         }
         Ok(Self {
             catch_location: CatchLocationId::new_placeholder(),
+            label,
             attempt,
             braces,
             arms,
@@ -482,7 +467,9 @@ impl ParseSource for AttemptExpression {
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
-        self.catch_location = context.register_catch_location(CatchLocationData::AttemptBlock);
+        self.catch_location = context.register_catch_location(CatchLocationData::AttemptBlock {
+            label: self.label.as_ref().map(|l| l.ident_string()),
+        });
 
         let segment = context.enter_next_segment(SegmentKind::PathBased);
         let mut previous_attempt_segment = None;
@@ -495,10 +482,11 @@ impl ParseSource for AttemptExpression {
 
             context.enter_catch(self.catch_location);
             arm.lhs.control_flow_pass(context)?;
+            context.exit_catch(self.catch_location);
+
             if let Some((_, guard_expression)) = &mut arm.guard {
                 guard_expression.control_flow_pass(context)?;
             }
-            context.exit_catch(self.catch_location);
 
             context.exit_segment(attempt_segment);
             previous_attempt_segment = Some(attempt_segment);
@@ -524,7 +512,8 @@ impl AttemptExpression {
         // We need a separate method to correctly capture the lifetimes of the guard clause
         fn guard_clause<'a>(
             guard: Option<&'a (Token![if], Expression)>,
-        ) -> Option<impl for<'b> FnOnce(&'b mut Interpreter) -> ExecutionResult<bool> + 'a> {
+        ) -> Option<impl for<'b> FnOnce(&'b mut Interpreter) -> ExecutionResult<bool> + 'a>
+        {
             guard.map(|(_, guard_expression)| {
                 move |interpreter: &mut Interpreter| -> ExecutionResult<bool> {
                     guard_expression
@@ -538,7 +527,8 @@ impl AttemptExpression {
                 arm.arm_scope,
                 self.catch_location,
                 |interpreter| -> ExecutionResult<()> {
-                    arm.lhs.evaluate_owned(interpreter)?
+                    arm.lhs
+                        .evaluate_owned(interpreter)?
                         .resolve_as("The returned value from the left half of an attempt arm")
                 },
                 guard_clause(arm.guard.as_ref()),

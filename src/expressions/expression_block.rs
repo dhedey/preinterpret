@@ -93,6 +93,24 @@ pub(crate) struct ExpressionBlock {
 impl ParseSource for ExpressionBlock {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let label = input.parse_optional()?;
+
+        // We add some special error handling here to help users avoid confusion
+        // between object literals and blocks.
+        let (inner, delim_span) = match input.cursor().any_group() {
+            Some((inner, Delimiter::Brace, delim_span, _)) => (inner, delim_span),
+            _ => {
+                return input.parse_err("Expected `{ ... }` to start an expression block.");
+            }
+        };
+        if inner.eof() {
+            return delim_span.open().parse_err("An empty object literal is written `%{}` with a `%` prefix. If you intend to use an empty block here, instead use `{ None }`.");
+        }
+        if let Some((_, next)) = inner.ident() {
+            if next.punct_matching(':').is_some() || next.punct_matching(',').is_some() {
+                return delim_span.open().parse_err("An object literal must be prefixed with %, e.g. `%{ field: 1 }`. Without such a prefix, { .. } defines a block.");
+            }
+        }
+
         let scoped_block = input.parse()?;
         Ok(Self {
             label: label.map(|l| (l, CatchLocationId::new_placeholder())),
@@ -102,18 +120,16 @@ impl ParseSource for ExpressionBlock {
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         if let Some((label, location_id)) = &mut self.label {
-            *location_id = context.register_catch_location(
-                CatchLocationData::LabeledBlock {
-                    label: label.ident_string(),
-                },
-            );
+            *location_id = context.register_catch_location(CatchLocationData::LabeledBlock {
+                label: label.ident_string(),
+            });
             context.enter_catch(*location_id);
             self.scoped_block.control_flow_pass(context)?;
             context.exit_catch(*location_id);
             Ok(())
         } else {
             self.scoped_block.control_flow_pass(context)
-        }   
+        }
     }
 }
 
@@ -135,11 +151,7 @@ impl ExpressionBlock {
 
         // If this block has a label, catch breaks targeting this specific catch location
         let output = if let Some((_, catch_location)) = &self.label {
-            match interpreter.catch_control_flow(
-                output_result,
-                *catch_location,
-                scope,
-            )? {
+            match interpreter.catch_control_flow(output_result, *catch_location, scope)? {
                 ExecutionOutcome::Value(value) => value,
                 ExecutionOutcome::ControlFlow(ControlFlowInterrupt::Break(break_interrupt)) => {
                     break_interrupt.into_value(self.span_range(), ownership)?

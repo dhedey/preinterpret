@@ -259,8 +259,7 @@ impl ControlFlowContext {
         &self,
         interrupt_details: InterruptDetails,
     ) -> ParseResult<CatchLocationId> {
-        self.state
-            .resolve_catch_for_interrupt(interrupt_details)
+        self.state.resolve_catch_for_interrupt(interrupt_details)
     }
 }
 
