@@ -443,7 +443,7 @@ E.G.
   * A Rust-like interpreted language with JS-like value types, built for code-generation
   * Comparison with proc-macros and crabtime
     * Native stream and parsing support, the `attempt` expression
-- [ ] [PAGE] Cheat-sheet
+  - [ ] [PAGE] Cheat-sheet
 - [ ] [PAGE] Syntax
   - [ ] [PAGE] Values  (linking to each expression value)
   - [ ] [PAGE] Control Flow
