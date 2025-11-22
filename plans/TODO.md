@@ -438,37 +438,56 @@ E.G.
 
 ## Write book / Docs
 
-* Introduction
+- [ ] [PAGE] Introduction - covering:
+  * Motivation
   * A Rust-like interpreted language with JS-like value types, built for code-generation
-  * Native stream and parsing support, and the `attempt` expression
   * Comparison with proc-macros and crabtime
-    * Compare to https://www.reddit.com/r/rust/comments/1j42fgi/media_introducing_eval_macro_a_new_way_to_write i.e. https://crates.io/crates/crabtime - thoughts on crabtime:
-    => Looks great!
-    => Likely has faster compile times compared with preinterpret
-    => Why don't they use a cheap hash of the code as a cache key?
-        - I imagine the rust macro system takes care of not re-running it if it changes
-        - The cachability is a big win compared to preinterpret (although preinterpret is faster on first run)
-    => I can't imagine the span-chasing / error messages are great, because everything is translated to/from strings between the processes
-        ... I wonder if there's any way to improve this?  Plausibly you could use the proc-macro bridge encoding scheme as per https://blog.jetbrains.com/rust/2022/07/07/procedural-macros-under-the-hood-part-ii/ to send handles onwards, or even delegate directly somehow?
-        - The spans are better in preinterpret
-    => Parsing isn't really a thing - they're not going after full macro stuff, probably wise
-* Use cases
-* Examples
-* Cheat-sheet
-* Values & Streams
-* Span handling
-  * If someone wants to keep a value's span, they can keep it in a stream and coerce it; or store it as a tuple of a value with its span `%{ value: $x, span: %[$x] }`
-* Parsing
-* Explanation of each expression, showing how it can be defined in terms of other building blocks
+    * Native stream and parsing support, the `attempt` expression
+- [ ] [PAGE] Cheat-sheet
+- [ ] [PAGE] Syntax
+  - [ ] [PAGE] Values  (linking to each expression value)
+  - [ ] [PAGE] Control Flow
+- [ ] [PAGE] Expression Values - discusses expression value hierachy, expression model similar to rust, object/array similar to JS. [subpage for each main expression value kind, including sytax, examples and creating the value, and methods on the value]
+  - [ ] [PAGE] Stream
+  - [ ] [PAGE] Integers
+  - [ ] [PAGE] Floats
+  - [ ] [PAGE] Char
+  - [ ] [PAGE] Boolean
+  - [ ] [PAGE] String
+  - [ ] [PAGE] Array
+  - [ ] [PAGE] Object
+  - [ ] [PAGE] Range
+  - [ ] [PAGE] Iterable
+  - [ ] [PAGE] Iterator
+  - [ ] [PAGE] None
+- [ ] [PAGE] Guides
+  - [ ] [PAGE] Errors and Spans
+      - NB: If someone wants to keep a value's span, they can keep it in a stream and coerce it; or store it as a tuple of a value with its span `%{ value: $x, span: %[$x] }`
+  - [ ] [PAGE] Parsing
+- [ ] Examples (tbc)
 
 And then we need to:
-* Update the README to point to the book
-* Update the module docstring to point to the book.
+- [ ] Update the README to point to the book
+- [ ] Update the module docstring to point to the book.
+
+Sidenote - crabtime comparison:
+* Compare to https://www.reddit.com/r/rust/comments/1j42fgi/media_introducing_eval_macro_a_new_way_to_write i.e. https://crates.io/crates/crabtime - thoughts on crabtime:
+=> Looks great!
+=> Likely has faster compile times compared with preinterpret
+=> Why don't they use a cheap hash of the code as a cache key?
+    - I imagine the rust macro system takes care of not re-running it if it changes
+    - The cachability is a big win compared to preinterpret (although preinterpret is faster on first run)
+=> I can't imagine the span-chasing / error messages are great, because everything is translated to/from strings between the processes
+    ... I wonder if there's any way to improve this?  Plausibly you could use the proc-macro bridge encoding scheme as per https://blog.jetbrains.com/rust/2022/07/07/procedural-macros-under-the-hood-part-ii/ to send handles onwards, or even delegate directly somehow?
+    - The spans are better in preinterpret
+=> Parsing isn't really a thing - they're not going after full macro stuff, probably wise
+
 
 ## Write marketing materials
 
 * Publish v1.0
 * Flashy infographic like `crabtime` with some examples.
+* Mimimal readme, focusing on key use-cases, and pointing out at the docs.
 
 ## Stream-return optimizations [OPTIONAL]
 
