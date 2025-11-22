@@ -1,31 +1,29 @@
 use super::*;
 
-pub(crate) struct ExpressionLabel {
-    pub(crate) label: syn::Lifetime,
-    pub(crate) colon: Token![:],
+pub(crate) struct CatchLabel {
+    label: syn::Lifetime,
+    _colon: Unused<Token![:]>,
 }
 
-impl ExpressionLabel {
+impl CatchLabel {
     pub(crate) fn ident_string(&self) -> String {
         self.label.ident.to_string()
     }
 }
 
-impl syn::parse::Parse for ExpressionLabel {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+impl ParseSource for CatchLabel {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
         let lifetime = input.parse()?;
-        let colon = input.parse()?;
+        let _colon = input.parse()?;
         Ok(Self {
             label: lifetime,
-            colon,
+            _colon,
         })
     }
-}
 
-impl ParseSourceOptional for ExpressionLabel {}
-
-impl HasSpanRange for ExpressionLabel {
-    fn span_range(&self) -> SpanRange {
-        SpanRange::new_between(self.label.apostrophe, self.colon.span)
+    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
+        Ok(())
     }
 }
+
+impl ParseSourceOptional for CatchLabel {}

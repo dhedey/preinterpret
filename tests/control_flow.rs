@@ -231,6 +231,83 @@ fn test_attempt() {
 }
 
 #[test]
+fn test_labeled_attempt_blocks() {
+    // Simple labeled attempt with revert to that label
+    run! {
+        let value = 'outer: attempt {
+            { revert 'outer; } => { 1 }
+            { } => { 2 }
+        };
+        %[_].assert_eq(value, 2);
+    }
+
+    // Nested attempt blocks with labeled revert to outer
+    run! {
+        let value = 'outer: attempt {
+            {
+                attempt {
+                    { revert 'outer; } => { None }
+                    { } => { None }
+                }
+            } => { 1 }
+            { } => { 2 }
+        };
+        %[_].assert_eq(value, 2);
+    }
+
+    // Multiple nested attempts with specific label targeting
+    run! {
+        let value = 'outer: attempt {
+            {
+                'inner: attempt {
+                    { revert 'inner; } => { None }
+                    { } => { None }
+                }
+            } => { 1 }
+            { } => { 2 }
+        };
+        %[_].assert_eq(value, 1);
+    }
+
+    // Labeled attempt with successful arm
+    run! {
+        let value = 'labeled: attempt {
+            { let x = 10; } => { x }
+            { } => { 0 }
+        };
+        %[_].assert_eq(value, 10);
+    }
+
+    // Revert to specific outer attempt skipping intermediate one
+    run! {
+        let value = 'outer: attempt {
+            {
+                'middle: attempt {
+                    {
+                        'inner: attempt {
+                            { revert 'outer; } => { None }
+                            { } => { None }
+                        }
+                    } => { None }
+                    { } => { None }
+                }
+            } => { 1 }
+            { } => { 2 }
+        };
+        %[_].assert_eq(value, 2);
+    }
+
+    // Unlabeled revert in labeled attempt (should revert to immediately enclosing attempt)
+    run! {
+        let value = 'outer: attempt {
+            { revert; } => { 1 }
+            { } => { 2 }
+        };
+        %[_].assert_eq(value, 2);
+    }
+}
+
+#[test]
 fn test_attempt_guard_clauses() {
     run! {
         let output = attempt {

@@ -133,10 +133,8 @@ Create the following expressions:
   - [x] Add `if X` guards to attempt block
   - [x] Add a message to uncatchable errors explaining why the attempt block does not catch them, advising to use an assertion if these errors are intended to be caught.
   - [x] Add `revert` keyword and replace error `is a not caught by attempt blocks` and `Guard condition evaluated to false.` with using it
-- [ ] Side-project: Make LateBound better to allow this, by upgrading to mutable before use
-  - [ ] https://rust-lang.github.io/rfcs/2025-nested-method-calls.html
 
-## Loop return behaviour
+## Loop return behaviour & emit statement
 
 Ideally we want to allow returning/appending easily in a loop. Currently, we're trialing loops returning a vector (or possibly a vector of non-None values).
 
@@ -155,12 +153,6 @@ These are things we definitely want to do:
 - [x] Add sensible use-case tests and compilation failure tests using `emit`
 - [x] Disallow `emit` in revertible segment into stream outside of segment
 
-The following are only maybes:
-
-- [ ] Allow adding lifetimes to stream literals `%'a[]` and then `emit 'a`, with `'root` being the topmost. Or maybe just `emit 'root` honestly. Can't really see the use case for the others.
-  - [ ] Note that `%'a[((#{ emit 'a %[x] }))]` should yield `x(())`
-  - [ ] Note that we need to prevent or revert outputting to root in revertible segments
-
 ## Break / Continue Improvements
 
 - [x] `break` can include an optional expresion, and can be used to return a value
@@ -175,6 +167,7 @@ First, read the @./2025-09-vision.md
 
 - [ ] Manually search for transform and rename to parse in folder names and file.
 - [ ] Initial changes:
+  - [ ] We store input in the interpreter `TODO[parser-input-in-interpreter]`
   - [ ] Parsers no longer output to a stream, instead the output values.
   - [ ] Sort out `TODO[parser-no-output]`
   - [ ] Scopes/frames can have a parse stream associated with them. This can be read/resolved (as the nearest parent) by parsers, even in expression blocks
@@ -183,6 +176,11 @@ First, read the @./2025-09-vision.md
 
 * Various other changes from the vision doc
 * (Side thought) - How does selecting a parse stream come into it? And e.g. when we extend to method/function definitions... Some options:
+
+  * Nov 2025: I like pseudo-variables:
+    * `@` refers to current scope, behind the scenes it's a parse stream type,
+      whose methods call into the interpreter
+    * Can consider introducing named variables `@input` in future
   * `@'1 IDENT`
   * `@>ident`, `@'1>ident`
   * Pseudo-variables:
@@ -367,6 +365,16 @@ preinterpret::run! {
   - [ ] References store on them cached information - either up-front, via an `Rc<Cell<ReferenceContent::Resolved(ResolvedReference)>>` or via a "resolve on first execute"
     - Value's relative offset from the top of the stack
     - An is last use flag
+
+## Deferred
+
+The following are less important tasks which maybe we don't even want/need to do.
+
+- [ ] Side-project: Make LateBound better to allow this, by upgrading to mutable before use
+  - [ ] https://rust-lang.github.io/rfcs/2025-nested-method-calls.html
+- [ ] Allow adding lifetimes to stream literals `%'a[]` and then `emit 'a`, with `'root` being the topmost. Or maybe just `emit 'root` honestly. Can't really see the use case for the others.
+  - [ ] Note that `%'a[((#{ emit 'a %[x] }))]` should yield `x(())`
+  - [ ] Note that we need to prevent or revert outputting to root in revertible segments
 
 ## Match block [blocked on slices]
 

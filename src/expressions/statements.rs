@@ -153,27 +153,57 @@ impl LetStatement {
     }
 }
 
-pub(crate) struct BreakStatement {
-    break_token: Token![break],
-    label: Option<syn::Lifetime>,
-    value: Option<Expression>,
+pub(crate) struct InterruptLabel {
+    label: syn::Lifetime,
 }
 
-impl HasSpan for BreakStatement {
-    fn span(&self) -> Span {
-        self.break_token.span
+impl ParseSource for InterruptLabel {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
+        let label = input.parse()?;
+        Ok(Self { label })
+    }
+
+    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
+        Ok(())
+    }
+}
+
+impl ParseSourceOptional for InterruptLabel {}
+
+impl HasSpanRange for InterruptLabel {
+    fn span_range(&self) -> SpanRange {
+        self.label.span_range()
+    }
+}
+
+impl InterruptLabel {
+    pub(crate) fn ident_string(&self) -> String {
+        self.label.ident.to_string()
+    }
+}
+
+pub(crate) struct BreakStatement {
+    break_token: Token![break],
+    label: Option<InterruptLabel>,
+    value: Option<Expression>,
+    target_catch_location: CatchLocationId,
+}
+
+impl HasSpanRange for BreakStatement {
+    fn span_range(&self) -> SpanRange {
+        let last = self
+            .label
+            .as_ref()
+            .map(|l| l.end_span())
+            .unwrap_or_else(|| self.break_token.span);
+        SpanRange::new_between(self.break_token.span, last)
     }
 }
 
 impl ParseSource for BreakStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let break_token = input.parse()?;
-
-        let label = if input.cursor().lifetime().is_some() {
-            Some(input.parse()?)
-        } else {
-            None
-        };
+        let label = input.parse_optional()?;
 
         // Try to parse an optional expression value
         let value = if !input.is_empty() && !input.peek(Token![;]) {
@@ -186,10 +216,16 @@ impl ParseSource for BreakStatement {
             break_token,
             label,
             value,
+            target_catch_location: CatchLocationId::new_placeholder(),
         })
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        self.target_catch_location =
+            context.resolve_catch_for_interrupt(InterruptDetails::Break {
+                break_token: &self.break_token,
+                label: self.label.as_ref(),
+            })?;
         if let Some(value) = &mut self.value {
             value.control_flow_pass(context)?;
         }
@@ -209,43 +245,46 @@ impl BreakStatement {
         };
 
         Err(ExecutionInterrupt::control_flow(
-            ControlFlowInterrupt::new_break(
-                self.label.as_ref().map(|l| l.ident.to_string()),
-                value,
-            ),
-            self.break_token.span,
+            ControlFlowInterrupt::new_break(self.target_catch_location, value),
         ))
     }
 }
 
 pub(crate) struct ContinueStatement {
+    target_catch_location: CatchLocationId,
     continue_token: Token![continue],
-    label: Option<syn::Lifetime>,
+    label: Option<InterruptLabel>,
 }
 
-impl HasSpan for ContinueStatement {
-    fn span(&self) -> Span {
-        self.continue_token.span
+impl HasSpanRange for ContinueStatement {
+    fn span_range(&self) -> SpanRange {
+        let last = self
+            .label
+            .as_ref()
+            .map(|l| l.end_span())
+            .unwrap_or_else(|| self.continue_token.span);
+        SpanRange::new_between(self.continue_token.span, last)
     }
 }
 
 impl ParseSource for ContinueStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let continue_token = input.parse()?;
-
-        let label = if input.cursor().lifetime().is_some() {
-            Some(input.parse()?)
-        } else {
-            None
-        };
+        let label = input.parse_optional()?;
 
         Ok(Self {
+            target_catch_location: CatchLocationId::new_placeholder(),
             continue_token,
             label,
         })
     }
 
-    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        self.target_catch_location =
+            context.resolve_catch_for_interrupt(InterruptDetails::Continue {
+                label: self.label.as_ref(),
+                continue_token: &self.continue_token,
+            })?;
         Ok(())
     }
 }
@@ -253,29 +292,43 @@ impl ParseSource for ContinueStatement {
 impl ContinueStatement {
     pub(crate) fn evaluate_as_statement(&self, _: &mut Interpreter) -> ExecutionResult<()> {
         Err(ExecutionInterrupt::control_flow(
-            ControlFlowInterrupt::new_continue(self.label.as_ref().map(|l| l.ident.to_string())),
-            self.continue_token.span,
+            ControlFlowInterrupt::new_continue(self.target_catch_location),
         ))
     }
 }
 
 pub(crate) struct RevertStatement {
     revert: RevertKeyword,
+    label: Option<InterruptLabel>,
+    target_catch_location: CatchLocationId,
 }
 
-impl HasSpan for RevertStatement {
-    fn span(&self) -> Span {
-        self.revert.span()
+impl HasSpanRange for RevertStatement {
+    fn span_range(&self) -> SpanRange {
+        let last = self
+            .label
+            .as_ref()
+            .map(|l| l.end_span())
+            .unwrap_or_else(|| self.revert.span());
+        SpanRange::new_between(self.revert.span(), last)
     }
 }
 
 impl ParseSource for RevertStatement {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        let revert = input.parse()?;
-        Ok(Self { revert })
+        Ok(Self {
+            revert: input.parse()?,
+            label: input.parse_optional()?,
+            target_catch_location: CatchLocationId::new_placeholder(),
+        })
     }
 
-    fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        self.target_catch_location =
+            context.resolve_catch_for_interrupt(InterruptDetails::Revert {
+                revert_token: &self.revert,
+                label: self.label.as_ref(),
+            })?;
         Ok(())
     }
 }
@@ -283,8 +336,7 @@ impl ParseSource for RevertStatement {
 impl RevertStatement {
     pub(crate) fn evaluate_as_statement(&self, _: &mut Interpreter) -> ExecutionResult<()> {
         Err(ExecutionInterrupt::control_flow(
-            ControlFlowInterrupt::Revert,
-            self.revert.span(),
+            ControlFlowInterrupt::new_revert(self.target_catch_location),
         ))
     }
 }

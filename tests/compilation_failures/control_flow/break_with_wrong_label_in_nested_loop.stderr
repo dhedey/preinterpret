@@ -1,5 +1,5 @@
-error: break with label outer can only be used inside a loop or block with that label
- --> tests/compilation_failures/control_flow/break_with_wrong_label_in_nested_loop.rs:6:13
+error: A labelled break must be used inside a loop or block with a matching label
+ --> tests/compilation_failures/control_flow/break_with_wrong_label_in_nested_loop.rs:6:19
   |
 6 |             break 'outer;
-  |             ^^^^^
+  |                   ^^^^^^

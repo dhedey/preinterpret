@@ -1,4 +1,4 @@
-error: continue can only be used inside a loop
+error: A continue must be used inside a loop
  --> tests/compilation_failures/control_flow/continue_outside_a_loop_2.rs:4:10
   |
 4 |     run!(continue;);

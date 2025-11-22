@@ -150,27 +150,25 @@ impl ExecutionInterrupt {
 
     pub(crate) fn into_outcome<T>(
         self,
-        should_catch: impl FnOnce(&ControlFlowInterrupt) -> bool,
+        catch_location_id: CatchLocationId,
     ) -> ExecutionResult<ExecutionOutcome<T>> {
         match *self.inner {
-            ExecutionInterruptInner::ControlFlowInterrupt(control_flow_interrupt, _)
-                if should_catch(&control_flow_interrupt) =>
+            ExecutionInterruptInner::ControlFlowInterrupt(interrupt)
+                if catch_location_id == interrupt.catch_location_id() =>
             {
-                Ok(ExecutionOutcome::ControlFlow(control_flow_interrupt))
+                Ok(ExecutionOutcome::ControlFlow(interrupt))
             }
             _ => Err(self),
         }
     }
 
-    /// Determines which errors can be caught by an attempt block.
-    ///
     /// Generally, coding errors should be propogated, while user-thrown errors
     /// and runtime errors which are indicative of invalid values being
     /// present should be caught.
     ///
     /// This allows the attempt block to use the first valid branch given the data
     /// it encounters.
-    pub(crate) fn is_catchable(&self) -> bool {
+    pub(crate) fn is_catchable_by_attempt_block(&self, catch_location_id: CatchLocationId) -> bool {
         match self.inner.as_ref() {
             ExecutionInterruptInner::Error(ErrorKind::Syntax, _) => false,
             ExecutionInterruptInner::Error(ErrorKind::Type, _) => false,
@@ -180,8 +178,9 @@ impl ExecutionInterrupt {
             ExecutionInterruptInner::Error(ErrorKind::Value, _) => true,
             ExecutionInterruptInner::Error(ErrorKind::ControlFlow, _) => false,
             ExecutionInterruptInner::Error(ErrorKind::Parse, _) => true,
-            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Revert, _) => true,
-            ExecutionInterruptInner::ControlFlowInterrupt(_, _) => false,
+            ExecutionInterruptInner::ControlFlowInterrupt(interrupt) => {
+                interrupt.catch_location_id() == catch_location_id
+            }
         }
     }
 
@@ -224,11 +223,8 @@ impl ExecutionInterrupt {
         Self::new_error(ErrorKind::ControlFlow, error)
     }
 
-    pub(crate) fn control_flow(control_flow: ControlFlowInterrupt, span: Span) -> Self {
-        Self::new(ExecutionInterruptInner::ControlFlowInterrupt(
-            control_flow,
-            span,
-        ))
+    pub(crate) fn control_flow(control_flow: ControlFlowInterrupt) -> Self {
+        Self::new(ExecutionInterruptInner::ControlFlowInterrupt(control_flow))
     }
 }
 
@@ -279,13 +275,13 @@ enum ExecutionInterruptInner {
     /// Some runtime error
     Error(ErrorKind, DetailedError),
     /// Indicates unwinding due to control flow (break/continue)
-    ControlFlowInterrupt(ControlFlowInterrupt, Span),
+    ControlFlowInterrupt(ControlFlowInterrupt),
 }
 
 pub(crate) enum ControlFlowInterrupt {
     Break(BreakInterrupt),
     Continue(ContinueInterrupt),
-    Revert,
+    Revert(RevertInterrupt),
 }
 
 impl std::fmt::Debug for ControlFlowInterrupt {
@@ -293,61 +289,49 @@ impl std::fmt::Debug for ControlFlowInterrupt {
         match self {
             ControlFlowInterrupt::Break(_) => f.write_str("Break"),
             ControlFlowInterrupt::Continue(_) => f.write_str("Continue"),
-            ControlFlowInterrupt::Revert => f.write_str("Revert"),
+            ControlFlowInterrupt::Revert(_) => f.write_str("Revert"),
         }
     }
 }
 
 impl ControlFlowInterrupt {
-    pub(crate) fn new_break(label: Option<String>, value: Option<OwnedValue>) -> Self {
-        ControlFlowInterrupt::Break(BreakInterrupt { label, value })
+    pub(crate) fn new_break(
+        target_catch_location: CatchLocationId,
+        value: Option<OwnedValue>,
+    ) -> Self {
+        ControlFlowInterrupt::Break(BreakInterrupt {
+            target_catch_location,
+            value,
+        })
     }
 
-    pub(crate) fn new_continue(label: Option<String>) -> Self {
-        ControlFlowInterrupt::Continue(ContinueInterrupt { label })
+    pub(crate) fn new_continue(target_catch_location: CatchLocationId) -> Self {
+        ControlFlowInterrupt::Continue(ContinueInterrupt {
+            target_catch_location,
+        })
     }
 
-    pub(crate) fn catch_labelled_break(
-        this: &ControlFlowInterrupt,
-        target_label: Option<&ExpressionLabel>,
-    ) -> bool {
-        match (this, target_label) {
-            (
-                ControlFlowInterrupt::Break(BreakInterrupt {
-                    label: Some(break_label),
-                    ..
-                }),
-                Some(target_label),
-            ) => break_label == target_label.ident_string().as_str(),
-            _ => false,
-        }
+    pub(crate) fn new_revert(target_catch_location: CatchLocationId) -> Self {
+        ControlFlowInterrupt::Revert(RevertInterrupt {
+            target_catch_location,
+        })
     }
 
-    pub(crate) fn catch_loop_related(
-        this: &ControlFlowInterrupt,
-        target_label: Option<&ExpressionLabel>,
-    ) -> bool {
-        match this {
-            ControlFlowInterrupt::Break(BreakInterrupt {
-                label: interrupt_label,
-                ..
-            })
-            | ControlFlowInterrupt::Continue(ContinueInterrupt {
-                label: interrupt_label,
-            }) => match (interrupt_label, target_label) {
-                (None, _) => true,
-                (Some(interrupt_label), Some(target_label)) => {
-                    interrupt_label == target_label.ident_string().as_str()
-                }
-                (Some(_), None) => false,
-            },
-            ControlFlowInterrupt::Revert => false,
+    fn catch_location_id(&self) -> CatchLocationId {
+        match self {
+            ControlFlowInterrupt::Break(break_interrupt) => break_interrupt.target_catch_location,
+            ControlFlowInterrupt::Continue(continue_interrupt) => {
+                continue_interrupt.target_catch_location
+            }
+            ControlFlowInterrupt::Revert(revert_interrupt) => {
+                revert_interrupt.target_catch_location
+            }
         }
     }
 }
 
 pub(crate) struct BreakInterrupt {
-    label: Option<String>,
+    target_catch_location: CatchLocationId,
     value: Option<OwnedValue>,
 }
 
@@ -366,46 +350,33 @@ impl BreakInterrupt {
 }
 
 pub(crate) struct ContinueInterrupt {
-    label: Option<String>,
+    target_catch_location: CatchLocationId,
+}
+
+pub(crate) struct RevertInterrupt {
+    target_catch_location: CatchLocationId,
 }
 
 impl ExecutionInterrupt {
     pub(crate) fn convert_to_final_error(self) -> syn::Error {
         match *self.inner {
             ExecutionInterruptInner::Error(_, e) => e.convert_to_final_error(),
-            ExecutionInterruptInner::ControlFlowInterrupt(
-                ControlFlowInterrupt::Break(BreakInterrupt { label, .. }),
-                span,
-            ) => {
-                if let Some(label) = label {
-                    syn::Error::new(span, format!("break with label {} can only be used inside a loop or block with that label", label))
-                } else {
-                    syn::Error::new(
-                        span,
-                        "break can only be used inside a loop or labeled block",
-                    )
-                }
+            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Break(_)) => {
+                panic!(
+                    "Internal error: break escaped to root (should be caught at parse time). \
+                     Please report this bug at https://github.com/dhedey/preinterpret/issues"
+                )
             }
-            ExecutionInterruptInner::ControlFlowInterrupt(
-                ControlFlowInterrupt::Continue(ContinueInterrupt { label }),
-                span,
-            ) => {
-                if let Some(label) = label {
-                    syn::Error::new(
-                        span,
-                        format!(
-                            "continue with label {} can only be used inside a loop with that label",
-                            label
-                        ),
-                    )
-                } else {
-                    syn::Error::new(span, "continue can only be used inside a loop")
-                }
+            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Continue(_)) => {
+                panic!(
+                    "Internal error: continue escaped to root (should be caught at parse time). \
+                     Please report this bug at https://github.com/dhedey/preinterpret/issues"
+                )
             }
-            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Revert, span) => {
-                syn::Error::new(
-                    span,
-                    "revert can only be used in the conditional part of an attempt arm",
+            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Revert(_)) => {
+                panic!(
+                    "Internal error: revert escaped to root (should be caught at parse time). \
+                     Please report this bug at https://github.com/dhedey/preinterpret/issues"
                 )
             }
         }

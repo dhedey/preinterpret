@@ -242,6 +242,25 @@ impl ControlFlowContext {
     pub(crate) fn exit_segment(&mut self, segment_id: ControlFlowSegmentId) {
         self.state.exit_segment(segment_id);
     }
+
+    pub(crate) fn register_catch_location(&mut self, data: CatchLocationData) -> CatchLocationId {
+        self.state.register_catch_location(data)
+    }
+
+    pub(crate) fn enter_catch(&mut self, catch_location_id: CatchLocationId) {
+        self.state.enter_catch(catch_location_id);
+    }
+
+    pub(crate) fn exit_catch(&mut self, catch_location_id: CatchLocationId) {
+        self.state.exit_catch(catch_location_id);
+    }
+
+    pub(crate) fn resolve_catch_for_interrupt(
+        &self,
+        interrupt_details: InterruptDetails,
+    ) -> ParseResult<CatchLocationId> {
+        self.state.resolve_catch_for_interrupt(interrupt_details)
+    }
 }
 
 // This was originally created so that we could modify a stateful context
