@@ -6,9 +6,39 @@ use crate::internal_prelude::*;
 
 pub(crate) struct Source;
 
-impl ParseBuffer<'_, Source> {
+impl<'a> ParseBuffer<'a, Source> {
     pub(crate) fn peek_grammar(&self) -> SourcePeekMatch {
         detect_preinterpret_grammar(self.cursor())
+    }
+
+    pub(crate) fn parse<T: ParseSource>(&self) -> ParseResult<T> {
+        T::parse(self)
+    }
+
+    pub(crate) fn parse_optional<T: ParseSourceOptional>(&self) -> ParseResult<Option<T>> {
+        T::parse_optional(self)
+    }
+
+    pub fn parse_terminated<T: ParseSource, P: ParseSource>(
+        &'a self,
+    ) -> ParseResult<Punctuated<T, P>> {
+        Punctuated::parse_terminated_using(self, T::parse, P::parse)
+    }
+
+    pub(crate) fn call<T, F: FnOnce(SourceParser) -> ParseResult<T>>(&self, f: F) -> ParseResult<T> {
+        f(self)
+    }
+
+    pub(crate) fn parse_virtual_empty_stream<T>(
+        &self,
+        parser: impl FnOnce(SourceParser) -> ParseResult<T>,
+    ) -> ParseResult<T> {
+        parse_with(TokenStream::new(), |stream: ParseStream<Source>| -> ParseResult<T> {
+            let forked = stream.fork();
+            let output = parser(&forked)?;
+            stream.advance_to(&forked);
+            Ok(output)
+        })
     }
 }
 
@@ -108,6 +138,25 @@ fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> SourcePeekMatch {
 
 pub(crate) struct Output;
 
+impl<'a> ParseBuffer<'a, Output> {
+    pub(crate) fn parse<T: Parse<Output>>(&self) -> ParseResult<T> {
+        self.parse_generic()
+    }
+
+    pub fn parse_terminated<T: Parse<Output>, P: Parse<Output>>(
+        &'a self,
+    ) -> ParseResult<Punctuated<T, P>> {
+        self.parse_terminated_generic()
+    }
+
+    pub(crate) fn call<T, F: FnOnce(ParseStream<Output>) -> ParseResult<T>>(
+        &self,
+        f: F,
+    ) -> ParseResult<T> {
+        self.call_generic(f)
+    }
+}
+
 // Source parsing
 // ===============
 
@@ -124,7 +173,7 @@ where
     T: Parse<Source>,
 {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        <T as Parse<Source>>::parse(&input.buffer)
+        <T as Parse<Source>>::parse(input)
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
@@ -139,7 +188,7 @@ pub(crate) trait ParseSourceOptional: ParseSource {
         let fork = input.fork();
         match Self::parse(&fork) {
             Ok(value) => {
-                input.advance_to(&fork.buffer);
+                input.advance_to(&fork);
                 Ok(Some(value))
             }
             Err(_) => Ok(None),
@@ -153,9 +202,8 @@ pub(crate) fn parse_without_analysis<T>(
     move |stream: ParseStream<Source>| {
         // To get access to an owned ParseBuffer we fork it... and advance later!
         let forked = stream.fork();
-        let parse_buffer = SourceParseBuffer::new(forked);
-        let mut output = parser(&parse_buffer)?;
-        stream.advance_to(&parse_buffer.buffer);
+        let output = parser(&forked)?;
+        stream.advance_to(&forked);
         Ok(output)
     }
 }
@@ -263,120 +311,7 @@ impl ControlFlowContext {
     }
 }
 
-// This was originally created so that we could modify a stateful context
-// during parsing, but this was later moved to the control_flow pass instead.
-// We might be able to remove this and go back to ParseBuffer<'a, Source> in future.
-pub(crate) struct SourceParseBuffer<'a> {
-    pub(crate) buffer: ParseBuffer<'a, Source>,
-}
-
-impl<'a> Deref for SourceParseBuffer<'a> {
-    type Target = ParseBuffer<'a, Source>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.buffer
-    }
-}
-
-impl<'a> SourceParseBuffer<'a> {
-    fn new(buffer: ParseBuffer<'a, Source>) -> Self {
-        Self { buffer }
-    }
-
-    pub(crate) fn fork(&self) -> SourceParseBuffer<'a> {
-        SourceParseBuffer {
-            buffer: self.buffer.fork(),
-        }
-    }
-
-    pub(crate) fn parse_virtual_empty_stream<T>(
-        &self,
-        parser: impl FnOnce(SourceParser) -> ParseResult<T>,
-    ) -> ParseResult<T> {
-        parse_with(TokenStream::new(), |stream| -> ParseResult<T> {
-            let forked = stream.fork();
-            let parse_buffer = SourceParseBuffer { buffer: forked };
-            let output = parser(&parse_buffer)?;
-            stream.advance_to(&parse_buffer.buffer);
-            Ok(output)
-        })
-    }
-
-    fn child_from_buffer<'c>(&self, buffer: ParseBuffer<'c, Source>) -> SourceParseBuffer<'c> {
-        SourceParseBuffer { buffer }
-    }
-
-    pub(crate) fn parse<T: ParseSource>(&self) -> ParseResult<T> {
-        T::parse(self)
-    }
-
-    pub(crate) fn parse_optional<T: ParseSourceOptional>(&self) -> ParseResult<Option<T>> {
-        T::parse_optional(self)
-    }
-
-    pub fn parse_terminated<T: ParseSource, P: ParseSource>(
-        &'a self,
-    ) -> ParseResult<Punctuated<T, P>> {
-        Punctuated::parse_terminated_using(self, T::parse, P::parse)
-    }
-
-    pub(crate) fn call<T, F: FnOnce(SourceParser) -> ParseResult<T>>(
-        &self,
-        f: F,
-    ) -> ParseResult<T> {
-        f(self)
-    }
-
-    pub(crate) fn parse_any_group(
-        &self,
-    ) -> ParseResult<(Delimiter, DelimSpan, SourceParseBuffer<'_>)> {
-        self.buffer
-            .parse_any_group()
-            .map(move |(d, s, b)| (d, s, self.child_from_buffer(b)))
-    }
-
-    pub(crate) fn parse_group_matching(
-        &self,
-        matching: impl FnOnce(Delimiter) -> bool,
-        expected_message: impl FnOnce() -> String,
-    ) -> ParseResult<(DelimSpan, SourceParseBuffer<'_>)> {
-        self.buffer
-            .parse_group_matching(matching, expected_message)
-            .map(|(s, b)| (s, self.child_from_buffer(b)))
-    }
-
-    pub(crate) fn parse_specific_group(
-        &self,
-        expected_delimiter: Delimiter,
-    ) -> ParseResult<(DelimSpan, SourceParseBuffer<'_>)> {
-        self.parse_group_matching(
-            |delimiter| delimiter == expected_delimiter,
-            || format!("Expected {}", expected_delimiter.description_of_open()),
-        )
-    }
-
-    pub(crate) fn parse_braces(&self) -> ParseResult<(Braces, SourceParseBuffer<'_>)> {
-        let (delim_span, inner) = self.parse_specific_group(Delimiter::Brace)?;
-        Ok((Braces { delim_span }, inner))
-    }
-
-    pub(crate) fn parse_brackets(&self) -> ParseResult<(Brackets, SourceParseBuffer<'_>)> {
-        let (delim_span, inner) = self.parse_specific_group(Delimiter::Bracket)?;
-        Ok((Brackets { delim_span }, inner))
-    }
-
-    pub(crate) fn parse_parentheses(&self) -> ParseResult<(Parentheses, SourceParseBuffer<'_>)> {
-        let (delim_span, inner) = self.parse_specific_group(Delimiter::Parenthesis)?;
-        Ok((Parentheses { delim_span }, inner))
-    }
-
-    pub(crate) fn parse_transparent_group(
-        &self,
-    ) -> ParseResult<(TransparentDelimiters, SourceParseBuffer<'_>)> {
-        let (delim_span, inner) = self.parse_specific_group(Delimiter::None)?;
-        Ok((TransparentDelimiters { delim_span }, inner))
-    }
-}
+pub(crate) type SourceParseBuffer<'a> = ParseBuffer<'a, Source>;
 
 // Generic parsing
 // ===============
@@ -430,15 +365,17 @@ impl<'a, K> ParseBuffer<'a, K> {
         }
     }
 
-    pub(crate) fn parse<T: Parse<K>>(&self) -> ParseResult<T> {
+    pub(crate) fn parse_generic<T: Parse<K>>(&self) -> ParseResult<T> {
         T::parse(self)
     }
 
-    pub fn parse_terminated<T: Parse<K>, P: Parse<K>>(&'a self) -> ParseResult<Punctuated<T, P>> {
+    pub fn parse_terminated_generic<T: Parse<K>, P: Parse<K>>(
+        &'a self,
+    ) -> ParseResult<Punctuated<T, P>> {
         Punctuated::parse_terminated_using(self, T::parse, P::parse)
     }
 
-    pub(crate) fn call<T, F: FnOnce(ParseStream<K>) -> ParseResult<T>>(
+    pub(crate) fn call_generic<T, F: FnOnce(ParseStream<K>) -> ParseResult<T>>(
         &self,
         f: F,
     ) -> ParseResult<T> {
@@ -468,7 +405,7 @@ impl<'a, K> ParseBuffer<'a, K> {
     }
 
     pub(crate) fn parse_any_ident(&self) -> ParseResult<Ident> {
-        self.call(|stream| Ok(Ident::parse_any(&stream.inner)?))
+        self.call_generic(|stream| Ok(Ident::parse_any(&stream.inner)?))
     }
 
     pub(crate) fn peek_ident_matching(&self, content: &str) -> bool {
@@ -657,12 +594,6 @@ pub(crate) trait AnyParseStream: Copy {
 }
 
 impl<'a, K> AnyParseStream for ParseStream<'a, K> {
-    fn is_empty(&self) -> bool {
-        self.inner.is_empty()
-    }
-}
-
-impl<'a> AnyParseStream for SourceParser<'a> {
     fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }

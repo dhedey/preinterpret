@@ -142,20 +142,20 @@ impl DelimiterExt for Delimiter {
 
 /// Allows storing a stack of parse buffers for certain parse strategies which require
 /// handling multiple groups in parallel.
-pub(crate) struct ParseStreamStack<'a> {
-    base: SourceParser<'a>,
-    group_stack: Vec<SourceParseBuffer<'a>>,
+pub(crate) struct ParseStreamStack<'a, K> {
+    base: ParseStream<'a, K>,
+    group_stack: Vec<ParseBuffer<'a, K>>,
 }
 
-impl<'a> ParseStreamStack<'a> {
-    pub(crate) fn new(base: SourceParser<'a>) -> Self {
+impl<'a, K> ParseStreamStack<'a, K> {
+    pub(crate) fn new(base: ParseStream<'a, K>) -> Self {
         Self {
             base,
             group_stack: Vec::new(),
         }
     }
 
-    pub(crate) fn current(&self) -> SourceParser<'_> {
+    pub(crate) fn current(&self) -> ParseStream<'_, K> {
         self.group_stack.last().unwrap_or(self.base)
     }
 
@@ -167,16 +167,8 @@ impl<'a> ParseStreamStack<'a> {
         self.current().parse_err(message)
     }
 
-    pub(crate) fn parse<T: ParseSource>(&mut self) -> ParseResult<T> {
-        self.current().parse()
-    }
-
     pub(crate) fn is_current_empty(&self) -> bool {
         self.current().is_empty()
-    }
-
-    pub(crate) fn peek_grammar(&mut self) -> SourcePeekMatch {
-        self.current().peek_grammar()
     }
 
     #[allow(unused)]
@@ -193,18 +185,6 @@ impl<'a> ParseStreamStack<'a> {
         self.current().parse_any_ident()
     }
 
-    pub(crate) fn try_parse_or_revert<T: ParseSource>(&mut self) -> ParseResult<T> {
-        let current = self.current();
-        let fork = current.fork();
-        match fork.parse::<T>() {
-            Ok(output) => {
-                current.advance_to(&fork);
-                Ok(output)
-            }
-            Err(err) => Err(err),
-        }
-    }
-
     pub(crate) fn parse_and_enter_group(&mut self) -> ParseResult<(Delimiter, DelimSpan)> {
         let (delimiter, delim_span, inner) = self.current().parse_any_group()?;
         let inner = unsafe {
@@ -219,7 +199,7 @@ impl<'a> ParseStreamStack<'a> {
             // ==> exit_group() ensures the parse buffers are dropped in the correct order
             // ==> If a user forgets to do it (or e.g. an error path or panic causes exit_group not to be called)
             //     Then the drop glue ensures the groups are dropped in the correct order.
-            std::mem::transmute::<SourceParseBuffer<'_>, SourceParseBuffer<'a>>(inner)
+            std::mem::transmute::<ParseBuffer<'_, K>, ParseBuffer<'a, K>>(inner)
         };
         self.group_stack.push(inner);
         Ok((delimiter, delim_span))
@@ -239,7 +219,29 @@ impl<'a> ParseStreamStack<'a> {
     }
 }
 
-impl Drop for ParseStreamStack<'_> {
+impl<'a> ParseStreamStack<'a, Source> {
+    pub(crate) fn parse<T: ParseSource>(&mut self) -> ParseResult<T> {
+        self.current().parse()
+    }
+
+    pub(crate) fn peek_grammar(&mut self) -> SourcePeekMatch {
+        self.current().peek_grammar()
+    }
+
+    pub(crate) fn try_parse_or_revert<T: ParseSource>(&mut self) -> ParseResult<T> {
+        let current = self.current();
+        let fork = current.fork();
+        match fork.parse::<T>() {
+            Ok(output) => {
+                current.advance_to(&fork);
+                Ok(output)
+            }
+            Err(err) => Err(err),
+        }
+    }
+}
+
+impl<K> Drop for ParseStreamStack<'_, K> {
     fn drop(&mut self) {
         while !self.group_stack.is_empty() {
             self.exit_group();
