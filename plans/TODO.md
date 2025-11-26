@@ -168,11 +168,17 @@ First, read the @./2025-09-vision.md
 - [ ] Manually search for transform and rename to parse in folder names and file.
 - [ ] Initial changes:
   - [ ] We store input in the interpreter `TODO[parser-input-in-interpreter]`
+  - [ ] Reversion works in attempt blocks, via forking and committing or rolling back
+        the fork.
   - [ ] Parsers no longer output to a stream, instead the output values.
   - [ ] Sort out `TODO[parser-no-output]`
   - [ ] Scopes/frames can have a parse stream associated with them. This can be read/resolved (as the nearest parent) by parsers, even in expression blocks
   - [ ] Don't support `@(#x = ...)` - instead we can have `#(let x = @[STREAM ...])`
   - [ ] Consider a `parse %[ .. ] { /* parsers * / }` expression / block (no new scope!)
+  - [ ] Support for starting to parse a `@.open('(')` in the left part of an attempt arm
+        and completing in the right arm `@.close(')')` - there needs to be some error checking in the parse stream stack. We probably can't allow closing in the LHS of
+        an attempt arm. We should record a reason on the new parse buffer and raise if
+        it doesn't match
 
 * Various other changes from the vision doc
 * (Side thought) - How does selecting a parse stream come into it? And e.g. when we extend to method/function definitions... Some options:
