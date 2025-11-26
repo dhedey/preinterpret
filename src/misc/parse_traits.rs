@@ -364,6 +364,22 @@ impl<'a, K> From<SynParseStream<'a>> for ParseStream<'a, K> {
 }
 
 impl<'a, K> ParseBuffer<'a, K> {
+    /// Returns a ParseStream referencing this buffer.
+    ///
+    /// This method handles the lifetime conversion needed when creating a
+    /// `ParseStream<'b, K>` from `&'b ParseBuffer<'a, K>`. The `ParseStream`
+    /// type alias requires both lifetimes to be the same, so we shrink the
+    /// inner lifetime to match the borrow lifetime.
+    ///
+    /// ## Safety
+    ///
+    /// This is safe because we're shortening the lifetime from 'a to the
+    /// borrow lifetime. The underlying token data (with lifetime 'a) outlives
+    /// the borrow, so references remain valid.
+    pub(crate) fn as_stream(&self) -> ParseStream<'_, K> {
+        unsafe { core::mem::transmute::<&ParseBuffer<'a, K>, ParseStream<'_, K>>(self) }
+    }
+
     pub(crate) fn fork(&self) -> ParseBuffer<'a, K> {
         ParseBuffer {
             inner: self.inner.fork(),

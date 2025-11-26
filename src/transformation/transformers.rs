@@ -228,7 +228,7 @@ impl TransformerDefinition for GroupTransformer {
     fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         let input = interpreter.input(&Span::call_site())?;
         let (_, inner) = input.parse_transparent_group()?;
-        interpreter.with_input(&inner, |interpreter| {
+        interpreter.with_input(inner.as_stream(), |interpreter| {
             self.inner.handle_transform(interpreter)
         })
     }
