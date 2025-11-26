@@ -78,22 +78,77 @@ impl ParseStreamStackStatic {
     /// Call `commit_fork` to accept the fork's position, or just drop it to discard.
     fn fork(&self) -> ParseStreamStackFork {
         // We fork by creating a new ParseStreamStack from the current stream's fork
-        let forked_stream = self.inner.current().fork();
-        ParseStreamStackFork {
-            // SAFETY: Same lifetime constraints as the parent
-            inner: unsafe {
-                ParseStreamStack::new(std::mem::transmute::<
-                    SynParseBuffer<'_>,
-                    SynParseBuffer<'static>,
-                >(forked_stream))
-            },
+        let forked_buffer = self.inner.current().fork();
+        // SAFETY: Same lifetime constraints as the parent
+        unsafe {
+            ParseStreamStackFork::new(std::mem::transmute::<
+                ParseBuffer<'_, Output>,
+                ParseBuffer<'static, Output>,
+            >(forked_buffer))
         }
     }
 
     /// Commits a fork, advancing this stack's position to match the fork.
     fn commit_fork(&mut self, fork: ParseStreamStackFork) {
         // Advance the current stream to the fork's position
-        self.inner.current().advance_to(&fork.inner.current());
+        self.inner.current().advance_to(&fork.current());
+    }
+}
+
+/// A forked version of `ParseStreamStackStatic` that owns its base buffer.
+///
+/// Unlike `ParseStreamStack` which holds a reference to its base, this struct
+/// owns the forked buffer. This is necessary because `fork()` creates a new
+/// owned `ParseBuffer`, and we need to store it somewhere.
+///
+/// The `Box` is used to ensure the buffer doesn't move when the struct moves,
+/// allowing the `ParseStreamStack` to safely reference it.
+///
+/// ## Safety
+///
+/// Same lifetime constraints as `ParseStreamStackStatic` - the buffer has been
+/// transmuted to 'static but must only be used within the original parsing context.
+struct ParseStreamStackFork {
+    /// The owned forked buffer with transmuted lifetime.
+    /// Boxed to ensure it doesn't move, so `stack` can safely reference it.
+    /// IMPORTANT: Must be declared before `stack` so it is dropped after `stack`.
+    _base: Box<ParseBuffer<'static, Output>>,
+    /// The parse stream stack that references `_base`.
+    stack: ParseStreamStack<'static, Output>,
+}
+
+impl ParseStreamStackFork {
+    /// Creates a new fork from an owned buffer.
+    ///
+    /// ## Safety
+    ///
+    /// The buffer must have been transmuted from a valid parse buffer with
+    /// the same lifetime constraints as the parent.
+    unsafe fn new(buffer: ParseBuffer<'static, Output>) -> Self {
+        let boxed = Box::new(buffer);
+        // Create a reference to the boxed buffer that will be used by ParseStreamStack.
+        // SAFETY: The boxed buffer lives as long as this struct, and won't move because it's boxed.
+        // We transmute the reference lifetime to 'static because:
+        // 1. The box is owned by this struct and won't be dropped until the struct is dropped
+        // 2. The stack is dropped before _base due to struct field drop order
+        let base_ref: ParseStream<'static, Output> =
+            std::mem::transmute::<ParseStream<'_, Output>, ParseStream<'static, Output>>(
+                boxed.as_stream(),
+            );
+        Self {
+            _base: boxed,
+            stack: ParseStreamStack::new(base_ref),
+        }
+    }
+
+    /// Gets the current parse stream.
+    fn current(&self) -> ParseStream<'_, Output> {
+        self.stack.current()
+    }
+
+    /// Gets the inner stack mutably.
+    fn stack_mut(&mut self) -> &mut ParseStreamStack<'static, Output> {
+        &mut self.stack
     }
 }
 
@@ -103,8 +158,8 @@ impl ParseStreamStackStatic {
 /// the stack. Parsing then uses this fork. On commit, we advance the original
 /// to match; on revert, we just pop without advancing.
 struct RevertibleInputEntry {
-    /// The forked parse stream stack
-    fork: ParseStreamStack<'static, Output>,
+    /// The forked parse stream stack (owns the base buffer)
+    fork: ParseStreamStackFork,
     /// Index in input_stack of the original that was forked.
     /// This is needed to commit the fork back to the original.
     original_index: usize,
@@ -157,7 +212,7 @@ impl InputHandler {
     ) -> Result<&mut ParseStreamStack<'static, Output>, InputHandlerError> {
         // First check revertible stack - if we're in revertible mode, use the fork
         if let Some(revertible) = self.revertible_stack.last_mut() {
-            return Ok(&mut revertible.fork);
+            return Ok(revertible.fork.stack_mut());
         }
 
         // Otherwise use the main input stack
@@ -220,13 +275,13 @@ impl InputHandler {
         }
 
         let original_index = self.input_stack.len() - 1;
-        let forked_stream = self.input_stack[original_index].inner.current().fork();
+        let forked_buffer = self.input_stack[original_index].inner.current().fork();
 
         self.revertible_stack.push(RevertibleInputEntry {
-            fork: ParseStreamStack::new(std::mem::transmute::<
-                SynParseBuffer<'_>,
-                SynParseBuffer<'static>,
-            >(forked_stream)),
+            fork: ParseStreamStackFork::new(std::mem::transmute::<
+                ParseBuffer<'_, Output>,
+                ParseBuffer<'static, Output>,
+            >(forked_buffer)),
             original_index,
         });
     }
@@ -234,15 +289,23 @@ impl InputHandler {
     /// Commits the current revertible entry, advancing the original input
     /// to match the fork's position.
     ///
+    /// Does nothing if there is no current input (allows use in contexts where
+    /// input may or may not be present, matching `enter_revertible` behavior).
+    ///
     /// ## Safety
     ///
     /// Must be paired with `enter_revertible`.
     ///
     /// ## Panics
     ///
-    /// Panics if not in revertible mode, or if the original input is no longer
+    /// Panics if in revertible mode but the original input is no longer
     /// at the expected position in the stack.
     pub(super) unsafe fn commit_revertible(&mut self) {
+        // If no input stack, enter_revertible was a no-op, so this should be too
+        if self.input_stack.is_empty() {
+            return;
+        }
+
         let entry = self
             .revertible_stack
             .pop()
@@ -264,14 +327,18 @@ impl InputHandler {
     /// Reverts the current revertible entry, discarding any parsing done
     /// on the fork. The original input position remains unchanged.
     ///
+    /// Does nothing if there is no current input (allows use in contexts where
+    /// input may or may not be present, matching `enter_revertible` behavior).
+    ///
     /// ## Safety
     ///
     /// Must be paired with `enter_revertible`.
-    ///
-    /// ## Panics
-    ///
-    /// Panics if not in revertible mode.
     pub(super) unsafe fn revert_revertible(&mut self) {
+        // If no input stack, enter_revertible was a no-op, so this should be too
+        if self.input_stack.is_empty() {
+            return;
+        }
+
         let _entry = self
             .revertible_stack
             .pop()

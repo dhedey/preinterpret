@@ -296,6 +296,35 @@ impl Interpreter {
         }
     }
 
+    /// Gets both the current input stream and output stream.
+    ///
+    /// This method allows simultaneous access to both by performing a split borrow.
+    /// Use this when you need to read from input and write to output in the same operation.
+    ///
+    /// Returns an error if no input or output is available.
+    pub(crate) fn input_and_output(
+        &mut self,
+        span_source: &impl HasSpanRange,
+    ) -> ExecutionResult<(ParseStream<'_, Output>, &mut OutputStream)> {
+        // Check for input first
+        let input = match self.input_handler.current_input() {
+            Ok(input) => input,
+            Err(InputHandlerError::NoInputAvailable) => {
+                return span_source.syntax_err("No input stream is available for parsing");
+            }
+        };
+
+        // Get output
+        let output = match self.output_handler.current_output_mut() {
+            Ok(output) => output,
+            Err(OutputHandlerError::FrozenOutputModification(reason)) => {
+                return span_source.control_flow_err(reason.error_message("emit"));
+            }
+        };
+
+        Ok((input, output))
+    }
+
     /// Gets the current input stack mutably for operations like entering/exiting groups.
     ///
     /// Returns an error if no input is available.
@@ -326,6 +355,55 @@ impl Interpreter {
         let result = f(self);
         self.input_handler.pop_input();
         result
+    }
+
+    /// Parses a group with the specified delimiter from the current input and runs
+    /// a closure with the group's contents as the current input.
+    ///
+    /// The group is automatically exited when the closure returns (even on error).
+    pub(crate) fn with_parsed_group<T>(
+        &mut self,
+        delimiter: Delimiter,
+        span_source: &impl HasSpanRange,
+        f: impl FnOnce(&mut Interpreter) -> ExecutionResult<T>,
+    ) -> ExecutionResult<T> {
+        // First check if the next token is a group with the expected delimiter
+        {
+            let input = self.input(span_source)?;
+            if !input.peek_specific_group(delimiter) {
+                // Use the input's span for the error, not span_source
+                return input
+                    .parse_err(format!("Expected {}", delimiter.description_of_open()))?;
+            }
+        }
+
+        // Enter the group on the input stack
+        let stack = self.input_stack_mut(span_source)?;
+        let _ = stack.parse_and_enter_group()?;
+
+        // Run the closure
+        let result = f(self);
+
+        // Exit the group (must happen even on error)
+        // Safe to unwrap since we just entered a group
+        self.input_handler
+            .current_input_stack_mut()
+            .expect("input stack should exist")
+            .exit_group();
+
+        result
+    }
+
+    /// Parses a transparent group (Delimiter::None) from the current input and runs
+    /// a closure with the group's contents as the current input.
+    ///
+    /// The group is automatically exited when the closure returns (even on error).
+    pub(crate) fn with_parsed_transparent_group<T>(
+        &mut self,
+        span_source: &impl HasSpanRange,
+        f: impl FnOnce(&mut Interpreter) -> ExecutionResult<T>,
+    ) -> ExecutionResult<T> {
+        self.with_parsed_group(Delimiter::None, span_source, f)
     }
 }
 

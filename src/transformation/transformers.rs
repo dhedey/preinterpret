@@ -20,10 +20,10 @@ impl TransformerDefinition for TokenTreeTransformer {
     }
 
     fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        let input = interpreter.input(&self.span)?;
+        let token_tree = interpreter.input(&self.span)?.parse::<TokenTree>()?;
         interpreter
             .output(&self.span)?
-            .push_raw_token_tree(input.parse::<TokenTree>()?);
+            .push_raw_token_tree(token_tree);
         Ok(())
     }
 
@@ -197,14 +197,14 @@ impl TransformerDefinition for PunctTransformer {
 
     fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         let input = interpreter.input(&self.span)?;
-        if input.cursor().any_punct().is_some() {
-            interpreter
-                .output(&self.span.span_range())?
-                .push_punct(input.parse_any_punct()?);
-            Ok(())
-        } else {
-            input.parse_err("Expected a punct")?
+        if input.cursor().any_punct().is_none() {
+            return input.parse_err("Expected a punct")?;
         }
+        let punct = input.parse_any_punct()?;
+        interpreter
+            .output(&self.span.span_range())?
+            .push_punct(punct);
+        Ok(())
     }
 
     fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
@@ -226,9 +226,7 @@ impl TransformerDefinition for GroupTransformer {
     }
 
     fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        let input = interpreter.input(&Span::call_site())?;
-        let (_, inner) = input.parse_transparent_group()?;
-        interpreter.with_input(inner.as_stream(), |interpreter| {
+        interpreter.with_parsed_transparent_group(&Span::call_site(), |interpreter| {
             self.inner.handle_transform(interpreter)
         })
     }
@@ -268,10 +266,8 @@ impl TransformerDefinition for ExactTransformer {
             .stream
             .evaluate_owned(interpreter)?
             .resolve_as("Input to the EXACT parser")?;
-        let input = interpreter.input(&self.span)?;
-        stream
-            .value
-            .parse_exact_match(input, interpreter.output(&self.span.span_range())?)
+        let (input, output) = interpreter.input_and_output(&self.span)?;
+        stream.value.parse_exact_match(input, output)
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {

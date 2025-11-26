@@ -135,9 +135,7 @@ impl HandleTransformation for TransformGroup {
         if self.delimiter == Delimiter::None {
             self.inner.handle_transform(interpreter)
         } else {
-            let input = interpreter.input(&Span::call_site())?;
-            let (_, inner) = input.parse_specific_group(self.delimiter)?;
-            interpreter.with_input(inner.as_stream(), |interpreter| {
+            interpreter.with_parsed_group(self.delimiter, &Span::call_site(), |interpreter| {
                 self.inner.handle_transform(interpreter)
             })
         }
