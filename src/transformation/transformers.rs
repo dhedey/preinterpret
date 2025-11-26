@@ -19,11 +19,8 @@ impl TransformerDefinition for TokenTreeTransformer {
         )
     }
 
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        let input = interpreter.input(&self.span)?;
         interpreter
             .output(&self.span)?
             .push_raw_token_tree(input.parse::<TokenTree>()?);
@@ -54,12 +51,8 @@ impl TransformerDefinition for RestTransformer {
         )
     }
 
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
-        ParseUntil::End.handle_parse_into(input, interpreter, &self.span.span_range())
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        ParseUntil::End.handle_parse_into(interpreter, &self.span.span_range())
     }
 
     fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
@@ -99,13 +92,9 @@ impl TransformerDefinition for UntilTransformer {
         }, "Expected @[UNTIL x] where x is an ident, punct, literal or empty group such as ()")
     }
 
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         self.until
-            .handle_parse_into(input, interpreter, &self.span.span_range())
+            .handle_parse_into(interpreter, &self.span.span_range())
     }
 
     fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
@@ -132,11 +121,8 @@ impl TransformerDefinition for IdentTransformer {
         )
     }
 
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        let input = interpreter.input(&self.span)?;
         if input.cursor().ident().is_some() {
             let ident = input.parse_any_ident()?;
             interpreter
@@ -172,11 +158,8 @@ impl TransformerDefinition for LiteralTransformer {
         )
     }
 
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        let input = interpreter.input(&self.span)?;
         if input.cursor().literal().is_some() {
             let literal = input.parse()?;
             interpreter
@@ -212,11 +195,8 @@ impl TransformerDefinition for PunctTransformer {
         )
     }
 
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        let input = interpreter.input(&self.span)?;
         if input.cursor().any_punct().is_some() {
             interpreter
                 .output(&self.span.span_range())?
@@ -245,13 +225,12 @@ impl TransformerDefinition for GroupTransformer {
         })
     }
 
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        let input = interpreter.input(&Span::call_site())?;
         let (_, inner) = input.parse_transparent_group()?;
-        self.inner.handle_transform(&inner, interpreter)
+        interpreter.with_input(&inner, |interpreter| {
+            self.inner.handle_transform(interpreter)
+        })
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
@@ -282,17 +261,14 @@ impl TransformerDefinition for ExactTransformer {
         )
     }
 
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         // TODO[parsers]: Ensure that no contextual parser is available when interpreting
         // To save confusion about parse order.
         let stream: ExpressionStream = self
             .stream
             .evaluate_owned(interpreter)?
             .resolve_as("Input to the EXACT parser")?;
+        let input = interpreter.input(&self.span)?;
         stream
             .value
             .parse_exact_match(input, interpreter.output(&self.span.span_range())?)

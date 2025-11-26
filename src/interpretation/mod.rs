@@ -1,5 +1,6 @@
 mod bindings;
 mod control_flow_pass;
+mod input_stream;
 mod interpret_traits;
 mod interpreter;
 mod output_stream;
@@ -12,6 +13,7 @@ mod variable;
 use crate::internal_prelude::*;
 pub(crate) use bindings::*;
 use control_flow_pass::*;
+use input_stream::*;
 pub(crate) use interpret_traits::*;
 pub(crate) use interpreter::*;
 pub(crate) use output_stream::*;

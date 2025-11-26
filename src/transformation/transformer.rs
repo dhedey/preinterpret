@@ -5,11 +5,7 @@ pub(crate) trait TransformerDefinition: Sized {
 
     fn parse(arguments: TransformerArguments) -> ParseResult<Self>;
 
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()>;
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()>;
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()>;
 }
@@ -153,12 +149,8 @@ impl ParseSource for Transformer {
 }
 
 impl HandleTransformation for Transformer {
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
-        self.instance.handle_transform(input, interpreter)
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        self.instance.handle_transform(interpreter)
     }
 }
 
@@ -212,10 +204,10 @@ macro_rules! define_transformers {
         }
 
         impl NamedTransformer {
-            fn handle_transform(&self, input: ParseStream<Output>, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+            fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
                 match self {
                     $(
-                        Self::$transformer(transformer) => transformer.handle_transform(input, interpreter),
+                        Self::$transformer(transformer) => transformer.handle_transform(interpreter),
                     )*
                 }
             }

@@ -14,19 +14,23 @@ pub(crate) enum ParseUntil {
 impl ParseUntil {
     pub(crate) fn handle_parse_into(
         &self,
-        input: ParseStream<Output>,
         interpreter: &mut Interpreter,
         error_span_range: &SpanRange,
     ) -> ExecutionResult<()> {
         match self {
             ParseUntil::End => {
+                let input = interpreter.input(error_span_range)?;
                 let remaining = input.parse::<TokenStream>()?;
                 interpreter
                     .output(error_span_range)?
                     .extend_raw_tokens(remaining);
             }
             ParseUntil::Group(delimiter) => {
-                while !input.is_empty() {
+                loop {
+                    let input = interpreter.input(error_span_range)?;
+                    if input.is_empty() {
+                        break;
+                    }
                     if input.peek_specific_group(*delimiter) {
                         return Ok(());
                     }
@@ -38,7 +42,11 @@ impl ParseUntil {
             }
             ParseUntil::Ident(ident) => {
                 let content = ident.to_string();
-                while !input.is_empty() {
+                loop {
+                    let input = interpreter.input(error_span_range)?;
+                    if input.is_empty() {
+                        break;
+                    }
                     if input.peek_ident_matching(&content) {
                         return Ok(());
                     }
@@ -50,7 +58,11 @@ impl ParseUntil {
             }
             ParseUntil::Punct(punct) => {
                 let punct_char = punct.as_char();
-                while !input.is_empty() {
+                loop {
+                    let input = interpreter.input(error_span_range)?;
+                    if input.is_empty() {
+                        break;
+                    }
                     if input.peek_punct_matching(punct_char) {
                         return Ok(());
                     }
@@ -62,7 +74,11 @@ impl ParseUntil {
             }
             ParseUntil::Literal(literal) => {
                 let content = literal.to_string();
-                while !input.is_empty() {
+                loop {
+                    let input = interpreter.input(error_span_range)?;
+                    if input.is_empty() {
+                        break;
+                    }
                     if input.peek_literal_matching(&content) {
                         return Ok(());
                     }

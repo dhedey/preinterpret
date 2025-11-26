@@ -6,6 +6,7 @@ pub(crate) struct Interpreter {
     scopes: Vec<RuntimeScope>,
     no_mutation_above: Vec<(ScopeId, MutationBlockReason)>,
     output_handler: OutputHandler,
+    input_handler: InputHandler,
 }
 
 impl Interpreter {
@@ -17,6 +18,7 @@ impl Interpreter {
             scopes: vec![],
             no_mutation_above: vec![],
             output_handler: OutputHandler::new(OutputStream::new()),
+            input_handler: InputHandler::new(),
         };
         interpreter.enter_scope_inner(root_scope_id, false);
         interpreter
@@ -49,23 +51,20 @@ impl Interpreter {
         self.enter_scope_inner(scope_id, true);
         self.no_mutation_above.push((scope_id, reason));
         unsafe {
-            // SAFETY: This is paired with `unfreeze_existing` below,
+            // SAFETY: These are paired with their counterparts below,
             // without any early returns in the middle
             self.output_handler.freeze_existing(reason);
+            self.input_handler.enter_revertible();
         }
         let revertible_result = revertible_segment(self);
-        let revert_mutations = || {
-            // TODO[parser-input-in-interpreter]: When input handling is added, we may need to commit fork on success / revert on failure
-        };
         let result = self.convert_revertible_result(
             revertible_result,
             guard_clause,
-            revert_mutations,
             catch_location_id,
             scope_id,
         );
         unsafe {
-            // SAFETY: This is paired with `freeze_existing` above
+            // SAFETY: These are paired with their counterparts above
             self.output_handler.unfreeze_existing();
         }
         self.no_mutation_above.pop();
@@ -78,7 +77,6 @@ impl Interpreter {
         &mut self,
         revertible_result: ExecutionResult<T>,
         guard_clause: Option<impl FnOnce(&mut Self) -> ExecutionResult<bool>>,
-        revert_mutations: impl FnOnce(),
         catch_location_id: CatchLocationId,
         scope_id: ScopeId,
     ) -> ExecutionResult<AttemptOutcome<T>> {
@@ -93,20 +91,47 @@ impl Interpreter {
                 // outside of the attempt arm catch. BUT we should still revert
                 // any mutations made in the arm.
                 match guard_result {
-                    Ok(true) => Ok(AttemptOutcome::Completed(value)),
-                    Ok(false) => Ok(AttemptOutcome::Reverted),
+                    Ok(true) => {
+                        // Success - commit the input parsing
+                        unsafe {
+                            // SAFETY: Paired with enter_revertible in the caller
+                            self.input_handler.commit_revertible();
+                        }
+                        Ok(AttemptOutcome::Completed(value))
+                    }
+                    Ok(false) => {
+                        // Guard failed - revert input parsing
+                        unsafe {
+                            // SAFETY: Paired with enter_revertible in the caller
+                            self.input_handler.revert_revertible();
+                        }
+                        Ok(AttemptOutcome::Reverted)
+                    }
                     Err(err) => {
-                        revert_mutations();
+                        // Guard errored - revert input parsing
+                        unsafe {
+                            // SAFETY: Paired with enter_revertible in the caller
+                            self.input_handler.revert_revertible();
+                        }
                         Err(err)
                     }
                 }
             }
             Err(err) if err.is_catchable_by_attempt_block(catch_location_id) => {
                 self.handle_catch(scope_id);
-                revert_mutations();
+                // Error was caught - revert input parsing
+                unsafe {
+                    // SAFETY: Paired with enter_revertible in the caller
+                    self.input_handler.revert_revertible();
+                }
                 Ok(AttemptOutcome::Reverted)
             }
             Err(mut err) => {
+                // Uncatchable error - still need to clean up revertible state
+                unsafe {
+                    // SAFETY: Paired with enter_revertible in the caller
+                    self.input_handler.revert_revertible();
+                }
                 if let Some((kind, error)) = err.error_mut() {
                     *error = core::mem::take(error).add_context_if_none(format!("NOTE: {} is not caught by an attempt block. If you wish to catch this, detect it before it is thrown and use the `revert` statement.", kind.as_str().upper_indefinite_articled()));
                 }
@@ -272,6 +297,60 @@ impl Interpreter {
 
     pub(crate) fn complete(self) -> OutputStream {
         self.output_handler.complete()
+    }
+
+    // Input methods
+
+    /// Returns true if there is currently an input stream available.
+    pub(crate) fn has_input(&self) -> bool {
+        self.input_handler.has_input()
+    }
+
+    /// Gets the current input stream for reading/parsing.
+    ///
+    /// Returns an error if no input is available.
+    pub(crate) fn input(
+        &self,
+        span_source: &impl HasSpanRange,
+    ) -> ExecutionResult<ParseStream<'_, Output>> {
+        match self.input_handler.current_input() {
+            Ok(input) => Ok(input),
+            Err(InputHandlerError::NoInputAvailable) => {
+                span_source.syntax_err("No input stream is available for parsing")
+            }
+        }
+    }
+
+    /// Gets the current input stack mutably for operations like entering/exiting groups.
+    ///
+    /// Returns an error if no input is available.
+    pub(crate) fn input_stack_mut(
+        &mut self,
+        span_source: &impl HasSpanRange,
+    ) -> ExecutionResult<&mut ParseStreamStack<'static, Output>> {
+        match self.input_handler.current_input_stack_mut() {
+            Ok(input) => Ok(input),
+            Err(InputHandlerError::NoInputAvailable) => {
+                span_source.syntax_err("No input stream is available for parsing")
+            }
+        }
+    }
+
+    /// Runs a closure with an input stream pushed onto the stack.
+    ///
+    /// The input stream is automatically popped when the closure returns.
+    pub(crate) fn with_input<T>(
+        &mut self,
+        input: ParseStream<Output>,
+        f: impl FnOnce(&mut Interpreter) -> ExecutionResult<T>,
+    ) -> ExecutionResult<T> {
+        unsafe {
+            // SAFETY: pop_input is called below, before the function returns
+            self.input_handler.push_input(input);
+        }
+        let result = f(self);
+        self.input_handler.pop_input();
+        result
     }
 }
 
