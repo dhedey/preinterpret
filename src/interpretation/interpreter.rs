@@ -64,7 +64,13 @@ impl Interpreter {
             scope_id,
         );
         unsafe {
-            // SAFETY: These are paired with their counterparts above
+            // SAFETY: Paired with enter_revertible above.
+            // Commit on success, revert otherwise.
+            match &result {
+                Ok(AttemptOutcome::Completed(_)) => self.input_handler.commit_revertible(),
+                Ok(AttemptOutcome::Reverted) | Err(_) => self.input_handler.revert_revertible(),
+            }
+            // SAFETY: Paired with freeze_existing above
             self.output_handler.unfreeze_existing();
         }
         self.no_mutation_above.pop();
@@ -91,47 +97,16 @@ impl Interpreter {
                 // outside of the attempt arm catch. BUT we should still revert
                 // any mutations made in the arm.
                 match guard_result {
-                    Ok(true) => {
-                        // Success - commit the input parsing
-                        unsafe {
-                            // SAFETY: Paired with enter_revertible in the caller
-                            self.input_handler.commit_revertible();
-                        }
-                        Ok(AttemptOutcome::Completed(value))
-                    }
-                    Ok(false) => {
-                        // Guard failed - revert input parsing
-                        unsafe {
-                            // SAFETY: Paired with enter_revertible in the caller
-                            self.input_handler.revert_revertible();
-                        }
-                        Ok(AttemptOutcome::Reverted)
-                    }
-                    Err(err) => {
-                        // Guard errored - revert input parsing
-                        unsafe {
-                            // SAFETY: Paired with enter_revertible in the caller
-                            self.input_handler.revert_revertible();
-                        }
-                        Err(err)
-                    }
+                    Ok(true) => Ok(AttemptOutcome::Completed(value)),
+                    Ok(false) => Ok(AttemptOutcome::Reverted),
+                    Err(err) => Err(err),
                 }
             }
             Err(err) if err.is_catchable_by_attempt_block(catch_location_id) => {
                 self.handle_catch(scope_id);
-                // Error was caught - revert input parsing
-                unsafe {
-                    // SAFETY: Paired with enter_revertible in the caller
-                    self.input_handler.revert_revertible();
-                }
                 Ok(AttemptOutcome::Reverted)
             }
             Err(mut err) => {
-                // Uncatchable error - still need to clean up revertible state
-                unsafe {
-                    // SAFETY: Paired with enter_revertible in the caller
-                    self.input_handler.revert_revertible();
-                }
                 if let Some((kind, error)) = err.error_mut() {
                     *error = core::mem::take(error).add_context_if_none(format!("NOTE: {} is not caught by an attempt block. If you wish to catch this, detect it before it is thrown and use the `revert` statement.", kind.as_str().upper_indefinite_articled()));
                 }
