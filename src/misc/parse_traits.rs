@@ -25,7 +25,10 @@ impl<'a> ParseBuffer<'a, Source> {
         Punctuated::parse_terminated_using(self, T::parse, P::parse)
     }
 
-    pub(crate) fn call<T, F: FnOnce(SourceParser) -> ParseResult<T>>(&self, f: F) -> ParseResult<T> {
+    pub(crate) fn call<T, F: FnOnce(SourceParser) -> ParseResult<T>>(
+        &self,
+        f: F,
+    ) -> ParseResult<T> {
         f(self)
     }
 
@@ -33,12 +36,15 @@ impl<'a> ParseBuffer<'a, Source> {
         &self,
         parser: impl FnOnce(SourceParser) -> ParseResult<T>,
     ) -> ParseResult<T> {
-        parse_with(TokenStream::new(), |stream: ParseStream<Source>| -> ParseResult<T> {
-            let forked = stream.fork();
-            let output = parser(&forked)?;
-            stream.advance_to(&forked);
-            Ok(output)
-        })
+        parse_with(
+            TokenStream::new(),
+            |stream: ParseStream<Source>| -> ParseResult<T> {
+                let forked = stream.fork();
+                let output = parser(&forked)?;
+                stream.advance_to(&forked);
+                Ok(output)
+            },
+        )
     }
 }
 
