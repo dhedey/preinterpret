@@ -22,7 +22,7 @@ use super::*;
 ///
 /// See the rust doc on the [`ExpressionStackFrame`] for further details.
 pub(super) struct ExpressionParser<'a> {
-    streams: ParseStreamStack<'a>,
+    streams: ParseStreamStack<'a, Source>,
     nodes: ExpressionNodes,
     expression_stack: Vec<ExpressionStackFrame>,
 }
@@ -65,7 +65,7 @@ impl<'a> ExpressionParser<'a> {
         }
     }
 
-    fn parse_unary_atom(input: &mut ParseStreamStack) -> ParseResult<UnaryAtom> {
+    fn parse_unary_atom(input: &mut ParseStreamStack<Source>) -> ParseResult<UnaryAtom> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::EmbeddedVariable | SourcePeekMatch::EmbeddedExpression | SourcePeekMatch::EmbeddedStatements => {
                 return input.parse_err(
@@ -152,7 +152,7 @@ impl<'a> ExpressionParser<'a> {
     }
 
     fn parse_extension(
-        input: &mut ParseStreamStack,
+        input: &mut ParseStreamStack<Source>,
         parent_stack_frame: &ExpressionStackFrame,
     ) -> ParseResult<NodeExtension> {
         // We fall through if we have no match
