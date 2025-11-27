@@ -679,7 +679,7 @@ mod benchmarking {
                 })
             })?;
 
-            let _ = context.time("output", move || Ok(output_stream.into_token_stream()));
+            let _ = context.time("output", move || Ok(output.into_token_stream()));
 
             Ok(())
         })?;
