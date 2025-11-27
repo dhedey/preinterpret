@@ -19,14 +19,11 @@ impl TransformerDefinition for TokenTreeTransformer {
         )
     }
 
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        let token_tree = interpreter.input(&self.span)?.parse::<TokenTree>()?;
         interpreter
             .output(&self.span)?
-            .push_raw_token_tree(input.parse::<TokenTree>()?);
+            .push_raw_token_tree(token_tree);
         Ok(())
     }
 
@@ -54,12 +51,8 @@ impl TransformerDefinition for RestTransformer {
         )
     }
 
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
-        ParseUntil::End.handle_parse_into(input, interpreter, &self.span.span_range())
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        ParseUntil::End.handle_parse_into(interpreter, &self.span.span_range())
     }
 
     fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
@@ -99,13 +92,9 @@ impl TransformerDefinition for UntilTransformer {
         }, "Expected @[UNTIL x] where x is an ident, punct, literal or empty group such as ()")
     }
 
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         self.until
-            .handle_parse_into(input, interpreter, &self.span.span_range())
+            .handle_parse_into(interpreter, &self.span.span_range())
     }
 
     fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
@@ -132,20 +121,15 @@ impl TransformerDefinition for IdentTransformer {
         )
     }
 
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
-        if input.cursor().ident().is_some() {
-            let ident = input.parse_any_ident()?;
-            interpreter
-                .output(&self.span.span_range())?
-                .push_ident(ident);
-            Ok(())
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        let input = interpreter.input(&self.span)?;
+        let ident = if input.cursor().ident().is_some() {
+            input.parse_any_ident()?
         } else {
-            input.parse_err("Expected an ident")?
-        }
+            return Err(input.parse_error("Expected an ident").into());
+        };
+        interpreter.output(&self.span)?.push_ident(ident);
+        Ok(())
     }
 
     fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
@@ -172,20 +156,15 @@ impl TransformerDefinition for LiteralTransformer {
         )
     }
 
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
-        if input.cursor().literal().is_some() {
-            let literal = input.parse()?;
-            interpreter
-                .output(&self.span.span_range())?
-                .push_literal(literal);
-            Ok(())
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        let input = interpreter.input(&self.span)?;
+        let literal = if input.cursor().literal().is_some() {
+            input.parse()?
         } else {
-            input.parse_err("Expected a literal")?
-        }
+            return Err(input.parse_error("Expected a literal").into());
+        };
+        interpreter.output(&self.span)?.push_literal(literal);
+        Ok(())
     }
 
     fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
@@ -212,19 +191,15 @@ impl TransformerDefinition for PunctTransformer {
         )
     }
 
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
-        if input.cursor().any_punct().is_some() {
-            interpreter
-                .output(&self.span.span_range())?
-                .push_punct(input.parse_any_punct()?);
-            Ok(())
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        let input = interpreter.input(&self.span)?;
+        let punct = if input.cursor().any_punct().is_some() {
+            input.parse_any_punct()?
         } else {
-            input.parse_err("Expected a punct")?
-        }
+            return Err(input.parse_error("Expected a punct").into());
+        };
+        interpreter.output(&self.span)?.push_punct(punct);
+        Ok(())
     }
 
     fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
@@ -233,6 +208,7 @@ impl TransformerDefinition for PunctTransformer {
 }
 
 pub(crate) struct GroupTransformer {
+    span: Span,
     inner: TransformStream,
 }
 
@@ -241,17 +217,15 @@ impl TransformerDefinition for GroupTransformer {
 
     fn parse(arguments: TransformerArguments) -> ParseResult<Self> {
         Ok(Self {
+            span: arguments.full_span(),
             inner: arguments.fully_parse_no_error_override()?,
         })
     }
 
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
-        let (_, inner) = input.parse_transparent_group()?;
-        self.inner.handle_transform(&inner, interpreter)
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        interpreter.parse_group(&self.span, Some(Delimiter::None), |interpreter, _, _| {
+            self.inner.handle_transform(interpreter)
+        })
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
@@ -282,20 +256,15 @@ impl TransformerDefinition for ExactTransformer {
         )
     }
 
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         // TODO[parsers]: Ensure that no contextual parser is available when interpreting
         // To save confusion about parse order.
         let stream: ExpressionStream = self
             .stream
             .evaluate_owned(interpreter)?
             .resolve_as("Input to the EXACT parser")?;
-        stream
-            .value
-            .parse_exact_match(input, interpreter.output(&self.span.span_range())?)
+        let (input, output) = interpreter.input_and_output(&self.span)?;
+        stream.value.parse_exact_match(input, output)
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {

@@ -314,46 +314,42 @@ pub(crate) fn handle_split(
     separator: &OutputStream,
     settings: SplitSettings,
 ) -> ExecutionResult<ExpressionArray> {
-    unsafe {
-        // RUST-ANALYZER SAFETY: This is as safe as we can get.
-        // Typically the separator won't contain none-delimited groups, so we're OK
-        input.parse_with(move |input| {
-            let mut output = Vec::new();
-            let mut current_item = OutputStream::new();
+    input.parse_with(move |input| {
+        let mut output = Vec::new();
+        let mut current_item = OutputStream::new();
 
-            // Special case separator.len() == 0 to avoid an infinite loop
-            if separator.is_empty() {
-                while !input.is_empty() {
-                    current_item.push_raw_token_tree(input.parse()?);
-                    let complete_item = core::mem::replace(&mut current_item, OutputStream::new());
-                    output.push(complete_item.into_value());
-                }
-                return Ok(ExpressionArray::new(output));
-            }
-
-            let mut drop_empty_next = settings.drop_empty_start;
+        // Special case separator.len() == 0 to avoid an infinite loop
+        if separator.is_empty() {
             while !input.is_empty() {
-                let separator_fork = input.fork();
-                let mut ignored_transformer_output = OutputStream::new();
-                if separator
-                    .parse_exact_match(&separator_fork, &mut ignored_transformer_output)
-                    .is_err()
-                {
-                    current_item.push_raw_token_tree(input.parse()?);
-                    continue;
-                }
-                // This is guaranteed to progress the parser because the separator is non-empty
-                input.advance_to(&separator_fork);
-                if !current_item.is_empty() || !drop_empty_next {
-                    let complete_item = core::mem::replace(&mut current_item, OutputStream::new());
-                    output.push(complete_item.into_value());
-                }
-                drop_empty_next = settings.drop_empty_middle;
+                current_item.push_raw_token_tree(input.parse()?);
+                let complete_item = core::mem::replace(&mut current_item, OutputStream::new());
+                output.push(complete_item.into_value());
             }
-            if !current_item.is_empty() || !settings.drop_empty_end {
-                output.push(current_item.into_value());
+            return Ok(ExpressionArray::new(output));
+        }
+
+        let mut drop_empty_next = settings.drop_empty_start;
+        while !input.is_empty() {
+            let separator_fork = input.fork();
+            let mut ignored_transformer_output = OutputStream::new();
+            if separator
+                .parse_exact_match(&separator_fork, &mut ignored_transformer_output)
+                .is_err()
+            {
+                current_item.push_raw_token_tree(input.parse()?);
+                continue;
             }
-            Ok(ExpressionArray::new(output))
-        })
-    }
+            // This is guaranteed to progress the parser because the separator is non-empty
+            input.advance_to(&separator_fork);
+            if !current_item.is_empty() || !drop_empty_next {
+                let complete_item = core::mem::replace(&mut current_item, OutputStream::new());
+                output.push(complete_item.into_value());
+            }
+            drop_empty_next = settings.drop_empty_middle;
+        }
+        if !current_item.is_empty() || !settings.drop_empty_end {
+            output.push(current_item.into_value());
+        }
+        Ok(ExpressionArray::new(output))
+    })
 }

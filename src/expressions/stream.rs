@@ -220,11 +220,7 @@ define_interface! {
             }
 
             [context] fn reinterpret_as_run(this: Owned<ExpressionStream>) -> ExecutionResult<OwnedValue> {
-                let source = unsafe {
-                    // RUST-ANALYZER-SAFETY - We can't do any better than this, and we're about to parse it as source code,
-                    // which handles groups/missing groups reasonably well (see tests)
-                    this.into_inner().value.into_token_stream()
-                };
+                let source = this.into_inner().value.into_token_stream();
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(ExpressionBlockContent::parse, ExpressionBlockContent::control_flow_pass)?;
                 let mut inner_interpreter = Interpreter::new(scope_definitions);
                 let return_value = reparsed.evaluate(&mut inner_interpreter, context.output_span_range, RequestedValueOwnership::owned())?.expect_owned();
@@ -235,11 +231,7 @@ define_interface! {
             }
 
             [context] fn reinterpret_as_stream(this: Owned<ExpressionStream>) -> ExecutionResult<OutputStream> {
-                let source = unsafe {
-                    // RUST-ANALYZER-SAFETY - We can't do any better than this, and we're about to parse it as source code,
-                    // which handles groups/missing groups reasonably well (see tests)
-                    this.into_inner().value.into_token_stream()
-                };
+                let source = this.into_inner().value.into_token_stream();
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(
                     |input| SourceStream::parse_with_span(input, context.output_span_range.start()),
                     SourceStream::control_flow_pass,

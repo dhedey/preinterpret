@@ -450,6 +450,19 @@ impl<'a, K> ParseBuffer<'a, K> {
         })?)
     }
 
+    pub(crate) fn parse_group(
+        &self,
+        required_delimiter: Option<Delimiter>,
+    ) -> ParseResult<(Delimiter, DelimSpan, ParseBuffer<'_, K>)> {
+        match required_delimiter {
+            Some(expected_delimiter) => {
+                let (delim_span, parse_buffer) = self.parse_specific_group(expected_delimiter)?;
+                Ok((expected_delimiter, delim_span, parse_buffer))
+            }
+            None => self.parse_any_group(),
+        }
+    }
+
     pub(crate) fn parse_any_group(
         &self,
     ) -> ParseResult<(Delimiter, DelimSpan, ParseBuffer<'_, K>)> {

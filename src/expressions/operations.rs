@@ -605,7 +605,7 @@ fn create_single_token<T: SynParse>(char: char, span: Span) -> T {
 
 fn create_double_token<T: SynParse>(char1: char, span1: Span, char2: char, span2: Span) -> T {
     let mut stream = TokenStream::new();
-    Punct::new(char1, Spacing::Alone)
+    Punct::new(char1, Spacing::Joint)
         .with_span(span1)
         .to_tokens(&mut stream);
     Punct::new(char2, Spacing::Alone)
