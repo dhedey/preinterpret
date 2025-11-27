@@ -6,6 +6,7 @@ pub(crate) struct Interpreter {
     scopes: Vec<RuntimeScope>,
     no_mutation_above: Vec<(ScopeId, MutationBlockReason)>,
     output_handler: OutputHandler,
+    input_handler: InputHandler,
 }
 
 impl Interpreter {
@@ -17,6 +18,7 @@ impl Interpreter {
             scopes: vec![],
             no_mutation_above: vec![],
             output_handler: OutputHandler::new(OutputStream::new()),
+            input_handler: InputHandler::new(),
         };
         interpreter.enter_scope_inner(root_scope_id, false);
         interpreter
@@ -216,6 +218,49 @@ impl Interpreter {
         self.config.iteration_limit = limit;
     }
 
+    // Input
+    pub(crate) fn start_parse(
+        &mut self,
+        stream: OutputStream,
+        f: impl FnOnce(&mut Interpreter) -> ExecutionResult<()>,
+    ) -> ExecutionResult<()> {
+        stream.parse_with(|input| {
+            unsafe {
+                // SAFETY: This is paired with `finish_parse` below,
+                // without any early returns in the middle
+                self.input_handler.start_parse(input);
+            }
+            let result = f(self);
+            unsafe {
+                // SAFETY: This is paired with `start_parse` above
+                self.input_handler.finish_parse();
+            }
+            result
+        })
+    }
+
+    pub(crate) fn parse_group<T>(
+        &mut self,
+        span_source: &impl HasSpanRange,
+        required_delimiter: Option<Delimiter>,
+        f: impl FnOnce(&mut Interpreter, Delimiter, DelimSpan) -> ExecutionResult<T>,
+    ) -> ExecutionResult<T> {
+        let (delimiter, delim_span) = self
+            .input_handler
+            .current_stack(span_source)?
+            .parse_and_enter_group(required_delimiter)?;
+        let result = f(self, delimiter, delim_span);
+        self.input_handler.current_stack(span_source)?.exit_group();
+        result
+    }
+
+    pub(crate) fn input<'a>(
+        &'a mut self,
+        span_source: &impl HasSpanRange,
+    ) -> ExecutionResult<ParseStream<'a, Output>> {
+        self.input_handler.current_input(span_source)
+    }
+
     // Output
     pub(crate) fn in_output_group<F, R>(
         &mut self,
@@ -262,12 +307,17 @@ impl Interpreter {
         &mut self,
         span_source: &impl HasSpanRange,
     ) -> ExecutionResult<&mut OutputStream> {
-        match self.output_handler.current_output_mut() {
-            Ok(output) => Ok(output),
-            Err(OutputHandlerError::FrozenOutputModification(reason)) => {
-                span_source.control_flow_err(reason.error_message("emit"))
-            }
-        }
+        self.output_handler.current_output_mut(span_source)
+    }
+
+    pub(crate) fn input_and_output<'a>(
+        &'a mut self,
+        span_source: &impl HasSpanRange,
+    ) -> ExecutionResult<(ParseStream<'a, Output>, &'a mut OutputStream)> {
+        Ok((
+            self.input_handler.current_input(span_source)?,
+            self.output_handler.current_output_mut(span_source)?,
+        ))
     }
 
     pub(crate) fn complete(self) -> OutputStream {

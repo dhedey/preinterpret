@@ -163,77 +163,60 @@ These are things we definitely want to do:
 
 ## Parser Changes
 
-First, read the @./2025-09-vision.md
+First, read the @./2025-11-vision.md
 
-- [ ] Manually search for transform and rename to parse in folder names and file.
-- [ ] Initial changes:
-  - [ ] We store input in the interpreter `TODO[parser-input-in-interpreter]`
-  - [ ] Reversion works in attempt blocks, via forking and committing or rolling back
-        the fork.
-  - [ ] Parsers no longer output to a stream, instead the output values.
-  - [ ] Sort out `TODO[parser-no-output]`
-  - [ ] Scopes/frames can have a parse stream associated with them. This can be read/resolved (as the nearest parent) by parsers, even in expression blocks
-  - [ ] Don't support `@(#x = ...)` - instead we can have `#(let x = @[STREAM ...])`
-  - [ ] Consider a `parse %[ .. ] { /* parsers * / }` expression / block (no new scope!)
-  - [ ] Support for starting to parse a `@.open('(')` in the left part of an attempt arm
-        and completing in the right arm `@.close(')')` - there needs to be some error checking in the parse stream stack. We probably can't allow closing in the LHS of
-        an attempt arm. We should record a reason on the new parse buffer and raise if
-        it doesn't match
+- [x] We store input in the interpreter
+- [ ] Create new `Parser` value kind
+- [ ] Create (temporary) `parse X as Y { }` expression
+- [ ] Create `consume X @[ .. ]` expression
+- [ ] Bind `input` to `Parser` at the start of each parse expression
+- [ ] Move transform logic from transformers onto `Parser`, and delete the transformers
+- [ ] Rename the transform stream to `ParseModeStream`
+- [ ] Reversion works in attempt blocks, via forking and committing or rolling back
+      the fork, fix `TODO[parser-input-in-interpreter]`
+- [ ] Remove all remaining parsers.
+- [ ] Remove parsing in a stream pattern - instead we just support a literal
+- [ ] Address any remaining `TODO[parser-no-output]` and `TODO[parsers]`
 
-* Various other changes from the vision doc
-* (Side thought) - How does selecting a parse stream come into it? And e.g. when we extend to method/function definitions... Some options:
+`Parser` methods:
+* `ident()`, `is_ident()`
+* `literal()`, `is_literal()`
+* `integer()`, `is_integer()`
+* `float()`, `is_float()`
+* `char()`, `is_char()`
+* `string()`, `is_string()`
+* `error()` etc
+* `end()`, `is_end()`
+* `token_tree()`
+* `span()` or `cursor()` -- maybe? outputs a token with a span for outputting errors. If at end of an inner stream, it outputs the ident `END` with the span of the closing bracket.
 
-  * Nov 2025: I like pseudo-variables:
-    * `@` refers to current scope, behind the scenes it's a parse stream type,
-      whose methods call into the interpreter
-    * Can consider introducing named variables `@input` in future
-  * `@'1 IDENT`
-  * `@>ident`, `@'1>ident`
-  * Pseudo-variables:
-    * `@.ident()`, `@'1.ident()` and similarly `out += %[..]`, `out'x += %[..]`
-    * Could define own method such as `assert_identical(@'1, @'2)`
-  * `#(IDENT(@))` or `@IDENT` shorthand for `#(IDENT(@))`
-  * `input.ident()`
-  * One option - @ is sugar, we use labels (lifetimes) to define parsers:
-    * `@IDENT` is sugar for `#(@IDENT)` which is sugar for `#(IDENT::<'current>())`.
-    * `@x=IDENT` is shorthand for `#{ let x = @IDENT; }` (only in stream parser mode)
-    * Any parsers with custom syntax require expression mode:
-      `#{ let full = @CAPTURE { ..inner parser.. } }`
-    * But then what is `@(..)` and repeat-friends syntax sugar for?
-      * Something like `STREAM::<'current> { /* desugared */ }` could work
-      * `@::<'current>(..)` could work, but it's a little weird to have the `@` and the identifier.
-      * Or just don't allow an unsugared form, and require, `parse '1 { @( .. ) }` could work, where parse takes a label instead of a variable.
-    * How would a parser take multiple input streams?
-      * `let x = parse_same_ident::<'1, '2>(...)`
+Consider if we want separate types for e.g.
+* `Span`
+* `TokenTree`
 
-* Named parsers:
-  * `@[CAPTURE_INPUT_STREAM <expression>]`
-    * This returns the input stream. It can capture the original tokens by using `let forked = input.fork()` and then `let end_cursor = input.end();` and then consuming `TokenTree`s from `forked` until `forked.cursor >= end_cursor` (making use of the PartialEq implementation)
-* Remove `#x` and `#..x` as variable binding / parsers, instead use `#(__out.x = @TOKEN_TREE.flatten())` / `@x=REST`
+Repeat bindings (only inside a `consume` statement)
+* `@(..)?`, `@(..)+`, `@(..),+`, `@(..)*`, `@(..),*`
 
-* Review the existing named parsers, and implement the following named parsers
-  * `@?(..)`, `@+(..)`, `@,+(..)`, `@*(..)`, `@+(..)`
-  * Consider if `@LITERAL` should infer to a value
-  * `@CURSOR` - outputs a token with a span for outputting errors. If at end of an inner stream, it outputs the ident `END` with the span of the closing bracket.
-  * `@TOKEN_OR_GROUP_CONTENT` - Literal, Ident, Punct or None-group content (using `ParsedTokenTree`) - (do we need this?)
-  * `@INFER_TOKEN_TREE` - Infers parsing as a value, falls back to Stream - OR maybe we just do `@TOKEN_TREE.infer()` - possibly this should also strip none-groups
-  * `@INTEGER`
-  * `@[ANY_GROUP { ...inner parser... }]`
-  * `@[FORK { ...parser... }]` the parser block creates a `commit=false` variable, if this is set to `commit=true` then it commits the fork.
-  * `@[PEEK { ... }]` which does a `@[FORK ...]` internally but never commits... question: Should it use it error (for use in an `attempt` block)? Or return a bool? Maybe we have two?
-  * `@[FIELDS { ... }]` and `@[SUBFIELDS { ... }]`
-  * Add ability to add scope to interpreter state (see `Parsers Revisited`) and can then add:
-    * `@[REPEATED { ... }]` (see below)
-    * `@[UNTIL { ... }]` - takes an explicit parse block or parser. Reverts any state change if it doesn't match.
+Future methods once we have closures:
+* `input.any_group(|inner| { })`
+* Something for `input.fields({ ... })` and `input.subfields({ ... })`, whose fields are closures
+* Possibly some support for `input.peek` and `fork` - although this is handled by the attempt statement
 ```rust
-@[REPEATED({
-    separator?: %[], // Could really be a parse stream, but it has to be a value here, and realistically it's not important. This is evaluated only once at the start.
+input.repeated(
+  %{
+    separator?: %[],
     min?: 0,
     max?: 1000000,
-}) { <block> }]
+  },
+  |inner| {
+    // ...
+  }
+)
 ```
 
-- [ ] Ensure `TODO[parsers]` are addressed
+Later:
+- [ ] Support for starting to parse a `input.open('(')` in the left part of an attempt arm
+      and completing in the right arm `input.close(')')` - there needs to be some error checking in the parse stream stack. We probably can't allow closing in the LHS of an attempt arm. We should record a reason on the new parse buffer and raise if it doesn't match
 
 ## Methods and closures
 
@@ -257,6 +240,9 @@ First, read the @./2025-09-vision.md
   * This needs to be validated during the control flow pass
 - [ ] Optional arguments
 - [ ] Add `map`, `filter`, `flatten`, `flatmap`
+- [ ] Add `stream.parse(|input| { ... })`
+- [ ] Add `let captured = input.capture(|input| { ... })`
+  * This returns the parsed input stream. It can capture the original tokens by using `let forked = input.fork()` and then `let end_cursor = input.end();` and then consuming `TokenTree`s from `forked` until `forked.cursor >= end_cursor` (making use of the PartialEq implementation)
 
 ## Utility methods
 
@@ -320,7 +306,7 @@ preinterpret::run! {
   for N in 0..=10 {
     let types = %[A B C D E F G H I J K L M N O P Q R S T].take(N);
     %[
-        impl<%(#types),*> MyTrait for (%(#types,)*) {}
+      impl<%(#types),*> MyTrait for (%(#types,)*) {}
     ]
   }
 }

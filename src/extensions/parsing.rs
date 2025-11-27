@@ -142,12 +142,12 @@ impl DelimiterExt for Delimiter {
 
 /// Allows storing a stack of parse buffers for certain parse strategies which require
 /// handling multiple groups in parallel.
-pub(crate) struct ParseStreamStack<'a, K> {
+pub(crate) struct ParseStack<'a, K> {
     base: ParseStream<'a, K>,
     group_stack: Vec<ParseBuffer<'a, K>>,
 }
 
-impl<'a, K> ParseStreamStack<'a, K> {
+impl<'a, K> ParseStack<'a, K> {
     pub(crate) fn new(base: ParseStream<'a, K>) -> Self {
         Self {
             base,
@@ -185,15 +185,18 @@ impl<'a, K> ParseStreamStack<'a, K> {
         self.current().parse_any_ident()
     }
 
-    pub(crate) fn parse_and_enter_group(&mut self) -> ParseResult<(Delimiter, DelimSpan)> {
-        let (delimiter, delim_span, inner) = self.current().parse_any_group()?;
+    pub(crate) fn parse_and_enter_group(
+        &mut self,
+        delimiter: Option<Delimiter>,
+    ) -> ParseResult<(Delimiter, DelimSpan)> {
+        let (delimiter, delim_span, inner) = self.current().parse_group(delimiter)?;
         let inner = unsafe {
             // SAFETY: This is safe because the lifetime is there for two reasons:
             // (A) Prevent mixing up different buffers from e.g. different groups,
             // (B) Ensure the buffers are dropped in the correct order so that the unexpected drop glue triggers
             // in the correct order.
             //
-            // This invariant is maintained by this `ParseStreamStack` struct:
+            // This invariant is maintained by this `ParseStack` struct:
             // (A) Is enforced by the fact we're parsing the group from the top parse buffer current().
             // (B) Is enforced by a combination of:
             // ==> exit_group() ensures the parse buffers are dropped in the correct order
@@ -219,7 +222,7 @@ impl<'a, K> ParseStreamStack<'a, K> {
     }
 }
 
-impl<'a> ParseStreamStack<'a, Source> {
+impl<'a> ParseStack<'a, Source> {
     pub(crate) fn parse<T: ParseSource>(&mut self) -> ParseResult<T> {
         self.current().parse()
     }
@@ -241,7 +244,7 @@ impl<'a> ParseStreamStack<'a, Source> {
     }
 }
 
-impl<K> Drop for ParseStreamStack<'_, K> {
+impl<K> Drop for ParseStack<'_, K> {
     fn drop(&mut self) {
         while !self.group_stack.is_empty() {
             self.exit_group();

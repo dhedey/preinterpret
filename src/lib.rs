@@ -511,11 +511,7 @@ fn preinterpret_stream_internal(input: TokenStream) -> SynResult<TokenStream> {
 
     let output_stream = interpreter.complete();
 
-    unsafe {
-        // RUST-ANALYZER-SAFETY: This might drop transparent groups in the output of
-        // rust-analyzer. There's not much we can do here...
-        Ok(output_stream.into_token_stream())
-    }
+    Ok(output_stream.into_token_stream())
 }
 
 /// Interprets its input as a preinterpret expression block, which should return a token stream.
@@ -556,11 +552,7 @@ fn preinterpret_run_internal(input: TokenStream) -> SynResult<TokenStream> {
         output_stream
     };
 
-    unsafe {
-        // RUST-ANALYZER-SAFETY: This might drop transparent groups in the output of
-        // rust-analyzer. There's not much we can do here...
-        Ok(output.into_token_stream())
-    }
+    Ok(output.into_token_stream())
 }
 
 /// Returns the scope and segment information for the given code.
@@ -687,13 +679,7 @@ mod benchmarking {
                 })
             })?;
 
-            let _ = context.time("output", move || {
-                unsafe {
-                    // RUST-ANALYZER-SAFETY: This might drop transparent groups in the output of
-                    // rust-analyzer. There's not much we can do here...
-                    output.into_token_stream()
-                }
-            });
+            let _ = context.time("output", move || Ok(output_stream.into_token_stream()));
 
             Ok(())
         })?;

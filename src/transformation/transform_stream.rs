@@ -22,13 +22,9 @@ impl ParseSource for TransformStream {
 }
 
 impl HandleTransformation for TransformStream {
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         for item in self.inner.iter() {
-            item.handle_transform(input, interpreter)?;
+            item.handle_transform(interpreter)?;
         }
         Ok(())
     }
@@ -39,9 +35,9 @@ pub(crate) enum TransformItem {
     EmbeddedStatements(EmbeddedStatements),
     Transformer(Transformer),
     TransformStreamInput(StreamParser),
-    ExactPunct(Punct),
-    ExactIdent(Ident),
-    ExactLiteral(Literal),
+    ExactPunct(Span, char),
+    ExactIdent(Span, String),
+    ExactLiteral(Span, String),
     ExactGroup(TransformGroup),
 }
 
@@ -54,9 +50,18 @@ impl ParseSource for TransformItem {
             SourcePeekMatch::Group(_) => Self::ExactGroup(input.parse()?),
             SourcePeekMatch::ExplicitTransformStream => Self::TransformStreamInput(input.parse()?),
             SourcePeekMatch::Transformer(_) => Self::Transformer(input.parse()?),
-            SourcePeekMatch::Punct(_) => Self::ExactPunct(input.parse_any_punct()?),
-            SourcePeekMatch::Literal(_) => Self::ExactLiteral(input.parse()?),
-            SourcePeekMatch::Ident(_) => Self::ExactIdent(input.parse_any_ident()?),
+            SourcePeekMatch::Punct(_) => {
+                let punct = input.parse_any_punct()?;
+                Self::ExactPunct(punct.span(), punct.as_char())
+            }
+            SourcePeekMatch::Literal(_) => {
+                let literal: Literal = input.parse()?;
+                Self::ExactLiteral(literal.span(), literal.to_string())
+            }
+            SourcePeekMatch::Ident(_) => {
+                let ident = input.parse_any_ident()?;
+                Self::ExactIdent(ident.span(), ident.to_string())
+            }
             SourcePeekMatch::StreamLiteral(_) => return input.parse_err("Stream literals are not supported here. Use an EXACT parser instead."),
             SourcePeekMatch::ObjectLiteral => return input.parse_err("Object literals are not supported here."),
             SourcePeekMatch::End => return input.parse_err("Unexpected end"),
@@ -69,26 +74,22 @@ impl ParseSource for TransformItem {
             TransformItem::EmbeddedStatements(statements) => statements.control_flow_pass(context),
             TransformItem::Transformer(transformer) => transformer.control_flow_pass(context),
             TransformItem::TransformStreamInput(stream) => stream.control_flow_pass(context),
-            TransformItem::ExactPunct(punct) => punct.control_flow_pass(context),
-            TransformItem::ExactIdent(ident) => ident.control_flow_pass(context),
-            TransformItem::ExactLiteral(literal) => literal.control_flow_pass(context),
+            TransformItem::ExactPunct { .. } => Ok(()),
+            TransformItem::ExactIdent { .. } => Ok(()),
+            TransformItem::ExactLiteral { .. } => Ok(()),
             TransformItem::ExactGroup(group) => group.control_flow_pass(context),
         }
     }
 }
 
 impl HandleTransformation for TransformItem {
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         match self {
             TransformItem::Transformer(transformer) => {
-                transformer.handle_transform(input, interpreter)?;
+                transformer.handle_transform(interpreter)?;
             }
             TransformItem::TransformStreamInput(stream) => {
-                stream.handle_transform(input, interpreter)?;
+                stream.handle_transform(interpreter)?;
             }
             TransformItem::EmbeddedExpression(block) => {
                 block.interpret(interpreter)?;
@@ -96,17 +97,17 @@ impl HandleTransformation for TransformItem {
             TransformItem::EmbeddedStatements(statements) => {
                 statements.interpret(interpreter)?;
             }
-            TransformItem::ExactPunct(punct) => {
-                input.parse_punct_matching(punct.as_char())?;
+            TransformItem::ExactPunct(span, punct) => {
+                interpreter.input(span)?.parse_punct_matching(*punct)?;
             }
-            TransformItem::ExactIdent(ident) => {
-                input.parse_ident_matching(&ident.to_string())?;
+            TransformItem::ExactIdent(span, ident) => {
+                interpreter.input(span)?.parse_ident_matching(ident)?;
             }
-            TransformItem::ExactLiteral(literal) => {
-                input.parse_literal_matching(&literal.to_string())?;
+            TransformItem::ExactLiteral(span, literal) => {
+                interpreter.input(span)?.parse_literal_matching(literal)?;
             }
             TransformItem::ExactGroup(group) => {
-                group.handle_transform(input, interpreter)?;
+                group.handle_transform(interpreter)?;
             }
         }
         Ok(())
@@ -115,14 +116,16 @@ impl HandleTransformation for TransformItem {
 
 pub(crate) struct TransformGroup {
     delimiter: Delimiter,
+    delim_span: DelimSpan,
     inner: TransformStream,
 }
 
 impl ParseSource for TransformGroup {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        let (delimiter, _, content) = input.parse_any_group()?;
+        let (delimiter, delim_span, content) = input.parse_any_group()?;
         Ok(Self {
             delimiter,
+            delim_span,
             inner: content.parse()?,
         })
     }
@@ -133,19 +136,18 @@ impl ParseSource for TransformGroup {
 }
 
 impl HandleTransformation for TransformGroup {
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         // Because `None` is ignored by Syn at parsing time, we can effectively be most permissive by ignoring them.
         // This removes a bit of a footgun for users.
         // If they really want to check for a None group, they can embed `@[GROUP ...]` transformer.
         if self.delimiter == Delimiter::None {
-            self.inner.handle_transform(input, interpreter)
+            self.inner.handle_transform(interpreter)
         } else {
-            let (_, inner) = input.parse_specific_group(self.delimiter)?;
-            self.inner.handle_transform(&inner, interpreter)
+            interpreter.parse_group(
+                &self.delim_span.open(),
+                Some(self.delimiter),
+                |interpreter, _, _| self.inner.handle_transform(interpreter),
+            )
         }
     }
 }
@@ -176,12 +178,8 @@ impl ParseSource for StreamParser {
 }
 
 impl HandleTransformation for StreamParser {
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
-        self.content.handle_transform(input, interpreter)
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        self.content.handle_transform(interpreter)
     }
 }
 
@@ -275,20 +273,16 @@ impl ParseSource for StreamParserContent {
 }
 
 impl HandleTransformation for StreamParserContent {
-    fn handle_transform(
-        &self,
-        input: ParseStream<Output>,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<()> {
+    fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         match self {
             StreamParserContent::Output { content } => {
-                content.handle_transform(input, interpreter)?;
+                content.handle_transform(interpreter)?;
             }
             StreamParserContent::StoreToVariable {
                 variable, content, ..
             } => {
                 let new_output = interpreter
-                    .capture_output(|interpreter| content.handle_transform(input, interpreter))?;
+                    .capture_output(|interpreter| content.handle_transform(interpreter))?;
                 variable.define(interpreter, new_output);
             }
             StreamParserContent::ExtendToVariable {
@@ -296,12 +290,12 @@ impl HandleTransformation for StreamParserContent {
             } => {
                 let mutable = variable.resolve_assignee(interpreter)?;
                 let new_output = interpreter
-                    .capture_output(|interpreter| content.handle_transform(input, interpreter))?;
+                    .capture_output(|interpreter| content.handle_transform(interpreter))?;
                 new_output.append_into(mutable.into_stream()?.as_mut());
             }
             StreamParserContent::Discard { content, .. } => {
                 let _ = interpreter
-                    .capture_output(|interpreter| content.handle_transform(input, interpreter))?;
+                    .capture_output(|interpreter| content.handle_transform(interpreter))?;
             }
         }
         Ok(())

@@ -22,7 +22,7 @@ use super::*;
 ///
 /// See the rust doc on the [`ExpressionStackFrame`] for further details.
 pub(super) struct ExpressionParser<'a> {
-    streams: ParseStreamStack<'a, Source>,
+    streams: ParseStack<'a, Source>,
     nodes: ExpressionNodes,
     expression_stack: Vec<ExpressionStackFrame>,
 }
@@ -30,7 +30,7 @@ pub(super) struct ExpressionParser<'a> {
 impl<'a> ExpressionParser<'a> {
     pub(super) fn parse(input: SourceParser<'a>) -> ParseResult<Expression> {
         Self {
-            streams: ParseStreamStack::new(input),
+            streams: ParseStack::new(input),
             nodes: ExpressionNodes::new(),
             expression_stack: Vec::with_capacity(10),
         }
@@ -65,7 +65,7 @@ impl<'a> ExpressionParser<'a> {
         }
     }
 
-    fn parse_unary_atom(input: &mut ParseStreamStack<Source>) -> ParseResult<UnaryAtom> {
+    fn parse_unary_atom(input: &mut ParseStack<Source>) -> ParseResult<UnaryAtom> {
         Ok(match input.peek_grammar() {
             SourcePeekMatch::EmbeddedVariable | SourcePeekMatch::EmbeddedExpression | SourcePeekMatch::EmbeddedStatements => {
                 return input.parse_err(
@@ -76,7 +76,7 @@ impl<'a> ExpressionParser<'a> {
                 return input.parse_err("Destructurings are not supported in an expression")
             }
             SourcePeekMatch::Group(Delimiter::None | Delimiter::Parenthesis) => {
-                let (_, delim_span) = input.parse_and_enter_group()?;
+                let (_, delim_span) = input.parse_and_enter_group(None)?;
                 UnaryAtom::Group(delim_span)
             }
             SourcePeekMatch::Group(Delimiter::Brace) => {
@@ -86,7 +86,7 @@ impl<'a> ExpressionParser<'a> {
                 // This could be handled as parsing a vector of SourceExpressions,
                 // but it's more efficient to handle nested vectors as a single expression
                 // in the expression parser
-                let (_, delim_span) = input.parse_and_enter_group()?;
+                let (_, delim_span) = input.parse_and_enter_group(None)?;
                 UnaryAtom::Array(Brackets { delim_span })
             }
             SourcePeekMatch::Punct(punct) => {
@@ -144,7 +144,7 @@ impl<'a> ExpressionParser<'a> {
             }
             SourcePeekMatch::ObjectLiteral => {
                 let _: Token![%] = input.parse()?;
-                let (_, delim_span) = input.parse_and_enter_group()?;
+                let (_, delim_span) = input.parse_and_enter_group(None)?;
                 UnaryAtom::Object(Braces { delim_span })
             }
             SourcePeekMatch::End => return input.parse_err("Expected an expression"),
@@ -152,13 +152,13 @@ impl<'a> ExpressionParser<'a> {
     }
 
     fn parse_extension(
-        input: &mut ParseStreamStack<Source>,
+        input: &mut ParseStack<Source>,
         parent_stack_frame: &ExpressionStackFrame,
     ) -> ParseResult<NodeExtension> {
         // We fall through if we have no match
         match input.peek_grammar() {
             SourcePeekMatch::Group(Delimiter::Bracket) => {
-                let (_, delim_span) = input.parse_and_enter_group()?;
+                let (_, delim_span) = input.parse_and_enter_group(None)?;
                 return Ok(NodeExtension::Index(IndexAccess {
                     brackets: Brackets { delim_span },
                 }));
@@ -190,7 +190,7 @@ impl<'a> ExpressionParser<'a> {
                     let dot = input.parse()?;
                     let ident = input.parse()?;
                     if input.peek(token::Paren) {
-                        let (_, delim_span) = input.parse_and_enter_group()?;
+                        let (_, delim_span) = input.parse_and_enter_group(None)?;
                         return Ok(NodeExtension::MethodCall(MethodAccess {
                             dot,
                             method: ident,
@@ -630,7 +630,7 @@ impl<'a> ExpressionParser<'a> {
                 complete_entries.push((ObjectKey::Identifier(key), node));
                 continue;
             } else if self.streams.peek(token::Bracket) {
-                let (_, delim_span) = self.streams.parse_and_enter_group()?;
+                let (_, delim_span) = self.streams.parse_and_enter_group(None)?;
                 break ObjectStackFrameState::EntryIndex(IndexAccess {
                     brackets: Brackets { delim_span },
                 });
