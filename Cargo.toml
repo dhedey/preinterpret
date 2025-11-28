@@ -33,6 +33,7 @@ debug = [] # Non-stable, for internal use only
 proc-macro2 = { version = "1.0.93" }
 syn = { version = "2.0.107", default-features = false, features = ["parsing", "derive", "printing", "clone-impls", "full"] }
 quote = { version = "1.0.38", default-features = false }
+slotmap = { version = "1.0.7" }
 
 [dev-dependencies]
 trybuild = { version = "1.0.110", features = ["diff"] }

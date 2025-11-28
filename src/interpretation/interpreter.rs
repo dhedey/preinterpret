@@ -225,15 +225,15 @@ impl Interpreter {
         f: impl FnOnce(&mut Interpreter) -> ExecutionResult<()>,
     ) -> ExecutionResult<()> {
         stream.parse_with(|input| {
-            unsafe {
+            let handle = unsafe {
                 // SAFETY: This is paired with `finish_parse` below,
                 // without any early returns in the middle
-                self.input_handler.start_parse(input);
-            }
+                self.input_handler.start_parse(input)
+            };
             let result = f(self);
             unsafe {
                 // SAFETY: This is paired with `start_parse` above
-                self.input_handler.finish_parse();
+                self.input_handler.finish_parse(handle);
             }
             result
         })
