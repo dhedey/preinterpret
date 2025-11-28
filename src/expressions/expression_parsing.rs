@@ -121,7 +121,7 @@ impl<'a> ExpressionParser<'a> {
                     "true" | "false" => {
                         let bool = input.parse::<syn::LitBool>()?;
                         UnaryAtom::Leaf(Leaf::Value(SharedValue::new_from_owned(
-                            ExpressionBoolean::for_litbool(&bool).into_owned_value(),
+                            BooleanExpression::for_litbool(&bool).into_owned_value(),
                         )))
                     }
                     "if" => UnaryAtom::Leaf(Leaf::IfExpression(Box::new(input.parse()?))),

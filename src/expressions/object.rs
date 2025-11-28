@@ -1,11 +1,11 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct ExpressionObject {
+pub(crate) struct ObjectExpression {
     pub(crate) entries: BTreeMap<String, ObjectEntry>,
 }
 
-impl ToExpressionValue for ExpressionObject {
+impl ToExpressionValue for ObjectExpression {
     fn into_value(self) -> ExpressionValue {
         ExpressionValue::Object(self)
     }
@@ -18,10 +18,10 @@ pub(crate) struct ObjectEntry {
     pub(crate) value: ExpressionValue,
 }
 
-impl ExpressionObject {
+impl ObjectExpression {
     pub(super) fn handle_integer_binary_operation(
         self,
-        _right: ExpressionInteger,
+        _right: IntegerExpression,
         operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         operation.unsupported(self)
@@ -193,7 +193,7 @@ impl ExpressionObject {
     }
 }
 
-impl Spanned<&ExpressionObject> {
+impl Spanned<&ObjectExpression> {
     pub(crate) fn validate(&self, validation: &impl ObjectValidate) -> ExecutionResult<()> {
         let mut missing_fields = Vec::new();
         for (field_name, _) in validation.required_fields() {
@@ -240,7 +240,7 @@ impl Spanned<&ExpressionObject> {
     }
 }
 
-impl HasValueType for ExpressionObject {
+impl HasValueType for ObjectExpression {
     fn value_type(&self) -> &'static str {
         self.entries.value_type()
     }
@@ -254,7 +254,7 @@ impl HasValueType for BTreeMap<String, ObjectEntry> {
 
 impl ToExpressionValue for BTreeMap<String, ObjectEntry> {
     fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Object(ExpressionObject { entries: self })
+        ExpressionValue::Object(ObjectExpression { entries: self })
     }
 }
 
@@ -263,11 +263,11 @@ define_interface! {
     parent: IterableTypeData,
     pub(crate) mod object_interface {
         pub(crate) mod methods {
-            [context] fn zip(this: ExpressionObject) -> ExecutionResult<ExpressionArray> {
+            [context] fn zip(this: ObjectExpression) -> ExecutionResult<ArrayExpression> {
                 ZipIterators::new_from_object(this, context.span_range())?.run_zip(context.interpreter, true)
             }
 
-            [context] fn zip_truncated(this: ExpressionObject) -> ExecutionResult<ExpressionArray> {
+            [context] fn zip_truncated(this: ObjectExpression) -> ExecutionResult<ArrayExpression> {
                 ZipIterators::new_from_object(this, context.span_range())?.run_zip(context.interpreter, false)
             }
         }

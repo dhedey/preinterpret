@@ -1,24 +1,24 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct ExpressionChar {
+pub(crate) struct CharExpression {
     pub(super) value: char,
 }
 
-impl ToExpressionValue for ExpressionChar {
+impl ToExpressionValue for CharExpression {
     fn into_value(self) -> ExpressionValue {
         ExpressionValue::Char(self)
     }
 }
 
-impl ExpressionChar {
+impl CharExpression {
     pub(super) fn for_litchar(lit: &syn::LitChar) -> Owned<Self> {
         Self { value: lit.value() }.into_owned(lit.span())
     }
 
     pub(super) fn handle_integer_binary_operation(
         self,
-        _right: ExpressionInteger,
+        _right: IntegerExpression,
         operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         operation.unsupported(self)
@@ -56,7 +56,7 @@ impl ExpressionChar {
     }
 }
 
-impl HasValueType for ExpressionChar {
+impl HasValueType for CharExpression {
     fn value_type(&self) -> &'static str {
         "char"
     }
@@ -64,7 +64,7 @@ impl HasValueType for ExpressionChar {
 
 impl ToExpressionValue for char {
     fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Char(ExpressionChar { value: self })
+        ExpressionValue::Char(CharExpression { value: self })
     }
 }
 

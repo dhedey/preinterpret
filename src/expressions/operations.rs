@@ -484,7 +484,7 @@ pub(super) trait HandleBinaryOperation: Sized {
 
     fn handle_integer_binary_operation(
         self,
-        rhs: ExpressionInteger,
+        rhs: IntegerExpression,
         operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue>;
 }

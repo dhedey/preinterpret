@@ -1,14 +1,14 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct ExpressionStream {
+pub(crate) struct StreamExpression {
     pub(crate) value: OutputStream,
 }
 
-impl ExpressionStream {
+impl StreamExpression {
     pub(super) fn handle_integer_binary_operation(
         self,
-        _right: ExpressionInteger,
+        _right: IntegerExpression,
         operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         operation.unsupported(self)
@@ -95,7 +95,7 @@ impl ExpressionStream {
     }
 }
 
-impl HasValueType for ExpressionStream {
+impl HasValueType for StreamExpression {
     fn value_type(&self) -> &'static str {
         self.value.value_type()
     }
@@ -109,7 +109,7 @@ impl HasValueType for OutputStream {
 
 impl ToExpressionValue for OutputStream {
     fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Stream(ExpressionStream { value: self })
+        ExpressionValue::Stream(StreamExpression { value: self })
     }
 }
 
@@ -142,7 +142,7 @@ define_interface! {
                 Ok(this.coerce_into_value())
             }
 
-            fn split(this: OutputStream, separator: AnyRef<OutputStream>, settings: Option<SplitSettings>) -> ExecutionResult<ExpressionArray> {
+            fn split(this: OutputStream, separator: AnyRef<OutputStream>, settings: Option<SplitSettings>) -> ExecutionResult<ArrayExpression> {
                 handle_split(this, &separator, settings.unwrap_or_default())
             }
 
@@ -177,12 +177,12 @@ define_interface! {
             // CORE METHODS
             // ============
 
-            fn error(this: Shared<ExpressionStream>, message: Shared<String>) -> ExecutionResult<Never> {
+            fn error(this: Shared<StreamExpression>, message: Shared<String>) -> ExecutionResult<Never> {
                 let error_span_range = this.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
                 error_span_range.assertion_err(message.as_str())
             }
 
-            fn assert(this: Shared<ExpressionStream>, condition: bool, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
+            fn assert(this: Shared<StreamExpression>, condition: bool, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
                 if condition {
                     Ok(())
                 } else {
@@ -195,7 +195,7 @@ define_interface! {
                 }
             }
 
-            fn assert_eq(this: Shared<ExpressionStream>, lhs: SpannedAnyRef<ExpressionValue>, rhs: SpannedAnyRef<ExpressionValue>, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
+            fn assert_eq(this: Shared<StreamExpression>, lhs: SpannedAnyRef<ExpressionValue>, rhs: SpannedAnyRef<ExpressionValue>, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
                 let lhs_value: &ExpressionValue = &lhs;
                 let rhs_value: &ExpressionValue = &rhs;
                 let res = {
@@ -219,7 +219,7 @@ define_interface! {
                 }
             }
 
-            [context] fn reinterpret_as_run(this: Owned<ExpressionStream>) -> ExecutionResult<OwnedValue> {
+            [context] fn reinterpret_as_run(this: Owned<StreamExpression>) -> ExecutionResult<OwnedValue> {
                 let source = this.into_inner().value.into_token_stream();
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(ExpressionBlockContent::parse, ExpressionBlockContent::control_flow_pass)?;
                 let mut inner_interpreter = Interpreter::new(scope_definitions);
@@ -230,7 +230,7 @@ define_interface! {
                 Ok(return_value)
             }
 
-            [context] fn reinterpret_as_stream(this: Owned<ExpressionStream>) -> ExecutionResult<OutputStream> {
+            [context] fn reinterpret_as_stream(this: Owned<StreamExpression>) -> ExecutionResult<OutputStream> {
                 let source = this.into_inner().value.into_token_stream();
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(
                     |input| SourceStream::parse_with_span(input, context.output_span_range.start()),
@@ -242,7 +242,7 @@ define_interface! {
             }
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_to_value(this: Owned<ExpressionStream>) -> ExecutionResult<ResolvedValue> {
+            [context] fn cast_to_value(this: Owned<StreamExpression>) -> ExecutionResult<ResolvedValue> {
                 let (this, span_range) = this.deconstruct();
                 let coerced = this.value.coerce_into_value();
                 if let ExpressionValue::Stream(_) = &coerced {

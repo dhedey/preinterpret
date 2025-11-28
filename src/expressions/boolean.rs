@@ -1,24 +1,24 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct ExpressionBoolean {
+pub(crate) struct BooleanExpression {
     pub(crate) value: bool,
 }
 
-impl ToExpressionValue for ExpressionBoolean {
+impl ToExpressionValue for BooleanExpression {
     fn into_value(self) -> ExpressionValue {
         ExpressionValue::Boolean(self)
     }
 }
 
-impl ExpressionBoolean {
+impl BooleanExpression {
     pub(super) fn for_litbool(lit: &syn::LitBool) -> Owned<Self> {
         Self { value: lit.value }.into_owned(lit.span)
     }
 
     pub(super) fn handle_integer_binary_operation(
         self,
-        _right: ExpressionInteger,
+        _right: IntegerExpression,
         operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         match operation.operation {
@@ -59,7 +59,7 @@ impl ExpressionBoolean {
     }
 }
 
-impl HasValueType for ExpressionBoolean {
+impl HasValueType for BooleanExpression {
     fn value_type(&self) -> &'static str {
         "bool"
     }
@@ -67,7 +67,7 @@ impl HasValueType for ExpressionBoolean {
 
 impl ToExpressionValue for bool {
     fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Boolean(ExpressionBoolean { value: self })
+        ExpressionValue::Boolean(BooleanExpression { value: self })
     }
 }
 

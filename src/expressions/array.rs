@@ -1,11 +1,11 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct ExpressionArray {
+pub(crate) struct ArrayExpression {
     pub(crate) items: Vec<ExpressionValue>,
 }
 
-impl ExpressionArray {
+impl ArrayExpression {
     pub(crate) fn new(items: Vec<ExpressionValue>) -> Self {
         Self { items }
     }
@@ -23,7 +23,7 @@ impl ExpressionArray {
 
     pub(super) fn handle_integer_binary_operation(
         self,
-        _right: ExpressionInteger,
+        _right: IntegerExpression,
         operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         operation.unsupported(self)
@@ -134,7 +134,7 @@ impl ExpressionArray {
 
     fn resolve_valid_index_from_integer(
         &self,
-        integer: Spanned<&ExpressionInteger>,
+        integer: Spanned<&IntegerExpression>,
         is_exclusive: bool,
     ) -> ExecutionResult<usize> {
         let index: usize = integer
@@ -167,7 +167,7 @@ impl ExpressionArray {
         output: &mut String,
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
-        ExpressionIterator::any_iterator_to_string(
+        IteratorExpression::any_iterator_to_string(
             self.items.iter(),
             output,
             behaviour,
@@ -179,7 +179,7 @@ impl ExpressionArray {
     }
 }
 
-impl HasValueType for ExpressionArray {
+impl HasValueType for ArrayExpression {
     fn value_type(&self) -> &'static str {
         self.items.value_type()
     }
@@ -193,11 +193,11 @@ impl HasValueType for Vec<ExpressionValue> {
 
 impl ToExpressionValue for Vec<ExpressionValue> {
     fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Array(ExpressionArray { items: self })
+        ExpressionValue::Array(ArrayExpression { items: self })
     }
 }
 
-impl ToExpressionValue for ExpressionArray {
+impl ToExpressionValue for ArrayExpression {
     fn into_value(self) -> ExpressionValue {
         ExpressionValue::Array(self)
     }
@@ -208,18 +208,18 @@ define_interface! {
     parent: IterableTypeData,
     pub(crate) mod array_interface {
         pub(crate) mod methods {
-            fn push(mut this: Mutable<ExpressionArray>, item: OwnedValue) -> ExecutionResult<()> {
+            fn push(mut this: Mutable<ArrayExpression>, item: OwnedValue) -> ExecutionResult<()> {
                 this.items.push(item.into());
                 Ok(())
             }
 
-            [context] fn to_stream_grouped(this: ExpressionArray) -> StreamOutput<impl StreamAppender> {
+            [context] fn to_stream_grouped(this: ArrayExpression) -> StreamOutput<impl StreamAppender> {
                 let error_span_range = context.span_range();
                 StreamOutput::new(move |stream| this.output_items_to(&mut ToStreamContext::new(stream, error_span_range), Grouping::Grouped))
             }
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_to_numeric(this: Owned<ExpressionArray>) -> ExecutionResult<ResolvedValue> {
+            [context] fn cast_to_numeric(this: Owned<ArrayExpression>) -> ExecutionResult<ResolvedValue> {
                 let (mut this, span_range) = this.deconstruct();
                 let length = this.items.len();
                 if length == 1 {

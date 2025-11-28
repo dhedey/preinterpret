@@ -38,13 +38,13 @@ where
 }
 
 pub(crate) enum ZipIterators {
-    Array(Vec<ExpressionIterator>, SpanRange),
-    Object(Vec<(String, Span, ExpressionIterator)>, SpanRange),
+    Array(Vec<IteratorExpression>, SpanRange),
+    Object(Vec<(String, Span, IteratorExpression)>, SpanRange),
 }
 
 impl ZipIterators {
     pub(crate) fn new_from_object(
-        object: ExpressionObject,
+        object: ObjectExpression,
         span_range: SpanRange,
     ) -> ExecutionResult<Self> {
         let entries = object
@@ -69,7 +69,7 @@ impl ZipIterators {
     }
 
     pub(crate) fn new_from_iterator(
-        iterator: ExpressionIterator,
+        iterator: IteratorExpression,
         span_range: SpanRange,
     ) -> ExecutionResult<Self> {
         let vec = iterator
@@ -90,7 +90,7 @@ impl ZipIterators {
         self,
         interpreter: &mut Interpreter,
         error_on_length_mismatch: bool,
-    ) -> ExecutionResult<ExpressionArray> {
+    ) -> ExecutionResult<ArrayExpression> {
         let mut iterators = self;
         let error_span_range = match &iterators {
             ZipIterators::Array(_, span_range) => *span_range,
@@ -99,7 +99,7 @@ impl ZipIterators {
         let mut output = Vec::new();
 
         if iterators.len() == 0 {
-            return Ok(ExpressionArray::new(output));
+            return Ok(ArrayExpression::new(output));
         }
 
         let (min_iterator_min_length, max_iterator_max_length) = iterators.size_hint_range();
@@ -122,7 +122,7 @@ impl ZipIterators {
             &mut output,
         )?;
 
-        Ok(ExpressionArray::new(output))
+        Ok(ArrayExpression::new(output))
     }
 
     /// Panics if called on an empty list of iterators
@@ -206,14 +206,14 @@ pub(crate) fn run_intersperse(
     items: IterableValue,
     separator: ExpressionValue,
     settings: IntersperseSettings,
-) -> ExecutionResult<ExpressionArray> {
+) -> ExecutionResult<ArrayExpression> {
     let mut output = Vec::new();
 
     let mut items = items.into_iterator()?.peekable();
 
     let mut this_item = match items.next() {
         Some(next) => next,
-        None => return Ok(ExpressionArray { items: output }),
+        None => return Ok(ArrayExpression { items: output }),
     };
 
     let mut appender = SeparatorAppender {
@@ -242,7 +242,7 @@ pub(crate) fn run_intersperse(
         }
     }
 
-    Ok(ExpressionArray { items: output })
+    Ok(ArrayExpression { items: output })
 }
 
 struct SeparatorAppender {
@@ -313,7 +313,7 @@ pub(crate) fn handle_split(
     input: OutputStream,
     separator: &OutputStream,
     settings: SplitSettings,
-) -> ExecutionResult<ExpressionArray> {
+) -> ExecutionResult<ArrayExpression> {
     input.parse_with(move |input| {
         let mut output = Vec::new();
         let mut current_item = OutputStream::new();
@@ -325,7 +325,7 @@ pub(crate) fn handle_split(
                 let complete_item = core::mem::replace(&mut current_item, OutputStream::new());
                 output.push(complete_item.into_value());
             }
-            return Ok(ExpressionArray::new(output));
+            return Ok(ArrayExpression::new(output));
         }
 
         let mut drop_empty_next = settings.drop_empty_start;
@@ -350,6 +350,6 @@ pub(crate) fn handle_split(
         if !current_item.is_empty() || !settings.drop_empty_end {
             output.push(current_item.into_value());
         }
-        Ok(ExpressionArray::new(output))
+        Ok(ArrayExpression::new(output))
     })
 }

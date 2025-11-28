@@ -461,7 +461,7 @@ impl ResolvableArgumentOwned for () {
 
 impl_resolvable_argument_for! {
     BooleanTypeData,
-    (value, context) -> ExpressionBoolean {
+    (value, context) -> BooleanExpression {
         match value {
             ExpressionValue::Boolean(value) => Ok(value),
             other => context.err("boolean", other),
@@ -471,13 +471,13 @@ impl_resolvable_argument_for! {
 
 impl_delegated_resolvable_argument_for! {
     BooleanTypeData,
-    (value: ExpressionBoolean) -> bool { value.value }
+    (value: BooleanExpression) -> bool { value.value }
 }
 
 // Integer types
 impl_resolvable_argument_for! {
     IntegerTypeData,
-    (value, context) -> ExpressionInteger {
+    (value, context) -> IntegerExpression {
         match value {
             ExpressionValue::Integer(value) => Ok(value),
             other => context.err("integer", other),
@@ -506,7 +506,7 @@ impl_resolvable_argument_for! {
     UntypedIntegerTypeData,
     (value, context) -> UntypedInteger {
         match value {
-            ExpressionValue::Integer(ExpressionInteger { value: ExpressionIntegerValue::Untyped(x), ..}) => Ok(x),
+            ExpressionValue::Integer(IntegerExpression { value: IntegerExpressionValue::Untyped(x), ..}) => Ok(x),
             _ => context.err("untyped integer", value),
         }
     }
@@ -524,12 +524,12 @@ macro_rules! impl_resolvable_integer_subtype {
                 context: ResolutionContext,
             ) -> ExecutionResult<Self> {
                 match value {
-                    ExpressionValue::Integer(ExpressionInteger {
-                        value: ExpressionIntegerValue::Untyped(x),
+                    ExpressionValue::Integer(IntegerExpression {
+                        value: IntegerExpressionValue::Untyped(x),
                         ..
                     }) => x.parse_as(),
-                    ExpressionValue::Integer(ExpressionInteger {
-                        value: ExpressionIntegerValue::$variant(x),
+                    ExpressionValue::Integer(IntegerExpression {
+                        value: IntegerExpressionValue::$variant(x),
                         ..
                     }) => Ok(x),
                     other => context.err($expected_msg, other),
@@ -543,8 +543,8 @@ macro_rules! impl_resolvable_integer_subtype {
                 context: ResolutionContext,
             ) -> ExecutionResult<&'a Self> {
                 match value {
-                    ExpressionValue::Integer(ExpressionInteger {
-                        value: ExpressionIntegerValue::$variant(x),
+                    ExpressionValue::Integer(IntegerExpression {
+                        value: IntegerExpressionValue::$variant(x),
                         ..
                     }) => Ok(x),
                     other => context.err($expected_msg, other),
@@ -558,8 +558,8 @@ macro_rules! impl_resolvable_integer_subtype {
                 context: ResolutionContext,
             ) -> ExecutionResult<&'a mut Self> {
                 match value {
-                    ExpressionValue::Integer(ExpressionInteger {
-                        value: ExpressionIntegerValue::$variant(x),
+                    ExpressionValue::Integer(IntegerExpression {
+                        value: IntegerExpressionValue::$variant(x),
                         ..
                     }) => Ok(x),
                     other => context.err($expected_msg, other),
@@ -585,7 +585,7 @@ impl_resolvable_integer_subtype!(UsizeTypeData, usize, Usize, "usize");
 // Float types
 impl_resolvable_argument_for! {
     FloatTypeData,
-    (value, context) -> ExpressionFloat {
+    (value, context) -> FloatExpression {
         match value {
             ExpressionValue::Float(value) => Ok(value),
             other => context.err("Expected float", other),
@@ -613,7 +613,7 @@ impl_resolvable_argument_for! {
     UntypedFloatTypeData,
     (value, context) -> UntypedFloat {
         match value {
-            ExpressionValue::Float(ExpressionFloat { value: ExpressionFloatValue::Untyped(x), ..}) => Ok(x),
+            ExpressionValue::Float(FloatExpression { value: FloatExpressionValue::Untyped(x), ..}) => Ok(x),
             other => context.err("untyped float", other),
         }
     }
@@ -631,12 +631,12 @@ macro_rules! impl_resolvable_float_subtype {
                 context: ResolutionContext,
             ) -> ExecutionResult<Self> {
                 match value {
-                    ExpressionValue::Float(ExpressionFloat {
-                        value: ExpressionFloatValue::Untyped(x),
+                    ExpressionValue::Float(FloatExpression {
+                        value: FloatExpressionValue::Untyped(x),
                         ..
                     }) => x.parse_as(),
-                    ExpressionValue::Float(ExpressionFloat {
-                        value: ExpressionFloatValue::$variant(x),
+                    ExpressionValue::Float(FloatExpression {
+                        value: FloatExpressionValue::$variant(x),
                         ..
                     }) => Ok(x),
                     other => context.err($expected_msg, other),
@@ -650,8 +650,8 @@ macro_rules! impl_resolvable_float_subtype {
                 context: ResolutionContext,
             ) -> ExecutionResult<&'a Self> {
                 match value {
-                    ExpressionValue::Float(ExpressionFloat {
-                        value: ExpressionFloatValue::$variant(x),
+                    ExpressionValue::Float(FloatExpression {
+                        value: FloatExpressionValue::$variant(x),
                         ..
                     }) => Ok(x),
                     other => context.err($expected_msg, other),
@@ -665,8 +665,8 @@ macro_rules! impl_resolvable_float_subtype {
                 context: ResolutionContext,
             ) -> ExecutionResult<&'a mut Self> {
                 match value {
-                    ExpressionValue::Float(ExpressionFloat {
-                        value: ExpressionFloatValue::$variant(x),
+                    ExpressionValue::Float(FloatExpression {
+                        value: FloatExpressionValue::$variant(x),
                         ..
                     }) => Ok(x),
                     other => context.err($expected_msg, other),
@@ -681,7 +681,7 @@ impl_resolvable_float_subtype!(F64TypeData, f64, F64, "f64");
 
 impl_resolvable_argument_for! {
     StringTypeData,
-    (value, context) -> ExpressionString {
+    (value, context) -> StringExpression {
         match value {
             ExpressionValue::String(value) => Ok(value),
             _ => context.err("string", value),
@@ -691,7 +691,7 @@ impl_resolvable_argument_for! {
 
 impl_delegated_resolvable_argument_for!(
     StringTypeData,
-    (value: ExpressionString) -> String { value.value }
+    (value: StringExpression) -> String { value.value }
 );
 
 impl ResolvableArgumentTarget for str {
@@ -712,7 +712,7 @@ impl ResolvableArgumentShared for str {
 
 impl_resolvable_argument_for! {
     CharTypeData,
-    (value, context) -> ExpressionChar {
+    (value, context) -> CharExpression {
         match value {
             ExpressionValue::Char(value) => Ok(value),
             _ => context.err("char", value),
@@ -722,12 +722,12 @@ impl_resolvable_argument_for! {
 
 impl_delegated_resolvable_argument_for!(
     CharTypeData,
-    (value: ExpressionChar) -> char { value.value }
+    (value: CharExpression) -> char { value.value }
 );
 
 impl_resolvable_argument_for! {
     ArrayTypeData,
-    (value, context) -> ExpressionArray {
+    (value, context) -> ArrayExpression {
         match value {
             ExpressionValue::Array(value) => Ok(value),
             _ => context.err("array", value),
@@ -737,7 +737,7 @@ impl_resolvable_argument_for! {
 
 impl_resolvable_argument_for! {
     ObjectTypeData,
-    (value, context) -> ExpressionObject {
+    (value, context) -> ObjectExpression {
         match value {
             ExpressionValue::Object(value) => Ok(value),
             _ => context.err("object", value),
@@ -747,7 +747,7 @@ impl_resolvable_argument_for! {
 
 impl_resolvable_argument_for! {
     StreamTypeData,
-    (value, context) -> ExpressionStream {
+    (value, context) -> StreamExpression {
         match value {
             ExpressionValue::Stream(value) => Ok(value),
             _ => context.err("stream", value),
@@ -757,12 +757,12 @@ impl_resolvable_argument_for! {
 
 impl_delegated_resolvable_argument_for!(
     StreamTypeData,
-    (value: ExpressionStream) -> OutputStream { value.value }
+    (value: StreamExpression) -> OutputStream { value.value }
 );
 
 impl_resolvable_argument_for! {
     RangeTypeData,
-    (value, context) -> ExpressionRange {
+    (value, context) -> RangeExpression {
         match value {
             ExpressionValue::Range(value) => Ok(value),
             _ => context.err("range", value),
@@ -798,7 +798,7 @@ impl ResolvableArgumentOwned for IterableValue {
 
 impl_resolvable_argument_for! {
     IteratorTypeData,
-    (value, context) -> ExpressionIterator {
+    (value, context) -> IteratorExpression {
         match value {
             ExpressionValue::Iterator(value) => Ok(value),
             _ => context.err("iterator", value),

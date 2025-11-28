@@ -2,37 +2,37 @@ use super::*;
 use crate::internal_prelude::*;
 
 #[derive(Clone)]
-pub(crate) struct ExpressionFloat {
-    pub(super) value: ExpressionFloatValue,
+pub(crate) struct FloatExpression {
+    pub(super) value: FloatExpressionValue,
 }
 
-impl ToExpressionValue for ExpressionFloat {
+impl ToExpressionValue for FloatExpression {
     fn into_value(self) -> ExpressionValue {
         ExpressionValue::Float(self)
     }
 }
 
-impl ExpressionFloat {
+impl FloatExpression {
     pub(super) fn for_litfloat(lit: &syn::LitFloat) -> ParseResult<Owned<Self>> {
         Ok(Self {
-            value: ExpressionFloatValue::for_litfloat(lit)?,
+            value: FloatExpressionValue::for_litfloat(lit)?,
         }
         .into_owned(lit.span()))
     }
 
     pub(super) fn handle_integer_binary_operation(
         self,
-        right: ExpressionInteger,
+        right: IntegerExpression,
         operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         match self.value {
-            ExpressionFloatValue::Untyped(input) => {
+            FloatExpressionValue::Untyped(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            ExpressionFloatValue::F32(input) => {
+            FloatExpressionValue::F32(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            ExpressionFloatValue::F64(input) => {
+            FloatExpressionValue::F64(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
         }
@@ -43,7 +43,7 @@ impl ExpressionFloat {
     }
 }
 
-impl HasValueType for ExpressionFloat {
+impl HasValueType for FloatExpression {
     fn value_type(&self) -> &'static str {
         self.value.value_type()
     }
@@ -62,13 +62,13 @@ define_interface! {
     }
 }
 
-pub(super) enum ExpressionFloatValuePair {
+pub(super) enum FloatExpressionValuePair {
     Untyped(UntypedFloat, UntypedFloat),
     F32(f32, f32),
     F64(f64, f64),
 }
 
-impl ExpressionFloatValuePair {
+impl FloatExpressionValuePair {
     pub(super) fn handle_paired_binary_operation(
         self,
         operation: WrappedOp<PairedBinaryOperation>,
@@ -82,13 +82,13 @@ impl ExpressionFloatValuePair {
 }
 
 #[derive(Clone)]
-pub(super) enum ExpressionFloatValue {
+pub(super) enum FloatExpressionValue {
     Untyped(UntypedFloat),
     F32(f32),
     F64(f64),
 }
 
-impl ExpressionFloatValue {
+impl FloatExpressionValue {
     pub(super) fn kind(&self) -> FloatKind {
         match self {
             Self::Untyped(_) => FloatKind::Untyped,
@@ -112,19 +112,19 @@ impl ExpressionFloatValue {
 
     fn to_unspanned_literal(&self) -> Literal {
         match self {
-            ExpressionFloatValue::Untyped(float) => float.to_unspanned_literal(),
-            ExpressionFloatValue::F32(float) => Literal::f32_suffixed(*float),
-            ExpressionFloatValue::F64(float) => Literal::f64_suffixed(*float),
+            FloatExpressionValue::Untyped(float) => float.to_unspanned_literal(),
+            FloatExpressionValue::F32(float) => Literal::f32_suffixed(*float),
+            FloatExpressionValue::F64(float) => Literal::f64_suffixed(*float),
         }
     }
 }
 
-impl HasValueType for ExpressionFloatValue {
+impl HasValueType for FloatExpressionValue {
     fn value_type(&self) -> &'static str {
         match self {
-            ExpressionFloatValue::Untyped(_) => "untyped float",
-            ExpressionFloatValue::F32(_) => "f32",
-            ExpressionFloatValue::F64(_) => "f64",
+            FloatExpressionValue::Untyped(_) => "untyped float",
+            FloatExpressionValue::F32(_) => "f32",
+            FloatExpressionValue::F64(_) => "f64",
         }
     }
 }
@@ -167,7 +167,7 @@ impl UntypedFloat {
 
     pub(super) fn handle_integer_binary_operation(
         self,
-        _rhs: ExpressionInteger,
+        _rhs: IntegerExpression,
         operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         match operation.operation {
@@ -258,8 +258,8 @@ impl HasValueType for UntypedFloat {
 
 impl ToExpressionValue for UntypedFloat {
     fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Float(ExpressionFloat {
-            value: ExpressionFloatValue::Untyped(self),
+        ExpressionValue::Float(FloatExpression {
+            value: FloatExpressionValue::Untyped(self),
         })
     }
 }
@@ -496,8 +496,8 @@ macro_rules! impl_float_operations {
 
         impl ToExpressionValue for $float_type {
             fn into_value(self) -> ExpressionValue {
-                ExpressionValue::Float(ExpressionFloat {
-                    value: ExpressionFloatValue::$float_enum_variant(self),
+                ExpressionValue::Float(FloatExpression {
+                    value: FloatExpressionValue::$float_enum_variant(self),
                 })
             }
         }
@@ -535,7 +535,7 @@ macro_rules! impl_float_operations {
 
             fn handle_integer_binary_operation(
                 self,
-                _rhs: ExpressionInteger,
+                _rhs: IntegerExpression,
                 operation: WrappedOp<IntegerBinaryOperation>,
             ) -> ExecutionResult<ExpressionValue> {
                 match operation.operation {

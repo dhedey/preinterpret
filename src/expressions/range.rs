@@ -1,13 +1,13 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct ExpressionRange {
+pub(crate) struct RangeExpression {
     pub(crate) inner: Box<ExpressionRangeInner>,
 }
 
-impl ExpressionRange {
+impl RangeExpression {
     pub(crate) fn len(&self, error_span_range: SpanRange) -> ExecutionResult<usize> {
-        ExpressionIterator::new_for_range(self.clone())?.len(error_span_range)
+        IteratorExpression::new_for_range(self.clone())?.len(error_span_range)
     }
 
     pub(crate) fn concat_recursive_into(
@@ -16,7 +16,7 @@ impl ExpressionRange {
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
         if !behaviour.use_debug_literal_syntax {
-            return ExpressionIterator::any_iterator_to_string(
+            return IteratorExpression::any_iterator_to_string(
                 self.clone().inner.into_iterable()?.resolve_iterator()?,
                 output,
                 behaviour,
@@ -67,10 +67,10 @@ impl ExpressionRange {
     }
 }
 
-impl Spanned<&ExpressionRange> {
+impl Spanned<&RangeExpression> {
     pub(crate) fn resolve_to_index_range(
         self,
-        array: &ExpressionArray,
+        array: &ArrayExpression,
     ) -> ExecutionResult<std::ops::Range<usize>> {
         let (inner, span_range) = self.deconstruct();
         let mut start = 0;
@@ -115,7 +115,7 @@ impl Spanned<&ExpressionRange> {
     }
 }
 
-impl HasValueType for ExpressionRange {
+impl HasValueType for RangeExpression {
     fn value_type(&self) -> &'static str {
         self.inner.value_type()
     }
@@ -220,7 +220,7 @@ impl HasValueType for ExpressionRangeInner {
 
 impl ToExpressionValue for ExpressionRangeInner {
     fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Range(ExpressionRange {
+        ExpressionValue::Range(RangeExpression {
             inner: Box::new(self),
         })
     }
@@ -233,8 +233,8 @@ define_interface! {
         pub(crate) mod methods {
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_via_iterator(this: Owned<ExpressionRange>) -> ExecutionResult<ResolvedValue> {
-                let this_iterator = this.try_map(|this, _| ExpressionIterator::new_for_range(this))?;
+            [context] fn cast_via_iterator(this: Owned<RangeExpression>) -> ExecutionResult<ResolvedValue> {
+                let this_iterator = this.try_map(|this, _| IteratorExpression::new_for_range(this))?;
                 context.operation.evaluate(this_iterator)
             }
         }
@@ -276,43 +276,43 @@ impl IterableExpressionRange<ExpressionValue> {
                 let pair = start.expect_value_pair(&dots, end)?;
                 match pair {
                     ExpressionValuePair::Integer(pair) => match pair {
-                        ExpressionIntegerValuePair::Untyped(start, end) => {
+                        IntegerExpressionValuePair::Untyped(start, end) => {
                             IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
                         }
-                        ExpressionIntegerValuePair::U8(start, end) => {
+                        IntegerExpressionValuePair::U8(start, end) => {
                             IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
                         }
-                        ExpressionIntegerValuePair::U16(start, end) => {
+                        IntegerExpressionValuePair::U16(start, end) => {
                             IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
                         }
-                        ExpressionIntegerValuePair::U32(start, end) => {
+                        IntegerExpressionValuePair::U32(start, end) => {
                             IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
                         }
-                        ExpressionIntegerValuePair::U64(start, end) => {
+                        IntegerExpressionValuePair::U64(start, end) => {
                             IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
                         }
-                        ExpressionIntegerValuePair::U128(start, end) => {
+                        IntegerExpressionValuePair::U128(start, end) => {
                             IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
                         }
-                        ExpressionIntegerValuePair::Usize(start, end) => {
+                        IntegerExpressionValuePair::Usize(start, end) => {
                             IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
                         }
-                        ExpressionIntegerValuePair::I8(start, end) => {
+                        IntegerExpressionValuePair::I8(start, end) => {
                             IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
                         }
-                        ExpressionIntegerValuePair::I16(start, end) => {
+                        IntegerExpressionValuePair::I16(start, end) => {
                             IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
                         }
-                        ExpressionIntegerValuePair::I32(start, end) => {
+                        IntegerExpressionValuePair::I32(start, end) => {
                             IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
                         }
-                        ExpressionIntegerValuePair::I64(start, end) => {
+                        IntegerExpressionValuePair::I64(start, end) => {
                             IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
                         }
-                        ExpressionIntegerValuePair::I128(start, end) => {
+                        IntegerExpressionValuePair::I128(start, end) => {
                             IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
                         }
-                        ExpressionIntegerValuePair::Isize(start, end) => {
+                        IntegerExpressionValuePair::Isize(start, end) => {
                             IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
                         }
                     },
@@ -329,43 +329,43 @@ impl IterableExpressionRange<ExpressionValue> {
             }
             Self::RangeFrom { start, dots } => match start {
                 ExpressionValue::Integer(start) => match start.value {
-                    ExpressionIntegerValue::Untyped(start) => {
+                    IntegerExpressionValue::Untyped(start) => {
                         IterableExpressionRange::RangeFrom { start, dots }.resolve()
                     }
-                    ExpressionIntegerValue::U8(start) => {
+                    IntegerExpressionValue::U8(start) => {
                         IterableExpressionRange::RangeFrom { start, dots }.resolve()
                     }
-                    ExpressionIntegerValue::U16(start) => {
+                    IntegerExpressionValue::U16(start) => {
                         IterableExpressionRange::RangeFrom { start, dots }.resolve()
                     }
-                    ExpressionIntegerValue::U32(start) => {
+                    IntegerExpressionValue::U32(start) => {
                         IterableExpressionRange::RangeFrom { start, dots }.resolve()
                     }
-                    ExpressionIntegerValue::U64(start) => {
+                    IntegerExpressionValue::U64(start) => {
                         IterableExpressionRange::RangeFrom { start, dots }.resolve()
                     }
-                    ExpressionIntegerValue::U128(start) => {
+                    IntegerExpressionValue::U128(start) => {
                         IterableExpressionRange::RangeFrom { start, dots }.resolve()
                     }
-                    ExpressionIntegerValue::Usize(start) => {
+                    IntegerExpressionValue::Usize(start) => {
                         IterableExpressionRange::RangeFrom { start, dots }.resolve()
                     }
-                    ExpressionIntegerValue::I8(start) => {
+                    IntegerExpressionValue::I8(start) => {
                         IterableExpressionRange::RangeFrom { start, dots }.resolve()
                     }
-                    ExpressionIntegerValue::I16(start) => {
+                    IntegerExpressionValue::I16(start) => {
                         IterableExpressionRange::RangeFrom { start, dots }.resolve()
                     }
-                    ExpressionIntegerValue::I32(start) => {
+                    IntegerExpressionValue::I32(start) => {
                         IterableExpressionRange::RangeFrom { start, dots }.resolve()
                     }
-                    ExpressionIntegerValue::I64(start) => {
+                    IntegerExpressionValue::I64(start) => {
                         IterableExpressionRange::RangeFrom { start, dots }.resolve()
                     }
-                    ExpressionIntegerValue::I128(start) => {
+                    IntegerExpressionValue::I128(start) => {
                         IterableExpressionRange::RangeFrom { start, dots }.resolve()
                     }
-                    ExpressionIntegerValue::Isize(start) => {
+                    IntegerExpressionValue::Isize(start) => {
                         IterableExpressionRange::RangeFrom { start, dots }.resolve()
                     }
                 },

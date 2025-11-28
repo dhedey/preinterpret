@@ -108,7 +108,7 @@ impl HandleDestructure for ArrayPattern {
         interpreter: &mut Interpreter,
         value: ExpressionValue,
     ) -> ExecutionResult<()> {
-        let array: ExpressionArray = value
+        let array: ArrayExpression = value
             .into_owned(self.brackets.span_range())
             .resolve_as("The value destructured with an array pattern")?;
         let mut has_seen_dot_dot = false;
@@ -226,7 +226,7 @@ impl HandleDestructure for ObjectPattern {
         interpreter: &mut Interpreter,
         value: ExpressionValue,
     ) -> ExecutionResult<()> {
-        let object: ExpressionObject = value
+        let object: ObjectExpression = value
             .into_owned(self.braces.span_range())
             .resolve_as("The value destructured with an object pattern")?;
         let mut value_map = object.entries;
@@ -354,7 +354,7 @@ impl HandleDestructure for StreamPattern {
         interpreter: &mut Interpreter,
         value: ExpressionValue,
     ) -> ExecutionResult<()> {
-        let stream: ExpressionStream = value
+        let stream: StreamExpression = value
             .into_owned(self.brackets.span_range())
             .resolve_as("The value destructured with a stream pattern")?;
         // TODO[parser-no-output]: Remove this once transformers no longer output

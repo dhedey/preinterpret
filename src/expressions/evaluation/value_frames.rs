@@ -490,7 +490,7 @@ impl ArrayBuilder {
             {
                 Some(next) => context.handle_node_as_owned(self, next),
                 None => context.return_owned(
-                    ExpressionValue::Array(ExpressionArray {
+                    ExpressionValue::Array(ArrayExpression {
                         items: self.evaluated_items,
                     })
                     .into_owned(self.span),

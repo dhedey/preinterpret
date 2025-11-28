@@ -125,7 +125,7 @@ impl ArrayBasedAssigner {
         value: ExpressionValue,
     ) -> ExecutionResult<Self> {
         let span_range = assignee_span.span_range();
-        let array: ExpressionArray = value
+        let array: ArrayExpression = value
             .into_owned(span_range)
             .resolve_as("The value destructured as an array")?;
         let mut has_seen_dot_dot = false;
@@ -253,7 +253,7 @@ impl ObjectBasedAssigner {
         value: ExpressionValue,
     ) -> ExecutionResult<Self> {
         let span_range = assignee_span.span_range();
-        let object: ExpressionObject = value
+        let object: ObjectExpression = value
             .into_owned(span_range)
             .resolve_as("The value destructured as an object")?;
 

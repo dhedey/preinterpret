@@ -69,7 +69,7 @@ macro_rules! define_typed_object {
 
         impl ResolvableArgumentOwned for $model {
             fn resolve_from_value(value: ExpressionValue, context: ResolutionContext) -> ExecutionResult<Self> {
-                Self::try_from(ExpressionObject::resolve_owned_from_value(value, context)?)
+                Self::try_from(ObjectExpression::resolve_owned_from_value(value, context)?)
             }
         }
 
@@ -93,10 +93,10 @@ macro_rules! define_typed_object {
             }
         }
 
-        impl TryFrom<Owned<ExpressionObject>> for $model {
+        impl TryFrom<Owned<ObjectExpression>> for $model {
             type Error = ExecutionInterrupt;
 
-            fn try_from(object: Owned<ExpressionObject>) -> Result<Self, Self::Error> {
+            fn try_from(object: Owned<ObjectExpression>) -> Result<Self, Self::Error> {
                 let (mut object, span_range) = object.deconstruct();
                 (&object).spanned(span_range).validate(&Self::validation())?;
                 Ok($model {

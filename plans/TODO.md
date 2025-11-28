@@ -63,9 +63,9 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 fn resolve_own_binary_operation(operation: &BinaryOperation) -> Option<MethodInterface> {
     Some(match operation {
         BinaryOperation::Paired(paired) => wrap_binary!([Op: operation, Span: output_span_range]
-            (lhs: UntypedInteger, rhs: ExpressionInteger) -> ExecutionResult<ResolvedValue> {
+            (lhs: UntypedInteger, rhs: IntegerExpression) -> ExecutionResult<ResolvedValue> {
                 match rhs.value {
-                    ExpressionIntegerValue::Untyped(rhs) => {
+                    IntegerExpressionValue::Untyped(rhs) => {
                         let lhs = lhs.parse_fallback()?;
                         let rhs = rhs.parse_fallback()?;
                         UntypedInteger::from_fallback(lhs.handle_paired_operation(operation, rhs)).to_resolved_value(output_span_range)
@@ -77,7 +77,7 @@ fn resolve_own_binary_operation(operation: &BinaryOperation) -> Option<MethodInt
                 }
             }
         ),
-        BinaryOperation::Integer(int_op) => wrap_binary!((lhs: UntypedInteger, rhs: ExpressionInteger) -> ExecutionResult<ExpressionValue> {
+        BinaryOperation::Integer(int_op) => wrap_binary!((lhs: UntypedInteger, rhs: IntegerExpression) -> ExecutionResult<ExpressionValue> {
             lhs.handle_integer_binary_operation(rhs, int_op)
         }),
         _ => return None,

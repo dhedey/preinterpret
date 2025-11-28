@@ -1,67 +1,67 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct ExpressionInteger {
-    pub(super) value: ExpressionIntegerValue,
+pub(crate) struct IntegerExpression {
+    pub(super) value: IntegerExpressionValue,
 }
 
-impl ToExpressionValue for ExpressionInteger {
+impl ToExpressionValue for IntegerExpression {
     fn into_value(self) -> ExpressionValue {
         ExpressionValue::Integer(self)
     }
 }
 
-impl ExpressionInteger {
+impl IntegerExpression {
     pub(super) fn for_litint(lit: &syn::LitInt) -> ParseResult<Owned<Self>> {
         Ok(Self {
-            value: ExpressionIntegerValue::for_litint(lit)?,
+            value: IntegerExpressionValue::for_litint(lit)?,
         }
         .into_owned(lit.span_range()))
     }
 
     pub(super) fn handle_integer_binary_operation(
         self,
-        right: ExpressionInteger,
+        right: IntegerExpression,
         operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         match self.value {
-            ExpressionIntegerValue::Untyped(input) => {
+            IntegerExpressionValue::Untyped(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            ExpressionIntegerValue::U8(input) => {
+            IntegerExpressionValue::U8(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            ExpressionIntegerValue::U16(input) => {
+            IntegerExpressionValue::U16(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            ExpressionIntegerValue::U32(input) => {
+            IntegerExpressionValue::U32(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            ExpressionIntegerValue::U64(input) => {
+            IntegerExpressionValue::U64(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            ExpressionIntegerValue::U128(input) => {
+            IntegerExpressionValue::U128(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            ExpressionIntegerValue::Usize(input) => {
+            IntegerExpressionValue::Usize(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            ExpressionIntegerValue::I8(input) => {
+            IntegerExpressionValue::I8(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            ExpressionIntegerValue::I16(input) => {
+            IntegerExpressionValue::I16(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            ExpressionIntegerValue::I32(input) => {
+            IntegerExpressionValue::I32(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            ExpressionIntegerValue::I64(input) => {
+            IntegerExpressionValue::I64(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            ExpressionIntegerValue::I128(input) => {
+            IntegerExpressionValue::I128(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
-            ExpressionIntegerValue::Isize(input) => {
+            IntegerExpressionValue::Isize(input) => {
                 input.handle_integer_binary_operation(right, operation)
             }
         }
@@ -72,7 +72,7 @@ impl ExpressionInteger {
     }
 }
 
-impl HasValueType for ExpressionInteger {
+impl HasValueType for IntegerExpression {
     fn value_type(&self) -> &'static str {
         self.value.value_type()
     }
@@ -91,7 +91,7 @@ define_interface! {
     }
 }
 
-pub(super) enum ExpressionIntegerValuePair {
+pub(super) enum IntegerExpressionValuePair {
     Untyped(UntypedInteger, UntypedInteger),
     U8(u8, u8),
     U16(u16, u16),
@@ -107,7 +107,7 @@ pub(super) enum ExpressionIntegerValuePair {
     Isize(isize, isize),
 }
 
-impl ExpressionIntegerValuePair {
+impl IntegerExpressionValuePair {
     pub(super) fn handle_paired_binary_operation(
         self,
         operation: WrappedOp<PairedBinaryOperation>,
@@ -181,7 +181,7 @@ impl IntegerKind {
 }
 
 #[derive(Clone)]
-pub(super) enum ExpressionIntegerValue {
+pub(super) enum IntegerExpressionValue {
     Untyped(UntypedInteger),
     U8(u8),
     U16(u16),
@@ -197,7 +197,7 @@ pub(super) enum ExpressionIntegerValue {
     Isize(isize),
 }
 
-impl ExpressionIntegerValue {
+impl IntegerExpressionValue {
     pub(super) fn kind(&self) -> IntegerKind {
         match self {
             Self::Untyped(_) => IntegerKind::Untyped,
@@ -217,7 +217,7 @@ impl ExpressionIntegerValue {
     }
 }
 
-impl ExpressionIntegerValue {
+impl IntegerExpressionValue {
     pub(super) fn for_litint(lit: &syn::LitInt) -> ParseResult<Self> {
         Ok(match lit.suffix() {
             "" => Self::Untyped(UntypedInteger::new_from_lit_int(lit.clone())),
@@ -243,39 +243,39 @@ impl ExpressionIntegerValue {
 
     fn to_unspanned_literal(&self) -> Literal {
         match self {
-            ExpressionIntegerValue::Untyped(int) => int.to_unspanned_literal(),
-            ExpressionIntegerValue::U8(int) => Literal::u8_suffixed(*int),
-            ExpressionIntegerValue::U16(int) => Literal::u16_suffixed(*int),
-            ExpressionIntegerValue::U32(int) => Literal::u32_suffixed(*int),
-            ExpressionIntegerValue::U64(int) => Literal::u64_suffixed(*int),
-            ExpressionIntegerValue::U128(int) => Literal::u128_suffixed(*int),
-            ExpressionIntegerValue::Usize(int) => Literal::usize_suffixed(*int),
-            ExpressionIntegerValue::I8(int) => Literal::i8_suffixed(*int),
-            ExpressionIntegerValue::I16(int) => Literal::i16_suffixed(*int),
-            ExpressionIntegerValue::I32(int) => Literal::i32_suffixed(*int),
-            ExpressionIntegerValue::I64(int) => Literal::i64_suffixed(*int),
-            ExpressionIntegerValue::I128(int) => Literal::i128_suffixed(*int),
-            ExpressionIntegerValue::Isize(int) => Literal::isize_suffixed(*int),
+            IntegerExpressionValue::Untyped(int) => int.to_unspanned_literal(),
+            IntegerExpressionValue::U8(int) => Literal::u8_suffixed(*int),
+            IntegerExpressionValue::U16(int) => Literal::u16_suffixed(*int),
+            IntegerExpressionValue::U32(int) => Literal::u32_suffixed(*int),
+            IntegerExpressionValue::U64(int) => Literal::u64_suffixed(*int),
+            IntegerExpressionValue::U128(int) => Literal::u128_suffixed(*int),
+            IntegerExpressionValue::Usize(int) => Literal::usize_suffixed(*int),
+            IntegerExpressionValue::I8(int) => Literal::i8_suffixed(*int),
+            IntegerExpressionValue::I16(int) => Literal::i16_suffixed(*int),
+            IntegerExpressionValue::I32(int) => Literal::i32_suffixed(*int),
+            IntegerExpressionValue::I64(int) => Literal::i64_suffixed(*int),
+            IntegerExpressionValue::I128(int) => Literal::i128_suffixed(*int),
+            IntegerExpressionValue::Isize(int) => Literal::isize_suffixed(*int),
         }
     }
 }
 
-impl HasValueType for ExpressionIntegerValue {
+impl HasValueType for IntegerExpressionValue {
     fn value_type(&self) -> &'static str {
         match self {
-            ExpressionIntegerValue::Untyped(value) => value.value_type(),
-            ExpressionIntegerValue::U8(value) => value.value_type(),
-            ExpressionIntegerValue::U16(value) => value.value_type(),
-            ExpressionIntegerValue::U32(value) => value.value_type(),
-            ExpressionIntegerValue::U64(value) => value.value_type(),
-            ExpressionIntegerValue::U128(value) => value.value_type(),
-            ExpressionIntegerValue::Usize(value) => value.value_type(),
-            ExpressionIntegerValue::I8(value) => value.value_type(),
-            ExpressionIntegerValue::I16(value) => value.value_type(),
-            ExpressionIntegerValue::I32(value) => value.value_type(),
-            ExpressionIntegerValue::I64(value) => value.value_type(),
-            ExpressionIntegerValue::I128(value) => value.value_type(),
-            ExpressionIntegerValue::Isize(value) => value.value_type(),
+            IntegerExpressionValue::Untyped(value) => value.value_type(),
+            IntegerExpressionValue::U8(value) => value.value_type(),
+            IntegerExpressionValue::U16(value) => value.value_type(),
+            IntegerExpressionValue::U32(value) => value.value_type(),
+            IntegerExpressionValue::U64(value) => value.value_type(),
+            IntegerExpressionValue::U128(value) => value.value_type(),
+            IntegerExpressionValue::Usize(value) => value.value_type(),
+            IntegerExpressionValue::I8(value) => value.value_type(),
+            IntegerExpressionValue::I16(value) => value.value_type(),
+            IntegerExpressionValue::I32(value) => value.value_type(),
+            IntegerExpressionValue::I64(value) => value.value_type(),
+            IntegerExpressionValue::I128(value) => value.value_type(),
+            IntegerExpressionValue::Isize(value) => value.value_type(),
         }
     }
 }
@@ -301,44 +301,44 @@ impl UntypedInteger {
 
     pub(super) fn handle_integer_binary_operation(
         self,
-        rhs: ExpressionInteger,
+        rhs: IntegerExpression,
         operation: WrappedOp<IntegerBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.parse_fallback()?;
         Ok(match operation.operation {
             IntegerBinaryOperation::ShiftLeft { .. } => match rhs.value {
-                ExpressionIntegerValue::Untyped(rhs) => {
+                IntegerExpressionValue::Untyped(rhs) => {
                     operation.output(lhs << rhs.parse_fallback()?)
                 }
-                ExpressionIntegerValue::U8(rhs) => operation.output(lhs << rhs),
-                ExpressionIntegerValue::U16(rhs) => operation.output(lhs << rhs),
-                ExpressionIntegerValue::U32(rhs) => operation.output(lhs << rhs),
-                ExpressionIntegerValue::U64(rhs) => operation.output(lhs << rhs),
-                ExpressionIntegerValue::U128(rhs) => operation.output(lhs << rhs),
-                ExpressionIntegerValue::Usize(rhs) => operation.output(lhs << rhs),
-                ExpressionIntegerValue::I8(rhs) => operation.output(lhs << rhs),
-                ExpressionIntegerValue::I16(rhs) => operation.output(lhs << rhs),
-                ExpressionIntegerValue::I32(rhs) => operation.output(lhs << rhs),
-                ExpressionIntegerValue::I64(rhs) => operation.output(lhs << rhs),
-                ExpressionIntegerValue::I128(rhs) => operation.output(lhs << rhs),
-                ExpressionIntegerValue::Isize(rhs) => operation.output(lhs << rhs),
+                IntegerExpressionValue::U8(rhs) => operation.output(lhs << rhs),
+                IntegerExpressionValue::U16(rhs) => operation.output(lhs << rhs),
+                IntegerExpressionValue::U32(rhs) => operation.output(lhs << rhs),
+                IntegerExpressionValue::U64(rhs) => operation.output(lhs << rhs),
+                IntegerExpressionValue::U128(rhs) => operation.output(lhs << rhs),
+                IntegerExpressionValue::Usize(rhs) => operation.output(lhs << rhs),
+                IntegerExpressionValue::I8(rhs) => operation.output(lhs << rhs),
+                IntegerExpressionValue::I16(rhs) => operation.output(lhs << rhs),
+                IntegerExpressionValue::I32(rhs) => operation.output(lhs << rhs),
+                IntegerExpressionValue::I64(rhs) => operation.output(lhs << rhs),
+                IntegerExpressionValue::I128(rhs) => operation.output(lhs << rhs),
+                IntegerExpressionValue::Isize(rhs) => operation.output(lhs << rhs),
             },
             IntegerBinaryOperation::ShiftRight { .. } => match rhs.value {
-                ExpressionIntegerValue::Untyped(rhs) => {
+                IntegerExpressionValue::Untyped(rhs) => {
                     operation.output(lhs >> rhs.parse_fallback()?)
                 }
-                ExpressionIntegerValue::U8(rhs) => operation.output(lhs >> rhs),
-                ExpressionIntegerValue::U16(rhs) => operation.output(lhs >> rhs),
-                ExpressionIntegerValue::U32(rhs) => operation.output(lhs >> rhs),
-                ExpressionIntegerValue::U64(rhs) => operation.output(lhs >> rhs),
-                ExpressionIntegerValue::U128(rhs) => operation.output(lhs >> rhs),
-                ExpressionIntegerValue::Usize(rhs) => operation.output(lhs >> rhs),
-                ExpressionIntegerValue::I8(rhs) => operation.output(lhs >> rhs),
-                ExpressionIntegerValue::I16(rhs) => operation.output(lhs >> rhs),
-                ExpressionIntegerValue::I32(rhs) => operation.output(lhs >> rhs),
-                ExpressionIntegerValue::I64(rhs) => operation.output(lhs >> rhs),
-                ExpressionIntegerValue::I128(rhs) => operation.output(lhs >> rhs),
-                ExpressionIntegerValue::Isize(rhs) => operation.output(lhs >> rhs),
+                IntegerExpressionValue::U8(rhs) => operation.output(lhs >> rhs),
+                IntegerExpressionValue::U16(rhs) => operation.output(lhs >> rhs),
+                IntegerExpressionValue::U32(rhs) => operation.output(lhs >> rhs),
+                IntegerExpressionValue::U64(rhs) => operation.output(lhs >> rhs),
+                IntegerExpressionValue::U128(rhs) => operation.output(lhs >> rhs),
+                IntegerExpressionValue::Usize(rhs) => operation.output(lhs >> rhs),
+                IntegerExpressionValue::I8(rhs) => operation.output(lhs >> rhs),
+                IntegerExpressionValue::I16(rhs) => operation.output(lhs >> rhs),
+                IntegerExpressionValue::I32(rhs) => operation.output(lhs >> rhs),
+                IntegerExpressionValue::I64(rhs) => operation.output(lhs >> rhs),
+                IntegerExpressionValue::I128(rhs) => operation.output(lhs >> rhs),
+                IntegerExpressionValue::Isize(rhs) => operation.output(lhs >> rhs),
             },
         })
     }
@@ -446,8 +446,8 @@ impl UntypedInteger {
 
 impl ToExpressionValue for UntypedInteger {
     fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Integer(ExpressionInteger {
-            value: ExpressionIntegerValue::Untyped(self),
+        ExpressionValue::Integer(IntegerExpression {
+            value: IntegerExpressionValue::Untyped(self),
         })
     }
 }
@@ -715,8 +715,8 @@ macro_rules! impl_int_operations {
 
         impl ToExpressionValue for $integer_type {
             fn into_value(self) -> ExpressionValue {
-                ExpressionValue::Integer(ExpressionInteger {
-                    value: ExpressionIntegerValue::$integer_enum_variant(self),
+                ExpressionValue::Integer(IntegerExpression {
+                    value: IntegerExpressionValue::$integer_enum_variant(self),
                 })
             }
         }
@@ -747,43 +747,43 @@ macro_rules! impl_int_operations {
 
             fn handle_integer_binary_operation(
                 self,
-                rhs: ExpressionInteger,
+                rhs: IntegerExpression,
                 operation: WrappedOp<IntegerBinaryOperation>,
             ) -> ExecutionResult<ExpressionValue> {
                 let lhs = self;
                 Ok(match operation.operation {
                     IntegerBinaryOperation::ShiftLeft { .. } => {
                         match rhs.value {
-                            ExpressionIntegerValue::Untyped(rhs) => operation.output(lhs << rhs.parse_fallback()?),
-                            ExpressionIntegerValue::U8(rhs) => operation.output(lhs << rhs),
-                            ExpressionIntegerValue::U16(rhs) => operation.output(lhs << rhs),
-                            ExpressionIntegerValue::U32(rhs) => operation.output(lhs << rhs),
-                            ExpressionIntegerValue::U64(rhs) => operation.output(lhs << rhs),
-                            ExpressionIntegerValue::U128(rhs) => operation.output(lhs << rhs),
-                            ExpressionIntegerValue::Usize(rhs) => operation.output(lhs << rhs),
-                            ExpressionIntegerValue::I8(rhs) => operation.output(lhs << rhs),
-                            ExpressionIntegerValue::I16(rhs) => operation.output(lhs << rhs),
-                            ExpressionIntegerValue::I32(rhs) => operation.output(lhs << rhs),
-                            ExpressionIntegerValue::I64(rhs) => operation.output(lhs << rhs),
-                            ExpressionIntegerValue::I128(rhs) => operation.output(lhs << rhs),
-                            ExpressionIntegerValue::Isize(rhs) => operation.output(lhs << rhs),
+                            IntegerExpressionValue::Untyped(rhs) => operation.output(lhs << rhs.parse_fallback()?),
+                            IntegerExpressionValue::U8(rhs) => operation.output(lhs << rhs),
+                            IntegerExpressionValue::U16(rhs) => operation.output(lhs << rhs),
+                            IntegerExpressionValue::U32(rhs) => operation.output(lhs << rhs),
+                            IntegerExpressionValue::U64(rhs) => operation.output(lhs << rhs),
+                            IntegerExpressionValue::U128(rhs) => operation.output(lhs << rhs),
+                            IntegerExpressionValue::Usize(rhs) => operation.output(lhs << rhs),
+                            IntegerExpressionValue::I8(rhs) => operation.output(lhs << rhs),
+                            IntegerExpressionValue::I16(rhs) => operation.output(lhs << rhs),
+                            IntegerExpressionValue::I32(rhs) => operation.output(lhs << rhs),
+                            IntegerExpressionValue::I64(rhs) => operation.output(lhs << rhs),
+                            IntegerExpressionValue::I128(rhs) => operation.output(lhs << rhs),
+                            IntegerExpressionValue::Isize(rhs) => operation.output(lhs << rhs),
                         }
                     },
                     IntegerBinaryOperation::ShiftRight { .. } => {
                         match rhs.value {
-                            ExpressionIntegerValue::Untyped(rhs) => operation.output(lhs >> rhs.parse_fallback()?),
-                            ExpressionIntegerValue::U8(rhs) => operation.output(lhs >> rhs),
-                            ExpressionIntegerValue::U16(rhs) => operation.output(lhs >> rhs),
-                            ExpressionIntegerValue::U32(rhs) => operation.output(lhs >> rhs),
-                            ExpressionIntegerValue::U64(rhs) => operation.output(lhs >> rhs),
-                            ExpressionIntegerValue::U128(rhs) => operation.output(lhs >> rhs),
-                            ExpressionIntegerValue::Usize(rhs) => operation.output(lhs >> rhs),
-                            ExpressionIntegerValue::I8(rhs) => operation.output(lhs >> rhs),
-                            ExpressionIntegerValue::I16(rhs) => operation.output(lhs >> rhs),
-                            ExpressionIntegerValue::I32(rhs) => operation.output(lhs >> rhs),
-                            ExpressionIntegerValue::I64(rhs) => operation.output(lhs >> rhs),
-                            ExpressionIntegerValue::I128(rhs) => operation.output(lhs >> rhs),
-                            ExpressionIntegerValue::Isize(rhs) => operation.output(lhs >> rhs),
+                            IntegerExpressionValue::Untyped(rhs) => operation.output(lhs >> rhs.parse_fallback()?),
+                            IntegerExpressionValue::U8(rhs) => operation.output(lhs >> rhs),
+                            IntegerExpressionValue::U16(rhs) => operation.output(lhs >> rhs),
+                            IntegerExpressionValue::U32(rhs) => operation.output(lhs >> rhs),
+                            IntegerExpressionValue::U64(rhs) => operation.output(lhs >> rhs),
+                            IntegerExpressionValue::U128(rhs) => operation.output(lhs >> rhs),
+                            IntegerExpressionValue::Usize(rhs) => operation.output(lhs >> rhs),
+                            IntegerExpressionValue::I8(rhs) => operation.output(lhs >> rhs),
+                            IntegerExpressionValue::I16(rhs) => operation.output(lhs >> rhs),
+                            IntegerExpressionValue::I32(rhs) => operation.output(lhs >> rhs),
+                            IntegerExpressionValue::I64(rhs) => operation.output(lhs >> rhs),
+                            IntegerExpressionValue::I128(rhs) => operation.output(lhs >> rhs),
+                            IntegerExpressionValue::Isize(rhs) => operation.output(lhs >> rhs),
                         }
                     },
                 })
