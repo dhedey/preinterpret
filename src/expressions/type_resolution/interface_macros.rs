@@ -301,11 +301,13 @@ impl<'a> HasSpanRange for MethodCallContext<'a> {
     }
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct UnaryOperationCallContext<'a> {
     pub operation: &'a UnaryOperation,
     pub output_span_range: SpanRange,
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct BinaryOperationCallContext<'a> {
     pub operation: &'a BinaryOperation,
     pub output_span_range: SpanRange,

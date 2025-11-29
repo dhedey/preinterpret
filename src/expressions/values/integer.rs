@@ -324,6 +324,19 @@ impl UntypedInteger {
         })
     }
 
+    fn binary_overflow_error(
+        context: BinaryOperationCallContext,
+        lhs: impl std::fmt::Display,
+        rhs: impl std::fmt::Display,
+    ) -> ExecutionInterrupt {
+        context.error(format!(
+            "The untyped integer operation {} {} {} overflowed in i128 space",
+            lhs,
+            context.operation.symbolic_description(),
+            rhs
+        ))
+    }
+
     fn paired_operation(
         lhs: Owned<UntypedInteger>,
         rhs: Owned<IntegerExpression>,
@@ -336,14 +349,8 @@ impl UntypedInteger {
             IntegerExpressionValue::Untyped(rhs) => {
                 let lhs = lhs.parse_fallback()?;
                 let rhs = rhs.parse_fallback()?;
-                let output = perform_fn(lhs, rhs).ok_or_else(|| {
-                    context.error(format!(
-                        "The untyped integer operation {} {} {} overflowed in i128 space",
-                        lhs,
-                        context.operation.symbolic_description(),
-                        rhs
-                    ))
-                })?;
+                let output = perform_fn(lhs, rhs)
+                    .ok_or_else(|| Self::binary_overflow_error(context, lhs, rhs))?;
                 UntypedInteger::from_fallback(output).to_resolved_value(context.output_span_range)
             }
             rhs => {
@@ -720,6 +727,30 @@ define_interface! {
             ) -> ExecutionResult<bool> {
                 UntypedInteger::paired_comparison(lhs, rhs, context, |a, b| a > b)
             }
+
+            [context] fn shift_left(
+                lhs: UntypedIntegerFallback,
+                rhs: CoercedToU32,
+            ) -> ExecutionResult<UntypedInteger> {
+                let UntypedIntegerFallback(lhs) = lhs;
+                let CoercedToU32(rhs) = rhs;
+                let value = lhs.checked_shl(rhs).ok_or_else(|| {
+                    UntypedInteger::binary_overflow_error(context, lhs, rhs)
+                })?;
+                Ok(UntypedInteger::from_fallback(value))
+            }
+
+            [context] fn shift_right(
+                lhs: UntypedIntegerFallback,
+                rhs: CoercedToU32,
+            ) -> ExecutionResult<UntypedInteger> {
+                let UntypedIntegerFallback(lhs) = lhs;
+                let CoercedToU32(rhs) = rhs;
+                let value = lhs.checked_shr(rhs).ok_or_else(|| {
+                    UntypedInteger::binary_overflow_error(context, lhs, rhs)
+                })?;
+                Ok(UntypedInteger::from_fallback(value))
+            }
         }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
@@ -768,6 +799,15 @@ define_interface! {
                     PairedBinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
                     PairedBinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
                     _ => return None,
+                })
+            }
+
+            fn resolve_integer_binary_operation(
+                operation: &IntegerBinaryOperation,
+            ) -> Option<BinaryOperationInterface> {
+                Some(match operation {
+                    IntegerBinaryOperation::ShiftLeft { .. } => binary_definitions::shift_left(),
+                    IntegerBinaryOperation::ShiftRight { .. } => binary_definitions::shift_right(),
                 })
             }
         }
@@ -943,6 +983,26 @@ macro_rules! impl_int_operations {
                     fn gt(lhs: $integer_type, rhs: $integer_type) -> bool {
                         lhs > rhs
                     }
+
+                    [context] fn shift_left(
+                        lhs: $integer_type,
+                        rhs: CoercedToU32,
+                    ) -> ExecutionResult<$integer_type> {
+                        let CoercedToU32(rhs) = rhs;
+                        lhs.checked_shl(rhs).ok_or_else(|| {
+                            $integer_type::binary_overflow_error(context, lhs, rhs)
+                        })
+                    }
+
+                    [context] fn shift_right(
+                        lhs: $integer_type,
+                        rhs: CoercedToU32,
+                    ) -> ExecutionResult<$integer_type> {
+                        let CoercedToU32(rhs) = rhs;
+                        lhs.checked_shr(rhs).ok_or_else(|| {
+                            $integer_type::binary_overflow_error(context, lhs, rhs)
+                        })
+                    }
                 }
                 interface_items {
                     fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
@@ -1002,6 +1062,15 @@ macro_rules! impl_int_operations {
                             PairedBinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
                             PairedBinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
                             _ => return None,
+                        })
+                    }
+
+                    fn resolve_integer_binary_operation(
+                        operation: &IntegerBinaryOperation,
+                    ) -> Option<BinaryOperationInterface> {
+                        Some(match operation {
+                            IntegerBinaryOperation::ShiftLeft { .. } => binary_definitions::shift_left(),
+                            IntegerBinaryOperation::ShiftRight { .. } => binary_definitions::shift_right(),
                         })
                     }
                 }
@@ -1136,6 +1205,46 @@ impl ResolvableArgumentOwned for UntypedIntegerFallback {
         let value: UntypedInteger =
             ResolvableArgumentOwned::resolve_from_value(input_value, context)?;
         Ok(UntypedIntegerFallback(value.parse_fallback()?))
+    }
+}
+
+pub(crate) struct CoercedToU32(pub(crate) u32);
+
+impl ResolvableArgumentTarget for CoercedToU32 {
+    type ValueType = IntegerTypeData;
+}
+
+impl ResolvableArgumentOwned for CoercedToU32 {
+    fn resolve_from_value(
+        input_value: ExpressionValue,
+        context: ResolutionContext,
+    ) -> ExecutionResult<Self> {
+        let integer = match input_value {
+            ExpressionValue::Integer(IntegerExpression { value, .. }) => value,
+            other => return context.err("integer", other),
+        };
+        let coerced = match integer.clone() {
+            IntegerExpressionValue::U8(x) => Some(x as u32),
+            IntegerExpressionValue::U16(x) => Some(x as u32),
+            IntegerExpressionValue::U32(x) => Some(x),
+            IntegerExpressionValue::U64(x) => x.try_into().ok(),
+            IntegerExpressionValue::U128(x) => x.try_into().ok(),
+            IntegerExpressionValue::Usize(x) => x.try_into().ok(),
+            IntegerExpressionValue::I8(x) => x.try_into().ok(),
+            IntegerExpressionValue::I16(x) => x.try_into().ok(),
+            IntegerExpressionValue::I32(x) => x.try_into().ok(),
+            IntegerExpressionValue::I64(x) => x.try_into().ok(),
+            IntegerExpressionValue::I128(x) => x.try_into().ok(),
+            IntegerExpressionValue::Isize(x) => x.try_into().ok(),
+            IntegerExpressionValue::Untyped(x) => x.parse_as().ok(),
+        };
+        match coerced {
+            Some(value) => Ok(CoercedToU32(value)),
+            None => context.err(
+                "u32-compatible integer",
+                ExpressionValue::Integer(IntegerExpression { value: integer }),
+            ),
+        }
     }
 }
 

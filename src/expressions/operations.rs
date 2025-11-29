@@ -367,6 +367,13 @@ impl BinaryOperation {
                     .into_owned(span_range)
             }
             BinaryOperation::Integer(operation) => {
+                if matches!(
+                    operation,
+                    IntegerBinaryOperation::ShiftLeft { .. }
+                        | IntegerBinaryOperation::ShiftRight { .. }
+                ) {
+                    return self.type_err("This operation should have been migrated!");
+                }
                 let right = right
                     .into_integer()
                     .ok_or_else(|| self.type_error("The shift amount must be an integer"))?;
@@ -515,21 +522,27 @@ impl HasSpanRange for IntegerBinaryOperation {
 pub(super) trait HandleBinaryOperation: Sized + std::fmt::Display + Copy {
     fn type_name() -> &'static str;
 
+    fn binary_overflow_error(
+        context: BinaryOperationCallContext,
+        lhs: impl std::fmt::Display,
+        rhs: impl std::fmt::Display,
+    ) -> ExecutionInterrupt {
+        context.error(format!(
+            "The {} operation {} {} {} overflowed",
+            Self::type_name(),
+            lhs,
+            context.operation.symbolic_description(),
+            rhs
+        ))
+    }
+
     fn paired_operation(
         lhs: Self,
         rhs: Self,
         context: BinaryOperationCallContext,
         perform_fn: fn(Self, Self) -> Option<Self>,
     ) -> ExecutionResult<Self> {
-        perform_fn(lhs, rhs).ok_or_else(|| {
-            context.error(format!(
-                "The {} operation {} {} {} overflowed",
-                Self::type_name(),
-                lhs,
-                context.operation.symbolic_description(),
-                rhs
-            ))
-        })
+        perform_fn(lhs, rhs).ok_or_else(|| Self::binary_overflow_error(context, lhs, rhs))
     }
 
     fn handle_paired_binary_operation(
