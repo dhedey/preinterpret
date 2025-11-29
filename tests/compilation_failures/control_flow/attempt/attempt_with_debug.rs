@@ -2,7 +2,7 @@ use preinterpret::*;
 
 fn main() {
     run!(
-        let x = "A debug call should propogate out of an attempt arm.";
+        let x = "A debug call should propagate out of an attempt arm.";
         attempt {
             { x.debug() } => { None }
         }

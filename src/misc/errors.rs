@@ -162,7 +162,7 @@ impl ExecutionInterrupt {
         }
     }
 
-    /// Generally, coding errors should be propogated, while user-thrown errors
+    /// Generally, coding errors should be propagated, while user-thrown errors
     /// and runtime errors which are indicative of invalid values being
     /// present should be caught.
     ///

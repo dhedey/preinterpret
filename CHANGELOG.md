@@ -2,7 +2,7 @@
 
 ## 1.0.0
 
-This moves preinterpet to an expression-based language, inspired by Rust, but with some twists to make writing code generation code quicker:
+This moves preinterpret to an expression-based language, inspired by Rust, but with some twists to make writing code generation code quicker:
 * Token streams as a native feature
 * Flexible Javascript-like objects/arrays
 * New expressions such as `attempt { .. }` for trying alternatives

@@ -133,7 +133,7 @@ impl VariableBinding {
             Ok(value) => Ok(LateBoundValue::Mutable(value)),
             Err(reason_not_mutable) => {
                 // If we get an error with a mutable and shared reference, a mutable reference must already exist.
-                // We can just propogate the error from taking the shared reference, it should be good enough.
+                // We can just propagate the error from taking the shared reference, it should be good enough.
                 let shared = self.into_shared()?;
                 Ok(LateBoundValue::Shared(LateBoundSharedValue::new(
                     shared,
