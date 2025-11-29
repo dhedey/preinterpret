@@ -12,12 +12,10 @@ pub(in crate::expressions) trait MethodResolver {
     ) -> Option<UnaryOperationInterface>;
 
     /// Resolves a binary operation as a method interface for this type.
-    /// Takes the RHS kind to enable type-aware resolution (e.g., `UntypedInteger + i32`).
     /// Returns None if the operation should fallback to the legacy system.
     fn resolve_binary_operation(
         &self,
         operation: &BinaryOperation,
-        rhs_kind: &ValueKind,
     ) -> Option<BinaryOperationInterface>;
 }
 
@@ -42,11 +40,10 @@ impl<T: HierarchicalTypeData> MethodResolver for T {
     fn resolve_binary_operation(
         &self,
         operation: &BinaryOperation,
-        rhs_kind: &ValueKind,
     ) -> Option<BinaryOperationInterface> {
-        match Self::resolve_own_binary_operation(operation, rhs_kind) {
+        match Self::resolve_own_binary_operation(operation) {
             Some(method) => Some(method),
-            None => Self::PARENT.and_then(|p| p.resolve_binary_operation(operation, rhs_kind)),
+            None => Self::PARENT.and_then(|p| p.resolve_binary_operation(operation)),
         }
     }
 }
@@ -70,11 +67,9 @@ pub(crate) trait HierarchicalTypeData {
     }
 
     /// Resolves a binary operation as a method interface for this type.
-    /// Takes the RHS kind to enable type-aware resolution.
     /// Returns None if the operation should fallback to the legacy system.
     fn resolve_own_binary_operation(
         _operation: &BinaryOperation,
-        _rhs_kind: &ValueKind,
     ) -> Option<BinaryOperationInterface> {
         None
     }
@@ -273,8 +268,11 @@ impl UnaryOperationInterface {
 }
 
 pub(crate) struct BinaryOperationInterface {
-    pub method:
-        fn(BinaryOperationCallContext, ResolvedValue, ResolvedValue) -> ExecutionResult<ResolvedValue>,
+    pub method: fn(
+        BinaryOperationCallContext,
+        ResolvedValue,
+        ResolvedValue,
+    ) -> ExecutionResult<ResolvedValue>,
     pub lhs_ownership: ResolvedValueOwnership,
     pub rhs_ownership: ResolvedValueOwnership,
 }

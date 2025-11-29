@@ -312,6 +312,7 @@ pub(crate) struct BinaryOperationCallContext<'a> {
 }
 
 macro_rules! define_interface {
+    // Rule without binary_operations - delegates to the full rule with empty binary_operations
     (
         struct $type_data:ident,
         parent: $parent_type_data:ident,
@@ -324,6 +325,53 @@ macro_rules! define_interface {
             $mod_unary_operations_vis:vis mod unary_operations {
                 $(
                     $([$unary_context:ident])? fn $unary_name:ident($($unary_args:tt)*) $(-> $unary_output_ty:ty)? $([ignore_type_assertion $unary_ignore_type_assertion:tt])? $unary_body:block
+                )*
+            }
+            interface_items {
+                $($items:item)*
+            }
+        }
+    ) => {
+        define_interface! {
+            struct $type_data,
+            parent: $parent_type_data,
+            $mod_vis mod $mod_name {
+                $mod_methods_vis mod methods {
+                    $(
+                        $([$method_context])? fn $method_name($($method_args)*) $(-> $method_output_ty)? $([ignore_type_assertion $method_ignore_type_assertion])? $method_body
+                    )*
+                }
+                $mod_unary_operations_vis mod unary_operations {
+                    $(
+                        $([$unary_context])? fn $unary_name($($unary_args)*) $(-> $unary_output_ty)? $([ignore_type_assertion $unary_ignore_type_assertion])? $unary_body
+                    )*
+                }
+                pub(crate) mod binary_operations {
+                }
+                interface_items {
+                    $($items)*
+                }
+            }
+        }
+    };
+    // Full rule with binary_operations
+    (
+        struct $type_data:ident,
+        parent: $parent_type_data:ident,
+        $mod_vis:vis mod $mod_name:ident {
+            $mod_methods_vis:vis mod methods {
+                $(
+                    $([$method_context:ident])? fn $method_name:ident($($method_args:tt)*) $(-> $method_output_ty:ty)? $([ignore_type_assertion $method_ignore_type_assertion:tt])? $method_body:block
+                )*
+            }
+            $mod_unary_operations_vis:vis mod unary_operations {
+                $(
+                    $([$unary_context:ident])? fn $unary_name:ident($($unary_args:tt)*) $(-> $unary_output_ty:ty)? $([ignore_type_assertion $unary_ignore_type_assertion:tt])? $unary_body:block
+                )*
+            }
+            $mod_binary_operations_vis:vis mod binary_operations {
+                $(
+                    $([$binary_context:ident])? fn $binary_name:ident($($binary_args:tt)*) $(-> $binary_output_ty:ty)? $([ignore_type_assertion $binary_ignore_type_assertion:tt])? $binary_body:block
                 )*
             }
             interface_items {
@@ -364,6 +412,14 @@ macro_rules! define_interface {
                         {$($unary_ignore_type_assertion)?}
                         {}
                         {$($type_data::assert_output_type::<$unary_output_ty>();)?}
+                    }
+                )*
+                $(
+                    $type_data::assert_first_argument::<handle_first_arg_type!($($binary_args)*,)>();
+                    if_exists! {
+                        {$($binary_ignore_type_assertion)?}
+                        {}
+                        {$($type_data::assert_output_type::<$binary_output_ty>();)?}
                     }
                 )*
             }
@@ -408,6 +464,26 @@ macro_rules! define_interface {
                 )*
             }
 
+            $mod_binary_operations_vis mod binary_operations {
+                #[allow(unused)]
+                use super::*;
+                $(
+                    $mod_binary_operations_vis fn $binary_name(if_empty!([$($binary_context)?][_context]): BinaryOperationCallContext, $($binary_args)*) $(-> $binary_output_ty)? {
+                        $binary_body
+                    }
+                )*
+            }
+
+            $mod_binary_operations_vis mod binary_definitions {
+                #[allow(unused)]
+                use super::*;
+                $(
+                    $mod_binary_operations_vis fn $binary_name() -> BinaryOperationInterface {
+                        create_binary_interface!(binary_operations::$binary_name[$($binary_args)*])
+                    }
+                )*
+            }
+
             impl HierarchicalTypeData for $type_data {
                 type Parent = $parent_type_data;
                 const PARENT: Option<Self::Parent> = $mod_name::parent();
@@ -422,7 +498,8 @@ macro_rules! define_interface {
                     })
                 }
 
-                // Pass through resolve_own_unary_operation until there's a better way to define them
+                // Pass through resolve_own_unary_operation and resolve_own_binary_operation
+                // until there's a better way to define them
                 $($items)*
             }
         }

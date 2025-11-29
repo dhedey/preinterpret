@@ -109,10 +109,8 @@ impl MethodResolver for ValueKind {
     fn resolve_binary_operation(
         &self,
         operation: &BinaryOperation,
-        rhs_kind: &ValueKind,
     ) -> Option<BinaryOperationInterface> {
-        self.method_resolver()
-            .resolve_binary_operation(operation, rhs_kind)
+        self.method_resolver().resolve_binary_operation(operation)
     }
 }
 

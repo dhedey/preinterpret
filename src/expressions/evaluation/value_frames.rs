@@ -674,8 +674,8 @@ enum BinaryPath {
         right: ExpressionNodeId,
     },
     OnRightBranch {
-        left: OwnedValue,
-        left_kind: ValueKind,
+        left: ResolvedValue,
+        method: Option<BinaryOperationInterface>,
     },
 }
 
@@ -718,39 +718,39 @@ impl EvaluationFrame for BinaryOperationBuilder {
                 if let Some(result) = self.operation.lazy_evaluate(left_value)? {
                     context.return_owned(result)?
                 } else {
-                    // Store the left kind for method resolution in OnRightBranch
-                    let left_kind = left_late_bound.as_ref().kind();
-                    // For now, use Owned for both operands.
-                    // TODO[operation-refactor]: Add ownership optimization once method resolution
-                    // supports preliminary resolution without RHS kind.
-                    let left = ResolvedValueOwnership::Owned
-                        .map_from_late_bound(left_late_bound)?
-                        .expect_owned();
+                    // Try method resolution based on left operand's kind and resolve left operand immediately
+                    let method = left_late_bound
+                        .as_ref()
+                        .kind()
+                        .resolve_binary_operation(&self.operation);
 
-                    self.state = BinaryPath::OnRightBranch { left, left_kind };
+                    let (left_ownership, right_ownership) = if let Some(method) = &method {
+                        (method.lhs_ownership(), method.rhs_ownership())
+                    } else {
+                        // Fallback to legacy system - use owned values for legacy evaluation
+                        (ResolvedValueOwnership::Owned, ResolvedValueOwnership::Owned)
+                    };
+                    let left = left_ownership.map_from_late_bound(left_late_bound)?;
+
+                    self.state = BinaryPath::OnRightBranch { left, method };
                     context.handle_node_as_any_value(
                         self,
                         right,
-                        RequestedValueOwnership::Concrete(ResolvedValueOwnership::Owned),
+                        RequestedValueOwnership::Concrete(right_ownership),
                     )
                 }
             }
-            BinaryPath::OnRightBranch { left, left_kind } => {
-                let right = item.expect_resolved_value().expect_owned();
-                let right_kind = right.as_ref().kind();
+            BinaryPath::OnRightBranch { left, method } => {
+                let right = item.expect_resolved_value();
 
-                // Try method resolution with both LHS and RHS kinds
-                if let Some(method) = left_kind.resolve_binary_operation(&self.operation, &right_kind)
-                {
-                    let result = method.execute(
-                        ResolvedValue::Owned(left),
-                        ResolvedValue::Owned(right),
-                        &self.operation,
-                    )?;
+                // Try method resolution first (we already determined this during left evaluation)
+                if let Some(method) = method {
+                    let result = method.execute(left, right, &self.operation)?;
                     return context.return_resolved_value(result);
                 }
 
-                // Fallback to legacy evaluation
+                let left = left.expect_owned();
+                let right = right.expect_owned();
                 context.return_owned(self.operation.evaluate(left, right)?)?
             }
         })
