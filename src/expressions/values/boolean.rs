@@ -1,3 +1,5 @@
+#![allow(clippy::bool_comparison)]
+
 use super::*;
 
 #[derive(Clone)]
@@ -46,11 +48,11 @@ impl BooleanExpression {
             PairedBinaryOperation::BitAnd { .. } => operation.output(lhs & rhs),
             PairedBinaryOperation::BitOr { .. } => operation.output(lhs | rhs),
             PairedBinaryOperation::Equal { .. } => operation.output(lhs == rhs),
-            PairedBinaryOperation::LessThan { .. } => operation.output(!lhs & rhs),
+            PairedBinaryOperation::LessThan { .. } => operation.output(lhs < rhs),
             PairedBinaryOperation::LessThanOrEqual { .. } => operation.output(lhs <= rhs),
             PairedBinaryOperation::NotEqual { .. } => operation.output(lhs != rhs),
             PairedBinaryOperation::GreaterThanOrEqual { .. } => operation.output(lhs >= rhs),
-            PairedBinaryOperation::GreaterThan { .. } => operation.output(lhs & !rhs),
+            PairedBinaryOperation::GreaterThan { .. } => operation.output(lhs > rhs),
         })
     }
 
@@ -150,6 +152,42 @@ define_interface! {
             fn or(lhs: bool, rhs: bool) -> bool {
                 lhs || rhs
             }
+
+            fn bitxor(lhs: bool, rhs: bool) -> bool {
+                lhs ^ rhs
+            }
+
+            fn bitand(lhs: bool, rhs: bool) -> bool {
+                lhs & rhs
+            }
+
+            fn bitor(lhs: bool, rhs: bool) -> bool {
+                lhs | rhs
+            }
+
+            fn eq(lhs: bool, rhs: bool) -> bool {
+                lhs == rhs
+            }
+
+            fn ne(lhs: bool, rhs: bool) -> bool {
+                lhs != rhs
+            }
+
+            fn lt(lhs: bool, rhs: bool) -> bool {
+                lhs < rhs
+            }
+
+            fn le(lhs: bool, rhs: bool) -> bool {
+                lhs <= rhs
+            }
+
+            fn ge(lhs: bool, rhs: bool) -> bool {
+                lhs >= rhs
+            }
+
+            fn gt(lhs: bool, rhs: bool) -> bool {
+                lhs > rhs
+            }
         }
         interface_items {
             fn resolve_paired_binary_operation(
@@ -158,6 +196,15 @@ define_interface! {
                 Some(match operation {
                     PairedBinaryOperation::LogicalAnd { .. } => binary_definitions::and(),
                     PairedBinaryOperation::LogicalOr { .. } => binary_definitions::or(),
+                    PairedBinaryOperation::BitXor { .. } => binary_definitions::bitxor(),
+                    PairedBinaryOperation::BitAnd { .. } => binary_definitions::bitand(),
+                    PairedBinaryOperation::BitOr { .. } => binary_definitions::bitor(),
+                    PairedBinaryOperation::Equal { .. } => binary_definitions::eq(),
+                    PairedBinaryOperation::NotEqual { .. } => binary_definitions::ne(),
+                    PairedBinaryOperation::LessThan { .. } => binary_definitions::lt(),
+                    PairedBinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
+                    PairedBinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
+                    PairedBinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
                     _ => return None,
                 })
             }

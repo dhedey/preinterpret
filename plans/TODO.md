@@ -47,9 +47,9 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
   - [x] `Addition`
   - [x] `Subtraction`, `Multiplication`, `Division` and `Remainder`
   - [x] `LogicalAnd` and `LogicalOr`
-  - [ ] `BitXor`, `BitAnd` and `BitOr`
-  - [ ] `Equal` and `NotEqual`
-  - [ ] `LessThan`, `LessThanOrEqual`, `GreaterThanOrEqual`, `GreaterThan`
+  - [x] `BitXor`, `BitAnd` and `BitOr`
+  - [x] `Equal` and `NotEqual`
+  - [x] `LessThan`, `LessThanOrEqual`, `GreaterThanOrEqual`, `GreaterThan`
 - [ ] Migrate the following `IntegerBinaryOperation`:
   - [ ] `ShiftLeft` and `ShiftRight`
   - [ ] Compute SHL/SHR on `Integer` via `.checked_shl(u32)` with an attempted cast to u32 via TryInto<u32>,

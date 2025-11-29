@@ -356,6 +356,35 @@ impl UntypedInteger {
         }
     }
 
+    fn paired_comparison(
+        lhs: Owned<UntypedInteger>,
+        rhs: Owned<IntegerExpression>,
+        context: BinaryOperationCallContext,
+        compare_fn: fn(FallbackInteger, FallbackInteger) -> bool,
+    ) -> ExecutionResult<bool> {
+        let (lhs, lhs_span_range) = lhs.deconstruct();
+        let (rhs, rhs_span_range) = rhs.deconstruct();
+        match rhs.value {
+            IntegerExpressionValue::Untyped(rhs) => {
+                let lhs = lhs.parse_fallback()?;
+                let rhs = rhs.parse_fallback()?;
+                Ok(compare_fn(lhs, rhs))
+            }
+            rhs => {
+                // Re-evaluate with lhs converted to the typed integer
+                let lhs = lhs.into_kind(rhs.kind())?;
+                context
+                    .operation
+                    .evaluate(
+                        lhs.into_owned_value(lhs_span_range),
+                        rhs.into_owned_value(rhs_span_range),
+                    )?
+                    .expect_owned()
+                    .resolve_as("The result of a comparison")
+            }
+        }
+    }
+
     pub(super) fn handle_integer_binary_operation(
         self,
         rhs: IntegerExpression,
@@ -628,6 +657,69 @@ define_interface! {
             ) -> ExecutionResult<ResolvedValue> {
                 UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_rem)
             }
+
+            [context] fn bitxor(
+                lhs: Owned<UntypedInteger>,
+                rhs: Owned<IntegerExpression>,
+            ) -> ExecutionResult<ResolvedValue> {
+                UntypedInteger::paired_operation(lhs, rhs, context, |a, b| Some(a ^ b))
+            }
+
+            [context] fn bitand(
+                lhs: Owned<UntypedInteger>,
+                rhs: Owned<IntegerExpression>,
+            ) -> ExecutionResult<ResolvedValue> {
+                UntypedInteger::paired_operation(lhs, rhs, context, |a, b| Some(a & b))
+            }
+
+            [context] fn bitor(
+                lhs: Owned<UntypedInteger>,
+                rhs: Owned<IntegerExpression>,
+            ) -> ExecutionResult<ResolvedValue> {
+                UntypedInteger::paired_operation(lhs, rhs, context, |a, b| Some(a | b))
+            }
+
+            [context] fn eq(
+                lhs: Owned<UntypedInteger>,
+                rhs: Owned<IntegerExpression>,
+            ) -> ExecutionResult<bool> {
+                UntypedInteger::paired_comparison(lhs, rhs, context, |a, b| a == b)
+            }
+
+            [context] fn ne(
+                lhs: Owned<UntypedInteger>,
+                rhs: Owned<IntegerExpression>,
+            ) -> ExecutionResult<bool> {
+                UntypedInteger::paired_comparison(lhs, rhs, context, |a, b| a != b)
+            }
+
+            [context] fn lt(
+                lhs: Owned<UntypedInteger>,
+                rhs: Owned<IntegerExpression>,
+            ) -> ExecutionResult<bool> {
+                UntypedInteger::paired_comparison(lhs, rhs, context, |a, b| a < b)
+            }
+
+            [context] fn le(
+                lhs: Owned<UntypedInteger>,
+                rhs: Owned<IntegerExpression>,
+            ) -> ExecutionResult<bool> {
+                UntypedInteger::paired_comparison(lhs, rhs, context, |a, b| a <= b)
+            }
+
+            [context] fn ge(
+                lhs: Owned<UntypedInteger>,
+                rhs: Owned<IntegerExpression>,
+            ) -> ExecutionResult<bool> {
+                UntypedInteger::paired_comparison(lhs, rhs, context, |a, b| a >= b)
+            }
+
+            [context] fn gt(
+                lhs: Owned<UntypedInteger>,
+                rhs: Owned<IntegerExpression>,
+            ) -> ExecutionResult<bool> {
+                UntypedInteger::paired_comparison(lhs, rhs, context, |a, b| a > b)
+            }
         }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
@@ -666,6 +758,15 @@ define_interface! {
                     PairedBinaryOperation::Multiplication { .. } => binary_definitions::mul(),
                     PairedBinaryOperation::Division { .. } => binary_definitions::div(),
                     PairedBinaryOperation::Remainder { .. } => binary_definitions::rem(),
+                    PairedBinaryOperation::BitXor { .. } => binary_definitions::bitxor(),
+                    PairedBinaryOperation::BitAnd { .. } => binary_definitions::bitand(),
+                    PairedBinaryOperation::BitOr { .. } => binary_definitions::bitor(),
+                    PairedBinaryOperation::Equal { .. } => binary_definitions::eq(),
+                    PairedBinaryOperation::NotEqual { .. } => binary_definitions::ne(),
+                    PairedBinaryOperation::LessThan { .. } => binary_definitions::lt(),
+                    PairedBinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
+                    PairedBinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
+                    PairedBinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
                     _ => return None,
                 })
             }
@@ -806,6 +907,42 @@ macro_rules! impl_int_operations {
                     ) -> ExecutionResult<$integer_type> {
                         $integer_type::paired_operation(lhs, rhs, context, <$integer_type>::checked_rem)
                     }
+
+                    fn bitxor(lhs: $integer_type, rhs: $integer_type) -> $integer_type {
+                        lhs ^ rhs
+                    }
+
+                    fn bitand(lhs: $integer_type, rhs: $integer_type) -> $integer_type {
+                        lhs & rhs
+                    }
+
+                    fn bitor(lhs: $integer_type, rhs: $integer_type) -> $integer_type {
+                        lhs | rhs
+                    }
+
+                    fn eq(lhs: $integer_type, rhs: $integer_type) -> bool {
+                        lhs == rhs
+                    }
+
+                    fn ne(lhs: $integer_type, rhs: $integer_type) -> bool {
+                        lhs != rhs
+                    }
+
+                    fn lt(lhs: $integer_type, rhs: $integer_type) -> bool {
+                        lhs < rhs
+                    }
+
+                    fn le(lhs: $integer_type, rhs: $integer_type) -> bool {
+                        lhs <= rhs
+                    }
+
+                    fn ge(lhs: $integer_type, rhs: $integer_type) -> bool {
+                        lhs >= rhs
+                    }
+
+                    fn gt(lhs: $integer_type, rhs: $integer_type) -> bool {
+                        lhs > rhs
+                    }
                 }
                 interface_items {
                     fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
@@ -855,6 +992,15 @@ macro_rules! impl_int_operations {
                             PairedBinaryOperation::Multiplication { .. } => binary_definitions::mul(),
                             PairedBinaryOperation::Division { .. } => binary_definitions::div(),
                             PairedBinaryOperation::Remainder { .. } => binary_definitions::rem(),
+                            PairedBinaryOperation::BitXor { .. } => binary_definitions::bitxor(),
+                            PairedBinaryOperation::BitAnd { .. } => binary_definitions::bitand(),
+                            PairedBinaryOperation::BitOr { .. } => binary_definitions::bitor(),
+                            PairedBinaryOperation::Equal { .. } => binary_definitions::eq(),
+                            PairedBinaryOperation::NotEqual { .. } => binary_definitions::ne(),
+                            PairedBinaryOperation::LessThan { .. } => binary_definitions::lt(),
+                            PairedBinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
+                            PairedBinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
+                            PairedBinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
                             _ => return None,
                         })
                     }

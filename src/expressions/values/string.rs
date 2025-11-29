@@ -189,6 +189,30 @@ define_interface! {
                 lhs.push_str(rhs.deref());
                 lhs
             }
+
+            fn eq(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+                lhs.deref() == rhs.deref()
+            }
+
+            fn ne(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+                lhs.deref() != rhs.deref()
+            }
+
+            fn lt(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+                lhs.deref() < rhs.deref()
+            }
+
+            fn le(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+                lhs.deref() <= rhs.deref()
+            }
+
+            fn ge(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+                lhs.deref() >= rhs.deref()
+            }
+
+            fn gt(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+                lhs.deref() > rhs.deref()
+            }
         }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
@@ -206,6 +230,12 @@ define_interface! {
             ) -> Option<BinaryOperationInterface> {
                 Some(match operation {
                     PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
+                    PairedBinaryOperation::Equal { .. } => binary_definitions::eq(),
+                    PairedBinaryOperation::NotEqual { .. } => binary_definitions::ne(),
+                    PairedBinaryOperation::LessThan { .. } => binary_definitions::lt(),
+                    PairedBinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
+                    PairedBinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
+                    PairedBinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
                     _ => return None,
                 })
             }
