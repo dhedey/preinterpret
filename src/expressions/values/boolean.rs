@@ -142,8 +142,25 @@ define_interface! {
                 input.to_string()
             }
         }
-        pub(crate) mod binary_operations {}
+        pub(crate) mod binary_operations {
+            fn and(lhs: bool, rhs: bool) -> bool {
+                lhs && rhs
+            }
+
+            fn or(lhs: bool, rhs: bool) -> bool {
+                lhs || rhs
+            }
+        }
         interface_items {
+            fn resolve_paired_binary_operation(
+                operation: &PairedBinaryOperation,
+            ) -> Option<BinaryOperationInterface> {
+                Some(match operation {
+                    PairedBinaryOperation::LogicalAnd { .. } => binary_definitions::and(),
+                    PairedBinaryOperation::LogicalOr { .. } => binary_definitions::or(),
+                    _ => return None,
+                })
+            }
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
                     UnaryOperation::Not { .. } => unary_definitions::not(),

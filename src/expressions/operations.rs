@@ -347,6 +347,8 @@ impl BinaryOperation {
                         | PairedBinaryOperation::Multiplication { .. }
                         | PairedBinaryOperation::Division { .. }
                         | PairedBinaryOperation::Remainder { .. }
+                        | PairedBinaryOperation::LogicalAnd { .. }
+                        | PairedBinaryOperation::LogicalOr { .. }
                 ) {
                     return self.type_err("This operation should have been migrated!");
                 }
