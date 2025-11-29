@@ -135,8 +135,46 @@ define_interface! {
                 input.to_string()
             }
         }
-        pub(crate) mod binary_operations {}
+        pub(crate) mod binary_operations {
+            fn eq(lhs: char, rhs: char) -> bool {
+                lhs == rhs
+            }
+
+            fn ne(lhs: char, rhs: char) -> bool {
+                lhs != rhs
+            }
+
+            fn lt(lhs: char, rhs: char) -> bool {
+                lhs < rhs
+            }
+
+            fn le(lhs: char, rhs: char) -> bool {
+                lhs <= rhs
+            }
+
+            fn ge(lhs: char, rhs: char) -> bool {
+                lhs >= rhs
+            }
+
+            fn gt(lhs: char, rhs: char) -> bool {
+                lhs > rhs
+            }
+        }
         interface_items {
+            fn resolve_paired_binary_operation(
+                operation: &PairedBinaryOperation,
+            ) -> Option<BinaryOperationInterface> {
+                Some(match operation {
+                    PairedBinaryOperation::Equal { .. } => binary_definitions::eq(),
+                    PairedBinaryOperation::NotEqual { .. } => binary_definitions::ne(),
+                    PairedBinaryOperation::LessThan { .. } => binary_definitions::lt(),
+                    PairedBinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
+                    PairedBinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
+                    PairedBinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
+                    _ => return None,
+                })
+            }
+
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
                     UnaryOperation::Cast { target, .. } => match target {

@@ -352,6 +352,12 @@ impl BinaryOperation {
                         | PairedBinaryOperation::BitXor { .. }
                         | PairedBinaryOperation::BitAnd { .. }
                         | PairedBinaryOperation::BitOr { .. }
+                        | PairedBinaryOperation::Equal { .. }
+                        | PairedBinaryOperation::NotEqual { .. }
+                        | PairedBinaryOperation::LessThan { .. }
+                        | PairedBinaryOperation::LessThanOrEqual { .. }
+                        | PairedBinaryOperation::GreaterThanOrEqual { .. }
+                        | PairedBinaryOperation::GreaterThan { .. }
                 ) {
                     return self.type_err("This operation should have been migrated!");
                 }

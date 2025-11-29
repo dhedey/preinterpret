@@ -162,6 +162,32 @@ define_interface! {
             fn bitor(lhs: bool, rhs: bool) -> bool {
                 lhs | rhs
             }
+
+            fn eq(lhs: bool, rhs: bool) -> bool {
+                lhs == rhs
+            }
+
+            fn ne(lhs: bool, rhs: bool) -> bool {
+                lhs != rhs
+            }
+
+            // For booleans: false < true
+            fn lt(lhs: bool, rhs: bool) -> bool {
+                !lhs & rhs
+            }
+
+            fn le(lhs: bool, rhs: bool) -> bool {
+                lhs <= rhs
+            }
+
+            fn ge(lhs: bool, rhs: bool) -> bool {
+                lhs >= rhs
+            }
+
+            // For booleans: true > false
+            fn gt(lhs: bool, rhs: bool) -> bool {
+                lhs & !rhs
+            }
         }
         interface_items {
             fn resolve_paired_binary_operation(
@@ -173,6 +199,12 @@ define_interface! {
                     PairedBinaryOperation::BitXor { .. } => binary_definitions::bitxor(),
                     PairedBinaryOperation::BitAnd { .. } => binary_definitions::bitand(),
                     PairedBinaryOperation::BitOr { .. } => binary_definitions::bitor(),
+                    PairedBinaryOperation::Equal { .. } => binary_definitions::eq(),
+                    PairedBinaryOperation::NotEqual { .. } => binary_definitions::ne(),
+                    PairedBinaryOperation::LessThan { .. } => binary_definitions::lt(),
+                    PairedBinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
+                    PairedBinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
+                    PairedBinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
                     _ => return None,
                 })
             }
