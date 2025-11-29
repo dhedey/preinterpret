@@ -262,6 +262,34 @@ where
     f(context, A::from_resolved(a)?).to_resolved_value(output_span_range)
 }
 
+macro_rules! create_binary_interface {
+    ($method_name:path[
+        $($lhs_part:ident)+ : $lhs_ty:ty,
+        $($rhs_part:ident)+ : $rhs_ty:ty $(,)?
+    ]) => {
+        BinaryOperationInterface {
+            method: |context, lhs, rhs| apply_binary_fn($method_name, lhs, rhs, context),
+            lhs_ownership: <$lhs_ty as FromResolved>::OWNERSHIP,
+            rhs_ownership: <$rhs_ty as FromResolved>::OWNERSHIP,
+        }
+    };
+}
+
+pub(crate) fn apply_binary_fn<A, B, R>(
+    f: fn(BinaryOperationCallContext, A, B) -> R,
+    lhs: ResolvedValue,
+    rhs: ResolvedValue,
+    context: BinaryOperationCallContext,
+) -> ExecutionResult<ResolvedValue>
+where
+    A: FromResolved,
+    B: FromResolved,
+    R: ResolvableOutput,
+{
+    let output_span_range = context.output_span_range;
+    f(context, A::from_resolved(lhs)?, B::from_resolved(rhs)?).to_resolved_value(output_span_range)
+}
+
 pub(crate) struct MethodCallContext<'a> {
     pub interpreter: &'a mut Interpreter,
     pub output_span_range: SpanRange,
@@ -275,6 +303,11 @@ impl<'a> HasSpanRange for MethodCallContext<'a> {
 
 pub(crate) struct UnaryOperationCallContext<'a> {
     pub operation: &'a UnaryOperation,
+    pub output_span_range: SpanRange,
+}
+
+pub(crate) struct BinaryOperationCallContext<'a> {
+    pub operation: &'a BinaryOperation,
     pub output_span_range: SpanRange,
 }
 
@@ -397,6 +430,6 @@ macro_rules! define_interface {
 }
 
 pub(crate) use {
-    create_method_interface, create_unary_interface, define_interface, handle_first_arg_type,
-    if_empty, ignore_all,
+    create_binary_interface, create_method_interface, create_unary_interface, define_interface,
+    handle_first_arg_type, if_empty, ignore_all,
 };

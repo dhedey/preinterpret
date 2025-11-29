@@ -563,7 +563,56 @@ define_interface! {
                     _ => return None,
                 })
             }
+
+            fn resolve_own_binary_operation(
+                operation: &BinaryOperation,
+                rhs_kind: &ValueKind,
+            ) -> Option<BinaryOperationInterface> {
+                // For now, only handle UntypedInteger + UntypedInteger via new method resolution.
+                // Mixed cases (UntypedInteger + TypedInteger) fall back to legacy system.
+                // This will be extended in follow-up PRs.
+                if !matches!(rhs_kind, ValueKind::Integer(IntegerKind::Untyped)) {
+                    return None;
+                }
+
+                match operation {
+                    BinaryOperation::Paired(PairedBinaryOperation::Addition { .. }) => {
+                        Some(untyped_integer_binary::add_interface())
+                    }
+                    // Other operators fall back to legacy system for now
+                    _ => None,
+                }
+            }
         }
+    }
+}
+
+/// Binary operation implementations for UntypedInteger.
+/// These are defined outside the define_interface! macro for now.
+pub(crate) mod untyped_integer_binary {
+    use super::*;
+
+    /// Addition operation: UntypedInteger + UntypedInteger
+    /// Performs the operation in i128 space (the fallback integer type).
+    pub(crate) fn add(
+        _context: BinaryOperationCallContext,
+        lhs: Owned<UntypedInteger>,
+        rhs: UntypedInteger,
+    ) -> ExecutionResult<UntypedInteger> {
+        let (lhs, lhs_span_range) = lhs.deconstruct();
+        let lhs_val = lhs.parse_fallback()?;
+        let rhs_val = rhs.parse_fallback()?;
+        match lhs_val.checked_add(rhs_val) {
+            Some(result) => Ok(UntypedInteger::from_fallback(result)),
+            None => lhs_span_range.value_err(format!(
+                "The untyped integer operation {:?} + {:?} overflowed in i128 space",
+                lhs_val, rhs_val
+            )),
+        }
+    }
+
+    pub(crate) fn add_interface() -> BinaryOperationInterface {
+        create_binary_interface!(add[lhs: Owned<UntypedInteger>, rhs: UntypedInteger])
     }
 }
 

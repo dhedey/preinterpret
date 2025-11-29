@@ -12,8 +12,13 @@ pub(in crate::expressions) trait MethodResolver {
     ) -> Option<UnaryOperationInterface>;
 
     /// Resolves a binary operation as a method interface for this type.
+    /// Takes the RHS kind to enable type-aware resolution (e.g., `UntypedInteger + i32`).
     /// Returns None if the operation should fallback to the legacy system.
-    fn resolve_binary_operation(&self, operation: &BinaryOperation) -> Option<MethodInterface>;
+    fn resolve_binary_operation(
+        &self,
+        operation: &BinaryOperation,
+        rhs_kind: &ValueKind,
+    ) -> Option<BinaryOperationInterface>;
 }
 
 impl<T: HierarchicalTypeData> MethodResolver for T {
@@ -34,10 +39,14 @@ impl<T: HierarchicalTypeData> MethodResolver for T {
         }
     }
 
-    fn resolve_binary_operation(&self, operation: &BinaryOperation) -> Option<MethodInterface> {
-        match Self::resolve_own_binary_operation(operation) {
+    fn resolve_binary_operation(
+        &self,
+        operation: &BinaryOperation,
+        rhs_kind: &ValueKind,
+    ) -> Option<BinaryOperationInterface> {
+        match Self::resolve_own_binary_operation(operation, rhs_kind) {
             Some(method) => Some(method),
-            None => Self::PARENT.and_then(|p| p.resolve_binary_operation(operation)),
+            None => Self::PARENT.and_then(|p| p.resolve_binary_operation(operation, rhs_kind)),
         }
     }
 }
@@ -61,8 +70,12 @@ pub(crate) trait HierarchicalTypeData {
     }
 
     /// Resolves a binary operation as a method interface for this type.
+    /// Takes the RHS kind to enable type-aware resolution.
     /// Returns None if the operation should fallback to the legacy system.
-    fn resolve_own_binary_operation(_operation: &BinaryOperation) -> Option<MethodInterface> {
+    fn resolve_own_binary_operation(
+        _operation: &BinaryOperation,
+        _rhs_kind: &ValueKind,
+    ) -> Option<BinaryOperationInterface> {
         None
     }
 }
@@ -256,5 +269,39 @@ impl UnaryOperationInterface {
 
     pub(crate) fn argument_ownership(&self) -> ResolvedValueOwnership {
         self.argument_ownership
+    }
+}
+
+pub(crate) struct BinaryOperationInterface {
+    pub method:
+        fn(BinaryOperationCallContext, ResolvedValue, ResolvedValue) -> ExecutionResult<ResolvedValue>,
+    pub lhs_ownership: ResolvedValueOwnership,
+    pub rhs_ownership: ResolvedValueOwnership,
+}
+
+impl BinaryOperationInterface {
+    pub(crate) fn execute(
+        &self,
+        lhs: ResolvedValue,
+        rhs: ResolvedValue,
+        operation: &BinaryOperation,
+    ) -> ExecutionResult<ResolvedValue> {
+        let output_span_range = SpanRange::new_between(lhs.span_range(), rhs.span_range());
+        (self.method)(
+            BinaryOperationCallContext {
+                operation,
+                output_span_range,
+            },
+            lhs,
+            rhs,
+        )
+    }
+
+    pub(crate) fn lhs_ownership(&self) -> ResolvedValueOwnership {
+        self.lhs_ownership
+    }
+
+    pub(crate) fn rhs_ownership(&self) -> ResolvedValueOwnership {
+        self.rhs_ownership
     }
 }

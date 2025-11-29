@@ -674,8 +674,8 @@ enum BinaryPath {
         right: ExpressionNodeId,
     },
     OnRightBranch {
-        left: ResolvedValue,
-        method: Option<MethodInterface>,
+        left: OwnedValue,
+        left_kind: ValueKind,
     },
 }
 
@@ -718,52 +718,39 @@ impl EvaluationFrame for BinaryOperationBuilder {
                 if let Some(result) = self.operation.lazy_evaluate(left_value)? {
                     context.return_owned(result)?
                 } else {
-                    // Try method resolution based on left operand's kind and resolve left operand immediately
-                    let method = left_late_bound
-                        .as_ref()
-                        .kind()
-                        .resolve_binary_operation(&self.operation);
+                    // Store the left kind for method resolution in OnRightBranch
+                    let left_kind = left_late_bound.as_ref().kind();
+                    // For now, use Owned for both operands.
+                    // TODO[operation-refactor]: Add ownership optimization once method resolution
+                    // supports preliminary resolution without RHS kind.
+                    let left = ResolvedValueOwnership::Owned
+                        .map_from_late_bound(left_late_bound)?
+                        .expect_owned();
 
-                    let (left_ownership, right_ownership) = if let Some(method) = &method {
-                        let (ownerships, min_required) = method.argument_ownerships();
-                        assert!(
-                            ownerships.len() == 2 && min_required == 2,
-                            "Binary operation methods must have exactly two ownerships"
-                        );
-                        (ownerships[0], ownerships[1])
-                    } else {
-                        // Fallback to legacy system - use owned values for legacy evaluation
-                        (ResolvedValueOwnership::Owned, ResolvedValueOwnership::Owned)
-                    };
-                    let left = left_ownership.map_from_late_bound(left_late_bound)?;
-
-                    self.state = BinaryPath::OnRightBranch { left, method };
+                    self.state = BinaryPath::OnRightBranch { left, left_kind };
                     context.handle_node_as_any_value(
                         self,
                         right,
-                        RequestedValueOwnership::Concrete(right_ownership),
+                        RequestedValueOwnership::Concrete(ResolvedValueOwnership::Owned),
                     )
                 }
             }
-            BinaryPath::OnRightBranch { left, method } => {
-                let right = item.expect_resolved_value();
+            BinaryPath::OnRightBranch { left, left_kind } => {
+                let right = item.expect_resolved_value().expect_owned();
                 let right_kind = right.as_ref().kind();
 
-                // Try method resolution first (we already determined this during left evaluation)
-                if let Some(method) = method {
-                    // TODO[operation-refactor]: Use proper span range from operation
-                    let span_range = SpanRange::new_between(left.span_range(), right.span_range());
-
-                    let mut call_context = MethodCallContext {
-                        output_span_range: span_range,
-                        interpreter: context.interpreter(),
-                    };
-                    let result = method.execute(vec![left, right], &mut call_context)?;
+                // Try method resolution with both LHS and RHS kinds
+                if let Some(method) = left_kind.resolve_binary_operation(&self.operation, &right_kind)
+                {
+                    let result = method.execute(
+                        ResolvedValue::Owned(left),
+                        ResolvedValue::Owned(right),
+                        &self.operation,
+                    )?;
                     return context.return_resolved_value(result);
                 }
 
-                let left = left.expect_owned();
-                let right = right.expect_owned();
+                // Fallback to legacy evaluation
                 context.return_owned(self.operation.evaluate(left, right)?)?
             }
         })
