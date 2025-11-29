@@ -229,24 +229,14 @@ impl UntypedFloat {
             rhs => {
                 // Re-evaluate with lhs converted to the typed float
                 let lhs = lhs.into_kind(rhs.kind())?;
-                let result = context.operation.evaluate(
-                    lhs.into_owned_value(lhs_span_range),
-                    rhs.into_owned_value(rhs_span_range),
-                )?;
-                // Extract the boolean result
-                match result {
-                    ResolvedValue::Owned(owned) => {
-                        match owned.value {
-                            ExpressionValue::Boolean(b) => Ok(b.value),
-                            _ => Err(context
-                                .error("Expected boolean result from comparison".to_string())),
-                        }
-                    }
-                    _ => {
-                        Err(context
-                            .error("Expected owned boolean result from comparison".to_string()))
-                    }
-                }
+                context
+                    .operation
+                    .evaluate(
+                        lhs.into_owned_value(lhs_span_range),
+                        rhs.into_owned_value(rhs_span_range),
+                    )?
+                    .expect_owned()
+                    .resolve_as("The result of a comparison")
             }
         }
     }

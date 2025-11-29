@@ -1,3 +1,5 @@
+#![allow(clippy::bool_comparison)]
+
 use super::*;
 
 #[derive(Clone)]
@@ -46,11 +48,11 @@ impl BooleanExpression {
             PairedBinaryOperation::BitAnd { .. } => operation.output(lhs & rhs),
             PairedBinaryOperation::BitOr { .. } => operation.output(lhs | rhs),
             PairedBinaryOperation::Equal { .. } => operation.output(lhs == rhs),
-            PairedBinaryOperation::LessThan { .. } => operation.output(!lhs & rhs),
+            PairedBinaryOperation::LessThan { .. } => operation.output(lhs < rhs),
             PairedBinaryOperation::LessThanOrEqual { .. } => operation.output(lhs <= rhs),
             PairedBinaryOperation::NotEqual { .. } => operation.output(lhs != rhs),
             PairedBinaryOperation::GreaterThanOrEqual { .. } => operation.output(lhs >= rhs),
-            PairedBinaryOperation::GreaterThan { .. } => operation.output(lhs & !rhs),
+            PairedBinaryOperation::GreaterThan { .. } => operation.output(lhs > rhs),
         })
     }
 
@@ -171,9 +173,8 @@ define_interface! {
                 lhs != rhs
             }
 
-            // For booleans: false < true
             fn lt(lhs: bool, rhs: bool) -> bool {
-                !lhs & rhs
+                lhs < rhs
             }
 
             fn le(lhs: bool, rhs: bool) -> bool {
@@ -184,9 +185,8 @@ define_interface! {
                 lhs >= rhs
             }
 
-            // For booleans: true > false
             fn gt(lhs: bool, rhs: bool) -> bool {
-                lhs & !rhs
+                lhs > rhs
             }
         }
         interface_items {
