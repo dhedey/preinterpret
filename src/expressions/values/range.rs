@@ -248,6 +248,7 @@ define_interface! {
                 context.operation.evaluate(this_iterator)
             }
         }
+        pub(crate) mod binary_operations {}
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {

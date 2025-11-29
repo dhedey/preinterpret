@@ -288,6 +288,7 @@ define_interface! {
                 }
             }
         }
+        pub(crate) mod binary_operations {}
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {

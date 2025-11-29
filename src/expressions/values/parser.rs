@@ -146,6 +146,7 @@ define_interface! {
         }
         pub(crate) mod unary_operations {
         }
+        pub(crate) mod binary_operations {}
         interface_items {
         }
     }
