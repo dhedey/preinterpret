@@ -231,13 +231,55 @@ For the first PR:
 
 ---
 
-## Open Questions
+## Design Decisions
 
-1. **RHS type in resolution**: Should `resolve_own_binary_operation` take the full RHS value or just its kind? Taking just the kind allows static dispatch but may limit flexibility.
+1. **RHS type in resolution**: `resolve_own_binary_operation` takes just the RHS kind, not the full value. This may make short-circuiting operators harder (see below), but we'll try this approach first.
 
-2. **Symmetric operations**: For `i32 + UntypedInteger`, should the typed integer's resolver handle this, or should there be a fallback that swaps operands?
+2. **Symmetric operations**: Define interfaces as asymmetric based on LHS. For `i32 + UntypedInteger`, the `i32`'s resolver handles it. Implementation can delegate internally (e.g., `a + b` can call the inner method for `b + a` when `a != b`).
 
-3. **Error span handling**: The current implementation uses `SpanRange::new_between()`. Should we preserve this or adjust for the new architecture?
+3. **Error span handling**: Add an error span range to the context, derived from the operator token.
+
+---
+
+## Short-Circuiting Considerations
+
+The short-circuiting operators (`&&` and `||`) present a challenge for this architecture:
+
+**The Problem:**
+- Currently, `BinaryOperation::lazy_evaluate()` handles `&&` and `||` by evaluating LHS first, then conditionally evaluating RHS
+- If `resolve_own_binary_operation` requires `rhs_kind`, we'd need to evaluate RHS to get its kind, which defeats short-circuiting
+- We don't currently have type data before evaluation
+
+**Possible Approaches:**
+
+1. **Don't migrate `&&` and `||`** - Keep them on the old evaluation path. Simple, but leaves the migration incomplete.
+
+2. **Resolution without RHS kind for short-circuit ops** - Have a separate resolution path or allow `rhs_kind` to be `None` for these operators. The resolved method would receive a thunk/closure for the RHS.
+
+3. **Two-phase evaluation** - For short-circuit ops:
+   - Phase 1: Resolve based on LHS only, get a "lazy" interface
+   - Phase 2: The interface method evaluates RHS if needed and handles type checking internally
+
+4. **Type inference** - If we had static type information from earlier passes, we could resolve without evaluating. But this would be a larger architectural change.
+
+**Recommendation for First PR:**
+Exclude `&&` and `||` from the migration initially. They can remain on the old path while we migrate the eager operators. This keeps the first PR focused and avoids premature architectural decisions.
+
+**Future Consideration:**
+When we do tackle short-circuiting, approach #2 or #3 seems most aligned with the current architecture. The method signature could be:
+
+```rust
+// Option: Lazy RHS parameter
+fn and(this: Boolean, rhs: impl FnOnce() -> ExecutionResult<ResolvedValue>) -> ExecutionResult<ResolvedValue> {
+    if !this.value {
+        return Ok(ResolvedValue::from(false));
+    }
+    let rhs = rhs()?;
+    // ... type check and compute
+}
+```
+
+Or we could have `BinaryOperationInterface` include a `is_short_circuit: bool` flag that changes how evaluation is handled.
 
 ---
 
