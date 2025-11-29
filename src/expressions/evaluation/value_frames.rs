@@ -675,7 +675,7 @@ enum BinaryPath {
     },
     OnRightBranch {
         left: ResolvedValue,
-        interface: Option<BinaryOperationInterface>,
+        interface: BinaryOperationInterface,
     },
 }
 
@@ -724,34 +724,34 @@ impl EvaluationFrame for BinaryOperationBuilder {
                         .kind()
                         .resolve_binary_operation(&self.operation);
 
-                    let (left_ownership, right_ownership) = if let Some(method) = &interface {
-                        (method.lhs_ownership(), method.rhs_ownership())
-                    } else {
-                        // Fallback to legacy system - use owned values for legacy evaluation
-                        (ResolvedValueOwnership::Owned, ResolvedValueOwnership::Owned)
-                    };
-                    let left = left_ownership.map_from_late_bound(left_late_bound)?;
+                    match interface {
+                        Some(interface) => {
+                            let rhs_ownership = interface.rhs_ownership();
+                            let left = interface
+                                .lhs_ownership()
+                                .map_from_late_bound(left_late_bound)?;
 
-                    self.state = BinaryPath::OnRightBranch { left, interface };
-                    context.handle_node_as_any_value(
-                        self,
-                        right,
-                        RequestedValueOwnership::Concrete(right_ownership),
-                    )
+                            self.state = BinaryPath::OnRightBranch { left, interface };
+                            context.handle_node_as_any_value(
+                                self,
+                                right,
+                                RequestedValueOwnership::Concrete(rhs_ownership),
+                            )
+                        }
+                        None => {
+                            return self.operation.type_err(format!(
+                                "The {} operator is not supported for {} operand",
+                                self.operation.symbolic_description(),
+                                left_late_bound.articled_value_type(),
+                            ));
+                        }
+                    }
                 }
             }
             BinaryPath::OnRightBranch { left, interface } => {
                 let right = item.expect_resolved_value();
-
-                // Try method resolution first (we already determined this during left evaluation)
-                if let Some(interface) = interface {
-                    let result = interface.execute(left, right, &self.operation)?;
-                    return context.return_resolved_value(result);
-                }
-
-                let left = left.expect_owned();
-                let right = right.expect_owned();
-                context.return_owned(self.operation.evaluate_legacy(left, right)?)?
+                let result = interface.execute(left, right, &self.operation)?;
+                return context.return_resolved_value(result);
             }
         })
     }

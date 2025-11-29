@@ -245,6 +245,14 @@ fn test_range() {
         "-2 -1 0 1 2 3 4 5"
     );
     assert_eq!(
+        run!((2u32..=5).intersperse(" ").to_stream().to_string()),
+        "2 3 4 5"
+    );
+    assert_eq!(
+        run!((2..=5u32).intersperse(" ").to_stream().to_string()),
+        "2 3 4 5"
+    );
+    assert_eq!(
         run! { let x = 2; ((x + x)..=5).intersperse(" ").to_string() },
         "4 5"
     );

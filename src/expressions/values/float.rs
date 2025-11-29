@@ -20,24 +20,6 @@ impl FloatExpression {
         .into_owned(lit.span()))
     }
 
-    pub(super) fn handle_integer_binary_operation(
-        self,
-        right: IntegerExpression,
-        operation: &IntegerBinaryOperation,
-    ) -> ExecutionResult<ExpressionValue> {
-        match self.value {
-            FloatExpressionValue::Untyped(input) => {
-                input.handle_integer_binary_operation(right, operation)
-            }
-            FloatExpressionValue::F32(input) => {
-                input.handle_integer_binary_operation(right, operation)
-            }
-            FloatExpressionValue::F64(input) => {
-                input.handle_integer_binary_operation(right, operation)
-            }
-        }
-    }
-
     pub(super) fn to_literal(&self, span: Span) -> Literal {
         self.value.to_unspanned_literal().with_span(span)
     }
@@ -59,25 +41,6 @@ define_interface! {
         }
         pub(crate) mod binary_operations {}
         interface_items {
-        }
-    }
-}
-
-pub(crate) enum FloatExpressionValuePair {
-    Untyped(UntypedFloat, UntypedFloat),
-    F32(f32, f32),
-    F64(f64, f64),
-}
-
-impl FloatExpressionValuePair {
-    pub(super) fn handle_paired_binary_operation(
-        self,
-        operation: &PairedBinaryOperation,
-    ) -> ExecutionResult<ExpressionValue> {
-        match self {
-            Self::Untyped(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
-            Self::F32(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
-            Self::F64(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
         }
     }
 }
@@ -239,55 +202,6 @@ impl UntypedFloat {
                     .resolve_as("The result of a comparison")
             }
         }
-    }
-
-    pub(super) fn handle_integer_binary_operation(
-        self,
-        _rhs: IntegerExpression,
-        operation: &IntegerBinaryOperation,
-    ) -> ExecutionResult<ExpressionValue> {
-        match operation {
-            IntegerBinaryOperation::ShiftLeft { .. }
-            | IntegerBinaryOperation::ShiftRight { .. } => operation.unsupported(self),
-        }
-    }
-
-    pub(super) fn handle_paired_binary_operation(
-        self,
-        rhs: Self,
-        operation: &PairedBinaryOperation,
-    ) -> ExecutionResult<ExpressionValue> {
-        let lhs = self.parse_fallback()?;
-        let rhs = rhs.parse_fallback()?;
-        Ok(match operation {
-            PairedBinaryOperation::Addition { .. } => {
-                operation.output(Self::from_fallback(lhs + rhs))
-            }
-            PairedBinaryOperation::Subtraction { .. } => {
-                operation.output(Self::from_fallback(lhs - rhs))
-            }
-            PairedBinaryOperation::Multiplication { .. } => {
-                operation.output(Self::from_fallback(lhs * rhs))
-            }
-            PairedBinaryOperation::Division { .. } => {
-                operation.output(Self::from_fallback(lhs / rhs))
-            }
-            PairedBinaryOperation::LogicalAnd { .. } | PairedBinaryOperation::LogicalOr { .. } => {
-                return operation.unsupported(self)
-            }
-            PairedBinaryOperation::Remainder { .. } => {
-                operation.output(Self::from_fallback(lhs % rhs))
-            }
-            PairedBinaryOperation::BitXor { .. }
-            | PairedBinaryOperation::BitAnd { .. }
-            | PairedBinaryOperation::BitOr { .. } => return operation.unsupported(self),
-            PairedBinaryOperation::Equal { .. } => operation.output(lhs == rhs),
-            PairedBinaryOperation::LessThan { .. } => operation.output(lhs < rhs),
-            PairedBinaryOperation::LessThanOrEqual { .. } => operation.output(lhs <= rhs),
-            PairedBinaryOperation::NotEqual { .. } => operation.output(lhs != rhs),
-            PairedBinaryOperation::GreaterThanOrEqual { .. } => operation.output(lhs >= rhs),
-            PairedBinaryOperation::GreaterThan { .. } => operation.output(lhs > rhs),
-        })
     }
 
     pub(super) fn from_fallback(value: FallbackFloat) -> Self {
@@ -758,47 +672,6 @@ macro_rules! impl_float_operations {
         impl HandleBinaryOperation for $float_type {
             fn type_name() -> &'static str {
                 stringify!($integer_type)
-            }
-
-            fn handle_paired_binary_operation(self, rhs: Self, operation: &PairedBinaryOperation) -> ExecutionResult<ExpressionValue> {
-                // Unlike integer arithmetic, float arithmetic does not overflow
-                // and instead falls back to NaN or infinity. In future we could
-                // allow trapping on these codes, but for now this is good enough
-                let lhs = self;
-                Ok(match operation {
-                    PairedBinaryOperation::Addition { .. } => operation.output(lhs + rhs),
-                    PairedBinaryOperation::Subtraction { .. } => operation.output(lhs - rhs),
-                    PairedBinaryOperation::Multiplication { .. } => operation.output(lhs * rhs),
-                    PairedBinaryOperation::Division { .. } => operation.output(lhs / rhs),
-                    PairedBinaryOperation::LogicalAnd { .. }
-                    | PairedBinaryOperation::LogicalOr { .. } => {
-                        return operation.unsupported(self)
-                    }
-                    PairedBinaryOperation::Remainder { .. } => operation.output(lhs % rhs),
-                    PairedBinaryOperation::BitXor { .. }
-                    | PairedBinaryOperation::BitAnd { .. }
-                    | PairedBinaryOperation::BitOr { .. } => {
-                        return operation.unsupported(self)
-                    }
-                    PairedBinaryOperation::Equal { .. } => operation.output(lhs == rhs),
-                    PairedBinaryOperation::LessThan { .. } => operation.output(lhs < rhs),
-                    PairedBinaryOperation::LessThanOrEqual { .. } => operation.output(lhs <= rhs),
-                    PairedBinaryOperation::NotEqual { .. } => operation.output(lhs != rhs),
-                    PairedBinaryOperation::GreaterThanOrEqual { .. } => operation.output(lhs >= rhs),
-                    PairedBinaryOperation::GreaterThan { .. } => operation.output(lhs > rhs),
-                })
-            }
-
-            fn handle_integer_binary_operation(
-                self,
-                _rhs: IntegerExpression,
-                operation: &IntegerBinaryOperation,
-            ) -> ExecutionResult<ExpressionValue> {
-                match operation {
-                    IntegerBinaryOperation::ShiftLeft { .. } | IntegerBinaryOperation::ShiftRight { .. } => {
-                        operation.unsupported(self)
-                    },
-                }
             }
         }
     )*};
