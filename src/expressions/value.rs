@@ -87,7 +87,7 @@ impl ValueKind {
             ValueKind::Stream => false,
             ValueKind::Range => true,
             ValueKind::Iterator => false,
-            // A parser is a handle, to can be cloned transparently.
+            // A parser is a handle, so can be cloned transparently.
             // It may fail to be able to be used to parse if the underlying stream is out of scope of course.
             ValueKind::Parser => true,
         }

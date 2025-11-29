@@ -545,7 +545,7 @@ impl AttemptExpression {
             interpreter.exit_scope(arm.arm_scope);
             return Ok(output);
         }
-        self.braces.control_flow_err("No attempt arm ran successfully. You may wish to add a fallback arm `{} => { None }` to ignore the error or to propogate a better message: `{} => { %[<tokens for error span>].error(\"Error message\") }`.")
+        self.braces.control_flow_err("No attempt arm ran successfully. You may wish to add a fallback arm `{} => { None }` to ignore the error or to propagate a better message: `{} => { %[<tokens for error span>].error(\"Error message\") }`.")
     }
 }
 
