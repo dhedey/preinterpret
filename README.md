@@ -15,13 +15,15 @@ If updating this readme, please ensure that the lib.rs rustdoc is also updated:
 * Run ./style-fix.sh
 -->
 
-This crate provides the `preinterpret!` macro, which works as a simple pre-processor to the token stream. It takes inspiration from and effectively combines the [quote](https://crates.io/crates/quote), [paste](https://crates.io/crates/paste) and [syn](https://crates.io/crates/syn) crates, to empower code generation authors and declarative macro writers, bringing:
+Preinterpret takes the pain out of Rust code generation. The [preinterpret](https://crates.io/crates/preinterpret) crate provides the `stream!` and `run!` macros which execute a simple but clear and powerful Rust-inspired interpreted language.
+
+It takes inspiration from and effectively combines the [quote](https://crates.io/crates/quote), [paste](https://crates.io/crates/paste) and [syn](https://crates.io/crates/syn) crates, to empower code generation authors and declarative macro writers, bringing:
 
 * **Heightened [readability](#readability)** - quote-like variable definition and substitution make it easier to work with code generation code.
 * **Heightened [expressivity](#expressivity)** - a toolkit of simple commands reduce boilerplate, and mitigate the need to build custom procedural macros in some cases.
 * **Heightened [simplicity](#simplicity)** - helping developers avoid the confusing corners [[1](https://veykril.github.io/tlborm/decl-macros/patterns/callbacks.html), [2](https://github.com/rust-lang/rust/issues/96184#issue-1207293401), [3](https://veykril.github.io/tlborm/decl-macros/minutiae/metavar-and-expansion.html), [4](https://veykril.github.io/tlborm/decl-macros/patterns/push-down-acc.html)] of declarative macro land.
 
-The `preinterpret!` macro can be used inside the output of a declarative macro, or by itself, functioning as a mini code generation tool all of its own.
+The `stream!` or `run!` macros can be used inside the output of a declarative macro, or by itself, functioning as a mini code generation tool all of its own.
 
 ```toml
 [dependencies]
@@ -33,9 +35,9 @@ preinterpret = "0.2"
 Preinterpret works with its own very simple language, with two pieces of syntax:
 
 * **Commands**: `[!command_name! input token stream...]` take an input token stream and output a token stream. There are a number of commands which cover a toolkit of useful functions.
-* **Variables**: `[!set! #var_name = token stream...]` defines a variable, and `#var_name` substitutes the variable into another command or the output.
+* **Variables**: `#(let var_name = %[token stream...];)` defines a variable, and `#var_name` substitutes the variable into another command or the output.
 
-Commands can be nested intuitively. The input of all commands (except `[!raw! ...]`) are first interpreted before the command itself executes.
+Commands can be nested intuitively. In general, the input of commands are first interpreted before the command itself executes.
 
 ### Declarative macro example
 
@@ -48,8 +50,10 @@ macro_rules! create_my_type {
         $vis:vis struct $type_name:ident {
             $($field_name:ident: $inner_type:ident),* $(,)?
         }
-    ) => {preinterpret::preinterpret! {
-        [!set! #type_name = [!ident! My $type_name]]
+    ) => {preinterpret::stream! {
+        #{
+            let type_name = %[My $type_name].to_ident();
+        }
         
         $(#[$attributes])*
         $vis struct #type_name {
@@ -58,7 +62,7 @@ macro_rules! create_my_type {
 
         impl #type_name {
             $(
-                fn [!ident_snake! my_ $inner_type](&self) -> &$inner_type {
+                fn #(%[my_ $inner_type].to_ident_snake())(&self) -> &$inner_type {
                     &self.$field_name
                 }
             )*
@@ -101,15 +105,17 @@ In other words, you typically want to replace `[< ... >]` with `[!ident! ...]`, 
 For example:
 
 ```rust
-preinterpret::preinterpret! {
-    [!set! #type_name = [!ident! HelloWorld]]
+preinterpret::stream! {
+    #{
+        let type_name = %[HelloWorld];
+    }
 
     struct #type_name;
 
-    #[doc = [!string! "This type is called [`" #type_name "`]"]]
+    #[doc = #(%["This type is called [`" #type_name "`]"].to_string())]
     impl #type_name {
-        fn [!ident_snake! say_ #type_name]() -> &'static str {
-            [!string! "It's time to say: " [!title! #type_name] "!"]
+        fn #(%[say_ #type_name].to_ident_snake())() -> &'static str {
+            #(%["It's time to say: " #(type_name.to_string().to_title_case()) "!"].to_string())
         }
     }
 }
@@ -120,9 +126,9 @@ assert_eq!(HelloWorld::say_hello_world(), "It's time to say: Hello World!")
 
 ### Special commands
 
-* `[!set! #foo = Hello]` followed by `[!set! #foo = #bar(World)]` sets the variable `#foo` to the token stream `Hello` and `#bar` to the token stream `Hello(World)`, and outputs no tokens. Using `#foo` or `#bar` later on will output the current value in the corresponding variable.
-* `[!raw! abc #abc [!ident! test]]` outputs its contents as-is, without any interpretation, giving the token stream `abc #abc [!ident! test]`.
-* `[!ignore! $foo]` ignores all of its content and outputs no tokens. It is useful to make a declarative macro loop over a meta-variable without outputting it into the resulting stream.
+* `#(let foo = %[Hello];)` followed by `#(let foo = %[#bar(World)];)` sets the variable `#foo` to the token stream `Hello` and `#bar` to the token stream `Hello(World)`, and outputs no tokens. Using `#foo` or `#bar` later on will output the current value in the corresponding variable.
+* `%raw[abc #abc %[test]]` outputs its contents as-is, without any interpretation, giving the token stream `abc #abc %[test]`.
+* `let _ = %raw[$foo]` ignores all content inside `[...]` and outputs no tokens. It is useful to make a declarative macro loop over a meta-variable without outputting it into the resulting stream.
 
 ### Concatenate and convert commands
 
@@ -133,33 +139,33 @@ Each of these commands functions in three steps:
 
 The following commands output idents:
 
-* `[!ident! X Y "Z"]` outputs the ident `XYZ`
-* `[!ident_camel! my hello_world]` outputs `MyHelloWorld`
-* `[!ident_snake! my_ HelloWorld]` outputs `my_hello_world`
-* `[!ident_upper_snake! my_ const Name]` outputs `MY_CONST_NAME`
+* `%[X Y "Z"].to_ident()` outputs the ident `XYZ`
+* `%[my hello_world].to_ident_camel()` outputs `MyHelloWorld`
+* `%[my_ HelloWorld].to_ident_snake()` outputs `my_hello_world`
+* `%[my_ const Name].to_ident_upper_snake()` outputs `MY_CONST_NAME`
 
-The `!literal!` command outputs any kind of literal, for example:
+The following commands output any kind of literal, for example:
 
-* `[!literal! 31 u 32]` outputs the integer literal `31u32`
-* `[!literal! '"' hello '"']` outputs the string literal `"hello"`
+* `%[31 u 32].to_literal()` outputs the integer literal `31u32`
+* `%['"' hello '"'].to_literal()` outputs the string literal `"hello"`
 
 The following commands output strings, without dropping non-alphanumeric characters:
 
-* `[!string! X Y " " Z (Hello World)]` outputs `"XY Z(HelloWorld)"`
-* `[!upper! foo_bar]` outputs `"FOO_BAR"`
-* `[!lower! FooBar]` outputs `"foobar"`
-* `[!capitalize! fooBar]` outputs `"FooBar"`
-* `[!decapitalize! FooBar]` outputs `"fooBar"`
+* `%[X Y " " Z (Hello World)].to_string()` outputs `"XY Z(HelloWorld)"`
+* `"foo_bar".to_uppercase()` outputs `"FOO_BAR"`
+* `"FooBar".to_lowercase()` outputs `"foobar"`
+* `"fooBar".capitalize()"` outputs `"FooBar"`
+* `"FooBar".decapitalize()` outputs `"fooBar"`
 
 The following commands output strings, whilst also dropping non-alphanumeric characters:
 
-* `[!snake! FooBar]` and `[!lower_snake! FooBar]` are equivalent and output `"foo_bar"`
-* `[!upper_snake! FooBar]` outputs `"FOO_BAR"`
-* `[!camel! foo_bar]` and `[!upper_camel! foo_bar]` are equivalent and output `"FooBar"`
-* `[!lower_camel! foo_bar]` outputs `"fooBar"`
-* `[!kebab! fooBar]` outputs `"foo-bar"`
-* `[!title! fooBar]` outputs `"Foo Bar"`
-* `[!insert_spaces! fooBar]` outputs `"foo Bar"`
+* `"FooBar".to_lower_snake_case()` outputs `"foo_bar"`
+* `"FooBar".to_upper_snake_case()"` outputs `"FOO_BAR"`
+* `"foo_bar".to_upper_camel_case()"` outputs `"FooBar"`
+* `"foo_bar".to_lower_camel_case()"` outputs `"fooBar"`
+* `"fooBar".to_kebab_case()"` outputs `"foo-bar"`
+* `"fooBar".to_title_case()"` outputs `"Foo Bar"`
+* `"fooBar".insert_spaces()"` outputs `"foo Bar"`
 
 > [!NOTE]
 >
@@ -192,10 +198,12 @@ macro_rules! impl_marker_traits {
             // Arbitrary (non-const) type generics
             < $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? $( = $deflt:tt)? ),+ >
         )?
-    } => {preinterpret::preinterpret!{
-        [!set! #impl_generics = $(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)?]
-        [!set! #type_generics = $(< $( $lt ),+ >)?]
-        [!set! #my_type = $type_name #type_generics]
+    } => {preinterpret::stream!{
+        #{
+            let impl_generics = %[$(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)?];
+            let type_generics = %[$(< $( $lt ),+ >)?];
+            let my_type = %[$type_name #type_generics];
+        }
 
         $(
             // Output each marker trait for the type
@@ -221,7 +229,7 @@ For example:
 macro_rules! create_struct_and_getters {
     (
         $name:ident { $($field:ident),* $(,)? }
-    ) => {preinterpret::preinterpret!{
+    ) => {preinterpret::stream!{
         // Define a struct with the given fields
         pub struct $name {
             $(
@@ -232,7 +240,7 @@ macro_rules! create_struct_and_getters {
         impl $name {
             $(
                 // Define get_X for each field X
-                pub fn [!ident! get_ $field](&self) -> &str {
+                pub fn #(%[get_ $field].to_ident())(&self) -> &str {
                     &self.$field
                 }
             )*
@@ -243,44 +251,6 @@ create_struct_and_getters! {
   MyStruct { hello, world }
 }
 ```
-
-Variable assignment works intuitively with the `* + ?` expansion operators, allowing basic procedural logic, such as creation of loop counts and indices before [meta-variables](https://github.com/rust-lang/rust/issues/83527) are stabilized.
-
-For example:
-```rust
-macro_rules! count_idents {
-    {
-        $($item: ident),*
-    } => {preinterpret::preinterpret!{
-        [!set! #current_index = 0usize]
-        $(
-            [!ignore! $item] // Loop over the items, but don't output them
-            [!set! #current_index = #current_index + 1]
-        )*
-        [!set! #count = #current_index]
-        #count
-    }}
-}
-```
-
-To quickly explain how this works, imagine we evaluate `count_idents!(a, b, c)`. As `count_idents!` is the most outer macro, it runs first, and expands into the following token stream:
-
-```rust
-let count = preinterpret::preinterpret!{
-  [!set! #current_index = 0usize]
-  [!ignore! a]
-  [!set! #current_index = #current_index + 1]
-  [!ignore! = b]
-  [!set! #current_index = #current_index + 1]
-  [!ignore! = c]
-  [!set! #current_index = #current_index + 1]
-  [!set! #count = #current_index]
-  #count
-};
-```
-
-Now the `preinterpret!` macro runs, resulting in `#count` equal to the token stream `0usize + 1 + 1 + 1`.
-This will be improved in future releases by adding support for mathematical operations on integer literals.
 
 ### Simplicity
 
@@ -325,18 +295,14 @@ Preinterpret is more explicit about types, and doesn't have these issues:
 macro_rules! impl_new_type {
     {
         $vis:vis $my_type:ident($my_inner_type:ty)
-    } => {preinterpret::preinterpret!{
-        #[xyz(as_type = [!string! $my_inner_type])]
+    } => {preinterpret::stream!{
+        #[xyz(as_type = #(%[$my_inner_type].to_string()))]
         $vis struct $my_type($my_inner_type);
     }}
 }
 ```
 
 ## Future Extension Possibilities
-
-### Add github docs page / rust book
-
-Add a github docs page / rust book at this repository, to allow us to build out a suite of examples, like `serde` or the little book of macros.
 
 ### Destructuring / Parsing Syntax, and Declarative Macros 2.0
 
@@ -359,7 +325,7 @@ The idea is that we create two new tools:
 
 In more detail:
 
-* `[!parse! (DESTRUCTURING) = (INPUT)]` is a more general `[!set!]` which acts like a `let <XX> = <YY> else { panic!() }`. It takes a `()`-wrapped parse destructuring on the left and a token stream as input on the right. Any `#x` in the parse definition acts as a binding rather than as a substitution. Parsing will handled commas intelligently, and accept intelligent parse operations to do heavy-lifting for the user. Parse operations look like `[!OPERATION! DESTRUCTURING]` with the operation name in `UPPER_SNAKE_CASE`. Some examples might be:
+* `[!let! (DESTRUCTURING) = (INPUT)]` (or maybe `!let!` or `!set!`) is a more general `[!set!]` which acts like a `let <XX> = <YY> else { panic!() }`. It takes a `()`-wrapped parse destructuring on the left and a `()`-wrapped token stream as input on the right. Any `#x` in the parse definition acts as a binding rather than as a substitution. Parsing will handled commas intelligently, and accept intelligent parse operations to do heavy-lifting for the user. Parse operations look like `[!OPERATION! DESTRUCTURING]` with the operation name in `UPPER_SNAKE_CASE`. Some examples might be:
     * `[!FIELDS! { hello: #a, world?: #b }]` - which can be parsed in any order, cope with trailing commas, and forbid fields in the source stream which aren't in the destructuring.
     * `[!SUBFIELDS! { hello: #a, world?: #b }]` - which can parse fields in any order, cope with trailing commas, and allow fields in the source stream which aren't in the destructuring.
     * `[!ITEM! { #ident, #impl_generics, ... }]` - which calls syn's parse item on the token
@@ -367,9 +333,11 @@ In more detail:
     * More tailored examples, such as `[!GENERICS! { impl: #x, type: #y, where: #z }]` which uses syn to parse the generics, and then uses subfields on the result.
     * Possibly `[!GROUPED! #x]` to parse a group with no brackets, to avoid parser ambiguity in some cases
     * `[!OPTIONAL! ...]` might be supported, but other complex logic (loops, matching) is delayed lazily until interpretation time - which feels more intuitive.
-* `[!for! (DESTRUCTURING) in (INPUT) { ... }]` which operates like the rust `for` loop, and uses a parse destructuring on the left, and has support for optional commas between values
-* `[!match! (INPUT) => { (DESTRUCTURING_1) => { ... }, (DESTRUCTURING_2) => { ... }, (#fallback) => { ... } }]` which operates like a rust `match` expression, and can replace the function of the branches of declarative macro inputs.
-* `[!macro_rules! name!(DESTRUCTURING) = { ... }]` which can define a declarative macro, but just parses its inputs as a token stream, and uses preinterpret for its heavy lifting.
+* `[!for! (DESTRUCTURING) in [!split_at! INPUT ,] { ... }]` which operates like the rust `for` loop over token trees, allowing them to be parsed. Instead of the destructuring, you can also just use a variable e.g. `#x` Operates well with the `[!split_at! ..]` command.
+* `[!while! [!parse_start_from! #variable DESTRUCTURING] { ... }]` can be used to consume a destructuring from the start of #variable. `[!parse_start_from! ..]` returns true if the parse succeeded, false if the variable is an empty token stream, and errors otherwise.
+* `[!parse_loop! #variable as (DESTRUCTURING), { ... }]` where the `,` is a separator and cleverly handles trailing `,` or `;` - similar to `syn::Punctuated`
+* `[!match! (INPUT) => { (DESTRUCTURING_1) => { ... }, (DESTRUCTURING_2) => { ... }, #fallback => { ... } }]` which operates like a rust `match` expression, and can replace the function of the branches of declarative macro inputs.
+* `[!macro_rules! name!(DESTRUCTURING) = { ... }]` which can define a declarative macro, but just parses its inputs as a token stream, and uses preinterpret for its heavy lifting. This could alternatively exist as `preinterpret::define_macro!{ my_macro!(DESTRUCTURING) = { ... }}`.
 
 And then we can end up with syntax like the following:
 
@@ -379,9 +347,9 @@ And then we can end up with syntax like the following:
 // =================================================
 
 // A simple macro can just take a token stream as input
-preinterpret::preinterpret! {
+preinterpret::stream! {
     [!macro_rules! my_macro!(#input) {
-        [!for! (#trait for #type) in (#input) {
+        [!parse_loop! #input as (#trait for #type), {
             impl #trait for #type
         }]
     }]
@@ -394,7 +362,7 @@ my_macro!(
 // It can also parse its input in the declaration.
 // Repeated sections have to be captured as a stream, and delegated to explicit lazy [!for! ...] binding.
 // This enforces a more procedural code style, and gives clearer compiler errors.
-preinterpret::preinterpret! {
+preinterpret::stream! {
     [!macro_rules! multi_impl_super_duper!(
         #type_list,
         ImplOptions [!FIELDS! {
@@ -403,9 +371,9 @@ preinterpret::preinterpret! {
             punctuation?: #punct = ("!") // Default
         }]
     ) = {
-        [!for! (
+        [!parse_loop! #type_list as (
             #type [!GENERICS! { impl: #impl_generics, type: #type_generics }]
-        ) in (#type_list) {
+        ) {
             impl<#impl_generics> SuperDuper for #type #type_generics {
                 const Hello: &'static str = [!string! #hello " " #world #punct];
             }
@@ -414,94 +382,42 @@ preinterpret::preinterpret! {
 }
 ```
 
-### Possible extension: Integer commands
+### Possible extension: Token stream commands
 
-Each of these commands functions in three steps:
-* Apply the interpreter to the token stream, which recursively executes preinterpret commands.
-* Iterate over each token (recursing into groups), expecting each to be an integer literal.
-* Apply some command-specific mapping to this stream of integer literals, and output a single integer literal without its type suffix. The suffix can be added back manually if required with a wrapper such as `[!literal! [!add! 1 2] u64]`.
+* `[!ungroup! #stream]` expects `#stream` to be a single group and unwraps it once
+* `[!flatten! #stream]` removes all singleton groups from `#stream`, leaving a token stream of idents, literals and punctuation
 
-Integer commands under consideration are:
+We could support a postfix calling convention, such as the `[!pipe! ...]` special command: `[!pipe! #stream > #x [!index! #x[4]] > #x [!ungroup! #x]]` or something like a scala for comprehension. But honestly, just saving things to variables might be cleaner.
 
-* `[!add! 5u64 9 32]` outputs `46`. It takes any number of integers and outputs their sum. The calculation operates in `u128` space.
-* `[!sub! 64u32 1u32]` outputs `63`. It takes two integers and outputs their difference. The calculation operates in `i128` space.
-* `[!mod! $length 2]` outputs `0` if `$length` is even, else `1`. It takes two integers `a` and `b`, and outputs `a mod b`.
+### Possible extension: Better performance via incremental parsing
 
-We also support the following assignment commands:
+Incremental parsing using a fork of syn ([see issue](https://github.com/dtolnay/syn/issues/1842)) would allow:
 
-* `[!increment! #i]` is shorthand for `[!set! #i = [!add! #i 1]]` and outputs no tokens.
+* Cheaper conversions between variables and parsing.
+* `[!consume_from! #stream #x]` where `#x` is read as the first token tree from `#stream`
+* `[!consume_from! #stream (<PARSE_DESTRUCTURING>)]` where the parser is read greedily from `#stream`
 
-Even better - we could even support calculator-style expression interpretation:
-
-* `[!usize! (5 + 10) / mod(4, 2)]` outputs `7usize`
+Forking syn may also allow some parts to be made more performant.
 
 ### Possible extension: User-defined commands
 
-* `[!define! [!my_command! <PARSE_DESTRUCTURING>] { <OUTPUT> }]`
+* `[!define_command! [!my_command! <ARGUMENTS_DESTRUCTURING>] { <OUTPUT> }]`
+* Some ability to define and re-use commands across multiple invocations
+  without being too expensive. Still unsure how to make this work.
 
-### Possible extension: Boolean commands
+### Possible extension: Further utility commands
 
-Each of these commands functions in three steps:
-* Apply the interpreter to the token stream, which recursively executes preinterpret commands.
-* Expects to read exactly two token trees (unless otherwise specified)
-* Apply some command-specific comparison, and outputs the boolean literal `true` or `false`.
-
-Comparison commands under consideration are:
-* `[!eq! #foo #bar]` outputs `true` if `#foo` and `#bar` are exactly the same token tree, via structural equality. For example:
-  * `[!eq! (3 4) (3   4)]` outputs `true` because the token stream ignores spacing.
-  * `[!eq! 1u64 1]` outputs `false` because these are different literals.
-* `[!lt! #foo #bar]` outputs `true` if `#foo` is an integer literal and less than `#bar`
-* `[!gt! #foo #bar]` outputs `true` if `#foo` is an integer literal and greater than `#bar`
-* `[!lte! #foo #bar]` outputs `true` if `#foo` is an integer literal and less than or equal to `#bar`
-* `[!gte! #foo #bar]` outputs `true` if `#foo` is an integer literal and greater than or equal to `#bar`
-* `[!not! #foo]` expects a single boolean literal, and outputs the negation of `#foo`
+Other boolean commands could be possible, similar to numeric commands:
+* `[!tokens_eq! #foo #bar]` outputs `true` if `#foo` and `#bar` are exactly the same token tree, via structural equality. For example:
+  * `[!tokens_eq! (3 4) (3   4)]` outputs `true` because the token stream ignores spacing.
+  * `[!tokens_eq! 1u64 1]` outputs `false` because these are different literals.
+  * This can be effectively done already with `#(x.to_debug_string() == y.to_debug_string())`
+* `[!str_split! { input: Value<LitStr>, separator: Value<LitStr>, }]`
 * `[!str_contains! "needle" [!string! haystack]]` expects two string literals, and outputs `true` if the first string is a substring of the second string.
-
-### Possible extension: Token stream commands
-
-* `[!skip! 4 from [#stream]]` reads and drops the first 4 token trees from the stream, and outputs the rest
-* `[!ungroup! (#stream)]` outputs `#stream`. It expects to receive a single group (i.e. wrapped in brackets), and unwraps it.
-
-### Possible extension: Control flow commands
-
-#### If statement
-
-`[!if! #cond then { #a } else { #b }]` outputs `#a` if `#cond` is `true`, else `#b` if `#cond` is false.
-
-The `if` command works as follows:
-* It starts by only interpreting its first token tree, and expects to see a single `true` or `false` literal.
-* It then expects to reads an unintepreted `then` ident, following by a single `{ .. }` group, whose contents get interpreted and output only if the condition was `true`.
-* It optionally also reads an `else` ident and a by a single `{ .. }` group, whose contents get interpreted and output only if the condition was `false`.
-
-#### For loop
-
-* `[!for! #token_tree in [#stream] { ... }]`
-
-#### Goto and label
-
-* `[!label! loop_start]` - defines a label which can be returned to. Effectively, it takes a clones of the remaining token stream after the label in the interpreter.
-* `[!goto! loop_start]` - jumps to the last execution of `[!label! loop_start]`. It unrolls the preinterpret stack (dropping all unwritten token streams) until it finds a stackframe in which the interpreter has the defined label, and continues the token stream from there.
-
-```rust,ignore
-// Hypothetical future syntax - not yet implemented!
-preinterpret::preinterpret!{
-    [!set! #i = 0]
-    [!label! loop]
-    const [!ident! AB #i]: u8 = 0;
-    [!increment! #i]
-    [!if! [!lte! #i 100] then { [!goto! loop] }]
-}
-```
 
 ### Possible extension: Eager expansion of macros
 
 When [eager expansion of macros returning literals](https://github.com/rust-lang/rust/issues/90765) is stabilized, it would be nice to include a command to do that, which could be used to include code, for example: `[!expand_literal_macros! include!("my-poem.txt")]`.
-
-### Possible extension: Explicit parsing feature to enable syn
-
-The heavy `syn` library is (in basic preinterpret) only needed for literal parsing, and error conversion into compile errors.
-
-We could add a parsing feature to speed up compile times a lot for stacks which don't need the parsing functionality.
 
 ## License
 

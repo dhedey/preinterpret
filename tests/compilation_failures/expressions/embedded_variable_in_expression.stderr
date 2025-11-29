@@ -1,0 +1,5 @@
+error: Invalid statement continuation. Possibly the previous statement is missing a semicolon?
+ --> tests/compilation_failures/expressions/embedded_variable_in_expression.rs:6:11
+  |
+6 |         5 #partial_sum
+  |           ^

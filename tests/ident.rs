@@ -1,10 +1,8 @@
-use preinterpret::preinterpret;
-
-macro_rules! my_assert_ident_eq {
-    ($input:tt, $check:ident) => {{
+macro_rules! assert_ident {
+    (($($input:tt)*), $check:ident) => {{
         assert_eq!(
             {
-                let preinterpret!($input) = 1;
+                let preinterpret::run!($($input)*) = 1;
                 $check
             },
             1
@@ -15,38 +13,38 @@ macro_rules! my_assert_ident_eq {
 #[test]
 #[allow(non_snake_case)]
 fn test_ident() {
-    my_assert_ident_eq!([!ident! a B C _D E], aBC_DE);
-    my_assert_ident_eq!([!ident! a 12 "3"], a123);
-    my_assert_ident_eq!([!ident! "MyString"], MyString);
-    my_assert_ident_eq!([!ident! get_ [!snake! them]], get_them);
+    assert_ident!((%[a B C _D E].to_ident()), aBC_DE);
+    assert_ident!((%[a 12 "3"].to_ident()), a123);
+    assert_ident!((%["MyString"].to_ident()), MyString);
+    assert_ident!((%[get_ #(%[them].to_string().to_lower_snake_case())].to_ident()), get_them);
 }
 
 #[test]
 #[allow(non_snake_case)]
 fn test_ident_camel() {
-    my_assert_ident_eq!([!ident_camel! a B C _D E], ABcDe);
-    my_assert_ident_eq!([!ident_camel! a 12 "3"], A123);
-    my_assert_ident_eq!([!ident_camel! "MyString"], MyString);
-    my_assert_ident_eq!([!ident_camel! get_ [!snake! them]], GetThem);
-    my_assert_ident_eq!([!ident_camel! my_ MixedCase STRING Which is "  #awesome  " - what "do you" think?], MyMixedCaseStringWhichisAwesomeWhatdoYouthink);
+    assert_ident!((%[a B C _D E].to_ident_camel()), ABcDe);
+    assert_ident!((%[a 12 "3"].to_ident_camel()), A123);
+    assert_ident!((%["MyString"].to_ident_camel()), MyString);
+    assert_ident!((%[get_ them].to_ident_camel()), GetThem);
+    assert_ident!((%[my_ MixedCase STRING Which is "  #awesome  " - what "do you" think?].to_ident_camel()), MyMixedCaseStringWhichisAwesomeWhatdoYouthink);
 }
 
 #[test]
 #[allow(non_snake_case)]
 fn test_ident_snake() {
-    my_assert_ident_eq!([!ident_snake! a B C _D E], a_bc_de);
-    my_assert_ident_eq!([!ident_snake! a 12 "3"], a123);
-    my_assert_ident_eq!([!ident_snake! "MyString"], my_string);
-    my_assert_ident_eq!([!ident_snake! get_ [!snake! them]], get_them);
-    my_assert_ident_eq!([!ident_snake! my_ MixedCase STRING Which is "  #awesome  " - what "do you" think?], my_mixed_case_string_whichis_awesome_whatdo_youthink);
+    assert_ident!((%[a B C _D E].to_ident_snake()), a_bc_de);
+    assert_ident!((%[a 12 "3"].to_ident_snake()), a123);
+    assert_ident!((%["MyString"].to_ident_snake()), my_string);
+    assert_ident!((%[get_ them].to_ident_snake()), get_them);
+    assert_ident!((%[my_ MixedCase STRING Which is "  #awesome  " - what "do you" think?].to_ident_snake()), my_mixed_case_string_whichis_awesome_whatdo_youthink);
 }
 
 #[test]
 #[allow(non_snake_case)]
 fn test_ident_upper_snake() {
-    my_assert_ident_eq!([!ident_upper_snake! a B C _D E], A_BC_DE);
-    my_assert_ident_eq!([!ident_upper_snake! a 12 "3"], A123);
-    my_assert_ident_eq!([!ident_upper_snake! "MyString"], MY_STRING);
-    my_assert_ident_eq!([!ident_upper_snake! get_ [!snake! them]], GET_THEM);
-    my_assert_ident_eq!([!ident_upper_snake! my_ MixedCase STRING Which is "  #awesome  " - what "do you" think?], MY_MIXED_CASE_STRING_WHICHIS_AWESOME_WHATDO_YOUTHINK);
+    assert_ident!((%[a B C _D E].to_ident_upper_snake()), A_BC_DE);
+    assert_ident!((%[a 12 "3"].to_ident_upper_snake()), A123);
+    assert_ident!((%["MyString"].to_ident_upper_snake()), MY_STRING);
+    assert_ident!((%[get_ them].to_ident_upper_snake()), GET_THEM);
+    assert_ident!((%[my_ MixedCase STRING Which is "  #awesome  " - what "do you" think?].to_ident_upper_snake()), MY_MIXED_CASE_STRING_WHICHIS_AWESOME_WHATDO_YOUTHINK);
 }

@@ -1,0 +1,7 @@
+error: Values are not equal
+ --> tests/compilation_failures/core/assert_eq_call_site_with_message.rs:4:5
+  |
+4 |     run!(%[].assert_eq(1, 2, "Values are not equal"));
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the macro `run` (in Nightly builds, run with -Z macro-backtrace for more info)

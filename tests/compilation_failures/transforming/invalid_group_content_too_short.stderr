@@ -1,0 +1,5 @@
+error: expected !
+ --> tests/compilation_failures/transforming/invalid_group_content_too_short.rs:5:50
+  |
+5 |         let %[Group: (Hello World!!)] = %[Group: (Hello World)];
+  |                                                  ^^^^^^^^^^^^^

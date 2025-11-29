@@ -1,0 +1,5 @@
+error: An empty object literal is written `%{}` with a `%` prefix. If you intend to use an empty block here, instead use `{ None }`.
+ --> tests/compilation_failures/expressions/empty_object_literal_without_prefix.rs:5:17
+  |
+5 |         let x = {};
+  |                 ^

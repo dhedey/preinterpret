@@ -1,0 +1,5 @@
+error: expected identifier, found keyword `continue`
+ --> tests/compilation_failures/control_flow/continue_outside_a_loop.rs:4:14
+  |
+4 |     run!(1 + continue + 2);
+  |              ^^^^^^^^

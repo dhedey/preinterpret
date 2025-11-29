@@ -1,0 +1,5 @@
+error: The value destructured with an object pattern is expected to be object, but it is an untyped integer
+ --> tests/compilation_failures/expressions/object_pattern_destructuring_wrong_type.rs:5:14
+  |
+5 |         let %{ x } = 0;
+  |              ^^^^^

@@ -1,0 +1,5 @@
+error: Cannot find variable `x` in this scope
+ --> tests/compilation_failures/control_flow/attempt/attempt_with_rhs_definition_not_accessible_later.rs:8:9
+  |
+8 |         x
+  |         ^

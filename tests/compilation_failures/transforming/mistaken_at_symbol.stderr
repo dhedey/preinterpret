@@ -1,0 +1,5 @@
+error: Destructurings are not supported here. If this wasn't intended to be a destructuring, replace @ with %raw[@]
+ --> tests/compilation_failures/transforming/mistaken_at_symbol.rs:8:15
+  |
+8 |             x @ I => x,
+  |               ^

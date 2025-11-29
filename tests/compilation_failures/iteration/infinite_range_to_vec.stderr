@@ -1,0 +1,6 @@
+error: Iteration limit of 1000 exceeded.
+       If needed, the limit can be reconfigured with None.configure_preinterpret(%{ iteration_limit: XXX })
+ --> tests/compilation_failures/iteration/infinite_range_to_vec.rs:4:23
+  |
+4 |     let _ = run!((0..).to_vec());
+  |                       ^^^^^^^^^

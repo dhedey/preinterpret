@@ -1,0 +1,44 @@
+name: Publish book to Github Pages
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read  # to read the docs and build job
+  pages: write    # to deploy to pages
+  id-token: write # to verify the deployment originates from an appropriate source
+
+jobs:
+  # Build job - https://github.com/actions/upload-pages-artifact
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      # Sets up the repository configuration for github pages to be deployed from an action
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      # Builds the book and outputs to book/book
+      - name: Build book
+        run: ./book/build.sh
+      # Creates a correctly compressed archive from the build HTML file, and outputs it as
+      # a `github-pages` artifact
+      - name: Upload static files as artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: book/book
+
+  # Deployment job - https://github.com/actions/deploy-pages
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # Deploys the artifact `github-pages` created by the `upload-pages-artifact` job
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

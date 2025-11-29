@@ -1,0 +1,6 @@
+[book]
+authors = ["David Edey"]
+language = "en"
+multilingual = false
+src = "src"
+title = "The Preinterpret Guide"

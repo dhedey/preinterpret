@@ -1,0 +1,5 @@
+error: expected _
+ --> tests/compilation_failures/transforming/invalid_content_wrong_punct.rs:5:40
+  |
+5 |         let %[Hello _ World] = %[Hello World];
+  |                                        ^^^^^
