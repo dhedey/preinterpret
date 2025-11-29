@@ -675,7 +675,7 @@ enum BinaryPath {
     },
     OnRightBranch {
         left: ResolvedValue,
-        method: Option<MethodInterface>,
+        method: Option<BinaryOperationInterface>,
     },
 }
 
@@ -725,12 +725,7 @@ impl EvaluationFrame for BinaryOperationBuilder {
                         .resolve_binary_operation(&self.operation);
 
                     let (left_ownership, right_ownership) = if let Some(method) = &method {
-                        let (ownerships, min_required) = method.argument_ownerships();
-                        assert!(
-                            ownerships.len() == 2 && min_required == 2,
-                            "Binary operation methods must have exactly two ownerships"
-                        );
-                        (ownerships[0], ownerships[1])
+                        (method.lhs_ownership(), method.rhs_ownership())
                     } else {
                         // Fallback to legacy system - use owned values for legacy evaluation
                         (ResolvedValueOwnership::Owned, ResolvedValueOwnership::Owned)
@@ -747,18 +742,10 @@ impl EvaluationFrame for BinaryOperationBuilder {
             }
             BinaryPath::OnRightBranch { left, method } => {
                 let right = item.expect_resolved_value();
-                let right_kind = right.as_ref().kind();
 
                 // Try method resolution first (we already determined this during left evaluation)
                 if let Some(method) = method {
-                    // TODO[operation-refactor]: Use proper span range from operation
-                    let span_range = SpanRange::new_between(left.span_range(), right.span_range());
-
-                    let mut call_context = MethodCallContext {
-                        output_span_range: span_range,
-                        interpreter: context.interpreter(),
-                    };
-                    let result = method.execute(vec![left, right], &mut call_context)?;
+                    let result = method.execute(left, right, &self.operation)?;
                     return context.return_resolved_value(result);
                 }
 

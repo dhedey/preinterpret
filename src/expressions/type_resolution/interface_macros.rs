@@ -262,6 +262,34 @@ where
     f(context, A::from_resolved(a)?).to_resolved_value(output_span_range)
 }
 
+macro_rules! create_binary_interface {
+    ($method_name:path[
+        $($lhs_part:ident)+ : $lhs_ty:ty,
+        $($rhs_part:ident)+ : $rhs_ty:ty $(,)?
+    ]) => {
+        BinaryOperationInterface {
+            method: |context, lhs, rhs| apply_binary_fn($method_name, lhs, rhs, context),
+            lhs_ownership: <$lhs_ty as FromResolved>::OWNERSHIP,
+            rhs_ownership: <$rhs_ty as FromResolved>::OWNERSHIP,
+        }
+    };
+}
+
+pub(crate) fn apply_binary_fn<A, B, R>(
+    f: fn(BinaryOperationCallContext, A, B) -> R,
+    lhs: ResolvedValue,
+    rhs: ResolvedValue,
+    context: BinaryOperationCallContext,
+) -> ExecutionResult<ResolvedValue>
+where
+    A: FromResolved,
+    B: FromResolved,
+    R: ResolvableOutput,
+{
+    let output_span_range = context.output_span_range;
+    f(context, A::from_resolved(lhs)?, B::from_resolved(rhs)?).to_resolved_value(output_span_range)
+}
+
 pub(crate) struct MethodCallContext<'a> {
     pub interpreter: &'a mut Interpreter,
     pub output_span_range: SpanRange,
@@ -278,6 +306,11 @@ pub(crate) struct UnaryOperationCallContext<'a> {
     pub output_span_range: SpanRange,
 }
 
+pub(crate) struct BinaryOperationCallContext<'a> {
+    pub operation: &'a BinaryOperation,
+    pub output_span_range: SpanRange,
+}
+
 macro_rules! define_interface {
     (
         struct $type_data:ident,
@@ -291,6 +324,11 @@ macro_rules! define_interface {
             $mod_unary_operations_vis:vis mod unary_operations {
                 $(
                     $([$unary_context:ident])? fn $unary_name:ident($($unary_args:tt)*) $(-> $unary_output_ty:ty)? $([ignore_type_assertion $unary_ignore_type_assertion:tt])? $unary_body:block
+                )*
+            }
+            $mod_binary_operations_vis:vis mod binary_operations {
+                $(
+                    $([$binary_context:ident])? fn $binary_name:ident($($binary_args:tt)*) $(-> $binary_output_ty:ty)? $([ignore_type_assertion $binary_ignore_type_assertion:tt])? $binary_body:block
                 )*
             }
             interface_items {
@@ -331,6 +369,14 @@ macro_rules! define_interface {
                         {$($unary_ignore_type_assertion)?}
                         {}
                         {$($type_data::assert_output_type::<$unary_output_ty>();)?}
+                    }
+                )*
+                $(
+                    $type_data::assert_first_argument::<handle_first_arg_type!($($binary_args)*,)>();
+                    if_exists! {
+                        {$($binary_ignore_type_assertion)?}
+                        {}
+                        {$($type_data::assert_output_type::<$binary_output_ty>();)?}
                     }
                 )*
             }
@@ -375,6 +421,26 @@ macro_rules! define_interface {
                 )*
             }
 
+            $mod_binary_operations_vis mod binary_operations {
+                #[allow(unused)]
+                use super::*;
+                $(
+                    $mod_binary_operations_vis fn $binary_name(if_empty!([$($binary_context)?][_context]): BinaryOperationCallContext, $($binary_args)*) $(-> $binary_output_ty)? {
+                        $binary_body
+                    }
+                )*
+            }
+
+            $mod_binary_operations_vis mod binary_definitions {
+                #[allow(unused)]
+                use super::*;
+                $(
+                    $mod_binary_operations_vis fn $binary_name() -> BinaryOperationInterface {
+                        create_binary_interface!(binary_operations::$binary_name[$($binary_args)*])
+                    }
+                )*
+            }
+
             impl HierarchicalTypeData for $type_data {
                 type Parent = $parent_type_data;
                 const PARENT: Option<Self::Parent> = $mod_name::parent();
@@ -389,7 +455,8 @@ macro_rules! define_interface {
                     })
                 }
 
-                // Pass through resolve_own_unary_operation until there's a better way to define them
+                // Pass through resolve_own_unary_operation and resolve_own_binary_operation
+                // until there's a better way to define them
                 $($items)*
             }
         }
@@ -397,6 +464,6 @@ macro_rules! define_interface {
 }
 
 pub(crate) use {
-    create_method_interface, create_unary_interface, define_interface, handle_first_arg_type,
-    if_empty, ignore_all,
+    create_binary_interface, create_method_interface, create_unary_interface, define_interface,
+    handle_first_arg_type, if_empty, ignore_all,
 };

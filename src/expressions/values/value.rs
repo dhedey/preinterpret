@@ -106,7 +106,10 @@ impl MethodResolver for ValueKind {
         self.method_resolver().resolve_unary_operation(operation)
     }
 
-    fn resolve_binary_operation(&self, operation: &BinaryOperation) -> Option<MethodInterface> {
+    fn resolve_binary_operation(
+        &self,
+        operation: &BinaryOperation,
+    ) -> Option<BinaryOperationInterface> {
         self.method_resolver().resolve_binary_operation(operation)
     }
 }
@@ -232,6 +235,7 @@ define_interface! {
                 input.into_stream()
             }
         }
+        pub(crate) mod binary_operations {}
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
@@ -531,7 +535,7 @@ impl ExpressionValue {
     pub(crate) fn handle_integer_binary_operation(
         self,
         right: IntegerExpression,
-        operation: WrappedOp<IntegerBinaryOperation>,
+        operation: &IntegerBinaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         match self {
             ExpressionValue::None => operation.unsupported(self),
@@ -937,7 +941,7 @@ pub(crate) enum ExpressionValuePair {
 impl ExpressionValuePair {
     pub(crate) fn handle_paired_binary_operation(
         self,
-        operation: WrappedOp<PairedBinaryOperation>,
+        operation: &PairedBinaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         match self {
             Self::Integer(pair) => pair.handle_paired_binary_operation(operation),

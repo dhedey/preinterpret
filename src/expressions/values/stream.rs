@@ -9,7 +9,7 @@ impl StreamExpression {
     pub(super) fn handle_integer_binary_operation(
         self,
         _right: IntegerExpression,
-        operation: WrappedOp<IntegerBinaryOperation>,
+        operation: &IntegerBinaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         operation.unsupported(self)
     }
@@ -17,11 +17,11 @@ impl StreamExpression {
     pub(super) fn handle_paired_binary_operation(
         self,
         rhs: Self,
-        operation: WrappedOp<PairedBinaryOperation>,
+        operation: &PairedBinaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.value;
         let rhs = rhs.value;
-        Ok(match operation.operation {
+        Ok(match operation {
             PairedBinaryOperation::Addition { .. } => operation.output({
                 let mut stream = lhs;
                 rhs.append_into(&mut stream);
@@ -276,6 +276,7 @@ define_interface! {
                 context.operation.evaluate(coerced.into_owned(span_range))
             }
         }
+        pub(crate) mod binary_operations {}
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {

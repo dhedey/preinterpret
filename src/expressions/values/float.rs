@@ -23,7 +23,7 @@ impl FloatExpression {
     pub(super) fn handle_integer_binary_operation(
         self,
         right: IntegerExpression,
-        operation: WrappedOp<IntegerBinaryOperation>,
+        operation: &IntegerBinaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         match self.value {
             FloatExpressionValue::Untyped(input) => {
@@ -57,6 +57,7 @@ define_interface! {
         }
         pub(crate) mod unary_operations {
         }
+        pub(crate) mod binary_operations {}
         interface_items {
         }
     }
@@ -71,7 +72,7 @@ pub(crate) enum FloatExpressionValuePair {
 impl FloatExpressionValuePair {
     pub(super) fn handle_paired_binary_operation(
         self,
-        operation: WrappedOp<PairedBinaryOperation>,
+        operation: &PairedBinaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         match self {
             Self::Untyped(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
@@ -168,9 +169,9 @@ impl UntypedFloat {
     pub(super) fn handle_integer_binary_operation(
         self,
         _rhs: IntegerExpression,
-        operation: WrappedOp<IntegerBinaryOperation>,
+        operation: &IntegerBinaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
-        match operation.operation {
+        match operation {
             IntegerBinaryOperation::ShiftLeft { .. }
             | IntegerBinaryOperation::ShiftRight { .. } => operation.unsupported(self),
         }
@@ -179,11 +180,11 @@ impl UntypedFloat {
     pub(super) fn handle_paired_binary_operation(
         self,
         rhs: Self,
-        operation: WrappedOp<PairedBinaryOperation>,
+        operation: &PairedBinaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.parse_fallback()?;
         let rhs = rhs.parse_fallback()?;
-        Ok(match operation.operation {
+        Ok(match operation {
             PairedBinaryOperation::Addition { .. } => {
                 operation.output(Self::from_fallback(lhs + rhs))
             }
@@ -343,6 +344,7 @@ define_interface! {
                 input.0.to_string()
             }
         }
+        pub(crate) mod binary_operations {}
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
@@ -457,6 +459,7 @@ macro_rules! impl_float_operations {
                         input.to_string()
                     }
                 }
+                pub(crate) mod binary_operations {}
                 interface_items {
                     fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                         Some(match operation {
@@ -504,12 +507,12 @@ macro_rules! impl_float_operations {
 
 
         impl HandleBinaryOperation for $float_type {
-            fn handle_paired_binary_operation(self, rhs: Self, operation: WrappedOp<PairedBinaryOperation>) -> ExecutionResult<ExpressionValue> {
+            fn handle_paired_binary_operation(self, rhs: Self, operation: &PairedBinaryOperation) -> ExecutionResult<ExpressionValue> {
                 // Unlike integer arithmetic, float arithmetic does not overflow
                 // and instead falls back to NaN or infinity. In future we could
                 // allow trapping on these codes, but for now this is good enough
                 let lhs = self;
-                Ok(match operation.operation {
+                Ok(match operation {
                     PairedBinaryOperation::Addition { .. } => operation.output(lhs + rhs),
                     PairedBinaryOperation::Subtraction { .. } => operation.output(lhs - rhs),
                     PairedBinaryOperation::Multiplication { .. } => operation.output(lhs * rhs),
@@ -536,9 +539,9 @@ macro_rules! impl_float_operations {
             fn handle_integer_binary_operation(
                 self,
                 _rhs: IntegerExpression,
-                operation: WrappedOp<IntegerBinaryOperation>,
+                operation: &IntegerBinaryOperation,
             ) -> ExecutionResult<ExpressionValue> {
-                match operation.operation {
+                match operation {
                     IntegerBinaryOperation::ShiftLeft { .. } | IntegerBinaryOperation::ShiftRight { .. } => {
                         operation.unsupported(self)
                     },
