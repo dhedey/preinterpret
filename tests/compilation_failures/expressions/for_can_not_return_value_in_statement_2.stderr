@@ -1,0 +1,8 @@
+error: A non-returning statement must not return a value. If you wish to explicitly discard the expression's result, use `let _ = ...;`. Alternatively, If you wish to output the value into the parent token stream, use `emit ...;`
+ --> tests/compilation_failures/expressions/for_can_not_return_value_in_statement_2.rs:6:28
+  |
+6 |               for j in i..=5 {
+  |  ____________________________^
+7 | |                 j // Effectively this criteria elevates to the inner loop
+8 | |             }
+  | |_____________^

@@ -1,0 +1,9 @@
+error: unexpected end of input, expected token tree
+ --> tests/compilation_failures/transforming/parser_after_rest.rs:4:5
+  |
+4 | /     run!(
+5 | |         let %[@REST @TOKEN_TREE] = %[Hello World];
+6 | |     );
+  | |_____^
+  |
+  = note: this error originates in the macro `run` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -1,0 +1,5 @@
+error: The array has 2 items, but the pattern expected at least 3
+ --> tests/compilation_failures/expressions/array_pattern_destructure_element_mismatch_3.rs:5:13
+  |
+5 |         let [_, _, .., _] = [1, 2];
+  |             ^^^^^^^^^^^^^

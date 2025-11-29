@@ -1,0 +1,5 @@
+error: This cannot be used in a value expression.
+ --> tests/compilation_failures/expressions/index_into_discarded_place.rs:5:11
+  |
+5 |         #(_[0] = 10)
+  |           ^

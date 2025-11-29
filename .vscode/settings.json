@@ -1,0 +1,6 @@
+{
+    // I was getting errors such as this when Rust Analyzer starts:
+    // 'PrimeCaches#5' has overflowed its stack
+    // This setting apparently avoids this https://github.com/rust-lang/rust-analyzer/issues/19698#issuecomment-2833543017
+    "rust-analyzer.cachePriming.enable": false
+}

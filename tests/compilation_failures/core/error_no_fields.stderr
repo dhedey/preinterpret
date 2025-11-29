@@ -1,0 +1,15 @@
+error: Expected 102 to equal 64
+  --> tests/compilation_failures/core/error_no_fields.rs:4:44
+   |
+ 4 |       ($input1:literal, $input2:literal) => {run!{
+   |  ____________________________________________^
+ 5 | |         if ($input1 != $input2) {
+ 6 | |             %[].error(%["Expected " $input1 " to equal " $input2].to_string());
+ 7 | |         }
+ 8 | |     }};
+   | |_____^
+...
+12 |       assert_literals_eq!(102, 64);
+   |       ---------------------------- in this macro invocation
+   |
+   = note: this error originates in the macro `run` which comes from the expansion of the macro `assert_literals_eq` (in Nightly builds, run with -Z macro-backtrace for more info)

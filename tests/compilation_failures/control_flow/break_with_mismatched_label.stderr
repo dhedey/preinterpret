@@ -1,0 +1,5 @@
+error: A labelled break must be used inside a loop or block with a matching label
+ --> tests/compilation_failures/control_flow/break_with_mismatched_label.rs:6:19
+  |
+6 |             break 'outer;
+  |                   ^^^^^^

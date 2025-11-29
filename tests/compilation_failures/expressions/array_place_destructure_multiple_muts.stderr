@@ -1,0 +1,5 @@
+error: The variable cannot be read as it is already being modified
+ --> tests/compilation_failures/expressions/array_place_destructure_multiple_muts.rs:6:13
+  |
+6 |         arr[arr[1]] = 3;
+  |             ^^^

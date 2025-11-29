@@ -1,0 +1,5 @@
+error: Expected comma, ], or operator
+ --> tests/compilation_failures/expressions/array_missing_comma.rs:5:14
+  |
+5 |         #([1 2])
+  |              ^

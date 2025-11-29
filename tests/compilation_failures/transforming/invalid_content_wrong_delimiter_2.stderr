@@ -1,0 +1,5 @@
+error: Expected start of transparent group, from a grouped macro $variable substitution or preinterpret %group[...] literal
+ --> tests/compilation_failures/transforming/invalid_content_wrong_delimiter_2.rs:5:35
+  |
+5 |         let %[@[GROUP @REST]] = %[[Hello World]];
+  |                                   ^^^^^^^^^^^^^
