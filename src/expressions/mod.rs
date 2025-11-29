@@ -42,6 +42,6 @@ use character::*;
 use expression_parsing::*;
 use float::*;
 use integer::*;
+use parser::*;
 use range::*;
 use string::*;
-use parser::*;

@@ -1,5 +1,5 @@
 use super::*;
-use slotmap::{SlotMap, new_key_type};
+use slotmap::{new_key_type, SlotMap};
 
 new_key_type! {
     pub(crate) struct ParserHandle;
@@ -37,14 +37,15 @@ impl InputHandler {
     /// SAFETY: Must be called after a prior `start_parse` call, and while the input is still alive.
     pub(super) unsafe fn finish_parse(&mut self, handle: ParserHandle) {
         let popped_handle = self.parser_stack.pop();
-        assert_eq!(popped_handle, Some(handle), "Popped handle does not match the provided handle");
+        assert_eq!(
+            popped_handle,
+            Some(handle),
+            "Popped handle does not match the provided handle"
+        );
         self.parsers.remove(handle);
     }
 
-    pub(super) fn get(
-        &mut self,
-        handle: ParserHandle,
-    ) -> Option<&mut ParseStack<'static, Output>> {
+    pub(super) fn get(&mut self, handle: ParserHandle) -> Option<&mut ParseStack<'static, Output>> {
         self.parsers.get_mut(handle)
     }
 

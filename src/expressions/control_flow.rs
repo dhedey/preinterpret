@@ -604,7 +604,9 @@ impl ParseExpression {
         interpreter: &mut Interpreter,
         ownership: RequestedValueOwnership,
     ) -> ExecutionResult<EvaluationItem> {
-        let input = self.input.evaluate_owned(interpreter)?
+        let input = self
+            .input
+            .evaluate_owned(interpreter)?
             .resolve_as("The input to a parse expression")?;
 
         interpreter.enter_scope(self.scope);

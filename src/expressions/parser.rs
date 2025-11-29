@@ -29,8 +29,13 @@ impl ToExpressionValue for ParserHandle {
     }
 }
 
-fn parser<'a>(this: Shared<ParserExpression>, context: &'a mut MethodCallContext) -> ExecutionResult<OutputParseStream<'a>> {
-    context.interpreter.parser(this.as_spanned().map(|e, _| e.handle))
+fn parser<'a>(
+    this: Shared<ParserExpression>,
+    context: &'a mut MethodCallContext,
+) -> ExecutionResult<OutputParseStream<'a>> {
+    context
+        .interpreter
+        .parser(this.as_spanned().map(|e, _| e.handle))
 }
 
 define_interface! {

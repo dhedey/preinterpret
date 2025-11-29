@@ -332,7 +332,6 @@ impl<T: SynParse, K> Parse<K> for T {
     }
 }
 
-
 pub(crate) type OutputParseStream<'a> = &'a ParseBuffer<'a, Output>;
 pub(crate) type ParseStream<'a, K> = &'a ParseBuffer<'a, K>;
 

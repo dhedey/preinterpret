@@ -791,7 +791,9 @@ impl ExpressionValue {
                 range.concat_recursive_into(output, behaviour)?;
             }
             ExpressionValue::Parser(_) => {
-                return behaviour.error_span_range.type_err("Parsers cannot be output to a string");
+                return behaviour
+                    .error_span_range
+                    .type_err("Parsers cannot be output to a string");
             }
             ExpressionValue::Integer(_)
             | ExpressionValue::Float(_)

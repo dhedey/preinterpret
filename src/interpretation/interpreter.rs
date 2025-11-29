@@ -243,7 +243,9 @@ impl Interpreter {
         &mut self,
         handle: Spanned<ParserHandle>,
     ) -> ExecutionResult<OutputParseStream<'_>> {
-        let stack = self.input_handler.get(handle.value)
+        let stack = self
+            .input_handler
+            .get(handle.value)
             .ok_or_else(|| handle.value_error("This parser is no longer available"))?;
         Ok(stack.current())
     }

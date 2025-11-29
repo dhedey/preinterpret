@@ -35,7 +35,10 @@ pub(crate) mod keyword {
 }
 
 pub(crate) fn is_keyword(ident: &str) -> bool {
-    matches!(ident, keyword::REVERT | keyword::EMIT | keyword::ATTEMPT | keyword::PARSE)
+    matches!(
+        ident,
+        keyword::REVERT | keyword::EMIT | keyword::ATTEMPT | keyword::PARSE
+    )
 }
 
 ExactIdent![emit as EmitKeyword];
