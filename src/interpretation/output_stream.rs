@@ -55,6 +55,10 @@ impl OutputStream {
         self.push_raw_token_tree(punct.into());
     }
 
+    pub(crate) fn push_tokens(&mut self, tokens: impl ToTokens) {
+        self.extend_raw_tokens(tokens.into_token_stream());
+    }
+
     pub(crate) fn push_grouped(
         &mut self,
         appender: impl FnOnce(&mut Self) -> ExecutionResult<()>,
@@ -120,6 +124,7 @@ impl OutputStream {
         let parse_result = self.clone().parse_as::<syn::Lit>();
         match parse_result {
             Ok(syn_lit) => ExpressionValue::for_syn_lit(syn_lit).into_inner(),
+            // Keep as stream otherwise
             Err(_) => self.into_value(),
         }
     }

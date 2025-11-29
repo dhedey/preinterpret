@@ -753,7 +753,7 @@ impl EvaluationFrame for BinaryOperationBuilder {
                 if let Some(method) = method {
                     // TODO[operation-refactor]: Use proper span range from operation
                     let span_range =
-                        SpanRange::new_between(left.span_range().start(), right.span_range().end());
+                        SpanRange::new_between(left.span_range(), right.span_range());
 
                     let mut call_context = MethodCallContext {
                         output_span_range: span_range,

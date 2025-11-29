@@ -41,6 +41,13 @@ impl InputHandler {
         self.parsers.remove(handle);
     }
 
+    pub(super) fn get(
+        &mut self,
+        handle: ParserHandle,
+    ) -> Option<&mut ParseStack<'static, Output>> {
+        self.parsers.get_mut(handle)
+    }
+
     pub(super) fn current_stack(
         &mut self,
         span_source: &impl HasSpanRange,

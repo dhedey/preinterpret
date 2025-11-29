@@ -16,6 +16,7 @@ pub(crate) enum ExpressionValue {
     Stream(StreamExpression),
     Range(RangeExpression),
     Iterator(IteratorExpression),
+    Parser(ParserExpression),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,6 +33,7 @@ pub(crate) enum ValueKind {
     Stream,
     Range,
     Iterator,
+    Parser,
 }
 
 impl ValueKind {
@@ -46,6 +48,7 @@ impl ValueKind {
         static STREAM: StreamTypeData = StreamTypeData;
         static RANGE: RangeTypeData = RangeTypeData;
         static ITERATOR: IteratorTypeData = IteratorTypeData;
+        static PARSER: ParserTypeData = ParserTypeData;
         match self {
             ValueKind::None => &NONE,
             ValueKind::Integer(kind) => kind.method_resolver(),
@@ -59,6 +62,7 @@ impl ValueKind {
             ValueKind::Stream => &STREAM,
             ValueKind::Range => &RANGE,
             ValueKind::Iterator => &ITERATOR,
+            ValueKind::Parser => &PARSER,
         }
     }
 
@@ -83,6 +87,9 @@ impl ValueKind {
             ValueKind::Stream => false,
             ValueKind::Range => true,
             ValueKind::Iterator => false,
+            // A parser is a handle, to can be cloned transparently.
+            // It may fail to be able to be used to parse if the underlying stream is out of scope of course.
+            ValueKind::Parser => true,
         }
     }
 }
@@ -230,7 +237,8 @@ define_interface! {
                 stream_interface::methods::to_ident_upper_snake(context, spanned)
             }
 
-            [context] fn to_literal(this: OwnedValue) -> ExecutionResult<Literal> {
+            // Some literals become ExpressionValue::UnsupportedLiteral but can still be round-tripped back to a stream
+            [context] fn to_literal(this: OwnedValue) -> ExecutionResult<ExpressionValue> {
                 let stream = this.into_stream()?;
                 let spanned = stream.into_spanned_ref(context.output_span_range);
                 stream_interface::methods::to_literal(context, spanned)
@@ -532,6 +540,7 @@ impl ExpressionValue {
             ExpressionValue::Stream(_) => ValueKind::Stream,
             ExpressionValue::Range(_) => ValueKind::Range,
             ExpressionValue::Iterator(_) => ValueKind::Iterator,
+            ExpressionValue::Parser(_) => ValueKind::Parser,
             ExpressionValue::UnsupportedLiteral(_) => ValueKind::UnsupportedLiteral,
         }
     }
@@ -579,6 +588,7 @@ impl ExpressionValue {
             }
             ExpressionValue::Iterator(value) => operation.unsupported(value),
             ExpressionValue::Range(value) => operation.unsupported(value),
+            ExpressionValue::Parser(value) => operation.unsupported(value),
         }
     }
 
@@ -741,6 +751,9 @@ impl ExpressionValue {
                 let iterator = IteratorExpression::new_for_range(range.clone())?;
                 iterator.output_items_to(output, Grouping::Flattened)?
             }
+            Self::Parser(_) => {
+                return output.type_err("Parsers cannot be output to a stream");
+            }
         };
         Ok(())
     }
@@ -776,6 +789,9 @@ impl ExpressionValue {
             }
             ExpressionValue::Range(range) => {
                 range.concat_recursive_into(output, behaviour)?;
+            }
+            ExpressionValue::Parser(_) => {
+                return behaviour.error_span_range.type_err("Parsers cannot be output to a string");
             }
             ExpressionValue::Integer(_)
             | ExpressionValue::Float(_)
@@ -916,6 +932,7 @@ impl HasValueType for ExpressionValue {
             Self::Stream(value) => value.value_type(),
             Self::Iterator(value) => value.value_type(),
             Self::Range(value) => value.value_type(),
+            Self::Parser(value) => value.value_type(),
         }
     }
 }

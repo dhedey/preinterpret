@@ -54,18 +54,6 @@ impl<T: ResolvableOutput> ResolvableOutput for ExecutionResult<T> {
     }
 }
 
-impl ResolvableOutput for Ident {
-    fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue> {
-        OutputStream::new_with(|s| s.push_ident(self)).to_resolved_value(output_span_range)
-    }
-}
-
-impl ResolvableOutput for Literal {
-    fn to_resolved_value(self, output_span_range: SpanRange) -> ExecutionResult<ResolvedValue> {
-        ExpressionValue::for_literal(self).to_resolved_value(output_span_range)
-    }
-}
-
 pub(crate) trait StreamAppender {
     fn append(self, output: &mut OutputStream) -> ExecutionResult<()>;
 }

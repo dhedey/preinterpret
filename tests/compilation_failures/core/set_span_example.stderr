@@ -1,0 +1,9 @@
+error[E0428]: the name `HelloWorld` is defined multiple times
+  --> tests/compilation_failures/core/set_span_example.rs:22:49
+   |
+22 | capitalize_variants!(MyEnum, [helloWorld, Test, HelloWorld]);
+   |                               ----------        ^^^^^^^^^^ `HelloWorld` redefined here
+   |                               |
+   |                               previous definition of the type `HelloWorld` here
+   |
+   = note: `HelloWorld` must be defined only once in the type namespace of this enum

@@ -105,11 +105,11 @@ pub(crate) trait HasSpanRange {
 
     #[allow(unused)]
     fn start_span(&self) -> Span {
-        self.span_range().start()
+        self.span_range().start
     }
 
     fn end_span(&self) -> Span {
-        self.span_range().end()
+        self.span_range().end
     }
 
     fn span_from_join_else_start(&self) -> Span {
@@ -178,16 +178,6 @@ impl SpanRange {
 
     pub(crate) fn set_end(&mut self, end: Span) {
         self.end = end;
-    }
-
-    #[allow(unused)]
-    pub(crate) fn start(&self) -> Span {
-        self.start
-    }
-
-    #[allow(unused)]
-    pub(crate) fn end(&self) -> Span {
-        self.end
     }
 }
 

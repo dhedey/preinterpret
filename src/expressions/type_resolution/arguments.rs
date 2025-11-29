@@ -16,7 +16,7 @@ impl<'a> ResolutionContext<'a> {
     }
 
     /// Create an error for the resolution context.
-    fn err<T>(
+    pub(crate) fn err<T>(
         &self,
         expected_value_kind: &str,
         value: impl Borrow<ExpressionValue>,

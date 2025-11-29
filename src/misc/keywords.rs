@@ -31,15 +31,17 @@ pub(crate) mod keyword {
     pub(crate) const REVERT: &str = "revert";
     pub(crate) const EMIT: &str = "emit";
     pub(crate) const ATTEMPT: &str = "attempt";
+    pub(crate) const PARSE: &str = "parse";
 }
 
 pub(crate) fn is_keyword(ident: &str) -> bool {
-    matches!(ident, keyword::REVERT | keyword::EMIT | keyword::ATTEMPT)
+    matches!(ident, keyword::REVERT | keyword::EMIT | keyword::ATTEMPT | keyword::PARSE)
 }
 
 ExactIdent![emit as EmitKeyword];
 ExactIdent![revert as RevertKeyword];
 ExactIdent![attempt as AttemptKeyword];
+ExactIdent![parse as ParseKeyword];
 
 // CONTEXTUAL KEYWORDS
 // These can still be used as identifiers in other contexts.

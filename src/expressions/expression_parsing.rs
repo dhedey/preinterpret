@@ -111,8 +111,10 @@ impl<'a> ExpressionParser<'a> {
 
                 if punct.as_char() == '.' {
                     UnaryAtom::Range(input.parse()?)
-                } else {
+                } else if punct.as_char() == '-' || punct.as_char() == '!' {
                     UnaryAtom::PrefixUnaryOperation(input.parse()?)
+                } else {
+                    return input.parse_err("Expected an expression");
                 }
             }
             SourcePeekMatch::Ident(ident) => {
@@ -129,6 +131,7 @@ impl<'a> ExpressionParser<'a> {
                     "while" => UnaryAtom::Leaf(Leaf::WhileExpression(Box::new(input.parse()?))),
                     "for" => UnaryAtom::Leaf(Leaf::ForExpression(Box::new(input.parse()?))),
                     "attempt" => UnaryAtom::Leaf(Leaf::AttemptExpression(Box::new(input.parse()?))),
+                    "parse" => return Ok(UnaryAtom::Leaf(Leaf::ParseExpression(Box::new(input.parse()?)))),
                     "None" => UnaryAtom::Leaf(Leaf::Value(SharedValue::new_from_owned(
                         ExpressionValue::None.into_owned(input.parse_any_ident()?.span_range()),
                     ))),

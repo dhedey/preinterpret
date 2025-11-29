@@ -166,29 +166,49 @@ These are things we definitely want to do:
 First, read the @./2025-11-vision.md
 
 - [x] We store input in the interpreter
-- [ ] Create new `Parser` value kind
-- [ ] Create (temporary) `parse X as Y { }` expression
+- [x] Create new `Parser` value kind
+- [x] Add ParserHandle to `InputHandler` and use some generational map to store ParseStacks (or import slotmap)
+  - [x] Look at https://donsz.nl/blog/arenas/
+  - [ ] If using slotmap / generational-arena, replace the arena implementation too
+- [x] Create (temporary) `parse X => |Y| { }` expression
+- [x] Bind `input` to `Parser` at the start of each parse expression
 - [ ] Create `consume X @[ .. ]` expression
-- [ ] Bind `input` to `Parser` at the start of each parse expression
 - [ ] Move transform logic from transformers onto `Parser`, and delete the transformers
-- [ ] Rename the transform stream to `ParseModeStream`
-- [ ] Reversion works in attempt blocks, via forking and committing or rolling back
-      the fork, fix `TODO[parser-input-in-interpreter]`
-- [ ] Remove all remaining parsers.
+- [ ] Remove all remaining transformers.
 - [ ] Remove parsing in a stream pattern - instead we just support a literal
+- [ ] Rename the transform stream to `ParseModeStream`
+- [ ] Reversion works in attempt blocks, via forking and committing or rolling back the fork, fix `TODO[parser-input-in-interpreter]`
 - [ ] Address any remaining `TODO[parser-no-output]` and `TODO[parsers]`
+- [ ] Add tests for all the methods on Parser, and for nested parse statements
 
 `Parser` methods:
-* `ident()`, `is_ident()`
-* `literal()`, `is_literal()`
-* `integer()`, `is_integer()`
-* `float()`, `is_float()`
-* `char()`, `is_char()`
-* `string()`, `is_string()`
-* `error()` etc
-* `end()`, `is_end()`
-* `token_tree()`
-* `span()` or `cursor()` -- maybe? outputs a token with a span for outputting errors. If at end of an inner stream, it outputs the ident `END` with the span of the closing bracket.
+- [x] `ident()`, `is_ident()`
+- [x] `literal()`, `is_literal()`
+- [x] `integer()`, `is_integer()`
+- [x] `float()`, `is_float()`
+- [x] `char()`, `is_char()`
+- [x] `string()`, `is_string()`
+- [x] `end()`, `is_end()`
+- [ ] `rest()`
+- [ ] `error()` etc
+- [ ] `token_tree()`
+- [ ] `span()` or `cursor()` -- maybe? outputs a token with a span for outputting errors. If at end of an inner stream, it outputs the ident `END` with the span of the closing bracket.
+
+And all of these from normal macros:
+- [ ] block: a block (i.e. a block of statements and/or an expression, surrounded by braces)
+- [ ] expr: an expression
+- [ ] ident: an identifier (this includes keywords)
+- [ ] item: an item, like a function, struct, module, impl, etc.
+- [ ] lifetime: a lifetime (e.g. 'foo, 'static, …)
+- [ ] literal: a literal (e.g. "Hello World!", 3.14, '🦀', …)
+- [ ] meta: a meta item; the things that go inside the #[...] and #![...] attributes
+- [ ] pat: a pattern
+- [ ] path: a path (e.g. foo, ::std::mem::replace, transmute::<_, int>, …)
+- [ ] stmt: a statement
+- [ ] tt: a single token tree
+- [ ] ty: a type
+- [ ] vis: a possible empty visibility qualifier (e.g. pub, pub(in crate), …)
+```
 
 Consider if we want separate types for e.g.
 * `Span`
@@ -215,8 +235,7 @@ input.repeated(
 ```
 
 Later:
-- [ ] Support for starting to parse a `input.open('(')` in the left part of an attempt arm
-      and completing in the right arm `input.close(')')` - there needs to be some error checking in the parse stream stack. We probably can't allow closing in the LHS of an attempt arm. We should record a reason on the new parse buffer and raise if it doesn't match
+- [ ] Support for starting to parse a `input.open('(')` in the left part of an attempt arm and completing in the right arm `input.close(')')` - there needs to be some error checking in the parse stream stack. We probably can't allow closing in the LHS of an attempt arm. We should record a reason on the new parse buffer and raise if it doesn't match
 
 ## Methods and closures
 
@@ -351,6 +370,9 @@ preinterpret::run! {
 ## Optimizations 
 
 - [ ] Look at benchmarks and if anything should be sped up
+- [ ] Speeding up stream literal processing
+  - [ ] When interpreting a stream literal, we can avoid having to go through error handling pathways to get an `output` from the intepreter by storing a `OutputInterpreter<'a>` which wraps an `&mut OutputStream` and a pointer to an Intepreter, and can be converted back into/from an `Interpreter` easily
+  - [ ] Possibly similarly for an `InputInterpreter<'a>` when processing a `ConsumeStream`
 - [ ] Speeding up scopes at runtime:
   - [ ] In the interpreter, store a flattened stack of variable values
   - [ ] `no_mutation_above` can be a stack offset

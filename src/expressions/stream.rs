@@ -169,13 +169,22 @@ define_interface! {
                 string_interface::methods::to_ident_upper_snake(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
-            [context] fn to_literal(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Literal> {
+            // Some literals become ExpressionValue::UnsupportedLiteral but can still be round-tripped back to a stream
+            [context] fn to_literal(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<ExpressionValue> {
                 let string = this.concat_recursive(&ConcatBehaviour::literal(this.span_range()));
-                string_interface::methods::to_literal(context, string.as_str().into_spanned_ref(this.span_range()))
+                let literal = string_interface::methods::to_literal(context, string.as_str().into_spanned_ref(this.span_range()))?;
+                Ok(ExpressionValue::for_literal(literal).into_value())
             }
 
             // CORE METHODS
             // ============
+
+            // NOTE: with_span() exists on all values, this is just a specialized mutable version for streams
+            fn set_span(mut this: Mutable<StreamExpression>, span_source: Shared<StreamExpression>) -> ExecutionResult<()> {
+                let span_range = span_source.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
+                this.value.replace_first_level_spans(span_range.join_into_span_else_start());
+                Ok(())
+            }
 
             fn error(this: Shared<StreamExpression>, message: Shared<String>) -> ExecutionResult<Never> {
                 let error_span_range = this.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
@@ -233,7 +242,7 @@ define_interface! {
             [context] fn reinterpret_as_stream(this: Owned<StreamExpression>) -> ExecutionResult<OutputStream> {
                 let source = this.into_inner().value.into_token_stream();
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(
-                    |input| SourceStream::parse_with_span(input, context.output_span_range.start()),
+                    |input| SourceStream::parse_with_span(input, context.output_span_range.span_from_join_else_start()),
                     SourceStream::control_flow_pass,
                 )?;
                 let mut inner_interpreter = Interpreter::new(scope_definitions);
