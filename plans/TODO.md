@@ -43,45 +43,55 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 
 ## Method Calls
 
-* TODO[operation-refactor]
-    * BinaryOperation Migration
-        * Add binary operation method resolution with type coercion/matching logic
-            * OPTION A:
-            * Untyped + ?int can be resolved like below
-            * Int + Untyped can be resolved with a `MaybeTypedInt<X>`
-            * OPTION B:
-            * We implement addition at the `Integer` layer and do as we do now
-        * Compute SHL/SHR on `Integer` using `.checked_shl(u32)` with an attempted cast to u32 via TryInto<u32>,
-            i.e. we have a CoercedInt<u32> wrapper type which we use as the operand of the SHL/SHR operators
-        * Migrate operators incrementally: `+`, `-`, `*`, `/`, `%`, `==`, `!=`, etc.
-        * No clone required for testing equality of streams, objects and arrays
-    * CompoundAssignment Migration
-    * Ensure all `TODO[operation-refactor]` are done
+- [ ] BinaryOperation Migration
+  - [ ] Add binary operation method resolution with type coercion/matching logic, similar to unary operations /
+    method resolutions, except:
+    - [ ] Untyped + ?int can be resolved like below
+    - [ ] Operations on integers of known type should take a `MaybeTypedInt<X>` (an enum of either `X` or `UntypedInteger`) for e.g. `X=u64` and start with a `resolve()` call which maps `untyped.to_kind(X::kind())`
+  - [ ] Compute SHL/SHR on `Integer` can use `.checked_shl(u32)` with an attempted cast to u32 via TryInto<u32>,
+    which should massively reduce the number of implementataions we need to generate.
+      i.e. we have a CoercedInt<u32> wrapper type which we use as the operand of the SHL/SHR operators
+  - [ ] We can migrate operators incrementally: `+`, `-`, `*`, `/`, `%`, `==`, `!=`, etc.
+  - [ ] When implementing `==`, we'd like no clone required for testing equality of streams, objects and arrays
+- [ ] CompoundAssignment Migration
+- [ ] Ensure all `TODO[operation-refactor]` are done
 
 ```rust
 // Possible UntypedInteger implementation
-fn resolve_own_binary_operation(operation: &BinaryOperation) -> Option<MethodInterface> {
+
+pub(crate) mod binary_operations {
+  [context] fn paired_operation(this: UntypedInteger, rhs: IntegerExpression) -> ExecutionResult<ResolvedValue>  {
+    let operation = match context.operation {
+      BinaryOperation::Paired(op) => op,
+      _ => panic!("paired_operation should only be called with a BinaryOperation::Paired")
+    };
+    match rhs.value {
+      IntegerExpressionValue::Untyped(rhs) => {
+        lhs.handle_paired_binary_operation(rhs, operation)
+           .to_resolved_value(context.output_span_range)
+      }
+      rhs => {
+          let lhs = lhs.to_kind(rhs.kind())?;
+          operation.evaluate(lhs, rhs)
+      }
+    }
+  }
+
+  [context] fn integer_operation(lhs: UntypedInteger, rhs: IntegerExpression) -> ExecutionResult<ResolvedValue> {
+    let operation = match context.operation {
+      BinaryOperation::Integer(op) => op,
+      _ => panic!("integer_operation should only be called with a BinaryOperation::Integer")
+    };
+    lhs.handle_integer_binary_operation(rhs, int_op)
+  }
+}
+interface_items {
+  fn resolve_own_binary_operation(operation: &BinaryOperation) -> Option<MethodInterface> {
     Some(match operation {
-        BinaryOperation::Paired(paired) => wrap_binary!([Op: operation, Span: output_span_range]
-            (lhs: UntypedInteger, rhs: IntegerExpression) -> ExecutionResult<ResolvedValue> {
-                match rhs.value {
-                    IntegerExpressionValue::Untyped(rhs) => {
-                        let lhs = lhs.parse_fallback()?;
-                        let rhs = rhs.parse_fallback()?;
-                        UntypedInteger::from_fallback(lhs.handle_paired_operation(operation, rhs)).to_resolved_value(output_span_range)
-                    }
-                    rhs => {
-                        let lhs = lhs.to_kind(rhs.kind())?;
-                        operation.evaluate(lhs, rhs)
-                    }
-                }
-            }
-        ),
-        BinaryOperation::Integer(int_op) => wrap_binary!((lhs: UntypedInteger, rhs: IntegerExpression) -> ExecutionResult<ExpressionValue> {
-            lhs.handle_integer_binary_operation(rhs, int_op)
-        }),
-        _ => return None,
+        BinaryOperation::Paired(_) => binary_definitions::paired_operation(),
+        BinaryOperation::Integer(_) => binary_definitions::integer_operation(),
     })
+  }
 }
 ```
 
@@ -172,10 +182,14 @@ First, read the @./2025-11-vision.md
   - [ ] If using slotmap / generational-arena, replace the arena implementation too
 - [x] Create (temporary) `parse X => |Y| { }` expression
 - [x] Bind `input` to `Parser` at the start of each parse expression
-- [ ] Create `@input[...]` expression, create a `ConsumeStream` similar to `TransformStream`
-- [ ] Move transform logic from transformers onto `Parser`, and delete the transformers
-- [ ] Remove all remaining transformers.
-- [ ] Change stream pattern to also be `@input[...]` - which binds the input
+- [ ] Create `@input[...]` expression
+  - [ ] Create a `ConsumeStream` which wraps a `SourceStream`
+    - [ ] We add `consume()` method which takes a `&mut ConsumingInterpreter` which for now can wrap a `ParseHandle` and `&mut Interpreter`
+    - [ ] Expression return values are swallowed
+- [ ] Add remaining parser methods below
+- [ ] Delete the transformers folder
+  - [ ] Change stream pattern to also be `@input[...]` - which binds the input
+  - [ ] Write equivalent tests
 - [ ] Reversion works in attempt blocks, via forking and committing or rolling back the fork, fix `TODO[parser-input-in-interpreter]`
 - [ ] Address any remaining `TODO[parser-no-output]` and `TODO[parsers]`
 - [ ] Add tests for all the methods on Parser, and for nested parse statements
@@ -188,8 +202,10 @@ First, read the @./2025-11-vision.md
 - [x] `char()`, `is_char()`
 - [x] `string()`, `is_string()`
 - [x] `end()`, `is_end()`
-- [ ] `read(<stream>)` - use `stream.parse_exact_match`
+- [ ] `read(<stream>)` - uses `stream.parse_exact_match`
 - [ ] `rest()`
+- [ ] `any_ident()`
+- [ ] `until(%[,])` (see until transformer)
 - [ ] `error()` etc
 - [ ] `token_tree()`
 - [ ] `span()` or `cursor()` -- maybe? outputs a token with a span for outputting errors. If at end of an inner stream, it outputs the ident `END` with the span of the closing bracket.
