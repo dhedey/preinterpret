@@ -281,6 +281,12 @@ impl HasValueType for IntegerExpressionValue {
     }
 }
 
+impl ToExpressionValue for IntegerExpressionValue {
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::Integer(IntegerExpression { value: self })
+    }
+}
+
 impl HasValueType for UntypedInteger {
     fn value_type(&self) -> &'static str {
         "untyped integer"
@@ -298,6 +304,56 @@ impl UntypedInteger {
 
     fn new_from_known_int_literal(literal: Literal) -> Self {
         Self::new_from_lit_int(literal.into())
+    }
+
+    fn into_kind(self, kind: IntegerKind) -> ExecutionResult<IntegerExpressionValue> {
+        Ok(match kind {
+            IntegerKind::Untyped => IntegerExpressionValue::Untyped(self),
+            IntegerKind::I8 => IntegerExpressionValue::I8(self.parse_as()?),
+            IntegerKind::I16 => IntegerExpressionValue::I16(self.parse_as()?),
+            IntegerKind::I32 => IntegerExpressionValue::I32(self.parse_as()?),
+            IntegerKind::I64 => IntegerExpressionValue::I64(self.parse_as()?),
+            IntegerKind::I128 => IntegerExpressionValue::I128(self.parse_as()?),
+            IntegerKind::Isize => IntegerExpressionValue::Isize(self.parse_as()?),
+            IntegerKind::U8 => IntegerExpressionValue::U8(self.parse_as()?),
+            IntegerKind::U16 => IntegerExpressionValue::U16(self.parse_as()?),
+            IntegerKind::U32 => IntegerExpressionValue::U32(self.parse_as()?),
+            IntegerKind::U64 => IntegerExpressionValue::U64(self.parse_as()?),
+            IntegerKind::U128 => IntegerExpressionValue::U128(self.parse_as()?),
+            IntegerKind::Usize => IntegerExpressionValue::Usize(self.parse_as()?),
+        })
+    }
+
+    fn paired_operation(
+        lhs: Owned<UntypedInteger>,
+        rhs: Owned<IntegerExpression>,
+        context: BinaryOperationCallContext,
+        perform_fn: fn(FallbackInteger, FallbackInteger) -> Option<FallbackInteger>,
+    ) -> ExecutionResult<ResolvedValue> {
+        let (lhs, lhs_span_range) = lhs.deconstruct();
+        let (rhs, rhs_span_range) = rhs.deconstruct();
+        match rhs.value {
+            IntegerExpressionValue::Untyped(rhs) => {
+                let lhs = lhs.parse_fallback()?;
+                let rhs = rhs.parse_fallback()?;
+                let output = perform_fn(lhs, rhs).ok_or_else(|| {
+                    context.error(format!(
+                        "The untyped integer operation {} {} {} overflowed in i128 space",
+                        lhs,
+                        context.operation.symbolic_description(),
+                        rhs
+                    ))
+                })?;
+                UntypedInteger::from_fallback(output).to_resolved_value(context.output_span_range)
+            }
+            rhs => {
+                let lhs = lhs.into_kind(rhs.kind())?;
+                context.operation.evaluate(
+                    lhs.into_owned_value(lhs_span_range),
+                    rhs.into_owned_value(rhs_span_range),
+                )
+            }
+        }
     }
 
     pub(super) fn handle_integer_binary_operation(
@@ -538,60 +594,11 @@ define_interface! {
             }
         }
         pub(crate) mod binary_operations {
-            // Paired operations: UntypedInteger + IntegerExpression
-            // Handles all paired binary operations (+, -, *, /, %, ==, !=, <, >, <=, >=)
-            [context] fn paired_operation(
+            [context] fn add(
                 lhs: Owned<UntypedInteger>,
-                rhs: IntegerExpression,
-            ) -> ExecutionResult<ExpressionValue> {
-                let operation = match context.operation {
-                    BinaryOperation::Paired(op) => op,
-                    _ => panic!("paired_operation should only be called with a BinaryOperation::Paired"),
-                };
-                let (lhs, _lhs_span_range) = lhs.deconstruct();
-                // Match on RHS type and coerce LHS as needed
-                let pair = match rhs.value {
-                    IntegerExpressionValue::Untyped(rhs) => {
-                        IntegerExpressionValuePair::Untyped(lhs, rhs)
-                    }
-                    IntegerExpressionValue::U8(rhs) => {
-                        IntegerExpressionValuePair::U8(lhs.parse_as()?, rhs)
-                    }
-                    IntegerExpressionValue::U16(rhs) => {
-                        IntegerExpressionValuePair::U16(lhs.parse_as()?, rhs)
-                    }
-                    IntegerExpressionValue::U32(rhs) => {
-                        IntegerExpressionValuePair::U32(lhs.parse_as()?, rhs)
-                    }
-                    IntegerExpressionValue::U64(rhs) => {
-                        IntegerExpressionValuePair::U64(lhs.parse_as()?, rhs)
-                    }
-                    IntegerExpressionValue::U128(rhs) => {
-                        IntegerExpressionValuePair::U128(lhs.parse_as()?, rhs)
-                    }
-                    IntegerExpressionValue::Usize(rhs) => {
-                        IntegerExpressionValuePair::Usize(lhs.parse_as()?, rhs)
-                    }
-                    IntegerExpressionValue::I8(rhs) => {
-                        IntegerExpressionValuePair::I8(lhs.parse_as()?, rhs)
-                    }
-                    IntegerExpressionValue::I16(rhs) => {
-                        IntegerExpressionValuePair::I16(lhs.parse_as()?, rhs)
-                    }
-                    IntegerExpressionValue::I32(rhs) => {
-                        IntegerExpressionValuePair::I32(lhs.parse_as()?, rhs)
-                    }
-                    IntegerExpressionValue::I64(rhs) => {
-                        IntegerExpressionValuePair::I64(lhs.parse_as()?, rhs)
-                    }
-                    IntegerExpressionValue::I128(rhs) => {
-                        IntegerExpressionValuePair::I128(lhs.parse_as()?, rhs)
-                    }
-                    IntegerExpressionValue::Isize(rhs) => {
-                        IntegerExpressionValuePair::Isize(lhs.parse_as()?, rhs)
-                    }
-                };
-                pair.handle_paired_binary_operation(operation)
+                rhs: Owned<IntegerExpression>,
+            ) -> ExecutionResult<ResolvedValue> {
+                UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_add)
             }
         }
         interface_items {
@@ -622,12 +629,11 @@ define_interface! {
                 })
             }
 
-            fn resolve_own_binary_operation(
-                operation: &BinaryOperation,
+            fn resolve_paired_binary_operation(
+                operation: &PairedBinaryOperation,
             ) -> Option<BinaryOperationInterface> {
                 Some(match operation {
-                    BinaryOperation::Paired(_) => binary_definitions::paired_operation(),
-                    // Integer operations (<<, >>) fall back to legacy system for now
+                    PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
                     _ => return None,
                 })
             }
@@ -733,7 +739,14 @@ macro_rules! impl_int_operations {
                         input.to_string()
                     }
                 }
-                pub(crate) mod binary_operations {}
+                pub(crate) mod binary_operations {
+                    [context] fn add(
+                        lhs: $integer_type,
+                        rhs: $integer_type,
+                    ) -> ExecutionResult<$integer_type> {
+                        $integer_type::paired_operation(lhs, rhs, context, <$integer_type>::checked_add)
+                    }
+                }
                 interface_items {
                     fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                         Some(match operation {
@@ -772,6 +785,15 @@ macro_rules! impl_int_operations {
                             _ => return None,
                         })
                     }
+
+                    fn resolve_paired_binary_operation(
+                        operation: &PairedBinaryOperation,
+                    ) -> Option<BinaryOperationInterface> {
+                        Some(match operation {
+                            PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
+                            _ => return None,
+                        })
+                    }
                 }
             }
         }
@@ -791,6 +813,10 @@ macro_rules! impl_int_operations {
         }
 
         impl HandleBinaryOperation for $integer_type {
+            fn type_name() -> &'static str {
+                stringify!($integer_type)
+            }
+
             fn handle_paired_binary_operation(self, rhs: Self, operation: &PairedBinaryOperation) -> ExecutionResult<ExpressionValue> {
                 let lhs = self;
                 let overflow_error = || format!("The {} operation {:?} {} {:?} overflowed", stringify!($integer_type), lhs, operation.symbolic_description(), rhs);

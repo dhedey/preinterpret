@@ -1,5 +1,5 @@
-error: This argument is expected to be integer, but it is an untyped float
- --> tests/compilation_failures/expressions/compare_int_and_float.rs:5:15
+error: Cannot infer common type from untyped integer < untyped float. Consider using `as` to cast the operands to matching types.
+ --> tests/compilation_failures/expressions/compare_int_and_float.rs:5:13
   |
 5 |         #(5 < 6.4)
-  |               ^^^
+  |             ^

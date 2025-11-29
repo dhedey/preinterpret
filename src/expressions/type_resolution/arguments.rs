@@ -24,7 +24,7 @@ impl<'a> ResolutionContext<'a> {
         self.span_range.type_err(format!(
             "{} is expected to be {}, but it is {}",
             self.resolution_target,
-            expected_value_kind,
+            expected_value_kind.lower_indefinite_articled(),
             value.borrow().articled_value_type()
         ))
     }

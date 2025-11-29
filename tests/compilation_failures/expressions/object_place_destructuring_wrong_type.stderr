@@ -1,4 +1,4 @@
-error: The value destructured as an object is expected to be object, but it is an array
+error: The value destructured as an object is expected to be an object, but it is an array
  --> tests/compilation_failures/expressions/object_place_destructuring_wrong_type.rs:6:10
   |
 6 |         %{ x } = [x];

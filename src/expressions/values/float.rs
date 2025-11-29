@@ -130,6 +130,12 @@ impl HasValueType for FloatExpressionValue {
     }
 }
 
+impl ToExpressionValue for FloatExpressionValue {
+    fn into_value(self) -> ExpressionValue {
+        ExpressionValue::Float(FloatExpression { value: self })
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum FloatKind {
     Untyped,
@@ -164,6 +170,46 @@ impl UntypedFloat {
 
     fn new_from_known_float_literal(literal: Literal) -> Self {
         Self::new_from_lit_float(literal.into())
+    }
+
+    fn into_kind(self, kind: FloatKind) -> ExecutionResult<FloatExpressionValue> {
+        Ok(match kind {
+            FloatKind::Untyped => FloatExpressionValue::Untyped(self),
+            FloatKind::F32 => FloatExpressionValue::F32(self.parse_as()?),
+            FloatKind::F64 => FloatExpressionValue::F64(self.parse_as()?),
+        })
+    }
+
+    fn paired_operation(
+        lhs: Owned<UntypedFloat>,
+        rhs: Owned<FloatExpression>,
+        context: BinaryOperationCallContext,
+        perform_fn: fn(FallbackFloat, FallbackFloat) -> Option<FallbackFloat>,
+    ) -> ExecutionResult<ResolvedValue> {
+        let (lhs, lhs_span_range) = lhs.deconstruct();
+        let (rhs, rhs_span_range) = rhs.deconstruct();
+        match rhs.value {
+            FloatExpressionValue::Untyped(rhs) => {
+                let lhs = lhs.parse_fallback()?;
+                let rhs = rhs.parse_fallback()?;
+                let output = perform_fn(lhs, rhs).ok_or_else(|| {
+                    context.error(format!(
+                        "The untyped integer operation {} {} {} overflowed in i128 space",
+                        lhs,
+                        context.operation.symbolic_description(),
+                        rhs
+                    ))
+                })?;
+                UntypedFloat::from_fallback(output).to_resolved_value(context.output_span_range)
+            }
+            rhs => {
+                let lhs = lhs.into_kind(rhs.kind())?;
+                context.operation.evaluate(
+                    lhs.into_owned_value(lhs_span_range),
+                    rhs.into_owned_value(rhs_span_range),
+                )
+            }
+        }
     }
 
     pub(super) fn handle_integer_binary_operation(
@@ -344,7 +390,14 @@ define_interface! {
                 input.0.to_string()
             }
         }
-        pub(crate) mod binary_operations {}
+        pub(crate) mod binary_operations {
+            [context] fn add(
+                lhs: Owned<UntypedFloat>,
+                rhs: Owned<FloatExpression>,
+            ) -> ExecutionResult<ResolvedValue> {
+                UntypedFloat::paired_operation(lhs, rhs, context, |a, b| Some(a + b))
+            }
+        }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
@@ -369,6 +422,15 @@ define_interface! {
                         CastTarget::String => unary_definitions::cast_to_string(),
                         _ => return None,
                     },
+                    _ => return None,
+                })
+            }
+
+            fn resolve_paired_binary_operation(
+                operation: &PairedBinaryOperation,
+            ) -> Option<BinaryOperationInterface> {
+                Some(match operation {
+                    PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
                     _ => return None,
                 })
             }
@@ -459,7 +521,14 @@ macro_rules! impl_float_operations {
                         input.to_string()
                     }
                 }
-                pub(crate) mod binary_operations {}
+                pub(crate) mod binary_operations {
+                    [context] fn add(
+                        lhs: $float_type,
+                        rhs: $float_type,
+                    ) -> ExecutionResult<$float_type> {
+                        $float_type::paired_operation(lhs, rhs, context, |a, b| Some(a + b))
+                    }
+                }
                 interface_items {
                     fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                         Some(match operation {
@@ -487,6 +556,15 @@ macro_rules! impl_float_operations {
                             _ => return None,
                         })
                     }
+
+                    fn resolve_paired_binary_operation(
+                        operation: &PairedBinaryOperation,
+                    ) -> Option<BinaryOperationInterface> {
+                        Some(match operation {
+                            PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
+                            _ => return None,
+                        })
+                    }
                 }
             }
         }
@@ -507,6 +585,10 @@ macro_rules! impl_float_operations {
 
 
         impl HandleBinaryOperation for $float_type {
+            fn type_name() -> &'static str {
+                stringify!($integer_type)
+            }
+
             fn handle_paired_binary_operation(self, rhs: Self, operation: &PairedBinaryOperation) -> ExecutionResult<ExpressionValue> {
                 // Unlike integer arithmetic, float arithmetic does not overflow
                 // and instead falls back to NaN or infinity. In future we could
@@ -557,7 +639,7 @@ impl_resolvable_argument_for! {
     (value, context) -> FloatExpression {
         match value {
             ExpressionValue::Float(value) => Ok(value),
-            other => context.err("Expected float", other),
+            other => context.err("float", other),
         }
     }
 }

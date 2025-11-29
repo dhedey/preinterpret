@@ -675,7 +675,7 @@ enum BinaryPath {
     },
     OnRightBranch {
         left: ResolvedValue,
-        method: Option<BinaryOperationInterface>,
+        interface: Option<BinaryOperationInterface>,
     },
 }
 
@@ -719,12 +719,12 @@ impl EvaluationFrame for BinaryOperationBuilder {
                     context.return_owned(result)?
                 } else {
                     // Try method resolution based on left operand's kind and resolve left operand immediately
-                    let method = left_late_bound
+                    let interface = left_late_bound
                         .as_ref()
                         .kind()
                         .resolve_binary_operation(&self.operation);
 
-                    let (left_ownership, right_ownership) = if let Some(method) = &method {
+                    let (left_ownership, right_ownership) = if let Some(method) = &interface {
                         (method.lhs_ownership(), method.rhs_ownership())
                     } else {
                         // Fallback to legacy system - use owned values for legacy evaluation
@@ -732,7 +732,7 @@ impl EvaluationFrame for BinaryOperationBuilder {
                     };
                     let left = left_ownership.map_from_late_bound(left_late_bound)?;
 
-                    self.state = BinaryPath::OnRightBranch { left, method };
+                    self.state = BinaryPath::OnRightBranch { left, interface };
                     context.handle_node_as_any_value(
                         self,
                         right,
@@ -740,18 +740,18 @@ impl EvaluationFrame for BinaryOperationBuilder {
                     )
                 }
             }
-            BinaryPath::OnRightBranch { left, method } => {
+            BinaryPath::OnRightBranch { left, interface } => {
                 let right = item.expect_resolved_value();
 
                 // Try method resolution first (we already determined this during left evaluation)
-                if let Some(method) = method {
-                    let result = method.execute(left, right, &self.operation)?;
+                if let Some(interface) = interface {
+                    let result = interface.execute(left, right, &self.operation)?;
                     return context.return_resolved_value(result);
                 }
 
                 let left = left.expect_owned();
                 let right = right.expect_owned();
-                context.return_owned(self.operation.evaluate(left, right)?)?
+                context.return_owned(self.operation.evaluate_legacy(left, right)?)?
             }
         })
     }

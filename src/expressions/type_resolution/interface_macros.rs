@@ -311,6 +311,17 @@ pub(crate) struct BinaryOperationCallContext<'a> {
     pub output_span_range: SpanRange,
 }
 
+impl<'a> BinaryOperationCallContext<'a> {
+    #[allow(unused)]
+    pub(crate) fn err<T>(&self, message: impl std::fmt::Display) -> ExecutionResult<T> {
+        self.operation.value_err(message)
+    }
+
+    pub(crate) fn error(&self, message: impl std::fmt::Display) -> ExecutionInterrupt {
+        self.operation.value_error(message)
+    }
+}
+
 macro_rules! define_interface {
     (
         struct $type_data:ident,

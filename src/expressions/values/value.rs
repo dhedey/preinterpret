@@ -873,10 +873,14 @@ impl SpannedAnyRefMut<'_, ExpressionValue> {
             (left_mut, operation) => {
                 // Fallback to just clone and use the normal operator
                 let left = left_mut.clone();
-                *left_mut = operation
+                let output = operation
                     .to_binary()
-                    .evaluate(left.into_owned(left_span_range), right)?
-                    .into_value();
+                    .evaluate(left.into_owned(left_span_range), right)?;
+                let value = RequestedValueOwnership::owned()
+                    .map_from_resolved(output)?
+                    .expect_owned()
+                    .value;
+                *left_mut = value;
             }
         }
         Ok(())

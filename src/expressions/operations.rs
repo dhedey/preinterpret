@@ -111,9 +111,9 @@ impl UnaryOperation {
         let input = input.into_owned_value();
         let method = input.kind().resolve_unary_operation(self).ok_or_else(|| {
             self.type_error(format!(
-                "The {} operator is not supported for {} values",
+                "The {} operator is not supported for {} operand",
                 self.symbolic_description(),
-                input.value_type(),
+                input.articled_value_type(),
             ))
         })?;
         let input = method.argument_ownership.map_from_owned(input)?;
@@ -327,7 +327,7 @@ impl BinaryOperation {
         }
     }
 
-    pub(crate) fn evaluate(
+    pub(crate) fn evaluate_legacy(
         &self,
         left: OwnedValue,
         right: OwnedValue,
@@ -338,6 +338,11 @@ impl BinaryOperation {
 
         Ok(match self {
             BinaryOperation::Paired(operation) => {
+                // MIGRATION LIST
+                // - When we complete migrating an operator, add it to the match below
+                if let PairedBinaryOperation::Addition { .. } = operation {
+                    return self.type_err("This operation should have been migrated!");
+                }
                 let value_pair = left.expect_value_pair(operation, right)?;
                 value_pair
                     .handle_paired_binary_operation(operation)?
@@ -351,6 +356,33 @@ impl BinaryOperation {
                     .into_owned(span_range)
             }
         })
+    }
+
+    pub(crate) fn evaluate<L: ToExpressionValue, R: ToExpressionValue>(
+        &self,
+        left: Owned<L>,
+        right: Owned<R>,
+    ) -> ExecutionResult<ResolvedValue> {
+        let left = left.into_owned_value();
+        let right = right.into_owned_value();
+        match left.kind().resolve_binary_operation(self) {
+            Some(interface) => {
+                let left = interface.lhs_ownership.map_from_owned(left)?;
+                let right = interface.rhs_ownership.map_from_owned(right)?;
+                interface.execute(left, right, self)
+            }
+            None => {
+                // self.type_error(format!(
+                //     "The {} operator is not supported for {} operand",
+                //     self.symbolic_description(),
+                //     left.articled_value_type(),
+                // ))
+                let output_span_range =
+                    SpanRange::new_between(left.span_range(), right.span_range());
+                let owned = self.evaluate_legacy(left, right)?;
+                owned.to_resolved_value(output_span_range)
+            }
+        }
     }
 }
 
@@ -462,7 +494,26 @@ impl HasSpanRange for IntegerBinaryOperation {
     }
 }
 
-pub(super) trait HandleBinaryOperation: Sized {
+pub(super) trait HandleBinaryOperation: Sized + std::fmt::Display + Copy {
+    fn type_name() -> &'static str;
+
+    fn paired_operation(
+        lhs: Self,
+        rhs: Self,
+        context: BinaryOperationCallContext,
+        perform_fn: fn(Self, Self) -> Option<Self>,
+    ) -> ExecutionResult<Self> {
+        perform_fn(lhs, rhs).ok_or_else(|| {
+            context.error(format!(
+                "The {} operation {} {} {} overflowed",
+                Self::type_name(),
+                lhs,
+                context.operation.symbolic_description(),
+                rhs
+            ))
+        })
+    }
+
     fn handle_paired_binary_operation(
         self,
         rhs: Self,

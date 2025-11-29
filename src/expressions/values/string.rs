@@ -184,7 +184,12 @@ define_interface! {
                 this
             }
         }
-        pub(crate) mod binary_operations {}
+        pub(crate) mod binary_operations {
+            fn add(mut lhs: String, rhs: Shared<str>) -> String {
+                lhs.push_str(rhs.deref());
+                lhs
+            }
+        }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
@@ -193,6 +198,15 @@ define_interface! {
                         CastTarget::String => unary_definitions::cast_to_string(),
                         _ => return None,
                     },
+                })
+            }
+
+            fn resolve_paired_binary_operation(
+                operation: &PairedBinaryOperation,
+            ) -> Option<BinaryOperationInterface> {
+                Some(match operation {
+                    PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
+                    _ => return None,
                 })
             }
         }

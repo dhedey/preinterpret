@@ -43,57 +43,23 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 
 ## Method Calls
 
-- [ ] BinaryOperation Migration
-  - [ ] Add binary operation method resolution with type coercion/matching logic, similar to unary operations /
-    method resolutions, except:
-    - [ ] Untyped + ?int can be resolved like below
-    - [ ] Operations on integers of known type should take a `MaybeTypedInt<X>` (an enum of either `X` or `UntypedInteger`) for e.g. `X=u64` and start with a `resolve()` call which maps `untyped.to_kind(X::kind())`
-  - [ ] Compute SHL/SHR on `Integer` can use `.checked_shl(u32)` with an attempted cast to u32 via TryInto<u32>,
-    which should massively reduce the number of implementataions we need to generate.
-      i.e. we have a CoercedInt<u32> wrapper type which we use as the operand of the SHL/SHR operators
-  - [ ] We can migrate operators incrementally: `+`, `-`, `*`, `/`, `%`, `==`, `!=`, etc.
-  - [ ] When implementing `==`, we'd like no clone required for testing equality of streams, objects and arrays
-- [ ] CompoundAssignment Migration
+- [ ] Migrate the following `PairedBinaryOperation` across all types to being under the `binary_operations` of its TypeData. For each, when migration is complete, add it to the // MIGRATION LIST in operations.rs to check it's fully migrated
+  - [x] `Addition`
+  - [ ] `Subtraction`, `Multiplication`, `Division` and `Remainder`
+  - [ ] `LogicalAnd` and `LogicalOr`
+  - [ ] `BitXor`, `BitAnd` and `BitOr`
+  - [ ] `Equal` and `NotEqual`
+  - [ ] `LessThan`, `LessThanOrEqual`, `GreaterThanOrEqual`, `GreaterThan`
+- [ ] Migrate the following `IntegerBinaryOperation`:
+  - [ ] `ShiftLeft` and `ShiftRight`
+  - [ ] Compute SHL/SHR on `Integer` via `.checked_shl(u32)` with an attempted cast to u32 via TryInto<u32>,
+  which should massively reduce the number of implementataions we need to generate.
+    i.e. we have a `CoercedInt<u32>` wrapper type which we use as the operand of the SHL/SHR operators
+- [ ] Remove the `evaluate_legacy` method, the `PairedBinaryOperation`, and all the relevant
+- [ ] Combine `PairedBinaryOperation` and `IntegerBinaryOperation` into a flattened `BinaryOperation`
+- [ ] Change `==`, to not require a clone for testing equality of streams, objects and arrays
+- [ ] CompoundAssignment Migration - TBC
 - [ ] Ensure all `TODO[operation-refactor]` are done
-
-```rust
-// Possible UntypedInteger implementation
-
-pub(crate) mod binary_operations {
-  [context] fn paired_operation(this: UntypedInteger, rhs: IntegerExpression) -> ExecutionResult<ResolvedValue>  {
-    let operation = match context.operation {
-      BinaryOperation::Paired(op) => op,
-      _ => panic!("paired_operation should only be called with a BinaryOperation::Paired")
-    };
-    match rhs.value {
-      IntegerExpressionValue::Untyped(rhs) => {
-        lhs.handle_paired_binary_operation(rhs, operation)
-           .to_resolved_value(context.output_span_range)
-      }
-      rhs => {
-          let lhs = lhs.to_kind(rhs.kind())?;
-          operation.evaluate(lhs, rhs)
-      }
-    }
-  }
-
-  [context] fn integer_operation(lhs: UntypedInteger, rhs: IntegerExpression) -> ExecutionResult<ResolvedValue> {
-    let operation = match context.operation {
-      BinaryOperation::Integer(op) => op,
-      _ => panic!("integer_operation should only be called with a BinaryOperation::Integer")
-    };
-    lhs.handle_integer_binary_operation(rhs, int_op)
-  }
-}
-interface_items {
-  fn resolve_own_binary_operation(operation: &BinaryOperation) -> Option<MethodInterface> {
-    Some(match operation {
-        BinaryOperation::Paired(_) => binary_definitions::paired_operation(),
-        BinaryOperation::Integer(_) => binary_definitions::integer_operation(),
-    })
-  }
-}
-```
 
 ## Control flow expressions (ideally requires Stream Literals)
 

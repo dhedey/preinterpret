@@ -1,5 +1,5 @@
-error: Cannot infer common type from untyped float + untyped integer. Consider using `as` to cast the operands to matching types.
- --> tests/compilation_failures/expressions/add_float_and_int.rs:5:15
+error: This argument is expected to be a float, but it is an untyped integer
+ --> tests/compilation_failures/expressions/add_float_and_int.rs:5:17
   |
 5 |         #(1.2 + 1)
-  |               ^
+  |                 ^

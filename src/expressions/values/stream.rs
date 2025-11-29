@@ -276,7 +276,12 @@ define_interface! {
                 context.operation.evaluate(coerced.into_owned(span_range))
             }
         }
-        pub(crate) mod binary_operations {}
+        pub(crate) mod binary_operations {
+            fn add(mut lhs: OutputStream, rhs: OutputStream) -> OutputStream {
+                rhs.append_into(&mut lhs);
+                lhs
+            }
+        }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
@@ -288,6 +293,15 @@ define_interface! {
                             | CastTarget::Float(_),
                         ..
                     } => unary_definitions::cast_to_value(),
+                    _ => return None,
+                })
+            }
+
+            fn resolve_paired_binary_operation(
+                operation: &PairedBinaryOperation,
+            ) -> Option<BinaryOperationInterface> {
+                Some(match operation {
+                    PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
                     _ => return None,
                 })
             }

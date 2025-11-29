@@ -69,7 +69,24 @@ pub(crate) trait HierarchicalTypeData {
     /// Resolves a binary operation as a method interface for this type.
     /// Returns None if the operation should fallback to the legacy system.
     fn resolve_own_binary_operation(
-        _operation: &BinaryOperation,
+        operation: &BinaryOperation,
+    ) -> Option<BinaryOperationInterface> {
+        match operation {
+            BinaryOperation::Paired(operation) => Self::resolve_paired_binary_operation(operation),
+            BinaryOperation::Integer(operation) => {
+                Self::resolve_integer_binary_operation(operation)
+            }
+        }
+    }
+
+    fn resolve_paired_binary_operation(
+        _operation: &PairedBinaryOperation,
+    ) -> Option<BinaryOperationInterface> {
+        None
+    }
+
+    fn resolve_integer_binary_operation(
+        _operation: &IntegerBinaryOperation,
     ) -> Option<BinaryOperationInterface> {
         None
     }
