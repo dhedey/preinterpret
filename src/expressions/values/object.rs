@@ -11,6 +11,16 @@ impl ToExpressionValue for ObjectExpression {
     }
 }
 
+impl_resolvable_argument_for! {
+    ObjectTypeData,
+    (value, context) -> ObjectExpression {
+        match value {
+            ExpressionValue::Object(value) => Ok(value),
+            _ => context.err("object", value),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct ObjectEntry {
     #[allow(unused)]

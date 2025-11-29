@@ -226,6 +226,16 @@ impl ToExpressionValue for ExpressionRangeInner {
     }
 }
 
+impl_resolvable_argument_for! {
+    RangeTypeData,
+    (value, context) -> RangeExpression {
+        match value {
+            ExpressionValue::Range(value) => Ok(value),
+            _ => context.err("range", value),
+        }
+    }
+}
+
 define_interface! {
     struct RangeTypeData,
     parent: IterableTypeData,

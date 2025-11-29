@@ -62,7 +62,7 @@ define_interface! {
     }
 }
 
-pub(super) enum FloatExpressionValuePair {
+pub(crate) enum FloatExpressionValuePair {
     Untyped(UntypedFloat, UntypedFloat),
     F32(f32, f32),
     F64(f64, f64),
@@ -82,7 +82,7 @@ impl FloatExpressionValuePair {
 }
 
 #[derive(Clone)]
-pub(super) enum FloatExpressionValue {
+pub(crate) enum FloatExpressionValue {
     Untyped(UntypedFloat),
     F32(f32),
     F64(f64),
@@ -221,7 +221,7 @@ impl UntypedFloat {
         )
     }
 
-    pub(super) fn parse_fallback(&self) -> ExecutionResult<FallbackFloat> {
+    pub(crate) fn parse_fallback(&self) -> ExecutionResult<FallbackFloat> {
         self.0.base10_digits().parse().map_err(|err| {
             self.0.value_error(format!(
                 "Could not parse as the default inferred type {}: {}",
@@ -231,7 +231,7 @@ impl UntypedFloat {
         })
     }
 
-    pub(super) fn parse_as<N>(&self) -> ExecutionResult<N>
+    pub(crate) fn parse_as<N>(&self) -> ExecutionResult<N>
     where
         N: FromStr,
         N::Err: core::fmt::Display,
@@ -548,3 +548,99 @@ macro_rules! impl_float_operations {
     )*};
 }
 impl_float_operations!(F32TypeData mod f32_interface: F32(f32), F64TypeData mod f64_interface: F64(f64));
+
+impl_resolvable_argument_for! {
+    FloatTypeData,
+    (value, context) -> FloatExpression {
+        match value {
+            ExpressionValue::Float(value) => Ok(value),
+            other => context.err("Expected float", other),
+        }
+    }
+}
+
+pub(crate) struct UntypedFloatFallback(pub FallbackFloat);
+
+impl ResolvableArgumentTarget for UntypedFloatFallback {
+    type ValueType = UntypedFloatTypeData;
+}
+
+impl ResolvableArgumentOwned for UntypedFloatFallback {
+    fn resolve_from_value(
+        input_value: ExpressionValue,
+        context: ResolutionContext,
+    ) -> ExecutionResult<Self> {
+        let value = UntypedFloat::resolve_from_value(input_value, context)?;
+        Ok(UntypedFloatFallback(value.parse_fallback()?))
+    }
+}
+
+impl_resolvable_argument_for! {
+    UntypedFloatTypeData,
+    (value, context) -> UntypedFloat {
+        match value {
+            ExpressionValue::Float(FloatExpression { value: FloatExpressionValue::Untyped(x), ..}) => Ok(x),
+            other => context.err("untyped float", other),
+        }
+    }
+}
+
+macro_rules! impl_resolvable_float_subtype {
+    ($value_type:ty, $type:ty, $variant:ident, $expected_msg:expr) => {
+        impl ResolvableArgumentTarget for $type {
+            type ValueType = $value_type;
+        }
+
+        impl ResolvableArgumentOwned for $type {
+            fn resolve_from_value(
+                value: ExpressionValue,
+                context: ResolutionContext,
+            ) -> ExecutionResult<Self> {
+                match value {
+                    ExpressionValue::Float(FloatExpression {
+                        value: FloatExpressionValue::Untyped(x),
+                        ..
+                    }) => x.parse_as(),
+                    ExpressionValue::Float(FloatExpression {
+                        value: FloatExpressionValue::$variant(x),
+                        ..
+                    }) => Ok(x),
+                    other => context.err($expected_msg, other),
+                }
+            }
+        }
+
+        impl ResolvableArgumentShared for $type {
+            fn resolve_from_ref<'a>(
+                value: &'a ExpressionValue,
+                context: ResolutionContext,
+            ) -> ExecutionResult<&'a Self> {
+                match value {
+                    ExpressionValue::Float(FloatExpression {
+                        value: FloatExpressionValue::$variant(x),
+                        ..
+                    }) => Ok(x),
+                    other => context.err($expected_msg, other),
+                }
+            }
+        }
+
+        impl ResolvableArgumentMutable for $type {
+            fn resolve_from_mut<'a>(
+                value: &'a mut ExpressionValue,
+                context: ResolutionContext,
+            ) -> ExecutionResult<&'a mut Self> {
+                match value {
+                    ExpressionValue::Float(FloatExpression {
+                        value: FloatExpressionValue::$variant(x),
+                        ..
+                    }) => Ok(x),
+                    other => context.err($expected_msg, other),
+                }
+            }
+        }
+    };
+}
+
+impl_resolvable_float_subtype!(F32TypeData, f32, F32, "f32");
+impl_resolvable_float_subtype!(F64TypeData, f64, F64, "f64");

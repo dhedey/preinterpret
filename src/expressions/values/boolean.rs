@@ -12,7 +12,7 @@ impl ToExpressionValue for BooleanExpression {
 }
 
 impl BooleanExpression {
-    pub(super) fn for_litbool(lit: &syn::LitBool) -> Owned<Self> {
+    pub(crate) fn for_litbool(lit: &syn::LitBool) -> Owned<Self> {
         Self { value: lit.value }.into_owned(lit.span)
     }
 
@@ -169,4 +169,19 @@ define_interface! {
             }
         }
     }
+}
+
+impl_resolvable_argument_for! {
+    BooleanTypeData,
+    (value, context) -> BooleanExpression {
+        match value {
+            ExpressionValue::Boolean(value) => Ok(value),
+            other => context.err("boolean", other),
+        }
+    }
+}
+
+impl_delegated_resolvable_argument_for! {
+    BooleanTypeData,
+    (value: BooleanExpression) -> bool { value.value }
 }

@@ -119,6 +119,21 @@ impl ToExpressionValue for TokenStream {
     }
 }
 
+impl_resolvable_argument_for! {
+    StreamTypeData,
+    (value, context) -> StreamExpression {
+        match value {
+            ExpressionValue::Stream(value) => Ok(value),
+            _ => context.err("stream", value),
+        }
+    }
+}
+
+impl_delegated_resolvable_argument_for!(
+    StreamTypeData,
+    (value: StreamExpression) -> OutputStream { value.value }
+);
+
 define_interface! {
     struct StreamTypeData,
     parent: IterableTypeData,

@@ -1,6 +1,6 @@
 use super::*;
 
-pub(super) trait Operation: HasSpanRange {
+pub(crate) trait Operation: HasSpanRange {
     fn wrap(&self) -> WrappedOp<'_, Self> {
         WrappedOp { operation: self }
     }
@@ -8,7 +8,7 @@ pub(super) trait Operation: HasSpanRange {
     fn symbolic_description(&self) -> &'static str;
 }
 
-pub(super) struct WrappedOp<'a, T: Operation + ?Sized> {
+pub(crate) struct WrappedOp<'a, T: Operation + ?Sized> {
     pub(super) operation: &'a T,
 }
 

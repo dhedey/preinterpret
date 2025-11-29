@@ -172,11 +172,10 @@ First, read the @./2025-11-vision.md
   - [ ] If using slotmap / generational-arena, replace the arena implementation too
 - [x] Create (temporary) `parse X => |Y| { }` expression
 - [x] Bind `input` to `Parser` at the start of each parse expression
-- [ ] Create `consume X @[ .. ]` expression
+- [ ] Create `@input[...]` expression, create a `ConsumeStream` similar to `TransformStream`
 - [ ] Move transform logic from transformers onto `Parser`, and delete the transformers
 - [ ] Remove all remaining transformers.
-- [ ] Remove parsing in a stream pattern - instead we just support a literal
-- [ ] Rename the transform stream to `ParseModeStream`
+- [ ] Change stream pattern to also be `@input[...]` - which binds the input
 - [ ] Reversion works in attempt blocks, via forking and committing or rolling back the fork, fix `TODO[parser-input-in-interpreter]`
 - [ ] Address any remaining `TODO[parser-no-output]` and `TODO[parsers]`
 - [ ] Add tests for all the methods on Parser, and for nested parse statements
@@ -189,6 +188,7 @@ First, read the @./2025-11-vision.md
 - [x] `char()`, `is_char()`
 - [x] `string()`, `is_string()`
 - [x] `end()`, `is_end()`
+- [ ] `read(<stream>)` - use `stream.parse_exact_match`
 - [ ] `rest()`
 - [ ] `error()` etc
 - [ ] `token_tree()`
@@ -208,7 +208,6 @@ And all of these from normal macros:
 - [ ] tt: a single token tree
 - [ ] ty: a type
 - [ ] vis: a possible empty visibility qualifier (e.g. pub, pub(in crate), …)
-```
 
 Consider if we want separate types for e.g.
 * `Span`
@@ -236,6 +235,7 @@ input.repeated(
 
 Later:
 - [ ] Support for starting to parse a `input.open('(')` in the left part of an attempt arm and completing in the right arm `input.close(')')` - there needs to be some error checking in the parse stream stack. We probably can't allow closing in the LHS of an attempt arm. We should record a reason on the new parse buffer and raise if it doesn't match
+- [ ] Or even `input.read("hello (")` / `input.read(")")`
 
 ## Methods and closures
 

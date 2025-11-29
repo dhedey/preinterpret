@@ -203,6 +203,16 @@ impl ToExpressionValue for ArrayExpression {
     }
 }
 
+impl_resolvable_argument_for! {
+    ArrayTypeData,
+    (value, context) -> ArrayExpression {
+        match value {
+            ExpressionValue::Array(value) => Ok(value),
+            _ => context.err("array", value),
+        }
+    }
+}
+
 define_interface! {
     struct ArrayTypeData,
     parent: IterableTypeData,

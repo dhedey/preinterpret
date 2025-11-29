@@ -111,28 +111,6 @@ impl MethodResolver for ValueKind {
     }
 }
 
-define_optional_object! {
-    pub(crate) struct SettingsInputs {
-        iteration_limit: usize => (DEFAULT_ITERATION_LIMIT_STR, "The new iteration limit"),
-    }
-}
-
-define_interface! {
-    struct NoneTypeData,
-    parent: ValueTypeData,
-    pub(crate) mod none_interface {
-        pub(crate) mod methods {
-            [context] fn configure_preinterpret(_none: (), inputs: SettingsInputs) {
-                if let Some(limit) = inputs.iteration_limit {
-                    context.interpreter.set_iteration_limit(Some(limit));
-                }
-            }
-        }
-        pub(crate) mod unary_operations {}
-        interface_items {}
-    }
-}
-
 define_interface! {
     struct ValueTypeData,
     parent: ValueTypeData,
@@ -279,12 +257,6 @@ pub(crate) trait ToExpressionValue: Sized {
     }
 }
 
-impl ToExpressionValue for () {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::None
-    }
-}
-
 impl ExpressionValue {
     pub(crate) fn for_literal(literal: Literal) -> OwnedValue {
         // The unwrap should be safe because all Literal should be parsable
@@ -335,7 +307,7 @@ impl ExpressionValue {
         Ok(self.clone())
     }
 
-    pub(super) fn expect_value_pair(
+    pub(crate) fn expect_value_pair(
         self,
         operation: &impl Operation,
         right: Self,
@@ -556,7 +528,7 @@ impl ExpressionValue {
         }
     }
 
-    pub(super) fn handle_integer_binary_operation(
+    pub(crate) fn handle_integer_binary_operation(
         self,
         right: IntegerExpression,
         operation: WrappedOp<IntegerBinaryOperation>,
@@ -878,7 +850,7 @@ impl OwnedValue {
 }
 
 impl SpannedAnyRefMut<'_, ExpressionValue> {
-    pub(super) fn handle_compound_assignment(
+    pub(crate) fn handle_compound_assignment(
         self,
         operation: &CompoundAssignmentOperation,
         right: OwnedValue,
@@ -939,7 +911,7 @@ impl HasValueType for ExpressionValue {
     }
 }
 
-pub(super) trait HasValueType {
+pub(crate) trait HasValueType {
     fn value_type(&self) -> &'static str;
 
     fn articled_value_type(&self) -> String {
@@ -951,28 +923,7 @@ pub(super) trait HasValueType {
     }
 }
 
-#[derive(Clone)]
-pub(crate) struct UnsupportedLiteral {
-    lit: syn::Lit,
-}
-
-impl HasValueType for UnsupportedLiteral {
-    fn value_type(&self) -> &'static str {
-        "unsupported literal"
-    }
-}
-
-define_interface! {
-    struct UnsupportedLiteralTypeData,
-    parent: ValueTypeData,
-    pub(crate) mod unsupported_literal_interface {
-        pub(crate) mod methods {}
-        pub(crate) mod unary_operations {}
-        interface_items {}
-    }
-}
-
-pub(super) enum ExpressionValuePair {
+pub(crate) enum ExpressionValuePair {
     Integer(IntegerExpressionValuePair),
     Float(FloatExpressionValuePair),
     BooleanPair(BooleanExpression, BooleanExpression),
@@ -984,7 +935,7 @@ pub(super) enum ExpressionValuePair {
 }
 
 impl ExpressionValuePair {
-    pub(super) fn handle_paired_binary_operation(
+    pub(crate) fn handle_paired_binary_operation(
         self,
         operation: WrappedOp<PairedBinaryOperation>,
     ) -> ExecutionResult<ExpressionValue> {

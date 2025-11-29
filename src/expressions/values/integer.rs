@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Clone)]
 pub(crate) struct IntegerExpression {
-    pub(super) value: IntegerExpressionValue,
+    pub(crate) value: IntegerExpressionValue,
 }
 
 impl ToExpressionValue for IntegerExpression {
@@ -91,7 +91,7 @@ define_interface! {
     }
 }
 
-pub(super) enum IntegerExpressionValuePair {
+pub(crate) enum IntegerExpressionValuePair {
     Untyped(UntypedInteger, UntypedInteger),
     U8(u8, u8),
     U16(u16, u16),
@@ -181,7 +181,7 @@ impl IntegerKind {
 }
 
 #[derive(Clone)]
-pub(super) enum IntegerExpressionValue {
+pub(crate) enum IntegerExpressionValue {
     Untyped(UntypedInteger),
     U8(u8),
     U16(u16),
@@ -415,7 +415,7 @@ impl UntypedInteger {
         )
     }
 
-    pub(super) fn parse_fallback(&self) -> ExecutionResult<FallbackInteger> {
+    pub(crate) fn parse_fallback(&self) -> ExecutionResult<FallbackInteger> {
         self.0.base10_digits().parse().map_err(|err| {
             self.0.value_error(format!(
                 "Could not parse as the default inferred type {}: {}",
@@ -425,7 +425,7 @@ impl UntypedInteger {
         })
     }
 
-    pub(super) fn parse_as<N>(&self) -> ExecutionResult<N>
+    pub(crate) fn parse_as<N>(&self) -> ExecutionResult<N>
     where
         N: FromStr,
         N::Err: core::fmt::Display,
@@ -806,3 +806,110 @@ impl_int_operations!(
     I128TypeData mod i128_interface: [Signed[yes],] I128(i128),
     IsizeTypeData mod isize_interface: [Signed[yes],] Isize(isize),
 );
+
+impl_resolvable_argument_for! {
+    IntegerTypeData,
+    (value, context) -> IntegerExpression {
+        match value {
+            ExpressionValue::Integer(value) => Ok(value),
+            other => context.err("integer", other),
+        }
+    }
+}
+
+pub(crate) struct UntypedIntegerFallback(pub(crate) FallbackInteger);
+
+impl ResolvableArgumentTarget for UntypedIntegerFallback {
+    type ValueType = UntypedIntegerTypeData;
+}
+
+impl ResolvableArgumentOwned for UntypedIntegerFallback {
+    fn resolve_from_value(
+        input_value: ExpressionValue,
+        context: ResolutionContext,
+    ) -> ExecutionResult<Self> {
+        let value: UntypedInteger =
+            ResolvableArgumentOwned::resolve_from_value(input_value, context)?;
+        Ok(UntypedIntegerFallback(value.parse_fallback()?))
+    }
+}
+
+impl_resolvable_argument_for! {
+    UntypedIntegerTypeData,
+    (value, context) -> UntypedInteger {
+        match value {
+            ExpressionValue::Integer(IntegerExpression { value: IntegerExpressionValue::Untyped(x), ..}) => Ok(x),
+            _ => context.err("untyped integer", value),
+        }
+    }
+}
+
+macro_rules! impl_resolvable_integer_subtype {
+    ($value_type:ty, $type:ty, $variant:ident, $expected_msg:expr) => {
+        impl ResolvableArgumentTarget for $type {
+            type ValueType = $value_type;
+        }
+
+        impl ResolvableArgumentOwned for $type {
+            fn resolve_from_value(
+                value: ExpressionValue,
+                context: ResolutionContext,
+            ) -> ExecutionResult<Self> {
+                match value {
+                    ExpressionValue::Integer(IntegerExpression {
+                        value: IntegerExpressionValue::Untyped(x),
+                        ..
+                    }) => x.parse_as(),
+                    ExpressionValue::Integer(IntegerExpression {
+                        value: IntegerExpressionValue::$variant(x),
+                        ..
+                    }) => Ok(x),
+                    other => context.err($expected_msg, other),
+                }
+            }
+        }
+
+        impl ResolvableArgumentShared for $type {
+            fn resolve_from_ref<'a>(
+                value: &'a ExpressionValue,
+                context: ResolutionContext,
+            ) -> ExecutionResult<&'a Self> {
+                match value {
+                    ExpressionValue::Integer(IntegerExpression {
+                        value: IntegerExpressionValue::$variant(x),
+                        ..
+                    }) => Ok(x),
+                    other => context.err($expected_msg, other),
+                }
+            }
+        }
+
+        impl ResolvableArgumentMutable for $type {
+            fn resolve_from_mut<'a>(
+                value: &'a mut ExpressionValue,
+                context: ResolutionContext,
+            ) -> ExecutionResult<&'a mut Self> {
+                match value {
+                    ExpressionValue::Integer(IntegerExpression {
+                        value: IntegerExpressionValue::$variant(x),
+                        ..
+                    }) => Ok(x),
+                    other => context.err($expected_msg, other),
+                }
+            }
+        }
+    };
+}
+
+impl_resolvable_integer_subtype!(I8TypeData, i8, I8, "i8");
+impl_resolvable_integer_subtype!(I16TypeData, i16, I16, "i16");
+impl_resolvable_integer_subtype!(I32TypeData, i32, I32, "i32");
+impl_resolvable_integer_subtype!(I64TypeData, i64, I64, "i64");
+impl_resolvable_integer_subtype!(I128TypeData, i128, I128, "i128");
+impl_resolvable_integer_subtype!(IsizeTypeData, isize, Isize, "isize");
+impl_resolvable_integer_subtype!(U8TypeData, u8, U8, "u8");
+impl_resolvable_integer_subtype!(U16TypeData, u16, U16, "u16");
+impl_resolvable_integer_subtype!(U32TypeData, u32, U32, "u32");
+impl_resolvable_integer_subtype!(U64TypeData, u64, U64, "u64");
+impl_resolvable_integer_subtype!(U128TypeData, u128, U128, "u128");
+impl_resolvable_integer_subtype!(UsizeTypeData, usize, Usize, "usize");

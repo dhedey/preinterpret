@@ -197,3 +197,34 @@ define_interface! {
         }
     }
 }
+
+impl_resolvable_argument_for! {
+    StringTypeData,
+    (value, context) -> StringExpression {
+        match value {
+            ExpressionValue::String(value) => Ok(value),
+            _ => context.err("string", value),
+        }
+    }
+}
+
+impl_delegated_resolvable_argument_for!(
+    StringTypeData,
+    (value: StringExpression) -> String { value.value }
+);
+
+impl ResolvableArgumentTarget for str {
+    type ValueType = StringTypeData;
+}
+
+impl ResolvableArgumentShared for str {
+    fn resolve_from_ref<'a>(
+        value: &'a ExpressionValue,
+        context: ResolutionContext,
+    ) -> ExecutionResult<&'a Self> {
+        match value {
+            ExpressionValue::String(s) => Ok(s.value.as_str()),
+            _ => context.err("string", value),
+        }
+    }
+}

@@ -162,3 +162,18 @@ define_interface! {
         }
     }
 }
+
+impl_resolvable_argument_for! {
+    CharTypeData,
+    (value, context) -> CharExpression {
+        match value {
+            ExpressionValue::Char(value) => Ok(value),
+            _ => context.err("char", value),
+        }
+    }
+}
+
+impl_delegated_resolvable_argument_for!(
+    CharTypeData,
+    (value: CharExpression) -> char { value.value }
+);
