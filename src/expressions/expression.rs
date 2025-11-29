@@ -161,6 +161,7 @@ pub(super) enum Leaf {
     WhileExpression(Box<WhileExpression>),
     ForExpression(Box<ForExpression>),
     AttemptExpression(Box<AttemptExpression>),
+    ParseExpression(Box<ParseExpression>),
 }
 
 impl HasSpanRange for Leaf {
@@ -176,6 +177,7 @@ impl HasSpanRange for Leaf {
             Leaf::WhileExpression(expression) => expression.span_range(),
             Leaf::ForExpression(expression) => expression.span_range(),
             Leaf::AttemptExpression(expression) => expression.span_range(),
+            Leaf::ParseExpression(expression) => expression.span_range(),
         }
     }
 }
@@ -188,7 +190,8 @@ impl Leaf {
             | Leaf::LoopExpression(_)
             | Leaf::WhileExpression(_)
             | Leaf::ForExpression(_)
-            | Leaf::AttemptExpression(_) => true,
+            | Leaf::AttemptExpression(_)
+            | Leaf::ParseExpression(_) => true,
             Leaf::Variable(_) | Leaf::Discarded(_) | Leaf::Value(_) | Leaf::StreamLiteral(_) => {
                 false
             }

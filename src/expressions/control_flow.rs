@@ -548,3 +548,75 @@ impl AttemptExpression {
         self.braces.control_flow_err("No attempt arm ran successfully. You may wish to add a fallback arm `{} => { None }` to ignore the error or to propogate a better message: `{} => { %[<tokens for error span>].error(\"Error message\") }`.")
     }
 }
+
+pub(crate) struct ParseExpression {
+    parse_ident: ParseKeyword,
+    input: Expression,
+    _fat_arrow: Unused<Token![=>]>,
+    _left_bar: Unused<Token![|]>,
+    parser_variable: VariableDefinition,
+    _right_bar: Unused<Token![|]>,
+    scope: ScopeId,
+    body: UnscopedBlock,
+}
+
+impl HasSpanRange for ParseExpression {
+    fn span_range(&self) -> SpanRange {
+        SpanRange::new_between(self.parse_ident.span(), self.body.span())
+    }
+}
+
+impl ParseSource for ParseExpression {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
+        let parse_ident = input.parse()?;
+        let input_expression = input.parse()?;
+        let _fat_arrow = input.parse()?;
+        let _left_bar = input.parse()?;
+        let parser_variable = input.parse()?;
+        let _right_bar = input.parse()?;
+        let body = input.parse()?;
+        Ok(Self {
+            parse_ident,
+            input: input_expression,
+            _fat_arrow,
+            _left_bar,
+            parser_variable,
+            _right_bar,
+            scope: ScopeId::new_placeholder(),
+            body,
+        })
+    }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        context.register_scope(&mut self.scope);
+        self.input.control_flow_pass(context)?;
+        context.enter_scope(self.scope);
+        self.parser_variable.control_flow_pass(context)?;
+        self.body.control_flow_pass(context)?;
+        context.exit_scope(self.scope);
+        Ok(())
+    }
+}
+
+impl ParseExpression {
+    pub(crate) fn evaluate(
+        &self,
+        interpreter: &mut Interpreter,
+        ownership: RequestedValueOwnership,
+    ) -> ExecutionResult<EvaluationItem> {
+        let input = self
+            .input
+            .evaluate_owned(interpreter)?
+            .resolve_as("The input to a parse expression")?;
+
+        interpreter.enter_scope(self.scope);
+
+        let output = interpreter.start_parse(input, |interpreter, handle| {
+            self.parser_variable.define(interpreter, handle);
+            self.body.evaluate(interpreter, ownership)
+        })?;
+
+        interpreter.exit_scope(self.scope);
+        Ok(output)
+    }
+}

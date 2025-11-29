@@ -213,7 +213,7 @@ define_interface! {
                 Ok(())
             }
 
-            [context] fn to_stream_grouped(this: ArrayExpression) -> StreamOutput<impl StreamAppender> {
+            [context] fn to_stream_grouped(this: ArrayExpression) -> StreamOutput<impl StreamAppender> [ignore_type_assertion!] {
                 let error_span_range = context.span_range();
                 StreamOutput::new(move |stream| this.output_items_to(&mut ToStreamContext::new(stream, error_span_range), Grouping::Grouped))
             }

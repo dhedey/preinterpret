@@ -219,24 +219,35 @@ impl Interpreter {
     }
 
     // Input
-    pub(crate) fn start_parse(
+    pub(crate) fn start_parse<T>(
         &mut self,
         stream: OutputStream,
-        f: impl FnOnce(&mut Interpreter) -> ExecutionResult<()>,
-    ) -> ExecutionResult<()> {
+        f: impl FnOnce(&mut Interpreter, ParserHandle) -> ExecutionResult<T>,
+    ) -> ExecutionResult<T> {
         stream.parse_with(|input| {
-            unsafe {
+            let handle = unsafe {
                 // SAFETY: This is paired with `finish_parse` below,
                 // without any early returns in the middle
-                self.input_handler.start_parse(input);
-            }
-            let result = f(self);
+                self.input_handler.start_parse(input)
+            };
+            let result = f(self, handle);
             unsafe {
                 // SAFETY: This is paired with `start_parse` above
-                self.input_handler.finish_parse();
+                self.input_handler.finish_parse(handle);
             }
             result
         })
+    }
+
+    pub(crate) fn parser(
+        &mut self,
+        handle: Spanned<ParserHandle>,
+    ) -> ExecutionResult<OutputParseStream<'_>> {
+        let stack = self
+            .input_handler
+            .get(handle.value)
+            .ok_or_else(|| handle.value_error("This parser is no longer available"))?;
+        Ok(stack.current())
     }
 
     pub(crate) fn parse_group<T>(

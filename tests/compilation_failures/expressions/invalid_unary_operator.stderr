@@ -1,4 +1,4 @@
-error: Expected ! or -
+error: Expected an expression
  --> tests/compilation_failures/expressions/invalid_unary_operator.rs:5:11
   |
 5 |         #(^10)

@@ -14,7 +14,7 @@ mod variable;
 use crate::internal_prelude::*;
 pub(crate) use bindings::*;
 use control_flow_pass::*;
-use input_handler::*;
+pub(crate) use input_handler::*;
 pub(crate) use interpret_traits::*;
 pub(crate) use interpreter::*;
 use output_handler::*;

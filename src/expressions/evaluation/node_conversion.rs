@@ -64,6 +64,11 @@ impl ExpressionNode {
                         let item = attempt_expression.evaluate(context.interpreter(), ownership)?;
                         context.return_item(item)?
                     }
+                    Leaf::ParseExpression(parse_expression) => {
+                        let ownership = context.requested_ownership();
+                        let item = parse_expression.evaluate(context.interpreter(), ownership)?;
+                        context.return_item(item)?
+                    }
                 }
             }
             ExpressionNode::Grouped { delim_span, inner } => {

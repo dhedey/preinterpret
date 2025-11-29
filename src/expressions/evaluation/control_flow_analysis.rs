@@ -185,6 +185,7 @@ impl Leaf {
             Leaf::AttemptExpression(attempt_expression) => {
                 attempt_expression.control_flow_pass(context)
             }
+            Leaf::ParseExpression(parse_expression) => parse_expression.control_flow_pass(context),
             Leaf::Discarded(_) => Ok(()),
             Leaf::Value(_) => Ok(()),
         }

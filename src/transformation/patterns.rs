@@ -359,7 +359,7 @@ impl HandleDestructure for StreamPattern {
             .resolve_as("The value destructured with a stream pattern")?;
         // TODO[parser-no-output]: Remove this once transformers no longer output
         let _ = interpreter.capture_output(|interpreter| {
-            interpreter.start_parse(stream.value, |interpreter| {
+            interpreter.start_parse(stream.value, |interpreter, _| {
                 self.content.handle_transform(interpreter)
             })
         })?;

@@ -48,6 +48,8 @@ pub(crate) trait HierarchicalTypeData {
 
     fn assert_first_argument<T: FromResolved<ValueType = Self>>() {}
 
+    fn assert_output_type<T: ResolvableOutput>() {}
+
     fn resolve_own_method(_method_name: &str) -> Option<MethodInterface> {
         None
     }
