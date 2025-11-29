@@ -45,8 +45,8 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 
 - [ ] Migrate the following `PairedBinaryOperation` across all types to being under the `binary_operations` of its TypeData. For each, when migration is complete, add it to the // MIGRATION LIST in operations.rs to check it's fully migrated
   - [x] `Addition`
-  - [ ] `Subtraction`, `Multiplication`, `Division` and `Remainder`
-  - [ ] `LogicalAnd` and `LogicalOr`
+  - [x] `Subtraction`, `Multiplication`, `Division` and `Remainder`
+  - [x] `LogicalAnd` and `LogicalOr`
   - [ ] `BitXor`, `BitAnd` and `BitOr`
   - [ ] `Equal` and `NotEqual`
   - [ ] `LessThan`, `LessThanOrEqual`, `GreaterThanOrEqual`, `GreaterThan`

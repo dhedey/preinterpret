@@ -600,6 +600,34 @@ define_interface! {
             ) -> ExecutionResult<ResolvedValue> {
                 UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_add)
             }
+
+            [context] fn sub(
+                lhs: Owned<UntypedInteger>,
+                rhs: Owned<IntegerExpression>,
+            ) -> ExecutionResult<ResolvedValue> {
+                UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_sub)
+            }
+
+            [context] fn mul(
+                lhs: Owned<UntypedInteger>,
+                rhs: Owned<IntegerExpression>,
+            ) -> ExecutionResult<ResolvedValue> {
+                UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_mul)
+            }
+
+            [context] fn div(
+                lhs: Owned<UntypedInteger>,
+                rhs: Owned<IntegerExpression>,
+            ) -> ExecutionResult<ResolvedValue> {
+                UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_div)
+            }
+
+            [context] fn rem(
+                lhs: Owned<UntypedInteger>,
+                rhs: Owned<IntegerExpression>,
+            ) -> ExecutionResult<ResolvedValue> {
+                UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_rem)
+            }
         }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
@@ -634,6 +662,10 @@ define_interface! {
             ) -> Option<BinaryOperationInterface> {
                 Some(match operation {
                     PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
+                    PairedBinaryOperation::Subtraction { .. } => binary_definitions::sub(),
+                    PairedBinaryOperation::Multiplication { .. } => binary_definitions::mul(),
+                    PairedBinaryOperation::Division { .. } => binary_definitions::div(),
+                    PairedBinaryOperation::Remainder { .. } => binary_definitions::rem(),
                     _ => return None,
                 })
             }
@@ -746,6 +778,34 @@ macro_rules! impl_int_operations {
                     ) -> ExecutionResult<$integer_type> {
                         $integer_type::paired_operation(lhs, rhs, context, <$integer_type>::checked_add)
                     }
+
+                    [context] fn sub(
+                        lhs: $integer_type,
+                        rhs: $integer_type,
+                    ) -> ExecutionResult<$integer_type> {
+                        $integer_type::paired_operation(lhs, rhs, context, <$integer_type>::checked_sub)
+                    }
+
+                    [context] fn mul(
+                        lhs: $integer_type,
+                        rhs: $integer_type,
+                    ) -> ExecutionResult<$integer_type> {
+                        $integer_type::paired_operation(lhs, rhs, context, <$integer_type>::checked_mul)
+                    }
+
+                    [context] fn div(
+                        lhs: $integer_type,
+                        rhs: $integer_type,
+                    ) -> ExecutionResult<$integer_type> {
+                        $integer_type::paired_operation(lhs, rhs, context, <$integer_type>::checked_div)
+                    }
+
+                    [context] fn rem(
+                        lhs: $integer_type,
+                        rhs: $integer_type,
+                    ) -> ExecutionResult<$integer_type> {
+                        $integer_type::paired_operation(lhs, rhs, context, <$integer_type>::checked_rem)
+                    }
                 }
                 interface_items {
                     fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
@@ -791,6 +851,10 @@ macro_rules! impl_int_operations {
                     ) -> Option<BinaryOperationInterface> {
                         Some(match operation {
                             PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
+                            PairedBinaryOperation::Subtraction { .. } => binary_definitions::sub(),
+                            PairedBinaryOperation::Multiplication { .. } => binary_definitions::mul(),
+                            PairedBinaryOperation::Division { .. } => binary_definitions::div(),
+                            PairedBinaryOperation::Remainder { .. } => binary_definitions::rem(),
                             _ => return None,
                         })
                     }

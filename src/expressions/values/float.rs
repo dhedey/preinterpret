@@ -397,6 +397,34 @@ define_interface! {
             ) -> ExecutionResult<ResolvedValue> {
                 UntypedFloat::paired_operation(lhs, rhs, context, |a, b| Some(a + b))
             }
+
+            [context] fn sub(
+                lhs: Owned<UntypedFloat>,
+                rhs: Owned<FloatExpression>,
+            ) -> ExecutionResult<ResolvedValue> {
+                UntypedFloat::paired_operation(lhs, rhs, context, |a, b| Some(a - b))
+            }
+
+            [context] fn mul(
+                lhs: Owned<UntypedFloat>,
+                rhs: Owned<FloatExpression>,
+            ) -> ExecutionResult<ResolvedValue> {
+                UntypedFloat::paired_operation(lhs, rhs, context, |a, b| Some(a * b))
+            }
+
+            [context] fn div(
+                lhs: Owned<UntypedFloat>,
+                rhs: Owned<FloatExpression>,
+            ) -> ExecutionResult<ResolvedValue> {
+                UntypedFloat::paired_operation(lhs, rhs, context, |a, b| Some(a / b))
+            }
+
+            [context] fn rem(
+                lhs: Owned<UntypedFloat>,
+                rhs: Owned<FloatExpression>,
+            ) -> ExecutionResult<ResolvedValue> {
+                UntypedFloat::paired_operation(lhs, rhs, context, |a, b| Some(a % b))
+            }
         }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
@@ -431,6 +459,10 @@ define_interface! {
             ) -> Option<BinaryOperationInterface> {
                 Some(match operation {
                     PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
+                    PairedBinaryOperation::Subtraction { .. } => binary_definitions::sub(),
+                    PairedBinaryOperation::Multiplication { .. } => binary_definitions::mul(),
+                    PairedBinaryOperation::Division { .. } => binary_definitions::div(),
+                    PairedBinaryOperation::Remainder { .. } => binary_definitions::rem(),
                     _ => return None,
                 })
             }
@@ -528,6 +560,34 @@ macro_rules! impl_float_operations {
                     ) -> ExecutionResult<$float_type> {
                         $float_type::paired_operation(lhs, rhs, context, |a, b| Some(a + b))
                     }
+
+                    [context] fn sub(
+                        lhs: $float_type,
+                        rhs: $float_type,
+                    ) -> ExecutionResult<$float_type> {
+                        $float_type::paired_operation(lhs, rhs, context, |a, b| Some(a - b))
+                    }
+
+                    [context] fn mul(
+                        lhs: $float_type,
+                        rhs: $float_type,
+                    ) -> ExecutionResult<$float_type> {
+                        $float_type::paired_operation(lhs, rhs, context, |a, b| Some(a * b))
+                    }
+
+                    [context] fn div(
+                        lhs: $float_type,
+                        rhs: $float_type,
+                    ) -> ExecutionResult<$float_type> {
+                        $float_type::paired_operation(lhs, rhs, context, |a, b| Some(a / b))
+                    }
+
+                    [context] fn rem(
+                        lhs: $float_type,
+                        rhs: $float_type,
+                    ) -> ExecutionResult<$float_type> {
+                        $float_type::paired_operation(lhs, rhs, context, |a, b| Some(a % b))
+                    }
                 }
                 interface_items {
                     fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
@@ -562,6 +622,10 @@ macro_rules! impl_float_operations {
                     ) -> Option<BinaryOperationInterface> {
                         Some(match operation {
                             PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
+                            PairedBinaryOperation::Subtraction { .. } => binary_definitions::sub(),
+                            PairedBinaryOperation::Multiplication { .. } => binary_definitions::mul(),
+                            PairedBinaryOperation::Division { .. } => binary_definitions::div(),
+                            PairedBinaryOperation::Remainder { .. } => binary_definitions::rem(),
                             _ => return None,
                         })
                     }

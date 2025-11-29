@@ -340,7 +340,16 @@ impl BinaryOperation {
             BinaryOperation::Paired(operation) => {
                 // MIGRATION LIST
                 // - When we complete migrating an operator, add it to the match below
-                if let PairedBinaryOperation::Addition { .. } = operation {
+                if matches!(
+                    operation,
+                    PairedBinaryOperation::Addition { .. }
+                        | PairedBinaryOperation::Subtraction { .. }
+                        | PairedBinaryOperation::Multiplication { .. }
+                        | PairedBinaryOperation::Division { .. }
+                        | PairedBinaryOperation::Remainder { .. }
+                        | PairedBinaryOperation::LogicalAnd { .. }
+                        | PairedBinaryOperation::LogicalOr { .. }
+                ) {
                     return self.type_err("This operation should have been migrated!");
                 }
                 let value_pair = left.expect_value_pair(operation, right)?;
