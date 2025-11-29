@@ -235,7 +235,15 @@ define_interface! {
                 input.into_stream()
             }
         }
-        pub(crate) mod binary_operations {}
+        pub(crate) mod binary_operations {
+            fn eq(lhs: AnyRef<ExpressionValue>, rhs: AnyRef<ExpressionValue>) -> bool {
+                values_equal(&lhs, &rhs)
+            }
+
+            fn ne(lhs: AnyRef<ExpressionValue>, rhs: AnyRef<ExpressionValue>) -> bool {
+                !values_equal(&lhs, &rhs)
+            }
+        }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
@@ -244,6 +252,16 @@ define_interface! {
                         CastTarget::Stream => unary_definitions::cast_to_stream(),
                         _ => return None,
                     },
+                    _ => return None,
+                })
+            }
+
+            fn resolve_paired_binary_operation(
+                operation: &PairedBinaryOperation,
+            ) -> Option<BinaryOperationInterface> {
+                Some(match operation {
+                    PairedBinaryOperation::Equal { .. } => binary_definitions::eq(),
+                    PairedBinaryOperation::NotEqual { .. } => binary_definitions::ne(),
                     _ => return None,
                 })
             }
@@ -1030,8 +1048,14 @@ pub(crate) fn objects_equal(lhs: &ObjectExpression, rhs: &ObjectExpression) -> b
 pub(crate) fn streams_equal(lhs: &StreamExpression, rhs: &StreamExpression) -> bool {
     // Compare streams by their token representation
     // We use the debug string representation for simplicity
-    let lhs_str = lhs.value.to_token_stream_removing_any_transparent_groups().to_string();
-    let rhs_str = rhs.value.to_token_stream_removing_any_transparent_groups().to_string();
+    let lhs_str = lhs
+        .value
+        .to_token_stream_removing_any_transparent_groups()
+        .to_string();
+    let rhs_str = rhs
+        .value
+        .to_token_stream_removing_any_transparent_groups()
+        .to_string();
     lhs_str == rhs_str
 }
 

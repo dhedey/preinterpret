@@ -283,31 +283,8 @@ define_interface! {
         }
         pub(crate) mod unary_operations {
         }
-        pub(crate) mod binary_operations {
-            fn eq(lhs: AnyRef<ObjectExpression>, rhs: AnyRef<ExpressionValue>) -> bool {
-                match &*rhs {
-                    ExpressionValue::Object(rhs_object) => objects_equal(&lhs, rhs_object),
-                    _ => false,
-                }
-            }
-
-            fn ne(lhs: AnyRef<ObjectExpression>, rhs: AnyRef<ExpressionValue>) -> bool {
-                match &*rhs {
-                    ExpressionValue::Object(rhs_object) => !objects_equal(&lhs, rhs_object),
-                    _ => true,
-                }
-            }
-        }
+        pub(crate) mod binary_operations {}
         interface_items {
-            fn resolve_paired_binary_operation(
-                operation: &PairedBinaryOperation,
-            ) -> Option<BinaryOperationInterface> {
-                Some(match operation {
-                    PairedBinaryOperation::Equal { .. } => binary_definitions::eq(),
-                    PairedBinaryOperation::NotEqual { .. } => binary_definitions::ne(),
-                    _ => return None,
-                })
-            }
         }
     }
 }
