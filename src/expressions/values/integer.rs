@@ -628,6 +628,27 @@ define_interface! {
             ) -> ExecutionResult<ResolvedValue> {
                 UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_rem)
             }
+
+            [context] fn bitxor(
+                lhs: Owned<UntypedInteger>,
+                rhs: Owned<IntegerExpression>,
+            ) -> ExecutionResult<ResolvedValue> {
+                UntypedInteger::paired_operation(lhs, rhs, context, |a, b| Some(a ^ b))
+            }
+
+            [context] fn bitand(
+                lhs: Owned<UntypedInteger>,
+                rhs: Owned<IntegerExpression>,
+            ) -> ExecutionResult<ResolvedValue> {
+                UntypedInteger::paired_operation(lhs, rhs, context, |a, b| Some(a & b))
+            }
+
+            [context] fn bitor(
+                lhs: Owned<UntypedInteger>,
+                rhs: Owned<IntegerExpression>,
+            ) -> ExecutionResult<ResolvedValue> {
+                UntypedInteger::paired_operation(lhs, rhs, context, |a, b| Some(a | b))
+            }
         }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
@@ -666,6 +687,9 @@ define_interface! {
                     PairedBinaryOperation::Multiplication { .. } => binary_definitions::mul(),
                     PairedBinaryOperation::Division { .. } => binary_definitions::div(),
                     PairedBinaryOperation::Remainder { .. } => binary_definitions::rem(),
+                    PairedBinaryOperation::BitXor { .. } => binary_definitions::bitxor(),
+                    PairedBinaryOperation::BitAnd { .. } => binary_definitions::bitand(),
+                    PairedBinaryOperation::BitOr { .. } => binary_definitions::bitor(),
                     _ => return None,
                 })
             }
@@ -806,6 +830,18 @@ macro_rules! impl_int_operations {
                     ) -> ExecutionResult<$integer_type> {
                         $integer_type::paired_operation(lhs, rhs, context, <$integer_type>::checked_rem)
                     }
+
+                    fn bitxor(lhs: $integer_type, rhs: $integer_type) -> $integer_type {
+                        lhs ^ rhs
+                    }
+
+                    fn bitand(lhs: $integer_type, rhs: $integer_type) -> $integer_type {
+                        lhs & rhs
+                    }
+
+                    fn bitor(lhs: $integer_type, rhs: $integer_type) -> $integer_type {
+                        lhs | rhs
+                    }
                 }
                 interface_items {
                     fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
@@ -855,6 +891,9 @@ macro_rules! impl_int_operations {
                             PairedBinaryOperation::Multiplication { .. } => binary_definitions::mul(),
                             PairedBinaryOperation::Division { .. } => binary_definitions::div(),
                             PairedBinaryOperation::Remainder { .. } => binary_definitions::rem(),
+                            PairedBinaryOperation::BitXor { .. } => binary_definitions::bitxor(),
+                            PairedBinaryOperation::BitAnd { .. } => binary_definitions::bitand(),
+                            PairedBinaryOperation::BitOr { .. } => binary_definitions::bitor(),
                             _ => return None,
                         })
                     }

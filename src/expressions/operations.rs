@@ -349,6 +349,9 @@ impl BinaryOperation {
                         | PairedBinaryOperation::Remainder { .. }
                         | PairedBinaryOperation::LogicalAnd { .. }
                         | PairedBinaryOperation::LogicalOr { .. }
+                        | PairedBinaryOperation::BitXor { .. }
+                        | PairedBinaryOperation::BitAnd { .. }
+                        | PairedBinaryOperation::BitOr { .. }
                 ) {
                     return self.type_err("This operation should have been migrated!");
                 }

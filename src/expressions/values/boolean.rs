@@ -150,6 +150,18 @@ define_interface! {
             fn or(lhs: bool, rhs: bool) -> bool {
                 lhs || rhs
             }
+
+            fn bitxor(lhs: bool, rhs: bool) -> bool {
+                lhs ^ rhs
+            }
+
+            fn bitand(lhs: bool, rhs: bool) -> bool {
+                lhs & rhs
+            }
+
+            fn bitor(lhs: bool, rhs: bool) -> bool {
+                lhs | rhs
+            }
         }
         interface_items {
             fn resolve_paired_binary_operation(
@@ -158,6 +170,9 @@ define_interface! {
                 Some(match operation {
                     PairedBinaryOperation::LogicalAnd { .. } => binary_definitions::and(),
                     PairedBinaryOperation::LogicalOr { .. } => binary_definitions::or(),
+                    PairedBinaryOperation::BitXor { .. } => binary_definitions::bitxor(),
+                    PairedBinaryOperation::BitAnd { .. } => binary_definitions::bitand(),
+                    PairedBinaryOperation::BitOr { .. } => binary_definitions::bitor(),
                     _ => return None,
                 })
             }

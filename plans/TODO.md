@@ -47,7 +47,7 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
   - [x] `Addition`
   - [x] `Subtraction`, `Multiplication`, `Division` and `Remainder`
   - [x] `LogicalAnd` and `LogicalOr`
-  - [ ] `BitXor`, `BitAnd` and `BitOr`
+  - [x] `BitXor`, `BitAnd` and `BitOr`
   - [ ] `Equal` and `NotEqual`
   - [ ] `LessThan`, `LessThanOrEqual`, `GreaterThanOrEqual`, `GreaterThan`
 - [ ] Migrate the following `IntegerBinaryOperation`:
