@@ -32,7 +32,7 @@ impl ObjectExpression {
     pub(super) fn handle_integer_binary_operation(
         self,
         _right: IntegerExpression,
-        operation: WrappedOp<IntegerBinaryOperation>,
+        operation: &IntegerBinaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         operation.unsupported(self)
     }
@@ -40,7 +40,7 @@ impl ObjectExpression {
     pub(super) fn handle_paired_binary_operation(
         self,
         _rhs: Self,
-        operation: WrappedOp<PairedBinaryOperation>,
+        operation: &PairedBinaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         operation.unsupported(self)
     }

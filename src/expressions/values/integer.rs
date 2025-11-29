@@ -22,7 +22,7 @@ impl IntegerExpression {
     pub(super) fn handle_integer_binary_operation(
         self,
         right: IntegerExpression,
-        operation: WrappedOp<IntegerBinaryOperation>,
+        operation: &IntegerBinaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         match self.value {
             IntegerExpressionValue::Untyped(input) => {
@@ -111,7 +111,7 @@ pub(crate) enum IntegerExpressionValuePair {
 impl IntegerExpressionValuePair {
     pub(super) fn handle_paired_binary_operation(
         self,
-        operation: WrappedOp<PairedBinaryOperation>,
+        operation: &PairedBinaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         match self {
             Self::Untyped(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
@@ -303,10 +303,10 @@ impl UntypedInteger {
     pub(super) fn handle_integer_binary_operation(
         self,
         rhs: IntegerExpression,
-        operation: WrappedOp<IntegerBinaryOperation>,
+        operation: &IntegerBinaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.parse_fallback()?;
-        Ok(match operation.operation {
+        Ok(match operation {
             IntegerBinaryOperation::ShiftLeft { .. } => match rhs.value {
                 IntegerExpressionValue::Untyped(rhs) => {
                     operation.output(lhs << rhs.parse_fallback()?)
@@ -347,7 +347,7 @@ impl UntypedInteger {
     pub(super) fn handle_paired_binary_operation(
         self,
         rhs: Self,
-        operation: WrappedOp<PairedBinaryOperation>,
+        operation: &PairedBinaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.parse_fallback()?;
         let rhs = rhs.parse_fallback()?;
@@ -359,7 +359,7 @@ impl UntypedInteger {
                 rhs
             )
         };
-        Ok(match operation.operation {
+        Ok(match operation {
             PairedBinaryOperation::Addition { .. } => {
                 return operation.output_if_some(
                     lhs.checked_add(rhs).map(Self::from_fallback),
@@ -591,7 +591,7 @@ define_interface! {
                         IntegerExpressionValuePair::Isize(lhs.parse_as()?, rhs)
                     }
                 };
-                pair.handle_paired_binary_operation(operation.wrap())
+                pair.handle_paired_binary_operation(operation)
             }
         }
         interface_items {
@@ -791,10 +791,10 @@ macro_rules! impl_int_operations {
         }
 
         impl HandleBinaryOperation for $integer_type {
-            fn handle_paired_binary_operation(self, rhs: Self, operation: WrappedOp<PairedBinaryOperation>) -> ExecutionResult<ExpressionValue> {
+            fn handle_paired_binary_operation(self, rhs: Self, operation: &PairedBinaryOperation) -> ExecutionResult<ExpressionValue> {
                 let lhs = self;
                 let overflow_error = || format!("The {} operation {:?} {} {:?} overflowed", stringify!($integer_type), lhs, operation.symbolic_description(), rhs);
-                Ok(match operation.operation {
+                Ok(match operation {
                     PairedBinaryOperation::Addition { .. } => return operation.output_if_some(lhs.checked_add(rhs), overflow_error),
                     PairedBinaryOperation::Subtraction { .. } => return operation.output_if_some(lhs.checked_sub(rhs), overflow_error),
                     PairedBinaryOperation::Multiplication { .. } => return operation.output_if_some(lhs.checked_mul(rhs), overflow_error),
@@ -817,10 +817,10 @@ macro_rules! impl_int_operations {
             fn handle_integer_binary_operation(
                 self,
                 rhs: IntegerExpression,
-                operation: WrappedOp<IntegerBinaryOperation>,
+                operation: &IntegerBinaryOperation,
             ) -> ExecutionResult<ExpressionValue> {
                 let lhs = self;
-                Ok(match operation.operation {
+                Ok(match operation {
                     IntegerBinaryOperation::ShiftLeft { .. } => {
                         match rhs.value {
                             IntegerExpressionValue::Untyped(rhs) => operation.output(lhs << rhs.parse_fallback()?),

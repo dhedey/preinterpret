@@ -1,41 +1,27 @@
 use super::*;
 
 pub(crate) trait Operation: HasSpanRange {
-    fn wrap(&self) -> WrappedOp<'_, Self> {
-        WrappedOp { operation: self }
-    }
-
     fn symbolic_description(&self) -> &'static str;
-}
 
-pub(crate) struct WrappedOp<'a, T: Operation + ?Sized> {
-    pub(super) operation: &'a T,
-}
-
-impl<T: Operation> WrappedOp<'_, T> {
-    pub(super) fn symbolic_description(&self) -> &'static str {
-        self.operation.symbolic_description()
-    }
-
-    pub(super) fn output(&self, output_value: impl ToExpressionValue) -> ExpressionValue {
+    fn output(&self, output_value: impl ToExpressionValue) -> ExpressionValue {
         output_value.into_value()
     }
 
-    pub(super) fn output_if_some(
+    fn output_if_some(
         &self,
         output_value: Option<impl ToExpressionValue>,
         error_message: impl FnOnce() -> String,
     ) -> ExecutionResult<ExpressionValue> {
         match output_value {
             Some(output_value) => Ok(self.output(output_value)),
-            None => self.operation.value_err(error_message()),
+            None => self.value_err(error_message()),
         }
     }
 
-    pub(super) fn unsupported(&self, value: impl HasValueType) -> ExecutionResult<ExpressionValue> {
-        self.operation.type_err(format!(
+    fn unsupported(&self, value: impl HasValueType) -> ExecutionResult<ExpressionValue> {
+        self.type_err(format!(
             "The {} operator is not supported for {} values",
-            self.operation.symbolic_description(),
+            self.symbolic_description(),
             value.value_type(),
         ))
     }
@@ -353,14 +339,14 @@ impl BinaryOperation {
             BinaryOperation::Paired(operation) => {
                 let value_pair = left.expect_value_pair(operation, right)?;
                 value_pair
-                    .handle_paired_binary_operation(operation.wrap())?
+                    .handle_paired_binary_operation(operation)?
                     .into_owned(span_range)
             }
             BinaryOperation::Integer(operation) => {
                 let right = right
                     .into_integer()
                     .ok_or_else(|| self.type_error("The shift amount must be an integer"))?;
-                left.handle_integer_binary_operation(right, operation.wrap())?
+                left.handle_integer_binary_operation(right, operation)?
                     .into_owned(span_range)
             }
         })
@@ -479,13 +465,13 @@ pub(super) trait HandleBinaryOperation: Sized {
     fn handle_paired_binary_operation(
         self,
         rhs: Self,
-        operation: WrappedOp<PairedBinaryOperation>,
+        operation: &PairedBinaryOperation,
     ) -> ExecutionResult<ExpressionValue>;
 
     fn handle_integer_binary_operation(
         self,
         rhs: IntegerExpression,
-        operation: WrappedOp<IntegerBinaryOperation>,
+        operation: &IntegerBinaryOperation,
     ) -> ExecutionResult<ExpressionValue>;
 }
 

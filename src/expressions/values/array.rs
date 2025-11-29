@@ -24,7 +24,7 @@ impl ArrayExpression {
     pub(super) fn handle_integer_binary_operation(
         self,
         _right: IntegerExpression,
-        operation: WrappedOp<IntegerBinaryOperation>,
+        operation: &IntegerBinaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         operation.unsupported(self)
     }
@@ -32,11 +32,11 @@ impl ArrayExpression {
     pub(super) fn handle_paired_binary_operation(
         self,
         rhs: Self,
-        operation: WrappedOp<PairedBinaryOperation>,
+        operation: &PairedBinaryOperation,
     ) -> ExecutionResult<ExpressionValue> {
         let lhs = self.items;
         let rhs = rhs.items;
-        Ok(match operation.operation {
+        Ok(match operation {
             PairedBinaryOperation::Addition { .. } => operation.output({
                 let mut stream = lhs;
                 stream.extend(rhs);
