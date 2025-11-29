@@ -637,3 +637,121 @@ fn can_assign_to_mutable_references() {
         %[_].assert_eq(y, 1);
     );
 }
+
+#[test]
+fn test_array_equality() {
+    // Array equality - same arrays
+    preinterpret_assert_eq!(#([1, 2, 3] == [1, 2, 3]), true);
+    preinterpret_assert_eq!(#([1, 2, 3] != [1, 2, 3]), false);
+
+    // Array equality - different arrays
+    preinterpret_assert_eq!(#([1, 2, 3] == [1, 2, 4]), false);
+    preinterpret_assert_eq!(#([1, 2, 3] != [1, 2, 4]), true);
+
+    // Array equality - different lengths
+    preinterpret_assert_eq!(#([1, 2, 3] == [1, 2]), false);
+    preinterpret_assert_eq!(#([1, 2] == [1, 2, 3]), false);
+
+    // Array equality - empty arrays
+    preinterpret_assert_eq!(#([] == []), true);
+
+    // Nested arrays
+    preinterpret_assert_eq!(#([[1, 2], [3, 4]] == [[1, 2], [3, 4]]), true);
+    preinterpret_assert_eq!(#([[1, 2], [3, 4]] == [[1, 2], [3, 5]]), false);
+
+    // Arrays with different value types should be unequal
+    preinterpret_assert_eq!(#([1, 2, 3] == "not an array"), false);
+    preinterpret_assert_eq!(#([1, 2, 3] != "not an array"), true);
+
+    // Array with variables
+    run!(
+        let a = [1, 2, 3];
+        let b = [1, 2, 3];
+        let c = [1, 2, 4];
+        %[_].assert(a == b, "a should equal b");
+        %[_].assert(a != c, "a should not equal c");
+    );
+}
+
+#[test]
+fn test_object_equality() {
+    // Object equality - same objects
+    preinterpret_assert_eq!(#(%{a: 1, b: 2} == %{a: 1, b: 2}), true);
+    preinterpret_assert_eq!(#(%{a: 1, b: 2} != %{a: 1, b: 2}), false);
+
+    // Object equality - different values
+    preinterpret_assert_eq!(#(%{a: 1, b: 2} == %{a: 1, b: 3}), false);
+    preinterpret_assert_eq!(#(%{a: 1, b: 2} != %{a: 1, b: 3}), true);
+
+    // Object equality - different keys
+    preinterpret_assert_eq!(#(%{a: 1, b: 2} == %{a: 1, c: 2}), false);
+
+    // Object equality - different number of keys
+    preinterpret_assert_eq!(#(%{a: 1, b: 2} == %{a: 1}), false);
+
+    // Empty objects
+    preinterpret_assert_eq!(#(%{} == %{}), true);
+
+    // Nested objects
+    preinterpret_assert_eq!(#(%{x: %{y: 1}} == %{x: %{y: 1}}), true);
+    preinterpret_assert_eq!(#(%{x: %{y: 1}} == %{x: %{y: 2}}), false);
+
+    // Objects with different value types should be unequal
+    preinterpret_assert_eq!(#(%{a: 1} == "not an object"), false);
+    preinterpret_assert_eq!(#(%{a: 1} != "not an object"), true);
+
+    // Object with variables
+    run!(
+        let a = %{x: 1, y: 2};
+        let b = %{x: 1, y: 2};
+        let c = %{x: 1, y: 3};
+        %[_].assert(a == b, "a should equal b");
+        %[_].assert(a != c, "a should not equal c");
+    );
+}
+
+#[test]
+fn test_stream_equality() {
+    // Stream equality - same streams
+    preinterpret_assert_eq!(#(%[hello world] == %[hello world]), true);
+    preinterpret_assert_eq!(#(%[hello world] != %[hello world]), false);
+
+    // Stream equality - different streams
+    preinterpret_assert_eq!(#(%[hello world] == %[hello there]), false);
+    preinterpret_assert_eq!(#(%[hello world] != %[hello there]), true);
+
+    // Empty streams
+    preinterpret_assert_eq!(#(%[] == %[]), true);
+
+    // Streams with different value types should be unequal
+    preinterpret_assert_eq!(#(%[hello] == "not a stream"), false);
+    preinterpret_assert_eq!(#(%[hello] != "not a stream"), true);
+
+    // Stream with variables
+    run!(
+        let a = %[foo bar];
+        let b = %[foo bar];
+        let c = %[foo baz];
+        %[_].assert(a == b, "a should equal b");
+        %[_].assert(a != c, "a should not equal c");
+    );
+}
+
+#[test]
+fn test_mixed_type_equality() {
+    // Arrays and objects are not equal even if they look similar
+    preinterpret_assert_eq!(#([1, 2] == %{a: 1}), false);
+    preinterpret_assert_eq!(#(%{a: 1} == [1, 2]), false);
+
+    // Arrays and streams are not equal
+    preinterpret_assert_eq!(#([1, 2] == %[1 2]), false);
+    preinterpret_assert_eq!(#(%[1 2] == [1, 2]), false);
+
+    // Objects and streams are not equal
+    preinterpret_assert_eq!(#(%{a: 1} == %[a: 1]), false);
+    preinterpret_assert_eq!(#(%[a: 1] == %{a: 1}), false);
+
+    // Nested mixed types
+    preinterpret_assert_eq!(#([%{a: 1}, %[hello]] == [%{a: 1}, %[hello]]), true);
+    preinterpret_assert_eq!(#([%{a: 1}, %[hello]] == [%{a: 2}, %[hello]]), false);
+}

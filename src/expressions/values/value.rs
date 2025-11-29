@@ -931,6 +931,110 @@ pub(crate) trait HasValueType {
     }
 }
 
+/// Checks if two ExpressionValues are equal.
+/// Returns true if both values are of the same type and have equal contents.
+/// For arrays, objects, and streams, this performs a deep comparison.
+pub(crate) fn values_equal(lhs: &ExpressionValue, rhs: &ExpressionValue) -> bool {
+    match (lhs, rhs) {
+        (ExpressionValue::None, ExpressionValue::None) => true,
+        (ExpressionValue::Boolean(l), ExpressionValue::Boolean(r)) => l.value == r.value,
+        (ExpressionValue::Char(l), ExpressionValue::Char(r)) => l.value == r.value,
+        (ExpressionValue::String(l), ExpressionValue::String(r)) => l.value == r.value,
+        (ExpressionValue::Integer(l), ExpressionValue::Integer(r)) => integers_equal(l, r),
+        (ExpressionValue::Float(l), ExpressionValue::Float(r)) => floats_equal(l, r),
+        (ExpressionValue::Array(l), ExpressionValue::Array(r)) => arrays_equal(l, r),
+        (ExpressionValue::Object(l), ExpressionValue::Object(r)) => objects_equal(l, r),
+        (ExpressionValue::Stream(l), ExpressionValue::Stream(r)) => streams_equal(l, r),
+        // Different types are not equal
+        _ => false,
+    }
+}
+
+fn integers_equal(lhs: &IntegerExpression, rhs: &IntegerExpression) -> bool {
+    use IntegerExpressionValue::*;
+    match (&lhs.value, &rhs.value) {
+        (Untyped(l), Untyped(r)) => untyped_integers_equal(l, r),
+        (U8(l), U8(r)) => l == r,
+        (U16(l), U16(r)) => l == r,
+        (U32(l), U32(r)) => l == r,
+        (U64(l), U64(r)) => l == r,
+        (U128(l), U128(r)) => l == r,
+        (Usize(l), Usize(r)) => l == r,
+        (I8(l), I8(r)) => l == r,
+        (I16(l), I16(r)) => l == r,
+        (I32(l), I32(r)) => l == r,
+        (I64(l), I64(r)) => l == r,
+        (I128(l), I128(r)) => l == r,
+        (Isize(l), Isize(r)) => l == r,
+        // Different integer types are not equal
+        _ => false,
+    }
+}
+
+fn untyped_integers_equal(lhs: &UntypedInteger, rhs: &UntypedInteger) -> bool {
+    // For untyped integers, compare their fallback values (i128)
+    // If parsing fails for either, they're not equal
+    match (lhs.parse_fallback(), rhs.parse_fallback()) {
+        (Ok(l), Ok(r)) => l == r,
+        _ => false,
+    }
+}
+
+fn floats_equal(lhs: &FloatExpression, rhs: &FloatExpression) -> bool {
+    use FloatExpressionValue::*;
+    match (&lhs.value, &rhs.value) {
+        (Untyped(l), Untyped(r)) => untyped_floats_equal(l, r),
+        (F32(l), F32(r)) => l == r,
+        (F64(l), F64(r)) => l == r,
+        // Different float types are not equal
+        _ => false,
+    }
+}
+
+fn untyped_floats_equal(lhs: &UntypedFloat, rhs: &UntypedFloat) -> bool {
+    // For untyped floats, compare their fallback values (f64)
+    // If parsing fails for either, they're not equal
+    match (lhs.parse_fallback(), rhs.parse_fallback()) {
+        (Ok(l), Ok(r)) => l == r,
+        _ => false,
+    }
+}
+
+pub(crate) fn arrays_equal(lhs: &ArrayExpression, rhs: &ArrayExpression) -> bool {
+    if lhs.items.len() != rhs.items.len() {
+        return false;
+    }
+    lhs.items
+        .iter()
+        .zip(rhs.items.iter())
+        .all(|(l, r)| values_equal(l, r))
+}
+
+pub(crate) fn objects_equal(lhs: &ObjectExpression, rhs: &ObjectExpression) -> bool {
+    if lhs.entries.len() != rhs.entries.len() {
+        return false;
+    }
+    for (key, l_entry) in &lhs.entries {
+        match rhs.entries.get(key) {
+            Some(r_entry) => {
+                if !values_equal(&l_entry.value, &r_entry.value) {
+                    return false;
+                }
+            }
+            None => return false,
+        }
+    }
+    true
+}
+
+pub(crate) fn streams_equal(lhs: &StreamExpression, rhs: &StreamExpression) -> bool {
+    // Compare streams by their token representation
+    // We use the debug string representation for simplicity
+    let lhs_str = lhs.value.to_token_stream_removing_any_transparent_groups().to_string();
+    let rhs_str = rhs.value.to_token_stream_removing_any_transparent_groups().to_string();
+    lhs_str == rhs_str
+}
+
 pub(crate) enum ExpressionValuePair {
     Integer(IntegerExpressionValuePair),
     Float(FloatExpressionValuePair),

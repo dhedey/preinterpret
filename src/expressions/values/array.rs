@@ -247,6 +247,20 @@ define_interface! {
                 lhs.items.extend(rhs.items);
                 lhs
             }
+
+            fn eq(lhs: AnyRef<ArrayExpression>, rhs: AnyRef<ExpressionValue>) -> bool {
+                match &*rhs {
+                    ExpressionValue::Array(rhs_array) => arrays_equal(&lhs, rhs_array),
+                    _ => false,
+                }
+            }
+
+            fn ne(lhs: AnyRef<ArrayExpression>, rhs: AnyRef<ExpressionValue>) -> bool {
+                match &*rhs {
+                    ExpressionValue::Array(rhs_array) => !arrays_equal(&lhs, rhs_array),
+                    _ => true,
+                }
+            }
         }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
@@ -267,6 +281,8 @@ define_interface! {
             ) -> Option<BinaryOperationInterface> {
                 Some(match operation {
                     PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
+                    PairedBinaryOperation::Equal { .. } => binary_definitions::eq(),
+                    PairedBinaryOperation::NotEqual { .. } => binary_definitions::ne(),
                     _ => return None,
                 })
             }

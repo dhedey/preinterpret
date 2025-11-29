@@ -281,6 +281,20 @@ define_interface! {
                 rhs.append_into(&mut lhs);
                 lhs
             }
+
+            fn eq(lhs: AnyRef<StreamExpression>, rhs: AnyRef<ExpressionValue>) -> bool {
+                match &*rhs {
+                    ExpressionValue::Stream(rhs_stream) => streams_equal(&lhs, rhs_stream),
+                    _ => false,
+                }
+            }
+
+            fn ne(lhs: AnyRef<StreamExpression>, rhs: AnyRef<ExpressionValue>) -> bool {
+                match &*rhs {
+                    ExpressionValue::Stream(rhs_stream) => !streams_equal(&lhs, rhs_stream),
+                    _ => true,
+                }
+            }
         }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
@@ -302,6 +316,8 @@ define_interface! {
             ) -> Option<BinaryOperationInterface> {
                 Some(match operation {
                     PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
+                    PairedBinaryOperation::Equal { .. } => binary_definitions::eq(),
+                    PairedBinaryOperation::NotEqual { .. } => binary_definitions::ne(),
                     _ => return None,
                 })
             }
