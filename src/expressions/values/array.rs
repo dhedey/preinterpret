@@ -224,10 +224,10 @@ define_interface! {
             }
 
             fn resolve_paired_binary_operation(
-                operation: &PairedBinaryOperation,
+                operation: &BinaryOperation,
             ) -> Option<BinaryOperationInterface> {
                 Some(match operation {
-                    PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
+                    BinaryOperation::Addition { .. } => binary_definitions::add(),
                     _ => return None,
                 })
             }

@@ -1,15 +1,16 @@
-use preinterpret::preinterpret;
+use preinterpret::stream;
 
-preinterpret! {
-    [!set! #bytes = 32]
-    [!set! #postfix = Hello World #bytes]
-    [!set! #MyRawVar = [!raw! Test no #str [!ident! replacement]]]
-    [!ignore! non - sensical !code :D - ignored (!)]
+stream! {
+    #{
+        let bytes = %[32];
+        let postfix = %[Hello World #bytes];
+        let my_raw_var = %raw[Test no #str [!ident! replacement]];
+    }
     struct MyStruct;
-    type [!ident! X "Boo" [!string! Hello 1] #postfix] = MyStruct;
-    const NUM: u32 = [!literal! 1337u #bytes];
-    const STRING: &str = [!string! #MyRawVar];
-    const SNAKE_CASE: &str = [!snake! MyVar];
+    type #(%[X "Boo" Hello 1 #postfix].to_ident()) = MyStruct;
+    const NUM: u32 = #(%[1337u #bytes].to_literal());
+    const STRING: &str = #(my_raw_var.to_string());
+    const SNAKE_CASE: &str = #(%[MyVar].to_string().to_lower_snake_case());
 }
 
 #[test]

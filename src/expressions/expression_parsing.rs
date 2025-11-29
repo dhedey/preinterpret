@@ -774,37 +774,22 @@ impl OperatorPrecendence {
 
     fn of_binary_operation(op: &BinaryOperation) -> Self {
         match op {
-            BinaryOperation::Integer(op) => Self::of_integer_binary_operator(op),
-            BinaryOperation::Paired(op) => Self::of_paired_binary_operator(op),
-        }
-    }
-
-    fn of_integer_binary_operator(op: &IntegerBinaryOperation) -> Self {
-        match op {
-            IntegerBinaryOperation::ShiftLeft { .. }
-            | IntegerBinaryOperation::ShiftRight { .. } => OperatorPrecendence::Shift,
-        }
-    }
-
-    fn of_paired_binary_operator(op: &PairedBinaryOperation) -> Self {
-        match op {
-            PairedBinaryOperation::Addition { .. } | PairedBinaryOperation::Subtraction { .. } => {
-                Self::Sum
-            }
-            PairedBinaryOperation::Multiplication { .. }
-            | PairedBinaryOperation::Division { .. }
-            | PairedBinaryOperation::Remainder { .. } => Self::Product,
-            PairedBinaryOperation::LogicalAnd { .. } => Self::And,
-            PairedBinaryOperation::LogicalOr { .. } => Self::Or,
-            PairedBinaryOperation::BitXor { .. } => Self::BitXor,
-            PairedBinaryOperation::BitAnd { .. } => Self::BitAnd,
-            PairedBinaryOperation::BitOr { .. } => Self::BitOr,
-            PairedBinaryOperation::Equal { .. }
-            | PairedBinaryOperation::LessThan { .. }
-            | PairedBinaryOperation::LessThanOrEqual { .. }
-            | PairedBinaryOperation::NotEqual { .. }
-            | PairedBinaryOperation::GreaterThanOrEqual { .. }
-            | PairedBinaryOperation::GreaterThan { .. } => Self::Compare,
+            BinaryOperation::Addition { .. } | BinaryOperation::Subtraction { .. } => Self::Sum,
+            BinaryOperation::Multiplication { .. }
+            | BinaryOperation::Division { .. }
+            | BinaryOperation::Remainder { .. } => Self::Product,
+            BinaryOperation::LogicalAnd { .. } => Self::And,
+            BinaryOperation::LogicalOr { .. } => Self::Or,
+            BinaryOperation::BitXor { .. } => Self::BitXor,
+            BinaryOperation::BitAnd { .. } => Self::BitAnd,
+            BinaryOperation::BitOr { .. } => Self::BitOr,
+            BinaryOperation::Equal { .. }
+            | BinaryOperation::LessThan { .. }
+            | BinaryOperation::LessThanOrEqual { .. }
+            | BinaryOperation::NotEqual { .. }
+            | BinaryOperation::GreaterThanOrEqual { .. }
+            | BinaryOperation::GreaterThan { .. } => Self::Compare,
+            BinaryOperation::ShiftLeft { .. } | BinaryOperation::ShiftRight { .. } => Self::Shift,
         }
     }
 }

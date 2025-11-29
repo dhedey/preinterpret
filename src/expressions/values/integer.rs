@@ -602,33 +602,26 @@ define_interface! {
             }
 
             fn resolve_paired_binary_operation(
-                operation: &PairedBinaryOperation,
+                operation: &BinaryOperation,
             ) -> Option<BinaryOperationInterface> {
                 Some(match operation {
-                    PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
-                    PairedBinaryOperation::Subtraction { .. } => binary_definitions::sub(),
-                    PairedBinaryOperation::Multiplication { .. } => binary_definitions::mul(),
-                    PairedBinaryOperation::Division { .. } => binary_definitions::div(),
-                    PairedBinaryOperation::Remainder { .. } => binary_definitions::rem(),
-                    PairedBinaryOperation::BitXor { .. } => binary_definitions::bitxor(),
-                    PairedBinaryOperation::BitAnd { .. } => binary_definitions::bitand(),
-                    PairedBinaryOperation::BitOr { .. } => binary_definitions::bitor(),
-                    PairedBinaryOperation::Equal { .. } => binary_definitions::eq(),
-                    PairedBinaryOperation::NotEqual { .. } => binary_definitions::ne(),
-                    PairedBinaryOperation::LessThan { .. } => binary_definitions::lt(),
-                    PairedBinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
-                    PairedBinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
-                    PairedBinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
+                    BinaryOperation::Addition { .. } => binary_definitions::add(),
+                    BinaryOperation::Subtraction { .. } => binary_definitions::sub(),
+                    BinaryOperation::Multiplication { .. } => binary_definitions::mul(),
+                    BinaryOperation::Division { .. } => binary_definitions::div(),
+                    BinaryOperation::Remainder { .. } => binary_definitions::rem(),
+                    BinaryOperation::BitXor { .. } => binary_definitions::bitxor(),
+                    BinaryOperation::BitAnd { .. } => binary_definitions::bitand(),
+                    BinaryOperation::BitOr { .. } => binary_definitions::bitor(),
+                    BinaryOperation::Equal { .. } => binary_definitions::eq(),
+                    BinaryOperation::NotEqual { .. } => binary_definitions::ne(),
+                    BinaryOperation::LessThan { .. } => binary_definitions::lt(),
+                    BinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
+                    BinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
+                    BinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
+                    BinaryOperation::ShiftLeft { .. } => binary_definitions::shift_left(),
+                    BinaryOperation::ShiftRight { .. } => binary_definitions::shift_right(),
                     _ => return None,
-                })
-            }
-
-            fn resolve_integer_binary_operation(
-                operation: &IntegerBinaryOperation,
-            ) -> Option<BinaryOperationInterface> {
-                Some(match operation {
-                    IntegerBinaryOperation::ShiftLeft { .. } => binary_definitions::shift_left(),
-                    IntegerBinaryOperation::ShiftRight { .. } => binary_definitions::shift_right(),
                 })
             }
         }
@@ -865,33 +858,26 @@ macro_rules! impl_int_operations {
                     }
 
                     fn resolve_paired_binary_operation(
-                        operation: &PairedBinaryOperation,
+                        operation: &BinaryOperation,
                     ) -> Option<BinaryOperationInterface> {
                         Some(match operation {
-                            PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
-                            PairedBinaryOperation::Subtraction { .. } => binary_definitions::sub(),
-                            PairedBinaryOperation::Multiplication { .. } => binary_definitions::mul(),
-                            PairedBinaryOperation::Division { .. } => binary_definitions::div(),
-                            PairedBinaryOperation::Remainder { .. } => binary_definitions::rem(),
-                            PairedBinaryOperation::BitXor { .. } => binary_definitions::bitxor(),
-                            PairedBinaryOperation::BitAnd { .. } => binary_definitions::bitand(),
-                            PairedBinaryOperation::BitOr { .. } => binary_definitions::bitor(),
-                            PairedBinaryOperation::Equal { .. } => binary_definitions::eq(),
-                            PairedBinaryOperation::NotEqual { .. } => binary_definitions::ne(),
-                            PairedBinaryOperation::LessThan { .. } => binary_definitions::lt(),
-                            PairedBinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
-                            PairedBinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
-                            PairedBinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
+                            BinaryOperation::Addition { .. } => binary_definitions::add(),
+                            BinaryOperation::Subtraction { .. } => binary_definitions::sub(),
+                            BinaryOperation::Multiplication { .. } => binary_definitions::mul(),
+                            BinaryOperation::Division { .. } => binary_definitions::div(),
+                            BinaryOperation::Remainder { .. } => binary_definitions::rem(),
+                            BinaryOperation::BitXor { .. } => binary_definitions::bitxor(),
+                            BinaryOperation::BitAnd { .. } => binary_definitions::bitand(),
+                            BinaryOperation::BitOr { .. } => binary_definitions::bitor(),
+                            BinaryOperation::Equal { .. } => binary_definitions::eq(),
+                            BinaryOperation::NotEqual { .. } => binary_definitions::ne(),
+                            BinaryOperation::LessThan { .. } => binary_definitions::lt(),
+                            BinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
+                            BinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
+                            BinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
+                            BinaryOperation::ShiftLeft { .. } => binary_definitions::shift_left(),
+                            BinaryOperation::ShiftRight { .. } => binary_definitions::shift_right(),
                             _ => return None,
-                        })
-                    }
-
-                    fn resolve_integer_binary_operation(
-                        operation: &IntegerBinaryOperation,
-                    ) -> Option<BinaryOperationInterface> {
-                        Some(match operation {
-                            IntegerBinaryOperation::ShiftLeft { .. } => binary_definitions::shift_left(),
-                            IntegerBinaryOperation::ShiftRight { .. } => binary_definitions::shift_right(),
                         })
                     }
                 }

@@ -127,15 +127,15 @@ define_interface! {
         }
         interface_items {
             fn resolve_paired_binary_operation(
-                operation: &PairedBinaryOperation,
+                operation: &BinaryOperation,
             ) -> Option<BinaryOperationInterface> {
                 Some(match operation {
-                    PairedBinaryOperation::Equal { .. } => binary_definitions::eq(),
-                    PairedBinaryOperation::NotEqual { .. } => binary_definitions::ne(),
-                    PairedBinaryOperation::LessThan { .. } => binary_definitions::lt(),
-                    PairedBinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
-                    PairedBinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
-                    PairedBinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
+                    BinaryOperation::Equal { .. } => binary_definitions::eq(),
+                    BinaryOperation::NotEqual { .. } => binary_definitions::ne(),
+                    BinaryOperation::LessThan { .. } => binary_definitions::lt(),
+                    BinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
+                    BinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
+                    BinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
                     _ => return None,
                 })
             }

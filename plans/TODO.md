@@ -56,7 +56,7 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
   which should massively reduce the number of implementataions we need to generate.
     i.e. we have a `CoercedInt<u32>` wrapper type which we use as the operand of the SHL/SHR operators
 - [x] Remove the `evaluate_legacy` method, the `PairedBinaryOperation`, and all the dead code
-- [ ] Combine `PairedBinaryOperation` and `IntegerBinaryOperation` into a flattened `BinaryOperation`
+- [x] Combine `PairedBinaryOperation` and `IntegerBinaryOperation` into a flattened `BinaryOperation`
 - [ ] Add `==` and `!=` to streams, objects and arrays and make it work with `AnyRef<..>` arguments for testing equality
 - [ ] Plan out migrating CompoundAssignment
 - [ ] Ensure all `TODO[operation-refactor]` are done

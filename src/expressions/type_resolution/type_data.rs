@@ -71,22 +71,11 @@ pub(crate) trait HierarchicalTypeData {
     fn resolve_own_binary_operation(
         operation: &BinaryOperation,
     ) -> Option<BinaryOperationInterface> {
-        match operation {
-            BinaryOperation::Paired(operation) => Self::resolve_paired_binary_operation(operation),
-            BinaryOperation::Integer(operation) => {
-                Self::resolve_integer_binary_operation(operation)
-            }
-        }
+        Self::resolve_paired_binary_operation(operation)
     }
 
     fn resolve_paired_binary_operation(
-        _operation: &PairedBinaryOperation,
-    ) -> Option<BinaryOperationInterface> {
-        None
-    }
-
-    fn resolve_integer_binary_operation(
-        _operation: &IntegerBinaryOperation,
+        _operation: &BinaryOperation,
     ) -> Option<BinaryOperationInterface> {
         None
     }
