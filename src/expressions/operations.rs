@@ -130,7 +130,8 @@ impl UnaryOperation {
                 input.value_type(),
             ))
         })?;
-        method.execute(ResolvedValue::Owned(input), self)
+        let input = method.argument_ownership.map_from_owned(input)?;
+        method.execute(input, self)
     }
 }
 
