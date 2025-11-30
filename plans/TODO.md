@@ -55,7 +55,7 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
   - [x] Compute SHL/SHR on `Integer` via `.checked_shl(u32)` with an attempted cast to u32 via TryInto<u32>,
   which should massively reduce the number of implementataions we need to generate.
     i.e. we have a `CoercedInt<u32>` wrapper type which we use as the operand of the SHL/SHR operators
-- [ ] Remove the `evaluate_legacy` method, the `PairedBinaryOperation`, and all the dead code
+- [x] Remove the `evaluate_legacy` method, the `PairedBinaryOperation`, and all the dead code
 - [ ] Combine `PairedBinaryOperation` and `IntegerBinaryOperation` into a flattened `BinaryOperation`
 - [x] Add `==` and `!=` to streams, objects and arrays and make it work with `AnyRef<..>` arguments for testing equality
 - [ ] Plan out migrating CompoundAssignment

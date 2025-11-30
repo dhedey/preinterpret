@@ -29,22 +29,6 @@ pub(crate) struct ObjectEntry {
 }
 
 impl ObjectExpression {
-    pub(super) fn handle_integer_binary_operation(
-        self,
-        _right: IntegerExpression,
-        operation: &IntegerBinaryOperation,
-    ) -> ExecutionResult<ExpressionValue> {
-        operation.unsupported(self)
-    }
-
-    pub(super) fn handle_paired_binary_operation(
-        self,
-        _rhs: Self,
-        operation: &PairedBinaryOperation,
-    ) -> ExecutionResult<ExpressionValue> {
-        operation.unsupported(self)
-    }
-
     pub(super) fn into_indexed(
         mut self,
         index: Spanned<&ExpressionValue>,

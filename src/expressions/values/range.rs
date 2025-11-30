@@ -1,3 +1,5 @@
+use syn::RangeLimits;
+
 use super::*;
 
 #[derive(Clone)]
@@ -278,123 +280,73 @@ pub(super) enum IterableExpressionRange<T> {
     },
 }
 
+fn resolve_range<T: ResolvableArgumentOwned + ResolvableRange>(
+    start: T,
+    dots: syn::RangeLimits,
+    end: Option<OwnedValue>,
+) -> ExecutionResult<Box<dyn ClonableIterator<Item = ExpressionValue>>> {
+    let definition = match (end, dots) {
+        (Some(end), dots) => {
+            let end = end.resolve_as("The end of this range bound")?;
+            IterableExpressionRange::RangeFromTo { start, dots, end }
+        }
+        (None, RangeLimits::HalfOpen(dots)) => IterableExpressionRange::RangeFrom { start, dots },
+        (None, RangeLimits::Closed(_)) => {
+            return dots.value_err("The range '..=' requires an end value")
+        }
+    };
+    T::resolve(definition)
+}
+
+trait ResolvableRange: Sized {
+    fn resolve(
+        definition: IterableExpressionRange<Self>,
+    ) -> ExecutionResult<Box<dyn ClonableIterator<Item = ExpressionValue>>>;
+}
+
 impl IterableExpressionRange<ExpressionValue> {
     pub(super) fn resolve_iterator(
         self,
     ) -> ExecutionResult<Box<dyn ClonableIterator<Item = ExpressionValue>>> {
-        match self {
+        let (start, dots, end) = match self {
             Self::RangeFromTo { start, dots, end } => {
-                let pair = start.expect_value_pair(&dots, end)?;
-                match pair {
-                    ExpressionValuePair::Integer(pair) => match pair {
-                        IntegerExpressionValuePair::Untyped(start, end) => {
-                            IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
-                        }
-                        IntegerExpressionValuePair::U8(start, end) => {
-                            IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
-                        }
-                        IntegerExpressionValuePair::U16(start, end) => {
-                            IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
-                        }
-                        IntegerExpressionValuePair::U32(start, end) => {
-                            IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
-                        }
-                        IntegerExpressionValuePair::U64(start, end) => {
-                            IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
-                        }
-                        IntegerExpressionValuePair::U128(start, end) => {
-                            IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
-                        }
-                        IntegerExpressionValuePair::Usize(start, end) => {
-                            IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
-                        }
-                        IntegerExpressionValuePair::I8(start, end) => {
-                            IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
-                        }
-                        IntegerExpressionValuePair::I16(start, end) => {
-                            IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
-                        }
-                        IntegerExpressionValuePair::I32(start, end) => {
-                            IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
-                        }
-                        IntegerExpressionValuePair::I64(start, end) => {
-                            IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
-                        }
-                        IntegerExpressionValuePair::I128(start, end) => {
-                            IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
-                        }
-                        IntegerExpressionValuePair::Isize(start, end) => {
-                            IterableExpressionRange::RangeFromTo { start, dots, end }.resolve()
-                        }
-                    },
-                    ExpressionValuePair::CharPair(start, end) => {
-                        IterableExpressionRange::RangeFromTo {
-                            start: start.value,
-                            dots,
-                            end: end.value,
-                        }
-                        .resolve()
-                    }
-                    _ => dots.value_err("The range must be between two integers or two characters"),
+                (start, dots, Some(end.into_owned(dots.span_range())))
+            }
+            Self::RangeFrom { start, dots } => (start, RangeLimits::HalfOpen(dots), None),
+        };
+        match start {
+            ExpressionValue::Integer(mut start) => {
+                if let Some(end) = &end {
+                    start = start.resolve_untyped_to_match(end)?;
+                }
+                match start.value {
+                    IntegerExpressionValue::Untyped(start) => resolve_range(start, dots, end),
+                    IntegerExpressionValue::U8(start) => resolve_range(start, dots, end),
+                    IntegerExpressionValue::U16(start) => resolve_range(start, dots, end),
+                    IntegerExpressionValue::U32(start) => resolve_range(start, dots, end),
+                    IntegerExpressionValue::U64(start) => resolve_range(start, dots, end),
+                    IntegerExpressionValue::U128(start) => resolve_range(start, dots, end),
+                    IntegerExpressionValue::Usize(start) => resolve_range(start, dots, end),
+                    IntegerExpressionValue::I8(start) => resolve_range(start, dots, end),
+                    IntegerExpressionValue::I16(start) => resolve_range(start, dots, end),
+                    IntegerExpressionValue::I32(start) => resolve_range(start, dots, end),
+                    IntegerExpressionValue::I64(start) => resolve_range(start, dots, end),
+                    IntegerExpressionValue::I128(start) => resolve_range(start, dots, end),
+                    IntegerExpressionValue::Isize(start) => resolve_range(start, dots, end),
                 }
             }
-            Self::RangeFrom { start, dots } => match start {
-                ExpressionValue::Integer(start) => match start.value {
-                    IntegerExpressionValue::Untyped(start) => {
-                        IterableExpressionRange::RangeFrom { start, dots }.resolve()
-                    }
-                    IntegerExpressionValue::U8(start) => {
-                        IterableExpressionRange::RangeFrom { start, dots }.resolve()
-                    }
-                    IntegerExpressionValue::U16(start) => {
-                        IterableExpressionRange::RangeFrom { start, dots }.resolve()
-                    }
-                    IntegerExpressionValue::U32(start) => {
-                        IterableExpressionRange::RangeFrom { start, dots }.resolve()
-                    }
-                    IntegerExpressionValue::U64(start) => {
-                        IterableExpressionRange::RangeFrom { start, dots }.resolve()
-                    }
-                    IntegerExpressionValue::U128(start) => {
-                        IterableExpressionRange::RangeFrom { start, dots }.resolve()
-                    }
-                    IntegerExpressionValue::Usize(start) => {
-                        IterableExpressionRange::RangeFrom { start, dots }.resolve()
-                    }
-                    IntegerExpressionValue::I8(start) => {
-                        IterableExpressionRange::RangeFrom { start, dots }.resolve()
-                    }
-                    IntegerExpressionValue::I16(start) => {
-                        IterableExpressionRange::RangeFrom { start, dots }.resolve()
-                    }
-                    IntegerExpressionValue::I32(start) => {
-                        IterableExpressionRange::RangeFrom { start, dots }.resolve()
-                    }
-                    IntegerExpressionValue::I64(start) => {
-                        IterableExpressionRange::RangeFrom { start, dots }.resolve()
-                    }
-                    IntegerExpressionValue::I128(start) => {
-                        IterableExpressionRange::RangeFrom { start, dots }.resolve()
-                    }
-                    IntegerExpressionValue::Isize(start) => {
-                        IterableExpressionRange::RangeFrom { start, dots }.resolve()
-                    }
-                },
-                ExpressionValue::Char(start) => IterableExpressionRange::RangeFrom {
-                    start: start.value,
-                    dots,
-                }
-                .resolve(),
-                _ => dots.type_err("The range must be from an integer or a character"),
-            },
+            ExpressionValue::Char(start) => resolve_range(start.value, dots, end),
+            _ => dots.value_err("The range must be between two integers or two characters"),
         }
     }
 }
 
-impl IterableExpressionRange<UntypedInteger> {
-    fn resolve(self) -> ExecutionResult<Box<dyn ClonableIterator<Item = ExpressionValue>>> {
-        match self {
-            Self::RangeFromTo { start, dots, end } => {
+impl ResolvableRange for UntypedInteger {
+    fn resolve(
+        definition: IterableExpressionRange<UntypedInteger>,
+    ) -> ExecutionResult<Box<dyn ClonableIterator<Item = ExpressionValue>>> {
+        match definition {
+            IterableExpressionRange::RangeFromTo { start, dots, end } => {
                 let start = start.parse_fallback()?;
                 let end = end.parse_fallback()?;
                 Ok(match dots {
@@ -406,7 +358,7 @@ impl IterableExpressionRange<UntypedInteger> {
                     ),
                 })
             }
-            Self::RangeFrom { start, .. } => {
+            IterableExpressionRange::RangeFrom { start, .. } => {
                 let start = start.parse_fallback()?;
                 Ok(Box::new((start..).map(move |x| {
                     UntypedInteger::from_fallback(x).into_value()
@@ -420,10 +372,10 @@ macro_rules! define_range_resolvers {
     (
         $($the_type:ident),* $(,)?
     ) => {$(
-        impl IterableExpressionRange<$the_type> {
-            fn resolve(self) -> ExecutionResult<Box<dyn ClonableIterator<Item = ExpressionValue>>> {
-                match self {
-                    Self::RangeFromTo { start, dots, end } => {
+        impl ResolvableRange for $the_type {
+            fn resolve(definition: IterableExpressionRange<Self>) -> ExecutionResult<Box<dyn ClonableIterator<Item = ExpressionValue>>> {
+                match definition {
+                    IterableExpressionRange::RangeFromTo { start, dots, end } => {
                         Ok(match dots {
                             syn::RangeLimits::HalfOpen { .. } => {
                                 Box::new((start..end).map(move |x| x.into_value()))
@@ -433,7 +385,7 @@ macro_rules! define_range_resolvers {
                             }
                         })
                     },
-                    Self::RangeFrom { start, .. } => {
+                    IterableExpressionRange::RangeFrom { start, .. } => {
                         Ok(Box::new((start..).map(move |x| x.into_value())))
                     },
                 }

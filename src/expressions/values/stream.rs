@@ -6,45 +6,6 @@ pub(crate) struct StreamExpression {
 }
 
 impl StreamExpression {
-    pub(super) fn handle_integer_binary_operation(
-        self,
-        _right: IntegerExpression,
-        operation: &IntegerBinaryOperation,
-    ) -> ExecutionResult<ExpressionValue> {
-        operation.unsupported(self)
-    }
-
-    pub(super) fn handle_paired_binary_operation(
-        self,
-        rhs: Self,
-        operation: &PairedBinaryOperation,
-    ) -> ExecutionResult<ExpressionValue> {
-        let lhs = self.value;
-        let rhs = rhs.value;
-        Ok(match operation {
-            PairedBinaryOperation::Addition { .. } => operation.output({
-                let mut stream = lhs;
-                rhs.append_into(&mut stream);
-                stream
-            }),
-            PairedBinaryOperation::Subtraction { .. }
-            | PairedBinaryOperation::Multiplication { .. }
-            | PairedBinaryOperation::Division { .. }
-            | PairedBinaryOperation::LogicalAnd { .. }
-            | PairedBinaryOperation::LogicalOr { .. }
-            | PairedBinaryOperation::Remainder { .. }
-            | PairedBinaryOperation::BitXor { .. }
-            | PairedBinaryOperation::BitAnd { .. }
-            | PairedBinaryOperation::BitOr { .. }
-            | PairedBinaryOperation::Equal { .. }
-            | PairedBinaryOperation::LessThan { .. }
-            | PairedBinaryOperation::LessThanOrEqual { .. }
-            | PairedBinaryOperation::NotEqual { .. }
-            | PairedBinaryOperation::GreaterThanOrEqual { .. }
-            | PairedBinaryOperation::GreaterThan { .. } => return operation.unsupported(lhs),
-        })
-    }
-
     pub(crate) fn concat_recursive_into(&self, output: &mut String, behaviour: &ConcatBehaviour) {
         if behaviour.use_stream_literal_syntax {
             if self.value.is_empty() {

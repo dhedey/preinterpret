@@ -2,29 +2,6 @@ use super::*;
 
 pub(crate) trait Operation: HasSpanRange {
     fn symbolic_description(&self) -> &'static str;
-
-    fn output(&self, output_value: impl ToExpressionValue) -> ExpressionValue {
-        output_value.into_value()
-    }
-
-    fn output_if_some(
-        &self,
-        output_value: Option<impl ToExpressionValue>,
-        error_message: impl FnOnce() -> String,
-    ) -> ExecutionResult<ExpressionValue> {
-        match output_value {
-            Some(output_value) => Ok(self.output(output_value)),
-            None => self.value_err(error_message()),
-        }
-    }
-
-    fn unsupported(&self, value: impl HasValueType) -> ExecutionResult<ExpressionValue> {
-        self.type_err(format!(
-            "The {} operator is not supported for {} values",
-            self.symbolic_description(),
-            value.value_type(),
-        ))
-    }
 }
 
 pub(super) enum PrefixUnaryOperation {
@@ -327,62 +304,6 @@ impl BinaryOperation {
         }
     }
 
-    pub(crate) fn evaluate_legacy(
-        &self,
-        left: OwnedValue,
-        right: OwnedValue,
-    ) -> ExecutionResult<OwnedValue> {
-        let (left, left_span_range) = left.deconstruct();
-        let (right, right_span_range) = right.deconstruct();
-        let span_range = SpanRange::new_between(left_span_range, right_span_range);
-
-        Ok(match self {
-            BinaryOperation::Paired(operation) => {
-                // MIGRATION LIST
-                // - When we complete migrating an operator, add it to the match below
-                if matches!(
-                    operation,
-                    PairedBinaryOperation::Addition { .. }
-                        | PairedBinaryOperation::Subtraction { .. }
-                        | PairedBinaryOperation::Multiplication { .. }
-                        | PairedBinaryOperation::Division { .. }
-                        | PairedBinaryOperation::Remainder { .. }
-                        | PairedBinaryOperation::LogicalAnd { .. }
-                        | PairedBinaryOperation::LogicalOr { .. }
-                        | PairedBinaryOperation::BitXor { .. }
-                        | PairedBinaryOperation::BitAnd { .. }
-                        | PairedBinaryOperation::BitOr { .. }
-                        | PairedBinaryOperation::Equal { .. }
-                        | PairedBinaryOperation::NotEqual { .. }
-                        | PairedBinaryOperation::LessThan { .. }
-                        | PairedBinaryOperation::LessThanOrEqual { .. }
-                        | PairedBinaryOperation::GreaterThanOrEqual { .. }
-                        | PairedBinaryOperation::GreaterThan { .. }
-                ) {
-                    return self.type_err("This operation should have been migrated!");
-                }
-                let value_pair = left.expect_value_pair(operation, right)?;
-                value_pair
-                    .handle_paired_binary_operation(operation)?
-                    .into_owned(span_range)
-            }
-            BinaryOperation::Integer(operation) => {
-                if matches!(
-                    operation,
-                    IntegerBinaryOperation::ShiftLeft { .. }
-                        | IntegerBinaryOperation::ShiftRight { .. }
-                ) {
-                    return self.type_err("This operation should have been migrated!");
-                }
-                let right = right
-                    .into_integer()
-                    .ok_or_else(|| self.type_error("The shift amount must be an integer"))?;
-                left.handle_integer_binary_operation(right, operation)?
-                    .into_owned(span_range)
-            }
-        })
-    }
-
     pub(crate) fn evaluate<L: ToExpressionValue, R: ToExpressionValue>(
         &self,
         left: Owned<L>,
@@ -396,17 +317,11 @@ impl BinaryOperation {
                 let right = interface.rhs_ownership.map_from_owned(right)?;
                 interface.execute(left, right, self)
             }
-            None => {
-                // self.type_error(format!(
-                //     "The {} operator is not supported for {} operand",
-                //     self.symbolic_description(),
-                //     left.articled_value_type(),
-                // ))
-                let output_span_range =
-                    SpanRange::new_between(left.span_range(), right.span_range());
-                let owned = self.evaluate_legacy(left, right)?;
-                owned.to_resolved_value(output_span_range)
-            }
+            None => self.type_err(format!(
+                "The {} operator is not supported for {} operand",
+                self.symbolic_description(),
+                left.articled_value_type(),
+            )),
         }
     }
 }
@@ -544,18 +459,6 @@ pub(super) trait HandleBinaryOperation: Sized + std::fmt::Display + Copy {
     ) -> ExecutionResult<Self> {
         perform_fn(lhs, rhs).ok_or_else(|| Self::binary_overflow_error(context, lhs, rhs))
     }
-
-    fn handle_paired_binary_operation(
-        self,
-        rhs: Self,
-        operation: &PairedBinaryOperation,
-    ) -> ExecutionResult<ExpressionValue>;
-
-    fn handle_integer_binary_operation(
-        self,
-        rhs: IntegerExpression,
-        operation: &IntegerBinaryOperation,
-    ) -> ExecutionResult<ExpressionValue>;
 }
 
 impl Operation for syn::RangeLimits {

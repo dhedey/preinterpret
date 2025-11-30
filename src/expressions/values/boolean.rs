@@ -18,44 +18,6 @@ impl BooleanExpression {
         Self { value: lit.value }.into_owned(lit.span)
     }
 
-    pub(super) fn handle_integer_binary_operation(
-        self,
-        _right: IntegerExpression,
-        operation: &IntegerBinaryOperation,
-    ) -> ExecutionResult<ExpressionValue> {
-        match operation {
-            IntegerBinaryOperation::ShiftLeft { .. }
-            | IntegerBinaryOperation::ShiftRight { .. } => operation.unsupported(self),
-        }
-    }
-
-    pub(super) fn handle_paired_binary_operation(
-        self,
-        rhs: Self,
-        operation: &PairedBinaryOperation,
-    ) -> ExecutionResult<ExpressionValue> {
-        let lhs = self.value;
-        let rhs = rhs.value;
-        Ok(match operation {
-            PairedBinaryOperation::Addition { .. }
-            | PairedBinaryOperation::Subtraction { .. }
-            | PairedBinaryOperation::Multiplication { .. }
-            | PairedBinaryOperation::Division { .. } => return operation.unsupported(self),
-            PairedBinaryOperation::LogicalAnd { .. } => operation.output(lhs && rhs),
-            PairedBinaryOperation::LogicalOr { .. } => operation.output(lhs || rhs),
-            PairedBinaryOperation::Remainder { .. } => return operation.unsupported(self),
-            PairedBinaryOperation::BitXor { .. } => operation.output(lhs ^ rhs),
-            PairedBinaryOperation::BitAnd { .. } => operation.output(lhs & rhs),
-            PairedBinaryOperation::BitOr { .. } => operation.output(lhs | rhs),
-            PairedBinaryOperation::Equal { .. } => operation.output(lhs == rhs),
-            PairedBinaryOperation::LessThan { .. } => operation.output(lhs < rhs),
-            PairedBinaryOperation::LessThanOrEqual { .. } => operation.output(lhs <= rhs),
-            PairedBinaryOperation::NotEqual { .. } => operation.output(lhs != rhs),
-            PairedBinaryOperation::GreaterThanOrEqual { .. } => operation.output(lhs >= rhs),
-            PairedBinaryOperation::GreaterThan { .. } => operation.output(lhs > rhs),
-        })
-    }
-
     pub(super) fn to_ident(&self, span: Span) -> Ident {
         Ident::new_bool(self.value, span)
     }

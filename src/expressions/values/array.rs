@@ -21,45 +21,6 @@ impl ArrayExpression {
         Ok(())
     }
 
-    pub(super) fn handle_integer_binary_operation(
-        self,
-        _right: IntegerExpression,
-        operation: &IntegerBinaryOperation,
-    ) -> ExecutionResult<ExpressionValue> {
-        operation.unsupported(self)
-    }
-
-    pub(super) fn handle_paired_binary_operation(
-        self,
-        rhs: Self,
-        operation: &PairedBinaryOperation,
-    ) -> ExecutionResult<ExpressionValue> {
-        let lhs = self.items;
-        let rhs = rhs.items;
-        Ok(match operation {
-            PairedBinaryOperation::Addition { .. } => operation.output({
-                let mut stream = lhs;
-                stream.extend(rhs);
-                stream
-            }),
-            PairedBinaryOperation::Subtraction { .. }
-            | PairedBinaryOperation::Multiplication { .. }
-            | PairedBinaryOperation::Division { .. }
-            | PairedBinaryOperation::LogicalAnd { .. }
-            | PairedBinaryOperation::LogicalOr { .. }
-            | PairedBinaryOperation::Remainder { .. }
-            | PairedBinaryOperation::BitXor { .. }
-            | PairedBinaryOperation::BitAnd { .. }
-            | PairedBinaryOperation::BitOr { .. }
-            | PairedBinaryOperation::Equal { .. }
-            | PairedBinaryOperation::LessThan { .. }
-            | PairedBinaryOperation::LessThanOrEqual { .. }
-            | PairedBinaryOperation::NotEqual { .. }
-            | PairedBinaryOperation::GreaterThanOrEqual { .. }
-            | PairedBinaryOperation::GreaterThan { .. } => return operation.unsupported(lhs),
-        })
-    }
-
     pub(super) fn into_indexed(
         mut self,
         index: Spanned<&ExpressionValue>,
