@@ -388,6 +388,21 @@ Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` doc
 
 - [x] Merge `assignee_frames` into `value_frames` as per comment as the top of `assignee_frames`
 - [x] Rename `EvaluationItem` to `RequestedValue` and consider making `RequestedValue::AssignmentCompletion` wrap an `Owned<()>` so that it becomes truly a value.
+- [ ] Renames / Merges:
+  - [ ] `ExpressionValue` => `Value`
+  - [ ] `IntegerExpression` and `IntegerExpressionValue` => `IntegerValue`
+  - [ ] `FloatExpression` and `FloatExpressionValue` => `FloatValue`
+  - [ ] `BooleanExpression` => `BooleanValue`
+  - [ ] `StringExpression` => `StringValue`
+  - [ ] `IteratorExpression` => `IteratorValue`
+  - [ ] `CharExpression` => `CharValue`
+  - [ ] `ArrayExpression` => `ArrayValue`
+  - [ ] `ObjectExpression` => `ObjectValue`
+  - [ ] `StreamExpression` => `StreamValue`
+  - [ ] `RangeExpression` => `RangeValue`
+  - [ ] `IteratorExpression` => `IteratorValue`
+  - [ ] `ParserExpression` => `ParserValue`
+- [ ] Merge `HasValueType` with `ValueKind`
 * Add `preinterpret::macro` - can this be a declarative macro? Would be slightly more efficient, as it just needs to wrap a call to `preinterpret::stream` or `preinterpret::run`...
 * Add `LiteralPattern` (wrapping a `Literal`)
 * Add `Eq` support on composite types and streams
