@@ -5,17 +5,22 @@ pub(in crate::expressions) trait MethodResolver {
     fn resolve_method(&self, method_name: &str) -> Option<MethodInterface>;
 
     /// Resolves a unary operation as a method interface for this type.
-    /// Returns None if the operation should fallback to the legacy system.
     fn resolve_unary_operation(
         &self,
         operation: &UnaryOperation,
     ) -> Option<UnaryOperationInterface>;
 
     /// Resolves a binary operation as a method interface for this type.
-    /// Returns None if the operation should fallback to the legacy system.
     fn resolve_binary_operation(
         &self,
         operation: &BinaryOperation,
+    ) -> Option<BinaryOperationInterface>;
+
+    /// Resolves a compound assignment operation as a method interface for this type.
+    #[allow(unused)]
+    fn resolve_compound_assignment_operation(
+        &self,
+        operation: &CompoundAssignmentOperation,
     ) -> Option<BinaryOperationInterface>;
 }
 
@@ -44,6 +49,16 @@ impl<T: HierarchicalTypeData> MethodResolver for T {
         match Self::resolve_own_binary_operation(operation) {
             Some(method) => Some(method),
             None => Self::PARENT.and_then(|p| p.resolve_binary_operation(operation)),
+        }
+    }
+
+    fn resolve_compound_assignment_operation(
+        &self,
+        operation: &CompoundAssignmentOperation,
+    ) -> Option<BinaryOperationInterface> {
+        match Self::resolve_own_compound_assignment_operation(operation) {
+            Some(method) => Some(method),
+            None => Self::PARENT.and_then(|p| p.resolve_compound_assignment_operation(operation)),
         }
     }
 }
@@ -87,6 +102,13 @@ pub(crate) trait HierarchicalTypeData {
 
     fn resolve_integer_binary_operation(
         _operation: &IntegerBinaryOperation,
+    ) -> Option<BinaryOperationInterface> {
+        None
+    }
+
+    #[allow(unused)]
+    fn resolve_own_compound_assignment_operation(
+        _operation: &CompoundAssignmentOperation,
     ) -> Option<BinaryOperationInterface> {
         None
     }

@@ -152,15 +152,6 @@ impl VariableReference {
             .resolve(ownership)
     }
 
-    pub(crate) fn resolve_assignee(
-        &self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<MutableValue> {
-        Ok(self
-            .resolve_resolved(interpreter, ResolvedValueOwnership::Assignee)?
-            .expect_mutable())
-    }
-
     pub(crate) fn resolve_shared(
         &self,
         interpreter: &mut Interpreter,

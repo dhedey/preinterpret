@@ -59,14 +59,6 @@ impl<'a> ExpressionEvaluator<'a> {
                     value,
                 )?
             }
-            NextActionInner::ReadNodeAsAssignee(node) => self.nodes.get(node).handle_as_assignee(
-                Context {
-                    stack: &mut self.stack,
-                    interpreter,
-                    request: (),
-                },
-                node,
-            )?,
             NextActionInner::HandleReturnedItem(item) => {
                 let top_of_stack = match self.stack.handlers.pop() {
                     Some(top) => top,
@@ -121,6 +113,7 @@ impl NextAction {
         match resolved {
             ResolvedValue::Owned(owned) => Self::return_owned(owned),
             ResolvedValue::Mutable(mutable) => Self::return_mutable(mutable),
+            ResolvedValue::Assignee(assignee) => Self::return_assignee(assignee),
             ResolvedValue::Shared(shared) => Self::return_shared(shared),
             ResolvedValue::CopyOnWrite(copy_on_write) => Self::return_copy_on_write(copy_on_write),
         }
@@ -130,7 +123,7 @@ impl NextAction {
         NextActionInner::HandleReturnedItem(EvaluationItem::LateBound(late_bound)).into()
     }
 
-    pub(super) fn return_assignee(assignee: MutableValue) -> Self {
+    pub(super) fn return_assignee(assignee: AssigneeValue) -> Self {
         NextActionInner::HandleReturnedItem(EvaluationItem::Assignee(assignee)).into()
     }
 
@@ -147,9 +140,6 @@ enum NextActionInner {
     // (similar to patterns but for existing values/reassignments)
     // let a = ["x", "y"]; let b; [a[1], .. b] = [1, 2, 3, 4]
     ReadNodeAsAssignmentTarget(ExpressionNodeId, ExpressionValue),
-    // Enters an expression node as a location for atomic assignment
-    // e.g. the a[1] in a[1] = "4"
-    ReadNodeAsAssignee(ExpressionNodeId),
     HandleReturnedItem(EvaluationItem),
 }
 
@@ -169,7 +159,7 @@ pub(crate) enum EvaluationItem {
     /// Note that assignees are handled subtly differently than a mutable value,
     /// for example with an assignee, x["a"] creates an entry if it doesn't exist,
     /// whereas with a mutable value it would return None without creating the entry.
-    Assignee(MutableValue),
+    Assignee(AssigneeValue),
 
     // Assignment items
     AssignmentCompletion(AssignmentCompletion),
@@ -197,10 +187,10 @@ impl EvaluationItem {
         }
     }
 
-    pub(crate) fn expect_assignee_value(self) -> MutableValue {
+    pub(super) fn expect_assignee(self) -> AssigneeValue {
         match self {
-            EvaluationItem::Mutable(assignee) => assignee,
-            _ => panic!("expect_assignee_from_value() called on non-mutable EvaluationItem"),
+            EvaluationItem::Assignee(assignee) => assignee,
+            _ => panic!("expect_assignee() called on non-assignee EvaluationItem"),
         }
     }
 
@@ -231,16 +221,12 @@ impl EvaluationItem {
         match self {
             EvaluationItem::Owned(value) => ResolvedValue::Owned(value),
             EvaluationItem::Mutable(mutable) => ResolvedValue::Mutable(mutable),
+            EvaluationItem::Assignee(assignee) => ResolvedValue::Assignee(assignee),
             EvaluationItem::Shared(shared) => ResolvedValue::Shared(shared),
             EvaluationItem::CopyOnWrite(copy_on_write) => ResolvedValue::CopyOnWrite(copy_on_write),
-            _ => panic!("expect_resolved_value() called on non-value EvaluationItem"),
-        }
-    }
-
-    pub(super) fn expect_assignee(self) -> MutableValue {
-        match self {
-            EvaluationItem::Assignee(assignee) => assignee,
-            _ => panic!("expect_assignee() called on non-assignee EvaluationItem"),
+            EvaluationItem::LateBound(_) | EvaluationItem::AssignmentCompletion(_) => {
+                panic!("expect_resolved_value() called on non-value EvaluationItem")
+            }
         }
     }
 
@@ -255,12 +241,17 @@ impl EvaluationItem {
                 EvaluationItem::LateBound(late_bound.map_any(map_shared, map_mutable, map_owned)?)
             }
             EvaluationItem::Owned(value) => EvaluationItem::Owned(map_owned(value)?),
+            EvaluationItem::Assignee(assignee) => {
+                EvaluationItem::Assignee(Assignee(map_mutable(assignee.0)?))
+            }
             EvaluationItem::Mutable(mutable) => EvaluationItem::Mutable(map_mutable(mutable)?),
             EvaluationItem::Shared(shared) => EvaluationItem::Shared(map_shared(shared)?),
             EvaluationItem::CopyOnWrite(cow) => {
                 EvaluationItem::CopyOnWrite(cow.map(map_shared, map_owned)?)
             }
-            _ => panic!("expect_any_value_and_map() called on non-value EvaluationItem"),
+            EvaluationItem::AssignmentCompletion(_) => {
+                panic!("expect_any_value_and_map() called on non-value EvaluationItem")
+            }
         })
     }
 }
@@ -283,8 +274,8 @@ impl WithSpanRangeExt for EvaluationItem {
             EvaluationItem::CopyOnWrite(cow) => {
                 EvaluationItem::CopyOnWrite(cow.with_span_range(span_range))
             }
-            EvaluationItem::Assignee(mutable) => {
-                EvaluationItem::Assignee(mutable.with_span_range(span_range))
+            EvaluationItem::Assignee(assignee) => {
+                EvaluationItem::Assignee(assignee.with_span_range(span_range))
             }
             EvaluationItem::AssignmentCompletion(assignment_completion) => {
                 EvaluationItem::AssignmentCompletion(
@@ -300,7 +291,6 @@ impl WithSpanRangeExt for EvaluationItem {
 /// [rust reference]: https://doc.rust-lang.org/reference/expressions.html#place-expressions-and-value-expressions
 pub(super) enum AnyEvaluationHandler {
     Value(AnyValueFrame, RequestedValueOwnership),
-    Assignee(AnyAssigneeFrame),
     Assignment(AnyAssignmentFrame),
 }
 
@@ -317,14 +307,6 @@ impl AnyEvaluationHandler {
                     interpreter,
                     stack,
                     request: ownership,
-                },
-                item,
-            ),
-            AnyEvaluationHandler::Assignee(handler) => handler.handle_item(
-                Context {
-                    interpreter,
-                    stack,
-                    request: (),
                 },
                 item,
             ),
@@ -395,15 +377,16 @@ impl<'a, T: EvaluationItemType> Context<'a, T> {
         )
     }
 
-    pub(super) fn handle_node_as_assignee_value<H: EvaluationFrame<ReturnType = T>>(
+    pub(super) fn handle_node_as_assignee<H: EvaluationFrame<ReturnType = T>>(
         self,
         handler: H,
         node: ExpressionNodeId,
+        auto_create: bool,
     ) -> NextAction {
         self.handle_node_as_any_value(
             handler,
             node,
-            RequestedValueOwnership::Concrete(ResolvedValueOwnership::Assignee),
+            RequestedValueOwnership::Concrete(ResolvedValueOwnership::Assignee { auto_create }),
         )
     }
 
@@ -425,17 +408,6 @@ impl<'a, T: EvaluationItemType> Context<'a, T> {
             .handlers
             .push(T::into_unkinded_handler(handler.into_any(), self.request));
         NextActionInner::ReadNodeAsValue(node, requested_ownership).into()
-    }
-
-    pub(super) fn handle_node_as_assignee<H: EvaluationFrame<ReturnType = T>>(
-        self,
-        handler: H,
-        node: ExpressionNodeId,
-    ) -> NextAction {
-        self.stack
-            .handlers
-            .push(T::into_unkinded_handler(handler.into_any(), self.request));
-        NextActionInner::ReadNodeAsAssignee(node).into()
     }
 
     pub(super) fn handle_node_as_assignment<H: EvaluationFrame<ReturnType = T>>(
@@ -535,28 +507,6 @@ impl<'a> Context<'a, ValueType> {
         Ok(NextAction::return_item(
             self.request.map_from_shared(shared)?,
         ))
-    }
-}
-
-pub(super) struct AssigneeType;
-
-pub(super) type AssigneeContext<'a> = Context<'a, AssigneeType>;
-
-impl EvaluationItemType for AssigneeType {
-    type RequestConstraints = ();
-    type AnyHandler = AnyAssigneeFrame;
-
-    fn into_unkinded_handler(
-        handler: Self::AnyHandler,
-        (): Self::RequestConstraints,
-    ) -> AnyEvaluationHandler {
-        AnyEvaluationHandler::Assignee(handler)
-    }
-}
-
-impl<'a> Context<'a, AssigneeType> {
-    pub(super) fn return_assignee(self, assignee: MutableValue) -> NextAction {
-        NextAction::return_assignee(assignee)
     }
 }
 

@@ -42,7 +42,9 @@ impl VariableContent {
                     Ok(ref_cell) => {
                         if matches!(
                             ownership,
-                            RequestedValueOwnership::Concrete(ResolvedValueOwnership::Assignee)
+                            RequestedValueOwnership::Concrete(
+                                ResolvedValueOwnership::Assignee { .. }
+                            )
                         ) {
                             return variable_span.control_flow_err("The final usage of a variable cannot be assigned to. You can use `let _ = ..` to discard a value.");
                         }
@@ -80,7 +82,9 @@ impl VariableContent {
                     .into_shared()
                     .map(CopyOnWrite::shared_in_place_of_shared)
                     .map(LateBoundValue::CopyOnWrite),
-                ResolvedValueOwnership::Assignee => binding.into_mut().map(LateBoundValue::Mutable),
+                ResolvedValueOwnership::Assignee { .. } => {
+                    binding.into_mut().map(LateBoundValue::Mutable)
+                }
                 ResolvedValueOwnership::Mutable => binding.into_mut().map(LateBoundValue::Mutable),
                 ResolvedValueOwnership::CopyOnWrite | ResolvedValueOwnership::AsIs => binding
                     .into_shared()
@@ -407,7 +411,43 @@ impl<T> WithSpanRangeExt for Owned<T> {
 }
 
 pub(crate) type MutableValue = Mutable<ExpressionValue>;
-pub(crate) struct AssigneeValue(pub Mutable<ExpressionValue>);
+pub(crate) type AssigneeValue = Assignee<ExpressionValue>;
+
+/// A binding of a unique (mutable) reference to a value
+/// See [`ResolvedValueOwnership::Assignee`] for more details.
+pub(crate) struct Assignee<T: 'static + ?Sized>(pub Mutable<T>);
+
+impl<T: 'static + ?Sized> WithSpanRangeExt for Assignee<T> {
+    fn with_span_range(self, span_range: SpanRange) -> Self {
+        Self(self.0.with_span_range(span_range))
+    }
+}
+
+impl<T: 'static + ?Sized> HasSpanRange for Assignee<T> {
+    fn span_range(&self) -> SpanRange {
+        self.0.span_range()
+    }
+}
+
+impl AssigneeValue {
+    pub(crate) fn set(&mut self, content: impl ToExpressionValue) {
+        *self.0.mut_cell = content.into_value();
+    }
+}
+
+impl<T: 'static + ?Sized> Deref for Assignee<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T: 'static + ?Sized> DerefMut for Assignee<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 /// A binding of a unique (mutable) reference to a value
 /// (e.g. inside a variable) along with a span of the whole access.
@@ -532,13 +572,13 @@ impl<T: ?Sized> AsRef<T> for Mutable<T> {
     }
 }
 
-impl<T: 'static + ?Sized> HasSpanRange for Mutable<T> {
+impl<T: ?Sized> HasSpanRange for Mutable<T> {
     fn span_range(&self) -> SpanRange {
         self.span_range
     }
 }
 
-impl WithSpanRangeExt for Mutable<ExpressionValue> {
+impl<T: ?Sized> WithSpanRangeExt for Mutable<T> {
     fn with_span_range(self, span_range: SpanRange) -> Self {
         Self {
             mut_cell: self.mut_cell,

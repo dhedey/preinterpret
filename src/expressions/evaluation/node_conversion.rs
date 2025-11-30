@@ -153,29 +153,4 @@ impl ExpressionNode {
             _ => AssigneeAssigner::start(context, self_node_id, value),
         })
     }
-
-    pub(super) fn handle_as_assignee(
-        &self,
-        mut context: AssigneeContext,
-        self_node_id: ExpressionNodeId,
-    ) -> ExecutionResult<NextAction> {
-        Ok(match self {
-            ExpressionNode::Leaf(Leaf::Variable(variable)) => {
-                let mutable = variable.resolve_assignee(context.interpreter())?;
-                context.return_assignee(mutable)
-            }
-            ExpressionNode::Index {
-                node,
-                access,
-                index,
-            } => IndexedAssignee::start(context, *node, *access, *index),
-            ExpressionNode::Property { node, access, .. } => {
-                PropertyAccessedAssignee::start(context, *node, access.clone())
-            }
-            ExpressionNode::Grouped { inner, .. } => GroupedAssignee::start(context, *inner),
-            // If we don't need special place-based handling (e.g. for creating a new entry in an object)
-            // Then let's just resolve via a mutable value
-            _ => ValueBasedAssignee::start(context, self_node_id),
-        })
-    }
 }

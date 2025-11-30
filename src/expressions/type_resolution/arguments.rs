@@ -45,15 +45,6 @@ impl FromResolved for ResolvedValue {
     }
 }
 
-impl FromResolved for AssigneeValue {
-    type ValueType = ValueTypeData;
-    const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Assignee;
-
-    fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
-        Ok(AssigneeValue(value.expect_mutable()))
-    }
-}
-
 impl<T: ResolvableArgumentShared + ResolvableArgumentTarget + ?Sized> FromResolved for Shared<T> {
     type ValueType = T::ValueType;
     const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Shared;
@@ -72,6 +63,18 @@ where
 
     fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
         Ok(Shared::<T>::from_resolved(value)?.into())
+    }
+}
+
+impl<T: ResolvableArgumentMutable + ResolvableArgumentTarget + ?Sized> FromResolved
+    for Assignee<T>
+{
+    type ValueType = T::ValueType;
+    const OWNERSHIP: ResolvedValueOwnership =
+        ResolvedValueOwnership::Assignee { auto_create: false };
+
+    fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
+        T::resolve_assignee(value.expect_assignee(), "This argument")
     }
 }
 
@@ -291,6 +294,13 @@ pub(crate) trait ResolvableArgumentMutable {
         value: &'a mut ExpressionValue,
         context: ResolutionContext,
     ) -> ExecutionResult<&'a mut Self>;
+
+    fn resolve_assignee(
+        value: Assignee<ExpressionValue>,
+        resolution_target: &str,
+    ) -> ExecutionResult<Assignee<Self>> {
+        Ok(Assignee(Self::resolve_mutable(value.0, resolution_target)?))
+    }
 
     fn resolve_mutable(
         value: Mutable<ExpressionValue>,

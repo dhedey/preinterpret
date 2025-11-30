@@ -58,7 +58,7 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 - [x] Remove the `evaluate_legacy` method, the `PairedBinaryOperation`, and all the dead code
 - [ ] Combine `PairedBinaryOperation` and `IntegerBinaryOperation` into a flattened `BinaryOperation`
 - [ ] Add `==` and `!=` to streams, objects and arrays and make it work with `AnyRef<..>` arguments for testing equality
-- [ ] Plan out migrating CompoundAssignment
+- [ ] CompoundAssignment migration
 - [ ] Ensure all `TODO[operation-refactor]` are done
 
 ## Control flow expressions (ideally requires Stream Literals)

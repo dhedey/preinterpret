@@ -7,6 +7,7 @@ pub(crate) enum ResolvedValue {
     Owned(OwnedValue),
     CopyOnWrite(CopyOnWriteValue),
     Mutable(MutableValue),
+    Assignee(AssigneeValue),
     Shared(SharedValue),
 }
 
@@ -32,6 +33,13 @@ impl ResolvedValue {
         }
     }
 
+    pub(crate) fn expect_assignee(self) -> AssigneeValue {
+        match self {
+            ResolvedValue::Assignee(value) => value,
+            _ => panic!("expect_assignee() called on a non-assignee ResolvedValue"),
+        }
+    }
+
     pub(crate) fn expect_shared(self) -> SharedValue {
         match self {
             ResolvedValue::Shared(value) => value,
@@ -50,6 +58,7 @@ impl HasSpanRange for ResolvedValue {
             ResolvedValue::Owned(owned) => owned.span_range(),
             ResolvedValue::CopyOnWrite(copy_on_write) => copy_on_write.span_range(),
             ResolvedValue::Mutable(mutable) => mutable.span_range(),
+            ResolvedValue::Assignee(assignee) => assignee.span_range(),
             ResolvedValue::Shared(shared) => shared.span_range(),
         }
     }
@@ -61,6 +70,9 @@ impl WithSpanRangeExt for ResolvedValue {
             ResolvedValue::Owned(value) => ResolvedValue::Owned(value.with_span_range(span_range)),
             ResolvedValue::Mutable(reference) => {
                 ResolvedValue::Mutable(reference.with_span_range(span_range))
+            }
+            ResolvedValue::Assignee(assignee) => {
+                ResolvedValue::Assignee(assignee.with_span_range(span_range))
             }
             ResolvedValue::Shared(shared) => {
                 ResolvedValue::Shared(shared.with_span_range(span_range))
@@ -85,6 +97,7 @@ impl AsRef<ExpressionValue> for ResolvedValue {
         match self {
             ResolvedValue::Owned(owned) => owned.as_ref(),
             ResolvedValue::Mutable(mutable) => mutable.as_ref(),
+            ResolvedValue::Assignee(assignee) => assignee.0.as_ref(),
             ResolvedValue::Shared(shared) => shared.as_ref(),
             ResolvedValue::CopyOnWrite(copy_on_write) => copy_on_write.as_ref(),
         }
@@ -126,6 +139,15 @@ impl RequestedValueOwnership {
         }
     }
 
+    pub(crate) fn requests_auto_create(&self) -> bool {
+        match self {
+            RequestedValueOwnership::Concrete(ResolvedValueOwnership::Assignee { auto_create }) => {
+                *auto_create
+            }
+            _ => false,
+        }
+    }
+
     pub(crate) fn map_none(self, span_range: SpanRange) -> ExecutionResult<EvaluationItem> {
         self.map_from_owned(().into_owned_value(span_range))
     }
@@ -149,6 +171,7 @@ impl RequestedValueOwnership {
         match value {
             ResolvedValue::Owned(owned) => self.map_from_owned(owned),
             ResolvedValue::Mutable(mutable) => self.map_from_mutable(mutable),
+            ResolvedValue::Assignee(assignee) => self.map_from_assignee(assignee),
             ResolvedValue::Shared(shared) => self.map_from_shared(shared),
             ResolvedValue::CopyOnWrite(copy_on_write) => self.map_from_copy_on_write(copy_on_write),
         }
@@ -160,7 +183,7 @@ impl RequestedValueOwnership {
             EvaluationItem::Owned(owned) => self.map_from_owned(owned),
             EvaluationItem::Shared(shared) => self.map_from_shared(shared),
             EvaluationItem::Mutable(mutable) => self.map_from_mutable(mutable),
-            EvaluationItem::Assignee(assignee) => self.map_from_mutable(assignee),
+            EvaluationItem::Assignee(assignee) => self.map_from_assignee(assignee),
             EvaluationItem::LateBound(late_bound_value) => {
                 self.map_from_late_bound(late_bound_value)
             }
@@ -212,6 +235,20 @@ impl RequestedValueOwnership {
         }
     }
 
+    pub(crate) fn map_from_assignee(
+        &self,
+        assignee: AssigneeValue,
+    ) -> ExecutionResult<EvaluationItem> {
+        match self {
+            RequestedValueOwnership::LateBound => Ok(EvaluationItem::LateBound(
+                LateBoundValue::Mutable(assignee.0),
+            )),
+            RequestedValueOwnership::Concrete(requested) => requested
+                .map_from_assignee(assignee)
+                .map(Self::item_from_resolved),
+        }
+    }
+
     pub(crate) fn map_from_shared(&self, shared: SharedValue) -> ExecutionResult<EvaluationItem> {
         match self {
             RequestedValueOwnership::LateBound => {
@@ -227,6 +264,7 @@ impl RequestedValueOwnership {
         match value {
             ResolvedValue::Owned(owned) => EvaluationItem::Owned(owned),
             ResolvedValue::Mutable(mutable) => EvaluationItem::Mutable(mutable),
+            ResolvedValue::Assignee(assignee) => EvaluationItem::Assignee(assignee),
             ResolvedValue::Shared(shared) => EvaluationItem::Shared(shared),
             ResolvedValue::CopyOnWrite(copy_on_write) => EvaluationItem::CopyOnWrite(copy_on_write),
         }
@@ -251,7 +289,12 @@ pub(crate) enum ResolvedValueOwnership {
     /// for use in a method, it cannot be freely converted to an assignee.
     /// This prevents (1 = 2) = 3 style issues, where it would be insane to allow assignment
     /// to a floating owned value.
-    Assignee,
+    ///
+    /// The auto_create flag indicates whether the assignee should create missing entries,
+    /// for example, it enables `obj.new_field = value` to work by auto-creating `new_field` in `obj`.
+    Assignee {
+        auto_create: bool,
+    },
     /// Approximately equivalent to Owned, but more flexible to avoid cloning large values unnecessarily
     /// e.g. array indexing operations should take CopyOnWrite instead of Owned
     /// If a method needs to create an owned value, that method can transparently or infallibly copy it,
@@ -303,7 +346,7 @@ impl ResolvedValueOwnership {
                     )))
                 }
             }
-            ResolvedValueOwnership::Assignee => {
+            ResolvedValueOwnership::Assignee { .. } => {
                 if copy_on_write.acts_as_shared_reference() {
                     copy_on_write.ownership_err("A shared reference cannot be assigned to.")
                 } else {
@@ -333,7 +376,7 @@ impl ResolvedValueOwnership {
             ResolvedValueOwnership::CopyOnWrite => Ok(ResolvedValue::CopyOnWrite(
                 CopyOnWrite::shared_in_place_of_shared(shared),
             )),
-            ResolvedValueOwnership::Assignee => Err(mutable_error(shared)),
+            ResolvedValueOwnership::Assignee { .. } => Err(mutable_error(shared)),
             ResolvedValueOwnership::Mutable => Err(mutable_error(shared)),
             ResolvedValueOwnership::Shared | ResolvedValueOwnership::AsIs => {
                 Ok(ResolvedValue::Shared(shared))
@@ -343,6 +386,13 @@ impl ResolvedValueOwnership {
 
     pub(crate) fn map_from_mutable(&self, mutable: MutableValue) -> ExecutionResult<ResolvedValue> {
         self.map_from_mutable_inner(mutable, false)
+    }
+
+    pub(crate) fn map_from_assignee(
+        &self,
+        assignee: AssigneeValue,
+    ) -> ExecutionResult<ResolvedValue> {
+        self.map_from_mutable_inner(assignee.0, false)
     }
 
     fn map_from_mutable_inner(
@@ -364,7 +414,9 @@ impl ResolvedValueOwnership {
             ResolvedValueOwnership::Mutable | ResolvedValueOwnership::AsIs => {
                 Ok(ResolvedValue::Mutable(mutable))
             }
-            ResolvedValueOwnership::Assignee => Ok(ResolvedValue::Mutable(mutable)),
+            ResolvedValueOwnership::Assignee { .. } => {
+                Ok(ResolvedValue::Assignee(Assignee(mutable)))
+            }
             ResolvedValueOwnership::Shared => Ok(ResolvedValue::Shared(mutable.into_shared())),
         }
     }
@@ -380,7 +432,7 @@ impl ResolvedValueOwnership {
             ResolvedValueOwnership::Mutable => {
                 Ok(ResolvedValue::Mutable(Mutable::new_from_owned(owned)))
             }
-            ResolvedValueOwnership::Assignee => {
+            ResolvedValueOwnership::Assignee { .. } => {
                 owned.ownership_err("An owned value cannot be assigned to.")
             }
             ResolvedValueOwnership::Shared => {
@@ -790,9 +842,10 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
         context: ValueContext,
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
+        let auto_create = context.requested_ownership().requests_auto_create();
         let mapped = item.expect_any_value_and_map(
             |shared| shared.resolve_property(&self.access),
-            |mutable| mutable.resolve_property(&self.access, false),
+            |mutable| mutable.resolve_property(&self.access, auto_create),
             |owned| owned.resolve_property(&self.access),
         )?;
         context.return_item(mapped)
@@ -854,9 +907,10 @@ impl EvaluationFrame for ValueIndexAccessBuilder {
                 let index = item.expect_shared();
                 let is_range = matches!(index.kind(), ValueKind::Range);
 
+                let auto_create = context.requested_ownership().requests_auto_create();
                 context.return_item(source.expect_any_value_and_map(
                     |shared| shared.resolve_indexed(self.access, index.as_spanned()),
-                    |mutable| mutable.resolve_indexed(self.access, index.as_spanned(), false),
+                    |mutable| mutable.resolve_indexed(self.access, index.as_spanned(), auto_create),
                     |owned| owned.resolve_indexed(self.access, index.as_spanned()),
                 )?)?
             }
@@ -1068,12 +1122,12 @@ impl EvaluationFrame for CompoundAssignmentBuilder {
                 let value = item.expect_owned();
                 self.state = CompoundAssignmentPath::OnTargetBranch { value };
                 // TODO[compound-assignment-refactor]: Resolve as LateBound, and then convert to what is needed based on the operation
-                context.handle_node_as_assignee_value(self, target)
+                context.handle_node_as_assignee(self, target, false)
             }
             CompoundAssignmentPath::OnTargetBranch { value } => {
-                let mut mutable = item.expect_assignee_value();
-                let span_range = SpanRange::new_between(mutable.span_range(), value.span_range());
-                SpannedAnyRefMut::from(mutable)
+                let mut assignee = item.expect_assignee();
+                let span_range = SpanRange::new_between(assignee.span_range(), value.span_range());
+                SpannedAnyRefMut::from(assignee.0)
                     .handle_compound_assignment(&self.operation, value)?;
                 context.return_owned(ExpressionValue::None.into_owned(span_range))?
             }

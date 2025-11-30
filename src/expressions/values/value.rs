@@ -112,6 +112,14 @@ impl MethodResolver for ValueKind {
     ) -> Option<BinaryOperationInterface> {
         self.method_resolver().resolve_binary_operation(operation)
     }
+
+    fn resolve_compound_assignment_operation(
+        &self,
+        operation: &CompoundAssignmentOperation,
+    ) -> Option<BinaryOperationInterface> {
+        self.method_resolver()
+            .resolve_compound_assignment_operation(operation)
+    }
 }
 
 define_interface! {
@@ -128,6 +136,7 @@ define_interface! {
                     ResolvedValue::Owned(owned) => Mutable::new_from_owned(owned),
                     ResolvedValue::CopyOnWrite(copy_on_write) => ResolvedValueOwnership::Mutable.map_from_copy_on_write(copy_on_write)?.expect_mutable(),
                     ResolvedValue::Mutable(mutable) => mutable,
+                    ResolvedValue::Assignee(assignee) => assignee.0,
                     ResolvedValue::Shared(shared) => ResolvedValueOwnership::Mutable.map_from_shared(shared)?.expect_mutable(),
                 })
             }

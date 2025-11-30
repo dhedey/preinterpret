@@ -46,7 +46,7 @@ impl AssigneeAssigner {
         value: ExpressionValue,
     ) -> NextAction {
         let frame = Self { value };
-        context.handle_node_as_assignee(frame, assignee)
+        context.handle_node_as_assignee(frame, assignee, true)
     }
 }
 
@@ -62,10 +62,10 @@ impl EvaluationFrame for AssigneeAssigner {
         context: AssignmentContext,
         item: EvaluationItem,
     ) -> ExecutionResult<NextAction> {
-        let mut mutable_place = item.expect_assignee();
+        let mut assignee = item.expect_assignee();
         let value = self.value;
-        let span_range = mutable_place.span_range();
-        mutable_place.set(value);
+        let span_range = assignee.span_range();
+        assignee.set(value);
         Ok(context.return_assignment_completion(span_range))
     }
 }

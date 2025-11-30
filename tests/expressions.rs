@@ -232,6 +232,12 @@ fn assign_works() {
         ),
         4
     );
+    // Check that assignments to composite places work
+    run!(
+        let x = %{ y: [3], };
+        x.y[0] += 2;
+        %[_].assert_eq(x.y[0], 5);
+    );
 }
 
 #[test]
@@ -584,6 +590,24 @@ fn test_method_calls() {
             let b = "b";
             a.swap(b);
             %[#a " - " #b].to_string()
+        ),
+        "b - a"
+    );
+    assert_eq!(
+        run!(
+            let obj_a = %{ value: "a" };
+            let arr_b = ["b"];
+            obj_a.value.swap(arr_b[0]);
+            %[#(obj_a.value) " - " #(arr_b[0])].to_string()
+        ),
+        "b - a"
+    );
+    assert_eq!(
+        run!(
+            let obj_a = %{ value: "a" };
+            let arr_b = ["b"];
+            arr_b[0].swap(obj_a.value);
+            %[#(obj_a.value) " - " #(arr_b[0])].to_string()
         ),
         "b - a"
     );
