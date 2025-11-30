@@ -538,7 +538,7 @@ fn preinterpret_run_internal(input: TokenStream) -> SynResult<TokenStream> {
         .evaluate(
             &mut interpreter,
             Span::call_site().into(),
-            RequestedValueOwnership::owned(),
+            RequestedOwnership::owned(),
         )
         .and_then(|x| x.expect_owned().into_stream())
         .convert_to_final_result()?;
@@ -664,7 +664,7 @@ mod benchmarking {
                     .evaluate(
                         &mut interpreter,
                         Span::call_site().into(),
-                        RequestedValueOwnership::owned(),
+                        RequestedOwnership::owned(),
                     )
                     .and_then(|x| x.expect_owned().into_stream())
                     .convert_to_final_result()?;

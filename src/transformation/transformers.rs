@@ -259,7 +259,7 @@ impl TransformerDefinition for ExactTransformer {
     fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         // TODO[parsers]: Ensure that no contextual parser is available when interpreting
         // To save confusion about parse order.
-        let stream: StreamExpression = self
+        let stream: StreamValue = self
             .stream
             .evaluate_owned(interpreter)?
             .resolve_as("Input to the EXACT parser")?;

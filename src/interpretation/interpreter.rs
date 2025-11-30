@@ -165,11 +165,7 @@ impl Interpreter {
         }
     }
 
-    pub(crate) fn define_variable(
-        &mut self,
-        definition_id: VariableDefinitionId,
-        value: ExpressionValue,
-    ) {
+    pub(crate) fn define_variable(&mut self, definition_id: VariableDefinitionId, value: Value) {
         let definition = self.scope_definitions.definitions.get(definition_id);
         let scope_data = self.scope_mut(definition.scope);
         scope_data.define_variable(definition_id, value)
@@ -178,7 +174,7 @@ impl Interpreter {
     pub(crate) fn resolve(
         &mut self,
         variable: &VariableReference,
-        ownership: RequestedValueOwnership,
+        ownership: RequestedOwnership,
     ) -> ExecutionResult<LateBoundValue> {
         let reference = self.scope_definitions.references.get(variable.id);
         let (definition, span, is_final) = (
@@ -363,7 +359,7 @@ struct RuntimeScope {
 }
 
 impl RuntimeScope {
-    fn define_variable(&mut self, definition_id: VariableDefinitionId, value: ExpressionValue) {
+    fn define_variable(&mut self, definition_id: VariableDefinitionId, value: Value) {
         self.variables
             .get_mut(&definition_id)
             .expect("Variable data not found in scope")
@@ -375,7 +371,7 @@ impl RuntimeScope {
         definition_id: VariableDefinitionId,
         span: Span,
         is_final: bool,
-        ownership: RequestedValueOwnership,
+        ownership: RequestedOwnership,
         blocked_from_mutation: Option<MutationBlockReason>,
     ) -> ExecutionResult<LateBoundValue> {
         self.variables

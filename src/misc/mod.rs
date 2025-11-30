@@ -38,8 +38,8 @@ pub(crate) fn print_if_slow<T>(
 // Equivalent to `!` but stable in our MSRV
 pub(crate) enum Never {}
 
-impl ToExpressionValue for Never {
-    fn into_value(self) -> ExpressionValue {
+impl IntoValue for Never {
+    fn into_value(self) -> Value {
         match self {}
     }
 }

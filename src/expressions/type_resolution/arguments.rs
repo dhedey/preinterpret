@@ -19,7 +19,7 @@ impl<'a> ResolutionContext<'a> {
     pub(crate) fn err<T>(
         &self,
         expected_value_kind: &str,
-        value: impl Borrow<ExpressionValue>,
+        value: impl Borrow<Value>,
     ) -> ExecutionResult<T> {
         self.span_range.type_err(format!(
             "{} is expected to be {}, but it is {}",
@@ -30,99 +30,98 @@ impl<'a> ResolutionContext<'a> {
     }
 }
 
-pub(crate) trait FromResolved: Sized {
+pub(crate) trait IsArgument: Sized {
     type ValueType: HierarchicalTypeData;
-    const OWNERSHIP: ResolvedValueOwnership;
-    fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self>;
+    const OWNERSHIP: ArgumentOwnership;
+    fn from_argument(value: ArgumentValue) -> ExecutionResult<Self>;
 }
 
-impl FromResolved for ResolvedValue {
+impl IsArgument for ArgumentValue {
     type ValueType = ValueTypeData;
-    const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::AsIs;
+    const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::AsIs;
 
-    fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
+    fn from_argument(value: ArgumentValue) -> ExecutionResult<Self> {
         Ok(value)
     }
 }
 
-impl FromResolved for AssigneeValue {
-    type ValueType = ValueTypeData;
-    const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Assignee;
-
-    fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
-        Ok(AssigneeValue(value.expect_mutable()))
-    }
-}
-
-impl<T: ResolvableArgumentShared + ResolvableArgumentTarget + ?Sized> FromResolved for Shared<T> {
+impl<T: ResolvableArgumentShared + ResolvableArgumentTarget + ?Sized> IsArgument for Shared<T> {
     type ValueType = T::ValueType;
-    const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Shared;
+    const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Shared;
 
-    fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
+    fn from_argument(value: ArgumentValue) -> ExecutionResult<Self> {
         T::resolve_shared(value.expect_shared(), "This argument")
     }
 }
 
-impl<T: 'static + ?Sized> FromResolved for AnyRef<'static, T>
+impl<T: 'static + ?Sized> IsArgument for AnyRef<'static, T>
 where
-    Shared<T>: FromResolved,
+    Shared<T>: IsArgument,
 {
-    type ValueType = <Shared<T> as FromResolved>::ValueType;
-    const OWNERSHIP: ResolvedValueOwnership = <Shared<T> as FromResolved>::OWNERSHIP;
+    type ValueType = <Shared<T> as IsArgument>::ValueType;
+    const OWNERSHIP: ArgumentOwnership = <Shared<T> as IsArgument>::OWNERSHIP;
 
-    fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
-        Ok(Shared::<T>::from_resolved(value)?.into())
+    fn from_argument(value: ArgumentValue) -> ExecutionResult<Self> {
+        Ok(Shared::<T>::from_argument(value)?.into())
     }
 }
 
-impl<T: ResolvableArgumentMutable + ResolvableArgumentTarget + ?Sized> FromResolved for Mutable<T> {
+impl<T: ResolvableArgumentMutable + ResolvableArgumentTarget + ?Sized> IsArgument for Assignee<T> {
     type ValueType = T::ValueType;
-    const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Mutable;
+    const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Assignee { auto_create: false };
 
-    fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
+    fn from_argument(value: ArgumentValue) -> ExecutionResult<Self> {
+        T::resolve_assignee(value.expect_assignee(), "This argument")
+    }
+}
+
+impl<T: ResolvableArgumentMutable + ResolvableArgumentTarget + ?Sized> IsArgument for Mutable<T> {
+    type ValueType = T::ValueType;
+    const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Mutable;
+
+    fn from_argument(value: ArgumentValue) -> ExecutionResult<Self> {
         T::resolve_mutable(value.expect_mutable(), "This argument")
     }
 }
 
-impl<T: 'static + ?Sized> FromResolved for AnyRefMut<'static, T>
+impl<T: 'static + ?Sized> IsArgument for AnyRefMut<'static, T>
 where
-    Mutable<T>: FromResolved,
+    Mutable<T>: IsArgument,
 {
-    type ValueType = <Mutable<T> as FromResolved>::ValueType;
-    const OWNERSHIP: ResolvedValueOwnership = <Mutable<T> as FromResolved>::OWNERSHIP;
+    type ValueType = <Mutable<T> as IsArgument>::ValueType;
+    const OWNERSHIP: ArgumentOwnership = <Mutable<T> as IsArgument>::OWNERSHIP;
 
-    fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
-        Ok(Mutable::<T>::from_resolved(value)?.into())
+    fn from_argument(value: ArgumentValue) -> ExecutionResult<Self> {
+        Ok(Mutable::<T>::from_argument(value)?.into())
     }
 }
 
-impl<T: ResolvableArgumentOwned + ResolvableArgumentTarget> FromResolved for Owned<T> {
+impl<T: ResolvableArgumentOwned + ResolvableArgumentTarget> IsArgument for Owned<T> {
     type ValueType = T::ValueType;
-    const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Owned;
+    const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
 
-    fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
+    fn from_argument(value: ArgumentValue) -> ExecutionResult<Self> {
         T::resolve_owned(value.expect_owned(), "This argument")
     }
 }
 
-impl<T: ResolvableArgumentOwned + ResolvableArgumentTarget> FromResolved for T {
+impl<T: ResolvableArgumentOwned + ResolvableArgumentTarget> IsArgument for T {
     type ValueType = T::ValueType;
-    const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Owned;
+    const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
 
-    fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
+    fn from_argument(value: ArgumentValue) -> ExecutionResult<Self> {
         T::resolve_value(value.expect_owned(), "This argument")
     }
 }
 
-impl<T: ResolvableArgumentShared + ResolvableArgumentTarget + ToOwned> FromResolved
-    for CopyOnWrite<T>
+impl<T: ResolvableArgumentShared + ResolvableArgumentTarget + ToOwned> IsArgument for CopyOnWrite<T>
 where
     T::Owned: ResolvableArgumentOwned,
 {
     type ValueType = T::ValueType;
-    const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::CopyOnWrite;
+    const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::CopyOnWrite;
 
-    fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
+    fn from_argument(value: ArgumentValue) -> ExecutionResult<Self> {
         value.expect_copy_on_write().map(
             |v| T::resolve_shared(v, "This argument"),
             |v| <T::Owned as ResolvableArgumentOwned>::resolve_owned(v, "This argument"),
@@ -130,14 +129,14 @@ where
     }
 }
 
-impl<T: FromResolved> FromResolved for Spanned<T> {
-    type ValueType = <T as FromResolved>::ValueType;
-    const OWNERSHIP: ResolvedValueOwnership = <T as FromResolved>::OWNERSHIP;
+impl<T: IsArgument> IsArgument for Spanned<T> {
+    type ValueType = <T as IsArgument>::ValueType;
+    const OWNERSHIP: ArgumentOwnership = <T as IsArgument>::OWNERSHIP;
 
-    fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
+    fn from_argument(value: ArgumentValue) -> ExecutionResult<Self> {
         let span_range = value.span_range();
         Ok(Spanned {
-            value: T::from_resolved(value)?,
+            value: T::from_argument(value)?,
             span_range,
         })
     }
@@ -160,30 +159,26 @@ impl<T: ResolvableArgumentOwned> ResolveAs<Owned<T>> for OwnedValue {
     }
 }
 
-impl<'a, T: ResolvableArgumentShared + ?Sized> ResolveAs<&'a T> for Spanned<&'a ExpressionValue> {
+impl<'a, T: ResolvableArgumentShared + ?Sized> ResolveAs<&'a T> for Spanned<&'a Value> {
     fn resolve_as(self, resolution_target: &str) -> ExecutionResult<&'a T> {
         T::resolve_ref(self, resolution_target)
     }
 }
 
-impl<'a, T: ResolvableArgumentShared + ?Sized> ResolveAs<Spanned<&'a T>>
-    for Spanned<&'a ExpressionValue>
-{
+impl<'a, T: ResolvableArgumentShared + ?Sized> ResolveAs<Spanned<&'a T>> for Spanned<&'a Value> {
     fn resolve_as(self, resolution_target: &str) -> ExecutionResult<Spanned<&'a T>> {
         T::resolve_spanned_ref(self, resolution_target)
     }
 }
 
-impl<'a, T: ResolvableArgumentMutable + ?Sized> ResolveAs<&'a mut T>
-    for Spanned<&'a mut ExpressionValue>
-{
+impl<'a, T: ResolvableArgumentMutable + ?Sized> ResolveAs<&'a mut T> for Spanned<&'a mut Value> {
     fn resolve_as(self, resolution_target: &str) -> ExecutionResult<&'a mut T> {
         T::resolve_ref_mut(self, resolution_target)
     }
 }
 
 impl<'a, T: ResolvableArgumentMutable + ?Sized> ResolveAs<Spanned<&'a mut T>>
-    for Spanned<&'a mut ExpressionValue>
+    for Spanned<&'a mut Value>
 {
     fn resolve_as(self, resolution_target: &str) -> ExecutionResult<Spanned<&'a mut T>> {
         T::resolve_spanned_ref_mut(self, resolution_target)
@@ -195,13 +190,10 @@ pub(crate) trait ResolvableArgumentTarget {
 }
 
 pub(crate) trait ResolvableArgumentOwned: Sized {
-    fn resolve_from_value(
-        value: ExpressionValue,
-        context: ResolutionContext,
-    ) -> ExecutionResult<Self>;
+    fn resolve_from_value(value: Value, context: ResolutionContext) -> ExecutionResult<Self>;
 
     fn resolve_owned_from_value(
-        value: ExpressionValue,
+        value: Value,
         context: ResolutionContext,
     ) -> ExecutionResult<Owned<Self>> {
         let span_range = *context.span_range;
@@ -209,10 +201,7 @@ pub(crate) trait ResolvableArgumentOwned: Sized {
     }
 
     /// The `resolution_target` should be capitalized, e.g. "This argument" or "The value destructed with an object pattern"
-    fn resolve_value(
-        value: Owned<ExpressionValue>,
-        resolution_target: &str,
-    ) -> ExecutionResult<Self> {
+    fn resolve_value(value: Owned<Value>, resolution_target: &str) -> ExecutionResult<Self> {
         let (value, span_range) = value.deconstruct();
         let context = ResolutionContext {
             span_range: &span_range,
@@ -222,10 +211,7 @@ pub(crate) trait ResolvableArgumentOwned: Sized {
     }
 
     /// The `resolution_target` should be capitalized, e.g. "This argument" or "The value destructed with an object pattern"
-    fn resolve_owned(
-        value: Owned<ExpressionValue>,
-        resolution_target: &str,
-    ) -> ExecutionResult<Owned<Self>> {
+    fn resolve_owned(value: Owned<Value>, resolution_target: &str) -> ExecutionResult<Owned<Self>> {
         let (value, span_range) = value.deconstruct();
         let context = ResolutionContext {
             span_range: &span_range,
@@ -237,13 +223,13 @@ pub(crate) trait ResolvableArgumentOwned: Sized {
 
 pub(crate) trait ResolvableArgumentShared {
     fn resolve_from_ref<'a>(
-        value: &'a ExpressionValue,
+        value: &'a Value,
         context: ResolutionContext,
     ) -> ExecutionResult<&'a Self>;
 
     /// The `resolution_target` should be capitalized, e.g. "This argument" or "The value destructed with an object pattern"
     fn resolve_shared(
-        value: Shared<ExpressionValue>,
+        value: Shared<Value>,
         resolution_target: &str,
     ) -> ExecutionResult<Shared<Self>> {
         value.try_map(|v, span_range| {
@@ -258,7 +244,7 @@ pub(crate) trait ResolvableArgumentShared {
     }
 
     fn resolve_ref<'a>(
-        value: Spanned<&'a ExpressionValue>,
+        value: Spanned<&'a Value>,
         resolution_target: &str,
     ) -> ExecutionResult<&'a Self> {
         Self::resolve_from_ref(
@@ -271,7 +257,7 @@ pub(crate) trait ResolvableArgumentShared {
     }
 
     fn resolve_spanned_ref<'a>(
-        value: Spanned<&'a ExpressionValue>,
+        value: Spanned<&'a Value>,
         resolution_target: &str,
     ) -> ExecutionResult<Spanned<&'a Self>> {
         value.try_map(|v, span_range| {
@@ -288,12 +274,19 @@ pub(crate) trait ResolvableArgumentShared {
 
 pub(crate) trait ResolvableArgumentMutable {
     fn resolve_from_mut<'a>(
-        value: &'a mut ExpressionValue,
+        value: &'a mut Value,
         context: ResolutionContext,
     ) -> ExecutionResult<&'a mut Self>;
 
+    fn resolve_assignee(
+        value: Assignee<Value>,
+        resolution_target: &str,
+    ) -> ExecutionResult<Assignee<Self>> {
+        Ok(Assignee(Self::resolve_mutable(value.0, resolution_target)?))
+    }
+
     fn resolve_mutable(
-        value: Mutable<ExpressionValue>,
+        value: Mutable<Value>,
         resolution_target: &str,
     ) -> ExecutionResult<Mutable<Self>> {
         value.try_map(|v, span_range| {
@@ -308,7 +301,7 @@ pub(crate) trait ResolvableArgumentMutable {
     }
 
     fn resolve_ref_mut<'a>(
-        value: Spanned<&'a mut ExpressionValue>,
+        value: Spanned<&'a mut Value>,
         resolution_target: &str,
     ) -> ExecutionResult<&'a mut Self> {
         Self::resolve_from_mut(
@@ -321,7 +314,7 @@ pub(crate) trait ResolvableArgumentMutable {
     }
 
     fn resolve_spanned_ref_mut<'a>(
-        value: Spanned<&'a mut ExpressionValue>,
+        value: Spanned<&'a mut Value>,
         resolution_target: &str,
     ) -> ExecutionResult<Spanned<&'a mut Self>> {
         value.try_map(|value, span_range| {
@@ -336,29 +329,26 @@ pub(crate) trait ResolvableArgumentMutable {
     }
 }
 
-impl ResolvableArgumentTarget for ExpressionValue {
+impl ResolvableArgumentTarget for Value {
     type ValueType = ValueTypeData;
 }
 
-impl ResolvableArgumentOwned for ExpressionValue {
-    fn resolve_from_value(
-        value: ExpressionValue,
-        _context: ResolutionContext,
-    ) -> ExecutionResult<Self> {
+impl ResolvableArgumentOwned for Value {
+    fn resolve_from_value(value: Value, _context: ResolutionContext) -> ExecutionResult<Self> {
         Ok(value)
     }
 }
-impl ResolvableArgumentShared for ExpressionValue {
+impl ResolvableArgumentShared for Value {
     fn resolve_from_ref<'a>(
-        value: &'a ExpressionValue,
+        value: &'a Value,
         _context: ResolutionContext,
     ) -> ExecutionResult<&'a Self> {
         Ok(value)
     }
 }
-impl ResolvableArgumentMutable for ExpressionValue {
+impl ResolvableArgumentMutable for Value {
     fn resolve_from_mut<'a>(
-        value: &'a mut ExpressionValue,
+        value: &'a mut Value,
         _context: ResolutionContext,
     ) -> ExecutionResult<&'a mut Self> {
         Ok(value)
@@ -373,7 +363,7 @@ macro_rules! impl_resolvable_argument_for {
 
         impl ResolvableArgumentOwned for $type {
             fn resolve_from_value(
-                $value: ExpressionValue,
+                $value: Value,
                 $context: ResolutionContext,
             ) -> ExecutionResult<Self> {
                 $body
@@ -382,7 +372,7 @@ macro_rules! impl_resolvable_argument_for {
 
         impl ResolvableArgumentShared for $type {
             fn resolve_from_ref<'a>(
-                $value: &'a ExpressionValue,
+                $value: &'a Value,
                 $context: ResolutionContext,
             ) -> ExecutionResult<&'a Self> {
                 $body
@@ -391,7 +381,7 @@ macro_rules! impl_resolvable_argument_for {
 
         impl ResolvableArgumentMutable for $type {
             fn resolve_from_mut<'a>(
-                $value: &'a mut ExpressionValue,
+                $value: &'a mut Value,
                 $context: ResolutionContext,
             ) -> ExecutionResult<&'a mut Self> {
                 $body
@@ -410,7 +400,7 @@ macro_rules! impl_delegated_resolvable_argument_for {
 
         impl ResolvableArgumentOwned for $type {
             fn resolve_from_value(
-                input_value: ExpressionValue,
+                input_value: Value,
                 context: ResolutionContext,
             ) -> ExecutionResult<Self> {
                 let $value: $delegate =
@@ -421,7 +411,7 @@ macro_rules! impl_delegated_resolvable_argument_for {
 
         impl ResolvableArgumentShared for $type {
             fn resolve_from_ref<'a>(
-                input_value: &'a ExpressionValue,
+                input_value: &'a Value,
                 context: ResolutionContext,
             ) -> ExecutionResult<&'a Self> {
                 let $value: &$delegate =
@@ -432,7 +422,7 @@ macro_rules! impl_delegated_resolvable_argument_for {
 
         impl ResolvableArgumentMutable for $type {
             fn resolve_from_mut<'a>(
-                input_value: &'a mut ExpressionValue,
+                input_value: &'a mut Value,
                 context: ResolutionContext,
             ) -> ExecutionResult<&'a mut Self> {
                 let $value: &mut $delegate =
