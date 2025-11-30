@@ -317,7 +317,7 @@ impl IterableExpressionRange<ExpressionValue> {
         match start {
             ExpressionValue::Integer(mut start) => {
                 if let Some(end) = &end {
-                    start.resolve_untyped_to_match(end)?;
+                    start = start.resolve_untyped_to_match(end)?;
                 }
                 match start.value {
                     IntegerExpressionValue::Untyped(start) => resolve_range(start, dots, end),

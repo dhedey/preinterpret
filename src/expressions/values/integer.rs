@@ -23,17 +23,14 @@ impl IntegerExpression {
         self.value.to_unspanned_literal().with_span(span)
     }
 
-    pub(crate) fn resolve_untyped_to_match(
-        &mut self,
-        other: &ExpressionValue,
-    ) -> ExecutionResult<()> {
-        if let (IntegerExpressionValue::Untyped(this), ExpressionValue::Integer(other)) =
-            (&mut self.value, other)
-        {
-            let other_kind = other.value.kind();
-            self.value = this.clone().into_kind(other_kind)?;
-        }
-        Ok(())
+    pub(crate) fn resolve_untyped_to_match(self, other: &ExpressionValue) -> ExecutionResult<Self> {
+        let value = match (self.value, other) {
+            (IntegerExpressionValue::Untyped(this), ExpressionValue::Integer(other)) => {
+                this.into_kind(other.value.kind())?
+            }
+            (value, _) => value,
+        };
+        Ok(Self { value })
     }
 }
 
