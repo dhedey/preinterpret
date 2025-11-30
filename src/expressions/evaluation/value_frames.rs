@@ -906,7 +906,7 @@ impl EvaluationFrame for ValueIndexAccessBuilder {
             }
             IndexPath::OnIndexBranch { source } => {
                 let index = value.expect_shared();
-                let is_range = matches!(index.kind(), ValueKind::Range);
+                let is_range = matches!(index.kind(), ValueKind::Range(_));
 
                 let auto_create = context.requested_ownership().requests_auto_create();
                 context.return_not_necessarily_matching_requested(

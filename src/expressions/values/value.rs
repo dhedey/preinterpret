@@ -64,7 +64,7 @@ pub(crate) enum ValueKind {
     Array,
     Object,
     Stream,
-    Range,
+    Range(RangeKind),
     Iterator,
     Parser,
 }
@@ -82,7 +82,7 @@ impl IsSpecificValueKind for ValueKind {
             ValueKind::Array => "array",
             ValueKind::Object => "object",
             ValueKind::Stream => "stream",
-            ValueKind::Range => "range",
+            ValueKind::Range(kind) => kind.display_name(),
             ValueKind::Iterator => "iterator",
             ValueKind::Parser => "parser",
         }
@@ -113,7 +113,7 @@ impl ValueKind {
             ValueKind::Array => &ARRAY,
             ValueKind::Object => &OBJECT,
             ValueKind::Stream => &STREAM,
-            ValueKind::Range => &RANGE,
+            ValueKind::Range(_) => &RANGE,
             ValueKind::Iterator => &ITERATOR,
             ValueKind::Parser => &PARSER,
         }
@@ -138,7 +138,7 @@ impl ValueKind {
             ValueKind::Array => false,
             ValueKind::Object => false,
             ValueKind::Stream => false,
-            ValueKind::Range => true,
+            ValueKind::Range(_) => true,
             ValueKind::Iterator => false,
             // A parser is a handle, so can be cloned transparently.
             // It may fail to be able to be used to parse if the underlying stream is out of scope of course.
@@ -721,7 +721,7 @@ impl HasValueKind for Value {
             Value::Array(_) => ValueKind::Array,
             Value::Object(_) => ValueKind::Object,
             Value::Stream(_) => ValueKind::Stream,
-            Value::Range(_) => ValueKind::Range,
+            Value::Range(range) => ValueKind::Range(range.kind()),
             Value::Iterator(_) => ValueKind::Iterator,
             Value::Parser(_) => ValueKind::Parser,
             Value::UnsupportedLiteral(_) => ValueKind::UnsupportedLiteral,
