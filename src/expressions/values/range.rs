@@ -117,9 +117,11 @@ impl Spanned<&RangeValue> {
     }
 }
 
-impl HasValueType for RangeValue {
-    fn value_type(&self) -> &'static str {
-        self.inner.value_type()
+impl HasValueKind for RangeValue {
+    type SpecificKind = ValueKind;
+
+    fn kind(&self) -> ValueKind {
+        ValueKind::Range
     }
 }
 
@@ -207,18 +209,6 @@ impl RangeValueInner {
     }
 }
 
-impl HasValueType for RangeValueInner {
-    fn value_type(&self) -> &'static str {
-        match self {
-            Self::Range { .. } => "range start..end",
-            Self::RangeFrom { .. } => "range start..",
-            Self::RangeTo { .. } => "range ..end",
-            Self::RangeFull { .. } => "range ..",
-            Self::RangeInclusive { .. } => "range start..=end",
-            Self::RangeToInclusive { .. } => "range ..=end",
-        }
-    }
-}
 
 impl IntoValue for RangeValueInner {
     fn into_value(self) -> Value {

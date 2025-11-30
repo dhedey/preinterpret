@@ -5,9 +5,11 @@ pub(crate) struct ParserValue {
     handle: ParserHandle,
 }
 
-impl HasValueType for ParserValue {
-    fn value_type(&self) -> &'static str {
-        "parser"
+impl HasValueKind for ParserValue {
+    type SpecificKind = ValueKind;
+
+    fn kind(&self) -> ValueKind {
+        ValueKind::Parser
     }
 }
 

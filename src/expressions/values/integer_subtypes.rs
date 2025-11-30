@@ -263,9 +263,11 @@ macro_rules! impl_int_operations {
             }
         }
 
-        impl HasValueType for $integer_type {
-            fn value_type(&self) -> &'static str {
-                stringify!($integer_type)
+        impl HasValueKind for $integer_type {
+            type SpecificKind = IntegerKind;
+
+            fn kind(&self) -> IntegerKind {
+                IntegerKind::$integer_enum_variant
             }
         }
 

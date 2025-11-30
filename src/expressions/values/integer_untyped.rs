@@ -135,9 +135,11 @@ impl UntypedInteger {
     }
 }
 
-impl HasValueType for UntypedInteger {
-    fn value_type(&self) -> &'static str {
-        "untyped integer"
+impl HasValueKind for UntypedInteger {
+    type SpecificKind = IntegerKind;
+
+    fn kind(&self) -> IntegerKind {
+        IntegerKind::Untyped
     }
 }
 

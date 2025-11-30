@@ -131,15 +131,11 @@ impl ArrayValue {
     }
 }
 
-impl HasValueType for ArrayValue {
-    fn value_type(&self) -> &'static str {
-        self.items.value_type()
-    }
-}
+impl HasValueKind for ArrayValue {
+    type SpecificKind = ValueKind;
 
-impl HasValueType for Vec<Value> {
-    fn value_type(&self) -> &'static str {
-        "array"
+    fn kind(&self) -> ValueKind {
+        ValueKind::Array
     }
 }
 

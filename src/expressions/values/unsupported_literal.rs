@@ -5,9 +5,11 @@ pub(crate) struct UnsupportedLiteral {
     pub(crate) lit: syn::Lit,
 }
 
-impl HasValueType for UnsupportedLiteral {
-    fn value_type(&self) -> &'static str {
-        "unsupported literal"
+impl HasValueKind for UnsupportedLiteral {
+    type SpecificKind = ValueKind;
+
+    fn kind(&self) -> ValueKind {
+        ValueKind::UnsupportedLiteral
     }
 }
 

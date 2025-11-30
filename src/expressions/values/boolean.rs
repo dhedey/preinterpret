@@ -23,9 +23,11 @@ impl BooleanValue {
     }
 }
 
-impl HasValueType for BooleanValue {
-    fn value_type(&self) -> &'static str {
-        "bool"
+impl HasValueKind for BooleanValue {
+    type SpecificKind = ValueKind;
+
+    fn kind(&self) -> ValueKind {
+        ValueKind::Boolean
     }
 }
 

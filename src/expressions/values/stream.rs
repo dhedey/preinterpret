@@ -56,15 +56,11 @@ impl StreamValue {
     }
 }
 
-impl HasValueType for StreamValue {
-    fn value_type(&self) -> &'static str {
-        self.value.value_type()
-    }
-}
+impl HasValueKind for StreamValue {
+    type SpecificKind = ValueKind;
 
-impl HasValueType for OutputStream {
-    fn value_type(&self) -> &'static str {
-        "stream"
+    fn kind(&self) -> ValueKind {
+        ValueKind::Stream
     }
 }
 

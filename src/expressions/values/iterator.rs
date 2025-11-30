@@ -195,9 +195,11 @@ impl_resolvable_argument_for! {
     }
 }
 
-impl HasValueType for IteratorValue {
-    fn value_type(&self) -> &'static str {
-        "iterator"
+impl HasValueKind for IteratorValue {
+    type SpecificKind = ValueKind;
+
+    fn kind(&self) -> ValueKind {
+        ValueKind::Iterator
     }
 }
 
