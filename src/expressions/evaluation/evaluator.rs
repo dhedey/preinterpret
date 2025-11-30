@@ -104,7 +104,7 @@ enum NextActionInner {
     // This covers atomic assignments and composite assignments
     // (similar to patterns but for existing values/reassignments)
     // let a = ["x", "y"]; let b; [a[1], .. b] = [1, 2, 3, 4]
-    ReadNodeAsAssignmentTarget(ExpressionNodeId, ExpressionValue),
+    ReadNodeAsAssignmentTarget(ExpressionNodeId, Value),
     HandleReturnedValue(RequestedValue),
 }
 
@@ -351,7 +351,7 @@ impl<'a, T: RequestedValueType> Context<'a, T> {
         self,
         handler: H,
         node: ExpressionNodeId,
-        value: ExpressionValue,
+        value: Value,
     ) -> NextAction {
         self.stack
             .handlers

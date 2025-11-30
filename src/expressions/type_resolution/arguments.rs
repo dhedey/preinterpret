@@ -19,7 +19,7 @@ impl<'a> ResolutionContext<'a> {
     pub(crate) fn err<T>(
         &self,
         expected_value_kind: &str,
-        value: impl Borrow<ExpressionValue>,
+        value: impl Borrow<Value>,
     ) -> ExecutionResult<T> {
         self.span_range.type_err(format!(
             "{} is expected to be {}, but it is {}",
@@ -159,30 +159,26 @@ impl<T: ResolvableArgumentOwned> ResolveAs<Owned<T>> for OwnedValue {
     }
 }
 
-impl<'a, T: ResolvableArgumentShared + ?Sized> ResolveAs<&'a T> for Spanned<&'a ExpressionValue> {
+impl<'a, T: ResolvableArgumentShared + ?Sized> ResolveAs<&'a T> for Spanned<&'a Value> {
     fn resolve_as(self, resolution_target: &str) -> ExecutionResult<&'a T> {
         T::resolve_ref(self, resolution_target)
     }
 }
 
-impl<'a, T: ResolvableArgumentShared + ?Sized> ResolveAs<Spanned<&'a T>>
-    for Spanned<&'a ExpressionValue>
-{
+impl<'a, T: ResolvableArgumentShared + ?Sized> ResolveAs<Spanned<&'a T>> for Spanned<&'a Value> {
     fn resolve_as(self, resolution_target: &str) -> ExecutionResult<Spanned<&'a T>> {
         T::resolve_spanned_ref(self, resolution_target)
     }
 }
 
-impl<'a, T: ResolvableArgumentMutable + ?Sized> ResolveAs<&'a mut T>
-    for Spanned<&'a mut ExpressionValue>
-{
+impl<'a, T: ResolvableArgumentMutable + ?Sized> ResolveAs<&'a mut T> for Spanned<&'a mut Value> {
     fn resolve_as(self, resolution_target: &str) -> ExecutionResult<&'a mut T> {
         T::resolve_ref_mut(self, resolution_target)
     }
 }
 
 impl<'a, T: ResolvableArgumentMutable + ?Sized> ResolveAs<Spanned<&'a mut T>>
-    for Spanned<&'a mut ExpressionValue>
+    for Spanned<&'a mut Value>
 {
     fn resolve_as(self, resolution_target: &str) -> ExecutionResult<Spanned<&'a mut T>> {
         T::resolve_spanned_ref_mut(self, resolution_target)
@@ -194,13 +190,10 @@ pub(crate) trait ResolvableArgumentTarget {
 }
 
 pub(crate) trait ResolvableArgumentOwned: Sized {
-    fn resolve_from_value(
-        value: ExpressionValue,
-        context: ResolutionContext,
-    ) -> ExecutionResult<Self>;
+    fn resolve_from_value(value: Value, context: ResolutionContext) -> ExecutionResult<Self>;
 
     fn resolve_owned_from_value(
-        value: ExpressionValue,
+        value: Value,
         context: ResolutionContext,
     ) -> ExecutionResult<Owned<Self>> {
         let span_range = *context.span_range;
@@ -208,10 +201,7 @@ pub(crate) trait ResolvableArgumentOwned: Sized {
     }
 
     /// The `resolution_target` should be capitalized, e.g. "This argument" or "The value destructed with an object pattern"
-    fn resolve_value(
-        value: Owned<ExpressionValue>,
-        resolution_target: &str,
-    ) -> ExecutionResult<Self> {
+    fn resolve_value(value: Owned<Value>, resolution_target: &str) -> ExecutionResult<Self> {
         let (value, span_range) = value.deconstruct();
         let context = ResolutionContext {
             span_range: &span_range,
@@ -221,10 +211,7 @@ pub(crate) trait ResolvableArgumentOwned: Sized {
     }
 
     /// The `resolution_target` should be capitalized, e.g. "This argument" or "The value destructed with an object pattern"
-    fn resolve_owned(
-        value: Owned<ExpressionValue>,
-        resolution_target: &str,
-    ) -> ExecutionResult<Owned<Self>> {
+    fn resolve_owned(value: Owned<Value>, resolution_target: &str) -> ExecutionResult<Owned<Self>> {
         let (value, span_range) = value.deconstruct();
         let context = ResolutionContext {
             span_range: &span_range,
@@ -236,13 +223,13 @@ pub(crate) trait ResolvableArgumentOwned: Sized {
 
 pub(crate) trait ResolvableArgumentShared {
     fn resolve_from_ref<'a>(
-        value: &'a ExpressionValue,
+        value: &'a Value,
         context: ResolutionContext,
     ) -> ExecutionResult<&'a Self>;
 
     /// The `resolution_target` should be capitalized, e.g. "This argument" or "The value destructed with an object pattern"
     fn resolve_shared(
-        value: Shared<ExpressionValue>,
+        value: Shared<Value>,
         resolution_target: &str,
     ) -> ExecutionResult<Shared<Self>> {
         value.try_map(|v, span_range| {
@@ -257,7 +244,7 @@ pub(crate) trait ResolvableArgumentShared {
     }
 
     fn resolve_ref<'a>(
-        value: Spanned<&'a ExpressionValue>,
+        value: Spanned<&'a Value>,
         resolution_target: &str,
     ) -> ExecutionResult<&'a Self> {
         Self::resolve_from_ref(
@@ -270,7 +257,7 @@ pub(crate) trait ResolvableArgumentShared {
     }
 
     fn resolve_spanned_ref<'a>(
-        value: Spanned<&'a ExpressionValue>,
+        value: Spanned<&'a Value>,
         resolution_target: &str,
     ) -> ExecutionResult<Spanned<&'a Self>> {
         value.try_map(|v, span_range| {
@@ -287,19 +274,19 @@ pub(crate) trait ResolvableArgumentShared {
 
 pub(crate) trait ResolvableArgumentMutable {
     fn resolve_from_mut<'a>(
-        value: &'a mut ExpressionValue,
+        value: &'a mut Value,
         context: ResolutionContext,
     ) -> ExecutionResult<&'a mut Self>;
 
     fn resolve_assignee(
-        value: Assignee<ExpressionValue>,
+        value: Assignee<Value>,
         resolution_target: &str,
     ) -> ExecutionResult<Assignee<Self>> {
         Ok(Assignee(Self::resolve_mutable(value.0, resolution_target)?))
     }
 
     fn resolve_mutable(
-        value: Mutable<ExpressionValue>,
+        value: Mutable<Value>,
         resolution_target: &str,
     ) -> ExecutionResult<Mutable<Self>> {
         value.try_map(|v, span_range| {
@@ -314,7 +301,7 @@ pub(crate) trait ResolvableArgumentMutable {
     }
 
     fn resolve_ref_mut<'a>(
-        value: Spanned<&'a mut ExpressionValue>,
+        value: Spanned<&'a mut Value>,
         resolution_target: &str,
     ) -> ExecutionResult<&'a mut Self> {
         Self::resolve_from_mut(
@@ -327,7 +314,7 @@ pub(crate) trait ResolvableArgumentMutable {
     }
 
     fn resolve_spanned_ref_mut<'a>(
-        value: Spanned<&'a mut ExpressionValue>,
+        value: Spanned<&'a mut Value>,
         resolution_target: &str,
     ) -> ExecutionResult<Spanned<&'a mut Self>> {
         value.try_map(|value, span_range| {
@@ -342,29 +329,26 @@ pub(crate) trait ResolvableArgumentMutable {
     }
 }
 
-impl ResolvableArgumentTarget for ExpressionValue {
+impl ResolvableArgumentTarget for Value {
     type ValueType = ValueTypeData;
 }
 
-impl ResolvableArgumentOwned for ExpressionValue {
-    fn resolve_from_value(
-        value: ExpressionValue,
-        _context: ResolutionContext,
-    ) -> ExecutionResult<Self> {
+impl ResolvableArgumentOwned for Value {
+    fn resolve_from_value(value: Value, _context: ResolutionContext) -> ExecutionResult<Self> {
         Ok(value)
     }
 }
-impl ResolvableArgumentShared for ExpressionValue {
+impl ResolvableArgumentShared for Value {
     fn resolve_from_ref<'a>(
-        value: &'a ExpressionValue,
+        value: &'a Value,
         _context: ResolutionContext,
     ) -> ExecutionResult<&'a Self> {
         Ok(value)
     }
 }
-impl ResolvableArgumentMutable for ExpressionValue {
+impl ResolvableArgumentMutable for Value {
     fn resolve_from_mut<'a>(
-        value: &'a mut ExpressionValue,
+        value: &'a mut Value,
         _context: ResolutionContext,
     ) -> ExecutionResult<&'a mut Self> {
         Ok(value)
@@ -379,7 +363,7 @@ macro_rules! impl_resolvable_argument_for {
 
         impl ResolvableArgumentOwned for $type {
             fn resolve_from_value(
-                $value: ExpressionValue,
+                $value: Value,
                 $context: ResolutionContext,
             ) -> ExecutionResult<Self> {
                 $body
@@ -388,7 +372,7 @@ macro_rules! impl_resolvable_argument_for {
 
         impl ResolvableArgumentShared for $type {
             fn resolve_from_ref<'a>(
-                $value: &'a ExpressionValue,
+                $value: &'a Value,
                 $context: ResolutionContext,
             ) -> ExecutionResult<&'a Self> {
                 $body
@@ -397,7 +381,7 @@ macro_rules! impl_resolvable_argument_for {
 
         impl ResolvableArgumentMutable for $type {
             fn resolve_from_mut<'a>(
-                $value: &'a mut ExpressionValue,
+                $value: &'a mut Value,
                 $context: ResolutionContext,
             ) -> ExecutionResult<&'a mut Self> {
                 $body
@@ -416,7 +400,7 @@ macro_rules! impl_delegated_resolvable_argument_for {
 
         impl ResolvableArgumentOwned for $type {
             fn resolve_from_value(
-                input_value: ExpressionValue,
+                input_value: Value,
                 context: ResolutionContext,
             ) -> ExecutionResult<Self> {
                 let $value: $delegate =
@@ -427,7 +411,7 @@ macro_rules! impl_delegated_resolvable_argument_for {
 
         impl ResolvableArgumentShared for $type {
             fn resolve_from_ref<'a>(
-                input_value: &'a ExpressionValue,
+                input_value: &'a Value,
                 context: ResolutionContext,
             ) -> ExecutionResult<&'a Self> {
                 let $value: &$delegate =
@@ -438,7 +422,7 @@ macro_rules! impl_delegated_resolvable_argument_for {
 
         impl ResolvableArgumentMutable for $type {
             fn resolve_from_mut<'a>(
-                input_value: &'a mut ExpressionValue,
+                input_value: &'a mut Value,
                 context: ResolutionContext,
             ) -> ExecutionResult<&'a mut Self> {
                 let $value: &mut $delegate =

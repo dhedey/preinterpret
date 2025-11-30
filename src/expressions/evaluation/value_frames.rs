@@ -50,7 +50,7 @@ impl ArgumentValue {
         }
     }
 
-    pub(crate) fn as_value_ref(&self) -> &ExpressionValue {
+    pub(crate) fn as_value_ref(&self) -> &Value {
         self.as_ref()
     }
 }
@@ -88,15 +88,15 @@ impl WithSpanRangeExt for ArgumentValue {
 }
 
 impl Deref for ArgumentValue {
-    type Target = ExpressionValue;
+    type Target = Value;
 
     fn deref(&self) -> &Self::Target {
         self.as_ref()
     }
 }
 
-impl AsRef<ExpressionValue> for ArgumentValue {
-    fn as_ref(&self) -> &ExpressionValue {
+impl AsRef<Value> for ArgumentValue {
+    fn as_ref(&self) -> &Value {
         match self {
             ArgumentValue::Owned(owned) => owned.as_ref(),
             ArgumentValue::Mutable(mutable) => mutable.as_ref(),
@@ -523,7 +523,7 @@ impl EvaluationFrame for GroupBuilder {
 pub(super) struct ArrayBuilder {
     span: Span,
     unevaluated_items: Vec<ExpressionNodeId>,
-    evaluated_items: Vec<ExpressionValue>,
+    evaluated_items: Vec<Value>,
 }
 
 impl ArrayBuilder {
@@ -930,7 +930,7 @@ pub(super) struct RangeBuilder {
 
 enum RangePath {
     OnLeftBranch { right: Option<ExpressionNodeId> },
-    OnRightBranch { left: Option<ExpressionValue> },
+    OnRightBranch { left: Option<Value> },
 }
 
 impl RangeBuilder {
@@ -943,7 +943,7 @@ impl RangeBuilder {
         Ok(match (left, right) {
             (None, None) => match range_limits {
                 syn::RangeLimits::HalfOpen(token) => {
-                    let inner = ExpressionRangeInner::RangeFull { token: *token };
+                    let inner = RangeValueInner::RangeFull { token: *token };
                     context.return_value(inner, token.span_range())?
                 }
                 syn::RangeLimits::Closed(_) => {
@@ -990,7 +990,7 @@ impl EvaluationFrame for RangeBuilder {
                 context.request_owned(self, right)
             }
             (RangePath::OnLeftBranch { right: None }, syn::RangeLimits::HalfOpen(token)) => {
-                let inner = ExpressionRangeInner::RangeFrom {
+                let inner = RangeValueInner::RangeFrom {
                     start_inclusive: value,
                     token,
                 };
@@ -1000,7 +1000,7 @@ impl EvaluationFrame for RangeBuilder {
                 unreachable!("A closed range should have been given a right in continue_range(..)")
             }
             (RangePath::OnRightBranch { left: Some(left) }, syn::RangeLimits::HalfOpen(token)) => {
-                let inner = ExpressionRangeInner::Range {
+                let inner = RangeValueInner::Range {
                     start_inclusive: left,
                     token,
                     end_exclusive: value,
@@ -1008,7 +1008,7 @@ impl EvaluationFrame for RangeBuilder {
                 context.return_value(inner, token.span_range())?
             }
             (RangePath::OnRightBranch { left: Some(left) }, syn::RangeLimits::Closed(token)) => {
-                let inner = ExpressionRangeInner::RangeInclusive {
+                let inner = RangeValueInner::RangeInclusive {
                     start_inclusive: left,
                     token,
                     end_inclusive: value,
@@ -1016,14 +1016,14 @@ impl EvaluationFrame for RangeBuilder {
                 context.return_value(inner, token.span_range())?
             }
             (RangePath::OnRightBranch { left: None }, syn::RangeLimits::HalfOpen(token)) => {
-                let inner = ExpressionRangeInner::RangeTo {
+                let inner = RangeValueInner::RangeTo {
                     token,
                     end_exclusive: value,
                 };
                 context.return_value(inner, token.span_range())?
             }
             (RangePath::OnRightBranch { left: None }, syn::RangeLimits::Closed(token)) => {
-                let inner = ExpressionRangeInner::RangeToInclusive {
+                let inner = RangeValueInner::RangeToInclusive {
                     token,
                     end_inclusive: value,
                 };
@@ -1134,7 +1134,7 @@ impl EvaluationFrame for CompoundAssignmentBuilder {
                 let span_range = SpanRange::new_between(assignee.span_range(), value.span_range());
                 SpannedAnyRefMut::from(assignee.0)
                     .handle_compound_assignment(&self.operation, value)?;
-                context.return_value(ExpressionValue::None, span_range)?
+                context.return_value(Value::None, span_range)?
             }
         })
     }

@@ -4,7 +4,7 @@ pub(crate) trait HandleDestructure {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,
-        value: ExpressionValue,
+        value: Value,
     ) -> ExecutionResult<()>;
 }
 
@@ -66,7 +66,7 @@ impl HandleDestructure for Pattern {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,
-        value: ExpressionValue,
+        value: Value,
     ) -> ExecutionResult<()> {
         match self {
             Pattern::Variable(variable) => variable.handle_destructure(interpreter, value),
@@ -106,9 +106,9 @@ impl HandleDestructure for ArrayPattern {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,
-        value: ExpressionValue,
+        value: Value,
     ) -> ExecutionResult<()> {
-        let array: ArrayExpression = value
+        let array: ArrayValue = value
             .into_owned(self.brackets.span_range())
             .resolve_as("The value destructured with an array pattern")?;
         let mut has_seen_dot_dot = false;
@@ -224,9 +224,9 @@ impl HandleDestructure for ObjectPattern {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,
-        value: ExpressionValue,
+        value: Value,
     ) -> ExecutionResult<()> {
-        let object: ObjectExpression = value
+        let object: ObjectValue = value
             .into_owned(self.braces.span_range())
             .resolve_as("The value destructured with an object pattern")?;
         let mut value_map = object.entries;
@@ -252,7 +252,7 @@ impl HandleDestructure for ObjectPattern {
             let value = value_map
                 .remove(&key)
                 .map(|entry| entry.value)
-                .unwrap_or_else(|| ExpressionValue::None);
+                .unwrap_or_else(|| Value::None);
             already_used_keys.insert(key);
             pattern.handle_destructure(interpreter, value)?;
         }
@@ -352,9 +352,9 @@ impl HandleDestructure for StreamPattern {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,
-        value: ExpressionValue,
+        value: Value,
     ) -> ExecutionResult<()> {
-        let stream: StreamExpression = value
+        let stream: StreamValue = value
             .into_owned(self.brackets.span_range())
             .resolve_as("The value destructured with a stream pattern")?;
         // TODO[parser-no-output]: Remove this once transformers no longer output

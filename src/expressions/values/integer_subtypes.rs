@@ -269,11 +269,9 @@ macro_rules! impl_int_operations {
             }
         }
 
-        impl ToExpressionValue for $integer_type {
-            fn into_value(self) -> ExpressionValue {
-                ExpressionValue::Integer(IntegerExpression {
-                    value: IntegerExpressionValue::$integer_enum_variant(self),
-                })
+        impl IntoValue for $integer_type {
+            fn into_value(self) -> Value {
+                Value::Integer(IntegerValue::$integer_enum_variant(self))
             }
         }
 
@@ -308,18 +306,12 @@ macro_rules! impl_resolvable_integer_subtype {
 
         impl ResolvableArgumentOwned for $type {
             fn resolve_from_value(
-                value: ExpressionValue,
+                value: Value,
                 context: ResolutionContext,
             ) -> ExecutionResult<Self> {
                 match value {
-                    ExpressionValue::Integer(IntegerExpression {
-                        value: IntegerExpressionValue::Untyped(x),
-                        ..
-                    }) => x.parse_as(),
-                    ExpressionValue::Integer(IntegerExpression {
-                        value: IntegerExpressionValue::$variant(x),
-                        ..
-                    }) => Ok(x),
+                    Value::Integer(IntegerValue::Untyped(x)) => x.parse_as(),
+                    Value::Integer(IntegerValue::$variant(x)) => Ok(x),
                     other => context.err($expected_msg, other),
                 }
             }
@@ -327,14 +319,11 @@ macro_rules! impl_resolvable_integer_subtype {
 
         impl ResolvableArgumentShared for $type {
             fn resolve_from_ref<'a>(
-                value: &'a ExpressionValue,
+                value: &'a Value,
                 context: ResolutionContext,
             ) -> ExecutionResult<&'a Self> {
                 match value {
-                    ExpressionValue::Integer(IntegerExpression {
-                        value: IntegerExpressionValue::$variant(x),
-                        ..
-                    }) => Ok(x),
+                    Value::Integer(IntegerValue::$variant(x)) => Ok(x),
                     other => context.err($expected_msg, other),
                 }
             }
@@ -342,14 +331,11 @@ macro_rules! impl_resolvable_integer_subtype {
 
         impl ResolvableArgumentMutable for $type {
             fn resolve_from_mut<'a>(
-                value: &'a mut ExpressionValue,
+                value: &'a mut Value,
                 context: ResolutionContext,
             ) -> ExecutionResult<&'a mut Self> {
                 match value {
-                    ExpressionValue::Integer(IntegerExpression {
-                        value: IntegerExpressionValue::$variant(x),
-                        ..
-                    }) => Ok(x),
+                    Value::Integer(IntegerValue::$variant(x)) => Ok(x),
                     other => context.err($expected_msg, other),
                 }
             }

@@ -2,32 +2,61 @@ use super::*;
 use crate::internal_prelude::*;
 
 #[derive(Clone)]
-pub(crate) struct FloatExpression {
-    pub(super) value: FloatExpressionValue,
+pub(crate) enum FloatValue {
+    Untyped(UntypedFloat),
+    F32(f32),
+    F64(f64),
 }
 
-impl ToExpressionValue for FloatExpression {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Float(self)
+impl IntoValue for FloatValue {
+    fn into_value(self) -> Value {
+        Value::Float(self)
     }
 }
 
-impl FloatExpression {
+impl FloatValue {
     pub(super) fn for_litfloat(lit: &syn::LitFloat) -> ParseResult<Owned<Self>> {
-        Ok(Self {
-            value: FloatExpressionValue::for_litfloat(lit)?,
+        Ok(match lit.suffix() {
+            "" => Self::Untyped(UntypedFloat::new_from_lit_float(lit.clone())),
+            "f32" => Self::F32(lit.base10_parse()?),
+            "f64" => Self::F64(lit.base10_parse()?),
+            suffix => {
+                return lit.span().parse_err(format!(
+                    "The literal suffix {suffix} is not supported in preinterpret expressions"
+                ));
+            }
         }
         .into_owned(lit.span()))
     }
 
     pub(super) fn to_literal(&self, span: Span) -> Literal {
-        self.value.to_unspanned_literal().with_span(span)
+        self.to_unspanned_literal().with_span(span)
+    }
+
+    pub(super) fn kind(&self) -> FloatKind {
+        match self {
+            Self::Untyped(_) => FloatKind::Untyped,
+            Self::F32(_) => FloatKind::F32,
+            Self::F64(_) => FloatKind::F64,
+        }
+    }
+
+    fn to_unspanned_literal(&self) -> Literal {
+        match self {
+            FloatValue::Untyped(float) => float.to_unspanned_literal(),
+            FloatValue::F32(float) => Literal::f32_suffixed(*float),
+            FloatValue::F64(float) => Literal::f64_suffixed(*float),
+        }
     }
 }
 
-impl HasValueType for FloatExpression {
+impl HasValueType for FloatValue {
     fn value_type(&self) -> &'static str {
-        self.value.value_type()
+        match self {
+            FloatValue::Untyped(_) => "untyped float",
+            FloatValue::F32(_) => "f32",
+            FloatValue::F64(_) => "f64",
+        }
     }
 }
 
@@ -42,60 +71,6 @@ define_interface! {
         pub(crate) mod binary_operations {}
         interface_items {
         }
-    }
-}
-
-#[derive(Clone)]
-pub(crate) enum FloatExpressionValue {
-    Untyped(UntypedFloat),
-    F32(f32),
-    F64(f64),
-}
-
-impl FloatExpressionValue {
-    pub(super) fn kind(&self) -> FloatKind {
-        match self {
-            Self::Untyped(_) => FloatKind::Untyped,
-            Self::F32(_) => FloatKind::F32,
-            Self::F64(_) => FloatKind::F64,
-        }
-    }
-
-    pub(super) fn for_litfloat(lit: &syn::LitFloat) -> ParseResult<Self> {
-        Ok(match lit.suffix() {
-            "" => Self::Untyped(UntypedFloat::new_from_lit_float(lit.clone())),
-            "f32" => Self::F32(lit.base10_parse()?),
-            "f64" => Self::F64(lit.base10_parse()?),
-            suffix => {
-                return lit.span().parse_err(format!(
-                    "The literal suffix {suffix} is not supported in preinterpret expressions"
-                ));
-            }
-        })
-    }
-
-    fn to_unspanned_literal(&self) -> Literal {
-        match self {
-            FloatExpressionValue::Untyped(float) => float.to_unspanned_literal(),
-            FloatExpressionValue::F32(float) => Literal::f32_suffixed(*float),
-            FloatExpressionValue::F64(float) => Literal::f64_suffixed(*float),
-        }
-    }
-}
-
-impl HasValueType for FloatExpressionValue {
-    fn value_type(&self) -> &'static str {
-        match self {
-            FloatExpressionValue::Untyped(_) => "untyped float",
-            FloatExpressionValue::F32(_) => "f32",
-            FloatExpressionValue::F64(_) => "f64",
-        }
-    }
-}
-
-impl ToExpressionValue for FloatExpressionValue {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Float(FloatExpression { value: self })
     }
 }
 
@@ -121,9 +96,9 @@ impl FloatKind {
 
 impl_resolvable_argument_for! {
     FloatTypeData,
-    (value, context) -> FloatExpression {
+    (value, context) -> FloatValue {
         match value {
-            ExpressionValue::Float(value) => Ok(value),
+            Value::Float(value) => Ok(value),
             other => context.err("float", other),
         }
     }

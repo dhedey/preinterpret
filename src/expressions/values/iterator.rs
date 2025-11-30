@@ -1,38 +1,36 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct IteratorExpression {
-    iterator: ExpressionIteratorInner,
+pub(crate) struct IteratorValue {
+    iterator: IteratorValueInner,
 }
 
-impl IteratorExpression {
-    fn new(iterator: ExpressionIteratorInner) -> Self {
+impl IteratorValue {
+    fn new(iterator: IteratorValueInner) -> Self {
         Self { iterator }
     }
 
     #[allow(unused)]
-    pub(crate) fn new_any(
-        iterator: impl Iterator<Item = ExpressionValue> + 'static + Clone,
-    ) -> Self {
+    pub(crate) fn new_any(iterator: impl Iterator<Item = Value> + 'static + Clone) -> Self {
         Self::new_custom(Box::new(iterator))
     }
 
-    pub(crate) fn new_for_array(array: ArrayExpression) -> Self {
+    pub(crate) fn new_for_array(array: ArrayValue) -> Self {
         Self::new_vec(array.items.into_iter())
     }
 
-    pub(crate) fn new_for_stream(stream: StreamExpression) -> Self {
-        Self::new(ExpressionIteratorInner::Stream(Box::new(
+    pub(crate) fn new_for_stream(stream: StreamValue) -> Self {
+        Self::new(IteratorValueInner::Stream(Box::new(
             stream.value.into_iter(),
         )))
     }
 
-    pub(crate) fn new_for_range(range: RangeExpression) -> ExecutionResult<Self> {
+    pub(crate) fn new_for_range(range: RangeValue) -> ExecutionResult<Self> {
         let iterator = range.inner.into_iterable()?.resolve_iterator()?;
         Ok(Self::new_custom(iterator))
     }
 
-    pub(crate) fn new_for_object(object: ObjectExpression) -> ExecutionResult<Self> {
+    pub(crate) fn new_for_object(object: ObjectValue) -> ExecutionResult<Self> {
         // We have to collect to vec and back to make it clonable
         let iterator = object
             .entries
@@ -43,7 +41,7 @@ impl IteratorExpression {
         Ok(Self::new_vec(iterator))
     }
 
-    pub(crate) fn new_for_string(string: StringExpression) -> ExecutionResult<Self> {
+    pub(crate) fn new_for_string(string: StringValue) -> ExecutionResult<Self> {
         // We have to collect to vec and back to make the iterator owned
         // That's because value.chars() creates a `Chars<'_>` iterator which
         // borrows from the string, which we don't allow in a Boxed iterator
@@ -56,12 +54,12 @@ impl IteratorExpression {
         Ok(Self::new_vec(iterator))
     }
 
-    fn new_vec(iterator: std::vec::IntoIter<ExpressionValue>) -> Self {
-        Self::new(ExpressionIteratorInner::Vec(Box::new(iterator)))
+    fn new_vec(iterator: std::vec::IntoIter<Value>) -> Self {
+        Self::new(IteratorValueInner::Vec(Box::new(iterator)))
     }
 
-    pub(crate) fn new_custom(iterator: Box<dyn ClonableIterator<Item = ExpressionValue>>) -> Self {
-        Self::new(ExpressionIteratorInner::Other(iterator))
+    pub(crate) fn new_custom(iterator: Box<dyn ClonableIterator<Item = Value>>) -> Self {
+        Self::new(IteratorValueInner::Other(iterator))
     }
 
     pub(crate) fn len(&self, error_span_range: SpanRange) -> ExecutionResult<usize> {
@@ -73,7 +71,7 @@ impl IteratorExpression {
         }
     }
 
-    pub(crate) fn singleton_value(mut self) -> Option<ExpressionValue> {
+    pub(crate) fn singleton_value(mut self) -> Option<Value> {
         let first = self.next()?;
         if self.next().is_none() {
             Some(first)
@@ -113,7 +111,7 @@ impl IteratorExpression {
         )
     }
 
-    pub(crate) fn any_iterator_to_string<T: Borrow<ExpressionValue>>(
+    pub(crate) fn any_iterator_to_string<T: Borrow<Value>>(
         iterator: impl Iterator<Item = T>,
         output: &mut String,
         behaviour: &ConcatBehaviour,
@@ -167,21 +165,21 @@ impl IteratorExpression {
     }
 }
 
-impl ToExpressionValue for ExpressionIteratorInner {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Iterator(IteratorExpression::new(self))
+impl IntoValue for IteratorValueInner {
+    fn into_value(self) -> Value {
+        Value::Iterator(IteratorValue::new(self))
     }
 }
 
-impl ToExpressionValue for Box<dyn ClonableIterator<Item = ExpressionValue>> {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Iterator(IteratorExpression::new_custom(self))
+impl IntoValue for Box<dyn ClonableIterator<Item = Value>> {
+    fn into_value(self) -> Value {
+        Value::Iterator(IteratorValue::new_custom(self))
     }
 }
 
-impl ToExpressionValue for IteratorExpression {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Iterator(IteratorExpression {
+impl IntoValue for IteratorValue {
+    fn into_value(self) -> Value {
+        Value::Iterator(IteratorValue {
             iterator: self.iterator,
         })
     }
@@ -189,62 +187,62 @@ impl ToExpressionValue for IteratorExpression {
 
 impl_resolvable_argument_for! {
     IteratorTypeData,
-    (value, context) -> IteratorExpression {
+    (value, context) -> IteratorValue {
         match value {
-            ExpressionValue::Iterator(value) => Ok(value),
+            Value::Iterator(value) => Ok(value),
             _ => context.err("iterator", value),
         }
     }
 }
 
-impl HasValueType for IteratorExpression {
+impl HasValueType for IteratorValue {
     fn value_type(&self) -> &'static str {
         "iterator"
     }
 }
 
 #[derive(Clone)]
-enum ExpressionIteratorInner {
+enum IteratorValueInner {
     // We Box these so that Value is smaller on the stack
-    Vec(Box<<Vec<ExpressionValue> as IntoIterator>::IntoIter>),
+    Vec(Box<<Vec<Value> as IntoIterator>::IntoIter>),
     Stream(Box<<OutputStream as IntoIterator>::IntoIter>),
-    Other(Box<dyn ClonableIterator<Item = ExpressionValue>>),
+    Other(Box<dyn ClonableIterator<Item = Value>>),
 }
 
-impl Iterator for IteratorExpression {
-    type Item = ExpressionValue;
+impl Iterator for IteratorValue {
+    type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.iterator {
-            ExpressionIteratorInner::Vec(iter) => iter.next(),
-            ExpressionIteratorInner::Stream(iter) => {
+            IteratorValueInner::Vec(iter) => iter.next(),
+            IteratorValueInner::Stream(iter) => {
                 let item = iter.next()?;
                 let stream: OutputStream = item.into();
                 Some(stream.coerce_into_value())
             }
-            ExpressionIteratorInner::Other(iter) => iter.next(),
+            IteratorValueInner::Other(iter) => iter.next(),
         }
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         match &self.iterator {
-            ExpressionIteratorInner::Vec(iter) => iter.size_hint(),
-            ExpressionIteratorInner::Stream(iter) => iter.size_hint(),
-            ExpressionIteratorInner::Other(iter) => iter.size_hint(),
+            IteratorValueInner::Vec(iter) => iter.size_hint(),
+            IteratorValueInner::Stream(iter) => iter.size_hint(),
+            IteratorValueInner::Other(iter) => iter.size_hint(),
         }
     }
 }
 
-impl Iterator for Mutable<IteratorExpression> {
-    type Item = ExpressionValue;
+impl Iterator for Mutable<IteratorValue> {
+    type Item = Value;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let this: &mut IteratorExpression = &mut *self;
+        let this: &mut IteratorValue = &mut *self;
         this.next()
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let this: &IteratorExpression = self;
+        let this: &IteratorValue = self;
         this.size_hint()
     }
 }
@@ -254,14 +252,14 @@ define_interface! {
     parent: IterableTypeData,
     pub(crate) mod iterator_interface {
         pub(crate) mod methods {
-            fn next(mut this: Mutable<IteratorExpression>) -> ExpressionValue {
+            fn next(mut this: Mutable<IteratorValue>) -> Value {
                 match this.next() {
                     Some(value) => value,
-                    None => ExpressionValue::None,
+                    None => Value::None,
                 }
             }
 
-            fn skip(mut this: IteratorExpression, n: usize) -> IteratorExpression {
+            fn skip(mut this: IteratorValue, n: usize) -> IteratorValue {
                 // We make this greedy instead of lazy because the Skip iterator is not clonable.
                 // We return an iterator for forwards compatibility in case we change it.
                 for _ in 0..n {
@@ -272,15 +270,15 @@ define_interface! {
                 this
             }
 
-            fn take(this: IteratorExpression, n: usize) -> IteratorExpression {
+            fn take(this: IteratorValue, n: usize) -> IteratorValue {
                 // We collect to a vec to satisfy the clonability requirement,
                 // but only return an iterator for forwards compatibility in case we change it.
                 let taken = this.take(n).collect::<Vec<_>>();
-                IteratorExpression::new_for_array(ArrayExpression::new(taken))
+                IteratorValue::new_for_array(ArrayValue::new(taken))
             }
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_singleton_to_value(this: Owned<IteratorExpression>) -> ExecutionResult<ReturnedValue> {
+            [context] fn cast_singleton_to_value(this: Owned<IteratorValue>) -> ExecutionResult<ReturnedValue> {
                 let (this, input_span_range) = this.deconstruct();
                 match this.singleton_value() {
                     Some(value) => context.operation.evaluate(Owned::new(value, input_span_range)),

@@ -127,7 +127,7 @@ impl ExpressionNode {
         // NB: This might intrisically be a part of a larger value, and might have been
         // created many lines previously, so doesn't have an obvious span associated with it
         // Instead, we put errors on the assignee syntax side
-        value: ExpressionValue,
+        value: Value,
     ) -> ExecutionResult<NextAction> {
         Ok(match self {
             ExpressionNode::Leaf(Leaf::Discarded(underscore)) => {

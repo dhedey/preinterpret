@@ -146,7 +146,7 @@ impl LetStatement {
                 .expression
                 .evaluate_owned(interpreter)?
                 .into_inner(),
-            None => ExpressionValue::None,
+            None => Value::None,
         };
         pattern.handle_destructure(interpreter, value)?;
         Ok(())

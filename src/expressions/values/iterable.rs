@@ -5,12 +5,12 @@ use super::*;
 // * IsArgument for IterableRef
 // * The parent of the value's TypeData to be IterableTypeData
 pub(crate) enum IterableValue {
-    Iterator(IteratorExpression),
-    Array(ArrayExpression),
-    Stream(StreamExpression),
-    Object(ObjectExpression),
-    Range(RangeExpression),
-    String(StringExpression),
+    Iterator(IteratorValue),
+    Array(ArrayValue),
+    Stream(StreamValue),
+    Object(ObjectValue),
+    Range(RangeValue),
+    String(StringValue),
 }
 
 impl ResolvableArgumentTarget for IterableValue {
@@ -18,17 +18,14 @@ impl ResolvableArgumentTarget for IterableValue {
 }
 
 impl ResolvableArgumentOwned for IterableValue {
-    fn resolve_from_value(
-        value: ExpressionValue,
-        context: ResolutionContext,
-    ) -> ExecutionResult<Self> {
+    fn resolve_from_value(value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
         Ok(match value {
-            ExpressionValue::Array(x) => Self::Array(x),
-            ExpressionValue::Object(x) => Self::Object(x),
-            ExpressionValue::Stream(x) => Self::Stream(x),
-            ExpressionValue::Range(x) => Self::Range(x),
-            ExpressionValue::Iterator(x) => Self::Iterator(x),
-            ExpressionValue::String(x) => Self::String(x),
+            Value::Array(x) => Self::Array(x),
+            Value::Object(x) => Self::Object(x),
+            Value::Stream(x) => Self::Stream(x),
+            Value::Range(x) => Self::Range(x),
+            Value::Iterator(x) => Self::Iterator(x),
+            Value::String(x) => Self::String(x),
             _ => {
                 return context.err(
                     "iterable (iterator, array, object, stream, range or string)",
@@ -44,7 +41,7 @@ define_interface! {
     parent: ValueTypeData,
     pub(crate) mod iterable_interface {
         pub(crate) mod methods {
-            fn into_iter(this: IterableValue) -> ExecutionResult<IteratorExpression> {
+            fn into_iter(this: IterableValue) -> ExecutionResult<IteratorValue> {
                 this.into_iterator()
             }
 
@@ -56,21 +53,21 @@ define_interface! {
                 Ok(this.len()? == 0)
             }
 
-            [context] fn zip(this: IterableValue) -> ExecutionResult<ArrayExpression> {
+            [context] fn zip(this: IterableValue) -> ExecutionResult<ArrayValue> {
                 let iterator = this.into_iterator()?;
                 ZipIterators::new_from_iterator(iterator, context.span_range())?.run_zip(context.interpreter, true)
             }
 
-            [context] fn zip_truncated(this: IterableValue) -> ExecutionResult<ArrayExpression> {
+            [context] fn zip_truncated(this: IterableValue) -> ExecutionResult<ArrayValue> {
                 let iterator = this.into_iterator()?;
                 ZipIterators::new_from_iterator(iterator, context.span_range())?.run_zip(context.interpreter, false)
             }
 
-            fn intersperse(this: IterableValue, separator: ExpressionValue, settings: Option<IntersperseSettings>) -> ExecutionResult<ArrayExpression> {
+            fn intersperse(this: IterableValue, separator: Value, settings: Option<IntersperseSettings>) -> ExecutionResult<ArrayValue> {
                 run_intersperse(this, separator, settings.unwrap_or_default())
             }
 
-            [context] fn to_vec(this: IterableValue) -> ExecutionResult<Vec<ExpressionValue>> {
+            [context] fn to_vec(this: IterableValue) -> ExecutionResult<Vec<Value>> {
                 let error_span_range = context.span_range();
                 let mut counter = context.interpreter.start_iteration_counter(&error_span_range);
                 let iterator = this.into_iterator()?;
@@ -96,24 +93,24 @@ define_interface! {
 }
 
 impl IterableValue {
-    pub(crate) fn into_iterator(self) -> ExecutionResult<IteratorExpression> {
+    pub(crate) fn into_iterator(self) -> ExecutionResult<IteratorValue> {
         Ok(match self {
-            IterableValue::Array(value) => IteratorExpression::new_for_array(value),
-            IterableValue::Stream(value) => IteratorExpression::new_for_stream(value),
+            IterableValue::Array(value) => IteratorValue::new_for_array(value),
+            IterableValue::Stream(value) => IteratorValue::new_for_stream(value),
             IterableValue::Iterator(value) => value,
-            IterableValue::Range(value) => IteratorExpression::new_for_range(value)?,
-            IterableValue::Object(value) => IteratorExpression::new_for_object(value)?,
-            IterableValue::String(value) => IteratorExpression::new_for_string(value)?,
+            IterableValue::Range(value) => IteratorValue::new_for_range(value)?,
+            IterableValue::Object(value) => IteratorValue::new_for_object(value)?,
+            IterableValue::String(value) => IteratorValue::new_for_string(value)?,
         })
     }
 }
 
 pub(crate) enum IterableRef<'a> {
-    Iterator(AnyRef<'a, IteratorExpression>),
-    Array(AnyRef<'a, ArrayExpression>),
+    Iterator(AnyRef<'a, IteratorValue>),
+    Array(AnyRef<'a, ArrayValue>),
     Stream(AnyRef<'a, OutputStream>),
-    Range(AnyRef<'a, RangeExpression>),
-    Object(AnyRef<'a, ObjectExpression>),
+    Range(AnyRef<'a, RangeValue>),
+    Object(AnyRef<'a, ObjectValue>),
     String(AnyRef<'a, str>),
 }
 

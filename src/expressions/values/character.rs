@@ -1,17 +1,17 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct CharExpression {
+pub(crate) struct CharValue {
     pub(super) value: char,
 }
 
-impl ToExpressionValue for CharExpression {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Char(self)
+impl IntoValue for CharValue {
+    fn into_value(self) -> Value {
+        Value::Char(self)
     }
 }
 
-impl CharExpression {
+impl CharValue {
     pub(super) fn for_litchar(lit: &syn::LitChar) -> Owned<Self> {
         Self { value: lit.value() }.into_owned(lit.span())
     }
@@ -21,15 +21,15 @@ impl CharExpression {
     }
 }
 
-impl HasValueType for CharExpression {
+impl HasValueType for CharValue {
     fn value_type(&self) -> &'static str {
         "char"
     }
 }
 
-impl ToExpressionValue for char {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Char(CharExpression { value: self })
+impl IntoValue for char {
+    fn into_value(self) -> Value {
+        Value::Char(CharValue { value: self })
     }
 }
 
@@ -169,9 +169,9 @@ define_interface! {
 
 impl_resolvable_argument_for! {
     CharTypeData,
-    (value, context) -> CharExpression {
+    (value, context) -> CharValue {
         match value {
-            ExpressionValue::Char(value) => Ok(value),
+            Value::Char(value) => Ok(value),
             _ => context.err("char", value),
         }
     }
@@ -179,5 +179,5 @@ impl_resolvable_argument_for! {
 
 impl_delegated_resolvable_argument_for!(
     CharTypeData,
-    (value: CharExpression) -> char { value.value }
+    (value: CharValue) -> char { value.value }
 );

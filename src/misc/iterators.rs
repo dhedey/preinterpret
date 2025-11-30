@@ -38,13 +38,13 @@ where
 }
 
 pub(crate) enum ZipIterators {
-    Array(Vec<IteratorExpression>, SpanRange),
-    Object(Vec<(String, Span, IteratorExpression)>, SpanRange),
+    Array(Vec<IteratorValue>, SpanRange),
+    Object(Vec<(String, Span, IteratorValue)>, SpanRange),
 }
 
 impl ZipIterators {
     pub(crate) fn new_from_object(
-        object: ObjectExpression,
+        object: ObjectValue,
         span_range: SpanRange,
     ) -> ExecutionResult<Self> {
         let entries = object
@@ -69,7 +69,7 @@ impl ZipIterators {
     }
 
     pub(crate) fn new_from_iterator(
-        iterator: IteratorExpression,
+        iterator: IteratorValue,
         span_range: SpanRange,
     ) -> ExecutionResult<Self> {
         let vec = iterator
@@ -90,7 +90,7 @@ impl ZipIterators {
         self,
         interpreter: &mut Interpreter,
         error_on_length_mismatch: bool,
-    ) -> ExecutionResult<ArrayExpression> {
+    ) -> ExecutionResult<ArrayValue> {
         let mut iterators = self;
         let error_span_range = match &iterators {
             ZipIterators::Array(_, span_range) => *span_range,
@@ -99,7 +99,7 @@ impl ZipIterators {
         let mut output = Vec::new();
 
         if iterators.len() == 0 {
-            return Ok(ArrayExpression::new(output));
+            return Ok(ArrayValue::new(output));
         }
 
         let (min_iterator_min_length, max_iterator_max_length) = iterators.size_hint_range();
@@ -122,7 +122,7 @@ impl ZipIterators {
             &mut output,
         )?;
 
-        Ok(ArrayExpression::new(output))
+        Ok(ArrayValue::new(output))
     }
 
     /// Panics if called on an empty list of iterators
@@ -158,7 +158,7 @@ impl ZipIterators {
         count: usize,
         interpreter: &mut Interpreter,
         error_span_range: SpanRange,
-        output: &mut Vec<ExpressionValue>,
+        output: &mut Vec<Value>,
     ) -> ExecutionResult<()> {
         let mut counter = interpreter.start_iteration_counter(&error_span_range);
 
@@ -198,22 +198,22 @@ impl ZipIterators {
 define_optional_object! {
     pub(crate) struct IntersperseSettings {
         add_trailing: bool = false => ("false", "Whether to add the separator after the last item (default: false)"),
-        final_separator: ExpressionValue => ("%[or]", "Define a different final separator (default: same as normal separator)"),
+        final_separator: Value => ("%[or]", "Define a different final separator (default: same as normal separator)"),
     }
 }
 
 pub(crate) fn run_intersperse(
     items: IterableValue,
-    separator: ExpressionValue,
+    separator: Value,
     settings: IntersperseSettings,
-) -> ExecutionResult<ArrayExpression> {
+) -> ExecutionResult<ArrayValue> {
     let mut output = Vec::new();
 
     let mut items = items.into_iterator()?.peekable();
 
     let mut this_item = match items.next() {
         Some(next) => next,
-        None => return Ok(ArrayExpression { items: output }),
+        None => return Ok(ArrayValue { items: output }),
     };
 
     let mut appender = SeparatorAppender {
@@ -242,12 +242,12 @@ pub(crate) fn run_intersperse(
         }
     }
 
-    Ok(ArrayExpression { items: output })
+    Ok(ArrayValue { items: output })
 }
 
 struct SeparatorAppender {
-    separator: ExpressionValue,
-    final_separator: Option<ExpressionValue>,
+    separator: Value,
+    final_separator: Option<Value>,
     add_trailing: bool,
 }
 
@@ -255,7 +255,7 @@ impl SeparatorAppender {
     fn add_separator(
         &mut self,
         remaining: RemainingItemCount,
-        output: &mut Vec<ExpressionValue>,
+        output: &mut Vec<Value>,
     ) -> ExecutionResult<()> {
         match self.separator(remaining) {
             TrailingSeparator::Normal => output.push(self.separator.clone()),
@@ -313,7 +313,7 @@ pub(crate) fn handle_split(
     input: OutputStream,
     separator: &OutputStream,
     settings: SplitSettings,
-) -> ExecutionResult<ArrayExpression> {
+) -> ExecutionResult<ArrayValue> {
     input.parse_with(move |input| {
         let mut output = Vec::new();
         let mut current_item = OutputStream::new();
@@ -325,7 +325,7 @@ pub(crate) fn handle_split(
                 let complete_item = core::mem::replace(&mut current_item, OutputStream::new());
                 output.push(complete_item.into_value());
             }
-            return Ok(ArrayExpression::new(output));
+            return Ok(ArrayValue::new(output));
         }
 
         let mut drop_empty_next = settings.drop_empty_start;
@@ -350,6 +350,6 @@ pub(crate) fn handle_split(
         if !current_item.is_empty() || !settings.drop_empty_end {
             output.push(current_item.into_value());
         }
-        Ok(ArrayExpression::new(output))
+        Ok(ArrayValue::new(output))
     })
 }

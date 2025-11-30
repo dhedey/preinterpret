@@ -36,7 +36,7 @@ impl ReturnedValue {
 // TODO: Find some way to selectively enable only on MSRV (e.g. following the build.rs feature flag pattern)
 // #[diagnostic::on_unimplemented(
 //     message = "`ResolvableOutput` is not implemented for `{Self}`",
-//     note = "`ResolvableOutput` is not implemented for `Shared<X>` or `Mutable<X>` unless `X` is `ExpressionValue`. If we wish to change this, we'd need to have some way to represent some kind of `ExpressionReference`, i.e. a `Typed<Shared<..>>` rather than a `Shared<Typed<..>>`"
+//     note = "`ResolvableOutput` is not implemented for `Shared<X>` or `Mutable<X>` unless `X` is `Value`. If we wish to change this, we'd need to have some way to represent some kind of `ExpressionReference`, i.e. a `Typed<Shared<..>>` rather than a `Shared<Typed<..>>`"
 // )]
 pub(crate) trait IsReturnable {
     fn to_returned_value(self, output_span_range: SpanRange) -> ExecutionResult<ReturnedValue>;
@@ -48,7 +48,7 @@ impl IsReturnable for ReturnedValue {
     }
 }
 
-impl IsReturnable for Shared<ExpressionValue> {
+impl IsReturnable for Shared<Value> {
     fn to_returned_value(self, output_span_range: SpanRange) -> ExecutionResult<ReturnedValue> {
         Ok(ReturnedValue::Shared(
             self.update_span_range(|_| output_span_range),
@@ -56,7 +56,7 @@ impl IsReturnable for Shared<ExpressionValue> {
     }
 }
 
-impl IsReturnable for Mutable<ExpressionValue> {
+impl IsReturnable for Mutable<Value> {
     fn to_returned_value(self, output_span_range: SpanRange) -> ExecutionResult<ReturnedValue> {
         Ok(ReturnedValue::Mutable(
             self.update_span_range(|_| output_span_range),
@@ -64,7 +64,7 @@ impl IsReturnable for Mutable<ExpressionValue> {
     }
 }
 
-impl<T: ToExpressionValue> IsReturnable for T {
+impl<T: IntoValue> IsReturnable for T {
     fn to_returned_value(self, output_span_range: SpanRange) -> ExecutionResult<ReturnedValue> {
         Ok(ReturnedValue::Owned(
             self.into_owned_value(output_span_range),
@@ -72,7 +72,7 @@ impl<T: ToExpressionValue> IsReturnable for T {
     }
 }
 
-impl<T: ToExpressionValue> IsReturnable for Owned<T> {
+impl<T: IntoValue> IsReturnable for Owned<T> {
     fn to_returned_value(self, output_span_range: SpanRange) -> ExecutionResult<ReturnedValue> {
         Ok(ReturnedValue::Owned(
             self.map(|f, _| f.into_value())

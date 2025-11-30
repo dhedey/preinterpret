@@ -3,17 +3,17 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct BooleanExpression {
+pub(crate) struct BooleanValue {
     pub(crate) value: bool,
 }
 
-impl ToExpressionValue for BooleanExpression {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Boolean(self)
+impl IntoValue for BooleanValue {
+    fn into_value(self) -> Value {
+        Value::Boolean(self)
     }
 }
 
-impl BooleanExpression {
+impl BooleanValue {
     pub(crate) fn for_litbool(lit: &syn::LitBool) -> Owned<Self> {
         Self { value: lit.value }.into_owned(lit.span)
     }
@@ -23,15 +23,15 @@ impl BooleanExpression {
     }
 }
 
-impl HasValueType for BooleanExpression {
+impl HasValueType for BooleanValue {
     fn value_type(&self) -> &'static str {
         "bool"
     }
 }
 
-impl ToExpressionValue for bool {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Boolean(BooleanExpression { value: self })
+impl IntoValue for bool {
+    fn into_value(self) -> Value {
+        Value::Boolean(BooleanValue { value: self })
     }
 }
 
@@ -200,9 +200,9 @@ define_interface! {
 
 impl_resolvable_argument_for! {
     BooleanTypeData,
-    (value, context) -> BooleanExpression {
+    (value, context) -> BooleanValue {
         match value {
-            ExpressionValue::Boolean(value) => Ok(value),
+            Value::Boolean(value) => Ok(value),
             other => context.err("boolean", other),
         }
     }
@@ -210,5 +210,5 @@ impl_resolvable_argument_for! {
 
 impl_delegated_resolvable_argument_for! {
     BooleanTypeData,
-    (value: BooleanExpression) -> bool { value.value }
+    (value: BooleanValue) -> bool { value.value }
 }

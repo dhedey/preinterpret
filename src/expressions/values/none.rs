@@ -1,8 +1,8 @@
 use super::*;
 
-impl ToExpressionValue for () {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::None
+impl IntoValue for () {
+    fn into_value(self) -> Value {
+        Value::None
     }
 }
 
@@ -11,12 +11,9 @@ impl ResolvableArgumentTarget for () {
 }
 
 impl ResolvableArgumentOwned for () {
-    fn resolve_from_value(
-        value: ExpressionValue,
-        context: ResolutionContext,
-    ) -> ExecutionResult<Self> {
+    fn resolve_from_value(value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
         match value {
-            ExpressionValue::None => Ok(()),
+            Value::None => Ok(()),
             other => context.err("None", other),
         }
     }

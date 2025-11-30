@@ -125,7 +125,7 @@ impl IfExpression {
             return else_code.evaluate(interpreter, requested_ownership);
         }
 
-        requested_ownership.map_from_owned(ExpressionValue::None.into_owned(self.span_range()))
+        requested_ownership.map_from_owned(Value::None.into_owned(self.span_range()))
     }
 }
 

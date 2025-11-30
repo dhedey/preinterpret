@@ -6,12 +6,12 @@ use std::rc::Rc;
 
 pub(super) enum VariableContent {
     Uninitialized,
-    Value(Rc<RefCell<ExpressionValue>>),
+    Value(Rc<RefCell<Value>>),
     Finished,
 }
 
 impl VariableContent {
-    pub(crate) fn define(&mut self, value: ExpressionValue) {
+    pub(crate) fn define(&mut self, value: Value) {
         match self {
             content @ VariableContent::Uninitialized => {
                 *content = VariableContent::Value(Rc::new(RefCell::new(value)));
@@ -110,7 +110,7 @@ impl VariableContent {
 
 #[derive(Clone)]
 pub(crate) struct VariableBinding {
-    data: Rc<RefCell<ExpressionValue>>,
+    data: Rc<RefCell<Value>>,
     variable_span: Span,
 }
 
@@ -220,15 +220,15 @@ impl LateBoundValue {
 }
 
 impl Deref for LateBoundValue {
-    type Target = ExpressionValue;
+    type Target = Value;
 
     fn deref(&self) -> &Self::Target {
         self.as_ref()
     }
 }
 
-impl AsRef<ExpressionValue> for LateBoundValue {
-    fn as_ref(&self) -> &ExpressionValue {
+impl AsRef<Value> for LateBoundValue {
+    fn as_ref(&self) -> &Value {
         match self {
             LateBoundValue::Owned(owned) => owned.as_ref(),
             LateBoundValue::CopyOnWrite(cow) => cow.as_ref(),
@@ -268,7 +268,7 @@ impl WithSpanRangeExt for LateBoundValue {
     }
 }
 
-pub(crate) type OwnedValue = Owned<ExpressionValue>;
+pub(crate) type OwnedValue = Owned<Value>;
 
 /// A binding of an owned value along with a span of the whole access.
 ///
@@ -335,7 +335,7 @@ impl OwnedValue {
     pub(crate) fn resolve_indexed(
         self,
         access: IndexAccess,
-        index: Spanned<&ExpressionValue>,
+        index: Spanned<&Value>,
     ) -> ExecutionResult<Self> {
         self.update_span_range(|span_range| SpanRange::new_between(span_range, access.span_range()))
             .try_map(|value, _| value.into_indexed(access, index))
@@ -348,7 +348,7 @@ impl OwnedValue {
 
     pub(crate) fn into_statement_result(self) -> ExecutionResult<()> {
         match self.value {
-            ExpressionValue::None => Ok(()),
+            Value::None => Ok(()),
             _ => self
                 .span_range
                 .control_flow_err("A non-returning statement must not return a value. If you wish to explicitly discard the expression's result, use `let _ = ...;`. Alternatively, If you wish to output the value into the parent token stream, use `emit ...;`"),
@@ -356,8 +356,8 @@ impl OwnedValue {
     }
 }
 
-impl<T: ToExpressionValue> Owned<T> {
-    pub(crate) fn into_value(self) -> ExpressionValue {
+impl<T: IntoValue> Owned<T> {
+    pub(crate) fn into_value(self) -> Value {
         self.value.into_value()
     }
 
@@ -376,14 +376,14 @@ impl<T> HasSpanRange for Owned<T> {
     }
 }
 
-impl From<OwnedValue> for ExpressionValue {
+impl From<OwnedValue> for Value {
     fn from(value: OwnedValue) -> Self {
         value.value
     }
 }
 
 impl Deref for OwnedValue {
-    type Target = ExpressionValue;
+    type Target = Value;
 
     fn deref(&self) -> &Self::Target {
         &self.value
@@ -405,8 +405,8 @@ impl<T> WithSpanRangeExt for Owned<T> {
     }
 }
 
-pub(crate) type MutableValue = Mutable<ExpressionValue>;
-pub(crate) type AssigneeValue = Assignee<ExpressionValue>;
+pub(crate) type MutableValue = Mutable<Value>;
+pub(crate) type AssigneeValue = Assignee<Value>;
 
 /// A binding of a unique (mutable) reference to a value
 /// See [`ArgumentOwnership::Assignee`] for more details.
@@ -425,7 +425,7 @@ impl<T: 'static + ?Sized> HasSpanRange for Assignee<T> {
 }
 
 impl AssigneeValue {
-    pub(crate) fn set(&mut self, content: impl ToExpressionValue) {
+    pub(crate) fn set(&mut self, content: impl IntoValue) {
         *self.0.mut_cell = content.into_value();
     }
 }
@@ -451,7 +451,7 @@ impl<T: 'static + ?Sized> DerefMut for Assignee<T> {
 /// * The mutable reference to the location under `x`
 /// * The lexical span of the tokens `x.y[4]`
 pub(crate) struct Mutable<T: 'static + ?Sized> {
-    pub(super) mut_cell: MutSubRcRefCell<ExpressionValue, T>,
+    pub(super) mut_cell: MutSubRcRefCell<Value, T>,
     pub(super) span_range: SpanRange,
 }
 
@@ -498,7 +498,7 @@ impl<T: ?Sized> Mutable<T> {
 }
 
 #[allow(unused)]
-impl Mutable<ExpressionValue> {
+impl Mutable<Value> {
     pub(crate) fn new_from_owned(value: OwnedValue) -> Self {
         let span_range = value.span_range;
         Self {
@@ -526,7 +526,7 @@ impl Mutable<ExpressionValue> {
 
     pub(crate) fn into_stream(self) -> ExecutionResult<Mutable<OutputStream>> {
         self.try_map(|value, span_range| match value {
-            ExpressionValue::Stream(stream) => Ok(&mut stream.value),
+            Value::Stream(stream) => Ok(&mut stream.value),
             _ => span_range.type_err("The variable is not a stream"),
         })
     }
@@ -534,7 +534,7 @@ impl Mutable<ExpressionValue> {
     pub(crate) fn resolve_indexed(
         self,
         access: IndexAccess,
-        index: Spanned<&ExpressionValue>,
+        index: Spanned<&Value>,
         auto_create: bool,
     ) -> ExecutionResult<Self> {
         self.update_span_range(|span_range| SpanRange::new_between(span_range, access.span_range()))
@@ -550,7 +550,7 @@ impl Mutable<ExpressionValue> {
             .try_map(|value, _| value.property_mut(access, auto_create))
     }
 
-    pub(crate) fn set(&mut self, content: impl ToExpressionValue) {
+    pub(crate) fn set(&mut self, content: impl IntoValue) {
         *self.mut_cell = content.into_value();
     }
 }
@@ -596,7 +596,7 @@ impl<T: ?Sized> DerefMut for Mutable<T> {
     }
 }
 
-pub(crate) type SharedValue = Shared<ExpressionValue>;
+pub(crate) type SharedValue = Shared<Value>;
 
 /// A binding of a shared (immutable) reference to a value
 /// (e.g. inside a variable) along with a span of the whole access.
@@ -605,7 +605,7 @@ pub(crate) type SharedValue = Shared<ExpressionValue>;
 /// * The mutable reference to the location under `x`
 /// * The lexical span of the tokens `x.y[4]`
 pub(crate) struct Shared<T: 'static + ?Sized> {
-    pub(super) shared_cell: SharedSubRcRefCell<ExpressionValue, T>,
+    pub(super) shared_cell: SharedSubRcRefCell<Value, T>,
     pub(super) span_range: SpanRange,
 }
 
@@ -655,7 +655,7 @@ impl<T: ?Sized> Shared<T> {
     }
 }
 
-impl Shared<ExpressionValue> {
+impl Shared<Value> {
     pub(crate) fn new_from_owned(value: OwnedValue) -> Self {
         let span_range = value.span_range;
         Self {
@@ -688,7 +688,7 @@ impl Shared<ExpressionValue> {
     pub(crate) fn resolve_indexed(
         self,
         access: IndexAccess,
-        index: Spanned<&ExpressionValue>,
+        index: Spanned<&Value>,
     ) -> ExecutionResult<Self> {
         self.update_span_range(|old_span| SpanRange::new_between(old_span, access))
             .try_map(|value, _| value.index_ref(access, index))
@@ -836,7 +836,7 @@ impl<T: ?Sized + ToOwned> Deref for CopyOnWrite<T> {
     }
 }
 
-impl CopyOnWrite<ExpressionValue> {
+impl CopyOnWrite<Value> {
     /// Converts to owned, cloning if necessary
     pub(crate) fn into_owned_infallible(self) -> OwnedValue {
         match self.inner {
@@ -892,4 +892,4 @@ impl<T: ToOwned + ?Sized> HasSpanRange for CopyOnWrite<T> {
     }
 }
 
-pub(crate) type CopyOnWriteValue = CopyOnWrite<ExpressionValue>;
+pub(crate) type CopyOnWriteValue = CopyOnWrite<Value>;
