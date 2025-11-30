@@ -221,15 +221,11 @@ impl Spanned<&ObjectValue> {
     }
 }
 
-impl HasValueType for ObjectValue {
-    fn value_type(&self) -> &'static str {
-        self.entries.value_type()
-    }
-}
+impl HasValueKind for ObjectValue {
+    type SpecificKind = ValueKind;
 
-impl HasValueType for BTreeMap<String, ObjectEntry> {
-    fn value_type(&self) -> &'static str {
-        "object"
+    fn kind(&self) -> ValueKind {
+        ValueKind::Object
     }
 }
 

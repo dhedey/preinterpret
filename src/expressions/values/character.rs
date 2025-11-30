@@ -21,9 +21,11 @@ impl CharValue {
     }
 }
 
-impl HasValueType for CharValue {
-    fn value_type(&self) -> &'static str {
-        "char"
+impl HasValueKind for CharValue {
+    type SpecificKind = ValueKind;
+
+    fn kind(&self) -> ValueKind {
+        ValueKind::Char
     }
 }
 

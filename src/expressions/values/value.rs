@@ -19,6 +19,39 @@ pub(crate) enum Value {
     Parser(ParserValue),
 }
 
+/// A trait for specific value kinds that can provide a display name.
+/// This is implemented by `ValueKind`, `IntegerKind`, `FloatKind`, etc.
+pub(crate) trait IsSpecificValueKind: Copy + Into<ValueKind> {
+    fn display_name(&self) -> &'static str;
+
+    fn articled_display_name(&self) -> String {
+        let display_name = self.display_name();
+        if display_name.is_empty() {
+            return display_name.to_string();
+        }
+        display_name.lower_indefinite_articled()
+    }
+}
+
+/// A trait for types that have a value kind.
+pub(crate) trait HasValueKind {
+    type SpecificKind: IsSpecificValueKind;
+
+    fn kind(&self) -> Self::SpecificKind;
+
+    fn value_kind(&self) -> ValueKind {
+        self.kind().into()
+    }
+
+    fn value_type(&self) -> &'static str {
+        self.kind().display_name()
+    }
+
+    fn articled_value_type(&self) -> String {
+        self.kind().articled_display_name()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ValueKind {
     None,
@@ -31,9 +64,29 @@ pub(crate) enum ValueKind {
     Array,
     Object,
     Stream,
-    Range,
+    Range(RangeKind),
     Iterator,
     Parser,
+}
+
+impl IsSpecificValueKind for ValueKind {
+    fn display_name(&self) -> &'static str {
+        match self {
+            ValueKind::None => "none value",
+            ValueKind::Integer(kind) => kind.display_name(),
+            ValueKind::Float(kind) => kind.display_name(),
+            ValueKind::Boolean => "bool",
+            ValueKind::String => "string",
+            ValueKind::Char => "char",
+            ValueKind::UnsupportedLiteral => "unsupported literal",
+            ValueKind::Array => "array",
+            ValueKind::Object => "object",
+            ValueKind::Stream => "stream",
+            ValueKind::Range(kind) => kind.display_name(),
+            ValueKind::Iterator => "iterator",
+            ValueKind::Parser => "parser",
+        }
+    }
 }
 
 impl ValueKind {
@@ -60,7 +113,7 @@ impl ValueKind {
             ValueKind::Array => &ARRAY,
             ValueKind::Object => &OBJECT,
             ValueKind::Stream => &STREAM,
-            ValueKind::Range => &RANGE,
+            ValueKind::Range(_) => &RANGE,
             ValueKind::Iterator => &ITERATOR,
             ValueKind::Parser => &PARSER,
         }
@@ -85,7 +138,7 @@ impl ValueKind {
             ValueKind::Array => false,
             ValueKind::Object => false,
             ValueKind::Stream => false,
-            ValueKind::Range => true,
+            ValueKind::Range(_) => true,
             ValueKind::Iterator => false,
             // A parser is a handle, so can be cloned transparently.
             // It may fail to be able to be used to parse if the underlying stream is out of scope of course.
@@ -311,31 +364,13 @@ impl Value {
         &self,
         error_span_range: SpanRange,
     ) -> ExecutionResult<Value> {
-        if !self.kind().supports_transparent_cloning() {
+        if !self.value_kind().supports_transparent_cloning() {
             return error_span_range.ownership_err(format!(
                 "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .clone() explicitly.",
                 self.articled_value_type()
             ));
         }
         Ok(self.clone())
-    }
-
-    pub(crate) fn kind(&self) -> ValueKind {
-        match self {
-            Value::None => ValueKind::None,
-            Value::Integer(integer) => ValueKind::Integer(integer.kind()),
-            Value::Float(float) => ValueKind::Float(float.kind()),
-            Value::Boolean(_) => ValueKind::Boolean,
-            Value::String(_) => ValueKind::String,
-            Value::Char(_) => ValueKind::Char,
-            Value::Array(_) => ValueKind::Array,
-            Value::Object(_) => ValueKind::Object,
-            Value::Stream(_) => ValueKind::Stream,
-            Value::Range(_) => ValueKind::Range,
-            Value::Iterator(_) => ValueKind::Iterator,
-            Value::Parser(_) => ValueKind::Parser,
-            Value::UnsupportedLiteral(_) => ValueKind::UnsupportedLiteral,
-        }
     }
 
     pub(crate) fn is_none(&self) -> bool {
@@ -672,34 +707,24 @@ pub(crate) enum Grouping {
     Flattened,
 }
 
-impl HasValueType for Value {
-    fn value_type(&self) -> &'static str {
+impl HasValueKind for Value {
+    type SpecificKind = ValueKind;
+
+    fn kind(&self) -> ValueKind {
         match self {
-            Self::None => "none value",
-            Self::Integer(value) => value.value_type(),
-            Self::Float(value) => value.value_type(),
-            Self::Boolean(value) => value.value_type(),
-            Self::String(value) => value.value_type(),
-            Self::Char(value) => value.value_type(),
-            Self::UnsupportedLiteral(value) => value.value_type(),
-            Self::Array(value) => value.value_type(),
-            Self::Object(value) => value.value_type(),
-            Self::Stream(value) => value.value_type(),
-            Self::Iterator(value) => value.value_type(),
-            Self::Range(value) => value.value_type(),
-            Self::Parser(value) => value.value_type(),
+            Value::None => ValueKind::None,
+            Value::Integer(integer) => ValueKind::Integer(integer.kind()),
+            Value::Float(float) => ValueKind::Float(float.kind()),
+            Value::Boolean(_) => ValueKind::Boolean,
+            Value::String(_) => ValueKind::String,
+            Value::Char(_) => ValueKind::Char,
+            Value::Array(_) => ValueKind::Array,
+            Value::Object(_) => ValueKind::Object,
+            Value::Stream(_) => ValueKind::Stream,
+            Value::Range(range) => ValueKind::Range(range.kind()),
+            Value::Iterator(_) => ValueKind::Iterator,
+            Value::Parser(_) => ValueKind::Parser,
+            Value::UnsupportedLiteral(_) => ValueKind::UnsupportedLiteral,
         }
-    }
-}
-
-pub(crate) trait HasValueType {
-    fn value_type(&self) -> &'static str;
-
-    fn articled_value_type(&self) -> String {
-        let value_type = self.value_type();
-        if value_type.is_empty() {
-            return value_type.to_string();
-        }
-        value_type.lower_indefinite_articled()
     }
 }

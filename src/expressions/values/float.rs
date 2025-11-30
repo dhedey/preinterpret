@@ -33,14 +33,6 @@ impl FloatValue {
         self.to_unspanned_literal().with_span(span)
     }
 
-    pub(super) fn kind(&self) -> FloatKind {
-        match self {
-            Self::Untyped(_) => FloatKind::Untyped,
-            Self::F32(_) => FloatKind::F32,
-            Self::F64(_) => FloatKind::F64,
-        }
-    }
-
     fn to_unspanned_literal(&self) -> Literal {
         match self {
             FloatValue::Untyped(float) => float.to_unspanned_literal(),
@@ -50,12 +42,14 @@ impl FloatValue {
     }
 }
 
-impl HasValueType for FloatValue {
-    fn value_type(&self) -> &'static str {
+impl HasValueKind for FloatValue {
+    type SpecificKind = FloatKind;
+
+    fn kind(&self) -> FloatKind {
         match self {
-            FloatValue::Untyped(_) => "untyped float",
-            FloatValue::F32(_) => "f32",
-            FloatValue::F64(_) => "f64",
+            Self::Untyped(_) => FloatKind::Untyped,
+            Self::F32(_) => FloatKind::F32,
+            Self::F64(_) => FloatKind::F64,
         }
     }
 }
@@ -79,6 +73,22 @@ pub(crate) enum FloatKind {
     Untyped,
     F32,
     F64,
+}
+
+impl IsSpecificValueKind for FloatKind {
+    fn display_name(&self) -> &'static str {
+        match self {
+            FloatKind::Untyped => "untyped float",
+            FloatKind::F32 => "f32",
+            FloatKind::F64 => "f64",
+        }
+    }
+}
+
+impl From<FloatKind> for ValueKind {
+    fn from(kind: FloatKind) -> Self {
+        ValueKind::Float(kind)
+    }
 }
 
 impl FloatKind {

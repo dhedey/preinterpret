@@ -59,24 +59,6 @@ impl IntegerValue {
         }
     }
 
-    pub(super) fn kind(&self) -> IntegerKind {
-        match self {
-            Self::Untyped(_) => IntegerKind::Untyped,
-            Self::U8(_) => IntegerKind::U8,
-            Self::U16(_) => IntegerKind::U16,
-            Self::U32(_) => IntegerKind::U32,
-            Self::U64(_) => IntegerKind::U64,
-            Self::U128(_) => IntegerKind::U128,
-            Self::Usize(_) => IntegerKind::Usize,
-            Self::I8(_) => IntegerKind::I8,
-            Self::I16(_) => IntegerKind::I16,
-            Self::I32(_) => IntegerKind::I32,
-            Self::I64(_) => IntegerKind::I64,
-            Self::I128(_) => IntegerKind::I128,
-            Self::Isize(_) => IntegerKind::Isize,
-        }
-    }
-
     fn to_unspanned_literal(&self) -> Literal {
         match self {
             IntegerValue::Untyped(int) => int.to_unspanned_literal(),
@@ -96,22 +78,24 @@ impl IntegerValue {
     }
 }
 
-impl HasValueType for IntegerValue {
-    fn value_type(&self) -> &'static str {
+impl HasValueKind for IntegerValue {
+    type SpecificKind = IntegerKind;
+
+    fn kind(&self) -> IntegerKind {
         match self {
-            IntegerValue::Untyped(value) => value.value_type(),
-            IntegerValue::U8(value) => value.value_type(),
-            IntegerValue::U16(value) => value.value_type(),
-            IntegerValue::U32(value) => value.value_type(),
-            IntegerValue::U64(value) => value.value_type(),
-            IntegerValue::U128(value) => value.value_type(),
-            IntegerValue::Usize(value) => value.value_type(),
-            IntegerValue::I8(value) => value.value_type(),
-            IntegerValue::I16(value) => value.value_type(),
-            IntegerValue::I32(value) => value.value_type(),
-            IntegerValue::I64(value) => value.value_type(),
-            IntegerValue::I128(value) => value.value_type(),
-            IntegerValue::Isize(value) => value.value_type(),
+            Self::Untyped(_) => IntegerKind::Untyped,
+            Self::U8(_) => IntegerKind::U8,
+            Self::U16(_) => IntegerKind::U16,
+            Self::U32(_) => IntegerKind::U32,
+            Self::U64(_) => IntegerKind::U64,
+            Self::U128(_) => IntegerKind::U128,
+            Self::Usize(_) => IntegerKind::Usize,
+            Self::I8(_) => IntegerKind::I8,
+            Self::I16(_) => IntegerKind::I16,
+            Self::I32(_) => IntegerKind::I32,
+            Self::I64(_) => IntegerKind::I64,
+            Self::I128(_) => IntegerKind::I128,
+            Self::Isize(_) => IntegerKind::Isize,
         }
     }
 }
@@ -145,6 +129,32 @@ pub(crate) enum IntegerKind {
     U64,
     U128,
     Usize,
+}
+
+impl IsSpecificValueKind for IntegerKind {
+    fn display_name(&self) -> &'static str {
+        match self {
+            IntegerKind::Untyped => "untyped integer",
+            IntegerKind::I8 => "i8",
+            IntegerKind::I16 => "i16",
+            IntegerKind::I32 => "i32",
+            IntegerKind::I64 => "i64",
+            IntegerKind::I128 => "i128",
+            IntegerKind::Isize => "isize",
+            IntegerKind::U8 => "u8",
+            IntegerKind::U16 => "u16",
+            IntegerKind::U32 => "u32",
+            IntegerKind::U64 => "u64",
+            IntegerKind::U128 => "u128",
+            IntegerKind::Usize => "usize",
+        }
+    }
+}
+
+impl From<IntegerKind> for ValueKind {
+    fn from(kind: IntegerKind) -> Self {
+        ValueKind::Integer(kind)
+    }
 }
 
 impl IntegerKind {

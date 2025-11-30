@@ -117,9 +117,46 @@ impl Spanned<&RangeValue> {
     }
 }
 
-impl HasValueType for RangeValue {
-    fn value_type(&self) -> &'static str {
-        self.inner.value_type()
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RangeKind {
+    /// `start .. end`
+    Range,
+    /// `start ..`
+    RangeFrom,
+    /// `.. end`
+    RangeTo,
+    /// `..`
+    RangeFull,
+    /// `start ..= end`
+    RangeInclusive,
+    /// `..= end`
+    RangeToInclusive,
+}
+
+impl IsSpecificValueKind for RangeKind {
+    fn display_name(&self) -> &'static str {
+        match self {
+            RangeKind::Range => "range start..end",
+            RangeKind::RangeFrom => "range start..",
+            RangeKind::RangeTo => "range ..end",
+            RangeKind::RangeFull => "range ..",
+            RangeKind::RangeInclusive => "range start..=end",
+            RangeKind::RangeToInclusive => "range ..=end",
+        }
+    }
+}
+
+impl From<RangeKind> for ValueKind {
+    fn from(kind: RangeKind) -> Self {
+        ValueKind::Range(kind)
+    }
+}
+
+impl HasValueKind for RangeValue {
+    type SpecificKind = RangeKind;
+
+    fn kind(&self) -> RangeKind {
+        self.inner.kind()
     }
 }
 
@@ -160,6 +197,17 @@ pub(crate) enum RangeValueInner {
 }
 
 impl RangeValueInner {
+    fn kind(&self) -> RangeKind {
+        match self {
+            Self::Range { .. } => RangeKind::Range,
+            Self::RangeFrom { .. } => RangeKind::RangeFrom,
+            Self::RangeTo { .. } => RangeKind::RangeTo,
+            Self::RangeFull { .. } => RangeKind::RangeFull,
+            Self::RangeInclusive { .. } => RangeKind::RangeInclusive,
+            Self::RangeToInclusive { .. } => RangeKind::RangeToInclusive,
+        }
+    }
+
     pub(super) fn into_iterable(self) -> ExecutionResult<IterableRangeOf<Value>> {
         Ok(match self {
             Self::Range {
@@ -203,19 +251,6 @@ impl RangeValueInner {
             Self::RangeFull { token } => token.span_range(),
             Self::RangeInclusive { token, .. } => token.span_range(),
             Self::RangeToInclusive { token, .. } => token.span_range(),
-        }
-    }
-}
-
-impl HasValueType for RangeValueInner {
-    fn value_type(&self) -> &'static str {
-        match self {
-            Self::Range { .. } => "range start..end",
-            Self::RangeFrom { .. } => "range start..",
-            Self::RangeTo { .. } => "range ..end",
-            Self::RangeFull { .. } => "range ..",
-            Self::RangeInclusive { .. } => "range start..=end",
-            Self::RangeToInclusive { .. } => "range ..=end",
         }
     }
 }

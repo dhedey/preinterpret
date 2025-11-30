@@ -193,9 +193,11 @@ macro_rules! impl_float_operations {
             }
         }
 
-        impl HasValueType for $float_type {
-            fn value_type(&self) -> &'static str {
-                stringify!($float_type)
+        impl HasValueKind for $float_type {
+            type SpecificKind = FloatKind;
+
+            fn kind(&self) -> FloatKind {
+                FloatKind::$float_enum_variant
             }
         }
 

@@ -121,9 +121,11 @@ impl UntypedFloat {
     }
 }
 
-impl HasValueType for UntypedFloat {
-    fn value_type(&self) -> &'static str {
-        "untyped float"
+impl HasValueKind for UntypedFloat {
+    type SpecificKind = FloatKind;
+
+    fn kind(&self) -> FloatKind {
+        FloatKind::Untyped
     }
 }
 
