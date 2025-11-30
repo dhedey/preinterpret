@@ -265,7 +265,7 @@ impl UntypedInteger {
         rhs: Owned<IntegerExpression>,
         context: BinaryOperationCallContext,
         perform_fn: fn(FallbackInteger, FallbackInteger) -> Option<FallbackInteger>,
-    ) -> ExecutionResult<ResolvedValue> {
+    ) -> ExecutionResult<ReturnedValue> {
         let (lhs, lhs_span_range) = lhs.deconstruct();
         let (rhs, rhs_span_range) = rhs.deconstruct();
         match rhs.value {
@@ -274,7 +274,7 @@ impl UntypedInteger {
                 let rhs = rhs.parse_fallback()?;
                 let output = perform_fn(lhs, rhs)
                     .ok_or_else(|| Self::binary_overflow_error(context, lhs, rhs))?;
-                UntypedInteger::from_fallback(output).to_resolved_value(context.output_span_range)
+                UntypedInteger::from_fallback(output).to_returned_value(context.output_span_range)
             }
             rhs => {
                 let lhs = lhs.into_kind(rhs.kind())?;
@@ -447,56 +447,56 @@ define_interface! {
             [context] fn add(
                 lhs: Owned<UntypedInteger>,
                 rhs: Owned<IntegerExpression>,
-            ) -> ExecutionResult<ResolvedValue> {
+            ) -> ExecutionResult<ReturnedValue> {
                 UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_add)
             }
 
             [context] fn sub(
                 lhs: Owned<UntypedInteger>,
                 rhs: Owned<IntegerExpression>,
-            ) -> ExecutionResult<ResolvedValue> {
+            ) -> ExecutionResult<ReturnedValue> {
                 UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_sub)
             }
 
             [context] fn mul(
                 lhs: Owned<UntypedInteger>,
                 rhs: Owned<IntegerExpression>,
-            ) -> ExecutionResult<ResolvedValue> {
+            ) -> ExecutionResult<ReturnedValue> {
                 UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_mul)
             }
 
             [context] fn div(
                 lhs: Owned<UntypedInteger>,
                 rhs: Owned<IntegerExpression>,
-            ) -> ExecutionResult<ResolvedValue> {
+            ) -> ExecutionResult<ReturnedValue> {
                 UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_div)
             }
 
             [context] fn rem(
                 lhs: Owned<UntypedInteger>,
                 rhs: Owned<IntegerExpression>,
-            ) -> ExecutionResult<ResolvedValue> {
+            ) -> ExecutionResult<ReturnedValue> {
                 UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_rem)
             }
 
             [context] fn bitxor(
                 lhs: Owned<UntypedInteger>,
                 rhs: Owned<IntegerExpression>,
-            ) -> ExecutionResult<ResolvedValue> {
+            ) -> ExecutionResult<ReturnedValue> {
                 UntypedInteger::paired_operation(lhs, rhs, context, |a, b| Some(a ^ b))
             }
 
             [context] fn bitand(
                 lhs: Owned<UntypedInteger>,
                 rhs: Owned<IntegerExpression>,
-            ) -> ExecutionResult<ResolvedValue> {
+            ) -> ExecutionResult<ReturnedValue> {
                 UntypedInteger::paired_operation(lhs, rhs, context, |a, b| Some(a & b))
             }
 
             [context] fn bitor(
                 lhs: Owned<UntypedInteger>,
                 rhs: Owned<IntegerExpression>,
-            ) -> ExecutionResult<ResolvedValue> {
+            ) -> ExecutionResult<ReturnedValue> {
                 UntypedInteger::paired_operation(lhs, rhs, context, |a, b| Some(a | b))
             }
 

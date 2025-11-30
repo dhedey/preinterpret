@@ -131,13 +131,13 @@ define_interface! {
                 this.into_owned_infallible()
             }
 
-            fn as_mut(this: ResolvedValue) -> ExecutionResult<MutableValue> {
+            fn as_mut(this: ArgumentValue) -> ExecutionResult<MutableValue> {
                 Ok(match this {
-                    ResolvedValue::Owned(owned) => Mutable::new_from_owned(owned),
-                    ResolvedValue::CopyOnWrite(copy_on_write) => ResolvedValueOwnership::Mutable.map_from_copy_on_write(copy_on_write)?.expect_mutable(),
-                    ResolvedValue::Mutable(mutable) => mutable,
-                    ResolvedValue::Assignee(assignee) => assignee.0,
-                    ResolvedValue::Shared(shared) => ResolvedValueOwnership::Mutable.map_from_shared(shared)?.expect_mutable(),
+                    ArgumentValue::Owned(owned) => Mutable::new_from_owned(owned),
+                    ArgumentValue::CopyOnWrite(copy_on_write) => ArgumentOwnership::Mutable.map_from_copy_on_write(copy_on_write)?.expect_mutable(),
+                    ArgumentValue::Mutable(mutable) => mutable,
+                    ArgumentValue::Assignee(assignee) => assignee.0,
+                    ArgumentValue::Shared(shared) => ArgumentOwnership::Mutable.map_from_shared(shared)?.expect_mutable(),
                 })
             }
 
@@ -650,8 +650,8 @@ impl SpannedAnyRefMut<'_, ExpressionValue> {
                 let output = operation
                     .to_binary()
                     .evaluate(left.into_owned(left_span_range), right)?;
-                let value = RequestedValueOwnership::owned()
-                    .map_from_resolved(output)?
+                let value = RequestedOwnership::owned()
+                    .map_from_returned(output)?
                     .expect_owned()
                     .value;
                 *left_mut = value;

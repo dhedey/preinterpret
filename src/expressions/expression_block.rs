@@ -72,11 +72,7 @@ impl Interpret for EmbeddedStatements {
     fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         let value = self
             .content
-            .evaluate(
-                interpreter,
-                self.span_range(),
-                RequestedValueOwnership::shared(),
-            )?
+            .evaluate(interpreter, self.span_range(), RequestedOwnership::shared())?
             .expect_shared();
         value.output_to(
             Grouping::Flattened,
@@ -144,8 +140,8 @@ impl ExpressionBlock {
     pub(crate) fn evaluate(
         &self,
         interpreter: &mut Interpreter,
-        ownership: RequestedValueOwnership,
-    ) -> ExecutionResult<EvaluationItem> {
+        ownership: RequestedOwnership,
+    ) -> ExecutionResult<RequestedValue> {
         let scope = interpreter.current_scope_id();
         let output_result = self.scoped_block.evaluate(interpreter, ownership);
 
@@ -204,8 +200,8 @@ impl ScopedBlock {
     pub(crate) fn evaluate(
         &self,
         interpreter: &mut Interpreter,
-        ownership: RequestedValueOwnership,
-    ) -> ExecutionResult<EvaluationItem> {
+        ownership: RequestedOwnership,
+    ) -> ExecutionResult<RequestedValue> {
         interpreter.enter_scope(self.scope);
         let output = self
             .content
@@ -218,7 +214,7 @@ impl ScopedBlock {
         &self,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<OwnedValue> {
-        self.evaluate(interpreter, RequestedValueOwnership::owned())
+        self.evaluate(interpreter, RequestedOwnership::owned())
             .map(|x| x.expect_owned())
     }
 }
@@ -250,8 +246,8 @@ impl UnscopedBlock {
     pub(crate) fn evaluate(
         &self,
         interpreter: &mut Interpreter,
-        ownership: RequestedValueOwnership,
-    ) -> ExecutionResult<EvaluationItem> {
+        ownership: RequestedOwnership,
+    ) -> ExecutionResult<RequestedValue> {
         self.content
             .evaluate(interpreter, self.span().into(), ownership)
     }
@@ -260,7 +256,7 @@ impl UnscopedBlock {
         &self,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<OwnedValue> {
-        self.evaluate(interpreter, RequestedValueOwnership::owned())
+        self.evaluate(interpreter, RequestedOwnership::owned())
             .map(|x| x.expect_owned())
     }
 }
@@ -308,8 +304,8 @@ impl ExpressionBlockContent {
         &self,
         interpreter: &mut Interpreter,
         output_span_range: SpanRange,
-        ownership: RequestedValueOwnership,
-    ) -> ExecutionResult<EvaluationItem> {
+        ownership: RequestedOwnership,
+    ) -> ExecutionResult<RequestedValue> {
         for (i, (statement, semicolon)) in self.statements.iter().enumerate() {
             let is_last = i == self.statements.len() - 1;
             if is_last && semicolon.is_none() {

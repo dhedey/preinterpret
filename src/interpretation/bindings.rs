@@ -25,7 +25,7 @@ impl VariableContent {
         &mut self,
         variable_span: Span,
         is_final: bool,
-        ownership: RequestedValueOwnership,
+        ownership: RequestedOwnership,
         blocked_from_mutation: Option<MutationBlockReason>,
     ) -> ExecutionResult<LateBoundValue> {
         const UNITIALIZED_ERR: &str = "Cannot resolve uninitialized variable. This shouldn't be possible, because all variables are set on first use.";
@@ -42,9 +42,7 @@ impl VariableContent {
                     Ok(ref_cell) => {
                         if matches!(
                             ownership,
-                            RequestedValueOwnership::Concrete(
-                                ResolvedValueOwnership::Assignee { .. }
-                            )
+                            RequestedOwnership::Concrete(ArgumentOwnership::Assignee { .. })
                         ) {
                             return variable_span.control_flow_err("The final usage of a variable cannot be assigned to. You can use `let _ = ..` to discard a value.");
                         }
@@ -73,20 +71,20 @@ impl VariableContent {
             variable_span,
         };
         let resolved = match ownership {
-            RequestedValueOwnership::LateBound => binding.into_late_bound(),
-            RequestedValueOwnership::Concrete(ownership) => match ownership {
-                ResolvedValueOwnership::Owned => binding
+            RequestedOwnership::LateBound => binding.into_late_bound(),
+            RequestedOwnership::Concrete(ownership) => match ownership {
+                ArgumentOwnership::Owned => binding
                     .into_transparently_cloned()
                     .map(LateBoundValue::Owned),
-                ResolvedValueOwnership::Shared => binding
+                ArgumentOwnership::Shared => binding
                     .into_shared()
                     .map(CopyOnWrite::shared_in_place_of_shared)
                     .map(LateBoundValue::CopyOnWrite),
-                ResolvedValueOwnership::Assignee { .. } => {
+                ArgumentOwnership::Assignee { .. } => {
                     binding.into_mut().map(LateBoundValue::Mutable)
                 }
-                ResolvedValueOwnership::Mutable => binding.into_mut().map(LateBoundValue::Mutable),
-                ResolvedValueOwnership::CopyOnWrite | ResolvedValueOwnership::AsIs => binding
+                ArgumentOwnership::Mutable => binding.into_mut().map(LateBoundValue::Mutable),
+                ArgumentOwnership::CopyOnWrite | ArgumentOwnership::AsIs => binding
                     .into_shared()
                     .map(CopyOnWrite::shared_in_place_of_shared)
                     .map(LateBoundValue::CopyOnWrite),
@@ -194,10 +192,7 @@ pub(crate) enum LateBoundValue {
 }
 
 impl LateBoundValue {
-    pub(crate) fn resolve(
-        self,
-        ownership: ResolvedValueOwnership,
-    ) -> ExecutionResult<ResolvedValue> {
+    pub(crate) fn resolve(self, ownership: ArgumentOwnership) -> ExecutionResult<ArgumentValue> {
         ownership.map_from_late_bound(self)
     }
 
@@ -414,7 +409,7 @@ pub(crate) type MutableValue = Mutable<ExpressionValue>;
 pub(crate) type AssigneeValue = Assignee<ExpressionValue>;
 
 /// A binding of a unique (mutable) reference to a value
-/// See [`ResolvedValueOwnership::Assignee`] for more details.
+/// See [`ArgumentOwnership::Assignee`] for more details.
 pub(crate) struct Assignee<T: 'static + ?Sized>(pub Mutable<T>);
 
 impl<T: 'static + ?Sized> WithSpanRangeExt for Assignee<T> {

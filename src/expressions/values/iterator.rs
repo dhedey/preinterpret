@@ -280,7 +280,7 @@ define_interface! {
             }
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_singleton_to_value(this: Owned<IteratorExpression>) -> ExecutionResult<ResolvedValue> {
+            [context] fn cast_singleton_to_value(this: Owned<IteratorExpression>) -> ExecutionResult<ReturnedValue> {
                 let (this, input_span_range) = this.deconstruct();
                 match this.singleton_value() {
                     Some(value) => context.operation.evaluate(Owned::new(value, input_span_range)),

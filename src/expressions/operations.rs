@@ -84,7 +84,7 @@ impl UnaryOperation {
     pub(super) fn evaluate<T: ToExpressionValue>(
         &self,
         input: Owned<T>,
-    ) -> ExecutionResult<ResolvedValue> {
+    ) -> ExecutionResult<ReturnedValue> {
         let input = input.into_owned_value();
         let method = input.kind().resolve_unary_operation(self).ok_or_else(|| {
             self.type_error(format!(
@@ -308,7 +308,7 @@ impl BinaryOperation {
         &self,
         left: Owned<L>,
         right: Owned<R>,
-    ) -> ExecutionResult<ResolvedValue> {
+    ) -> ExecutionResult<ReturnedValue> {
         let left = left.into_owned_value();
         let right = right.into_owned_value();
         match left.kind().resolve_binary_operation(self) {

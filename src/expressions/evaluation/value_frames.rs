@@ -1,9 +1,12 @@
 #![allow(unused)] // TODO[unused-clearup]
 use super::*;
 
-/// A [`ResolvedValue`] represents a value which has had its ownership concretely
-/// resolved for use in a specific operation (e.g. method call, property access, etc)
-pub(crate) enum ResolvedValue {
+/// A [`ArgumentValue`] represents a value which has had its ownership concretely
+/// resolved for use in a specific operation (e.g. method call, property access, etc).
+///
+/// It is typically paired with an [`ArgumentOwnership`] (maybe wrapped in a [`RequestedOwnership`])
+/// which indicates what ownership type to resolve to.
+pub(crate) enum ArgumentValue {
     Owned(OwnedValue),
     CopyOnWrite(CopyOnWriteValue),
     Mutable(MutableValue),
@@ -11,39 +14,39 @@ pub(crate) enum ResolvedValue {
     Shared(SharedValue),
 }
 
-impl ResolvedValue {
+impl ArgumentValue {
     pub(crate) fn expect_owned(self) -> OwnedValue {
         match self {
-            ResolvedValue::Owned(value) => value,
-            _ => panic!("expect_owned() called on a non-owned ResolvedValue"),
+            ArgumentValue::Owned(value) => value,
+            _ => panic!("expect_owned() called on a non-owned ArgumentValue"),
         }
     }
 
     pub(crate) fn expect_copy_on_write(self) -> CopyOnWriteValue {
         match self {
-            ResolvedValue::CopyOnWrite(value) => value,
-            _ => panic!("expect_copy_on_write() called on a non-copy-on-write ResolvedValue"),
+            ArgumentValue::CopyOnWrite(value) => value,
+            _ => panic!("expect_copy_on_write() called on a non-copy-on-write ArgumentValue"),
         }
     }
 
     pub(crate) fn expect_mutable(self) -> MutableValue {
         match self {
-            ResolvedValue::Mutable(value) => value,
-            _ => panic!("expect_mutable() called on a non-mutable ResolvedValue"),
+            ArgumentValue::Mutable(value) => value,
+            _ => panic!("expect_mutable() called on a non-mutable ArgumentValue"),
         }
     }
 
     pub(crate) fn expect_assignee(self) -> AssigneeValue {
         match self {
-            ResolvedValue::Assignee(value) => value,
-            _ => panic!("expect_assignee() called on a non-assignee ResolvedValue"),
+            ArgumentValue::Assignee(value) => value,
+            _ => panic!("expect_assignee() called on a non-assignee ArgumentValue"),
         }
     }
 
     pub(crate) fn expect_shared(self) -> SharedValue {
         match self {
-            ResolvedValue::Shared(value) => value,
-            _ => panic!("expect_shared() called on a non-shared ResolvedValue"),
+            ArgumentValue::Shared(value) => value,
+            _ => panic!("expect_shared() called on a non-shared ArgumentValue"),
         }
     }
 
@@ -52,39 +55,39 @@ impl ResolvedValue {
     }
 }
 
-impl HasSpanRange for ResolvedValue {
+impl HasSpanRange for ArgumentValue {
     fn span_range(&self) -> SpanRange {
         match self {
-            ResolvedValue::Owned(owned) => owned.span_range(),
-            ResolvedValue::CopyOnWrite(copy_on_write) => copy_on_write.span_range(),
-            ResolvedValue::Mutable(mutable) => mutable.span_range(),
-            ResolvedValue::Assignee(assignee) => assignee.span_range(),
-            ResolvedValue::Shared(shared) => shared.span_range(),
+            ArgumentValue::Owned(owned) => owned.span_range(),
+            ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write.span_range(),
+            ArgumentValue::Mutable(mutable) => mutable.span_range(),
+            ArgumentValue::Assignee(assignee) => assignee.span_range(),
+            ArgumentValue::Shared(shared) => shared.span_range(),
         }
     }
 }
 
-impl WithSpanRangeExt for ResolvedValue {
+impl WithSpanRangeExt for ArgumentValue {
     fn with_span_range(self, span_range: SpanRange) -> Self {
         match self {
-            ResolvedValue::Owned(value) => ResolvedValue::Owned(value.with_span_range(span_range)),
-            ResolvedValue::Mutable(reference) => {
-                ResolvedValue::Mutable(reference.with_span_range(span_range))
+            ArgumentValue::Owned(value) => ArgumentValue::Owned(value.with_span_range(span_range)),
+            ArgumentValue::Mutable(reference) => {
+                ArgumentValue::Mutable(reference.with_span_range(span_range))
             }
-            ResolvedValue::Assignee(assignee) => {
-                ResolvedValue::Assignee(assignee.with_span_range(span_range))
+            ArgumentValue::Assignee(assignee) => {
+                ArgumentValue::Assignee(assignee.with_span_range(span_range))
             }
-            ResolvedValue::Shared(shared) => {
-                ResolvedValue::Shared(shared.with_span_range(span_range))
+            ArgumentValue::Shared(shared) => {
+                ArgumentValue::Shared(shared.with_span_range(span_range))
             }
-            ResolvedValue::CopyOnWrite(copy_on_write) => {
-                ResolvedValue::CopyOnWrite(copy_on_write.with_span_range(span_range))
+            ArgumentValue::CopyOnWrite(copy_on_write) => {
+                ArgumentValue::CopyOnWrite(copy_on_write.with_span_range(span_range))
             }
         }
     }
 }
 
-impl Deref for ResolvedValue {
+impl Deref for ArgumentValue {
     type Target = ExpressionValue;
 
     fn deref(&self) -> &Self::Target {
@@ -92,48 +95,45 @@ impl Deref for ResolvedValue {
     }
 }
 
-impl AsRef<ExpressionValue> for ResolvedValue {
+impl AsRef<ExpressionValue> for ArgumentValue {
     fn as_ref(&self) -> &ExpressionValue {
         match self {
-            ResolvedValue::Owned(owned) => owned.as_ref(),
-            ResolvedValue::Mutable(mutable) => mutable.as_ref(),
-            ResolvedValue::Assignee(assignee) => assignee.0.as_ref(),
-            ResolvedValue::Shared(shared) => shared.as_ref(),
-            ResolvedValue::CopyOnWrite(copy_on_write) => copy_on_write.as_ref(),
+            ArgumentValue::Owned(owned) => owned.as_ref(),
+            ArgumentValue::Mutable(mutable) => mutable.as_ref(),
+            ArgumentValue::Assignee(assignee) => assignee.0.as_ref(),
+            ArgumentValue::Shared(shared) => shared.as_ref(),
+            ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write.as_ref(),
         }
     }
 }
 
-pub(crate) use crate::interpretation::CopyOnWriteValue;
-use crate::stream_interface::method_definitions::assert;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum RequestedValueOwnership {
+pub(crate) enum RequestedOwnership {
     /// Receives any of Owned, SharedReference or MutableReference, depending on what
     /// is available.
     /// This can then be used to resolve the value kind, and use the correct one.
     LateBound,
     /// A concrete value of the correct type.
-    Concrete(ResolvedValueOwnership),
+    Concrete(ArgumentOwnership),
 }
 
-impl RequestedValueOwnership {
+impl RequestedOwnership {
     pub(crate) fn owned() -> Self {
-        RequestedValueOwnership::Concrete(ResolvedValueOwnership::Owned)
+        RequestedOwnership::Concrete(ArgumentOwnership::Owned)
     }
 
     pub(crate) fn shared() -> Self {
-        RequestedValueOwnership::Concrete(ResolvedValueOwnership::Shared)
+        RequestedOwnership::Concrete(ArgumentOwnership::Shared)
     }
 
     pub(crate) fn copy_on_write() -> Self {
-        RequestedValueOwnership::Concrete(ResolvedValueOwnership::CopyOnWrite)
+        RequestedOwnership::Concrete(ArgumentOwnership::CopyOnWrite)
     }
 
     pub(crate) fn replace_owned_with_copy_on_write(self) -> Self {
         match self {
-            RequestedValueOwnership::Concrete(ResolvedValueOwnership::Owned) => {
-                RequestedValueOwnership::Concrete(ResolvedValueOwnership::CopyOnWrite)
+            RequestedOwnership::Concrete(ArgumentOwnership::Owned) => {
+                RequestedOwnership::Concrete(ArgumentOwnership::CopyOnWrite)
             }
             _ => self,
         }
@@ -141,139 +141,155 @@ impl RequestedValueOwnership {
 
     pub(crate) fn requests_auto_create(&self) -> bool {
         match self {
-            RequestedValueOwnership::Concrete(ResolvedValueOwnership::Assignee { auto_create }) => {
+            RequestedOwnership::Concrete(ArgumentOwnership::Assignee { auto_create }) => {
                 *auto_create
             }
             _ => false,
         }
     }
 
-    pub(crate) fn map_none(self, span_range: SpanRange) -> ExecutionResult<EvaluationItem> {
+    pub(crate) fn map_none(self, span_range: SpanRange) -> ExecutionResult<RequestedValue> {
         self.map_from_owned(().into_owned_value(span_range))
     }
 
     pub(crate) fn map_from_late_bound(
         &self,
         late_bound: LateBoundValue,
-    ) -> ExecutionResult<EvaluationItem> {
+    ) -> ExecutionResult<RequestedValue> {
         Ok(match self {
-            RequestedValueOwnership::LateBound => EvaluationItem::LateBound(late_bound),
-            RequestedValueOwnership::Concrete(_) => {
+            RequestedOwnership::LateBound => RequestedValue::LateBound(late_bound),
+            RequestedOwnership::Concrete(_) => {
                 panic!("Returning a late-bound reference when concrete ownership was requested")
             }
         })
     }
 
-    pub(crate) fn map_from_resolved(
+    pub(crate) fn map_from_argument(
         &self,
-        value: ResolvedValue,
-    ) -> ExecutionResult<EvaluationItem> {
+        value: ArgumentValue,
+    ) -> ExecutionResult<RequestedValue> {
         match value {
-            ResolvedValue::Owned(owned) => self.map_from_owned(owned),
-            ResolvedValue::Mutable(mutable) => self.map_from_mutable(mutable),
-            ResolvedValue::Assignee(assignee) => self.map_from_assignee(assignee),
-            ResolvedValue::Shared(shared) => self.map_from_shared(shared),
-            ResolvedValue::CopyOnWrite(copy_on_write) => self.map_from_copy_on_write(copy_on_write),
+            ArgumentValue::Owned(owned) => self.map_from_owned(owned),
+            ArgumentValue::Mutable(mutable) => self.map_from_mutable(mutable),
+            ArgumentValue::Assignee(assignee) => self.map_from_assignee(assignee),
+            ArgumentValue::Shared(shared) => self.map_from_shared(shared),
+            ArgumentValue::CopyOnWrite(copy_on_write) => self.map_from_copy_on_write(copy_on_write),
         }
     }
 
-    /// This ensures the item's type aligns with the requested ownership.
-    pub(crate) fn map_from_item(&self, value: EvaluationItem) -> ExecutionResult<EvaluationItem> {
+    pub(crate) fn map_from_returned(
+        &self,
+        value: ReturnedValue,
+    ) -> ExecutionResult<RequestedValue> {
         match value {
-            EvaluationItem::Owned(owned) => self.map_from_owned(owned),
-            EvaluationItem::Shared(shared) => self.map_from_shared(shared),
-            EvaluationItem::Mutable(mutable) => self.map_from_mutable(mutable),
-            EvaluationItem::Assignee(assignee) => self.map_from_assignee(assignee),
-            EvaluationItem::LateBound(late_bound_value) => {
+            ReturnedValue::Owned(owned) => self.map_from_owned(owned),
+            ReturnedValue::Mutable(mutable) => self.map_from_mutable(mutable),
+            ReturnedValue::Assignee(assignee) => self.map_from_assignee(assignee),
+            ReturnedValue::Shared(shared) => self.map_from_shared(shared),
+            ReturnedValue::CopyOnWrite(copy_on_write) => self.map_from_copy_on_write(copy_on_write),
+        }
+    }
+
+    /// This ensures the requested value's type aligns with the requested ownership.
+    pub(crate) fn map_from_requested(
+        &self,
+        requested: RequestedValue,
+    ) -> ExecutionResult<RequestedValue> {
+        match requested {
+            RequestedValue::Owned(owned) => self.map_from_owned(owned),
+            RequestedValue::Shared(shared) => self.map_from_shared(shared),
+            RequestedValue::Mutable(mutable) => self.map_from_mutable(mutable),
+            RequestedValue::Assignee(assignee) => self.map_from_assignee(assignee),
+            RequestedValue::LateBound(late_bound_value) => {
                 self.map_from_late_bound(late_bound_value)
             }
-            EvaluationItem::CopyOnWrite(copy_on_write) => {
+            RequestedValue::CopyOnWrite(copy_on_write) => {
                 self.map_from_copy_on_write(copy_on_write)
             }
-            EvaluationItem::AssignmentCompletion { .. } => {
+            RequestedValue::AssignmentCompletion { .. } => {
                 panic!("Returning a non-value item from a value context")
             }
         }
     }
 
-    pub(crate) fn map_from_owned(&self, value: OwnedValue) -> ExecutionResult<EvaluationItem> {
+    pub(crate) fn map_from_owned(&self, value: OwnedValue) -> ExecutionResult<RequestedValue> {
         match self {
-            RequestedValueOwnership::LateBound => {
-                Ok(EvaluationItem::LateBound(LateBoundValue::Owned(value)))
+            RequestedOwnership::LateBound => {
+                Ok(RequestedValue::LateBound(LateBoundValue::Owned(value)))
             }
-            RequestedValueOwnership::Concrete(requested) => requested
+            RequestedOwnership::Concrete(requested) => requested
                 .map_from_owned(value)
-                .map(Self::item_from_resolved),
+                .map(Self::item_from_argument),
         }
     }
 
     pub(crate) fn map_from_copy_on_write(
         &self,
         cow: CopyOnWriteValue,
-    ) -> ExecutionResult<EvaluationItem> {
+    ) -> ExecutionResult<RequestedValue> {
         match self {
-            RequestedValueOwnership::LateBound => {
-                Ok(EvaluationItem::LateBound(LateBoundValue::CopyOnWrite(cow)))
+            RequestedOwnership::LateBound => {
+                Ok(RequestedValue::LateBound(LateBoundValue::CopyOnWrite(cow)))
             }
-            RequestedValueOwnership::Concrete(requested) => requested
+            RequestedOwnership::Concrete(requested) => requested
                 .map_from_copy_on_write(cow)
-                .map(Self::item_from_resolved),
+                .map(Self::item_from_argument),
         }
     }
 
     pub(crate) fn map_from_mutable(
         &self,
         mutable: MutableValue,
-    ) -> ExecutionResult<EvaluationItem> {
+    ) -> ExecutionResult<RequestedValue> {
         match self {
-            RequestedValueOwnership::LateBound => {
-                Ok(EvaluationItem::LateBound(LateBoundValue::Mutable(mutable)))
+            RequestedOwnership::LateBound => {
+                Ok(RequestedValue::LateBound(LateBoundValue::Mutable(mutable)))
             }
-            RequestedValueOwnership::Concrete(requested) => requested
+            RequestedOwnership::Concrete(requested) => requested
                 .map_from_mutable(mutable)
-                .map(Self::item_from_resolved),
+                .map(Self::item_from_argument),
         }
     }
 
     pub(crate) fn map_from_assignee(
         &self,
         assignee: AssigneeValue,
-    ) -> ExecutionResult<EvaluationItem> {
+    ) -> ExecutionResult<RequestedValue> {
         match self {
-            RequestedValueOwnership::LateBound => Ok(EvaluationItem::LateBound(
+            RequestedOwnership::LateBound => Ok(RequestedValue::LateBound(
                 LateBoundValue::Mutable(assignee.0),
             )),
-            RequestedValueOwnership::Concrete(requested) => requested
+            RequestedOwnership::Concrete(requested) => requested
                 .map_from_assignee(assignee)
-                .map(Self::item_from_resolved),
+                .map(Self::item_from_argument),
         }
     }
 
-    pub(crate) fn map_from_shared(&self, shared: SharedValue) -> ExecutionResult<EvaluationItem> {
+    pub(crate) fn map_from_shared(&self, shared: SharedValue) -> ExecutionResult<RequestedValue> {
         match self {
-            RequestedValueOwnership::LateBound => {
+            RequestedOwnership::LateBound => {
                 panic!("Returning a shared reference when late-bound was requested")
             }
-            RequestedValueOwnership::Concrete(requested) => requested
+            RequestedOwnership::Concrete(requested) => requested
                 .map_from_shared(shared)
-                .map(Self::item_from_resolved),
+                .map(Self::item_from_argument),
         }
     }
 
-    fn item_from_resolved(value: ResolvedValue) -> EvaluationItem {
+    fn item_from_argument(value: ArgumentValue) -> RequestedValue {
         match value {
-            ResolvedValue::Owned(owned) => EvaluationItem::Owned(owned),
-            ResolvedValue::Mutable(mutable) => EvaluationItem::Mutable(mutable),
-            ResolvedValue::Assignee(assignee) => EvaluationItem::Assignee(assignee),
-            ResolvedValue::Shared(shared) => EvaluationItem::Shared(shared),
-            ResolvedValue::CopyOnWrite(copy_on_write) => EvaluationItem::CopyOnWrite(copy_on_write),
+            ArgumentValue::Owned(owned) => RequestedValue::Owned(owned),
+            ArgumentValue::Mutable(mutable) => RequestedValue::Mutable(mutable),
+            ArgumentValue::Assignee(assignee) => RequestedValue::Assignee(assignee),
+            ArgumentValue::Shared(shared) => RequestedValue::Shared(shared),
+            ArgumentValue::CopyOnWrite(copy_on_write) => RequestedValue::CopyOnWrite(copy_on_write),
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 /// The ownership that a method might concretely request
-pub(crate) enum ResolvedValueOwnership {
+pub(crate) enum ArgumentOwnership {
     Owned,
     Shared,
     Mutable,
@@ -303,16 +319,16 @@ pub(crate) enum ResolvedValueOwnership {
     /// A niche resolved value which passes through the value uncoerced, for
     /// handling in the method itself - notably this is used in the `.as_mut()` method.
     ///
-    /// Currently this is handled as a ResolvedValue, but it might be better to handle
+    /// Currently this is handled as a ArgumentValue, but it might be better to handle
     /// it as LateBound (so that we don't drop the shared-conversion error reason).
     AsIs,
 }
 
-impl ResolvedValueOwnership {
+impl ArgumentOwnership {
     pub(crate) fn map_from_late_bound(
         &self,
         late_bound: LateBoundValue,
-    ) -> ExecutionResult<ResolvedValue> {
+    ) -> ExecutionResult<ArgumentValue> {
         match late_bound {
             LateBoundValue::Owned(owned) => self.map_from_owned(owned),
             LateBoundValue::CopyOnWrite(copy_on_write) => {
@@ -329,37 +345,35 @@ impl ResolvedValueOwnership {
     pub(crate) fn map_from_copy_on_write(
         &self,
         copy_on_write: CopyOnWriteValue,
-    ) -> ExecutionResult<ResolvedValue> {
+    ) -> ExecutionResult<ArgumentValue> {
         match self {
-            ResolvedValueOwnership::Owned => Ok(ResolvedValue::Owned(
+            ArgumentOwnership::Owned => Ok(ArgumentValue::Owned(
                 copy_on_write.into_owned_transparently()?,
             )),
-            ResolvedValueOwnership::Shared => {
-                Ok(ResolvedValue::Shared(copy_on_write.into_shared()))
-            }
-            ResolvedValueOwnership::Mutable => {
+            ArgumentOwnership::Shared => Ok(ArgumentValue::Shared(copy_on_write.into_shared())),
+            ArgumentOwnership::Mutable => {
                 if copy_on_write.acts_as_shared_reference() {
                     copy_on_write.ownership_err("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone()` to get a mutable reference to a cloned value.")
                 } else {
-                    Ok(ResolvedValue::Mutable(Mutable::new_from_owned(
+                    Ok(ArgumentValue::Mutable(Mutable::new_from_owned(
                         copy_on_write.into_owned_transparently()?,
                     )))
                 }
             }
-            ResolvedValueOwnership::Assignee { .. } => {
+            ArgumentOwnership::Assignee { .. } => {
                 if copy_on_write.acts_as_shared_reference() {
                     copy_on_write.ownership_err("A shared reference cannot be assigned to.")
                 } else {
                     copy_on_write.ownership_err("An owned value cannot be assigned to.")
                 }
             }
-            ResolvedValueOwnership::CopyOnWrite | ResolvedValueOwnership::AsIs => {
-                Ok(ResolvedValue::CopyOnWrite(copy_on_write))
+            ArgumentOwnership::CopyOnWrite | ArgumentOwnership::AsIs => {
+                Ok(ArgumentValue::CopyOnWrite(copy_on_write))
             }
         }
     }
 
-    pub(crate) fn map_from_shared(&self, shared: SharedValue) -> ExecutionResult<ResolvedValue> {
+    pub(crate) fn map_from_shared(&self, shared: SharedValue) -> ExecutionResult<ArgumentValue> {
         self.map_from_shared_with_error_reason(
             shared,
             |shared| shared.ownership_error("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone().as_mut()` to get a mutable reference."),
@@ -370,28 +384,28 @@ impl ResolvedValueOwnership {
         &self,
         shared: SharedValue,
         mutable_error: impl FnOnce(SharedValue) -> ExecutionInterrupt,
-    ) -> ExecutionResult<ResolvedValue> {
+    ) -> ExecutionResult<ArgumentValue> {
         match self {
-            ResolvedValueOwnership::Owned => Ok(ResolvedValue::Owned(shared.transparent_clone()?)),
-            ResolvedValueOwnership::CopyOnWrite => Ok(ResolvedValue::CopyOnWrite(
+            ArgumentOwnership::Owned => Ok(ArgumentValue::Owned(shared.transparent_clone()?)),
+            ArgumentOwnership::CopyOnWrite => Ok(ArgumentValue::CopyOnWrite(
                 CopyOnWrite::shared_in_place_of_shared(shared),
             )),
-            ResolvedValueOwnership::Assignee { .. } => Err(mutable_error(shared)),
-            ResolvedValueOwnership::Mutable => Err(mutable_error(shared)),
-            ResolvedValueOwnership::Shared | ResolvedValueOwnership::AsIs => {
-                Ok(ResolvedValue::Shared(shared))
+            ArgumentOwnership::Assignee { .. } => Err(mutable_error(shared)),
+            ArgumentOwnership::Mutable => Err(mutable_error(shared)),
+            ArgumentOwnership::Shared | ArgumentOwnership::AsIs => {
+                Ok(ArgumentValue::Shared(shared))
             }
         }
     }
 
-    pub(crate) fn map_from_mutable(&self, mutable: MutableValue) -> ExecutionResult<ResolvedValue> {
+    pub(crate) fn map_from_mutable(&self, mutable: MutableValue) -> ExecutionResult<ArgumentValue> {
         self.map_from_mutable_inner(mutable, false)
     }
 
     pub(crate) fn map_from_assignee(
         &self,
         assignee: AssigneeValue,
-    ) -> ExecutionResult<ResolvedValue> {
+    ) -> ExecutionResult<ArgumentValue> {
         self.map_from_mutable_inner(assignee.0, false)
     }
 
@@ -399,45 +413,39 @@ impl ResolvedValueOwnership {
         &self,
         mutable: MutableValue,
         is_late_bound: bool,
-    ) -> ExecutionResult<ResolvedValue> {
+    ) -> ExecutionResult<ArgumentValue> {
         match self {
-            ResolvedValueOwnership::Owned => {
+            ArgumentOwnership::Owned => {
                 if is_late_bound {
-                    Ok(ResolvedValue::Owned(mutable.transparent_clone()?))
+                    Ok(ArgumentValue::Owned(mutable.transparent_clone()?))
                 } else {
                     mutable.ownership_err("An owned value is required, but a mutable reference was received. This indicates a possible bug. If this was intended, use `.clone()` to get an owned value.")
                 }
             }
-            ResolvedValueOwnership::CopyOnWrite => Ok(ResolvedValue::CopyOnWrite(
+            ArgumentOwnership::CopyOnWrite => Ok(ArgumentValue::CopyOnWrite(
                 CopyOnWrite::shared_in_place_of_shared(mutable.into_shared()),
             )),
-            ResolvedValueOwnership::Mutable | ResolvedValueOwnership::AsIs => {
-                Ok(ResolvedValue::Mutable(mutable))
+            ArgumentOwnership::Mutable | ArgumentOwnership::AsIs => {
+                Ok(ArgumentValue::Mutable(mutable))
             }
-            ResolvedValueOwnership::Assignee { .. } => {
-                Ok(ResolvedValue::Assignee(Assignee(mutable)))
-            }
-            ResolvedValueOwnership::Shared => Ok(ResolvedValue::Shared(mutable.into_shared())),
+            ArgumentOwnership::Assignee { .. } => Ok(ArgumentValue::Assignee(Assignee(mutable))),
+            ArgumentOwnership::Shared => Ok(ArgumentValue::Shared(mutable.into_shared())),
         }
     }
 
-    pub(crate) fn map_from_owned(&self, owned: OwnedValue) -> ExecutionResult<ResolvedValue> {
+    pub(crate) fn map_from_owned(&self, owned: OwnedValue) -> ExecutionResult<ArgumentValue> {
         match self {
-            ResolvedValueOwnership::Owned | ResolvedValueOwnership::AsIs => {
-                Ok(ResolvedValue::Owned(owned))
+            ArgumentOwnership::Owned | ArgumentOwnership::AsIs => Ok(ArgumentValue::Owned(owned)),
+            ArgumentOwnership::CopyOnWrite => {
+                Ok(ArgumentValue::CopyOnWrite(CopyOnWrite::owned(owned)))
             }
-            ResolvedValueOwnership::CopyOnWrite => {
-                Ok(ResolvedValue::CopyOnWrite(CopyOnWrite::owned(owned)))
+            ArgumentOwnership::Mutable => {
+                Ok(ArgumentValue::Mutable(Mutable::new_from_owned(owned)))
             }
-            ResolvedValueOwnership::Mutable => {
-                Ok(ResolvedValue::Mutable(Mutable::new_from_owned(owned)))
-            }
-            ResolvedValueOwnership::Assignee { .. } => {
+            ArgumentOwnership::Assignee { .. } => {
                 owned.ownership_err("An owned value cannot be assigned to.")
             }
-            ResolvedValueOwnership::Shared => {
-                Ok(ResolvedValue::Shared(Shared::new_from_owned(owned)))
-            }
+            ArgumentOwnership::Shared => Ok(ArgumentValue::Shared(Shared::new_from_owned(owned))),
         }
     }
 }
@@ -458,23 +466,23 @@ pub(super) enum AnyValueFrame {
 }
 
 impl AnyValueFrame {
-    pub(super) fn handle_item(
+    pub(super) fn handle_next(
         self,
         context: Context<ValueType>,
-        item: EvaluationItem,
+        value: RequestedValue,
     ) -> ExecutionResult<NextAction> {
         match self {
-            AnyValueFrame::Group(frame) => frame.handle_item(context, item),
-            AnyValueFrame::Array(frame) => frame.handle_item(context, item),
-            AnyValueFrame::Object(frame) => frame.handle_item(context, item),
-            AnyValueFrame::UnaryOperation(frame) => frame.handle_item(context, item),
-            AnyValueFrame::BinaryOperation(frame) => frame.handle_item(context, item),
-            AnyValueFrame::PropertyAccess(frame) => frame.handle_item(context, item),
-            AnyValueFrame::IndexAccess(frame) => frame.handle_item(context, item),
-            AnyValueFrame::Range(frame) => frame.handle_item(context, item),
-            AnyValueFrame::Assignment(frame) => frame.handle_item(context, item),
-            AnyValueFrame::CompoundAssignment(frame) => frame.handle_item(context, item),
-            AnyValueFrame::MethodCall(frame) => frame.handle_item(context, item),
+            AnyValueFrame::Group(frame) => frame.handle_next(context, value),
+            AnyValueFrame::Array(frame) => frame.handle_next(context, value),
+            AnyValueFrame::Object(frame) => frame.handle_next(context, value),
+            AnyValueFrame::UnaryOperation(frame) => frame.handle_next(context, value),
+            AnyValueFrame::BinaryOperation(frame) => frame.handle_next(context, value),
+            AnyValueFrame::PropertyAccess(frame) => frame.handle_next(context, value),
+            AnyValueFrame::IndexAccess(frame) => frame.handle_next(context, value),
+            AnyValueFrame::Range(frame) => frame.handle_next(context, value),
+            AnyValueFrame::Assignment(frame) => frame.handle_next(context, value),
+            AnyValueFrame::CompoundAssignment(frame) => frame.handle_next(context, value),
+            AnyValueFrame::MethodCall(frame) => frame.handle_next(context, value),
         }
     }
 }
@@ -492,7 +500,7 @@ impl GroupBuilder {
         let frame = Self {
             span: delim_span.join(),
         };
-        context.handle_node_as_owned(frame, inner)
+        context.request_owned(frame, inner)
     }
 }
 
@@ -503,12 +511,12 @@ impl EvaluationFrame for GroupBuilder {
         AnyValueFrame::Group(self)
     }
 
-    fn handle_item(
+    fn handle_next(
         self,
         context: ValueContext,
-        item: EvaluationItem,
+        value: RequestedValue,
     ) -> ExecutionResult<NextAction> {
-        let inner = item.expect_owned();
+        let inner = value.expect_owned();
         context.return_owned(inner.with_span(self.span))
     }
 }
@@ -540,7 +548,7 @@ impl ArrayBuilder {
                 .get(self.evaluated_items.len())
                 .cloned()
             {
-                Some(next) => context.handle_node_as_owned(self, next),
+                Some(next) => context.request_owned(self, next),
                 None => context.return_owned(
                     ExpressionValue::Array(ArrayExpression {
                         items: self.evaluated_items,
@@ -559,12 +567,12 @@ impl EvaluationFrame for ArrayBuilder {
         AnyValueFrame::Array(self)
     }
 
-    fn handle_item(
+    fn handle_next(
         mut self,
         context: ValueContext,
-        item: EvaluationItem,
+        value: RequestedValue,
     ) -> ExecutionResult<NextAction> {
-        let value = item.expect_owned();
+        let value = value.expect_owned();
         self.evaluated_items.push(value.into_inner());
         self.next(context)
     }
@@ -619,11 +627,11 @@ impl ObjectBuilder {
                         key,
                         key_span: ident.span(),
                     });
-                    context.handle_node_as_owned(self, value_node)
+                    context.request_owned(self, value_node)
                 }
                 Some((ObjectKey::Indexed { access, index }, value_node)) => {
                     self.pending = Some(PendingEntryPath::OnIndexKeyBranch { access, value_node });
-                    context.handle_node_as_owned(self, index)
+                    context.request_owned(self, index)
                 }
                 None => context
                     .return_owned(self.evaluated_entries.into_value().into_owned(self.span))?,
@@ -639,15 +647,15 @@ impl EvaluationFrame for Box<ObjectBuilder> {
         AnyValueFrame::Object(self)
     }
 
-    fn handle_item(
+    fn handle_next(
         mut self,
         context: ValueContext,
-        item: EvaluationItem,
+        value: RequestedValue,
     ) -> ExecutionResult<NextAction> {
         let pending = self.pending.take();
         Ok(match pending {
             Some(PendingEntryPath::OnIndexKeyBranch { access, value_node }) => {
-                let value = item.expect_owned();
+                let value = value.expect_owned();
                 let key: String = value.resolve_as("An object key")?;
                 if self.evaluated_entries.contains_key(&key) {
                     return access.syntax_err(format!("The key {} has already been set", key));
@@ -656,10 +664,10 @@ impl EvaluationFrame for Box<ObjectBuilder> {
                     key,
                     key_span: access.span(),
                 });
-                context.handle_node_as_owned(self, value_node)
+                context.request_owned(self, value_node)
             }
             Some(PendingEntryPath::OnValueBranch { key, key_span }) => {
-                let value = item.expect_owned().into_inner();
+                let value = value.expect_owned().into_inner();
                 let entry = ObjectEntry { key_span, value };
                 self.evaluated_entries.insert(key, entry);
                 self.next(context)?
@@ -683,7 +691,7 @@ impl UnaryOperationBuilder {
     ) -> NextAction {
         let frame = Self { operation };
         // Use late-bound evaluation to allow method resolution to determine ownership requirements
-        context.handle_node_as_late_bound(frame, input)
+        context.request_late_bound(frame, input)
     }
 }
 
@@ -694,19 +702,19 @@ impl EvaluationFrame for UnaryOperationBuilder {
         AnyValueFrame::UnaryOperation(self)
     }
 
-    fn handle_item(
+    fn handle_next(
         self,
         context: ValueContext,
-        item: EvaluationItem,
+        value: RequestedValue,
     ) -> ExecutionResult<NextAction> {
-        let late_bound_value = item.expect_late_bound();
+        let late_bound_value = value.expect_late_bound();
         let operand_kind = late_bound_value.kind();
 
         // Try method resolution first
         if let Some(interface) = operand_kind.resolve_unary_operation(&self.operation) {
             let resolved_value = late_bound_value.resolve(interface.argument_ownership())?;
             let result = interface.execute(resolved_value, &self.operation)?;
-            return context.return_resolved_value(result);
+            return context.return_returned_value(result);
         }
         self.operation.type_err(format!(
             "The {} operator is not supported for {} values",
@@ -726,7 +734,7 @@ enum BinaryPath {
         right: ExpressionNodeId,
     },
     OnRightBranch {
-        left: ResolvedValue,
+        left: ArgumentValue,
         interface: BinaryOperationInterface,
     },
 }
@@ -743,7 +751,7 @@ impl BinaryOperationBuilder {
             state: BinaryPath::OnLeftBranch { right },
         };
         // Use late-bound evaluation to allow method resolution to determine ownership requirements
-        context.handle_node_as_late_bound(frame, left)
+        context.request_late_bound(frame, left)
     }
 }
 
@@ -754,14 +762,14 @@ impl EvaluationFrame for BinaryOperationBuilder {
         AnyValueFrame::BinaryOperation(self)
     }
 
-    fn handle_item(
+    fn handle_next(
         mut self,
         mut context: ValueContext,
-        item: EvaluationItem,
+        value: RequestedValue,
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
             BinaryPath::OnLeftBranch { right } => {
-                let left_late_bound = item.expect_late_bound();
+                let left_late_bound = value.expect_late_bound();
 
                 // Check for lazy evaluation first (short-circuit operators)
                 let left_value = left_late_bound
@@ -784,10 +792,10 @@ impl EvaluationFrame for BinaryOperationBuilder {
                                 .map_from_late_bound(left_late_bound)?;
 
                             self.state = BinaryPath::OnRightBranch { left, interface };
-                            context.handle_node_as_any_value(
+                            context.request_any_value(
                                 self,
                                 right,
-                                RequestedValueOwnership::Concrete(rhs_ownership),
+                                RequestedOwnership::Concrete(rhs_ownership),
                             )
                         }
                         None => {
@@ -801,9 +809,9 @@ impl EvaluationFrame for BinaryOperationBuilder {
                 }
             }
             BinaryPath::OnRightBranch { left, interface } => {
-                let right = item.expect_resolved_value();
+                let right = value.expect_resolved_value();
                 let result = interface.execute(left, right, &self.operation)?;
-                return context.return_resolved_value(result);
+                return context.return_returned_value(result);
             }
         })
     }
@@ -826,7 +834,7 @@ impl ValuePropertyAccessBuilder {
         let ownership_request = context
             .requested_ownership()
             .replace_owned_with_copy_on_write();
-        context.handle_node_as_any_value(frame, node, ownership_request)
+        context.request_any_value(frame, node, ownership_request)
     }
 }
 
@@ -837,18 +845,18 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
         AnyValueFrame::PropertyAccess(self)
     }
 
-    fn handle_item(
+    fn handle_next(
         self,
         context: ValueContext,
-        item: EvaluationItem,
+        value: RequestedValue,
     ) -> ExecutionResult<NextAction> {
         let auto_create = context.requested_ownership().requests_auto_create();
-        let mapped = item.expect_any_value_and_map(
+        let mapped = value.expect_any_value_and_map(
             |shared| shared.resolve_property(&self.access),
             |mutable| mutable.resolve_property(&self.access, auto_create),
             |owned| owned.resolve_property(&self.access),
         )?;
-        context.return_item(mapped)
+        context.return_not_necessarily_matching_requested(mapped)
     }
 }
 
@@ -859,7 +867,7 @@ pub(super) struct ValueIndexAccessBuilder {
 
 enum IndexPath {
     OnSourceBranch { index: ExpressionNodeId },
-    OnIndexBranch { source: EvaluationItem },
+    OnIndexBranch { source: RequestedValue },
 }
 
 impl ValueIndexAccessBuilder {
@@ -879,7 +887,7 @@ impl ValueIndexAccessBuilder {
         let ownership_request = context
             .requested_ownership()
             .replace_owned_with_copy_on_write();
-        context.handle_node_as_any_value(frame, source, ownership_request)
+        context.request_any_value(frame, source, ownership_request)
     }
 }
 
@@ -890,29 +898,33 @@ impl EvaluationFrame for ValueIndexAccessBuilder {
         AnyValueFrame::IndexAccess(self)
     }
 
-    fn handle_item(
+    fn handle_next(
         mut self,
         context: ValueContext,
-        item: EvaluationItem,
+        value: RequestedValue,
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
             IndexPath::OnSourceBranch { index } => {
-                self.state = IndexPath::OnIndexBranch { source: item };
+                self.state = IndexPath::OnIndexBranch { source: value };
                 // This is a value, so we are _accessing it_ and can't create values
                 // (that's only possible in a place!) - therefore we don't need an owned key,
                 // and can use &index for reading values from our array
-                context.handle_node_as_shared(self, index)
+                context.request_shared(self, index)
             }
             IndexPath::OnIndexBranch { source } => {
-                let index = item.expect_shared();
+                let index = value.expect_shared();
                 let is_range = matches!(index.kind(), ValueKind::Range);
 
                 let auto_create = context.requested_ownership().requests_auto_create();
-                context.return_item(source.expect_any_value_and_map(
-                    |shared| shared.resolve_indexed(self.access, index.as_spanned()),
-                    |mutable| mutable.resolve_indexed(self.access, index.as_spanned(), auto_create),
-                    |owned| owned.resolve_indexed(self.access, index.as_spanned()),
-                )?)?
+                context.return_not_necessarily_matching_requested(
+                    source.expect_any_value_and_map(
+                        |shared| shared.resolve_indexed(self.access, index.as_spanned()),
+                        |mutable| {
+                            mutable.resolve_indexed(self.access, index.as_spanned(), auto_create)
+                        },
+                        |owned| owned.resolve_indexed(self.access, index.as_spanned()),
+                    )?,
+                )?
             }
         })
     }
@@ -947,14 +959,14 @@ impl RangeBuilder {
                     )
                 }
             },
-            (None, Some(right)) => context.handle_node_as_owned(
+            (None, Some(right)) => context.request_owned(
                 Self {
                     range_limits: *range_limits,
                     state: RangePath::OnRightBranch { left: None },
                 },
                 *right,
             ),
-            (Some(left), right) => context.handle_node_as_owned(
+            (Some(left), right) => context.request_owned(
                 Self {
                     range_limits: *range_limits,
                     state: RangePath::OnLeftBranch { right: *right },
@@ -972,17 +984,17 @@ impl EvaluationFrame for RangeBuilder {
         AnyValueFrame::Range(self)
     }
 
-    fn handle_item(
+    fn handle_next(
         mut self,
         context: ValueContext,
-        item: EvaluationItem,
+        value: RequestedValue,
     ) -> ExecutionResult<NextAction> {
         // TODO[range-refactor]: Change to not always clone the value
-        let value = item.expect_owned().into_inner();
+        let value = value.expect_owned().into_inner();
         Ok(match (self.state, self.range_limits) {
             (RangePath::OnLeftBranch { right: Some(right) }, _) => {
                 self.state = RangePath::OnRightBranch { left: Some(value) };
-                context.handle_node_as_owned(self, right)
+                context.request_owned(self, right)
             }
             (RangePath::OnLeftBranch { right: None }, syn::RangeLimits::HalfOpen(token)) => {
                 let inner = ExpressionRangeInner::RangeFrom {
@@ -1050,7 +1062,7 @@ impl AssignmentBuilder {
             equals_token,
             state: AssignmentPath::OnValueBranch { assignee },
         };
-        context.handle_node_as_owned(frame, value)
+        context.request_owned(frame, value)
     }
 }
 
@@ -1061,19 +1073,19 @@ impl EvaluationFrame for AssignmentBuilder {
         AnyValueFrame::Assignment(self)
     }
 
-    fn handle_item(
+    fn handle_next(
         mut self,
         context: ValueContext,
-        item: EvaluationItem,
+        value: RequestedValue,
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
             AssignmentPath::OnValueBranch { assignee } => {
-                let value = item.expect_owned().into_inner();
+                let value = value.expect_owned().into_inner();
                 self.state = AssignmentPath::OnAwaitingAssignment;
-                context.handle_node_as_assignment(self, assignee, value)
+                context.request_assignment(self, assignee, value)
             }
             AssignmentPath::OnAwaitingAssignment => {
-                let AssignmentCompletion { span_range } = item.expect_assignment_completion();
+                let AssignmentCompletion { span_range } = value.expect_assignment_completion();
                 context.return_owned(ExpressionValue::None.into_owned(span_range))?
             }
         })
@@ -1101,7 +1113,7 @@ impl CompoundAssignmentBuilder {
             operation,
             state: CompoundAssignmentPath::OnValueBranch { target },
         };
-        context.handle_node_as_owned(frame, value)
+        context.request_owned(frame, value)
     }
 }
 
@@ -1112,20 +1124,20 @@ impl EvaluationFrame for CompoundAssignmentBuilder {
         AnyValueFrame::CompoundAssignment(self)
     }
 
-    fn handle_item(
+    fn handle_next(
         mut self,
         context: ValueContext,
-        item: EvaluationItem,
+        requested: RequestedValue,
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
             CompoundAssignmentPath::OnValueBranch { target } => {
-                let value = item.expect_owned();
+                let value = requested.expect_owned();
                 self.state = CompoundAssignmentPath::OnTargetBranch { value };
                 // TODO[compound-assignment-refactor]: Resolve as LateBound, and then convert to what is needed based on the operation
-                context.handle_node_as_assignee(self, target, false)
+                context.request_assignee(self, target, false)
             }
             CompoundAssignmentPath::OnTargetBranch { value } => {
-                let mut assignee = item.expect_assignee();
+                let mut assignee = requested.expect_assignee();
                 let span_range = SpanRange::new_between(assignee.span_range(), value.span_range());
                 SpannedAnyRefMut::from(assignee.0)
                     .handle_compound_assignment(&self.operation, value)?;
@@ -1137,7 +1149,7 @@ impl EvaluationFrame for CompoundAssignmentBuilder {
 
 pub(super) struct MethodCallBuilder {
     method: MethodAccess,
-    unevaluated_parameters_stack: Vec<(ExpressionNodeId, ResolvedValueOwnership)>,
+    unevaluated_parameters_stack: Vec<(ExpressionNodeId, ArgumentOwnership)>,
     state: MethodCallPath,
 }
 
@@ -1145,7 +1157,7 @@ enum MethodCallPath {
     CallerPath,
     ArgumentsPath {
         method: MethodInterface,
-        evaluated_arguments_including_caller: Vec<ResolvedValue>,
+        evaluated_arguments_including_caller: Vec<ArgumentValue>,
     },
 }
 
@@ -1163,12 +1175,12 @@ impl MethodCallBuilder {
                 .rev()
                 .map(|x| {
                     // This is just a placeholder - we'll fix it up shortly
-                    (*x, ResolvedValueOwnership::Owned)
+                    (*x, ArgumentOwnership::Owned)
                 })
                 .collect(),
             state: MethodCallPath::CallerPath,
         };
-        context.handle_node_as_late_bound(frame, caller)
+        context.request_late_bound(frame, caller)
     }
 }
 
@@ -1179,15 +1191,15 @@ impl EvaluationFrame for MethodCallBuilder {
         AnyValueFrame::MethodCall(self)
     }
 
-    fn handle_item(
+    fn handle_next(
         mut self,
         mut context: ValueContext,
-        item: EvaluationItem,
+        value: RequestedValue,
     ) -> ExecutionResult<NextAction> {
         // Handle expected item based on current state
         match self.state {
             MethodCallPath::CallerPath => {
-                let caller = item.expect_late_bound();
+                let caller = value.expect_late_bound();
                 let method = caller
                     .as_ref()
                     .kind()
@@ -1234,7 +1246,7 @@ impl EvaluationFrame for MethodCallBuilder {
 
                 // We skip 1 to ignore the caller
                 let non_self_argument_ownerships: iter::Skip<
-                    std::slice::Iter<'_, ResolvedValueOwnership>,
+                    std::slice::Iter<'_, ArgumentOwnership>,
                 > = argument_ownerships.iter().skip(1);
                 for ((_, requested_ownership), ownership) in self
                     .unevaluated_parameters_stack
@@ -1259,17 +1271,15 @@ impl EvaluationFrame for MethodCallBuilder {
                 evaluated_arguments_including_caller: ref mut evaluated_parameters_including_caller,
                 ..
             } => {
-                let argument = item.expect_resolved_value();
+                let argument = value.expect_resolved_value();
                 evaluated_parameters_including_caller.push(argument);
             }
         };
         // Now plan the next action
         Ok(match self.unevaluated_parameters_stack.pop() {
-            Some((parameter, ownership)) => context.handle_node_as_any_value(
-                self,
-                parameter,
-                RequestedValueOwnership::Concrete(ownership),
-            ),
+            Some((parameter, ownership)) => {
+                context.request_any_value(self, parameter, RequestedOwnership::Concrete(ownership))
+            }
             None => {
                 let (arguments, method) = match self.state {
                     MethodCallPath::CallerPath => unreachable!("Already updated above"),
@@ -1283,7 +1293,7 @@ impl EvaluationFrame for MethodCallBuilder {
                     interpreter: context.interpreter(),
                 };
                 let output = method.execute(arguments, &mut call_context)?;
-                context.return_resolved_value(output)?
+                context.return_returned_value(output)?
             }
         })
     }

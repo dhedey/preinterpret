@@ -2,7 +2,7 @@ use super::*;
 
 // If you add a new variant, also update:
 // * ResolvableArgumentOwned for IterableValue
-// * FromResolved for IterableRef
+// * IsArgument for IterableRef
 // * The parent of the value's TypeData to be IterableTypeData
 pub(crate) enum IterableValue {
     Iterator(IteratorExpression),
@@ -117,18 +117,18 @@ pub(crate) enum IterableRef<'a> {
     String(AnyRef<'a, str>),
 }
 
-impl FromResolved for IterableRef<'static> {
+impl IsArgument for IterableRef<'static> {
     type ValueType = IterableTypeData;
-    const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Shared;
+    const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Shared;
 
-    fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
+    fn from_argument(value: ArgumentValue) -> ExecutionResult<Self> {
         Ok(match value.kind() {
-            ValueKind::Iterator => IterableRef::Iterator(FromResolved::from_resolved(value)?),
-            ValueKind::Array => IterableRef::Array(FromResolved::from_resolved(value)?),
-            ValueKind::Stream => IterableRef::Stream(FromResolved::from_resolved(value)?),
-            ValueKind::Range => IterableRef::Range(FromResolved::from_resolved(value)?),
-            ValueKind::Object => IterableRef::Object(FromResolved::from_resolved(value)?),
-            ValueKind::String => IterableRef::String(FromResolved::from_resolved(value)?),
+            ValueKind::Iterator => IterableRef::Iterator(IsArgument::from_argument(value)?),
+            ValueKind::Array => IterableRef::Array(IsArgument::from_argument(value)?),
+            ValueKind::Stream => IterableRef::Stream(IsArgument::from_argument(value)?),
+            ValueKind::Range => IterableRef::Range(IsArgument::from_argument(value)?),
+            ValueKind::Object => IterableRef::Object(IsArgument::from_argument(value)?),
+            ValueKind::String => IterableRef::String(IsArgument::from_argument(value)?),
             _ => {
                 return value.type_err(
                     "Expected iterable (iterator, array, object, stream, range or string)",

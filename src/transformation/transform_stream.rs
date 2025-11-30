@@ -289,9 +289,9 @@ impl HandleTransformation for StreamParserContent {
                 variable, content, ..
             } => {
                 let assignee = variable
-                    .resolve_resolved(
+                    .resolve_concrete(
                         interpreter,
-                        ResolvedValueOwnership::Assignee { auto_create: false },
+                        ArgumentOwnership::Assignee { auto_create: false },
                     )?
                     .expect_assignee();
                 let new_output = interpreter

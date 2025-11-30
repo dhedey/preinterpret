@@ -208,7 +208,7 @@ define_interface! {
                 let source = this.into_inner().value.into_token_stream();
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(ExpressionBlockContent::parse, ExpressionBlockContent::control_flow_pass)?;
                 let mut inner_interpreter = Interpreter::new(scope_definitions);
-                let return_value = reparsed.evaluate(&mut inner_interpreter, context.output_span_range, RequestedValueOwnership::owned())?.expect_owned();
+                let return_value = reparsed.evaluate(&mut inner_interpreter, context.output_span_range, RequestedOwnership::owned())?.expect_owned();
                 if !inner_interpreter.complete().is_empty() {
                     return context.control_flow_err("reinterpret_as_run does not allow non-empty stream output")
                 }
@@ -227,7 +227,7 @@ define_interface! {
             }
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_to_value(this: Owned<StreamExpression>) -> ExecutionResult<ResolvedValue> {
+            [context] fn cast_to_value(this: Owned<StreamExpression>) -> ExecutionResult<ReturnedValue> {
                 let (this, span_range) = this.deconstruct();
                 let coerced = this.value.coerce_into_value();
                 if let ExpressionValue::Stream(_) = &coerced {

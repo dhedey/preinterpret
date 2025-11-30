@@ -70,8 +70,8 @@ impl Statement {
     pub(crate) fn evaluate_as_returning_expression(
         &self,
         interpreter: &mut Interpreter,
-        ownership: RequestedValueOwnership,
-    ) -> ExecutionResult<EvaluationItem> {
+        ownership: RequestedOwnership,
+    ) -> ExecutionResult<RequestedValue> {
         match self {
             Statement::Expression(expression) => expression.evaluate(interpreter, ownership),
             Statement::LetStatement(_)

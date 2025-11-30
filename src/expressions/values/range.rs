@@ -245,7 +245,7 @@ define_interface! {
         pub(crate) mod methods {
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_via_iterator(this: Owned<RangeExpression>) -> ExecutionResult<ResolvedValue> {
+            [context] fn cast_via_iterator(this: Owned<RangeExpression>) -> ExecutionResult<ReturnedValue> {
                 let this_iterator = this.try_map(|this, _| IteratorExpression::new_for_range(this))?;
                 context.operation.evaluate(this_iterator)
             }

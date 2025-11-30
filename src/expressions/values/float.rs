@@ -148,7 +148,7 @@ impl UntypedFloat {
         rhs: Owned<FloatExpression>,
         context: BinaryOperationCallContext,
         perform_fn: fn(FallbackFloat, FallbackFloat) -> Option<FallbackFloat>,
-    ) -> ExecutionResult<ResolvedValue> {
+    ) -> ExecutionResult<ReturnedValue> {
         let (lhs, lhs_span_range) = lhs.deconstruct();
         let (rhs, rhs_span_range) = rhs.deconstruct();
         match rhs.value {
@@ -163,7 +163,7 @@ impl UntypedFloat {
                         rhs
                     ))
                 })?;
-                UntypedFloat::from_fallback(output).to_resolved_value(context.output_span_range)
+                UntypedFloat::from_fallback(output).to_returned_value(context.output_span_range)
             }
             rhs => {
                 let lhs = lhs.into_kind(rhs.kind())?;
@@ -337,35 +337,35 @@ define_interface! {
             [context] fn add(
                 lhs: Owned<UntypedFloat>,
                 rhs: Owned<FloatExpression>,
-            ) -> ExecutionResult<ResolvedValue> {
+            ) -> ExecutionResult<ReturnedValue> {
                 UntypedFloat::paired_operation(lhs, rhs, context, |a, b| Some(a + b))
             }
 
             [context] fn sub(
                 lhs: Owned<UntypedFloat>,
                 rhs: Owned<FloatExpression>,
-            ) -> ExecutionResult<ResolvedValue> {
+            ) -> ExecutionResult<ReturnedValue> {
                 UntypedFloat::paired_operation(lhs, rhs, context, |a, b| Some(a - b))
             }
 
             [context] fn mul(
                 lhs: Owned<UntypedFloat>,
                 rhs: Owned<FloatExpression>,
-            ) -> ExecutionResult<ResolvedValue> {
+            ) -> ExecutionResult<ReturnedValue> {
                 UntypedFloat::paired_operation(lhs, rhs, context, |a, b| Some(a * b))
             }
 
             [context] fn div(
                 lhs: Owned<UntypedFloat>,
                 rhs: Owned<FloatExpression>,
-            ) -> ExecutionResult<ResolvedValue> {
+            ) -> ExecutionResult<ReturnedValue> {
                 UntypedFloat::paired_operation(lhs, rhs, context, |a, b| Some(a / b))
             }
 
             [context] fn rem(
                 lhs: Owned<UntypedFloat>,
                 rhs: Owned<FloatExpression>,
-            ) -> ExecutionResult<ResolvedValue> {
+            ) -> ExecutionResult<ReturnedValue> {
                 UntypedFloat::paired_operation(lhs, rhs, context, |a, b| Some(a % b))
             }
 

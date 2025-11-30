@@ -178,7 +178,7 @@ impl Interpreter {
     pub(crate) fn resolve(
         &mut self,
         variable: &VariableReference,
-        ownership: RequestedValueOwnership,
+        ownership: RequestedOwnership,
     ) -> ExecutionResult<LateBoundValue> {
         let reference = self.scope_definitions.references.get(variable.id);
         let (definition, span, is_final) = (
@@ -375,7 +375,7 @@ impl RuntimeScope {
         definition_id: VariableDefinitionId,
         span: Span,
         is_final: bool,
-        ownership: RequestedValueOwnership,
+        ownership: RequestedOwnership,
         blocked_from_mutation: Option<MutationBlockReason>,
     ) -> ExecutionResult<LateBoundValue> {
         self.variables

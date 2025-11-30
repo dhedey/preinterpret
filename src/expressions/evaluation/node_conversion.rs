@@ -12,21 +12,19 @@ impl ExpressionNode {
                         return token.syntax_err("This cannot be used in a value expression.");
                     }
                     Leaf::Variable(variable) => match context.requested_ownership() {
-                        RequestedValueOwnership::LateBound => {
+                        RequestedOwnership::LateBound => {
                             let late_bound = variable.resolve_late_bound(context.interpreter())?;
                             context.return_late_bound(late_bound)?
                         }
-                        RequestedValueOwnership::Concrete(ownership) => {
+                        RequestedOwnership::Concrete(ownership) => {
                             let resolved =
-                                variable.resolve_resolved(context.interpreter(), ownership)?;
-                            context.return_resolved_value(resolved)?
+                                variable.resolve_concrete(context.interpreter(), ownership)?;
+                            context.return_argument_value(resolved)?
                         }
                     },
-                    Leaf::Block(block) => {
-                        let ownership = context.requested_ownership();
-                        let item = block.evaluate(context.interpreter(), ownership)?;
-                        context.return_item(item)?
-                    }
+                    Leaf::Block(block) => context.evaluate(|interpreter, ownership| {
+                        block.evaluate(interpreter, ownership)
+                    })?,
                     Leaf::Value(value) => {
                         // We return a freely clonable CopyOnWrite in order to delay the clone of the literal if it's not necessary
                         // This allows something like e.g. x[0][5][2] to only clone the innermost value instead of the full multi-dimensional array
@@ -40,34 +38,34 @@ impl ExpressionNode {
                         context.return_owned(value.into_owned_value(stream_literal.span_range()))?
                     }
                     Leaf::IfExpression(if_expression) => {
-                        let ownership = context.requested_ownership();
-                        let item = if_expression.evaluate(context.interpreter(), ownership)?;
-                        context.return_item(item)?
+                        context.evaluate(|interpreter, ownership| {
+                            if_expression.evaluate(interpreter, ownership)
+                        })?
                     }
                     Leaf::LoopExpression(loop_expression) => {
-                        let ownership = context.requested_ownership();
-                        let item = loop_expression.evaluate(context.interpreter(), ownership)?;
-                        context.return_item(item)?
+                        context.evaluate(|interpreter, ownership| {
+                            loop_expression.evaluate(interpreter, ownership)
+                        })?
                     }
                     Leaf::WhileExpression(while_expression) => {
-                        let ownership = context.requested_ownership();
-                        let item = while_expression.evaluate(context.interpreter(), ownership)?;
-                        context.return_item(item)?
+                        context.evaluate(|interpreter, ownership| {
+                            while_expression.evaluate(interpreter, ownership)
+                        })?
                     }
                     Leaf::ForExpression(for_expression) => {
-                        let ownership = context.requested_ownership();
-                        let item = for_expression.evaluate(context.interpreter(), ownership)?;
-                        context.return_item(item)?
+                        context.evaluate(|interpreter, ownership| {
+                            for_expression.evaluate(interpreter, ownership)
+                        })?
                     }
                     Leaf::AttemptExpression(attempt_expression) => {
-                        let ownership = context.requested_ownership();
-                        let item = attempt_expression.evaluate(context.interpreter(), ownership)?;
-                        context.return_item(item)?
+                        context.evaluate(|interpreter, ownership| {
+                            attempt_expression.evaluate(interpreter, ownership)
+                        })?
                     }
                     Leaf::ParseExpression(parse_expression) => {
-                        let ownership = context.requested_ownership();
-                        let item = parse_expression.evaluate(context.interpreter(), ownership)?;
-                        context.return_item(item)?
+                        context.evaluate(|interpreter, ownership| {
+                            parse_expression.evaluate(interpreter, ownership)
+                        })?
                     }
                 }
             }

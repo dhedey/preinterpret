@@ -190,7 +190,7 @@ define_interface! {
             }
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_to_numeric(this: Owned<ArrayExpression>) -> ExecutionResult<ResolvedValue> {
+            [context] fn cast_to_numeric(this: Owned<ArrayExpression>) -> ExecutionResult<ReturnedValue> {
                 let (mut this, span_range) = this.deconstruct();
                 let length = this.items.len();
                 if length == 1 {

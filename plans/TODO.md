@@ -386,8 +386,8 @@ Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` doc
 
 ## Final considerations
 
-* Merge `assignee_frames` into `value_frames` as per comment as the top of `assignee_frames`
-* Rename `EvaluationItem` to `RequestedValue` and consider making `RequestedValue::AssignmentCompletion` wrap an `Owned<()>` so that it becomes truly a value.
+- [x] Merge `assignee_frames` into `value_frames` as per comment as the top of `assignee_frames`
+- [x] Rename `EvaluationItem` to `RequestedValue` and consider making `RequestedValue::AssignmentCompletion` wrap an `Owned<()>` so that it becomes truly a value.
 * Add `preinterpret::macro` - can this be a declarative macro? Would be slightly more efficient, as it just needs to wrap a call to `preinterpret::stream` or `preinterpret::run`...
 * Add `LiteralPattern` (wrapping a `Literal`)
 * Add `Eq` support on composite types and streams
@@ -487,7 +487,7 @@ Sidenote - crabtime comparison:
 
 ## Stream-return optimizations [OPTIONAL]
 
-Expression evaluation can come with an `OutputStyle::AppendToStream(&mut OutputStream)` rather than a `OutputStyle::OwnedValue`, which is handled in `ResolvedValue` (might need a new name!)
+Expression evaluation can come with an `OutputStyle::AppendToStream(&mut OutputStream)` rather than a `OutputStyle::OwnedValue`, which is handled in `ArgumentValue` (might need a new name!)
 
 This can be used to optimize, e.g.:
 
@@ -512,10 +512,10 @@ Consider:
     * We can make `ExpressionValue` deref into `ExpressionRef`, e.g. `ExpressionRef::Array(<slice>)`
     * Then we can make `SharedValue(Ref<ExpressionRef>)`, which can be constructed from a `Ref<ExpressionValue>` with a map!
     * And similarly `MutableValue(RefMut<ExpressionRefMut>)`
-* Using ResolvedValue in place of ExpressionValue e.g. inside arrays / objects, so that we can destructure `let (x, y) = (a, b)` without clone/take
+* Using ArgumentValue in place of ExpressionValue e.g. inside arrays / objects, so that we can destructure `let (x, y) = (a, b)` without clone/take
     * But then we end up with nested references which can be confusing!
     * CONCLUSION: Maybe we don't want this - to destructure it needs to be owned anyway?
-* Consider whether to expand to storing `ResolvedValue` or `CopyOnWriteValue` in variables instead of `OwnedValue`?
+* Consider whether to expand to storing `ArgumentValue` or `CopyOnWriteValue` in variables instead of `OwnedValue`?
     => The main issue is if it interferes with taking mutable references, but it's possibly OK, would need to see if it's a confusing problem in practice... (e.g. `let b = a[0]; a.push(1)` if `b` is a reference to `a[0]` then this is a problem when we push to `a`)
     => If a mutable reference is created and there are pending references, the variable data RefCell could be replaced with a cloned value and then mutated... But this can be more expensive, because e.g. `let b = a[0]; a.push(1)` results in the whole array `a` being copied in the `CoW` case; but only the `a[0]` being cloned in the "clone on assign" case.
     => Maybe we just stick to assignments being Owned/Cloned as currently
