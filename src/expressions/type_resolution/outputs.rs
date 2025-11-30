@@ -6,11 +6,8 @@ use super::*;
 /// See also [`RequestedValue`] for values that have been fully evaluated.
 pub(crate) enum ReturnedValue {
     Owned(OwnedValue),
-    #[allow(unused)]
     CopyOnWrite(CopyOnWriteValue),
     Mutable(MutableValue),
-    #[allow(unused)]
-    Assignee(AssigneeValue),
     Shared(SharedValue),
 }
 
@@ -22,7 +19,6 @@ impl WithSpanRangeExt for ReturnedValue {
                 ReturnedValue::CopyOnWrite(v.with_span_range(span_range))
             }
             ReturnedValue::Mutable(v) => ReturnedValue::Mutable(v.with_span_range(span_range)),
-            ReturnedValue::Assignee(v) => ReturnedValue::Assignee(v.with_span_range(span_range)),
             ReturnedValue::Shared(v) => ReturnedValue::Shared(v.with_span_range(span_range)),
         }
     }

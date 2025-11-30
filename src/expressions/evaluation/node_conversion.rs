@@ -29,13 +29,13 @@ impl ExpressionNode {
                         // We return a freely clonable CopyOnWrite in order to delay the clone of the literal if it's not necessary
                         // This allows something like e.g. x[0][5][2] to only clone the innermost value instead of the full multi-dimensional array
                         let value = CopyOnWrite::shared_in_place_of_owned(Shared::clone(value));
-                        context.return_copy_on_write(value)?
+                        context.return_returned_value(ReturnedValue::CopyOnWrite(value))?
                     }
                     Leaf::StreamLiteral(stream_literal) => {
                         let value = context
                             .interpreter()
                             .capture_output(|interpreter| stream_literal.interpret(interpreter))?;
-                        context.return_owned(value.into_owned_value(stream_literal.span_range()))?
+                        context.return_value(value, stream_literal.span_range())?
                     }
                     Leaf::IfExpression(if_expression) => {
                         context.evaluate(|interpreter, ownership| {

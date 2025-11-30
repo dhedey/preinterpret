@@ -1,4 +1,3 @@
-#![allow(unused)] // TODO[unused-clearup]
 use super::*;
 
 pub(in crate::expressions) struct ExpressionEvaluator<'a> {
@@ -93,40 +92,6 @@ pub(super) enum StepResult {
 pub(super) struct NextAction(NextActionInner);
 
 impl NextAction {
-    pub(super) fn return_owned(value: OwnedValue) -> Self {
-        NextActionInner::HandleReturnedValue(RequestedValue::Owned(value)).into()
-    }
-
-    pub(super) fn return_mutable(mutable: MutableValue) -> Self {
-        NextActionInner::HandleReturnedValue(RequestedValue::Mutable(mutable)).into()
-    }
-
-    pub(super) fn return_shared(shared: SharedValue) -> Self {
-        NextActionInner::HandleReturnedValue(RequestedValue::Shared(shared)).into()
-    }
-
-    pub(super) fn return_copy_on_write(copy_on_write: CopyOnWriteValue) -> Self {
-        NextActionInner::HandleReturnedValue(RequestedValue::CopyOnWrite(copy_on_write)).into()
-    }
-
-    pub(super) fn return_resolved_value(resolved: ArgumentValue) -> Self {
-        match resolved {
-            ArgumentValue::Owned(owned) => Self::return_owned(owned),
-            ArgumentValue::Mutable(mutable) => Self::return_mutable(mutable),
-            ArgumentValue::Assignee(assignee) => Self::return_assignee(assignee),
-            ArgumentValue::Shared(shared) => Self::return_shared(shared),
-            ArgumentValue::CopyOnWrite(copy_on_write) => Self::return_copy_on_write(copy_on_write),
-        }
-    }
-
-    pub(super) fn return_late_bound(late_bound: LateBoundValue) -> Self {
-        NextActionInner::HandleReturnedValue(RequestedValue::LateBound(late_bound)).into()
-    }
-
-    pub(super) fn return_assignee(assignee: AssigneeValue) -> Self {
-        NextActionInner::HandleReturnedValue(RequestedValue::Assignee(assignee)).into()
-    }
-
     fn return_requested(value: RequestedValue) -> Self {
         NextActionInner::HandleReturnedValue(value).into()
     }
@@ -190,13 +155,6 @@ impl RequestedValue {
         }
     }
 
-    pub(crate) fn expect_mutable(self) -> MutableValue {
-        match self {
-            RequestedValue::Mutable(mutable) => mutable,
-            _ => panic!("expect_mutable() called on non-mutable RequestedValue"),
-        }
-    }
-
     pub(super) fn expect_assignee(self) -> AssigneeValue {
         match self {
             RequestedValue::Assignee(assignee) => assignee,
@@ -211,13 +169,6 @@ impl RequestedValue {
         }
     }
 
-    pub(crate) fn expect_copy_on_write(self) -> CopyOnWriteValue {
-        match self {
-            RequestedValue::CopyOnWrite(cow) => cow,
-            _ => panic!("expect_copy_on_write() called on non-copy-on-write RequestedValue"),
-        }
-    }
-
     pub(super) fn expect_assignment_completion(self) -> AssignmentCompletion {
         match self {
             RequestedValue::AssignmentCompletion(completion) => completion,
@@ -227,7 +178,7 @@ impl RequestedValue {
         }
     }
 
-    pub(crate) fn expect_resolved_value(self) -> ArgumentValue {
+    pub(crate) fn expect_argument_value(self) -> ArgumentValue {
         match self {
             RequestedValue::Owned(value) => ArgumentValue::Owned(value),
             RequestedValue::Mutable(mutable) => ArgumentValue::Mutable(mutable),
@@ -351,18 +302,6 @@ impl<'a, T: RequestedValueType> Context<'a, T> {
         )
     }
 
-    pub(super) fn request_copy_on_write<H: EvaluationFrame<ReturnType = T>>(
-        self,
-        handler: H,
-        node: ExpressionNodeId,
-    ) -> NextAction {
-        self.request_any_value(
-            handler,
-            node,
-            RequestedOwnership::Concrete(ArgumentOwnership::CopyOnWrite),
-        )
-    }
-
     pub(super) fn request_shared<H: EvaluationFrame<ReturnType = T>>(
         self,
         handler: H,
@@ -372,18 +311,6 @@ impl<'a, T: RequestedValueType> Context<'a, T> {
             handler,
             node,
             RequestedOwnership::Concrete(ArgumentOwnership::Shared),
-        )
-    }
-
-    pub(super) fn request_mutable<H: EvaluationFrame<ReturnType = T>>(
-        self,
-        handler: H,
-        node: ExpressionNodeId,
-    ) -> NextAction {
-        self.request_any_value(
-            handler,
-            node,
-            RequestedOwnership::Concrete(ArgumentOwnership::Mutable),
         )
     }
 
@@ -521,27 +448,14 @@ impl<'a> Context<'a, ValueType> {
         ))
     }
 
-    pub(super) fn return_owned(self, value: OwnedValue) -> ExecutionResult<NextAction> {
+    pub(super) fn return_value(
+        self,
+        value: impl IsReturnable,
+        output_span_range: SpanRange,
+    ) -> ExecutionResult<NextAction> {
         Ok(NextAction::return_requested(
-            self.request.map_from_owned(value)?,
-        ))
-    }
-
-    pub(super) fn return_copy_on_write(self, cow: CopyOnWriteValue) -> ExecutionResult<NextAction> {
-        Ok(NextAction::return_requested(
-            self.request.map_from_copy_on_write(cow)?,
-        ))
-    }
-
-    pub(super) fn return_mutable(self, mutable: MutableValue) -> ExecutionResult<NextAction> {
-        Ok(NextAction::return_requested(
-            self.request.map_from_mutable(mutable)?,
-        ))
-    }
-
-    pub(super) fn return_shared(self, shared: SharedValue) -> ExecutionResult<NextAction> {
-        Ok(NextAction::return_requested(
-            self.request.map_from_shared(shared)?,
+            self.request
+                .map_from_returned(value.to_returned_value(output_span_range)?)?,
         ))
     }
 }

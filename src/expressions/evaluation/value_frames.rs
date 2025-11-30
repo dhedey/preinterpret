@@ -184,7 +184,6 @@ impl RequestedOwnership {
         match value {
             ReturnedValue::Owned(owned) => self.map_from_owned(owned),
             ReturnedValue::Mutable(mutable) => self.map_from_mutable(mutable),
-            ReturnedValue::Assignee(assignee) => self.map_from_assignee(assignee),
             ReturnedValue::Shared(shared) => self.map_from_shared(shared),
             ReturnedValue::CopyOnWrite(copy_on_write) => self.map_from_copy_on_write(copy_on_write),
         }
@@ -517,7 +516,7 @@ impl EvaluationFrame for GroupBuilder {
         value: RequestedValue,
     ) -> ExecutionResult<NextAction> {
         let inner = value.expect_owned();
-        context.return_owned(inner.with_span(self.span))
+        context.return_value(inner, self.span.span_range())
     }
 }
 
@@ -549,12 +548,7 @@ impl ArrayBuilder {
                 .cloned()
             {
                 Some(next) => context.request_owned(self, next),
-                None => context.return_owned(
-                    ExpressionValue::Array(ArrayExpression {
-                        items: self.evaluated_items,
-                    })
-                    .into_owned(self.span),
-                )?,
+                None => context.return_value(self.evaluated_items, self.span.span_range())?,
             },
         )
     }
@@ -633,8 +627,7 @@ impl ObjectBuilder {
                     self.pending = Some(PendingEntryPath::OnIndexKeyBranch { access, value_node });
                     context.request_owned(self, index)
                 }
-                None => context
-                    .return_owned(self.evaluated_entries.into_value().into_owned(self.span))?,
+                None => context.return_value(self.evaluated_entries, self.span.span_range())?,
             },
         )
     }
@@ -776,7 +769,7 @@ impl EvaluationFrame for BinaryOperationBuilder {
                     .as_ref()
                     .spanned(left_late_bound.span_range());
                 if let Some(result) = self.operation.lazy_evaluate(left_value)? {
-                    context.return_owned(result)?
+                    context.return_returned_value(ReturnedValue::Owned(result))?
                 } else {
                     // Try method resolution based on left operand's kind and resolve left operand immediately
                     let interface = left_late_bound
@@ -809,7 +802,7 @@ impl EvaluationFrame for BinaryOperationBuilder {
                 }
             }
             BinaryPath::OnRightBranch { left, interface } => {
-                let right = value.expect_resolved_value();
+                let right = value.expect_argument_value();
                 let result = interface.execute(left, right, &self.operation)?;
                 return context.return_returned_value(result);
             }
@@ -951,7 +944,7 @@ impl RangeBuilder {
             (None, None) => match range_limits {
                 syn::RangeLimits::HalfOpen(token) => {
                     let inner = ExpressionRangeInner::RangeFull { token: *token };
-                    context.return_owned(inner.into_value().into_owned(token.span_range()))?
+                    context.return_value(inner, token.span_range())?
                 }
                 syn::RangeLimits::Closed(_) => {
                     unreachable!(
@@ -1001,7 +994,7 @@ impl EvaluationFrame for RangeBuilder {
                     start_inclusive: value,
                     token,
                 };
-                context.return_owned(inner.into_owned_value(token))?
+                context.return_value(inner, token.span_range())?
             }
             (RangePath::OnLeftBranch { right: None }, syn::RangeLimits::Closed(_)) => {
                 unreachable!("A closed range should have been given a right in continue_range(..)")
@@ -1012,7 +1005,7 @@ impl EvaluationFrame for RangeBuilder {
                     token,
                     end_exclusive: value,
                 };
-                context.return_owned(inner.into_owned_value(token))?
+                context.return_value(inner, token.span_range())?
             }
             (RangePath::OnRightBranch { left: Some(left) }, syn::RangeLimits::Closed(token)) => {
                 let inner = ExpressionRangeInner::RangeInclusive {
@@ -1020,21 +1013,21 @@ impl EvaluationFrame for RangeBuilder {
                     token,
                     end_inclusive: value,
                 };
-                context.return_owned(inner.into_owned_value(token))?
+                context.return_value(inner, token.span_range())?
             }
             (RangePath::OnRightBranch { left: None }, syn::RangeLimits::HalfOpen(token)) => {
                 let inner = ExpressionRangeInner::RangeTo {
                     token,
                     end_exclusive: value,
                 };
-                context.return_owned(inner.into_owned_value(token))?
+                context.return_value(inner, token.span_range())?
             }
             (RangePath::OnRightBranch { left: None }, syn::RangeLimits::Closed(token)) => {
                 let inner = ExpressionRangeInner::RangeToInclusive {
                     token,
                     end_inclusive: value,
                 };
-                context.return_owned(inner.into_owned_value(token.span_range()))?
+                context.return_value(inner, token.span_range())?
             }
         })
     }
@@ -1086,7 +1079,7 @@ impl EvaluationFrame for AssignmentBuilder {
             }
             AssignmentPath::OnAwaitingAssignment => {
                 let AssignmentCompletion { span_range } = value.expect_assignment_completion();
-                context.return_owned(ExpressionValue::None.into_owned(span_range))?
+                context.return_value((), span_range)?
             }
         })
     }
@@ -1141,7 +1134,7 @@ impl EvaluationFrame for CompoundAssignmentBuilder {
                 let span_range = SpanRange::new_between(assignee.span_range(), value.span_range());
                 SpannedAnyRefMut::from(assignee.0)
                     .handle_compound_assignment(&self.operation, value)?;
-                context.return_owned(ExpressionValue::None.into_owned(span_range))?
+                context.return_value(ExpressionValue::None, span_range)?
             }
         })
     }
@@ -1271,7 +1264,7 @@ impl EvaluationFrame for MethodCallBuilder {
                 evaluated_arguments_including_caller: ref mut evaluated_parameters_including_caller,
                 ..
             } => {
-                let argument = value.expect_resolved_value();
+                let argument = value.expect_argument_value();
                 evaluated_parameters_including_caller.push(argument);
             }
         };
