@@ -16,24 +16,24 @@ impl UntypedFloat {
         Self::new_from_lit_float(literal.into())
     }
 
-    fn into_kind(self, kind: FloatKind) -> ExecutionResult<FloatExpressionValue> {
+    fn into_kind(self, kind: FloatKind) -> ExecutionResult<FloatValue> {
         Ok(match kind {
-            FloatKind::Untyped => FloatExpressionValue::Untyped(self),
-            FloatKind::F32 => FloatExpressionValue::F32(self.parse_as()?),
-            FloatKind::F64 => FloatExpressionValue::F64(self.parse_as()?),
+            FloatKind::Untyped => FloatValue::Untyped(self),
+            FloatKind::F32 => FloatValue::F32(self.parse_as()?),
+            FloatKind::F64 => FloatValue::F64(self.parse_as()?),
         })
     }
 
     fn paired_operation(
         lhs: Owned<UntypedFloat>,
-        rhs: Owned<FloatExpression>,
+        rhs: Owned<FloatValue>,
         context: BinaryOperationCallContext,
         perform_fn: fn(FallbackFloat, FallbackFloat) -> Option<FallbackFloat>,
     ) -> ExecutionResult<ReturnedValue> {
         let (lhs, lhs_span_range) = lhs.deconstruct();
         let (rhs, rhs_span_range) = rhs.deconstruct();
-        match rhs.value {
-            FloatExpressionValue::Untyped(rhs) => {
+        match rhs {
+            FloatValue::Untyped(rhs) => {
                 let lhs = lhs.parse_fallback()?;
                 let rhs = rhs.parse_fallback()?;
                 let output = perform_fn(lhs, rhs).ok_or_else(|| {
@@ -58,14 +58,14 @@ impl UntypedFloat {
 
     fn paired_comparison(
         lhs: Owned<UntypedFloat>,
-        rhs: Owned<FloatExpression>,
+        rhs: Owned<FloatValue>,
         context: BinaryOperationCallContext,
         compare_fn: fn(FallbackFloat, FallbackFloat) -> bool,
     ) -> ExecutionResult<bool> {
         let (lhs, lhs_span_range) = lhs.deconstruct();
         let (rhs, rhs_span_range) = rhs.deconstruct();
-        match rhs.value {
-            FloatExpressionValue::Untyped(rhs) => {
+        match rhs {
+            FloatValue::Untyped(rhs) => {
                 let lhs = lhs.parse_fallback()?;
                 let rhs = rhs.parse_fallback()?;
                 Ok(compare_fn(lhs, rhs))
@@ -127,11 +127,9 @@ impl HasValueType for UntypedFloat {
     }
 }
 
-impl ToExpressionValue for UntypedFloat {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Float(FloatExpression {
-            value: FloatExpressionValue::Untyped(self),
-        })
+impl IntoValue for UntypedFloat {
+    fn into_value(self) -> Value {
+        Value::Float(FloatValue::Untyped(self))
     }
 }
 
@@ -217,77 +215,77 @@ define_interface! {
         pub(crate) mod binary_operations {
             [context] fn add(
                 lhs: Owned<UntypedFloat>,
-                rhs: Owned<FloatExpression>,
+                rhs: Owned<FloatValue>,
             ) -> ExecutionResult<ReturnedValue> {
                 UntypedFloat::paired_operation(lhs, rhs, context, |a, b| Some(a + b))
             }
 
             [context] fn sub(
                 lhs: Owned<UntypedFloat>,
-                rhs: Owned<FloatExpression>,
+                rhs: Owned<FloatValue>,
             ) -> ExecutionResult<ReturnedValue> {
                 UntypedFloat::paired_operation(lhs, rhs, context, |a, b| Some(a - b))
             }
 
             [context] fn mul(
                 lhs: Owned<UntypedFloat>,
-                rhs: Owned<FloatExpression>,
+                rhs: Owned<FloatValue>,
             ) -> ExecutionResult<ReturnedValue> {
                 UntypedFloat::paired_operation(lhs, rhs, context, |a, b| Some(a * b))
             }
 
             [context] fn div(
                 lhs: Owned<UntypedFloat>,
-                rhs: Owned<FloatExpression>,
+                rhs: Owned<FloatValue>,
             ) -> ExecutionResult<ReturnedValue> {
                 UntypedFloat::paired_operation(lhs, rhs, context, |a, b| Some(a / b))
             }
 
             [context] fn rem(
                 lhs: Owned<UntypedFloat>,
-                rhs: Owned<FloatExpression>,
+                rhs: Owned<FloatValue>,
             ) -> ExecutionResult<ReturnedValue> {
                 UntypedFloat::paired_operation(lhs, rhs, context, |a, b| Some(a % b))
             }
 
             [context] fn eq(
                 lhs: Owned<UntypedFloat>,
-                rhs: Owned<FloatExpression>,
+                rhs: Owned<FloatValue>,
             ) -> ExecutionResult<bool> {
                 UntypedFloat::paired_comparison(lhs, rhs, context, |a, b| a == b)
             }
 
             [context] fn ne(
                 lhs: Owned<UntypedFloat>,
-                rhs: Owned<FloatExpression>,
+                rhs: Owned<FloatValue>,
             ) -> ExecutionResult<bool> {
                 UntypedFloat::paired_comparison(lhs, rhs, context, |a, b| a != b)
             }
 
             [context] fn lt(
                 lhs: Owned<UntypedFloat>,
-                rhs: Owned<FloatExpression>,
+                rhs: Owned<FloatValue>,
             ) -> ExecutionResult<bool> {
                 UntypedFloat::paired_comparison(lhs, rhs, context, |a, b| a < b)
             }
 
             [context] fn le(
                 lhs: Owned<UntypedFloat>,
-                rhs: Owned<FloatExpression>,
+                rhs: Owned<FloatValue>,
             ) -> ExecutionResult<bool> {
                 UntypedFloat::paired_comparison(lhs, rhs, context, |a, b| a <= b)
             }
 
             [context] fn ge(
                 lhs: Owned<UntypedFloat>,
-                rhs: Owned<FloatExpression>,
+                rhs: Owned<FloatValue>,
             ) -> ExecutionResult<bool> {
                 UntypedFloat::paired_comparison(lhs, rhs, context, |a, b| a >= b)
             }
 
             [context] fn gt(
                 lhs: Owned<UntypedFloat>,
-                rhs: Owned<FloatExpression>,
+                rhs: Owned<FloatValue>,
             ) -> ExecutionResult<bool> {
                 UntypedFloat::paired_comparison(lhs, rhs, context, |a, b| a > b)
             }
@@ -349,10 +347,7 @@ impl ResolvableArgumentTarget for UntypedFloatFallback {
 }
 
 impl ResolvableArgumentOwned for UntypedFloatFallback {
-    fn resolve_from_value(
-        input_value: ExpressionValue,
-        context: ResolutionContext,
-    ) -> ExecutionResult<Self> {
+    fn resolve_from_value(input_value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
         let value = UntypedFloat::resolve_from_value(input_value, context)?;
         Ok(UntypedFloatFallback(value.parse_fallback()?))
     }
@@ -362,7 +357,7 @@ impl_resolvable_argument_for! {
     UntypedFloatTypeData,
     (value, context) -> UntypedFloat {
         match value {
-            ExpressionValue::Float(FloatExpression { value: FloatExpressionValue::Untyped(x), ..}) => Ok(x),
+            Value::Float(FloatValue::Untyped(x)) => Ok(x),
             other => context.err("untyped float", other),
         }
     }

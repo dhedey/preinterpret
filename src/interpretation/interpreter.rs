@@ -165,11 +165,7 @@ impl Interpreter {
         }
     }
 
-    pub(crate) fn define_variable(
-        &mut self,
-        definition_id: VariableDefinitionId,
-        value: ExpressionValue,
-    ) {
+    pub(crate) fn define_variable(&mut self, definition_id: VariableDefinitionId, value: Value) {
         let definition = self.scope_definitions.definitions.get(definition_id);
         let scope_data = self.scope_mut(definition.scope);
         scope_data.define_variable(definition_id, value)
@@ -363,7 +359,7 @@ struct RuntimeScope {
 }
 
 impl RuntimeScope {
-    fn define_variable(&mut self, definition_id: VariableDefinitionId, value: ExpressionValue) {
+    fn define_variable(&mut self, definition_id: VariableDefinitionId, value: Value) {
         self.variables
             .get_mut(&definition_id)
             .expect("Variable data not found in scope")

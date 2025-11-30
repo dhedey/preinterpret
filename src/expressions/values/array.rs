@@ -1,12 +1,12 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct ArrayExpression {
-    pub(crate) items: Vec<ExpressionValue>,
+pub(crate) struct ArrayValue {
+    pub(crate) items: Vec<Value>,
 }
 
-impl ArrayExpression {
-    pub(crate) fn new(items: Vec<ExpressionValue>) -> Self {
+impl ArrayValue {
+    pub(crate) fn new(items: Vec<Value>) -> Self {
         Self { items }
     }
 
@@ -21,18 +21,15 @@ impl ArrayExpression {
         Ok(())
     }
 
-    pub(super) fn into_indexed(
-        mut self,
-        index: Spanned<&ExpressionValue>,
-    ) -> ExecutionResult<ExpressionValue> {
+    pub(super) fn into_indexed(mut self, index: Spanned<&Value>) -> ExecutionResult<Value> {
         let (index, span_range) = index.deconstruct();
         Ok(match index {
-            ExpressionValue::Integer(integer) => {
+            Value::Integer(integer) => {
                 let index =
                     self.resolve_valid_index_from_integer(integer.spanned(span_range), false)?;
-                std::mem::replace(&mut self.items[index], ExpressionValue::None)
+                std::mem::replace(&mut self.items[index], Value::None)
             }
-            ExpressionValue::Range(range) => {
+            Value::Range(range) => {
                 let range = range.spanned(span_range).resolve_to_index_range(&self)?;
                 let new_items: Vec<_> = self.items.drain(range).collect();
                 new_items.into_value()
@@ -41,18 +38,15 @@ impl ArrayExpression {
         })
     }
 
-    pub(super) fn index_mut(
-        &mut self,
-        index: Spanned<&ExpressionValue>,
-    ) -> ExecutionResult<&mut ExpressionValue> {
+    pub(super) fn index_mut(&mut self, index: Spanned<&Value>) -> ExecutionResult<&mut Value> {
         let (index, span_range) = index.deconstruct();
         Ok(match index {
-            ExpressionValue::Integer(integer) => {
+            Value::Integer(integer) => {
                 let index =
                     self.resolve_valid_index_from_integer(integer.spanned(span_range), false)?;
                 &mut self.items[index]
             }
-            ExpressionValue::Range(..) => {
+            Value::Range(..) => {
                 // Temporary until we add slice types - we error here
                 return span_range.ownership_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]");
             }
@@ -60,18 +54,15 @@ impl ArrayExpression {
         })
     }
 
-    pub(super) fn index_ref(
-        &self,
-        index: Spanned<&ExpressionValue>,
-    ) -> ExecutionResult<&ExpressionValue> {
+    pub(super) fn index_ref(&self, index: Spanned<&Value>) -> ExecutionResult<&Value> {
         let (index, span_range) = index.deconstruct();
         Ok(match index {
-            ExpressionValue::Integer(integer) => {
+            Value::Integer(integer) => {
                 let index =
                     self.resolve_valid_index_from_integer(integer.spanned(span_range), false)?;
                 &self.items[index]
             }
-            ExpressionValue::Range(..) => {
+            Value::Range(..) => {
                 // Temporary until we add slice types - we error here
                 return span_range.ownership_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]");
             }
@@ -81,12 +72,12 @@ impl ArrayExpression {
 
     pub(super) fn resolve_valid_index(
         &self,
-        index: Spanned<&ExpressionValue>,
+        index: Spanned<&Value>,
         is_exclusive: bool,
     ) -> ExecutionResult<usize> {
         let (index, span_range) = index.deconstruct();
         match index {
-            ExpressionValue::Integer(int) => {
+            Value::Integer(int) => {
                 self.resolve_valid_index_from_integer(int.spanned(span_range), is_exclusive)
             }
             _ => span_range.type_err("The index must be an integer"),
@@ -95,7 +86,7 @@ impl ArrayExpression {
 
     fn resolve_valid_index_from_integer(
         &self,
-        integer: Spanned<&IntegerExpression>,
+        integer: Spanned<&IntegerValue>,
         is_exclusive: bool,
     ) -> ExecutionResult<usize> {
         let index: usize = integer
@@ -128,7 +119,7 @@ impl ArrayExpression {
         output: &mut String,
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
-        IteratorExpression::any_iterator_to_string(
+        IteratorValue::any_iterator_to_string(
             self.items.iter(),
             output,
             behaviour,
@@ -140,35 +131,35 @@ impl ArrayExpression {
     }
 }
 
-impl HasValueType for ArrayExpression {
+impl HasValueType for ArrayValue {
     fn value_type(&self) -> &'static str {
         self.items.value_type()
     }
 }
 
-impl HasValueType for Vec<ExpressionValue> {
+impl HasValueType for Vec<Value> {
     fn value_type(&self) -> &'static str {
         "array"
     }
 }
 
-impl ToExpressionValue for Vec<ExpressionValue> {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Array(ArrayExpression { items: self })
+impl IntoValue for Vec<Value> {
+    fn into_value(self) -> Value {
+        Value::Array(ArrayValue { items: self })
     }
 }
 
-impl ToExpressionValue for ArrayExpression {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Array(self)
+impl IntoValue for ArrayValue {
+    fn into_value(self) -> Value {
+        Value::Array(self)
     }
 }
 
 impl_resolvable_argument_for! {
     ArrayTypeData,
-    (value, context) -> ArrayExpression {
+    (value, context) -> ArrayValue {
         match value {
-            ExpressionValue::Array(value) => Ok(value),
+            Value::Array(value) => Ok(value),
             _ => context.err("array", value),
         }
     }
@@ -179,18 +170,18 @@ define_interface! {
     parent: IterableTypeData,
     pub(crate) mod array_interface {
         pub(crate) mod methods {
-            fn push(mut this: Mutable<ArrayExpression>, item: OwnedValue) -> ExecutionResult<()> {
+            fn push(mut this: Mutable<ArrayValue>, item: OwnedValue) -> ExecutionResult<()> {
                 this.items.push(item.into());
                 Ok(())
             }
 
-            [context] fn to_stream_grouped(this: ArrayExpression) -> StreamOutput<impl StreamAppender> [ignore_type_assertion!] {
+            [context] fn to_stream_grouped(this: ArrayValue) -> StreamOutput<impl StreamAppender> [ignore_type_assertion!] {
                 let error_span_range = context.span_range();
                 StreamOutput::new(move |stream| this.output_items_to(&mut ToStreamContext::new(stream, error_span_range), Grouping::Grouped))
             }
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_to_numeric(this: Owned<ArrayExpression>) -> ExecutionResult<ReturnedValue> {
+            [context] fn cast_to_numeric(this: Owned<ArrayValue>) -> ExecutionResult<ReturnedValue> {
                 let (mut this, span_range) = this.deconstruct();
                 let length = this.items.len();
                 if length == 1 {
@@ -204,7 +195,7 @@ define_interface! {
             }
         }
         pub(crate) mod binary_operations {
-            fn add(mut lhs: ArrayExpression, rhs: ArrayExpression) -> ArrayExpression {
+            fn add(mut lhs: ArrayValue, rhs: ArrayValue) -> ArrayValue {
                 lhs.items.extend(rhs.items);
                 lhs
             }

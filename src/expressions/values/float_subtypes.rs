@@ -199,11 +199,9 @@ macro_rules! impl_float_operations {
             }
         }
 
-        impl ToExpressionValue for $float_type {
-            fn into_value(self) -> ExpressionValue {
-                ExpressionValue::Float(FloatExpression {
-                    value: FloatExpressionValue::$float_enum_variant(self),
-                })
+        impl IntoValue for $float_type {
+            fn into_value(self) -> Value {
+                Value::Float(FloatValue::$float_enum_variant(self))
             }
         }
 
@@ -226,18 +224,12 @@ macro_rules! impl_resolvable_float_subtype {
 
         impl ResolvableArgumentOwned for $type {
             fn resolve_from_value(
-                value: ExpressionValue,
+                value: Value,
                 context: ResolutionContext,
             ) -> ExecutionResult<Self> {
                 match value {
-                    ExpressionValue::Float(FloatExpression {
-                        value: FloatExpressionValue::Untyped(x),
-                        ..
-                    }) => x.parse_as(),
-                    ExpressionValue::Float(FloatExpression {
-                        value: FloatExpressionValue::$variant(x),
-                        ..
-                    }) => Ok(x),
+                    Value::Float(FloatValue::Untyped(x)) => x.parse_as(),
+                    Value::Float(FloatValue::$variant(x)) => Ok(x),
                     other => context.err($expected_msg, other),
                 }
             }
@@ -245,14 +237,11 @@ macro_rules! impl_resolvable_float_subtype {
 
         impl ResolvableArgumentShared for $type {
             fn resolve_from_ref<'a>(
-                value: &'a ExpressionValue,
+                value: &'a Value,
                 context: ResolutionContext,
             ) -> ExecutionResult<&'a Self> {
                 match value {
-                    ExpressionValue::Float(FloatExpression {
-                        value: FloatExpressionValue::$variant(x),
-                        ..
-                    }) => Ok(x),
+                    Value::Float(FloatValue::$variant(x)) => Ok(x),
                     other => context.err($expected_msg, other),
                 }
             }
@@ -260,14 +249,11 @@ macro_rules! impl_resolvable_float_subtype {
 
         impl ResolvableArgumentMutable for $type {
             fn resolve_from_mut<'a>(
-                value: &'a mut ExpressionValue,
+                value: &'a mut Value,
                 context: ResolutionContext,
             ) -> ExecutionResult<&'a mut Self> {
                 match value {
-                    ExpressionValue::Float(FloatExpression {
-                        value: FloatExpressionValue::$variant(x),
-                        ..
-                    }) => Ok(x),
+                    Value::Float(FloatValue::$variant(x)) => Ok(x),
                     other => context.err($expected_msg, other),
                 }
             }

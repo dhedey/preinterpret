@@ -315,6 +315,6 @@ impl ExpressionBlockContent {
                 statement.evaluate_as_statement(interpreter)?;
             }
         }
-        ownership.map_from_owned(ExpressionValue::None.into_owned(output_span_range))
+        ownership.map_from_owned(Value::None.into_owned(output_span_range))
     }
 }

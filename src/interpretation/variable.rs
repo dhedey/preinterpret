@@ -65,11 +65,7 @@ impl ParseSource for VariableDefinition {
 }
 
 impl VariableDefinition {
-    pub(crate) fn define(
-        &self,
-        interpreter: &mut Interpreter,
-        value_source: impl ToExpressionValue,
-    ) {
+    pub(crate) fn define(&self, interpreter: &mut Interpreter, value_source: impl IntoValue) {
         interpreter.define_variable(self.id, value_source.into_value());
     }
 }
@@ -189,7 +185,7 @@ impl HandleDestructure for VariablePattern {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,
-        value: ExpressionValue,
+        value: Value,
     ) -> ExecutionResult<()> {
         self.definition.define(interpreter, value);
         Ok(())

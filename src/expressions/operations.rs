@@ -81,10 +81,7 @@ impl UnaryOperation {
         operand_span_range
     }
 
-    pub(super) fn evaluate<T: ToExpressionValue>(
-        &self,
-        input: Owned<T>,
-    ) -> ExecutionResult<ReturnedValue> {
+    pub(super) fn evaluate<T: IntoValue>(&self, input: Owned<T>) -> ExecutionResult<ReturnedValue> {
         let input = input.into_owned_value();
         let method = input.kind().resolve_unary_operation(self).ok_or_else(|| {
             self.type_error(format!(
@@ -281,7 +278,7 @@ impl SynParse for BinaryOperation {
 impl BinaryOperation {
     pub(super) fn lazy_evaluate(
         &self,
-        left: Spanned<&ExpressionValue>,
+        left: Spanned<&Value>,
     ) -> ExecutionResult<Option<OwnedValue>> {
         match self {
             BinaryOperation::Paired(PairedBinaryOperation::LogicalAnd { .. }) => {
@@ -304,7 +301,7 @@ impl BinaryOperation {
         }
     }
 
-    pub(crate) fn evaluate<L: ToExpressionValue, R: ToExpressionValue>(
+    pub(crate) fn evaluate<L: IntoValue, R: IntoValue>(
         &self,
         left: Owned<L>,
         right: Owned<R>,

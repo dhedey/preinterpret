@@ -1,17 +1,17 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct StringExpression {
+pub(crate) struct StringValue {
     pub(crate) value: String,
 }
 
-impl ToExpressionValue for StringExpression {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::String(self)
+impl IntoValue for StringValue {
+    fn into_value(self) -> Value {
+        Value::String(self)
     }
 }
 
-impl StringExpression {
+impl StringValue {
     pub(super) fn for_litstr(lit: &syn::LitStr) -> Owned<Self> {
         Self { value: lit.value() }.into_owned(lit.span())
     }
@@ -21,7 +21,7 @@ impl StringExpression {
     }
 }
 
-impl HasValueType for StringExpression {
+impl HasValueType for StringValue {
     fn value_type(&self) -> &'static str {
         self.value.value_type()
     }
@@ -33,15 +33,15 @@ impl HasValueType for String {
     }
 }
 
-impl ToExpressionValue for String {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::String(StringExpression { value: self })
+impl IntoValue for String {
+    fn into_value(self) -> Value {
+        Value::String(StringValue { value: self })
     }
 }
 
-impl ToExpressionValue for &str {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::String(StringExpression {
+impl IntoValue for &str {
+    fn into_value(self) -> Value {
+        Value::String(StringValue {
             value: self.to_string(),
         })
     }
@@ -210,9 +210,9 @@ define_interface! {
 
 impl_resolvable_argument_for! {
     StringTypeData,
-    (value, context) -> StringExpression {
+    (value, context) -> StringValue {
         match value {
-            ExpressionValue::String(value) => Ok(value),
+            Value::String(value) => Ok(value),
             _ => context.err("string", value),
         }
     }
@@ -220,7 +220,7 @@ impl_resolvable_argument_for! {
 
 impl_delegated_resolvable_argument_for!(
     StringTypeData,
-    (value: StringExpression) -> String { value.value }
+    (value: StringValue) -> String { value.value }
 );
 
 impl ResolvableArgumentTarget for str {
@@ -229,11 +229,11 @@ impl ResolvableArgumentTarget for str {
 
 impl ResolvableArgumentShared for str {
     fn resolve_from_ref<'a>(
-        value: &'a ExpressionValue,
+        value: &'a Value,
         context: ResolutionContext,
     ) -> ExecutionResult<&'a Self> {
         match value {
-            ExpressionValue::String(s) => Ok(s.value.as_str()),
+            Value::String(s) => Ok(s.value.as_str()),
             _ => context.err("string", value),
         }
     }

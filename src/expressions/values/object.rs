@@ -1,21 +1,21 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct ObjectExpression {
+pub(crate) struct ObjectValue {
     pub(crate) entries: BTreeMap<String, ObjectEntry>,
 }
 
-impl ToExpressionValue for ObjectExpression {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Object(self)
+impl IntoValue for ObjectValue {
+    fn into_value(self) -> Value {
+        Value::Object(self)
     }
 }
 
 impl_resolvable_argument_for! {
     ObjectTypeData,
-    (value, context) -> ObjectExpression {
+    (value, context) -> ObjectValue {
         match value {
-            ExpressionValue::Object(value) => Ok(value),
+            Value::Object(value) => Ok(value),
             _ => context.err("object", value),
         }
     }
@@ -25,34 +25,28 @@ impl_resolvable_argument_for! {
 pub(crate) struct ObjectEntry {
     #[allow(unused)]
     pub(crate) key_span: Span,
-    pub(crate) value: ExpressionValue,
+    pub(crate) value: Value,
 }
 
-impl ObjectExpression {
-    pub(super) fn into_indexed(
-        mut self,
-        index: Spanned<&ExpressionValue>,
-    ) -> ExecutionResult<ExpressionValue> {
+impl ObjectValue {
+    pub(super) fn into_indexed(mut self, index: Spanned<&Value>) -> ExecutionResult<Value> {
         let key = index.resolve_as("An object key")?;
         Ok(self.remove_or_none(key))
     }
 
-    pub(super) fn into_property(
-        mut self,
-        access: &PropertyAccess,
-    ) -> ExecutionResult<ExpressionValue> {
+    pub(super) fn into_property(mut self, access: &PropertyAccess) -> ExecutionResult<Value> {
         let key = access.property.to_string();
         Ok(self.remove_or_none(&key))
     }
 
-    pub(crate) fn remove_or_none(&mut self, key: &str) -> ExpressionValue {
+    pub(crate) fn remove_or_none(&mut self, key: &str) -> Value {
         match self.entries.remove(key) {
             Some(entry) => entry.value,
-            None => ExpressionValue::None,
+            None => Value::None,
         }
     }
 
-    pub(crate) fn remove_no_none(&mut self, key: &str) -> Option<ExpressionValue> {
+    pub(crate) fn remove_no_none(&mut self, key: &str) -> Option<Value> {
         match self.entries.remove(key) {
             Some(entry) => {
                 if entry.value.is_none() {
@@ -67,17 +61,14 @@ impl ObjectExpression {
 
     pub(super) fn index_mut(
         &mut self,
-        index: Spanned<&ExpressionValue>,
+        index: Spanned<&Value>,
         auto_create: bool,
-    ) -> ExecutionResult<&mut ExpressionValue> {
+    ) -> ExecutionResult<&mut Value> {
         let index: Spanned<&str> = index.resolve_as("An object key")?;
         self.mut_entry(index.map(|s, _| s.to_string()), auto_create)
     }
 
-    pub(super) fn index_ref(
-        &self,
-        index: Spanned<&ExpressionValue>,
-    ) -> ExecutionResult<&ExpressionValue> {
+    pub(super) fn index_ref(&self, index: Spanned<&Value>) -> ExecutionResult<&Value> {
         let key: Spanned<&str> = index.resolve_as("An object key")?;
         let entry = self.entries.get(key.value).ok_or_else(|| {
             key.value_error(format!(
@@ -92,17 +83,14 @@ impl ObjectExpression {
         &mut self,
         access: &PropertyAccess,
         auto_create: bool,
-    ) -> ExecutionResult<&mut ExpressionValue> {
+    ) -> ExecutionResult<&mut Value> {
         self.mut_entry(
             access.property.to_string().spanned(access.property.span()),
             auto_create,
         )
     }
 
-    pub(super) fn property_ref(
-        &self,
-        access: &PropertyAccess,
-    ) -> ExecutionResult<&ExpressionValue> {
+    pub(super) fn property_ref(&self, access: &PropertyAccess) -> ExecutionResult<&Value> {
         let key = access.property.to_string();
         let entry = self.entries.get(&key).ok_or_else(|| {
             access.value_error(format!("The object does not have a field named `{}`", key))
@@ -114,7 +102,7 @@ impl ObjectExpression {
         &mut self,
         key: Spanned<String>,
         auto_create: bool,
-    ) -> ExecutionResult<&mut ExpressionValue> {
+    ) -> ExecutionResult<&mut Value> {
         use std::collections::btree_map::*;
         let (key, key_span) = key.deconstruct();
         Ok(match self.entries.entry(key) {
@@ -124,7 +112,7 @@ impl ObjectExpression {
                     &mut entry
                         .insert(ObjectEntry {
                             key_span: key_span.join_into_span_else_start(),
-                            value: ExpressionValue::None,
+                            value: Value::None,
                         })
                         .value
                 } else {
@@ -187,15 +175,14 @@ impl ObjectExpression {
     }
 }
 
-impl Spanned<&ObjectExpression> {
+impl Spanned<&ObjectValue> {
     pub(crate) fn validate(&self, validation: &impl ObjectValidate) -> ExecutionResult<()> {
         let mut missing_fields = Vec::new();
         for (field_name, _) in validation.required_fields() {
             match self.entries.get(field_name) {
                 None
                 | Some(ObjectEntry {
-                    value: ExpressionValue::None,
-                    ..
+                    value: Value::None, ..
                 }) => {
                     missing_fields.push(field_name);
                 }
@@ -234,7 +221,7 @@ impl Spanned<&ObjectExpression> {
     }
 }
 
-impl HasValueType for ObjectExpression {
+impl HasValueType for ObjectValue {
     fn value_type(&self) -> &'static str {
         self.entries.value_type()
     }
@@ -246,9 +233,9 @@ impl HasValueType for BTreeMap<String, ObjectEntry> {
     }
 }
 
-impl ToExpressionValue for BTreeMap<String, ObjectEntry> {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Object(ObjectExpression { entries: self })
+impl IntoValue for BTreeMap<String, ObjectEntry> {
+    fn into_value(self) -> Value {
+        Value::Object(ObjectValue { entries: self })
     }
 }
 
@@ -257,11 +244,11 @@ define_interface! {
     parent: IterableTypeData,
     pub(crate) mod object_interface {
         pub(crate) mod methods {
-            [context] fn zip(this: ObjectExpression) -> ExecutionResult<ArrayExpression> {
+            [context] fn zip(this: ObjectValue) -> ExecutionResult<ArrayValue> {
                 ZipIterators::new_from_object(this, context.span_range())?.run_zip(context.interpreter, true)
             }
 
-            [context] fn zip_truncated(this: ObjectExpression) -> ExecutionResult<ArrayExpression> {
+            [context] fn zip_truncated(this: ObjectValue) -> ExecutionResult<ArrayValue> {
                 ZipIterators::new_from_object(this, context.span_range())?.run_zip(context.interpreter, false)
             }
         }

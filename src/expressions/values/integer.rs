@@ -1,42 +1,118 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct IntegerExpression {
-    pub(crate) value: IntegerExpressionValue,
+pub(crate) enum IntegerValue {
+    Untyped(UntypedInteger),
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
+    U128(u128),
+    Usize(usize),
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    I128(i128),
+    Isize(isize),
 }
 
-impl ToExpressionValue for IntegerExpression {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Integer(self)
+impl IntoValue for IntegerValue {
+    fn into_value(self) -> Value {
+        Value::Integer(self)
     }
 }
 
-impl IntegerExpression {
+impl IntegerValue {
     pub(super) fn for_litint(lit: &syn::LitInt) -> ParseResult<Owned<Self>> {
-        Ok(Self {
-            value: IntegerExpressionValue::for_litint(lit)?,
+        Ok(match lit.suffix() {
+            "" => Self::Untyped(UntypedInteger::new_from_lit_int(lit.clone())),
+            "u8" => Self::U8(lit.base10_parse()?),
+            "u16" => Self::U16(lit.base10_parse()?),
+            "u32" => Self::U32(lit.base10_parse()?),
+            "u64" => Self::U64(lit.base10_parse()?),
+            "u128" => Self::U128(lit.base10_parse()?),
+            "usize" => Self::Usize(lit.base10_parse()?),
+            "i8" => Self::I8(lit.base10_parse()?),
+            "i16" => Self::I16(lit.base10_parse()?),
+            "i32" => Self::I32(lit.base10_parse()?),
+            "i64" => Self::I64(lit.base10_parse()?),
+            "i128" => Self::I128(lit.base10_parse()?),
+            "isize" => Self::Isize(lit.base10_parse()?),
+            suffix => {
+                return lit.span().parse_err(format!(
+                    "The literal suffix {suffix} is not supported in preinterpret expressions"
+                ));
+            }
         }
         .into_owned(lit.span_range()))
     }
 
     pub(super) fn to_literal(&self, span: Span) -> Literal {
-        self.value.to_unspanned_literal().with_span(span)
+        self.to_unspanned_literal().with_span(span)
     }
 
-    pub(crate) fn resolve_untyped_to_match(self, other: &ExpressionValue) -> ExecutionResult<Self> {
-        let value = match (self.value, other) {
-            (IntegerExpressionValue::Untyped(this), ExpressionValue::Integer(other)) => {
-                this.into_kind(other.value.kind())?
-            }
-            (value, _) => value,
-        };
-        Ok(Self { value })
+    pub(crate) fn resolve_untyped_to_match(self, other: &Value) -> ExecutionResult<Self> {
+        match (self, other) {
+            (IntegerValue::Untyped(this), Value::Integer(other)) => this.into_kind(other.kind()),
+            (value, _) => Ok(value),
+        }
+    }
+
+    pub(super) fn kind(&self) -> IntegerKind {
+        match self {
+            Self::Untyped(_) => IntegerKind::Untyped,
+            Self::U8(_) => IntegerKind::U8,
+            Self::U16(_) => IntegerKind::U16,
+            Self::U32(_) => IntegerKind::U32,
+            Self::U64(_) => IntegerKind::U64,
+            Self::U128(_) => IntegerKind::U128,
+            Self::Usize(_) => IntegerKind::Usize,
+            Self::I8(_) => IntegerKind::I8,
+            Self::I16(_) => IntegerKind::I16,
+            Self::I32(_) => IntegerKind::I32,
+            Self::I64(_) => IntegerKind::I64,
+            Self::I128(_) => IntegerKind::I128,
+            Self::Isize(_) => IntegerKind::Isize,
+        }
+    }
+
+    fn to_unspanned_literal(&self) -> Literal {
+        match self {
+            IntegerValue::Untyped(int) => int.to_unspanned_literal(),
+            IntegerValue::U8(int) => Literal::u8_suffixed(*int),
+            IntegerValue::U16(int) => Literal::u16_suffixed(*int),
+            IntegerValue::U32(int) => Literal::u32_suffixed(*int),
+            IntegerValue::U64(int) => Literal::u64_suffixed(*int),
+            IntegerValue::U128(int) => Literal::u128_suffixed(*int),
+            IntegerValue::Usize(int) => Literal::usize_suffixed(*int),
+            IntegerValue::I8(int) => Literal::i8_suffixed(*int),
+            IntegerValue::I16(int) => Literal::i16_suffixed(*int),
+            IntegerValue::I32(int) => Literal::i32_suffixed(*int),
+            IntegerValue::I64(int) => Literal::i64_suffixed(*int),
+            IntegerValue::I128(int) => Literal::i128_suffixed(*int),
+            IntegerValue::Isize(int) => Literal::isize_suffixed(*int),
+        }
     }
 }
 
-impl HasValueType for IntegerExpression {
+impl HasValueType for IntegerValue {
     fn value_type(&self) -> &'static str {
-        self.value.value_type()
+        match self {
+            IntegerValue::Untyped(value) => value.value_type(),
+            IntegerValue::U8(value) => value.value_type(),
+            IntegerValue::U16(value) => value.value_type(),
+            IntegerValue::U32(value) => value.value_type(),
+            IntegerValue::U64(value) => value.value_type(),
+            IntegerValue::U128(value) => value.value_type(),
+            IntegerValue::Usize(value) => value.value_type(),
+            IntegerValue::I8(value) => value.value_type(),
+            IntegerValue::I16(value) => value.value_type(),
+            IntegerValue::I32(value) => value.value_type(),
+            IntegerValue::I64(value) => value.value_type(),
+            IntegerValue::I128(value) => value.value_type(),
+            IntegerValue::Isize(value) => value.value_type(),
+        }
     }
 }
 
@@ -104,117 +180,11 @@ impl IntegerKind {
     }
 }
 
-#[derive(Clone)]
-pub(crate) enum IntegerExpressionValue {
-    Untyped(UntypedInteger),
-    U8(u8),
-    U16(u16),
-    U32(u32),
-    U64(u64),
-    U128(u128),
-    Usize(usize),
-    I8(i8),
-    I16(i16),
-    I32(i32),
-    I64(i64),
-    I128(i128),
-    Isize(isize),
-}
-
-impl IntegerExpressionValue {
-    pub(super) fn kind(&self) -> IntegerKind {
-        match self {
-            Self::Untyped(_) => IntegerKind::Untyped,
-            Self::U8(_) => IntegerKind::U8,
-            Self::U16(_) => IntegerKind::U16,
-            Self::U32(_) => IntegerKind::U32,
-            Self::U64(_) => IntegerKind::U64,
-            Self::U128(_) => IntegerKind::U128,
-            Self::Usize(_) => IntegerKind::Usize,
-            Self::I8(_) => IntegerKind::I8,
-            Self::I16(_) => IntegerKind::I16,
-            Self::I32(_) => IntegerKind::I32,
-            Self::I64(_) => IntegerKind::I64,
-            Self::I128(_) => IntegerKind::I128,
-            Self::Isize(_) => IntegerKind::Isize,
-        }
-    }
-}
-
-impl IntegerExpressionValue {
-    pub(super) fn for_litint(lit: &syn::LitInt) -> ParseResult<Self> {
-        Ok(match lit.suffix() {
-            "" => Self::Untyped(UntypedInteger::new_from_lit_int(lit.clone())),
-            "u8" => Self::U8(lit.base10_parse()?),
-            "u16" => Self::U16(lit.base10_parse()?),
-            "u32" => Self::U32(lit.base10_parse()?),
-            "u64" => Self::U64(lit.base10_parse()?),
-            "u128" => Self::U128(lit.base10_parse()?),
-            "usize" => Self::Usize(lit.base10_parse()?),
-            "i8" => Self::I8(lit.base10_parse()?),
-            "i16" => Self::I16(lit.base10_parse()?),
-            "i32" => Self::I32(lit.base10_parse()?),
-            "i64" => Self::I64(lit.base10_parse()?),
-            "i128" => Self::I128(lit.base10_parse()?),
-            "isize" => Self::Isize(lit.base10_parse()?),
-            suffix => {
-                return lit.span().parse_err(format!(
-                    "The literal suffix {suffix} is not supported in preinterpret expressions"
-                ));
-            }
-        })
-    }
-
-    fn to_unspanned_literal(&self) -> Literal {
-        match self {
-            IntegerExpressionValue::Untyped(int) => int.to_unspanned_literal(),
-            IntegerExpressionValue::U8(int) => Literal::u8_suffixed(*int),
-            IntegerExpressionValue::U16(int) => Literal::u16_suffixed(*int),
-            IntegerExpressionValue::U32(int) => Literal::u32_suffixed(*int),
-            IntegerExpressionValue::U64(int) => Literal::u64_suffixed(*int),
-            IntegerExpressionValue::U128(int) => Literal::u128_suffixed(*int),
-            IntegerExpressionValue::Usize(int) => Literal::usize_suffixed(*int),
-            IntegerExpressionValue::I8(int) => Literal::i8_suffixed(*int),
-            IntegerExpressionValue::I16(int) => Literal::i16_suffixed(*int),
-            IntegerExpressionValue::I32(int) => Literal::i32_suffixed(*int),
-            IntegerExpressionValue::I64(int) => Literal::i64_suffixed(*int),
-            IntegerExpressionValue::I128(int) => Literal::i128_suffixed(*int),
-            IntegerExpressionValue::Isize(int) => Literal::isize_suffixed(*int),
-        }
-    }
-}
-
-impl HasValueType for IntegerExpressionValue {
-    fn value_type(&self) -> &'static str {
-        match self {
-            IntegerExpressionValue::Untyped(value) => value.value_type(),
-            IntegerExpressionValue::U8(value) => value.value_type(),
-            IntegerExpressionValue::U16(value) => value.value_type(),
-            IntegerExpressionValue::U32(value) => value.value_type(),
-            IntegerExpressionValue::U64(value) => value.value_type(),
-            IntegerExpressionValue::U128(value) => value.value_type(),
-            IntegerExpressionValue::Usize(value) => value.value_type(),
-            IntegerExpressionValue::I8(value) => value.value_type(),
-            IntegerExpressionValue::I16(value) => value.value_type(),
-            IntegerExpressionValue::I32(value) => value.value_type(),
-            IntegerExpressionValue::I64(value) => value.value_type(),
-            IntegerExpressionValue::I128(value) => value.value_type(),
-            IntegerExpressionValue::Isize(value) => value.value_type(),
-        }
-    }
-}
-
-impl ToExpressionValue for IntegerExpressionValue {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Integer(IntegerExpression { value: self })
-    }
-}
-
 impl_resolvable_argument_for! {
     IntegerTypeData,
-    (value, context) -> IntegerExpression {
+    (value, context) -> IntegerValue {
         match value {
-            ExpressionValue::Integer(value) => Ok(value),
+            Value::Integer(value) => Ok(value),
             other => context.err("integer", other),
         }
     }
@@ -227,35 +197,29 @@ impl ResolvableArgumentTarget for CoercedToU32 {
 }
 
 impl ResolvableArgumentOwned for CoercedToU32 {
-    fn resolve_from_value(
-        input_value: ExpressionValue,
-        context: ResolutionContext,
-    ) -> ExecutionResult<Self> {
+    fn resolve_from_value(input_value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
         let integer = match input_value {
-            ExpressionValue::Integer(IntegerExpression { value, .. }) => value,
+            Value::Integer(value) => value,
             other => return context.err("integer", other),
         };
         let coerced = match integer.clone() {
-            IntegerExpressionValue::U8(x) => Some(x as u32),
-            IntegerExpressionValue::U16(x) => Some(x as u32),
-            IntegerExpressionValue::U32(x) => Some(x),
-            IntegerExpressionValue::U64(x) => x.try_into().ok(),
-            IntegerExpressionValue::U128(x) => x.try_into().ok(),
-            IntegerExpressionValue::Usize(x) => x.try_into().ok(),
-            IntegerExpressionValue::I8(x) => x.try_into().ok(),
-            IntegerExpressionValue::I16(x) => x.try_into().ok(),
-            IntegerExpressionValue::I32(x) => x.try_into().ok(),
-            IntegerExpressionValue::I64(x) => x.try_into().ok(),
-            IntegerExpressionValue::I128(x) => x.try_into().ok(),
-            IntegerExpressionValue::Isize(x) => x.try_into().ok(),
-            IntegerExpressionValue::Untyped(x) => x.parse_as().ok(),
+            IntegerValue::U8(x) => Some(x as u32),
+            IntegerValue::U16(x) => Some(x as u32),
+            IntegerValue::U32(x) => Some(x),
+            IntegerValue::U64(x) => x.try_into().ok(),
+            IntegerValue::U128(x) => x.try_into().ok(),
+            IntegerValue::Usize(x) => x.try_into().ok(),
+            IntegerValue::I8(x) => x.try_into().ok(),
+            IntegerValue::I16(x) => x.try_into().ok(),
+            IntegerValue::I32(x) => x.try_into().ok(),
+            IntegerValue::I64(x) => x.try_into().ok(),
+            IntegerValue::I128(x) => x.try_into().ok(),
+            IntegerValue::Isize(x) => x.try_into().ok(),
+            IntegerValue::Untyped(x) => x.parse_as().ok(),
         };
         match coerced {
             Some(value) => Ok(CoercedToU32(value)),
-            None => context.err(
-                "u32-compatible integer",
-                ExpressionValue::Integer(IntegerExpression { value: integer }),
-            ),
+            None => context.err("u32-compatible integer", Value::Integer(integer)),
         }
     }
 }

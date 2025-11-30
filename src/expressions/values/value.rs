@@ -1,22 +1,22 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) enum ExpressionValue {
+pub(crate) enum Value {
     None,
-    Integer(IntegerExpression),
-    Float(FloatExpression),
-    Boolean(BooleanExpression),
-    String(StringExpression),
-    Char(CharExpression),
+    Integer(IntegerValue),
+    Float(FloatValue),
+    Boolean(BooleanValue),
+    String(StringValue),
+    Char(CharValue),
     // Unsupported literal is a type here so that we can parse such a token
     // as a value rather than a stream, and give it better error messages
     UnsupportedLiteral(UnsupportedLiteral),
-    Array(ArrayExpression),
-    Object(ObjectExpression),
-    Stream(StreamExpression),
-    Range(RangeExpression),
-    Iterator(IteratorExpression),
-    Parser(ParserExpression),
+    Array(ArrayValue),
+    Object(ObjectValue),
+    Stream(StreamValue),
+    Range(RangeValue),
+    Iterator(IteratorValue),
+    Parser(ParserValue),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -151,7 +151,7 @@ define_interface! {
                 core::mem::swap(a.0.deref_mut(), b.0.deref_mut());
             }
 
-            fn replace(mut a: AssigneeValue, b: ExpressionValue) -> ExpressionValue {
+            fn replace(mut a: AssigneeValue, b: Value) -> Value {
                 core::mem::replace(a.0.deref_mut(), b)
             }
 
@@ -184,7 +184,7 @@ define_interface! {
                 input.concat_recursive(&ConcatBehaviour::standard(input.span_range()))
             }
 
-            [context] fn with_span(this: CopyOnWriteValue, spans: AnyRef<StreamExpression>) -> ExecutionResult<OutputStream> {
+            [context] fn with_span(this: CopyOnWriteValue, spans: AnyRef<StreamValue>) -> ExecutionResult<OutputStream> {
                 let mut this = to_stream(context, this)?;
                 let span_to_use = match spans.resolve_content_span_range() {
                     Some(span_range) => span_range.span_from_join_else_start(),
@@ -227,8 +227,8 @@ define_interface! {
                 stream_interface::methods::to_ident_upper_snake(context, spanned)
             }
 
-            // Some literals become ExpressionValue::UnsupportedLiteral but can still be round-tripped back to a stream
-            [context] fn to_literal(this: OwnedValue) -> ExecutionResult<ExpressionValue> {
+            // Some literals become Value::UnsupportedLiteral but can still be round-tripped back to a stream
+            [context] fn to_literal(this: OwnedValue) -> ExecutionResult<Value> {
                 let stream = this.into_stream()?;
                 let spanned = stream.into_spanned_ref(context.output_span_range);
                 stream_interface::methods::to_literal(context, spanned)
@@ -260,8 +260,8 @@ define_interface! {
     }
 }
 
-pub(crate) trait ToExpressionValue: Sized {
-    fn into_value(self) -> ExpressionValue;
+pub(crate) trait IntoValue: Sized {
+    fn into_value(self) -> Value;
     fn into_owned(self, span_range: impl HasSpanRange) -> Owned<Self> {
         Owned::new(self, span_range.span_range())
     }
@@ -270,7 +270,7 @@ pub(crate) trait ToExpressionValue: Sized {
     }
 }
 
-impl ExpressionValue {
+impl Value {
     pub(crate) fn for_literal(literal: Literal) -> OwnedValue {
         // The unwrap should be safe because all Literal should be parsable
         // as syn::Lit; falling back to syn::Lit::Verbatim if necessary.
@@ -285,17 +285,17 @@ impl ExpressionValue {
     pub(crate) fn for_syn_lit(lit: syn::Lit) -> OwnedValue {
         // https://docs.rs/syn/latest/syn/enum.Lit.html
         let matched = match &lit {
-            Lit::Int(lit) => match IntegerExpression::for_litint(lit) {
+            Lit::Int(lit) => match IntegerValue::for_litint(lit) {
                 Ok(int) => Some(int.into_owned_value()),
                 Err(_) => None,
             },
-            Lit::Float(lit) => match FloatExpression::for_litfloat(lit) {
+            Lit::Float(lit) => match FloatValue::for_litfloat(lit) {
                 Ok(float) => Some(float.into_owned_value()),
                 Err(_) => None,
             },
-            Lit::Bool(lit) => Some(BooleanExpression::for_litbool(lit).into_owned_value()),
-            Lit::Str(lit) => Some(StringExpression::for_litstr(lit).into_owned_value()),
-            Lit::Char(lit) => Some(CharExpression::for_litchar(lit).into_owned_value()),
+            Lit::Bool(lit) => Some(BooleanValue::for_litbool(lit).into_owned_value()),
+            Lit::Str(lit) => Some(StringValue::for_litstr(lit).into_owned_value()),
+            Lit::Char(lit) => Some(CharValue::for_litchar(lit).into_owned_value()),
             _ => None,
         };
         match matched {
@@ -310,7 +310,7 @@ impl ExpressionValue {
     pub(crate) fn try_transparent_clone(
         &self,
         error_span_range: SpanRange,
-    ) -> ExecutionResult<ExpressionValue> {
+    ) -> ExecutionResult<Value> {
         if !self.kind().supports_transparent_cloning() {
             return error_span_range.ownership_err(format!(
                 "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .clone() explicitly.",
@@ -322,24 +322,24 @@ impl ExpressionValue {
 
     pub(crate) fn kind(&self) -> ValueKind {
         match self {
-            ExpressionValue::None => ValueKind::None,
-            ExpressionValue::Integer(integer) => ValueKind::Integer(integer.value.kind()),
-            ExpressionValue::Float(float) => ValueKind::Float(float.value.kind()),
-            ExpressionValue::Boolean(_) => ValueKind::Boolean,
-            ExpressionValue::String(_) => ValueKind::String,
-            ExpressionValue::Char(_) => ValueKind::Char,
-            ExpressionValue::Array(_) => ValueKind::Array,
-            ExpressionValue::Object(_) => ValueKind::Object,
-            ExpressionValue::Stream(_) => ValueKind::Stream,
-            ExpressionValue::Range(_) => ValueKind::Range,
-            ExpressionValue::Iterator(_) => ValueKind::Iterator,
-            ExpressionValue::Parser(_) => ValueKind::Parser,
-            ExpressionValue::UnsupportedLiteral(_) => ValueKind::UnsupportedLiteral,
+            Value::None => ValueKind::None,
+            Value::Integer(integer) => ValueKind::Integer(integer.kind()),
+            Value::Float(float) => ValueKind::Float(float.kind()),
+            Value::Boolean(_) => ValueKind::Boolean,
+            Value::String(_) => ValueKind::String,
+            Value::Char(_) => ValueKind::Char,
+            Value::Array(_) => ValueKind::Array,
+            Value::Object(_) => ValueKind::Object,
+            Value::Stream(_) => ValueKind::Stream,
+            Value::Range(_) => ValueKind::Range,
+            Value::Iterator(_) => ValueKind::Iterator,
+            Value::Parser(_) => ValueKind::Parser,
+            Value::UnsupportedLiteral(_) => ValueKind::UnsupportedLiteral,
         }
     }
 
     pub(crate) fn is_none(&self) -> bool {
-        matches!(self, ExpressionValue::None)
+        matches!(self, Value::None)
     }
 
     pub(crate) fn into_indexed(
@@ -348,8 +348,8 @@ impl ExpressionValue {
         index: Spanned<&Self>,
     ) -> ExecutionResult<Self> {
         match self {
-            ExpressionValue::Array(array) => array.into_indexed(index),
-            ExpressionValue::Object(object) => object.into_indexed(index),
+            Value::Array(array) => array.into_indexed(index),
+            Value::Object(object) => object.into_indexed(index),
             other => access.type_err(format!("Cannot index into a {}", other.value_type())),
         }
     }
@@ -361,8 +361,8 @@ impl ExpressionValue {
         auto_create: bool,
     ) -> ExecutionResult<&mut Self> {
         match self {
-            ExpressionValue::Array(array) => array.index_mut(index),
-            ExpressionValue::Object(object) => object.index_mut(index, auto_create),
+            Value::Array(array) => array.index_mut(index),
+            Value::Object(object) => object.index_mut(index, auto_create),
             other => access.type_err(format!("Cannot index into a {}", other.value_type())),
         }
     }
@@ -373,15 +373,15 @@ impl ExpressionValue {
         index: Spanned<&Self>,
     ) -> ExecutionResult<&Self> {
         match self {
-            ExpressionValue::Array(array) => array.index_ref(index),
-            ExpressionValue::Object(object) => object.index_ref(index),
+            Value::Array(array) => array.index_ref(index),
+            Value::Object(object) => object.index_ref(index),
             other => access.type_err(format!("Cannot index into a {}", other.value_type())),
         }
     }
 
     pub(crate) fn into_property(self, access: &PropertyAccess) -> ExecutionResult<Self> {
         match self {
-            ExpressionValue::Object(object) => object.into_property(access),
+            Value::Object(object) => object.into_property(access),
             other => access.type_err(format!(
                 "Cannot access properties on a {}",
                 other.value_type()
@@ -395,7 +395,7 @@ impl ExpressionValue {
         auto_create: bool,
     ) -> ExecutionResult<&mut Self> {
         match self {
-            ExpressionValue::Object(object) => object.property_mut(access, auto_create),
+            Value::Object(object) => object.property_mut(access, auto_create),
             other => access.type_err(format!(
                 "Cannot access properties on a {}",
                 other.value_type()
@@ -405,7 +405,7 @@ impl ExpressionValue {
 
     pub(crate) fn property_ref(&self, access: &PropertyAccess) -> ExecutionResult<&Self> {
         match self {
-            ExpressionValue::Object(object) => object.property_ref(access),
+            Value::Object(object) => object.property_ref(access),
             other => access.type_err(format!(
                 "Cannot access properties on a {}",
                 other.value_type()
@@ -498,7 +498,7 @@ impl ExpressionValue {
                 .clone()
                 .output_items_to(output, Grouping::Flattened)?,
             Self::Range(range) => {
-                let iterator = IteratorExpression::new_for_range(range.clone())?;
+                let iterator = IteratorValue::new_for_range(range.clone())?;
                 iterator.output_items_to(output, Grouping::Flattened)?
             }
             Self::Parser(_) => {
@@ -520,37 +520,37 @@ impl ExpressionValue {
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
         match self {
-            ExpressionValue::None => {
+            Value::None => {
                 if behaviour.show_none_values {
                     output.push_str("None");
                 }
             }
-            ExpressionValue::Stream(stream) => {
+            Value::Stream(stream) => {
                 stream.concat_recursive_into(output, behaviour);
             }
-            ExpressionValue::Array(array) => {
+            Value::Array(array) => {
                 array.concat_recursive_into(output, behaviour)?;
             }
-            ExpressionValue::Object(object) => {
+            Value::Object(object) => {
                 object.concat_recursive_into(output, behaviour)?;
             }
-            ExpressionValue::Iterator(iterator) => {
+            Value::Iterator(iterator) => {
                 iterator.concat_recursive_into(output, behaviour)?;
             }
-            ExpressionValue::Range(range) => {
+            Value::Range(range) => {
                 range.concat_recursive_into(output, behaviour)?;
             }
-            ExpressionValue::Parser(_) => {
+            Value::Parser(_) => {
                 return behaviour
                     .error_span_range
                     .type_err("Parsers cannot be output to a string");
             }
-            ExpressionValue::Integer(_)
-            | ExpressionValue::Float(_)
-            | ExpressionValue::Char(_)
-            | ExpressionValue::Boolean(_)
-            | ExpressionValue::UnsupportedLiteral(_)
-            | ExpressionValue::String(_) => {
+            Value::Integer(_)
+            | Value::Float(_)
+            | Value::Char(_)
+            | Value::Boolean(_)
+            | Value::UnsupportedLiteral(_)
+            | Value::String(_) => {
                 // This isn't the most efficient, but it's less code and debug doesn't need to be super efficient.
                 let stream = self
                     .output_to_new_stream(Grouping::Flattened, behaviour.error_span_range)
@@ -622,12 +622,12 @@ impl OwnedValue {
     pub(crate) fn expect_any_iterator(
         self,
         resolution_target: &str,
-    ) -> ExecutionResult<Owned<IteratorExpression>> {
+    ) -> ExecutionResult<Owned<IteratorValue>> {
         IterableValue::resolve_owned(self, resolution_target)?.try_map(|v, _| v.into_iterator())
     }
 }
 
-impl SpannedAnyRefMut<'_, ExpressionValue> {
+impl SpannedAnyRefMut<'_, Value> {
     pub(crate) fn handle_compound_assignment(
         self,
         operation: &CompoundAssignmentOperation,
@@ -635,13 +635,12 @@ impl SpannedAnyRefMut<'_, ExpressionValue> {
     ) -> ExecutionResult<()> {
         let (mut left, left_span_range) = self.deconstruct();
         match (&mut *left, operation) {
-            (ExpressionValue::Stream(left_mut), CompoundAssignmentOperation::Add(_)) => {
-                let right: StreamExpression = right.resolve_as("The target of += on a stream")?;
+            (Value::Stream(left_mut), CompoundAssignmentOperation::Add(_)) => {
+                let right: StreamValue = right.resolve_as("The target of += on a stream")?;
                 right.value.append_into(&mut left_mut.value);
             }
-            (ExpressionValue::Array(left_mut), CompoundAssignmentOperation::Add(_)) => {
-                let mut right: ArrayExpression =
-                    right.resolve_as("The target of += on an array")?;
+            (Value::Array(left_mut), CompoundAssignmentOperation::Add(_)) => {
+                let mut right: ArrayValue = right.resolve_as("The target of += on an array")?;
                 left_mut.items.append(&mut right.items);
             }
             (left_mut, operation) => {
@@ -661,8 +660,8 @@ impl SpannedAnyRefMut<'_, ExpressionValue> {
     }
 }
 
-impl ToExpressionValue for ExpressionValue {
-    fn into_value(self) -> ExpressionValue {
+impl IntoValue for Value {
+    fn into_value(self) -> Value {
         self
     }
 }
@@ -673,7 +672,7 @@ pub(crate) enum Grouping {
     Flattened,
 }
 
-impl HasValueType for ExpressionValue {
+impl HasValueType for Value {
     fn value_type(&self) -> &'static str {
         match self {
             Self::None => "none value",

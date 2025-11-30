@@ -1,11 +1,11 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct StreamExpression {
+pub(crate) struct StreamValue {
     pub(crate) value: OutputStream,
 }
 
-impl StreamExpression {
+impl StreamValue {
     pub(crate) fn concat_recursive_into(&self, output: &mut String, behaviour: &ConcatBehaviour) {
         if behaviour.use_stream_literal_syntax {
             if self.value.is_empty() {
@@ -56,7 +56,7 @@ impl StreamExpression {
     }
 }
 
-impl HasValueType for StreamExpression {
+impl HasValueType for StreamValue {
     fn value_type(&self) -> &'static str {
         self.value.value_type()
     }
@@ -68,23 +68,23 @@ impl HasValueType for OutputStream {
     }
 }
 
-impl ToExpressionValue for OutputStream {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Stream(StreamExpression { value: self })
+impl IntoValue for OutputStream {
+    fn into_value(self) -> Value {
+        Value::Stream(StreamValue { value: self })
     }
 }
 
-impl ToExpressionValue for TokenStream {
-    fn into_value(self) -> ExpressionValue {
+impl IntoValue for TokenStream {
+    fn into_value(self) -> Value {
         OutputStream::raw(self).into_value()
     }
 }
 
 impl_resolvable_argument_for! {
     StreamTypeData,
-    (value, context) -> StreamExpression {
+    (value, context) -> StreamValue {
         match value {
-            ExpressionValue::Stream(value) => Ok(value),
+            Value::Stream(value) => Ok(value),
             _ => context.err("stream", value),
         }
     }
@@ -92,7 +92,7 @@ impl_resolvable_argument_for! {
 
 impl_delegated_resolvable_argument_for!(
     StreamTypeData,
-    (value: StreamExpression) -> OutputStream { value.value }
+    (value: StreamValue) -> OutputStream { value.value }
 );
 
 define_interface! {
@@ -114,11 +114,11 @@ define_interface! {
                 Ok(this.to_token_stream_removing_any_transparent_groups())
             }
 
-            fn infer(this: OutputStream) -> ExecutionResult<ExpressionValue> {
+            fn infer(this: OutputStream) -> ExecutionResult<Value> {
                 Ok(this.coerce_into_value())
             }
 
-            fn split(this: OutputStream, separator: AnyRef<OutputStream>, settings: Option<SplitSettings>) -> ExecutionResult<ArrayExpression> {
+            fn split(this: OutputStream, separator: AnyRef<OutputStream>, settings: Option<SplitSettings>) -> ExecutionResult<ArrayValue> {
                 handle_split(this, &separator, settings.unwrap_or_default())
             }
 
@@ -145,29 +145,29 @@ define_interface! {
                 string_interface::methods::to_ident_upper_snake(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
-            // Some literals become ExpressionValue::UnsupportedLiteral but can still be round-tripped back to a stream
-            [context] fn to_literal(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<ExpressionValue> {
+            // Some literals become Value::UnsupportedLiteral but can still be round-tripped back to a stream
+            [context] fn to_literal(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Value> {
                 let string = this.concat_recursive(&ConcatBehaviour::literal(this.span_range()));
                 let literal = string_interface::methods::to_literal(context, string.as_str().into_spanned_ref(this.span_range()))?;
-                Ok(ExpressionValue::for_literal(literal).into_value())
+                Ok(Value::for_literal(literal).into_value())
             }
 
             // CORE METHODS
             // ============
 
             // NOTE: with_span() exists on all values, this is just a specialized mutable version for streams
-            fn set_span(mut this: Mutable<StreamExpression>, span_source: Shared<StreamExpression>) -> ExecutionResult<()> {
+            fn set_span(mut this: Mutable<StreamValue>, span_source: Shared<StreamValue>) -> ExecutionResult<()> {
                 let span_range = span_source.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
                 this.value.replace_first_level_spans(span_range.join_into_span_else_start());
                 Ok(())
             }
 
-            fn error(this: Shared<StreamExpression>, message: Shared<String>) -> ExecutionResult<Never> {
+            fn error(this: Shared<StreamValue>, message: Shared<String>) -> ExecutionResult<Never> {
                 let error_span_range = this.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
                 error_span_range.assertion_err(message.as_str())
             }
 
-            fn assert(this: Shared<StreamExpression>, condition: bool, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
+            fn assert(this: Shared<StreamValue>, condition: bool, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
                 if condition {
                     Ok(())
                 } else {
@@ -180,9 +180,9 @@ define_interface! {
                 }
             }
 
-            fn assert_eq(this: Shared<StreamExpression>, lhs: SpannedAnyRef<ExpressionValue>, rhs: SpannedAnyRef<ExpressionValue>, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
-                let lhs_value: &ExpressionValue = &lhs;
-                let rhs_value: &ExpressionValue = &rhs;
+            fn assert_eq(this: Shared<StreamValue>, lhs: SpannedAnyRef<Value>, rhs: SpannedAnyRef<Value>, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
+                let lhs_value: &Value = &lhs;
+                let rhs_value: &Value = &rhs;
                 let res = {
                     // TODO[operation-refactor]: Replace with eq when we have a solid implementation
                     let lhs_debug_str = lhs_value.concat_recursive(&ConcatBehaviour::debug(lhs.span_range()))?;
@@ -204,7 +204,7 @@ define_interface! {
                 }
             }
 
-            [context] fn reinterpret_as_run(this: Owned<StreamExpression>) -> ExecutionResult<OwnedValue> {
+            [context] fn reinterpret_as_run(this: Owned<StreamValue>) -> ExecutionResult<OwnedValue> {
                 let source = this.into_inner().value.into_token_stream();
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(ExpressionBlockContent::parse, ExpressionBlockContent::control_flow_pass)?;
                 let mut inner_interpreter = Interpreter::new(scope_definitions);
@@ -215,7 +215,7 @@ define_interface! {
                 Ok(return_value)
             }
 
-            [context] fn reinterpret_as_stream(this: Owned<StreamExpression>) -> ExecutionResult<OutputStream> {
+            [context] fn reinterpret_as_stream(this: Owned<StreamValue>) -> ExecutionResult<OutputStream> {
                 let source = this.into_inner().value.into_token_stream();
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(
                     |input| SourceStream::parse_with_span(input, context.output_span_range.span_from_join_else_start()),
@@ -227,10 +227,10 @@ define_interface! {
             }
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_to_value(this: Owned<StreamExpression>) -> ExecutionResult<ReturnedValue> {
+            [context] fn cast_to_value(this: Owned<StreamValue>) -> ExecutionResult<ReturnedValue> {
                 let (this, span_range) = this.deconstruct();
                 let coerced = this.value.coerce_into_value();
-                if let ExpressionValue::Stream(_) = &coerced {
+                if let Value::Stream(_) = &coerced {
                     return span_range.value_err("The stream could not be coerced into a single value");
                 }
                 // Re-run the cast operation on the coerced value

@@ -13,21 +13,21 @@ impl UntypedInteger {
         Self::new_from_lit_int(literal.into())
     }
 
-    pub(crate) fn into_kind(self, kind: IntegerKind) -> ExecutionResult<IntegerExpressionValue> {
+    pub(crate) fn into_kind(self, kind: IntegerKind) -> ExecutionResult<IntegerValue> {
         Ok(match kind {
-            IntegerKind::Untyped => IntegerExpressionValue::Untyped(self),
-            IntegerKind::I8 => IntegerExpressionValue::I8(self.parse_as()?),
-            IntegerKind::I16 => IntegerExpressionValue::I16(self.parse_as()?),
-            IntegerKind::I32 => IntegerExpressionValue::I32(self.parse_as()?),
-            IntegerKind::I64 => IntegerExpressionValue::I64(self.parse_as()?),
-            IntegerKind::I128 => IntegerExpressionValue::I128(self.parse_as()?),
-            IntegerKind::Isize => IntegerExpressionValue::Isize(self.parse_as()?),
-            IntegerKind::U8 => IntegerExpressionValue::U8(self.parse_as()?),
-            IntegerKind::U16 => IntegerExpressionValue::U16(self.parse_as()?),
-            IntegerKind::U32 => IntegerExpressionValue::U32(self.parse_as()?),
-            IntegerKind::U64 => IntegerExpressionValue::U64(self.parse_as()?),
-            IntegerKind::U128 => IntegerExpressionValue::U128(self.parse_as()?),
-            IntegerKind::Usize => IntegerExpressionValue::Usize(self.parse_as()?),
+            IntegerKind::Untyped => IntegerValue::Untyped(self),
+            IntegerKind::I8 => IntegerValue::I8(self.parse_as()?),
+            IntegerKind::I16 => IntegerValue::I16(self.parse_as()?),
+            IntegerKind::I32 => IntegerValue::I32(self.parse_as()?),
+            IntegerKind::I64 => IntegerValue::I64(self.parse_as()?),
+            IntegerKind::I128 => IntegerValue::I128(self.parse_as()?),
+            IntegerKind::Isize => IntegerValue::Isize(self.parse_as()?),
+            IntegerKind::U8 => IntegerValue::U8(self.parse_as()?),
+            IntegerKind::U16 => IntegerValue::U16(self.parse_as()?),
+            IntegerKind::U32 => IntegerValue::U32(self.parse_as()?),
+            IntegerKind::U64 => IntegerValue::U64(self.parse_as()?),
+            IntegerKind::U128 => IntegerValue::U128(self.parse_as()?),
+            IntegerKind::Usize => IntegerValue::Usize(self.parse_as()?),
         })
     }
 
@@ -46,14 +46,14 @@ impl UntypedInteger {
 
     fn paired_operation(
         lhs: Owned<UntypedInteger>,
-        rhs: Owned<IntegerExpression>,
+        rhs: Owned<IntegerValue>,
         context: BinaryOperationCallContext,
         perform_fn: fn(FallbackInteger, FallbackInteger) -> Option<FallbackInteger>,
     ) -> ExecutionResult<ReturnedValue> {
         let (lhs, lhs_span_range) = lhs.deconstruct();
         let (rhs, rhs_span_range) = rhs.deconstruct();
-        match rhs.value {
-            IntegerExpressionValue::Untyped(rhs) => {
+        match rhs {
+            IntegerValue::Untyped(rhs) => {
                 let lhs = lhs.parse_fallback()?;
                 let rhs = rhs.parse_fallback()?;
                 let output = perform_fn(lhs, rhs)
@@ -72,14 +72,14 @@ impl UntypedInteger {
 
     fn paired_comparison(
         lhs: Owned<UntypedInteger>,
-        rhs: Owned<IntegerExpression>,
+        rhs: Owned<IntegerValue>,
         context: BinaryOperationCallContext,
         compare_fn: fn(FallbackInteger, FallbackInteger) -> bool,
     ) -> ExecutionResult<bool> {
         let (lhs, lhs_span_range) = lhs.deconstruct();
         let (rhs, rhs_span_range) = rhs.deconstruct();
-        match rhs.value {
-            IntegerExpressionValue::Untyped(rhs) => {
+        match rhs {
+            IntegerValue::Untyped(rhs) => {
                 let lhs = lhs.parse_fallback()?;
                 let rhs = rhs.parse_fallback()?;
                 Ok(compare_fn(lhs, rhs))
@@ -141,11 +141,9 @@ impl HasValueType for UntypedInteger {
     }
 }
 
-impl ToExpressionValue for UntypedInteger {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Integer(IntegerExpression {
-            value: IntegerExpressionValue::Untyped(self),
-        })
+impl IntoValue for UntypedInteger {
+    fn into_value(self) -> Value {
+        Value::Integer(IntegerValue::Untyped(self))
     }
 }
 
@@ -236,98 +234,98 @@ define_interface! {
         pub(crate) mod binary_operations {
             [context] fn add(
                 lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerExpression>,
+                rhs: Owned<IntegerValue>,
             ) -> ExecutionResult<ReturnedValue> {
                 UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_add)
             }
 
             [context] fn sub(
                 lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerExpression>,
+                rhs: Owned<IntegerValue>,
             ) -> ExecutionResult<ReturnedValue> {
                 UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_sub)
             }
 
             [context] fn mul(
                 lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerExpression>,
+                rhs: Owned<IntegerValue>,
             ) -> ExecutionResult<ReturnedValue> {
                 UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_mul)
             }
 
             [context] fn div(
                 lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerExpression>,
+                rhs: Owned<IntegerValue>,
             ) -> ExecutionResult<ReturnedValue> {
                 UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_div)
             }
 
             [context] fn rem(
                 lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerExpression>,
+                rhs: Owned<IntegerValue>,
             ) -> ExecutionResult<ReturnedValue> {
                 UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_rem)
             }
 
             [context] fn bitxor(
                 lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerExpression>,
+                rhs: Owned<IntegerValue>,
             ) -> ExecutionResult<ReturnedValue> {
                 UntypedInteger::paired_operation(lhs, rhs, context, |a, b| Some(a ^ b))
             }
 
             [context] fn bitand(
                 lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerExpression>,
+                rhs: Owned<IntegerValue>,
             ) -> ExecutionResult<ReturnedValue> {
                 UntypedInteger::paired_operation(lhs, rhs, context, |a, b| Some(a & b))
             }
 
             [context] fn bitor(
                 lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerExpression>,
+                rhs: Owned<IntegerValue>,
             ) -> ExecutionResult<ReturnedValue> {
                 UntypedInteger::paired_operation(lhs, rhs, context, |a, b| Some(a | b))
             }
 
             [context] fn eq(
                 lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerExpression>,
+                rhs: Owned<IntegerValue>,
             ) -> ExecutionResult<bool> {
                 UntypedInteger::paired_comparison(lhs, rhs, context, |a, b| a == b)
             }
 
             [context] fn ne(
                 lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerExpression>,
+                rhs: Owned<IntegerValue>,
             ) -> ExecutionResult<bool> {
                 UntypedInteger::paired_comparison(lhs, rhs, context, |a, b| a != b)
             }
 
             [context] fn lt(
                 lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerExpression>,
+                rhs: Owned<IntegerValue>,
             ) -> ExecutionResult<bool> {
                 UntypedInteger::paired_comparison(lhs, rhs, context, |a, b| a < b)
             }
 
             [context] fn le(
                 lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerExpression>,
+                rhs: Owned<IntegerValue>,
             ) -> ExecutionResult<bool> {
                 UntypedInteger::paired_comparison(lhs, rhs, context, |a, b| a <= b)
             }
 
             [context] fn ge(
                 lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerExpression>,
+                rhs: Owned<IntegerValue>,
             ) -> ExecutionResult<bool> {
                 UntypedInteger::paired_comparison(lhs, rhs, context, |a, b| a >= b)
             }
 
             [context] fn gt(
                 lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerExpression>,
+                rhs: Owned<IntegerValue>,
             ) -> ExecutionResult<bool> {
                 UntypedInteger::paired_comparison(lhs, rhs, context, |a, b| a > b)
             }
@@ -425,10 +423,7 @@ impl ResolvableArgumentTarget for UntypedIntegerFallback {
 }
 
 impl ResolvableArgumentOwned for UntypedIntegerFallback {
-    fn resolve_from_value(
-        input_value: ExpressionValue,
-        context: ResolutionContext,
-    ) -> ExecutionResult<Self> {
+    fn resolve_from_value(input_value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
         let value: UntypedInteger =
             ResolvableArgumentOwned::resolve_from_value(input_value, context)?;
         Ok(UntypedIntegerFallback(value.parse_fallback()?))
@@ -439,7 +434,7 @@ impl_resolvable_argument_for! {
     UntypedIntegerTypeData,
     (value, context) -> UntypedInteger {
         match value {
-            ExpressionValue::Integer(IntegerExpression { value: IntegerExpressionValue::Untyped(x), ..}) => Ok(x),
+            Value::Integer(IntegerValue::Untyped(x)) => Ok(x),
             _ => context.err("untyped integer", value),
         }
     }
