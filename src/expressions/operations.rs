@@ -186,6 +186,7 @@ impl HasSpan for UnaryOperation {
 pub(crate) enum BinaryOperation {
     Paired(PairedBinaryOperation),
     Integer(IntegerBinaryOperation),
+    CompoundAssignment(CompoundAssignmentOperation),
 }
 
 impl From<PairedBinaryOperation> for BinaryOperation {
@@ -328,6 +329,7 @@ impl HasSpanRange for BinaryOperation {
         match self {
             BinaryOperation::Paired(op) => op.span_range(),
             BinaryOperation::Integer(op) => op.span_range(),
+            BinaryOperation::CompoundAssignment(op) => op.span_range(),
         }
     }
 }
@@ -337,6 +339,8 @@ impl Operation for BinaryOperation {
         match self {
             BinaryOperation::Paired(paired) => paired.symbolic_description(),
             BinaryOperation::Integer(integer) => integer.symbolic_description(),
+            BinaryOperation::CompoundAssignment(compound_assignment) =>
+                compound_assignment.symbolic_description(),
         }
     }
 }
@@ -436,7 +440,7 @@ pub(super) trait HandleBinaryOperation: Sized + std::fmt::Display + Copy {
 
     fn binary_overflow_error(
         context: BinaryOperationCallContext,
-        lhs: impl std::fmt::Display,
+        lhs: Self,
         rhs: impl std::fmt::Display,
     ) -> ExecutionInterrupt {
         context.error(format!(
@@ -448,13 +452,39 @@ pub(super) trait HandleBinaryOperation: Sized + std::fmt::Display + Copy {
         ))
     }
 
-    fn paired_operation(
-        lhs: Self,
-        rhs: Self,
+    fn paired_operation<T: From<Self>>(
+        self,
+        rhs: impl ResolveAs<Self>,
         context: BinaryOperationCallContext,
         perform_fn: fn(Self, Self) -> Option<Self>,
-    ) -> ExecutionResult<Self> {
-        perform_fn(lhs, rhs).ok_or_else(|| Self::binary_overflow_error(context, lhs, rhs))
+    ) -> ExecutionResult<T> {
+        let lhs = self;
+        let rhs = rhs.resolve_as("This operand")?;
+        perform_fn(lhs, rhs)
+            .map(|r| r.into())
+            .ok_or_else(|| Self::binary_overflow_error(context, lhs, rhs))
+    }
+
+    fn paired_operation_no_overflow<T: From<Self>>(
+        self,
+        rhs: impl ResolveAs<Self>,
+        perform_fn: fn(Self, Self) -> Self,
+    ) -> ExecutionResult<T> {
+        let lhs = self;
+        let rhs = rhs.resolve_as("This operand")?;
+        Ok(perform_fn(lhs, rhs).into())
+    }
+
+    fn shift_operation<O, T: From<O>>(
+        self,
+        rhs: u32,
+        context: BinaryOperationCallContext,
+        perform_fn: impl FnOnce(Self, u32) -> Option<O>,
+    ) -> ExecutionResult<T> {
+        let lhs = self;
+        perform_fn(lhs, rhs)
+            .map(|r| r.into())
+            .ok_or_else(|| Self::binary_overflow_error(context, lhs, rhs))
     }
 }
 
@@ -516,71 +546,6 @@ impl SynParse for CompoundAssignmentOperation {
             Err(input.error("Expected one of += -= *= /= %= &= |= ^= <<= or >>="))
         }
     }
-}
-
-impl CompoundAssignmentOperation {
-    pub(crate) fn to_binary(self) -> BinaryOperation {
-        match self {
-            CompoundAssignmentOperation::Add(token) => {
-                let token = create_single_token('+', token.spans[0]);
-                PairedBinaryOperation::Addition(token).into()
-            }
-            CompoundAssignmentOperation::Sub(token) => {
-                let token = create_single_token('-', token.spans[0]);
-                PairedBinaryOperation::Subtraction(token).into()
-            }
-            CompoundAssignmentOperation::Mul(token) => {
-                let token = create_single_token('*', token.spans[0]);
-                PairedBinaryOperation::Multiplication(token).into()
-            }
-            CompoundAssignmentOperation::Div(token) => {
-                let token = create_single_token('/', token.spans[0]);
-                PairedBinaryOperation::Division(token).into()
-            }
-            CompoundAssignmentOperation::Rem(token) => {
-                let token = create_single_token('%', token.spans[0]);
-                PairedBinaryOperation::Remainder(token).into()
-            }
-            CompoundAssignmentOperation::BitAnd(token) => {
-                let token = create_single_token('&', token.spans[0]);
-                PairedBinaryOperation::BitAnd(token).into()
-            }
-            CompoundAssignmentOperation::BitOr(token) => {
-                let token = create_single_token('^', token.spans[0]);
-                PairedBinaryOperation::BitOr(token).into()
-            }
-            CompoundAssignmentOperation::BitXor(token) => {
-                let token = create_single_token('|', token.spans[0]);
-                PairedBinaryOperation::BitXor(token).into()
-            }
-            CompoundAssignmentOperation::Shl(token) => {
-                let token = create_double_token('<', token.spans[0], '<', token.spans[1]);
-                IntegerBinaryOperation::ShiftLeft(token).into()
-            }
-            CompoundAssignmentOperation::Shr(token) => {
-                let token = create_double_token('>', token.spans[0], '>', token.spans[1]);
-                IntegerBinaryOperation::ShiftRight(token).into()
-            }
-        }
-    }
-}
-
-fn create_single_token<T: SynParse>(char: char, span: Span) -> T {
-    let stream = Punct::new(char, Spacing::Alone)
-        .with_span(span)
-        .to_token_stream();
-    T::parse.parse2(stream).unwrap()
-}
-
-fn create_double_token<T: SynParse>(char1: char, span1: Span, char2: char, span2: Span) -> T {
-    let mut stream = TokenStream::new();
-    Punct::new(char1, Spacing::Joint)
-        .with_span(span1)
-        .to_tokens(&mut stream);
-    Punct::new(char2, Spacing::Alone)
-        .with_span(span2)
-        .to_tokens(&mut stream);
-    T::parse.parse2(stream).unwrap()
 }
 
 impl Operation for CompoundAssignmentOperation {

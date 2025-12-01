@@ -315,7 +315,7 @@ pub(super) enum IterableRangeOf<T> {
     },
 }
 
-fn resolve_range<T: ResolvableArgumentOwned + ResolvableRange>(
+fn resolve_range<T: ResolvableOwned<Value> + ResolvableRange>(
     start: T,
     dots: syn::RangeLimits,
     end: Option<OwnedValue>,
@@ -349,10 +349,11 @@ impl IterableRangeOf<Value> {
             }
             Self::RangeFrom { start, dots } => (start, RangeLimits::HalfOpen(dots), None),
         };
+        let span_range = dots.span_range();
         match start {
             Value::Integer(mut start) => {
                 if let Some(end) = &end {
-                    start = start.resolve_untyped_to_match(end)?;
+                    start = IntegerValue::resolve_untyped_to_match_other(start.into_owned(span_range), end)?;
                 }
                 match start {
                     IntegerValue::Untyped(start) => resolve_range(start, dots, end),

@@ -195,6 +195,10 @@ define_interface! {
                 lhs.items.extend(rhs.items);
                 lhs
             }
+
+            fn add_assign(mut lhs: Assignee<ArrayValue>, rhs: ArrayValue) {
+                lhs.items.extend(rhs.items);
+            }
         }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
@@ -215,6 +219,15 @@ define_interface! {
             ) -> Option<BinaryOperationInterface> {
                 Some(match operation {
                     PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
+                    _ => return None,
+                })
+            }
+
+            fn resolve_own_compound_assignment_operation(
+                operation: &CompoundAssignmentOperation,
+            ) -> Option<BinaryOperationInterface> {
+                Some(match operation {
+                    CompoundAssignmentOperation::Add { .. } => binary_definitions::add_assign(),
                     _ => return None,
                 })
             }

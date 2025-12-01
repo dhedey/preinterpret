@@ -106,11 +106,6 @@ impl ExpressionNode {
                 equals_token,
                 value,
             } => AssignmentBuilder::start(context, *assignee, *equals_token, *value),
-            ExpressionNode::CompoundAssignment {
-                assignee,
-                operation,
-                value,
-            } => CompoundAssignmentBuilder::start(context, *assignee, *operation, *value),
             ExpressionNode::MethodCall {
                 node,
                 method,

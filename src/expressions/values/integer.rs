@@ -52,11 +52,32 @@ impl IntegerValue {
         self.to_unspanned_literal().with_span(span)
     }
 
-    pub(crate) fn resolve_untyped_to_match(self, other: &Value) -> ExecutionResult<Self> {
-        match (self, other) {
-            (IntegerValue::Untyped(this), Value::Integer(other)) => this.into_kind(other.kind()),
+    pub(crate) fn resolve_untyped_to_match_other(this: Owned<IntegerValue>, other: &Value) -> ExecutionResult<Self> {
+        let (value, span_range) = this.deconstruct();
+        match (value, other) {
+            (IntegerValue::Untyped(this), Value::Integer(other)) => this.into_owned(span_range).into_kind(other.kind()),
             (value, _) => Ok(value),
         }
+    }
+
+    pub(crate) fn resolve_untyped_to_match(this: Owned<IntegerValue>, target: &IntegerValue) -> ExecutionResult<Self> {
+        let (value, span_range) = this.deconstruct();
+        match value {
+            IntegerValue::Untyped(this) => this.into_owned(span_range).into_kind(target.kind()),
+            other => Ok(other),
+        }
+    }
+
+    pub(crate) fn assign_op<R>(
+        mut left: Assignee<IntegerValue>,
+        right: R,
+        context: BinaryOperationCallContext,
+        op: fn(BinaryOperationCallContext, Owned<IntegerValue>, R) -> ExecutionResult<IntegerValue>,
+    ) -> ExecutionResult<()> {
+        let left_value = core::mem::replace(&mut *left, IntegerValue::U32(0));
+        let result = op(context, left_value.into_owned(left.span_range()), right)?;
+        *left = result;
+        Ok(())
     }
 
     fn to_unspanned_literal(&self) -> Literal {
@@ -108,8 +129,281 @@ define_interface! {
         }
         pub(crate) mod unary_operations {
         }
-        pub(crate) mod binary_operations {}
+        pub(crate) mod binary_operations {
+            [context] fn add(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
+                let lhs_span = left.span_range();
+                match IntegerValue::resolve_untyped_to_match(left, &right)? {
+                    IntegerValue::Untyped(left) => left.into_owned(lhs_span).paired_operation(right, context, FallbackInteger::checked_add),
+                    IntegerValue::U8(left) => left.paired_operation(right, context, u8::checked_add),
+                    IntegerValue::U16(left) => left.paired_operation(right, context, u16::checked_add),
+                    IntegerValue::U32(left) => left.paired_operation(right, context, u32::checked_add),
+                    IntegerValue::U64(left) => left.paired_operation(right, context, u64::checked_add),
+                    IntegerValue::U128(left) => left.paired_operation(right, context, u128::checked_add),
+                    IntegerValue::Usize(left) => left.paired_operation(right, context, usize::checked_add),
+                    IntegerValue::I8(left) => left.paired_operation(right, context, i8::checked_add),
+                    IntegerValue::I16(left) => left.paired_operation(right, context, i16::checked_add),
+                    IntegerValue::I32(left) => left.paired_operation(right, context, i32::checked_add),
+                    IntegerValue::I64(left) => left.paired_operation(right, context, i64::checked_add),
+                    IntegerValue::I128(left) => left.paired_operation(right, context, i128::checked_add),
+                    IntegerValue::Isize(left) => left.paired_operation(right, context, isize::checked_add),
+                }
+            }
+
+            [context] fn add_assign(lhs: Assignee<IntegerValue>, rhs: Owned<IntegerValue>) -> ExecutionResult<()> {
+                IntegerValue::assign_op(lhs, rhs, context, add)
+            }
+
+            [context] fn sub(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
+                let lhs_span = left.span_range();
+                match IntegerValue::resolve_untyped_to_match(left, &right)? {
+                    IntegerValue::Untyped(left) => left.into_owned(lhs_span).paired_operation(right, context, FallbackInteger::checked_sub),
+                    IntegerValue::U8(left) => left.paired_operation(right, context, u8::checked_sub),
+                    IntegerValue::U16(left) => left.paired_operation(right, context, u16::checked_sub),
+                    IntegerValue::U32(left) => left.paired_operation(right, context, u32::checked_sub),
+                    IntegerValue::U64(left) => left.paired_operation(right, context, u64::checked_sub),
+                    IntegerValue::U128(left) => left.paired_operation(right, context, u128::checked_sub),
+                    IntegerValue::Usize(left) => left.paired_operation(right, context, usize::checked_sub),
+                    IntegerValue::I8(left) => left.paired_operation(right, context, i8::checked_sub),
+                    IntegerValue::I16(left) => left.paired_operation(right, context, i16::checked_sub),
+                    IntegerValue::I32(left) => left.paired_operation(right, context, i32::checked_sub),
+                    IntegerValue::I64(left) => left.paired_operation(right, context, i64::checked_sub),
+                    IntegerValue::I128(left) => left.paired_operation(right, context, i128::checked_sub),
+                    IntegerValue::Isize(left) => left.paired_operation(right, context, isize::checked_sub),
+                }
+            }
+
+            [context] fn sub_assign(lhs: Assignee<IntegerValue>, rhs: Owned<IntegerValue>) -> ExecutionResult<()> {
+                IntegerValue::assign_op(lhs, rhs, context, sub)
+            }
+
+            [context] fn mul(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
+                let lhs_span = left.span_range();
+                match IntegerValue::resolve_untyped_to_match(left, &right)? {
+                    IntegerValue::Untyped(left) => left.into_owned(lhs_span).paired_operation(right, context, FallbackInteger::checked_mul),
+                    IntegerValue::U8(left) => left.paired_operation(right, context, u8::checked_mul),
+                    IntegerValue::U16(left) => left.paired_operation(right, context, u16::checked_mul),
+                    IntegerValue::U32(left) => left.paired_operation(right, context, u32::checked_mul),
+                    IntegerValue::U64(left) => left.paired_operation(right, context, u64::checked_mul),
+                    IntegerValue::U128(left) => left.paired_operation(right, context, u128::checked_mul),
+                    IntegerValue::Usize(left) => left.paired_operation(right, context, usize::checked_mul),
+                    IntegerValue::I8(left) => left.paired_operation(right, context, i8::checked_mul),
+                    IntegerValue::I16(left) => left.paired_operation(right, context, i16::checked_mul),
+                    IntegerValue::I32(left) => left.paired_operation(right, context, i32::checked_mul),
+                    IntegerValue::I64(left) => left.paired_operation(right, context, i64::checked_mul),
+                    IntegerValue::I128(left) => left.paired_operation(right, context, i128::checked_mul),
+                    IntegerValue::Isize(left) => left.paired_operation(right, context, isize::checked_mul),
+                }
+            }
+
+            [context] fn mul_assign(lhs: Assignee<IntegerValue>, rhs: Owned<IntegerValue>) -> ExecutionResult<()> {
+                IntegerValue::assign_op(lhs, rhs, context, mul)
+            }
+
+            [context] fn div(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
+                let lhs_span = left.span_range();
+                match IntegerValue::resolve_untyped_to_match(left, &right)? {
+                    IntegerValue::Untyped(left) => left.into_owned(lhs_span).paired_operation(right, context, FallbackInteger::checked_div),
+                    IntegerValue::U8(left) => left.paired_operation(right, context, u8::checked_div),
+                    IntegerValue::U16(left) => left.paired_operation(right, context, u16::checked_div),
+                    IntegerValue::U32(left) => left.paired_operation(right, context, u32::checked_div),
+                    IntegerValue::U64(left) => left.paired_operation(right, context, u64::checked_div),
+                    IntegerValue::U128(left) => left.paired_operation(right, context, u128::checked_div),
+                    IntegerValue::Usize(left) => left.paired_operation(right, context, usize::checked_div),
+                    IntegerValue::I8(left) => left.paired_operation(right, context, i8::checked_div),
+                    IntegerValue::I16(left) => left.paired_operation(right, context, i16::checked_div),
+                    IntegerValue::I32(left) => left.paired_operation(right, context, i32::checked_div),
+                    IntegerValue::I64(left) => left.paired_operation(right, context, i64::checked_div),
+                    IntegerValue::I128(left) => left.paired_operation(right, context, i128::checked_div),
+                    IntegerValue::Isize(left) => left.paired_operation(right, context, isize::checked_div),
+                }
+            }
+
+            [context] fn div_assign(lhs: Assignee<IntegerValue>, rhs: Owned<IntegerValue>) -> ExecutionResult<()> {
+                IntegerValue::assign_op(lhs, rhs, context, div)
+            }
+
+            [context] fn rem(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
+                let lhs_span = left.span_range();
+                match IntegerValue::resolve_untyped_to_match(left, &right)? {
+                    IntegerValue::Untyped(left) => left.into_owned(lhs_span).paired_operation(right, context, FallbackInteger::checked_rem),
+                    IntegerValue::U8(left) => left.paired_operation(right, context, u8::checked_rem),
+                    IntegerValue::U16(left) => left.paired_operation(right, context, u16::checked_rem),
+                    IntegerValue::U32(left) => left.paired_operation(right, context, u32::checked_rem),
+                    IntegerValue::U64(left) => left.paired_operation(right, context, u64::checked_rem),
+                    IntegerValue::U128(left) => left.paired_operation(right, context, u128::checked_rem),
+                    IntegerValue::Usize(left) => left.paired_operation(right, context, usize::checked_rem),
+                    IntegerValue::I8(left) => left.paired_operation(right, context, i8::checked_rem),
+                    IntegerValue::I16(left) => left.paired_operation(right, context, i16::checked_rem),
+                    IntegerValue::I32(left) => left.paired_operation(right, context, i32::checked_rem),
+                    IntegerValue::I64(left) => left.paired_operation(right, context, i64::checked_rem),
+                    IntegerValue::I128(left) => left.paired_operation(right, context, i128::checked_rem),
+                    IntegerValue::Isize(left) => left.paired_operation(right, context, isize::checked_rem),
+                }
+            }
+
+            [context] fn rem_assign(lhs: Assignee<IntegerValue>, rhs: Owned<IntegerValue>) -> ExecutionResult<()> {
+                IntegerValue::assign_op(lhs, rhs, context, rem)
+            }
+
+            [context] fn bitxor(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
+                let lhs_span = left.span_range();
+                match IntegerValue::resolve_untyped_to_match(left, &right)? {
+                    IntegerValue::Untyped(left) => left.into_owned(lhs_span).paired_operation(right, context, |a, b| Some(a ^ b)),
+                    IntegerValue::U8(left) => left.paired_operation(right, context, |a, b| Some(a ^ b)),
+                    IntegerValue::U16(left) => left.paired_operation(right, context, |a, b| Some(a ^ b)),
+                    IntegerValue::U32(left) => left.paired_operation(right, context, |a, b| Some(a ^ b)),
+                    IntegerValue::U64(left) => left.paired_operation(right, context, |a, b| Some(a ^ b)),
+                    IntegerValue::U128(left) => left.paired_operation(right, context, |a, b| Some(a ^ b)),
+                    IntegerValue::Usize(left) => left.paired_operation(right, context, |a, b| Some(a ^ b)),
+                    IntegerValue::I8(left) => left.paired_operation(right, context, |a, b| Some(a ^ b)),
+                    IntegerValue::I16(left) => left.paired_operation(right, context, |a, b| Some(a ^ b)),
+                    IntegerValue::I32(left) => left.paired_operation(right, context, |a, b| Some(a ^ b)),
+                    IntegerValue::I64(left) => left.paired_operation(right, context, |a, b| Some(a ^ b)),
+                    IntegerValue::I128(left) => left.paired_operation(right, context, |a, b| Some(a ^ b)),
+                    IntegerValue::Isize(left) => left.paired_operation(right, context, |a, b| Some(a ^ b)),
+                }
+            }
+
+            [context] fn bitxor_assign(lhs: Assignee<IntegerValue>, rhs: Owned<IntegerValue>) -> ExecutionResult<()> {
+                IntegerValue::assign_op(lhs, rhs, context, bitxor)
+            }
+
+            [context] fn bitand(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
+                let lhs_span = left.span_range();
+                match IntegerValue::resolve_untyped_to_match(left, &right)? {
+                    IntegerValue::Untyped(left) => left.into_owned(lhs_span).paired_operation(right, context, |a, b| Some(a & b)),
+                    IntegerValue::U8(left) => left.paired_operation(right, context, |a, b| Some(a & b)),
+                    IntegerValue::U16(left) => left.paired_operation(right, context, |a, b| Some(a & b)),
+                    IntegerValue::U32(left) => left.paired_operation(right, context, |a, b| Some(a & b)),
+                    IntegerValue::U64(left) => left.paired_operation(right, context, |a, b| Some(a & b)),
+                    IntegerValue::U128(left) => left.paired_operation(right, context, |a, b| Some(a & b)),
+                    IntegerValue::Usize(left) => left.paired_operation(right, context, |a, b| Some(a & b)),
+                    IntegerValue::I8(left) => left.paired_operation(right, context, |a, b| Some(a & b)),
+                    IntegerValue::I16(left) => left.paired_operation(right, context, |a, b| Some(a & b)),
+                    IntegerValue::I32(left) => left.paired_operation(right, context, |a, b| Some(a & b)),
+                    IntegerValue::I64(left) => left.paired_operation(right, context, |a, b| Some(a & b)),
+                    IntegerValue::I128(left) => left.paired_operation(right, context, |a, b| Some(a & b)),
+                    IntegerValue::Isize(left) => left.paired_operation(right, context, |a, b| Some(a & b)),
+                }
+            }
+
+            [context] fn bitand_assign(lhs: Assignee<IntegerValue>, rhs: Owned<IntegerValue>) -> ExecutionResult<()> {
+                IntegerValue::assign_op(lhs, rhs, context, bitand)
+            }
+
+            [context] fn bitor(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
+                let lhs_span = left.span_range();
+                match IntegerValue::resolve_untyped_to_match(left, &right)? {
+                    IntegerValue::Untyped(left) => left.into_owned(lhs_span).paired_operation(right, context, |a, b| Some(a | b)),
+                    IntegerValue::U8(left) => left.paired_operation(right, context, |a, b| Some(a | b)),
+                    IntegerValue::U16(left) => left.paired_operation(right, context, |a, b| Some(a | b)),
+                    IntegerValue::U32(left) => left.paired_operation(right, context, |a, b| Some(a | b)),
+                    IntegerValue::U64(left) => left.paired_operation(right, context, |a, b| Some(a | b)),
+                    IntegerValue::U128(left) => left.paired_operation(right, context, |a, b| Some(a | b)),
+                    IntegerValue::Usize(left) => left.paired_operation(right, context, |a, b| Some(a | b)),
+                    IntegerValue::I8(left) => left.paired_operation(right, context, |a, b| Some(a | b)),
+                    IntegerValue::I16(left) => left.paired_operation(right, context, |a, b| Some(a | b)),
+                    IntegerValue::I32(left) => left.paired_operation(right, context, |a, b| Some(a | b)),
+                    IntegerValue::I64(left) => left.paired_operation(right, context, |a, b| Some(a | b)),
+                    IntegerValue::I128(left) => left.paired_operation(right, context, |a, b| Some(a | b)),
+                    IntegerValue::Isize(left) => left.paired_operation(right, context, |a, b| Some(a | b)),
+                }
+            }
+
+            [context] fn bitor_assign(lhs: Assignee<IntegerValue>, rhs: Owned<IntegerValue>) -> ExecutionResult<()> {
+                IntegerValue::assign_op(lhs, rhs, context, bitor)
+            }
+
+            [context] fn shift_left(lhs: Owned<IntegerValue>, right: CoercedToU32) -> ExecutionResult<IntegerValue> {
+                let (lhs, lhs_span) = lhs.deconstruct();
+                let CoercedToU32(right) = right;
+                match lhs {
+                    IntegerValue::Untyped(left) => left.into_owned(lhs_span).shift_operation(right, context, FallbackInteger::checked_shl),
+                    IntegerValue::U8(left) => left.shift_operation(right, context, u8::checked_shl),
+                    IntegerValue::U16(left) => left.shift_operation(right, context, u16::checked_shl),
+                    IntegerValue::U32(left) => left.shift_operation(right, context, u32::checked_shl),
+                    IntegerValue::U64(left) => left.shift_operation(right, context, u64::checked_shl),
+                    IntegerValue::U128(left) => left.shift_operation(right, context, u128::checked_shl),
+                    IntegerValue::Usize(left) => left.shift_operation(right, context, usize::checked_shl),
+                    IntegerValue::I8(left) => left.shift_operation(right, context, i8::checked_shl),
+                    IntegerValue::I16(left) => left.shift_operation(right, context, i16::checked_shl),
+                    IntegerValue::I32(left) => left.shift_operation(right, context, i32::checked_shl),
+                    IntegerValue::I64(left) => left.shift_operation(right, context, i64::checked_shl),
+                    IntegerValue::I128(left) => left.shift_operation(right, context, i128::checked_shl),
+                    IntegerValue::Isize(left) => left.shift_operation(right, context, isize::checked_shl),
+                }
+            }
+
+            [context] fn shift_left_assign(lhs: Assignee<IntegerValue>, rhs: CoercedToU32) -> ExecutionResult<()> {
+                IntegerValue::assign_op(lhs, rhs, context, shift_left)
+            }
+
+            [context] fn shift_right(lhs: Owned<IntegerValue>, right: CoercedToU32) -> ExecutionResult<IntegerValue> {
+                let (lhs, lhs_span) = lhs.deconstruct();
+                let CoercedToU32(right) = right;
+                match lhs {
+                    IntegerValue::Untyped(left) => left.into_owned(lhs_span).shift_operation(right, context, FallbackInteger::checked_shr),
+                    IntegerValue::U8(left) => left.shift_operation(right, context, u8::checked_shr),
+                    IntegerValue::U16(left) => left.shift_operation(right, context, u16::checked_shr),
+                    IntegerValue::U32(left) => left.shift_operation(right, context, u32::checked_shr),
+                    IntegerValue::U64(left) => left.shift_operation(right, context, u64::checked_shr),
+                    IntegerValue::U128(left) => left.shift_operation(right, context, u128::checked_shr),
+                    IntegerValue::Usize(left) => left.shift_operation(right, context, usize::checked_shr),
+                    IntegerValue::I8(left) => left.shift_operation(right, context, i8::checked_shr),
+                    IntegerValue::I16(left) => left.shift_operation(right, context, i16::checked_shr),
+                    IntegerValue::I32(left) => left.shift_operation(right, context, i32::checked_shr),
+                    IntegerValue::I64(left) => left.shift_operation(right, context, i64::checked_shr),
+                    IntegerValue::I128(left) => left.shift_operation(right, context, i128::checked_shr),
+                    IntegerValue::Isize(left) => left.shift_operation(right, context, isize::checked_shr),
+                }
+            }
+
+            [context] fn shift_right_assign(lhs: Assignee<IntegerValue>, rhs: CoercedToU32) -> ExecutionResult<()> {
+                IntegerValue::assign_op(lhs, rhs, context, shift_right)
+            }
+        }
         interface_items {
+            fn resolve_paired_binary_operation(
+                operation: &PairedBinaryOperation,
+            ) -> Option<BinaryOperationInterface> {
+                Some(match operation {
+                    PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
+                    PairedBinaryOperation::Subtraction { .. } => binary_definitions::sub(),
+                    PairedBinaryOperation::Multiplication { .. } => binary_definitions::mul(),
+                    PairedBinaryOperation::Division { .. } => binary_definitions::div(),
+                    PairedBinaryOperation::Remainder { .. } => binary_definitions::rem(),
+                    PairedBinaryOperation::BitXor { .. } => binary_definitions::bitxor(),
+                    PairedBinaryOperation::BitAnd { .. } => binary_definitions::bitand(),
+                    PairedBinaryOperation::BitOr { .. } => binary_definitions::bitor(),
+                    _ => return None,
+                })
+            }
+
+            fn resolve_integer_binary_operation(
+                operation: &IntegerBinaryOperation,
+            ) -> Option<BinaryOperationInterface> {
+                Some(match operation {
+                    IntegerBinaryOperation::ShiftLeft { .. } => binary_definitions::shift_left(),
+                    IntegerBinaryOperation::ShiftRight { .. } => binary_definitions::shift_right(),
+                })
+            }
+
+            fn resolve_own_compound_assignment_operation(
+                operation: &CompoundAssignmentOperation,
+            ) -> Option<BinaryOperationInterface> {
+                Some(match operation {
+                    CompoundAssignmentOperation::Add { .. } => binary_definitions::add_assign(),
+                    CompoundAssignmentOperation::Sub { .. } => binary_definitions::sub_assign(),
+                    CompoundAssignmentOperation::Mul { .. } => binary_definitions::mul_assign(),
+                    CompoundAssignmentOperation::Div { .. } => binary_definitions::div_assign(),
+                    CompoundAssignmentOperation::Rem { .. } => binary_definitions::rem_assign(),
+                    CompoundAssignmentOperation::BitXor { .. } => binary_definitions::bitxor_assign(),
+                    CompoundAssignmentOperation::BitAnd { .. } => binary_definitions::bitand_assign(),
+                    CompoundAssignmentOperation::BitOr { .. } => binary_definitions::bitor_assign(),
+                    CompoundAssignmentOperation::Shl { .. } => binary_definitions::shift_left_assign(),
+                    CompoundAssignmentOperation::Shr { .. } => binary_definitions::shift_right_assign(),
+                })
+            }
         }
     }
 }
@@ -206,7 +500,7 @@ impl ResolvableArgumentTarget for CoercedToU32 {
     type ValueType = IntegerTypeData;
 }
 
-impl ResolvableArgumentOwned for CoercedToU32 {
+impl ResolvableOwned<Value> for CoercedToU32 {
     fn resolve_from_value(input_value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
         let integer = match input_value {
             Value::Integer(value) => value,
@@ -225,7 +519,7 @@ impl ResolvableArgumentOwned for CoercedToU32 {
             IntegerValue::I64(x) => x.try_into().ok(),
             IntegerValue::I128(x) => x.try_into().ok(),
             IntegerValue::Isize(x) => x.try_into().ok(),
-            IntegerValue::Untyped(x) => x.parse_as().ok(),
+            IntegerValue::Untyped(x) => x.into_spanned_ref(context.error_span_range()).parse_as().ok(),
         };
         match coerced {
             Some(value) => Ok(CoercedToU32(value)),

@@ -84,41 +84,6 @@ macro_rules! impl_float_operations {
                     }
                 }
                 pub(crate) mod binary_operations {
-                    [context] fn add(
-                        lhs: $float_type,
-                        rhs: $float_type,
-                    ) -> ExecutionResult<$float_type> {
-                        $float_type::paired_operation(lhs, rhs, context, |a, b| Some(a + b))
-                    }
-
-                    [context] fn sub(
-                        lhs: $float_type,
-                        rhs: $float_type,
-                    ) -> ExecutionResult<$float_type> {
-                        $float_type::paired_operation(lhs, rhs, context, |a, b| Some(a - b))
-                    }
-
-                    [context] fn mul(
-                        lhs: $float_type,
-                        rhs: $float_type,
-                    ) -> ExecutionResult<$float_type> {
-                        $float_type::paired_operation(lhs, rhs, context, |a, b| Some(a * b))
-                    }
-
-                    [context] fn div(
-                        lhs: $float_type,
-                        rhs: $float_type,
-                    ) -> ExecutionResult<$float_type> {
-                        $float_type::paired_operation(lhs, rhs, context, |a, b| Some(a / b))
-                    }
-
-                    [context] fn rem(
-                        lhs: $float_type,
-                        rhs: $float_type,
-                    ) -> ExecutionResult<$float_type> {
-                        $float_type::paired_operation(lhs, rhs, context, |a, b| Some(a % b))
-                    }
-
                     fn eq(lhs: $float_type, rhs: $float_type) -> bool {
                         lhs == rhs
                     }
@@ -175,11 +140,7 @@ macro_rules! impl_float_operations {
                         operation: &PairedBinaryOperation,
                     ) -> Option<BinaryOperationInterface> {
                         Some(match operation {
-                            PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
-                            PairedBinaryOperation::Subtraction { .. } => binary_definitions::sub(),
-                            PairedBinaryOperation::Multiplication { .. } => binary_definitions::mul(),
-                            PairedBinaryOperation::Division { .. } => binary_definitions::div(),
-                            PairedBinaryOperation::Remainder { .. } => binary_definitions::rem(),
+                            // Most operations are defined on the float value directly
                             PairedBinaryOperation::Equal { .. } => binary_definitions::eq(),
                             PairedBinaryOperation::NotEqual { .. } => binary_definitions::ne(),
                             PairedBinaryOperation::LessThan { .. } => binary_definitions::lt(),
@@ -224,20 +185,38 @@ macro_rules! impl_resolvable_float_subtype {
             type ValueType = $value_type;
         }
 
-        impl ResolvableArgumentOwned for $type {
+        impl From<$type> for FloatValue {
+            fn from(value: $type) -> Self {
+                FloatValue::$variant(value)
+            }
+        }
+
+        impl ResolvableOwned<FloatValue> for $type {
             fn resolve_from_value(
-                value: Value,
+                value: FloatValue,
                 context: ResolutionContext,
             ) -> ExecutionResult<Self> {
                 match value {
-                    Value::Float(FloatValue::Untyped(x)) => x.parse_as(),
-                    Value::Float(FloatValue::$variant(x)) => Ok(x),
+                    FloatValue::Untyped(x) => Ok(x.into_fallback() as $type),
+                    FloatValue::$variant(x) => Ok(x),
                     other => context.err($expected_msg, other),
                 }
             }
         }
 
-        impl ResolvableArgumentShared for $type {
+        impl ResolvableOwned<Value> for $type {
+            fn resolve_from_value(
+                value: Value,
+                context: ResolutionContext,
+            ) -> ExecutionResult<Self> {
+                match value {
+                    Value::Float(x) => <$type>::resolve_from_value(x, context),
+                    other => context.err($expected_msg, other),
+                }
+            }
+        }
+
+        impl ResolvableShared<Value> for $type {
             fn resolve_from_ref<'a>(
                 value: &'a Value,
                 context: ResolutionContext,
@@ -249,7 +228,7 @@ macro_rules! impl_resolvable_float_subtype {
             }
         }
 
-        impl ResolvableArgumentMutable for $type {
+        impl ResolvableMutable<Value> for $type {
             fn resolve_from_mut<'a>(
                 value: &'a mut Value,
                 context: ResolutionContext,

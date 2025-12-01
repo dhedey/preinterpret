@@ -13,24 +13,6 @@ impl UntypedInteger {
         Self::new_from_lit_int(literal.into())
     }
 
-    pub(crate) fn into_kind(self, kind: IntegerKind) -> ExecutionResult<IntegerValue> {
-        Ok(match kind {
-            IntegerKind::Untyped => IntegerValue::Untyped(self),
-            IntegerKind::I8 => IntegerValue::I8(self.parse_as()?),
-            IntegerKind::I16 => IntegerValue::I16(self.parse_as()?),
-            IntegerKind::I32 => IntegerValue::I32(self.parse_as()?),
-            IntegerKind::I64 => IntegerValue::I64(self.parse_as()?),
-            IntegerKind::I128 => IntegerValue::I128(self.parse_as()?),
-            IntegerKind::Isize => IntegerValue::Isize(self.parse_as()?),
-            IntegerKind::U8 => IntegerValue::U8(self.parse_as()?),
-            IntegerKind::U16 => IntegerValue::U16(self.parse_as()?),
-            IntegerKind::U32 => IntegerValue::U32(self.parse_as()?),
-            IntegerKind::U64 => IntegerValue::U64(self.parse_as()?),
-            IntegerKind::U128 => IntegerValue::U128(self.parse_as()?),
-            IntegerKind::Usize => IntegerValue::Usize(self.parse_as()?),
-        })
-    }
-
     fn binary_overflow_error(
         context: BinaryOperationCallContext,
         lhs: impl std::fmt::Display,
@@ -42,32 +24,6 @@ impl UntypedInteger {
             context.operation.symbolic_description(),
             rhs
         ))
-    }
-
-    fn paired_operation(
-        lhs: Owned<UntypedInteger>,
-        rhs: Owned<IntegerValue>,
-        context: BinaryOperationCallContext,
-        perform_fn: fn(FallbackInteger, FallbackInteger) -> Option<FallbackInteger>,
-    ) -> ExecutionResult<ReturnedValue> {
-        let (lhs, lhs_span_range) = lhs.deconstruct();
-        let (rhs, rhs_span_range) = rhs.deconstruct();
-        match rhs {
-            IntegerValue::Untyped(rhs) => {
-                let lhs = lhs.parse_fallback()?;
-                let rhs = rhs.parse_fallback()?;
-                let output = perform_fn(lhs, rhs)
-                    .ok_or_else(|| Self::binary_overflow_error(context, lhs, rhs))?;
-                UntypedInteger::from_fallback(output).to_returned_value(context.output_span_range)
-            }
-            rhs => {
-                let lhs = lhs.into_kind(rhs.kind())?;
-                context.operation.evaluate(
-                    lhs.into_owned_value(lhs_span_range),
-                    rhs.into_owned_value(rhs_span_range),
-                )
-            }
-        }
     }
 
     fn paired_comparison(
@@ -86,7 +42,7 @@ impl UntypedInteger {
             }
             rhs => {
                 // Re-evaluate with lhs converted to the typed integer
-                let lhs = lhs.into_kind(rhs.kind())?;
+                let lhs = lhs.into_owned(lhs_span_range).into_kind(rhs.kind())?;
                 context
                     .operation
                     .evaluate(
@@ -116,22 +72,70 @@ impl UntypedInteger {
         })
     }
 
-    pub(crate) fn parse_as<N>(&self) -> ExecutionResult<N>
+    pub(super) fn to_unspanned_literal(&self) -> Literal {
+        self.0.token()
+    }
+}
+
+impl Owned<UntypedInteger> {
+    pub(crate) fn paired_operation(
+        self,
+        rhs: Owned<IntegerValue>,
+        context: BinaryOperationCallContext,
+        perform_fn: fn(FallbackInteger, FallbackInteger) -> Option<FallbackInteger>,
+    ) -> ExecutionResult<IntegerValue> {
+        let lhs = self.parse_fallback()?;
+        let rhs: UntypedInteger = rhs.resolve_as("This operand")?;
+        let rhs = rhs.parse_fallback()?;
+        let output = perform_fn(lhs, rhs)
+            .ok_or_else(|| UntypedInteger::binary_overflow_error(context, lhs, rhs))?;
+        Ok(IntegerValue::Untyped(UntypedInteger::from_fallback(output)))
+    }
+
+    pub(crate) fn shift_operation(
+        self,
+        rhs: u32,
+        context: BinaryOperationCallContext,
+        perform_fn: fn(FallbackInteger, u32) -> Option<FallbackInteger>,
+    ) -> ExecutionResult<IntegerValue> {
+        let lhs = self.parse_fallback()?;
+        let output = perform_fn(lhs, rhs)
+            .ok_or_else(|| UntypedInteger::binary_overflow_error(context, lhs, rhs))?;
+        Ok(IntegerValue::Untyped(UntypedInteger::from_fallback(output)))
+    }
+
+    pub(crate) fn into_kind(self, kind: IntegerKind) -> ExecutionResult<IntegerValue> {
+        Ok(match kind {
+            IntegerKind::Untyped => IntegerValue::Untyped(self.value),
+            IntegerKind::I8 => IntegerValue::I8(self.as_ref().parse_as()?),
+            IntegerKind::I16 => IntegerValue::I16(self.as_ref().parse_as()?),
+            IntegerKind::I32 => IntegerValue::I32(self.as_ref().parse_as()?),
+            IntegerKind::I64 => IntegerValue::I64(self.as_ref().parse_as()?),
+            IntegerKind::I128 => IntegerValue::I128(self.as_ref().parse_as()?),
+            IntegerKind::Isize => IntegerValue::Isize(self.as_ref().parse_as()?),
+            IntegerKind::U8 => IntegerValue::U8(self.as_ref().parse_as()?),
+            IntegerKind::U16 => IntegerValue::U16(self.as_ref().parse_as()?),
+            IntegerKind::U32 => IntegerValue::U32(self.as_ref().parse_as()?),
+            IntegerKind::U64 => IntegerValue::U64(self.as_ref().parse_as()?),
+            IntegerKind::U128 => IntegerValue::U128(self.as_ref().parse_as()?),
+            IntegerKind::Usize => IntegerValue::Usize(self.as_ref().parse_as()?),
+        })
+    }
+}
+
+impl<'a> SpannedAnyRef<'a, UntypedInteger> {
+    pub(crate) fn parse_as<N>(self) -> ExecutionResult<N>
     where
         N: FromStr,
         N::Err: core::fmt::Display,
     {
-        self.0.base10_digits().parse().map_err(|err| {
-            self.0.value_error(format!(
+        self.value.0.base10_digits().parse().map_err(|err| {
+            self.span_range.value_error(format!(
                 "Could not parse as {}: {}",
                 core::any::type_name::<N>(),
                 err
             ))
         })
-    }
-
-    pub(super) fn to_unspanned_literal(&self) -> Literal {
-        self.0.token()
     }
 }
 
@@ -234,62 +238,6 @@ define_interface! {
             }
         }
         pub(crate) mod binary_operations {
-            [context] fn add(
-                lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerValue>,
-            ) -> ExecutionResult<ReturnedValue> {
-                UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_add)
-            }
-
-            [context] fn sub(
-                lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerValue>,
-            ) -> ExecutionResult<ReturnedValue> {
-                UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_sub)
-            }
-
-            [context] fn mul(
-                lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerValue>,
-            ) -> ExecutionResult<ReturnedValue> {
-                UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_mul)
-            }
-
-            [context] fn div(
-                lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerValue>,
-            ) -> ExecutionResult<ReturnedValue> {
-                UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_div)
-            }
-
-            [context] fn rem(
-                lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerValue>,
-            ) -> ExecutionResult<ReturnedValue> {
-                UntypedInteger::paired_operation(lhs, rhs, context, FallbackInteger::checked_rem)
-            }
-
-            [context] fn bitxor(
-                lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerValue>,
-            ) -> ExecutionResult<ReturnedValue> {
-                UntypedInteger::paired_operation(lhs, rhs, context, |a, b| Some(a ^ b))
-            }
-
-            [context] fn bitand(
-                lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerValue>,
-            ) -> ExecutionResult<ReturnedValue> {
-                UntypedInteger::paired_operation(lhs, rhs, context, |a, b| Some(a & b))
-            }
-
-            [context] fn bitor(
-                lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerValue>,
-            ) -> ExecutionResult<ReturnedValue> {
-                UntypedInteger::paired_operation(lhs, rhs, context, |a, b| Some(a | b))
-            }
-
             [context] fn eq(
                 lhs: Owned<UntypedInteger>,
                 rhs: Owned<IntegerValue>,
@@ -331,30 +279,6 @@ define_interface! {
             ) -> ExecutionResult<bool> {
                 UntypedInteger::paired_comparison(lhs, rhs, context, |a, b| a > b)
             }
-
-            [context] fn shift_left(
-                lhs: UntypedIntegerFallback,
-                rhs: CoercedToU32,
-            ) -> ExecutionResult<UntypedInteger> {
-                let UntypedIntegerFallback(lhs) = lhs;
-                let CoercedToU32(rhs) = rhs;
-                let value = lhs.checked_shl(rhs).ok_or_else(|| {
-                    UntypedInteger::binary_overflow_error(context, lhs, rhs)
-                })?;
-                Ok(UntypedInteger::from_fallback(value))
-            }
-
-            [context] fn shift_right(
-                lhs: UntypedIntegerFallback,
-                rhs: CoercedToU32,
-            ) -> ExecutionResult<UntypedInteger> {
-                let UntypedIntegerFallback(lhs) = lhs;
-                let CoercedToU32(rhs) = rhs;
-                let value = lhs.checked_shr(rhs).ok_or_else(|| {
-                    UntypedInteger::binary_overflow_error(context, lhs, rhs)
-                })?;
-                Ok(UntypedInteger::from_fallback(value))
-            }
         }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
@@ -388,14 +312,7 @@ define_interface! {
                 operation: &PairedBinaryOperation,
             ) -> Option<BinaryOperationInterface> {
                 Some(match operation {
-                    PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
-                    PairedBinaryOperation::Subtraction { .. } => binary_definitions::sub(),
-                    PairedBinaryOperation::Multiplication { .. } => binary_definitions::mul(),
-                    PairedBinaryOperation::Division { .. } => binary_definitions::div(),
-                    PairedBinaryOperation::Remainder { .. } => binary_definitions::rem(),
-                    PairedBinaryOperation::BitXor { .. } => binary_definitions::bitxor(),
-                    PairedBinaryOperation::BitAnd { .. } => binary_definitions::bitand(),
-                    PairedBinaryOperation::BitOr { .. } => binary_definitions::bitor(),
+                    // Most operations are defined on the integer value directly
                     PairedBinaryOperation::Equal { .. } => binary_definitions::eq(),
                     PairedBinaryOperation::NotEqual { .. } => binary_definitions::ne(),
                     PairedBinaryOperation::LessThan { .. } => binary_definitions::lt(),
@@ -403,15 +320,6 @@ define_interface! {
                     PairedBinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
                     PairedBinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
                     _ => return None,
-                })
-            }
-
-            fn resolve_integer_binary_operation(
-                operation: &IntegerBinaryOperation,
-            ) -> Option<BinaryOperationInterface> {
-                Some(match operation {
-                    IntegerBinaryOperation::ShiftLeft { .. } => binary_definitions::shift_left(),
-                    IntegerBinaryOperation::ShiftRight { .. } => binary_definitions::shift_right(),
                 })
             }
         }
@@ -424,11 +332,23 @@ impl ResolvableArgumentTarget for UntypedIntegerFallback {
     type ValueType = UntypedIntegerTypeData;
 }
 
-impl ResolvableArgumentOwned for UntypedIntegerFallback {
+impl ResolvableOwned<Value> for UntypedIntegerFallback {
     fn resolve_from_value(input_value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
         let value: UntypedInteger =
-            ResolvableArgumentOwned::resolve_from_value(input_value, context)?;
+            ResolvableOwned::<Value>::resolve_from_value(input_value, context)?;
         Ok(UntypedIntegerFallback(value.parse_fallback()?))
+    }
+}
+
+impl ResolvableOwned<IntegerValue> for UntypedInteger {
+    fn resolve_from_value(
+        value: IntegerValue,
+        context: ResolutionContext,
+    ) -> ExecutionResult<Self> {
+        match value {
+            IntegerValue::Untyped(value) => Ok(value),
+            _ => context.err("untyped integer", value),
+        }
     }
 }
 

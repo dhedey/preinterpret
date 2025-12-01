@@ -52,6 +52,22 @@ pub(crate) trait HasValueKind {
     }
 }
 
+impl<'a, T: HasValueKind> HasValueKind for &'a T {
+    type SpecificKind = T::SpecificKind;
+
+    fn kind(&self) -> Self::SpecificKind {
+        (**self).kind()
+    }
+}
+
+impl<'a, T: HasValueKind> HasValueKind for &'a mut T {
+    type SpecificKind = T::SpecificKind;
+
+    fn kind(&self) -> Self::SpecificKind {
+        (**self).kind()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ValueKind {
     None,
@@ -659,39 +675,6 @@ impl OwnedValue {
         resolution_target: &str,
     ) -> ExecutionResult<Owned<IteratorValue>> {
         IterableValue::resolve_owned(self, resolution_target)?.try_map(|v, _| v.into_iterator())
-    }
-}
-
-impl SpannedAnyRefMut<'_, Value> {
-    pub(crate) fn handle_compound_assignment(
-        self,
-        operation: &CompoundAssignmentOperation,
-        right: OwnedValue,
-    ) -> ExecutionResult<()> {
-        let (mut left, left_span_range) = self.deconstruct();
-        match (&mut *left, operation) {
-            (Value::Stream(left_mut), CompoundAssignmentOperation::Add(_)) => {
-                let right: StreamValue = right.resolve_as("The target of += on a stream")?;
-                right.value.append_into(&mut left_mut.value);
-            }
-            (Value::Array(left_mut), CompoundAssignmentOperation::Add(_)) => {
-                let mut right: ArrayValue = right.resolve_as("The target of += on an array")?;
-                left_mut.items.append(&mut right.items);
-            }
-            (left_mut, operation) => {
-                // Fallback to just clone and use the normal operator
-                let left = left_mut.clone();
-                let output = operation
-                    .to_binary()
-                    .evaluate(left.into_owned(left_span_range), right)?;
-                let value = RequestedOwnership::owned()
-                    .map_from_returned(output)?
-                    .expect_owned()
-                    .value;
-                *left_mut = value;
-            }
-        }
-        Ok(())
     }
 }
 

@@ -1,7 +1,7 @@
 use super::*;
 
 // If you add a new variant, also update:
-// * ResolvableArgumentOwned for IterableValue
+// * ResolvableOwned<Value> for IterableValue
 // * IsArgument for IterableRef
 // * The parent of the value's TypeData to be IterableTypeData
 pub(crate) enum IterableValue {
@@ -17,7 +17,7 @@ impl ResolvableArgumentTarget for IterableValue {
     type ValueType = IterableTypeData;
 }
 
-impl ResolvableArgumentOwned for IterableValue {
+impl ResolvableOwned<Value> for IterableValue {
     fn resolve_from_value(value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
         Ok(match value {
             Value::Array(x) => Self::Array(x),

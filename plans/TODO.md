@@ -43,7 +43,7 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 
 ## Method Calls
 
-- [ ] Migrate the following `PairedBinaryOperation` across all types to being under the `binary_operations` of its TypeData. For each, when migration is complete, add it to the // MIGRATION LIST in operations.rs to check it's fully migrated
+- [x] Migrate the following `PairedBinaryOperation` across all types to being under the `binary_operations` of its TypeData. For each, when migration is complete, add it to the // MIGRATION LIST in operations.rs to check it's fully migrated
   - [x] `Addition`
   - [x] `Subtraction`, `Multiplication`, `Division` and `Remainder`
   - [x] `LogicalAnd` and `LogicalOr`
@@ -56,10 +56,16 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
   which should massively reduce the number of implementataions we need to generate.
     i.e. we have a `CoercedInt<u32>` wrapper type which we use as the operand of the SHL/SHR operators
 - [x] Remove the `evaluate_legacy` method, the `PairedBinaryOperation`, and all the dead code
-- [ ] Combine `PairedBinaryOperation` and `IntegerBinaryOperation` into a flattened `BinaryOperation`
-- [ ] Add `==` and `!=` to streams, objects and arrays and make it work with `AnyRef<..>` arguments for testing equality
-- [ ] CompoundAssignment migration
-- [ ] Ensure all `TODO[operation-refactor]` are done
+- [ ] Combine `PairedBinaryOperation`, `IntegerBinaryOperation` and `CompoundAssignmentOperation` into a flattened `BinaryOperation`
+- [ ] Add `==` and `!=` to all values (including streams, objects and arrays, and between typed/untyped integers and floats) and make it work with `AnyRef<..>` arguments for testing equality
+- [x] CompoundAssignment migration
+- [ ] Migrate `UntypedInteger` to use `FallbackInteger` like `UntypedFloat` (except a little harder because integers can overflow)
+- [ ] Migrate comparison operations to IntegerValue if it makes sense? Would be nice to get rid of the `paired_comparison` methods
+- [ ] Consider if/how we can improve the evaluation order of compound assignments to be (right, left)
+- [ ] Add tests to cover all the operations, including:
+  - [ ] Compile error tests for `+=` out of order
+  - [ ] All the binary operations, with the four combinations typed/untyped etc
+- [ ] Ensure all `TODO[operation-refactor]` and `TODO[compound-assignment-refactor]` are done
 
 ## Control flow expressions (ideally requires Stream Literals)
 
@@ -368,6 +374,7 @@ The following are less important tasks which maybe we don't even want/need to do
 
 - [ ] Side-project: Make LateBound better to allow this, by upgrading to mutable before use
   - [ ] https://rust-lang.github.io/rfcs/2025-nested-method-calls.html
+  - [ ] x += x for x copy, by resolving Owned before Mutable / Shared
 - [ ] Allow adding lifetimes to stream literals `%'a[]` and then `emit 'a`, with `'root` being the topmost. Or maybe just `emit 'root` honestly. Can't really see the use case for the others.
   - [ ] Note that `%'a[((#{ emit 'a %[x] }))]` should yield `x(())`
   - [ ] Note that we need to prevent or revert outputting to root in revertible segments
@@ -388,26 +395,11 @@ Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` doc
 
 - [x] Merge `assignee_frames` into `value_frames` as per comment as the top of `assignee_frames`
 - [x] Rename `EvaluationItem` to `RequestedValue` and consider making `RequestedValue::AssignmentCompletion` wrap an `Owned<()>` so that it becomes truly a value.
-- [ ] Renames / Merges:
-  - [ ] `ExpressionValue` => `Value`
-  - [ ] `IntegerExpression` and `IntegerExpressionValue` => `IntegerValue`
-  - [ ] `FloatExpression` and `FloatExpressionValue` => `FloatValue`
-  - [ ] `BooleanExpression` => `BooleanValue`
-  - [ ] `StringExpression` => `StringValue`
-  - [ ] `IteratorExpression` => `IteratorValue`
-  - [ ] `CharExpression` => `CharValue`
-  - [ ] `ArrayExpression` => `ArrayValue`
-  - [ ] `ObjectExpression` => `ObjectValue`
-  - [ ] `StreamExpression` => `StreamValue`
-  - [ ] `RangeExpression` => `RangeValue`
-  - [ ] `IteratorExpression` => `IteratorValue`
-  - [ ] `ParserExpression` => `ParserValue`
-- [ ] Merge `HasValueType` with `ValueKind`
+- [x] Merge `HasValueType` with `ValueKind`
 * Add `preinterpret::macro` - can this be a declarative macro? Would be slightly more efficient, as it just needs to wrap a call to `preinterpret::stream` or `preinterpret::run`...
 * Add `LiteralPattern` (wrapping a `Literal`)
 * Add `Eq` support on composite types and streams
 * See `TODO[untyped]` - Have UntypedInteger/UntypedFloat have an inner representation of either value or literal, for improved efficiency / less weird `Span::call_site()` error handling
-* Merge `HasValueType` into `ValueKind`
 * Better handling of `configure_preinterpret` aligned with future parsers:
   * Add a `BespokeObject` value type, with an example subtype of `PreinterpretInterface`
   * Add a `preinterpret` variable to global scope of type `PreinterpretInterface`
@@ -420,8 +412,7 @@ Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` doc
 * TODO check
 * Check all `#[allow(unused)]` and remove any which aren't needed
   We can use `_xyz: Unused<T>` in some places to reduce the size of types.
-
-NB: `define_command`, `define_parser`, and parsing of Rust code pushed to v1.1
+* Do we want to add support for various rust types?
 
 ## Better handling of value sub-references
 
@@ -439,13 +430,7 @@ One option We can work it like `IterableRef`, but perhaps we can do better?
 
 ## Cloning
 
-* Consider making Iterator non-clonable (which will unlock many more easy lazy implementations, of e.g. `take` using the non-clonable `Take`, and similar for other mapped iterators), i.e. `ExpressionValue` has a manual `clone() -> ExecutionResult<Self>` - this will simplify some things. But then, `to_string()` would want to take a `CopyOnWrite` so that where we clone, the iterator can potentially take owned, attempt cloen, else error.
-
-## Finish converting all commands to expressions
-
-E.G.
-* `preinterpret.settings({..})` (`preinterpret` is available as a variable pre-bound on the root frame)
-* .. possibly keep the v0.2 commands in `deprecated` mode?
+* Consider making Iterator non-clonable (which will unlock many more easy lazy implementations, of e.g. `take` using the non-clonable `Take`, and similar for other mapped iterators), i.e. `ExpressionValue` has a manual `clone() -> ExecutionResult<Self>` - this will simplify some things. But then, `to_string()` would want to take a `CopyOnWrite` so that where we clone, the iterator can potentially take owned, attempt clone, else error.
 
 ## Write book / Docs
 

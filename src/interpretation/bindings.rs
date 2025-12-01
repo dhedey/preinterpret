@@ -46,10 +46,10 @@ impl VariableContent {
                         ) {
                             return variable_span.control_flow_err("The final usage of a variable cannot be assigned to. You can use `let _ = ..` to discard a value.");
                         }
-                        return Ok(LateBoundValue::Owned(Owned::new(
-                            ref_cell.into_inner(),
-                            variable_span.span_range(),
-                        )));
+                        return Ok(LateBoundValue::Owned(LateBoundOwnedValue {
+                            owned: ref_cell.into_inner().into_owned(variable_span.span_range()),
+                            is_from_last_use: true,
+                        }));
                     }
                     // It's currently referenced, proceed with normal late-bound resolution.
                     // e.g.
@@ -75,7 +75,10 @@ impl VariableContent {
             RequestedOwnership::Concrete(ownership) => match ownership {
                 ArgumentOwnership::Owned => binding
                     .into_transparently_cloned()
-                    .map(LateBoundValue::Owned),
+                    .map(|owned| LateBoundValue::Owned(LateBoundOwnedValue {
+                        owned,
+                        is_from_last_use: false,
+                    })),
                 ArgumentOwnership::Shared => binding
                     .into_shared()
                     .map(CopyOnWrite::shared_in_place_of_shared)
@@ -146,6 +149,20 @@ impl VariableBinding {
     }
 }
 
+pub(crate) struct LateBoundOwnedValue {
+    pub(crate) owned: OwnedValue,
+    pub(crate) is_from_last_use: bool,
+}
+
+impl WithSpanRangeExt for LateBoundOwnedValue {
+    fn with_span_range(self, span_range: SpanRange) -> Self {
+        Self {
+            owned: self.owned.with_span_range(span_range),
+            is_from_last_use: self.is_from_last_use,
+        }
+    }
+}
+
 /// A shared value where mutable access failed for a specific reason
 pub(crate) struct LateBoundSharedValue {
     pub(crate) shared: SharedValue,
@@ -182,7 +199,7 @@ impl WithSpanRangeExt for LateBoundSharedValue {
 /// So instead, we take the most powerful access we can have for `x[a]`, and convert it later.
 pub(crate) enum LateBoundValue {
     /// An owned value that can be converted to any ownership type
-    Owned(OwnedValue),
+    Owned(LateBoundOwnedValue),
     /// A copy-on-write value that can be converted to an owned value
     CopyOnWrite(CopyOnWriteValue),
     /// A mutable reference
@@ -203,7 +220,10 @@ impl LateBoundValue {
         map_owned: impl FnOnce(OwnedValue) -> ExecutionResult<OwnedValue>,
     ) -> ExecutionResult<Self> {
         Ok(match self {
-            LateBoundValue::Owned(owned) => LateBoundValue::Owned(map_owned(owned)?),
+            LateBoundValue::Owned(owned) => LateBoundValue::Owned(LateBoundOwnedValue {
+                owned: map_owned(owned.owned)?,
+                is_from_last_use: owned.is_from_last_use,
+            }),
             LateBoundValue::CopyOnWrite(copy_on_write) => {
                 LateBoundValue::CopyOnWrite(copy_on_write.map(map_shared, map_owned)?)
             }
@@ -230,7 +250,7 @@ impl Deref for LateBoundValue {
 impl AsRef<Value> for LateBoundValue {
     fn as_ref(&self) -> &Value {
         match self {
-            LateBoundValue::Owned(owned) => owned.as_ref(),
+            LateBoundValue::Owned(owned) => &owned.owned,
             LateBoundValue::CopyOnWrite(cow) => cow.as_ref(),
             LateBoundValue::Mutable(mutable) => mutable.as_ref(),
             LateBoundValue::Shared(shared) => shared.shared.as_ref(),
@@ -241,7 +261,7 @@ impl AsRef<Value> for LateBoundValue {
 impl HasSpanRange for LateBoundValue {
     fn span_range(&self) -> SpanRange {
         match self {
-            LateBoundValue::Owned(owned) => owned.span_range,
+            LateBoundValue::Owned(owned) => owned.owned.span_range,
             LateBoundValue::CopyOnWrite(cow) => cow.span_range(),
             LateBoundValue::Mutable(mutable) => mutable.span_range,
             LateBoundValue::Shared(shared) => shared.shared.span_range,
@@ -295,12 +315,12 @@ impl<T> Owned<T> {
         self.value
     }
 
-    pub(crate) fn as_ref(&self) -> &T {
-        &self.value
+    pub(crate) fn as_ref<'a>(&'a self) -> SpannedAnyRef<'a, T> {
+        self.value.into_spanned_ref(self.span_range)
     }
 
-    pub(crate) fn as_mut(&mut self) -> &mut T {
-        &mut self.value
+    pub(crate) fn as_mut<'a>(&'a mut self) -> SpannedAnyRefMut<'a, T> {
+        self.value.into_spanned_ref_mut(self.span_range)
     }
 
     pub(crate) fn map<V>(self, value_map: impl FnOnce(T, &SpanRange) -> V) -> Owned<V> {
@@ -382,15 +402,15 @@ impl From<OwnedValue> for Value {
     }
 }
 
-impl Deref for OwnedValue {
-    type Target = Value;
+impl<T> Deref for Owned<T> {
+    type Target = T;
 
     fn deref(&self) -> &Self::Target {
         &self.value
     }
 }
 
-impl DerefMut for OwnedValue {
+impl<T> DerefMut for Owned<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.value
     }
@@ -829,7 +849,7 @@ impl<T: ?Sized + ToOwned> Deref for CopyOnWrite<T> {
 
     fn deref(&self) -> &T {
         match self.inner {
-            CopyOnWriteInner::Owned(ref owned) => owned.as_ref().borrow(),
+            CopyOnWriteInner::Owned(ref owned) => (&**owned).borrow(),
             CopyOnWriteInner::SharedWithInfallibleCloning(ref shared) => shared.as_ref(),
             CopyOnWriteInner::SharedWithTransparentCloning(ref shared) => shared.as_ref(),
         }

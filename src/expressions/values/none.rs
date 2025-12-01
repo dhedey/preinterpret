@@ -10,7 +10,7 @@ impl ResolvableArgumentTarget for () {
     type ValueType = NoneTypeData;
 }
 
-impl ResolvableArgumentOwned for () {
+impl ResolvableOwned<Value> for () {
     fn resolve_from_value(value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
         match value {
             Value::None => Ok(()),

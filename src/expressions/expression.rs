@@ -142,11 +142,6 @@ pub(super) enum ExpressionNode {
         equals_token: Token![=],
         value: ExpressionNodeId,
     },
-    CompoundAssignment {
-        assignee: ExpressionNodeId,
-        operation: CompoundAssignmentOperation,
-        value: ExpressionNodeId,
-    },
 }
 
 // We Box some of these variants to reduce the size of ExpressionNode

@@ -150,6 +150,10 @@ define_interface! {
                 lhs.push_str(rhs.deref());
                 lhs
             }
+            
+            fn add_assign(mut lhs: Assignee<String>, rhs: Shared<str>) {
+                lhs.push_str(rhs.deref());
+            }
 
             fn eq(lhs: Shared<str>, rhs: Shared<str>) -> bool {
                 lhs.deref() == rhs.deref()
@@ -200,6 +204,15 @@ define_interface! {
                     _ => return None,
                 })
             }
+
+            fn resolve_own_compound_assignment_operation(
+                operation: &CompoundAssignmentOperation,
+            ) -> Option<BinaryOperationInterface> {
+                Some(match operation {
+                    CompoundAssignmentOperation::Add { .. } => binary_definitions::add_assign(),
+                    _ => return None,
+                })
+            }
         }
     }
 }
@@ -223,7 +236,7 @@ impl ResolvableArgumentTarget for str {
     type ValueType = StringTypeData;
 }
 
-impl ResolvableArgumentShared for str {
+impl ResolvableShared<Value> for str {
     fn resolve_from_ref<'a>(
         value: &'a Value,
         context: ResolutionContext,

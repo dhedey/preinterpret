@@ -238,6 +238,10 @@ define_interface! {
                 rhs.append_into(&mut lhs);
                 lhs
             }
+
+            fn add_assign(mut lhs: Assignee<OutputStream>, rhs: OutputStream) {
+                rhs.append_into(&mut lhs);
+            }
         }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
@@ -259,6 +263,15 @@ define_interface! {
             ) -> Option<BinaryOperationInterface> {
                 Some(match operation {
                     PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
+                    _ => return None,
+                })
+            }
+
+            fn resolve_own_compound_assignment_operation(
+                operation: &CompoundAssignmentOperation,
+            ) -> Option<BinaryOperationInterface> {
+                Some(match operation {
+                    CompoundAssignmentOperation::Add { .. } => binary_definitions::add_assign(),
                     _ => return None,
                 })
             }

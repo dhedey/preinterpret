@@ -67,7 +67,7 @@ macro_rules! define_typed_object {
             type ValueType = ObjectTypeData;
         }
 
-        impl ResolvableArgumentOwned for $model {
+        impl ResolvableOwned<Value> for $model {
             fn resolve_from_value(value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
                 Self::try_from(ObjectValue::resolve_owned_from_value(value, context)?)
             }

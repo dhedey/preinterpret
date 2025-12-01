@@ -99,53 +99,6 @@ macro_rules! impl_int_operations {
                     }
                 }
                 pub(crate) mod binary_operations {
-                    [context] fn add(
-                        lhs: $integer_type,
-                        rhs: $integer_type,
-                    ) -> ExecutionResult<$integer_type> {
-                        $integer_type::paired_operation(lhs, rhs, context, <$integer_type>::checked_add)
-                    }
-
-                    [context] fn sub(
-                        lhs: $integer_type,
-                        rhs: $integer_type,
-                    ) -> ExecutionResult<$integer_type> {
-                        $integer_type::paired_operation(lhs, rhs, context, <$integer_type>::checked_sub)
-                    }
-
-                    [context] fn mul(
-                        lhs: $integer_type,
-                        rhs: $integer_type,
-                    ) -> ExecutionResult<$integer_type> {
-                        $integer_type::paired_operation(lhs, rhs, context, <$integer_type>::checked_mul)
-                    }
-
-                    [context] fn div(
-                        lhs: $integer_type,
-                        rhs: $integer_type,
-                    ) -> ExecutionResult<$integer_type> {
-                        $integer_type::paired_operation(lhs, rhs, context, <$integer_type>::checked_div)
-                    }
-
-                    [context] fn rem(
-                        lhs: $integer_type,
-                        rhs: $integer_type,
-                    ) -> ExecutionResult<$integer_type> {
-                        $integer_type::paired_operation(lhs, rhs, context, <$integer_type>::checked_rem)
-                    }
-
-                    fn bitxor(lhs: $integer_type, rhs: $integer_type) -> $integer_type {
-                        lhs ^ rhs
-                    }
-
-                    fn bitand(lhs: $integer_type, rhs: $integer_type) -> $integer_type {
-                        lhs & rhs
-                    }
-
-                    fn bitor(lhs: $integer_type, rhs: $integer_type) -> $integer_type {
-                        lhs | rhs
-                    }
-
                     fn eq(lhs: $integer_type, rhs: $integer_type) -> bool {
                         lhs == rhs
                     }
@@ -168,26 +121,6 @@ macro_rules! impl_int_operations {
 
                     fn gt(lhs: $integer_type, rhs: $integer_type) -> bool {
                         lhs > rhs
-                    }
-
-                    [context] fn shift_left(
-                        lhs: $integer_type,
-                        rhs: CoercedToU32,
-                    ) -> ExecutionResult<$integer_type> {
-                        let CoercedToU32(rhs) = rhs;
-                        lhs.checked_shl(rhs).ok_or_else(|| {
-                            $integer_type::binary_overflow_error(context, lhs, rhs)
-                        })
-                    }
-
-                    [context] fn shift_right(
-                        lhs: $integer_type,
-                        rhs: CoercedToU32,
-                    ) -> ExecutionResult<$integer_type> {
-                        let CoercedToU32(rhs) = rhs;
-                        lhs.checked_shr(rhs).ok_or_else(|| {
-                            $integer_type::binary_overflow_error(context, lhs, rhs)
-                        })
                     }
                 }
                 interface_items {
@@ -233,14 +166,7 @@ macro_rules! impl_int_operations {
                         operation: &PairedBinaryOperation,
                     ) -> Option<BinaryOperationInterface> {
                         Some(match operation {
-                            PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
-                            PairedBinaryOperation::Subtraction { .. } => binary_definitions::sub(),
-                            PairedBinaryOperation::Multiplication { .. } => binary_definitions::mul(),
-                            PairedBinaryOperation::Division { .. } => binary_definitions::div(),
-                            PairedBinaryOperation::Remainder { .. } => binary_definitions::rem(),
-                            PairedBinaryOperation::BitXor { .. } => binary_definitions::bitxor(),
-                            PairedBinaryOperation::BitAnd { .. } => binary_definitions::bitand(),
-                            PairedBinaryOperation::BitOr { .. } => binary_definitions::bitor(),
+                            // Most operations are defined on the integer value directly
                             PairedBinaryOperation::Equal { .. } => binary_definitions::eq(),
                             PairedBinaryOperation::NotEqual { .. } => binary_definitions::ne(),
                             PairedBinaryOperation::LessThan { .. } => binary_definitions::lt(),
@@ -248,15 +174,6 @@ macro_rules! impl_int_operations {
                             PairedBinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
                             PairedBinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
                             _ => return None,
-                        })
-                    }
-
-                    fn resolve_integer_binary_operation(
-                        operation: &IntegerBinaryOperation,
-                    ) -> Option<BinaryOperationInterface> {
-                        Some(match operation {
-                            IntegerBinaryOperation::ShiftLeft { .. } => binary_definitions::shift_left(),
-                            IntegerBinaryOperation::ShiftRight { .. } => binary_definitions::shift_right(),
                         })
                     }
                 }
@@ -306,20 +223,38 @@ macro_rules! impl_resolvable_integer_subtype {
             type ValueType = $value_type;
         }
 
-        impl ResolvableArgumentOwned for $type {
+        impl From<$type> for IntegerValue {
+            fn from(value: $type) -> Self {
+                IntegerValue::$variant(value)
+            }
+        }
+
+        impl ResolvableOwned<IntegerValue> for $type {
             fn resolve_from_value(
-                value: Value,
+                value: IntegerValue,
                 context: ResolutionContext,
             ) -> ExecutionResult<Self> {
                 match value {
-                    Value::Integer(IntegerValue::Untyped(x)) => x.parse_as(),
-                    Value::Integer(IntegerValue::$variant(x)) => Ok(x),
+                    IntegerValue::Untyped(x) => x.into_spanned_ref(context.error_span_range()).parse_as(),
+                    IntegerValue::$variant(x) => Ok(x),
                     other => context.err($expected_msg, other),
                 }
             }
         }
 
-        impl ResolvableArgumentShared for $type {
+        impl ResolvableOwned<Value> for $type {
+            fn resolve_from_value(
+                value: Value,
+                context: ResolutionContext,
+            ) -> ExecutionResult<Self> {
+                match value {
+                    Value::Integer(x) => <$type>::resolve_from_value(x, context),
+                    other => context.err($expected_msg, other),
+                }
+            }
+        }
+
+        impl ResolvableShared<Value> for $type {
             fn resolve_from_ref<'a>(
                 value: &'a Value,
                 context: ResolutionContext,
@@ -331,7 +266,7 @@ macro_rules! impl_resolvable_integer_subtype {
             }
         }
 
-        impl ResolvableArgumentMutable for $type {
+        impl ResolvableMutable<Value> for $type {
             fn resolve_from_mut<'a>(
                 value: &'a mut Value,
                 context: ResolutionContext,

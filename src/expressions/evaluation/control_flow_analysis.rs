@@ -6,126 +6,77 @@ pub(in super::super) fn control_flow_visit(
     context: FlowCapturer,
 ) -> ParseResult<()> {
     let mut stack = ControlFlowStack::new();
-    stack.push_as_value(root);
-    while let Some((as_kind, node_id)) = stack.pop() {
+    stack.push(root);
+    while let Some(node_id) = stack.pop() {
         let node = nodes.get_mut(node_id);
-        match as_kind {
-            NodeAs::ValueOrAtomicAssignee => {
-                // As per node-conversion / value_frames / assignee_frames
-                // (NB - both value and atomic assignee frames have the same control flow)
-                match node {
-                    ExpressionNode::Leaf(leaf) => {
-                        leaf.control_flow_pass(context)?;
-                    }
-                    ExpressionNode::Grouped { inner, .. } => {
-                        stack.push_as_value(*inner);
-                    }
-                    ExpressionNode::Array { items, .. } => {
-                        stack.push_as_value_reversed(items.iter().copied());
-                    }
-                    ExpressionNode::Object { entries, .. } => {
-                        let mut nodes = vec![];
-                        for (key, node_id) in entries.iter() {
-                            match key {
-                                ObjectKey::Identifier(_) => {}
-                                ObjectKey::Indexed { index, .. } => {
-                                    nodes.push(*index);
-                                }
-                            }
-                            nodes.push(*node_id);
-                        }
-                        stack.push_as_value_reversed(nodes);
-                    }
-                    ExpressionNode::UnaryOperation { input, .. } => {
-                        stack.push_as_value(*input);
-                    }
-                    ExpressionNode::BinaryOperation {
-                        left_input,
-                        right_input,
-                        ..
-                    } => {
-                        stack.push_as_value_reversed([*left_input, *right_input]);
-                    }
-                    ExpressionNode::Property { node, .. } => {
-                        stack.push_as_value(*node);
-                    }
-                    ExpressionNode::MethodCall {
-                        node, parameters, ..
-                    } => {
-                        stack.push_as_value_reversed(parameters.iter().copied());
-                        stack.push_as_value(*node); // This is a stack so this executes first
-                    }
-                    ExpressionNode::Index { node, index, .. } => {
-                        stack.push_as_value_reversed([*node, *index]);
-                    }
-                    ExpressionNode::Range { left, right, .. } => {
-                        // This is a stack, so left is activated first
-                        if let Some(right) = right {
-                            stack.push_as_value(*right);
-                        }
-                        if let Some(left) = left {
-                            stack.push_as_value(*left);
+        match node {
+            ExpressionNode::Leaf(leaf) => {
+                leaf.control_flow_pass(context)?;
+            }
+            ExpressionNode::Grouped { inner, .. } => {
+                stack.push(*inner);
+            }
+            ExpressionNode::Array { items, .. } => {
+                stack.push_reversed(items.iter().copied());
+            }
+            ExpressionNode::Object { entries, .. } => {
+                let mut nodes = vec![];
+                for (key, node_id) in entries.iter() {
+                    match key {
+                        ObjectKey::Identifier(_) => {}
+                        ObjectKey::Indexed { index, .. } => {
+                            nodes.push(*index);
                         }
                     }
-                    ExpressionNode::Assignment {
-                        assignee,
-                        equals_token: _,
-                        value,
-                    } => {
-                        stack.push_reversed([
-                            (NodeAs::ValueOrAtomicAssignee, *value),
-                            (NodeAs::Assignment, *assignee),
-                        ]);
-                    }
-                    ExpressionNode::CompoundAssignment {
-                        assignee,
-                        operation: _,
-                        value,
-                    } => {
-                        // NB - the assignee here is an atomic assignee, which is treated as a value for control flow purposes
-                        stack.push_as_value_reversed([*value, *assignee]);
-                    }
+                    nodes.push(*node_id);
+                }
+                stack.push_reversed(nodes);
+            }
+            ExpressionNode::UnaryOperation { input, .. } => {
+                stack.push(*input);
+            }
+            ExpressionNode::BinaryOperation {
+                left_input,
+                right_input,
+                ..
+            } => {
+                stack.push_reversed([*left_input, *right_input]);
+            }
+            ExpressionNode::Property { node, .. } => {
+                stack.push(*node);
+            }
+            ExpressionNode::MethodCall {
+                node, parameters, ..
+            } => {
+                stack.push_reversed(parameters.iter().copied());
+                stack.push(*node); // This is a stack so this executes first
+            }
+            ExpressionNode::Index { node, index, .. } => {
+                stack.push_reversed([*node, *index]);
+            }
+            ExpressionNode::Range { left, right, .. } => {
+                // This is a stack, so left is activated first
+                if let Some(right) = right {
+                    stack.push(*right);
+                }
+                if let Some(left) = left {
+                    stack.push(*left);
                 }
             }
-            NodeAs::Assignment => {
-                // As per node-conversion / assignment_frames
-                match node {
-                    ExpressionNode::Grouped { inner, .. } => {
-                        stack.push_as_assignment(*inner);
-                    }
-                    ExpressionNode::Object { entries, .. } => {
-                        let mut nodes = vec![];
-                        for (key, node_id) in entries.iter() {
-                            match key {
-                                ObjectKey::Identifier(_) => {}
-                                ObjectKey::Indexed { index, .. } => {
-                                    nodes.push((NodeAs::ValueOrAtomicAssignee, *index));
-                                }
-                            }
-                            nodes.push((NodeAs::Assignment, *node_id));
-                        }
-                        stack.push_reversed(nodes);
-                    }
-                    ExpressionNode::Array { items, .. } => {
-                        stack.push_as_assignment_reversed(items.iter().copied());
-                    }
-                    _ => {
-                        stack.push_as_value(node_id);
-                    }
-                }
+            ExpressionNode::Assignment {
+                assignee,
+                equals_token: _,
+                value,
+            } => {
+                stack.push_reversed([*value, *assignee]);
             }
         }
     }
     Ok(())
 }
 
-enum NodeAs {
-    ValueOrAtomicAssignee,
-    Assignment,
-}
-
 struct ControlFlowStack {
-    nodes: Vec<(NodeAs, ExpressionNodeId)>,
+    nodes: Vec<ExpressionNodeId>,
 }
 
 impl ControlFlowStack {
@@ -133,41 +84,21 @@ impl ControlFlowStack {
         Self { nodes: vec![] }
     }
 
-    fn push_reversed<I: DoubleEndedIterator<Item = (NodeAs, ExpressionNodeId)>>(
-        &mut self,
-        node: impl IntoIterator<IntoIter = I>,
-    ) {
-        self.nodes.extend(node.into_iter().rev());
-    }
-
-    fn push_as_value_reversed<I: DoubleEndedIterator<Item = ExpressionNodeId>>(
+    fn push_reversed<I: DoubleEndedIterator<Item = ExpressionNodeId>>(
         &mut self,
         node: impl IntoIterator<IntoIter = I>,
     ) {
         self.nodes.extend(
             node.into_iter()
-                .rev()
-                .map(|v| (NodeAs::ValueOrAtomicAssignee, v)),
+                .rev(),
         );
     }
 
-    fn push_as_assignment_reversed<I: DoubleEndedIterator<Item = ExpressionNodeId>>(
-        &mut self,
-        node: impl IntoIterator<IntoIter = I>,
-    ) {
-        self.nodes
-            .extend(node.into_iter().rev().map(|v| (NodeAs::Assignment, v)));
+    fn push(&mut self, node: ExpressionNodeId) {
+        self.nodes.push(node);
     }
 
-    fn push_as_value(&mut self, node: ExpressionNodeId) {
-        self.nodes.push((NodeAs::ValueOrAtomicAssignee, node));
-    }
-
-    fn push_as_assignment(&mut self, node: ExpressionNodeId) {
-        self.nodes.push((NodeAs::Assignment, node));
-    }
-
-    fn pop(&mut self) -> Option<(NodeAs, ExpressionNodeId)> {
+    fn pop(&mut self) -> Option<ExpressionNodeId> {
         self.nodes.pop()
     }
 }

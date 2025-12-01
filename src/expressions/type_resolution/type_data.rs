@@ -91,6 +91,9 @@ pub(crate) trait HierarchicalTypeData {
             BinaryOperation::Integer(operation) => {
                 Self::resolve_integer_binary_operation(operation)
             }
+            BinaryOperation::CompoundAssignment(operation) => {
+                Self::resolve_own_compound_assignment_operation(operation)
+            }
         }
     }
 
@@ -106,7 +109,6 @@ pub(crate) trait HierarchicalTypeData {
         None
     }
 
-    #[allow(unused)]
     fn resolve_own_compound_assignment_operation(
         _operation: &CompoundAssignmentOperation,
     ) -> Option<BinaryOperationInterface> {

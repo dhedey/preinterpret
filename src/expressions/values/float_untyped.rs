@@ -1,59 +1,38 @@
 use super::*;
 
-#[derive(Clone)]
-pub(crate) struct UntypedFloat(
-    /// The span of the literal is ignored, and will be set when converted to an output.
-    LitFloat,
-);
+#[derive(Copy, Clone)]
+pub(crate) struct UntypedFloat(FallbackFloat);
 pub(crate) type FallbackFloat = f64;
 
 impl UntypedFloat {
-    pub(super) fn new_from_lit_float(lit_float: LitFloat) -> Self {
-        Self(lit_float)
+    pub(super) fn new_from_lit_float(lit_float: &LitFloat) -> ParseResult<Self> {
+        Ok(Self(lit_float.base10_digits().parse().map_err(|err| {
+            lit_float.parse_error(format!(
+                "Untyped floats in preinterpret must fit inside a {}: {}",
+                core::any::type_name::<FallbackFloat>(),
+                err
+            ))
+        })?))
     }
 
-    fn new_from_known_float_literal(literal: Literal) -> Self {
-        Self::new_from_lit_float(literal.into())
-    }
-
-    fn into_kind(self, kind: FloatKind) -> ExecutionResult<FloatValue> {
+    pub(crate) fn into_kind(self, kind: FloatKind) -> ExecutionResult<FloatValue> {
         Ok(match kind {
             FloatKind::Untyped => FloatValue::Untyped(self),
-            FloatKind::F32 => FloatValue::F32(self.parse_as()?),
-            FloatKind::F64 => FloatValue::F64(self.parse_as()?),
+            FloatKind::F32 => FloatValue::F32(self.0 as f32),
+            FloatKind::F64 => FloatValue::F64(self.0 as f64),
         })
     }
 
-    fn paired_operation(
-        lhs: Owned<UntypedFloat>,
+    pub(crate) fn paired_operation(
+        self,
         rhs: Owned<FloatValue>,
-        context: BinaryOperationCallContext,
-        perform_fn: fn(FallbackFloat, FallbackFloat) -> Option<FallbackFloat>,
-    ) -> ExecutionResult<ReturnedValue> {
-        let (lhs, lhs_span_range) = lhs.deconstruct();
-        let (rhs, rhs_span_range) = rhs.deconstruct();
-        match rhs {
-            FloatValue::Untyped(rhs) => {
-                let lhs = lhs.parse_fallback()?;
-                let rhs = rhs.parse_fallback()?;
-                let output = perform_fn(lhs, rhs).ok_or_else(|| {
-                    context.error(format!(
-                        "The untyped integer operation {} {} {} overflowed in i128 space",
-                        lhs,
-                        context.operation.symbolic_description(),
-                        rhs
-                    ))
-                })?;
-                UntypedFloat::from_fallback(output).to_returned_value(context.output_span_range)
-            }
-            rhs => {
-                let lhs = lhs.into_kind(rhs.kind())?;
-                context.operation.evaluate(
-                    lhs.into_owned_value(lhs_span_range),
-                    rhs.into_owned_value(rhs_span_range),
-                )
-            }
-        }
+        perform_fn: fn(FallbackFloat, FallbackFloat) -> FallbackFloat,
+    ) -> ExecutionResult<FloatValue> {
+        let lhs = self.0;
+        let rhs: UntypedFloat = rhs.resolve_as("This operand")?;
+        let rhs = rhs.0;
+        let output = perform_fn(lhs, rhs);
+        Ok(FloatValue::Untyped(UntypedFloat::from_fallback(output)))
     }
 
     fn paired_comparison(
@@ -66,8 +45,8 @@ impl UntypedFloat {
         let (rhs, rhs_span_range) = rhs.deconstruct();
         match rhs {
             FloatValue::Untyped(rhs) => {
-                let lhs = lhs.parse_fallback()?;
-                let rhs = rhs.parse_fallback()?;
+                let lhs = lhs.0;
+                let rhs = rhs.0;
                 Ok(compare_fn(lhs, rhs))
             }
             rhs => {
@@ -85,39 +64,16 @@ impl UntypedFloat {
         }
     }
 
+    pub(super) fn into_fallback(self) -> FallbackFloat {
+        self.0
+    }
+
     pub(super) fn from_fallback(value: FallbackFloat) -> Self {
-        // TODO[untyped] - Have a way to store this more efficiently without going through a literal
-        Self::new_from_known_float_literal(
-            Literal::f64_unsuffixed(value).with_span(Span::call_site()),
-        )
-    }
-
-    pub(crate) fn parse_fallback(&self) -> ExecutionResult<FallbackFloat> {
-        self.0.base10_digits().parse().map_err(|err| {
-            self.0.value_error(format!(
-                "Could not parse as the default inferred type {}: {}",
-                core::any::type_name::<FallbackFloat>(),
-                err
-            ))
-        })
-    }
-
-    pub(crate) fn parse_as<N>(&self) -> ExecutionResult<N>
-    where
-        N: FromStr,
-        N::Err: core::fmt::Display,
-    {
-        self.0.base10_digits().parse().map_err(|err| {
-            self.0.value_error(format!(
-                "Could not parse as {}: {}",
-                core::any::type_name::<N>(),
-                err
-            ))
-        })
+        Self(value)
     }
 
     pub(super) fn to_unspanned_literal(&self) -> Literal {
-        self.0.token()
+        Literal::f64_unsuffixed(self.0)
     }
 }
 
@@ -215,41 +171,6 @@ define_interface! {
             }
         }
         pub(crate) mod binary_operations {
-            [context] fn add(
-                lhs: Owned<UntypedFloat>,
-                rhs: Owned<FloatValue>,
-            ) -> ExecutionResult<ReturnedValue> {
-                UntypedFloat::paired_operation(lhs, rhs, context, |a, b| Some(a + b))
-            }
-
-            [context] fn sub(
-                lhs: Owned<UntypedFloat>,
-                rhs: Owned<FloatValue>,
-            ) -> ExecutionResult<ReturnedValue> {
-                UntypedFloat::paired_operation(lhs, rhs, context, |a, b| Some(a - b))
-            }
-
-            [context] fn mul(
-                lhs: Owned<UntypedFloat>,
-                rhs: Owned<FloatValue>,
-            ) -> ExecutionResult<ReturnedValue> {
-                UntypedFloat::paired_operation(lhs, rhs, context, |a, b| Some(a * b))
-            }
-
-            [context] fn div(
-                lhs: Owned<UntypedFloat>,
-                rhs: Owned<FloatValue>,
-            ) -> ExecutionResult<ReturnedValue> {
-                UntypedFloat::paired_operation(lhs, rhs, context, |a, b| Some(a / b))
-            }
-
-            [context] fn rem(
-                lhs: Owned<UntypedFloat>,
-                rhs: Owned<FloatValue>,
-            ) -> ExecutionResult<ReturnedValue> {
-                UntypedFloat::paired_operation(lhs, rhs, context, |a, b| Some(a % b))
-            }
-
             [context] fn eq(
                 lhs: Owned<UntypedFloat>,
                 rhs: Owned<FloatValue>,
@@ -324,11 +245,7 @@ define_interface! {
                 operation: &PairedBinaryOperation,
             ) -> Option<BinaryOperationInterface> {
                 Some(match operation {
-                    PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
-                    PairedBinaryOperation::Subtraction { .. } => binary_definitions::sub(),
-                    PairedBinaryOperation::Multiplication { .. } => binary_definitions::mul(),
-                    PairedBinaryOperation::Division { .. } => binary_definitions::div(),
-                    PairedBinaryOperation::Remainder { .. } => binary_definitions::rem(),
+                    // Most operations are defined on the float value directly
                     PairedBinaryOperation::Equal { .. } => binary_definitions::eq(),
                     PairedBinaryOperation::NotEqual { .. } => binary_definitions::ne(),
                     PairedBinaryOperation::LessThan { .. } => binary_definitions::lt(),
@@ -348,10 +265,22 @@ impl ResolvableArgumentTarget for UntypedFloatFallback {
     type ValueType = UntypedFloatTypeData;
 }
 
-impl ResolvableArgumentOwned for UntypedFloatFallback {
+impl ResolvableOwned<Value> for UntypedFloatFallback {
     fn resolve_from_value(input_value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
         let value = UntypedFloat::resolve_from_value(input_value, context)?;
-        Ok(UntypedFloatFallback(value.parse_fallback()?))
+        Ok(UntypedFloatFallback(value.0))
+    }
+}
+
+impl ResolvableOwned<FloatValue> for UntypedFloat {
+    fn resolve_from_value(
+        value: FloatValue,
+        context: ResolutionContext,
+    ) -> ExecutionResult<Self> {
+        match value {
+            FloatValue::Untyped(value) => Ok(value),
+            _ => context.err("untyped float", value),
+        }
     }
 }
 

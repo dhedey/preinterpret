@@ -1,4 +1,3 @@
-#![allow(unused)] // TODO[unused-clearup]
 use super::*;
 
 /// A [`ArgumentValue`] represents a value which has had its ownership concretely
@@ -49,10 +48,6 @@ impl ArgumentValue {
             _ => panic!("expect_shared() called on a non-shared ArgumentValue"),
         }
     }
-
-    pub(crate) fn as_value_ref(&self) -> &Value {
-        self.as_ref()
-    }
 }
 
 impl HasSpanRange for ArgumentValue {
@@ -98,11 +93,11 @@ impl Deref for ArgumentValue {
 impl AsRef<Value> for ArgumentValue {
     fn as_ref(&self) -> &Value {
         match self {
-            ArgumentValue::Owned(owned) => owned.as_ref(),
-            ArgumentValue::Mutable(mutable) => mutable.as_ref(),
-            ArgumentValue::Assignee(assignee) => assignee.0.as_ref(),
-            ArgumentValue::Shared(shared) => shared.as_ref(),
-            ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write.as_ref(),
+            ArgumentValue::Owned(owned) => owned,
+            ArgumentValue::Mutable(mutable) => mutable,
+            ArgumentValue::Assignee(assignee) => &assignee.0,
+            ArgumentValue::Shared(shared) => shared,
+            ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write,
         }
     }
 }
@@ -124,10 +119,6 @@ impl RequestedOwnership {
 
     pub(crate) fn shared() -> Self {
         RequestedOwnership::Concrete(ArgumentOwnership::Shared)
-    }
-
-    pub(crate) fn copy_on_write() -> Self {
-        RequestedOwnership::Concrete(ArgumentOwnership::CopyOnWrite)
     }
 
     pub(crate) fn replace_owned_with_copy_on_write(self) -> Self {
@@ -214,7 +205,10 @@ impl RequestedOwnership {
     pub(crate) fn map_from_owned(&self, value: OwnedValue) -> ExecutionResult<RequestedValue> {
         match self {
             RequestedOwnership::LateBound => {
-                Ok(RequestedValue::LateBound(LateBoundValue::Owned(value)))
+                Ok(RequestedValue::LateBound(LateBoundValue::Owned(LateBoundOwnedValue {
+                    owned: value,
+                    is_from_last_use: false,
+                })))
             }
             RequestedOwnership::Concrete(requested) => requested
                 .map_from_owned(value)
@@ -286,6 +280,12 @@ impl RequestedOwnership {
     }
 }
 
+impl From<ArgumentOwnership> for RequestedOwnership {
+    fn from(ownership: ArgumentOwnership) -> Self {
+        RequestedOwnership::Concrete(ownership)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 /// The ownership that a method might concretely request
 pub(crate) enum ArgumentOwnership {
@@ -329,7 +329,7 @@ impl ArgumentOwnership {
         late_bound: LateBoundValue,
     ) -> ExecutionResult<ArgumentValue> {
         match late_bound {
-            LateBoundValue::Owned(owned) => self.map_from_owned(owned),
+            LateBoundValue::Owned(owned) => self.map_from_owned_with_is_last_use(owned.owned, owned.is_from_last_use),
             LateBoundValue::CopyOnWrite(copy_on_write) => {
                 self.map_from_copy_on_write(copy_on_write)
             }
@@ -433,6 +433,14 @@ impl ArgumentOwnership {
     }
 
     pub(crate) fn map_from_owned(&self, owned: OwnedValue) -> ExecutionResult<ArgumentValue> {
+        self.map_from_owned_with_is_last_use(owned, false)
+    }
+
+    fn map_from_owned_with_is_last_use(
+        &self,
+        owned: OwnedValue,
+        is_from_last_use: bool,
+    ) -> ExecutionResult<ArgumentValue> {
         match self {
             ArgumentOwnership::Owned | ArgumentOwnership::AsIs => Ok(ArgumentValue::Owned(owned)),
             ArgumentOwnership::CopyOnWrite => {
@@ -442,7 +450,11 @@ impl ArgumentOwnership {
                 Ok(ArgumentValue::Mutable(Mutable::new_from_owned(owned)))
             }
             ArgumentOwnership::Assignee { .. } => {
-                owned.ownership_err("An owned value cannot be assigned to.")
+                if is_from_last_use {
+                    owned.ownership_err("The final usage of a variable cannot be assigned to. You can use `let _ = ..` to discard a value.")
+                } else {
+                    owned.ownership_err("An owned value cannot be assigned to.")
+                }
             }
             ArgumentOwnership::Shared => Ok(ArgumentValue::Shared(Shared::new_from_owned(owned))),
         }
@@ -460,7 +472,6 @@ pub(super) enum AnyValueFrame {
     IndexAccess(ValueIndexAccessBuilder),
     Range(RangeBuilder),
     Assignment(AssignmentBuilder),
-    CompoundAssignment(CompoundAssignmentBuilder),
     MethodCall(MethodCallBuilder),
 }
 
@@ -480,7 +491,6 @@ impl AnyValueFrame {
             AnyValueFrame::IndexAccess(frame) => frame.handle_next(context, value),
             AnyValueFrame::Range(frame) => frame.handle_next(context, value),
             AnyValueFrame::Assignment(frame) => frame.handle_next(context, value),
-            AnyValueFrame::CompoundAssignment(frame) => frame.handle_next(context, value),
             AnyValueFrame::MethodCall(frame) => frame.handle_next(context, value),
         }
     }
@@ -757,7 +767,7 @@ impl EvaluationFrame for BinaryOperationBuilder {
 
     fn handle_next(
         mut self,
-        mut context: ValueContext,
+        context: ValueContext,
         value: RequestedValue,
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
@@ -785,10 +795,10 @@ impl EvaluationFrame for BinaryOperationBuilder {
                                 .map_from_late_bound(left_late_bound)?;
 
                             self.state = BinaryPath::OnRightBranch { left, interface };
-                            context.request_any_value(
+                            context.request_argument_value(
                                 self,
                                 right,
-                                RequestedOwnership::Concrete(rhs_ownership),
+                                rhs_ownership,
                             )
                         }
                         None => {
@@ -906,7 +916,6 @@ impl EvaluationFrame for ValueIndexAccessBuilder {
             }
             IndexPath::OnIndexBranch { source } => {
                 let index = value.expect_shared();
-                let is_range = matches!(index.kind(), ValueKind::Range(_));
 
                 let auto_create = context.requested_ownership().requests_auto_create();
                 context.return_not_necessarily_matching_requested(
@@ -1085,60 +1094,86 @@ impl EvaluationFrame for AssignmentBuilder {
     }
 }
 
-pub(super) struct CompoundAssignmentBuilder {
-    operation: CompoundAssignmentOperation,
-    state: CompoundAssignmentPath,
-}
+// pub(super) struct CompoundAssignmentBuilder {
+//     operation: CompoundAssignmentOperation,
+//     state: CompoundAssignmentPath,
+// }
 
-enum CompoundAssignmentPath {
-    OnValueBranch { target: ExpressionNodeId },
-    OnTargetBranch { value: OwnedValue },
-}
+// /// NOTE: Unlike an Assignment, with a CompoundAssignment we resolve the target first,
+// /// so we can resolve the operation interface
+// enum CompoundAssignmentPath {
+//     OnTargetBranch { right: ExpressionNodeId },
+//     OnValueBranch { left: ArgumentValue, interface: BinaryOperationInterface, },
+// }
 
-impl CompoundAssignmentBuilder {
-    pub(super) fn start(
-        context: ValueContext,
-        target: ExpressionNodeId,
-        operation: CompoundAssignmentOperation,
-        value: ExpressionNodeId,
-    ) -> NextAction {
-        let frame = Self {
-            operation,
-            state: CompoundAssignmentPath::OnValueBranch { target },
-        };
-        context.request_owned(frame, value)
-    }
-}
+// impl CompoundAssignmentBuilder {
+//     pub(super) fn start(
+//         context: ValueContext,
+//         target: ExpressionNodeId,
+//         operation: CompoundAssignmentOperation,
+//         value: ExpressionNodeId,
+//     ) -> NextAction {
+//         let frame = Self {
+//             operation,
+//             state: CompoundAssignmentPath::OnTargetBranch { right: value },
+//         };
+//         context.request_late_bound(frame, target)
+//     }
+// }
 
-impl EvaluationFrame for CompoundAssignmentBuilder {
-    type ReturnType = ValueType;
+// impl EvaluationFrame for CompoundAssignmentBuilder {
+//     type ReturnType = ValueType;
 
-    fn into_any(self) -> AnyValueFrame {
-        AnyValueFrame::CompoundAssignment(self)
-    }
+//     fn into_any(self) -> AnyValueFrame {
+//         AnyValueFrame::CompoundAssignment(self)
+//     }
 
-    fn handle_next(
-        mut self,
-        context: ValueContext,
-        requested: RequestedValue,
-    ) -> ExecutionResult<NextAction> {
-        Ok(match self.state {
-            CompoundAssignmentPath::OnValueBranch { target } => {
-                let value = requested.expect_owned();
-                self.state = CompoundAssignmentPath::OnTargetBranch { value };
-                // TODO[compound-assignment-refactor]: Resolve as LateBound, and then convert to what is needed based on the operation
-                context.request_assignee(self, target, false)
-            }
-            CompoundAssignmentPath::OnTargetBranch { value } => {
-                let mut assignee = requested.expect_assignee();
-                let span_range = SpanRange::new_between(assignee.span_range(), value.span_range());
-                SpannedAnyRefMut::from(assignee.0)
-                    .handle_compound_assignment(&self.operation, value)?;
-                context.return_value(Value::None, span_range)?
-            }
-        })
-    }
-}
+//     fn handle_next(
+//         mut self,
+//         context: ValueContext,
+//         requested: RequestedValue,
+//     ) -> ExecutionResult<NextAction> {
+//         Ok(match self.state {
+//             CompoundAssignmentPath::OnTargetBranch { right } => {
+//                 let target_late_bound = requested.expect_late_bound();
+
+//                 // Resolve based on left operand's kind and resolve left operand immediately
+//                 let interface = target_late_bound
+//                     .as_ref()
+//                     .kind()
+//                     .resolve_compound_assignment_operation(&self.operation);
+
+//                 match interface {
+//                     Some(interface) => {
+//                         let rhs_ownership = interface.rhs_ownership();
+//                         let left = interface
+//                             .lhs_ownership()
+//                             .map_from_late_bound(target_late_bound)?;
+
+//                         self.state = CompoundAssignmentPath::OnValueBranch { left, interface };
+//                         context.request_argument_value(
+//                             self,
+//                             right,
+//                             rhs_ownership,
+//                         )
+//                     }
+//                     None => {
+//                         return self.operation.type_err(format!(
+//                             "The {} operator is not supported for {} operand",
+//                             self.operation.symbolic_description(),
+//                             target_late_bound.articled_value_type(),
+//                         ));
+//                     }
+//                 }
+//             }
+//             CompoundAssignmentPath::OnValueBranch { left, interface } => {
+//                 let right = requested.expect_argument_value();
+//                 let result = interface.execute(left, right, &self.operation)?;
+//                 return context.return_returned_value(result);
+//             }
+//         })
+//     }
+// }
 
 pub(super) struct MethodCallBuilder {
     method: MethodAccess,

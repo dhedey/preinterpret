@@ -295,10 +295,10 @@ impl<'a, T: RequestedValueType> Context<'a, T> {
         handler: H,
         node: ExpressionNodeId,
     ) -> NextAction {
-        self.request_any_value(
+        self.request_argument_value(
             handler,
             node,
-            RequestedOwnership::Concrete(ArgumentOwnership::Owned),
+            ArgumentOwnership::Owned,
         )
     }
 
@@ -307,10 +307,10 @@ impl<'a, T: RequestedValueType> Context<'a, T> {
         handler: H,
         node: ExpressionNodeId,
     ) -> NextAction {
-        self.request_any_value(
+        self.request_argument_value(
             handler,
             node,
-            RequestedOwnership::Concrete(ArgumentOwnership::Shared),
+            ArgumentOwnership::Shared,
         )
     }
 
@@ -320,10 +320,10 @@ impl<'a, T: RequestedValueType> Context<'a, T> {
         node: ExpressionNodeId,
         auto_create: bool,
     ) -> NextAction {
-        self.request_any_value(
+        self.request_argument_value(
             handler,
             node,
-            RequestedOwnership::Concrete(ArgumentOwnership::Assignee { auto_create }),
+            ArgumentOwnership::Assignee { auto_create },
         )
     }
 
@@ -345,6 +345,15 @@ impl<'a, T: RequestedValueType> Context<'a, T> {
             .handlers
             .push(T::into_unkinded_handler(handler.into_any(), self.request));
         NextActionInner::ReadNodeAsValue(node, requested_ownership).into()
+    }
+
+    pub(super) fn request_argument_value<H: EvaluationFrame<ReturnType = T>>(
+        self,
+        handler: H,
+        node: ExpressionNodeId,
+        argument_ownership: ArgumentOwnership,
+    ) -> NextAction {
+        self.request_any_value(handler, node, argument_ownership.into())
     }
 
     pub(super) fn request_assignment<H: EvaluationFrame<ReturnType = T>>(

@@ -539,10 +539,10 @@ impl<'a> ExpressionParser<'a> {
                     extension.into_post_operation_completion_work_item(node)
                 }
                 ExpressionStackFrame::IncompleteCompoundAssignment { place, operation } => {
-                    let node = self.nodes.add_node(ExpressionNode::CompoundAssignment {
-                        assignee: place,
-                        operation,
-                        value: node,
+                    let node = self.nodes.add_node(ExpressionNode::BinaryOperation {
+                        operation: BinaryOperation::CompoundAssignment(operation),
+                        left_input: place,
+                        right_input: node,
                     });
                     extension.into_post_operation_completion_work_item(node)
                 }
@@ -776,6 +776,7 @@ impl OperatorPrecendence {
         match op {
             BinaryOperation::Integer(op) => Self::of_integer_binary_operator(op),
             BinaryOperation::Paired(op) => Self::of_paired_binary_operator(op),
+            BinaryOperation::CompoundAssignment(_) => OperatorPrecendence::Assign,
         }
     }
 
