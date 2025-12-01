@@ -19,7 +19,7 @@ impl UntypedFloat {
         Ok(match kind {
             FloatKind::Untyped => FloatValue::Untyped(self),
             FloatKind::F32 => FloatValue::F32(self.0 as f32),
-            FloatKind::F64 => FloatValue::F64(self.0 as f64),
+            FloatKind::F64 => FloatValue::F64(self.0),
         })
     }
 
@@ -72,7 +72,7 @@ impl UntypedFloat {
         Self(value)
     }
 
-    pub(super) fn to_unspanned_literal(&self) -> Literal {
+    pub(super) fn to_unspanned_literal(self) -> Literal {
         Literal::f64_unsuffixed(self.0)
     }
 }

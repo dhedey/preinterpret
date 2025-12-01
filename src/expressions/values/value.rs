@@ -52,7 +52,7 @@ pub(crate) trait HasValueKind {
     }
 }
 
-impl<'a, T: HasValueKind> HasValueKind for &'a T {
+impl<T: HasValueKind> HasValueKind for &T {
     type SpecificKind = T::SpecificKind;
 
     fn kind(&self) -> Self::SpecificKind {
@@ -60,7 +60,7 @@ impl<'a, T: HasValueKind> HasValueKind for &'a T {
     }
 }
 
-impl<'a, T: HasValueKind> HasValueKind for &'a mut T {
+impl<T: HasValueKind> HasValueKind for &mut T {
     type SpecificKind = T::SpecificKind;
 
     fn kind(&self) -> Self::SpecificKind {

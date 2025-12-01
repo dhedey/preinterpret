@@ -849,7 +849,7 @@ impl<T: ?Sized + ToOwned> Deref for CopyOnWrite<T> {
 
     fn deref(&self) -> &T {
         match self.inner {
-            CopyOnWriteInner::Owned(ref owned) => (&**owned).borrow(),
+            CopyOnWriteInner::Owned(ref owned) => (**owned).borrow(),
             CopyOnWriteInner::SharedWithInfallibleCloning(ref shared) => shared.as_ref(),
             CopyOnWriteInner::SharedWithTransparentCloning(ref shared) => shared.as_ref(),
         }
