@@ -1,3 +1,5 @@
+use std::num::TryFromIntError;
+
 use super::*;
 
 #[derive(Copy, Clone)]
@@ -21,11 +23,46 @@ impl UntypedInteger {
         rhs: impl std::fmt::Display,
     ) -> ExecutionInterrupt {
         context.error(format!(
-            "The untyped integer operation {} {} {} overflowed in i128 space",
+            "The untyped integer operation {} {} {} overflowed in {} space",
             lhs,
             context.operation.symbolic_description(),
-            rhs
+            rhs,
+            core::any::type_name::<FallbackInteger>(),
         ))
+    }
+
+    pub(crate) fn into_kind(
+        self,
+        kind: IntegerKind,
+        span_range: SpanRange,
+    ) -> ExecutionResult<IntegerValue> {
+        fn into_kind_inner(
+            value: FallbackInteger,
+            kind: IntegerKind,
+        ) -> Result<IntegerValue, TryFromIntError> {
+            Ok(match kind {
+                IntegerKind::Untyped => IntegerValue::Untyped(UntypedInteger(value)),
+                IntegerKind::I8 => IntegerValue::I8(value.try_into()?),
+                IntegerKind::I16 => IntegerValue::I16(value.try_into()?),
+                IntegerKind::I32 => IntegerValue::I32(value.try_into()?),
+                IntegerKind::I64 => IntegerValue::I64(value.try_into()?),
+                IntegerKind::I128 => IntegerValue::I128(value),
+                IntegerKind::Isize => IntegerValue::Isize(value.try_into()?),
+                IntegerKind::U8 => IntegerValue::U8(value.try_into()?),
+                IntegerKind::U16 => IntegerValue::U16(value.try_into()?),
+                IntegerKind::U32 => IntegerValue::U32(value.try_into()?),
+                IntegerKind::U64 => IntegerValue::U64(value.try_into()?),
+                IntegerKind::U128 => IntegerValue::U128(value.try_into()?),
+                IntegerKind::Usize => IntegerValue::Usize(value.try_into()?),
+            })
+        }
+        let value = self.0;
+        into_kind_inner(value, kind)
+            .map_err(|_| span_range.value_error(format!(
+                "The integer value {} does not fit into {}",
+                value,
+                kind.articled_display_name()
+            )))
     }
 
     fn paired_comparison(
@@ -55,85 +92,6 @@ impl UntypedInteger {
                     .resolve_as("The result of a comparison")
             }
         }
-    }
-
-    fn conversion_error(
-        value: FallbackInteger,
-        kind: IntegerKind,
-        span_range: SpanRange,
-    ) -> ExecutionInterrupt {
-        span_range.value_error(format!(
-            "The integer value {} does not fit into {}",
-            value,
-            kind.articled_display_name()
-        ))
-    }
-
-    pub(crate) fn into_kind(
-        self,
-        kind: IntegerKind,
-        span_range: SpanRange,
-    ) -> ExecutionResult<IntegerValue> {
-        let value = self.0;
-        Ok(match kind {
-            IntegerKind::Untyped => IntegerValue::Untyped(self),
-            IntegerKind::I8 => IntegerValue::I8(
-                value
-                    .try_into()
-                    .map_err(|_| Self::conversion_error(value, kind, span_range))?,
-            ),
-            IntegerKind::I16 => IntegerValue::I16(
-                value
-                    .try_into()
-                    .map_err(|_| Self::conversion_error(value, kind, span_range))?,
-            ),
-            IntegerKind::I32 => IntegerValue::I32(
-                value
-                    .try_into()
-                    .map_err(|_| Self::conversion_error(value, kind, span_range))?,
-            ),
-            IntegerKind::I64 => IntegerValue::I64(
-                value
-                    .try_into()
-                    .map_err(|_| Self::conversion_error(value, kind, span_range))?,
-            ),
-            IntegerKind::I128 => IntegerValue::I128(value),
-            IntegerKind::Isize => IntegerValue::Isize(
-                value
-                    .try_into()
-                    .map_err(|_| Self::conversion_error(value, kind, span_range))?,
-            ),
-            IntegerKind::U8 => IntegerValue::U8(
-                value
-                    .try_into()
-                    .map_err(|_| Self::conversion_error(value, kind, span_range))?,
-            ),
-            IntegerKind::U16 => IntegerValue::U16(
-                value
-                    .try_into()
-                    .map_err(|_| Self::conversion_error(value, kind, span_range))?,
-            ),
-            IntegerKind::U32 => IntegerValue::U32(
-                value
-                    .try_into()
-                    .map_err(|_| Self::conversion_error(value, kind, span_range))?,
-            ),
-            IntegerKind::U64 => IntegerValue::U64(
-                value
-                    .try_into()
-                    .map_err(|_| Self::conversion_error(value, kind, span_range))?,
-            ),
-            IntegerKind::U128 => IntegerValue::U128(
-                value
-                    .try_into()
-                    .map_err(|_| Self::conversion_error(value, kind, span_range))?,
-            ),
-            IntegerKind::Usize => IntegerValue::Usize(
-                value
-                    .try_into()
-                    .map_err(|_| Self::conversion_error(value, kind, span_range))?,
-            ),
-        })
     }
 
     pub(crate) fn paired_operation(

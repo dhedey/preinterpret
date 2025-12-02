@@ -315,9 +315,8 @@ define_interface! {
             }
 
             [context] fn shift_left(lhs: Owned<IntegerValue>, right: CoercedToU32) -> ExecutionResult<IntegerValue> {
-                let (lhs, _lhs_span) = lhs.deconstruct();
                 let CoercedToU32(right) = right;
-                match lhs {
+                match lhs.value {
                     IntegerValue::Untyped(left) => left.shift_operation(right, context, FallbackInteger::checked_shl),
                     IntegerValue::U8(left) => left.shift_operation(right, context, u8::checked_shl),
                     IntegerValue::U16(left) => left.shift_operation(right, context, u16::checked_shl),
@@ -339,9 +338,8 @@ define_interface! {
             }
 
             [context] fn shift_right(lhs: Owned<IntegerValue>, right: CoercedToU32) -> ExecutionResult<IntegerValue> {
-                let (lhs, _lhs_span) = lhs.deconstruct();
                 let CoercedToU32(right) = right;
-                match lhs {
+                match lhs.value {
                     IntegerValue::Untyped(left) => left.shift_operation(right, context, FallbackInteger::checked_shr),
                     IntegerValue::U8(left) => left.shift_operation(right, context, u8::checked_shr),
                     IntegerValue::U16(left) => left.shift_operation(right, context, u16::checked_shr),
