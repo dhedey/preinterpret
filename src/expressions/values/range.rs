@@ -386,8 +386,8 @@ impl ResolvableRange for UntypedInteger {
     ) -> ExecutionResult<Box<dyn ClonableIterator<Item = Value>>> {
         match definition {
             IterableRangeOf::RangeFromTo { start, dots, end } => {
-                let start = start.parse_fallback()?;
-                let end = end.parse_fallback()?;
+                let start = start.into_fallback();
+                let end = end.into_fallback();
                 Ok(match dots {
                     syn::RangeLimits::HalfOpen { .. } => Box::new(
                         (start..end).map(move |x| UntypedInteger::from_fallback(x).into_value()),
@@ -398,7 +398,7 @@ impl ResolvableRange for UntypedInteger {
                 })
             }
             IterableRangeOf::RangeFrom { start, .. } => {
-                let start = start.parse_fallback()?;
+                let start = start.into_fallback();
                 Ok(Box::new((start..).map(move |x| {
                     UntypedInteger::from_fallback(x).into_value()
                 })))

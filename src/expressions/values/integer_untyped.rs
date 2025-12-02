@@ -1,16 +1,18 @@
 use super::*;
 
-#[derive(Clone)]
-pub(crate) struct UntypedInteger(syn::LitInt);
+#[derive(Copy, Clone)]
+pub(crate) struct UntypedInteger(FallbackInteger);
 pub(crate) type FallbackInteger = i128;
 
 impl UntypedInteger {
-    pub(super) fn new_from_lit_int(lit_int: LitInt) -> Self {
-        Self(lit_int)
-    }
-
-    fn new_from_known_int_literal(literal: Literal) -> Self {
-        Self::new_from_lit_int(literal.into())
+    pub(super) fn new_from_lit_int(lit_int: &LitInt) -> ParseResult<Self> {
+        Ok(Self(lit_int.base10_digits().parse().map_err(|err| {
+            lit_int.parse_error(format!(
+                "Untyped integers in preinterpret must fit inside a {}: {}",
+                core::any::type_name::<FallbackInteger>(),
+                err
+            ))
+        })?))
     }
 
     fn binary_overflow_error(
@@ -36,13 +38,13 @@ impl UntypedInteger {
         let (rhs, rhs_span_range) = rhs.deconstruct();
         match rhs {
             IntegerValue::Untyped(rhs) => {
-                let lhs = lhs.parse_fallback()?;
-                let rhs = rhs.parse_fallback()?;
+                let lhs = lhs.0;
+                let rhs = rhs.0;
                 Ok(compare_fn(lhs, rhs))
             }
             rhs => {
                 // Re-evaluate with lhs converted to the typed integer
-                let lhs = lhs.into_owned(lhs_span_range).into_kind(rhs.kind())?;
+                let lhs = lhs.into_kind(rhs.kind())?;
                 context
                     .operation
                     .evaluate(
@@ -55,38 +57,33 @@ impl UntypedInteger {
         }
     }
 
-    pub(crate) fn from_fallback(value: FallbackInteger) -> Self {
-        // TODO[untyped] - Have a way to store this more efficiently without going through a literal
-        Self::new_from_known_int_literal(
-            Literal::i128_unsuffixed(value).with_span(Span::call_site()),
-        )
-    }
-
-    pub(crate) fn parse_fallback(&self) -> ExecutionResult<FallbackInteger> {
-        self.0.base10_digits().parse().map_err(|err| {
-            self.0.value_error(format!(
-                "Could not parse as the default inferred type {}: {}",
-                core::any::type_name::<FallbackInteger>(),
-                err
-            ))
+    pub(crate) fn into_kind(self, kind: IntegerKind) -> ExecutionResult<IntegerValue> {
+        Ok(match kind {
+            IntegerKind::Untyped => IntegerValue::Untyped(self),
+            IntegerKind::I8 => IntegerValue::I8(self.0 as i8),
+            IntegerKind::I16 => IntegerValue::I16(self.0 as i16),
+            IntegerKind::I32 => IntegerValue::I32(self.0 as i32),
+            IntegerKind::I64 => IntegerValue::I64(self.0 as i64),
+            IntegerKind::I128 => IntegerValue::I128(self.0),
+            IntegerKind::Isize => IntegerValue::Isize(self.0 as isize),
+            IntegerKind::U8 => IntegerValue::U8(self.0 as u8),
+            IntegerKind::U16 => IntegerValue::U16(self.0 as u16),
+            IntegerKind::U32 => IntegerValue::U32(self.0 as u32),
+            IntegerKind::U64 => IntegerValue::U64(self.0 as u64),
+            IntegerKind::U128 => IntegerValue::U128(self.0 as u128),
+            IntegerKind::Usize => IntegerValue::Usize(self.0 as usize),
         })
     }
 
-    pub(super) fn to_unspanned_literal(&self) -> Literal {
-        self.0.token()
-    }
-}
-
-impl Owned<UntypedInteger> {
     pub(crate) fn paired_operation(
         self,
         rhs: Owned<IntegerValue>,
         context: BinaryOperationCallContext,
         perform_fn: fn(FallbackInteger, FallbackInteger) -> Option<FallbackInteger>,
     ) -> ExecutionResult<IntegerValue> {
-        let lhs = self.parse_fallback()?;
+        let lhs = self.0;
         let rhs: UntypedInteger = rhs.resolve_as("This operand")?;
-        let rhs = rhs.parse_fallback()?;
+        let rhs = rhs.0;
         let output = perform_fn(lhs, rhs)
             .ok_or_else(|| UntypedInteger::binary_overflow_error(context, lhs, rhs))?;
         Ok(IntegerValue::Untyped(UntypedInteger::from_fallback(output)))
@@ -98,44 +95,22 @@ impl Owned<UntypedInteger> {
         context: BinaryOperationCallContext,
         perform_fn: fn(FallbackInteger, u32) -> Option<FallbackInteger>,
     ) -> ExecutionResult<IntegerValue> {
-        let lhs = self.parse_fallback()?;
+        let lhs = self.0;
         let output = perform_fn(lhs, rhs)
             .ok_or_else(|| UntypedInteger::binary_overflow_error(context, lhs, rhs))?;
         Ok(IntegerValue::Untyped(UntypedInteger::from_fallback(output)))
     }
 
-    pub(crate) fn into_kind(self, kind: IntegerKind) -> ExecutionResult<IntegerValue> {
-        Ok(match kind {
-            IntegerKind::Untyped => IntegerValue::Untyped(self.value),
-            IntegerKind::I8 => IntegerValue::I8(self.as_ref().parse_as()?),
-            IntegerKind::I16 => IntegerValue::I16(self.as_ref().parse_as()?),
-            IntegerKind::I32 => IntegerValue::I32(self.as_ref().parse_as()?),
-            IntegerKind::I64 => IntegerValue::I64(self.as_ref().parse_as()?),
-            IntegerKind::I128 => IntegerValue::I128(self.as_ref().parse_as()?),
-            IntegerKind::Isize => IntegerValue::Isize(self.as_ref().parse_as()?),
-            IntegerKind::U8 => IntegerValue::U8(self.as_ref().parse_as()?),
-            IntegerKind::U16 => IntegerValue::U16(self.as_ref().parse_as()?),
-            IntegerKind::U32 => IntegerValue::U32(self.as_ref().parse_as()?),
-            IntegerKind::U64 => IntegerValue::U64(self.as_ref().parse_as()?),
-            IntegerKind::U128 => IntegerValue::U128(self.as_ref().parse_as()?),
-            IntegerKind::Usize => IntegerValue::Usize(self.as_ref().parse_as()?),
-        })
+    pub(crate) fn from_fallback(value: FallbackInteger) -> Self {
+        Self(value)
     }
-}
 
-impl<'a> SpannedAnyRef<'a, UntypedInteger> {
-    pub(crate) fn parse_as<N>(self) -> ExecutionResult<N>
-    where
-        N: FromStr,
-        N::Err: core::fmt::Display,
-    {
-        self.value.0.base10_digits().parse().map_err(|err| {
-            self.span_range.value_error(format!(
-                "Could not parse as {}: {}",
-                core::any::type_name::<N>(),
-                err
-            ))
-        })
+    pub(super) fn into_fallback(self) -> FallbackInteger {
+        self.0
+    }
+
+    pub(super) fn to_unspanned_literal(self) -> Literal {
+        Literal::i128_unsuffixed(self.0)
     }
 }
 
@@ -162,7 +137,7 @@ define_interface! {
         pub(crate) mod unary_operations {
             fn neg(this: Owned<UntypedInteger>) -> ExecutionResult<UntypedInteger> {
                 let (value, span_range) = this.deconstruct();
-                let input = value.parse_fallback()?;
+                let input = value.into_fallback();
                 match input.checked_neg() {
                     Some(negated) => Ok(UntypedInteger::from_fallback(negated)),
                     None => span_range.value_err("Negating this value would overflow in i128 space"),
@@ -336,7 +311,7 @@ impl ResolvableOwned<Value> for UntypedIntegerFallback {
     fn resolve_from_value(input_value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
         let value: UntypedInteger =
             ResolvableOwned::<Value>::resolve_from_value(input_value, context)?;
-        Ok(UntypedIntegerFallback(value.parse_fallback()?))
+        Ok(UntypedIntegerFallback(value.into_fallback()))
     }
 }
 

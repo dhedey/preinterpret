@@ -232,14 +232,12 @@ macro_rules! impl_resolvable_integer_subtype {
         impl ResolvableOwned<IntegerValue> for $type {
             fn resolve_from_value(
                 value: IntegerValue,
-                context: ResolutionContext,
+                _context: ResolutionContext,
             ) -> ExecutionResult<Self> {
                 match value {
-                    IntegerValue::Untyped(x) => {
-                        x.into_spanned_ref(context.error_span_range()).parse_as()
-                    }
+                    IntegerValue::Untyped(x) => Ok(x.into_fallback() as $type),
                     IntegerValue::$variant(x) => Ok(x),
-                    other => context.err($expected_msg, other),
+                    other => _context.err($expected_msg, other),
                 }
             }
         }

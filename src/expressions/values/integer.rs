@@ -26,7 +26,7 @@ impl IntoValue for IntegerValue {
 impl IntegerValue {
     pub(super) fn for_litint(lit: &syn::LitInt) -> ParseResult<Owned<Self>> {
         Ok(match lit.suffix() {
-            "" => Self::Untyped(UntypedInteger::new_from_lit_int(lit.clone())),
+            "" => Self::Untyped(UntypedInteger::new_from_lit_int(lit)?),
             "u8" => Self::U8(lit.base10_parse()?),
             "u16" => Self::U16(lit.base10_parse()?),
             "u32" => Self::U32(lit.base10_parse()?),
@@ -56,11 +56,9 @@ impl IntegerValue {
         this: Owned<IntegerValue>,
         other: &Value,
     ) -> ExecutionResult<Self> {
-        let (value, span_range) = this.deconstruct();
+        let (value, _span_range) = this.deconstruct();
         match (value, other) {
-            (IntegerValue::Untyped(this), Value::Integer(other)) => {
-                this.into_owned(span_range).into_kind(other.kind())
-            }
+            (IntegerValue::Untyped(this), Value::Integer(other)) => this.into_kind(other.kind()),
             (value, _) => Ok(value),
         }
     }
@@ -69,9 +67,9 @@ impl IntegerValue {
         this: Owned<IntegerValue>,
         target: &IntegerValue,
     ) -> ExecutionResult<Self> {
-        let (value, span_range) = this.deconstruct();
+        let (value, _span_range) = this.deconstruct();
         match value {
-            IntegerValue::Untyped(this) => this.into_owned(span_range).into_kind(target.kind()),
+            IntegerValue::Untyped(this) => this.into_kind(target.kind()),
             other => Ok(other),
         }
     }
@@ -139,9 +137,8 @@ define_interface! {
         }
         pub(crate) mod binary_operations {
             [context] fn add(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
-                let lhs_span = left.span_range();
                 match IntegerValue::resolve_untyped_to_match(left, &right)? {
-                    IntegerValue::Untyped(left) => left.into_owned(lhs_span).paired_operation(right, context, FallbackInteger::checked_add),
+                    IntegerValue::Untyped(left) => left.paired_operation(right, context, FallbackInteger::checked_add),
                     IntegerValue::U8(left) => left.paired_operation(right, context, u8::checked_add),
                     IntegerValue::U16(left) => left.paired_operation(right, context, u16::checked_add),
                     IntegerValue::U32(left) => left.paired_operation(right, context, u32::checked_add),
@@ -162,9 +159,8 @@ define_interface! {
             }
 
             [context] fn sub(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
-                let lhs_span = left.span_range();
                 match IntegerValue::resolve_untyped_to_match(left, &right)? {
-                    IntegerValue::Untyped(left) => left.into_owned(lhs_span).paired_operation(right, context, FallbackInteger::checked_sub),
+                    IntegerValue::Untyped(left) => left.paired_operation(right, context, FallbackInteger::checked_sub),
                     IntegerValue::U8(left) => left.paired_operation(right, context, u8::checked_sub),
                     IntegerValue::U16(left) => left.paired_operation(right, context, u16::checked_sub),
                     IntegerValue::U32(left) => left.paired_operation(right, context, u32::checked_sub),
@@ -185,9 +181,8 @@ define_interface! {
             }
 
             [context] fn mul(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
-                let lhs_span = left.span_range();
                 match IntegerValue::resolve_untyped_to_match(left, &right)? {
-                    IntegerValue::Untyped(left) => left.into_owned(lhs_span).paired_operation(right, context, FallbackInteger::checked_mul),
+                    IntegerValue::Untyped(left) => left.paired_operation(right, context, FallbackInteger::checked_mul),
                     IntegerValue::U8(left) => left.paired_operation(right, context, u8::checked_mul),
                     IntegerValue::U16(left) => left.paired_operation(right, context, u16::checked_mul),
                     IntegerValue::U32(left) => left.paired_operation(right, context, u32::checked_mul),
@@ -208,9 +203,8 @@ define_interface! {
             }
 
             [context] fn div(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
-                let lhs_span = left.span_range();
                 match IntegerValue::resolve_untyped_to_match(left, &right)? {
-                    IntegerValue::Untyped(left) => left.into_owned(lhs_span).paired_operation(right, context, FallbackInteger::checked_div),
+                    IntegerValue::Untyped(left) => left.paired_operation(right, context, FallbackInteger::checked_div),
                     IntegerValue::U8(left) => left.paired_operation(right, context, u8::checked_div),
                     IntegerValue::U16(left) => left.paired_operation(right, context, u16::checked_div),
                     IntegerValue::U32(left) => left.paired_operation(right, context, u32::checked_div),
@@ -231,9 +225,8 @@ define_interface! {
             }
 
             [context] fn rem(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
-                let lhs_span = left.span_range();
                 match IntegerValue::resolve_untyped_to_match(left, &right)? {
-                    IntegerValue::Untyped(left) => left.into_owned(lhs_span).paired_operation(right, context, FallbackInteger::checked_rem),
+                    IntegerValue::Untyped(left) => left.paired_operation(right, context, FallbackInteger::checked_rem),
                     IntegerValue::U8(left) => left.paired_operation(right, context, u8::checked_rem),
                     IntegerValue::U16(left) => left.paired_operation(right, context, u16::checked_rem),
                     IntegerValue::U32(left) => left.paired_operation(right, context, u32::checked_rem),
@@ -254,9 +247,8 @@ define_interface! {
             }
 
             [context] fn bitxor(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
-                let lhs_span = left.span_range();
                 match IntegerValue::resolve_untyped_to_match(left, &right)? {
-                    IntegerValue::Untyped(left) => left.into_owned(lhs_span).paired_operation(right, context, |a, b| Some(a ^ b)),
+                    IntegerValue::Untyped(left) => left.paired_operation(right, context, |a, b| Some(a ^ b)),
                     IntegerValue::U8(left) => left.paired_operation(right, context, |a, b| Some(a ^ b)),
                     IntegerValue::U16(left) => left.paired_operation(right, context, |a, b| Some(a ^ b)),
                     IntegerValue::U32(left) => left.paired_operation(right, context, |a, b| Some(a ^ b)),
@@ -277,9 +269,8 @@ define_interface! {
             }
 
             [context] fn bitand(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
-                let lhs_span = left.span_range();
                 match IntegerValue::resolve_untyped_to_match(left, &right)? {
-                    IntegerValue::Untyped(left) => left.into_owned(lhs_span).paired_operation(right, context, |a, b| Some(a & b)),
+                    IntegerValue::Untyped(left) => left.paired_operation(right, context, |a, b| Some(a & b)),
                     IntegerValue::U8(left) => left.paired_operation(right, context, |a, b| Some(a & b)),
                     IntegerValue::U16(left) => left.paired_operation(right, context, |a, b| Some(a & b)),
                     IntegerValue::U32(left) => left.paired_operation(right, context, |a, b| Some(a & b)),
@@ -300,9 +291,8 @@ define_interface! {
             }
 
             [context] fn bitor(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
-                let lhs_span = left.span_range();
                 match IntegerValue::resolve_untyped_to_match(left, &right)? {
-                    IntegerValue::Untyped(left) => left.into_owned(lhs_span).paired_operation(right, context, |a, b| Some(a | b)),
+                    IntegerValue::Untyped(left) => left.paired_operation(right, context, |a, b| Some(a | b)),
                     IntegerValue::U8(left) => left.paired_operation(right, context, |a, b| Some(a | b)),
                     IntegerValue::U16(left) => left.paired_operation(right, context, |a, b| Some(a | b)),
                     IntegerValue::U32(left) => left.paired_operation(right, context, |a, b| Some(a | b)),
@@ -323,10 +313,10 @@ define_interface! {
             }
 
             [context] fn shift_left(lhs: Owned<IntegerValue>, right: CoercedToU32) -> ExecutionResult<IntegerValue> {
-                let (lhs, lhs_span) = lhs.deconstruct();
+                let (lhs, _lhs_span) = lhs.deconstruct();
                 let CoercedToU32(right) = right;
                 match lhs {
-                    IntegerValue::Untyped(left) => left.into_owned(lhs_span).shift_operation(right, context, FallbackInteger::checked_shl),
+                    IntegerValue::Untyped(left) => left.shift_operation(right, context, FallbackInteger::checked_shl),
                     IntegerValue::U8(left) => left.shift_operation(right, context, u8::checked_shl),
                     IntegerValue::U16(left) => left.shift_operation(right, context, u16::checked_shl),
                     IntegerValue::U32(left) => left.shift_operation(right, context, u32::checked_shl),
@@ -347,10 +337,10 @@ define_interface! {
             }
 
             [context] fn shift_right(lhs: Owned<IntegerValue>, right: CoercedToU32) -> ExecutionResult<IntegerValue> {
-                let (lhs, lhs_span) = lhs.deconstruct();
+                let (lhs, _lhs_span) = lhs.deconstruct();
                 let CoercedToU32(right) = right;
                 match lhs {
-                    IntegerValue::Untyped(left) => left.into_owned(lhs_span).shift_operation(right, context, FallbackInteger::checked_shr),
+                    IntegerValue::Untyped(left) => left.shift_operation(right, context, FallbackInteger::checked_shr),
                     IntegerValue::U8(left) => left.shift_operation(right, context, u8::checked_shr),
                     IntegerValue::U16(left) => left.shift_operation(right, context, u16::checked_shr),
                     IntegerValue::U32(left) => left.shift_operation(right, context, u32::checked_shr),
@@ -516,10 +506,7 @@ impl ResolvableOwned<Value> for CoercedToU32 {
             IntegerValue::I64(x) => x.try_into().ok(),
             IntegerValue::I128(x) => x.try_into().ok(),
             IntegerValue::Isize(x) => x.try_into().ok(),
-            IntegerValue::Untyped(x) => x
-                .into_spanned_ref(context.error_span_range())
-                .parse_as()
-                .ok(),
+            IntegerValue::Untyped(x) => x.into_fallback().try_into().ok(),
         };
         match coerced {
             Some(value) => Ok(CoercedToU32(value)),
