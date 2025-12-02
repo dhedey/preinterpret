@@ -144,6 +144,17 @@ impl IsSpecificValueKind for RangeKind {
             RangeKind::RangeToInclusive => "range ..=end",
         }
     }
+
+    fn articled_display_name(&self) -> &'static str {
+        match self {
+            RangeKind::Range => "a range start..end",
+            RangeKind::RangeFrom => "a range start..",
+            RangeKind::RangeTo => "a range ..end",
+            RangeKind::RangeFull => "a range ..",
+            RangeKind::RangeInclusive => "a range start..=end",
+            RangeKind::RangeToInclusive => "a range ..=end",
+        }
+    }
 }
 
 impl From<RangeKind> for ValueKind {
@@ -268,7 +279,7 @@ impl_resolvable_argument_for! {
     (value, context) -> RangeValue {
         match value {
             Value::Range(value) => Ok(value),
-            _ => context.err("range", value),
+            _ => context.err("a range", value),
         }
     }
 }

@@ -81,7 +81,7 @@ impl_resolvable_argument_for! {
     (value, context) -> StreamValue {
         match value {
             Value::Stream(value) => Ok(value),
-            _ => context.err("stream", value),
+            _ => context.err("a stream", value),
         }
     }
 }

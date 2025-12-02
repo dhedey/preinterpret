@@ -190,7 +190,7 @@ impl_resolvable_argument_for! {
     (value, context) -> IteratorValue {
         match value {
             Value::Iterator(value) => Ok(value),
-            _ => context.err("iterator", value),
+            _ => context.err("an iterator", value),
         }
     }
 }

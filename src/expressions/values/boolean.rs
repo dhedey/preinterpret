@@ -205,7 +205,7 @@ impl_resolvable_argument_for! {
     (value, context) -> BooleanValue {
         match value {
             Value::Boolean(value) => Ok(value),
-            other => context.err("boolean", other),
+            other => context.err("a boolean", other),
         }
     }
 }

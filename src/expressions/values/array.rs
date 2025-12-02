@@ -156,7 +156,7 @@ impl_resolvable_argument_for! {
     (value, context) -> ArrayValue {
         match value {
             Value::Array(value) => Ok(value),
-            _ => context.err("array", value),
+            _ => context.err("an array", value),
         }
     }
 }

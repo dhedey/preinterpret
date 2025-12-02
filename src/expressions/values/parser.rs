@@ -159,7 +159,7 @@ impl_resolvable_argument_for! {
     (value, context) -> ParserValue {
         match value {
             Value::Parser(value) => Ok(value),
-            other => context.err("parser", other),
+            other => context.err("a parser", other),
         }
     }
 }

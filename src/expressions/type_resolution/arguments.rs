@@ -22,13 +22,13 @@ impl<'a> ResolutionContext<'a> {
     /// Create an error for the resolution context.
     pub(crate) fn err<T, V: HasValueKind>(
         &self,
-        expected_value_kind: &str,
+        articled_expected_value_kind: &str,
         value: V,
     ) -> ExecutionResult<T> {
         self.span_range.type_err(format!(
             "{} is expected to be {}, but it is {}",
             self.resolution_target,
-            expected_value_kind.lower_indefinite_articled(),
+            articled_expected_value_kind,
             value.articled_value_type()
         ))
     }

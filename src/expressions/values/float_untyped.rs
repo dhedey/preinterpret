@@ -276,7 +276,7 @@ impl ResolvableOwned<FloatValue> for UntypedFloat {
     fn resolve_from_value(value: FloatValue, context: ResolutionContext) -> ExecutionResult<Self> {
         match value {
             FloatValue::Untyped(value) => Ok(value),
-            _ => context.err("untyped float", value),
+            _ => context.err("an untyped float", value),
         }
     }
 }
@@ -286,7 +286,7 @@ impl_resolvable_argument_for! {
     (value, context) -> UntypedFloat {
         match value {
             Value::Float(FloatValue::Untyped(x)) => Ok(x),
-            other => context.err("untyped float", other),
+            other => context.err("an untyped float", other),
         }
     }
 }

@@ -347,7 +347,7 @@ impl ResolvableOwned<IntegerValue> for UntypedInteger {
     ) -> ExecutionResult<Self> {
         match value {
             IntegerValue::Untyped(value) => Ok(value),
-            _ => context.err("untyped integer", value),
+            _ => context.err("an untyped integer", value),
         }
     }
 }
@@ -357,7 +357,7 @@ impl_resolvable_argument_for! {
     (value, context) -> UntypedInteger {
         match value {
             Value::Integer(IntegerValue::Untyped(x)) => Ok(x),
-            _ => context.err("untyped integer", value),
+            _ => context.err("an untyped integer", value),
         }
     }
 }

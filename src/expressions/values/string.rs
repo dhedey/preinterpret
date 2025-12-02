@@ -214,7 +214,7 @@ impl_resolvable_argument_for! {
     (value, context) -> StringValue {
         match value {
             Value::String(value) => Ok(value),
-            _ => context.err("string", value),
+            _ => context.err("a string", value),
         }
     }
 }
@@ -235,7 +235,7 @@ impl ResolvableShared<Value> for str {
     ) -> ExecutionResult<&'a Self> {
         match value {
             Value::String(s) => Ok(s.value.as_str()),
-            _ => context.err("string", value),
+            _ => context.err("a string", value),
         }
     }
 }

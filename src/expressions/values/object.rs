@@ -16,7 +16,7 @@ impl_resolvable_argument_for! {
     (value, context) -> ObjectValue {
         match value {
             Value::Object(value) => Ok(value),
-            _ => context.err("object", value),
+            _ => context.err("an object", value),
         }
     }
 }
