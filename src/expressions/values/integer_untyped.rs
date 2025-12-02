@@ -44,7 +44,7 @@ impl UntypedInteger {
             }
             rhs => {
                 // Re-evaluate with lhs converted to the typed integer
-                let lhs = lhs.into_kind(rhs.kind())?;
+                let lhs = lhs.into_kind(rhs.kind(), lhs_span_range)?;
                 context
                     .operation
                     .evaluate(
@@ -57,21 +57,82 @@ impl UntypedInteger {
         }
     }
 
-    pub(crate) fn into_kind(self, kind: IntegerKind) -> ExecutionResult<IntegerValue> {
+    fn conversion_error(
+        value: FallbackInteger,
+        kind: IntegerKind,
+        span_range: SpanRange,
+    ) -> ExecutionInterrupt {
+        span_range.value_error(format!(
+            "The integer value {} does not fit into {}",
+            value,
+            kind.articled_display_name()
+        ))
+    }
+
+    pub(crate) fn into_kind(
+        self,
+        kind: IntegerKind,
+        span_range: SpanRange,
+    ) -> ExecutionResult<IntegerValue> {
+        let value = self.0;
         Ok(match kind {
             IntegerKind::Untyped => IntegerValue::Untyped(self),
-            IntegerKind::I8 => IntegerValue::I8(self.0 as i8),
-            IntegerKind::I16 => IntegerValue::I16(self.0 as i16),
-            IntegerKind::I32 => IntegerValue::I32(self.0 as i32),
-            IntegerKind::I64 => IntegerValue::I64(self.0 as i64),
-            IntegerKind::I128 => IntegerValue::I128(self.0),
-            IntegerKind::Isize => IntegerValue::Isize(self.0 as isize),
-            IntegerKind::U8 => IntegerValue::U8(self.0 as u8),
-            IntegerKind::U16 => IntegerValue::U16(self.0 as u16),
-            IntegerKind::U32 => IntegerValue::U32(self.0 as u32),
-            IntegerKind::U64 => IntegerValue::U64(self.0 as u64),
-            IntegerKind::U128 => IntegerValue::U128(self.0 as u128),
-            IntegerKind::Usize => IntegerValue::Usize(self.0 as usize),
+            IntegerKind::I8 => IntegerValue::I8(
+                value
+                    .try_into()
+                    .map_err(|_| Self::conversion_error(value, kind, span_range))?,
+            ),
+            IntegerKind::I16 => IntegerValue::I16(
+                value
+                    .try_into()
+                    .map_err(|_| Self::conversion_error(value, kind, span_range))?,
+            ),
+            IntegerKind::I32 => IntegerValue::I32(
+                value
+                    .try_into()
+                    .map_err(|_| Self::conversion_error(value, kind, span_range))?,
+            ),
+            IntegerKind::I64 => IntegerValue::I64(
+                value
+                    .try_into()
+                    .map_err(|_| Self::conversion_error(value, kind, span_range))?,
+            ),
+            IntegerKind::I128 => IntegerValue::I128(value),
+            IntegerKind::Isize => IntegerValue::Isize(
+                value
+                    .try_into()
+                    .map_err(|_| Self::conversion_error(value, kind, span_range))?,
+            ),
+            IntegerKind::U8 => IntegerValue::U8(
+                value
+                    .try_into()
+                    .map_err(|_| Self::conversion_error(value, kind, span_range))?,
+            ),
+            IntegerKind::U16 => IntegerValue::U16(
+                value
+                    .try_into()
+                    .map_err(|_| Self::conversion_error(value, kind, span_range))?,
+            ),
+            IntegerKind::U32 => IntegerValue::U32(
+                value
+                    .try_into()
+                    .map_err(|_| Self::conversion_error(value, kind, span_range))?,
+            ),
+            IntegerKind::U64 => IntegerValue::U64(
+                value
+                    .try_into()
+                    .map_err(|_| Self::conversion_error(value, kind, span_range))?,
+            ),
+            IntegerKind::U128 => IntegerValue::U128(
+                value
+                    .try_into()
+                    .map_err(|_| Self::conversion_error(value, kind, span_range))?,
+            ),
+            IntegerKind::Usize => IntegerValue::Usize(
+                value
+                    .try_into()
+                    .map_err(|_| Self::conversion_error(value, kind, span_range))?,
+            ),
         })
     }
 

@@ -56,9 +56,11 @@ impl IntegerValue {
         this: Owned<IntegerValue>,
         other: &Value,
     ) -> ExecutionResult<Self> {
-        let (value, _span_range) = this.deconstruct();
+        let (value, span_range) = this.deconstruct();
         match (value, other) {
-            (IntegerValue::Untyped(this), Value::Integer(other)) => this.into_kind(other.kind()),
+            (IntegerValue::Untyped(this), Value::Integer(other)) => {
+                this.into_kind(other.kind(), span_range)
+            }
             (value, _) => Ok(value),
         }
     }
@@ -67,9 +69,9 @@ impl IntegerValue {
         this: Owned<IntegerValue>,
         target: &IntegerValue,
     ) -> ExecutionResult<Self> {
-        let (value, _span_range) = this.deconstruct();
+        let (value, span_range) = this.deconstruct();
         match value {
-            IntegerValue::Untyped(this) => this.into_kind(target.kind()),
+            IntegerValue::Untyped(this) => this.into_kind(target.kind(), span_range),
             other => Ok(other),
         }
     }
