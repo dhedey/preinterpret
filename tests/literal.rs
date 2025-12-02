@@ -34,6 +34,14 @@ fn test_integer_literal() {
 }
 
 #[test]
+fn test_max_u128_literal() {
+    // Verifies that u128::MAX (which doesn't fit in i128) can still be passed through as-is
+    // because it falls back to being an UnsupportedLiteral
+    let x: u128 = run!(340_282_366_920_938_463_463_374_607_431_768_211_455u128);
+    assert_eq!(x, u128::MAX);
+}
+
+#[test]
 fn test_float_literal() {
     assert_eq!(run!(%[0 . 123].to_literal()), 0.123);
     assert_eq!(run!(%[677f32].to_literal()), 677f32);
