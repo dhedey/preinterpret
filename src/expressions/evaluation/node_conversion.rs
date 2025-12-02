@@ -85,9 +85,7 @@ impl ExpressionNode {
                 operation,
                 left_input,
                 right_input,
-            } => {
-                BinaryOperationBuilder::start(context, operation.clone(), *left_input, *right_input)
-            }
+            } => BinaryOperationBuilder::start(context, *operation, *left_input, *right_input),
             ExpressionNode::Property { node, access } => {
                 ValuePropertyAccessBuilder::start(context, access.clone(), *node)
             }

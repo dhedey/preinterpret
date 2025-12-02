@@ -300,23 +300,6 @@ impl SynParse for BinaryOperation {
 }
 
 impl BinaryOperation {
-    /// Returns true if this is a compound assignment operation (+=, -=, etc.)
-    pub(crate) fn is_compound_assignment(&self) -> bool {
-        matches!(
-            self,
-            Self::AddAssign(_)
-                | Self::SubAssign(_)
-                | Self::MulAssign(_)
-                | Self::DivAssign(_)
-                | Self::RemAssign(_)
-                | Self::BitAndAssign(_)
-                | Self::BitOrAssign(_)
-                | Self::BitXorAssign(_)
-                | Self::ShlAssign(_)
-                | Self::ShrAssign(_)
-        )
-    }
-
     pub(super) fn lazy_evaluate(
         &self,
         left: Spanned<&Value>,

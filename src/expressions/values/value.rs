@@ -181,7 +181,6 @@ impl MethodResolver for ValueKind {
     ) -> Option<BinaryOperationInterface> {
         self.method_resolver().resolve_binary_operation(operation)
     }
-
 }
 
 define_interface! {
