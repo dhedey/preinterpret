@@ -48,6 +48,31 @@ impl ArgumentValue {
             _ => panic!("expect_shared() called on a non-shared ArgumentValue"),
         }
     }
+
+    /// SAFETY:
+    /// * Must be paired with a call to `enable()` before any further use of the value.
+    /// * Must not use the value while disabled.
+    pub(crate) unsafe fn disable(&mut self) {
+        match self {
+            ArgumentValue::Owned(_) => {}
+            ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write.disable(),
+            ArgumentValue::Mutable(mutable) => mutable.disable(),
+            ArgumentValue::Assignee(assignee) => assignee.0.disable(),
+            ArgumentValue::Shared(shared) => shared.disable(),
+        }
+    }
+
+    /// SAFETY:
+    /// * Must only be used after a call to `disable()`.
+    pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
+        match self {
+            ArgumentValue::Owned(_) => Ok(()),
+            ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write.enable(),
+            ArgumentValue::Mutable(mutable) => mutable.enable(),
+            ArgumentValue::Assignee(assignee) => assignee.0.enable(),
+            ArgumentValue::Shared(shared) => shared.enable(),
+        }
+    }
 }
 
 impl HasSpanRange for ArgumentValue {
@@ -204,12 +229,12 @@ impl RequestedOwnership {
 
     pub(crate) fn map_from_owned(&self, value: OwnedValue) -> ExecutionResult<RequestedValue> {
         match self {
-            RequestedOwnership::LateBound => {
-                Ok(RequestedValue::LateBound(LateBoundValue::Owned(LateBoundOwnedValue {
+            RequestedOwnership::LateBound => Ok(RequestedValue::LateBound(LateBoundValue::Owned(
+                LateBoundOwnedValue {
                     owned: value,
                     is_from_last_use: false,
-                })))
-            }
+                },
+            ))),
             RequestedOwnership::Concrete(requested) => requested
                 .map_from_owned(value)
                 .map(Self::item_from_argument),
@@ -329,7 +354,9 @@ impl ArgumentOwnership {
         late_bound: LateBoundValue,
     ) -> ExecutionResult<ArgumentValue> {
         match late_bound {
-            LateBoundValue::Owned(owned) => self.map_from_owned_with_is_last_use(owned.owned, owned.is_from_last_use),
+            LateBoundValue::Owned(owned) => {
+                self.map_from_owned_with_is_last_use(owned.owned, owned.is_from_last_use)
+            }
             LateBoundValue::CopyOnWrite(copy_on_write) => {
                 self.map_from_copy_on_write(copy_on_write)
             }
@@ -790,16 +817,17 @@ impl EvaluationFrame for BinaryOperationBuilder {
                     match interface {
                         Some(interface) => {
                             let rhs_ownership = interface.rhs_ownership();
-                            let left = interface
+                            let mut left = interface
                                 .lhs_ownership()
                                 .map_from_late_bound(left_late_bound)?;
 
+                            unsafe {
+                                // SAFETY: We re-enable it below and don't use it while disabled
+                                left.disable();
+                            }
+
                             self.state = BinaryPath::OnRightBranch { left, interface };
-                            context.request_argument_value(
-                                self,
-                                right,
-                                rhs_ownership,
-                            )
+                            context.request_argument_value(self, right, rhs_ownership)
                         }
                         None => {
                             return self.operation.type_err(format!(
@@ -811,8 +839,23 @@ impl EvaluationFrame for BinaryOperationBuilder {
                     }
                 }
             }
-            BinaryPath::OnRightBranch { left, interface } => {
-                let right = value.expect_argument_value();
+            BinaryPath::OnRightBranch {
+                mut left,
+                interface,
+            } => {
+                let mut right = value.expect_argument_value();
+
+                // NOTE:
+                // - This disable/enable flow allows us to do x += x without issues
+                // - Read https://rust-lang.github.io/rfcs/2025-nested-method-calls.html for more details
+                // - We enable left-to-right for more intuitive error messages:
+                //   If left and right clash, then the error message should be on the right, not the left
+                unsafe {
+                    // SAFETY: We disabled left above
+                    right.disable();
+                    left.enable()?;
+                    right.enable()?;
+                }
                 let result = interface.execute(left, right, &self.operation)?;
                 return context.return_returned_value(result);
             }
@@ -1094,87 +1137,6 @@ impl EvaluationFrame for AssignmentBuilder {
     }
 }
 
-// pub(super) struct CompoundAssignmentBuilder {
-//     operation: CompoundAssignmentOperation,
-//     state: CompoundAssignmentPath,
-// }
-
-// /// NOTE: Unlike an Assignment, with a CompoundAssignment we resolve the target first,
-// /// so we can resolve the operation interface
-// enum CompoundAssignmentPath {
-//     OnTargetBranch { right: ExpressionNodeId },
-//     OnValueBranch { left: ArgumentValue, interface: BinaryOperationInterface, },
-// }
-
-// impl CompoundAssignmentBuilder {
-//     pub(super) fn start(
-//         context: ValueContext,
-//         target: ExpressionNodeId,
-//         operation: CompoundAssignmentOperation,
-//         value: ExpressionNodeId,
-//     ) -> NextAction {
-//         let frame = Self {
-//             operation,
-//             state: CompoundAssignmentPath::OnTargetBranch { right: value },
-//         };
-//         context.request_late_bound(frame, target)
-//     }
-// }
-
-// impl EvaluationFrame for CompoundAssignmentBuilder {
-//     type ReturnType = ValueType;
-
-//     fn into_any(self) -> AnyValueFrame {
-//         AnyValueFrame::CompoundAssignment(self)
-//     }
-
-//     fn handle_next(
-//         mut self,
-//         context: ValueContext,
-//         requested: RequestedValue,
-//     ) -> ExecutionResult<NextAction> {
-//         Ok(match self.state {
-//             CompoundAssignmentPath::OnTargetBranch { right } => {
-//                 let target_late_bound = requested.expect_late_bound();
-
-//                 // Resolve based on left operand's kind and resolve left operand immediately
-//                 let interface = target_late_bound
-//                     .as_ref()
-//                     .kind()
-//                     .resolve_compound_assignment_operation(&self.operation);
-
-//                 match interface {
-//                     Some(interface) => {
-//                         let rhs_ownership = interface.rhs_ownership();
-//                         let left = interface
-//                             .lhs_ownership()
-//                             .map_from_late_bound(target_late_bound)?;
-
-//                         self.state = CompoundAssignmentPath::OnValueBranch { left, interface };
-//                         context.request_argument_value(
-//                             self,
-//                             right,
-//                             rhs_ownership,
-//                         )
-//                     }
-//                     None => {
-//                         return self.operation.type_err(format!(
-//                             "The {} operator is not supported for {} operand",
-//                             self.operation.symbolic_description(),
-//                             target_late_bound.articled_value_type(),
-//                         ));
-//                     }
-//                 }
-//             }
-//             CompoundAssignmentPath::OnValueBranch { left, interface } => {
-//                 let right = requested.expect_argument_value();
-//                 let result = interface.execute(left, right, &self.operation)?;
-//                 return context.return_returned_value(result);
-//             }
-//         })
-//     }
-// }
-
 pub(super) struct MethodCallBuilder {
     method: MethodAccess,
     unevaluated_parameters_stack: Vec<(ExpressionNodeId, ArgumentOwnership)>,
@@ -1185,7 +1147,7 @@ enum MethodCallPath {
     CallerPath,
     ArgumentsPath {
         method: MethodInterface,
-        evaluated_arguments_including_caller: Vec<ArgumentValue>,
+        disabled_evaluated_arguments_including_caller: Vec<ArgumentValue>,
     },
 }
 
@@ -1270,7 +1232,7 @@ impl EvaluationFrame for MethodCallBuilder {
                         non_caller_arguments,
                     ));
                 }
-                let caller = argument_ownerships[0].map_from_late_bound(caller)?;
+                let mut caller = argument_ownerships[0].map_from_late_bound(caller)?;
 
                 // We skip 1 to ignore the caller
                 let non_self_argument_ownerships: iter::Skip<
@@ -1286,9 +1248,13 @@ impl EvaluationFrame for MethodCallBuilder {
                 }
 
                 self.state = MethodCallPath::ArgumentsPath {
-                    evaluated_arguments_including_caller: {
+                    disabled_evaluated_arguments_including_caller: {
                         let mut params =
                             Vec::with_capacity(1 + self.unevaluated_parameters_stack.len());
+                        unsafe {
+                            // SAFETY: We enable it again before use
+                            caller.disable();
+                        }
                         params.push(caller);
                         params
                     },
@@ -1296,11 +1262,15 @@ impl EvaluationFrame for MethodCallBuilder {
                 };
             }
             MethodCallPath::ArgumentsPath {
-                evaluated_arguments_including_caller: ref mut evaluated_parameters_including_caller,
+                ref mut disabled_evaluated_arguments_including_caller,
                 ..
             } => {
-                let argument = value.expect_argument_value();
-                evaluated_parameters_including_caller.push(argument);
+                let mut argument = value.expect_argument_value();
+                unsafe {
+                    // SAFETY: We enable it again before use
+                    argument.disable();
+                }
+                disabled_evaluated_arguments_including_caller.push(argument);
             }
         };
         // Now plan the next action
@@ -1312,9 +1282,21 @@ impl EvaluationFrame for MethodCallBuilder {
                 let (arguments, method) = match self.state {
                     MethodCallPath::CallerPath => unreachable!("Already updated above"),
                     MethodCallPath::ArgumentsPath {
-                        evaluated_arguments_including_caller,
+                        disabled_evaluated_arguments_including_caller: mut arguments,
                         method,
-                    } => (evaluated_arguments_including_caller, method),
+                    } => {
+                        // NOTE:
+                        // - This disable/enable flow allows us to do things like vec.push(vec.len())
+                        // - Read https://rust-lang.github.io/rfcs/2025-nested-method-calls.html for more details
+                        // - We enable left-to-right for intuitive error messages: later borrows will report errors
+                        unsafe {
+                            for argument in &mut arguments {
+                                // SAFETY: We disabled them above
+                                argument.enable()?;
+                            }
+                        }
+                        (arguments, method)
+                    }
                 };
                 let mut call_context = MethodCallContext {
                     output_span_range: self.method.span_range(),

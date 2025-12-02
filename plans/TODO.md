@@ -56,12 +56,13 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
   which should massively reduce the number of implementataions we need to generate.
     i.e. we have a `CoercedInt<u32>` wrapper type which we use as the operand of the SHL/SHR operators
 - [x] Remove the `evaluate_legacy` method, the `PairedBinaryOperation`, and all the dead code
+- [x] CompoundAssignment migration
+- [x] Enable `x += x` to work (using disable() / enable()) methods
+- [x] Add tests that e.g. `swap(x, x)` still breaks with a borrowing error and we don't get UB
 - [ ] Combine `PairedBinaryOperation`, `IntegerBinaryOperation` and `CompoundAssignmentOperation` into a flattened `BinaryOperation`
 - [ ] Add `==` and `!=` to all values (including streams, objects and arrays, and between typed/untyped integers and floats) and make it work with `AnyRef<..>` arguments for testing equality
-- [x] CompoundAssignment migration
 - [ ] Migrate `UntypedInteger` to use `FallbackInteger` like `UntypedFloat` (except a little harder because integers can overflow)
 - [ ] Migrate comparison operations to IntegerValue if it makes sense? Would be nice to get rid of the `paired_comparison` methods
-- [ ] Consider if/how we can improve the evaluation order of compound assignments to be (right, left)
 - [ ] Add tests to cover all the operations, including:
   - [ ] Compile error tests for `+=` out of order
   - [ ] All the binary operations, with the four combinations typed/untyped etc
@@ -367,14 +368,15 @@ preinterpret::run! {
   - [ ] References store on them cached information - either up-front, via an `Rc<Cell<ReferenceContent::Resolved(ResolvedReference)>>` or via a "resolve on first execute"
     - Value's relative offset from the top of the stack
     - An is last use flag
+- Address `TODO[performance]`
 
 ## Deferred
 
 The following are less important tasks which maybe we don't even want/need to do.
 
-- [ ] Side-project: Make LateBound better to allow this, by upgrading to mutable before use
-  - [ ] https://rust-lang.github.io/rfcs/2025-nested-method-calls.html
-  - [ ] x += x for x copy, by resolving Owned before Mutable / Shared
+- [x] Side-project: Make LateBound better to allow this, by upgrading to mutable before use
+  - [x] https://rust-lang.github.io/rfcs/2025-nested-method-calls.html
+  - [x] x += x for x copy, by resolving Owned before Mutable / Shared
 - [ ] Allow adding lifetimes to stream literals `%'a[]` and then `emit 'a`, with `'root` being the topmost. Or maybe just `emit 'root` honestly. Can't really see the use case for the others.
   - [ ] Note that `%'a[((#{ emit 'a %[x] }))]` should yield `x(())`
   - [ ] Note that we need to prevent or revert outputting to root in revertible segments

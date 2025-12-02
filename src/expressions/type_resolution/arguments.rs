@@ -229,16 +229,10 @@ pub(crate) trait ResolvableOwned<T>: Sized {
 }
 
 pub(crate) trait ResolvableShared<T> {
-    fn resolve_from_ref<'a>(
-        value: &'a T,
-        context: ResolutionContext,
-    ) -> ExecutionResult<&'a Self>;
+    fn resolve_from_ref<'a>(value: &'a T, context: ResolutionContext) -> ExecutionResult<&'a Self>;
 
     /// The `resolution_target` should be capitalized, e.g. "This argument" or "The value destructed with an object pattern"
-    fn resolve_shared(
-        value: Shared<T>,
-        resolution_target: &str,
-    ) -> ExecutionResult<Shared<Self>> {
+    fn resolve_shared(value: Shared<T>, resolution_target: &str) -> ExecutionResult<Shared<Self>> {
         value.try_map(|v, span_range| {
             Self::resolve_from_ref(
                 v,

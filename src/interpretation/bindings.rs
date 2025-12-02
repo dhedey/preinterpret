@@ -73,12 +73,12 @@ impl VariableContent {
         let resolved = match ownership {
             RequestedOwnership::LateBound => binding.into_late_bound(),
             RequestedOwnership::Concrete(ownership) => match ownership {
-                ArgumentOwnership::Owned => binding
-                    .into_transparently_cloned()
-                    .map(|owned| LateBoundValue::Owned(LateBoundOwnedValue {
+                ArgumentOwnership::Owned => binding.into_transparently_cloned().map(|owned| {
+                    LateBoundValue::Owned(LateBoundOwnedValue {
                         owned,
                         is_from_last_use: false,
-                    })),
+                    })
+                }),
                 ArgumentOwnership::Shared => binding
                     .into_shared()
                     .map(CopyOnWrite::shared_in_place_of_shared)
@@ -515,7 +515,25 @@ impl<T: ?Sized> Mutable<T> {
             span_range: span_range_map(self.span_range),
         }
     }
+
+    /// SAFETY:
+    /// * Must be paired with a call to `enable()` before any further use of the value.
+    /// * Must not use the value while disabled.
+    pub(crate) unsafe fn disable(&mut self) {
+        self.mut_cell.disable();
+    }
+
+    /// SAFETY:
+    /// * Must only be used after a call to `disable()`.
+    pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
+        self.mut_cell
+            .enable()
+            .map_err(|_| self.span_range.ownership_error(MUTABLE_ERROR_MESSAGE))
+    }
 }
+
+static MUTABLE_ERROR_MESSAGE: &str =
+    "The variable cannot be modified as it is already being modified";
 
 #[allow(unused)]
 impl Mutable<Value> {
@@ -535,11 +553,8 @@ impl Mutable<Value> {
 
     fn new_from_variable(reference: VariableBinding) -> syn::Result<Self> {
         Ok(Self {
-            mut_cell: MutSubRcRefCell::new(reference.data).map_err(|_| {
-                reference
-                    .variable_span
-                    .syn_error("The variable cannot be modified as it is already being modified")
-            })?,
+            mut_cell: MutSubRcRefCell::new(reference.data)
+                .map_err(|_| reference.variable_span.syn_error(MUTABLE_ERROR_MESSAGE))?,
             span_range: reference.variable_span.span_range(),
         })
     }
@@ -673,7 +688,24 @@ impl<T: ?Sized> Shared<T> {
             span_range: span_range_map(self.span_range),
         }
     }
+
+    /// SAFETY:
+    /// * Must be paired with a call to `enable()` before any further use of the value.
+    /// * Must not use the value while disabled.
+    pub(crate) unsafe fn disable(&mut self) {
+        self.shared_cell.disable();
+    }
+
+    /// SAFETY:
+    /// * Must only be used after with a call to `enable()`.
+    pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
+        self.shared_cell
+            .enable()
+            .map_err(|_| self.span_range.ownership_error(SHARED_ERROR_MESSAGE))
+    }
 }
+
+static SHARED_ERROR_MESSAGE: &str = "The variable cannot be read as it is already being modified";
 
 impl Shared<Value> {
     pub(crate) fn new_from_owned(value: OwnedValue) -> Self {
@@ -696,11 +728,8 @@ impl Shared<Value> {
 
     fn new_from_variable(reference: VariableBinding) -> syn::Result<Self> {
         Ok(Self {
-            shared_cell: SharedSubRcRefCell::new(reference.data).map_err(|_| {
-                reference
-                    .variable_span
-                    .syn_error("The variable cannot be read as it is already being modified")
-            })?,
+            shared_cell: SharedSubRcRefCell::new(reference.data)
+                .map_err(|_| reference.variable_span.syn_error(SHARED_ERROR_MESSAGE))?,
             span_range: reference.variable_span.span_range(),
         })
     }
@@ -834,6 +863,27 @@ impl<T: 'static + ToOwned + ?Sized> CopyOnWrite<T> {
             CopyOnWriteInner::Owned(owned) => map_owned(owned),
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => map_shared(shared),
             CopyOnWriteInner::SharedWithTransparentCloning(shared) => map_shared(shared),
+        }
+    }
+
+    /// SAFETY:
+    /// * Must be paired with a call to `enable()` before any further use of the value.
+    /// * Must not use the value while disabled.
+    pub(crate) unsafe fn disable(&mut self) {
+        match &mut self.inner {
+            CopyOnWriteInner::Owned(_) => {}
+            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => shared.disable(),
+            CopyOnWriteInner::SharedWithTransparentCloning(shared) => shared.disable(),
+        }
+    }
+
+    /// SAFETY:
+    /// * Must only be used after a call to `disable()`.
+    pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
+        match &mut self.inner {
+            CopyOnWriteInner::Owned(_) => Ok(()),
+            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => shared.enable(),
+            CopyOnWriteInner::SharedWithTransparentCloning(shared) => shared.enable(),
         }
     }
 }

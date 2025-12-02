@@ -431,16 +431,27 @@ fn test_array_place_destructurings() {
         ),
         "[[0, 2, 4, 0, 0], 2, None]"
     );
-    // This test demonstrates that the right side executes first.
-    // This aligns with the rust behaviour.
     preinterpret_assert_eq!(
         #(
             let a = [0, 0];
             let b = 0;
+            // Unlike rust, we execute left-to-right, so:
+            // * a[b] is evaluated to a[0]
+            // * The RHS is evaluated, which increments b to 1
+            // * a[0] is converted back to a mutable reference, and assigned to
+            //
+            // Rust actually executes the other way around, and ends up with:
+            // %{ a: [0, 5], b: 1 }
+            // This is likely due to borrowing rules, which we can partially
+            // circumvent by temporarily disabling them with enable/disable.
+            //
+            // I don't think it's frequent for people to rely on this behaviour,
+            // so I don't think it's an issue for us to diverge from rust here
+            // (in fact, I think we're more intuitive this way)
             a[b] += { b += 1; 5 };
-            a.to_debug_string()
+            %{ a, b }.to_debug_string()
         ),
-        "[0, 5]"
+        "%{ a: [5, 0], b: 1 }"
     );
     // This test demonstrates that the assignee operation is executed
     // incrementally, to align with the rust behaviour.

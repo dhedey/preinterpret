@@ -150,7 +150,7 @@ define_interface! {
                 lhs.push_str(rhs.deref());
                 lhs
             }
-            
+
             fn add_assign(mut lhs: Assignee<String>, rhs: Shared<str>) {
                 lhs.push_str(rhs.deref());
             }

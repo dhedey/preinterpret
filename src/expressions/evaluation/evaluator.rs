@@ -295,11 +295,7 @@ impl<'a, T: RequestedValueType> Context<'a, T> {
         handler: H,
         node: ExpressionNodeId,
     ) -> NextAction {
-        self.request_argument_value(
-            handler,
-            node,
-            ArgumentOwnership::Owned,
-        )
+        self.request_argument_value(handler, node, ArgumentOwnership::Owned)
     }
 
     pub(super) fn request_shared<H: EvaluationFrame<ReturnType = T>>(
@@ -307,11 +303,7 @@ impl<'a, T: RequestedValueType> Context<'a, T> {
         handler: H,
         node: ExpressionNodeId,
     ) -> NextAction {
-        self.request_argument_value(
-            handler,
-            node,
-            ArgumentOwnership::Shared,
-        )
+        self.request_argument_value(handler, node, ArgumentOwnership::Shared)
     }
 
     pub(super) fn request_assignee<H: EvaluationFrame<ReturnType = T>>(
@@ -320,11 +312,7 @@ impl<'a, T: RequestedValueType> Context<'a, T> {
         node: ExpressionNodeId,
         auto_create: bool,
     ) -> NextAction {
-        self.request_argument_value(
-            handler,
-            node,
-            ArgumentOwnership::Assignee { auto_create },
-        )
+        self.request_argument_value(handler, node, ArgumentOwnership::Assignee { auto_create })
     }
 
     pub(super) fn request_late_bound<H: EvaluationFrame<ReturnType = T>>(

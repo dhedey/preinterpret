@@ -235,7 +235,9 @@ macro_rules! impl_resolvable_integer_subtype {
                 context: ResolutionContext,
             ) -> ExecutionResult<Self> {
                 match value {
-                    IntegerValue::Untyped(x) => x.into_spanned_ref(context.error_span_range()).parse_as(),
+                    IntegerValue::Untyped(x) => {
+                        x.into_spanned_ref(context.error_span_range()).parse_as()
+                    }
                     IntegerValue::$variant(x) => Ok(x),
                     other => context.err($expected_msg, other),
                 }

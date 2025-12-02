@@ -353,7 +353,10 @@ impl IterableRangeOf<Value> {
         match start {
             Value::Integer(mut start) => {
                 if let Some(end) = &end {
-                    start = IntegerValue::resolve_untyped_to_match_other(start.into_owned(span_range), end)?;
+                    start = IntegerValue::resolve_untyped_to_match_other(
+                        start.into_owned(span_range),
+                        end,
+                    )?;
                 }
                 match start {
                     IntegerValue::Untyped(start) => resolve_range(start, dots, end),

@@ -201,25 +201,55 @@ impl From<IntegerBinaryOperation> for BinaryOperation {
     }
 }
 
+impl From<CompoundAssignmentOperation> for BinaryOperation {
+    fn from(operation: CompoundAssignmentOperation) -> Self {
+        Self::CompoundAssignment(operation)
+    }
+}
+
 impl SynParse for BinaryOperation {
     fn parse(input: SynParseStream) -> SynResult<Self> {
         // In line with Syn's BinOp, we use peek instead of lookahead
         // ...I assume for slightly increased performance
         // ...Or because 30 alternative options in the error message is too many
-        if input.peek(Token![+]) {
+        // NOTE: Order is important here - longer tokens must be checked first,
+        // because e.g. Token![+] doesn't check for Spacing::Alone so matches the
+        // start of Token![+=]
+        // [TODO-performance]: Convert this into a much more efficient parse-tree
+        if input.peek(Token![+=]) {
+            Ok(Self::CompoundAssignment(CompoundAssignmentOperation::Add(
+                input.parse()?,
+            )))
+        } else if input.peek(Token![+]) {
             Ok(Self::Paired(PairedBinaryOperation::Addition(
+                input.parse()?,
+            )))
+        } else if input.peek(Token![-=]) {
+            Ok(Self::CompoundAssignment(CompoundAssignmentOperation::Sub(
                 input.parse()?,
             )))
         } else if input.peek(Token![-]) {
             Ok(Self::Paired(PairedBinaryOperation::Subtraction(
                 input.parse()?,
             )))
+        } else if input.peek(Token![*=]) {
+            Ok(Self::CompoundAssignment(CompoundAssignmentOperation::Mul(
+                input.parse()?,
+            )))
         } else if input.peek(Token![*]) {
             Ok(Self::Paired(PairedBinaryOperation::Multiplication(
                 input.parse()?,
             )))
+        } else if input.peek(Token![/=]) {
+            Ok(Self::CompoundAssignment(CompoundAssignmentOperation::Div(
+                input.parse()?,
+            )))
         } else if input.peek(Token![/]) {
             Ok(Self::Paired(PairedBinaryOperation::Division(
+                input.parse()?,
+            )))
+        } else if input.peek(Token![%=]) {
+            Ok(Self::CompoundAssignment(CompoundAssignmentOperation::Rem(
                 input.parse()?,
             )))
         } else if input.peek(Token![%]) {
@@ -248,8 +278,16 @@ impl SynParse for BinaryOperation {
             Ok(Self::Paired(PairedBinaryOperation::LessThanOrEqual(
                 input.parse()?,
             )))
+        } else if input.peek(Token![<<=]) {
+            Ok(Self::CompoundAssignment(CompoundAssignmentOperation::Shl(
+                input.parse()?,
+            )))
         } else if input.peek(Token![<<]) {
             Ok(Self::Integer(IntegerBinaryOperation::ShiftLeft(
+                input.parse()?,
+            )))
+        } else if input.peek(Token![>>=]) {
+            Ok(Self::CompoundAssignment(CompoundAssignmentOperation::Shr(
                 input.parse()?,
             )))
         } else if input.peek(Token![>>]) {
@@ -264,14 +302,26 @@ impl SynParse for BinaryOperation {
             Ok(Self::Paired(PairedBinaryOperation::LessThan(
                 input.parse()?,
             )))
+        } else if input.peek(Token![&=]) {
+            Ok(Self::CompoundAssignment(
+                CompoundAssignmentOperation::BitAnd(input.parse()?),
+            ))
         } else if input.peek(Token![&]) {
             Ok(Self::Paired(PairedBinaryOperation::BitAnd(input.parse()?)))
+        } else if input.peek(Token![|=]) {
+            Ok(Self::CompoundAssignment(
+                CompoundAssignmentOperation::BitOr(input.parse()?),
+            ))
         } else if input.peek(Token![|]) {
             Ok(Self::Paired(PairedBinaryOperation::BitOr(input.parse()?)))
+        } else if input.peek(Token![^=]) {
+            Ok(Self::CompoundAssignment(
+                CompoundAssignmentOperation::BitXor(input.parse()?),
+            ))
         } else if input.peek(Token![^]) {
             Ok(Self::Paired(PairedBinaryOperation::BitXor(input.parse()?)))
         } else {
-            Err(input.error("Expected one of + - * / % && || ^ & | == < <= != >= > << or >>"))
+            Err(input.error("Expected one of + - * / % && || ^ & | == < <= != >= > << >> += -= *= /= %= &= |= ^= <<= or >>="))
         }
     }
 }
@@ -339,8 +389,9 @@ impl Operation for BinaryOperation {
         match self {
             BinaryOperation::Paired(paired) => paired.symbolic_description(),
             BinaryOperation::Integer(integer) => integer.symbolic_description(),
-            BinaryOperation::CompoundAssignment(compound_assignment) =>
-                compound_assignment.symbolic_description(),
+            BinaryOperation::CompoundAssignment(compound_assignment) => {
+                compound_assignment.symbolic_description()
+            }
         }
     }
 }

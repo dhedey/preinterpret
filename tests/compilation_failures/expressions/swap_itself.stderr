@@ -1,0 +1,5 @@
+error: The variable cannot be modified as it is already being modified
+ --> tests/compilation_failures/expressions/swap_itself.rs:6:16
+  |
+6 |         a.swap(a);
+  |                ^

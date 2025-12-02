@@ -88,10 +88,7 @@ impl ControlFlowStack {
         &mut self,
         node: impl IntoIterator<IntoIter = I>,
     ) {
-        self.nodes.extend(
-            node.into_iter()
-                .rev(),
-        );
+        self.nodes.extend(node.into_iter().rev());
     }
 
     fn push(&mut self, node: ExpressionNodeId) {

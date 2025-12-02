@@ -33,8 +33,10 @@ impl FloatValue {
         self.to_unspanned_literal().with_span(span)
     }
 
-
-    pub(crate) fn resolve_untyped_to_match(this: Owned<FloatValue>, target: &FloatValue) -> ExecutionResult<Self> {
+    pub(crate) fn resolve_untyped_to_match(
+        this: Owned<FloatValue>,
+        target: &FloatValue,
+    ) -> ExecutionResult<Self> {
         let (value, span_range) = this.deconstruct();
         match value {
             FloatValue::Untyped(this) => this.into_owned(span_range).into_kind(target.kind()),

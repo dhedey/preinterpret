@@ -52,15 +52,23 @@ impl IntegerValue {
         self.to_unspanned_literal().with_span(span)
     }
 
-    pub(crate) fn resolve_untyped_to_match_other(this: Owned<IntegerValue>, other: &Value) -> ExecutionResult<Self> {
+    pub(crate) fn resolve_untyped_to_match_other(
+        this: Owned<IntegerValue>,
+        other: &Value,
+    ) -> ExecutionResult<Self> {
         let (value, span_range) = this.deconstruct();
         match (value, other) {
-            (IntegerValue::Untyped(this), Value::Integer(other)) => this.into_owned(span_range).into_kind(other.kind()),
+            (IntegerValue::Untyped(this), Value::Integer(other)) => {
+                this.into_owned(span_range).into_kind(other.kind())
+            }
             (value, _) => Ok(value),
         }
     }
 
-    pub(crate) fn resolve_untyped_to_match(this: Owned<IntegerValue>, target: &IntegerValue) -> ExecutionResult<Self> {
+    pub(crate) fn resolve_untyped_to_match(
+        this: Owned<IntegerValue>,
+        target: &IntegerValue,
+    ) -> ExecutionResult<Self> {
         let (value, span_range) = this.deconstruct();
         match value {
             IntegerValue::Untyped(this) => this.into_owned(span_range).into_kind(target.kind()),
@@ -519,7 +527,10 @@ impl ResolvableOwned<Value> for CoercedToU32 {
             IntegerValue::I64(x) => x.try_into().ok(),
             IntegerValue::I128(x) => x.try_into().ok(),
             IntegerValue::Isize(x) => x.try_into().ok(),
-            IntegerValue::Untyped(x) => x.into_spanned_ref(context.error_span_range()).parse_as().ok(),
+            IntegerValue::Untyped(x) => x
+                .into_spanned_ref(context.error_span_range())
+                .parse_as()
+                .ok(),
         };
         match coerced {
             Some(value) => Ok(CoercedToU32(value)),
