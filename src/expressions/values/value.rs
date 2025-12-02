@@ -182,13 +182,6 @@ impl MethodResolver for ValueKind {
         self.method_resolver().resolve_binary_operation(operation)
     }
 
-    fn resolve_compound_assignment_operation(
-        &self,
-        operation: &CompoundAssignmentOperation,
-    ) -> Option<BinaryOperationInterface> {
-        self.method_resolver()
-            .resolve_compound_assignment_operation(operation)
-    }
 }
 
 define_interface! {

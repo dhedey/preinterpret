@@ -15,13 +15,6 @@ pub(in crate::expressions) trait MethodResolver {
         &self,
         operation: &BinaryOperation,
     ) -> Option<BinaryOperationInterface>;
-
-    /// Resolves a compound assignment operation as a method interface for this type.
-    #[allow(unused)]
-    fn resolve_compound_assignment_operation(
-        &self,
-        operation: &CompoundAssignmentOperation,
-    ) -> Option<BinaryOperationInterface>;
 }
 
 impl<T: HierarchicalTypeData> MethodResolver for T {
@@ -51,16 +44,6 @@ impl<T: HierarchicalTypeData> MethodResolver for T {
             None => Self::PARENT.and_then(|p| p.resolve_binary_operation(operation)),
         }
     }
-
-    fn resolve_compound_assignment_operation(
-        &self,
-        operation: &CompoundAssignmentOperation,
-    ) -> Option<BinaryOperationInterface> {
-        match Self::resolve_own_compound_assignment_operation(operation) {
-            Some(method) => Some(method),
-            None => Self::PARENT.and_then(|p| p.resolve_compound_assignment_operation(operation)),
-        }
-    }
 }
 
 pub(crate) trait HierarchicalTypeData {
@@ -82,35 +65,9 @@ pub(crate) trait HierarchicalTypeData {
     }
 
     /// Resolves a binary operation as a method interface for this type.
-    /// Returns None if the operation should fallback to the legacy system.
+    /// Returns None if the operation is not supported by this type.
     fn resolve_own_binary_operation(
-        operation: &BinaryOperation,
-    ) -> Option<BinaryOperationInterface> {
-        match operation {
-            BinaryOperation::Paired(operation) => Self::resolve_paired_binary_operation(operation),
-            BinaryOperation::Integer(operation) => {
-                Self::resolve_integer_binary_operation(operation)
-            }
-            BinaryOperation::CompoundAssignment(operation) => {
-                Self::resolve_own_compound_assignment_operation(operation)
-            }
-        }
-    }
-
-    fn resolve_paired_binary_operation(
-        _operation: &PairedBinaryOperation,
-    ) -> Option<BinaryOperationInterface> {
-        None
-    }
-
-    fn resolve_integer_binary_operation(
-        _operation: &IntegerBinaryOperation,
-    ) -> Option<BinaryOperationInterface> {
-        None
-    }
-
-    fn resolve_own_compound_assignment_operation(
-        _operation: &CompoundAssignmentOperation,
+        _operation: &BinaryOperation,
     ) -> Option<BinaryOperationInterface> {
         None
     }

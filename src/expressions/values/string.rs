@@ -190,26 +190,18 @@ define_interface! {
                 })
             }
 
-            fn resolve_paired_binary_operation(
-                operation: &PairedBinaryOperation,
+            fn resolve_own_binary_operation(
+                operation: &BinaryOperation,
             ) -> Option<BinaryOperationInterface> {
                 Some(match operation {
-                    PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
-                    PairedBinaryOperation::Equal { .. } => binary_definitions::eq(),
-                    PairedBinaryOperation::NotEqual { .. } => binary_definitions::ne(),
-                    PairedBinaryOperation::LessThan { .. } => binary_definitions::lt(),
-                    PairedBinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
-                    PairedBinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
-                    PairedBinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
-                    _ => return None,
-                })
-            }
-
-            fn resolve_own_compound_assignment_operation(
-                operation: &CompoundAssignmentOperation,
-            ) -> Option<BinaryOperationInterface> {
-                Some(match operation {
-                    CompoundAssignmentOperation::Add { .. } => binary_definitions::add_assign(),
+                    BinaryOperation::Addition { .. } => binary_definitions::add(),
+                    BinaryOperation::Equal { .. } => binary_definitions::eq(),
+                    BinaryOperation::NotEqual { .. } => binary_definitions::ne(),
+                    BinaryOperation::LessThan { .. } => binary_definitions::lt(),
+                    BinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
+                    BinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
+                    BinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
+                    BinaryOperation::AddAssign { .. } => binary_definitions::add_assign(),
                     _ => return None,
                 })
             }

@@ -371,45 +371,34 @@ define_interface! {
             }
         }
         interface_items {
-            fn resolve_paired_binary_operation(
-                operation: &PairedBinaryOperation,
+            fn resolve_own_binary_operation(
+                operation: &BinaryOperation,
             ) -> Option<BinaryOperationInterface> {
                 Some(match operation {
-                    PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
-                    PairedBinaryOperation::Subtraction { .. } => binary_definitions::sub(),
-                    PairedBinaryOperation::Multiplication { .. } => binary_definitions::mul(),
-                    PairedBinaryOperation::Division { .. } => binary_definitions::div(),
-                    PairedBinaryOperation::Remainder { .. } => binary_definitions::rem(),
-                    PairedBinaryOperation::BitXor { .. } => binary_definitions::bitxor(),
-                    PairedBinaryOperation::BitAnd { .. } => binary_definitions::bitand(),
-                    PairedBinaryOperation::BitOr { .. } => binary_definitions::bitor(),
+                    // Arithmetic operations
+                    BinaryOperation::Addition { .. } => binary_definitions::add(),
+                    BinaryOperation::Subtraction { .. } => binary_definitions::sub(),
+                    BinaryOperation::Multiplication { .. } => binary_definitions::mul(),
+                    BinaryOperation::Division { .. } => binary_definitions::div(),
+                    BinaryOperation::Remainder { .. } => binary_definitions::rem(),
+                    // Bitwise operations
+                    BinaryOperation::BitXor { .. } => binary_definitions::bitxor(),
+                    BinaryOperation::BitAnd { .. } => binary_definitions::bitand(),
+                    BinaryOperation::BitOr { .. } => binary_definitions::bitor(),
+                    BinaryOperation::ShiftLeft { .. } => binary_definitions::shift_left(),
+                    BinaryOperation::ShiftRight { .. } => binary_definitions::shift_right(),
+                    // Compound assignment operations
+                    BinaryOperation::AddAssign { .. } => binary_definitions::add_assign(),
+                    BinaryOperation::SubAssign { .. } => binary_definitions::sub_assign(),
+                    BinaryOperation::MulAssign { .. } => binary_definitions::mul_assign(),
+                    BinaryOperation::DivAssign { .. } => binary_definitions::div_assign(),
+                    BinaryOperation::RemAssign { .. } => binary_definitions::rem_assign(),
+                    BinaryOperation::BitXorAssign { .. } => binary_definitions::bitxor_assign(),
+                    BinaryOperation::BitAndAssign { .. } => binary_definitions::bitand_assign(),
+                    BinaryOperation::BitOrAssign { .. } => binary_definitions::bitor_assign(),
+                    BinaryOperation::ShlAssign { .. } => binary_definitions::shift_left_assign(),
+                    BinaryOperation::ShrAssign { .. } => binary_definitions::shift_right_assign(),
                     _ => return None,
-                })
-            }
-
-            fn resolve_integer_binary_operation(
-                operation: &IntegerBinaryOperation,
-            ) -> Option<BinaryOperationInterface> {
-                Some(match operation {
-                    IntegerBinaryOperation::ShiftLeft { .. } => binary_definitions::shift_left(),
-                    IntegerBinaryOperation::ShiftRight { .. } => binary_definitions::shift_right(),
-                })
-            }
-
-            fn resolve_own_compound_assignment_operation(
-                operation: &CompoundAssignmentOperation,
-            ) -> Option<BinaryOperationInterface> {
-                Some(match operation {
-                    CompoundAssignmentOperation::Add { .. } => binary_definitions::add_assign(),
-                    CompoundAssignmentOperation::Sub { .. } => binary_definitions::sub_assign(),
-                    CompoundAssignmentOperation::Mul { .. } => binary_definitions::mul_assign(),
-                    CompoundAssignmentOperation::Div { .. } => binary_definitions::div_assign(),
-                    CompoundAssignmentOperation::Rem { .. } => binary_definitions::rem_assign(),
-                    CompoundAssignmentOperation::BitXor { .. } => binary_definitions::bitxor_assign(),
-                    CompoundAssignmentOperation::BitAnd { .. } => binary_definitions::bitand_assign(),
-                    CompoundAssignmentOperation::BitOr { .. } => binary_definitions::bitor_assign(),
-                    CompoundAssignmentOperation::Shl { .. } => binary_definitions::shift_left_assign(),
-                    CompoundAssignmentOperation::Shr { .. } => binary_definitions::shift_right_assign(),
                 })
             }
         }
