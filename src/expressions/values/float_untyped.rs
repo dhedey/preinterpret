@@ -35,33 +35,15 @@ impl UntypedFloat {
         Ok(FloatValue::Untyped(UntypedFloat::from_fallback(output)))
     }
 
-    fn paired_comparison(
-        lhs: Owned<UntypedFloat>,
+    pub(crate) fn paired_comparison(
+        self,
         rhs: Owned<FloatValue>,
-        context: BinaryOperationCallContext,
         compare_fn: fn(FallbackFloat, FallbackFloat) -> bool,
     ) -> ExecutionResult<bool> {
-        let (lhs, lhs_span_range) = lhs.deconstruct();
-        let (rhs, rhs_span_range) = rhs.deconstruct();
-        match rhs {
-            FloatValue::Untyped(rhs) => {
-                let lhs = lhs.0;
-                let rhs = rhs.0;
-                Ok(compare_fn(lhs, rhs))
-            }
-            rhs => {
-                // Re-evaluate with lhs converted to the typed float
-                let lhs = lhs.into_kind(rhs.kind())?;
-                context
-                    .operation
-                    .evaluate(
-                        lhs.into_owned_value(lhs_span_range),
-                        rhs.into_owned_value(rhs_span_range),
-                    )?
-                    .expect_owned()
-                    .resolve_as("The result of a comparison")
-            }
-        }
+        let lhs = self.0;
+        let rhs: UntypedFloat = rhs.resolve_as("This operand")?;
+        let rhs = rhs.0;
+        Ok(compare_fn(lhs, rhs))
     }
 
     pub(super) fn into_fallback(self) -> FallbackFloat {
@@ -171,47 +153,6 @@ define_interface! {
             }
         }
         pub(crate) mod binary_operations {
-            [context] fn eq(
-                lhs: Owned<UntypedFloat>,
-                rhs: Owned<FloatValue>,
-            ) -> ExecutionResult<bool> {
-                UntypedFloat::paired_comparison(lhs, rhs, context, |a, b| a == b)
-            }
-
-            [context] fn ne(
-                lhs: Owned<UntypedFloat>,
-                rhs: Owned<FloatValue>,
-            ) -> ExecutionResult<bool> {
-                UntypedFloat::paired_comparison(lhs, rhs, context, |a, b| a != b)
-            }
-
-            [context] fn lt(
-                lhs: Owned<UntypedFloat>,
-                rhs: Owned<FloatValue>,
-            ) -> ExecutionResult<bool> {
-                UntypedFloat::paired_comparison(lhs, rhs, context, |a, b| a < b)
-            }
-
-            [context] fn le(
-                lhs: Owned<UntypedFloat>,
-                rhs: Owned<FloatValue>,
-            ) -> ExecutionResult<bool> {
-                UntypedFloat::paired_comparison(lhs, rhs, context, |a, b| a <= b)
-            }
-
-            [context] fn ge(
-                lhs: Owned<UntypedFloat>,
-                rhs: Owned<FloatValue>,
-            ) -> ExecutionResult<bool> {
-                UntypedFloat::paired_comparison(lhs, rhs, context, |a, b| a >= b)
-            }
-
-            [context] fn gt(
-                lhs: Owned<UntypedFloat>,
-                rhs: Owned<FloatValue>,
-            ) -> ExecutionResult<bool> {
-                UntypedFloat::paired_comparison(lhs, rhs, context, |a, b| a > b)
-            }
         }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
@@ -242,18 +183,10 @@ define_interface! {
             }
 
             fn resolve_own_binary_operation(
-                operation: &BinaryOperation,
+                _operation: &BinaryOperation,
             ) -> Option<BinaryOperationInterface> {
-                Some(match operation {
-                    // Most operations are defined on the float value directly
-                    BinaryOperation::Equal { .. } => binary_definitions::eq(),
-                    BinaryOperation::NotEqual { .. } => binary_definitions::ne(),
-                    BinaryOperation::LessThan { .. } => binary_definitions::lt(),
-                    BinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
-                    BinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
-                    BinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
-                    _ => return None,
-                })
+                // All operations are defined on the parent FloatValue type
+                None
             }
         }
     }

@@ -66,35 +66,6 @@ impl UntypedInteger {
         })
     }
 
-    fn paired_comparison(
-        lhs: Owned<UntypedInteger>,
-        rhs: Owned<IntegerValue>,
-        context: BinaryOperationCallContext,
-        compare_fn: fn(FallbackInteger, FallbackInteger) -> bool,
-    ) -> ExecutionResult<bool> {
-        let (lhs, lhs_span_range) = lhs.deconstruct();
-        let (rhs, rhs_span_range) = rhs.deconstruct();
-        match rhs {
-            IntegerValue::Untyped(rhs) => {
-                let lhs = lhs.0;
-                let rhs = rhs.0;
-                Ok(compare_fn(lhs, rhs))
-            }
-            rhs => {
-                // Re-evaluate with lhs converted to the typed integer
-                let lhs = lhs.into_kind(rhs.kind(), lhs_span_range)?;
-                context
-                    .operation
-                    .evaluate(
-                        lhs.into_owned_value(lhs_span_range),
-                        rhs.into_owned_value(rhs_span_range),
-                    )?
-                    .expect_owned()
-                    .resolve_as("The result of a comparison")
-            }
-        }
-    }
-
     pub(crate) fn paired_operation(
         self,
         rhs: Owned<IntegerValue>,
@@ -107,6 +78,17 @@ impl UntypedInteger {
         let output = perform_fn(lhs, rhs)
             .ok_or_else(|| UntypedInteger::binary_overflow_error(context, lhs, rhs))?;
         Ok(IntegerValue::Untyped(UntypedInteger::from_fallback(output)))
+    }
+
+    pub(crate) fn paired_comparison(
+        self,
+        rhs: Owned<IntegerValue>,
+        compare_fn: fn(FallbackInteger, FallbackInteger) -> bool,
+    ) -> ExecutionResult<bool> {
+        let lhs = self.0;
+        let rhs: UntypedInteger = rhs.resolve_as("This operand")?;
+        let rhs = rhs.0;
+        Ok(compare_fn(lhs, rhs))
     }
 
     pub(crate) fn shift_operation(
@@ -233,47 +215,6 @@ define_interface! {
             }
         }
         pub(crate) mod binary_operations {
-            [context] fn eq(
-                lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerValue>,
-            ) -> ExecutionResult<bool> {
-                UntypedInteger::paired_comparison(lhs, rhs, context, |a, b| a == b)
-            }
-
-            [context] fn ne(
-                lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerValue>,
-            ) -> ExecutionResult<bool> {
-                UntypedInteger::paired_comparison(lhs, rhs, context, |a, b| a != b)
-            }
-
-            [context] fn lt(
-                lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerValue>,
-            ) -> ExecutionResult<bool> {
-                UntypedInteger::paired_comparison(lhs, rhs, context, |a, b| a < b)
-            }
-
-            [context] fn le(
-                lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerValue>,
-            ) -> ExecutionResult<bool> {
-                UntypedInteger::paired_comparison(lhs, rhs, context, |a, b| a <= b)
-            }
-
-            [context] fn ge(
-                lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerValue>,
-            ) -> ExecutionResult<bool> {
-                UntypedInteger::paired_comparison(lhs, rhs, context, |a, b| a >= b)
-            }
-
-            [context] fn gt(
-                lhs: Owned<UntypedInteger>,
-                rhs: Owned<IntegerValue>,
-            ) -> ExecutionResult<bool> {
-                UntypedInteger::paired_comparison(lhs, rhs, context, |a, b| a > b)
-            }
         }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
@@ -304,18 +245,10 @@ define_interface! {
             }
 
             fn resolve_own_binary_operation(
-                operation: &BinaryOperation,
+                _operation: &BinaryOperation,
             ) -> Option<BinaryOperationInterface> {
-                Some(match operation {
-                    // Most operations are defined on the integer value directly
-                    BinaryOperation::Equal { .. } => binary_definitions::eq(),
-                    BinaryOperation::NotEqual { .. } => binary_definitions::ne(),
-                    BinaryOperation::LessThan { .. } => binary_definitions::lt(),
-                    BinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
-                    BinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
-                    BinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
-                    _ => return None,
-                })
+                // All operations are defined on the parent IntegerValue type
+                None
             }
         }
     }

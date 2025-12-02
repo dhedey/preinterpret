@@ -145,6 +145,54 @@ define_interface! {
             [context] fn rem_assign(left: Assignee<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<()> {
                 FloatValue::assign_op(left, right, context, rem)
             }
+
+            fn lt(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<bool> {
+                match FloatValue::resolve_untyped_to_match(left, &right)? {
+                    FloatValue::Untyped(left) => left.paired_comparison(right, |a, b| a < b),
+                    FloatValue::F32(left) => left.paired_comparison(right, |a, b| a < b),
+                    FloatValue::F64(left) => left.paired_comparison(right, |a, b| a < b),
+                }
+            }
+
+            fn le(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<bool> {
+                match FloatValue::resolve_untyped_to_match(left, &right)? {
+                    FloatValue::Untyped(left) => left.paired_comparison(right, |a, b| a <= b),
+                    FloatValue::F32(left) => left.paired_comparison(right, |a, b| a <= b),
+                    FloatValue::F64(left) => left.paired_comparison(right, |a, b| a <= b),
+                }
+            }
+
+            fn gt(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<bool> {
+                match FloatValue::resolve_untyped_to_match(left, &right)? {
+                    FloatValue::Untyped(left) => left.paired_comparison(right, |a, b| a > b),
+                    FloatValue::F32(left) => left.paired_comparison(right, |a, b| a > b),
+                    FloatValue::F64(left) => left.paired_comparison(right, |a, b| a > b),
+                }
+            }
+
+            fn ge(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<bool> {
+                match FloatValue::resolve_untyped_to_match(left, &right)? {
+                    FloatValue::Untyped(left) => left.paired_comparison(right, |a, b| a >= b),
+                    FloatValue::F32(left) => left.paired_comparison(right, |a, b| a >= b),
+                    FloatValue::F64(left) => left.paired_comparison(right, |a, b| a >= b),
+                }
+            }
+
+            fn eq(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<bool> {
+                match FloatValue::resolve_untyped_to_match(left, &right)? {
+                    FloatValue::Untyped(left) => left.paired_comparison(right, |a, b| a == b),
+                    FloatValue::F32(left) => left.paired_comparison(right, |a, b| a == b),
+                    FloatValue::F64(left) => left.paired_comparison(right, |a, b| a == b),
+                }
+            }
+
+            fn ne(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<bool> {
+                match FloatValue::resolve_untyped_to_match(left, &right)? {
+                    FloatValue::Untyped(left) => left.paired_comparison(right, |a, b| a != b),
+                    FloatValue::F32(left) => left.paired_comparison(right, |a, b| a != b),
+                    FloatValue::F64(left) => left.paired_comparison(right, |a, b| a != b),
+                }
+            }
         }
         interface_items {
             fn resolve_own_binary_operation(
@@ -163,6 +211,13 @@ define_interface! {
                     BinaryOperation::MulAssign { .. } => binary_definitions::mul_assign(),
                     BinaryOperation::DivAssign { .. } => binary_definitions::div_assign(),
                     BinaryOperation::RemAssign { .. } => binary_definitions::rem_assign(),
+                    // Comparison operations
+                    BinaryOperation::LessThan { .. } => binary_definitions::lt(),
+                    BinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
+                    BinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
+                    BinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
+                    BinaryOperation::Equal { .. } => binary_definitions::eq(),
+                    BinaryOperation::NotEqual { .. } => binary_definitions::ne(),
                     _ => return None,
                 })
             }

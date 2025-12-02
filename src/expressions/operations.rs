@@ -325,6 +325,7 @@ impl BinaryOperation {
         }
     }
 
+    #[allow(unused)]
     pub(crate) fn evaluate<L: IntoValue, R: IntoValue>(
         &self,
         left: Owned<L>,
@@ -465,6 +466,16 @@ pub(super) trait HandleBinaryOperation: Sized + std::fmt::Display + Copy {
         let lhs = self;
         let rhs = rhs.resolve_as("This operand")?;
         Ok(perform_fn(lhs, rhs).into())
+    }
+
+    fn paired_comparison(
+        self,
+        rhs: impl ResolveAs<Self>,
+        compare_fn: fn(Self, Self) -> bool,
+    ) -> ExecutionResult<bool> {
+        let lhs = self;
+        let rhs = rhs.resolve_as("This operand")?;
+        Ok(compare_fn(lhs, rhs))
     }
 
     fn shift_operation<O, T: From<O>>(

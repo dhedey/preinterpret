@@ -99,29 +99,6 @@ macro_rules! impl_int_operations {
                     }
                 }
                 pub(crate) mod binary_operations {
-                    fn eq(lhs: $integer_type, rhs: $integer_type) -> bool {
-                        lhs == rhs
-                    }
-
-                    fn ne(lhs: $integer_type, rhs: $integer_type) -> bool {
-                        lhs != rhs
-                    }
-
-                    fn lt(lhs: $integer_type, rhs: $integer_type) -> bool {
-                        lhs < rhs
-                    }
-
-                    fn le(lhs: $integer_type, rhs: $integer_type) -> bool {
-                        lhs <= rhs
-                    }
-
-                    fn ge(lhs: $integer_type, rhs: $integer_type) -> bool {
-                        lhs >= rhs
-                    }
-
-                    fn gt(lhs: $integer_type, rhs: $integer_type) -> bool {
-                        lhs > rhs
-                    }
                 }
                 interface_items {
                     fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
@@ -163,18 +140,10 @@ macro_rules! impl_int_operations {
                     }
 
                     fn resolve_own_binary_operation(
-                        operation: &BinaryOperation,
+                        _operation: &BinaryOperation,
                     ) -> Option<BinaryOperationInterface> {
-                        Some(match operation {
-                            // Most operations are defined on the integer value directly
-                            BinaryOperation::Equal { .. } => binary_definitions::eq(),
-                            BinaryOperation::NotEqual { .. } => binary_definitions::ne(),
-                            BinaryOperation::LessThan { .. } => binary_definitions::lt(),
-                            BinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
-                            BinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
-                            BinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
-                            _ => return None,
-                        })
+                        // All operations are defined on the parent IntegerValue type
+                        None
                     }
                 }
             }
