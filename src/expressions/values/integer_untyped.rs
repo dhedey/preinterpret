@@ -57,12 +57,13 @@ impl UntypedInteger {
             })
         }
         let value = self.0;
-        into_kind_inner(value, kind)
-            .map_err(|_| span_range.value_error(format!(
+        into_kind_inner(value, kind).map_err(|_| {
+            span_range.value_error(format!(
                 "The integer value {} does not fit into {}",
                 value,
                 kind.articled_display_name()
-            )))
+            ))
+        })
     }
 
     fn paired_comparison(
