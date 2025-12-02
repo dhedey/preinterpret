@@ -147,28 +147,22 @@ define_interface! {
             }
         }
         interface_items {
-            fn resolve_paired_binary_operation(
-                operation: &PairedBinaryOperation,
+            fn resolve_own_binary_operation(
+                operation: &BinaryOperation,
             ) -> Option<BinaryOperationInterface> {
                 Some(match operation {
-                    PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
-                    PairedBinaryOperation::Subtraction { .. } => binary_definitions::sub(),
-                    PairedBinaryOperation::Multiplication { .. } => binary_definitions::mul(),
-                    PairedBinaryOperation::Division { .. } => binary_definitions::div(),
-                    PairedBinaryOperation::Remainder { .. } => binary_definitions::rem(),
-                    _ => return None,
-                })
-            }
-
-            fn resolve_own_compound_assignment_operation(
-                operation: &CompoundAssignmentOperation,
-            ) -> Option<BinaryOperationInterface> {
-                Some(match operation {
-                    CompoundAssignmentOperation::Add { .. } => binary_definitions::add_assign(),
-                    CompoundAssignmentOperation::Sub { .. } => binary_definitions::sub_assign(),
-                    CompoundAssignmentOperation::Mul { .. } => binary_definitions::mul_assign(),
-                    CompoundAssignmentOperation::Div { .. } => binary_definitions::div_assign(),
-                    CompoundAssignmentOperation::Rem { .. } => binary_definitions::rem_assign(),
+                    // Arithmetic operations
+                    BinaryOperation::Addition { .. } => binary_definitions::add(),
+                    BinaryOperation::Subtraction { .. } => binary_definitions::sub(),
+                    BinaryOperation::Multiplication { .. } => binary_definitions::mul(),
+                    BinaryOperation::Division { .. } => binary_definitions::div(),
+                    BinaryOperation::Remainder { .. } => binary_definitions::rem(),
+                    // Compound assignment operations
+                    BinaryOperation::AddAssign { .. } => binary_definitions::add_assign(),
+                    BinaryOperation::SubAssign { .. } => binary_definitions::sub_assign(),
+                    BinaryOperation::MulAssign { .. } => binary_definitions::mul_assign(),
+                    BinaryOperation::DivAssign { .. } => binary_definitions::div_assign(),
+                    BinaryOperation::RemAssign { .. } => binary_definitions::rem_assign(),
                     _ => return None,
                 })
             }

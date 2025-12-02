@@ -136,17 +136,17 @@ macro_rules! impl_float_operations {
                         })
                     }
 
-                    fn resolve_paired_binary_operation(
-                        operation: &PairedBinaryOperation,
+                    fn resolve_own_binary_operation(
+                        operation: &BinaryOperation,
                     ) -> Option<BinaryOperationInterface> {
                         Some(match operation {
                             // Most operations are defined on the float value directly
-                            PairedBinaryOperation::Equal { .. } => binary_definitions::eq(),
-                            PairedBinaryOperation::NotEqual { .. } => binary_definitions::ne(),
-                            PairedBinaryOperation::LessThan { .. } => binary_definitions::lt(),
-                            PairedBinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
-                            PairedBinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
-                            PairedBinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
+                            BinaryOperation::Equal { .. } => binary_definitions::eq(),
+                            BinaryOperation::NotEqual { .. } => binary_definitions::ne(),
+                            BinaryOperation::LessThan { .. } => binary_definitions::lt(),
+                            BinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
+                            BinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
+                            BinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
                             _ => return None,
                         })
                     }

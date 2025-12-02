@@ -154,21 +154,21 @@ define_interface! {
             }
         }
         interface_items {
-            fn resolve_paired_binary_operation(
-                operation: &PairedBinaryOperation,
+            fn resolve_own_binary_operation(
+                operation: &BinaryOperation,
             ) -> Option<BinaryOperationInterface> {
                 Some(match operation {
-                    PairedBinaryOperation::LogicalAnd { .. } => binary_definitions::and(),
-                    PairedBinaryOperation::LogicalOr { .. } => binary_definitions::or(),
-                    PairedBinaryOperation::BitXor { .. } => binary_definitions::bitxor(),
-                    PairedBinaryOperation::BitAnd { .. } => binary_definitions::bitand(),
-                    PairedBinaryOperation::BitOr { .. } => binary_definitions::bitor(),
-                    PairedBinaryOperation::Equal { .. } => binary_definitions::eq(),
-                    PairedBinaryOperation::NotEqual { .. } => binary_definitions::ne(),
-                    PairedBinaryOperation::LessThan { .. } => binary_definitions::lt(),
-                    PairedBinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
-                    PairedBinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
-                    PairedBinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
+                    BinaryOperation::LogicalAnd { .. } => binary_definitions::and(),
+                    BinaryOperation::LogicalOr { .. } => binary_definitions::or(),
+                    BinaryOperation::BitXor { .. } => binary_definitions::bitxor(),
+                    BinaryOperation::BitAnd { .. } => binary_definitions::bitand(),
+                    BinaryOperation::BitOr { .. } => binary_definitions::bitor(),
+                    BinaryOperation::Equal { .. } => binary_definitions::eq(),
+                    BinaryOperation::NotEqual { .. } => binary_definitions::ne(),
+                    BinaryOperation::LessThan { .. } => binary_definitions::lt(),
+                    BinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
+                    BinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
+                    BinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
                     _ => return None,
                 })
             }

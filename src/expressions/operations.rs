@@ -182,29 +182,50 @@ impl HasSpan for UnaryOperation {
     }
 }
 
-#[derive(Clone)]
+/// Flattened binary operation enum containing all binary operators.
+///
+/// This includes:
+/// - Arithmetic: Addition (+), Subtraction (-), Multiplication (*), Division (/), Remainder (%)
+/// - Logical: LogicalAnd (&&), LogicalOr (||)
+/// - Bitwise: BitXor (^), BitAnd (&), BitOr (|), ShiftLeft (<<), ShiftRight (>>)
+/// - Comparison: Equal (==), NotEqual (!=), LessThan (<), LessThanOrEqual (<=), GreaterThan (>), GreaterThanOrEqual (>=)
+/// - Compound Assignment: AddAssign (+=), SubAssign (-=), MulAssign (*=), DivAssign (/=), RemAssign (%=),
+///   BitAndAssign (&=), BitOrAssign (|=), BitXorAssign (^=), ShlAssign (<<=), ShrAssign (>>=)
+#[derive(Copy, Clone)]
 pub(crate) enum BinaryOperation {
-    Paired(PairedBinaryOperation),
-    Integer(IntegerBinaryOperation),
-    CompoundAssignment(CompoundAssignmentOperation),
-}
-
-impl From<PairedBinaryOperation> for BinaryOperation {
-    fn from(operation: PairedBinaryOperation) -> Self {
-        Self::Paired(operation)
-    }
-}
-
-impl From<IntegerBinaryOperation> for BinaryOperation {
-    fn from(operation: IntegerBinaryOperation) -> Self {
-        Self::Integer(operation)
-    }
-}
-
-impl From<CompoundAssignmentOperation> for BinaryOperation {
-    fn from(operation: CompoundAssignmentOperation) -> Self {
-        Self::CompoundAssignment(operation)
-    }
+    // Arithmetic operations
+    Addition(Token![+]),
+    Subtraction(Token![-]),
+    Multiplication(Token![*]),
+    Division(Token![/]),
+    Remainder(Token![%]),
+    // Logical operations
+    LogicalAnd(Token![&&]),
+    LogicalOr(Token![||]),
+    // Bitwise operations
+    BitXor(Token![^]),
+    BitAnd(Token![&]),
+    BitOr(Token![|]),
+    ShiftLeft(Token![<<]),
+    ShiftRight(Token![>>]),
+    // Comparison operations
+    Equal(Token![==]),
+    NotEqual(Token![!=]),
+    LessThan(Token![<]),
+    LessThanOrEqual(Token![<=]),
+    GreaterThan(Token![>]),
+    GreaterThanOrEqual(Token![>=]),
+    // Compound assignment operations
+    AddAssign(Token![+=]),
+    SubAssign(Token![-=]),
+    MulAssign(Token![*=]),
+    DivAssign(Token![/=]),
+    RemAssign(Token![%=]),
+    BitAndAssign(Token![&=]),
+    BitOrAssign(Token![|=]),
+    BitXorAssign(Token![^=]),
+    ShlAssign(Token![<<=]),
+    ShrAssign(Token![>>=]),
 }
 
 impl SynParse for BinaryOperation {
@@ -217,109 +238,61 @@ impl SynParse for BinaryOperation {
         // start of Token![+=]
         // [TODO-performance]: Convert this into a much more efficient parse-tree
         if input.peek(Token![+=]) {
-            Ok(Self::CompoundAssignment(CompoundAssignmentOperation::Add(
-                input.parse()?,
-            )))
+            Ok(Self::AddAssign(input.parse()?))
         } else if input.peek(Token![+]) {
-            Ok(Self::Paired(PairedBinaryOperation::Addition(
-                input.parse()?,
-            )))
+            Ok(Self::Addition(input.parse()?))
         } else if input.peek(Token![-=]) {
-            Ok(Self::CompoundAssignment(CompoundAssignmentOperation::Sub(
-                input.parse()?,
-            )))
+            Ok(Self::SubAssign(input.parse()?))
         } else if input.peek(Token![-]) {
-            Ok(Self::Paired(PairedBinaryOperation::Subtraction(
-                input.parse()?,
-            )))
+            Ok(Self::Subtraction(input.parse()?))
         } else if input.peek(Token![*=]) {
-            Ok(Self::CompoundAssignment(CompoundAssignmentOperation::Mul(
-                input.parse()?,
-            )))
+            Ok(Self::MulAssign(input.parse()?))
         } else if input.peek(Token![*]) {
-            Ok(Self::Paired(PairedBinaryOperation::Multiplication(
-                input.parse()?,
-            )))
+            Ok(Self::Multiplication(input.parse()?))
         } else if input.peek(Token![/=]) {
-            Ok(Self::CompoundAssignment(CompoundAssignmentOperation::Div(
-                input.parse()?,
-            )))
+            Ok(Self::DivAssign(input.parse()?))
         } else if input.peek(Token![/]) {
-            Ok(Self::Paired(PairedBinaryOperation::Division(
-                input.parse()?,
-            )))
+            Ok(Self::Division(input.parse()?))
         } else if input.peek(Token![%=]) {
-            Ok(Self::CompoundAssignment(CompoundAssignmentOperation::Rem(
-                input.parse()?,
-            )))
+            Ok(Self::RemAssign(input.parse()?))
         } else if input.peek(Token![%]) {
-            Ok(Self::Paired(PairedBinaryOperation::Remainder(
-                input.parse()?,
-            )))
+            Ok(Self::Remainder(input.parse()?))
         } else if input.peek(Token![&&]) {
-            Ok(Self::Paired(PairedBinaryOperation::LogicalAnd(
-                input.parse()?,
-            )))
+            Ok(Self::LogicalAnd(input.parse()?))
         } else if input.peek(Token![||]) {
-            Ok(Self::Paired(PairedBinaryOperation::LogicalOr(
-                input.parse()?,
-            )))
+            Ok(Self::LogicalOr(input.parse()?))
         } else if input.peek(Token![==]) {
-            Ok(Self::Paired(PairedBinaryOperation::Equal(input.parse()?)))
+            Ok(Self::Equal(input.parse()?))
         } else if input.peek(Token![!=]) {
-            Ok(Self::Paired(PairedBinaryOperation::NotEqual(
-                input.parse()?,
-            )))
+            Ok(Self::NotEqual(input.parse()?))
         } else if input.peek(Token![>=]) {
-            Ok(Self::Paired(PairedBinaryOperation::GreaterThanOrEqual(
-                input.parse()?,
-            )))
+            Ok(Self::GreaterThanOrEqual(input.parse()?))
         } else if input.peek(Token![<=]) {
-            Ok(Self::Paired(PairedBinaryOperation::LessThanOrEqual(
-                input.parse()?,
-            )))
+            Ok(Self::LessThanOrEqual(input.parse()?))
         } else if input.peek(Token![<<=]) {
-            Ok(Self::CompoundAssignment(CompoundAssignmentOperation::Shl(
-                input.parse()?,
-            )))
+            Ok(Self::ShlAssign(input.parse()?))
         } else if input.peek(Token![<<]) {
-            Ok(Self::Integer(IntegerBinaryOperation::ShiftLeft(
-                input.parse()?,
-            )))
+            Ok(Self::ShiftLeft(input.parse()?))
         } else if input.peek(Token![>>=]) {
-            Ok(Self::CompoundAssignment(CompoundAssignmentOperation::Shr(
-                input.parse()?,
-            )))
+            Ok(Self::ShrAssign(input.parse()?))
         } else if input.peek(Token![>>]) {
-            Ok(Self::Integer(IntegerBinaryOperation::ShiftRight(
-                input.parse()?,
-            )))
+            Ok(Self::ShiftRight(input.parse()?))
         } else if input.peek(Token![>]) {
-            Ok(Self::Paired(PairedBinaryOperation::GreaterThan(
-                input.parse()?,
-            )))
+            Ok(Self::GreaterThan(input.parse()?))
         } else if input.peek(Token![<]) {
-            Ok(Self::Paired(PairedBinaryOperation::LessThan(
-                input.parse()?,
-            )))
+            Ok(Self::LessThan(input.parse()?))
         } else if input.peek(Token![&=]) {
-            Ok(Self::CompoundAssignment(
-                CompoundAssignmentOperation::BitAnd(input.parse()?),
-            ))
+            Ok(Self::BitAndAssign(input.parse()?))
         } else if input.peek(Token![&]) {
-            Ok(Self::Paired(PairedBinaryOperation::BitAnd(input.parse()?)))
+            Ok(Self::BitAnd(input.parse()?))
         } else if input.peek(Token![|=]) {
-            Ok(Self::CompoundAssignment(
-                CompoundAssignmentOperation::BitOr(input.parse()?),
-            ))
+            Ok(Self::BitOrAssign(input.parse()?))
         } else if input.peek(Token![|]) {
-            Ok(Self::Paired(PairedBinaryOperation::BitOr(input.parse()?)))
+            Ok(Self::BitOr(input.parse()?))
         } else if input.peek(Token![^=]) {
-            Ok(Self::CompoundAssignment(
-                CompoundAssignmentOperation::BitXor(input.parse()?),
-            ))
+            Ok(Self::BitXorAssign(input.parse()?))
         } else if input.peek(Token![^]) {
-            Ok(Self::Paired(PairedBinaryOperation::BitXor(input.parse()?)))
+            Ok(Self::BitXor(input.parse()?))
         } else {
             Err(input.error("Expected one of + - * / % && || ^ & | == < <= != >= > << >> += -= *= /= %= &= |= ^= <<= or >>="))
         }
@@ -332,7 +305,7 @@ impl BinaryOperation {
         left: Spanned<&Value>,
     ) -> ExecutionResult<Option<OwnedValue>> {
         match self {
-            BinaryOperation::Paired(PairedBinaryOperation::LogicalAnd { .. }) => {
+            BinaryOperation::LogicalAnd { .. } => {
                 let bool: Spanned<&bool> = left.resolve_as("The left operand to &&")?;
                 if !*bool.value {
                     Ok(Some(bool.value.into_owned_value(bool.span_range)))
@@ -340,7 +313,7 @@ impl BinaryOperation {
                     Ok(None)
                 }
             }
-            BinaryOperation::Paired(PairedBinaryOperation::LogicalOr { .. }) => {
+            BinaryOperation::LogicalOr { .. } => {
                 let bool: Spanned<&bool> = left.resolve_as("The left operand to ||")?;
                 if *bool.value {
                     Ok(Some(bool.value.into_owned_value(bool.span_range)))
@@ -377,9 +350,39 @@ impl BinaryOperation {
 impl HasSpanRange for BinaryOperation {
     fn span_range(&self) -> SpanRange {
         match self {
-            BinaryOperation::Paired(op) => op.span_range(),
-            BinaryOperation::Integer(op) => op.span_range(),
-            BinaryOperation::CompoundAssignment(op) => op.span_range(),
+            // Arithmetic
+            BinaryOperation::Addition(op) => op.span_range(),
+            BinaryOperation::Subtraction(op) => op.span_range(),
+            BinaryOperation::Multiplication(op) => op.span_range(),
+            BinaryOperation::Division(op) => op.span_range(),
+            BinaryOperation::Remainder(op) => op.span_range(),
+            // Logical
+            BinaryOperation::LogicalAnd(op) => op.span_range(),
+            BinaryOperation::LogicalOr(op) => op.span_range(),
+            // Bitwise
+            BinaryOperation::BitXor(op) => op.span_range(),
+            BinaryOperation::BitAnd(op) => op.span_range(),
+            BinaryOperation::BitOr(op) => op.span_range(),
+            BinaryOperation::ShiftLeft(op) => op.span_range(),
+            BinaryOperation::ShiftRight(op) => op.span_range(),
+            // Comparison
+            BinaryOperation::Equal(op) => op.span_range(),
+            BinaryOperation::NotEqual(op) => op.span_range(),
+            BinaryOperation::LessThan(op) => op.span_range(),
+            BinaryOperation::LessThanOrEqual(op) => op.span_range(),
+            BinaryOperation::GreaterThan(op) => op.span_range(),
+            BinaryOperation::GreaterThanOrEqual(op) => op.span_range(),
+            // Compound assignment
+            BinaryOperation::AddAssign(op) => op.span_range(),
+            BinaryOperation::SubAssign(op) => op.span_range(),
+            BinaryOperation::MulAssign(op) => op.span_range(),
+            BinaryOperation::DivAssign(op) => op.span_range(),
+            BinaryOperation::RemAssign(op) => op.span_range(),
+            BinaryOperation::BitAndAssign(op) => op.span_range(),
+            BinaryOperation::BitOrAssign(op) => op.span_range(),
+            BinaryOperation::BitXorAssign(op) => op.span_range(),
+            BinaryOperation::ShlAssign(op) => op.span_range(),
+            BinaryOperation::ShrAssign(op) => op.span_range(),
         }
     }
 }
@@ -387,101 +390,39 @@ impl HasSpanRange for BinaryOperation {
 impl Operation for BinaryOperation {
     fn symbolic_description(&self) -> &'static str {
         match self {
-            BinaryOperation::Paired(paired) => paired.symbolic_description(),
-            BinaryOperation::Integer(integer) => integer.symbolic_description(),
-            BinaryOperation::CompoundAssignment(compound_assignment) => {
-                compound_assignment.symbolic_description()
-            }
-        }
-    }
-}
-
-#[derive(Copy, Clone)]
-pub(crate) enum PairedBinaryOperation {
-    Addition(Token![+]),
-    Subtraction(Token![-]),
-    Multiplication(Token![*]),
-    Division(Token![/]),
-    Remainder(Token![%]),
-    LogicalAnd(Token![&&]),
-    LogicalOr(Token![||]),
-    BitXor(Token![^]),
-    BitAnd(Token![&]),
-    BitOr(Token![|]),
-    Equal(Token![==]),
-    LessThan(Token![<]),
-    LessThanOrEqual(Token![<=]),
-    NotEqual(Token![!=]),
-    GreaterThanOrEqual(Token![>=]),
-    GreaterThan(Token![>]),
-}
-
-impl Operation for PairedBinaryOperation {
-    fn symbolic_description(&self) -> &'static str {
-        match self {
-            PairedBinaryOperation::Addition { .. } => "+",
-            PairedBinaryOperation::Subtraction { .. } => "-",
-            PairedBinaryOperation::Multiplication { .. } => "*",
-            PairedBinaryOperation::Division { .. } => "/",
-            PairedBinaryOperation::Remainder { .. } => "%",
-            PairedBinaryOperation::LogicalAnd { .. } => "&&",
-            PairedBinaryOperation::LogicalOr { .. } => "||",
-            PairedBinaryOperation::BitXor { .. } => "^",
-            PairedBinaryOperation::BitAnd { .. } => "&",
-            PairedBinaryOperation::BitOr { .. } => "|",
-            PairedBinaryOperation::Equal { .. } => "==",
-            PairedBinaryOperation::LessThan { .. } => "<",
-            PairedBinaryOperation::LessThanOrEqual { .. } => "<=",
-            PairedBinaryOperation::NotEqual { .. } => "!=",
-            PairedBinaryOperation::GreaterThanOrEqual { .. } => ">=",
-            PairedBinaryOperation::GreaterThan { .. } => ">",
-        }
-    }
-}
-
-impl HasSpanRange for PairedBinaryOperation {
-    fn span_range(&self) -> SpanRange {
-        match self {
-            PairedBinaryOperation::Addition(plus) => plus.span_range(),
-            PairedBinaryOperation::Subtraction(minus) => minus.span_range(),
-            PairedBinaryOperation::Multiplication(star) => star.span_range(),
-            PairedBinaryOperation::Division(slash) => slash.span_range(),
-            PairedBinaryOperation::Remainder(percent) => percent.span_range(),
-            PairedBinaryOperation::LogicalAnd(and_and) => and_and.span_range(),
-            PairedBinaryOperation::LogicalOr(or_or) => or_or.span_range(),
-            PairedBinaryOperation::BitXor(caret) => caret.span_range(),
-            PairedBinaryOperation::BitAnd(and) => and.span_range(),
-            PairedBinaryOperation::BitOr(or) => or.span_range(),
-            PairedBinaryOperation::Equal(eq_eq) => eq_eq.span_range(),
-            PairedBinaryOperation::LessThan(lt) => lt.span_range(),
-            PairedBinaryOperation::LessThanOrEqual(le) => le.span_range(),
-            PairedBinaryOperation::NotEqual(ne) => ne.span_range(),
-            PairedBinaryOperation::GreaterThanOrEqual(ge) => ge.span_range(),
-            PairedBinaryOperation::GreaterThan(gt) => gt.span_range(),
-        }
-    }
-}
-
-#[derive(Copy, Clone)]
-pub(crate) enum IntegerBinaryOperation {
-    ShiftLeft(Token![<<]),
-    ShiftRight(Token![>>]),
-}
-
-impl Operation for IntegerBinaryOperation {
-    fn symbolic_description(&self) -> &'static str {
-        match self {
-            IntegerBinaryOperation::ShiftLeft { .. } => "<<",
-            IntegerBinaryOperation::ShiftRight { .. } => ">>",
-        }
-    }
-}
-
-impl HasSpanRange for IntegerBinaryOperation {
-    fn span_range(&self) -> SpanRange {
-        match self {
-            IntegerBinaryOperation::ShiftLeft(shl) => shl.span_range(),
-            IntegerBinaryOperation::ShiftRight(shr) => shr.span_range(),
+            // Arithmetic
+            BinaryOperation::Addition { .. } => "+",
+            BinaryOperation::Subtraction { .. } => "-",
+            BinaryOperation::Multiplication { .. } => "*",
+            BinaryOperation::Division { .. } => "/",
+            BinaryOperation::Remainder { .. } => "%",
+            // Logical
+            BinaryOperation::LogicalAnd { .. } => "&&",
+            BinaryOperation::LogicalOr { .. } => "||",
+            // Bitwise
+            BinaryOperation::BitXor { .. } => "^",
+            BinaryOperation::BitAnd { .. } => "&",
+            BinaryOperation::BitOr { .. } => "|",
+            BinaryOperation::ShiftLeft { .. } => "<<",
+            BinaryOperation::ShiftRight { .. } => ">>",
+            // Comparison
+            BinaryOperation::Equal { .. } => "==",
+            BinaryOperation::NotEqual { .. } => "!=",
+            BinaryOperation::LessThan { .. } => "<",
+            BinaryOperation::LessThanOrEqual { .. } => "<=",
+            BinaryOperation::GreaterThan { .. } => ">",
+            BinaryOperation::GreaterThanOrEqual { .. } => ">=",
+            // Compound assignment
+            BinaryOperation::AddAssign { .. } => "+=",
+            BinaryOperation::SubAssign { .. } => "-=",
+            BinaryOperation::MulAssign { .. } => "*=",
+            BinaryOperation::DivAssign { .. } => "/=",
+            BinaryOperation::RemAssign { .. } => "%=",
+            BinaryOperation::BitAndAssign { .. } => "&=",
+            BinaryOperation::BitOrAssign { .. } => "|=",
+            BinaryOperation::BitXorAssign { .. } => "^=",
+            BinaryOperation::ShlAssign { .. } => "<<=",
+            BinaryOperation::ShrAssign { .. } => ">>=",
         }
     }
 }
@@ -551,85 +492,6 @@ impl Operation for syn::RangeLimits {
 impl HasSpanRange for syn::RangeLimits {
     fn span_range(&self) -> SpanRange {
         self.span_range_from_iterating_over_all_tokens()
-    }
-}
-
-#[derive(Clone, Copy)]
-pub(crate) enum CompoundAssignmentOperation {
-    Add(Token![+=]),
-    Sub(Token![-=]),
-    Mul(Token![*=]),
-    Div(Token![/=]),
-    Rem(Token![%=]),
-    BitAnd(Token![&=]),
-    BitOr(Token![|=]),
-    BitXor(Token![^=]),
-    Shl(Token![<<=]),
-    Shr(Token![>>=]),
-}
-
-impl SynParse for CompoundAssignmentOperation {
-    fn parse(input: SynParseStream) -> SynResult<Self> {
-        // In line with Syn's BinOp, we use peek instead of lookahead
-        // ...I assume for slightly increased performance
-        // ...Or because 30 alternative options in the error message is too many
-        if input.peek(Token![+=]) {
-            Ok(Self::Add(input.parse()?))
-        } else if input.peek(Token![-=]) {
-            Ok(Self::Sub(input.parse()?))
-        } else if input.peek(Token![*=]) {
-            Ok(Self::Mul(input.parse()?))
-        } else if input.peek(Token![/=]) {
-            Ok(Self::Div(input.parse()?))
-        } else if input.peek(Token![%=]) {
-            Ok(Self::Rem(input.parse()?))
-        } else if input.peek(Token![&=]) {
-            Ok(Self::BitAnd(input.parse()?))
-        } else if input.peek(Token![|=]) {
-            Ok(Self::BitOr(input.parse()?))
-        } else if input.peek(Token![^=]) {
-            Ok(Self::BitXor(input.parse()?))
-        } else if input.peek(Token![<<=]) {
-            Ok(Self::Shl(input.parse()?))
-        } else if input.peek(Token![>>=]) {
-            Ok(Self::Shr(input.parse()?))
-        } else {
-            Err(input.error("Expected one of += -= *= /= %= &= |= ^= <<= or >>="))
-        }
-    }
-}
-
-impl Operation for CompoundAssignmentOperation {
-    fn symbolic_description(&self) -> &'static str {
-        match self {
-            CompoundAssignmentOperation::Add(_) => "+=",
-            CompoundAssignmentOperation::Sub(_) => "-=",
-            CompoundAssignmentOperation::Mul(_) => "*=",
-            CompoundAssignmentOperation::Div(_) => "/=",
-            CompoundAssignmentOperation::Rem(_) => "%=",
-            CompoundAssignmentOperation::BitAnd(_) => "&=",
-            CompoundAssignmentOperation::BitOr(_) => "|=",
-            CompoundAssignmentOperation::BitXor(_) => "^=",
-            CompoundAssignmentOperation::Shl(_) => "<<=",
-            CompoundAssignmentOperation::Shr(_) => ">>=",
-        }
-    }
-}
-
-impl HasSpanRange for CompoundAssignmentOperation {
-    fn span_range(&self) -> SpanRange {
-        match self {
-            CompoundAssignmentOperation::Add(op) => op.span_range(),
-            CompoundAssignmentOperation::Sub(op) => op.span_range(),
-            CompoundAssignmentOperation::Mul(op) => op.span_range(),
-            CompoundAssignmentOperation::Div(op) => op.span_range(),
-            CompoundAssignmentOperation::Rem(op) => op.span_range(),
-            CompoundAssignmentOperation::BitAnd(op) => op.span_range(),
-            CompoundAssignmentOperation::BitOr(op) => op.span_range(),
-            CompoundAssignmentOperation::BitXor(op) => op.span_range(),
-            CompoundAssignmentOperation::Shl(op) => op.span_range(),
-            CompoundAssignmentOperation::Shr(op) => op.span_range(),
-        }
     }
 }
 

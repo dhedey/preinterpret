@@ -214,20 +214,12 @@ define_interface! {
                 })
             }
 
-            fn resolve_paired_binary_operation(
-                operation: &PairedBinaryOperation,
+            fn resolve_own_binary_operation(
+                operation: &BinaryOperation,
             ) -> Option<BinaryOperationInterface> {
                 Some(match operation {
-                    PairedBinaryOperation::Addition { .. } => binary_definitions::add(),
-                    _ => return None,
-                })
-            }
-
-            fn resolve_own_compound_assignment_operation(
-                operation: &CompoundAssignmentOperation,
-            ) -> Option<BinaryOperationInterface> {
-                Some(match operation {
-                    CompoundAssignmentOperation::Add { .. } => binary_definitions::add_assign(),
+                    BinaryOperation::Addition { .. } => binary_definitions::add(),
+                    BinaryOperation::AddAssign { .. } => binary_definitions::add_assign(),
                     _ => return None,
                 })
             }

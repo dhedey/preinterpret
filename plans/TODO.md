@@ -59,7 +59,7 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 - [x] CompoundAssignment migration
 - [x] Enable `x += x` to work (using disable() / enable()) methods
 - [x] Add tests that e.g. `swap(x, x)` still breaks with a borrowing error and we don't get UB
-- [ ] Combine `PairedBinaryOperation`, `IntegerBinaryOperation` and `CompoundAssignmentOperation` into a flattened `BinaryOperation`
+- [x] Combine `PairedBinaryOperation`, `IntegerBinaryOperation` and `CompoundAssignmentOperation` into a flattened `BinaryOperation`
 - [ ] Add `==` and `!=` to all values (including streams, objects and arrays, and between typed/untyped integers and floats) and make it work with `AnyRef<..>` arguments for testing equality
 - [ ] Migrate `UntypedInteger` to use `FallbackInteger` like `UntypedFloat` (except a little harder because integers can overflow)
 - [ ] Migrate comparison operations to IntegerValue if it makes sense? Would be nice to get rid of the `paired_comparison` methods
