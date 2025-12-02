@@ -257,6 +257,8 @@ Later:
 Implement the following:
 * All value kinds:
   * `is_none()`, and similarly for other value kinds
+  * A `kind()` method which returns a logical name for the value kind, which could be used in a `match` statement
+
 * Streams:
   * `is_ident()` and similarly for other stream
 
