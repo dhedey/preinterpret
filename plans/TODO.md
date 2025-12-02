@@ -61,11 +61,15 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 - [x] Add tests that e.g. `swap(x, x)` still breaks with a borrowing error and we don't get UB
 - [x] Combine `PairedBinaryOperation`, `IntegerBinaryOperation` and `CompoundAssignmentOperation` into a flattened `BinaryOperation`
 - [x] Migrate `UntypedInteger` to use `FallbackInteger` like `UntypedFloat` (except a little harder because integers can overflow)
-- [ ] Migrate <, <=, >, >= from specific integer/float and untyped values to IntegerValue and FloatValue, in a similar way that we've done for paired arithmetic operators.
-- [ ] Add `==` and `!=` to all values (including streams, objects and arrays, and between typed/untyped integers and floats) and make it work with `AnyRef<..>` arguments for testing equality
-- [ ] Add tests to cover all the operations, including:
-  - [ ] Compile error tests for `+=` out of order
-  - [ ] All the binary operations, with the four combinations typed/untyped etc
+- [x] Migrate <, <=, >, >= from specific integer/float and untyped values to IntegerValue and FloatValue, in a similar way that we've done for paired arithmetic operators.
+- [ ] Add `==` and `!=` support for all values (including streams, objects, arrays, parsers, unsupported literals, etc) and make it work with `AnyRef<..>` arguments for testing equality
+- [ ] Add a new test file, `operations.rs`, and add tests to cover all the operations, including:
+  - [ ] Cover all the binary operations with all valid type combinations
+  - [ ] For integers/streams, this will involve for each paired operator `1 x untyped/untyped`, `n x typed/typed`, `n x typed/untyped` and `n x untyped/typed` where `n` is the number of integer/float types there are.
+  - [ ] Create various examples of combinations / operations that don't compile, and create compilation failure tests for them in an `operations` folder, brainstorm ideas, but some ideas include:
+    - [ ] Operations between invalid types; at least one for each operation. e.g. `1 + []` or `1u32 + 3.0`
+    - [ ] Overflows, underflows, divide by 0s, etc
+  - [ ] Have a think about floats and test for infinity and NaN. Can such values be created in preinterpret? If not, how might we support creating them? How does rust do it? Is there an easy preinterpret equivalent?
 - [ ] Ensure all `TODO[operation-refactor]` and `TODO[compound-assignment-refactor]` are done
 
 ## Control flow expressions (ideally requires Stream Literals)
