@@ -110,7 +110,7 @@ impl Interpreter {
             }
             Err(mut err) => {
                 if let Some((kind, error)) = err.error_mut() {
-                    *error = core::mem::take(error).add_context_if_none(format!("NOTE: {} is not caught by an attempt block. If you wish to catch this, detect it before it is thrown and use the `revert` statement.", kind.as_str().upper_indefinite_articled()));
+                    *error = core::mem::take(error).add_context_if_none(format!("NOTE: {} is not caught by an attempt block. If you wish to catch this, detect it before it is thrown and use the `revert` statement.", kind.as_str().indefinite_articled(true)));
                 }
                 Err(err)
             }

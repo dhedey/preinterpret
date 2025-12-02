@@ -545,6 +545,24 @@ impl IsSpecificValueKind for IntegerKind {
             IntegerKind::Usize => "usize",
         }
     }
+
+    fn articled_display_name(&self) -> &'static str {
+        match self {
+            IntegerKind::Untyped => "an untyped integer",
+            IntegerKind::I8 => "an i8",
+            IntegerKind::I16 => "an i16",
+            IntegerKind::I32 => "an i32",
+            IntegerKind::I64 => "an i64",
+            IntegerKind::I128 => "an i128",
+            IntegerKind::Isize => "an isize",
+            IntegerKind::U8 => "a u8",
+            IntegerKind::U16 => "a u16",
+            IntegerKind::U32 => "a u32",
+            IntegerKind::U64 => "a u64",
+            IntegerKind::U128 => "a u128",
+            IntegerKind::Usize => "a usize",
+        }
+    }
 }
 
 impl From<IntegerKind> for ValueKind {
@@ -591,7 +609,7 @@ impl_resolvable_argument_for! {
     (value, context) -> IntegerValue {
         match value {
             Value::Integer(value) => Ok(value),
-            other => context.err("integer", other),
+            other => context.err("an integer", other),
         }
     }
 }
@@ -606,7 +624,7 @@ impl ResolvableOwned<Value> for CoercedToU32 {
     fn resolve_from_value(input_value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
         let integer = match input_value {
             Value::Integer(value) => value,
-            other => return context.err("integer", other),
+            other => return context.err("an integer", other),
         };
         let coerced = match integer.clone() {
             IntegerValue::U8(x) => Some(x as u32),
@@ -625,7 +643,7 @@ impl ResolvableOwned<Value> for CoercedToU32 {
         };
         match coerced {
             Some(value) => Ok(CoercedToU32(value)),
-            None => context.err("u32-compatible integer", Value::Integer(integer)),
+            None => context.err("a u32-compatible integer", Value::Integer(integer)),
         }
     }
 }

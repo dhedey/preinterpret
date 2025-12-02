@@ -1,0 +1,5 @@
+error: The == operator is not supported for None operand
+ --> tests/compilation_failures/expressions/compare_object_and_none.rs:4:23
+  |
+4 |     let _ = run!(None == %{});
+  |                       ^^

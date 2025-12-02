@@ -24,13 +24,7 @@ pub(crate) enum Value {
 pub(crate) trait IsSpecificValueKind: Copy + Into<ValueKind> {
     fn display_name(&self) -> &'static str;
 
-    fn articled_display_name(&self) -> String {
-        let display_name = self.display_name();
-        if display_name.is_empty() {
-            return display_name.to_string();
-        }
-        display_name.lower_indefinite_articled()
-    }
+    fn articled_display_name(&self) -> &'static str;
 }
 
 /// A trait for types that have a value kind.
@@ -47,7 +41,7 @@ pub(crate) trait HasValueKind {
         self.kind().display_name()
     }
 
-    fn articled_value_type(&self) -> String {
+    fn articled_value_type(&self) -> &'static str {
         self.kind().articled_display_name()
     }
 }
@@ -88,7 +82,7 @@ pub(crate) enum ValueKind {
 impl IsSpecificValueKind for ValueKind {
     fn display_name(&self) -> &'static str {
         match self {
-            ValueKind::None => "none value",
+            ValueKind::None => "None",
             ValueKind::Integer(kind) => kind.display_name(),
             ValueKind::Float(kind) => kind.display_name(),
             ValueKind::Boolean => "bool",
@@ -101,6 +95,25 @@ impl IsSpecificValueKind for ValueKind {
             ValueKind::Range(kind) => kind.display_name(),
             ValueKind::Iterator => "iterator",
             ValueKind::Parser => "parser",
+        }
+    }
+
+    fn articled_display_name(&self) -> &'static str {
+        match self {
+            // Instead of saying "expected a none value", we can say "expected None"
+            ValueKind::None => "None",
+            ValueKind::Integer(kind) => kind.articled_display_name(),
+            ValueKind::Float(kind) => kind.articled_display_name(),
+            ValueKind::Boolean => "a bool",
+            ValueKind::String => "a string",
+            ValueKind::Char => "a char",
+            ValueKind::UnsupportedLiteral => "an unsupported literal",
+            ValueKind::Array => "an array",
+            ValueKind::Object => "an object",
+            ValueKind::Stream => "a stream",
+            ValueKind::Range(kind) => kind.articled_display_name(),
+            ValueKind::Iterator => "an iterator",
+            ValueKind::Parser => "a parser",
         }
     }
 }

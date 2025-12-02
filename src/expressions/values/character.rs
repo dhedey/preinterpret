@@ -174,7 +174,7 @@ impl_resolvable_argument_for! {
     (value, context) -> CharValue {
         match value {
             Value::Char(value) => Ok(value),
-            _ => context.err("char", value),
+            _ => context.err("a char", value),
         }
     }
 }

@@ -211,5 +211,5 @@ macro_rules! impl_resolvable_float_subtype {
     };
 }
 
-impl_resolvable_float_subtype!(F32TypeData, f32, F32, "f32");
-impl_resolvable_float_subtype!(F64TypeData, f64, F64, "f64");
+impl_resolvable_float_subtype!(F32TypeData, f32, F32, "an f32");
+impl_resolvable_float_subtype!(F64TypeData, f64, F64, "an f64");

@@ -249,15 +249,15 @@ macro_rules! impl_resolvable_integer_subtype {
     };
 }
 
-impl_resolvable_integer_subtype!(I8TypeData, i8, I8, "i8");
-impl_resolvable_integer_subtype!(I16TypeData, i16, I16, "i16");
-impl_resolvable_integer_subtype!(I32TypeData, i32, I32, "i32");
-impl_resolvable_integer_subtype!(I64TypeData, i64, I64, "i64");
-impl_resolvable_integer_subtype!(I128TypeData, i128, I128, "i128");
-impl_resolvable_integer_subtype!(IsizeTypeData, isize, Isize, "isize");
-impl_resolvable_integer_subtype!(U8TypeData, u8, U8, "u8");
-impl_resolvable_integer_subtype!(U16TypeData, u16, U16, "u16");
-impl_resolvable_integer_subtype!(U32TypeData, u32, U32, "u32");
-impl_resolvable_integer_subtype!(U64TypeData, u64, U64, "u64");
-impl_resolvable_integer_subtype!(U128TypeData, u128, U128, "u128");
-impl_resolvable_integer_subtype!(UsizeTypeData, usize, Usize, "usize");
+impl_resolvable_integer_subtype!(I8TypeData, i8, I8, "an i8");
+impl_resolvable_integer_subtype!(I16TypeData, i16, I16, "an i16");
+impl_resolvable_integer_subtype!(I32TypeData, i32, I32, "an i32");
+impl_resolvable_integer_subtype!(I64TypeData, i64, I64, "an i64");
+impl_resolvable_integer_subtype!(I128TypeData, i128, I128, "an i128");
+impl_resolvable_integer_subtype!(IsizeTypeData, isize, Isize, "an isize");
+impl_resolvable_integer_subtype!(U8TypeData, u8, U8, "a u8");
+impl_resolvable_integer_subtype!(U16TypeData, u16, U16, "a u16");
+impl_resolvable_integer_subtype!(U32TypeData, u32, U32, "a u32");
+impl_resolvable_integer_subtype!(U64TypeData, u64, U64, "a u64");
+impl_resolvable_integer_subtype!(U128TypeData, u128, U128, "a u128");
+impl_resolvable_integer_subtype!(UsizeTypeData, usize, Usize, "a usize");

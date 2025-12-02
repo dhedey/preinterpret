@@ -28,7 +28,7 @@ impl ResolvableOwned<Value> for IterableValue {
             Value::String(x) => Self::String(x),
             _ => {
                 return context.err(
-                    "iterable (iterator, array, object, stream, range or string)",
+                    "an iterable (iterator, array, object, stream, range or string)",
                     value,
                 );
             }

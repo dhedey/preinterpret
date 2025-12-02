@@ -240,6 +240,14 @@ impl IsSpecificValueKind for FloatKind {
             FloatKind::F64 => "f64",
         }
     }
+
+    fn articled_display_name(&self) -> &'static str {
+        match self {
+            FloatKind::Untyped => "an untyped float",
+            FloatKind::F32 => "an f32",
+            FloatKind::F64 => "an f64",
+        }
+    }
 }
 
 impl From<FloatKind> for ValueKind {
@@ -266,7 +274,7 @@ impl_resolvable_argument_for! {
     (value, context) -> FloatValue {
         match value {
             Value::Float(value) => Ok(value),
-            other => context.err("float", other),
+            other => context.err("a float", other),
         }
     }
 }
