@@ -71,6 +71,9 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
     - [ ] Overflows, underflows, divide by 0s, etc
   - [ ] Have a think about floats and test for infinity and NaN. Can such values be created in preinterpret? If not, how might we support creating them? How does rust do it? Is there an easy preinterpret equivalent?
 - [ ] Ensure all `TODO[operation-refactor]` and `TODO[compound-assignment-refactor]` are done
+  - [ ] All value kinds should be generated with a macro which also generates a `#[test] list_all` method
+  - [ ] We should create some unit tests in `value.rs` and functions `generate_example_values(value_kind)` which returns a `Vec<Value>` for each value kind.
+  - [ ] We can use this to check that `eq` and `neq` are defined and work correctly for all types
 
 ## Control flow expressions (ideally requires Stream Literals)
 
