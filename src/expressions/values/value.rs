@@ -318,7 +318,15 @@ define_interface! {
                 input.into_stream()
             }
         }
-        pub(crate) mod binary_operations {}
+        pub(crate) mod binary_operations {
+            fn eq(lhs: AnyRef<Value>, rhs: AnyRef<Value>) -> bool {
+                Value::values_equal(&*lhs, &*rhs)
+            }
+
+            fn ne(lhs: AnyRef<Value>, rhs: AnyRef<Value>) -> bool {
+                !Value::values_equal(&*lhs, &*rhs)
+            }
+        }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
@@ -327,6 +335,16 @@ define_interface! {
                         CastTarget::Stream => unary_definitions::cast_to_stream(),
                         _ => return None,
                     },
+                    _ => return None,
+                })
+            }
+
+            fn resolve_own_binary_operation(
+                operation: &BinaryOperation,
+            ) -> Option<BinaryOperationInterface> {
+                Some(match operation {
+                    BinaryOperation::Equal { .. } => binary_definitions::eq(),
+                    BinaryOperation::NotEqual { .. } => binary_definitions::ne(),
                     _ => return None,
                 })
             }
@@ -396,6 +414,32 @@ impl Value {
 
     pub(crate) fn is_none(&self) -> bool {
         matches!(self, Value::None)
+    }
+
+    /// Recursively compares two values for equality.
+    /// For most types, this is structural equality. For iterators, only reference equality is supported
+    /// (they are only equal if they are the same iterator - which won't happen in practice with refs).
+    pub(crate) fn values_equal(lhs: &Value, rhs: &Value) -> bool {
+        match (lhs, rhs) {
+            (Value::None, Value::None) => true,
+            (Value::Boolean(l), Value::Boolean(r)) => l.value == r.value,
+            (Value::Char(l), Value::Char(r)) => l.value == r.value,
+            (Value::String(l), Value::String(r)) => l.value == r.value,
+            (Value::Integer(l), Value::Integer(r)) => IntegerValue::integers_equal(l, r),
+            (Value::Float(l), Value::Float(r)) => FloatValue::floats_equal(l, r),
+            (Value::Array(l), Value::Array(r)) => ArrayValue::arrays_equal(l, r),
+            (Value::Object(l), Value::Object(r)) => ObjectValue::objects_equal(l, r),
+            (Value::Stream(l), Value::Stream(r)) => StreamValue::streams_equal(l, r),
+            (Value::Range(l), Value::Range(r)) => RangeValue::ranges_equal(l, r),
+            (Value::UnsupportedLiteral(l), Value::UnsupportedLiteral(r)) => {
+                UnsupportedLiteral::literals_equal(l, r)
+            }
+            (Value::Parser(l), Value::Parser(r)) => ParserValue::parsers_equal(l, r),
+            // Iterators are not structurally comparable since comparing would consume them
+            (Value::Iterator(_), Value::Iterator(_)) => false,
+            // Different types are not equal
+            _ => false,
+        }
     }
 
     pub(crate) fn into_indexed(

@@ -105,6 +105,65 @@ impl IntegerValue {
             IntegerValue::Isize(int) => Literal::isize_suffixed(*int),
         }
     }
+
+    /// Compare two integers for equality.
+    /// Handles type coercion between typed and untyped integers.
+    pub(super) fn integers_equal(lhs: &IntegerValue, rhs: &IntegerValue) -> bool {
+        // Convert both to fallback integers for comparison when types differ
+        // This handles the case where e.g. 5 (untyped) == 5u32
+        match (lhs, rhs) {
+            // Same type comparisons
+            (IntegerValue::Untyped(l), IntegerValue::Untyped(r)) => {
+                l.into_fallback() == r.into_fallback()
+            }
+            (IntegerValue::U8(l), IntegerValue::U8(r)) => l == r,
+            (IntegerValue::U16(l), IntegerValue::U16(r)) => l == r,
+            (IntegerValue::U32(l), IntegerValue::U32(r)) => l == r,
+            (IntegerValue::U64(l), IntegerValue::U64(r)) => l == r,
+            (IntegerValue::U128(l), IntegerValue::U128(r)) => l == r,
+            (IntegerValue::Usize(l), IntegerValue::Usize(r)) => l == r,
+            (IntegerValue::I8(l), IntegerValue::I8(r)) => l == r,
+            (IntegerValue::I16(l), IntegerValue::I16(r)) => l == r,
+            (IntegerValue::I32(l), IntegerValue::I32(r)) => l == r,
+            (IntegerValue::I64(l), IntegerValue::I64(r)) => l == r,
+            (IntegerValue::I128(l), IntegerValue::I128(r)) => l == r,
+            (IntegerValue::Isize(l), IntegerValue::Isize(r)) => l == r,
+            // Untyped vs typed - compare via fallback
+            (IntegerValue::Untyped(l), r) => {
+                let l_fallback = l.into_fallback();
+                r.to_fallback()
+                    .map(|r_fallback| l_fallback == r_fallback)
+                    .unwrap_or(false)
+            }
+            (l, IntegerValue::Untyped(r)) => {
+                let r_fallback = r.into_fallback();
+                l.to_fallback()
+                    .map(|l_fallback| l_fallback == r_fallback)
+                    .unwrap_or(false)
+            }
+            // Different typed integers are never equal
+            _ => false,
+        }
+    }
+
+    /// Convert to fallback integer for comparison
+    fn to_fallback(&self) -> Option<FallbackInteger> {
+        Some(match self {
+            IntegerValue::Untyped(x) => x.into_fallback(),
+            IntegerValue::U8(x) => (*x).into(),
+            IntegerValue::U16(x) => (*x).into(),
+            IntegerValue::U32(x) => (*x).into(),
+            IntegerValue::U64(x) => (*x).into(),
+            IntegerValue::U128(x) => (*x).try_into().ok()?,
+            IntegerValue::Usize(x) => (*x).try_into().ok()?,
+            IntegerValue::I8(x) => (*x).into(),
+            IntegerValue::I16(x) => (*x).into(),
+            IntegerValue::I32(x) => (*x).into(),
+            IntegerValue::I64(x) => (*x).into(),
+            IntegerValue::I128(x) => (*x).try_into().ok()?,
+            IntegerValue::Isize(x) => (*x).try_into().ok()?,
+        })
+    }
 }
 
 impl HasValueKind for IntegerValue {

@@ -63,6 +63,26 @@ impl FloatValue {
             FloatValue::F64(float) => Literal::f64_suffixed(*float),
         }
     }
+
+    /// Compare two floats for equality.
+    /// Handles type coercion between typed and untyped floats.
+    pub(super) fn floats_equal(lhs: &FloatValue, rhs: &FloatValue) -> bool {
+        match (lhs, rhs) {
+            // Same type comparisons
+            (FloatValue::Untyped(l), FloatValue::Untyped(r)) => {
+                l.into_fallback() == r.into_fallback()
+            }
+            (FloatValue::F32(l), FloatValue::F32(r)) => l == r,
+            (FloatValue::F64(l), FloatValue::F64(r)) => l == r,
+            // Untyped vs typed - compare via fallback (f64)
+            (FloatValue::Untyped(l), FloatValue::F32(r)) => l.into_fallback() == (*r as f64),
+            (FloatValue::Untyped(l), FloatValue::F64(r)) => l.into_fallback() == *r,
+            (FloatValue::F32(l), FloatValue::Untyped(r)) => (*l as f64) == r.into_fallback(),
+            (FloatValue::F64(l), FloatValue::Untyped(r)) => *l == r.into_fallback(),
+            // Different typed floats are never equal
+            _ => false,
+        }
+    }
 }
 
 impl HasValueKind for FloatValue {

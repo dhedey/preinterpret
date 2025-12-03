@@ -62,7 +62,7 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 - [x] Combine `PairedBinaryOperation`, `IntegerBinaryOperation` and `CompoundAssignmentOperation` into a flattened `BinaryOperation`
 - [x] Migrate `UntypedInteger` to use `FallbackInteger` like `UntypedFloat` (except a little harder because integers can overflow)
 - [x] Migrate <, <=, >, >= from specific integer/float and untyped values to IntegerValue and FloatValue, in a similar way that we've done for paired arithmetic operators.
-- [ ] Add `==` and `!=` support for all values (including streams, objects, arrays, parsers, unsupported literals, etc) and make it work with `AnyRef<..>` arguments for testing equality
+- [x] Add `==` and `!=` support for all values (including streams, objects, arrays, parsers, unsupported literals, etc) and make it work with `AnyRef<..>` arguments for testing equality
 - [ ] Add a new test file, `operations.rs`, and add tests to cover all the operations, including:
   - [ ] Cover all the binary operations with all valid type combinations
   - [ ] For integers/streams, this will involve for each paired operator `1 x untyped/untyped`, `n x typed/typed`, `n x typed/untyped` and `n x untyped/typed` where `n` is the number of integer/float types there are.

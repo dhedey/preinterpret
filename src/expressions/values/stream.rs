@@ -54,6 +54,18 @@ impl StreamValue {
             Some(error_span_stream.span_range_from_iterating_over_all_tokens())
         }
     }
+
+    /// Compare two streams for equality by comparing their token string representation.
+    /// This ignores spans and only compares the token content.
+    pub(super) fn streams_equal(lhs: &StreamValue, rhs: &StreamValue) -> bool {
+        lhs.value
+            .to_token_stream_removing_any_transparent_groups()
+            .to_string()
+            == rhs
+                .value
+                .to_token_stream_removing_any_transparent_groups()
+                .to_string()
+    }
 }
 
 impl HasValueKind for StreamValue {
@@ -179,12 +191,8 @@ define_interface! {
             fn assert_eq(this: Shared<StreamValue>, lhs: SpannedAnyRef<Value>, rhs: SpannedAnyRef<Value>, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
                 let lhs_value: &Value = &lhs;
                 let rhs_value: &Value = &rhs;
-                let res = {
-                    // TODO[operation-refactor]: Replace with eq when we have a solid implementation
-                    let lhs_debug_str = lhs_value.concat_recursive(&ConcatBehaviour::debug(lhs.span_range()))?;
-                    let rhs_debug_str = rhs_value.concat_recursive(&ConcatBehaviour::debug(rhs.span_range()))?;
-                    lhs_debug_str == rhs_debug_str
-                }; if res {
+                let res = Value::values_equal(lhs_value, rhs_value);
+                if res {
                     Ok(())
                 } else {
                     let error_span_range = this.resolve_content_span_range().unwrap_or(Span::call_site().span_range());

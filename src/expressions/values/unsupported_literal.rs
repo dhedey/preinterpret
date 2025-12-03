@@ -5,6 +5,14 @@ pub(crate) struct UnsupportedLiteral {
     pub(crate) lit: syn::Lit,
 }
 
+impl UnsupportedLiteral {
+    /// Compare two unsupported literals for equality by comparing their token string representation.
+    pub(super) fn literals_equal(lhs: &UnsupportedLiteral, rhs: &UnsupportedLiteral) -> bool {
+        use quote::ToTokens;
+        lhs.lit.to_token_stream().to_string() == rhs.lit.to_token_stream().to_string()
+    }
+}
+
 impl HasValueKind for UnsupportedLiteral {
     type SpecificKind = ValueKind;
 

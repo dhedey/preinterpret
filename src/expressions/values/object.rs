@@ -173,6 +173,25 @@ impl ObjectValue {
         }
         Ok(())
     }
+
+    /// Recursively compare two objects for equality.
+    /// Objects are equal if they have the same keys and all values are equal.
+    pub(super) fn objects_equal(lhs: &ObjectValue, rhs: &ObjectValue) -> bool {
+        if lhs.entries.len() != rhs.entries.len() {
+            return false;
+        }
+        for (key, lhs_entry) in lhs.entries.iter() {
+            match rhs.entries.get(key) {
+                Some(rhs_entry) => {
+                    if !Value::values_equal(&lhs_entry.value, &rhs_entry.value) {
+                        return false;
+                    }
+                }
+                None => return false,
+            }
+        }
+        true
+    }
 }
 
 impl Spanned<&ObjectValue> {
