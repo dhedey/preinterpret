@@ -160,7 +160,7 @@ impl IntegerValue {
             IntegerValue::I16(x) => (*x).into(),
             IntegerValue::I32(x) => (*x).into(),
             IntegerValue::I64(x) => (*x).into(),
-            IntegerValue::I128(x) => (*x).try_into().ok()?,
+            IntegerValue::I128(x) => *x,
             IntegerValue::Isize(x) => (*x).try_into().ok()?,
         })
     }

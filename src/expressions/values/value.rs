@@ -320,11 +320,11 @@ define_interface! {
         }
         pub(crate) mod binary_operations {
             fn eq(lhs: AnyRef<Value>, rhs: AnyRef<Value>) -> bool {
-                Value::values_equal(&*lhs, &*rhs)
+                Value::values_equal(&lhs, &rhs)
             }
 
             fn ne(lhs: AnyRef<Value>, rhs: AnyRef<Value>) -> bool {
-                !Value::values_equal(&*lhs, &*rhs)
+                !Value::values_equal(&lhs, &rhs)
             }
         }
         interface_items {
@@ -421,6 +421,7 @@ impl Value {
     /// (they are only equal if they are the same iterator - which won't happen in practice with refs).
     pub(crate) fn values_equal(lhs: &Value, rhs: &Value) -> bool {
         match (lhs, rhs) {
+            // Same type comparisons
             (Value::None, Value::None) => true,
             (Value::Boolean(l), Value::Boolean(r)) => l.value == r.value,
             (Value::Char(l), Value::Char(r)) => l.value == r.value,
@@ -437,8 +438,20 @@ impl Value {
             (Value::Parser(l), Value::Parser(r)) => ParserValue::parsers_equal(l, r),
             // Iterators are not structurally comparable since comparing would consume them
             (Value::Iterator(_), Value::Iterator(_)) => false,
-            // Different types are not equal
-            _ => false,
+            // Different types are not equal - explicit cases ensure new variants cause compile errors
+            (Value::None, _) => false,
+            (Value::Boolean(_), _) => false,
+            (Value::Char(_), _) => false,
+            (Value::String(_), _) => false,
+            (Value::Integer(_), _) => false,
+            (Value::Float(_), _) => false,
+            (Value::Array(_), _) => false,
+            (Value::Object(_), _) => false,
+            (Value::Stream(_), _) => false,
+            (Value::Range(_), _) => false,
+            (Value::UnsupportedLiteral(_), _) => false,
+            (Value::Parser(_), _) => false,
+            (Value::Iterator(_), _) => false,
         }
     }
 
