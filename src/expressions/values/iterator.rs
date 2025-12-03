@@ -205,18 +205,19 @@ impl HasValueKind for IteratorValue {
 
 impl ValuesEqual for IteratorValue {
     /// Compares two iterators by cloning and comparing element-by-element.
-    fn values_eq(&self, other: &Self) -> bool {
-        let mut self_iter = self.clone();
-        let mut other_iter = other.clone();
+    fn typed_eq(lhs: Spanned<&Self>, rhs: Spanned<&Self>) -> ExecutionResult<bool> {
+        let mut lhs_iter = lhs.value.clone();
+        let mut rhs_iter = rhs.value.clone();
         loop {
-            match (self_iter.next(), other_iter.next()) {
+            match (lhs_iter.next(), rhs_iter.next()) {
                 (Some(l), Some(r)) => {
-                    if !l.values_eq(&r) {
-                        return false;
+                    if !Value::typed_eq((&l).spanned(lhs.span_range), (&r).spanned(rhs.span_range))?
+                    {
+                        return Ok(false);
                     }
                 }
-                (None, None) => return true,
-                _ => return false, // Different lengths
+                (None, None) => return Ok(true),
+                _ => return Ok(false), // Different lengths
             }
         }
     }

@@ -8,9 +8,23 @@ use super::*;
 /// - **Token comparison**: Streams and unsupported literals compare via token string representation
 /// - **Float semantics**: Floats use Rust's `==`, so `NaN != NaN`
 ///
-/// Different value types are never equal to each other.
-pub(crate) trait ValuesEqual {
-    fn values_eq(&self, other: &Self) -> bool;
+/// Provides two methods:
+/// - `typed_eq`: Returns `ExecutionResult<bool>`, errors on incompatible types
+/// - `values_eq`: Returns `bool`, returns `false` for incompatible types (like JS `===`)
+pub(crate) trait ValuesEqual: Sized {
+    /// Strict equality check that errors on incompatible types.
+    /// Takes spanned references to both operands for better error messages and potential casting.
+    fn typed_eq(lhs: Spanned<&Self>, rhs: Spanned<&Self>) -> ExecutionResult<bool>;
+
+    /// Lenient equality - returns `false` for incompatible types instead of erroring.
+    /// Behaves like JavaScript's `===` operator.
+    fn values_eq(&self, other: &Self) -> bool {
+        Self::typed_eq(
+            self.spanned(Span::call_site().span_range()),
+            other.spanned(Span::call_site().span_range()),
+        )
+        .unwrap_or(false)
+    }
 }
 
 #[derive(Clone)]
@@ -436,38 +450,71 @@ impl Value {
 }
 
 impl ValuesEqual for Value {
-    fn values_eq(&self, other: &Self) -> bool {
-        match (self, other) {
+    fn typed_eq(lhs: Spanned<&Self>, rhs: Spanned<&Self>) -> ExecutionResult<bool> {
+        match (lhs.value, rhs.value) {
             // Same type comparisons - delegate to type-specific implementations
-            (Value::None, Value::None) => true,
-            (Value::Boolean(l), Value::Boolean(r)) => l.values_eq(r),
-            (Value::Char(l), Value::Char(r)) => l.values_eq(r),
-            (Value::String(l), Value::String(r)) => l.values_eq(r),
-            (Value::Integer(l), Value::Integer(r)) => l.values_eq(r),
-            (Value::Float(l), Value::Float(r)) => l.values_eq(r),
-            (Value::Array(l), Value::Array(r)) => l.values_eq(r),
-            (Value::Object(l), Value::Object(r)) => l.values_eq(r),
-            (Value::Stream(l), Value::Stream(r)) => l.values_eq(r),
-            (Value::Range(l), Value::Range(r)) => l.values_eq(r),
-            (Value::UnsupportedLiteral(l), Value::UnsupportedLiteral(r)) => l.values_eq(r),
-            (Value::Parser(l), Value::Parser(r)) => l.values_eq(r),
-            (Value::Iterator(l), Value::Iterator(r)) => l.values_eq(r),
-            // Different types are not equal - explicit cases ensure new variants cause compile errors
-            (Value::None, _) => false,
-            (Value::Boolean(_), _) => false,
-            (Value::Char(_), _) => false,
-            (Value::String(_), _) => false,
-            (Value::Integer(_), _) => false,
-            (Value::Float(_), _) => false,
-            (Value::Array(_), _) => false,
-            (Value::Object(_), _) => false,
-            (Value::Stream(_), _) => false,
-            (Value::Range(_), _) => false,
-            (Value::UnsupportedLiteral(_), _) => false,
-            (Value::Parser(_), _) => false,
-            (Value::Iterator(_), _) => false,
+            (Value::None, Value::None) => Ok(true),
+            (Value::Boolean(l), Value::Boolean(r)) => {
+                BooleanValue::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
+            }
+            (Value::Char(l), Value::Char(r)) => {
+                CharValue::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
+            }
+            (Value::String(l), Value::String(r)) => {
+                StringValue::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
+            }
+            (Value::Integer(l), Value::Integer(r)) => {
+                IntegerValue::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
+            }
+            (Value::Float(l), Value::Float(r)) => {
+                FloatValue::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
+            }
+            (Value::Array(l), Value::Array(r)) => {
+                ArrayValue::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
+            }
+            (Value::Object(l), Value::Object(r)) => {
+                ObjectValue::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
+            }
+            (Value::Stream(l), Value::Stream(r)) => {
+                StreamValue::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
+            }
+            (Value::Range(l), Value::Range(r)) => {
+                RangeValue::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
+            }
+            (Value::UnsupportedLiteral(l), Value::UnsupportedLiteral(r)) => {
+                UnsupportedLiteral::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
+            }
+            (Value::Parser(l), Value::Parser(r)) => {
+                ParserValue::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
+            }
+            (Value::Iterator(l), Value::Iterator(r)) => {
+                IteratorValue::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
+            }
+            // Different types - error with explicit cases to ensure new variants cause compile errors
+            (Value::None, _) => type_mismatch_err(&lhs, &rhs),
+            (Value::Boolean(_), _) => type_mismatch_err(&lhs, &rhs),
+            (Value::Char(_), _) => type_mismatch_err(&lhs, &rhs),
+            (Value::String(_), _) => type_mismatch_err(&lhs, &rhs),
+            (Value::Integer(_), _) => type_mismatch_err(&lhs, &rhs),
+            (Value::Float(_), _) => type_mismatch_err(&lhs, &rhs),
+            (Value::Array(_), _) => type_mismatch_err(&lhs, &rhs),
+            (Value::Object(_), _) => type_mismatch_err(&lhs, &rhs),
+            (Value::Stream(_), _) => type_mismatch_err(&lhs, &rhs),
+            (Value::Range(_), _) => type_mismatch_err(&lhs, &rhs),
+            (Value::UnsupportedLiteral(_), _) => type_mismatch_err(&lhs, &rhs),
+            (Value::Parser(_), _) => type_mismatch_err(&lhs, &rhs),
+            (Value::Iterator(_), _) => type_mismatch_err(&lhs, &rhs),
         }
     }
+}
+
+fn type_mismatch_err<T>(lhs: &Spanned<&Value>, rhs: &Spanned<&Value>) -> ExecutionResult<T> {
+    // Use lhs span for the error, but mention both types
+    lhs.span_range.type_err(format!(
+        "Cannot compare {} with {}",
+        lhs.value.value_type(),
+        rhs.value.value_type()
+    ))
 }
 
 impl Value {

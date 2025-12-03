@@ -30,8 +30,8 @@ impl HasValueKind for StringValue {
 }
 
 impl ValuesEqual for StringValue {
-    fn values_eq(&self, other: &Self) -> bool {
-        self.value == other.value
+    fn typed_eq(lhs: Spanned<&Self>, rhs: Spanned<&Self>) -> ExecutionResult<bool> {
+        Ok(lhs.value.value == rhs.value.value)
     }
 }
 

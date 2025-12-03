@@ -66,14 +66,17 @@ impl HasValueKind for StreamValue {
 
 impl ValuesEqual for StreamValue {
     /// Compares two streams by their token string representation, ignoring spans.
-    fn values_eq(&self, other: &Self) -> bool {
-        self.value
+    fn typed_eq(lhs: Spanned<&Self>, rhs: Spanned<&Self>) -> ExecutionResult<bool> {
+        Ok(lhs
+            .value
+            .value
             .to_token_stream_removing_any_transparent_groups()
             .to_string()
-            == other
+            == rhs
+                .value
                 .value
                 .to_token_stream_removing_any_transparent_groups()
-                .to_string()
+                .to_string())
     }
 }
 

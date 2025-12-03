@@ -178,21 +178,24 @@ impl ObjectValue {
 impl ValuesEqual for ObjectValue {
     /// Recursively compares two objects.
     /// Objects are equal if they have the same keys and all values are equal.
-    fn values_eq(&self, other: &Self) -> bool {
-        if self.entries.len() != other.entries.len() {
-            return false;
+    fn typed_eq(lhs: Spanned<&Self>, rhs: Spanned<&Self>) -> ExecutionResult<bool> {
+        if lhs.value.entries.len() != rhs.value.entries.len() {
+            return Ok(false);
         }
-        for (key, lhs_entry) in self.entries.iter() {
-            match other.entries.get(key) {
+        for (key, lhs_entry) in lhs.value.entries.iter() {
+            match rhs.value.entries.get(key) {
                 Some(rhs_entry) => {
-                    if !lhs_entry.value.values_eq(&rhs_entry.value) {
-                        return false;
+                    if !Value::typed_eq(
+                        (&lhs_entry.value).spanned(lhs.span_range),
+                        (&rhs_entry.value).spanned(rhs.span_range),
+                    )? {
+                        return Ok(false);
                     }
                 }
-                None => return false,
+                None => return Ok(false),
             }
         }
-        true
+        Ok(true)
     }
 }
 

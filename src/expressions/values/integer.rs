@@ -151,8 +151,8 @@ impl HasValueKind for IntegerValue {
 impl ValuesEqual for IntegerValue {
     /// Handles type coercion between typed and untyped integers.
     /// E.g., `5 == 5u32` returns true.
-    fn values_eq(&self, other: &Self) -> bool {
-        match (self, other) {
+    fn typed_eq(lhs: Spanned<&Self>, rhs: Spanned<&Self>) -> ExecutionResult<bool> {
+        Ok(match (lhs.value, rhs.value) {
             // Same type comparisons
             (IntegerValue::Untyped(l), IntegerValue::Untyped(r)) => {
                 l.into_fallback() == r.into_fallback()
@@ -184,7 +184,7 @@ impl ValuesEqual for IntegerValue {
             }
             // Different typed integers are never equal
             _ => false,
-        }
+        })
     }
 }
 
