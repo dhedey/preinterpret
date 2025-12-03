@@ -54,18 +54,6 @@ impl StreamValue {
             Some(error_span_stream.span_range_from_iterating_over_all_tokens())
         }
     }
-
-    /// Compare two streams for equality by comparing their token string representation.
-    /// This ignores spans and only compares the token content.
-    pub(super) fn streams_equal(lhs: &StreamValue, rhs: &StreamValue) -> bool {
-        lhs.value
-            .to_token_stream_removing_any_transparent_groups()
-            .to_string()
-            == rhs
-                .value
-                .to_token_stream_removing_any_transparent_groups()
-                .to_string()
-    }
 }
 
 impl HasValueKind for StreamValue {
@@ -73,6 +61,19 @@ impl HasValueKind for StreamValue {
 
     fn kind(&self) -> ValueKind {
         ValueKind::Stream
+    }
+}
+
+impl ValuesEqual for StreamValue {
+    /// Compares two streams by their token string representation, ignoring spans.
+    fn values_eq(&self, other: &Self) -> bool {
+        self.value
+            .to_token_stream_removing_any_transparent_groups()
+            .to_string()
+            == other
+                .value
+                .to_token_stream_removing_any_transparent_groups()
+                .to_string()
     }
 }
 

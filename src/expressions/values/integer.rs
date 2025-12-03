@@ -106,46 +106,6 @@ impl IntegerValue {
         }
     }
 
-    /// Compare two integers for equality.
-    /// Handles type coercion between typed and untyped integers.
-    pub(super) fn integers_equal(lhs: &IntegerValue, rhs: &IntegerValue) -> bool {
-        // Convert both to fallback integers for comparison when types differ
-        // This handles the case where e.g. 5 (untyped) == 5u32
-        match (lhs, rhs) {
-            // Same type comparisons
-            (IntegerValue::Untyped(l), IntegerValue::Untyped(r)) => {
-                l.into_fallback() == r.into_fallback()
-            }
-            (IntegerValue::U8(l), IntegerValue::U8(r)) => l == r,
-            (IntegerValue::U16(l), IntegerValue::U16(r)) => l == r,
-            (IntegerValue::U32(l), IntegerValue::U32(r)) => l == r,
-            (IntegerValue::U64(l), IntegerValue::U64(r)) => l == r,
-            (IntegerValue::U128(l), IntegerValue::U128(r)) => l == r,
-            (IntegerValue::Usize(l), IntegerValue::Usize(r)) => l == r,
-            (IntegerValue::I8(l), IntegerValue::I8(r)) => l == r,
-            (IntegerValue::I16(l), IntegerValue::I16(r)) => l == r,
-            (IntegerValue::I32(l), IntegerValue::I32(r)) => l == r,
-            (IntegerValue::I64(l), IntegerValue::I64(r)) => l == r,
-            (IntegerValue::I128(l), IntegerValue::I128(r)) => l == r,
-            (IntegerValue::Isize(l), IntegerValue::Isize(r)) => l == r,
-            // Untyped vs typed - compare via fallback
-            (IntegerValue::Untyped(l), r) => {
-                let l_fallback = l.into_fallback();
-                r.to_fallback()
-                    .map(|r_fallback| l_fallback == r_fallback)
-                    .unwrap_or(false)
-            }
-            (l, IntegerValue::Untyped(r)) => {
-                let r_fallback = r.into_fallback();
-                l.to_fallback()
-                    .map(|l_fallback| l_fallback == r_fallback)
-                    .unwrap_or(false)
-            }
-            // Different typed integers are never equal
-            _ => false,
-        }
-    }
-
     /// Convert to fallback integer for comparison
     fn to_fallback(&self) -> Option<FallbackInteger> {
         Some(match self {
@@ -184,6 +144,46 @@ impl HasValueKind for IntegerValue {
             Self::I64(_) => IntegerKind::I64,
             Self::I128(_) => IntegerKind::I128,
             Self::Isize(_) => IntegerKind::Isize,
+        }
+    }
+}
+
+impl ValuesEqual for IntegerValue {
+    /// Handles type coercion between typed and untyped integers.
+    /// E.g., `5 == 5u32` returns true.
+    fn values_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            // Same type comparisons
+            (IntegerValue::Untyped(l), IntegerValue::Untyped(r)) => {
+                l.into_fallback() == r.into_fallback()
+            }
+            (IntegerValue::U8(l), IntegerValue::U8(r)) => l == r,
+            (IntegerValue::U16(l), IntegerValue::U16(r)) => l == r,
+            (IntegerValue::U32(l), IntegerValue::U32(r)) => l == r,
+            (IntegerValue::U64(l), IntegerValue::U64(r)) => l == r,
+            (IntegerValue::U128(l), IntegerValue::U128(r)) => l == r,
+            (IntegerValue::Usize(l), IntegerValue::Usize(r)) => l == r,
+            (IntegerValue::I8(l), IntegerValue::I8(r)) => l == r,
+            (IntegerValue::I16(l), IntegerValue::I16(r)) => l == r,
+            (IntegerValue::I32(l), IntegerValue::I32(r)) => l == r,
+            (IntegerValue::I64(l), IntegerValue::I64(r)) => l == r,
+            (IntegerValue::I128(l), IntegerValue::I128(r)) => l == r,
+            (IntegerValue::Isize(l), IntegerValue::Isize(r)) => l == r,
+            // Untyped vs typed - compare via fallback
+            (IntegerValue::Untyped(l), r) => {
+                let l_fallback = l.into_fallback();
+                r.to_fallback()
+                    .map(|r_fallback| l_fallback == r_fallback)
+                    .unwrap_or(false)
+            }
+            (l, IntegerValue::Untyped(r)) => {
+                let r_fallback = r.into_fallback();
+                l.to_fallback()
+                    .map(|l_fallback| l_fallback == r_fallback)
+                    .unwrap_or(false)
+            }
+            // Different typed integers are never equal
+            _ => false,
         }
     }
 }

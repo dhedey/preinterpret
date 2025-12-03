@@ -29,6 +29,12 @@ impl HasValueKind for StringValue {
     }
 }
 
+impl ValuesEqual for StringValue {
+    fn values_eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
 impl IntoValue for String {
     fn into_value(self) -> Value {
         Value::String(StringValue { value: self })

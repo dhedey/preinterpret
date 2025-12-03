@@ -12,70 +12,6 @@ impl RangeValue {
         IteratorValue::new_for_range(self.clone())?.len(error_span_range)
     }
 
-    /// Compare two ranges for equality.
-    /// Ranges are equal if they have the same kind and the same bounds.
-    pub(super) fn ranges_equal(lhs: &RangeValue, rhs: &RangeValue) -> bool {
-        match (&*lhs.inner, &*rhs.inner) {
-            (
-                RangeValueInner::Range {
-                    start_inclusive: l_start,
-                    end_exclusive: l_end,
-                    ..
-                },
-                RangeValueInner::Range {
-                    start_inclusive: r_start,
-                    end_exclusive: r_end,
-                    ..
-                },
-            ) => Value::values_equal(l_start, r_start) && Value::values_equal(l_end, r_end),
-            (
-                RangeValueInner::RangeFrom {
-                    start_inclusive: l_start,
-                    ..
-                },
-                RangeValueInner::RangeFrom {
-                    start_inclusive: r_start,
-                    ..
-                },
-            ) => Value::values_equal(l_start, r_start),
-            (
-                RangeValueInner::RangeTo {
-                    end_exclusive: l_end,
-                    ..
-                },
-                RangeValueInner::RangeTo {
-                    end_exclusive: r_end,
-                    ..
-                },
-            ) => Value::values_equal(l_end, r_end),
-            (RangeValueInner::RangeFull { .. }, RangeValueInner::RangeFull { .. }) => true,
-            (
-                RangeValueInner::RangeInclusive {
-                    start_inclusive: l_start,
-                    end_inclusive: l_end,
-                    ..
-                },
-                RangeValueInner::RangeInclusive {
-                    start_inclusive: r_start,
-                    end_inclusive: r_end,
-                    ..
-                },
-            ) => Value::values_equal(l_start, r_start) && Value::values_equal(l_end, r_end),
-            (
-                RangeValueInner::RangeToInclusive {
-                    end_inclusive: l_end,
-                    ..
-                },
-                RangeValueInner::RangeToInclusive {
-                    end_inclusive: r_end,
-                    ..
-                },
-            ) => Value::values_equal(l_end, r_end),
-            // Different range kinds are never equal
-            _ => false,
-        }
-    }
-
     pub(crate) fn concat_recursive_into(
         &self,
         output: &mut String,
@@ -232,6 +168,71 @@ impl HasValueKind for RangeValue {
 
     fn kind(&self) -> RangeKind {
         self.inner.kind()
+    }
+}
+
+impl ValuesEqual for RangeValue {
+    /// Ranges are equal if they have the same kind and the same bounds.
+    fn values_eq(&self, other: &Self) -> bool {
+        match (&*self.inner, &*other.inner) {
+            (
+                RangeValueInner::Range {
+                    start_inclusive: l_start,
+                    end_exclusive: l_end,
+                    ..
+                },
+                RangeValueInner::Range {
+                    start_inclusive: r_start,
+                    end_exclusive: r_end,
+                    ..
+                },
+            ) => l_start.values_eq(r_start) && l_end.values_eq(r_end),
+            (
+                RangeValueInner::RangeFrom {
+                    start_inclusive: l_start,
+                    ..
+                },
+                RangeValueInner::RangeFrom {
+                    start_inclusive: r_start,
+                    ..
+                },
+            ) => l_start.values_eq(r_start),
+            (
+                RangeValueInner::RangeTo {
+                    end_exclusive: l_end,
+                    ..
+                },
+                RangeValueInner::RangeTo {
+                    end_exclusive: r_end,
+                    ..
+                },
+            ) => l_end.values_eq(r_end),
+            (RangeValueInner::RangeFull { .. }, RangeValueInner::RangeFull { .. }) => true,
+            (
+                RangeValueInner::RangeInclusive {
+                    start_inclusive: l_start,
+                    end_inclusive: l_end,
+                    ..
+                },
+                RangeValueInner::RangeInclusive {
+                    start_inclusive: r_start,
+                    end_inclusive: r_end,
+                    ..
+                },
+            ) => l_start.values_eq(r_start) && l_end.values_eq(r_end),
+            (
+                RangeValueInner::RangeToInclusive {
+                    end_inclusive: l_end,
+                    ..
+                },
+                RangeValueInner::RangeToInclusive {
+                    end_inclusive: r_end,
+                    ..
+                },
+            ) => l_end.values_eq(r_end),
+            // Different range kinds are never equal
+            _ => false,
+        }
     }
 }
 

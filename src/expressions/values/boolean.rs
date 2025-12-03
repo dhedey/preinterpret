@@ -31,6 +31,12 @@ impl HasValueKind for BooleanValue {
     }
 }
 
+impl ValuesEqual for BooleanValue {
+    fn values_eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
 impl IntoValue for bool {
     fn into_value(self) -> Value {
         Value::Boolean(BooleanValue { value: self })

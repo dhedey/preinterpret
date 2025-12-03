@@ -29,6 +29,12 @@ impl HasValueKind for CharValue {
     }
 }
 
+impl ValuesEqual for CharValue {
+    fn values_eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
 impl IntoValue for char {
     fn into_value(self) -> Value {
         Value::Char(CharValue { value: self })

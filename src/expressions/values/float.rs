@@ -63,11 +63,25 @@ impl FloatValue {
             FloatValue::F64(float) => Literal::f64_suffixed(*float),
         }
     }
+}
 
-    /// Compare two floats for equality.
+impl HasValueKind for FloatValue {
+    type SpecificKind = FloatKind;
+
+    fn kind(&self) -> FloatKind {
+        match self {
+            Self::Untyped(_) => FloatKind::Untyped,
+            Self::F32(_) => FloatKind::F32,
+            Self::F64(_) => FloatKind::F64,
+        }
+    }
+}
+
+impl ValuesEqual for FloatValue {
     /// Handles type coercion between typed and untyped floats.
-    pub(super) fn floats_equal(lhs: &FloatValue, rhs: &FloatValue) -> bool {
-        match (lhs, rhs) {
+    /// Uses Rust's float `==`, so `NaN != NaN`.
+    fn values_eq(&self, other: &Self) -> bool {
+        match (self, other) {
             // Same type comparisons
             (FloatValue::Untyped(l), FloatValue::Untyped(r)) => {
                 l.into_fallback() == r.into_fallback()
@@ -81,18 +95,6 @@ impl FloatValue {
             (FloatValue::F64(l), FloatValue::Untyped(r)) => *l == r.into_fallback(),
             // Different typed floats are never equal
             _ => false,
-        }
-    }
-}
-
-impl HasValueKind for FloatValue {
-    type SpecificKind = FloatKind;
-
-    fn kind(&self) -> FloatKind {
-        match self {
-            Self::Untyped(_) => FloatKind::Untyped,
-            Self::F32(_) => FloatKind::F32,
-            Self::F64(_) => FloatKind::F64,
         }
     }
 }

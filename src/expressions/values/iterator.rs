@@ -203,6 +203,25 @@ impl HasValueKind for IteratorValue {
     }
 }
 
+impl ValuesEqual for IteratorValue {
+    /// Compares two iterators by cloning and comparing element-by-element.
+    fn values_eq(&self, other: &Self) -> bool {
+        let mut self_iter = self.clone();
+        let mut other_iter = other.clone();
+        loop {
+            match (self_iter.next(), other_iter.next()) {
+                (Some(l), Some(r)) => {
+                    if !l.values_eq(&r) {
+                        return false;
+                    }
+                }
+                (None, None) => return true,
+                _ => return false, // Different lengths
+            }
+        }
+    }
+}
+
 #[derive(Clone)]
 enum IteratorValueInner {
     // We Box these so that Value is smaller on the stack

@@ -1,5 +1,18 @@
 use super::*;
 
+/// A trait for comparing values for equality with preinterpret semantics.
+///
+/// This is NOT the same as Rust's `PartialEq`/`Eq` traits because:
+/// - **Type coercion**: Untyped integers/floats can equal typed ones (e.g., `5 == 5u32`)
+/// - **Structural comparison**: Arrays, objects, and iterators are compared element-wise
+/// - **Token comparison**: Streams and unsupported literals compare via token string representation
+/// - **Float semantics**: Floats use Rust's `==`, so `NaN != NaN`
+///
+/// Different value types are never equal to each other.
+pub(crate) trait ValuesEqual {
+    fn values_eq(&self, other: &Self) -> bool;
+}
+
 #[derive(Clone)]
 pub(crate) enum Value {
     None,
@@ -416,28 +429,29 @@ impl Value {
         matches!(self, Value::None)
     }
 
-    /// Recursively compares two values for equality.
-    /// For most types, this is structural equality. For iterators, only reference equality is supported
-    /// (they are only equal if they are the same iterator - which won't happen in practice with refs).
+    /// Recursively compares two values for equality using `ValuesEqual` semantics.
     pub(crate) fn values_equal(lhs: &Value, rhs: &Value) -> bool {
-        match (lhs, rhs) {
-            // Same type comparisons
+        lhs.values_eq(rhs)
+    }
+}
+
+impl ValuesEqual for Value {
+    fn values_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            // Same type comparisons - delegate to type-specific implementations
             (Value::None, Value::None) => true,
-            (Value::Boolean(l), Value::Boolean(r)) => l.value == r.value,
-            (Value::Char(l), Value::Char(r)) => l.value == r.value,
-            (Value::String(l), Value::String(r)) => l.value == r.value,
-            (Value::Integer(l), Value::Integer(r)) => IntegerValue::integers_equal(l, r),
-            (Value::Float(l), Value::Float(r)) => FloatValue::floats_equal(l, r),
-            (Value::Array(l), Value::Array(r)) => ArrayValue::arrays_equal(l, r),
-            (Value::Object(l), Value::Object(r)) => ObjectValue::objects_equal(l, r),
-            (Value::Stream(l), Value::Stream(r)) => StreamValue::streams_equal(l, r),
-            (Value::Range(l), Value::Range(r)) => RangeValue::ranges_equal(l, r),
-            (Value::UnsupportedLiteral(l), Value::UnsupportedLiteral(r)) => {
-                UnsupportedLiteral::literals_equal(l, r)
-            }
-            (Value::Parser(l), Value::Parser(r)) => ParserValue::parsers_equal(l, r),
-            // Iterators are not structurally comparable since comparing would consume them
-            (Value::Iterator(_), Value::Iterator(_)) => false,
+            (Value::Boolean(l), Value::Boolean(r)) => l.values_eq(r),
+            (Value::Char(l), Value::Char(r)) => l.values_eq(r),
+            (Value::String(l), Value::String(r)) => l.values_eq(r),
+            (Value::Integer(l), Value::Integer(r)) => l.values_eq(r),
+            (Value::Float(l), Value::Float(r)) => l.values_eq(r),
+            (Value::Array(l), Value::Array(r)) => l.values_eq(r),
+            (Value::Object(l), Value::Object(r)) => l.values_eq(r),
+            (Value::Stream(l), Value::Stream(r)) => l.values_eq(r),
+            (Value::Range(l), Value::Range(r)) => l.values_eq(r),
+            (Value::UnsupportedLiteral(l), Value::UnsupportedLiteral(r)) => l.values_eq(r),
+            (Value::Parser(l), Value::Parser(r)) => l.values_eq(r),
+            (Value::Iterator(l), Value::Iterator(r)) => l.values_eq(r),
             // Different types are not equal - explicit cases ensure new variants cause compile errors
             (Value::None, _) => false,
             (Value::Boolean(_), _) => false,
@@ -454,7 +468,9 @@ impl Value {
             (Value::Iterator(_), _) => false,
         }
     }
+}
 
+impl Value {
     pub(crate) fn into_indexed(
         self,
         access: IndexAccess,

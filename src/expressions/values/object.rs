@@ -173,17 +173,19 @@ impl ObjectValue {
         }
         Ok(())
     }
+}
 
-    /// Recursively compare two objects for equality.
+impl ValuesEqual for ObjectValue {
+    /// Recursively compares two objects.
     /// Objects are equal if they have the same keys and all values are equal.
-    pub(super) fn objects_equal(lhs: &ObjectValue, rhs: &ObjectValue) -> bool {
-        if lhs.entries.len() != rhs.entries.len() {
+    fn values_eq(&self, other: &Self) -> bool {
+        if self.entries.len() != other.entries.len() {
             return false;
         }
-        for (key, lhs_entry) in lhs.entries.iter() {
-            match rhs.entries.get(key) {
+        for (key, lhs_entry) in self.entries.iter() {
+            match other.entries.get(key) {
                 Some(rhs_entry) => {
-                    if !Value::values_equal(&lhs_entry.value, &rhs_entry.value) {
+                    if !lhs_entry.value.values_eq(&rhs_entry.value) {
                         return false;
                     }
                 }

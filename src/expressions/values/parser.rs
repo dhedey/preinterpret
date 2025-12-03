@@ -17,11 +17,12 @@ impl ParserValue {
     pub(crate) fn new(handle: ParserHandle) -> Self {
         Self { handle }
     }
+}
 
-    /// Compare two parsers for equality.
+impl ValuesEqual for ParserValue {
     /// Parsers are equal if they reference the same handle.
-    pub(super) fn parsers_equal(lhs: &ParserValue, rhs: &ParserValue) -> bool {
-        lhs.handle == rhs.handle
+    fn values_eq(&self, other: &Self) -> bool {
+        self.handle == other.handle
     }
 }
 

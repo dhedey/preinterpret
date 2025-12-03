@@ -129,17 +129,6 @@ impl ArrayValue {
             false, // Output all the vec because it's already in memory
         )
     }
-
-    /// Recursively compare two arrays for equality.
-    pub(super) fn arrays_equal(lhs: &ArrayValue, rhs: &ArrayValue) -> bool {
-        if lhs.items.len() != rhs.items.len() {
-            return false;
-        }
-        lhs.items
-            .iter()
-            .zip(rhs.items.iter())
-            .all(|(l, r)| Value::values_equal(l, r))
-    }
 }
 
 impl HasValueKind for ArrayValue {
@@ -147,6 +136,19 @@ impl HasValueKind for ArrayValue {
 
     fn kind(&self) -> ValueKind {
         ValueKind::Array
+    }
+}
+
+impl ValuesEqual for ArrayValue {
+    /// Recursively compares two arrays element-by-element.
+    fn values_eq(&self, other: &Self) -> bool {
+        if self.items.len() != other.items.len() {
+            return false;
+        }
+        self.items
+            .iter()
+            .zip(other.items.iter())
+            .all(|(l, r)| l.values_eq(r))
     }
 }
 
