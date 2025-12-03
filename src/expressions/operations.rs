@@ -325,18 +325,15 @@ impl BinaryOperation {
         }
     }
 
-    #[allow(unused)]
-    pub(crate) fn evaluate<L: IntoValue, R: IntoValue>(
+    pub(crate) fn evaluate(
         &self,
-        left: Owned<L>,
-        right: Owned<R>,
+        left: LateBoundValue,
+        right: LateBoundValue,
     ) -> ExecutionResult<ReturnedValue> {
-        let left = left.into_owned_value();
-        let right = right.into_owned_value();
         match left.kind().resolve_binary_operation(self) {
             Some(interface) => {
-                let left = interface.lhs_ownership.map_from_owned(left)?;
-                let right = interface.rhs_ownership.map_from_owned(right)?;
+                let left = interface.lhs_ownership.map_from_late_bound(left)?;
+                let right = interface.rhs_ownership.map_from_late_bound(right)?;
                 interface.execute(left, right, self)
             }
             None => self.type_err(format!(

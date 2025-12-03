@@ -209,6 +209,10 @@ pub(crate) enum LateBoundValue {
 }
 
 impl LateBoundValue {
+    pub(crate) fn new_shared(shared: SharedValue) -> Self {
+        LateBoundValue::CopyOnWrite(CopyOnWrite::shared_in_place_of_shared(shared))
+    }
+
     pub(crate) fn resolve(self, ownership: ArgumentOwnership) -> ExecutionResult<ArgumentValue> {
         ownership.map_from_late_bound(self)
     }

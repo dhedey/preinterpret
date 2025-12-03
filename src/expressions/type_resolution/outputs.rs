@@ -24,6 +24,15 @@ impl WithSpanRangeExt for ReturnedValue {
     }
 }
 
+impl ReturnedValue {
+    pub(crate) fn expect_owned(self) -> OwnedValue {
+        match self {
+            ReturnedValue::Owned(v) => v,
+            _ => panic!("Called expect_owned on non-owned ReturnedValue"),
+        }
+    }
+}
+
 // TODO: Find some way to selectively enable only on MSRV (e.g. following the build.rs feature flag pattern)
 // #[diagnostic::on_unimplemented(
 //     message = "`ResolvableOutput` is not implemented for `{Self}`",

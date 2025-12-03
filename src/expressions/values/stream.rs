@@ -176,14 +176,19 @@ define_interface! {
                 }
             }
 
-            fn assert_eq(this: Shared<StreamValue>, lhs: SpannedAnyRef<Value>, rhs: SpannedAnyRef<Value>, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
-                let lhs_value: &Value = &lhs;
-                let rhs_value: &Value = &rhs;
+            fn assert_eq(this: Shared<StreamValue>, lhs: SharedValue, rhs: SharedValue, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
                 let res = {
-                    // TODO[operation-refactor]: Replace with eq when we have a solid implementation
-                    let lhs_debug_str = lhs_value.concat_recursive(&ConcatBehaviour::debug(lhs.span_range()))?;
-                    let rhs_debug_str = rhs_value.concat_recursive(&ConcatBehaviour::debug(rhs.span_range()))?;
-                    lhs_debug_str == rhs_debug_str
+                    let equality_result = BinaryOperation::Equal(syn::token::EqEq { spans: [Span::call_site(), Span::call_site()] })
+                        .evaluate(
+                            LateBoundValue::new_shared(Shared::clone(&lhs)),
+                            LateBoundValue::new_shared(Shared::clone(&rhs)),
+                        );
+                    match equality_result {
+                        Ok(value) => value.expect_owned().resolve_as("Result of equality operation").unwrap(),
+                        // If values have different types, the == operator may throw.
+                        // Pretend it's false so we give a better error message below.
+                        Err(_) => false,
+                    }
                 }; if res {
                     Ok(())
                 } else {
