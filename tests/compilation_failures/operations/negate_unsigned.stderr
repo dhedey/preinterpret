@@ -1,0 +1,5 @@
+error: The - operator is not supported for u32 values
+ --> tests/compilation_failures/operations/negate_unsigned.rs:5:11
+  |
+5 |         #(-5u32)
+  |           ^

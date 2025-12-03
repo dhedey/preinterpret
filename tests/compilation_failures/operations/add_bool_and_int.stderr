@@ -1,0 +1,5 @@
+error: The + operator is not supported for a bool operand
+ --> tests/compilation_failures/operations/add_bool_and_int.rs:5:16
+  |
+5 |         #(true + 1)
+  |                ^

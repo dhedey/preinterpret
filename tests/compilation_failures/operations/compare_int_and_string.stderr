@@ -1,0 +1,5 @@
+error: This argument is expected to be an integer, but it is a string
+ --> tests/compilation_failures/operations/compare_int_and_string.rs:5:16
+  |
+5 |         #(5 == "five")
+  |                ^^^^^^

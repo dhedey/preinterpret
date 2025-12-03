@@ -1,0 +1,5 @@
+error: This argument is expected to be a boolean, but it is an untyped integer
+ --> tests/compilation_failures/operations/compare_bool_and_int.rs:5:19
+  |
+5 |         #(true == 1)
+  |                   ^

@@ -1,0 +1,5 @@
+error: The untyped integer operation 10 % 0 overflowed in i128 space
+ --> tests/compilation_failures/operations/remainder_by_zero_int.rs:5:14
+  |
+5 |         #(10 % 0)
+  |              ^

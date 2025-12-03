@@ -1,0 +1,5 @@
+error: The ! operator is not supported for untyped integer values
+ --> tests/compilation_failures/operations/logical_not_on_int.rs:5:11
+  |
+5 |         #(!5)
+  |           ^

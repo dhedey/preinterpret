@@ -1,0 +1,5 @@
+error: The u8 operation 0 - 1 overflowed
+ --> tests/compilation_failures/operations/integer_underflow_sub.rs:5:15
+  |
+5 |         #(0u8 - 1u8)
+  |               ^

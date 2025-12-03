@@ -1,0 +1,5 @@
+error: The - operator is not supported for a stream operand
+ --> tests/compilation_failures/operations/stream_subtract.rs:5:20
+  |
+5 |         #(%[hello] - %[world])
+  |                    ^

@@ -1,0 +1,5 @@
+error: The * operator is not supported for a string operand
+ --> tests/compilation_failures/operations/multiply_strings.rs:5:19
+  |
+5 |         #("hello" * 3)
+  |                   ^

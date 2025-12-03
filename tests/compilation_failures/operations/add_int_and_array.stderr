@@ -1,0 +1,5 @@
+error: This argument is expected to be an integer, but it is an array
+ --> tests/compilation_failures/operations/add_int_and_array.rs:5:15
+  |
+5 |         #(1 + [])
+  |               ^^
