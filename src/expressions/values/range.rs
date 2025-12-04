@@ -173,8 +173,12 @@ impl HasValueKind for RangeValue {
 
 impl ValuesEqual for RangeValue {
     /// Ranges are equal if they have the same kind and the same bounds.
-    fn typed_eq(lhs: Spanned<&Self>, rhs: Spanned<&Self>) -> ExecutionResult<bool> {
-        Ok(match (&*lhs.value.inner, &*rhs.value.inner) {
+    fn values_equal<C: EqualityContext>(
+        &self,
+        other: &Self,
+        ctx: &mut C,
+    ) -> Result<bool, C::Error> {
+        Ok(match (&*self.inner, &*other.inner) {
             (
                 RangeValueInner::Range {
                     start_inclusive: l_start,
@@ -187,10 +191,8 @@ impl ValuesEqual for RangeValue {
                     ..
                 },
             ) => {
-                Value::typed_eq(
-                    l_start.spanned(lhs.span_range),
-                    r_start.spanned(rhs.span_range),
-                )? && Value::typed_eq(l_end.spanned(lhs.span_range), r_end.spanned(rhs.span_range))?
+                ctx.with_range_start(|ctx| l_start.values_equal(r_start, ctx))?
+                    && ctx.with_range_end(|ctx| l_end.values_equal(r_end, ctx))?
             }
             (
                 RangeValueInner::RangeFrom {
@@ -201,10 +203,7 @@ impl ValuesEqual for RangeValue {
                     start_inclusive: r_start,
                     ..
                 },
-            ) => Value::typed_eq(
-                l_start.spanned(lhs.span_range),
-                r_start.spanned(rhs.span_range),
-            )?,
+            ) => ctx.with_range_start(|ctx| l_start.values_equal(r_start, ctx))?,
             (
                 RangeValueInner::RangeTo {
                     end_exclusive: l_end,
@@ -214,7 +213,7 @@ impl ValuesEqual for RangeValue {
                     end_exclusive: r_end,
                     ..
                 },
-            ) => Value::typed_eq(l_end.spanned(lhs.span_range), r_end.spanned(rhs.span_range))?,
+            ) => ctx.with_range_end(|ctx| l_end.values_equal(r_end, ctx))?,
             (RangeValueInner::RangeFull { .. }, RangeValueInner::RangeFull { .. }) => true,
             (
                 RangeValueInner::RangeInclusive {
@@ -228,10 +227,8 @@ impl ValuesEqual for RangeValue {
                     ..
                 },
             ) => {
-                Value::typed_eq(
-                    l_start.spanned(lhs.span_range),
-                    r_start.spanned(rhs.span_range),
-                )? && Value::typed_eq(l_end.spanned(lhs.span_range), r_end.spanned(rhs.span_range))?
+                ctx.with_range_start(|ctx| l_start.values_equal(r_start, ctx))?
+                    && ctx.with_range_end(|ctx| l_end.values_equal(r_end, ctx))?
             }
             (
                 RangeValueInner::RangeToInclusive {
@@ -242,7 +239,7 @@ impl ValuesEqual for RangeValue {
                     end_inclusive: r_end,
                     ..
                 },
-            ) => Value::typed_eq(l_end.spanned(lhs.span_range), r_end.spanned(rhs.span_range))?,
+            ) => ctx.with_range_end(|ctx| l_end.values_equal(r_end, ctx))?,
             // Different range kinds are never equal
             _ => false,
         })

@@ -80,8 +80,12 @@ impl HasValueKind for FloatValue {
 impl ValuesEqual for FloatValue {
     /// Handles type coercion between typed and untyped floats.
     /// Uses Rust's float `==`, so `NaN != NaN`.
-    fn typed_eq(lhs: Spanned<&Self>, rhs: Spanned<&Self>) -> ExecutionResult<bool> {
-        Ok(match (lhs.value, rhs.value) {
+    fn values_equal<C: EqualityContext>(
+        &self,
+        other: &Self,
+        _ctx: &mut C,
+    ) -> Result<bool, C::Error> {
+        Ok(match (self, other) {
             // Same type comparisons
             (FloatValue::Untyped(l), FloatValue::Untyped(r)) => {
                 l.into_fallback() == r.into_fallback()

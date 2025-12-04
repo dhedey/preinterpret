@@ -178,17 +178,21 @@ impl ObjectValue {
 impl ValuesEqual for ObjectValue {
     /// Recursively compares two objects.
     /// Objects are equal if they have the same keys and all values are equal.
-    fn typed_eq(lhs: Spanned<&Self>, rhs: Spanned<&Self>) -> ExecutionResult<bool> {
-        if lhs.value.entries.len() != rhs.value.entries.len() {
+    fn values_equal<C: EqualityContext>(
+        &self,
+        other: &Self,
+        ctx: &mut C,
+    ) -> Result<bool, C::Error> {
+        if self.entries.len() != other.entries.len() {
             return Ok(false);
         }
-        for (key, lhs_entry) in lhs.value.entries.iter() {
-            match rhs.value.entries.get(key) {
+        for (key, lhs_entry) in self.entries.iter() {
+            match other.entries.get(key) {
                 Some(rhs_entry) => {
-                    if !Value::typed_eq(
-                        (&lhs_entry.value).spanned(lhs.span_range),
-                        (&rhs_entry.value).spanned(rhs.span_range),
-                    )? {
+                    let equal = ctx.with_object_key(key, |ctx| {
+                        lhs_entry.value.values_equal(&rhs_entry.value, ctx)
+                    })?;
+                    if !equal {
                         return Ok(false);
                     }
                 }

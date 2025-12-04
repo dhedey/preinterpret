@@ -1,5 +1,228 @@
 use super::*;
 
+// ============================================================================
+// Equality Context - Controls behavior of value equality comparisons
+// ============================================================================
+
+/// A segment in the path to the current comparison location.
+#[derive(Clone, Debug)]
+#[allow(dead_code)] // Infrastructure for TypedEquality path tracking
+pub(crate) enum PathSegment {
+    ArrayIndex(usize),
+    ObjectKey(String),
+    IteratorIndex(usize),
+    RangeStart,
+    RangeEnd,
+}
+
+impl PathSegment {
+    #[allow(dead_code)] // Used by TypedEquality for error messages
+    fn fmt_path(path: &[PathSegment]) -> String {
+        let mut result = String::new();
+        for segment in path {
+            match segment {
+                PathSegment::ArrayIndex(i) => result.push_str(&format!("[{}]", i)),
+                PathSegment::ObjectKey(k) => {
+                    if result.is_empty() {
+                        result.push_str(k);
+                    } else {
+                        result.push_str(&format!(".{}", k));
+                    }
+                }
+                PathSegment::IteratorIndex(i) => result.push_str(&format!("<iter[{}]>", i)),
+                PathSegment::RangeStart => result.push_str(".start"),
+                PathSegment::RangeEnd => result.push_str(".end"),
+            }
+        }
+        if result.is_empty() {
+            "<root>".to_string()
+        } else {
+            result
+        }
+    }
+}
+
+/// Context trait for controlling equality comparison behavior.
+///
+/// Different implementations allow for:
+/// - Simple equality: returns `false` on type mismatch (like JS `===`)
+/// - Typed equality: errors on type mismatch, tracks path for error messages
+/// - Assert equality: errors on any difference, useful for assert_eq
+pub(crate) trait EqualityContext {
+    type Error;
+
+    /// Called when comparing values of different types.
+    /// Returns `Ok(false)` for lenient comparison, `Err` for strict comparison.
+    fn type_mismatch<L: HasValueKind, R: HasValueKind>(
+        &mut self,
+        lhs: &L,
+        rhs: &R,
+    ) -> Result<bool, Self::Error>;
+
+    /// Called when values of the same type are not equal.
+    /// Returns `Ok(false)` for normal comparison, `Err` for assert-style comparison.
+    #[allow(dead_code)] // Infrastructure for future AssertEquality context
+    fn values_not_equal<T: HasValueKind>(&mut self, lhs: &T, rhs: &T) -> Result<bool, Self::Error>;
+
+    /// Wrap a comparison within an array index context.
+    fn with_array_index<R>(&mut self, index: usize, f: impl FnOnce(&mut Self) -> R) -> R;
+
+    /// Wrap a comparison within an object key context.
+    fn with_object_key<R>(&mut self, key: &str, f: impl FnOnce(&mut Self) -> R) -> R;
+
+    /// Wrap a comparison within an iterator index context.
+    fn with_iterator_index<R>(&mut self, index: usize, f: impl FnOnce(&mut Self) -> R) -> R;
+
+    /// Wrap a comparison within a range start context.
+    fn with_range_start<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R;
+
+    /// Wrap a comparison within a range end context.
+    fn with_range_end<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R;
+}
+
+/// Simple equality context - returns `false` on type mismatch, no path tracking.
+/// This is the most efficient option when you just need a bool result.
+pub(crate) struct SimpleEquality;
+
+impl EqualityContext for SimpleEquality {
+    type Error = core::convert::Infallible;
+
+    #[inline]
+    fn type_mismatch<L: HasValueKind, R: HasValueKind>(
+        &mut self,
+        _lhs: &L,
+        _rhs: &R,
+    ) -> Result<bool, Self::Error> {
+        Ok(false)
+    }
+
+    #[inline]
+    fn values_not_equal<T: HasValueKind>(
+        &mut self,
+        _lhs: &T,
+        _rhs: &T,
+    ) -> Result<bool, Self::Error> {
+        Ok(false)
+    }
+
+    #[inline]
+    fn with_array_index<R>(&mut self, _index: usize, f: impl FnOnce(&mut Self) -> R) -> R {
+        f(self)
+    }
+
+    #[inline]
+    fn with_object_key<R>(&mut self, _key: &str, f: impl FnOnce(&mut Self) -> R) -> R {
+        f(self)
+    }
+
+    #[inline]
+    fn with_iterator_index<R>(&mut self, _index: usize, f: impl FnOnce(&mut Self) -> R) -> R {
+        f(self)
+    }
+
+    #[inline]
+    fn with_range_start<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        f(self)
+    }
+
+    #[inline]
+    fn with_range_end<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        f(self)
+    }
+}
+
+/// Typed equality context - errors on type mismatch, tracks path for error messages.
+#[allow(dead_code)] // Infrastructure for strict equality comparisons
+pub(crate) struct TypedEquality {
+    pub(crate) path: Vec<PathSegment>,
+    pub(crate) error_span: SpanRange,
+}
+
+impl TypedEquality {
+    #[allow(dead_code)] // Infrastructure for strict equality comparisons
+    pub(crate) fn new(error_span: SpanRange) -> Self {
+        Self {
+            path: Vec::new(),
+            error_span,
+        }
+    }
+}
+
+impl EqualityContext for TypedEquality {
+    type Error = ExecutionInterrupt;
+
+    fn type_mismatch<L: HasValueKind, R: HasValueKind>(
+        &mut self,
+        lhs: &L,
+        rhs: &R,
+    ) -> Result<bool, Self::Error> {
+        let path_str = if self.path.is_empty() {
+            String::new()
+        } else {
+            format!(" at {}", PathSegment::fmt_path(&self.path))
+        };
+        Err(self.error_span.type_error(format!(
+            "Cannot compare {} with {}{}",
+            lhs.articled_value_type(),
+            rhs.articled_value_type(),
+            path_str
+        )))
+    }
+
+    #[inline]
+    fn values_not_equal<T: HasValueKind>(
+        &mut self,
+        _lhs: &T,
+        _rhs: &T,
+    ) -> Result<bool, Self::Error> {
+        Ok(false)
+    }
+
+    #[inline]
+    fn with_array_index<R>(&mut self, index: usize, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.path.push(PathSegment::ArrayIndex(index));
+        let result = f(self);
+        self.path.pop();
+        result
+    }
+
+    #[inline]
+    fn with_object_key<R>(&mut self, key: &str, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.path.push(PathSegment::ObjectKey(key.to_string()));
+        let result = f(self);
+        self.path.pop();
+        result
+    }
+
+    #[inline]
+    fn with_iterator_index<R>(&mut self, index: usize, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.path.push(PathSegment::IteratorIndex(index));
+        let result = f(self);
+        self.path.pop();
+        result
+    }
+
+    #[inline]
+    fn with_range_start<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.path.push(PathSegment::RangeStart);
+        let result = f(self);
+        self.path.pop();
+        result
+    }
+
+    #[inline]
+    fn with_range_end<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.path.push(PathSegment::RangeEnd);
+        let result = f(self);
+        self.path.pop();
+        result
+    }
+}
+
+// ============================================================================
+// ValuesEqual trait - Value equality with configurable context
+// ============================================================================
+
 /// A trait for comparing values for equality with preinterpret semantics.
 ///
 /// This is NOT the same as Rust's `PartialEq`/`Eq` traits because:
@@ -8,22 +231,28 @@ use super::*;
 /// - **Token comparison**: Streams and unsupported literals compare via token string representation
 /// - **Float semantics**: Floats use Rust's `==`, so `NaN != NaN`
 ///
-/// Provides two methods:
-/// - `typed_eq`: Returns `ExecutionResult<bool>`, errors on incompatible types
-/// - `values_eq`: Returns `bool`, returns `false` for incompatible types (like JS `===`)
-pub(crate) trait ValuesEqual: Sized {
-    /// Strict equality check that errors on incompatible types.
-    /// Takes spanned references to both operands for better error messages and potential casting.
-    fn typed_eq(lhs: Spanned<&Self>, rhs: Spanned<&Self>) -> ExecutionResult<bool>;
+/// The comparison behavior is controlled by the `EqualityContext`:
+/// - `SimpleEquality`: Returns `false` on type mismatch (like JS `===`)
+/// - `TypedEquality`: Errors on type mismatch with path information
+pub(crate) trait ValuesEqual: Sized + HasValueKind {
+    /// Compare two values for equality using the given context.
+    fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C)
+        -> Result<bool, C::Error>;
 
     /// Lenient equality - returns `false` for incompatible types instead of erroring.
     /// Behaves like JavaScript's `===` operator.
     fn values_eq(&self, other: &Self) -> bool {
-        Self::typed_eq(
-            self.spanned(Span::call_site().span_range()),
-            other.spanned(Span::call_site().span_range()),
-        )
-        .unwrap_or(false)
+        // Infallible can't actually be constructed, so unwrap is safe
+        match self.values_equal(other, &mut SimpleEquality) {
+            Ok(result) => result,
+            Err(infallible) => match infallible {},
+        }
+    }
+
+    /// Strict equality check that errors on incompatible types.
+    #[allow(dead_code)] // Infrastructure for strict equality comparisons
+    fn typed_eq(&self, other: &Self, error_span: SpanRange) -> ExecutionResult<bool> {
+        self.values_equal(other, &mut TypedEquality::new(error_span))
     }
 }
 
@@ -450,71 +679,42 @@ impl Value {
 }
 
 impl ValuesEqual for Value {
-    fn typed_eq(lhs: Spanned<&Self>, rhs: Spanned<&Self>) -> ExecutionResult<bool> {
-        match (lhs.value, rhs.value) {
+    fn values_equal<C: EqualityContext>(
+        &self,
+        other: &Self,
+        ctx: &mut C,
+    ) -> Result<bool, C::Error> {
+        match (self, other) {
             // Same type comparisons - delegate to type-specific implementations
             (Value::None, Value::None) => Ok(true),
-            (Value::Boolean(l), Value::Boolean(r)) => {
-                BooleanValue::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
-            }
-            (Value::Char(l), Value::Char(r)) => {
-                CharValue::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
-            }
-            (Value::String(l), Value::String(r)) => {
-                StringValue::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
-            }
-            (Value::Integer(l), Value::Integer(r)) => {
-                IntegerValue::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
-            }
-            (Value::Float(l), Value::Float(r)) => {
-                FloatValue::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
-            }
-            (Value::Array(l), Value::Array(r)) => {
-                ArrayValue::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
-            }
-            (Value::Object(l), Value::Object(r)) => {
-                ObjectValue::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
-            }
-            (Value::Stream(l), Value::Stream(r)) => {
-                StreamValue::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
-            }
-            (Value::Range(l), Value::Range(r)) => {
-                RangeValue::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
-            }
-            (Value::UnsupportedLiteral(l), Value::UnsupportedLiteral(r)) => {
-                UnsupportedLiteral::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
-            }
-            (Value::Parser(l), Value::Parser(r)) => {
-                ParserValue::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
-            }
-            (Value::Iterator(l), Value::Iterator(r)) => {
-                IteratorValue::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))
-            }
-            // Different types - error with explicit cases to ensure new variants cause compile errors
-            (Value::None, _) => type_mismatch_err(&lhs, &rhs),
-            (Value::Boolean(_), _) => type_mismatch_err(&lhs, &rhs),
-            (Value::Char(_), _) => type_mismatch_err(&lhs, &rhs),
-            (Value::String(_), _) => type_mismatch_err(&lhs, &rhs),
-            (Value::Integer(_), _) => type_mismatch_err(&lhs, &rhs),
-            (Value::Float(_), _) => type_mismatch_err(&lhs, &rhs),
-            (Value::Array(_), _) => type_mismatch_err(&lhs, &rhs),
-            (Value::Object(_), _) => type_mismatch_err(&lhs, &rhs),
-            (Value::Stream(_), _) => type_mismatch_err(&lhs, &rhs),
-            (Value::Range(_), _) => type_mismatch_err(&lhs, &rhs),
-            (Value::UnsupportedLiteral(_), _) => type_mismatch_err(&lhs, &rhs),
-            (Value::Parser(_), _) => type_mismatch_err(&lhs, &rhs),
-            (Value::Iterator(_), _) => type_mismatch_err(&lhs, &rhs),
+            (Value::Boolean(l), Value::Boolean(r)) => l.values_equal(r, ctx),
+            (Value::Char(l), Value::Char(r)) => l.values_equal(r, ctx),
+            (Value::String(l), Value::String(r)) => l.values_equal(r, ctx),
+            (Value::Integer(l), Value::Integer(r)) => l.values_equal(r, ctx),
+            (Value::Float(l), Value::Float(r)) => l.values_equal(r, ctx),
+            (Value::Array(l), Value::Array(r)) => l.values_equal(r, ctx),
+            (Value::Object(l), Value::Object(r)) => l.values_equal(r, ctx),
+            (Value::Stream(l), Value::Stream(r)) => l.values_equal(r, ctx),
+            (Value::Range(l), Value::Range(r)) => l.values_equal(r, ctx),
+            (Value::UnsupportedLiteral(l), Value::UnsupportedLiteral(r)) => l.values_equal(r, ctx),
+            (Value::Parser(l), Value::Parser(r)) => l.values_equal(r, ctx),
+            (Value::Iterator(l), Value::Iterator(r)) => l.values_equal(r, ctx),
+            // Different types - use explicit cases to ensure new variants cause compile errors
+            (Value::None, _) => ctx.type_mismatch(self, other),
+            (Value::Boolean(_), _) => ctx.type_mismatch(self, other),
+            (Value::Char(_), _) => ctx.type_mismatch(self, other),
+            (Value::String(_), _) => ctx.type_mismatch(self, other),
+            (Value::Integer(_), _) => ctx.type_mismatch(self, other),
+            (Value::Float(_), _) => ctx.type_mismatch(self, other),
+            (Value::Array(_), _) => ctx.type_mismatch(self, other),
+            (Value::Object(_), _) => ctx.type_mismatch(self, other),
+            (Value::Stream(_), _) => ctx.type_mismatch(self, other),
+            (Value::Range(_), _) => ctx.type_mismatch(self, other),
+            (Value::UnsupportedLiteral(_), _) => ctx.type_mismatch(self, other),
+            (Value::Parser(_), _) => ctx.type_mismatch(self, other),
+            (Value::Iterator(_), _) => ctx.type_mismatch(self, other),
         }
     }
-}
-
-fn type_mismatch_err<T>(lhs: &Spanned<&Value>, rhs: &Spanned<&Value>) -> ExecutionResult<T> {
-    // Use lhs span for the error, but mention both types
-    lhs.span_range.type_err(format!(
-        "Cannot compare {} with {}",
-        lhs.value.value_type(),
-        rhs.value.value_type()
-    ))
 }
 
 impl Value {

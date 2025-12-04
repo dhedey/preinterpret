@@ -30,8 +30,12 @@ impl HasValueKind for StringValue {
 }
 
 impl ValuesEqual for StringValue {
-    fn typed_eq(lhs: Spanned<&Self>, rhs: Spanned<&Self>) -> ExecutionResult<bool> {
-        Ok(lhs.value.value == rhs.value.value)
+    fn values_equal<C: EqualityContext>(
+        &self,
+        other: &Self,
+        _ctx: &mut C,
+    ) -> Result<bool, C::Error> {
+        Ok(self.value == other.value)
     }
 }
 

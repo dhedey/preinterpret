@@ -141,12 +141,17 @@ impl HasValueKind for ArrayValue {
 
 impl ValuesEqual for ArrayValue {
     /// Recursively compares two arrays element-by-element.
-    fn typed_eq(lhs: Spanned<&Self>, rhs: Spanned<&Self>) -> ExecutionResult<bool> {
-        if lhs.value.items.len() != rhs.value.items.len() {
+    fn values_equal<C: EqualityContext>(
+        &self,
+        other: &Self,
+        ctx: &mut C,
+    ) -> Result<bool, C::Error> {
+        if self.items.len() != other.items.len() {
             return Ok(false);
         }
-        for (l, r) in lhs.value.items.iter().zip(rhs.value.items.iter()) {
-            if !Value::typed_eq(l.spanned(lhs.span_range), r.spanned(rhs.span_range))? {
+        for (i, (l, r)) in self.items.iter().zip(other.items.iter()).enumerate() {
+            let equal = ctx.with_array_index(i, |ctx| l.values_equal(r, ctx))?;
+            if !equal {
                 return Ok(false);
             }
         }
