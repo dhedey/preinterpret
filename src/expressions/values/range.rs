@@ -173,12 +173,8 @@ impl HasValueKind for RangeValue {
 
 impl ValuesEqual for RangeValue {
     /// Ranges are equal if they have the same kind and the same bounds.
-    fn values_equal<C: EqualityContext>(
-        &self,
-        other: &Self,
-        ctx: &mut C,
-    ) -> Result<bool, C::Error> {
-        Ok(match (&*self.inner, &*other.inner) {
+    fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+        match (&*self.inner, &*other.inner) {
             (
                 RangeValueInner::Range {
                     start_inclusive: l_start,
@@ -191,8 +187,11 @@ impl ValuesEqual for RangeValue {
                     ..
                 },
             ) => {
-                ctx.with_range_start(|ctx| l_start.values_equal(r_start, ctx))?
-                    && ctx.with_range_end(|ctx| l_end.values_equal(r_end, ctx))?
+                let result = ctx.with_range_start(|ctx| l_start.values_equal(r_start, ctx));
+                if ctx.should_short_circuit(&result) {
+                    return result;
+                }
+                ctx.with_range_end(|ctx| l_end.values_equal(r_end, ctx))
             }
             (
                 RangeValueInner::RangeFrom {
@@ -203,7 +202,7 @@ impl ValuesEqual for RangeValue {
                     start_inclusive: r_start,
                     ..
                 },
-            ) => ctx.with_range_start(|ctx| l_start.values_equal(r_start, ctx))?,
+            ) => ctx.with_range_start(|ctx| l_start.values_equal(r_start, ctx)),
             (
                 RangeValueInner::RangeTo {
                     end_exclusive: l_end,
@@ -213,8 +212,8 @@ impl ValuesEqual for RangeValue {
                     end_exclusive: r_end,
                     ..
                 },
-            ) => ctx.with_range_end(|ctx| l_end.values_equal(r_end, ctx))?,
-            (RangeValueInner::RangeFull { .. }, RangeValueInner::RangeFull { .. }) => true,
+            ) => ctx.with_range_end(|ctx| l_end.values_equal(r_end, ctx)),
+            (RangeValueInner::RangeFull { .. }, RangeValueInner::RangeFull { .. }) => ctx.equal(),
             (
                 RangeValueInner::RangeInclusive {
                     start_inclusive: l_start,
@@ -227,8 +226,11 @@ impl ValuesEqual for RangeValue {
                     ..
                 },
             ) => {
-                ctx.with_range_start(|ctx| l_start.values_equal(r_start, ctx))?
-                    && ctx.with_range_end(|ctx| l_end.values_equal(r_end, ctx))?
+                let result = ctx.with_range_start(|ctx| l_start.values_equal(r_start, ctx));
+                if ctx.should_short_circuit(&result) {
+                    return result;
+                }
+                ctx.with_range_end(|ctx| l_end.values_equal(r_end, ctx))
             }
             (
                 RangeValueInner::RangeToInclusive {
@@ -239,10 +241,10 @@ impl ValuesEqual for RangeValue {
                     end_inclusive: r_end,
                     ..
                 },
-            ) => ctx.with_range_end(|ctx| l_end.values_equal(r_end, ctx))?,
+            ) => ctx.with_range_end(|ctx| l_end.values_equal(r_end, ctx)),
             // Different range kinds are never equal
-            _ => false,
-        })
+            _ => ctx.not_equal(self, other),
+        }
     }
 }
 

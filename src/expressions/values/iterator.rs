@@ -205,25 +205,22 @@ impl HasValueKind for IteratorValue {
 
 impl ValuesEqual for IteratorValue {
     /// Compares two iterators by cloning and comparing element-by-element.
-    fn values_equal<C: EqualityContext>(
-        &self,
-        other: &Self,
-        ctx: &mut C,
-    ) -> Result<bool, C::Error> {
+    fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
         let mut lhs_iter = self.clone();
         let mut rhs_iter = other.clone();
         let mut index = 0;
         loop {
             match (lhs_iter.next(), rhs_iter.next()) {
                 (Some(l), Some(r)) => {
-                    let equal = ctx.with_iterator_index(index, |ctx| l.values_equal(&r, ctx))?;
-                    if !equal {
-                        return Ok(false);
+                    let result = ctx.with_iterator_index(index, |ctx| l.values_equal(&r, ctx));
+                    if ctx.should_short_circuit(&result) {
+                        return result;
                     }
                     index += 1;
                 }
-                (None, None) => return Ok(true),
-                _ => return Ok(false), // Different lengths
+                (None, None) => return ctx.equal(),
+                // Different lengths - we don't know exact lengths, so use not_equal
+                _ => return ctx.not_equal(self, other),
             }
         }
     }

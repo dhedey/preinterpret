@@ -178,28 +178,24 @@ impl ObjectValue {
 impl ValuesEqual for ObjectValue {
     /// Recursively compares two objects.
     /// Objects are equal if they have the same keys and all values are equal.
-    fn values_equal<C: EqualityContext>(
-        &self,
-        other: &Self,
-        ctx: &mut C,
-    ) -> Result<bool, C::Error> {
+    fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
         if self.entries.len() != other.entries.len() {
-            return Ok(false);
+            return ctx.lengths_unequal(self.entries.len(), other.entries.len());
         }
         for (key, lhs_entry) in self.entries.iter() {
             match other.entries.get(key) {
                 Some(rhs_entry) => {
-                    let equal = ctx.with_object_key(key, |ctx| {
+                    let result = ctx.with_object_key(key, |ctx| {
                         lhs_entry.value.values_equal(&rhs_entry.value, ctx)
-                    })?;
-                    if !equal {
-                        return Ok(false);
+                    });
+                    if ctx.should_short_circuit(&result) {
+                        return result;
                     }
                 }
-                None => return Ok(false),
+                None => return ctx.missing_key(key),
             }
         }
-        Ok(true)
+        ctx.equal()
     }
 }
 

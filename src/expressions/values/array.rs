@@ -89,8 +89,7 @@ impl ArrayValue {
         integer: Spanned<&IntegerValue>,
         is_exclusive: bool,
     ) -> ExecutionResult<usize> {
-        let index: usize = integer
-            .clone()
+        let index: usize = (**integer)
             .into_owned_value(integer.span_range)
             .resolve_as("An array index")?;
         if is_exclusive {
@@ -141,21 +140,17 @@ impl HasValueKind for ArrayValue {
 
 impl ValuesEqual for ArrayValue {
     /// Recursively compares two arrays element-by-element.
-    fn values_equal<C: EqualityContext>(
-        &self,
-        other: &Self,
-        ctx: &mut C,
-    ) -> Result<bool, C::Error> {
+    fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
         if self.items.len() != other.items.len() {
-            return Ok(false);
+            return ctx.lengths_unequal(self.items.len(), other.items.len());
         }
         for (i, (l, r)) in self.items.iter().zip(other.items.iter()).enumerate() {
-            let equal = ctx.with_array_index(i, |ctx| l.values_equal(r, ctx))?;
-            if !equal {
-                return Ok(false);
+            let result = ctx.with_array_index(i, |ctx| l.values_equal(r, ctx));
+            if ctx.should_short_circuit(&result) {
+                return result;
             }
         }
-        Ok(true)
+        ctx.equal()
     }
 }
 

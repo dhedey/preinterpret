@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub(crate) enum IntegerValue {
     Untyped(UntypedInteger),
     U8(u8),
@@ -107,6 +107,7 @@ impl IntegerValue {
     }
 
     /// Convert to fallback integer for comparison
+    #[allow(dead_code)] // Infrastructure for future comparison methods
     fn to_fallback(&self) -> Option<FallbackInteger> {
         Some(match self {
             IntegerValue::Untyped(x) => x.into_fallback(),
@@ -148,16 +149,34 @@ impl HasValueKind for IntegerValue {
     }
 }
 
+impl IntegerValue {
+    /// Aligns types for comparison - converts untyped to match the other's type.
+    /// Returns `None` if the untyped value doesn't fit in the target type.
+    fn align_types(mut lhs: Self, mut rhs: Self) -> Option<(Self, Self)> {
+        match (&lhs, &rhs) {
+            (IntegerValue::Untyped(l), typed) if !matches!(typed, IntegerValue::Untyped(_)) => {
+                lhs = l.try_into_kind(typed.kind())?;
+            }
+            (typed, IntegerValue::Untyped(r)) if !matches!(typed, IntegerValue::Untyped(_)) => {
+                rhs = r.try_into_kind(lhs.kind())?;
+            }
+            _ => {} // Both same type or both untyped - no conversion needed
+        }
+        Some((lhs, rhs))
+    }
+}
+
 impl ValuesEqual for IntegerValue {
     /// Handles type coercion between typed and untyped integers.
     /// E.g., `5 == 5u32` returns true.
-    fn values_equal<C: EqualityContext>(
-        &self,
-        other: &Self,
-        _ctx: &mut C,
-    ) -> Result<bool, C::Error> {
-        Ok(match (self, other) {
-            // Same type comparisons
+    fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+        // Align types (untyped -> typed conversion)
+        let Some((lhs, rhs)) = Self::align_types(*self, *other) else {
+            return ctx.not_equal(self, other);
+        };
+
+        // After alignment, compare directly
+        let equal = match (lhs, rhs) {
             (IntegerValue::Untyped(l), IntegerValue::Untyped(r)) => {
                 l.into_fallback() == r.into_fallback()
             }
@@ -173,22 +192,15 @@ impl ValuesEqual for IntegerValue {
             (IntegerValue::I64(l), IntegerValue::I64(r)) => l == r,
             (IntegerValue::I128(l), IntegerValue::I128(r)) => l == r,
             (IntegerValue::Isize(l), IntegerValue::Isize(r)) => l == r,
-            // Untyped vs typed - compare via fallback
-            (IntegerValue::Untyped(l), r) => {
-                let l_fallback = l.into_fallback();
-                r.to_fallback()
-                    .map(|r_fallback| l_fallback == r_fallback)
-                    .unwrap_or(false)
-            }
-            (l, IntegerValue::Untyped(r)) => {
-                let r_fallback = r.into_fallback();
-                l.to_fallback()
-                    .map(|l_fallback| l_fallback == r_fallback)
-                    .unwrap_or(false)
-            }
             // Different typed integers are never equal
-            _ => false,
-        })
+            _ => return ctx.not_equal(self, other),
+        };
+
+        if equal {
+            ctx.equal()
+        } else {
+            ctx.not_equal(self, other)
+        }
     }
 }
 
@@ -689,7 +701,7 @@ impl ResolvableOwned<Value> for CoercedToU32 {
             Value::Integer(value) => value,
             other => return context.err("an integer", other),
         };
-        let coerced = match integer.clone() {
+        let coerced = match integer {
             IntegerValue::U8(x) => Some(x as u32),
             IntegerValue::U16(x) => Some(x as u32),
             IntegerValue::U32(x) => Some(x),

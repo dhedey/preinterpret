@@ -7,13 +7,13 @@ pub(crate) struct UnsupportedLiteral {
 
 impl ValuesEqual for UnsupportedLiteral {
     /// Compares two unsupported literals by their token string representation.
-    fn values_equal<C: EqualityContext>(
-        &self,
-        other: &Self,
-        _ctx: &mut C,
-    ) -> Result<bool, C::Error> {
+    fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
         use quote::ToTokens;
-        Ok(self.lit.to_token_stream().to_string() == other.lit.to_token_stream().to_string())
+        if self.lit.to_token_stream().to_string() == other.lit.to_token_stream().to_string() {
+            ctx.equal()
+        } else {
+            ctx.not_equal(self, other)
+        }
     }
 }
 

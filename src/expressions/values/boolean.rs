@@ -32,12 +32,12 @@ impl HasValueKind for BooleanValue {
 }
 
 impl ValuesEqual for BooleanValue {
-    fn values_equal<C: EqualityContext>(
-        &self,
-        other: &Self,
-        _ctx: &mut C,
-    ) -> Result<bool, C::Error> {
-        Ok(self.value == other.value)
+    fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+        if self.value == other.value {
+            ctx.equal()
+        } else {
+            ctx.not_equal(self, other)
+        }
     }
 }
 

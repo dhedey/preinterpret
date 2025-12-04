@@ -66,19 +66,20 @@ impl HasValueKind for StreamValue {
 
 impl ValuesEqual for StreamValue {
     /// Compares two streams by their token string representation, ignoring spans.
-    fn values_equal<C: EqualityContext>(
-        &self,
-        other: &Self,
-        _ctx: &mut C,
-    ) -> Result<bool, C::Error> {
-        Ok(self
+    fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+        let lhs = self
             .value
             .to_token_stream_removing_any_transparent_groups()
-            .to_string()
-            == other
-                .value
-                .to_token_stream_removing_any_transparent_groups()
-                .to_string())
+            .to_string();
+        let rhs = other
+            .value
+            .to_token_stream_removing_any_transparent_groups()
+            .to_string();
+        if lhs == rhs {
+            ctx.equal()
+        } else {
+            ctx.not_equal(self, other)
+        }
     }
 }
 

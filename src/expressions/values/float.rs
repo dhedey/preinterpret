@@ -1,7 +1,7 @@
 use super::*;
 use crate::internal_prelude::*;
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub(crate) enum FloatValue {
     Untyped(UntypedFloat),
     F32(f32),
@@ -77,29 +77,46 @@ impl HasValueKind for FloatValue {
     }
 }
 
+impl FloatValue {
+    /// Aligns types for comparison - converts untyped to match the other's type.
+    /// Unlike integers, float conversion never fails (may lose precision).
+    fn align_types(mut lhs: Self, mut rhs: Self) -> (Self, Self) {
+        match (&lhs, &rhs) {
+            (FloatValue::Untyped(l), typed) if !matches!(typed, FloatValue::Untyped(_)) => {
+                lhs = l.into_kind_infallible(typed.kind());
+            }
+            (typed, FloatValue::Untyped(r)) if !matches!(typed, FloatValue::Untyped(_)) => {
+                rhs = r.into_kind_infallible(lhs.kind());
+            }
+            _ => {} // Both same type or both untyped - no conversion needed
+        }
+        (lhs, rhs)
+    }
+}
+
 impl ValuesEqual for FloatValue {
     /// Handles type coercion between typed and untyped floats.
     /// Uses Rust's float `==`, so `NaN != NaN`.
-    fn values_equal<C: EqualityContext>(
-        &self,
-        other: &Self,
-        _ctx: &mut C,
-    ) -> Result<bool, C::Error> {
-        Ok(match (self, other) {
-            // Same type comparisons
+    fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+        // Align types (untyped -> typed conversion)
+        let (lhs, rhs) = Self::align_types(*self, *other);
+
+        // After alignment, compare directly
+        let equal = match (lhs, rhs) {
             (FloatValue::Untyped(l), FloatValue::Untyped(r)) => {
                 l.into_fallback() == r.into_fallback()
             }
             (FloatValue::F32(l), FloatValue::F32(r)) => l == r,
             (FloatValue::F64(l), FloatValue::F64(r)) => l == r,
-            // Untyped vs typed - compare via fallback (f64)
-            (FloatValue::Untyped(l), FloatValue::F32(r)) => l.into_fallback() == (*r as f64),
-            (FloatValue::Untyped(l), FloatValue::F64(r)) => l.into_fallback() == *r,
-            (FloatValue::F32(l), FloatValue::Untyped(r)) => (*l as f64) == r.into_fallback(),
-            (FloatValue::F64(l), FloatValue::Untyped(r)) => *l == r.into_fallback(),
             // Different typed floats are never equal
-            _ => false,
-        })
+            _ => return ctx.not_equal(self, other),
+        };
+
+        if equal {
+            ctx.equal()
+        } else {
+            ctx.not_equal(self, other)
+        }
     }
 }
 

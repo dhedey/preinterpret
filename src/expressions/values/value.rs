@@ -49,20 +49,24 @@ impl PathSegment {
 /// - Typed equality: errors on type mismatch, tracks path for error messages
 /// - Assert equality: errors on any difference, useful for assert_eq
 pub(crate) trait EqualityContext {
-    type Error;
+    /// The result type returned by equality comparisons.
+    type Result;
 
-    /// Called when comparing values of different types.
-    /// Returns `Ok(false)` for lenient comparison, `Err` for strict comparison.
-    fn type_mismatch<L: HasValueKind, R: HasValueKind>(
-        &mut self,
-        lhs: &L,
-        rhs: &R,
-    ) -> Result<bool, Self::Error>;
+    /// Values are equal.
+    fn equal(&mut self) -> Self::Result;
 
-    /// Called when values of the same type are not equal.
-    /// Returns `Ok(false)` for normal comparison, `Err` for assert-style comparison.
-    #[allow(dead_code)] // Infrastructure for future AssertEquality context
-    fn values_not_equal<T: HasValueKind>(&mut self, lhs: &T, rhs: &T) -> Result<bool, Self::Error>;
+    /// Values of the same type are not equal.
+    fn not_equal<T: HasValueKind>(&mut self, lhs: &T, rhs: &T) -> Self::Result;
+
+    /// Values have different types.
+    fn type_mismatch<L: HasValueKind, R: HasValueKind>(&mut self, lhs: &L, rhs: &R)
+        -> Self::Result;
+
+    /// Arrays or iterators have different lengths.
+    fn lengths_unequal(&mut self, lhs_len: usize, rhs_len: usize) -> Self::Result;
+
+    /// Object is missing a key that the other has.
+    fn missing_key(&mut self, key: &str) -> Self::Result;
 
     /// Wrap a comparison within an array index context.
     fn with_array_index<R>(&mut self, index: usize, f: impl FnOnce(&mut Self) -> R) -> R;
@@ -78,6 +82,10 @@ pub(crate) trait EqualityContext {
 
     /// Wrap a comparison within a range end context.
     fn with_range_end<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R;
+
+    /// Returns true if the result indicates we should stop comparing and return early.
+    /// This is true when the result indicates "not equal" or an error occurred.
+    fn should_short_circuit(&self, result: &Self::Result) -> bool;
 }
 
 /// Simple equality context - returns `false` on type mismatch, no path tracking.
@@ -85,24 +93,31 @@ pub(crate) trait EqualityContext {
 pub(crate) struct SimpleEquality;
 
 impl EqualityContext for SimpleEquality {
-    type Error = core::convert::Infallible;
+    type Result = bool;
 
     #[inline]
-    fn type_mismatch<L: HasValueKind, R: HasValueKind>(
-        &mut self,
-        _lhs: &L,
-        _rhs: &R,
-    ) -> Result<bool, Self::Error> {
-        Ok(false)
+    fn equal(&mut self) -> bool {
+        true
     }
 
     #[inline]
-    fn values_not_equal<T: HasValueKind>(
-        &mut self,
-        _lhs: &T,
-        _rhs: &T,
-    ) -> Result<bool, Self::Error> {
-        Ok(false)
+    fn not_equal<T: HasValueKind>(&mut self, _lhs: &T, _rhs: &T) -> bool {
+        false
+    }
+
+    #[inline]
+    fn type_mismatch<L: HasValueKind, R: HasValueKind>(&mut self, _lhs: &L, _rhs: &R) -> bool {
+        false
+    }
+
+    #[inline]
+    fn lengths_unequal(&mut self, _lhs_len: usize, _rhs_len: usize) -> bool {
+        false
+    }
+
+    #[inline]
+    fn missing_key(&mut self, _key: &str) -> bool {
+        false
     }
 
     #[inline]
@@ -129,6 +144,11 @@ impl EqualityContext for SimpleEquality {
     fn with_range_end<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
         f(self)
     }
+
+    #[inline]
+    fn should_short_circuit(&self, result: &bool) -> bool {
+        !*result
+    }
 }
 
 /// Typed equality context - errors on type mismatch, tracks path for error messages.
@@ -149,13 +169,23 @@ impl TypedEquality {
 }
 
 impl EqualityContext for TypedEquality {
-    type Error = ExecutionInterrupt;
+    type Result = ExecutionResult<bool>;
+
+    #[inline]
+    fn equal(&mut self) -> ExecutionResult<bool> {
+        Ok(true)
+    }
+
+    #[inline]
+    fn not_equal<T: HasValueKind>(&mut self, _lhs: &T, _rhs: &T) -> ExecutionResult<bool> {
+        Ok(false)
+    }
 
     fn type_mismatch<L: HasValueKind, R: HasValueKind>(
         &mut self,
         lhs: &L,
         rhs: &R,
-    ) -> Result<bool, Self::Error> {
+    ) -> ExecutionResult<bool> {
         let path_str = if self.path.is_empty() {
             String::new()
         } else {
@@ -170,11 +200,12 @@ impl EqualityContext for TypedEquality {
     }
 
     #[inline]
-    fn values_not_equal<T: HasValueKind>(
-        &mut self,
-        _lhs: &T,
-        _rhs: &T,
-    ) -> Result<bool, Self::Error> {
+    fn lengths_unequal(&mut self, _lhs_len: usize, _rhs_len: usize) -> ExecutionResult<bool> {
+        Ok(false)
+    }
+
+    #[inline]
+    fn missing_key(&mut self, _key: &str) -> ExecutionResult<bool> {
         Ok(false)
     }
 
@@ -217,6 +248,12 @@ impl EqualityContext for TypedEquality {
         self.path.pop();
         result
     }
+
+    #[inline]
+    fn should_short_circuit(&self, result: &ExecutionResult<bool>) -> bool {
+        // Short-circuit on Ok(false) or Err(_)
+        !matches!(result, Ok(true))
+    }
 }
 
 // ============================================================================
@@ -236,17 +273,12 @@ impl EqualityContext for TypedEquality {
 /// - `TypedEquality`: Errors on type mismatch with path information
 pub(crate) trait ValuesEqual: Sized + HasValueKind {
     /// Compare two values for equality using the given context.
-    fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C)
-        -> Result<bool, C::Error>;
+    fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result;
 
     /// Lenient equality - returns `false` for incompatible types instead of erroring.
     /// Behaves like JavaScript's `===` operator.
     fn values_eq(&self, other: &Self) -> bool {
-        // Infallible can't actually be constructed, so unwrap is safe
-        match self.values_equal(other, &mut SimpleEquality) {
-            Ok(result) => result,
-            Err(infallible) => match infallible {},
-        }
+        self.values_equal(other, &mut SimpleEquality)
     }
 
     /// Strict equality check that errors on incompatible types.
@@ -679,14 +711,10 @@ impl Value {
 }
 
 impl ValuesEqual for Value {
-    fn values_equal<C: EqualityContext>(
-        &self,
-        other: &Self,
-        ctx: &mut C,
-    ) -> Result<bool, C::Error> {
+    fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
         match (self, other) {
             // Same type comparisons - delegate to type-specific implementations
-            (Value::None, Value::None) => Ok(true),
+            (Value::None, Value::None) => ctx.equal(),
             (Value::Boolean(l), Value::Boolean(r)) => l.values_equal(r, ctx),
             (Value::Char(l), Value::Char(r)) => l.values_equal(r, ctx),
             (Value::String(l), Value::String(r)) => l.values_equal(r, ctx),

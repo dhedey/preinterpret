@@ -21,12 +21,12 @@ impl ParserValue {
 
 impl ValuesEqual for ParserValue {
     /// Parsers are equal if they reference the same handle.
-    fn values_equal<C: EqualityContext>(
-        &self,
-        other: &Self,
-        _ctx: &mut C,
-    ) -> Result<bool, C::Error> {
-        Ok(self.handle == other.handle)
+    fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+        if self.handle == other.handle {
+            ctx.equal()
+        } else {
+            ctx.not_equal(self, other)
+        }
     }
 }
 
