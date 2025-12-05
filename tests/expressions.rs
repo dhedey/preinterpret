@@ -680,3 +680,33 @@ fn can_assign_to_mutable_references() {
         %[_].assert_eq(y, 1);
     );
 }
+
+#[test]
+fn test_remove_transparent_groups() {
+    // Stream equality removes transparent groups before comparison because
+    // TokenStream's string representation doesn't distinguish them.
+    run!(
+        let with_group = %group[Hello World];
+        let without_group = %[Hello World];
+        // They're equal in equality comparison (transparent groups are ignored)
+        %[_].assert(with_group == without_group);
+    );
+    // But their debug strings show the difference
+    run!(
+        let with_group = %group[Hello World];
+        let without_group = %[Hello World];
+        %[_].assert(with_group.to_debug_string() != without_group.to_debug_string());
+    );
+    // remove_transparent_groups can be used to normalize streams
+    run!(
+        let nested = %group[%group[Hello]];
+        let flat = %[Hello];
+        %[_].assert(nested.remove_transparent_groups() == flat.remove_transparent_groups());
+    );
+    // After removing transparent groups, their debug strings also match
+    run!(
+        let nested = %group[Hello];
+        let flat = %[Hello];
+        %[_].assert(nested.remove_transparent_groups().to_debug_string() == flat.to_debug_string());
+    );
+}

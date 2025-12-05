@@ -445,6 +445,34 @@ One option We can work it like `IterableRef`, but perhaps we can do better?
 
 ## Write book / Docs
 
+### Equality Methods Documentation Notes
+
+The codebase has three equality methods with different semantics:
+
+1. **`==` / `values_eq()`** - Lenient equality (like JavaScript's `===`)
+   - Returns `false` for incompatible value kinds (no error)
+   - Used for normal equality comparisons
+   - Example: `1 == "hello"` returns `false`
+
+2. **`typed_eq()`** - Strict equality with type checking
+   - Returns an error for incompatible value kinds
+   - Useful when type mismatches indicate a bug
+   - Example: `1.typed_eq("hello")` errors with "Cannot compare an untyped integer with a string"
+   - Includes path tracking for nested comparisons: `[1, 2].typed_eq([1, "two"])` errors with "... at [1]"
+
+3. **`assert_eq()`** - Debug equality for assertions
+   - Uses `DebugEquality` context internally
+   - Provides detailed error messages with path and value information
+   - Example error: `lhs[1] != rhs[1]: 2 != 5` with full values shown below
+
+**Stream Equality Note**: Stream equality uses string representation comparison, which means
+transparent (none-delimited) groups are automatically removed before comparison (since they
+don't render differently in string form). To normalize a stream by removing transparent groups
+(e.g., for debug output comparison), use:
+```
+stream.remove_transparent_groups()
+```
+
 - [ ] [PAGE] Introduction - covering:
   * Motivation
   * A Rust-like interpreted language with JS-like value types, built for code-generation

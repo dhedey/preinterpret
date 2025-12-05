@@ -66,6 +66,9 @@ impl HasValueKind for StreamValue {
 
 impl ValuesEqual for StreamValue {
     /// Compares two streams by their token string representation, ignoring spans.
+    /// Note: Transparent groups (none-delimited groups) are removed before comparison because
+    /// the string representation of a TokenStream doesn't distinguish transparent groups from
+    /// their contents.
     fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
         let lhs = self
             .value
@@ -127,6 +130,12 @@ define_interface! {
 
             fn flatten(this: OutputStream) -> ExecutionResult<TokenStream> {
                 Ok(this.to_token_stream_removing_any_transparent_groups())
+            }
+
+            // Removes transparent (none-delimited) groups from the stream.
+            // Useful before equality comparison if you want to ignore them.
+            fn remove_transparent_groups(this: OutputStream) -> OutputStream {
+                OutputStream::raw(this.to_token_stream_removing_any_transparent_groups())
             }
 
             fn infer(this: OutputStream) -> ExecutionResult<Value> {
