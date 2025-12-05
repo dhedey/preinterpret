@@ -192,7 +192,7 @@ impl ValuesEqual for ObjectValue {
                         return result;
                     }
                 }
-                None => return ctx.missing_key(key),
+                None => return ctx.missing_key(key, MissingSide::Rhs),
             }
         }
         ctx.equal()

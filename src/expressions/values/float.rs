@@ -75,6 +75,14 @@ impl HasValueKind for FloatValue {
             Self::F64(_) => FloatKind::F64,
         }
     }
+
+    fn debug_display(&self) -> String {
+        match self {
+            Self::Untyped(x) => x.into_fallback().to_string(),
+            Self::F32(x) => format!("{}f32", x),
+            Self::F64(x) => format!("{}f64", x),
+        }
+    }
 }
 
 impl FloatValue {

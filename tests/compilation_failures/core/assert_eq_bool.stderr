@@ -1,0 +1,7 @@
+error: Assertion failed: true != false
+         lhs = true
+         rhs = false
+ --> tests/compilation_failures/core/assert_eq_bool.rs:4:12
+  |
+4 |     run!(%[_].assert_eq(true, false));
+  |            ^

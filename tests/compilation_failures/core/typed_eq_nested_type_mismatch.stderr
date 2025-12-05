@@ -1,0 +1,5 @@
+error: Cannot compare an untyped integer with a string at [1]
+ --> tests/compilation_failures/core/typed_eq_nested_type_mismatch.rs:5:28
+  |
+5 |     run!(%[_].assert([1, 2].typed_eq([1, "two"])));
+  |                            ^^^^^^^^^^^^^^^^^^^^^

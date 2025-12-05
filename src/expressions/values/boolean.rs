@@ -29,6 +29,10 @@ impl HasValueKind for BooleanValue {
     fn kind(&self) -> ValueKind {
         ValueKind::Boolean
     }
+
+    fn debug_display(&self) -> String {
+        self.value.to_string()
+    }
 }
 
 impl ValuesEqual for BooleanValue {

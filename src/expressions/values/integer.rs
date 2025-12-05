@@ -147,6 +147,24 @@ impl HasValueKind for IntegerValue {
             Self::Isize(_) => IntegerKind::Isize,
         }
     }
+
+    fn debug_display(&self) -> String {
+        match self {
+            Self::Untyped(x) => x.into_fallback().to_string(),
+            Self::U8(x) => format!("{}u8", x),
+            Self::U16(x) => format!("{}u16", x),
+            Self::U32(x) => format!("{}u32", x),
+            Self::U64(x) => format!("{}u64", x),
+            Self::U128(x) => format!("{}u128", x),
+            Self::Usize(x) => format!("{}usize", x),
+            Self::I8(x) => format!("{}i8", x),
+            Self::I16(x) => format!("{}i16", x),
+            Self::I32(x) => format!("{}i32", x),
+            Self::I64(x) => format!("{}i64", x),
+            Self::I128(x) => format!("{}i128", x),
+            Self::Isize(x) => format!("{}isize", x),
+        }
+    }
 }
 
 impl IntegerValue {

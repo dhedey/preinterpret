@@ -16,29 +16,18 @@ pub(crate) enum PathSegment {
 }
 
 impl PathSegment {
-    #[allow(dead_code)] // Used by TypedEquality for error messages
     fn fmt_path(path: &[PathSegment]) -> String {
         let mut result = String::new();
         for segment in path {
             match segment {
                 PathSegment::ArrayIndex(i) => result.push_str(&format!("[{}]", i)),
-                PathSegment::ObjectKey(k) => {
-                    if result.is_empty() {
-                        result.push_str(k);
-                    } else {
-                        result.push_str(&format!(".{}", k));
-                    }
-                }
+                PathSegment::ObjectKey(k) => result.push_str(&format!(".{}", k)),
                 PathSegment::IteratorIndex(i) => result.push_str(&format!("<iter[{}]>", i)),
                 PathSegment::RangeStart => result.push_str(".start"),
                 PathSegment::RangeEnd => result.push_str(".end"),
             }
         }
-        if result.is_empty() {
-            "<root>".to_string()
-        } else {
-            result
-        }
+        result
     }
 }
 
@@ -66,7 +55,7 @@ pub(crate) trait EqualityContext {
     fn lengths_unequal(&mut self, lhs_len: usize, rhs_len: usize) -> Self::Result;
 
     /// Object is missing a key that the other has.
-    fn missing_key(&mut self, key: &str) -> Self::Result;
+    fn missing_key(&mut self, key: &str, missing_on: MissingSide) -> Self::Result;
 
     /// Wrap a comparison within an array index context.
     fn with_array_index<R>(&mut self, index: usize, f: impl FnOnce(&mut Self) -> R) -> R;
@@ -116,7 +105,7 @@ impl EqualityContext for SimpleEquality {
     }
 
     #[inline]
-    fn missing_key(&mut self, _key: &str) -> bool {
+    fn missing_key(&mut self, _key: &str, _missing_on: MissingSide) -> bool {
         false
     }
 
@@ -152,14 +141,12 @@ impl EqualityContext for SimpleEquality {
 }
 
 /// Typed equality context - errors on type mismatch, tracks path for error messages.
-#[allow(dead_code)] // Infrastructure for strict equality comparisons
 pub(crate) struct TypedEquality {
-    pub(crate) path: Vec<PathSegment>,
-    pub(crate) error_span: SpanRange,
+    path: Vec<PathSegment>,
+    error_span: SpanRange,
 }
 
 impl TypedEquality {
-    #[allow(dead_code)] // Infrastructure for strict equality comparisons
     pub(crate) fn new(error_span: SpanRange) -> Self {
         Self {
             path: Vec::new(),
@@ -205,7 +192,7 @@ impl EqualityContext for TypedEquality {
     }
 
     #[inline]
-    fn missing_key(&mut self, _key: &str) -> ExecutionResult<bool> {
+    fn missing_key(&mut self, _key: &str, _missing_on: MissingSide) -> ExecutionResult<bool> {
         Ok(false)
     }
 
@@ -260,23 +247,34 @@ impl EqualityContext for TypedEquality {
 // Debug Equality - Captures detailed information about equality failures
 // ============================================================================
 
+/// Which side of the comparison is missing a key.
+#[derive(Debug, Clone, Copy)]
+#[allow(dead_code)] // Lhs variant is for future use when checking both directions
+pub(crate) enum MissingSide {
+    Lhs,
+    Rhs,
+}
+
 /// The reason why two values were not equal.
 #[derive(Debug, Clone)]
 pub(crate) enum DebugInequalityReason {
     /// Values of the same type have different values.
     ValueMismatch {
-        lhs_kind: ValueKind,
-        rhs_kind: ValueKind,
+        lhs_display: String,
+        rhs_display: String,
     },
-    /// Values have incompatible types.
-    TypeMismatch {
+    /// Values have incompatible value kinds.
+    ValueKindMismatch {
         lhs_kind: ValueKind,
         rhs_kind: ValueKind,
     },
     /// Collections have different lengths.
     LengthMismatch { lhs_len: usize, rhs_len: usize },
-    /// Object is missing a key.
-    MissingKey { key: String },
+    /// Object is missing a key on one side.
+    MissingKey {
+        key: String,
+        missing_on: MissingSide,
+    },
 }
 
 /// Error returned by `DebugEquality` when values are not equal.
@@ -291,38 +289,62 @@ pub(crate) struct DebugEqualityError {
 impl DebugEqualityError {
     /// Formats the error as a human-readable message.
     pub fn format_message(&self) -> String {
-        let path_str = if self.path.is_empty() {
-            String::new()
-        } else {
-            format!(" at {}", PathSegment::fmt_path(&self.path))
-        };
+        let path_str = PathSegment::fmt_path(&self.path);
 
         match &self.reason {
-            DebugInequalityReason::ValueMismatch { lhs_kind, rhs_kind } => {
-                if lhs_kind == rhs_kind {
-                    format!("values differ{}", path_str)
+            DebugInequalityReason::ValueMismatch {
+                lhs_display,
+                rhs_display,
+            } => {
+                if path_str.is_empty() {
+                    format!("{} != {}", lhs_display, rhs_display)
                 } else {
                     format!(
-                        "values differ{} ({} vs {})",
+                        "lhs{} != rhs{}: {} != {}",
+                        path_str, path_str, lhs_display, rhs_display
+                    )
+                }
+            }
+            DebugInequalityReason::ValueKindMismatch { lhs_kind, rhs_kind } => {
+                if path_str.is_empty() {
+                    format!(
+                        "value kind mismatch: {} vs {}",
+                        lhs_kind.display_name(),
+                        rhs_kind.display_name()
+                    )
+                } else {
+                    format!(
+                        "lhs{} vs rhs{}: value kind mismatch: {} vs {}",
+                        path_str,
                         path_str,
                         lhs_kind.display_name(),
                         rhs_kind.display_name()
                     )
                 }
             }
-            DebugInequalityReason::TypeMismatch { lhs_kind, rhs_kind } => {
-                format!(
-                    "type mismatch{}: {} vs {}",
-                    path_str,
-                    lhs_kind.display_name(),
-                    rhs_kind.display_name()
-                )
-            }
             DebugInequalityReason::LengthMismatch { lhs_len, rhs_len } => {
-                format!("length mismatch{}: {} vs {}", path_str, lhs_len, rhs_len)
+                if path_str.is_empty() {
+                    format!("length mismatch ({} != {})", lhs_len, rhs_len)
+                } else {
+                    format!(
+                        "lhs{} vs rhs{}: length mismatch ({} != {})",
+                        path_str, path_str, lhs_len, rhs_len
+                    )
+                }
             }
-            DebugInequalityReason::MissingKey { key } => {
-                format!("missing key{}: \"{}\"", path_str, key)
+            DebugInequalityReason::MissingKey { key, missing_on } => {
+                let (present, missing) = match missing_on {
+                    MissingSide::Lhs => ("rhs", "lhs"),
+                    MissingSide::Rhs => ("lhs", "rhs"),
+                };
+                if path_str.is_empty() {
+                    format!("{} has key \"{}\" but {} does not", present, key, missing)
+                } else {
+                    format!(
+                        "{}{} has key \"{}\" but {}{} does not",
+                        present, path_str, key, missing, path_str
+                    )
+                }
             }
         }
     }
@@ -354,8 +376,8 @@ impl EqualityContext for DebugEquality {
         Err(DebugEqualityError {
             path: self.path.clone(),
             reason: DebugInequalityReason::ValueMismatch {
-                lhs_kind: lhs.value_kind(),
-                rhs_kind: rhs.value_kind(),
+                lhs_display: lhs.debug_display(),
+                rhs_display: rhs.debug_display(),
             },
         })
     }
@@ -367,7 +389,7 @@ impl EqualityContext for DebugEquality {
     ) -> Result<(), DebugEqualityError> {
         Err(DebugEqualityError {
             path: self.path.clone(),
-            reason: DebugInequalityReason::TypeMismatch {
+            reason: DebugInequalityReason::ValueKindMismatch {
                 lhs_kind: lhs.value_kind(),
                 rhs_kind: rhs.value_kind(),
             },
@@ -387,11 +409,16 @@ impl EqualityContext for DebugEquality {
     }
 
     #[inline]
-    fn missing_key(&mut self, key: &str) -> Result<(), DebugEqualityError> {
+    fn missing_key(
+        &mut self,
+        key: &str,
+        missing_on: MissingSide,
+    ) -> Result<(), DebugEqualityError> {
         Err(DebugEqualityError {
             path: self.path.clone(),
             reason: DebugInequalityReason::MissingKey {
                 key: key.to_string(),
+                missing_on,
             },
         })
     }
@@ -469,7 +496,6 @@ pub(crate) trait ValuesEqual: Sized + HasValueKind {
     }
 
     /// Strict equality check that errors on incompatible types.
-    #[allow(dead_code)] // Infrastructure for strict equality comparisons
     fn typed_eq(&self, other: &Self, error_span: SpanRange) -> ExecutionResult<bool> {
         self.values_equal(other, &mut TypedEquality::new(error_span))
     }
@@ -525,6 +551,12 @@ pub(crate) trait HasValueKind {
     fn articled_value_type(&self) -> &'static str {
         self.kind().articled_display_name()
     }
+
+    /// Returns a short debug representation of the value for error messages.
+    /// Override in specific types to show the actual value (e.g., "5", "true").
+    fn debug_display(&self) -> String {
+        format!("<{}>", self.value_type())
+    }
 }
 
 impl<T: HasValueKind> HasValueKind for &T {
@@ -533,6 +565,10 @@ impl<T: HasValueKind> HasValueKind for &T {
     fn kind(&self) -> Self::SpecificKind {
         (**self).kind()
     }
+
+    fn debug_display(&self) -> String {
+        (**self).debug_display()
+    }
 }
 
 impl<T: HasValueKind> HasValueKind for &mut T {
@@ -540,6 +576,10 @@ impl<T: HasValueKind> HasValueKind for &mut T {
 
     fn kind(&self) -> Self::SpecificKind {
         (**self).kind()
+    }
+
+    fn debug_display(&self) -> String {
+        (**self).debug_display()
     }
 }
 
@@ -753,6 +793,15 @@ define_interface! {
             // ===============================
             fn is_none(this: SharedValue) -> bool {
                 this.is_none()
+            }
+
+            // EQUALITY METHODS
+            // ===============================
+            // Compare values with strict type checking - errors on value kind mismatch.
+            [context] fn typed_eq(this: SpannedAnyRef<Value>, other: SpannedAnyRef<Value>) -> ExecutionResult<bool> {
+                let this_value: &Value = &this;
+                let other_value: &Value = &other;
+                this_value.typed_eq(other_value, context.span_range())
             }
 
             // STRING-BASED CONVERSION METHODS
@@ -1254,6 +1303,25 @@ impl HasValueKind for Value {
             Value::Iterator(_) => ValueKind::Iterator,
             Value::Parser(_) => ValueKind::Parser,
             Value::UnsupportedLiteral(_) => ValueKind::UnsupportedLiteral,
+        }
+    }
+
+    fn debug_display(&self) -> String {
+        match self {
+            Value::None => "None".to_string(),
+            Value::Integer(v) => v.debug_display(),
+            Value::Float(v) => v.debug_display(),
+            Value::Boolean(v) => v.debug_display(),
+            Value::String(v) => v.debug_display(),
+            Value::Char(v) => v.debug_display(),
+            // For composite/complex types, use the default format
+            Value::Array(_) => "<array>".to_string(),
+            Value::Object(_) => "<object>".to_string(),
+            Value::Stream(_) => "<stream>".to_string(),
+            Value::Range(_) => "<range>".to_string(),
+            Value::Iterator(_) => "<iterator>".to_string(),
+            Value::Parser(_) => "<parser>".to_string(),
+            Value::UnsupportedLiteral(_) => "<unsupported literal>".to_string(),
         }
     }
 }

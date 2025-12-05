@@ -27,6 +27,10 @@ impl HasValueKind for StringValue {
     fn kind(&self) -> ValueKind {
         ValueKind::String
     }
+
+    fn debug_display(&self) -> String {
+        format!("\"{}\"", self.value.escape_default())
+    }
 }
 
 impl ValuesEqual for StringValue {

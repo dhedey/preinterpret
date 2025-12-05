@@ -1,4 +1,4 @@
-error: Assertion failed: values differ
+error: Assertion failed: 1 != 2
          lhs = 1
          rhs = 2
  --> tests/compilation_failures/core/assert_eq_in_macro.rs:4:12

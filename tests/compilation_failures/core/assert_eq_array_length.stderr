@@ -1,0 +1,7 @@
+error: Assertion failed: length mismatch (3 != 2)
+         lhs = [1, 2, 3]
+         rhs = [1, 2]
+ --> tests/compilation_failures/core/assert_eq_array_length.rs:4:12
+  |
+4 |     run!(%[_].assert_eq([1, 2, 3], [1, 2]));
+  |            ^

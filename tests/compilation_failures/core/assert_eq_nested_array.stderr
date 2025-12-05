@@ -1,0 +1,7 @@
+error: Assertion failed: lhs[1][1] != rhs[1][1]: 4 != 5
+         lhs = [[1, 2], [3, 4]]
+         rhs = [[1, 2], [3, 5]]
+ --> tests/compilation_failures/core/assert_eq_nested_array.rs:4:12
+  |
+4 |     run!(%[_].assert_eq([[1, 2], [3, 4]], [[1, 2], [3, 5]]));
+  |            ^

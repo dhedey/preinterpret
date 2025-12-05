@@ -1,0 +1,5 @@
+error: Cannot compare an untyped integer with a string
+ --> tests/compilation_failures/core/typed_eq_type_mismatch.rs:5:23
+  |
+5 |     run!(%[_].assert(1.typed_eq("hello")));
+  |                       ^^^^^^^^^^^^^^^^^^
