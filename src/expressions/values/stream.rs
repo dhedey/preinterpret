@@ -65,19 +65,17 @@ impl HasValueKind for StreamValue {
 }
 
 impl ValuesEqual for StreamValue {
-    /// Compares two streams by their token string representation, ignoring spans.
-    /// Note: Transparent groups (none-delimited groups) are removed before comparison because
-    /// the string representation of a TokenStream doesn't distinguish transparent groups from
-    /// their contents.
+    /// Compares two streams by their debug string representation, ignoring spans.
+    /// Transparent groups (none-delimited groups) are preserved in comparison.
+    /// Use `remove_transparent_groups()` before comparison if you want to ignore them.
     fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+        // Use debug concat_recursive which preserves transparent group structure
         let lhs = self
             .value
-            .to_token_stream_removing_any_transparent_groups()
-            .to_string();
+            .concat_recursive(&ConcatBehaviour::debug(Span::call_site().span_range()));
         let rhs = other
             .value
-            .to_token_stream_removing_any_transparent_groups()
-            .to_string();
+            .concat_recursive(&ConcatBehaviour::debug(Span::call_site().span_range()));
         if lhs == rhs {
             ctx.equal()
         } else {
