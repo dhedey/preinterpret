@@ -198,20 +198,21 @@ define_interface! {
             fn assert_eq(this: Shared<StreamValue>, lhs: SpannedAnyRef<Value>, rhs: SpannedAnyRef<Value>, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
                 let lhs_value: &Value = &lhs;
                 let rhs_value: &Value = &rhs;
-                let res = Value::values_equal(lhs_value, rhs_value);
-                if res {
-                    Ok(())
-                } else {
-                    let error_span_range = this.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
-                    let message = match message {
-                        Some(ref m) => m.to_string(),
-                        None => format!(
-                            "Assertion failed: lhs != rhs, where:\n  lhs = {}\n  rhs = {}",
-                            lhs.concat_recursive(&ConcatBehaviour::debug(lhs.span_range()))?,
-                            rhs.concat_recursive(&ConcatBehaviour::debug(rhs.span_range()))?,
-                        ),
-                    };
-                    error_span_range.assertion_err(message)
+                match Value::debug_eq(lhs_value, rhs_value) {
+                    Ok(()) => Ok(()),
+                    Err(debug_error) => {
+                        let error_span_range = this.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
+                        let message = match message {
+                            Some(ref m) => m.to_string(),
+                            None => format!(
+                                "Assertion failed: {}\n  lhs = {}\n  rhs = {}",
+                                debug_error.format_message(),
+                                lhs.concat_recursive(&ConcatBehaviour::debug(lhs.span_range()))?,
+                                rhs.concat_recursive(&ConcatBehaviour::debug(rhs.span_range()))?,
+                            ),
+                        };
+                        error_span_range.assertion_err(message)
+                    }
                 }
             }
 

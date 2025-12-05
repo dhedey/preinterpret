@@ -257,6 +257,192 @@ impl EqualityContext for TypedEquality {
 }
 
 // ============================================================================
+// Debug Equality - Captures detailed information about equality failures
+// ============================================================================
+
+/// The reason why two values were not equal.
+#[derive(Debug, Clone)]
+pub(crate) enum DebugInequalityReason {
+    /// Values of the same type have different values.
+    ValueMismatch {
+        lhs_kind: ValueKind,
+        rhs_kind: ValueKind,
+    },
+    /// Values have incompatible types.
+    TypeMismatch {
+        lhs_kind: ValueKind,
+        rhs_kind: ValueKind,
+    },
+    /// Collections have different lengths.
+    LengthMismatch { lhs_len: usize, rhs_len: usize },
+    /// Object is missing a key.
+    MissingKey { key: String },
+}
+
+/// Error returned by `DebugEquality` when values are not equal.
+#[derive(Debug, Clone)]
+pub(crate) struct DebugEqualityError {
+    /// The path to where the inequality was found.
+    pub path: Vec<PathSegment>,
+    /// The reason for the inequality.
+    pub reason: DebugInequalityReason,
+}
+
+impl DebugEqualityError {
+    /// Formats the error as a human-readable message.
+    pub fn format_message(&self) -> String {
+        let path_str = if self.path.is_empty() {
+            String::new()
+        } else {
+            format!(" at {}", PathSegment::fmt_path(&self.path))
+        };
+
+        match &self.reason {
+            DebugInequalityReason::ValueMismatch { lhs_kind, rhs_kind } => {
+                if lhs_kind == rhs_kind {
+                    format!("values differ{}", path_str)
+                } else {
+                    format!(
+                        "values differ{} ({} vs {})",
+                        path_str,
+                        lhs_kind.display_name(),
+                        rhs_kind.display_name()
+                    )
+                }
+            }
+            DebugInequalityReason::TypeMismatch { lhs_kind, rhs_kind } => {
+                format!(
+                    "type mismatch{}: {} vs {}",
+                    path_str,
+                    lhs_kind.display_name(),
+                    rhs_kind.display_name()
+                )
+            }
+            DebugInequalityReason::LengthMismatch { lhs_len, rhs_len } => {
+                format!("length mismatch{}: {} vs {}", path_str, lhs_len, rhs_len)
+            }
+            DebugInequalityReason::MissingKey { key } => {
+                format!("missing key{}: \"{}\"", path_str, key)
+            }
+        }
+    }
+}
+
+/// Debug equality context - captures detailed information about why values differ.
+/// This is useful for assertion failures where you want to show exactly where
+/// the mismatch occurred.
+pub(crate) struct DebugEquality {
+    path: Vec<PathSegment>,
+}
+
+impl DebugEquality {
+    pub(crate) fn new() -> Self {
+        Self { path: Vec::new() }
+    }
+}
+
+impl EqualityContext for DebugEquality {
+    type Result = Result<(), DebugEqualityError>;
+
+    #[inline]
+    fn equal(&mut self) -> Result<(), DebugEqualityError> {
+        Ok(())
+    }
+
+    #[inline]
+    fn not_equal<T: HasValueKind>(&mut self, lhs: &T, rhs: &T) -> Result<(), DebugEqualityError> {
+        Err(DebugEqualityError {
+            path: self.path.clone(),
+            reason: DebugInequalityReason::ValueMismatch {
+                lhs_kind: lhs.value_kind(),
+                rhs_kind: rhs.value_kind(),
+            },
+        })
+    }
+
+    fn type_mismatch<L: HasValueKind, R: HasValueKind>(
+        &mut self,
+        lhs: &L,
+        rhs: &R,
+    ) -> Result<(), DebugEqualityError> {
+        Err(DebugEqualityError {
+            path: self.path.clone(),
+            reason: DebugInequalityReason::TypeMismatch {
+                lhs_kind: lhs.value_kind(),
+                rhs_kind: rhs.value_kind(),
+            },
+        })
+    }
+
+    #[inline]
+    fn lengths_unequal(
+        &mut self,
+        lhs_len: usize,
+        rhs_len: usize,
+    ) -> Result<(), DebugEqualityError> {
+        Err(DebugEqualityError {
+            path: self.path.clone(),
+            reason: DebugInequalityReason::LengthMismatch { lhs_len, rhs_len },
+        })
+    }
+
+    #[inline]
+    fn missing_key(&mut self, key: &str) -> Result<(), DebugEqualityError> {
+        Err(DebugEqualityError {
+            path: self.path.clone(),
+            reason: DebugInequalityReason::MissingKey {
+                key: key.to_string(),
+            },
+        })
+    }
+
+    #[inline]
+    fn with_array_index<R>(&mut self, index: usize, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.path.push(PathSegment::ArrayIndex(index));
+        let result = f(self);
+        self.path.pop();
+        result
+    }
+
+    #[inline]
+    fn with_object_key<R>(&mut self, key: &str, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.path.push(PathSegment::ObjectKey(key.to_string()));
+        let result = f(self);
+        self.path.pop();
+        result
+    }
+
+    #[inline]
+    fn with_iterator_index<R>(&mut self, index: usize, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.path.push(PathSegment::IteratorIndex(index));
+        let result = f(self);
+        self.path.pop();
+        result
+    }
+
+    #[inline]
+    fn with_range_start<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.path.push(PathSegment::RangeStart);
+        let result = f(self);
+        self.path.pop();
+        result
+    }
+
+    #[inline]
+    fn with_range_end<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.path.push(PathSegment::RangeEnd);
+        let result = f(self);
+        self.path.pop();
+        result
+    }
+
+    #[inline]
+    fn should_short_circuit(&self, result: &Result<(), DebugEqualityError>) -> bool {
+        result.is_err()
+    }
+}
+
+// ============================================================================
 // ValuesEqual trait - Value equality with configurable context
 // ============================================================================
 
@@ -271,6 +457,7 @@ impl EqualityContext for TypedEquality {
 /// The comparison behavior is controlled by the `EqualityContext`:
 /// - `SimpleEquality`: Returns `false` on type mismatch (like JS `===`)
 /// - `TypedEquality`: Errors on type mismatch with path information
+/// - `DebugEquality`: Returns detailed error info for assertion messages
 pub(crate) trait ValuesEqual: Sized + HasValueKind {
     /// Compare two values for equality using the given context.
     fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result;
@@ -285,6 +472,12 @@ pub(crate) trait ValuesEqual: Sized + HasValueKind {
     #[allow(dead_code)] // Infrastructure for strict equality comparisons
     fn typed_eq(&self, other: &Self, error_span: SpanRange) -> ExecutionResult<bool> {
         self.values_equal(other, &mut TypedEquality::new(error_span))
+    }
+
+    /// Debug equality check - returns detailed information about why values differ.
+    /// Useful for generating informative assertion failure messages.
+    fn debug_eq(&self, other: &Self) -> Result<(), DebugEqualityError> {
+        self.values_equal(other, &mut DebugEquality::new())
     }
 }
 
@@ -712,34 +905,34 @@ impl Value {
 
 impl ValuesEqual for Value {
     fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+        // Each variant has two lines: same-type comparison, then type-mismatch fallback.
+        // This ensures adding a new variant only requires adding two lines at the bottom.
         match (self, other) {
-            // Same type comparisons - delegate to type-specific implementations
             (Value::None, Value::None) => ctx.equal(),
-            (Value::Boolean(l), Value::Boolean(r)) => l.values_equal(r, ctx),
-            (Value::Char(l), Value::Char(r)) => l.values_equal(r, ctx),
-            (Value::String(l), Value::String(r)) => l.values_equal(r, ctx),
-            (Value::Integer(l), Value::Integer(r)) => l.values_equal(r, ctx),
-            (Value::Float(l), Value::Float(r)) => l.values_equal(r, ctx),
-            (Value::Array(l), Value::Array(r)) => l.values_equal(r, ctx),
-            (Value::Object(l), Value::Object(r)) => l.values_equal(r, ctx),
-            (Value::Stream(l), Value::Stream(r)) => l.values_equal(r, ctx),
-            (Value::Range(l), Value::Range(r)) => l.values_equal(r, ctx),
-            (Value::UnsupportedLiteral(l), Value::UnsupportedLiteral(r)) => l.values_equal(r, ctx),
-            (Value::Parser(l), Value::Parser(r)) => l.values_equal(r, ctx),
-            (Value::Iterator(l), Value::Iterator(r)) => l.values_equal(r, ctx),
-            // Different types - use explicit cases to ensure new variants cause compile errors
             (Value::None, _) => ctx.type_mismatch(self, other),
+            (Value::Boolean(l), Value::Boolean(r)) => l.values_equal(r, ctx),
             (Value::Boolean(_), _) => ctx.type_mismatch(self, other),
+            (Value::Char(l), Value::Char(r)) => l.values_equal(r, ctx),
             (Value::Char(_), _) => ctx.type_mismatch(self, other),
+            (Value::String(l), Value::String(r)) => l.values_equal(r, ctx),
             (Value::String(_), _) => ctx.type_mismatch(self, other),
+            (Value::Integer(l), Value::Integer(r)) => l.values_equal(r, ctx),
             (Value::Integer(_), _) => ctx.type_mismatch(self, other),
+            (Value::Float(l), Value::Float(r)) => l.values_equal(r, ctx),
             (Value::Float(_), _) => ctx.type_mismatch(self, other),
+            (Value::Array(l), Value::Array(r)) => l.values_equal(r, ctx),
             (Value::Array(_), _) => ctx.type_mismatch(self, other),
+            (Value::Object(l), Value::Object(r)) => l.values_equal(r, ctx),
             (Value::Object(_), _) => ctx.type_mismatch(self, other),
+            (Value::Stream(l), Value::Stream(r)) => l.values_equal(r, ctx),
             (Value::Stream(_), _) => ctx.type_mismatch(self, other),
+            (Value::Range(l), Value::Range(r)) => l.values_equal(r, ctx),
             (Value::Range(_), _) => ctx.type_mismatch(self, other),
+            (Value::UnsupportedLiteral(l), Value::UnsupportedLiteral(r)) => l.values_equal(r, ctx),
             (Value::UnsupportedLiteral(_), _) => ctx.type_mismatch(self, other),
+            (Value::Parser(l), Value::Parser(r)) => l.values_equal(r, ctx),
             (Value::Parser(_), _) => ctx.type_mismatch(self, other),
+            (Value::Iterator(l), Value::Iterator(r)) => l.values_equal(r, ctx),
             (Value::Iterator(_), _) => ctx.type_mismatch(self, other),
         }
     }
