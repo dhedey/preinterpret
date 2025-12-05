@@ -465,13 +465,7 @@ The codebase has three equality methods with different semantics:
    - Provides detailed error messages with path and value information
    - Example error: `lhs[1] != rhs[1]: 2 != 5` with full values shown below
 
-**Stream Equality Note**: Stream equality uses string representation comparison, which means
-transparent (none-delimited) groups are automatically removed before comparison (since they
-don't render differently in string form). To normalize a stream by removing transparent groups
-(e.g., for debug output comparison), use:
-```
-stream.remove_transparent_groups()
-```
+**Stream Equality Note**: Stream equality preserves transparent groups. Use `remove_transparent_groups()` to normalize streams before comparison if needed.
 
 - [ ] [PAGE] Introduction - covering:
   * Motivation
