@@ -394,9 +394,9 @@ macro_rules! impl_resolvable_argument_for {
 pub(crate) use impl_resolvable_argument_for;
 
 macro_rules! impl_delegated_resolvable_argument_for {
-    ($value_type:ty, ($value:ident: $delegate:ty) -> $type:ty { $expr:expr }) => {
+    (($value:ident: $delegate:ty) -> $type:ty { $expr:expr }) => {
         impl ResolvableArgumentTarget for $type {
-            type ValueType = $value_type;
+            type ValueType = <$delegate as ResolvableArgumentTarget>::ValueType;
         }
 
         impl ResolvableOwned<Value> for $type {

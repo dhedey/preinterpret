@@ -8,6 +8,7 @@ pub(crate) use std::{
     borrow::Borrow,
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
+    fmt::Debug,
     str::FromStr,
 };
 pub(crate) use syn::buffer::Cursor;

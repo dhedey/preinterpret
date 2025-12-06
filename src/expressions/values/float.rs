@@ -1,7 +1,7 @@
 use super::*;
 use crate::internal_prelude::*;
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub(crate) enum FloatValue {
     Untyped(UntypedFloat),
     F32(f32),
@@ -29,7 +29,7 @@ impl FloatValue {
         .into_owned(lit.span()))
     }
 
-    pub(super) fn to_literal(&self, span: Span) -> Literal {
+    pub(super) fn to_literal(self, span: Span) -> Literal {
         self.to_unspanned_literal().with_span(span)
     }
 
@@ -56,11 +56,11 @@ impl FloatValue {
         Ok(())
     }
 
-    fn to_unspanned_literal(&self) -> Literal {
+    fn to_unspanned_literal(self) -> Literal {
         match self {
             FloatValue::Untyped(float) => float.to_unspanned_literal(),
-            FloatValue::F32(float) => Literal::f32_suffixed(*float),
-            FloatValue::F64(float) => Literal::f64_suffixed(*float),
+            FloatValue::F32(float) => Literal::f32_suffixed(float),
+            FloatValue::F64(float) => Literal::f64_suffixed(float),
         }
     }
 }
@@ -73,6 +73,62 @@ impl HasValueKind for FloatValue {
             Self::Untyped(_) => FloatKind::Untyped,
             Self::F32(_) => FloatKind::F32,
             Self::F64(_) => FloatKind::F64,
+        }
+    }
+}
+
+impl Debug for FloatValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Untyped(v) => write!(f, "{}", v.into_fallback()),
+            Self::F32(v) => write!(f, "{:?}", v),
+            Self::F64(v) => write!(f, "{:?}", v),
+        }
+    }
+}
+
+impl FloatValue {
+    /// Aligns types for comparison - converts untyped to match the other's type.
+    /// Unlike integers, float conversion never fails (may lose precision).
+    fn align_types(mut lhs: Self, mut rhs: Self) -> (Self, Self) {
+        match (&lhs, &rhs) {
+            (FloatValue::Untyped(l), typed) if !matches!(typed, FloatValue::Untyped(_)) => {
+                lhs = l.into_kind_infallible(typed.kind());
+            }
+            (typed, FloatValue::Untyped(r)) if !matches!(typed, FloatValue::Untyped(_)) => {
+                rhs = r.into_kind_infallible(lhs.kind());
+            }
+            _ => {} // Both same type or both untyped - no conversion needed
+        }
+        (lhs, rhs)
+    }
+}
+
+impl ValuesEqual for FloatValue {
+    /// Handles type coercion between typed and untyped floats.
+    /// Uses Rust's float `==`, so `NaN != NaN`.
+    fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+        // Align types (untyped -> typed conversion)
+        let (lhs, rhs) = Self::align_types(*self, *other);
+
+        // After alignment, compare directly.
+        // Each variant has two lines: same-type comparison, then type-mismatch fallback.
+        // This ensures adding a new variant causes a compiler error.
+        let equal = match (lhs, rhs) {
+            (FloatValue::Untyped(l), FloatValue::Untyped(r)) => {
+                l.into_fallback() == r.into_fallback()
+            }
+            (FloatValue::Untyped(_), _) => return ctx.leaf_values_not_equal(self, other),
+            (FloatValue::F32(l), FloatValue::F32(r)) => l == r,
+            (FloatValue::F32(_), _) => return ctx.leaf_values_not_equal(self, other),
+            (FloatValue::F64(l), FloatValue::F64(r)) => l == r,
+            (FloatValue::F64(_), _) => return ctx.leaf_values_not_equal(self, other),
+        };
+
+        if equal {
+            ctx.values_equal()
+        } else {
+            ctx.leaf_values_not_equal(self, other)
         }
     }
 }

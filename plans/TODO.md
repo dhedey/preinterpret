@@ -62,7 +62,7 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 - [x] Combine `PairedBinaryOperation`, `IntegerBinaryOperation` and `CompoundAssignmentOperation` into a flattened `BinaryOperation`
 - [x] Migrate `UntypedInteger` to use `FallbackInteger` like `UntypedFloat` (except a little harder because integers can overflow)
 - [x] Migrate <, <=, >, >= from specific integer/float and untyped values to IntegerValue and FloatValue, in a similar way that we've done for paired arithmetic operators.
-- [ ] Add `==` and `!=` support for all values (including streams, objects, arrays, parsers, unsupported literals, etc) and make it work with `AnyRef<..>` arguments for testing equality
+- [x] Add `==` and `!=` support for all values (including streams, objects, arrays, parsers, unsupported literals, etc) and make it work with `AnyRef<..>` arguments for testing equality
 - [ ] Add support for non-finite float values (infinity, NaN):
   - [ ] Currently, `proc_macro2::Literal::f64_unsuffixed()` panics with `assertion failed: f.is_finite()` when given infinity/NaN
   - [ ] Rename `to_unspanned_literal()` to `to_unspanned_finite_literal() -> Option<Literal>` (returns None for non-finite)
@@ -80,6 +80,7 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
   - [ ] All value kinds should be generated with a macro which also generates a `#[test] list_all` method
   - [ ] We should create some unit tests in `value.rs` and functions `generate_example_values(value_kind)` which returns a `Vec<Value>` for each value kind.
   - [ ] We can use this to check that `eq` and `neq` are defined and work correctly for all types
+- [ ] Add lexicographic ordering to arrays, if they're the same length and their values can be compared
 
 ## Control flow expressions (ideally requires Stream Literals)
 
@@ -260,7 +261,8 @@ Later:
   * Break and continue statements should not leak out of function boundaries
   * This needs to be validated during the control flow pass
 - [ ] Optional arguments
-- [ ] Add `map`, `filter`, `flatten`, `flatmap`
+- [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`
+- [ ] Add `array.sort`, `array.sort_by`
 - [ ] Add `stream.parse(|input| { ... })`
 - [ ] Add `let captured = input.capture(|input| { ... })`
   * This returns the parsed input stream. It can capture the original tokens by using `let forked = input.fork()` and then `let end_cursor = input.end();` and then consuming `TokenTree`s from `forked` until `forked.cursor >= end_cursor` (making use of the PartialEq implementation)
@@ -473,6 +475,7 @@ One option We can work it like `IterableRef`, but perhaps we can do better?
   - [ ] [PAGE] Iterable
   - [ ] [PAGE] Iterator
   - [ ] [PAGE] None
+  - [ ] Document equality methods: `==` (lenient), `typed_eq()` (errors on type mismatch), `assert_eq()` (detailed error messages). Stream equality preserves transparent groups; use `remove_transparent_groups()` to normalize.
 - [ ] [PAGE] Guides
   - [ ] [PAGE] Errors and Spans
       - NB: If someone wants to keep a value's span, they can keep it in a stream and coerce it; or store it as a tuple of a value with its span `%{ value: $x, span: %[$x] }`

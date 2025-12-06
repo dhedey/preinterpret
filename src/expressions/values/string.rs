@@ -5,6 +5,12 @@ pub(crate) struct StringValue {
     pub(crate) value: String,
 }
 
+impl Debug for StringValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.value)
+    }
+}
+
 impl IntoValue for StringValue {
     fn into_value(self) -> Value {
         Value::String(self)
@@ -26,6 +32,16 @@ impl HasValueKind for StringValue {
 
     fn kind(&self) -> ValueKind {
         ValueKind::String
+    }
+}
+
+impl ValuesEqual for StringValue {
+    fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+        if self.value == other.value {
+            ctx.values_equal()
+        } else {
+            ctx.leaf_values_not_equal(self, other)
+        }
     }
 }
 
@@ -220,7 +236,6 @@ impl_resolvable_argument_for! {
 }
 
 impl_delegated_resolvable_argument_for!(
-    StringTypeData,
     (value: StringValue) -> String { value.value }
 );
 

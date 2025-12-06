@@ -1,5 +1,3 @@
-use std::num::TryFromIntError;
-
 use super::*;
 
 #[derive(Copy, Clone)]
@@ -31,36 +29,35 @@ impl UntypedInteger {
         ))
     }
 
+    /// Tries to convert to a specific integer kind, returning None if the value doesn't fit.
+    pub(crate) fn try_into_kind(self, kind: IntegerKind) -> Option<IntegerValue> {
+        let value = self.0;
+        Some(match kind {
+            IntegerKind::Untyped => IntegerValue::Untyped(UntypedInteger(value)),
+            IntegerKind::I8 => IntegerValue::I8(value.try_into().ok()?),
+            IntegerKind::I16 => IntegerValue::I16(value.try_into().ok()?),
+            IntegerKind::I32 => IntegerValue::I32(value.try_into().ok()?),
+            IntegerKind::I64 => IntegerValue::I64(value.try_into().ok()?),
+            IntegerKind::I128 => IntegerValue::I128(value),
+            IntegerKind::Isize => IntegerValue::Isize(value.try_into().ok()?),
+            IntegerKind::U8 => IntegerValue::U8(value.try_into().ok()?),
+            IntegerKind::U16 => IntegerValue::U16(value.try_into().ok()?),
+            IntegerKind::U32 => IntegerValue::U32(value.try_into().ok()?),
+            IntegerKind::U64 => IntegerValue::U64(value.try_into().ok()?),
+            IntegerKind::U128 => IntegerValue::U128(value.try_into().ok()?),
+            IntegerKind::Usize => IntegerValue::Usize(value.try_into().ok()?),
+        })
+    }
+
     pub(crate) fn into_kind(
         self,
         kind: IntegerKind,
         span_range: SpanRange,
     ) -> ExecutionResult<IntegerValue> {
-        fn into_kind_inner(
-            value: FallbackInteger,
-            kind: IntegerKind,
-        ) -> Result<IntegerValue, TryFromIntError> {
-            Ok(match kind {
-                IntegerKind::Untyped => IntegerValue::Untyped(UntypedInteger(value)),
-                IntegerKind::I8 => IntegerValue::I8(value.try_into()?),
-                IntegerKind::I16 => IntegerValue::I16(value.try_into()?),
-                IntegerKind::I32 => IntegerValue::I32(value.try_into()?),
-                IntegerKind::I64 => IntegerValue::I64(value.try_into()?),
-                IntegerKind::I128 => IntegerValue::I128(value),
-                IntegerKind::Isize => IntegerValue::Isize(value.try_into()?),
-                IntegerKind::U8 => IntegerValue::U8(value.try_into()?),
-                IntegerKind::U16 => IntegerValue::U16(value.try_into()?),
-                IntegerKind::U32 => IntegerValue::U32(value.try_into()?),
-                IntegerKind::U64 => IntegerValue::U64(value.try_into()?),
-                IntegerKind::U128 => IntegerValue::U128(value.try_into()?),
-                IntegerKind::Usize => IntegerValue::Usize(value.try_into()?),
-            })
-        }
-        let value = self.0;
-        into_kind_inner(value, kind).map_err(|_| {
+        self.try_into_kind(kind).ok_or_else(|| {
             span_range.value_error(format!(
                 "The integer value {} does not fit into {}",
-                value,
+                self.0,
                 kind.articled_display_name()
             ))
         })
