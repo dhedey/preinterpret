@@ -1,5 +1,5 @@
 error: Use `%[@[GROUP ...]]` to match `%group[...]` stream literal content
- --> tests/compilation_failures/transforming/destructure_with_group_stream_pattern.rs:4:14
+ --> tests/compilation_failures/parsing/destructure_with_group_stream_pattern.rs:4:14
   |
 4 |     run!(let %group[Output] = %group[Output];)
   |              ^

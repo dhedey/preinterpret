@@ -166,7 +166,7 @@ First, read the @./2025-11-vision.md
   - [x] Create a `ParseTemplateLiteral` and a `ParseTemplateStream`
 - [x] Add remaining parser methods below
 - [x] Add `ParseTemplatePattern` pattern
-- [ ] Migrate tests from `transforming.rs` to `parsing.rs` etc
+- [x] Migrate tests from `transforming.rs` to `parsing.rs` etc
 - [ ] Delete the transformers folder
 - [ ] Make StreamPattern an exact match, and allow `%raw[]` and `%group[]` patterns too, by wrapping a `StreamLiteral`
 - [ ] Reversion works in attempt blocks, via forking and committing or rolling back the fork, fix `TODO[parser-input-in-interpreter]`
@@ -439,18 +439,19 @@ Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` doc
 - [x] See `TODO[untyped]` - Have UntypedInteger/UntypedFloat have an inner representation of either value or literal, for improved efficiency / less weird `Span::call_site()` error handling
 - [ ] Move `typed_eq` as `%[].typed_eq(..)`
 - [ ] Add a `%[].structure_eq(...)` method which uses an `EqualityContext` which ignores value inequality
-* Add `LiteralPattern` (wrapping a `Literal`)
-* Better handling of `configure_preinterpret`:
+- [ ] We might need to auto-change the span of all outputted tokens to `Span::call_site()` to get hygiene
+  to be most flexible. Perhaps this can be disabled with `preinterpret::set_auto_call_site_hygiene(false)`
+- [ ] Add `LiteralPattern` (wrapping a `Literal`)
+- [ ] Better handling of `configure_preinterpret`:
   * Move `None.configure_preinterpret` to `preinterpret::set_iteration_limit(..)`
-* CastTarget revision:
+- [ ] CastTarget revision:
   * The `as int` operator is not supported for string values
   * The `as char` operator is not supported for untyped integer values
   * Add casts of any integer to char, via `char::from_u32(u32::try_from(x))`
   * Should we remove/replace any CastTargets?
-* TODO check
-* Check all `#[allow(unused)]` and remove any which aren't needed
+- [ ] TODO check
+- [ ] Check all `#[allow(unused)]` and remove any which aren't needed
   We can use `_xyz: Unused<T>` in some places to reduce the size of types.
-* Do we want to add support for various rust types?
 
 ## Better handling of value sub-references
 

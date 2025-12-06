@@ -32,7 +32,6 @@ fn test_variable_parsing() {
 
 #[test]
 fn test_parse_template_literal() {
-    // Test @parser[...] syntax - migrated from transforming.rs
     assert_eq!(
         run! {
             let @parser[<Hello #{ let inner = parser.ident(); } World>] = %[<Hello Beautiful World>];
@@ -44,7 +43,6 @@ fn test_parse_template_literal() {
 
 #[test]
 fn test_parser_ident_method() {
-    // parser.ident() - equivalent to old @IDENT transformer
     assert_eq!(
         run! {
             let @parser[The "quick" #{ let x = parser.ident(); } fox "jumps"] = %[The "quick" brown fox "jumps"];
@@ -64,15 +62,20 @@ fn test_parser_ident_method() {
 
 #[test]
 fn test_parser_literal_method() {
-    // parser.literal() - equivalent to old @LITERAL transformer
     assert_eq!(
         run! {
             let @parser[The "quick" #{ let x = parser.inferred_literal(); } fox "jumps"] = %[The "quick" "brown" fox "jumps"];
-            x
+            x.to_debug_string()
         },
-        "brown"
+        r#""brown""#
     );
-    // Lots of literals
+    assert_eq!(
+        run! {
+            let @parser[The "quick" #{ let x = parser.literal(); } fox "jumps"] = %[The "quick" "brown" fox "jumps"];
+            x.to_debug_string()
+        },
+        r#"%["brown"]"#
+    );
     assert_eq!(
         run! {
             let x = %[];
@@ -85,7 +88,6 @@ fn test_parser_literal_method() {
 
 #[test]
 fn test_parser_punct_method() {
-    // parser.punct() - equivalent to old @PUNCT transformer
     assert_eq!(
         run! {
             let @parser[The "quick" brown fox "jumps" #{ let x = parser.punct(); }] = %[The "quick" brown fox "jumps"!];
@@ -97,22 +99,25 @@ fn test_parser_punct_method() {
 
 #[test]
 fn test_parser_token_tree_method() {
-    // parser.token_tree() - equivalent to old @TOKEN_TREE transformer
     assert_eq!(
         run! {
             let x = %[];
             let @parser[
-                // Matches one tt: Why
-                #{ x += parser.token_tree(); }
-                // Matches one tt: %group[it is fun to be here]
-                #{ x += parser.token_tree(); }
-                // Matches stream until (, then group it: %group[Hello Everyone]
-                #{ x += parser.until(%[()]).to_group(); }
+                #{
+                    // Matches one tt: Why
+                    x += parser.token_tree();
+                    // Matches one tt: %group[it is fun to be here]
+                    x += parser.token_tree();
+                    // Matches stream until (, then group it: %group[Hello Everyone]
+                    x += parser.until(%[()]).to_group();
+                }
                 (
-                    // Matches one tt and flatten it: This is an exciting adventure
-                    #{ x += parser.token_tree().flatten(); }
-                    // Matches rest and flatten it: do you agree ?
-                    #{ x += parser.rest().flatten(); }
+                    #{
+                        // Matches one tt and flatten it: This is an exciting adventure
+                        x += parser.token_tree().flatten();
+                        // Matches rest and flatten it: do you agree ?
+                        x += parser.rest().flatten();
+                    }
                 )
             ] = %[Why %group[it is fun to be here] Hello Everyone (%group[This is an exciting adventure] do you agree?)];
             x.to_debug_string()
