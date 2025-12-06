@@ -29,6 +29,51 @@ impl FloatValue {
         .into_owned(lit.span()))
     }
 
+    /// Outputs this float value to a token stream.
+    /// For finite values, outputs a literal. For non-finite values (infinity, NaN),
+    /// outputs the equivalent constant path like `f32::INFINITY`.
+    pub(super) fn output_to(&self, output: &mut ToStreamContext) {
+        let span = output.new_token_span();
+        match self {
+            FloatValue::Untyped(float) => {
+                let f = float.into_fallback();
+                if f.is_finite() {
+                    output.push_literal(Literal::f64_unsuffixed(f).with_span(span));
+                } else if f.is_nan() {
+                    // For untyped NaN, we output f64::NAN since FallbackFloat is f64
+                    output.extend_raw_tokens(quote::quote_spanned!(span=> f64::NAN));
+                } else if f.is_sign_positive() {
+                    output.extend_raw_tokens(quote::quote_spanned!(span=> f64::INFINITY));
+                } else {
+                    output.extend_raw_tokens(quote::quote_spanned!(span=> f64::NEG_INFINITY));
+                }
+            }
+            FloatValue::F32(f) => {
+                if f.is_finite() {
+                    output.push_literal(Literal::f32_suffixed(*f).with_span(span));
+                } else if f.is_nan() {
+                    output.extend_raw_tokens(quote::quote_spanned!(span=> f32::NAN));
+                } else if f.is_sign_positive() {
+                    output.extend_raw_tokens(quote::quote_spanned!(span=> f32::INFINITY));
+                } else {
+                    output.extend_raw_tokens(quote::quote_spanned!(span=> f32::NEG_INFINITY));
+                }
+            }
+            FloatValue::F64(f) => {
+                if f.is_finite() {
+                    output.push_literal(Literal::f64_suffixed(*f).with_span(span));
+                } else if f.is_nan() {
+                    output.extend_raw_tokens(quote::quote_spanned!(span=> f64::NAN));
+                } else if f.is_sign_positive() {
+                    output.extend_raw_tokens(quote::quote_spanned!(span=> f64::INFINITY));
+                } else {
+                    output.extend_raw_tokens(quote::quote_spanned!(span=> f64::NEG_INFINITY));
+                }
+            }
+        }
+    }
+
+    #[allow(dead_code)]
     pub(super) fn to_literal(self, span: Span) -> Literal {
         self.to_unspanned_literal().with_span(span)
     }
@@ -138,6 +183,45 @@ define_interface! {
     parent: ValueTypeData,
     pub(crate) mod float_interface {
         pub(crate) mod methods {
+            fn is_nan(this: FloatValue) -> bool {
+                match this {
+                    FloatValue::Untyped(x) => x.into_fallback().is_nan(),
+                    FloatValue::F32(x) => x.is_nan(),
+                    FloatValue::F64(x) => x.is_nan(),
+                }
+            }
+
+            fn is_infinite(this: FloatValue) -> bool {
+                match this {
+                    FloatValue::Untyped(x) => x.into_fallback().is_infinite(),
+                    FloatValue::F32(x) => x.is_infinite(),
+                    FloatValue::F64(x) => x.is_infinite(),
+                }
+            }
+
+            fn is_finite(this: FloatValue) -> bool {
+                match this {
+                    FloatValue::Untyped(x) => x.into_fallback().is_finite(),
+                    FloatValue::F32(x) => x.is_finite(),
+                    FloatValue::F64(x) => x.is_finite(),
+                }
+            }
+
+            fn is_sign_positive(this: FloatValue) -> bool {
+                match this {
+                    FloatValue::Untyped(x) => x.into_fallback().is_sign_positive(),
+                    FloatValue::F32(x) => x.is_sign_positive(),
+                    FloatValue::F64(x) => x.is_sign_positive(),
+                }
+            }
+
+            fn is_sign_negative(this: FloatValue) -> bool {
+                match this {
+                    FloatValue::Untyped(x) => x.into_fallback().is_sign_negative(),
+                    FloatValue::F32(x) => x.is_sign_negative(),
+                    FloatValue::F64(x) => x.is_sign_negative(),
+                }
+            }
         }
         pub(crate) mod unary_operations {
         }

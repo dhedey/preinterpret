@@ -119,6 +119,21 @@ macro_rules! impl_float_operations {
                         // All operations are defined on the parent FloatValue type
                         None
                     }
+
+                    fn resolve_type_property(
+                        property_name: &str,
+                    ) -> Option<Value> {
+                        match property_name {
+                            "MAX" => Some($float_type::MAX.into_value()),
+                            "MIN" => Some($float_type::MIN.into_value()),
+                            "MIN_POSITIVE" => Some($float_type::MIN_POSITIVE.into_value()),
+                            "INFINITY" => Some($float_type::INFINITY.into_value()),
+                            "NEG_INFINITY" => Some($float_type::NEG_INFINITY.into_value()),
+                            "NAN" => Some($float_type::NAN.into_value()),
+                            "EPSILON" => Some($float_type::EPSILON.into_value()),
+                            _ => None,
+                        }
+                    }
                 }
             }
         }

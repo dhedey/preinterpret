@@ -1,3 +1,4 @@
+#![allow(clippy::assertions_on_constants)]
 #[path = "helpers/prelude.rs"]
 mod prelude;
 use prelude::*;
@@ -15,60 +16,66 @@ fn test_expression_compilation_failures() {
 
 #[test]
 fn test_basic_evaluate_works() {
-    preinterpret_assert_eq!(#(!!(!!(true))), true);
-    preinterpret_assert_eq!(#(1 + 5), 6u8);
-    preinterpret_assert_eq!(#(1 + 5), 6i128);
-    preinterpret_assert_eq!(#("Hello" + " " + "World!"), "Hello World!");
-    preinterpret_assert_eq!(#(1 + 5u16), 6u16);
-    preinterpret_assert_eq!(#(127i8 + (-127i8) + (-127i8)), -127i8);
-    preinterpret_assert_eq!(#(3.0 + 3.2), 6.2);
-    preinterpret_assert_eq!(#(3.6 + 3999999999999999992.0), 3.6 + 3999999999999999992.0);
-    preinterpret_assert_eq!(#(-3.2), -3.2);
-    preinterpret_assert_eq!(#(true && true || false), true);
-    preinterpret_assert_eq!(#(true || false && false), true); // The && has priority
-    preinterpret_assert_eq!(#(true | false & false), true); // The & has priority
-    preinterpret_assert_eq!(#(true as u32 + 2), 3);
-    preinterpret_assert_eq!(#(3.57 as int + 1), 4u32);
-    preinterpret_assert_eq!(#(3.57 as int + 1), 4u64);
-    preinterpret_assert_eq!(#(0b1000 & 0b1101), 0b1000);
-    preinterpret_assert_eq!(#(0b1000 | 0b1101), 0b1101);
-    preinterpret_assert_eq!(#(0b1000 ^ 0b1101), 0b101);
-    preinterpret_assert_eq!(#(5 << 2), 20);
-    preinterpret_assert_eq!(#(5 >> 1), 2);
-    preinterpret_assert_eq!(#(123 == 456), false);
-    preinterpret_assert_eq!(#(123 < 456), true);
-    preinterpret_assert_eq!(#(123 <= 456), true);
-    preinterpret_assert_eq!(#(123 != 456), true);
-    preinterpret_assert_eq!(#(123 >= 456), false);
-    preinterpret_assert_eq!(#(123 > 456), false);
-    preinterpret_assert_eq!(#(let six_as_sum = 3 + 3; six_as_sum * six_as_sum), 36);
-    preinterpret_assert_eq!(#(
-        let partial_sum = %[+ 2];
-        %[#(%[5] + partial_sum.clone()) %[=] %raw[#](5 #partial_sum)].reinterpret_as_stream().to_debug_string()
-    ), "%[5 + 2 = 7]");
-    preinterpret_assert_eq!(#(1 + (1..2) as int), 2);
-    preinterpret_assert_eq!(#("hello" == "world"), false);
-    preinterpret_assert_eq!(#("hello" == "hello"), true);
-    preinterpret_assert_eq!(#('A' as u8 == 65), true);
-    preinterpret_assert_eq!(#(65u8 as char == 'A'), true);
-    preinterpret_assert_eq!(#('A' == 'A'), true);
-    preinterpret_assert_eq!(#('A' == 'B'), false);
-    preinterpret_assert_eq!(#('A' < 'B'), true);
-    preinterpret_assert_eq!(#("Zoo" > "Aardvark"), true);
-    preinterpret_assert_eq!(
-        #(("Hello" as stream + "World" as stream + (1 + 1) as stream + (1 + 1).to_group() + [1 + 2].to_group() + %group[1 + 2 + 3]).to_debug_string()),
+    assert!(run!(!!(!!(true))));
+    assert_eq!(run!(1 + 5), 6u8);
+    assert_eq!(run!(1 + 5), 6i128);
+    assert_eq!(run!("Hello" + " " + "World!"), "Hello World!");
+    assert_eq!(run!(1 + 5u16), 6u16);
+    assert_eq!(run!(127i8 + (-127i8) + (-127i8)), -127i8);
+    assert_eq!(run!(3.0 + 3.2), 6.2);
+    assert_eq!(
+        run!(3.6 + 3999999999999999992.0),
+        3.6 + 3999999999999999992.0
+    );
+    assert_eq!(run!(-3.2), -3.2);
+    assert!(run!(true && true || false));
+    assert!(run!(true || false && false)); // The && has priority
+    assert!(run!(true | false & false)); // The & has priority
+    assert_eq!(run!(true as u32 + 2), 3);
+    assert_eq!(run!(3.57 as int + 1), 4u32);
+    assert_eq!(run!(3.57 as int + 1), 4u64);
+    assert_eq!(run!(0b1000 & 0b1101), 0b1000);
+    assert_eq!(run!(0b1000 | 0b1101), 0b1101);
+    assert_eq!(run!(0b1000 ^ 0b1101), 0b101);
+    assert_eq!(run!(5 << 2), 20);
+    assert_eq!(run!(5 >> 1), 2);
+    assert!(!run!(123 == 456));
+    assert!(run!(123 < 456));
+    assert!(run!(123 <= 456));
+    assert!(run!(123 != 456));
+    assert!(!run!(123 >= 456));
+    assert!(!run!(123 > 456));
+    assert_eq!(run!(let six_as_sum = 3 + 3; six_as_sum * six_as_sum), 36);
+    assert_eq!(
+        run!(
+            let partial_sum = %[+ 2];
+            %[#(%[5] + partial_sum.clone()) %[=] %raw[#](5 #partial_sum)].reinterpret_as_stream().to_debug_string()
+        ),
+        "%[5 + 2 = 7]"
+    );
+    assert_eq!(run!(1 + (1..2) as int), 2);
+    assert!(!run!("hello" == "world"));
+    assert!(run!("hello" == "hello"));
+    assert!(run!('A' as u8 == 65));
+    assert!(run!(65u8 as char == 'A'));
+    assert!(run!('A' == 'A'));
+    assert!(!run!('A' == 'B'));
+    assert!(run!('A' < 'B'));
+    assert!(run!("Zoo" > "Aardvark"));
+    assert_eq!(
+        run!(("Hello" as stream + "World" as stream + (1 + 1) as stream + (1 + 1).to_group() + [1 + 2].to_group() + %group[1 + 2 + 3]).to_debug_string()),
         r#"%["Hello" "World" 2 %group[2] %group[3] %group[1 + 2 + 3]]"#
     );
-    preinterpret_assert_eq!(
-        #([1, 2, 1 + 2, 4].to_debug_string()),
-        "[1, 2, 3, 4]"
-    );
-    preinterpret_assert_eq!(
-        #(([1 + (3 + 4), [5,] + [], [[6, 7],]] + [123]).to_debug_string()),
+    assert_eq!(run!([1, 2, 1 + 2, 4].to_debug_string()), "[1, 2, 3, 4]");
+    assert_eq!(
+        run!(([1 + (3 + 4), [5,] + [], [[6, 7],]] + [123]).to_debug_string()),
         "[8, [5], [[6, 7]], 123]"
     );
-    preinterpret_assert_eq!(
-        #(("Hello" as stream + "World" as stream + (1 + 1) as stream + (1 + 1).to_group()).to_debug_string()),
+    assert_eq!(
+        run!(
+            ("Hello" as stream + "World" as stream + (1 + 1) as stream + (1 + 1).to_group())
+                .to_debug_string()
+        ),
         r#"%["Hello" "World" 2 %group[2]]"#
     );
     assert_eq!(run!(let x = 1; x + 2), 3);
@@ -81,13 +88,13 @@ fn test_expression_precedence() {
     // * Operators at the same precedence should left-associate.
 
     // 1 + -1 + ((2 + 4) * 3) - 9 => 1 + -1 + 18 - 9 => 9
-    preinterpret_assert_eq!(#(1 + -(1) + (2 + 4) * 3 - 9), 9);
+    assert_eq!(run!(1 + -(1) + (2 + 4) * 3 - 9), 9);
     // (true > true) > true => false > true => false
-    preinterpret_assert_eq!(#(true > true > true), false);
+    assert!(!run!(true > true > true));
     // (5 - 2) - 1 => 3 - 1 => 2
-    preinterpret_assert_eq!(#(5 - 2 - 1), 2);
+    assert_eq!(run!(5 - 2 - 1), 2);
     // ((3 * 3 - 4) < (3 << 1)) && true => 5 < 6 => true
-    preinterpret_assert_eq!(#(3 * 3 - 4 < 3 << 1 && true), true);
+    assert!(run!(3 * 3 - 4 < 3 << 1 && true));
 }
 
 #[test]
@@ -176,45 +183,36 @@ fn test_very_long_expression_works() {
 #[test]
 fn boolean_operators_short_circuit() {
     // && short-circuits if first operand is false
-    preinterpret_assert_eq!(
-        #(
-            let is_lazy = true;
-            let _ = false && { is_lazy = false; true };
-            is_lazy
-        ),
-        true
-    );
+    assert!(run!(
+        let is_lazy = true;
+        let _ = false && { is_lazy = false; true };
+        is_lazy
+    ));
     // || short-circuits if first operand is true
-    preinterpret_assert_eq!(
-        #(
-            let is_lazy = true;
-            let _ = true || { is_lazy = false; true };
-            is_lazy
-        ),
-        true
-    );
+    assert!(run!(
+        let is_lazy = true;
+        let _ = true || { is_lazy = false; true };
+        is_lazy
+    ));
     // For comparison, the & operator does _not_ short-circuit
-    preinterpret_assert_eq!(
-        #(
-            let is_lazy = true;
-            let _ = false & { is_lazy = false; true };
-            is_lazy
-        ),
-        false
-    );
+    assert!(!run!(
+        let is_lazy = true;
+        let _ = false & { is_lazy = false; true };
+        is_lazy
+    ));
 }
 
 #[test]
 fn assign_works() {
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let x = 5 + 5;
             x.to_debug_string()
         ),
         "10"
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let x = 10;
             x /= 1 + 1;  // 10 / (1 + 1)
             x += 2 + x; // 5 + (2 + 5)
@@ -224,8 +222,8 @@ fn assign_works() {
     );
     // Assign can reference itself in its expression,
     // because the expression result is buffered.
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let x = 2;
             x += x;
             x
@@ -307,15 +305,11 @@ fn test_range() {
 
 #[test]
 fn test_array_indexing() {
-    preinterpret_assert_eq!(
-        #(let x = [1, 2, 3]; x[1]), 2
-    );
-    preinterpret_assert_eq!(
-        #(let x = [1, 2, 3]; x[x[0] + x[x[1] - 1] - 1]), 3
-    );
+    assert_eq!(run!(let x = [1, 2, 3]; x[1]), 2);
+    assert_eq!(run!(let x = [1, 2, 3]; x[x[0] + x[x[1] - 1] - 1]), 3);
     // And setting indices...
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let x = [0, 0, 0];
             x[0] = 2;
             (x[1 + 1]) = x[0];
@@ -324,43 +318,43 @@ fn test_array_indexing() {
         "[2, 0, 2]"
     );
     // And ranges in value position
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let x = [1, 2, 3, 4, 5];
             x[..].to_debug_string()
         ),
         "[1, 2, 3, 4, 5]"
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let x = [1, 2, 3, 4, 5];
             x[0..0].to_debug_string()
         ),
         "[]"
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let x = [1, 2, 3, 4, 5];
             x[2..=2].to_debug_string()
         ),
         "[3]"
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let x = [1, 2, 3, 4, 5];
             x[..=2].to_debug_string()
         ),
         "[1, 2, 3]"
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let x = [1, 2, 3, 4, 5];
             x[..4].to_debug_string()
         ),
         "[1, 2, 3, 4]"
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let x = [1, 2, 3, 4, 5];
             x[2..].to_debug_string()
         ),
@@ -371,8 +365,8 @@ fn test_array_indexing() {
 #[test]
 fn test_array_place_destructurings() {
     // And array destructuring
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let a = 0; let b = 0; let c = 0;
             let x = [1, 2, 3, 4, 5];
             [a, b, _, _, c] = x;
@@ -380,8 +374,8 @@ fn test_array_place_destructurings() {
         ),
         "[1, 2, 5]"
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let a = 0; let b = 0; let c = 0;
             let x = [1, 2, 3, 4, 5];
             [a, b, c, ..] = x;
@@ -389,8 +383,8 @@ fn test_array_place_destructurings() {
         ),
         "[1, 2, 3]"
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let a = 0; let b = 0; let c = 0;
             let x = [1, 2, 3, 4, 5];
             [.., a, b] = x;
@@ -398,8 +392,8 @@ fn test_array_place_destructurings() {
         ),
         "[4, 5, 0]"
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let a = 0; let b = 0; let c = 0;
             let x = [1, 2, 3, 4, 5];
             [a, .., b, c] = x;
@@ -408,8 +402,8 @@ fn test_array_place_destructurings() {
         "[1, 4, 5]"
     );
     // Nested places
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let out = [[0, 0], 0];
             let a = 0; let b = 0; let c = 0;
             [out[1], .., out[0][0], out[0][1]] = [1, 2, 3, 4, 5];
@@ -418,8 +412,8 @@ fn test_array_place_destructurings() {
         "[[4, 5], 1]"
     );
     // Misc
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let a = [0, 0, 0, 0, 0];
             let b = 3;
             let c = 0;
@@ -431,8 +425,8 @@ fn test_array_place_destructurings() {
         ),
         "[[0, 2, 4, 0, 0], 2, None]"
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let a = [0, 0];
             let b = 0;
             // Unlike rust, we execute left-to-right, so:
@@ -455,8 +449,8 @@ fn test_array_place_destructurings() {
     );
     // This test demonstrates that the assignee operation is executed
     // incrementally, to align with the rust behaviour.
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let arr = [0, 0];
             let arr2 = [0, 0];
             // The first assignment arr[0] = 1 occurs before being overwritten
@@ -471,36 +465,36 @@ fn test_array_place_destructurings() {
 #[test]
 fn test_array_pattern_destructurings() {
     // And array destructuring
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let [a, b, _, _, c] = [1, 2, 3, 4, 5];
             [a, b, c].to_debug_string()
         ),
         "[1, 2, 5]"
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let [a, b, c, ..] = [1, 2, 3, 4, 5];
             [a, b, c].to_debug_string()
         ),
         "[1, 2, 3]"
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let [.., a, b] = [1, 2, 3, 4, 5];
             [a, b].to_debug_string()
         ),
         "[4, 5]"
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let [a, .., b, c] = [1, 2, 3, 4, 5];
             [a, b, c].to_debug_string()
         ),
         "[1, 4, 5]"
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let [a, .., b, c] = [[1, "a"], 2, 3, 4, 5];
             [a, b, c].to_debug_string()
         ),
@@ -510,8 +504,8 @@ fn test_array_pattern_destructurings() {
 
 #[test]
 fn test_objects() {
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let a = %{};
             let b = "Hello";
             let x = %{ a: a.clone(), hello: 1, ["world"]: 2, b };
@@ -522,26 +516,26 @@ fn test_objects() {
         ),
         r#"%{ a: %{}, b: "Hello", hello: 1, world: 2, ["x y z"]: 4, y: 5, ["z\" test"]: %{} }"#
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             %{ prop1: 1 }["prop1"].to_debug_string()
         ),
         r#"1"#
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             %{ prop1: 1 }["prop2"].to_debug_string()
         ),
         r#"None"#
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             %{ prop1: 1 }.prop1.to_debug_string()
         ),
         r#"1"#
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let a;
             let b;
             let z;
@@ -550,8 +544,8 @@ fn test_objects() {
         ),
         r#"%{ a: 1, b: 7, z: None }"#
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let %{ a, y: [_, b], ["c"]: c, [r#"two "words"#]: x, z } = %{ a: 1, y: [5, 7], ["two \"words"]: %{}, };
             %{ a, b, c, x: x, z }.to_debug_string()
         ),
@@ -561,15 +555,15 @@ fn test_objects() {
 
 #[test]
 fn test_method_calls() {
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let x = [1, 2, 3];
             x.len() + %["Hello" world].len()
         ),
         2 + 3
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let x = [1, 2, 3];
             x.push(5);
             x.push(2);
@@ -578,17 +572,11 @@ fn test_method_calls() {
         "[1, 2, 3, 5, 2]"
     );
     // Push returns None
-    preinterpret_assert_eq!(
-        #([1, 2, 3].as_mut().push(4).to_debug_string()),
-        "None"
-    );
+    assert_eq!(run!([1, 2, 3].as_mut().push(4).to_debug_string()), "None");
     // Converting to mut and then to shared works
-    preinterpret_assert_eq!(
-        #([].as_mut().len().to_debug_string()),
-        "0usize"
-    );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(run!([].as_mut().len().to_debug_string()), "0usize");
+    assert_eq!(
+        run!(
             let x = [1, 2, 3];
             let y = x.clone();
             x.to_debug_string() + " - " + y.to_debug_string()

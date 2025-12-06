@@ -939,8 +939,7 @@ impl Value {
                 output.push_literal(literal);
             }
             Self::Float(value) => {
-                let literal = value.to_literal(output.new_token_span());
-                output.push_literal(literal);
+                value.output_to(output);
             }
             Self::Boolean(value) => {
                 let ident = value.to_ident(output.new_token_span());

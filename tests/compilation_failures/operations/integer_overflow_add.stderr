@@ -1,0 +1,5 @@
+error: The u8 operation 255 + 1 overflowed
+ --> tests/compilation_failures/operations/integer_overflow_add.rs:4:24
+  |
+4 |     let _ = run!(255u8 + 1u8);
+  |                        ^

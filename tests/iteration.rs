@@ -115,9 +115,12 @@ fn iterator_skip_and_take() {
 
 #[test]
 fn test_empty_stream_is_empty() {
-    preinterpret_assert_eq!({
-        %[] "hello" %[] %[]
-    }, "hello");
+    assert_eq!(
+        stream! {
+            %[] "hello" %[] %[]
+        },
+        "hello"
+    );
     assert!(run!(%[].is_empty()));
     assert!(run!(%[%[]].is_empty()));
     assert!(run!(%[%[] %[]].is_empty()));
@@ -300,8 +303,8 @@ fn complex_cases_for_intersperse_and_input_types() {
     );
     // All inputs can be variables
     // Inputs can be in any order
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let people = %[Anna Barbara Charlie];
             let separator = [", "];
             let final_separator = [" and "];
@@ -315,8 +318,8 @@ fn complex_cases_for_intersperse_and_input_types() {
     );
     // Add trailing is executed even if it's irrelevant because there are no items
     // This is no longer particularly unexpected due to the expression model
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let x = "NOT_EXECUTED";
             let _ = [].intersperse([], %{ add_trailing: { x = "EXECUTED"; false } });
             x
@@ -327,12 +330,12 @@ fn complex_cases_for_intersperse_and_input_types() {
 
 #[test]
 fn test_zip() {
-    preinterpret_assert_eq!(
-        #([%[Hello "Goodbye"], ["World", "Friend"]].zip().to_debug_string()),
+    assert_eq!(
+        run!([%[Hello "Goodbye"], ["World", "Friend"]].zip().to_debug_string()),
         r#"[[%[Hello], "World"], ["Goodbye", "Friend"]]"#,
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let countries = %["France" "Germany" "Italy"];
             let flags = %["🇫🇷" "🇩🇪" "🇮🇹"];
             let capitals = %["Paris" "Berlin" "Rome"];
@@ -340,32 +343,32 @@ fn test_zip() {
         ),
         r#"[["France", "🇫🇷", "Paris"], ["Germany", "🇩🇪", "Berlin"], ["Italy", "🇮🇹", "Rome"]]"#,
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let longer = %[A B C D];
             let shorter = [1, 2, 3];
             [longer, shorter].zip_truncated().to_debug_string()
         ),
         r#"[[%[A], 1], [%[B], 2], [%[C], 3]]"#,
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let letters = %[A B C];
             let numbers = [1, 2, 3];
             [letters, numbers].zip().to_debug_string()
         ),
         r#"[[%[A], 1], [%[B], 2], [%[C], 3]]"#,
     );
-    preinterpret_assert_eq!(
-        #(
+    assert_eq!(
+        run!(
             let letters = %[A B C];
             let numbers = [1, 2, 3];
             %{ number: numbers, letter: letters }.zip().to_debug_string()
         ),
         r#"[%{ letter: %[A], number: 1 }, %{ letter: %[B], number: 2 }, %{ letter: %[C], number: 3 }]"#,
     );
-    preinterpret_assert_eq!(#([].zip().to_debug_string()), r#"[]"#);
-    preinterpret_assert_eq!(#(%{}.zip().to_debug_string()), r#"[]"#);
+    assert_eq!(run!([].zip().to_debug_string()), r#"[]"#);
+    assert_eq!(run!(%{}.zip().to_debug_string()), r#"[]"#);
     // When a stream iterates, we look at each token tree, form a singleton stream from it to be the coerced value.
     // In reality this means that a stream is an iterator of singleton streams, so zipping it just returns itself
     // (wrapped in a couple of arrays)

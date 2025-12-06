@@ -63,13 +63,18 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 - [x] Migrate `UntypedInteger` to use `FallbackInteger` like `UntypedFloat` (except a little harder because integers can overflow)
 - [x] Migrate <, <=, >, >= from specific integer/float and untyped values to IntegerValue and FloatValue, in a similar way that we've done for paired arithmetic operators.
 - [x] Add `==` and `!=` support for all values (including streams, objects, arrays, parsers, unsupported literals, etc) and make it work with `AnyRef<..>` arguments for testing equality
-- [ ] Add a new test file, `operations.rs`, and add tests to cover all the operations, including:
-  - [ ] Cover all the binary operations with all valid type combinations
-  - [ ] For integers/streams, this will involve for each paired operator `1 x untyped/untyped`, `n x typed/typed`, `n x typed/untyped` and `n x untyped/typed` where `n` is the number of integer/float types there are.
-  - [ ] Create various examples of combinations / operations that don't compile, and create compilation failure tests for them in an `operations` folder, brainstorm ideas, but some ideas include:
-    - [ ] Operations between invalid types; at least one for each operation. e.g. `1 + []` or `1u32 + 3.0`
-    - [ ] Overflows, underflows, divide by 0s, etc
-  - [ ] Have a think about floats and test for infinity and NaN. Can such values be created in preinterpret? If not, how might we support creating them? How does rust do it? Is there an easy preinterpret equivalent?
+- [x] Add support for non-finite float values (infinity, NaN):
+  - [x] Added `output_to()` method to `FloatValue` that outputs `f32::INFINITY`, `f32::NEG_INFINITY`, `f32::NAN` (and f64 equivalents) for non-finite values, and uses `Literal::f32_suffixed()`/`Literal::f64_suffixed()` for finite values
+  - [x] Added float type constants: `f32::MAX`, `f32::MIN`, `f32::MIN_POSITIVE`, `f32::INFINITY`, `f32::NEG_INFINITY`, `f32::NAN`, `f32::EPSILON` (and f64 equivalents)
+  - [x] Added `is_nan()`, `is_infinite()`, `is_finite()`, `is_sign_positive()`, `is_sign_negative()` methods to float values
+- [x] Add a new test file, `operations.rs`, and add tests to cover all the operations, including:
+  - [x] Cover all the binary operations with all valid type combinations
+  - [x] For integers/streams, this will involve for each paired operator `1 x untyped/untyped`, `n x typed/typed`, `n x typed/untyped` and `n x untyped/typed` where `n` is the number of integer/float types there are.
+  - [x] Create various examples of combinations / operations that don't compile, and create compilation failure tests for them in an `operations` folder, brainstorm ideas, but some ideas include:
+    - [x] Operations between invalid types; at least one for each operation. e.g. `1 + []` or `1u32 + 3.0`
+    - [x] Overflows, underflows, divide by 0s, etc
+  - [x] Have a think about floats and test for infinity and NaN. Can such values be created in preinterpret? If not, how might we support creating them? How does rust do it? Is there an easy preinterpret equivalent?
+    - Finding: preinterpret now supports non-finite floats (INFINITY, NEG_INFINITY, NAN) via type constants and operations that produce them (e.g., `1.0f32 / 0.0f32`). Non-finite values are output as `f32::INFINITY`, etc.
 - [ ] Ensure all `TODO[operation-refactor]` and `TODO[compound-assignment-refactor]` are done
   - [ ] All value kinds should be generated with a macro which also generates a `#[test] list_all` method
   - [ ] We should create some unit tests in `value.rs` and functions `generate_example_values(value_kind)` which returns a `Vec<Value>` for each value kind.
