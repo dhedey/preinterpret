@@ -1,3 +1,4 @@
+#![allow(clippy::assertions_on_constants)]
 #[path = "helpers/prelude.rs"]
 mod prelude;
 use prelude::*;
