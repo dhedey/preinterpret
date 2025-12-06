@@ -15,7 +15,7 @@ impl HasValueKind for ParserValue {
 
 impl Debug for ParserValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Parser#{:?}", self.handle)
+        write!(f, "Parser[{:?}]", self.handle)
     }
 }
 
