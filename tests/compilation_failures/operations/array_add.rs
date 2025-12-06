@@ -1,5 +1,0 @@
-use preinterpret::*;
-
-fn main() {
-    let _ = run!([1, 2] + [3, 4]);
-}
