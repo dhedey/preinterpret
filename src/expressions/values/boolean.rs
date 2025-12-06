@@ -227,6 +227,5 @@ impl_resolvable_argument_for! {
 }
 
 impl_delegated_resolvable_argument_for! {
-    BooleanTypeData,
     (value: BooleanValue) -> bool { value.value }
 }

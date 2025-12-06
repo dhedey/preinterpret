@@ -95,9 +95,15 @@ impl ValuesEqual for StreamValue {
     }
 }
 
+impl IntoValue for StreamValue {
+    fn into_value(self) -> Value {
+        Value::Stream(self)
+    }
+}
+
 impl IntoValue for OutputStream {
     fn into_value(self) -> Value {
-        Value::Stream(StreamValue { value: self })
+        StreamValue { value: self }.into_value()
     }
 }
 
@@ -118,7 +124,6 @@ impl_resolvable_argument_for! {
 }
 
 impl_delegated_resolvable_argument_for!(
-    StreamTypeData,
     (value: StreamValue) -> OutputStream { value.value }
 );
 

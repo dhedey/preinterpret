@@ -236,7 +236,6 @@ impl_resolvable_argument_for! {
 }
 
 impl_delegated_resolvable_argument_for!(
-    StringTypeData,
     (value: StringValue) -> String { value.value }
 );
 
