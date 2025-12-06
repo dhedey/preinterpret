@@ -255,7 +255,8 @@ Later:
   * Break and continue statements should not leak out of function boundaries
   * This needs to be validated during the control flow pass
 - [ ] Optional arguments
-- [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`, - [ ] Add `array.sort`, `array.sort_by`
+- [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`
+- [ ] Add `array.sort`, `array.sort_by`
 - [ ] Add `stream.parse(|input| { ... })`
 - [ ] Add `let captured = input.capture(|input| { ... })`
   * This returns the parsed input stream. It can capture the original tokens by using `let forked = input.fork()` and then `let end_cursor = input.end();` and then consuming `TokenTree`s from `forked` until `forked.cursor >= end_cursor` (making use of the PartialEq implementation)
