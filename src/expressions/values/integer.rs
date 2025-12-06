@@ -193,25 +193,38 @@ impl ValuesEqual for IntegerValue {
             return ctx.not_equal(self, other);
         };
 
-        // After alignment, compare directly
+        // After alignment, compare directly.
+        // Each variant has two lines: same-type comparison, then type-mismatch fallback.
+        // This ensures adding a new variant causes a compiler error.
         let equal = match (lhs, rhs) {
             (IntegerValue::Untyped(l), IntegerValue::Untyped(r)) => {
                 l.into_fallback() == r.into_fallback()
             }
+            (IntegerValue::Untyped(_), _) => return ctx.not_equal(self, other),
             (IntegerValue::U8(l), IntegerValue::U8(r)) => l == r,
+            (IntegerValue::U8(_), _) => return ctx.not_equal(self, other),
             (IntegerValue::U16(l), IntegerValue::U16(r)) => l == r,
+            (IntegerValue::U16(_), _) => return ctx.not_equal(self, other),
             (IntegerValue::U32(l), IntegerValue::U32(r)) => l == r,
+            (IntegerValue::U32(_), _) => return ctx.not_equal(self, other),
             (IntegerValue::U64(l), IntegerValue::U64(r)) => l == r,
+            (IntegerValue::U64(_), _) => return ctx.not_equal(self, other),
             (IntegerValue::U128(l), IntegerValue::U128(r)) => l == r,
+            (IntegerValue::U128(_), _) => return ctx.not_equal(self, other),
             (IntegerValue::Usize(l), IntegerValue::Usize(r)) => l == r,
+            (IntegerValue::Usize(_), _) => return ctx.not_equal(self, other),
             (IntegerValue::I8(l), IntegerValue::I8(r)) => l == r,
+            (IntegerValue::I8(_), _) => return ctx.not_equal(self, other),
             (IntegerValue::I16(l), IntegerValue::I16(r)) => l == r,
+            (IntegerValue::I16(_), _) => return ctx.not_equal(self, other),
             (IntegerValue::I32(l), IntegerValue::I32(r)) => l == r,
+            (IntegerValue::I32(_), _) => return ctx.not_equal(self, other),
             (IntegerValue::I64(l), IntegerValue::I64(r)) => l == r,
+            (IntegerValue::I64(_), _) => return ctx.not_equal(self, other),
             (IntegerValue::I128(l), IntegerValue::I128(r)) => l == r,
+            (IntegerValue::I128(_), _) => return ctx.not_equal(self, other),
             (IntegerValue::Isize(l), IntegerValue::Isize(r)) => l == r,
-            // Different typed integers are never equal
-            _ => return ctx.not_equal(self, other),
+            (IntegerValue::Isize(_), _) => return ctx.not_equal(self, other),
         };
 
         if equal {

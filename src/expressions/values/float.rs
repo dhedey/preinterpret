@@ -109,15 +109,18 @@ impl ValuesEqual for FloatValue {
         // Align types (untyped -> typed conversion)
         let (lhs, rhs) = Self::align_types(*self, *other);
 
-        // After alignment, compare directly
+        // After alignment, compare directly.
+        // Each variant has two lines: same-type comparison, then type-mismatch fallback.
+        // This ensures adding a new variant causes a compiler error.
         let equal = match (lhs, rhs) {
             (FloatValue::Untyped(l), FloatValue::Untyped(r)) => {
                 l.into_fallback() == r.into_fallback()
             }
+            (FloatValue::Untyped(_), _) => return ctx.not_equal(self, other),
             (FloatValue::F32(l), FloatValue::F32(r)) => l == r,
+            (FloatValue::F32(_), _) => return ctx.not_equal(self, other),
             (FloatValue::F64(l), FloatValue::F64(r)) => l == r,
-            // Different typed floats are never equal
-            _ => return ctx.not_equal(self, other),
+            (FloatValue::F64(_), _) => return ctx.not_equal(self, other),
         };
 
         if equal {
