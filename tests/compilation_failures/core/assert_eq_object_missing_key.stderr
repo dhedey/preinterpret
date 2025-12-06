@@ -1,0 +1,7 @@
+error: Assertion failed: lhs has extra key "b", compared to rhs
+         lhs = %{ a: 1, b: 2 }
+         rhs = %{ a: 1, c: 2 }
+ --> tests/compilation_failures/core/assert_eq_object_missing_key.rs:4:12
+  |
+4 |     run!(%[_].assert_eq(%{ a: 1, b: 2 }, %{ a: 1, c: 2 }));
+  |            ^

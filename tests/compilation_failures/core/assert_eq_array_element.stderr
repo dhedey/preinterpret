@@ -1,0 +1,7 @@
+error: Assertion failed: lhs[1] != rhs[1]: 2 != 5
+         lhs = [1, 2, 3]
+         rhs = [1, 5, 3]
+ --> tests/compilation_failures/core/assert_eq_array_element.rs:4:12
+  |
+4 |     run!(%[_].assert_eq([1, 2, 3], [1, 5, 3]));
+  |            ^

@@ -339,8 +339,8 @@ impl BreakInterrupt {
     pub(crate) fn into_value(
         self,
         span_range: SpanRange,
-        ownership: RequestedValueOwnership,
-    ) -> ExecutionResult<EvaluationItem> {
+        ownership: RequestedOwnership,
+    ) -> ExecutionResult<RequestedValue> {
         let value = match self.value {
             Some(value) => value,
             None => ().into_owned_value(span_range),

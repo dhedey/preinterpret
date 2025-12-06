@@ -123,7 +123,7 @@ impl<'a> ExpressionParser<'a> {
                     "true" | "false" => {
                         let bool = input.parse::<syn::LitBool>()?;
                         UnaryAtom::Leaf(Leaf::Value(SharedValue::new_from_owned(
-                            BooleanExpression::for_litbool(&bool).into_owned_value(),
+                            BooleanValue::for_litbool(&bool).into_owned_value(),
                         )))
                     }
                     "if" => UnaryAtom::Leaf(Leaf::IfExpression(Box::new(input.parse()?))),
@@ -133,13 +133,21 @@ impl<'a> ExpressionParser<'a> {
                     "attempt" => UnaryAtom::Leaf(Leaf::AttemptExpression(Box::new(input.parse()?))),
                     "parse" => return Ok(UnaryAtom::Leaf(Leaf::ParseExpression(Box::new(input.parse()?)))),
                     "None" => UnaryAtom::Leaf(Leaf::Value(SharedValue::new_from_owned(
-                        ExpressionValue::None.into_owned(input.parse_any_ident()?.span_range()),
+                        Value::None.into_owned(input.parse_any_ident()?.span_range()),
                     ))),
-                    _ => UnaryAtom::Leaf(Leaf::Variable(input.parse()?))
+                    _ => {
+                        let (_ident, next) = input.cursor().ident().unwrap();
+                        if let Some((_, next)) = next.punct_matching(':') {
+                            if let Some((_, _)) = next.punct_matching(':') {
+                                return Ok(UnaryAtom::Leaf(Leaf::TypeProperty(input.parse()?)));
+                            }
+                        }
+                        UnaryAtom::Leaf(Leaf::Variable(input.parse()?))
+                    }
                 }
             },
             SourcePeekMatch::Literal(_) => {
-                let value = ExpressionValue::for_syn_lit(input.parse()?);
+                let value = Value::for_syn_lit(input.parse()?);
                 UnaryAtom::Leaf(Leaf::Value(SharedValue::new_from_owned(value)))
             },
             SourcePeekMatch::StreamLiteral(_) => {
@@ -189,6 +197,8 @@ impl<'a> ExpressionParser<'a> {
                 }
             }
             SourcePeekMatch::Punct(punct) => {
+                // TODO[performance]: Get rid of the try_parse_or_revert and convert this into
+                // a parse tree
                 if punct.as_char() == '.' && input.peek2(syn::Ident) {
                     let dot = input.parse()?;
                     let ident = input.parse()?;
@@ -205,20 +215,17 @@ impl<'a> ExpressionParser<'a> {
                         property: ident,
                     }));
                 }
-                if let Ok(operation) = input.try_parse_or_revert() {
-                    return Ok(NodeExtension::CompoundAssignmentOperation(operation));
+                if let Some((punct, _)) = input.cursor().punct_matching('=') {
+                    // Ensure that a guard expression `{} if XX => ` can be parsed correctly.
+                    if punct.spacing() == Spacing::Alone {
+                        return Ok(NodeExtension::AssignmentOperation(input.parse()?));
+                    }
                 }
                 if let Ok(operation) = input.try_parse_or_revert() {
                     return Ok(NodeExtension::BinaryOperation(operation));
                 }
                 if let Ok(range_limits) = input.try_parse_or_revert() {
                     return Ok(NodeExtension::Range(range_limits));
-                }
-                // Ensure that a guard expression `{} if XX => ` can be parsed correctly.
-                if !input.peek(Token![=>]) {
-                    if let Ok(eq) = input.try_parse_or_revert() {
-                        return Ok(NodeExtension::AssignmentOperation(eq));
-                    }
                 }
             }
             SourcePeekMatch::Ident(ident) if ident == "as" => {
@@ -255,8 +262,7 @@ impl<'a> ExpressionParser<'a> {
             ExpressionStackFrame::IncompleteUnaryPrefixOperation { .. }
             | ExpressionStackFrame::IncompleteBinaryOperation { .. }
             | ExpressionStackFrame::IncompleteRange { .. }
-            | ExpressionStackFrame::IncompleteAssignment { .. }
-            | ExpressionStackFrame::IncompleteCompoundAssignment { .. } => {
+            | ExpressionStackFrame::IncompleteAssignment { .. } => {
                 Ok(NodeExtension::NoValidExtensionForCurrentParent)
             }
         }
@@ -394,12 +400,6 @@ impl<'a> ExpressionParser<'a> {
                         equals_token,
                     })
                 }
-                NodeExtension::CompoundAssignmentOperation(operation) => {
-                    self.push_stack_frame(ExpressionStackFrame::IncompleteCompoundAssignment {
-                        place: node,
-                        operation,
-                    })
-                }
                 NodeExtension::EndOfStreamOrGroup
                 | NodeExtension::NoValidExtensionForCurrentParent => {
                     unreachable!("Not possible, as these have minimum precedence")
@@ -534,14 +534,6 @@ impl<'a> ExpressionParser<'a> {
                     let node = self.nodes.add_node(ExpressionNode::Assignment {
                         assignee,
                         equals_token,
-                        value: node,
-                    });
-                    extension.into_post_operation_completion_work_item(node)
-                }
-                ExpressionStackFrame::IncompleteCompoundAssignment { place, operation } => {
-                    let node = self.nodes.add_node(ExpressionNode::CompoundAssignment {
-                        assignee: place,
-                        operation,
                         value: node,
                     });
                     extension.into_post_operation_completion_work_item(node)
@@ -774,37 +766,37 @@ impl OperatorPrecendence {
 
     fn of_binary_operation(op: &BinaryOperation) -> Self {
         match op {
-            BinaryOperation::Integer(op) => Self::of_integer_binary_operator(op),
-            BinaryOperation::Paired(op) => Self::of_paired_binary_operator(op),
-        }
-    }
-
-    fn of_integer_binary_operator(op: &IntegerBinaryOperation) -> Self {
-        match op {
-            IntegerBinaryOperation::ShiftLeft { .. }
-            | IntegerBinaryOperation::ShiftRight { .. } => OperatorPrecendence::Shift,
-        }
-    }
-
-    fn of_paired_binary_operator(op: &PairedBinaryOperation) -> Self {
-        match op {
-            PairedBinaryOperation::Addition { .. } | PairedBinaryOperation::Subtraction { .. } => {
-                Self::Sum
-            }
-            PairedBinaryOperation::Multiplication { .. }
-            | PairedBinaryOperation::Division { .. }
-            | PairedBinaryOperation::Remainder { .. } => Self::Product,
-            PairedBinaryOperation::LogicalAnd { .. } => Self::And,
-            PairedBinaryOperation::LogicalOr { .. } => Self::Or,
-            PairedBinaryOperation::BitXor { .. } => Self::BitXor,
-            PairedBinaryOperation::BitAnd { .. } => Self::BitAnd,
-            PairedBinaryOperation::BitOr { .. } => Self::BitOr,
-            PairedBinaryOperation::Equal { .. }
-            | PairedBinaryOperation::LessThan { .. }
-            | PairedBinaryOperation::LessThanOrEqual { .. }
-            | PairedBinaryOperation::NotEqual { .. }
-            | PairedBinaryOperation::GreaterThanOrEqual { .. }
-            | PairedBinaryOperation::GreaterThan { .. } => Self::Compare,
+            // Arithmetic
+            BinaryOperation::Addition { .. } | BinaryOperation::Subtraction { .. } => Self::Sum,
+            BinaryOperation::Multiplication { .. }
+            | BinaryOperation::Division { .. }
+            | BinaryOperation::Remainder { .. } => Self::Product,
+            // Logical
+            BinaryOperation::LogicalAnd { .. } => Self::And,
+            BinaryOperation::LogicalOr { .. } => Self::Or,
+            // Bitwise
+            BinaryOperation::BitXor { .. } => Self::BitXor,
+            BinaryOperation::BitAnd { .. } => Self::BitAnd,
+            BinaryOperation::BitOr { .. } => Self::BitOr,
+            BinaryOperation::ShiftLeft { .. } | BinaryOperation::ShiftRight { .. } => Self::Shift,
+            // Comparison
+            BinaryOperation::Equal { .. }
+            | BinaryOperation::NotEqual { .. }
+            | BinaryOperation::LessThan { .. }
+            | BinaryOperation::LessThanOrEqual { .. }
+            | BinaryOperation::GreaterThan { .. }
+            | BinaryOperation::GreaterThanOrEqual { .. } => Self::Compare,
+            // Compound assignment
+            BinaryOperation::AddAssign { .. }
+            | BinaryOperation::SubAssign { .. }
+            | BinaryOperation::MulAssign { .. }
+            | BinaryOperation::DivAssign { .. }
+            | BinaryOperation::RemAssign { .. }
+            | BinaryOperation::BitAndAssign { .. }
+            | BinaryOperation::BitOrAssign { .. }
+            | BinaryOperation::BitXorAssign { .. }
+            | BinaryOperation::ShlAssign { .. }
+            | BinaryOperation::ShrAssign { .. } => Self::Assign,
         }
     }
 }
@@ -949,14 +941,6 @@ pub(super) enum ExpressionStackFrame {
         assignee: ExpressionNodeId,
         equals_token: Token![=],
     },
-    /// An incomplete assignment operation
-    /// It's left side is a place expression, according to the [rust reference].
-    ///
-    /// [rust reference]: https://doc.rust-lang.org/reference/expressions.html#place-expressions-and-value-expressions
-    IncompleteCompoundAssignment {
-        place: ExpressionNodeId,
-        operation: CompoundAssignmentOperation,
-    },
     /// A range which will be followed by a rhs
     IncompleteRange {
         lhs: Option<ExpressionNodeId>,
@@ -992,9 +976,6 @@ impl ExpressionStackFrame {
             ExpressionStackFrame::IncompleteIndex { .. } => OperatorPrecendence::MIN,
             ExpressionStackFrame::IncompleteRange { .. } => OperatorPrecendence::Range,
             ExpressionStackFrame::IncompleteAssignment { .. } => OperatorPrecendence::Assign,
-            ExpressionStackFrame::IncompleteCompoundAssignment { .. } => {
-                OperatorPrecendence::Assign
-            }
             ExpressionStackFrame::IncompleteUnaryPrefixOperation { operation, .. } => {
                 OperatorPrecendence::of_prefix_unary_operation(operation)
             }
@@ -1054,7 +1035,6 @@ pub(super) enum NodeExtension {
     Index(IndexAccess),
     Range(syn::RangeLimits),
     AssignmentOperation(Token![=]),
-    CompoundAssignmentOperation(CompoundAssignmentOperation),
     EndOfStreamOrGroup,
     NoValidExtensionForCurrentParent,
 }
@@ -1071,7 +1051,6 @@ impl NodeExtension {
             NodeExtension::Range(_) => OperatorPrecendence::Range,
             NodeExtension::EndOfStreamOrGroup => OperatorPrecendence::MIN,
             NodeExtension::AssignmentOperation(_) => OperatorPrecendence::AssignExtension,
-            NodeExtension::CompoundAssignmentOperation(_) => OperatorPrecendence::AssignExtension,
             NodeExtension::NoValidExtensionForCurrentParent => OperatorPrecendence::MIN,
         }
     }
@@ -1087,7 +1066,6 @@ impl NodeExtension {
             | NodeExtension::Index { .. }
             | NodeExtension::Range { .. }
             | NodeExtension::AssignmentOperation { .. }
-            | NodeExtension::CompoundAssignmentOperation { .. }
             | NodeExtension::EndOfStreamOrGroup) => {
                 WorkItem::TryApplyAlreadyParsedExtension { node, extension }
             }

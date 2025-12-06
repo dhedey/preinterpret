@@ -19,16 +19,16 @@ pub(super) enum AnyAssignmentFrame {
 }
 
 impl AnyAssignmentFrame {
-    pub(super) fn handle_item(
+    pub(super) fn handle_next(
         self,
         context: Context<AssignmentType>,
-        item: EvaluationItem,
+        value: RequestedValue,
     ) -> ExecutionResult<NextAction> {
         match self {
-            Self::Assignee(frame) => frame.handle_item(context, item),
-            Self::Grouped(frame) => frame.handle_item(context, item),
-            Self::Object(frame) => frame.handle_item(context, item),
-            Self::Array(frame) => frame.handle_item(context, item),
+            Self::Assignee(frame) => frame.handle_next(context, value),
+            Self::Grouped(frame) => frame.handle_next(context, value),
+            Self::Object(frame) => frame.handle_next(context, value),
+            Self::Array(frame) => frame.handle_next(context, value),
         }
     }
 }
@@ -36,17 +36,17 @@ impl AnyAssignmentFrame {
 struct PrivateUnit;
 
 pub(super) struct AssigneeAssigner {
-    value: ExpressionValue,
+    value: Value,
 }
 
 impl AssigneeAssigner {
     pub(super) fn start(
         context: AssignmentContext,
         assignee: ExpressionNodeId,
-        value: ExpressionValue,
+        value: Value,
     ) -> NextAction {
         let frame = Self { value };
-        context.handle_node_as_assignee(frame, assignee)
+        context.request_assignee(frame, assignee, true)
     }
 }
 
@@ -57,15 +57,15 @@ impl EvaluationFrame for AssigneeAssigner {
         AnyAssignmentFrame::Assignee(self)
     }
 
-    fn handle_item(
+    fn handle_next(
         self,
         context: AssignmentContext,
-        item: EvaluationItem,
+        value: RequestedValue,
     ) -> ExecutionResult<NextAction> {
-        let mut mutable_place = item.expect_assignee();
+        let mut assignee = value.expect_assignee();
         let value = self.value;
-        let span_range = mutable_place.span_range();
-        mutable_place.set(value);
+        let span_range = assignee.span_range();
+        assignee.set(value);
         Ok(context.return_assignment_completion(span_range))
     }
 }
@@ -76,10 +76,10 @@ impl GroupedAssigner {
     pub(super) fn start(
         context: AssignmentContext,
         inner: ExpressionNodeId,
-        value: ExpressionValue,
+        value: Value,
     ) -> NextAction {
         let frame = Self(PrivateUnit);
-        context.handle_node_as_assignment(frame, inner, value)
+        context.request_assignment(frame, inner, value)
     }
 }
 
@@ -90,19 +90,19 @@ impl EvaluationFrame for GroupedAssigner {
         AnyAssignmentFrame::Grouped(self)
     }
 
-    fn handle_item(
+    fn handle_next(
         self,
         context: AssignmentContext,
-        item: EvaluationItem,
+        value: RequestedValue,
     ) -> ExecutionResult<NextAction> {
-        let AssignmentCompletion { span_range } = item.expect_assignment_completion();
+        let AssignmentCompletion { span_range } = value.expect_assignment_completion();
         Ok(context.return_assignment_completion(span_range))
     }
 }
 
 pub(super) struct ArrayBasedAssigner {
     span_range: SpanRange,
-    assignee_stack: Vec<(ExpressionNodeId, ExpressionValue)>,
+    assignee_stack: Vec<(ExpressionNodeId, Value)>,
 }
 
 impl ArrayBasedAssigner {
@@ -111,10 +111,10 @@ impl ArrayBasedAssigner {
         nodes: &Arena<ExpressionNodeId, ExpressionNode>,
         brackets: &Brackets,
         assignee_item_node_ids: &[ExpressionNodeId],
-        value: ExpressionValue,
+        value: Value,
     ) -> ExecutionResult<NextAction> {
         let frame = Self::new(nodes, brackets.join(), assignee_item_node_ids, value)?;
-        Ok(frame.handle_next(context))
+        Ok(frame.handle_next_subassignment(context))
     }
 
     /// See also `ArrayPattern` in `patterns.rs`
@@ -122,10 +122,10 @@ impl ArrayBasedAssigner {
         nodes: &Arena<ExpressionNodeId, ExpressionNode>,
         assignee_span: Span,
         assignee_item_node_ids: &[ExpressionNodeId],
-        value: ExpressionValue,
+        value: Value,
     ) -> ExecutionResult<Self> {
         let span_range = assignee_span.span_range();
-        let array: ArrayExpression = value
+        let array: ArrayValue = value
             .into_owned(span_range)
             .resolve_as("The value destructured as an array")?;
         let mut has_seen_dot_dot = false;
@@ -195,9 +195,9 @@ impl ArrayBasedAssigner {
         })
     }
 
-    fn handle_next(mut self, context: AssignmentContext) -> NextAction {
+    fn handle_next_subassignment(mut self, context: AssignmentContext) -> NextAction {
         match self.assignee_stack.pop() {
-            Some((node, value)) => context.handle_node_as_assignment(self, node, value),
+            Some((node, value)) => context.request_assignment(self, node, value),
             None => context.return_assignment_completion(self.span_range),
         }
     }
@@ -210,13 +210,13 @@ impl EvaluationFrame for ArrayBasedAssigner {
         AnyAssignmentFrame::Array(self)
     }
 
-    fn handle_item(
+    fn handle_next(
         self,
         context: AssignmentContext,
-        item: EvaluationItem,
+        value: RequestedValue,
     ) -> ExecutionResult<NextAction> {
-        let AssignmentCompletion { .. } = item.expect_assignment_completion();
-        Ok(self.handle_next(context))
+        let AssignmentCompletion { .. } = value.expect_assignment_completion();
+        Ok(self.handle_next_subassignment(context))
     }
 }
 
@@ -241,19 +241,19 @@ impl ObjectBasedAssigner {
         context: AssignmentContext,
         braces: &Braces,
         assignee_pairs: &[(ObjectKey, ExpressionNodeId)],
-        value: ExpressionValue,
+        value: Value,
     ) -> ExecutionResult<NextAction> {
         let frame = Box::new(Self::new(braces.join(), assignee_pairs, value)?);
-        frame.handle_next(context)
+        frame.handle_next_subassignment(context)
     }
 
     fn new(
         assignee_span: Span,
         assignee_pairs: &[(ObjectKey, ExpressionNodeId)],
-        value: ExpressionValue,
+        value: Value,
     ) -> ExecutionResult<Self> {
         let span_range = assignee_span.span_range();
-        let object: ObjectExpression = value
+        let object: ObjectValue = value
             .into_owned(span_range)
             .resolve_as("The value destructured as an object")?;
 
@@ -270,23 +270,26 @@ impl ObjectBasedAssigner {
         mut self: Box<Self>,
         context: AssignmentContext,
         access: IndexAccess,
-        index: &ExpressionValue,
+        index: &Value,
         assignee_node: ExpressionNodeId,
     ) -> ExecutionResult<NextAction> {
         let key: &str = index
             .spanned(access.span_range())
             .resolve_as("An object key")?;
         let value = self.resolve_value(key.to_string(), access.span())?;
-        Ok(context.handle_node_as_assignment(self, assignee_node, value))
+        Ok(context.request_assignment(self, assignee_node, value))
     }
 
-    fn handle_next(mut self: Box<Self>, context: AssignmentContext) -> ExecutionResult<NextAction> {
+    fn handle_next_subassignment(
+        mut self: Box<Self>,
+        context: AssignmentContext,
+    ) -> ExecutionResult<NextAction> {
         Ok(match self.unresolved_stack.pop() {
             Some((ObjectKey::Identifier(ident), assignee_node)) => {
                 let key = ident.to_string();
                 let value = self.resolve_value(key, ident.span())?;
                 self.state = ObjectAssignmentState::WaitingForSubassignment;
-                context.handle_node_as_assignment(self, assignee_node, value)
+                context.request_assignment(self, assignee_node, value)
             }
             Some((ObjectKey::Indexed { index, access }, assignee_node)) => {
                 self.state = ObjectAssignmentState::ResolvingIndex {
@@ -294,13 +297,13 @@ impl ObjectBasedAssigner {
                     access,
                 };
                 // This only needs to be read-only, as we are just using it to work out which field/s to assign
-                context.handle_node_as_shared(self, index)
+                context.request_shared(self, index)
             }
             None => context.return_assignment_completion(self.span_range),
         })
     }
 
-    fn resolve_value(&mut self, key: String, key_span: Span) -> ExecutionResult<ExpressionValue> {
+    fn resolve_value(&mut self, key: String, key_span: Span) -> ExecutionResult<Value> {
         if self.already_used_keys.contains(&key) {
             return key_span.syntax_err(format!("The key `{}` has already used", key));
         }
@@ -308,7 +311,7 @@ impl ObjectBasedAssigner {
             .entries
             .remove(&key)
             .map(|entry| entry.value)
-            .unwrap_or_else(|| ExpressionValue::None);
+            .unwrap_or_else(|| Value::None);
         self.already_used_keys.insert(key);
         Ok(value)
     }
@@ -321,22 +324,22 @@ impl EvaluationFrame for Box<ObjectBasedAssigner> {
         AnyAssignmentFrame::Object(self)
     }
 
-    fn handle_item(
+    fn handle_next(
         self,
         context: AssignmentContext,
-        item: EvaluationItem,
+        value: RequestedValue,
     ) -> ExecutionResult<NextAction> {
         match self.state {
             ObjectAssignmentState::ResolvingIndex {
                 assignee_node,
                 access,
             } => {
-                let index_place = item.expect_shared();
+                let index_place = value.expect_shared();
                 self.handle_index_value(context, access, index_place.as_ref(), assignee_node)
             }
             ObjectAssignmentState::WaitingForSubassignment => {
-                let AssignmentCompletion { .. } = item.expect_assignment_completion();
-                self.handle_next(context)
+                let AssignmentCompletion { .. } = value.expect_assignment_completion();
+                self.handle_next_subassignment(context)
             }
         }
     }

@@ -30,7 +30,7 @@ macro_rules! create_method_interface {
     ($method_name:path[$($arg_part:ident)+ : $ty:ty $(,)?]) => {
         MethodInterface::Arity1 {
             method: |context, a| apply_fn1($method_name, a, context),
-            argument_ownership: [<$ty as FromResolved>::OWNERSHIP],
+            argument_ownership: [<$ty as IsArgument>::OWNERSHIP],
         }
     };
     ($method_name:path[
@@ -40,8 +40,8 @@ macro_rules! create_method_interface {
         MethodInterface::Arity1PlusOptional1 {
             method: |context, a, b| apply_fn1_optional1($method_name, a, b, context),
             argument_ownership: [
-                <$ty1 as FromResolved>::OWNERSHIP,
-                <$ty2 as FromResolved>::OWNERSHIP,
+                <$ty1 as IsArgument>::OWNERSHIP,
+                <$ty2 as IsArgument>::OWNERSHIP,
             ],
         }
     };
@@ -52,8 +52,8 @@ macro_rules! create_method_interface {
         MethodInterface::Arity2 {
             method: |context, a, b| apply_fn2($method_name, a, b, context),
             argument_ownership: [
-                <$ty1 as FromResolved>::OWNERSHIP,
-                <$ty2 as FromResolved>::OWNERSHIP,
+                <$ty1 as IsArgument>::OWNERSHIP,
+                <$ty2 as IsArgument>::OWNERSHIP,
             ],
         }
     };
@@ -65,9 +65,9 @@ macro_rules! create_method_interface {
         MethodInterface::Arity2PlusOptional1 {
             method: |context, a, b, c| apply_fn2_optional1($method_name, a, b, c, context),
             argument_ownership: [
-                <$ty1 as FromResolved>::OWNERSHIP,
-                <$ty2 as FromResolved>::OWNERSHIP,
-                <$ty3 as FromResolved>::OWNERSHIP,
+                <$ty1 as IsArgument>::OWNERSHIP,
+                <$ty2 as IsArgument>::OWNERSHIP,
+                <$ty3 as IsArgument>::OWNERSHIP,
             ],
         }
     };
@@ -79,9 +79,9 @@ macro_rules! create_method_interface {
         MethodInterface::Arity3 {
             method: |context, a, b, c| apply_fn3($method_name, a, b, c, context),
             argument_ownership: [
-                <$ty1 as FromResolved>::OWNERSHIP,
-                <$ty2 as FromResolved>::OWNERSHIP,
-                <$ty3 as FromResolved>::OWNERSHIP,
+                <$ty1 as IsArgument>::OWNERSHIP,
+                <$ty2 as IsArgument>::OWNERSHIP,
+                <$ty3 as IsArgument>::OWNERSHIP,
             ],
         }
     };
@@ -94,10 +94,10 @@ macro_rules! create_method_interface {
         MethodInterface::Arity3PlusOptional1 {
             method: |context, a, b, c, d| apply_fn3_optional1($method_name, a, b, c, d, context),
             argument_ownership: [
-                <$ty1 as FromResolved>::OWNERSHIP,
-                <$ty2 as FromResolved>::OWNERSHIP,
-                <$ty3 as FromResolved>::OWNERSHIP,
-                <$ty4 as FromResolved>::OWNERSHIP,
+                <$ty1 as IsArgument>::OWNERSHIP,
+                <$ty2 as IsArgument>::OWNERSHIP,
+                <$ty3 as IsArgument>::OWNERSHIP,
+                <$ty4 as IsArgument>::OWNERSHIP,
             ],
         }
     };
@@ -110,156 +110,184 @@ macro_rules! create_method_interface {
 pub(crate) fn apply_fn0<R>(
     f: fn(&mut MethodCallContext) -> R,
     context: &mut MethodCallContext,
-) -> ExecutionResult<ResolvedValue>
+) -> ExecutionResult<ReturnedValue>
 where
-    R: ResolvableOutput,
+    R: IsReturnable,
 {
     let output_span_range = context.output_span_range;
-    f(context).to_resolved_value(output_span_range)
+    f(context).to_returned_value(output_span_range)
 }
 
 pub(crate) fn apply_fn1<A, R>(
     f: fn(&mut MethodCallContext, A) -> R,
-    a: ResolvedValue,
+    a: ArgumentValue,
     context: &mut MethodCallContext,
-) -> ExecutionResult<ResolvedValue>
+) -> ExecutionResult<ReturnedValue>
 where
-    A: FromResolved,
-    R: ResolvableOutput,
+    A: IsArgument,
+    R: IsReturnable,
 {
     let output_span_range = context.output_span_range;
-    f(context, A::from_resolved(a)?).to_resolved_value(output_span_range)
+    f(context, A::from_argument(a)?).to_returned_value(output_span_range)
 }
 
 #[allow(unused)]
 pub(crate) fn apply_fn1_optional1<A, B, C>(
     f: fn(&mut MethodCallContext, A, Option<B>) -> C,
-    a: ResolvedValue,
-    b: Option<ResolvedValue>,
+    a: ArgumentValue,
+    b: Option<ArgumentValue>,
     context: &mut MethodCallContext,
-) -> ExecutionResult<ResolvedValue>
+) -> ExecutionResult<ReturnedValue>
 where
-    A: FromResolved,
-    B: FromResolved,
-    C: ResolvableOutput,
+    A: IsArgument,
+    B: IsArgument,
+    C: IsReturnable,
 {
     let output_span_range = context.output_span_range;
     f(
         context,
-        A::from_resolved(a)?,
-        b.map(|b| B::from_resolved(b)).transpose()?,
+        A::from_argument(a)?,
+        b.map(|b| B::from_argument(b)).transpose()?,
     )
-    .to_resolved_value(output_span_range)
+    .to_returned_value(output_span_range)
 }
 
 pub(crate) fn apply_fn2<A, B, C>(
     f: fn(&mut MethodCallContext, A, B) -> C,
-    a: ResolvedValue,
-    b: ResolvedValue,
+    a: ArgumentValue,
+    b: ArgumentValue,
     context: &mut MethodCallContext,
-) -> ExecutionResult<ResolvedValue>
+) -> ExecutionResult<ReturnedValue>
 where
-    A: FromResolved,
-    B: FromResolved,
-    C: ResolvableOutput,
+    A: IsArgument,
+    B: IsArgument,
+    C: IsReturnable,
 {
     let output_span_range = context.output_span_range;
-    f(context, A::from_resolved(a)?, B::from_resolved(b)?).to_resolved_value(output_span_range)
+    f(context, A::from_argument(a)?, B::from_argument(b)?).to_returned_value(output_span_range)
 }
 
 pub(crate) fn apply_fn2_optional1<A, B, C, D>(
     f: fn(&mut MethodCallContext, A, B, Option<C>) -> D,
-    a: ResolvedValue,
-    b: ResolvedValue,
-    c: Option<ResolvedValue>,
+    a: ArgumentValue,
+    b: ArgumentValue,
+    c: Option<ArgumentValue>,
     context: &mut MethodCallContext,
-) -> ExecutionResult<ResolvedValue>
+) -> ExecutionResult<ReturnedValue>
 where
-    A: FromResolved,
-    B: FromResolved,
-    C: FromResolved,
-    D: ResolvableOutput,
+    A: IsArgument,
+    B: IsArgument,
+    C: IsArgument,
+    D: IsReturnable,
 {
     let output_span_range = context.output_span_range;
     f(
         context,
-        A::from_resolved(a)?,
-        B::from_resolved(b)?,
-        c.map(|c| C::from_resolved(c)).transpose()?,
+        A::from_argument(a)?,
+        B::from_argument(b)?,
+        c.map(|c| C::from_argument(c)).transpose()?,
     )
-    .to_resolved_value(output_span_range)
+    .to_returned_value(output_span_range)
 }
 
 #[allow(unused)]
 pub(crate) fn apply_fn3<A, B, C, R>(
     f: fn(&mut MethodCallContext, A, B, C) -> R,
-    a: ResolvedValue,
-    b: ResolvedValue,
-    c: ResolvedValue,
+    a: ArgumentValue,
+    b: ArgumentValue,
+    c: ArgumentValue,
     context: &mut MethodCallContext,
-) -> ExecutionResult<ResolvedValue>
+) -> ExecutionResult<ReturnedValue>
 where
-    A: FromResolved,
-    B: FromResolved,
-    C: FromResolved,
-    R: ResolvableOutput,
+    A: IsArgument,
+    B: IsArgument,
+    C: IsArgument,
+    R: IsReturnable,
 {
     let output_span_range = context.output_span_range;
     f(
         context,
-        A::from_resolved(a)?,
-        B::from_resolved(b)?,
-        C::from_resolved(c)?,
+        A::from_argument(a)?,
+        B::from_argument(b)?,
+        C::from_argument(c)?,
     )
-    .to_resolved_value(output_span_range)
+    .to_returned_value(output_span_range)
 }
 
 pub(crate) fn apply_fn3_optional1<A, B, C, D, R>(
     f: fn(&mut MethodCallContext, A, B, C, Option<D>) -> R,
-    a: ResolvedValue,
-    b: ResolvedValue,
-    c: ResolvedValue,
-    d: Option<ResolvedValue>,
+    a: ArgumentValue,
+    b: ArgumentValue,
+    c: ArgumentValue,
+    d: Option<ArgumentValue>,
     context: &mut MethodCallContext,
-) -> ExecutionResult<ResolvedValue>
+) -> ExecutionResult<ReturnedValue>
 where
-    A: FromResolved,
-    B: FromResolved,
-    C: FromResolved,
-    D: FromResolved,
-    R: ResolvableOutput,
+    A: IsArgument,
+    B: IsArgument,
+    C: IsArgument,
+    D: IsArgument,
+    R: IsReturnable,
 {
     let output_span_range = context.output_span_range;
     f(
         context,
-        A::from_resolved(a)?,
-        B::from_resolved(b)?,
-        C::from_resolved(c)?,
-        d.map(|d| D::from_resolved(d)).transpose()?,
+        A::from_argument(a)?,
+        B::from_argument(b)?,
+        C::from_argument(c)?,
+        d.map(|d| D::from_argument(d)).transpose()?,
     )
-    .to_resolved_value(output_span_range)
+    .to_returned_value(output_span_range)
 }
 
 macro_rules! create_unary_interface {
     ($method_name:path[$($arg_part:ident)+ : $ty:ty $(,)?]) => {
         UnaryOperationInterface {
             method: |context, a| apply_unary_fn($method_name, a, context),
-            argument_ownership: <$ty as FromResolved>::OWNERSHIP,
+            argument_ownership: <$ty as IsArgument>::OWNERSHIP,
         }
     };
 }
 
 pub(crate) fn apply_unary_fn<A, R>(
     f: fn(UnaryOperationCallContext, A) -> R,
-    a: ResolvedValue,
+    a: ArgumentValue,
     context: UnaryOperationCallContext,
-) -> ExecutionResult<ResolvedValue>
+) -> ExecutionResult<ReturnedValue>
 where
-    A: FromResolved,
-    R: ResolvableOutput,
+    A: IsArgument,
+    R: IsReturnable,
 {
     let output_span_range = context.output_span_range;
-    f(context, A::from_resolved(a)?).to_resolved_value(output_span_range)
+    f(context, A::from_argument(a)?).to_returned_value(output_span_range)
+}
+
+macro_rules! create_binary_interface {
+    ($method_name:path[
+        $($lhs_part:ident)+ : $lhs_ty:ty,
+        $($rhs_part:ident)+ : $rhs_ty:ty $(,)?
+    ]) => {
+        BinaryOperationInterface {
+            method: |context, lhs, rhs| apply_binary_fn($method_name, lhs, rhs, context),
+            lhs_ownership: <$lhs_ty as IsArgument>::OWNERSHIP,
+            rhs_ownership: <$rhs_ty as IsArgument>::OWNERSHIP,
+        }
+    };
+}
+
+pub(crate) fn apply_binary_fn<A, B, R>(
+    f: fn(BinaryOperationCallContext, A, B) -> R,
+    lhs: ArgumentValue,
+    rhs: ArgumentValue,
+    context: BinaryOperationCallContext,
+) -> ExecutionResult<ReturnedValue>
+where
+    A: IsArgument,
+    B: IsArgument,
+    R: IsReturnable,
+{
+    let output_span_range = context.output_span_range;
+    f(context, A::from_argument(lhs)?, B::from_argument(rhs)?).to_returned_value(output_span_range)
 }
 
 pub(crate) struct MethodCallContext<'a> {
@@ -273,9 +301,27 @@ impl<'a> HasSpanRange for MethodCallContext<'a> {
     }
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct UnaryOperationCallContext<'a> {
     pub operation: &'a UnaryOperation,
     pub output_span_range: SpanRange,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct BinaryOperationCallContext<'a> {
+    pub operation: &'a BinaryOperation,
+    pub output_span_range: SpanRange,
+}
+
+impl<'a> BinaryOperationCallContext<'a> {
+    #[allow(unused)]
+    pub(crate) fn err<T>(&self, message: impl std::fmt::Display) -> ExecutionResult<T> {
+        self.operation.value_err(message)
+    }
+
+    pub(crate) fn error(&self, message: impl std::fmt::Display) -> ExecutionInterrupt {
+        self.operation.value_error(message)
+    }
 }
 
 macro_rules! define_interface {
@@ -291,6 +337,11 @@ macro_rules! define_interface {
             $mod_unary_operations_vis:vis mod unary_operations {
                 $(
                     $([$unary_context:ident])? fn $unary_name:ident($($unary_args:tt)*) $(-> $unary_output_ty:ty)? $([ignore_type_assertion $unary_ignore_type_assertion:tt])? $unary_body:block
+                )*
+            }
+            $mod_binary_operations_vis:vis mod binary_operations {
+                $(
+                    $([$binary_context:ident])? fn $binary_name:ident($($binary_args:tt)*) $(-> $binary_output_ty:ty)? $([ignore_type_assertion $binary_ignore_type_assertion:tt])? $binary_body:block
                 )*
             }
             interface_items {
@@ -331,6 +382,14 @@ macro_rules! define_interface {
                         {$($unary_ignore_type_assertion)?}
                         {}
                         {$($type_data::assert_output_type::<$unary_output_ty>();)?}
+                    }
+                )*
+                $(
+                    $type_data::assert_first_argument::<handle_first_arg_type!($($binary_args)*,)>();
+                    if_exists! {
+                        {$($binary_ignore_type_assertion)?}
+                        {}
+                        {$($type_data::assert_output_type::<$binary_output_ty>();)?}
                     }
                 )*
             }
@@ -375,6 +434,26 @@ macro_rules! define_interface {
                 )*
             }
 
+            $mod_binary_operations_vis mod binary_operations {
+                #[allow(unused)]
+                use super::*;
+                $(
+                    $mod_binary_operations_vis fn $binary_name(if_empty!([$($binary_context)?][_context]): BinaryOperationCallContext, $($binary_args)*) $(-> $binary_output_ty)? {
+                        $binary_body
+                    }
+                )*
+            }
+
+            $mod_binary_operations_vis mod binary_definitions {
+                #[allow(unused)]
+                use super::*;
+                $(
+                    $mod_binary_operations_vis fn $binary_name() -> BinaryOperationInterface {
+                        create_binary_interface!(binary_operations::$binary_name[$($binary_args)*])
+                    }
+                )*
+            }
+
             impl HierarchicalTypeData for $type_data {
                 type Parent = $parent_type_data;
                 const PARENT: Option<Self::Parent> = $mod_name::parent();
@@ -389,7 +468,8 @@ macro_rules! define_interface {
                     })
                 }
 
-                // Pass through resolve_own_unary_operation until there's a better way to define them
+                // Pass through resolve_own_unary_operation and resolve_own_binary_operation
+                // until there's a better way to define them
                 $($items)*
             }
         }
@@ -397,6 +477,6 @@ macro_rules! define_interface {
 }
 
 pub(crate) use {
-    create_method_interface, create_unary_interface, define_interface, handle_first_arg_type,
-    if_empty, ignore_all,
+    create_binary_interface, create_method_interface, create_unary_interface, define_interface,
+    handle_first_arg_type, if_empty, ignore_all,
 };

@@ -13,14 +13,3 @@ pub(crate) fn should_run_ui_tests() -> bool {
         _ => true, // Default case: run the tests
     }
 }
-
-macro_rules! preinterpret_assert_eq {
-    (#($($input:tt)*), $($output:tt)*) => {
-        assert_eq!(preinterpret::run!($($input)*), $($output)*);
-    };
-    ($input:tt, $($output:tt)*) => {
-        assert_eq!(preinterpret::stream!($input), $($output)*);
-    };
-}
-
-pub(crate) use preinterpret_assert_eq;

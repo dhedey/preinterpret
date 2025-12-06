@@ -43,57 +43,37 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
 
 ## Method Calls
 
-- [ ] BinaryOperation Migration
-  - [ ] Add binary operation method resolution with type coercion/matching logic, similar to unary operations /
-    method resolutions, except:
-    - [ ] Untyped + ?int can be resolved like below
-    - [ ] Operations on integers of known type should take a `MaybeTypedInt<X>` (an enum of either `X` or `UntypedInteger`) for e.g. `X=u64` and start with a `resolve()` call which maps `untyped.to_kind(X::kind())`
-  - [ ] Compute SHL/SHR on `Integer` can use `.checked_shl(u32)` with an attempted cast to u32 via TryInto<u32>,
-    which should massively reduce the number of implementataions we need to generate.
-      i.e. we have a CoercedInt<u32> wrapper type which we use as the operand of the SHL/SHR operators
-  - [ ] We can migrate operators incrementally: `+`, `-`, `*`, `/`, `%`, `==`, `!=`, etc.
-  - [ ] When implementing `==`, we'd like no clone required for testing equality of streams, objects and arrays
-- [ ] CompoundAssignment Migration
-- [ ] Ensure all `TODO[operation-refactor]` are done
-
-```rust
-// Possible UntypedInteger implementation
-
-pub(crate) mod binary_operations {
-  [context] fn paired_operation(this: UntypedInteger, rhs: IntegerExpression) -> ExecutionResult<ResolvedValue>  {
-    let operation = match context.operation {
-      BinaryOperation::Paired(op) => op,
-      _ => panic!("paired_operation should only be called with a BinaryOperation::Paired")
-    };
-    match rhs.value {
-      IntegerExpressionValue::Untyped(rhs) => {
-        lhs.handle_paired_binary_operation(rhs, operation)
-           .to_resolved_value(context.output_span_range)
-      }
-      rhs => {
-          let lhs = lhs.to_kind(rhs.kind())?;
-          operation.evaluate(lhs, rhs)
-      }
-    }
-  }
-
-  [context] fn integer_operation(lhs: UntypedInteger, rhs: IntegerExpression) -> ExecutionResult<ResolvedValue> {
-    let operation = match context.operation {
-      BinaryOperation::Integer(op) => op,
-      _ => panic!("integer_operation should only be called with a BinaryOperation::Integer")
-    };
-    lhs.handle_integer_binary_operation(rhs, int_op)
-  }
-}
-interface_items {
-  fn resolve_own_binary_operation(operation: &BinaryOperation) -> Option<MethodInterface> {
-    Some(match operation {
-        BinaryOperation::Paired(_) => binary_definitions::paired_operation(),
-        BinaryOperation::Integer(_) => binary_definitions::integer_operation(),
-    })
-  }
-}
-```
+- [x] Migrate the following `PairedBinaryOperation` across all types to being under the `binary_operations` of its TypeData. For each, when migration is complete, add it to the // MIGRATION LIST in operations.rs to check it's fully migrated
+  - [x] `Addition`
+  - [x] `Subtraction`, `Multiplication`, `Division` and `Remainder`
+  - [x] `LogicalAnd` and `LogicalOr`
+  - [x] `BitXor`, `BitAnd` and `BitOr`
+  - [x] `Equal` and `NotEqual`
+  - [x] `LessThan`, `LessThanOrEqual`, `GreaterThanOrEqual`, `GreaterThan`
+- [x] Migrate the following `IntegerBinaryOperation`:
+  - [x] `ShiftLeft` and `ShiftRight`
+  - [x] Compute SHL/SHR on `Integer` via `.checked_shl(u32)` with an attempted cast to u32 via TryInto<u32>,
+  which should massively reduce the number of implementataions we need to generate.
+    i.e. we have a `CoercedInt<u32>` wrapper type which we use as the operand of the SHL/SHR operators
+- [x] Remove the `evaluate_legacy` method, the `PairedBinaryOperation`, and all the dead code
+- [x] CompoundAssignment migration
+- [x] Enable `x += x` to work (using disable() / enable()) methods
+- [x] Add tests that e.g. `swap(x, x)` still breaks with a borrowing error and we don't get UB
+- [x] Combine `PairedBinaryOperation`, `IntegerBinaryOperation` and `CompoundAssignmentOperation` into a flattened `BinaryOperation`
+- [x] Migrate `UntypedInteger` to use `FallbackInteger` like `UntypedFloat` (except a little harder because integers can overflow)
+- [x] Migrate <, <=, >, >= from specific integer/float and untyped values to IntegerValue and FloatValue, in a similar way that we've done for paired arithmetic operators.
+- [x] Add `==` and `!=` support for all values (including streams, objects, arrays, parsers, unsupported literals, etc) and make it work with `AnyRef<..>` arguments for testing equality
+- [x] Add support for non-finite float values (infinity, NaN):
+  - [x] Added `output_to()` method to `FloatValue` that outputs `f32::INFINITY`, `f32::NEG_INFINITY`, `f32::NAN` (and f64 equivalents) for non-finite values, and uses `Literal::f32_suffixed()`/`Literal::f64_suffixed()` for finite values
+  - [x] Added float type constants: `f32::MAX`, `f32::MIN`, `f32::MIN_POSITIVE`, `f32::INFINITY`, `f32::NEG_INFINITY`, `f32::NAN`, `f32::EPSILON` (and f64 equivalents)
+  - [x] Added `is_nan()`, `is_infinite()`, `is_finite()`, `is_sign_positive()`, `is_sign_negative()` methods to float values
+- [x] Add a new test file, `operations.rs`, and add tests to cover all the operations, including:
+  - [x] Cover all the binary operations with all valid type combinations
+  - [x] For integers/streams, this will involve for each paired operator `1 x untyped/untyped`, `n x typed/typed`, `n x typed/untyped` and `n x untyped/typed` where `n` is the number of integer/float types there are.
+  - [x] Create various examples of combinations / operations that don't compile, and create compilation failure tests for them in an `operations` folder, brainstorm ideas, but some ideas include:
+    - [x] Operations between invalid types; at least one for each operation. e.g. `1 + []` or `1u32 + 3.0`
+    - [x] Overflows, underflows, divide by 0s, etc
+- [x] Ensure all `TODO[operation-refactor]` and `TODO[compound-assignment-refactor]` are done
 
 ## Control flow expressions (ideally requires Stream Literals)
 
@@ -255,7 +235,7 @@ Later:
 
 ## Methods and closures
 
-- [ ] Introduce basic functions
+- [ ] Introduce basic function values
   * Value type function `let my_func = |x, y, z| { ... };`
   * To start with, they are not closures (i.e. they can't capture any outer variables)
   * New node extension in the expression parser: invocation `(...)`
@@ -269,12 +249,21 @@ Later:
     * If invocation is on an owned function, then owned values from the closure can be consumed
       by the invocation
     * Otherwise, the values are only available as shared/mut
+- [ ] Try to unify methods under a "resolve, then invoke" structure
+    * `my_array.push` returns a closure with `my_array` bound. This can then be deactivated
+    whilst the rest of the arguments are resolved!
+    ... and avoids the horrible javascript issues with
+    `this` not being bound.
+    * And then for objects, the method wins; BUT you can use `x["obj"]` to access the field instead of the method
+  * Add ability to define functions on a type.
+  * Move preinterpret settings to `preinterpret::...`
 - [ ] Break/continue label resolution in functions/closures
   * Functions and closures must resolve break/continue labels statically
   * Break and continue statements should not leak out of function boundaries
   * This needs to be validated during the control flow pass
 - [ ] Optional arguments
-- [ ] Add `map`, `filter`, `flatten`, `flatmap`
+- [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`
+- [ ] Add `array.sort`, `array.sort_by`
 - [ ] Add `stream.parse(|input| { ... })`
 - [ ] Add `let captured = input.capture(|input| { ... })`
   * This returns the parsed input stream. It can capture the original tokens by using `let forked = input.fork()` and then `let end_cursor = input.end();` and then consuming `TokenTree`s from `forked` until `forked.cursor >= end_cursor` (making use of the PartialEq implementation)
@@ -284,6 +273,8 @@ Later:
 Implement the following:
 * All value kinds:
   * `is_none()`, and similarly for other value kinds
+  * A `kind()` method which returns a logical name for the value kind, which could be used in a `match` statement
+
 * Streams:
   * `is_ident()` and similarly for other stream
 
@@ -395,16 +386,22 @@ preinterpret::run! {
   - [ ] References store on them cached information - either up-front, via an `Rc<Cell<ReferenceContent::Resolved(ResolvedReference)>>` or via a "resolve on first execute"
     - Value's relative offset from the top of the stack
     - An is last use flag
+- Address `TODO[performance]`
 
 ## Deferred
 
 The following are less important tasks which maybe we don't even want/need to do.
 
-- [ ] Side-project: Make LateBound better to allow this, by upgrading to mutable before use
-  - [ ] https://rust-lang.github.io/rfcs/2025-nested-method-calls.html
-- [ ] Allow adding lifetimes to stream literals `%'a[]` and then `emit 'a`, with `'root` being the topmost. Or maybe just `emit 'root` honestly. Can't really see the use case for the others.
+- [x] Side-project: Make LateBound better to allow this, by upgrading to mutable before use
+  - [x] https://rust-lang.github.io/rfcs/2025-nested-method-calls.html
+  - [x] x += x for x copy, by resolving Owned before Mutable / Shared
+- [ ] Allow adding labels to stream literals `%'a[]` and then `emit 'a`, with `'root` being the topmost. Or maybe just `emit 'root` honestly. Can't really see the use case for the others.
   - [ ] Note that `%'a[((#{ emit 'a %[x] }))]` should yield `x(())`
   - [ ] Note that we need to prevent or revert outputting to root in revertible segments
+- [ ] All value kinds should be generated with a macro which also generates a `#[test] list_all` method
+  - [ ] We should create some unit tests in `value.rs` and functions `generate_example_values(value_kind)` which returns a `Vec<Value>` for each value kind.
+  - [ ] We can use this to check that `eq` and `neq` are defined and work correctly for all types
+- [ ] Add lexicographic ordering to arrays, if they're the same length and their values can be compared
 
 ## Match block [blocked on slices]
 
@@ -420,17 +417,17 @@ Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` doc
 
 ## Final considerations
 
-* Merge `assignee_frames` into `value_frames` as per comment as the top of `assignee_frames`
-* Rename `EvaluationItem` to `RequestedValue` and consider making `RequestedValue::AssignmentCompletion` wrap an `Owned<()>` so that it becomes truly a value.
+- [x] Merge `assignee_frames` into `value_frames` as per comment as the top of `assignee_frames`
+- [x] Rename `EvaluationItem` to `RequestedValue` and consider making `RequestedValue::AssignmentCompletion` wrap an `Owned<()>` so that it becomes truly a value.
+- [x] Merge `HasValueType` with `ValueKind`
 * Add `preinterpret::macro` - can this be a declarative macro? Would be slightly more efficient, as it just needs to wrap a call to `preinterpret::stream` or `preinterpret::run`...
+- [x] Add `Eq` support on composite types and streams
+- [x] See `TODO[untyped]` - Have UntypedInteger/UntypedFloat have an inner representation of either value or literal, for improved efficiency / less weird `Span::call_site()` error handling
+- [ ] Move `typed_eq` as `%[].typed_eq(..)`
+- [ ] Add a `%[].structure_eq(...)` method which uses an `EqualityContext` which ignores value inequality
 * Add `LiteralPattern` (wrapping a `Literal`)
-* Add `Eq` support on composite types and streams
-* See `TODO[untyped]` - Have UntypedInteger/UntypedFloat have an inner representation of either value or literal, for improved efficiency / less weird `Span::call_site()` error handling
-* Merge `HasValueType` into `ValueKind`
-* Better handling of `configure_preinterpret` aligned with future parsers:
-  * Add a `BespokeObject` value type, with an example subtype of `PreinterpretInterface`
-  * Add a `preinterpret` variable to global scope of type `PreinterpretInterface`
-  * Move `None.configure_preinterpret` to `PreinterpretInterface` and possibly split it out as `set_iteration_limit(..)`
+* Better handling of `configure_preinterpret`:
+  * Move `None.configure_preinterpret` to `preinterpret::set_iteration_limit(..)`
 * CastTarget revision:
   * The `as int` operator is not supported for string values
   * The `as char` operator is not supported for untyped integer values
@@ -439,8 +436,7 @@ Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` doc
 * TODO check
 * Check all `#[allow(unused)]` and remove any which aren't needed
   We can use `_xyz: Unused<T>` in some places to reduce the size of types.
-
-NB: `define_command`, `define_parser`, and parsing of Rust code pushed to v1.1
+* Do we want to add support for various rust types?
 
 ## Better handling of value sub-references
 
@@ -458,13 +454,7 @@ One option We can work it like `IterableRef`, but perhaps we can do better?
 
 ## Cloning
 
-* Consider making Iterator non-clonable (which will unlock many more easy lazy implementations, of e.g. `take` using the non-clonable `Take`, and similar for other mapped iterators), i.e. `ExpressionValue` has a manual `clone() -> ExecutionResult<Self>` - this will simplify some things. But then, `to_string()` would want to take a `CopyOnWrite` so that where we clone, the iterator can potentially take owned, attempt cloen, else error.
-
-## Finish converting all commands to expressions
-
-E.G.
-* `preinterpret.settings({..})` (`preinterpret` is available as a variable pre-bound on the root frame)
-* .. possibly keep the v0.2 commands in `deprecated` mode?
+* Consider making Iterator non-clonable (which will unlock many more easy lazy implementations, of e.g. `take` using the non-clonable `Take`, and similar for other mapped iterators), i.e. `ExpressionValue` has a manual `clone() -> ExecutionResult<Self>` - this will simplify some things. But then, `to_string()` would want to take a `CopyOnWrite` so that where we clone, the iterator can potentially take owned, attempt clone, else error.
 
 ## Write book / Docs
 
@@ -490,6 +480,7 @@ E.G.
   - [ ] [PAGE] Iterable
   - [ ] [PAGE] Iterator
   - [ ] [PAGE] None
+  - [ ] Document equality methods: `==` (lenient), `typed_eq()` (errors on type mismatch), `assert_eq()` (detailed error messages). Stream equality preserves transparent groups; use `remove_transparent_groups()` to normalize.
 - [ ] [PAGE] Guides
   - [ ] [PAGE] Errors and Spans
       - NB: If someone wants to keep a value's span, they can keep it in a stream and coerce it; or store it as a tuple of a value with its span `%{ value: $x, span: %[$x] }`
@@ -521,7 +512,7 @@ Sidenote - crabtime comparison:
 
 ## Stream-return optimizations [OPTIONAL]
 
-Expression evaluation can come with an `OutputStyle::AppendToStream(&mut OutputStream)` rather than a `OutputStyle::OwnedValue`, which is handled in `ResolvedValue` (might need a new name!)
+Expression evaluation can come with an `OutputStyle::AppendToStream(&mut OutputStream)` rather than a `OutputStyle::OwnedValue`, which is handled in `ArgumentValue` (might need a new name!)
 
 This can be used to optimize, e.g.:
 
@@ -546,10 +537,10 @@ Consider:
     * We can make `ExpressionValue` deref into `ExpressionRef`, e.g. `ExpressionRef::Array(<slice>)`
     * Then we can make `SharedValue(Ref<ExpressionRef>)`, which can be constructed from a `Ref<ExpressionValue>` with a map!
     * And similarly `MutableValue(RefMut<ExpressionRefMut>)`
-* Using ResolvedValue in place of ExpressionValue e.g. inside arrays / objects, so that we can destructure `let (x, y) = (a, b)` without clone/take
+* Using ArgumentValue in place of ExpressionValue e.g. inside arrays / objects, so that we can destructure `let (x, y) = (a, b)` without clone/take
     * But then we end up with nested references which can be confusing!
     * CONCLUSION: Maybe we don't want this - to destructure it needs to be owned anyway?
-* Consider whether to expand to storing `ResolvedValue` or `CopyOnWriteValue` in variables instead of `OwnedValue`?
+* Consider whether to expand to storing `ArgumentValue` or `CopyOnWriteValue` in variables instead of `OwnedValue`?
     => The main issue is if it interferes with taking mutable references, but it's possibly OK, would need to see if it's a confusing problem in practice... (e.g. `let b = a[0]; a.push(1)` if `b` is a reference to `a[0]` then this is a problem when we push to `a`)
     => If a mutable reference is created and there are pending references, the variable data RefCell could be replaced with a cloned value and then mutated... But this can be more expensive, because e.g. `let b = a[0]; a.push(1)` results in the whole array `a` being copied in the `CoW` case; but only the `a[0]` being cloned in the "clone on assign" case.
     => Maybe we just stick to assignments being Owned/Cloned as currently

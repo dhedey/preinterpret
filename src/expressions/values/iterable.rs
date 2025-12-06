@@ -1,37 +1,34 @@
 use super::*;
 
 // If you add a new variant, also update:
-// * ResolvableArgumentOwned for IterableValue
-// * FromResolved for IterableRef
+// * ResolvableOwned<Value> for IterableValue
+// * IsArgument for IterableRef
 // * The parent of the value's TypeData to be IterableTypeData
 pub(crate) enum IterableValue {
-    Iterator(IteratorExpression),
-    Array(ArrayExpression),
-    Stream(StreamExpression),
-    Object(ObjectExpression),
-    Range(RangeExpression),
-    String(StringExpression),
+    Iterator(IteratorValue),
+    Array(ArrayValue),
+    Stream(StreamValue),
+    Object(ObjectValue),
+    Range(RangeValue),
+    String(StringValue),
 }
 
 impl ResolvableArgumentTarget for IterableValue {
     type ValueType = IterableTypeData;
 }
 
-impl ResolvableArgumentOwned for IterableValue {
-    fn resolve_from_value(
-        value: ExpressionValue,
-        context: ResolutionContext,
-    ) -> ExecutionResult<Self> {
+impl ResolvableOwned<Value> for IterableValue {
+    fn resolve_from_value(value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
         Ok(match value {
-            ExpressionValue::Array(x) => Self::Array(x),
-            ExpressionValue::Object(x) => Self::Object(x),
-            ExpressionValue::Stream(x) => Self::Stream(x),
-            ExpressionValue::Range(x) => Self::Range(x),
-            ExpressionValue::Iterator(x) => Self::Iterator(x),
-            ExpressionValue::String(x) => Self::String(x),
+            Value::Array(x) => Self::Array(x),
+            Value::Object(x) => Self::Object(x),
+            Value::Stream(x) => Self::Stream(x),
+            Value::Range(x) => Self::Range(x),
+            Value::Iterator(x) => Self::Iterator(x),
+            Value::String(x) => Self::String(x),
             _ => {
                 return context.err(
-                    "iterable (iterator, array, object, stream, range or string)",
+                    "an iterable (iterator, array, object, stream, range or string)",
                     value,
                 );
             }
@@ -44,7 +41,7 @@ define_interface! {
     parent: ValueTypeData,
     pub(crate) mod iterable_interface {
         pub(crate) mod methods {
-            fn into_iter(this: IterableValue) -> ExecutionResult<IteratorExpression> {
+            fn into_iter(this: IterableValue) -> ExecutionResult<IteratorValue> {
                 this.into_iterator()
             }
 
@@ -56,21 +53,21 @@ define_interface! {
                 Ok(this.len()? == 0)
             }
 
-            [context] fn zip(this: IterableValue) -> ExecutionResult<ArrayExpression> {
+            [context] fn zip(this: IterableValue) -> ExecutionResult<ArrayValue> {
                 let iterator = this.into_iterator()?;
                 ZipIterators::new_from_iterator(iterator, context.span_range())?.run_zip(context.interpreter, true)
             }
 
-            [context] fn zip_truncated(this: IterableValue) -> ExecutionResult<ArrayExpression> {
+            [context] fn zip_truncated(this: IterableValue) -> ExecutionResult<ArrayValue> {
                 let iterator = this.into_iterator()?;
                 ZipIterators::new_from_iterator(iterator, context.span_range())?.run_zip(context.interpreter, false)
             }
 
-            fn intersperse(this: IterableValue, separator: ExpressionValue, settings: Option<IntersperseSettings>) -> ExecutionResult<ArrayExpression> {
+            fn intersperse(this: IterableValue, separator: Value, settings: Option<IntersperseSettings>) -> ExecutionResult<ArrayValue> {
                 run_intersperse(this, separator, settings.unwrap_or_default())
             }
 
-            [context] fn to_vec(this: IterableValue) -> ExecutionResult<Vec<ExpressionValue>> {
+            [context] fn to_vec(this: IterableValue) -> ExecutionResult<Vec<Value>> {
                 let error_span_range = context.span_range();
                 let mut counter = context.interpreter.start_iteration_counter(&error_span_range);
                 let iterator = this.into_iterator()?;
@@ -89,45 +86,46 @@ define_interface! {
         }
         pub(crate) mod unary_operations {
         }
+        pub(crate) mod binary_operations {}
         interface_items {
         }
     }
 }
 
 impl IterableValue {
-    pub(crate) fn into_iterator(self) -> ExecutionResult<IteratorExpression> {
+    pub(crate) fn into_iterator(self) -> ExecutionResult<IteratorValue> {
         Ok(match self {
-            IterableValue::Array(value) => IteratorExpression::new_for_array(value),
-            IterableValue::Stream(value) => IteratorExpression::new_for_stream(value),
+            IterableValue::Array(value) => IteratorValue::new_for_array(value),
+            IterableValue::Stream(value) => IteratorValue::new_for_stream(value),
             IterableValue::Iterator(value) => value,
-            IterableValue::Range(value) => IteratorExpression::new_for_range(value)?,
-            IterableValue::Object(value) => IteratorExpression::new_for_object(value)?,
-            IterableValue::String(value) => IteratorExpression::new_for_string(value)?,
+            IterableValue::Range(value) => IteratorValue::new_for_range(value)?,
+            IterableValue::Object(value) => IteratorValue::new_for_object(value)?,
+            IterableValue::String(value) => IteratorValue::new_for_string(value)?,
         })
     }
 }
 
 pub(crate) enum IterableRef<'a> {
-    Iterator(AnyRef<'a, IteratorExpression>),
-    Array(AnyRef<'a, ArrayExpression>),
+    Iterator(AnyRef<'a, IteratorValue>),
+    Array(AnyRef<'a, ArrayValue>),
     Stream(AnyRef<'a, OutputStream>),
-    Range(AnyRef<'a, RangeExpression>),
-    Object(AnyRef<'a, ObjectExpression>),
+    Range(AnyRef<'a, RangeValue>),
+    Object(AnyRef<'a, ObjectValue>),
     String(AnyRef<'a, str>),
 }
 
-impl FromResolved for IterableRef<'static> {
+impl IsArgument for IterableRef<'static> {
     type ValueType = IterableTypeData;
-    const OWNERSHIP: ResolvedValueOwnership = ResolvedValueOwnership::Shared;
+    const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Shared;
 
-    fn from_resolved(value: ResolvedValue) -> ExecutionResult<Self> {
+    fn from_argument(value: ArgumentValue) -> ExecutionResult<Self> {
         Ok(match value.kind() {
-            ValueKind::Iterator => IterableRef::Iterator(FromResolved::from_resolved(value)?),
-            ValueKind::Array => IterableRef::Array(FromResolved::from_resolved(value)?),
-            ValueKind::Stream => IterableRef::Stream(FromResolved::from_resolved(value)?),
-            ValueKind::Range => IterableRef::Range(FromResolved::from_resolved(value)?),
-            ValueKind::Object => IterableRef::Object(FromResolved::from_resolved(value)?),
-            ValueKind::String => IterableRef::String(FromResolved::from_resolved(value)?),
+            ValueKind::Iterator => IterableRef::Iterator(IsArgument::from_argument(value)?),
+            ValueKind::Array => IterableRef::Array(IsArgument::from_argument(value)?),
+            ValueKind::Stream => IterableRef::Stream(IsArgument::from_argument(value)?),
+            ValueKind::Range(_) => IterableRef::Range(IsArgument::from_argument(value)?),
+            ValueKind::Object => IterableRef::Object(IsArgument::from_argument(value)?),
+            ValueKind::String => IterableRef::String(IsArgument::from_argument(value)?),
             _ => {
                 return value.type_err(
                     "Expected iterable (iterator, array, object, stream, range or string)",

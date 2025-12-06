@@ -1,51 +1,180 @@
 use super::*;
 use crate::internal_prelude::*;
 
-#[derive(Clone)]
-pub(crate) struct FloatExpression {
-    pub(super) value: FloatExpressionValue,
+#[derive(Copy, Clone)]
+pub(crate) enum FloatValue {
+    Untyped(UntypedFloat),
+    F32(f32),
+    F64(f64),
 }
 
-impl ToExpressionValue for FloatExpression {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Float(self)
+impl IntoValue for FloatValue {
+    fn into_value(self) -> Value {
+        Value::Float(self)
     }
 }
 
-impl FloatExpression {
+impl FloatValue {
     pub(super) fn for_litfloat(lit: &syn::LitFloat) -> ParseResult<Owned<Self>> {
-        Ok(Self {
-            value: FloatExpressionValue::for_litfloat(lit)?,
+        Ok(match lit.suffix() {
+            "" => Self::Untyped(UntypedFloat::new_from_lit_float(lit)?),
+            "f32" => Self::F32(lit.base10_parse()?),
+            "f64" => Self::F64(lit.base10_parse()?),
+            suffix => {
+                return lit.span().parse_err(format!(
+                    "The literal suffix {suffix} is not supported in preinterpret expressions"
+                ));
+            }
         }
         .into_owned(lit.span()))
     }
 
-    pub(super) fn handle_integer_binary_operation(
-        self,
-        right: IntegerExpression,
-        operation: WrappedOp<IntegerBinaryOperation>,
-    ) -> ExecutionResult<ExpressionValue> {
-        match self.value {
-            FloatExpressionValue::Untyped(input) => {
-                input.handle_integer_binary_operation(right, operation)
+    /// Outputs this float value to a token stream.
+    /// For finite values, outputs a literal. For non-finite values (infinity, NaN),
+    /// outputs the equivalent constant path like `f32::INFINITY`.
+    pub(super) fn output_to(&self, output: &mut ToStreamContext) {
+        let span = output.new_token_span();
+        match self {
+            FloatValue::Untyped(float) => {
+                let f = float.into_fallback();
+                if f.is_finite() {
+                    output.push_literal(Literal::f64_unsuffixed(f).with_span(span));
+                } else if f.is_nan() {
+                    // For untyped NaN, we output f64::NAN since FallbackFloat is f64
+                    output.extend_raw_tokens(quote::quote_spanned!(span=> f64::NAN));
+                } else if f.is_sign_positive() {
+                    output.extend_raw_tokens(quote::quote_spanned!(span=> f64::INFINITY));
+                } else {
+                    output.extend_raw_tokens(quote::quote_spanned!(span=> f64::NEG_INFINITY));
+                }
             }
-            FloatExpressionValue::F32(input) => {
-                input.handle_integer_binary_operation(right, operation)
+            FloatValue::F32(f) => {
+                if f.is_finite() {
+                    output.push_literal(Literal::f32_suffixed(*f).with_span(span));
+                } else if f.is_nan() {
+                    output.extend_raw_tokens(quote::quote_spanned!(span=> f32::NAN));
+                } else if f.is_sign_positive() {
+                    output.extend_raw_tokens(quote::quote_spanned!(span=> f32::INFINITY));
+                } else {
+                    output.extend_raw_tokens(quote::quote_spanned!(span=> f32::NEG_INFINITY));
+                }
             }
-            FloatExpressionValue::F64(input) => {
-                input.handle_integer_binary_operation(right, operation)
+            FloatValue::F64(f) => {
+                if f.is_finite() {
+                    output.push_literal(Literal::f64_suffixed(*f).with_span(span));
+                } else if f.is_nan() {
+                    output.extend_raw_tokens(quote::quote_spanned!(span=> f64::NAN));
+                } else if f.is_sign_positive() {
+                    output.extend_raw_tokens(quote::quote_spanned!(span=> f64::INFINITY));
+                } else {
+                    output.extend_raw_tokens(quote::quote_spanned!(span=> f64::NEG_INFINITY));
+                }
             }
         }
     }
 
-    pub(super) fn to_literal(&self, span: Span) -> Literal {
-        self.value.to_unspanned_literal().with_span(span)
+    #[allow(dead_code)]
+    pub(super) fn to_literal(self, span: Span) -> Literal {
+        self.to_unspanned_literal().with_span(span)
+    }
+
+    pub(crate) fn resolve_untyped_to_match(
+        this: Owned<FloatValue>,
+        target: &FloatValue,
+    ) -> ExecutionResult<Self> {
+        let (value, span_range) = this.deconstruct();
+        match value {
+            FloatValue::Untyped(this) => this.into_owned(span_range).into_kind(target.kind()),
+            other => Ok(other),
+        }
+    }
+
+    pub(crate) fn assign_op<R>(
+        mut left: Assignee<FloatValue>,
+        right: R,
+        context: BinaryOperationCallContext,
+        op: fn(BinaryOperationCallContext, Owned<FloatValue>, R) -> ExecutionResult<FloatValue>,
+    ) -> ExecutionResult<()> {
+        let left_value = core::mem::replace(&mut *left, FloatValue::F32(0.0));
+        let result = op(context, left_value.into_owned(left.span_range()), right)?;
+        *left = result;
+        Ok(())
+    }
+
+    fn to_unspanned_literal(self) -> Literal {
+        match self {
+            FloatValue::Untyped(float) => float.to_unspanned_literal(),
+            FloatValue::F32(float) => Literal::f32_suffixed(float),
+            FloatValue::F64(float) => Literal::f64_suffixed(float),
+        }
     }
 }
 
-impl HasValueType for FloatExpression {
-    fn value_type(&self) -> &'static str {
-        self.value.value_type()
+impl HasValueKind for FloatValue {
+    type SpecificKind = FloatKind;
+
+    fn kind(&self) -> FloatKind {
+        match self {
+            Self::Untyped(_) => FloatKind::Untyped,
+            Self::F32(_) => FloatKind::F32,
+            Self::F64(_) => FloatKind::F64,
+        }
+    }
+}
+
+impl Debug for FloatValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Untyped(v) => write!(f, "{}", v.into_fallback()),
+            Self::F32(v) => write!(f, "{:?}", v),
+            Self::F64(v) => write!(f, "{:?}", v),
+        }
+    }
+}
+
+impl FloatValue {
+    /// Aligns types for comparison - converts untyped to match the other's type.
+    /// Unlike integers, float conversion never fails (may lose precision).
+    fn align_types(mut lhs: Self, mut rhs: Self) -> (Self, Self) {
+        match (&lhs, &rhs) {
+            (FloatValue::Untyped(l), typed) if !matches!(typed, FloatValue::Untyped(_)) => {
+                lhs = l.into_kind_infallible(typed.kind());
+            }
+            (typed, FloatValue::Untyped(r)) if !matches!(typed, FloatValue::Untyped(_)) => {
+                rhs = r.into_kind_infallible(lhs.kind());
+            }
+            _ => {} // Both same type or both untyped - no conversion needed
+        }
+        (lhs, rhs)
+    }
+}
+
+impl ValuesEqual for FloatValue {
+    /// Handles type coercion between typed and untyped floats.
+    /// Uses Rust's float `==`, so `NaN != NaN`.
+    fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+        // Align types (untyped -> typed conversion)
+        let (lhs, rhs) = Self::align_types(*self, *other);
+
+        // After alignment, compare directly.
+        // Each variant has two lines: same-type comparison, then type-mismatch fallback.
+        // This ensures adding a new variant causes a compiler error.
+        let equal = match (lhs, rhs) {
+            (FloatValue::Untyped(l), FloatValue::Untyped(r)) => {
+                l.into_fallback() == r.into_fallback()
+            }
+            (FloatValue::Untyped(_), _) => return ctx.leaf_values_not_equal(self, other),
+            (FloatValue::F32(l), FloatValue::F32(r)) => l == r,
+            (FloatValue::F32(_), _) => return ctx.leaf_values_not_equal(self, other),
+            (FloatValue::F64(l), FloatValue::F64(r)) => l == r,
+            (FloatValue::F64(_), _) => return ctx.leaf_values_not_equal(self, other),
+        };
+
+        if equal {
+            ctx.values_equal()
+        } else {
+            ctx.leaf_values_not_equal(self, other)
+        }
     }
 }
 
@@ -54,319 +183,181 @@ define_interface! {
     parent: ValueTypeData,
     pub(crate) mod float_interface {
         pub(crate) mod methods {
+            fn is_nan(this: FloatValue) -> bool {
+                match this {
+                    FloatValue::Untyped(x) => x.into_fallback().is_nan(),
+                    FloatValue::F32(x) => x.is_nan(),
+                    FloatValue::F64(x) => x.is_nan(),
+                }
+            }
+
+            fn is_infinite(this: FloatValue) -> bool {
+                match this {
+                    FloatValue::Untyped(x) => x.into_fallback().is_infinite(),
+                    FloatValue::F32(x) => x.is_infinite(),
+                    FloatValue::F64(x) => x.is_infinite(),
+                }
+            }
+
+            fn is_finite(this: FloatValue) -> bool {
+                match this {
+                    FloatValue::Untyped(x) => x.into_fallback().is_finite(),
+                    FloatValue::F32(x) => x.is_finite(),
+                    FloatValue::F64(x) => x.is_finite(),
+                }
+            }
+
+            fn is_sign_positive(this: FloatValue) -> bool {
+                match this {
+                    FloatValue::Untyped(x) => x.into_fallback().is_sign_positive(),
+                    FloatValue::F32(x) => x.is_sign_positive(),
+                    FloatValue::F64(x) => x.is_sign_positive(),
+                }
+            }
+
+            fn is_sign_negative(this: FloatValue) -> bool {
+                match this {
+                    FloatValue::Untyped(x) => x.into_fallback().is_sign_negative(),
+                    FloatValue::F32(x) => x.is_sign_negative(),
+                    FloatValue::F64(x) => x.is_sign_negative(),
+                }
+            }
         }
         pub(crate) mod unary_operations {
         }
-        interface_items {
-        }
-    }
-}
-
-pub(crate) enum FloatExpressionValuePair {
-    Untyped(UntypedFloat, UntypedFloat),
-    F32(f32, f32),
-    F64(f64, f64),
-}
-
-impl FloatExpressionValuePair {
-    pub(super) fn handle_paired_binary_operation(
-        self,
-        operation: WrappedOp<PairedBinaryOperation>,
-    ) -> ExecutionResult<ExpressionValue> {
-        match self {
-            Self::Untyped(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
-            Self::F32(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
-            Self::F64(lhs, rhs) => lhs.handle_paired_binary_operation(rhs, operation),
-        }
-    }
-}
-
-#[derive(Clone)]
-pub(crate) enum FloatExpressionValue {
-    Untyped(UntypedFloat),
-    F32(f32),
-    F64(f64),
-}
-
-impl FloatExpressionValue {
-    pub(super) fn kind(&self) -> FloatKind {
-        match self {
-            Self::Untyped(_) => FloatKind::Untyped,
-            Self::F32(_) => FloatKind::F32,
-            Self::F64(_) => FloatKind::F64,
-        }
-    }
-
-    pub(super) fn for_litfloat(lit: &syn::LitFloat) -> ParseResult<Self> {
-        Ok(match lit.suffix() {
-            "" => Self::Untyped(UntypedFloat::new_from_lit_float(lit.clone())),
-            "f32" => Self::F32(lit.base10_parse()?),
-            "f64" => Self::F64(lit.base10_parse()?),
-            suffix => {
-                return lit.span().parse_err(format!(
-                    "The literal suffix {suffix} is not supported in preinterpret expressions"
-                ));
-            }
-        })
-    }
-
-    fn to_unspanned_literal(&self) -> Literal {
-        match self {
-            FloatExpressionValue::Untyped(float) => float.to_unspanned_literal(),
-            FloatExpressionValue::F32(float) => Literal::f32_suffixed(*float),
-            FloatExpressionValue::F64(float) => Literal::f64_suffixed(*float),
-        }
-    }
-}
-
-impl HasValueType for FloatExpressionValue {
-    fn value_type(&self) -> &'static str {
-        match self {
-            FloatExpressionValue::Untyped(_) => "untyped float",
-            FloatExpressionValue::F32(_) => "f32",
-            FloatExpressionValue::F64(_) => "f64",
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub(crate) enum FloatKind {
-    Untyped,
-    F32,
-    F64,
-}
-
-impl FloatKind {
-    pub(super) fn method_resolver(&self) -> &'static dyn MethodResolver {
-        static UNTYPED: UntypedFloatTypeData = UntypedFloatTypeData;
-        static F32: F32TypeData = F32TypeData;
-        static F64: F64TypeData = F64TypeData;
-        match self {
-            FloatKind::Untyped => &UNTYPED,
-            FloatKind::F32 => &F32,
-            FloatKind::F64 => &F64,
-        }
-    }
-}
-
-#[derive(Clone)]
-pub(crate) struct UntypedFloat(
-    /// The span of the literal is ignored, and will be set when converted to an output.
-    LitFloat,
-);
-pub(crate) type FallbackFloat = f64;
-
-impl UntypedFloat {
-    pub(super) fn new_from_lit_float(lit_float: LitFloat) -> Self {
-        Self(lit_float)
-    }
-
-    fn new_from_known_float_literal(literal: Literal) -> Self {
-        Self::new_from_lit_float(literal.into())
-    }
-
-    pub(super) fn handle_integer_binary_operation(
-        self,
-        _rhs: IntegerExpression,
-        operation: WrappedOp<IntegerBinaryOperation>,
-    ) -> ExecutionResult<ExpressionValue> {
-        match operation.operation {
-            IntegerBinaryOperation::ShiftLeft { .. }
-            | IntegerBinaryOperation::ShiftRight { .. } => operation.unsupported(self),
-        }
-    }
-
-    pub(super) fn handle_paired_binary_operation(
-        self,
-        rhs: Self,
-        operation: WrappedOp<PairedBinaryOperation>,
-    ) -> ExecutionResult<ExpressionValue> {
-        let lhs = self.parse_fallback()?;
-        let rhs = rhs.parse_fallback()?;
-        Ok(match operation.operation {
-            PairedBinaryOperation::Addition { .. } => {
-                operation.output(Self::from_fallback(lhs + rhs))
-            }
-            PairedBinaryOperation::Subtraction { .. } => {
-                operation.output(Self::from_fallback(lhs - rhs))
-            }
-            PairedBinaryOperation::Multiplication { .. } => {
-                operation.output(Self::from_fallback(lhs * rhs))
-            }
-            PairedBinaryOperation::Division { .. } => {
-                operation.output(Self::from_fallback(lhs / rhs))
-            }
-            PairedBinaryOperation::LogicalAnd { .. } | PairedBinaryOperation::LogicalOr { .. } => {
-                return operation.unsupported(self)
-            }
-            PairedBinaryOperation::Remainder { .. } => {
-                operation.output(Self::from_fallback(lhs % rhs))
-            }
-            PairedBinaryOperation::BitXor { .. }
-            | PairedBinaryOperation::BitAnd { .. }
-            | PairedBinaryOperation::BitOr { .. } => return operation.unsupported(self),
-            PairedBinaryOperation::Equal { .. } => operation.output(lhs == rhs),
-            PairedBinaryOperation::LessThan { .. } => operation.output(lhs < rhs),
-            PairedBinaryOperation::LessThanOrEqual { .. } => operation.output(lhs <= rhs),
-            PairedBinaryOperation::NotEqual { .. } => operation.output(lhs != rhs),
-            PairedBinaryOperation::GreaterThanOrEqual { .. } => operation.output(lhs >= rhs),
-            PairedBinaryOperation::GreaterThan { .. } => operation.output(lhs > rhs),
-        })
-    }
-
-    pub(super) fn from_fallback(value: FallbackFloat) -> Self {
-        // TODO[untyped] - Have a way to store this more efficiently without going through a literal
-        Self::new_from_known_float_literal(
-            Literal::f64_unsuffixed(value).with_span(Span::call_site()),
-        )
-    }
-
-    pub(crate) fn parse_fallback(&self) -> ExecutionResult<FallbackFloat> {
-        self.0.base10_digits().parse().map_err(|err| {
-            self.0.value_error(format!(
-                "Could not parse as the default inferred type {}: {}",
-                core::any::type_name::<FallbackFloat>(),
-                err
-            ))
-        })
-    }
-
-    pub(crate) fn parse_as<N>(&self) -> ExecutionResult<N>
-    where
-        N: FromStr,
-        N::Err: core::fmt::Display,
-    {
-        self.0.base10_digits().parse().map_err(|err| {
-            self.0.value_error(format!(
-                "Could not parse as {}: {}",
-                core::any::type_name::<N>(),
-                err
-            ))
-        })
-    }
-
-    fn to_unspanned_literal(&self) -> Literal {
-        self.0.token()
-    }
-}
-
-impl HasValueType for UntypedFloat {
-    fn value_type(&self) -> &'static str {
-        "untyped float"
-    }
-}
-
-impl ToExpressionValue for UntypedFloat {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Float(FloatExpression {
-            value: FloatExpressionValue::Untyped(self),
-        })
-    }
-}
-
-define_interface! {
-    struct UntypedFloatTypeData,
-    parent: FloatTypeData,
-    pub(crate) mod untyped_float_interface {
-        pub(crate) mod methods {
-        }
-        pub(crate) mod unary_operations {
-            fn neg(input: UntypedFloatFallback) -> UntypedFloat {
-                UntypedFloat::from_fallback(-input.0)
+        pub(crate) mod binary_operations {
+            fn add(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<FloatValue> {
+                match FloatValue::resolve_untyped_to_match(left, &right)? {
+                    FloatValue::Untyped(left) => left.paired_operation(right, |a, b| a + b),
+                    FloatValue::F32(left) => left.paired_operation_no_overflow(right, |a, b| a + b),
+                    FloatValue::F64(left) => left.paired_operation_no_overflow(right, |a, b| a + b),
+                }
             }
 
-            fn cast_to_untyped_integer(input: UntypedFloatFallback) -> UntypedInteger {
-                UntypedInteger::from_fallback(input.0 as FallbackInteger)
+            [context] fn add_assign(left: Assignee<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<()> {
+                FloatValue::assign_op(left, right, context, add)
             }
 
-            fn cast_to_i8(input: UntypedFloatFallback) -> i8 {
-                input.0 as i8
+            fn sub(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<FloatValue> {
+                match FloatValue::resolve_untyped_to_match(left, &right)? {
+                    FloatValue::Untyped(left) => left.paired_operation(right, |a, b| a - b),
+                    FloatValue::F32(left) => left.paired_operation_no_overflow(right, |a, b| a - b),
+                    FloatValue::F64(left) => left.paired_operation_no_overflow(right, |a, b| a - b),
+                }
             }
 
-            fn cast_to_i16(input: UntypedFloatFallback) -> i16 {
-                input.0 as i16
+            [context] fn sub_assign(left: Assignee<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<()> {
+                FloatValue::assign_op(left, right, context, sub)
             }
 
-            fn cast_to_i32(input: UntypedFloatFallback) -> i32 {
-                input.0 as i32
+            fn mul(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<FloatValue> {
+                match FloatValue::resolve_untyped_to_match(left, &right)? {
+                    FloatValue::Untyped(left) => left.paired_operation(right, |a, b| a * b),
+                    FloatValue::F32(left) => left.paired_operation_no_overflow(right, |a, b| a * b),
+                    FloatValue::F64(left) => left.paired_operation_no_overflow(right, |a, b| a * b),
+                }
             }
 
-            fn cast_to_i64(input: UntypedFloatFallback) -> i64 {
-                input.0 as i64
+            [context] fn mul_assign(left: Assignee<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<()> {
+                FloatValue::assign_op(left, right, context, mul)
             }
 
-            fn cast_to_i128(input: UntypedFloatFallback) -> i128 {
-                input.0 as i128
+            fn div(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<FloatValue> {
+                match FloatValue::resolve_untyped_to_match(left, &right)? {
+                    FloatValue::Untyped(left) => left.paired_operation(right, |a, b| a / b),
+                    FloatValue::F32(left) => left.paired_operation_no_overflow(right, |a, b| a / b),
+                    FloatValue::F64(left) => left.paired_operation_no_overflow(right, |a, b| a / b),
+                }
             }
 
-            fn cast_to_isize(input: UntypedFloatFallback) -> isize {
-                input.0 as isize
+            [context] fn div_assign(left: Assignee<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<()> {
+                FloatValue::assign_op(left, right, context, div)
             }
 
-            fn cast_to_u8(input: UntypedFloatFallback) -> u8 {
-                input.0 as u8
+            fn rem(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<FloatValue> {
+                match FloatValue::resolve_untyped_to_match(left, &right)? {
+                    FloatValue::Untyped(left) => left.paired_operation(right, |a, b| a % b),
+                    FloatValue::F32(left) => left.paired_operation_no_overflow(right, |a, b| a % b),
+                    FloatValue::F64(left) => left.paired_operation_no_overflow(right, |a, b| a % b),
+                }
             }
 
-            fn cast_to_u16(input: UntypedFloatFallback) -> u16 {
-                input.0 as u16
+            [context] fn rem_assign(left: Assignee<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<()> {
+                FloatValue::assign_op(left, right, context, rem)
             }
 
-            fn cast_to_u32(input: UntypedFloatFallback) -> u32 {
-                input.0 as u32
+            fn lt(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<bool> {
+                match FloatValue::resolve_untyped_to_match(left, &right)? {
+                    FloatValue::Untyped(left) => left.paired_comparison(right, |a, b| a < b),
+                    FloatValue::F32(left) => left.paired_comparison(right, |a, b| a < b),
+                    FloatValue::F64(left) => left.paired_comparison(right, |a, b| a < b),
+                }
             }
 
-            fn cast_to_u64(input: UntypedFloatFallback) -> u64 {
-                input.0 as u64
+            fn le(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<bool> {
+                match FloatValue::resolve_untyped_to_match(left, &right)? {
+                    FloatValue::Untyped(left) => left.paired_comparison(right, |a, b| a <= b),
+                    FloatValue::F32(left) => left.paired_comparison(right, |a, b| a <= b),
+                    FloatValue::F64(left) => left.paired_comparison(right, |a, b| a <= b),
+                }
             }
 
-            fn cast_to_u128(input: UntypedFloatFallback) -> u128 {
-                input.0 as u128
+            fn gt(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<bool> {
+                match FloatValue::resolve_untyped_to_match(left, &right)? {
+                    FloatValue::Untyped(left) => left.paired_comparison(right, |a, b| a > b),
+                    FloatValue::F32(left) => left.paired_comparison(right, |a, b| a > b),
+                    FloatValue::F64(left) => left.paired_comparison(right, |a, b| a > b),
+                }
             }
 
-            fn cast_to_usize(input: UntypedFloatFallback) -> usize {
-                input.0 as usize
+            fn ge(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<bool> {
+                match FloatValue::resolve_untyped_to_match(left, &right)? {
+                    FloatValue::Untyped(left) => left.paired_comparison(right, |a, b| a >= b),
+                    FloatValue::F32(left) => left.paired_comparison(right, |a, b| a >= b),
+                    FloatValue::F64(left) => left.paired_comparison(right, |a, b| a >= b),
+                }
             }
 
-            fn cast_to_untyped_float(input: UntypedFloatFallback) -> UntypedFloat {
-                UntypedFloat::from_fallback(input.0)
+            fn eq(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<bool> {
+                match FloatValue::resolve_untyped_to_match(left, &right)? {
+                    FloatValue::Untyped(left) => left.paired_comparison(right, |a, b| a == b),
+                    FloatValue::F32(left) => left.paired_comparison(right, |a, b| a == b),
+                    FloatValue::F64(left) => left.paired_comparison(right, |a, b| a == b),
+                }
             }
 
-            fn cast_to_f32(input: UntypedFloatFallback) -> f32 {
-                input.0 as f32
-            }
-
-            fn cast_to_f64(input: UntypedFloatFallback) -> f64 {
-                input.0
-            }
-
-            fn cast_to_string(input: UntypedFloatFallback) -> String {
-                input.0.to_string()
+            fn ne(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<bool> {
+                match FloatValue::resolve_untyped_to_match(left, &right)? {
+                    FloatValue::Untyped(left) => left.paired_comparison(right, |a, b| a != b),
+                    FloatValue::F32(left) => left.paired_comparison(right, |a, b| a != b),
+                    FloatValue::F64(left) => left.paired_comparison(right, |a, b| a != b),
+                }
             }
         }
         interface_items {
-            fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+            fn resolve_own_binary_operation(
+                operation: &BinaryOperation,
+            ) -> Option<BinaryOperationInterface> {
                 Some(match operation {
-                    UnaryOperation::Neg { .. } => unary_definitions::neg(),
-                    UnaryOperation::Cast { target, .. } => match target {
-                        CastTarget::Integer(IntegerKind::Untyped) => unary_definitions::cast_to_untyped_integer(),
-                        CastTarget::Integer(IntegerKind::I8) => unary_definitions::cast_to_i8(),
-                        CastTarget::Integer(IntegerKind::I16) => unary_definitions::cast_to_i16(),
-                        CastTarget::Integer(IntegerKind::I32) => unary_definitions::cast_to_i32(),
-                        CastTarget::Integer(IntegerKind::I64) => unary_definitions::cast_to_i64(),
-                        CastTarget::Integer(IntegerKind::I128) => unary_definitions::cast_to_i128(),
-                        CastTarget::Integer(IntegerKind::Isize) => unary_definitions::cast_to_isize(),
-                        CastTarget::Integer(IntegerKind::U8) => unary_definitions::cast_to_u8(),
-                        CastTarget::Integer(IntegerKind::U16) => unary_definitions::cast_to_u16(),
-                        CastTarget::Integer(IntegerKind::U32) => unary_definitions::cast_to_u32(),
-                        CastTarget::Integer(IntegerKind::U64) => unary_definitions::cast_to_u64(),
-                        CastTarget::Integer(IntegerKind::U128) => unary_definitions::cast_to_u128(),
-                        CastTarget::Integer(IntegerKind::Usize) => unary_definitions::cast_to_usize(),
-                        CastTarget::Float(FloatKind::Untyped) => unary_definitions::cast_to_untyped_float(),
-                        CastTarget::Float(FloatKind::F32) => unary_definitions::cast_to_f32(),
-                        CastTarget::Float(FloatKind::F64) => unary_definitions::cast_to_f64(),
-                        CastTarget::String => unary_definitions::cast_to_string(),
-                        _ => return None,
-                    },
+                    // Arithmetic operations
+                    BinaryOperation::Addition { .. } => binary_definitions::add(),
+                    BinaryOperation::Subtraction { .. } => binary_definitions::sub(),
+                    BinaryOperation::Multiplication { .. } => binary_definitions::mul(),
+                    BinaryOperation::Division { .. } => binary_definitions::div(),
+                    BinaryOperation::Remainder { .. } => binary_definitions::rem(),
+                    // Compound assignment operations
+                    BinaryOperation::AddAssign { .. } => binary_definitions::add_assign(),
+                    BinaryOperation::SubAssign { .. } => binary_definitions::sub_assign(),
+                    BinaryOperation::MulAssign { .. } => binary_definitions::mul_assign(),
+                    BinaryOperation::DivAssign { .. } => binary_definitions::div_assign(),
+                    BinaryOperation::RemAssign { .. } => binary_definitions::rem_assign(),
+                    // Comparison operations
+                    BinaryOperation::LessThan { .. } => binary_definitions::lt(),
+                    BinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
+                    BinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
+                    BinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
+                    BinaryOperation::Equal { .. } => binary_definitions::eq(),
+                    BinaryOperation::NotEqual { .. } => binary_definitions::ne(),
                     _ => return None,
                 })
             }
@@ -374,273 +365,12 @@ define_interface! {
     }
 }
 
-macro_rules! impl_float_operations {
-    (
-        $($type_data:ident mod $mod_name:ident: $float_enum_variant:ident($float_type:ident)),* $(,)?
-    ) => {$(
-        define_interface! {
-            struct $type_data,
-            parent: FloatTypeData,
-            pub(crate) mod $mod_name {
-                pub(crate) mod methods {
-                }
-                pub(crate) mod unary_operations {
-                    fn neg(input: $float_type) -> $float_type {
-                        -input
-                    }
-
-                    fn cast_to_untyped_integer(input: $float_type) -> UntypedInteger {
-                        UntypedInteger::from_fallback(input as FallbackInteger)
-                    }
-
-                    fn cast_to_i8(input: $float_type) -> i8 {
-                        input as i8
-                    }
-
-                    fn cast_to_i16(input: $float_type) -> i16 {
-                        input as i16
-                    }
-
-                    fn cast_to_i32(input: $float_type) -> i32 {
-                        input as i32
-                    }
-
-                    fn cast_to_i64(input: $float_type) -> i64 {
-                        input as i64
-                    }
-
-                    fn cast_to_i128(input: $float_type) -> i128 {
-                        input as i128
-                    }
-
-                    fn cast_to_isize(input: $float_type) -> isize {
-                        input as isize
-                    }
-
-                    fn cast_to_u8(input: $float_type) -> u8 {
-                        input as u8
-                    }
-
-                    fn cast_to_u16(input: $float_type) -> u16 {
-                        input as u16
-                    }
-
-                    fn cast_to_u32(input: $float_type) -> u32 {
-                        input as u32
-                    }
-
-                    fn cast_to_u64(input: $float_type) -> u64 {
-                        input as u64
-                    }
-
-                    fn cast_to_u128(input: $float_type) -> u128 {
-                        input as u128
-                    }
-
-                    fn cast_to_usize(input: $float_type) -> usize {
-                        input as usize
-                    }
-
-                    fn cast_to_untyped_float(input: $float_type) -> UntypedFloat {
-                        UntypedFloat::from_fallback(input as FallbackFloat)
-                    }
-
-                    fn cast_to_f32(input: $float_type) -> f32 {
-                        input as f32
-                    }
-
-                    fn cast_to_f64(input: $float_type) -> f64 {
-                        input as f64
-                    }
-
-                    fn cast_to_string(input: $float_type) -> String {
-                        input.to_string()
-                    }
-                }
-                interface_items {
-                    fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
-                        Some(match operation {
-                            UnaryOperation::Neg { .. } => unary_definitions::neg(),
-                            UnaryOperation::Cast { target, .. } => match target {
-                                CastTarget::Integer(IntegerKind::Untyped) => unary_definitions::cast_to_untyped_integer(),
-                                CastTarget::Integer(IntegerKind::I8) => unary_definitions::cast_to_i8(),
-                                CastTarget::Integer(IntegerKind::I16) => unary_definitions::cast_to_i16(),
-                                CastTarget::Integer(IntegerKind::I32) => unary_definitions::cast_to_i32(),
-                                CastTarget::Integer(IntegerKind::I64) => unary_definitions::cast_to_i64(),
-                                CastTarget::Integer(IntegerKind::I128) => unary_definitions::cast_to_i128(),
-                                CastTarget::Integer(IntegerKind::Isize) => unary_definitions::cast_to_isize(),
-                                CastTarget::Integer(IntegerKind::U8) => unary_definitions::cast_to_u8(),
-                                CastTarget::Integer(IntegerKind::U16) => unary_definitions::cast_to_u16(),
-                                CastTarget::Integer(IntegerKind::U32) => unary_definitions::cast_to_u32(),
-                                CastTarget::Integer(IntegerKind::U64) => unary_definitions::cast_to_u64(),
-                                CastTarget::Integer(IntegerKind::U128) => unary_definitions::cast_to_u128(),
-                                CastTarget::Integer(IntegerKind::Usize) => unary_definitions::cast_to_usize(),
-                                CastTarget::Float(FloatKind::Untyped) => unary_definitions::cast_to_untyped_float(),
-                                CastTarget::Float(FloatKind::F32) => unary_definitions::cast_to_f32(),
-                                CastTarget::Float(FloatKind::F64) => unary_definitions::cast_to_f64(),
-                                CastTarget::String => unary_definitions::cast_to_string(),
-                                _ => return None,
-                            }
-                            _ => return None,
-                        })
-                    }
-                }
-            }
-        }
-
-        impl HasValueType for $float_type {
-            fn value_type(&self) -> &'static str {
-                stringify!($float_type)
-            }
-        }
-
-        impl ToExpressionValue for $float_type {
-            fn into_value(self) -> ExpressionValue {
-                ExpressionValue::Float(FloatExpression {
-                    value: FloatExpressionValue::$float_enum_variant(self),
-                })
-            }
-        }
-
-
-        impl HandleBinaryOperation for $float_type {
-            fn handle_paired_binary_operation(self, rhs: Self, operation: WrappedOp<PairedBinaryOperation>) -> ExecutionResult<ExpressionValue> {
-                // Unlike integer arithmetic, float arithmetic does not overflow
-                // and instead falls back to NaN or infinity. In future we could
-                // allow trapping on these codes, but for now this is good enough
-                let lhs = self;
-                Ok(match operation.operation {
-                    PairedBinaryOperation::Addition { .. } => operation.output(lhs + rhs),
-                    PairedBinaryOperation::Subtraction { .. } => operation.output(lhs - rhs),
-                    PairedBinaryOperation::Multiplication { .. } => operation.output(lhs * rhs),
-                    PairedBinaryOperation::Division { .. } => operation.output(lhs / rhs),
-                    PairedBinaryOperation::LogicalAnd { .. }
-                    | PairedBinaryOperation::LogicalOr { .. } => {
-                        return operation.unsupported(self)
-                    }
-                    PairedBinaryOperation::Remainder { .. } => operation.output(lhs % rhs),
-                    PairedBinaryOperation::BitXor { .. }
-                    | PairedBinaryOperation::BitAnd { .. }
-                    | PairedBinaryOperation::BitOr { .. } => {
-                        return operation.unsupported(self)
-                    }
-                    PairedBinaryOperation::Equal { .. } => operation.output(lhs == rhs),
-                    PairedBinaryOperation::LessThan { .. } => operation.output(lhs < rhs),
-                    PairedBinaryOperation::LessThanOrEqual { .. } => operation.output(lhs <= rhs),
-                    PairedBinaryOperation::NotEqual { .. } => operation.output(lhs != rhs),
-                    PairedBinaryOperation::GreaterThanOrEqual { .. } => operation.output(lhs >= rhs),
-                    PairedBinaryOperation::GreaterThan { .. } => operation.output(lhs > rhs),
-                })
-            }
-
-            fn handle_integer_binary_operation(
-                self,
-                _rhs: IntegerExpression,
-                operation: WrappedOp<IntegerBinaryOperation>,
-            ) -> ExecutionResult<ExpressionValue> {
-                match operation.operation {
-                    IntegerBinaryOperation::ShiftLeft { .. } | IntegerBinaryOperation::ShiftRight { .. } => {
-                        operation.unsupported(self)
-                    },
-                }
-            }
-        }
-    )*};
-}
-impl_float_operations!(F32TypeData mod f32_interface: F32(f32), F64TypeData mod f64_interface: F64(f64));
-
 impl_resolvable_argument_for! {
     FloatTypeData,
-    (value, context) -> FloatExpression {
+    (value, context) -> FloatValue {
         match value {
-            ExpressionValue::Float(value) => Ok(value),
-            other => context.err("Expected float", other),
+            Value::Float(value) => Ok(value),
+            other => context.err("a float", other),
         }
     }
 }
-
-pub(crate) struct UntypedFloatFallback(pub FallbackFloat);
-
-impl ResolvableArgumentTarget for UntypedFloatFallback {
-    type ValueType = UntypedFloatTypeData;
-}
-
-impl ResolvableArgumentOwned for UntypedFloatFallback {
-    fn resolve_from_value(
-        input_value: ExpressionValue,
-        context: ResolutionContext,
-    ) -> ExecutionResult<Self> {
-        let value = UntypedFloat::resolve_from_value(input_value, context)?;
-        Ok(UntypedFloatFallback(value.parse_fallback()?))
-    }
-}
-
-impl_resolvable_argument_for! {
-    UntypedFloatTypeData,
-    (value, context) -> UntypedFloat {
-        match value {
-            ExpressionValue::Float(FloatExpression { value: FloatExpressionValue::Untyped(x), ..}) => Ok(x),
-            other => context.err("untyped float", other),
-        }
-    }
-}
-
-macro_rules! impl_resolvable_float_subtype {
-    ($value_type:ty, $type:ty, $variant:ident, $expected_msg:expr) => {
-        impl ResolvableArgumentTarget for $type {
-            type ValueType = $value_type;
-        }
-
-        impl ResolvableArgumentOwned for $type {
-            fn resolve_from_value(
-                value: ExpressionValue,
-                context: ResolutionContext,
-            ) -> ExecutionResult<Self> {
-                match value {
-                    ExpressionValue::Float(FloatExpression {
-                        value: FloatExpressionValue::Untyped(x),
-                        ..
-                    }) => x.parse_as(),
-                    ExpressionValue::Float(FloatExpression {
-                        value: FloatExpressionValue::$variant(x),
-                        ..
-                    }) => Ok(x),
-                    other => context.err($expected_msg, other),
-                }
-            }
-        }
-
-        impl ResolvableArgumentShared for $type {
-            fn resolve_from_ref<'a>(
-                value: &'a ExpressionValue,
-                context: ResolutionContext,
-            ) -> ExecutionResult<&'a Self> {
-                match value {
-                    ExpressionValue::Float(FloatExpression {
-                        value: FloatExpressionValue::$variant(x),
-                        ..
-                    }) => Ok(x),
-                    other => context.err($expected_msg, other),
-                }
-            }
-        }
-
-        impl ResolvableArgumentMutable for $type {
-            fn resolve_from_mut<'a>(
-                value: &'a mut ExpressionValue,
-                context: ResolutionContext,
-            ) -> ExecutionResult<&'a mut Self> {
-                match value {
-                    ExpressionValue::Float(FloatExpression {
-                        value: FloatExpressionValue::$variant(x),
-                        ..
-                    }) => Ok(x),
-                    other => context.err($expected_msg, other),
-                }
-            }
-        }
-    };
-}
-
-impl_resolvable_float_subtype!(F32TypeData, f32, F32, "f32");
-impl_resolvable_float_subtype!(F64TypeData, f64, F64, "f64");

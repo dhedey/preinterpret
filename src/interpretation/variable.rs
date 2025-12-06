@@ -65,11 +65,7 @@ impl ParseSource for VariableDefinition {
 }
 
 impl VariableDefinition {
-    pub(crate) fn define(
-        &self,
-        interpreter: &mut Interpreter,
-        value_source: impl ToExpressionValue,
-    ) {
+    pub(crate) fn define(&self, interpreter: &mut Interpreter, value_source: impl IntoValue) {
         interpreter.define_variable(self.id, value_source.into_value());
     }
 }
@@ -139,26 +135,17 @@ impl VariableReference {
         &self,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<LateBoundValue> {
-        interpreter.resolve(self, RequestedValueOwnership::LateBound)
+        interpreter.resolve(self, RequestedOwnership::LateBound)
     }
 
-    pub(crate) fn resolve_resolved(
+    pub(crate) fn resolve_concrete(
         &self,
         interpreter: &mut Interpreter,
-        ownership: ResolvedValueOwnership,
-    ) -> ExecutionResult<ResolvedValue> {
+        ownership: ArgumentOwnership,
+    ) -> ExecutionResult<ArgumentValue> {
         interpreter
-            .resolve(self, RequestedValueOwnership::Concrete(ownership))?
+            .resolve(self, RequestedOwnership::Concrete(ownership))?
             .resolve(ownership)
-    }
-
-    pub(crate) fn resolve_assignee(
-        &self,
-        interpreter: &mut Interpreter,
-    ) -> ExecutionResult<MutableValue> {
-        Ok(self
-            .resolve_resolved(interpreter, ResolvedValueOwnership::Assignee)?
-            .expect_mutable())
     }
 
     pub(crate) fn resolve_shared(
@@ -166,7 +153,7 @@ impl VariableReference {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<SharedValue> {
         Ok(self
-            .resolve_resolved(interpreter, ResolvedValueOwnership::Shared)?
+            .resolve_concrete(interpreter, ArgumentOwnership::Shared)?
             .expect_shared())
     }
 }
@@ -198,7 +185,7 @@ impl HandleDestructure for VariablePattern {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,
-        value: ExpressionValue,
+        value: Value,
     ) -> ExecutionResult<()> {
         self.definition.define(interpreter, value);
         Ok(())

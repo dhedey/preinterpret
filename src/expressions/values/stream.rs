@@ -1,50 +1,11 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct StreamExpression {
+pub(crate) struct StreamValue {
     pub(crate) value: OutputStream,
 }
 
-impl StreamExpression {
-    pub(super) fn handle_integer_binary_operation(
-        self,
-        _right: IntegerExpression,
-        operation: WrappedOp<IntegerBinaryOperation>,
-    ) -> ExecutionResult<ExpressionValue> {
-        operation.unsupported(self)
-    }
-
-    pub(super) fn handle_paired_binary_operation(
-        self,
-        rhs: Self,
-        operation: WrappedOp<PairedBinaryOperation>,
-    ) -> ExecutionResult<ExpressionValue> {
-        let lhs = self.value;
-        let rhs = rhs.value;
-        Ok(match operation.operation {
-            PairedBinaryOperation::Addition { .. } => operation.output({
-                let mut stream = lhs;
-                rhs.append_into(&mut stream);
-                stream
-            }),
-            PairedBinaryOperation::Subtraction { .. }
-            | PairedBinaryOperation::Multiplication { .. }
-            | PairedBinaryOperation::Division { .. }
-            | PairedBinaryOperation::LogicalAnd { .. }
-            | PairedBinaryOperation::LogicalOr { .. }
-            | PairedBinaryOperation::Remainder { .. }
-            | PairedBinaryOperation::BitXor { .. }
-            | PairedBinaryOperation::BitAnd { .. }
-            | PairedBinaryOperation::BitOr { .. }
-            | PairedBinaryOperation::Equal { .. }
-            | PairedBinaryOperation::LessThan { .. }
-            | PairedBinaryOperation::LessThanOrEqual { .. }
-            | PairedBinaryOperation::NotEqual { .. }
-            | PairedBinaryOperation::GreaterThanOrEqual { .. }
-            | PairedBinaryOperation::GreaterThan { .. } => return operation.unsupported(lhs),
-        })
-    }
-
+impl StreamValue {
     pub(crate) fn concat_recursive_into(&self, output: &mut String, behaviour: &ConcatBehaviour) {
         if behaviour.use_stream_literal_syntax {
             if self.value.is_empty() {
@@ -95,43 +56,75 @@ impl StreamExpression {
     }
 }
 
-impl HasValueType for StreamExpression {
-    fn value_type(&self) -> &'static str {
-        self.value.value_type()
+impl HasValueKind for StreamValue {
+    type SpecificKind = ValueKind;
+
+    fn kind(&self) -> ValueKind {
+        ValueKind::Stream
     }
 }
 
-impl HasValueType for OutputStream {
-    fn value_type(&self) -> &'static str {
-        "stream"
+impl Debug for StreamValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut debug_string = String::new();
+        self.concat_recursive_into(
+            &mut debug_string,
+            &ConcatBehaviour::debug(Span::call_site().span_range()),
+        );
+        write!(f, "{}", debug_string)
     }
 }
 
-impl ToExpressionValue for OutputStream {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Stream(StreamExpression { value: self })
+impl ValuesEqual for StreamValue {
+    /// Compares two streams by their debug string representation, ignoring spans.
+    /// Transparent groups (none-delimited groups) are preserved in comparison.
+    /// Use `remove_transparent_groups()` before comparison if you want to ignore them.
+    fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+        // Use debug concat_recursive which preserves transparent group structure
+        let lhs = self
+            .value
+            .concat_recursive(&ConcatBehaviour::debug(Span::call_site().span_range()));
+        let rhs = other
+            .value
+            .concat_recursive(&ConcatBehaviour::debug(Span::call_site().span_range()));
+        if lhs == rhs {
+            ctx.values_equal()
+        } else {
+            ctx.leaf_values_not_equal(self, other)
+        }
     }
 }
 
-impl ToExpressionValue for TokenStream {
-    fn into_value(self) -> ExpressionValue {
+impl IntoValue for StreamValue {
+    fn into_value(self) -> Value {
+        Value::Stream(self)
+    }
+}
+
+impl IntoValue for OutputStream {
+    fn into_value(self) -> Value {
+        StreamValue { value: self }.into_value()
+    }
+}
+
+impl IntoValue for TokenStream {
+    fn into_value(self) -> Value {
         OutputStream::raw(self).into_value()
     }
 }
 
 impl_resolvable_argument_for! {
     StreamTypeData,
-    (value, context) -> StreamExpression {
+    (value, context) -> StreamValue {
         match value {
-            ExpressionValue::Stream(value) => Ok(value),
-            _ => context.err("stream", value),
+            Value::Stream(value) => Ok(value),
+            _ => context.err("a stream", value),
         }
     }
 }
 
 impl_delegated_resolvable_argument_for!(
-    StreamTypeData,
-    (value: StreamExpression) -> OutputStream { value.value }
+    (value: StreamValue) -> OutputStream { value.value }
 );
 
 define_interface! {
@@ -153,11 +146,17 @@ define_interface! {
                 Ok(this.to_token_stream_removing_any_transparent_groups())
             }
 
-            fn infer(this: OutputStream) -> ExecutionResult<ExpressionValue> {
+            // Removes transparent (none-delimited) groups from the stream.
+            // Useful before equality comparison if you want to ignore them.
+            fn remove_transparent_groups(this: OutputStream) -> OutputStream {
+                OutputStream::raw(this.to_token_stream_removing_any_transparent_groups())
+            }
+
+            fn infer(this: OutputStream) -> ExecutionResult<Value> {
                 Ok(this.coerce_into_value())
             }
 
-            fn split(this: OutputStream, separator: AnyRef<OutputStream>, settings: Option<SplitSettings>) -> ExecutionResult<ArrayExpression> {
+            fn split(this: OutputStream, separator: AnyRef<OutputStream>, settings: Option<SplitSettings>) -> ExecutionResult<ArrayValue> {
                 handle_split(this, &separator, settings.unwrap_or_default())
             }
 
@@ -184,29 +183,29 @@ define_interface! {
                 string_interface::methods::to_ident_upper_snake(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
-            // Some literals become ExpressionValue::UnsupportedLiteral but can still be round-tripped back to a stream
-            [context] fn to_literal(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<ExpressionValue> {
+            // Some literals become Value::UnsupportedLiteral but can still be round-tripped back to a stream
+            [context] fn to_literal(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Value> {
                 let string = this.concat_recursive(&ConcatBehaviour::literal(this.span_range()));
                 let literal = string_interface::methods::to_literal(context, string.as_str().into_spanned_ref(this.span_range()))?;
-                Ok(ExpressionValue::for_literal(literal).into_value())
+                Ok(Value::for_literal(literal).into_value())
             }
 
             // CORE METHODS
             // ============
 
             // NOTE: with_span() exists on all values, this is just a specialized mutable version for streams
-            fn set_span(mut this: Mutable<StreamExpression>, span_source: Shared<StreamExpression>) -> ExecutionResult<()> {
+            fn set_span(mut this: Mutable<StreamValue>, span_source: Shared<StreamValue>) -> ExecutionResult<()> {
                 let span_range = span_source.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
                 this.value.replace_first_level_spans(span_range.join_into_span_else_start());
                 Ok(())
             }
 
-            fn error(this: Shared<StreamExpression>, message: Shared<String>) -> ExecutionResult<Never> {
+            fn error(this: Shared<StreamValue>, message: Shared<String>) -> ExecutionResult<Never> {
                 let error_span_range = this.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
                 error_span_range.assertion_err(message.as_str())
             }
 
-            fn assert(this: Shared<StreamExpression>, condition: bool, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
+            fn assert(this: Shared<StreamValue>, condition: bool, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
                 if condition {
                     Ok(())
                 } else {
@@ -219,42 +218,39 @@ define_interface! {
                 }
             }
 
-            fn assert_eq(this: Shared<StreamExpression>, lhs: SpannedAnyRef<ExpressionValue>, rhs: SpannedAnyRef<ExpressionValue>, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
-                let lhs_value: &ExpressionValue = &lhs;
-                let rhs_value: &ExpressionValue = &rhs;
-                let res = {
-                    // TODO[operation-refactor]: Replace with eq when we have a solid implementation
-                    let lhs_debug_str = lhs_value.concat_recursive(&ConcatBehaviour::debug(lhs.span_range()))?;
-                    let rhs_debug_str = rhs_value.concat_recursive(&ConcatBehaviour::debug(rhs.span_range()))?;
-                    lhs_debug_str == rhs_debug_str
-                }; if res {
-                    Ok(())
-                } else {
-                    let error_span_range = this.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
-                    let message = match message {
-                        Some(ref m) => m.to_string(),
-                        None => format!(
-                            "Assertion failed: lhs != rhs, where:\n  lhs = {}\n  rhs = {}",
-                            lhs.concat_recursive(&ConcatBehaviour::debug(lhs.span_range()))?,
-                            rhs.concat_recursive(&ConcatBehaviour::debug(rhs.span_range()))?,
-                        ),
-                    };
-                    error_span_range.assertion_err(message)
+            fn assert_eq(this: Shared<StreamValue>, lhs: SpannedAnyRef<Value>, rhs: SpannedAnyRef<Value>, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
+                let lhs_value: &Value = &lhs;
+                let rhs_value: &Value = &rhs;
+                match Value::debug_eq(lhs_value, rhs_value) {
+                    Ok(()) => Ok(()),
+                    Err(debug_error) => {
+                        let error_span_range = this.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
+                        let message = match message {
+                            Some(ref m) => m.to_string(),
+                            None => format!(
+                                "Assertion failed: {}\n  lhs = {}\n  rhs = {}",
+                                debug_error.format_message(),
+                                lhs.concat_recursive(&ConcatBehaviour::debug(lhs.span_range()))?,
+                                rhs.concat_recursive(&ConcatBehaviour::debug(rhs.span_range()))?,
+                            ),
+                        };
+                        error_span_range.assertion_err(message)
+                    }
                 }
             }
 
-            [context] fn reinterpret_as_run(this: Owned<StreamExpression>) -> ExecutionResult<OwnedValue> {
+            [context] fn reinterpret_as_run(this: Owned<StreamValue>) -> ExecutionResult<OwnedValue> {
                 let source = this.into_inner().value.into_token_stream();
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(ExpressionBlockContent::parse, ExpressionBlockContent::control_flow_pass)?;
                 let mut inner_interpreter = Interpreter::new(scope_definitions);
-                let return_value = reparsed.evaluate(&mut inner_interpreter, context.output_span_range, RequestedValueOwnership::owned())?.expect_owned();
+                let return_value = reparsed.evaluate(&mut inner_interpreter, context.output_span_range, RequestedOwnership::owned())?.expect_owned();
                 if !inner_interpreter.complete().is_empty() {
                     return context.control_flow_err("reinterpret_as_run does not allow non-empty stream output")
                 }
                 Ok(return_value)
             }
 
-            [context] fn reinterpret_as_stream(this: Owned<StreamExpression>) -> ExecutionResult<OutputStream> {
+            [context] fn reinterpret_as_stream(this: Owned<StreamValue>) -> ExecutionResult<OutputStream> {
                 let source = this.into_inner().value.into_token_stream();
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(
                     |input| SourceStream::parse_with_span(input, context.output_span_range.span_from_join_else_start()),
@@ -266,14 +262,24 @@ define_interface! {
             }
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_to_value(this: Owned<StreamExpression>) -> ExecutionResult<ResolvedValue> {
+            [context] fn cast_to_value(this: Owned<StreamValue>) -> ExecutionResult<ReturnedValue> {
                 let (this, span_range) = this.deconstruct();
                 let coerced = this.value.coerce_into_value();
-                if let ExpressionValue::Stream(_) = &coerced {
+                if let Value::Stream(_) = &coerced {
                     return span_range.value_err("The stream could not be coerced into a single value");
                 }
                 // Re-run the cast operation on the coerced value
                 context.operation.evaluate(coerced.into_owned(span_range))
+            }
+        }
+        pub(crate) mod binary_operations {
+            fn add(mut lhs: OutputStream, rhs: OutputStream) -> OutputStream {
+                rhs.append_into(&mut lhs);
+                lhs
+            }
+
+            fn add_assign(mut lhs: Assignee<OutputStream>, rhs: OutputStream) {
+                rhs.append_into(&mut lhs);
             }
         }
         interface_items {
@@ -287,6 +293,16 @@ define_interface! {
                             | CastTarget::Float(_),
                         ..
                     } => unary_definitions::cast_to_value(),
+                    _ => return None,
+                })
+            }
+
+            fn resolve_own_binary_operation(
+                operation: &BinaryOperation,
+            ) -> Option<BinaryOperationInterface> {
+                Some(match operation {
+                    BinaryOperation::Addition { .. } => binary_definitions::add(),
+                    BinaryOperation::AddAssign { .. } => binary_definitions::add_assign(),
                     _ => return None,
                 })
             }

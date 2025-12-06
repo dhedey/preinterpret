@@ -1,54 +1,25 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct CharExpression {
+pub(crate) struct CharValue {
     pub(super) value: char,
 }
 
-impl ToExpressionValue for CharExpression {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Char(self)
+impl IntoValue for CharValue {
+    fn into_value(self) -> Value {
+        Value::Char(self)
     }
 }
 
-impl CharExpression {
+impl Debug for CharValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.value)
+    }
+}
+
+impl CharValue {
     pub(super) fn for_litchar(lit: &syn::LitChar) -> Owned<Self> {
         Self { value: lit.value() }.into_owned(lit.span())
-    }
-
-    pub(super) fn handle_integer_binary_operation(
-        self,
-        _right: IntegerExpression,
-        operation: WrappedOp<IntegerBinaryOperation>,
-    ) -> ExecutionResult<ExpressionValue> {
-        operation.unsupported(self)
-    }
-
-    pub(super) fn handle_paired_binary_operation(
-        self,
-        rhs: Self,
-        operation: WrappedOp<PairedBinaryOperation>,
-    ) -> ExecutionResult<ExpressionValue> {
-        let lhs = self.value;
-        let rhs = rhs.value;
-        Ok(match operation.operation {
-            PairedBinaryOperation::Addition { .. }
-            | PairedBinaryOperation::Subtraction { .. }
-            | PairedBinaryOperation::Multiplication { .. }
-            | PairedBinaryOperation::Division { .. }
-            | PairedBinaryOperation::LogicalAnd { .. }
-            | PairedBinaryOperation::LogicalOr { .. }
-            | PairedBinaryOperation::Remainder { .. }
-            | PairedBinaryOperation::BitXor { .. }
-            | PairedBinaryOperation::BitAnd { .. }
-            | PairedBinaryOperation::BitOr { .. } => return operation.unsupported(self),
-            PairedBinaryOperation::Equal { .. } => operation.output(lhs == rhs),
-            PairedBinaryOperation::LessThan { .. } => operation.output(lhs < rhs),
-            PairedBinaryOperation::LessThanOrEqual { .. } => operation.output(lhs <= rhs),
-            PairedBinaryOperation::NotEqual { .. } => operation.output(lhs != rhs),
-            PairedBinaryOperation::GreaterThanOrEqual { .. } => operation.output(lhs >= rhs),
-            PairedBinaryOperation::GreaterThan { .. } => operation.output(lhs > rhs),
-        })
     }
 
     pub(super) fn to_literal(&self, span: Span) -> Literal {
@@ -56,15 +27,27 @@ impl CharExpression {
     }
 }
 
-impl HasValueType for CharExpression {
-    fn value_type(&self) -> &'static str {
-        "char"
+impl HasValueKind for CharValue {
+    type SpecificKind = ValueKind;
+
+    fn kind(&self) -> ValueKind {
+        ValueKind::Char
     }
 }
 
-impl ToExpressionValue for char {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::Char(CharExpression { value: self })
+impl ValuesEqual for CharValue {
+    fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+        if self.value == other.value {
+            ctx.values_equal()
+        } else {
+            ctx.leaf_values_not_equal(self, other)
+        }
+    }
+}
+
+impl IntoValue for char {
+    fn into_value(self) -> Value {
+        Value::Char(CharValue { value: self })
     }
 }
 
@@ -135,7 +118,46 @@ define_interface! {
                 input.to_string()
             }
         }
+        pub(crate) mod binary_operations {
+            fn eq(lhs: char, rhs: char) -> bool {
+                lhs == rhs
+            }
+
+            fn ne(lhs: char, rhs: char) -> bool {
+                lhs != rhs
+            }
+
+            fn lt(lhs: char, rhs: char) -> bool {
+                lhs < rhs
+            }
+
+            fn le(lhs: char, rhs: char) -> bool {
+                lhs <= rhs
+            }
+
+            fn ge(lhs: char, rhs: char) -> bool {
+                lhs >= rhs
+            }
+
+            fn gt(lhs: char, rhs: char) -> bool {
+                lhs > rhs
+            }
+        }
         interface_items {
+            fn resolve_own_binary_operation(
+                operation: &BinaryOperation,
+            ) -> Option<BinaryOperationInterface> {
+                Some(match operation {
+                    BinaryOperation::Equal { .. } => binary_definitions::eq(),
+                    BinaryOperation::NotEqual { .. } => binary_definitions::ne(),
+                    BinaryOperation::LessThan { .. } => binary_definitions::lt(),
+                    BinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
+                    BinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
+                    BinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
+                    _ => return None,
+                })
+            }
+
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
                     UnaryOperation::Cast { target, .. } => match target {
@@ -165,15 +187,14 @@ define_interface! {
 
 impl_resolvable_argument_for! {
     CharTypeData,
-    (value, context) -> CharExpression {
+    (value, context) -> CharValue {
         match value {
-            ExpressionValue::Char(value) => Ok(value),
-            _ => context.err("char", value),
+            Value::Char(value) => Ok(value),
+            _ => context.err("a char", value),
         }
     }
 }
 
 impl_delegated_resolvable_argument_for!(
-    CharTypeData,
-    (value: CharExpression) -> char { value.value }
+    (value: CharValue) -> char { value.value }
 );

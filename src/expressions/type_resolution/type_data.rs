@@ -5,15 +5,19 @@ pub(in crate::expressions) trait MethodResolver {
     fn resolve_method(&self, method_name: &str) -> Option<MethodInterface>;
 
     /// Resolves a unary operation as a method interface for this type.
-    /// Returns None if the operation should fallback to the legacy system.
     fn resolve_unary_operation(
         &self,
         operation: &UnaryOperation,
     ) -> Option<UnaryOperationInterface>;
 
     /// Resolves a binary operation as a method interface for this type.
-    /// Returns None if the operation should fallback to the legacy system.
-    fn resolve_binary_operation(&self, operation: &BinaryOperation) -> Option<MethodInterface>;
+    fn resolve_binary_operation(
+        &self,
+        operation: &BinaryOperation,
+    ) -> Option<BinaryOperationInterface>;
+
+    /// Resolves a property of this type.
+    fn resolve_type_property(&self, _property_name: &str) -> Option<Value>;
 }
 
 impl<T: HierarchicalTypeData> MethodResolver for T {
@@ -34,11 +38,18 @@ impl<T: HierarchicalTypeData> MethodResolver for T {
         }
     }
 
-    fn resolve_binary_operation(&self, operation: &BinaryOperation) -> Option<MethodInterface> {
+    fn resolve_binary_operation(
+        &self,
+        operation: &BinaryOperation,
+    ) -> Option<BinaryOperationInterface> {
         match Self::resolve_own_binary_operation(operation) {
             Some(method) => Some(method),
             None => Self::PARENT.and_then(|p| p.resolve_binary_operation(operation)),
         }
+    }
+
+    fn resolve_type_property(&self, property_name: &str) -> Option<Value> {
+        <Self as HierarchicalTypeData>::resolve_type_property(property_name)
     }
 }
 
@@ -46,9 +57,9 @@ pub(crate) trait HierarchicalTypeData {
     type Parent: HierarchicalTypeData;
     const PARENT: Option<Self::Parent>;
 
-    fn assert_first_argument<T: FromResolved<ValueType = Self>>() {}
+    fn assert_first_argument<T: IsArgument<ValueType = Self>>() {}
 
-    fn assert_output_type<T: ResolvableOutput>() {}
+    fn assert_output_type<T: IsReturnable>() {}
 
     fn resolve_own_method(_method_name: &str) -> Option<MethodInterface> {
         None
@@ -61,8 +72,14 @@ pub(crate) trait HierarchicalTypeData {
     }
 
     /// Resolves a binary operation as a method interface for this type.
-    /// Returns None if the operation should fallback to the legacy system.
-    fn resolve_own_binary_operation(_operation: &BinaryOperation) -> Option<MethodInterface> {
+    /// Returns None if the operation is not supported by this type.
+    fn resolve_own_binary_operation(
+        _operation: &BinaryOperation,
+    ) -> Option<BinaryOperationInterface> {
+        None
+    }
+
+    fn resolve_type_property(_property_name: &str) -> Option<Value> {
         None
     }
 }
@@ -70,70 +87,70 @@ pub(crate) trait HierarchicalTypeData {
 #[allow(unused)]
 pub(crate) enum MethodInterface {
     Arity0 {
-        method: fn(&mut MethodCallContext) -> ExecutionResult<ResolvedValue>,
-        argument_ownership: [ResolvedValueOwnership; 0],
+        method: fn(&mut MethodCallContext) -> ExecutionResult<ReturnedValue>,
+        argument_ownership: [ArgumentOwnership; 0],
     },
     Arity1 {
-        method: fn(&mut MethodCallContext, ResolvedValue) -> ExecutionResult<ResolvedValue>,
-        argument_ownership: [ResolvedValueOwnership; 1],
+        method: fn(&mut MethodCallContext, ArgumentValue) -> ExecutionResult<ReturnedValue>,
+        argument_ownership: [ArgumentOwnership; 1],
     },
     /// 1 argument, 1 optional argument
     Arity1PlusOptional1 {
         method: fn(
             &mut MethodCallContext,
-            ResolvedValue,
-            Option<ResolvedValue>,
-        ) -> ExecutionResult<ResolvedValue>,
-        argument_ownership: [ResolvedValueOwnership; 2],
+            ArgumentValue,
+            Option<ArgumentValue>,
+        ) -> ExecutionResult<ReturnedValue>,
+        argument_ownership: [ArgumentOwnership; 2],
     },
     Arity2 {
         method: fn(
             &mut MethodCallContext,
-            ResolvedValue,
-            ResolvedValue,
-        ) -> ExecutionResult<ResolvedValue>,
-        argument_ownership: [ResolvedValueOwnership; 2],
+            ArgumentValue,
+            ArgumentValue,
+        ) -> ExecutionResult<ReturnedValue>,
+        argument_ownership: [ArgumentOwnership; 2],
     },
     Arity2PlusOptional1 {
         method: fn(
             &mut MethodCallContext,
-            ResolvedValue,
-            ResolvedValue,
-            Option<ResolvedValue>,
-        ) -> ExecutionResult<ResolvedValue>,
-        argument_ownership: [ResolvedValueOwnership; 3],
+            ArgumentValue,
+            ArgumentValue,
+            Option<ArgumentValue>,
+        ) -> ExecutionResult<ReturnedValue>,
+        argument_ownership: [ArgumentOwnership; 3],
     },
     Arity3 {
         method: fn(
             &mut MethodCallContext,
-            ResolvedValue,
-            ResolvedValue,
-            ResolvedValue,
-        ) -> ExecutionResult<ResolvedValue>,
-        argument_ownership: [ResolvedValueOwnership; 3],
+            ArgumentValue,
+            ArgumentValue,
+            ArgumentValue,
+        ) -> ExecutionResult<ReturnedValue>,
+        argument_ownership: [ArgumentOwnership; 3],
     },
     Arity3PlusOptional1 {
         method: fn(
             &mut MethodCallContext,
-            ResolvedValue,
-            ResolvedValue,
-            ResolvedValue,
-            Option<ResolvedValue>,
-        ) -> ExecutionResult<ResolvedValue>,
-        argument_ownership: [ResolvedValueOwnership; 4],
+            ArgumentValue,
+            ArgumentValue,
+            ArgumentValue,
+            Option<ArgumentValue>,
+        ) -> ExecutionResult<ReturnedValue>,
+        argument_ownership: [ArgumentOwnership; 4],
     },
     ArityAny {
-        method: fn(&mut MethodCallContext, Vec<ResolvedValue>) -> ExecutionResult<ResolvedValue>,
-        argument_ownership: Vec<ResolvedValueOwnership>,
+        method: fn(&mut MethodCallContext, Vec<ArgumentValue>) -> ExecutionResult<ReturnedValue>,
+        argument_ownership: Vec<ArgumentOwnership>,
     },
 }
 
 impl MethodInterface {
     pub(crate) fn execute(
         &self,
-        arguments: Vec<ResolvedValue>,
+        arguments: Vec<ArgumentValue>,
         context: &mut MethodCallContext,
-    ) -> ExecutionResult<ResolvedValue> {
+    ) -> ExecutionResult<ReturnedValue> {
         match self {
             MethodInterface::Arity0 { method, .. } => {
                 if !arguments.is_empty() {
@@ -142,18 +159,18 @@ impl MethodInterface {
                 method(context)
             }
             MethodInterface::Arity1 { method, .. } => {
-                match <[ResolvedValue; 1]>::try_from(arguments) {
+                match <[ArgumentValue; 1]>::try_from(arguments) {
                     Ok([a]) => method(context, a),
                     Err(_) => context.output_span_range.type_err("Expected 1 argument"),
                 }
             }
             MethodInterface::Arity1PlusOptional1 { method, .. } => match arguments.len() {
                 1 => {
-                    let [a] = <[ResolvedValue; 1]>::try_from(arguments).ok().unwrap();
+                    let [a] = <[ArgumentValue; 1]>::try_from(arguments).ok().unwrap();
                     method(context, a, None)
                 }
                 2 => {
-                    let [a, b] = <[ResolvedValue; 2]>::try_from(arguments).ok().unwrap();
+                    let [a, b] = <[ArgumentValue; 2]>::try_from(arguments).ok().unwrap();
                     method(context, a, Some(b))
                 }
                 _ => context
@@ -161,18 +178,18 @@ impl MethodInterface {
                     .type_err("Expected 1 or 2 arguments"),
             },
             MethodInterface::Arity2 { method, .. } => {
-                match <[ResolvedValue; 2]>::try_from(arguments) {
+                match <[ArgumentValue; 2]>::try_from(arguments) {
                     Ok([a, b]) => method(context, a, b),
                     Err(_) => context.output_span_range.type_err("Expected 2 arguments"),
                 }
             }
             MethodInterface::Arity2PlusOptional1 { method, .. } => match arguments.len() {
                 2 => {
-                    let [a, b] = <[ResolvedValue; 2]>::try_from(arguments).ok().unwrap();
+                    let [a, b] = <[ArgumentValue; 2]>::try_from(arguments).ok().unwrap();
                     method(context, a, b, None)
                 }
                 3 => {
-                    let [a, b, c] = <[ResolvedValue; 3]>::try_from(arguments).ok().unwrap();
+                    let [a, b, c] = <[ArgumentValue; 3]>::try_from(arguments).ok().unwrap();
                     method(context, a, b, Some(c))
                 }
                 _ => context
@@ -180,18 +197,18 @@ impl MethodInterface {
                     .type_err("Expected 2 or 3 arguments"),
             },
             MethodInterface::Arity3 { method, .. } => {
-                match <[ResolvedValue; 3]>::try_from(arguments) {
+                match <[ArgumentValue; 3]>::try_from(arguments) {
                     Ok([a, b, c]) => method(context, a, b, c),
                     Err(_) => context.output_span_range.type_err("Expected 3 arguments"),
                 }
             }
             MethodInterface::Arity3PlusOptional1 { method, .. } => match arguments.len() {
                 3 => {
-                    let [a, b, c] = <[ResolvedValue; 3]>::try_from(arguments).ok().unwrap();
+                    let [a, b, c] = <[ArgumentValue; 3]>::try_from(arguments).ok().unwrap();
                     method(context, a, b, c, None)
                 }
                 4 => {
-                    let [a, b, c, d] = <[ResolvedValue; 4]>::try_from(arguments).ok().unwrap();
+                    let [a, b, c, d] = <[ArgumentValue; 4]>::try_from(arguments).ok().unwrap();
                     method(context, a, b, c, Some(d))
                 }
                 _ => context
@@ -203,7 +220,7 @@ impl MethodInterface {
     }
 
     /// Returns (argument_ownerships, required_argument_count)
-    pub(crate) fn argument_ownerships(&self) -> (&[ResolvedValueOwnership], usize) {
+    pub(crate) fn argument_ownerships(&self) -> (&[ArgumentOwnership], usize) {
         match self {
             MethodInterface::Arity0 {
                 argument_ownership, ..
@@ -234,16 +251,16 @@ impl MethodInterface {
 }
 
 pub(crate) struct UnaryOperationInterface {
-    pub method: fn(UnaryOperationCallContext, ResolvedValue) -> ExecutionResult<ResolvedValue>,
-    pub argument_ownership: ResolvedValueOwnership,
+    pub method: fn(UnaryOperationCallContext, ArgumentValue) -> ExecutionResult<ReturnedValue>,
+    pub argument_ownership: ArgumentOwnership,
 }
 
 impl UnaryOperationInterface {
     pub(crate) fn execute(
         &self,
-        input: ResolvedValue,
+        input: ArgumentValue,
         operation: &UnaryOperation,
-    ) -> ExecutionResult<ResolvedValue> {
+    ) -> ExecutionResult<ReturnedValue> {
         let output_span_range = operation.output_span_range(input.span_range());
         (self.method)(
             UnaryOperationCallContext {
@@ -254,7 +271,44 @@ impl UnaryOperationInterface {
         )
     }
 
-    pub(crate) fn argument_ownership(&self) -> ResolvedValueOwnership {
+    pub(crate) fn argument_ownership(&self) -> ArgumentOwnership {
         self.argument_ownership
+    }
+}
+
+pub(crate) struct BinaryOperationInterface {
+    pub method: fn(
+        BinaryOperationCallContext,
+        ArgumentValue,
+        ArgumentValue,
+    ) -> ExecutionResult<ReturnedValue>,
+    pub lhs_ownership: ArgumentOwnership,
+    pub rhs_ownership: ArgumentOwnership,
+}
+
+impl BinaryOperationInterface {
+    pub(crate) fn execute(
+        &self,
+        lhs: ArgumentValue,
+        rhs: ArgumentValue,
+        operation: &BinaryOperation,
+    ) -> ExecutionResult<ReturnedValue> {
+        let output_span_range = SpanRange::new_between(lhs.span_range(), rhs.span_range());
+        (self.method)(
+            BinaryOperationCallContext {
+                operation,
+                output_span_range,
+            },
+            lhs,
+            rhs,
+        )
+    }
+
+    pub(crate) fn lhs_ownership(&self) -> ArgumentOwnership {
+        self.lhs_ownership
+    }
+
+    pub(crate) fn rhs_ownership(&self) -> ArgumentOwnership {
+        self.rhs_ownership
     }
 }

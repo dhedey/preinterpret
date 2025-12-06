@@ -101,8 +101,8 @@ impl IfExpression {
     pub(crate) fn evaluate(
         &self,
         interpreter: &mut Interpreter,
-        requested_ownership: RequestedValueOwnership,
-    ) -> ExecutionResult<EvaluationItem> {
+        requested_ownership: RequestedOwnership,
+    ) -> ExecutionResult<RequestedValue> {
         let evaluated_condition: bool = self
             .condition
             .evaluate_owned(interpreter)?
@@ -125,7 +125,7 @@ impl IfExpression {
             return else_code.evaluate(interpreter, requested_ownership);
         }
 
-        requested_ownership.map_from_owned(ExpressionValue::None.into_owned(self.span_range()))
+        requested_ownership.map_from_owned(Value::None.into_owned(self.span_range()))
     }
 }
 
@@ -181,8 +181,8 @@ impl WhileExpression {
     pub(crate) fn evaluate(
         &self,
         interpreter: &mut Interpreter,
-        ownership: RequestedValueOwnership,
-    ) -> ExecutionResult<EvaluationItem> {
+        ownership: RequestedOwnership,
+    ) -> ExecutionResult<RequestedValue> {
         let span = self.body.span();
         let mut iteration_counter = interpreter.start_iteration_counter(&span);
 
@@ -264,8 +264,8 @@ impl LoopExpression {
     pub(crate) fn evaluate(
         &self,
         interpreter: &mut Interpreter,
-        ownership: RequestedValueOwnership,
-    ) -> ExecutionResult<EvaluationItem> {
+        ownership: RequestedOwnership,
+    ) -> ExecutionResult<RequestedValue> {
         let span = self.body.span();
         let mut iteration_counter = interpreter.start_iteration_counter(&span);
 
@@ -362,8 +362,8 @@ impl ForExpression {
     pub(crate) fn evaluate(
         &self,
         interpreter: &mut Interpreter,
-        ownership: RequestedValueOwnership,
-    ) -> ExecutionResult<EvaluationItem> {
+        ownership: RequestedOwnership,
+    ) -> ExecutionResult<RequestedValue> {
         let iterable: IterableValue = self
             .iterable
             .evaluate_owned(interpreter)?
@@ -507,8 +507,8 @@ impl AttemptExpression {
     pub(crate) fn evaluate(
         &self,
         interpreter: &mut Interpreter,
-        ownership: RequestedValueOwnership,
-    ) -> ExecutionResult<EvaluationItem> {
+        ownership: RequestedOwnership,
+    ) -> ExecutionResult<RequestedValue> {
         // We need a separate method to correctly capture the lifetimes of the guard clause
         fn guard_clause<'a>(
             guard: Option<&'a (Token![if], Expression)>,
@@ -602,8 +602,8 @@ impl ParseExpression {
     pub(crate) fn evaluate(
         &self,
         interpreter: &mut Interpreter,
-        ownership: RequestedValueOwnership,
-    ) -> ExecutionResult<EvaluationItem> {
+        ownership: RequestedOwnership,
+    ) -> ExecutionResult<RequestedValue> {
         let input = self
             .input
             .evaluate_owned(interpreter)?

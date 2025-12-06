@@ -48,6 +48,31 @@ impl<T: 'static + ?Sized, U: 'static + ?Sized> MutSubRcRefCell<T, U> {
         }
     }
 
+    /// SAFETY:
+    /// * Must be paired with a call to `enable()` before any further use of the value.
+    /// * Must not use the value while disabled.
+    pub(crate) unsafe fn disable(&mut self) {
+        // Ideally we'd just decrement the ref count, but RefCell doesn't expose that.
+        // Instead, we duplicate it, so the old value gets dropped automatically,
+        // decrementing the ref count.
+        self.ref_mut = unsafe { core::ptr::read(&self.ref_mut) };
+    }
+
+    /// SAFETY:
+    /// * Must only be used after a call to `disable()`.
+    pub(crate) unsafe fn enable(&mut self) -> Result<(), BorrowMutError> {
+        // Ideally we'd just increment the ref count, but RefCell doesn't expose that.
+        // Instead, we re-borrow it mutably, which increments the ref count, then forget
+        // the new borrow.
+        match self.pointed_at.try_borrow_mut() {
+            Ok(new_ref_mut) => {
+                std::mem::forget(new_ref_mut);
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     pub(crate) fn map<V: ?Sized>(self, f: impl FnOnce(&mut U) -> &mut V) -> MutSubRcRefCell<T, V> {
         MutSubRcRefCell {
             ref_mut: RefMut::map(self.ref_mut, f),
@@ -150,6 +175,31 @@ impl<T: ?Sized, U: 'static + ?Sized> SharedSubRcRefCell<T, U> {
                 pointed_at: self.pointed_at,
             }),
             Err(_) => Err(error.unwrap()),
+        }
+    }
+
+    /// SAFETY:
+    /// * Must be paired with a call to `enable()` before any further use of the value.
+    /// * Must not use the value while disabled.
+    pub(crate) unsafe fn disable(&mut self) {
+        // Ideally we'd just decrement the ref count, but RefCell doesn't expose that.
+        // Instead, we duplicate it, so the old value gets dropped automatically,
+        // decrementing the ref count.
+        self.shared_ref = unsafe { core::ptr::read(&self.shared_ref) };
+    }
+
+    /// SAFETY:
+    /// * Must only be used after a call to `disable()`.
+    pub(crate) unsafe fn enable(&mut self) -> Result<(), BorrowError> {
+        // Ideally we'd just increment the ref count, but RefCell doesn't expose that.
+        // Instead, we re-borrow it mutably, which increments the ref count, then forget
+        // the new borrow.
+        match self.pointed_at.try_borrow() {
+            Ok(new_ref_mut) => {
+                std::mem::forget(new_ref_mut);
+                Ok(())
+            }
+            Err(e) => Err(e),
         }
     }
 }

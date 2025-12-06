@@ -34,6 +34,48 @@ fn test_integer_literal() {
 }
 
 #[test]
+fn test_max_u128_literal() {
+    // Verifies that u128::MAX (which doesn't fit in i128) can still be passed through as-is
+    // because it falls back to being an UnsupportedLiteral
+    let x: u128 = run!(340_282_366_920_938_463_463_374_607_431_768_211_455u128);
+    assert_eq!(x, u128::MAX);
+    let x2: u128 = run!(u128::MAX);
+    assert_eq!(x2, u128::MAX);
+}
+
+#[test]
+fn test_min_literals() {
+    assert_eq!(run!(i8::MIN), i8::MIN);
+    assert_eq!(run!(i16::MIN), i16::MIN);
+    assert_eq!(run!(i32::MIN), i32::MIN);
+    assert_eq!(run!(i64::MIN), i64::MIN);
+    assert_eq!(run!(i128::MIN), i128::MIN);
+    assert_eq!(run!(isize::MIN), isize::MIN);
+    assert_eq!(run!(u8::MIN), u8::MIN);
+    assert_eq!(run!(u16::MIN), u16::MIN);
+    assert_eq!(run!(u32::MIN), u32::MIN);
+    assert_eq!(run!(u64::MIN), u64::MIN);
+    assert_eq!(run!(u128::MIN), u128::MIN);
+    assert_eq!(run!(usize::MIN), usize::MIN);
+}
+
+#[test]
+fn test_max_literals() {
+    assert_eq!(run!(i8::MAX), i8::MAX);
+    assert_eq!(run!(i16::MAX), i16::MAX);
+    assert_eq!(run!(i32::MAX), i32::MAX);
+    assert_eq!(run!(i64::MAX), i64::MAX);
+    assert_eq!(run!(i128::MAX), i128::MAX);
+    assert_eq!(run!(isize::MAX), isize::MAX);
+    assert_eq!(run!(u8::MAX), u8::MAX);
+    assert_eq!(run!(u16::MAX), u16::MAX);
+    assert_eq!(run!(u32::MAX), u32::MAX);
+    assert_eq!(run!(u64::MAX), u64::MAX);
+    assert_eq!(run!(u128::MAX), u128::MAX);
+    assert_eq!(run!(usize::MAX), usize::MAX);
+}
+
+#[test]
 fn test_float_literal() {
     assert_eq!(run!(%[0 . 123].to_literal()), 0.123);
     assert_eq!(run!(%[677f32].to_literal()), 677f32);

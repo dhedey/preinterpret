@@ -1,8 +1,8 @@
 use super::*;
 
-impl ToExpressionValue for () {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::None
+impl IntoValue for () {
+    fn into_value(self) -> Value {
+        Value::None
     }
 }
 
@@ -10,13 +10,10 @@ impl ResolvableArgumentTarget for () {
     type ValueType = NoneTypeData;
 }
 
-impl ResolvableArgumentOwned for () {
-    fn resolve_from_value(
-        value: ExpressionValue,
-        context: ResolutionContext,
-    ) -> ExecutionResult<Self> {
+impl ResolvableOwned<Value> for () {
+    fn resolve_from_value(value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
         match value {
-            ExpressionValue::None => Ok(()),
+            Value::None => Ok(()),
             other => context.err("None", other),
         }
     }
@@ -40,6 +37,7 @@ define_interface! {
             }
         }
         pub(crate) mod unary_operations {}
+        pub(crate) mod binary_operations {}
         interface_items {}
     }
 }

@@ -1,54 +1,25 @@
 use super::*;
 
 #[derive(Clone)]
-pub(crate) struct StringExpression {
+pub(crate) struct StringValue {
     pub(crate) value: String,
 }
 
-impl ToExpressionValue for StringExpression {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::String(self)
+impl Debug for StringValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.value)
     }
 }
 
-impl StringExpression {
+impl IntoValue for StringValue {
+    fn into_value(self) -> Value {
+        Value::String(self)
+    }
+}
+
+impl StringValue {
     pub(super) fn for_litstr(lit: &syn::LitStr) -> Owned<Self> {
         Self { value: lit.value() }.into_owned(lit.span())
-    }
-
-    pub(super) fn handle_integer_binary_operation(
-        self,
-        _right: IntegerExpression,
-        operation: WrappedOp<IntegerBinaryOperation>,
-    ) -> ExecutionResult<ExpressionValue> {
-        operation.unsupported(self)
-    }
-
-    pub(super) fn handle_paired_binary_operation(
-        self,
-        rhs: Self,
-        operation: WrappedOp<PairedBinaryOperation>,
-    ) -> ExecutionResult<ExpressionValue> {
-        let lhs = self.value;
-        let rhs = rhs.value;
-        Ok(match operation.operation {
-            PairedBinaryOperation::Addition { .. } => operation.output(lhs + &rhs),
-            PairedBinaryOperation::Subtraction { .. }
-            | PairedBinaryOperation::Multiplication { .. }
-            | PairedBinaryOperation::Division { .. }
-            | PairedBinaryOperation::LogicalAnd { .. }
-            | PairedBinaryOperation::LogicalOr { .. }
-            | PairedBinaryOperation::Remainder { .. }
-            | PairedBinaryOperation::BitXor { .. }
-            | PairedBinaryOperation::BitAnd { .. }
-            | PairedBinaryOperation::BitOr { .. } => return operation.unsupported(lhs),
-            PairedBinaryOperation::Equal { .. } => operation.output(lhs == rhs),
-            PairedBinaryOperation::LessThan { .. } => operation.output(lhs < rhs),
-            PairedBinaryOperation::LessThanOrEqual { .. } => operation.output(lhs <= rhs),
-            PairedBinaryOperation::NotEqual { .. } => operation.output(lhs != rhs),
-            PairedBinaryOperation::GreaterThanOrEqual { .. } => operation.output(lhs >= rhs),
-            PairedBinaryOperation::GreaterThan { .. } => operation.output(lhs > rhs),
-        })
     }
 
     pub(super) fn to_literal(&self, span: Span) -> Literal {
@@ -56,27 +27,33 @@ impl StringExpression {
     }
 }
 
-impl HasValueType for StringExpression {
-    fn value_type(&self) -> &'static str {
-        self.value.value_type()
+impl HasValueKind for StringValue {
+    type SpecificKind = ValueKind;
+
+    fn kind(&self) -> ValueKind {
+        ValueKind::String
     }
 }
 
-impl HasValueType for String {
-    fn value_type(&self) -> &'static str {
-        "string"
+impl ValuesEqual for StringValue {
+    fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+        if self.value == other.value {
+            ctx.values_equal()
+        } else {
+            ctx.leaf_values_not_equal(self, other)
+        }
     }
 }
 
-impl ToExpressionValue for String {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::String(StringExpression { value: self })
+impl IntoValue for String {
+    fn into_value(self) -> Value {
+        Value::String(StringValue { value: self })
     }
 }
 
-impl ToExpressionValue for &str {
-    fn into_value(self) -> ExpressionValue {
-        ExpressionValue::String(StringExpression {
+impl IntoValue for &str {
+    fn into_value(self) -> Value {
+        Value::String(StringValue {
             value: self.to_string(),
         })
     }
@@ -184,6 +161,40 @@ define_interface! {
                 this
             }
         }
+        pub(crate) mod binary_operations {
+            fn add(mut lhs: String, rhs: Shared<str>) -> String {
+                lhs.push_str(rhs.deref());
+                lhs
+            }
+
+            fn add_assign(mut lhs: Assignee<String>, rhs: Shared<str>) {
+                lhs.push_str(rhs.deref());
+            }
+
+            fn eq(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+                lhs.deref() == rhs.deref()
+            }
+
+            fn ne(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+                lhs.deref() != rhs.deref()
+            }
+
+            fn lt(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+                lhs.deref() < rhs.deref()
+            }
+
+            fn le(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+                lhs.deref() <= rhs.deref()
+            }
+
+            fn ge(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+                lhs.deref() >= rhs.deref()
+            }
+
+            fn gt(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+                lhs.deref() > rhs.deref()
+            }
+        }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
@@ -194,37 +205,52 @@ define_interface! {
                     },
                 })
             }
+
+            fn resolve_own_binary_operation(
+                operation: &BinaryOperation,
+            ) -> Option<BinaryOperationInterface> {
+                Some(match operation {
+                    BinaryOperation::Addition { .. } => binary_definitions::add(),
+                    BinaryOperation::Equal { .. } => binary_definitions::eq(),
+                    BinaryOperation::NotEqual { .. } => binary_definitions::ne(),
+                    BinaryOperation::LessThan { .. } => binary_definitions::lt(),
+                    BinaryOperation::LessThanOrEqual { .. } => binary_definitions::le(),
+                    BinaryOperation::GreaterThanOrEqual { .. } => binary_definitions::ge(),
+                    BinaryOperation::GreaterThan { .. } => binary_definitions::gt(),
+                    BinaryOperation::AddAssign { .. } => binary_definitions::add_assign(),
+                    _ => return None,
+                })
+            }
         }
     }
 }
 
 impl_resolvable_argument_for! {
     StringTypeData,
-    (value, context) -> StringExpression {
+    (value, context) -> StringValue {
         match value {
-            ExpressionValue::String(value) => Ok(value),
-            _ => context.err("string", value),
+            Value::String(value) => Ok(value),
+            _ => context.err("a string", value),
         }
     }
 }
 
 impl_delegated_resolvable_argument_for!(
-    StringTypeData,
-    (value: StringExpression) -> String { value.value }
+    (value: StringValue) -> String { value.value }
 );
 
 impl ResolvableArgumentTarget for str {
     type ValueType = StringTypeData;
 }
 
-impl ResolvableArgumentShared for str {
+impl ResolvableShared<Value> for str {
     fn resolve_from_ref<'a>(
-        value: &'a ExpressionValue,
+        value: &'a Value,
         context: ResolutionContext,
     ) -> ExecutionResult<&'a Self> {
         match value {
-            ExpressionValue::String(s) => Ok(s.value.as_str()),
-            _ => context.err("string", value),
+            Value::String(s) => Ok(s.value.as_str()),
+            _ => context.err("a string", value),
         }
     }
 }
