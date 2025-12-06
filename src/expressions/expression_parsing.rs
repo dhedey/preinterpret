@@ -135,7 +135,15 @@ impl<'a> ExpressionParser<'a> {
                     "None" => UnaryAtom::Leaf(Leaf::Value(SharedValue::new_from_owned(
                         Value::None.into_owned(input.parse_any_ident()?.span_range()),
                     ))),
-                    _ => UnaryAtom::Leaf(Leaf::Variable(input.parse()?))
+                    _ => {
+                        let (_ident, next) = input.cursor().ident().unwrap();
+                        if let Some((_, next)) = next.punct_matching(':') {
+                            if let Some((_, _)) = next.punct_matching(':') {
+                                return Ok(UnaryAtom::Leaf(Leaf::TypeProperty(input.parse()?)));
+                            }
+                        }
+                        UnaryAtom::Leaf(Leaf::Variable(input.parse()?))
+                    }
                 }
             },
             SourcePeekMatch::Literal(_) => {

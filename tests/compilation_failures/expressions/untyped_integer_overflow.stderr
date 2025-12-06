@@ -1,5 +1,5 @@
 error: The untyped integer operation 170141183460469231731687303715884105727 + 1 overflowed in i128 space
- --> tests/compilation_failures/expressions/untyped_integer_overflow.rs:5:70
+ --> tests/compilation_failures/expressions/untyped_integer_overflow.rs:4:35
   |
-5 |     let _ = run!(170_141_183_460_469_231_731_687_303_715_884_105_727 + 1);
-  |                                                                      ^
+4 |     let _ = run!(i128::MAX as int + 1);
+  |                                   ^

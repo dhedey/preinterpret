@@ -22,6 +22,9 @@ impl ExpressionNode {
                             context.return_argument_value(resolved)?
                         }
                     },
+                    Leaf::TypeProperty(type_property) => {
+                        context.evaluate(|_, ownership| type_property.resolve(ownership))?
+                    }
                     Leaf::Block(block) => context.evaluate(|interpreter, ownership| {
                         block.evaluate(interpreter, ownership)
                     })?,
