@@ -55,9 +55,6 @@ impl ParseSource for ParseTemplateItem {
             SourcePeekMatch::EmbeddedStatements => {
                 ParseTemplateItem::EmbeddedStatements(input.parse()?)
             }
-            SourcePeekMatch::ExplicitTransformStream | SourcePeekMatch::Transformer(_) => {
-                return input.parse_err("TODO: REMOVE THIS");
-            }
             SourcePeekMatch::Punct(_) => {
                 let punct = input.parse_any_punct()?;
                 ParseTemplateItem::Punct(punct.as_char())

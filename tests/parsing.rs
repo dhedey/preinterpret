@@ -128,7 +128,6 @@ fn test_parser_token_tree_method() {
 
 #[test]
 fn test_parser_rest_method() {
-    // parser.rest() - equivalent to old @REST transformer
     assert_eq!(
         run! {
             let @parser[#{ let inner = parser.rest(); }] = %[<Hello Beautiful World>];

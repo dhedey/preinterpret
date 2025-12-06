@@ -31,6 +31,7 @@ impl ParseSource for Pattern {
             } else if next.group_matching(Delimiter::Bracket).is_some() {
                 Ok(Pattern::Stream(input.parse()?))
             } else if next.ident_matching("raw").is_some() {
+                // TODO[parsers]: Check this is the correct syntax once implemented!
                 input.parse_err(
                     "Use `%[@[EXACT(%raw[...])]]` to match `%raw[...]` stream literal content",
                 )
@@ -331,7 +332,8 @@ impl ParseSource for ObjectEntry {
 pub struct StreamPattern {
     _prefix: Unused<Token![%]>,
     brackets: Brackets,
-    content: TransformStream,
+    // TODO[parsers]: Replace with a distinct type that doesn't allow embedded statements, but does allow %[group] and %[raw]
+    content: ParseTemplateStream,
 }
 
 impl ParseSource for StreamPattern {
@@ -341,7 +343,7 @@ impl ParseSource for StreamPattern {
         Ok(Self {
             _prefix,
             brackets,
-            content: inner.parse()?,
+            content: ParseTemplateStream::parse_with_span(&inner, brackets.span())?,
         })
     }
 
@@ -359,13 +361,9 @@ impl HandleDestructure for StreamPattern {
         let stream: StreamValue = value
             .into_owned(self.brackets.span_range())
             .resolve_as("The value destructured with a stream pattern")?;
-        // TODO[parser-no-output]: Remove this once transformers no longer output
-        let _ = interpreter.capture_output(|interpreter| {
-            interpreter.start_parse(stream.value, |interpreter, _| {
-                self.content.handle_transform(interpreter)
-            })
-        })?;
-        Ok(())
+        interpreter.start_parse(stream.value, |interpreter, _| {
+            self.content.consume(interpreter)
+        })
     }
 }
 

@@ -333,16 +333,6 @@ impl Interpreter {
         self.output_handler.current_output_mut(span_source)
     }
 
-    pub(crate) fn input_and_output<'a>(
-        &'a mut self,
-        span_source: &impl HasSpanRange,
-    ) -> ExecutionResult<(ParseStream<'a, Output>, &'a mut OutputStream)> {
-        Ok((
-            self.input_handler.current_input(),
-            self.output_handler.current_output_mut(span_source)?,
-        ))
-    }
-
     pub(crate) fn complete(self) -> OutputStream {
         self.output_handler.complete()
     }

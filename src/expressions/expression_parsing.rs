@@ -72,9 +72,6 @@ impl<'a> ExpressionParser<'a> {
                     "In an expression, the # variable prefix is not allowed. The # prefix should only be used when embedding a variable into an output stream, e.g. %[#var + #(..expressions..)]",
                 )
             }
-            SourcePeekMatch::ExplicitTransformStream | SourcePeekMatch::Transformer(_) => {
-                return input.parse_err("Destructurings are not supported in an expression")
-            }
             SourcePeekMatch::Group(Delimiter::None | Delimiter::Parenthesis) => {
                 let (_, delim_span) = input.parse_and_enter_group(None)?;
                 UnaryAtom::Group(delim_span)

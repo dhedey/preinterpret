@@ -53,8 +53,6 @@ pub(crate) enum SourcePeekMatch {
     EmbeddedExpression,
     EmbeddedStatements,
     EmbeddedVariable,
-    ExplicitTransformStream,
-    Transformer(Option<TransformerKind>),
     Group(Delimiter),
     Ident(Ident),
     Punct(Punct),
@@ -91,27 +89,6 @@ fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> SourcePeekMatch {
         }
         if next.group_matching(Delimiter::Brace).is_some() {
             return SourcePeekMatch::ObjectLiteral;
-        }
-    }
-
-    if let Some((_, next)) = cursor.punct_matching('@') {
-        if let Some((_, _, _)) = next.group_matching(Delimiter::Parenthesis) {
-            // @(...) or @(_ = ...) or @(#x = ...)
-            return SourcePeekMatch::ExplicitTransformStream;
-        }
-        if let Some((ident, _)) = next.ident() {
-            let name = ident.to_string();
-            if name.to_uppercase() == name {
-                return SourcePeekMatch::Transformer(TransformerKind::for_ident(&ident));
-            }
-        }
-        if let Some((_, next, _)) = next.group_matching(Delimiter::Bracket) {
-            if let Some((ident, _)) = next.ident() {
-                let name = ident.to_string();
-                if name.to_uppercase() == name {
-                    return SourcePeekMatch::Transformer(TransformerKind::for_ident(&ident));
-                }
-            }
         }
     }
 
