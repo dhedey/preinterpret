@@ -408,7 +408,8 @@ impl HandleDestructure for ParseTemplatePattern {
         let stream: StreamValue = value
             .into_owned(self.brackets.span_range())
             .resolve_as("The value destructured with a parse template pattern")?;
-        interpreter.start_parse(stream.value, |interpreter, _| {
+        interpreter.start_parse(stream.value, |interpreter, handle| {
+            self.parser_definition.define(interpreter, handle);
             self.content.consume(interpreter)
         })
     }

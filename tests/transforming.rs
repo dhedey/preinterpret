@@ -17,7 +17,7 @@ fn test_transforming_compilation_failures() {
 fn test_variable_parsing() {
     assert_eq!(
         run! {
-            let %[<Hello @(#inner = @IDENT) World>] = %[<Hello Beautiful World>];
+            let @parser[<Hello #{ let inner = parser.ident(); } World>] = %[<Hello Beautiful World>];
             inner.to_debug_string()
         },
         "%[Beautiful]"

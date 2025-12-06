@@ -109,11 +109,11 @@ define_interface! {
                 Ok(parser(this, context)?.parse()?)
             }
 
-            [context] fn read(this: Shared<ParserValue>, parse_template: AnyRef<OutputStream>) -> ExecutionResult<()> {
+            [context] fn read(this: Shared<ParserValue>, parse_template: AnyRef<OutputStream>) -> ExecutionResult<OutputStream> {
                 let this = parser(this, context)?;
-                // TODO[parsers] - parse_exact_match doesn't need an output stream
-                let mut discarded_output = OutputStream::new();
-                parse_template.parse_exact_match(this, &mut discarded_output)
+                let mut output = OutputStream::new();
+                parse_template.parse_exact_match(this, &mut output)?;
+                Ok(output)
             }
 
             [context] fn rest(this: Shared<ParserValue>) -> ExecutionResult<OutputStream> {
