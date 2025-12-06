@@ -1,7 +1,5 @@
 use preinterpret::*;
 
 fn main() {
-    let _ = stream!{
-        #("hello" * 3)
-    };
+    let _ = run!("hello" * 3);
 }

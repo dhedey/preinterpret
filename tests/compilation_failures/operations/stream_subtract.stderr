@@ -1,5 +1,5 @@
 error: The - operator is not supported for a stream operand
- --> tests/compilation_failures/operations/stream_subtract.rs:5:20
+ --> tests/compilation_failures/operations/stream_subtract.rs:4:27
   |
-5 |         #(%[hello] - %[world])
-  |                    ^
+4 |     let _ = run!(%[hello] - %[world]);
+  |                           ^

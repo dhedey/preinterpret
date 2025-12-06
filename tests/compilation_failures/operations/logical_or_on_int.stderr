@@ -1,5 +1,5 @@
 error: The left operand to || is expected to be a boolean, but it is an untyped integer
- --> tests/compilation_failures/operations/logical_or_on_int.rs:5:11
+ --> tests/compilation_failures/operations/logical_or_on_int.rs:4:18
   |
-5 |         #(1 || 2)
-  |           ^
+4 |     let _ = run!(1 || 2);
+  |                  ^

@@ -1,5 +1,5 @@
 error: The | operator is not supported for an untyped float operand
- --> tests/compilation_failures/operations/bitwise_or_on_float.rs:5:15
+ --> tests/compilation_failures/operations/bitwise_or_on_float.rs:4:22
   |
-5 |         #(1.0 | 2.0)
-  |               ^
+4 |     let _ = run!(1.0 | 2.0);
+  |                      ^

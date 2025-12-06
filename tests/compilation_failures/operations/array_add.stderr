@@ -1,10 +1,7 @@
 error: macro expansion ignores `2` and any tokens following
  --> tests/compilation_failures/operations/array_add.rs:4:13
   |
-4 |       let _ = stream!{
-  |  _____________^
-5 | |         #([1, 2] + [3, 4])
-6 | |     };
-  | |_____^ caused by the macro expansion here
+4 |     let _ = run!([1, 2] + [3, 4]);
+  |             ^^^^^^^^^^^^^^^^^^^^^ caused by the macro expansion here
   |
-  = note: the usage of `stream!` is likely invalid in expression context
+  = note: the usage of `run!` is likely invalid in expression context

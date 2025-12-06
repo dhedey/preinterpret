@@ -1,5 +1,5 @@
 error: The u8 operation 200 * 2 overflowed
- --> tests/compilation_failures/operations/integer_overflow_mul.rs:5:17
+ --> tests/compilation_failures/operations/integer_overflow_mul.rs:4:24
   |
-5 |         #(200u8 * 2u8)
-  |                 ^
+4 |     let _ = run!(200u8 * 2u8);
+  |                        ^

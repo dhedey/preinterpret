@@ -1,7 +1,5 @@
 use preinterpret::*;
 
 fn main() {
-    let _ = stream!{
-        #(0u8 - 1u8)
-    };
+    let _ = run!(0u8 - 1u8);
 }

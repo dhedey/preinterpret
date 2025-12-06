@@ -1,5 +1,5 @@
 error: The untyped integer operation 10 / 0 overflowed in i128 space
- --> tests/compilation_failures/operations/divide_by_zero_int.rs:5:14
+ --> tests/compilation_failures/operations/divide_by_zero_int.rs:4:21
   |
-5 |         #(10 / 0)
-  |              ^
+4 |     let _ = run!(10 / 0);
+  |                     ^
