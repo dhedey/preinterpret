@@ -203,6 +203,45 @@ impl HasValueKind for IteratorValue {
     }
 }
 
+fn definite_size_hint(size_hint: (usize, Option<usize>)) -> Option<usize> {
+    let (min, max) = size_hint;
+    if let Some(max) = max {
+        if min == max {
+            Some(min)
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+impl ValuesEqual for IteratorValue {
+    /// Compares two iterators by cloning and comparing element-by-element.
+    fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+        let mut lhs_iter = self.clone();
+        let mut rhs_iter = other.clone();
+        let mut index = 0;
+        let lhs_size = definite_size_hint(lhs_iter.size_hint());
+        let rhs_size = definite_size_hint(rhs_iter.size_hint());
+        const MAX_ITERATIONS: usize = 1000;
+        while index < MAX_ITERATIONS {
+            match (lhs_iter.next(), rhs_iter.next()) {
+                (Some(l), Some(r)) => {
+                    let result = ctx.with_iterator_index(index, |ctx| l.test_equality(&r, ctx));
+                    if ctx.should_short_circuit(&result) {
+                        return result;
+                    }
+                    index += 1;
+                }
+                (None, None) => return ctx.values_equal(),
+                _ => return ctx.lengths_unequal(lhs_size, rhs_size),
+            }
+        }
+        ctx.iteration_limit_exceeded(MAX_ITERATIONS)
+    }
+}
+
 #[derive(Clone)]
 enum IteratorValueInner {
     // We Box these so that Value is smaller on the stack

@@ -171,6 +171,84 @@ impl HasValueKind for RangeValue {
     }
 }
 
+impl ValuesEqual for RangeValue {
+    /// Ranges are equal if they have the same kind and the same bounds.
+    fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+        match (&*self.inner, &*other.inner) {
+            (
+                RangeValueInner::Range {
+                    start_inclusive: l_start,
+                    end_exclusive: l_end,
+                    ..
+                },
+                RangeValueInner::Range {
+                    start_inclusive: r_start,
+                    end_exclusive: r_end,
+                    ..
+                },
+            ) => {
+                let result = ctx.with_range_start(|ctx| l_start.test_equality(r_start, ctx));
+                if ctx.should_short_circuit(&result) {
+                    return result;
+                }
+                ctx.with_range_end(|ctx| l_end.test_equality(r_end, ctx))
+            }
+            (
+                RangeValueInner::RangeFrom {
+                    start_inclusive: l_start,
+                    ..
+                },
+                RangeValueInner::RangeFrom {
+                    start_inclusive: r_start,
+                    ..
+                },
+            ) => ctx.with_range_start(|ctx| l_start.test_equality(r_start, ctx)),
+            (
+                RangeValueInner::RangeTo {
+                    end_exclusive: l_end,
+                    ..
+                },
+                RangeValueInner::RangeTo {
+                    end_exclusive: r_end,
+                    ..
+                },
+            ) => ctx.with_range_end(|ctx| l_end.test_equality(r_end, ctx)),
+            (RangeValueInner::RangeFull { .. }, RangeValueInner::RangeFull { .. }) => {
+                ctx.values_equal()
+            }
+            (
+                RangeValueInner::RangeInclusive {
+                    start_inclusive: l_start,
+                    end_inclusive: l_end,
+                    ..
+                },
+                RangeValueInner::RangeInclusive {
+                    start_inclusive: r_start,
+                    end_inclusive: r_end,
+                    ..
+                },
+            ) => {
+                let result = ctx.with_range_start(|ctx| l_start.test_equality(r_start, ctx));
+                if ctx.should_short_circuit(&result) {
+                    return result;
+                }
+                ctx.with_range_end(|ctx| l_end.test_equality(r_end, ctx))
+            }
+            (
+                RangeValueInner::RangeToInclusive {
+                    end_inclusive: l_end,
+                    ..
+                },
+                RangeValueInner::RangeToInclusive {
+                    end_inclusive: r_end,
+                    ..
+                },
+            ) => ctx.with_range_end(|ctx| l_end.test_equality(r_end, ctx)),
+            _ => ctx.kind_mismatch(self, other),
+        }
+    }
+}
+
 /// A representation of the Rust [range expression].
 ///
 /// [range expression]: https://doc.rust-lang.org/reference/expressions/range-expr.html

@@ -13,9 +13,26 @@ impl HasValueKind for ParserValue {
     }
 }
 
+impl Debug for ParserValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Parser[{:?}]", self.handle)
+    }
+}
+
 impl ParserValue {
     pub(crate) fn new(handle: ParserHandle) -> Self {
         Self { handle }
+    }
+}
+
+impl ValuesEqual for ParserValue {
+    /// Parsers are equal if they reference the same handle.
+    fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+        if self.handle == other.handle {
+            ctx.values_equal()
+        } else {
+            ctx.leaf_values_not_equal(self, other)
+        }
     }
 }
 

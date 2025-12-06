@@ -13,6 +13,12 @@ impl IntoValue for BooleanValue {
     }
 }
 
+impl Debug for BooleanValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
+
 impl BooleanValue {
     pub(crate) fn for_litbool(lit: &syn::LitBool) -> Owned<Self> {
         Self { value: lit.value }.into_owned(lit.span)
@@ -28,6 +34,16 @@ impl HasValueKind for BooleanValue {
 
     fn kind(&self) -> ValueKind {
         ValueKind::Boolean
+    }
+}
+
+impl ValuesEqual for BooleanValue {
+    fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+        if self.value == other.value {
+            ctx.values_equal()
+        } else {
+            ctx.leaf_values_not_equal(self, other)
+        }
     }
 }
 

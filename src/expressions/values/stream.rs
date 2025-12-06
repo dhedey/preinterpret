@@ -64,6 +64,37 @@ impl HasValueKind for StreamValue {
     }
 }
 
+impl Debug for StreamValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut debug_string = String::new();
+        self.concat_recursive_into(
+            &mut debug_string,
+            &ConcatBehaviour::debug(Span::call_site().span_range()),
+        );
+        write!(f, "{}", debug_string)
+    }
+}
+
+impl ValuesEqual for StreamValue {
+    /// Compares two streams by their debug string representation, ignoring spans.
+    /// Transparent groups (none-delimited groups) are preserved in comparison.
+    /// Use `remove_transparent_groups()` before comparison if you want to ignore them.
+    fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+        // Use debug concat_recursive which preserves transparent group structure
+        let lhs = self
+            .value
+            .concat_recursive(&ConcatBehaviour::debug(Span::call_site().span_range()));
+        let rhs = other
+            .value
+            .concat_recursive(&ConcatBehaviour::debug(Span::call_site().span_range()));
+        if lhs == rhs {
+            ctx.values_equal()
+        } else {
+            ctx.leaf_values_not_equal(self, other)
+        }
+    }
+}
+
 impl IntoValue for StreamValue {
     fn into_value(self) -> Value {
         Value::Stream(self)
@@ -113,6 +144,12 @@ define_interface! {
 
             fn flatten(this: OutputStream) -> ExecutionResult<TokenStream> {
                 Ok(this.to_token_stream_removing_any_transparent_groups())
+            }
+
+            // Removes transparent (none-delimited) groups from the stream.
+            // Useful before equality comparison if you want to ignore them.
+            fn remove_transparent_groups(this: OutputStream) -> OutputStream {
+                OutputStream::raw(this.to_token_stream_removing_any_transparent_groups())
             }
 
             fn infer(this: OutputStream) -> ExecutionResult<Value> {
@@ -184,24 +221,21 @@ define_interface! {
             fn assert_eq(this: Shared<StreamValue>, lhs: SpannedAnyRef<Value>, rhs: SpannedAnyRef<Value>, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
                 let lhs_value: &Value = &lhs;
                 let rhs_value: &Value = &rhs;
-                let res = {
-                    // TODO[operation-refactor]: Replace with eq when we have a solid implementation
-                    let lhs_debug_str = lhs_value.concat_recursive(&ConcatBehaviour::debug(lhs.span_range()))?;
-                    let rhs_debug_str = rhs_value.concat_recursive(&ConcatBehaviour::debug(rhs.span_range()))?;
-                    lhs_debug_str == rhs_debug_str
-                }; if res {
-                    Ok(())
-                } else {
-                    let error_span_range = this.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
-                    let message = match message {
-                        Some(ref m) => m.to_string(),
-                        None => format!(
-                            "Assertion failed: lhs != rhs, where:\n  lhs = {}\n  rhs = {}",
-                            lhs.concat_recursive(&ConcatBehaviour::debug(lhs.span_range()))?,
-                            rhs.concat_recursive(&ConcatBehaviour::debug(rhs.span_range()))?,
-                        ),
-                    };
-                    error_span_range.assertion_err(message)
+                match Value::debug_eq(lhs_value, rhs_value) {
+                    Ok(()) => Ok(()),
+                    Err(debug_error) => {
+                        let error_span_range = this.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
+                        let message = match message {
+                            Some(ref m) => m.to_string(),
+                            None => format!(
+                                "Assertion failed: {}\n  lhs = {}\n  rhs = {}",
+                                debug_error.format_message(),
+                                lhs.concat_recursive(&ConcatBehaviour::debug(lhs.span_range()))?,
+                                rhs.concat_recursive(&ConcatBehaviour::debug(rhs.span_range()))?,
+                            ),
+                        };
+                        error_span_range.assertion_err(message)
+                    }
                 }
             }
 

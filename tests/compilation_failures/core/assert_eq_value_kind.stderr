@@ -1,0 +1,7 @@
+error: Assertion failed: lhs is an untyped integer, but rhs is a string
+         lhs = 1
+         rhs = "hello"
+ --> tests/compilation_failures/core/assert_eq_value_kind.rs:4:12
+  |
+4 |     run!(%[_].assert_eq(1, "hello"));
+  |            ^

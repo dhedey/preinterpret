@@ -175,6 +175,30 @@ impl ObjectValue {
     }
 }
 
+impl ValuesEqual for ObjectValue {
+    /// Recursively compares two objects.
+    /// Objects are equal if they have the same keys and all values are equal.
+    fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+        if self.entries.len() != other.entries.len() {
+            return ctx.lengths_unequal(Some(self.entries.len()), Some(other.entries.len()));
+        }
+        for (key, lhs_entry) in self.entries.iter() {
+            match other.entries.get(key) {
+                Some(rhs_entry) => {
+                    let result = ctx.with_object_key(key, |ctx| {
+                        lhs_entry.value.test_equality(&rhs_entry.value, ctx)
+                    });
+                    if ctx.should_short_circuit(&result) {
+                        return result;
+                    }
+                }
+                None => return ctx.missing_key(key, MissingSide::Rhs),
+            }
+        }
+        ctx.values_equal()
+    }
+}
+
 impl Spanned<&ObjectValue> {
     pub(crate) fn validate(&self, validation: &impl ObjectValidate) -> ExecutionResult<()> {
         let mut missing_fields = Vec::new();

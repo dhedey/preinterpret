@@ -680,3 +680,33 @@ fn can_assign_to_mutable_references() {
         %[_].assert_eq(y, 1);
     );
 }
+
+#[test]
+fn test_stream_equality_preserves_transparent_groups() {
+    // Stream equality preserves transparent groups - they are NOT ignored.
+    // A stream with a transparent group is different from one without.
+    run!(
+        let with_group = %[%group[Hello] world];
+        let without_group = %[Hello world];
+        // They're NOT equal because transparent groups are preserved
+        %[_].assert(with_group != without_group);
+    );
+    // Their debug strings also show the difference
+    run!(
+        let with_group = %group[Hello World];
+        let without_group = %[Hello World];
+        %[_].assert(with_group.to_debug_string() != without_group.to_debug_string());
+    );
+    // remove_transparent_groups can be used to normalize streams for comparison
+    run!(
+        let nested = %group[%group[Hello]];
+        let flat = %[Hello];
+        %[_].assert(nested.remove_transparent_groups() == flat.remove_transparent_groups());
+    );
+    // After removing transparent groups, equality comparison matches
+    run!(
+        let with_group = %[%group[Hello] world];
+        let without_group = %[Hello world];
+        %[_].assert(with_group.remove_transparent_groups() == without_group.remove_transparent_groups());
+    );
+}

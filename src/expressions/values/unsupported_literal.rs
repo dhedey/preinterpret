@@ -5,6 +5,22 @@ pub(crate) struct UnsupportedLiteral {
     pub(crate) lit: syn::Lit,
 }
 
+impl ValuesEqual for UnsupportedLiteral {
+    fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+        if self.lit.to_token_stream().to_string() == other.lit.to_token_stream().to_string() {
+            ctx.values_equal()
+        } else {
+            ctx.leaf_values_not_equal(self, other)
+        }
+    }
+}
+
+impl Debug for UnsupportedLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.lit.to_token_stream())
+    }
+}
+
 impl HasValueKind for UnsupportedLiteral {
     type SpecificKind = ValueKind;
 
