@@ -145,6 +145,16 @@ macro_rules! impl_int_operations {
                         // All operations are defined on the parent IntegerValue type
                         None
                     }
+
+                    fn resolve_type_property(
+                        property_name: &str,
+                    ) -> Option<Value> {
+                        match property_name {
+                            "MAX" => Some($integer_type::MAX.into_value()),
+                            "MIN" => Some($integer_type::MIN.into_value()),
+                            _ => None,
+                        }
+                    }
                 }
             }
         }

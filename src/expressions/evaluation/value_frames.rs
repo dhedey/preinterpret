@@ -285,9 +285,9 @@ impl RequestedOwnership {
 
     pub(crate) fn map_from_shared(&self, shared: SharedValue) -> ExecutionResult<RequestedValue> {
         match self {
-            RequestedOwnership::LateBound => {
-                panic!("Returning a shared reference when late-bound was requested")
-            }
+            RequestedOwnership::LateBound => Ok(RequestedValue::LateBound(
+                LateBoundValue::CopyOnWrite(CopyOnWrite::shared_in_place_of_shared(shared)),
+            )),
             RequestedOwnership::Concrete(requested) => requested
                 .map_from_shared(shared)
                 .map(Self::item_from_argument),

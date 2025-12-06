@@ -242,7 +242,7 @@ Later:
 
 ## Methods and closures
 
-- [ ] Introduce basic functions
+- [ ] Introduce basic function values
   * Value type function `let my_func = |x, y, z| { ... };`
   * To start with, they are not closures (i.e. they can't capture any outer variables)
   * New node extension in the expression parser: invocation `(...)`
@@ -256,6 +256,14 @@ Later:
     * If invocation is on an owned function, then owned values from the closure can be consumed
       by the invocation
     * Otherwise, the values are only available as shared/mut
+- [ ] Try to unify methods under a "resolve, then invoke" structure
+    * `my_array.push` returns a closure with `my_array` bound. This can then be deactivated
+    whilst the rest of the arguments are resolved!
+    ... and avoids the horrible javascript issues with
+    `this` not being bound.
+    * And then for objects, the method wins; BUT you can use `x["obj"]` to access the field instead of the method
+  * Add ability to define functions on a type.
+  * Move preinterpret settings to `preinterpret::...`
 - [ ] Break/continue label resolution in functions/closures
   * Functions and closures must resolve break/continue labels statically
   * Break and continue statements should not leak out of function boundaries
@@ -394,7 +402,7 @@ The following are less important tasks which maybe we don't even want/need to do
 - [x] Side-project: Make LateBound better to allow this, by upgrading to mutable before use
   - [x] https://rust-lang.github.io/rfcs/2025-nested-method-calls.html
   - [x] x += x for x copy, by resolving Owned before Mutable / Shared
-- [ ] Allow adding lifetimes to stream literals `%'a[]` and then `emit 'a`, with `'root` being the topmost. Or maybe just `emit 'root` honestly. Can't really see the use case for the others.
+- [ ] Allow adding labels to stream literals `%'a[]` and then `emit 'a`, with `'root` being the topmost. Or maybe just `emit 'root` honestly. Can't really see the use case for the others.
   - [ ] Note that `%'a[((#{ emit 'a %[x] }))]` should yield `x(())`
   - [ ] Note that we need to prevent or revert outputting to root in revertible segments
 
@@ -416,13 +424,13 @@ Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` doc
 - [x] Rename `EvaluationItem` to `RequestedValue` and consider making `RequestedValue::AssignmentCompletion` wrap an `Owned<()>` so that it becomes truly a value.
 - [x] Merge `HasValueType` with `ValueKind`
 * Add `preinterpret::macro` - can this be a declarative macro? Would be slightly more efficient, as it just needs to wrap a call to `preinterpret::stream` or `preinterpret::run`...
+- [x] Add `Eq` support on composite types and streams
+- [x] See `TODO[untyped]` - Have UntypedInteger/UntypedFloat have an inner representation of either value or literal, for improved efficiency / less weird `Span::call_site()` error handling
+- [ ] Move `typed_eq` as `%[].typed_eq(..)`
+- [ ] Add a `%[].structure_eq(...)` method which uses an `EqualityContext` which ignores value inequality
 * Add `LiteralPattern` (wrapping a `Literal`)
-* Add `Eq` support on composite types and streams
-* See `TODO[untyped]` - Have UntypedInteger/UntypedFloat have an inner representation of either value or literal, for improved efficiency / less weird `Span::call_site()` error handling
-* Better handling of `configure_preinterpret` aligned with future parsers:
-  * Add a `BespokeObject` value type, with an example subtype of `PreinterpretInterface`
-  * Add a `preinterpret` variable to global scope of type `PreinterpretInterface`
-  * Move `None.configure_preinterpret` to `PreinterpretInterface` and possibly split it out as `set_iteration_limit(..)`
+* Better handling of `configure_preinterpret`:
+  * Move `None.configure_preinterpret` to `preinterpret::set_iteration_limit(..)`
 * CastTarget revision:
   * The `as int` operator is not supported for string values
   * The `as char` operator is not supported for untyped integer values

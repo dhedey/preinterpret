@@ -281,50 +281,6 @@ define_interface! {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub(crate) enum FloatKind {
-    Untyped,
-    F32,
-    F64,
-}
-
-impl IsSpecificValueKind for FloatKind {
-    fn display_name(&self) -> &'static str {
-        match self {
-            FloatKind::Untyped => "untyped float",
-            FloatKind::F32 => "f32",
-            FloatKind::F64 => "f64",
-        }
-    }
-
-    fn articled_display_name(&self) -> &'static str {
-        match self {
-            FloatKind::Untyped => "an untyped float",
-            FloatKind::F32 => "an f32",
-            FloatKind::F64 => "an f64",
-        }
-    }
-}
-
-impl From<FloatKind> for ValueKind {
-    fn from(kind: FloatKind) -> Self {
-        ValueKind::Float(kind)
-    }
-}
-
-impl FloatKind {
-    pub(super) fn method_resolver(&self) -> &'static dyn MethodResolver {
-        static UNTYPED: UntypedFloatTypeData = UntypedFloatTypeData;
-        static F32: F32TypeData = F32TypeData;
-        static F64: F64TypeData = F64TypeData;
-        match self {
-            FloatKind::Untyped => &UNTYPED,
-            FloatKind::F32 => &F32,
-            FloatKind::F64 => &F64,
-        }
-    }
-}
-
 impl_resolvable_argument_for! {
     FloatTypeData,
     (value, context) -> FloatValue {

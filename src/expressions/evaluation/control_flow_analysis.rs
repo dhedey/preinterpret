@@ -104,6 +104,7 @@ impl Leaf {
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         match self {
             Leaf::Variable(variable) => variable.control_flow_pass(context),
+            Leaf::TypeProperty(type_property) => type_property.control_flow_pass(context),
             Leaf::Block(block) => block.control_flow_pass(context),
             Leaf::StreamLiteral(stream_literal) => stream_literal.control_flow_pass(context),
             Leaf::IfExpression(if_expression) => if_expression.control_flow_pass(context),

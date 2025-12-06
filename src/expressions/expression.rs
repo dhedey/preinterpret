@@ -148,6 +148,7 @@ pub(super) enum ExpressionNode {
 pub(super) enum Leaf {
     Block(Box<ExpressionBlock>),
     Variable(VariableReference),
+    TypeProperty(TypeProperty),
     Discarded(Token![_]),
     Value(SharedValue),
     StreamLiteral(StreamLiteral),
@@ -163,6 +164,7 @@ impl HasSpanRange for Leaf {
     fn span_range(&self) -> SpanRange {
         match self {
             Leaf::Variable(variable) => variable.span_range(),
+            Leaf::TypeProperty(type_property) => type_property.span_range(),
             Leaf::Discarded(token) => token.span_range(),
             Leaf::Block(block) => block.span_range(),
             Leaf::Value(value) => value.span_range(),
@@ -187,9 +189,11 @@ impl Leaf {
             | Leaf::ForExpression(_)
             | Leaf::AttemptExpression(_)
             | Leaf::ParseExpression(_) => true,
-            Leaf::Variable(_) | Leaf::Discarded(_) | Leaf::Value(_) | Leaf::StreamLiteral(_) => {
-                false
-            }
+            Leaf::Variable(_)
+            | Leaf::TypeProperty(_)
+            | Leaf::Discarded(_)
+            | Leaf::Value(_)
+            | Leaf::StreamLiteral(_) => false,
         }
     }
 }

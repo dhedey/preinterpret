@@ -15,6 +15,9 @@ pub(in crate::expressions) trait MethodResolver {
         &self,
         operation: &BinaryOperation,
     ) -> Option<BinaryOperationInterface>;
+
+    /// Resolves a property of this type.
+    fn resolve_type_property(&self, _property_name: &str) -> Option<Value>;
 }
 
 impl<T: HierarchicalTypeData> MethodResolver for T {
@@ -44,6 +47,10 @@ impl<T: HierarchicalTypeData> MethodResolver for T {
             None => Self::PARENT.and_then(|p| p.resolve_binary_operation(operation)),
         }
     }
+
+    fn resolve_type_property(&self, property_name: &str) -> Option<Value> {
+        <Self as HierarchicalTypeData>::resolve_type_property(property_name)
+    }
 }
 
 pub(crate) trait HierarchicalTypeData {
@@ -69,6 +76,10 @@ pub(crate) trait HierarchicalTypeData {
     fn resolve_own_binary_operation(
         _operation: &BinaryOperation,
     ) -> Option<BinaryOperationInterface> {
+        None
+    }
+
+    fn resolve_type_property(_property_name: &str) -> Option<Value> {
         None
     }
 }

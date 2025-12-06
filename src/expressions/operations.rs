@@ -59,7 +59,8 @@ impl UnaryOperation {
         as_token: Token![as],
         target_ident: Ident,
     ) -> ParseResult<Self> {
-        let target = CastTarget::from_str(target_ident.to_string().as_str()).map_err(|()| {
+        let target = Type::from_ident(&target_ident)?;
+        let target = CastTarget::from_source_type(target).ok_or_else(|| {
             target_ident.parse_error("This type is not supported in cast expressions")
         })?;
 
@@ -105,37 +106,21 @@ pub(crate) enum CastTarget {
     Stream,
 }
 
-impl FromStr for CastTarget {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s {
-            "int" | "integer" => CastTarget::Integer(IntegerKind::Untyped),
-            "u8" => CastTarget::Integer(IntegerKind::U8),
-            "u16" => CastTarget::Integer(IntegerKind::U16),
-            "u32" => CastTarget::Integer(IntegerKind::U32),
-            "u64" => CastTarget::Integer(IntegerKind::U64),
-            "u128" => CastTarget::Integer(IntegerKind::U128),
-            "usize" => CastTarget::Integer(IntegerKind::Usize),
-            "i8" => CastTarget::Integer(IntegerKind::I8),
-            "i16" => CastTarget::Integer(IntegerKind::I16),
-            "i32" => CastTarget::Integer(IntegerKind::I32),
-            "i64" => CastTarget::Integer(IntegerKind::I64),
-            "i128" => CastTarget::Integer(IntegerKind::I128),
-            "isize" => CastTarget::Integer(IntegerKind::Isize),
-            "float" => CastTarget::Float(FloatKind::Untyped),
-            "f32" => CastTarget::Float(FloatKind::F32),
-            "f64" => CastTarget::Float(FloatKind::F64),
-            "bool" => CastTarget::Boolean,
-            "char" => CastTarget::Char,
-            "stream" => CastTarget::Stream,
-            "string" => CastTarget::String,
-            _ => return Err(()),
+impl CastTarget {
+    fn from_source_type(s: Type) -> Option<Self> {
+        Some(match s.kind {
+            TypeKind::Integer => CastTarget::Integer(IntegerKind::Untyped),
+            TypeKind::SpecificInteger(kind) => CastTarget::Integer(kind),
+            TypeKind::Float => CastTarget::Float(FloatKind::Untyped),
+            TypeKind::SpecificFloat(kind) => CastTarget::Float(kind),
+            TypeKind::Boolean => CastTarget::Boolean,
+            TypeKind::String => CastTarget::String,
+            TypeKind::Char => CastTarget::Char,
+            TypeKind::Stream => CastTarget::Stream,
+            _ => return None,
         })
     }
-}
 
-impl CastTarget {
     fn symbolic_description(&self) -> &'static str {
         match self {
             CastTarget::Integer(IntegerKind::Untyped) => "as int",
