@@ -1,7 +1,0 @@
-error: proc macro panicked
- --> tests/compilation_failures/operations/float_divide_by_zero.rs:6:13
-  |
-6 |     let _ = run!(1.0f32 / 0.0f32);
-  |             ^^^^^^^^^^^^^^^^^^^^^
-  |
-  = help: message: assertion failed: f.is_finite()

@@ -1014,35 +1014,240 @@ mod float_compound_assignment {
 }
 
 // =============================================================================
-// FLOAT SPECIAL VALUES (INFINITY AND NAN) - DOCUMENTATION
+// FLOAT CONSTANTS AND METHODS
 // =============================================================================
 
-// Note: preinterpret does NOT support non-finite float values (Infinity, NaN).
-//
-// Attempting to create infinity or NaN (e.g., via `1.0f32 / 0.0f32` or `0.0f32 / 0.0f32`)
-// will result in a compile-time error: "assertion failed: f.is_finite()"
-//
-// This is by design in the `UntypedFloat` type which requires values to be finite.
-//
-// Current limitations:
-// - Division by zero for floats causes a compile-time panic (not infinity)
-// - Operations that would produce NaN cause a compile-time panic
-// - preinterpret doesn't support the `::` syntax for constants like `f32::INFINITY`
-// - preinterpret doesn't have methods like `is_nan()` or `is_infinite()` on floats
-//
-// How Rust handles this:
-// - In Rust, `f32::INFINITY`, `f32::NEG_INFINITY`, and `f32::NAN` are constants
-// - Division by zero produces infinity: `1.0f32 / 0.0f32 == f32::INFINITY`
-// - 0.0 / 0.0 produces NaN: `(0.0f32 / 0.0f32).is_nan() == true`
-//
-// Potential preinterpret solutions for supporting infinity/NaN:
-// 1. Add float constants: `f32_infinity`, `f32_neg_infinity`, `f32_nan` (or similar)
-// 2. Remove the `is_finite()` assertion and allow non-finite values
-// 3. Add methods like `is_nan()`, `is_infinite()`, `is_finite()` to float values
-// 4. Support the `::` syntax for accessing type constants
-//
-// For now, operations that would produce non-finite values are compile errors.
-// See tests/compilation_failures/operations/float_divide_by_zero.rs for the failure test.
+mod float_constants {
+    use super::*;
+
+    // -------------------------------------------------------------------------
+    // f32 constants
+    // -------------------------------------------------------------------------
+    #[test]
+    fn f32_max_min() {
+        assert_eq!(run!(f32::MAX), f32::MAX);
+        assert_eq!(run!(f32::MIN), f32::MIN);
+        assert_eq!(run!(f32::MIN_POSITIVE), f32::MIN_POSITIVE);
+        assert_eq!(run!(f32::EPSILON), f32::EPSILON);
+    }
+
+    #[test]
+    fn f32_infinity() {
+        assert_eq!(run!(f32::INFINITY), f32::INFINITY);
+        assert_eq!(run!(f32::NEG_INFINITY), f32::NEG_INFINITY);
+    }
+
+    #[test]
+    fn f32_nan() {
+        // NaN is not equal to itself, so use is_nan() to test
+        assert!(run!(f32::NAN).is_nan());
+    }
+
+    // -------------------------------------------------------------------------
+    // f64 constants
+    // -------------------------------------------------------------------------
+    #[test]
+    fn f64_max_min() {
+        assert_eq!(run!(f64::MAX), f64::MAX);
+        assert_eq!(run!(f64::MIN), f64::MIN);
+        assert_eq!(run!(f64::MIN_POSITIVE), f64::MIN_POSITIVE);
+        assert_eq!(run!(f64::EPSILON), f64::EPSILON);
+    }
+
+    #[test]
+    fn f64_infinity() {
+        assert_eq!(run!(f64::INFINITY), f64::INFINITY);
+        assert_eq!(run!(f64::NEG_INFINITY), f64::NEG_INFINITY);
+    }
+
+    #[test]
+    fn f64_nan() {
+        // NaN is not equal to itself, so use is_nan() to test
+        assert!(run!(f64::NAN).is_nan());
+    }
+
+    // -------------------------------------------------------------------------
+    // Operations producing infinity
+    // -------------------------------------------------------------------------
+    #[test]
+    fn division_by_zero_produces_infinity() {
+        assert_eq!(run!(1.0f32 / 0.0f32), f32::INFINITY);
+        assert_eq!(run!(-1.0f32 / 0.0f32), f32::NEG_INFINITY);
+        assert_eq!(run!(1.0f64 / 0.0f64), f64::INFINITY);
+        assert_eq!(run!(-1.0f64 / 0.0f64), f64::NEG_INFINITY);
+    }
+
+    #[test]
+    fn overflow_produces_infinity() {
+        assert_eq!(run!(f32::MAX + f32::MAX), f32::INFINITY);
+        assert_eq!(run!(f64::MAX + f64::MAX), f64::INFINITY);
+        assert_eq!(run!(f32::MIN + f32::MIN), f32::NEG_INFINITY);
+        assert_eq!(run!(f64::MIN + f64::MIN), f64::NEG_INFINITY);
+    }
+
+    // -------------------------------------------------------------------------
+    // Operations producing NaN
+    // -------------------------------------------------------------------------
+    #[test]
+    fn zero_divided_by_zero_produces_nan() {
+        assert!(run!(0.0f32 / 0.0f32).is_nan());
+        assert!(run!(0.0f64 / 0.0f64).is_nan());
+    }
+
+    #[test]
+    fn infinity_minus_infinity_produces_nan() {
+        assert!(run!(f32::INFINITY - f32::INFINITY).is_nan());
+        assert!(run!(f64::INFINITY - f64::INFINITY).is_nan());
+    }
+}
+
+mod float_methods {
+    use super::*;
+
+    // -------------------------------------------------------------------------
+    // is_nan()
+    // -------------------------------------------------------------------------
+    #[test]
+    fn is_nan_f32() {
+        assert!(run!(f32::NAN.is_nan()));
+        assert!(!run!(1.0f32.is_nan()));
+        assert!(!run!(f32::INFINITY.is_nan()));
+        assert!(!run!(0.0f32.is_nan()));
+    }
+
+    #[test]
+    fn is_nan_f64() {
+        assert!(run!(f64::NAN.is_nan()));
+        assert!(!run!(1.0f64.is_nan()));
+        assert!(!run!(f64::INFINITY.is_nan()));
+        assert!(!run!(0.0f64.is_nan()));
+    }
+
+    #[test]
+    fn is_nan_untyped() {
+        // Untyped floats (which use f64 internally)
+        assert!(!run!(1.0.is_nan()));
+        assert!(!run!(0.0.is_nan()));
+    }
+
+    // -------------------------------------------------------------------------
+    // is_infinite()
+    // -------------------------------------------------------------------------
+    #[test]
+    fn is_infinite_f32() {
+        assert!(run!(f32::INFINITY.is_infinite()));
+        assert!(run!(f32::NEG_INFINITY.is_infinite()));
+        assert!(!run!(f32::NAN.is_infinite()));
+        assert!(!run!(1.0f32.is_infinite()));
+        assert!(!run!(0.0f32.is_infinite()));
+        assert!(!run!(f32::MAX.is_infinite()));
+    }
+
+    #[test]
+    fn is_infinite_f64() {
+        assert!(run!(f64::INFINITY.is_infinite()));
+        assert!(run!(f64::NEG_INFINITY.is_infinite()));
+        assert!(!run!(f64::NAN.is_infinite()));
+        assert!(!run!(1.0f64.is_infinite()));
+        assert!(!run!(0.0f64.is_infinite()));
+        assert!(!run!(f64::MAX.is_infinite()));
+    }
+
+    #[test]
+    fn is_infinite_untyped() {
+        // Untyped floats (which use f64 internally)
+        assert!(!run!(1.0.is_infinite()));
+        assert!(!run!(0.0.is_infinite()));
+    }
+
+    // -------------------------------------------------------------------------
+    // is_finite()
+    // -------------------------------------------------------------------------
+    #[test]
+    fn is_finite_f32() {
+        assert!(run!(1.0f32.is_finite()));
+        assert!(run!(0.0f32.is_finite()));
+        assert!(run!(f32::MAX.is_finite()));
+        assert!(run!(f32::MIN.is_finite()));
+        assert!(!run!(f32::INFINITY.is_finite()));
+        assert!(!run!(f32::NEG_INFINITY.is_finite()));
+        assert!(!run!(f32::NAN.is_finite()));
+    }
+
+    #[test]
+    fn is_finite_f64() {
+        assert!(run!(1.0f64.is_finite()));
+        assert!(run!(0.0f64.is_finite()));
+        assert!(run!(f64::MAX.is_finite()));
+        assert!(run!(f64::MIN.is_finite()));
+        assert!(!run!(f64::INFINITY.is_finite()));
+        assert!(!run!(f64::NEG_INFINITY.is_finite()));
+        assert!(!run!(f64::NAN.is_finite()));
+    }
+
+    #[test]
+    fn is_finite_untyped() {
+        // Untyped floats (which use f64 internally)
+        assert!(run!(1.0.is_finite()));
+        assert!(run!(0.0.is_finite()));
+    }
+
+    // -------------------------------------------------------------------------
+    // is_sign_positive()
+    // -------------------------------------------------------------------------
+    #[test]
+    fn is_sign_positive_f32() {
+        assert!(run!(1.0f32.is_sign_positive()));
+        assert!(run!(0.0f32.is_sign_positive()));
+        assert!(run!(f32::INFINITY.is_sign_positive()));
+        assert!(!run!((-1.0f32).is_sign_positive()));
+        assert!(!run!(f32::NEG_INFINITY.is_sign_positive()));
+    }
+
+    #[test]
+    fn is_sign_positive_f64() {
+        assert!(run!(1.0f64.is_sign_positive()));
+        assert!(run!(0.0f64.is_sign_positive()));
+        assert!(run!(f64::INFINITY.is_sign_positive()));
+        assert!(!run!((-1.0f64).is_sign_positive()));
+        assert!(!run!(f64::NEG_INFINITY.is_sign_positive()));
+    }
+
+    #[test]
+    fn is_sign_positive_untyped() {
+        assert!(run!(1.0.is_sign_positive()));
+        assert!(run!(0.0.is_sign_positive()));
+        assert!(!run!((-1.0).is_sign_positive()));
+    }
+
+    // -------------------------------------------------------------------------
+    // is_sign_negative()
+    // -------------------------------------------------------------------------
+    #[test]
+    fn is_sign_negative_f32() {
+        assert!(!run!(1.0f32.is_sign_negative()));
+        assert!(!run!(0.0f32.is_sign_negative()));
+        assert!(!run!(f32::INFINITY.is_sign_negative()));
+        assert!(run!((-1.0f32).is_sign_negative()));
+        assert!(run!(f32::NEG_INFINITY.is_sign_negative()));
+    }
+
+    #[test]
+    fn is_sign_negative_f64() {
+        assert!(!run!(1.0f64.is_sign_negative()));
+        assert!(!run!(0.0f64.is_sign_negative()));
+        assert!(!run!(f64::INFINITY.is_sign_negative()));
+        assert!(run!((-1.0f64).is_sign_negative()));
+        assert!(run!(f64::NEG_INFINITY.is_sign_negative()));
+    }
+
+    #[test]
+    fn is_sign_negative_untyped() {
+        assert!(!run!(1.0.is_sign_negative()));
+        assert!(!run!(0.0.is_sign_negative()));
+        assert!(run!((-1.0).is_sign_negative()));
+    }
+}
 
 // =============================================================================
 // BOOLEAN OPERATIONS
