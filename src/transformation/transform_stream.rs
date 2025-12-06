@@ -30,6 +30,7 @@ impl HandleTransformation for TransformStream {
     }
 }
 
+#[allow(unused)]
 pub(crate) enum TransformItem {
     EmbeddedExpression(EmbeddedExpression),
     EmbeddedStatements(EmbeddedStatements),
@@ -97,14 +98,14 @@ impl HandleTransformation for TransformItem {
             TransformItem::EmbeddedStatements(statements) => {
                 statements.interpret(interpreter)?;
             }
-            TransformItem::ExactPunct(span, punct) => {
-                interpreter.input(span)?.parse_punct_matching(*punct)?;
+            TransformItem::ExactPunct(_, punct) => {
+                interpreter.input().parse_punct_matching(*punct)?;
             }
-            TransformItem::ExactIdent(span, ident) => {
-                interpreter.input(span)?.parse_ident_matching(ident)?;
+            TransformItem::ExactIdent(_, ident) => {
+                interpreter.input().parse_ident_matching(ident)?;
             }
-            TransformItem::ExactLiteral(span, literal) => {
-                interpreter.input(span)?.parse_literal_matching(literal)?;
+            TransformItem::ExactLiteral(_, literal) => {
+                interpreter.input().parse_literal_matching(literal)?;
             }
             TransformItem::ExactGroup(group) => {
                 group.handle_transform(interpreter)?;
@@ -114,6 +115,7 @@ impl HandleTransformation for TransformItem {
     }
 }
 
+#[allow(unused)]
 pub(crate) struct TransformGroup {
     delimiter: Delimiter,
     delim_span: DelimSpan,
@@ -143,11 +145,9 @@ impl HandleTransformation for TransformGroup {
         if self.delimiter == Delimiter::None {
             self.inner.handle_transform(interpreter)
         } else {
-            interpreter.parse_group(
-                &self.delim_span.open(),
-                Some(self.delimiter),
-                |interpreter, _, _| self.inner.handle_transform(interpreter),
-            )
+            interpreter.parse_group(Some(self.delimiter), |interpreter, _, _| {
+                self.inner.handle_transform(interpreter)
+            })
         }
     }
 }

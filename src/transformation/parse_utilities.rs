@@ -11,23 +11,46 @@ pub(crate) enum ParseUntil {
     Literal(Literal),
 }
 
+impl Parse<Output> for ParseUntil {
+    fn parse(input: ParseStream<Output>) -> ParseResult<Self> {
+        let next: TokenTree = input.parse()?;
+        let until = match next {
+            TokenTree::Group(group) => {
+                if !group.stream().is_empty() {
+                    return group
+                        .span()
+                        .parse_err(format!(
+                            "Until will only read up until the start of the group '{}'. The group must be empty '{}{}' to indicate this.",
+                            group.delimiter().description_of_open(),
+                            group.delimiter().description_of_open(),
+                            group.delimiter().description_of_close(),
+                        ));
+                }
+                ParseUntil::Group(group.delimiter())
+            }
+            TokenTree::Ident(ident) => ParseUntil::Ident(ident),
+            TokenTree::Punct(punct) => ParseUntil::Punct(punct),
+            TokenTree::Literal(literal) => ParseUntil::Literal(literal),
+        };
+        if !input.is_empty() {
+            return input.parse_err("Until only takes a single token.");
+        }
+        Ok(until)
+    }
+}
+
 impl ParseUntil {
     pub(crate) fn handle_parse_into(
         &self,
-        interpreter: &mut Interpreter,
-        error_span_range: &SpanRange,
+        input: OutputParseStream,
+        output: &mut OutputStream,
     ) -> ExecutionResult<()> {
         match self {
             ParseUntil::End => {
-                let remaining = interpreter
-                    .input(error_span_range)?
-                    .parse::<TokenStream>()?;
-                interpreter
-                    .output(error_span_range)?
-                    .extend_raw_tokens(remaining);
+                let remaining = input.parse::<TokenStream>()?;
+                output.extend_raw_tokens(remaining);
             }
             ParseUntil::Group(delimiter) => {
-                let (input, output) = interpreter.input_and_output(error_span_range)?;
                 while !input.is_empty() {
                     if input.peek_specific_group(*delimiter) {
                         return Ok(());
@@ -38,7 +61,6 @@ impl ParseUntil {
             }
             ParseUntil::Ident(ident) => {
                 let content = ident.to_string();
-                let (input, output) = interpreter.input_and_output(error_span_range)?;
                 while !input.is_empty() {
                     if input.peek_ident_matching(&content) {
                         return Ok(());
@@ -49,7 +71,6 @@ impl ParseUntil {
             }
             ParseUntil::Punct(punct) => {
                 let punct_char = punct.as_char();
-                let (input, output) = interpreter.input_and_output(error_span_range)?;
                 while !input.is_empty() {
                     if input.peek_punct_matching(punct_char) {
                         return Ok(());
@@ -60,7 +81,6 @@ impl ParseUntil {
             }
             ParseUntil::Literal(literal) => {
                 let content = literal.to_string();
-                let (input, output) = interpreter.input_and_output(error_span_range)?;
                 while !input.is_empty() {
                     if input.peek_literal_matching(&content) {
                         return Ok(());

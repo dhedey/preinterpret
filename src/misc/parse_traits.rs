@@ -640,3 +640,20 @@ impl<T: ParseSource> ParseSource for Unused<T> {
         unreachable!("An unused value should not have a control flow pass")
     }
 }
+
+impl<T> Unused<T> {
+    /// The argument is immediately discarded, so we don't need to keep it around.
+    pub(crate) fn new(_inner: T) -> Self {
+        Self {
+            _marker: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<T> From<T> for Unused<T> {
+    fn from(_value: T) -> Self {
+        Self {
+            _marker: std::marker::PhantomData,
+        }
+    }
+}

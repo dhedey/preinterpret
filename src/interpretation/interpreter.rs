@@ -226,7 +226,7 @@ impl Interpreter {
                 // without any early returns in the middle
                 self.input_handler.start_parse(input)
             };
-            let result = f(self, handle);
+            let result = self.parse_with(handle, |interpreter| f(interpreter, handle));
             unsafe {
                 // SAFETY: This is paired with `start_parse` above
                 self.input_handler.finish_parse(handle);
@@ -235,37 +235,53 @@ impl Interpreter {
         })
     }
 
+    pub(crate) fn parse_with<T>(
+        &mut self,
+        handle: ParserHandle,
+        f: impl FnOnce(&mut Interpreter) -> ExecutionResult<T>,
+    ) -> ExecutionResult<T> {
+        unsafe {
+            // SAFETY: This is paired with `pop_current_handle` below,
+            // without any early returns in the middle
+            self.input_handler.push_current_handle(handle);
+        }
+        let result = f(self);
+        unsafe {
+            // SAFETY: This is paired with `push_current_handle` above,
+            // without any early returns in the middle
+            self.input_handler.pop_current_handle(handle);
+        }
+        result
+    }
+
     pub(crate) fn parser(
         &mut self,
-        handle: Spanned<ParserHandle>,
+        handle: ParserHandle,
+        error_span_range: SpanRange,
     ) -> ExecutionResult<OutputParseStream<'_>> {
         let stack = self
             .input_handler
-            .get(handle.value)
-            .ok_or_else(|| handle.value_error("This parser is no longer available"))?;
+            .get(handle)
+            .ok_or_else(|| error_span_range.value_error("This parser is no longer available"))?;
         Ok(stack.current())
     }
 
     pub(crate) fn parse_group<T>(
         &mut self,
-        span_source: &impl HasSpanRange,
         required_delimiter: Option<Delimiter>,
         f: impl FnOnce(&mut Interpreter, Delimiter, DelimSpan) -> ExecutionResult<T>,
     ) -> ExecutionResult<T> {
         let (delimiter, delim_span) = self
             .input_handler
-            .current_stack(span_source)?
+            .current_stack()
             .parse_and_enter_group(required_delimiter)?;
         let result = f(self, delimiter, delim_span);
-        self.input_handler.current_stack(span_source)?.exit_group();
+        self.input_handler.current_stack().exit_group();
         result
     }
 
-    pub(crate) fn input<'a>(
-        &'a mut self,
-        span_source: &impl HasSpanRange,
-    ) -> ExecutionResult<ParseStream<'a, Output>> {
-        self.input_handler.current_input(span_source)
+    pub(crate) fn input<'a>(&'a mut self) -> ParseStream<'a, Output> {
+        self.input_handler.current_input()
     }
 
     // Output
@@ -322,7 +338,7 @@ impl Interpreter {
         span_source: &impl HasSpanRange,
     ) -> ExecutionResult<(ParseStream<'a, Output>, &'a mut OutputStream)> {
         Ok((
-            self.input_handler.current_input(span_source)?,
+            self.input_handler.current_input(),
             self.output_handler.current_output_mut(span_source)?,
         ))
     }

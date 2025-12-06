@@ -20,7 +20,7 @@ impl TransformerDefinition for TokenTreeTransformer {
     }
 
     fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        let token_tree = interpreter.input(&self.span)?.parse::<TokenTree>()?;
+        let token_tree = interpreter.input().parse::<TokenTree>()?;
         interpreter
             .output(&self.span)?
             .push_raw_token_tree(token_tree);
@@ -52,7 +52,8 @@ impl TransformerDefinition for RestTransformer {
     }
 
     fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        ParseUntil::End.handle_parse_into(interpreter, &self.span.span_range())
+        let (input, output) = interpreter.input_and_output(&self.span)?;
+        ParseUntil::End.handle_parse_into(input, output)
     }
 
     fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
@@ -93,8 +94,8 @@ impl TransformerDefinition for UntilTransformer {
     }
 
     fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        self.until
-            .handle_parse_into(interpreter, &self.span.span_range())
+        let (input, output) = interpreter.input_and_output(&self.span)?;
+        self.until.handle_parse_into(input, output)
     }
 
     fn control_flow_pass(&mut self, _context: FlowCapturer) -> ParseResult<()> {
@@ -122,7 +123,7 @@ impl TransformerDefinition for IdentTransformer {
     }
 
     fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        let input = interpreter.input(&self.span)?;
+        let input = interpreter.input();
         let ident = if input.cursor().ident().is_some() {
             input.parse_any_ident()?
         } else {
@@ -157,7 +158,7 @@ impl TransformerDefinition for LiteralTransformer {
     }
 
     fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        let input = interpreter.input(&self.span)?;
+        let input = interpreter.input();
         let literal = if input.cursor().literal().is_some() {
             input.parse()?
         } else {
@@ -192,7 +193,7 @@ impl TransformerDefinition for PunctTransformer {
     }
 
     fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        let input = interpreter.input(&self.span)?;
+        let input = interpreter.input();
         let punct = if input.cursor().any_punct().is_some() {
             input.parse_any_punct()?
         } else {
@@ -208,7 +209,6 @@ impl TransformerDefinition for PunctTransformer {
 }
 
 pub(crate) struct GroupTransformer {
-    span: Span,
     inner: TransformStream,
 }
 
@@ -217,13 +217,12 @@ impl TransformerDefinition for GroupTransformer {
 
     fn parse(arguments: TransformerArguments) -> ParseResult<Self> {
         Ok(Self {
-            span: arguments.full_span(),
             inner: arguments.fully_parse_no_error_override()?,
         })
     }
 
     fn handle_transform(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        interpreter.parse_group(&self.span, Some(Delimiter::None), |interpreter, _, _| {
+        interpreter.parse_group(Some(Delimiter::None), |interpreter, _, _| {
             self.inner.handle_transform(interpreter)
         })
     }

@@ -152,6 +152,7 @@ pub(super) enum Leaf {
     Discarded(Token![_]),
     Value(SharedValue),
     StreamLiteral(StreamLiteral),
+    ParseTemplateLiteral(ParseTemplateLiteral),
     IfExpression(Box<IfExpression>),
     LoopExpression(Box<LoopExpression>),
     WhileExpression(Box<WhileExpression>),
@@ -169,6 +170,7 @@ impl HasSpanRange for Leaf {
             Leaf::Block(block) => block.span_range(),
             Leaf::Value(value) => value.span_range(),
             Leaf::StreamLiteral(stream) => stream.span_range(),
+            Leaf::ParseTemplateLiteral(stream) => stream.span_range(),
             Leaf::IfExpression(expression) => expression.span_range(),
             Leaf::LoopExpression(expression) => expression.span_range(),
             Leaf::WhileExpression(expression) => expression.span_range(),
@@ -193,7 +195,8 @@ impl Leaf {
             | Leaf::TypeProperty(_)
             | Leaf::Discarded(_)
             | Leaf::Value(_)
-            | Leaf::StreamLiteral(_) => false,
+            | Leaf::StreamLiteral(_)
+            | Leaf::ParseTemplateLiteral(_) => false,
         }
     }
 }

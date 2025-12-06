@@ -116,6 +116,7 @@ impl CursorExt for Cursor<'_> {
 
 pub(crate) trait DelimiterExt {
     fn description_of_open(&self) -> &'static str;
+    fn description_of_close(&self) -> &'static str;
     #[allow(unused)]
     fn description_of_group(&self) -> &'static str;
 }
@@ -127,6 +128,15 @@ impl DelimiterExt for Delimiter {
             Delimiter::Brace => "{",
             Delimiter::Bracket => "[",
             Delimiter::None => "start of transparent group, from a grouped macro $variable substitution or preinterpret %group[...] literal",
+        }
+    }
+
+    fn description_of_close(&self) -> &'static str {
+        match self {
+            Delimiter::Parenthesis => ")",
+            Delimiter::Brace => "}",
+            Delimiter::Bracket => "]",
+            Delimiter::None => "end of transparent group, from a grouped macro $variable substitution or preinterpret %group[...] literal",
         }
     }
 

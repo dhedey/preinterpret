@@ -107,6 +107,9 @@ impl Leaf {
             Leaf::TypeProperty(type_property) => type_property.control_flow_pass(context),
             Leaf::Block(block) => block.control_flow_pass(context),
             Leaf::StreamLiteral(stream_literal) => stream_literal.control_flow_pass(context),
+            Leaf::ParseTemplateLiteral(consume_literal) => {
+                consume_literal.control_flow_pass(context)
+            }
             Leaf::IfExpression(if_expression) => if_expression.control_flow_pass(context),
             Leaf::LoopExpression(loop_expression) => loop_expression.control_flow_pass(context),
             Leaf::WhileExpression(while_expression) => while_expression.control_flow_pass(context),

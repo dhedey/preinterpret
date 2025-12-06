@@ -108,8 +108,9 @@ impl<'a> ExpressionParser<'a> {
                         }
                     }
                 }
-
-                if punct.as_char() == '.' {
+                if punct.as_char() == '@' {
+                    UnaryAtom::Leaf(Leaf::ParseTemplateLiteral(input.parse()?))
+                } else if punct.as_char() == '.' {
                     UnaryAtom::Range(input.parse()?)
                 } else if punct.as_char() == '-' || punct.as_char() == '!' {
                     UnaryAtom::PrefixUnaryOperation(input.parse()?)

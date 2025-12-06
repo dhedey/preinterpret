@@ -48,13 +48,28 @@ impl IntoValue for ParserHandle {
     }
 }
 
+impl Shared<ParserValue> {
+    pub(crate) fn parser<'i>(
+        &self,
+        interpreter: &'i mut Interpreter,
+    ) -> ExecutionResult<OutputParseStream<'i>> {
+        interpreter.parser(self.handle, self.span_range())
+    }
+
+    pub(crate) fn parse_with<T>(
+        &self,
+        interpreter: &mut Interpreter,
+        f: impl FnOnce(&mut Interpreter) -> ExecutionResult<T>,
+    ) -> ExecutionResult<T> {
+        interpreter.parse_with(self.handle, f)
+    }
+}
+
 fn parser<'a>(
     this: Shared<ParserValue>,
     context: &'a mut MethodCallContext,
 ) -> ExecutionResult<OutputParseStream<'a>> {
-    context
-        .interpreter
-        .parser(this.as_spanned().map(|e, _| e.handle))
+    this.parser(context.interpreter)
 }
 
 define_interface! {
@@ -86,8 +101,39 @@ define_interface! {
                 Ok(parser(this, context)?.parse()?)
             }
 
+            [context] fn any_ident(this: Shared<ParserValue>) -> ExecutionResult<Ident> {
+                Ok(parser(this, context)?.parse_any_ident()?)
+            }
+
             [context] fn punct(this: Shared<ParserValue>) -> ExecutionResult<Punct> {
                 Ok(parser(this, context)?.parse()?)
+            }
+
+            [context] fn read(this: Shared<ParserValue>, parse_template: AnyRef<OutputStream>) -> ExecutionResult<()> {
+                let this = parser(this, context)?;
+                // TODO[parsers] - parse_exact_match doesn't need an output stream
+                let mut discarded_output = OutputStream::new();
+                parse_template.parse_exact_match(this, &mut discarded_output)
+            }
+
+            [context] fn rest(this: Shared<ParserValue>) -> ExecutionResult<OutputStream> {
+                let input = parser(this, context)?;
+                let mut output = OutputStream::new();
+                ParseUntil::End.handle_parse_into(input, &mut output)?;
+                Ok(output)
+            }
+
+            [context] fn until(this: Shared<ParserValue>, until: OutputStream) -> ExecutionResult<OutputStream> {
+                let input = parser(this, context)?;
+                let until: ParseUntil = until.parse_as()?;
+                let mut output = OutputStream::new();
+                until.handle_parse_into(input, &mut output)?;
+                Ok(output)
+            }
+
+            [context] fn error(this: Shared<ParserValue>, message: String) -> ExecutionResult<()> {
+                let parser = parser(this, context)?;
+                parser.parse_err(message).map_err(|e| e.into())
             }
 
             // LITERALS
@@ -202,5 +248,58 @@ impl IntoValue for Punct {
 impl IntoValue for Literal {
     fn into_value(self) -> Value {
         OutputStream::new_with(|s| s.push_literal(self)).into_value()
+    }
+}
+
+/// Note: This is very similar to a [`ParseTemplatePattern`], but there, the ident is a *definition*,
+/// and used to capture the consumed stream into a variable. Here, the ident is a reference
+/// to an existing variable, whose value is expected to be a parser.
+pub(crate) struct ParseTemplateLiteral {
+    prefix: Token![@],
+    parser_reference: VariableReference,
+    brackets: Brackets,
+    content: ParseTemplateStream,
+}
+
+impl ParseSource for ParseTemplateLiteral {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
+        let prefix = input.parse()?;
+        let parser_reference = input.parse()?;
+        let (brackets, inner) = input.parse_brackets()?;
+        let content = ParseTemplateStream::parse_with_span(&inner, brackets.span())?;
+        Ok(Self {
+            prefix,
+            parser_reference,
+            brackets,
+            content,
+        })
+    }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        self.parser_reference.control_flow_pass(context)?;
+        self.content.control_flow_pass(context)
+    }
+}
+
+impl ParseTemplateLiteral {
+    pub(crate) fn evaluate(
+        &self,
+        interpreter: &mut Interpreter,
+        ownership: RequestedOwnership,
+    ) -> ExecutionResult<RequestedValue> {
+        let parser: Shared<ParserValue> = self
+            .parser_reference
+            .resolve_shared(interpreter)?
+            .resolve_as("The value bound by a consume literal")?;
+
+        parser.parse_with(interpreter, |interpreter| self.content.consume(interpreter))?;
+
+        ownership.map_from_owned(().into_owned_value(self.span_range()))
+    }
+}
+
+impl HasSpanRange for ParseTemplateLiteral {
+    fn span_range(&self) -> SpanRange {
+        SpanRange::new_between(self.prefix.span, self.brackets.end_span())
     }
 }

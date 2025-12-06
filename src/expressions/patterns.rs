@@ -13,8 +13,8 @@ pub(crate) enum Pattern {
     Array(ArrayPattern),
     Object(ObjectPattern),
     Stream(StreamPattern),
-    #[allow(unused)]
-    Discarded(Token![_]),
+    ParseTemplatePattern(ParseTemplatePattern),
+    Discarded(Unused<Token![_]>),
 }
 
 impl ParseSource for Pattern {
@@ -42,6 +42,8 @@ impl ParseSource for Pattern {
             } else {
                 input.parse_err("Expected a pattern, such as an object pattern `%{ ... }` or stream pattern `%[ ... ]`")
             }
+        } else if lookahead.peek(Token![@]) {
+            Ok(Pattern::ParseTemplatePattern(input.parse()?))
         } else if lookahead.peek(Token![_]) {
             Ok(Pattern::Discarded(input.parse()?))
         } else if input.peek(Token![#]) {
@@ -57,7 +59,8 @@ impl ParseSource for Pattern {
             Pattern::Array(array) => array.control_flow_pass(context),
             Pattern::Object(object) => object.control_flow_pass(context),
             Pattern::Stream(stream) => stream.control_flow_pass(context),
-            Pattern::Discarded(discarded) => discarded.control_flow_pass(context),
+            Pattern::ParseTemplatePattern(pattern) => pattern.control_flow_pass(context),
+            Pattern::Discarded(_) => Ok(()),
         }
     }
 }
@@ -73,6 +76,9 @@ impl HandleDestructure for Pattern {
             Pattern::Array(array) => array.handle_destructure(interpreter, value),
             Pattern::Object(object) => object.handle_destructure(interpreter, value),
             Pattern::Stream(stream) => stream.handle_destructure(interpreter, value),
+            Pattern::ParseTemplatePattern(pattern) => {
+                pattern.handle_destructure(interpreter, value)
+            }
             Pattern::Discarded(_) => Ok(()),
         }
     }
@@ -193,19 +199,17 @@ impl ParseSource for PatternOrDotDot {
 }
 
 pub struct ObjectPattern {
-    #[allow(unused)]
-    prefix: Token![%],
-    #[allow(unused)]
+    _prefix: Unused<Token![%]>,
     braces: Braces,
     entries: Punctuated<ObjectEntry, Token![,]>,
 }
 
 impl ParseSource for ObjectPattern {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        let prefix = input.parse()?;
+        let _prefix = input.parse()?;
         let (braces, inner) = input.parse_braces()?;
         Ok(Self {
-            prefix,
+            _prefix,
             braces,
             entries: inner.parse_terminated()?,
         })
@@ -325,19 +329,17 @@ impl ParseSource for ObjectEntry {
 }
 
 pub struct StreamPattern {
-    #[allow(unused)]
-    prefix: Token![%],
-    #[allow(unused)]
+    _prefix: Unused<Token![%]>,
     brackets: Brackets,
     content: TransformStream,
 }
 
 impl ParseSource for StreamPattern {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        let prefix = input.parse()?;
+        let _prefix = input.parse()?;
         let (brackets, inner) = input.parse_brackets()?;
         Ok(Self {
-            prefix,
+            _prefix,
             brackets,
             content: inner.parse()?,
         })
@@ -364,5 +366,50 @@ impl HandleDestructure for StreamPattern {
             })
         })?;
         Ok(())
+    }
+}
+
+/// Note: This is very similar to a [`ParseTemplateLiteral`], but here, the ident is a *definition*,
+/// and used to capture the consumed stream into a variable. There, the ident is a reference
+/// to an existing variable, whose value is expected to be a parser.
+pub(crate) struct ParseTemplatePattern {
+    _prefix: Unused<Token![@]>,
+    parser_definition: VariableDefinition,
+    brackets: Brackets,
+    content: ParseTemplateStream,
+}
+
+impl ParseSource for ParseTemplatePattern {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
+        let _prefix = input.parse()?;
+        let parser_definition = input.parse()?;
+        let (brackets, inner) = input.parse_brackets()?;
+        let content = ParseTemplateStream::parse_with_span(&inner, brackets.span())?;
+        Ok(Self {
+            _prefix,
+            parser_definition,
+            brackets,
+            content,
+        })
+    }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        self.parser_definition.control_flow_pass(context)?;
+        self.content.control_flow_pass(context)
+    }
+}
+
+impl HandleDestructure for ParseTemplatePattern {
+    fn handle_destructure(
+        &self,
+        interpreter: &mut Interpreter,
+        value: Value,
+    ) -> ExecutionResult<()> {
+        let stream: StreamValue = value
+            .into_owned(self.brackets.span_range())
+            .resolve_as("The value destructured with a parse template pattern")?;
+        interpreter.start_parse(stream.value, |interpreter, _| {
+            self.content.consume(interpreter)
+        })
     }
 }

@@ -162,17 +162,16 @@ First, read the @./2025-11-vision.md
   - [ ] If using slotmap / generational-arena, replace the arena implementation too
 - [x] Create (temporary) `parse X => |Y| { }` expression
 - [x] Bind `input` to `Parser` at the start of each parse expression
-- [ ] Create `@input[...]` expression
-  - [ ] Create a `ConsumeStream` which wraps a `SourceStream`
-    - [ ] We add `consume()` method which takes a `&mut ConsumingInterpreter` which for now can wrap a `ParseHandle` and `&mut Interpreter`
-    - [ ] Expression return values are swallowed
-- [ ] Add remaining parser methods below
+- [x] Create `@input[...]` expression
+  - [x] Create a `ParseTemplateLiteral` and a `ParseTemplateStream`
+- [x] Add remaining parser methods below
+- [x] Add `ParseTemplatePattern` pattern
+- [ ] Migrate tests from `transforming.rs` to `parsing.rs` etc
 - [ ] Delete the transformers folder
-  - [ ] Change stream pattern to also be `@input[...]` - which binds the input
-  - [ ] Write equivalent tests
+- [ ] Make StreamPattern an exact match, and allow `%raw[]` and `%group[]` patterns too, by wrapping a `StreamLiteral`
 - [ ] Reversion works in attempt blocks, via forking and committing or rolling back the fork, fix `TODO[parser-input-in-interpreter]`
 - [ ] Address any remaining `TODO[parser-no-output]` and `TODO[parsers]`
-- [ ] Add tests for all the methods on Parser, and for nested parse statements
+- [ ] Add tons of tests for all the methods on Parser, and for nested parse statements
 
 `Parser` methods:
 - [x] `ident()`, `is_ident()`
@@ -182,13 +181,13 @@ First, read the @./2025-11-vision.md
 - [x] `char()`, `is_char()`
 - [x] `string()`, `is_string()`
 - [x] `end()`, `is_end()`
-- [ ] `read(<stream>)` - uses `stream.parse_exact_match`
-- [ ] `rest()`
-- [ ] `any_ident()`
-- [ ] `until(%[,])` (see until transformer)
-- [ ] `error()` etc
-- [ ] `token_tree()`
-- [ ] `span()` or `cursor()` -- maybe? outputs a token with a span for outputting errors. If at end of an inner stream, it outputs the ident `END` with the span of the closing bracket.
+- [x] `read(<stream>)` - uses `stream.parse_exact_match`
+- [x] `rest()`
+- [x] `until(%[,])` (see until transformer)
+- [x] `end()`
+- [x] `any_ident()`
+- [x] `error()`
+- [x] `token_tree()`
 
 And all of these from normal macros:
 - [ ] block: a block (i.e. a block of statements and/or an expression, surrounded by braces)
@@ -208,12 +207,17 @@ And all of these from normal macros:
 Consider if we want separate types for e.g.
 * `Span`
 * `TokenTree`
+And
+- [ ] These could live under a `Tokens` type in the hierarchy, alongside `StreamValue` and other Rust-like / syn-like objects
+- [ ] Parser methods `span()` or `cursor()` -- maybe? outputs a token with a span for outputting errors. If at end of an inner stream, it outputs the ident `END` with the span of the closing bracket.
 
-Repeat bindings (only inside a `consume` statement)
-* `@(..)?`, `@(..)+`, `@(..),+`, `@(..)*`, `@(..),*`
+Parse template bindings
+* `@xx[]?`, `@xx[]+`, `@xx[],+`, `@xx[]*`, `@xx[],*`
+* `@(..)?`, `@(..)+`, `@(..),+`, `@(..)*`, `@(..),*` (inside a parse template literal)
 
 Future methods once we have closures:
 * `input.any_group(|inner| { })`
+* `input.transparent_group(|inner| { })`
 * Something for `input.fields({ ... })` and `input.subfields({ ... })`, whose fields are closures
 * Possibly some support for `input.peek` and `fork` - although this is handled by the attempt statement
 ```rust
@@ -402,6 +406,14 @@ The following are less important tasks which maybe we don't even want/need to do
   - [ ] We should create some unit tests in `value.rs` and functions `generate_example_values(value_kind)` which returns a `Vec<Value>` for each value kind.
   - [ ] We can use this to check that `eq` and `neq` are defined and work correctly for all types
 - [ ] Add lexicographic ordering to arrays, if they're the same length and their values can be compared
+- [ ] Add a "closing span range" to the parse streams, and check for end manually to get a better error message:
+  - [ ] Wherever we use `parse_with`
+  - [ ] Wherever we drop the `ParseStreamStack` in the interpreter
+  - [ ] Whenever we create an output stream, we can set an optional "end_of_stream" span, which is used when the parser runs.
+  - [ ] Check if the compiler output in the `parser_after_rest` test is better:
+```rust
+let @input[{ let _ = input.rest(); let _ = input.token_tree(); }] = %[Hello World];
+```
 
 ## Match block [blocked on slices]
 
@@ -420,7 +432,9 @@ Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` doc
 - [x] Merge `assignee_frames` into `value_frames` as per comment as the top of `assignee_frames`
 - [x] Rename `EvaluationItem` to `RequestedValue` and consider making `RequestedValue::AssignmentCompletion` wrap an `Owned<()>` so that it becomes truly a value.
 - [x] Merge `HasValueType` with `ValueKind`
-* Add `preinterpret::macro` - can this be a declarative macro? Would be slightly more efficient, as it just needs to wrap a call to `preinterpret::stream` or `preinterpret::run`...
+- [ ] Add `preinterpret::macro` - can this be a declarative macro? Would be slightly more efficient, as it just needs to wrap a call to `preinterpret::stream` or `preinterpret::run`...
+  - [ ] When we create `input = %raw[..]` we will need to set its `end_of_stream` span to the end of the
+  macro_rules! macro somehow... I'm not sure how to get that span though.
 - [x] Add `Eq` support on composite types and streams
 - [x] See `TODO[untyped]` - Have UntypedInteger/UntypedFloat have an inner representation of either value or literal, for improved efficiency / less weird `Span::call_site()` error handling
 - [ ] Move `typed_eq` as `%[].typed_eq(..)`
