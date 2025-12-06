@@ -48,7 +48,7 @@ impl IntegerValue {
         .into_owned(lit.span_range()))
     }
 
-    pub(super) fn to_literal(&self, span: Span) -> Literal {
+    pub(super) fn to_literal(self, span: Span) -> Literal {
         self.to_unspanned_literal().with_span(span)
     }
 
@@ -88,42 +88,22 @@ impl IntegerValue {
         Ok(())
     }
 
-    fn to_unspanned_literal(&self) -> Literal {
+    fn to_unspanned_literal(self) -> Literal {
         match self {
             IntegerValue::Untyped(int) => int.to_unspanned_literal(),
-            IntegerValue::U8(int) => Literal::u8_suffixed(*int),
-            IntegerValue::U16(int) => Literal::u16_suffixed(*int),
-            IntegerValue::U32(int) => Literal::u32_suffixed(*int),
-            IntegerValue::U64(int) => Literal::u64_suffixed(*int),
-            IntegerValue::U128(int) => Literal::u128_suffixed(*int),
-            IntegerValue::Usize(int) => Literal::usize_suffixed(*int),
-            IntegerValue::I8(int) => Literal::i8_suffixed(*int),
-            IntegerValue::I16(int) => Literal::i16_suffixed(*int),
-            IntegerValue::I32(int) => Literal::i32_suffixed(*int),
-            IntegerValue::I64(int) => Literal::i64_suffixed(*int),
-            IntegerValue::I128(int) => Literal::i128_suffixed(*int),
-            IntegerValue::Isize(int) => Literal::isize_suffixed(*int),
+            IntegerValue::U8(int) => Literal::u8_suffixed(int),
+            IntegerValue::U16(int) => Literal::u16_suffixed(int),
+            IntegerValue::U32(int) => Literal::u32_suffixed(int),
+            IntegerValue::U64(int) => Literal::u64_suffixed(int),
+            IntegerValue::U128(int) => Literal::u128_suffixed(int),
+            IntegerValue::Usize(int) => Literal::usize_suffixed(int),
+            IntegerValue::I8(int) => Literal::i8_suffixed(int),
+            IntegerValue::I16(int) => Literal::i16_suffixed(int),
+            IntegerValue::I32(int) => Literal::i32_suffixed(int),
+            IntegerValue::I64(int) => Literal::i64_suffixed(int),
+            IntegerValue::I128(int) => Literal::i128_suffixed(int),
+            IntegerValue::Isize(int) => Literal::isize_suffixed(int),
         }
-    }
-
-    /// Convert to fallback integer for comparison
-    #[allow(dead_code)] // Infrastructure for future comparison methods
-    fn to_fallback(&self) -> Option<FallbackInteger> {
-        Some(match self {
-            IntegerValue::Untyped(x) => x.into_fallback(),
-            IntegerValue::U8(x) => (*x).into(),
-            IntegerValue::U16(x) => (*x).into(),
-            IntegerValue::U32(x) => (*x).into(),
-            IntegerValue::U64(x) => (*x).into(),
-            IntegerValue::U128(x) => (*x).try_into().ok()?,
-            IntegerValue::Usize(x) => (*x).try_into().ok()?,
-            IntegerValue::I8(x) => (*x).into(),
-            IntegerValue::I16(x) => (*x).into(),
-            IntegerValue::I32(x) => (*x).into(),
-            IntegerValue::I64(x) => (*x).into(),
-            IntegerValue::I128(x) => *x,
-            IntegerValue::Isize(x) => (*x).try_into().ok()?,
-        })
     }
 }
 
@@ -147,22 +127,24 @@ impl HasValueKind for IntegerValue {
             Self::Isize(_) => IntegerKind::Isize,
         }
     }
+}
 
-    fn debug_display(&self) -> String {
+impl Debug for IntegerValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Untyped(x) => x.into_fallback().to_string(),
-            Self::U8(x) => format!("{}u8", x),
-            Self::U16(x) => format!("{}u16", x),
-            Self::U32(x) => format!("{}u32", x),
-            Self::U64(x) => format!("{}u64", x),
-            Self::U128(x) => format!("{}u128", x),
-            Self::Usize(x) => format!("{}usize", x),
-            Self::I8(x) => format!("{}i8", x),
-            Self::I16(x) => format!("{}i16", x),
-            Self::I32(x) => format!("{}i32", x),
-            Self::I64(x) => format!("{}i64", x),
-            Self::I128(x) => format!("{}i128", x),
-            Self::Isize(x) => format!("{}isize", x),
+            Self::Untyped(v) => write!(f, "{}", v.into_fallback()),
+            Self::U8(v) => write!(f, "{:?}", v),
+            Self::U16(v) => write!(f, "{:?}", v),
+            Self::U32(v) => write!(f, "{:?}", v),
+            Self::U64(v) => write!(f, "{:?}", v),
+            Self::U128(v) => write!(f, "{:?}", v),
+            Self::Usize(v) => write!(f, "{:?}", v),
+            Self::I8(v) => write!(f, "{:?}", v),
+            Self::I16(v) => write!(f, "{:?}", v),
+            Self::I32(v) => write!(f, "{:?}", v),
+            Self::I64(v) => write!(f, "{:?}", v),
+            Self::I128(v) => write!(f, "{:?}", v),
+            Self::Isize(v) => write!(f, "{:?}", v),
         }
     }
 }
@@ -187,10 +169,10 @@ impl IntegerValue {
 impl ValuesEqual for IntegerValue {
     /// Handles type coercion between typed and untyped integers.
     /// E.g., `5 == 5u32` returns true.
-    fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+    fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
         // Align types (untyped -> typed conversion)
         let Some((lhs, rhs)) = Self::align_types(*self, *other) else {
-            return ctx.not_equal(self, other);
+            return ctx.leaf_values_not_equal(self, other);
         };
 
         // After alignment, compare directly.
@@ -200,37 +182,37 @@ impl ValuesEqual for IntegerValue {
             (IntegerValue::Untyped(l), IntegerValue::Untyped(r)) => {
                 l.into_fallback() == r.into_fallback()
             }
-            (IntegerValue::Untyped(_), _) => return ctx.not_equal(self, other),
+            (IntegerValue::Untyped(_), _) => return ctx.leaf_values_not_equal(self, other),
             (IntegerValue::U8(l), IntegerValue::U8(r)) => l == r,
-            (IntegerValue::U8(_), _) => return ctx.not_equal(self, other),
+            (IntegerValue::U8(_), _) => return ctx.leaf_values_not_equal(self, other),
             (IntegerValue::U16(l), IntegerValue::U16(r)) => l == r,
-            (IntegerValue::U16(_), _) => return ctx.not_equal(self, other),
+            (IntegerValue::U16(_), _) => return ctx.leaf_values_not_equal(self, other),
             (IntegerValue::U32(l), IntegerValue::U32(r)) => l == r,
-            (IntegerValue::U32(_), _) => return ctx.not_equal(self, other),
+            (IntegerValue::U32(_), _) => return ctx.leaf_values_not_equal(self, other),
             (IntegerValue::U64(l), IntegerValue::U64(r)) => l == r,
-            (IntegerValue::U64(_), _) => return ctx.not_equal(self, other),
+            (IntegerValue::U64(_), _) => return ctx.leaf_values_not_equal(self, other),
             (IntegerValue::U128(l), IntegerValue::U128(r)) => l == r,
-            (IntegerValue::U128(_), _) => return ctx.not_equal(self, other),
+            (IntegerValue::U128(_), _) => return ctx.leaf_values_not_equal(self, other),
             (IntegerValue::Usize(l), IntegerValue::Usize(r)) => l == r,
-            (IntegerValue::Usize(_), _) => return ctx.not_equal(self, other),
+            (IntegerValue::Usize(_), _) => return ctx.leaf_values_not_equal(self, other),
             (IntegerValue::I8(l), IntegerValue::I8(r)) => l == r,
-            (IntegerValue::I8(_), _) => return ctx.not_equal(self, other),
+            (IntegerValue::I8(_), _) => return ctx.leaf_values_not_equal(self, other),
             (IntegerValue::I16(l), IntegerValue::I16(r)) => l == r,
-            (IntegerValue::I16(_), _) => return ctx.not_equal(self, other),
+            (IntegerValue::I16(_), _) => return ctx.leaf_values_not_equal(self, other),
             (IntegerValue::I32(l), IntegerValue::I32(r)) => l == r,
-            (IntegerValue::I32(_), _) => return ctx.not_equal(self, other),
+            (IntegerValue::I32(_), _) => return ctx.leaf_values_not_equal(self, other),
             (IntegerValue::I64(l), IntegerValue::I64(r)) => l == r,
-            (IntegerValue::I64(_), _) => return ctx.not_equal(self, other),
+            (IntegerValue::I64(_), _) => return ctx.leaf_values_not_equal(self, other),
             (IntegerValue::I128(l), IntegerValue::I128(r)) => l == r,
-            (IntegerValue::I128(_), _) => return ctx.not_equal(self, other),
+            (IntegerValue::I128(_), _) => return ctx.leaf_values_not_equal(self, other),
             (IntegerValue::Isize(l), IntegerValue::Isize(r)) => l == r,
-            (IntegerValue::Isize(_), _) => return ctx.not_equal(self, other),
+            (IntegerValue::Isize(_), _) => return ctx.leaf_values_not_equal(self, other),
         };
 
         if equal {
-            ctx.equal()
+            ctx.values_equal()
         } else {
-            ctx.not_equal(self, other)
+            ctx.leaf_values_not_equal(self, other)
         }
     }
 }

@@ -1,4 +1,4 @@
-error: Assertion failed: length mismatch (3 != 2)
+error: Assertion failed: lhs has length 3, but rhs has length 2
          lhs = [1, 2, 3]
          rhs = [1, 2]
  --> tests/compilation_failures/core/assert_eq_array_length.rs:4:12

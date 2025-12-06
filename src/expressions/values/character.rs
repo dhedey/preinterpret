@@ -11,6 +11,12 @@ impl IntoValue for CharValue {
     }
 }
 
+impl Debug for CharValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.value)
+    }
+}
+
 impl CharValue {
     pub(super) fn for_litchar(lit: &syn::LitChar) -> Owned<Self> {
         Self { value: lit.value() }.into_owned(lit.span())
@@ -27,18 +33,14 @@ impl HasValueKind for CharValue {
     fn kind(&self) -> ValueKind {
         ValueKind::Char
     }
-
-    fn debug_display(&self) -> String {
-        format!("'{}'", self.value.escape_default())
-    }
 }
 
 impl ValuesEqual for CharValue {
-    fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+    fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
         if self.value == other.value {
-            ctx.equal()
+            ctx.values_equal()
         } else {
-            ctx.not_equal(self, other)
+            ctx.leaf_values_not_equal(self, other)
         }
     }
 }

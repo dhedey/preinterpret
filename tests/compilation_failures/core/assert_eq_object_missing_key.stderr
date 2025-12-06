@@ -1,4 +1,4 @@
-error: Assertion failed: lhs has key "b" but rhs does not
+error: Assertion failed: lhs has extra key "b", compared to rhs
          lhs = %{ a: 1, b: 2 }
          rhs = %{ a: 1, c: 2 }
  --> tests/compilation_failures/core/assert_eq_object_missing_key.rs:4:12

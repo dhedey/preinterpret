@@ -140,17 +140,17 @@ impl HasValueKind for ArrayValue {
 
 impl ValuesEqual for ArrayValue {
     /// Recursively compares two arrays element-by-element.
-    fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+    fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
         if self.items.len() != other.items.len() {
-            return ctx.lengths_unequal(self.items.len(), other.items.len());
+            return ctx.lengths_unequal(Some(self.items.len()), Some(other.items.len()));
         }
         for (i, (l, r)) in self.items.iter().zip(other.items.iter()).enumerate() {
-            let result = ctx.with_array_index(i, |ctx| l.values_equal(r, ctx));
+            let result = ctx.with_array_index(i, |ctx| l.test_equality(r, ctx));
             if ctx.should_short_circuit(&result) {
                 return result;
             }
         }
-        ctx.equal()
+        ctx.values_equal()
     }
 }
 

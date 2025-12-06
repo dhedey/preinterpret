@@ -64,11 +64,22 @@ impl HasValueKind for StreamValue {
     }
 }
 
+impl Debug for StreamValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut debug_string = String::new();
+        self.concat_recursive_into(
+            &mut debug_string,
+            &ConcatBehaviour::debug(Span::call_site().span_range()),
+        );
+        write!(f, "{}", debug_string)
+    }
+}
+
 impl ValuesEqual for StreamValue {
     /// Compares two streams by their debug string representation, ignoring spans.
     /// Transparent groups (none-delimited groups) are preserved in comparison.
     /// Use `remove_transparent_groups()` before comparison if you want to ignore them.
-    fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+    fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
         // Use debug concat_recursive which preserves transparent group structure
         let lhs = self
             .value
@@ -77,9 +88,9 @@ impl ValuesEqual for StreamValue {
             .value
             .concat_recursive(&ConcatBehaviour::debug(Span::call_site().span_range()));
         if lhs == rhs {
-            ctx.equal()
+            ctx.values_equal()
         } else {
-            ctx.not_equal(self, other)
+            ctx.leaf_values_not_equal(self, other)
         }
     }
 }

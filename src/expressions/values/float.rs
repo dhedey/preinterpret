@@ -29,7 +29,7 @@ impl FloatValue {
         .into_owned(lit.span()))
     }
 
-    pub(super) fn to_literal(&self, span: Span) -> Literal {
+    pub(super) fn to_literal(self, span: Span) -> Literal {
         self.to_unspanned_literal().with_span(span)
     }
 
@@ -56,11 +56,11 @@ impl FloatValue {
         Ok(())
     }
 
-    fn to_unspanned_literal(&self) -> Literal {
+    fn to_unspanned_literal(self) -> Literal {
         match self {
             FloatValue::Untyped(float) => float.to_unspanned_literal(),
-            FloatValue::F32(float) => Literal::f32_suffixed(*float),
-            FloatValue::F64(float) => Literal::f64_suffixed(*float),
+            FloatValue::F32(float) => Literal::f32_suffixed(float),
+            FloatValue::F64(float) => Literal::f64_suffixed(float),
         }
     }
 }
@@ -75,12 +75,14 @@ impl HasValueKind for FloatValue {
             Self::F64(_) => FloatKind::F64,
         }
     }
+}
 
-    fn debug_display(&self) -> String {
+impl Debug for FloatValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Untyped(x) => x.into_fallback().to_string(),
-            Self::F32(x) => format!("{}f32", x),
-            Self::F64(x) => format!("{}f64", x),
+            Self::Untyped(v) => write!(f, "{}", v.into_fallback()),
+            Self::F32(v) => write!(f, "{:?}", v),
+            Self::F64(v) => write!(f, "{:?}", v),
         }
     }
 }
@@ -105,7 +107,7 @@ impl FloatValue {
 impl ValuesEqual for FloatValue {
     /// Handles type coercion between typed and untyped floats.
     /// Uses Rust's float `==`, so `NaN != NaN`.
-    fn values_equal<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
+    fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
         // Align types (untyped -> typed conversion)
         let (lhs, rhs) = Self::align_types(*self, *other);
 
@@ -116,17 +118,17 @@ impl ValuesEqual for FloatValue {
             (FloatValue::Untyped(l), FloatValue::Untyped(r)) => {
                 l.into_fallback() == r.into_fallback()
             }
-            (FloatValue::Untyped(_), _) => return ctx.not_equal(self, other),
+            (FloatValue::Untyped(_), _) => return ctx.leaf_values_not_equal(self, other),
             (FloatValue::F32(l), FloatValue::F32(r)) => l == r,
-            (FloatValue::F32(_), _) => return ctx.not_equal(self, other),
+            (FloatValue::F32(_), _) => return ctx.leaf_values_not_equal(self, other),
             (FloatValue::F64(l), FloatValue::F64(r)) => l == r,
-            (FloatValue::F64(_), _) => return ctx.not_equal(self, other),
+            (FloatValue::F64(_), _) => return ctx.leaf_values_not_equal(self, other),
         };
 
         if equal {
-            ctx.equal()
+            ctx.values_equal()
         } else {
-            ctx.not_equal(self, other)
+            ctx.leaf_values_not_equal(self, other)
         }
     }
 }

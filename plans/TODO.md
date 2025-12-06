@@ -74,6 +74,7 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
   - [ ] All value kinds should be generated with a macro which also generates a `#[test] list_all` method
   - [ ] We should create some unit tests in `value.rs` and functions `generate_example_values(value_kind)` which returns a `Vec<Value>` for each value kind.
   - [ ] We can use this to check that `eq` and `neq` are defined and work correctly for all types
+- [ ] Add lexicographic ordering to arrays, if they're the same length and their values can be compared
 
 ## Control flow expressions (ideally requires Stream Literals)
 
@@ -254,7 +255,7 @@ Later:
   * Break and continue statements should not leak out of function boundaries
   * This needs to be validated during the control flow pass
 - [ ] Optional arguments
-- [ ] Add `map`, `filter`, `flatten`, `flatmap`
+- [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`, - [ ] Add `array.sort`, `array.sort_by`
 - [ ] Add `stream.parse(|input| { ... })`
 - [ ] Add `let captured = input.capture(|input| { ... })`
   * This returns the parsed input stream. It can capture the original tokens by using `let forked = input.fork()` and then `let end_cursor = input.end();` and then consuming `TokenTree`s from `forked` until `forked.cursor >= end_cursor` (making use of the PartialEq implementation)
