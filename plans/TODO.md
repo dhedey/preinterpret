@@ -73,13 +73,7 @@ This is the to-do-list for 1.0, revised as-of @./2025-09-vision.md
   - [x] Create various examples of combinations / operations that don't compile, and create compilation failure tests for them in an `operations` folder, brainstorm ideas, but some ideas include:
     - [x] Operations between invalid types; at least one for each operation. e.g. `1 + []` or `1u32 + 3.0`
     - [x] Overflows, underflows, divide by 0s, etc
-  - [x] Have a think about floats and test for infinity and NaN. Can such values be created in preinterpret? If not, how might we support creating them? How does rust do it? Is there an easy preinterpret equivalent?
-    - Finding: preinterpret now supports non-finite floats (INFINITY, NEG_INFINITY, NAN) via type constants and operations that produce them (e.g., `1.0f32 / 0.0f32`). Non-finite values are output as `f32::INFINITY`, etc.
-- [ ] Ensure all `TODO[operation-refactor]` and `TODO[compound-assignment-refactor]` are done
-  - [ ] All value kinds should be generated with a macro which also generates a `#[test] list_all` method
-  - [ ] We should create some unit tests in `value.rs` and functions `generate_example_values(value_kind)` which returns a `Vec<Value>` for each value kind.
-  - [ ] We can use this to check that `eq` and `neq` are defined and work correctly for all types
-- [ ] Add lexicographic ordering to arrays, if they're the same length and their values can be compared
+- [x] Ensure all `TODO[operation-refactor]` and `TODO[compound-assignment-refactor]` are done
 
 ## Control flow expressions (ideally requires Stream Literals)
 
@@ -404,6 +398,10 @@ The following are less important tasks which maybe we don't even want/need to do
 - [ ] Allow adding labels to stream literals `%'a[]` and then `emit 'a`, with `'root` being the topmost. Or maybe just `emit 'root` honestly. Can't really see the use case for the others.
   - [ ] Note that `%'a[((#{ emit 'a %[x] }))]` should yield `x(())`
   - [ ] Note that we need to prevent or revert outputting to root in revertible segments
+- [ ] All value kinds should be generated with a macro which also generates a `#[test] list_all` method
+  - [ ] We should create some unit tests in `value.rs` and functions `generate_example_values(value_kind)` which returns a `Vec<Value>` for each value kind.
+  - [ ] We can use this to check that `eq` and `neq` are defined and work correctly for all types
+- [ ] Add lexicographic ordering to arrays, if they're the same length and their values can be compared
 
 ## Match block [blocked on slices]
 
