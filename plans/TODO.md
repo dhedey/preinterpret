@@ -445,28 +445,6 @@ One option We can work it like `IterableRef`, but perhaps we can do better?
 
 ## Write book / Docs
 
-### Equality Methods Documentation Notes
-
-The codebase has three equality methods with different semantics:
-
-1. **`==` / `values_eq()`** - Lenient equality (like JavaScript's `===`)
-   - Returns `false` for incompatible value kinds (no error)
-   - Used for normal equality comparisons
-   - Example: `1 == "hello"` returns `false`
-
-2. **`typed_eq()`** - Strict equality with type checking
-   - Returns an error for incompatible value kinds
-   - Useful when type mismatches indicate a bug
-   - Example: `1.typed_eq("hello")` errors with "Cannot compare an untyped integer with a string"
-   - Includes path tracking for nested comparisons: `[1, 2].typed_eq([1, "two"])` errors with "... at [1]"
-
-3. **`assert_eq()`** - Debug equality for assertions
-   - Uses `DebugEquality` context internally
-   - Provides detailed error messages with path and value information
-   - Example error: `lhs[1] != rhs[1]: 2 != 5` with full values shown below
-
-**Stream Equality Note**: Stream equality preserves transparent groups. Use `remove_transparent_groups()` to normalize streams before comparison if needed.
-
 - [ ] [PAGE] Introduction - covering:
   * Motivation
   * A Rust-like interpreted language with JS-like value types, built for code-generation
@@ -489,6 +467,7 @@ The codebase has three equality methods with different semantics:
   - [ ] [PAGE] Iterable
   - [ ] [PAGE] Iterator
   - [ ] [PAGE] None
+  - [ ] Document equality methods: `==` (lenient), `typed_eq()` (errors on type mismatch), `assert_eq()` (detailed error messages). Stream equality preserves transparent groups; use `remove_transparent_groups()` to normalize.
 - [ ] [PAGE] Guides
   - [ ] [PAGE] Errors and Spans
       - NB: If someone wants to keep a value's span, they can keep it in a stream and coerce it; or store it as a tuple of a value with its span `%{ value: $x, span: %[$x] }`
