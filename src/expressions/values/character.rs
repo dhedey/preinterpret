@@ -180,6 +180,5 @@ impl_resolvable_argument_for! {
 }
 
 impl_delegated_resolvable_argument_for!(
-    CharTypeData,
     (value: CharValue) -> char { value.value }
 );
