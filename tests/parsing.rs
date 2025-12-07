@@ -699,13 +699,14 @@ fn test_fork_close_open_revert() {
                 {
                     // After revert: back inside '(' group, close it normally
                     parser.close(')');
-                    // Now parse the [] as a token_tree
-                    let tt = parser.token_tree();
-                } => { %{ arm: "second", tt } }
+                    parser.open('[');
+                } => {
+                    parser.close(']');
+                    %{ arm: "second" }
+                }
             };
             parser.end();
             %[].assert_eq(result.arm, "second");
-            %[].assert_eq(result.tt, %[[]]);
         };
     }
 }

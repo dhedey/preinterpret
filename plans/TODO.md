@@ -169,9 +169,8 @@ First, read the @./2025-11-vision.md
 - [x] Migrate tests from `transforming.rs` to `parsing.rs` etc
 - [x] Delete the transformers folder
 - [x] Reversion works in attempt blocks, via forking and committing or rolling back the fork, fix `TODO[parser-input-in-interpreter]`
-- [x] Add test for `parser.open('(')` without a corresponding `parser.close(')')`. The `finish_parse` method now checks for unclosed groups before dropping the `ParseStack`, ensuring proper error handling even when the group content is empty (see `open_without_close_empty.rs` and `open_without_close_unconsumed.rs`).
 - [ ] Make StreamPattern an exact match, and allow `%raw[]` and `%group[]` patterns too - but disallow embedding statements.
-- [ ] Address any remaining `TODO[parser-no-output]` and `TODO[parsers]`
+- [ ] Address any remaining `TODO[parsers]`
 - [ ] Add tons of tests for all the methods on Parser, and for nested parse statements
 
 `Parser` methods:
@@ -189,6 +188,7 @@ First, read the @./2025-11-vision.md
 - [x] `any_ident()`
 - [x] `error()`
 - [x] `token_tree()`
+- [x] `open('(')` and `close(')')`
 
 And all of these from normal macros:
 - [ ] block: a block (i.e. a block of statements and/or an expression, surrounded by braces)
@@ -233,10 +233,6 @@ input.repeated(
   }
 )
 ```
-
-Later:
-- [ ] Support for starting to parse a `input.open('(')` in the left part of an attempt arm and completing in the right arm `input.close(')')` - there needs to be some error checking in the parse stream stack. We probably can't allow closing in the LHS of an attempt arm. We should record a reason on the new parse buffer and raise if it doesn't match
-- [ ] Or even `input.read("hello (")` / `input.read(")")`
 
 ## Methods and closures
 
