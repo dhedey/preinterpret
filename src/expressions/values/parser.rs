@@ -173,7 +173,7 @@ define_interface! {
             // Closes the current group. Must be paired with a prior `open`.
             // The close character must match: ')' for '(', '}' for '{', ']' for '['
             [context] fn close(this: Shared<ParserValue>, delimiter_char: char) -> ExecutionResult<()> {
-                let _expected_delimiter = delimiter_from_close_char(delimiter_char)
+                let expected_delimiter = delimiter_from_close_char(delimiter_char)
                     .ok_or_else(|| this.span_range().value_error(format!(
                         "Invalid close delimiter '{}'. Expected ')', '}}', or ']'", delimiter_char
                     )))?;
@@ -182,7 +182,7 @@ define_interface! {
                     if !interpreter.input().is_empty() {
                         return interpreter.input().parse_err("unexpected token - group content not fully consumed before close")?;
                     }
-                    interpreter.exit_input_group();
+                    interpreter.exit_input_group(Some(expected_delimiter))?;
                     Ok(())
                 })
             }

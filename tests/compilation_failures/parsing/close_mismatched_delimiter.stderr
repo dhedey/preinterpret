@@ -1,0 +1,5 @@
+error: close delimiter mismatch: expected ], but the group was opened with (
+ --> tests/compilation_failures/parsing/close_mismatched_delimiter.rs:9:16
+  |
+9 |         }] = %[(Hello)];
+  |                ^^^^^^^

@@ -292,7 +292,11 @@ impl Interpreter {
             .current_stack()
             .parse_and_enter_group(required_delimiter)?;
         let result = f(self, delimiter, delim_span);
-        self.input_handler.current_stack().exit_group();
+        // This can't fail since we pass the same delimiter we got from parse_and_enter_group
+        let _ = self
+            .input_handler
+            .current_stack()
+            .exit_group(Some(delimiter));
         result
     }
 
@@ -310,8 +314,14 @@ impl Interpreter {
 
     /// Exit the current input group.
     /// Must be paired with a prior `enter_input_group`.
-    pub(crate) fn exit_input_group(&mut self) {
-        self.input_handler.current_stack().exit_group();
+    pub(crate) fn exit_input_group(
+        &mut self,
+        expected_delimiter: Option<Delimiter>,
+    ) -> ExecutionResult<()> {
+        self.input_handler
+            .current_stack()
+            .exit_group(expected_delimiter)
+            .map_err(|e| e.into())
     }
 
     pub(crate) fn input<'a>(&'a mut self) -> ParseStream<'a, Output> {

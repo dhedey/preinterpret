@@ -172,6 +172,8 @@ struct BaseLevel<'a, K> {
 
 /// A group level in the parse stack.
 struct GroupLevel<'a, K> {
+    /// The delimiter used to enter this group.
+    delimiter: Delimiter,
     /// Stack of buffers for this group.
     /// - buffers[0] is at depth `fork_depth - buffers.len() + 1`
     /// - buffers.last() is at the current fork_depth
@@ -375,6 +377,7 @@ impl<'a, K> ParseStack<'a, K> {
 
         // Create a new group level with one buffer at the current fork depth
         self.groups.push(GroupLevel {
+            delimiter,
             buffers: vec![GroupBuffer::Active(inner)],
         });
         Ok((delimiter, delim_span))
@@ -385,15 +388,33 @@ impl<'a, K> ParseStack<'a, K> {
     /// If the group is not finished, the next attempt to read from the parent will trigger an error,
     /// in accordance with the drop glue on `ParseBuffer`.
     ///
+    /// If `expected_delimiter` is provided, it will be validated against the actual delimiter
+    /// used when entering the group.
+    ///
     /// ### Panics
     /// Panics if there is no group available.
-    pub(crate) fn exit_group(&mut self) {
+    ///
+    /// ### Returns
+    /// Returns an error if the expected delimiter doesn't match.
+    pub(crate) fn exit_group(&mut self, expected_delimiter: Option<Delimiter>) -> ParseResult<()> {
         // Find the innermost active group (what current() would return)
         let group_index = self
             .groups
             .iter()
             .rposition(|g| matches!(g.buffers.last(), Some(GroupBuffer::Active(_))))
             .expect("exit_group called but no active group to exit");
+
+        // Validate delimiter if expected
+        if let Some(expected) = expected_delimiter {
+            let actual = self.groups[group_index].delimiter;
+            if actual != expected {
+                return self.parse_err(format!(
+                    "close delimiter mismatch: expected {}, but the group was opened with {}",
+                    expected.description_of_close(),
+                    actual.description_of_open()
+                ));
+            }
+        }
 
         if self.fork_depth() == 0 {
             // Not forked: remove the group entirely
@@ -405,6 +426,7 @@ impl<'a, K> ParseStack<'a, K> {
                 *buffer = GroupBuffer::Ended;
             }
         }
+        Ok(())
     }
 }
 
