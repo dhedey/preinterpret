@@ -8,6 +8,13 @@ fn test_string_literal() {
 }
 
 #[test]
+fn test_raw_string_literal() {
+    // This demonstrates that rust raw strings become string values when interpreted
+    // Because if they became an UnsupportedLiteral, then + wouldn't work
+    assert_eq!(run!(r#"hello " World""# + "!!!"), "hello \" World\"!!!");
+}
+
+#[test]
 fn test_byte_string_literal() {
     assert_eq!(
         run!(%[b '"' hello World! "\""].to_literal()),
