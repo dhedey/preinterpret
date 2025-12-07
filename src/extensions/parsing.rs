@@ -152,35 +152,56 @@ impl DelimiterExt for Delimiter {
 
 /// Allows storing a stack of parse buffers for certain parse strategies which require
 /// handling multiple groups in parallel.
+///
+/// Supports nested forking for attempt blocks: each fork level adds a new buffer to each
+/// active level's stack. On commit, buffers are advanced; on rollback, fork buffers are discarded.
 pub(crate) struct ParseStack<'a, K> {
-    base: ParseStream<'a, K>,
-    group_stack: Vec<ParseBuffer<'a, K>>,
-    fork_state: Option<ForkState<'a, K>>,
+    /// The base level (root stream + its forks)
+    base: BaseLevel<'a, K>,
+    /// Group levels, each with their own fork stacks
+    groups: Vec<GroupLevel<'a, K>>,
 }
 
-/// State maintained during a fork operation on ParseStack.
-/// When forked, parsing operations work on forked buffers.
-/// On commit, original buffers are advanced to match fork positions.
-/// On rollback, fork state is discarded and originals remain unchanged.
-struct ForkState<'a, K> {
-    /// Forked version of the base buffer
-    base_fork: ParseBuffer<'a, K>,
-    /// Forked versions of groups that existed at fork time
-    forked_groups: Vec<ParseBuffer<'a, K>>,
-    /// New groups entered during the fork (on top of forked_groups)
-    new_groups: Vec<ParseBuffer<'a, K>>,
-    /// How many of the forked_groups are still "active" (not exited).
-    /// Starts at forked_groups.len(), decrements on exit_group when new_groups is empty.
-    forked_depth: usize,
+/// The base (root) level of the parse stack.
+struct BaseLevel<'a, K> {
+    /// The original parse stream (a reference)
+    root: ParseStream<'a, K>,
+    /// Forks at each depth: forks[i] is the fork at depth i+1
+    forks: Vec<ParseBuffer<'a, K>>,
+}
+
+/// A group level in the parse stack.
+struct GroupLevel<'a, K> {
+    /// Stack of buffers for this group.
+    /// - buffers[0] is at depth `fork_depth - buffers.len() + 1`
+    /// - buffers.last() is at the current fork_depth
+    ///
+    /// When a level's buffers becomes empty after commit/rollback, the level is removed.
+    buffers: Vec<GroupBuffer<'a, K>>,
+}
+
+/// State of a group buffer at a particular fork depth.
+enum GroupBuffer<'a, K> {
+    /// Group is active at this depth
+    Active(ParseBuffer<'a, K>),
+    /// Group was exited at this depth
+    Ended,
 }
 
 impl<'a, K> ParseStack<'a, K> {
     pub(crate) fn new(base: ParseStream<'a, K>) -> Self {
         Self {
-            base,
-            group_stack: Vec::new(),
-            fork_state: None,
+            base: BaseLevel {
+                root: base,
+                forks: Vec::new(),
+            },
+            groups: Vec::new(),
         }
+    }
+
+    /// Returns the current fork depth (0 = not forked).
+    pub(crate) fn fork_depth(&self) -> usize {
+        self.base.forks.len()
     }
 
     /// Start a fork. From this point, parsing operations work on forked buffers.
@@ -188,21 +209,28 @@ impl<'a, K> ParseStack<'a, K> {
     /// # Safety
     /// Must be paired with either `commit_fork` or `rollback_fork`.
     pub(crate) unsafe fn start_fork(&mut self) {
-        assert!(
-            self.fork_state.is_none(),
-            "Cannot start a fork while already forked"
-        );
+        // Fork the base level
+        let base_current = self
+            .base
+            .forks
+            .last()
+            .map(|f| f as &_)
+            .unwrap_or(self.base.root);
+        self.base.forks.push(base_current.fork());
 
-        let base_fork = self.base.fork();
-        let forked_groups: Vec<_> = self.group_stack.iter().map(|g| g.fork()).collect();
-        let forked_depth = forked_groups.len();
-
-        self.fork_state = Some(ForkState {
-            base_fork,
-            forked_groups,
-            new_groups: Vec::new(),
-            forked_depth,
-        });
+        // Fork each group level
+        for group in &mut self.groups {
+            match group.buffers.last() {
+                Some(GroupBuffer::Active(buffer)) => {
+                    group.buffers.push(GroupBuffer::Active(buffer.fork()));
+                }
+                Some(GroupBuffer::Ended) => {
+                    // Group was ended at previous depth; carry forward the Ended status
+                    group.buffers.push(GroupBuffer::Ended);
+                }
+                None => unreachable!("Group should always have at least one buffer"),
+            }
+        }
     }
 
     /// Commit the fork: advance all original buffers to their forked positions.
@@ -210,24 +238,52 @@ impl<'a, K> ParseStack<'a, K> {
     /// # Safety
     /// Must be called after `start_fork`.
     pub(crate) unsafe fn commit_fork(&mut self) {
-        let fork_state = self
-            .fork_state
-            .take()
-            .expect("commit_fork called without active fork");
+        assert!(
+            self.fork_depth() > 0,
+            "commit_fork called without active fork"
+        );
 
-        // Advance base to fork position
-        self.base.advance_to(&fork_state.base_fork);
-
-        // Advance all original groups to their forked positions
-        for (original, forked) in self.group_stack.iter().zip(fork_state.forked_groups.iter()) {
-            original.advance_to(forked);
+        // Commit base level
+        let committed_fork = self.base.forks.pop().unwrap();
+        if let Some(previous) = self.base.forks.last() {
+            previous.advance_to(&committed_fork);
+        } else {
+            self.base.root.advance_to(&committed_fork);
         }
 
-        // Truncate group_stack to match the number of forked groups still active
-        self.group_stack.truncate(fork_state.forked_depth);
+        // Commit each group level
+        for group in &mut self.groups {
+            // If buffers.len() == 1, group was created at this depth.
+            // On commit, it survives at the new (lower) depth - don't pop.
+            if group.buffers.len() == 1 {
+                continue;
+            }
 
-        // Append any new groups that were entered during the fork
-        self.group_stack.extend(fork_state.new_groups);
+            // Pop the buffer at the current depth
+            let popped = group.buffers.pop().unwrap();
+
+            match popped {
+                GroupBuffer::Active(buffer) => {
+                    // Advance the previous depth to this position
+                    if let Some(GroupBuffer::Active(previous)) = group.buffers.last() {
+                        previous.advance_to(&buffer);
+                    }
+                    // If previous was Ended, nothing to advance
+                }
+                GroupBuffer::Ended => {
+                    // Group was exited at this depth; propagate to previous depth
+                    if let Some(previous) = group.buffers.last_mut() {
+                        *previous = GroupBuffer::Ended;
+                    }
+                }
+            }
+        }
+
+        // Clean up groups that are ended at depth 0
+        if self.fork_depth() == 0 {
+            self.groups
+                .retain(|g| matches!(g.buffers.last(), Some(GroupBuffer::Active(_))));
+        }
     }
 
     /// Rollback the fork: discard fork state, leaving originals unchanged.
@@ -235,30 +291,40 @@ impl<'a, K> ParseStack<'a, K> {
     /// # Safety
     /// Must be called after `start_fork`.
     pub(crate) unsafe fn rollback_fork(&mut self) {
-        let _fork_state = self
-            .fork_state
-            .take()
-            .expect("rollback_fork called without active fork");
-        // Simply discard the fork state; original base and group_stack remain unchanged
+        assert!(
+            self.fork_depth() > 0,
+            "rollback_fork called without active fork"
+        );
+
+        // Rollback base level
+        self.base.forks.pop();
+
+        // Rollback each group level
+        self.groups.retain_mut(|group| {
+            group.buffers.pop();
+            // If group has no more buffers, it was entered during this fork; remove it
+            !group.buffers.is_empty()
+        });
     }
 
     pub(crate) fn is_forked(&self) -> bool {
-        self.fork_state.is_some()
+        self.fork_depth() > 0
     }
 
     pub(crate) fn current(&self) -> ParseStream<'_, K> {
-        if let Some(fork_state) = &self.fork_state {
-            // When forked, return from fork state
-            if let Some(new_group) = fork_state.new_groups.last() {
-                return new_group;
+        // Check groups from top to bottom for an active buffer
+        for group in self.groups.iter().rev() {
+            if let Some(GroupBuffer::Active(buffer)) = group.buffers.last() {
+                return buffer;
             }
-            if fork_state.forked_depth > 0 {
-                return &fork_state.forked_groups[fork_state.forked_depth - 1];
-            }
-            return &fork_state.base_fork;
+            // If Ended, continue to next group (or base)
         }
-        // Not forked: return from original state
-        self.group_stack.last().unwrap_or(self.base)
+        // Fall back to base level
+        self.base
+            .forks
+            .last()
+            .map(|f| f as &_)
+            .unwrap_or(self.base.root)
     }
 
     pub(crate) fn cursor(&self) -> Cursor<'_> {
@@ -307,12 +373,10 @@ impl<'a, K> ParseStack<'a, K> {
             std::mem::transmute::<ParseBuffer<'_, K>, ParseBuffer<'a, K>>(inner)
         };
 
-        if let Some(fork_state) = &mut self.fork_state {
-            // When forked, push to new_groups
-            fork_state.new_groups.push(inner);
-        } else {
-            self.group_stack.push(inner);
-        }
+        // Create a new group level with one buffer at the current fork depth
+        self.groups.push(GroupLevel {
+            buffers: vec![GroupBuffer::Active(inner)],
+        });
         Ok((delimiter, delim_span))
     }
 
@@ -324,21 +388,23 @@ impl<'a, K> ParseStack<'a, K> {
     /// ### Panics
     /// Panics if there is no group available.
     pub(crate) fn exit_group(&mut self) {
-        if let Some(fork_state) = &mut self.fork_state {
-            // When forked, pop from new_groups first, then decrement forked_depth
-            if fork_state.new_groups.pop().is_some() {
-                return;
-            }
-            if fork_state.forked_depth > 0 {
-                fork_state.forked_depth -= 1;
-                return;
-            }
-            panic!("exit_group called but no group to exit in forked state");
-        }
+        // Find the innermost active group (what current() would return)
+        let group_index = self
+            .groups
+            .iter()
+            .rposition(|g| matches!(g.buffers.last(), Some(GroupBuffer::Active(_))))
+            .expect("exit_group called but no active group to exit");
 
-        self.group_stack
-            .pop()
-            .expect("finish_group must be paired with push_group");
+        if self.fork_depth() == 0 {
+            // Not forked: remove the group entirely
+            self.groups.remove(group_index);
+        } else {
+            // Forked: mark as ended
+            let group = &mut self.groups[group_index];
+            if let Some(buffer) = group.buffers.last_mut() {
+                *buffer = GroupBuffer::Ended;
+            }
+        }
     }
 }
 
@@ -366,16 +432,13 @@ impl<'a> ParseStack<'a, Source> {
 
 impl<K> Drop for ParseStack<'_, K> {
     fn drop(&mut self) {
-        // If forked, drop fork state first (including new_groups)
-        if let Some(mut fork_state) = self.fork_state.take() {
-            // Drop new_groups in reverse order
-            while fork_state.new_groups.pop().is_some() {}
-            // forked_groups will be dropped automatically
+        // Drop groups in reverse order (innermost first)
+        // Each group's buffers are also dropped in reverse order
+        while let Some(mut group) = self.groups.pop() {
+            while group.buffers.pop().is_some() {}
         }
 
-        // Drop original group_stack in reverse order
-        while !self.group_stack.is_empty() {
-            self.group_stack.pop();
-        }
+        // Drop base forks in reverse order
+        while self.base.forks.pop().is_some() {}
     }
 }
