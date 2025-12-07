@@ -45,7 +45,10 @@ impl InputHandler {
 
         // Check for unclosed groups before removing the parser
         if let Some(delimiter) = stack.innermost_active_group_delimiter() {
-            return stack.parse_err(format!("expected '{}'", delimiter.description_of_close()));
+            return stack.parse_err(format!(
+                "a call to close '{}' is required, because there is an unclosed group",
+                delimiter.description_of_close()
+            ));
         }
 
         self.parsers.remove(handle);
