@@ -527,6 +527,7 @@ One option We can work it like `IterableRef`, but perhaps we can do better?
   - [ ] [PAGE] Errors and Spans
       - NB: If someone wants to keep a value's span, they can keep it in a stream and coerce it; or store it as a tuple of a value with its span `%{ value: $x, span: %[$x] }`
   - [ ] [PAGE] Parsing
+  - [ ] Hygiene
 - [ ] Examples (tbc)
 
 And then we need to:
