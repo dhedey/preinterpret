@@ -178,10 +178,12 @@ define_interface! {
                         "Invalid close delimiter '{}'. Expected ')', '}}', or ']'", *delimiter_char
                     )))?;
                 this.parse_with(context.interpreter, |interpreter| {
-                    // Check if there's a group to close first, so we get "no group to close"
-                    // instead of a misleading "expected ')'" when there's no group.
+                    // Check if there's a group to close first
                     if !interpreter.has_active_input_group() {
-                        return Err(delimiter_char.span_range().value_error("no group to close"));
+                        return Err(delimiter_char.span_range().value_error(format!(
+                            "attempting to close '{}' isn't valid, because there is no open group",
+                            expected_delimiter.description_of_close()
+                        )));
                     }
                     if !interpreter.input().is_empty() {
                         return interpreter.input().parse_err(format!(

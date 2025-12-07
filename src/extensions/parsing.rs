@@ -413,9 +413,9 @@ impl<'a, K> ParseStack<'a, K> {
             let actual = self.groups[group_index].delimiter;
             if actual != expected {
                 return self.parse_err(format!(
-                    "close delimiter mismatch: expected {}, but the group was opened with {}",
+                    "attempting to close '{}' isn't valid, because the currently open group would end with '{}'",
                     expected.description_of_close(),
-                    actual.description_of_open()
+                    actual.description_of_close()
                 ));
             }
         }
