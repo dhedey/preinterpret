@@ -536,6 +536,84 @@ fn test_attempt_with_partial_group_parsing_rollback() {
 }
 
 #[test]
+fn test_open_in_attempt_arm_close_in_result() {
+    // Open group in the left part of attempt arm, close in the right part
+    // This is a common pattern: parse `#(` then `<ident>)` and return the ident
+    run! {
+        parse %[(hello)] => |parser| {
+            let result = attempt {
+                {
+                    parser.open('(');
+                    let x = parser.ident();
+                } => {
+                    parser.close(')');
+                    x
+                }
+            };
+            %[].assert_eq(result, %[hello]);
+        };
+    }
+
+    // More complex: open in arm, do more parsing, close in result
+    run! {
+        parse %[(a b c)] => |parser| {
+            let result = attempt {
+                {
+                    parser.open('(');
+                    let first = parser.ident();
+                } => {
+                    let second = parser.ident();
+                    let third = parser.ident();
+                    parser.close(')');
+                    %{ first, second, third }
+                }
+            };
+            %[].assert_eq(result, %{ first: %[a], second: %[b], third: %[c] });
+        };
+    }
+
+    // With revert - open in first arm, revert, then open again in second arm and close in result
+    run! {
+        parse %[(value)] => |parser| {
+            let result = attempt {
+                {
+                    parser.open('(');
+                    // Pretend we don't like what we see
+                    revert;
+                } => { %{ from: "first" } }
+                {
+                    parser.open('(');
+                    let x = parser.ident();
+                } => {
+                    parser.close(')');
+                    %{ from: "second", x }
+                }
+            };
+            %[].assert_eq(result, %{ from: "second", x: %[value] });
+        };
+    }
+
+    // Nested groups: open outer in arm, open/close inner normally, close outer in result
+    run! {
+        parse %[({ inner } after)] => |parser| {
+            let result = attempt {
+                {
+                    parser.open('(');
+                    parser.open('{');
+                    let inner = parser.ident();
+                    parser.close('}');
+                    let after = parser.ident();
+                } => {
+                    parser.close(')');
+                    %{ inner, after }
+                }
+            };
+            %[].assert_eq(result, %{ inner: %[inner], after: %[after] });
+        };
+    }
+}
+
+#[test]
 fn test_nested_attempts_with_groups_at_different_levels() {
     // Open group in outer, parse in inner attempt
     run! {

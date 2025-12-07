@@ -1,0 +1,5 @@
+error: unexpected token, expected `)`
+  --> tests/compilation_failures/parsing/open_without_close_unconsumed.rs:11:23
+   |
+11 |         }] = %[(Hello World)];
+   |                       ^^^^^
