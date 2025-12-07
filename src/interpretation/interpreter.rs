@@ -58,23 +58,18 @@ impl Interpreter {
             self.input_handler.start_fork();
         }
         let revertible_result = revertible_segment(self);
-        let revert_input = |input_handler: &mut InputHandler| unsafe {
-            // SAFETY: This is paired with `start_fork` above
-            input_handler.rollback_fork();
-        };
-        let commit_input = |input_handler: &mut InputHandler| unsafe {
-            // SAFETY: This is paired with `start_fork` above
-            input_handler.commit_fork();
-        };
         let result = self.convert_revertible_result(
             revertible_result,
             guard_clause,
-            revert_input,
-            commit_input,
             catch_location_id,
             scope_id,
         );
         unsafe {
+            // SAFETY: This is paired with `start_fork` above
+            match &result {
+                Ok(AttemptOutcome::Completed(_)) => self.input_handler.commit_fork(),
+                Ok(AttemptOutcome::Reverted) | Err(_) => self.input_handler.rollback_fork(),
+            }
             // SAFETY: This is paired with `freeze_existing` above
             self.output_handler.unfreeze_existing();
         }
@@ -88,8 +83,6 @@ impl Interpreter {
         &mut self,
         revertible_result: ExecutionResult<T>,
         guard_clause: Option<impl FnOnce(&mut Self) -> ExecutionResult<bool>>,
-        revert_input: impl FnOnce(&mut InputHandler),
-        commit_input: impl FnOnce(&mut InputHandler),
         catch_location_id: CatchLocationId,
         scope_id: ScopeId,
     ) -> ExecutionResult<AttemptOutcome<T>> {
@@ -104,27 +97,16 @@ impl Interpreter {
                 // outside of the attempt arm catch. BUT we should still revert
                 // any mutations made in the arm.
                 match guard_result {
-                    Ok(true) => {
-                        commit_input(&mut self.input_handler);
-                        Ok(AttemptOutcome::Completed(value))
-                    }
-                    Ok(false) => {
-                        revert_input(&mut self.input_handler);
-                        Ok(AttemptOutcome::Reverted)
-                    }
-                    Err(err) => {
-                        revert_input(&mut self.input_handler);
-                        Err(err)
-                    }
+                    Ok(true) => Ok(AttemptOutcome::Completed(value)),
+                    Ok(false) => Ok(AttemptOutcome::Reverted),
+                    Err(err) => Err(err),
                 }
             }
             Err(err) if err.is_catchable_by_attempt_block(catch_location_id) => {
                 self.handle_catch(scope_id);
-                revert_input(&mut self.input_handler);
                 Ok(AttemptOutcome::Reverted)
             }
             Err(mut err) => {
-                revert_input(&mut self.input_handler);
                 if let Some((kind, error)) = err.error_mut() {
                     *error = core::mem::take(error).add_context_if_none(format!("NOTE: {} is not caught by an attempt block. If you wish to catch this, detect it before it is thrown and use the `revert` statement.", kind.as_str().indefinite_articled(true)));
                 }
