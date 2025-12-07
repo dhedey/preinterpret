@@ -1,5 +1,5 @@
 error: Invalid open delimiter 'x'. Expected '(', '{', or '['
- --> tests/compilation_failures/parsing/open_invalid_delimiter.rs:6:13
+ --> tests/compilation_failures/parsing/open_invalid_delimiter.rs:6:25
   |
 6 |             parser.open('x');
-  |             ^^^^^^
+  |                         ^^^
