@@ -168,7 +168,8 @@ First, read the @./2025-11-vision.md
 - [x] Add `ParseTemplatePattern` pattern
 - [x] Migrate tests from `transforming.rs` to `parsing.rs` etc
 - [x] Delete the transformers folder
-- [ ] Reversion works in attempt blocks, via forking and committing or rolling back the fork, fix `TODO[parser-input-in-interpreter]`
+- [x] Reversion works in attempt blocks, via forking and committing or rolling back the fork, fix `TODO[parser-input-in-interpreter]`
+- [ ] Add test for `parser.open('(')` without a corresponding `parser.close(')')`. This should trigger an error from syn's `ParseBuffer` drop glue, but currently it compiles successfully. Investigate why the drop glue isn't triggering and fix the issue.
 - [ ] Make StreamPattern an exact match, and allow `%raw[]` and `%group[]` patterns too - but disallow embedding statements.
 - [ ] Address any remaining `TODO[parser-no-output]` and `TODO[parsers]`
 - [ ] Add tons of tests for all the methods on Parser, and for nested parse statements
