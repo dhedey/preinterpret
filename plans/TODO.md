@@ -169,9 +169,7 @@ First, read the @./2025-11-vision.md
 - [x] Migrate tests from `transforming.rs` to `parsing.rs` etc
 - [x] Delete the transformers folder
 - [x] Reversion works in attempt blocks, via forking and committing or rolling back the fork, fix `TODO[parser-input-in-interpreter]`
-- [ ] Make StreamPattern an exact match, and allow `%raw[]` and `%group[]` patterns too - but disallow embedding statements.
-- [ ] Address any remaining `TODO[parsers]`
-- [ ] Add tons of tests for all the methods on Parser, and for nested parse statements
+- [x] Add tons of tests for all the methods on Parser, and for nested parse statements
 
 `Parser` methods:
 - [x] `ident()`, `is_ident()`
@@ -190,7 +188,94 @@ First, read the @./2025-11-vision.md
 - [x] `token_tree()`
 - [x] `open('(')` and `close(')')`
 
-And all of these from normal macros:
+## Methods and closures
+
+- [ ] Introduce basic function values
+  * Value type function `let my_func = |x, y, z| { ... };`
+  * To start with, they are not closures (i.e. they can't capture any outer variables)
+  - [ ] Break/continue label resolution in functions/closures
+    * Functions and closures must resolve break/continue labels statically
+    * Break and continue statements should not leak out of function boundaries
+    * This needs to be validated during the control flow pass
+- [ ] New node extension in the expression parser: invocation `(...)`
+- [ ] Closures
+  * A function may capture variable bindings from the parent scope, these are converted into a `VariableBinding::Closure(<closed_variable_id>)`
+  * The closure consists of a set of bindings attached to the function value, either:
+    - `ClosedVariable::Owned(Value)` if it's the last mention of the closed variable, so it can be moved in
+    - `ClosedVariable::Referenced(Rc<RefCell<Value>>)` otherwise
+  * Invocation requests `CopyOnWrite`, and can be on a shared function or an owned function
+    (if it is the last usage of that value, as per normal red/owned binding rules)
+    * If invocation is on an owned function, then owned values from the closure can be consumed
+      by the invocation
+    * Otherwise, the values are only available as shared/mut
+- [ ] Try to unify methods under a "resolve, then invoke" structure
+    * `array::push` should resolve to the method, and `array::push(arr, value)` should work - we'll likely want an explicit `function` section and `constants` section on type data; which we can merge with methods when resolving what `array::push` resolves to.
+    * `my_array.push` returns a closure with `my_array` bound. The LateBound `my_array` can then be deactivated whilst the rest of the arguments are resolved, like what we do at the moment. This approach avoids the horrible javascript issues with `this` not being bound when referencing `x.y`.
+    * And then for objects, the method wins; BUT you can use `x["obj"]` to access the field instead of the method
+- [ ] Create a `preinterpret` type, and move preinterpret settings to `preinterpret::...`
+- [ ] Optional arguments
+- [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`
+- [ ] Add `array.sort`, `array.sort_by`
+- [ ] Add `stream.parse(|input| { ... })`
+- [ ] Add `let captured = input.capture(|input| { ... })`
+  * This returns the parsed input stream. It can capture the original tokens by using `let forked = input.fork()` and then `let end_cursor = input.end();` and then consuming `TokenTree`s from `forked` until `forked.cursor >= end_cursor` (making use of the PartialEq implementation)
+
+## Parser - Methods using closures
+
+Future methods once we have closures:
+* `input.any_group(|inner| { })`
+* `input.group('()', |inner| { })`
+* `input.transparent_group(|inner| { })`
+* Something for `input.fields({ ... })` and `input.subfields({ ... })` (allows other fields not present), whose fields are closures. BUT what do we do about `optional` fields. Hmm. Maybe:
+```rust
+input.fields(%{
+  required: %{
+    hello: parser::integer,
+  },
+  optional: %{
+    world: parser::string,
+  },
+})
+```
+* `input.repeated(..)` as below:
+```rust
+input.repeated(
+  %{
+    separator?: %[],
+    min?: 0,
+    max?: 1000000,
+  },
+  |inner| {
+    // ...
+  }
+)
+```
+
+## Parser - Better Types for Tokens
+
+- [ ] Add `Tokens`, `TokenTree`, `Group` as non-leaf types, for use alongside `StreamValue` and other Rust-like / syn-like objects
+- [ ] Work out whether `Tokens` should be iterable or not.
+   * Actually I think *not*
+   * Some values probably want to be iterable in other ways (e.g. `Repeated` or `Punctuated`)
+   * Add singleton things like those under `TokenTree` should probably not be iterable
+   * Perhaps Tokens/Stream needs `.into_token_tree_iter()` to be iterable?
+   * Perhaps `Iterable` actually takes a `Box<dyn IterableValue>` somehow, and is an opt-in in the type hierarchy
+   * We likely need multi-parenting - so `Repeated` can be both `Tokens` and `Iterable`
+- [ ] Add explicit values for:
+  - [ ] NOPE: `Span`
+  - [ ] NOPE: `TokenTree` <-- We don't want this. Instead we should have leaf values like `Literal`, `Ident`, `Punct`
+        ... but mabe
+  - [ ] `Ident` (parent = `TokenTree`)
+  - [ ] `Literal` (parent = `TokenTree`) <-- Unsupported Literal can go here
+  - [ ] `Punct` (parent = `TokenTree`)
+  - [ ] `ParenthesesGroup` (parent = `Group`)
+  - [ ] `BraceGroup` (parent = `Group`)
+  - [ ] `BracketGroup` (parent = `Group`)
+- [ ] Stream methods `single_literal()`, `single_ident()`, `single_token_tree()`
+- [ ] Parser methods `span()` or `cursor()` -- maybe? outputs a token with a span for outputting errors. If at end of an inner stream, it outputs the ident `END` with the span of the closing bracket.
+- [ ] `preinterpret::call_site()`, `preinterpret::call_site_close()`, `preinterpret::call_site_open()` return `Span`
+
+Then add all of these from normal macros:
 - [ ] block: a block (i.e. a block of statements and/or an expression, surrounded by braces)
 - [ ] expr: an expression
 - [ ] ident: an identifier (this includes keywords)
@@ -205,79 +290,19 @@ And all of these from normal macros:
 - [ ] ty: a type
 - [ ] vis: a possible empty visibility qualifier (e.g. pub, pub(in crate), …)
 
-Consider if we want separate types for e.g.
-* `Span`
-* `TokenTree`
-And
-- [ ] These could live under a `Tokens` type in the hierarchy, alongside `StreamValue` and other Rust-like / syn-like objects
-- [ ] Parser methods `span()` or `cursor()` -- maybe? outputs a token with a span for outputting errors. If at end of an inner stream, it outputs the ident `END` with the span of the closing bracket.
-
-Parse template bindings
-* `@xx[]?`, `@xx[]+`, `@xx[],+`, `@xx[]*`, `@xx[],*`
-* `@(..)?`, `@(..)+`, `@(..),+`, `@(..)*`, `@(..),*` (inside a parse template literal)
-
-Future methods once we have closures:
-* `input.any_group(|inner| { })`
-* `input.transparent_group(|inner| { })`
-* Something for `input.fields({ ... })` and `input.subfields({ ... })`, whose fields are closures
-* Possibly some support for `input.peek` and `fork` - although this is handled by the attempt statement
-```rust
-input.repeated(
-  %{
-    separator?: %[],
-    min?: 0,
-    max?: 1000000,
-  },
-  |inner| {
-    // ...
-  }
-)
-```
-
-## Methods and closures
-
-- [ ] Introduce basic function values
-  * Value type function `let my_func = |x, y, z| { ... };`
-  * To start with, they are not closures (i.e. they can't capture any outer variables)
-  * New node extension in the expression parser: invocation `(...)`
-- [ ] Closures
-  * A function may capture variable bindings from the parent scope, these are converted into a `VariableBinding::Closure(<closed_variable_id>)`
-  * The closure consists of a set of bindings attached to the function value, either:
-    - `ClosedVariable::Owned(Value)` if it's the last mention of the closed variable, so it can be moved in
-    - `ClosedVariable::Referenced(Rc<RefCell<Value>>)` otherwise
-  * Invocation requests `CopyOnWrite`, and can be on a shared function or an owned function
-    (if it is the last usage of that value, as per normal red/owned binding rules)
-    * If invocation is on an owned function, then owned values from the closure can be consumed
-      by the invocation
-    * Otherwise, the values are only available as shared/mut
-- [ ] Try to unify methods under a "resolve, then invoke" structure
-    * `my_array.push` returns a closure with `my_array` bound. This can then be deactivated
-    whilst the rest of the arguments are resolved!
-    ... and avoids the horrible javascript issues with
-    `this` not being bound.
-    * And then for objects, the method wins; BUT you can use `x["obj"]` to access the field instead of the method
-  * Add ability to define functions on a type.
-  * Move preinterpret settings to `preinterpret::...`
-- [ ] Break/continue label resolution in functions/closures
-  * Functions and closures must resolve break/continue labels statically
-  * Break and continue statements should not leak out of function boundaries
-  * This needs to be validated during the control flow pass
-- [ ] Optional arguments
-- [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`
-- [ ] Add `array.sort`, `array.sort_by`
-- [ ] Add `stream.parse(|input| { ... })`
-- [ ] Add `let captured = input.capture(|input| { ... })`
-  * This returns the parsed input stream. It can capture the original tokens by using `let forked = input.fork()` and then `let end_cursor = input.end();` and then consuming `TokenTree`s from `forked` until `forked.cursor >= end_cursor` (making use of the PartialEq implementation)
-
 ## Utility methods
 
 Implement the following:
-* All value kinds:
-  * `is_none()`, and similarly for other value kinds
-  * A `kind()` method which returns a logical name for the value kind, which could be used in a `match` statement
+* All values:
+  * A `types() -> ["u32", "integer", "value"]` method which returns a logical name for all types in its hierarchy, from most to least specific.
+  * A `leaf_type() -> "u32"` which could be used in a `match` statement
+  * An `is_type("ident") -> bool`
 
-* Streams:
-  * `is_ident()` and similarly for other stream
+## Parser - Repeat Input Bindings 
+
+Parse template repeat bindings
+* `@xx[]?`, `@xx[]+`, `@xx[],+`, `@xx[]*`, `@xx[],*`
+* `@(..)?`, `@(..)+`, `@(..),+`, `@(..)*`, `@(..),*` (inside a parse template literal)
 
 ## Repeat output bindings
 
@@ -403,6 +428,7 @@ The following are less important tasks which maybe we don't even want/need to do
   - [ ] We should create some unit tests in `value.rs` and functions `generate_example_values(value_kind)` which returns a `Vec<Value>` for each value kind.
   - [ ] We can use this to check that `eq` and `neq` are defined and work correctly for all types
 - [ ] Add lexicographic ordering to arrays, if they're the same length and their values can be compared
+- [ ] Make StreamPattern an exact match, and allow `%raw[]` and `%group[]` patterns too - but disallow embedding statements; and address any remaining `TODO[parsers]`
 - [ ] Add a "closing span range" to the parse streams, and check for end manually to get a better error message:
   - [ ] Wherever we use `parse_with`
   - [ ] Wherever we drop the `ParseStreamStack` in the interpreter
@@ -423,6 +449,10 @@ let @input[{ let _ = input.rest(); let _ = input.token_tree(); }] = %[Hello Worl
 ## Coding challenges
 
 Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` docs) to ensure that the language is sufficiently comprehensive to use in practice.
+
+Also:
+* `versioned!` from Scrypto
+* The big state macro from Scrypto
 
 ## Final considerations
 
