@@ -128,7 +128,7 @@ fn test_for() {
             // A stream is iterated token-tree by token-tree
             // So we can match each value with a stream pattern matching each `(X,)`
             let arr = [];
-            for %[(@(#x = @IDENT),)] in %[(a,) (b,) (c,)] {
+            for @parser[(#{ let x = parser.ident(); },)] in %[(a,) (b,) (c,)] {
                 if x.to_string() == "c" {
                     break;
                 }

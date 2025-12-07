@@ -54,19 +54,22 @@ impl Interpreter {
             // SAFETY: This is paired with `unfreeze_existing` below,
             // without any early returns in the middle
             self.output_handler.freeze_existing(reason);
+            // SAFETY: This is paired with `commit_fork` or `rollback_fork` below
+            self.input_handler.start_fork();
         }
         let revertible_result = revertible_segment(self);
-        let revert_mutations = || {
-            // TODO[parser-input-in-interpreter]: When input handling is added, we may need to commit fork on success / revert on failure
-        };
         let result = self.convert_revertible_result(
             revertible_result,
             guard_clause,
-            revert_mutations,
             catch_location_id,
             scope_id,
         );
         unsafe {
+            // SAFETY: This is paired with `start_fork` above
+            match &result {
+                Ok(AttemptOutcome::Completed(_)) => self.input_handler.commit_fork(),
+                Ok(AttemptOutcome::Reverted) | Err(_) => self.input_handler.rollback_fork(),
+            }
             // SAFETY: This is paired with `freeze_existing` above
             self.output_handler.unfreeze_existing();
         }
@@ -80,7 +83,6 @@ impl Interpreter {
         &mut self,
         revertible_result: ExecutionResult<T>,
         guard_clause: Option<impl FnOnce(&mut Self) -> ExecutionResult<bool>>,
-        revert_mutations: impl FnOnce(),
         catch_location_id: CatchLocationId,
         scope_id: ScopeId,
     ) -> ExecutionResult<AttemptOutcome<T>> {
@@ -97,15 +99,11 @@ impl Interpreter {
                 match guard_result {
                     Ok(true) => Ok(AttemptOutcome::Completed(value)),
                     Ok(false) => Ok(AttemptOutcome::Reverted),
-                    Err(err) => {
-                        revert_mutations();
-                        Err(err)
-                    }
+                    Err(err) => Err(err),
                 }
             }
             Err(err) if err.is_catchable_by_attempt_block(catch_location_id) => {
                 self.handle_catch(scope_id);
-                revert_mutations();
                 Ok(AttemptOutcome::Reverted)
             }
             Err(mut err) => {
@@ -226,46 +224,99 @@ impl Interpreter {
                 // without any early returns in the middle
                 self.input_handler.start_parse(input)
             };
-            let result = f(self, handle);
-            unsafe {
+            let result = self.parse_with(handle, |interpreter| f(interpreter, handle));
+            let finish_result = unsafe {
                 // SAFETY: This is paired with `start_parse` above
-                self.input_handler.finish_parse(handle);
+                self.input_handler.finish_parse(handle)
+            };
+            // Combine results: if original failed, return that error; otherwise check finish_result
+            match (result, finish_result) {
+                (Ok(value), Ok(())) => Ok(value),
+                (Err(err), _) => Err(err),
+                (Ok(_), Err(err)) => Err(err.into()),
             }
-            result
         })
+    }
+
+    pub(crate) fn parse_with<T>(
+        &mut self,
+        handle: ParserHandle,
+        f: impl FnOnce(&mut Interpreter) -> ExecutionResult<T>,
+    ) -> ExecutionResult<T> {
+        unsafe {
+            // SAFETY: This is paired with `pop_current_handle` below,
+            // without any early returns in the middle
+            self.input_handler.push_current_handle(handle);
+        }
+        let result = f(self);
+        unsafe {
+            // SAFETY: This is paired with `push_current_handle` above,
+            // without any early returns in the middle
+            self.input_handler.pop_current_handle(handle);
+        }
+        result
     }
 
     pub(crate) fn parser(
         &mut self,
-        handle: Spanned<ParserHandle>,
+        handle: ParserHandle,
+        error_span_range: SpanRange,
     ) -> ExecutionResult<OutputParseStream<'_>> {
         let stack = self
             .input_handler
-            .get(handle.value)
-            .ok_or_else(|| handle.value_error("This parser is no longer available"))?;
+            .get(handle)
+            .ok_or_else(|| error_span_range.value_error("This parser is no longer available"))?;
         Ok(stack.current())
     }
 
     pub(crate) fn parse_group<T>(
         &mut self,
-        span_source: &impl HasSpanRange,
         required_delimiter: Option<Delimiter>,
         f: impl FnOnce(&mut Interpreter, Delimiter, DelimSpan) -> ExecutionResult<T>,
     ) -> ExecutionResult<T> {
         let (delimiter, delim_span) = self
             .input_handler
-            .current_stack(span_source)?
+            .current_stack()
             .parse_and_enter_group(required_delimiter)?;
         let result = f(self, delimiter, delim_span);
-        self.input_handler.current_stack(span_source)?.exit_group();
+        self.input_handler
+            .current_stack()
+            .exit_group(Some(delimiter))
+            .expect("exit_group can't fail since we pass the same delimiter we got from parse_and_enter_group");
         result
     }
 
-    pub(crate) fn input<'a>(
-        &'a mut self,
-        span_source: &impl HasSpanRange,
-    ) -> ExecutionResult<ParseStream<'a, Output>> {
-        self.input_handler.current_input(span_source)
+    /// Enter a group with the specified delimiter.
+    /// Must be paired with `exit_input_group`.
+    pub(crate) fn enter_input_group(
+        &mut self,
+        required_delimiter: Option<Delimiter>,
+    ) -> ExecutionResult<(Delimiter, DelimSpan)> {
+        self.input_handler
+            .current_stack()
+            .parse_and_enter_group(required_delimiter)
+            .map_err(|e| e.into())
+    }
+
+    /// Exit the current input group.
+    /// Must be paired with a prior `enter_input_group`.
+    pub(crate) fn exit_input_group(
+        &mut self,
+        expected_delimiter: Option<Delimiter>,
+    ) -> ExecutionResult<()> {
+        self.input_handler
+            .current_stack()
+            .exit_group(expected_delimiter)
+            .map_err(|e| e.into())
+    }
+
+    /// Returns true if there is an active input group that can be exited.
+    pub(crate) fn has_active_input_group(&mut self) -> bool {
+        self.input_handler.current_stack().has_active_group()
+    }
+
+    pub(crate) fn input<'a>(&'a mut self) -> ParseStream<'a, Output> {
+        self.input_handler.current_input()
     }
 
     // Output
@@ -315,16 +366,6 @@ impl Interpreter {
         span_source: &impl HasSpanRange,
     ) -> ExecutionResult<&mut OutputStream> {
         self.output_handler.current_output_mut(span_source)
-    }
-
-    pub(crate) fn input_and_output<'a>(
-        &'a mut self,
-        span_source: &impl HasSpanRange,
-    ) -> ExecutionResult<(ParseStream<'a, Output>, &'a mut OutputStream)> {
-        Ok((
-            self.input_handler.current_input(span_source)?,
-            self.output_handler.current_output_mut(span_source)?,
-        ))
     }
 
     pub(crate) fn complete(self) -> OutputStream {

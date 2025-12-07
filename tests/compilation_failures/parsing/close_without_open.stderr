@@ -1,0 +1,5 @@
+error: attempting to close ')' isn't valid, because there is no open group
+ --> tests/compilation_failures/parsing/close_without_open.rs:6:26
+  |
+6 |             parser.close(')');
+  |                          ^^^

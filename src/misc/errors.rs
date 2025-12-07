@@ -6,17 +6,12 @@ pub(crate) type ParseResult<T> = core::result::Result<T, ParseError>;
 pub(crate) trait ParseResultExt<T> {
     /// This is not a `From` because it wants to be explicit
     fn convert_to_final_result(self) -> syn::Result<T>;
-    fn add_context_if_error_and_no_context(self, context: impl FnOnce() -> String) -> Self;
     fn into_execution_result(self) -> ExecutionResult<T>;
 }
 
 impl<T> ParseResultExt<T> for ParseResult<T> {
     fn convert_to_final_result(self) -> syn::Result<T> {
         self.map_err(|error| error.convert_to_final_error())
-    }
-
-    fn add_context_if_error_and_no_context(self, context: impl FnOnce() -> String) -> Self {
-        self.map_err(|error| error.add_context_if_none(context()))
     }
 
     fn into_execution_result(self) -> ExecutionResult<T> {
@@ -63,13 +58,6 @@ impl DetailedError {
             other => other,
         }
     }
-
-    pub(crate) fn context(&self) -> Option<&str> {
-        match self {
-            DetailedError::Standard(_) => None,
-            DetailedError::Contextual(_, context) => Some(context),
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -95,14 +83,6 @@ impl ParseError {
     /// This is not a `From` because it wants to be explicit
     pub(crate) fn convert_to_final_error(self) -> syn::Error {
         self.0.convert_to_final_error()
-    }
-
-    pub(crate) fn add_context_if_none(self, context: impl std::fmt::Display) -> Self {
-        Self(self.0.add_context_if_none(context))
-    }
-
-    pub(crate) fn context(&self) -> Option<&str> {
-        self.0.context()
     }
 }
 

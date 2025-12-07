@@ -162,17 +162,14 @@ First, read the @./2025-11-vision.md
   - [ ] If using slotmap / generational-arena, replace the arena implementation too
 - [x] Create (temporary) `parse X => |Y| { }` expression
 - [x] Bind `input` to `Parser` at the start of each parse expression
-- [ ] Create `@input[...]` expression
-  - [ ] Create a `ConsumeStream` which wraps a `SourceStream`
-    - [ ] We add `consume()` method which takes a `&mut ConsumingInterpreter` which for now can wrap a `ParseHandle` and `&mut Interpreter`
-    - [ ] Expression return values are swallowed
-- [ ] Add remaining parser methods below
-- [ ] Delete the transformers folder
-  - [ ] Change stream pattern to also be `@input[...]` - which binds the input
-  - [ ] Write equivalent tests
-- [ ] Reversion works in attempt blocks, via forking and committing or rolling back the fork, fix `TODO[parser-input-in-interpreter]`
-- [ ] Address any remaining `TODO[parser-no-output]` and `TODO[parsers]`
-- [ ] Add tests for all the methods on Parser, and for nested parse statements
+- [x] Create `@input[...]` expression
+  - [x] Create a `ParseTemplateLiteral` and a `ParseTemplateStream`
+- [x] Add remaining parser methods below
+- [x] Add `ParseTemplatePattern` pattern
+- [x] Migrate tests from `transforming.rs` to `parsing.rs` etc
+- [x] Delete the transformers folder
+- [x] Reversion works in attempt blocks, via forking and committing or rolling back the fork, fix `TODO[parser-input-in-interpreter]`
+- [x] Add tons of tests for all the methods on Parser, and for nested parse statements
 
 `Parser` methods:
 - [x] `ident()`, `is_ident()`
@@ -182,15 +179,103 @@ First, read the @./2025-11-vision.md
 - [x] `char()`, `is_char()`
 - [x] `string()`, `is_string()`
 - [x] `end()`, `is_end()`
-- [ ] `read(<stream>)` - uses `stream.parse_exact_match`
-- [ ] `rest()`
-- [ ] `any_ident()`
-- [ ] `until(%[,])` (see until transformer)
-- [ ] `error()` etc
-- [ ] `token_tree()`
-- [ ] `span()` or `cursor()` -- maybe? outputs a token with a span for outputting errors. If at end of an inner stream, it outputs the ident `END` with the span of the closing bracket.
+- [x] `read(<stream>)` - uses `stream.parse_exact_match`
+- [x] `rest()`
+- [x] `until(%[,])` (see until transformer)
+- [x] `end()`
+- [x] `any_ident()`
+- [x] `error()`
+- [x] `token_tree()`
+- [x] `open('(')` and `close(')')`
 
-And all of these from normal macros:
+## Methods and closures
+
+- [ ] Introduce basic function values
+  * Value type function `let my_func = |x, y, z| { ... };`
+  * To start with, they are not closures (i.e. they can't capture any outer variables)
+  - [ ] Break/continue label resolution in functions/closures
+    * Functions and closures must resolve break/continue labels statically
+    * Break and continue statements should not leak out of function boundaries
+    * This needs to be validated during the control flow pass
+- [ ] New node extension in the expression parser: invocation `(...)`
+- [ ] Closures
+  * A function may capture variable bindings from the parent scope, these are converted into a `VariableBinding::Closure(<closed_variable_id>)`
+  * The closure consists of a set of bindings attached to the function value, either:
+    - `ClosedVariable::Owned(Value)` if it's the last mention of the closed variable, so it can be moved in
+    - `ClosedVariable::Referenced(Rc<RefCell<Value>>)` otherwise
+  * Invocation requests `CopyOnWrite`, and can be on a shared function or an owned function
+    (if it is the last usage of that value, as per normal red/owned binding rules)
+    * If invocation is on an owned function, then owned values from the closure can be consumed
+      by the invocation
+    * Otherwise, the values are only available as shared/mut
+- [ ] Try to unify methods under a "resolve, then invoke" structure
+    * `array::push` should resolve to the method, and `array::push(arr, value)` should work - we'll likely want an explicit `function` section and `constants` section on type data; which we can merge with methods when resolving what `array::push` resolves to.
+    * `my_array.push` returns a closure with `my_array` bound. The LateBound `my_array` can then be deactivated whilst the rest of the arguments are resolved, like what we do at the moment. This approach avoids the horrible javascript issues with `this` not being bound when referencing `x.y`.
+    * And then for objects, the method wins; BUT you can use `x["obj"]` to access the field instead of the method
+- [ ] Create a `preinterpret` type, and move preinterpret settings to `preinterpret::...`
+- [ ] Optional arguments
+- [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`
+- [ ] Add `array.sort`, `array.sort_by`
+- [ ] Add `stream.parse(|input| { ... })`
+- [ ] Add `let captured = input.capture(|input| { ... })`
+  * This returns the parsed input stream. It can capture the original tokens by using `let forked = input.fork()` and then `let end_cursor = input.end();` and then consuming `TokenTree`s from `forked` until `forked.cursor >= end_cursor` (making use of the PartialEq implementation)
+
+## Parser - Methods using closures
+
+Future methods once we have closures:
+* `input.any_group(|inner| { })`
+* `input.group('()', |inner| { })`
+* `input.transparent_group(|inner| { })`
+* Something for `input.fields({ ... })` and `input.subfields({ ... })` (allows other fields not present), whose fields are closures. BUT what do we do about `optional` fields. Hmm. Maybe:
+```rust
+input.fields(%{
+  required: %{
+    hello: parser::integer,
+  },
+  optional: %{
+    world: parser::string,
+  },
+})
+```
+* `input.repeated(..)` as below:
+```rust
+input.repeated(
+  %{
+    separator?: %[],
+    min?: 0,
+    max?: 1000000,
+  },
+  |inner| {
+    // ...
+  }
+)
+```
+
+## Parser - Better Types for Tokens
+
+- [ ] Add `Tokens`, `TokenTree`, `Group` as non-leaf types, for use alongside `StreamValue` and other Rust-like / syn-like objects
+- [ ] Work out whether `Tokens` should be iterable or not.
+   * Actually I think *not*
+   * Some values probably want to be iterable in other ways (e.g. `Repeated` or `Punctuated`)
+   * Add singleton things like those under `TokenTree` should probably not be iterable
+   * Perhaps Tokens/Stream needs `.into_token_tree_iter()` to be iterable?
+   * Perhaps `Iterable` actually takes a `Box<dyn IterableValue>` somehow, and is an opt-in in the type hierarchy
+   * We likely need multi-parenting - so `Repeated` can be both `Tokens` and `Iterable`
+- [ ] Add explicit values for:
+  - [ ] NOPE: `Span`
+  - [ ] NOPE: `TokenTree` <-- We don't want this. Instead we should have leaf values like `Literal`, `Ident`, `Punct`
+        ... but mabe
+  - [ ] `Ident` (parent = `TokenTree`)
+  - [ ] `Literal` (parent = `TokenTree`) <-- Unsupported Literal can go here
+  - [ ] `Punct` (parent = `TokenTree`)
+  - [ ] `ParenthesesGroup` (parent = `Group`)
+  - [ ] `BraceGroup` (parent = `Group`)
+  - [ ] `BracketGroup` (parent = `Group`)
+- [ ] Stream methods `single_literal()`, `single_ident()`, `single_token_tree()`
+- [ ] Parser methods `span()` or `cursor()` -- maybe? outputs a token with a span for outputting errors. If at end of an inner stream, it outputs the ident `END` with the span of the closing bracket.
+- [ ] `preinterpret::call_site()`, `preinterpret::call_site_close()`, `preinterpret::call_site_open()` return `Span`
+
+Then add all of these from normal macros:
 - [ ] block: a block (i.e. a block of statements and/or an expression, surrounded by braces)
 - [ ] expr: an expression
 - [ ] ident: an identifier (this includes keywords)
@@ -205,78 +290,19 @@ And all of these from normal macros:
 - [ ] ty: a type
 - [ ] vis: a possible empty visibility qualifier (e.g. pub, pub(in crate), …)
 
-Consider if we want separate types for e.g.
-* `Span`
-* `TokenTree`
-
-Repeat bindings (only inside a `consume` statement)
-* `@(..)?`, `@(..)+`, `@(..),+`, `@(..)*`, `@(..),*`
-
-Future methods once we have closures:
-* `input.any_group(|inner| { })`
-* Something for `input.fields({ ... })` and `input.subfields({ ... })`, whose fields are closures
-* Possibly some support for `input.peek` and `fork` - although this is handled by the attempt statement
-```rust
-input.repeated(
-  %{
-    separator?: %[],
-    min?: 0,
-    max?: 1000000,
-  },
-  |inner| {
-    // ...
-  }
-)
-```
-
-Later:
-- [ ] Support for starting to parse a `input.open('(')` in the left part of an attempt arm and completing in the right arm `input.close(')')` - there needs to be some error checking in the parse stream stack. We probably can't allow closing in the LHS of an attempt arm. We should record a reason on the new parse buffer and raise if it doesn't match
-- [ ] Or even `input.read("hello (")` / `input.read(")")`
-
-## Methods and closures
-
-- [ ] Introduce basic function values
-  * Value type function `let my_func = |x, y, z| { ... };`
-  * To start with, they are not closures (i.e. they can't capture any outer variables)
-  * New node extension in the expression parser: invocation `(...)`
-- [ ] Closures
-  * A function may capture variable bindings from the parent scope, these are converted into a `VariableBinding::Closure(<closed_variable_id>)`
-  * The closure consists of a set of bindings attached to the function value, either:
-    - `ClosedVariable::Owned(Value)` if it's the last mention of the closed variable, so it can be moved in
-    - `ClosedVariable::Referenced(Rc<RefCell<Value>>)` otherwise
-  * Invocation requests `CopyOnWrite`, and can be on a shared function or an owned function
-    (if it is the last usage of that value, as per normal red/owned binding rules)
-    * If invocation is on an owned function, then owned values from the closure can be consumed
-      by the invocation
-    * Otherwise, the values are only available as shared/mut
-- [ ] Try to unify methods under a "resolve, then invoke" structure
-    * `my_array.push` returns a closure with `my_array` bound. This can then be deactivated
-    whilst the rest of the arguments are resolved!
-    ... and avoids the horrible javascript issues with
-    `this` not being bound.
-    * And then for objects, the method wins; BUT you can use `x["obj"]` to access the field instead of the method
-  * Add ability to define functions on a type.
-  * Move preinterpret settings to `preinterpret::...`
-- [ ] Break/continue label resolution in functions/closures
-  * Functions and closures must resolve break/continue labels statically
-  * Break and continue statements should not leak out of function boundaries
-  * This needs to be validated during the control flow pass
-- [ ] Optional arguments
-- [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`
-- [ ] Add `array.sort`, `array.sort_by`
-- [ ] Add `stream.parse(|input| { ... })`
-- [ ] Add `let captured = input.capture(|input| { ... })`
-  * This returns the parsed input stream. It can capture the original tokens by using `let forked = input.fork()` and then `let end_cursor = input.end();` and then consuming `TokenTree`s from `forked` until `forked.cursor >= end_cursor` (making use of the PartialEq implementation)
-
 ## Utility methods
 
 Implement the following:
-* All value kinds:
-  * `is_none()`, and similarly for other value kinds
-  * A `kind()` method which returns a logical name for the value kind, which could be used in a `match` statement
+* All values:
+  * A `types() -> ["u32", "integer", "value"]` method which returns a logical name for all types in its hierarchy, from most to least specific.
+  * A `leaf_type() -> "u32"` which could be used in a `match` statement
+  * An `is_type("ident") -> bool`
 
-* Streams:
-  * `is_ident()` and similarly for other stream
+## Parser - Repeat Input Bindings 
+
+Parse template repeat bindings
+* `@xx[]?`, `@xx[]+`, `@xx[],+`, `@xx[]*`, `@xx[],*`
+* `@(..)?`, `@(..)+`, `@(..),+`, `@(..)*`, `@(..),*` (inside a parse template literal)
 
 ## Repeat output bindings
 
@@ -402,6 +428,15 @@ The following are less important tasks which maybe we don't even want/need to do
   - [ ] We should create some unit tests in `value.rs` and functions `generate_example_values(value_kind)` which returns a `Vec<Value>` for each value kind.
   - [ ] We can use this to check that `eq` and `neq` are defined and work correctly for all types
 - [ ] Add lexicographic ordering to arrays, if they're the same length and their values can be compared
+- [ ] Make StreamPattern an exact match, and allow `%raw[]` and `%group[]` patterns too - but disallow embedding statements; and address any remaining `TODO[parsers]`
+- [ ] Add a "closing span range" to the parse streams, and check for end manually to get a better error message:
+  - [ ] Wherever we use `parse_with`
+  - [ ] Wherever we drop the `ParseStreamStack` in the interpreter
+  - [ ] Whenever we create an output stream, we can set an optional "end_of_stream" span, which is used when the parser runs.
+  - [ ] Check if the compiler output in the `parser_after_rest` test is better:
+```rust
+let @input[{ let _ = input.rest(); let _ = input.token_tree(); }] = %[Hello World];
+```
 
 ## Match block [blocked on slices]
 
@@ -415,28 +450,35 @@ The following are less important tasks which maybe we don't even want/need to do
 
 Implement 10 leet-code challenges and 10 parsing challenges (e.g. from `syn` docs) to ensure that the language is sufficiently comprehensive to use in practice.
 
+Also:
+* `versioned!` from Scrypto
+* The big state macro from Scrypto
+
 ## Final considerations
 
 - [x] Merge `assignee_frames` into `value_frames` as per comment as the top of `assignee_frames`
 - [x] Rename `EvaluationItem` to `RequestedValue` and consider making `RequestedValue::AssignmentCompletion` wrap an `Owned<()>` so that it becomes truly a value.
 - [x] Merge `HasValueType` with `ValueKind`
-* Add `preinterpret::macro` - can this be a declarative macro? Would be slightly more efficient, as it just needs to wrap a call to `preinterpret::stream` or `preinterpret::run`...
+- [ ] Add `preinterpret::macro` - can this be a declarative macro? Would be slightly more efficient, as it just needs to wrap a call to `preinterpret::stream` or `preinterpret::run`...
+  - [ ] When we create `input = %raw[..]` we will need to set its `end_of_stream` span to the end of the
+  macro_rules! macro somehow... I'm not sure how to get that span though.
 - [x] Add `Eq` support on composite types and streams
 - [x] See `TODO[untyped]` - Have UntypedInteger/UntypedFloat have an inner representation of either value or literal, for improved efficiency / less weird `Span::call_site()` error handling
 - [ ] Move `typed_eq` as `%[].typed_eq(..)`
 - [ ] Add a `%[].structure_eq(...)` method which uses an `EqualityContext` which ignores value inequality
-* Add `LiteralPattern` (wrapping a `Literal`)
-* Better handling of `configure_preinterpret`:
+- [ ] We might need to auto-change the span of all outputted tokens to `Span::call_site()` to get hygiene
+  to be most flexible. Perhaps this can be disabled with `preinterpret::set_auto_call_site_hygiene(false)`
+- [ ] Add `LiteralPattern` (wrapping a `Literal`)
+- [ ] Better handling of `configure_preinterpret`:
   * Move `None.configure_preinterpret` to `preinterpret::set_iteration_limit(..)`
-* CastTarget revision:
+- [ ] CastTarget revision:
   * The `as int` operator is not supported for string values
   * The `as char` operator is not supported for untyped integer values
   * Add casts of any integer to char, via `char::from_u32(u32::try_from(x))`
   * Should we remove/replace any CastTargets?
-* TODO check
-* Check all `#[allow(unused)]` and remove any which aren't needed
+- [ ] TODO check
+- [ ] Check all `#[allow(unused)]` and remove any which aren't needed
   We can use `_xyz: Unused<T>` in some places to reduce the size of types.
-* Do we want to add support for various rust types?
 
 ## Better handling of value sub-references
 
@@ -485,6 +527,7 @@ One option We can work it like `IterableRef`, but perhaps we can do better?
   - [ ] [PAGE] Errors and Spans
       - NB: If someone wants to keep a value's span, they can keep it in a stream and coerce it; or store it as a tuple of a value with its span `%{ value: $x, span: %[$x] }`
   - [ ] [PAGE] Parsing
+  - [ ] Hygiene
 - [ ] Examples (tbc)
 
 And then we need to:

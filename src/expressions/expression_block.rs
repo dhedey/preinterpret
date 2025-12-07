@@ -81,6 +81,15 @@ impl Interpret for EmbeddedStatements {
     }
 }
 
+impl EmbeddedStatements {
+    pub(crate) fn consume(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        self.content
+            .evaluate(interpreter, self.span_range(), RequestedOwnership::owned())?
+            .expect_owned()
+            .into_statement_result()
+    }
+}
+
 pub(crate) struct ExpressionBlock {
     pub(super) label: Option<(CatchLabel, CatchLocationId)>,
     pub(super) scoped_block: ScopedBlock,

@@ -1,5 +1,5 @@
 error: unexpected token
- --> tests/compilation_failures/transforming/invalid_content_too_long.rs:5:43
+ --> tests/compilation_failures/parsing/invalid_content_too_long.rs:5:43
   |
 5 |         let %[Hello World] = %[Hello World!!!];
   |                                           ^

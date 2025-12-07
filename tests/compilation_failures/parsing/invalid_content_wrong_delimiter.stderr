@@ -1,0 +1,5 @@
+error: Cannot find variable `input` in this scope
+ --> tests/compilation_failures/parsing/invalid_content_wrong_delimiter.rs:5:27
+  |
+5 |         let %[(#{ let _ = input.rest(); })] = %[[Hello World]];
+  |                           ^^^^^

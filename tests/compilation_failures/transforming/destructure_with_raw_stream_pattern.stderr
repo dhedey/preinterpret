@@ -1,5 +1,0 @@
-error: Use `%[@[EXACT(%raw[...])]]` to match `%raw[...]` stream literal content
- --> tests/compilation_failures/transforming/destructure_with_raw_stream_pattern.rs:4:14
-  |
-4 |     run!(let %raw[Output] = %raw[Output];)
-  |              ^

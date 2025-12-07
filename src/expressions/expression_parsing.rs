@@ -72,9 +72,6 @@ impl<'a> ExpressionParser<'a> {
                     "In an expression, the # variable prefix is not allowed. The # prefix should only be used when embedding a variable into an output stream, e.g. %[#var + #(..expressions..)]",
                 )
             }
-            SourcePeekMatch::ExplicitTransformStream | SourcePeekMatch::Transformer(_) => {
-                return input.parse_err("Destructurings are not supported in an expression")
-            }
             SourcePeekMatch::Group(Delimiter::None | Delimiter::Parenthesis) => {
                 let (_, delim_span) = input.parse_and_enter_group(None)?;
                 UnaryAtom::Group(delim_span)
@@ -108,8 +105,9 @@ impl<'a> ExpressionParser<'a> {
                         }
                     }
                 }
-
-                if punct.as_char() == '.' {
+                if punct.as_char() == '@' {
+                    UnaryAtom::Leaf(Leaf::ParseTemplateLiteral(input.parse()?))
+                } else if punct.as_char() == '.' {
                     UnaryAtom::Range(input.parse()?)
                 } else if punct.as_char() == '-' || punct.as_char() == '!' {
                     UnaryAtom::PrefixUnaryOperation(input.parse()?)
@@ -276,7 +274,7 @@ impl<'a> ExpressionParser<'a> {
             }
             UnaryAtom::Array(brackets) => {
                 if self.streams.is_current_empty() {
-                    self.streams.exit_group();
+                    self.streams.exit_group(None)?;
                     WorkItem::TryParseAndApplyExtension {
                         node: self.nodes.add_node(ExpressionNode::Array {
                             brackets,
@@ -370,7 +368,7 @@ impl<'a> ExpressionParser<'a> {
                 },
                 NodeExtension::MethodCall(method) => {
                     if self.streams.is_current_empty() {
-                        self.streams.exit_group();
+                        self.streams.exit_group(None)?;
                         let node = self.nodes.add_node(ExpressionNode::MethodCall {
                             node,
                             method,
@@ -420,7 +418,7 @@ impl<'a> ExpressionParser<'a> {
                 }
                 ExpressionStackFrame::Group { delim_span } => {
                     assert!(matches!(extension, NodeExtension::EndOfStreamOrGroup));
-                    self.streams.exit_group();
+                    self.streams.exit_group(None)?;
                     WorkItem::TryParseAndApplyExtension {
                         node: self.nodes.add_node(ExpressionNode::Grouped {
                             delim_span,
@@ -434,7 +432,7 @@ impl<'a> ExpressionParser<'a> {
                 } => {
                     assert!(matches!(extension, NodeExtension::EndOfStreamOrGroup));
                     items.push(node);
-                    self.streams.exit_group();
+                    self.streams.exit_group(None)?;
                     WorkItem::TryParseAndApplyExtension {
                         node: self
                             .nodes
@@ -448,7 +446,7 @@ impl<'a> ExpressionParser<'a> {
                 } => {
                     assert!(matches!(extension, NodeExtension::EndOfStreamOrGroup));
                     parameters.push(node);
-                    self.streams.exit_group();
+                    self.streams.exit_group(None)?;
                     let node = self.nodes.add_node(ExpressionNode::MethodCall {
                         node: source,
                         method,
@@ -462,7 +460,7 @@ impl<'a> ExpressionParser<'a> {
                     state: ObjectStackFrameState::EntryIndex(access),
                 } => {
                     assert!(matches!(extension, NodeExtension::EndOfStreamOrGroup));
-                    self.streams.exit_group();
+                    self.streams.exit_group(None)?;
                     let colon = self.streams.parse()?;
                     self.expression_stack
                         .push(ExpressionStackFrame::NonEmptyObject {
@@ -484,7 +482,7 @@ impl<'a> ExpressionParser<'a> {
                     state: ObjectStackFrameState::EntryValue(key, _),
                 } => {
                     assert!(matches!(extension, NodeExtension::EndOfStreamOrGroup));
-                    self.streams.exit_group();
+                    self.streams.exit_group(None)?;
                     entries.push((key, node));
                     let node = self
                         .nodes
@@ -511,7 +509,7 @@ impl<'a> ExpressionParser<'a> {
                     access,
                 } => {
                     assert!(matches!(extension, NodeExtension::EndOfStreamOrGroup));
-                    self.streams.exit_group();
+                    self.streams.exit_group(None)?;
                     let node = self.nodes.add_node(ExpressionNode::Index {
                         node: source,
                         access,
@@ -593,7 +591,7 @@ impl<'a> ExpressionParser<'a> {
         const ERROR_MESSAGE: &str = r##"Expected an object entry (`field,` `field: ..,` or `["field"]: ..,`). If you meant to start a new block, use #{ ... } instead."##;
         let state = loop {
             if self.streams.is_current_empty() {
-                self.streams.exit_group();
+                self.streams.exit_group(None)?;
                 let node = self.nodes.add_node(ExpressionNode::Object {
                     braces,
                     entries: complete_entries,

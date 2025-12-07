@@ -40,6 +40,11 @@ impl ExpressionNode {
                             .capture_output(|interpreter| stream_literal.interpret(interpreter))?;
                         context.return_value(value, stream_literal.span_range())?
                     }
+                    Leaf::ParseTemplateLiteral(consume_literal) => {
+                        context.evaluate(|interpreter, ownership| {
+                            consume_literal.evaluate(interpreter, ownership)
+                        })?
+                    }
                     Leaf::IfExpression(if_expression) => {
                         context.evaluate(|interpreter, ownership| {
                             if_expression.evaluate(interpreter, ownership)
