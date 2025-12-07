@@ -659,3 +659,53 @@ fn test_nested_attempts_with_groups_at_different_levels() {
         };
     }
 }
+
+#[test]
+fn test_fork_close_open_commit() {
+    // Test: open '(', fork, close ')', open '[', close ']', commit
+    // This verifies that closing one group and opening another inside a fork works correctly
+    run! {
+        parse %[()[]] => |parser| {
+            parser.open('(');
+            let result = attempt {
+                {
+                    // Inside fork: close ')', open '[', close ']'
+                    parser.close(')');
+                    parser.open('[');
+                    parser.close(']');
+                } => { "committed" }
+            };
+            parser.end();
+            %[].assert_eq(result, "committed");
+        };
+    }
+}
+
+#[test]
+fn test_fork_close_open_revert() {
+    // Test: open '(', fork, close ')', open '[', close ']', revert, close ')', token_tree, end
+    // This verifies that reverting restores the original group state
+    run! {
+        parse %[()[]] => |parser| {
+            parser.open('(');
+            let result = attempt {
+                {
+                    // Inside fork: close ')', open '[', close ']', then revert
+                    parser.close(')');
+                    parser.open('[');
+                    parser.close(']');
+                    revert;
+                } => { %{ arm: "first" } }
+                {
+                    // After revert: back inside '(' group, close it normally
+                    parser.close(')');
+                    // Now parse the [] as a token_tree
+                    let tt = parser.token_tree();
+                } => { %{ arm: "second", tt } }
+            };
+            parser.end();
+            %[].assert_eq(result.arm, "second");
+            %[].assert_eq(result.tt, %[[]]);
+        };
+    }
+}
