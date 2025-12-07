@@ -77,4 +77,38 @@ impl InputHandler {
     pub(super) fn current_input<'a>(&'a mut self) -> ParseStream<'a, Output> {
         self.current_stack().current()
     }
+
+    /// Start a fork on all active parsers.
+    ///
+    /// # Safety
+    /// Must be paired with either `commit_fork` or `rollback_fork`.
+    pub(super) unsafe fn start_fork(&mut self) {
+        for (_, parser) in self.parsers.iter_mut() {
+            parser.start_fork();
+        }
+    }
+
+    /// Commit the fork on all active parsers.
+    ///
+    /// # Safety
+    /// Must be called after `start_fork`.
+    pub(super) unsafe fn commit_fork(&mut self) {
+        for (_, parser) in self.parsers.iter_mut() {
+            if parser.is_forked() {
+                parser.commit_fork();
+            }
+        }
+    }
+
+    /// Rollback the fork on all active parsers.
+    ///
+    /// # Safety
+    /// Must be called after `start_fork`.
+    pub(super) unsafe fn rollback_fork(&mut self) {
+        for (_, parser) in self.parsers.iter_mut() {
+            if parser.is_forked() {
+                parser.rollback_fork();
+            }
+        }
+    }
 }
