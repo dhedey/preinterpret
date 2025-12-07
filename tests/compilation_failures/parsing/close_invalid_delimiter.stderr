@@ -1,0 +1,5 @@
+error: Invalid close delimiter 'x'. Expected ')', '}', or ']'
+ --> tests/compilation_failures/parsing/close_invalid_delimiter.rs:6:26
+  |
+6 |             parser.close('x');
+  |                          ^^^

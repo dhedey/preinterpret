@@ -37,8 +37,22 @@ impl InputHandler {
 
     /// SAFETY:
     /// * Must be called after a prior `start_parse` call, and while the input is still alive.
-    pub(super) unsafe fn finish_parse(&mut self, handle: ParserHandle) {
+    pub(super) unsafe fn finish_parse(&mut self, handle: ParserHandle) -> Result<(), ParseError> {
+        let stack = self
+            .parsers
+            .get(handle)
+            .expect("finish_parse called with invalid handle");
+
+        // Check for unclosed groups before removing the parser
+        if let Some(delimiter) = stack.innermost_active_group_delimiter() {
+            return stack.parse_err(format!(
+                "a call to close '{}' is required, because there is an unclosed group",
+                delimiter.description_of_close()
+            ));
+        }
+
         self.parsers.remove(handle);
+        Ok(())
     }
 
     /// SAFETY:
@@ -76,5 +90,39 @@ impl InputHandler {
 
     pub(super) fn current_input<'a>(&'a mut self) -> ParseStream<'a, Output> {
         self.current_stack().current()
+    }
+
+    /// Start a fork on all active parsers.
+    ///
+    /// # Safety
+    /// Must be paired with either `commit_fork` or `rollback_fork`.
+    pub(super) unsafe fn start_fork(&mut self) {
+        for (_, parser) in self.parsers.iter_mut() {
+            parser.start_fork();
+        }
+    }
+
+    /// Commit the fork on all active parsers.
+    ///
+    /// # Safety
+    /// Must be called after `start_fork`.
+    pub(super) unsafe fn commit_fork(&mut self) {
+        for (_, parser) in self.parsers.iter_mut() {
+            if parser.is_forked() {
+                parser.commit_fork();
+            }
+        }
+    }
+
+    /// Rollback the fork on all active parsers.
+    ///
+    /// # Safety
+    /// Must be called after `start_fork`.
+    pub(super) unsafe fn rollback_fork(&mut self) {
+        for (_, parser) in self.parsers.iter_mut() {
+            if parser.is_forked() {
+                parser.rollback_fork();
+            }
+        }
     }
 }

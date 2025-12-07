@@ -1,12 +1,12 @@
 error: unexpected end of input, expected token tree
- --> tests/compilation_failures/parsing/parser_after_rest.rs:4:5
-  |
-4 | /     run!(
-5 | |         let @input[#{
-6 | |             let _ = input.rest();
-7 | |             let _ = input.token_tree();
-8 | |         }] = %[Hello World];
-9 | |     );
-  | |_____^
-  |
-  = note: this error originates in the macro `run` (in Nightly builds, run with -Z macro-backtrace for more info)
+  --> tests/compilation_failures/parsing/parser_after_rest.rs:4:5
+   |
+ 4 | /     run!(
+ 5 | |         let @input[#{
+ 6 | |             let _ = input.rest();
+...  |
+11 | |         }] = %[Hello World];
+12 | |     );
+   | |_____^
+   |
+   = note: this error originates in the macro `run` (in Nightly builds, run with -Z macro-backtrace for more info)

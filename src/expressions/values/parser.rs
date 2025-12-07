@@ -25,6 +25,24 @@ impl ParserValue {
     }
 }
 
+fn delimiter_from_open_char(c: char) -> Option<Delimiter> {
+    match c {
+        '(' => Some(Delimiter::Parenthesis),
+        '{' => Some(Delimiter::Brace),
+        '[' => Some(Delimiter::Bracket),
+        _ => None,
+    }
+}
+
+fn delimiter_from_close_char(c: char) -> Option<Delimiter> {
+    match c {
+        ')' => Some(Delimiter::Parenthesis),
+        '}' => Some(Delimiter::Brace),
+        ']' => Some(Delimiter::Bracket),
+        _ => None,
+    }
+}
+
 impl ValuesEqual for ParserValue {
     /// Parsers are equal if they reference the same handle.
     fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
@@ -134,6 +152,47 @@ define_interface! {
             [context] fn error(this: Shared<ParserValue>, message: String) -> ExecutionResult<()> {
                 let parser = parser(this, context)?;
                 parser.parse_err(message).map_err(|e| e.into())
+            }
+
+            // GROUPS
+            // ======
+
+            // Opens a group with the specified delimiter character ('(', '{', or '[').
+            // Must be paired with `close`.
+            [context] fn open(this: Shared<ParserValue>, delimiter_char: Owned<char>) -> ExecutionResult<()> {
+                let delimiter = delimiter_from_open_char(*delimiter_char)
+                    .ok_or_else(|| delimiter_char.span_range().value_error(format!(
+                        "Invalid open delimiter '{}'. Expected '(', '{{', or '['", *delimiter_char
+                    )))?;
+                this.parse_with(context.interpreter, |interpreter| {
+                    interpreter.enter_input_group(Some(delimiter))?;
+                    Ok(())
+                })
+            }
+
+            // Closes the current group. Must be paired with a prior `open`.
+            // The close character must match: ')' for '(', '}' for '{', ']' for '['
+            [context] fn close(this: Shared<ParserValue>, delimiter_char: Owned<char>) -> ExecutionResult<()> {
+                let expected_delimiter = delimiter_from_close_char(*delimiter_char)
+                    .ok_or_else(|| delimiter_char.span_range().value_error(format!(
+                        "Invalid close delimiter '{}'. Expected ')', '}}', or ']'", *delimiter_char
+                    )))?;
+                this.parse_with(context.interpreter, |interpreter| {
+                    // Check if there's a group to close first
+                    if !interpreter.has_active_input_group() {
+                        return Err(delimiter_char.span_range().value_error(format!(
+                            "attempting to close '{}' isn't valid, because there is no open group",
+                            expected_delimiter.description_of_close()
+                        )));
+                    }
+                    if !interpreter.input().is_empty() {
+                        return interpreter.input().parse_err(format!(
+                            "expected '{}'", expected_delimiter.description_of_close()
+                        ))?;
+                    }
+                    interpreter.exit_input_group(Some(expected_delimiter))?;
+                    Ok(())
+                })
             }
 
             // LITERALS

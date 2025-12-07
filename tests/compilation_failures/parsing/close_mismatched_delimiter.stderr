@@ -1,0 +1,5 @@
+error: attempting to close ']' isn't valid, because the currently open group would end with ')'
+ --> tests/compilation_failures/parsing/close_mismatched_delimiter.rs:9:16
+  |
+9 |         }] = %[(Hello)];
+  |                ^^^^^^^

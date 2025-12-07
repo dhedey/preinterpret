@@ -212,3 +212,501 @@ fn test_parser_commands_mid_parse() {
         "#x = %[jumps]; #y = \"brown\""
     );
 }
+
+#[test]
+fn test_parser_open_close_methods() {
+    // Basic open/close with parentheses
+    run! {
+        parse %[(Hello World)] => |parser| {
+            parser.open('(');
+            let a = parser.ident();
+            let b = parser.ident();
+            parser.close(')');
+            %[].assert_eq(%{ a, b }, %{ a: %[Hello], b: %[World] });
+        };
+    }
+
+    // Basic open/close with braces
+    run! {
+        parse %[{ Test }] => |parser| {
+            parser.open('{');
+            let x = parser.ident();
+            parser.close('}');
+            %[].assert_eq(x, %[Test]);
+        };
+    }
+
+    // Basic open/close with brackets
+    run! {
+        parse %[[Inner]] => |parser| {
+            parser.open('[');
+            let x = parser.ident();
+            parser.close(']');
+            %[].assert_eq(x, %[Inner]);
+        };
+    }
+
+    // Nested open/close
+    run! {
+        parse %[(outer { inner } after)] => |parser| {
+            parser.open('(');
+            let a = parser.ident();
+            parser.open('{');
+            let b = parser.ident();
+            parser.close('}');
+            let c = parser.ident();
+            parser.close(')');
+            %[].assert_eq(%{ a, b, c }, %{ a: %[outer], b: %[inner], c: %[after] });
+        };
+    }
+}
+
+#[test]
+fn test_attempt_block_with_parsing_rollback() {
+    // Simple attempt with parsing that rolls back
+    run! {
+        parse %[Hello World] => |parser| {
+            let result = attempt {
+                {
+                    let _ = parser.ident();
+                    let _ = parser.ident();
+                    revert;
+                } => { %{ reverted: true } }
+                {
+                    let a = parser.ident();
+                    let b = parser.ident();
+                } => { %{ reverted: false, a, b } }
+            };
+            %[].assert_eq(result, %{ reverted: false, a: %[Hello], b: %[World] });
+        };
+    }
+
+    // Parsing rolls back on revert - verify position reset
+    run! {
+        parse %[Hello World] => |parser| {
+            let first = attempt {
+                {
+                    // Parse two idents, then revert
+                    let _ = parser.ident();
+                    let _ = parser.ident();
+                    revert;
+                } => { None }
+                {
+                    // After rollback, should be back at start
+                    let x = parser.ident();
+                } => { x }
+            };
+            // Should have consumed only "Hello"
+            let second = parser.ident();
+            %[].assert_eq(%{ first, second }, %{ first: %[Hello], second: %[World] });
+        };
+    }
+}
+
+#[test]
+fn test_nested_attempt_blocks_with_parsing() {
+    // Nested attempt blocks - inner success, outer success
+    run! {
+        parse %[Hello World] => |parser| {
+            let result = attempt {
+                {
+                    let x = parser.ident();
+                    let y = attempt {
+                        { let inner = parser.ident(); } => { inner }
+                    };
+                } => { %{ x, y } }
+            };
+            %[].assert_eq(result, %{ x: %[Hello], y: %[World] });
+        };
+    }
+
+    // Nested attempt blocks - inner rollback, outer success
+    run! {
+        parse %[Hello World] => |parser| {
+            let result = attempt {
+                {
+                    let x = parser.ident();
+                    let y = attempt {
+                        {
+                            let _ = parser.ident();
+                            revert;
+                        } => { %[wrong] }
+                        { let inner = parser.ident(); } => { inner }
+                    };
+                } => { %{ x, y } }
+            };
+            %[].assert_eq(result, %{ x: %[Hello], y: %[World] });
+        };
+    }
+
+    // Nested attempt blocks - inner success, outer rollback
+    run! {
+        parse %[Hello World] => |parser| {
+            let result = attempt {
+                {
+                    let _ = parser.ident();
+                    let _ = attempt {
+                        { let _ = parser.ident(); } => { None }
+                    };
+                    revert;
+                } => { %{ arm: "first" } }
+                {
+                    // After rollback, should be back at start
+                    let a = parser.ident();
+                    let b = parser.ident();
+                } => { %{ arm: "second", a, b } }
+            };
+            %[].assert_eq(result, %{ arm: "second", a: %[Hello], b: %[World] });
+        };
+    }
+}
+
+#[test]
+fn test_deeply_nested_attempt_blocks_with_parsing() {
+    // Three levels of nesting with various rollback patterns
+    run! {
+        parse %[A B C] => |parser| {
+            let result = 'outer: attempt {
+                {
+                    let a = parser.ident();
+                    let inner = 'middle: attempt {
+                        {
+                            let b = parser.ident();
+                            let c = 'inner: attempt {
+                                { let x = parser.ident(); } => { x }
+                            };
+                        } => { %{ b, c } }
+                    };
+                } => { %{ a, b: inner.b.clone(), c: inner.c.clone() } }
+            };
+            %[].assert_eq(result, %{ a: %[A], b: %[B], c: %[C] });
+        };
+    }
+
+    // Three levels - rollback inner, continue middle and outer
+    run! {
+        parse %[A B C] => |parser| {
+            let result = 'outer: attempt {
+                {
+                    let a = parser.ident();
+                    let inner = 'middle: attempt {
+                        {
+                            let b = parser.ident();
+                            let c = 'inner: attempt {
+                                {
+                                    let _ = parser.ident();
+                                    revert;
+                                } => { %[wrong] }
+                                { let x = parser.ident(); } => { x }
+                            };
+                        } => { %{ b, c } }
+                    };
+                } => { %{ a, b: inner.b.clone(), c: inner.c.clone() } }
+            };
+            %[].assert_eq(result, %{ a: %[A], b: %[B], c: %[C] });
+        };
+    }
+
+    // Three levels - rollback middle (includes inner work), continue outer
+    run! {
+        parse %[A B C] => |parser| {
+            let result = 'outer: attempt {
+                {
+                    let a = parser.ident();
+                    let inner = 'middle: attempt {
+                        {
+                            let _ = parser.ident();
+                            let _ = 'inner: attempt {
+                                { let _ = parser.ident(); } => { None }
+                            };
+                            revert;
+                        } => { %{ from: "first" } }
+                        {
+                            let b = parser.ident();
+                            let c = parser.ident();
+                        } => { %{ from: "second", b, c } }
+                    };
+                } => { %{ a, from: inner.from.clone(), b: inner.b.clone(), c: inner.c.clone() } }
+            };
+            %[].assert_eq(result, %{ a: %[A], from: "second", b: %[B], c: %[C] });
+        };
+    }
+
+    // Three levels - rollback directly to outer from inner
+    run! {
+        parse %[A B C] => |parser| {
+            let result = 'outer: attempt {
+                {
+                    let _ = parser.ident();
+                    let _ = 'middle: attempt {
+                        {
+                            let _ = parser.ident();
+                            'inner: attempt {
+                                {
+                                    let _ = parser.ident();
+                                    revert 'outer;
+                                } => { None }
+                            }
+                        } => { None }
+                    };
+                } => { %{ arm: "first" } }
+                {
+                    let a = parser.ident();
+                    let b = parser.ident();
+                    let c = parser.ident();
+                } => { %{ arm: "second", a, b, c } }
+            };
+            %[].assert_eq(result, %{ arm: "second", a: %[A], b: %[B], c: %[C] });
+        };
+    }
+}
+
+#[test]
+fn test_attempt_with_open_close_rollback() {
+    // Open/close inside attempt block that rolls back
+    run! {
+        parse %[(Hello)] => |parser| {
+            let result = attempt {
+                {
+                    parser.open('(');
+                    let _ = parser.ident();
+                    parser.close(')');
+                    revert;
+                } => { %{ arm: "first" } }
+                {
+                    parser.open('(');
+                    let x = parser.ident();
+                    parser.close(')');
+                } => { %{ arm: "second", x } }
+            };
+            %[].assert_eq(result, %{ arm: "second", x: %[Hello] });
+        };
+    }
+
+    // Nested groups with rollback
+    run! {
+        parse %[({ a } b)] => |parser| {
+            let result = attempt {
+                {
+                    parser.open('(');
+                    parser.open('{');
+                    let _ = parser.ident();
+                    parser.close('}');
+                    let _ = parser.ident();
+                    parser.close(')');
+                    revert;
+                } => { %{ arm: "first" } }
+                {
+                    parser.open('(');
+                    parser.open('{');
+                    let inner = parser.ident();
+                    parser.close('}');
+                    let outer = parser.ident();
+                    parser.close(')');
+                } => { %{ arm: "second", inner, outer } }
+            };
+            %[].assert_eq(result, %{ arm: "second", inner: %[a], outer: %[b] });
+        };
+    }
+}
+
+#[test]
+fn test_attempt_with_partial_group_parsing_rollback() {
+    // Enter group, parse partially, then rollback before closing
+    run! {
+        parse %[(Hello World)] => |parser| {
+            let result = attempt {
+                {
+                    parser.open('(');
+                    let _ = parser.ident();
+                    // Don't close - rollback mid-group
+                    revert;
+                } => { %{ arm: "first" } }
+                {
+                    // After rollback, back at start
+                    parser.open('(');
+                    let x = parser.ident();
+                    let y = parser.ident();
+                    parser.close(')');
+                } => { %{ arm: "second", x, y } }
+            };
+            %[].assert_eq(result, %{ arm: "second", x: %[Hello], y: %[World] });
+        };
+    }
+}
+
+#[test]
+fn test_open_in_attempt_arm_close_in_result() {
+    // Open group in the left part of attempt arm, close in the right part
+    // This is a common pattern: parse `#(` then `<ident>)` and return the ident
+    run! {
+        parse %[(hello)] => |parser| {
+            let result = attempt {
+                {
+                    parser.open('(');
+                    let x = parser.ident();
+                } => {
+                    parser.close(')');
+                    x
+                }
+            };
+            %[].assert_eq(result, %[hello]);
+        };
+    }
+
+    // More complex: open in arm, do more parsing, close in result
+    run! {
+        parse %[(a b c)] => |parser| {
+            let result = attempt {
+                {
+                    parser.open('(');
+                    let first = parser.ident();
+                } => {
+                    let second = parser.ident();
+                    let third = parser.ident();
+                    parser.close(')');
+                    %{ first, second, third }
+                }
+            };
+            %[].assert_eq(result, %{ first: %[a], second: %[b], third: %[c] });
+        };
+    }
+
+    // With revert - open in first arm, revert, then open again in second arm and close in result
+    run! {
+        parse %[(value)] => |parser| {
+            let result = attempt {
+                {
+                    parser.open('(');
+                    // Pretend we don't like what we see
+                    revert;
+                } => { %{ from: "first" } }
+                {
+                    parser.open('(');
+                    let x = parser.ident();
+                } => {
+                    parser.close(')');
+                    %{ from: "second", x }
+                }
+            };
+            %[].assert_eq(result, %{ from: "second", x: %[value] });
+        };
+    }
+
+    // Nested groups: open outer in arm, open/close inner normally, close outer in result
+    run! {
+        parse %[({ inner } after)] => |parser| {
+            let result = attempt {
+                {
+                    parser.open('(');
+                    parser.open('{');
+                    let inner = parser.ident();
+                    parser.close('}');
+                    let after = parser.ident();
+                } => {
+                    parser.close(')');
+                    %{ inner, after }
+                }
+            };
+            %[].assert_eq(result, %{ inner: %[inner], after: %[after] });
+        };
+    }
+}
+
+#[test]
+fn test_nested_attempts_with_groups_at_different_levels() {
+    // Open group in outer, parse in inner attempt
+    run! {
+        parse %[(Test)] => |parser| {
+            let result = attempt {
+                {
+                    parser.open('(');
+                    let inner_result = attempt {
+                        {
+                            let _ = parser.ident();
+                            revert;
+                        } => { %[wrong] }
+                        { let x = parser.ident(); } => { x }
+                    };
+                    parser.close(')');
+                } => { inner_result }
+            };
+            %[].assert_eq(result, %[Test]);
+        };
+    }
+
+    // Multiple nested groups across multiple attempt levels
+    run! {
+        parse %[({ value })] => |parser| {
+            let result = 'outer: attempt {
+                {
+                    parser.open('(');
+                    let level1 = 'middle: attempt {
+                        {
+                            parser.open('{');
+                            let level2 = 'inner: attempt {
+                                { let x = parser.ident(); } => { x }
+                            };
+                            parser.close('}');
+                        } => { %{ level: "inner", value: level2 } }
+                    };
+                    parser.close(')');
+                } => { %{ level: "outer", inner: level1 } }
+            };
+            %[].assert_eq(result.level, "outer");
+            %[].assert_eq(result.inner.level, "inner");
+            %[].assert_eq(result.inner.value, %[value]);
+        };
+    }
+}
+
+#[test]
+fn test_fork_close_open_commit() {
+    // Test: open '(', fork, close ')', open '[', close ']', commit
+    // This verifies that closing one group and opening another inside a fork works correctly
+    run! {
+        parse %[()[]] => |parser| {
+            parser.open('(');
+            let result = attempt {
+                {
+                    // Inside fork: close ')', open '[', close ']'
+                    parser.close(')');
+                    parser.open('[');
+                    parser.close(']');
+                } => { "committed" }
+            };
+            parser.end();
+            %[].assert_eq(result, "committed");
+        };
+    }
+}
+
+#[test]
+fn test_fork_close_open_revert() {
+    // Test: open '(', fork, close ')', open '[', close ']', revert, close ')', token_tree, end
+    // This verifies that reverting restores the original group state
+    run! {
+        parse %[()[]] => |parser| {
+            parser.open('(');
+            let result = attempt {
+                {
+                    // Inside fork: close ')', open '[', close ']', then revert
+                    parser.close(')');
+                    parser.open('[');
+                    parser.close(']');
+                    revert;
+                } => { %{ arm: "first" } }
+                {
+                    // After revert: back inside '(' group, close it normally
+                    parser.close(')');
+                    parser.open('[');
+                } => {
+                    parser.close(']');
+                    %{ arm: "second" }
+                }
+            };
+            parser.end();
+            %[].assert_eq(result.arm, "second");
+        };
+    }
+}
