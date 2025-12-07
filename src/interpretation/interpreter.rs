@@ -274,11 +274,10 @@ impl Interpreter {
             .current_stack()
             .parse_and_enter_group(required_delimiter)?;
         let result = f(self, delimiter, delim_span);
-        // This can't fail since we pass the same delimiter we got from parse_and_enter_group
-        let _ = self
-            .input_handler
+        self.input_handler
             .current_stack()
-            .exit_group(Some(delimiter));
+            .exit_group(Some(delimiter))
+            .expect("exit_group can't fail since we pass the same delimiter we got from parse_and_enter_group");
         result
     }
 
