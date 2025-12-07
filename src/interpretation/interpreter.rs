@@ -296,6 +296,24 @@ impl Interpreter {
         result
     }
 
+    /// Enter a group with the specified delimiter.
+    /// Must be paired with `exit_input_group`.
+    pub(crate) fn enter_input_group(
+        &mut self,
+        required_delimiter: Option<Delimiter>,
+    ) -> ExecutionResult<(Delimiter, DelimSpan)> {
+        self.input_handler
+            .current_stack()
+            .parse_and_enter_group(required_delimiter)
+            .map_err(|e| e.into())
+    }
+
+    /// Exit the current input group.
+    /// Must be paired with a prior `enter_input_group`.
+    pub(crate) fn exit_input_group(&mut self) {
+        self.input_handler.current_stack().exit_group();
+    }
+
     pub(crate) fn input<'a>(&'a mut self) -> ParseStream<'a, Output> {
         self.input_handler.current_input()
     }
