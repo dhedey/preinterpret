@@ -1,4 +1,4 @@
-error: unexpected token - group content not fully consumed before close
+error: expected ')'
  --> tests/compilation_failures/parsing/close_without_consuming.rs:9:17
   |
 9 |         }] = %[(Hello World)];

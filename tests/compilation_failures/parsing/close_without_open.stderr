@@ -1,0 +1,5 @@
+error: no group to close
+ --> tests/compilation_failures/parsing/close_without_open.rs:6:26
+  |
+6 |             parser.close(')');
+  |                          ^^^

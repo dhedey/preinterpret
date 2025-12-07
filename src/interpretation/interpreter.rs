@@ -306,6 +306,11 @@ impl Interpreter {
             .map_err(|e| e.into())
     }
 
+    /// Returns true if there is an active input group that can be exited.
+    pub(crate) fn has_active_input_group(&mut self) -> bool {
+        self.input_handler.current_stack().has_active_group()
+    }
+
     pub(crate) fn input<'a>(&'a mut self) -> ParseStream<'a, Output> {
         self.input_handler.current_input()
     }

@@ -383,6 +383,13 @@ impl<'a, K> ParseStack<'a, K> {
         Ok((delimiter, delim_span))
     }
 
+    /// Returns true if there is an active group that can be exited.
+    pub(crate) fn has_active_group(&self) -> bool {
+        self.groups
+            .iter()
+            .any(|g| matches!(g.buffers.last(), Some(GroupBuffer::Active(_))))
+    }
+
     /// Should be paired with `parse_and_enter_group`.
     ///
     /// If the group is not finished, the next attempt to read from the parent will trigger an error,
@@ -391,18 +398,15 @@ impl<'a, K> ParseStack<'a, K> {
     /// If `expected_delimiter` is provided, it will be validated against the actual delimiter
     /// used when entering the group.
     ///
-    /// ### Panics
-    /// Panics if there is no group available.
-    ///
     /// ### Returns
-    /// Returns an error if the expected delimiter doesn't match.
+    /// Returns an error if there is no group to exit or if the expected delimiter doesn't match.
     pub(crate) fn exit_group(&mut self, expected_delimiter: Option<Delimiter>) -> ParseResult<()> {
         // Find the innermost active group (what current() would return)
         let group_index = self
             .groups
             .iter()
             .rposition(|g| matches!(g.buffers.last(), Some(GroupBuffer::Active(_))))
-            .expect("exit_group called but no active group to exit");
+            .ok_or_else(|| self.current().parse_error("no group to close"))?;
 
         // Validate delimiter if expected
         if let Some(expected) = expected_delimiter {
