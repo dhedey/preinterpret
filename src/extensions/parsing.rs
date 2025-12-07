@@ -390,6 +390,15 @@ impl<'a, K> ParseStack<'a, K> {
             .any(|g| matches!(g.buffers.last(), Some(GroupBuffer::Active(_))))
     }
 
+    /// Returns the delimiter of the innermost active group, if any.
+    pub(crate) fn innermost_active_group_delimiter(&self) -> Option<Delimiter> {
+        self.groups
+            .iter()
+            .rev()
+            .find(|g| matches!(g.buffers.last(), Some(GroupBuffer::Active(_))))
+            .map(|g| g.delimiter)
+    }
+
     /// Should be paired with `parse_and_enter_group`.
     ///
     /// If the group is not finished, the next attempt to read from the parent will trigger an error,

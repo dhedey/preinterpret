@@ -37,8 +37,19 @@ impl InputHandler {
 
     /// SAFETY:
     /// * Must be called after a prior `start_parse` call, and while the input is still alive.
-    pub(super) unsafe fn finish_parse(&mut self, handle: ParserHandle) {
+    pub(super) unsafe fn finish_parse(&mut self, handle: ParserHandle) -> Result<(), ParseError> {
+        let stack = self
+            .parsers
+            .get(handle)
+            .expect("finish_parse called with invalid handle");
+
+        // Check for unclosed groups before removing the parser
+        if let Some(delimiter) = stack.innermost_active_group_delimiter() {
+            return stack.parse_err(format!("expected '{}'", delimiter.description_of_close()));
+        }
+
         self.parsers.remove(handle);
+        Ok(())
     }
 
     /// SAFETY:

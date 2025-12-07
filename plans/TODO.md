@@ -169,7 +169,7 @@ First, read the @./2025-11-vision.md
 - [x] Migrate tests from `transforming.rs` to `parsing.rs` etc
 - [x] Delete the transformers folder
 - [x] Reversion works in attempt blocks, via forking and committing or rolling back the fork, fix `TODO[parser-input-in-interpreter]`
-- [x] Add test for `parser.open('(')` without a corresponding `parser.close(')')`. Investigated: syn's drop glue correctly triggers when there's unconsumed content (see `open_without_close_unconsumed.rs`). When all content is consumed but `close()` isn't called, the buffer is empty so no error - this is acceptable behavior.
+- [x] Add test for `parser.open('(')` without a corresponding `parser.close(')')`. The `finish_parse` method now checks for unclosed groups before dropping the `ParseStack`, ensuring proper error handling even when the group content is empty (see `open_without_close_empty.rs` and `open_without_close_unconsumed.rs`).
 - [ ] Make StreamPattern an exact match, and allow `%raw[]` and `%group[]` patterns too - but disallow embedding statements.
 - [ ] Address any remaining `TODO[parser-no-output]` and `TODO[parsers]`
 - [ ] Add tons of tests for all the methods on Parser, and for nested parse statements

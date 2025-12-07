@@ -1,0 +1,5 @@
+error: expected ')'
+ --> tests/compilation_failures/parsing/open_without_close_empty.rs:9:16
+  |
+9 |         }] = %[()];
+  |                ^^

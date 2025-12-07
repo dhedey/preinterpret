@@ -225,11 +225,16 @@ impl Interpreter {
                 self.input_handler.start_parse(input)
             };
             let result = self.parse_with(handle, |interpreter| f(interpreter, handle));
-            unsafe {
+            let finish_result = unsafe {
                 // SAFETY: This is paired with `start_parse` above
-                self.input_handler.finish_parse(handle);
+                self.input_handler.finish_parse(handle)
+            };
+            // Combine results: if original failed, return that error; otherwise check finish_result
+            match (result, finish_result) {
+                (Ok(value), Ok(())) => Ok(value),
+                (Err(err), _) => Err(err),
+                (Ok(_), Err(err)) => Err(err.into()),
             }
-            result
         })
     }
 
