@@ -31,8 +31,9 @@ impl ExpressionNode {
                     Leaf::Value(value) => {
                         // We return a freely clonable CopyOnWrite in order to delay the clone of the literal if it's not necessary
                         // This allows something like e.g. x[0][5][2] to only clone the innermost value instead of the full multi-dimensional array
-                        let value = CopyOnWrite::shared_in_place_of_owned(Shared::clone(value));
-                        context.return_returned_value(ReturnedValue::CopyOnWrite(value))?
+                        let shared_cloned = SharedValue::clone_shared(value);
+                        let cow = CopyOnWriteValue::shared_in_place_of_owned(shared_cloned);
+                        context.return_returned_value(ReturnedValue::CopyOnWrite(cow))?
                     }
                     Leaf::StreamLiteral(stream_literal) => {
                         let value = context

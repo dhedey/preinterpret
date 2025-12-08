@@ -706,8 +706,8 @@ define_interface! {
 
 pub(crate) trait IntoValue: Sized {
     fn into_value(self) -> Value;
-    fn into_owned(self, span_range: impl HasSpanRange) -> Owned<Self> {
-        Owned::new(self, span_range.span_range())
+    fn into_owned(self, span_range: impl HasSpanRange) -> Spanned<Owned<Self>> {
+        Spanned(Owned(self), span_range.span_range())
     }
     fn into_owned_value(self, span_range: impl HasSpanRange) -> OwnedValue {
         OwnedValue::new(self.into_value(), span_range.span_range())

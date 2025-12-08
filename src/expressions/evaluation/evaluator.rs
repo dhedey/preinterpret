@@ -203,12 +203,16 @@ impl RequestedValue {
             }
             RequestedValue::Owned(value) => RequestedValue::Owned(map_owned(value)?),
             RequestedValue::Assignee(assignee) => {
-                RequestedValue::Assignee(Assignee(map_mutable(assignee.0)?))
+                // assignee is Spanned<Assignee<Value>>
+                // Extract the inner Mutable, wrap it with span, map it, then rewrap
+                let mutable: MutableValue = Spanned(assignee.0 .0, assignee.1);
+                let mapped = map_mutable(mutable)?;
+                RequestedValue::Assignee(Spanned(Assignee(mapped.0), mapped.1))
             }
             RequestedValue::Mutable(mutable) => RequestedValue::Mutable(map_mutable(mutable)?),
             RequestedValue::Shared(shared) => RequestedValue::Shared(map_shared(shared)?),
             RequestedValue::CopyOnWrite(cow) => {
-                RequestedValue::CopyOnWrite(cow.map(map_shared, map_owned)?)
+                RequestedValue::CopyOnWrite(cow.map_cow(map_shared, map_owned)?)
             }
             RequestedValue::AssignmentCompletion(_) => {
                 panic!("expect_any_value_and_map() called on non-value RequestedValue")

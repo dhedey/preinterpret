@@ -55,10 +55,10 @@ impl ArgumentValue {
     pub(crate) unsafe fn disable(&mut self) {
         match self {
             ArgumentValue::Owned(_) => {}
-            ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write.disable(),
-            ArgumentValue::Mutable(mutable) => mutable.disable(),
-            ArgumentValue::Assignee(assignee) => assignee.0.disable(),
-            ArgumentValue::Shared(shared) => shared.disable(),
+            ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write.0.disable(),
+            ArgumentValue::Mutable(mutable) => mutable.0.disable(),
+            ArgumentValue::Assignee(assignee) => assignee.0 .0.disable(),
+            ArgumentValue::Shared(shared) => shared.0.disable(),
         }
     }
 
@@ -69,7 +69,17 @@ impl ArgumentValue {
             ArgumentValue::Owned(_) => Ok(()),
             ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write.enable(),
             ArgumentValue::Mutable(mutable) => mutable.enable(),
-            ArgumentValue::Assignee(assignee) => assignee.0.enable(),
+            ArgumentValue::Assignee(assignee) => {
+                // assignee is Spanned<Assignee<Value>>
+                // We need to create a temp Spanned<Mutable<Value>> to call enable
+                let span = assignee.1;
+                assignee
+                    .0
+                     .0
+                     .0
+                    .enable()
+                    .map_err(|_| span.ownership_error("The variable cannot be modified as it is already being modified"))
+            }
             ArgumentValue::Shared(shared) => shared.enable(),
         }
     }
@@ -274,9 +284,11 @@ impl RequestedOwnership {
         assignee: AssigneeValue,
     ) -> ExecutionResult<RequestedValue> {
         match self {
-            RequestedOwnership::LateBound => Ok(RequestedValue::LateBound(
-                LateBoundValue::Mutable(assignee.0),
-            )),
+            RequestedOwnership::LateBound => {
+                // Convert Spanned<Assignee<Value>> to MutableValue = Spanned<Mutable<Value>>
+                let mutable = Spanned(assignee.0 .0, assignee.1);
+                Ok(RequestedValue::LateBound(LateBoundValue::Mutable(mutable)))
+            }
             RequestedOwnership::Concrete(requested) => requested
                 .map_from_assignee(assignee)
                 .map(Self::item_from_argument),
@@ -286,7 +298,7 @@ impl RequestedOwnership {
     pub(crate) fn map_from_shared(&self, shared: SharedValue) -> ExecutionResult<RequestedValue> {
         match self {
             RequestedOwnership::LateBound => Ok(RequestedValue::LateBound(
-                LateBoundValue::CopyOnWrite(CopyOnWrite::shared_in_place_of_shared(shared)),
+                LateBoundValue::CopyOnWrite(CopyOnWriteValue::shared_in_place_of_shared(shared)),
             )),
             RequestedOwnership::Concrete(requested) => requested
                 .map_from_shared(shared)
@@ -381,7 +393,7 @@ impl ArgumentOwnership {
                 if copy_on_write.acts_as_shared_reference() {
                     copy_on_write.ownership_err("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone()` to get a mutable reference to a cloned value.")
                 } else {
-                    Ok(ArgumentValue::Mutable(Mutable::new_from_owned(
+                    Ok(ArgumentValue::Mutable(MutableValue::new_from_owned(
                         copy_on_write.into_owned_transparently()?,
                     )))
                 }
@@ -414,7 +426,7 @@ impl ArgumentOwnership {
         match self {
             ArgumentOwnership::Owned => Ok(ArgumentValue::Owned(shared.transparent_clone()?)),
             ArgumentOwnership::CopyOnWrite => Ok(ArgumentValue::CopyOnWrite(
-                CopyOnWrite::shared_in_place_of_shared(shared),
+                CopyOnWriteValue::shared_in_place_of_shared(shared),
             )),
             ArgumentOwnership::Assignee { .. } => Err(mutable_error(shared)),
             ArgumentOwnership::Mutable => Err(mutable_error(shared)),
@@ -432,7 +444,9 @@ impl ArgumentOwnership {
         &self,
         assignee: AssigneeValue,
     ) -> ExecutionResult<ArgumentValue> {
-        self.map_from_mutable_inner(assignee.0, false)
+        // Convert Spanned<Assignee<Value>> to Spanned<Mutable<Value>>
+        let mutable = Spanned(assignee.0 .0, assignee.1);
+        self.map_from_mutable_inner(mutable, false)
     }
 
     fn map_from_mutable_inner(
@@ -449,12 +463,15 @@ impl ArgumentOwnership {
                 }
             }
             ArgumentOwnership::CopyOnWrite => Ok(ArgumentValue::CopyOnWrite(
-                CopyOnWrite::shared_in_place_of_shared(mutable.into_shared()),
+                CopyOnWriteValue::shared_in_place_of_shared(mutable.into_shared()),
             )),
             ArgumentOwnership::Mutable | ArgumentOwnership::AsIs => {
                 Ok(ArgumentValue::Mutable(mutable))
             }
-            ArgumentOwnership::Assignee { .. } => Ok(ArgumentValue::Assignee(Assignee(mutable))),
+            ArgumentOwnership::Assignee { .. } => {
+                // Convert Spanned<Mutable<Value>> to Spanned<Assignee<Value>>
+                Ok(ArgumentValue::Assignee(Spanned(Assignee(mutable.0), mutable.1)))
+            }
             ArgumentOwnership::Shared => Ok(ArgumentValue::Shared(mutable.into_shared())),
         }
     }
@@ -471,10 +488,10 @@ impl ArgumentOwnership {
         match self {
             ArgumentOwnership::Owned | ArgumentOwnership::AsIs => Ok(ArgumentValue::Owned(owned)),
             ArgumentOwnership::CopyOnWrite => {
-                Ok(ArgumentValue::CopyOnWrite(CopyOnWrite::owned(owned)))
+                Ok(ArgumentValue::CopyOnWrite(CopyOnWriteValue::owned(owned)))
             }
             ArgumentOwnership::Mutable => {
-                Ok(ArgumentValue::Mutable(Mutable::new_from_owned(owned)))
+                Ok(ArgumentValue::Mutable(MutableValue::new_from_owned(owned)))
             }
             ArgumentOwnership::Assignee { .. } => {
                 if is_from_last_use {
@@ -483,7 +500,7 @@ impl ArgumentOwnership {
                     owned.ownership_err("An owned value cannot be assigned to.")
                 }
             }
-            ArgumentOwnership::Shared => Ok(ArgumentValue::Shared(Shared::new_from_owned(owned))),
+            ArgumentOwnership::Shared => Ok(ArgumentValue::Shared(SharedValue::new_from_owned(owned))),
         }
     }
 }
