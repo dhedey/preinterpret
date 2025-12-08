@@ -135,11 +135,12 @@ define_interface! {
         }
         pub(crate) mod unary_operations {
             fn neg(this: Owned<UntypedInteger>) -> ExecutionResult<UntypedInteger> {
-                let (value, span_range) = this.deconstruct();
+                let value = this.into_inner();
                 let input = value.into_fallback();
                 match input.checked_neg() {
                     Some(negated) => Ok(UntypedInteger::from_fallback(negated)),
-                    None => span_range.value_err("Negating this value would overflow in i128 space"),
+                    // TODO: Track proper span through resolution
+                    None => Span::call_site().span_range().value_err("Negating this value would overflow in i128 space"),
                 }
             }
 

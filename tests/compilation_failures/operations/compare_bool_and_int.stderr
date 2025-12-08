@@ -1,5 +1,7 @@
 error: This argument is expected to be a boolean, but it is an untyped integer
- --> tests/compilation_failures/operations/compare_bool_and_int.rs:4:26
+ --> tests/compilation_failures/operations/compare_bool_and_int.rs:4:13
   |
 4 |     let _ = run!(true == 1);
-  |                          ^
+  |             ^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the macro `run` (in Nightly builds, run with -Z macro-backtrace for more info)

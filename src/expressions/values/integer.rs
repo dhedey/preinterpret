@@ -45,7 +45,7 @@ impl IntegerValue {
                 ));
             }
         }
-        .into_owned(lit.span_range()))
+        .into_owned())
     }
 
     pub(super) fn to_literal(self, span: Span) -> Literal {
@@ -56,10 +56,12 @@ impl IntegerValue {
         this: Owned<IntegerValue>,
         other: &Value,
     ) -> ExecutionResult<Self> {
-        let (value, span_range) = this.deconstruct();
+        let value = this.into_inner();
+        // TODO: Track proper span through resolution
+        let fallback_span = Span::call_site().span_range();
         match (value, other) {
             (IntegerValue::Untyped(this), Value::Integer(other)) => {
-                this.into_kind(other.kind(), span_range)
+                this.into_kind(other.kind(), fallback_span)
             }
             (value, _) => Ok(value),
         }
@@ -69,9 +71,11 @@ impl IntegerValue {
         this: Owned<IntegerValue>,
         target: &IntegerValue,
     ) -> ExecutionResult<Self> {
-        let (value, span_range) = this.deconstruct();
+        let value = this.into_inner();
+        // TODO: Track proper span through resolution
+        let fallback_span = Span::call_site().span_range();
         match value {
-            IntegerValue::Untyped(this) => this.into_kind(target.kind(), span_range),
+            IntegerValue::Untyped(this) => this.into_kind(target.kind(), fallback_span),
             other => Ok(other),
         }
     }
@@ -83,7 +87,7 @@ impl IntegerValue {
         op: fn(BinaryOperationCallContext, Owned<IntegerValue>, R) -> ExecutionResult<IntegerValue>,
     ) -> ExecutionResult<()> {
         let left_value = core::mem::replace(&mut *left, IntegerValue::U32(0));
-        let result = op(context, left_value.into_owned(left.span_range()), right)?;
+        let result = op(context, left_value.into_owned(), right)?;
         *left = result;
         Ok(())
     }
@@ -404,7 +408,7 @@ define_interface! {
 
             [context] fn shift_left(lhs: Owned<IntegerValue>, right: CoercedToU32) -> ExecutionResult<IntegerValue> {
                 let CoercedToU32(right) = right;
-                match lhs.value {
+                match lhs.into_inner() {
                     IntegerValue::Untyped(left) => left.shift_operation(right, context, FallbackInteger::checked_shl),
                     IntegerValue::U8(left) => left.shift_operation(right, context, u8::checked_shl),
                     IntegerValue::U16(left) => left.shift_operation(right, context, u16::checked_shl),
@@ -427,7 +431,7 @@ define_interface! {
 
             [context] fn shift_right(lhs: Owned<IntegerValue>, right: CoercedToU32) -> ExecutionResult<IntegerValue> {
                 let CoercedToU32(right) = right;
-                match lhs.value {
+                match lhs.into_inner() {
                     IntegerValue::Untyped(left) => left.shift_operation(right, context, FallbackInteger::checked_shr),
                     IntegerValue::U8(left) => left.shift_operation(right, context, u8::checked_shr),
                     IntegerValue::U16(left) => left.shift_operation(right, context, u16::checked_shr),

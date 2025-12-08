@@ -370,9 +370,11 @@ impl EmitStatement {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         let value = self.expression.evaluate_owned(interpreter)?;
+        // TODO: Use proper span from the expression
+        let fallback_span = Span::call_site().span_range();
         value.output_to(
             Grouping::Flattened,
-            &mut ToStreamContext::new(interpreter.output(&self.emit)?, value.span_range()),
+            &mut ToStreamContext::new(interpreter.output(&self.emit)?, fallback_span),
         )
     }
 }

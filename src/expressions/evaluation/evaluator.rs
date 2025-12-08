@@ -203,16 +203,15 @@ impl RequestedValue {
             }
             RequestedValue::Owned(value) => RequestedValue::Owned(map_owned(value)?),
             RequestedValue::Assignee(assignee) => {
-                // assignee is Spanned<Assignee<Value>>
-                // Extract the inner Mutable, wrap it with span, map it, then rewrap
-                let mutable: MutableValue = Spanned(assignee.0 .0, assignee.1);
-                let mapped = map_mutable(mutable)?;
-                RequestedValue::Assignee(Spanned(Assignee(mapped.0), mapped.1))
+                // Assignee is Assignee(Mutable<Value>)
+                // Extract the inner Mutable, map it, then rewrap in Assignee
+                let mapped = map_mutable(assignee.0)?;
+                RequestedValue::Assignee(Assignee(mapped))
             }
             RequestedValue::Mutable(mutable) => RequestedValue::Mutable(map_mutable(mutable)?),
             RequestedValue::Shared(shared) => RequestedValue::Shared(map_shared(shared)?),
             RequestedValue::CopyOnWrite(cow) => {
-                RequestedValue::CopyOnWrite(cow.map_cow(map_shared, map_owned)?)
+                RequestedValue::CopyOnWrite(cow.map(map_shared, map_owned)?)
             }
             RequestedValue::AssignmentCompletion(_) => {
                 panic!("expect_any_value_and_map() called on non-value RequestedValue")
@@ -221,35 +220,9 @@ impl RequestedValue {
     }
 }
 
-impl WithSpanRangeExt for RequestedValue {
-    fn with_span_range(self, span_range: SpanRange) -> Self {
-        match self {
-            RequestedValue::LateBound(late_bound) => {
-                RequestedValue::LateBound(late_bound.with_span_range(span_range))
-            }
-            RequestedValue::Owned(value) => {
-                RequestedValue::Owned(value.with_span_range(span_range))
-            }
-            RequestedValue::Mutable(mutable) => {
-                RequestedValue::Mutable(mutable.with_span_range(span_range))
-            }
-            RequestedValue::Shared(shared) => {
-                RequestedValue::Shared(shared.with_span_range(span_range))
-            }
-            RequestedValue::CopyOnWrite(cow) => {
-                RequestedValue::CopyOnWrite(cow.with_span_range(span_range))
-            }
-            RequestedValue::Assignee(assignee) => {
-                RequestedValue::Assignee(assignee.with_span_range(span_range))
-            }
-            RequestedValue::AssignmentCompletion(assignment_completion) => {
-                RequestedValue::AssignmentCompletion(
-                    assignment_completion.with_span_range(span_range),
-                )
-            }
-        }
-    }
-}
+// Note: RequestedValue no longer implements WithSpanRangeExt since the inner
+// value types (Owned, Mutable, Shared, etc.) no longer carry spans internally.
+// Spans should be tracked separately at a higher level if needed.
 
 /// See the [rust reference] for a good description of assignee vs place.
 ///
@@ -452,11 +425,10 @@ impl<'a> Context<'a, ValueType> {
     pub(super) fn return_value(
         self,
         value: impl IsReturnable,
-        output_span_range: SpanRange,
+        _output_span_range: SpanRange,
     ) -> ExecutionResult<NextAction> {
         Ok(NextAction::return_requested(
-            self.request
-                .map_from_returned(value.to_returned_value(output_span_range)?)?,
+            self.request.map_from_returned(value.to_returned_value()?)?,
         ))
     }
 }

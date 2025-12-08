@@ -1,5 +1,10 @@
 error: This argument is expected to be an integer, but it is an untyped float
- --> tests/compilation_failures/expressions/compare_int_and_float.rs:5:15
+ --> tests/compilation_failures/expressions/compare_int_and_float.rs:4:13
   |
-5 |         #(5 < 6.4)
-  |               ^^^
+4 |       let _ = stream!{
+  |  _____________^
+5 | |         #(5 < 6.4)
+6 | |     };
+  | |_____^
+  |
+  = note: this error originates in the macro `stream` (in Nightly builds, run with -Z macro-backtrace for more info)

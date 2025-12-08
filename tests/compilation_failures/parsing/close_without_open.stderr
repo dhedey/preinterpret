@@ -1,5 +1,11 @@
 error: attempting to close ')' isn't valid, because there is no open group
- --> tests/compilation_failures/parsing/close_without_open.rs:6:26
+ --> tests/compilation_failures/parsing/close_without_open.rs:4:5
   |
-6 |             parser.close(')');
-  |                          ^^^
+4 | /     run!(
+5 | |         let @parser[#{
+6 | |             parser.close(')');
+7 | |         }] = %[Hello World];
+8 | |     );
+  | |_____^
+  |
+  = note: this error originates in the macro `run` (in Nightly builds, run with -Z macro-backtrace for more info)

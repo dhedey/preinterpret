@@ -69,28 +69,32 @@ impl Expression {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         // This must align with is_valid_as_statement_without_semicolon
+        // TODO: Get proper span from expression nodes
+        let fallback_span = Span::call_site().span_range();
         match &self.nodes.get(self.root) {
             ExpressionNode::Leaf(Leaf::Block(block)) => block
                 .evaluate(interpreter, RequestedOwnership::owned())?
                 .expect_owned()
-                .into_statement_result(),
+                .into_statement_result(block.span().span_range()),
             ExpressionNode::Leaf(Leaf::IfExpression(if_expression)) => if_expression
                 .evaluate(interpreter, RequestedOwnership::owned())?
                 .expect_owned()
-                .into_statement_result(),
+                .into_statement_result(if_expression.span_range()),
             ExpressionNode::Leaf(Leaf::LoopExpression(loop_expression)) => loop_expression
                 .evaluate(interpreter, RequestedOwnership::owned())?
                 .expect_owned()
-                .into_statement_result(),
+                .into_statement_result(loop_expression.span_range()),
             ExpressionNode::Leaf(Leaf::WhileExpression(while_expression)) => while_expression
                 .evaluate(interpreter, RequestedOwnership::owned())?
                 .expect_owned()
-                .into_statement_result(),
+                .into_statement_result(while_expression.span_range()),
             ExpressionNode::Leaf(Leaf::ForExpression(for_expression)) => for_expression
                 .evaluate(interpreter, RequestedOwnership::owned())?
                 .expect_owned()
-                .into_statement_result(),
-            _ => self.evaluate_owned(interpreter)?.into_statement_result(),
+                .into_statement_result(for_expression.span_range()),
+            _ => self
+                .evaluate_owned(interpreter)?
+                .into_statement_result(fallback_span),
         }
     }
 }
@@ -168,7 +172,8 @@ impl HasSpanRange for Leaf {
             Leaf::TypeProperty(type_property) => type_property.span_range(),
             Leaf::Discarded(token) => token.span_range(),
             Leaf::Block(block) => block.span_range(),
-            Leaf::Value(value) => value.span_range(),
+            // Shared values no longer carry spans - use call_site as fallback
+            Leaf::Value(_value) => Span::call_site().span_range(),
             Leaf::StreamLiteral(stream) => stream.span_range(),
             Leaf::ParseTemplateLiteral(stream) => stream.span_range(),
             Leaf::IfExpression(expression) => expression.span_range(),

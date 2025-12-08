@@ -114,7 +114,7 @@ impl HandleDestructure for ArrayPattern {
         value: Value,
     ) -> ExecutionResult<()> {
         let array: ArrayValue = value
-            .into_owned(self.brackets.span_range())
+            .into_owned()
             .resolve_as("The value destructured with an array pattern")?;
         let mut has_seen_dot_dot = false;
         let mut prefix_assignees = Vec::new();
@@ -199,17 +199,17 @@ impl ParseSource for PatternOrDotDot {
 
 pub struct ObjectPattern {
     _prefix: Unused<Token![%]>,
-    braces: Braces,
+    _braces: Braces,
     entries: Punctuated<ObjectEntry, Token![,]>,
 }
 
 impl ParseSource for ObjectPattern {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         let _prefix = input.parse()?;
-        let (braces, inner) = input.parse_braces()?;
+        let (_braces, inner) = input.parse_braces()?;
         Ok(Self {
             _prefix,
-            braces,
+            _braces,
             entries: inner.parse_terminated()?,
         })
     }
@@ -230,7 +230,7 @@ impl HandleDestructure for ObjectPattern {
         value: Value,
     ) -> ExecutionResult<()> {
         let object: ObjectValue = value
-            .into_owned(self.braces.span_range())
+            .into_owned()
             .resolve_as("The value destructured with an object pattern")?;
         let mut value_map = object.entries;
         let mut already_used_keys = HashSet::with_capacity(self.entries.len());
@@ -329,7 +329,7 @@ impl ParseSource for ObjectEntry {
 
 pub struct StreamPattern {
     _prefix: Unused<Token![%]>,
-    brackets: Brackets,
+    _brackets: Brackets,
     // TODO[parsers]: Replace with a distinct type that doesn't allow embedded statements, but does allow %[group] and %[raw]
     content: ParseTemplateStream,
 }
@@ -340,7 +340,7 @@ impl ParseSource for StreamPattern {
         let (brackets, inner) = input.parse_brackets()?;
         Ok(Self {
             _prefix,
-            brackets,
+            _brackets: brackets,
             content: ParseTemplateStream::parse_with_span(&inner, brackets.span())?,
         })
     }
@@ -357,7 +357,7 @@ impl HandleDestructure for StreamPattern {
         value: Value,
     ) -> ExecutionResult<()> {
         let stream: StreamValue = value
-            .into_owned(self.brackets.span_range())
+            .into_owned()
             .resolve_as("The value destructured with a stream pattern")?;
         interpreter.start_parse(stream.value, |interpreter, _| {
             self.content.consume(interpreter)
@@ -371,7 +371,7 @@ impl HandleDestructure for StreamPattern {
 pub(crate) struct ParseTemplatePattern {
     _prefix: Unused<Token![@]>,
     parser_definition: VariableDefinition,
-    brackets: Brackets,
+    _brackets: Brackets,
     content: ParseTemplateStream,
 }
 
@@ -384,7 +384,7 @@ impl ParseSource for ParseTemplatePattern {
         Ok(Self {
             _prefix,
             parser_definition,
-            brackets,
+            _brackets: brackets,
             content,
         })
     }
@@ -402,7 +402,7 @@ impl HandleDestructure for ParseTemplatePattern {
         value: Value,
     ) -> ExecutionResult<()> {
         let stream: StreamValue = value
-            .into_owned(self.brackets.span_range())
+            .into_owned()
             .resolve_as("The value destructured with a parse template pattern")?;
         interpreter.start_parse(stream.value, |interpreter, handle| {
             self.parser_definition.define(interpreter, handle);

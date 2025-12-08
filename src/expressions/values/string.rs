@@ -19,7 +19,7 @@ impl IntoValue for StringValue {
 
 impl StringValue {
     pub(super) fn for_litstr(lit: &syn::LitStr) -> Owned<Self> {
-        Self { value: lit.value() }.into_owned(lit.span())
+        Self { value: lit.value() }.into_owned()
     }
 
     pub(super) fn to_literal(&self, span: Span) -> Literal {

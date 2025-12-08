@@ -591,11 +591,7 @@ fn test_iterable_mapping() {
     let as_iterable = my_value.map_type_maybe::<IterableType>().unwrap();
     let iterator = as_iterable.0.into_iterator().unwrap();
     let collected: Vec<u32> = iterator
-        .map(|v| {
-            Owned::new(v, Span::call_site().span_range())
-                .resolve_as("u32")
-                .unwrap()
-        })
+        .map(|v| Owned::new(v).resolve_as("u32").unwrap())
         .collect();
     assert_eq!(collected, vec![42u32]);
 }

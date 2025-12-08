@@ -6,7 +6,11 @@ error: Expected:
            final_separator?: %[or],
        }
        The following field/s are unexpected: finl_separator
- --> tests/compilation_failures/iteration/intersperse_wrong_settings.rs:5:33
+ --> tests/compilation_failures/iteration/intersperse_wrong_settings.rs:4:5
   |
-5 |         [1, 2].intersperse("", %{ finl_separator: "" })
-  |                                 ^^^^^^^^^^^^^^^^^^^^^^
+4 | /     run! {
+5 | |         [1, 2].intersperse("", %{ finl_separator: "" })
+6 | |     }
+  | |_____^
+  |
+  = note: this error originates in the macro `run` (in Nightly builds, run with -Z macro-backtrace for more info)

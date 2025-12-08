@@ -442,7 +442,20 @@ single_span_token! {
 
 pub(crate) struct Spanned<T>(pub(crate) T, pub(crate) SpanRange);
 
+impl<T: Clone> Clone for Spanned<T> {
+    fn clone(&self) -> Self {
+        Spanned(self.0.clone(), self.1)
+    }
+}
+
+impl<T: Copy> Copy for Spanned<T> {}
+
 impl<T> Spanned<T> {
+    #[allow(unused)]
+    pub(crate) fn new(value: T, span_range: SpanRange) -> Self {
+        Spanned(value, span_range)
+    }
+
     #[allow(unused)]
     pub(crate) fn map<U>(self, f: impl FnOnce(T, &SpanRange) -> U) -> Spanned<U> {
         Spanned(f(self.0, &self.1), self.1)
@@ -455,6 +468,7 @@ impl<T> Spanned<T> {
         Ok(Spanned(f(self.0, &self.1)?, self.1))
     }
 
+    #[allow(unused)]
     pub(crate) fn with_span_range(self, span_range: SpanRange) -> Self {
         Spanned(self.0, span_range)
     }

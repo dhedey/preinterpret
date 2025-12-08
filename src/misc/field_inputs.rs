@@ -97,8 +97,10 @@ macro_rules! define_typed_object {
             type Error = ExecutionInterrupt;
 
             fn try_from(object: Owned<ObjectValue>) -> Result<Self, Self::Error> {
-                let (mut object, span_range) = object.deconstruct();
-                (&object).spanned(span_range).validate(&Self::validation())?;
+                let mut object = object.into_inner();
+                // TODO: Track proper span through resolution
+                let fallback_span = Span::call_site().span_range();
+                (&object).spanned(fallback_span).validate(&Self::validation())?;
                 Ok($model {
                     $(
                         $required_field: object.remove_or_none(stringify!($required_field)),
@@ -111,14 +113,14 @@ macro_rules! define_typed_object {
                                 {
                                     // Need to return the $optional_field_type
                                     match optional {
-                                        Some(value) => ResolveAs::<$optional_field_type>::resolve_as(value.into_owned(span_range), stringify!($optional_field))?,
+                                        Some(value) => ResolveAs::<$optional_field_type>::resolve_as(value.into_owned(), stringify!($optional_field))?,
                                         None => $($optional_field_default)?,
                                     }
                                 }
                                 {
                                     // Need to return Option<$optional_field_type>
                                     match optional {
-                                        Some(value) => Some(ResolveAs::<$optional_field_type>::resolve_as(value.into_owned(span_range), stringify!($optional_field))?),
+                                        Some(value) => Some(ResolveAs::<$optional_field_type>::resolve_as(value.into_owned(), stringify!($optional_field))?),
                                         None => None,
                                     }
                                 }

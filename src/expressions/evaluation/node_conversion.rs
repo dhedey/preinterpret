@@ -31,7 +31,7 @@ impl ExpressionNode {
                     Leaf::Value(value) => {
                         // We return a freely clonable CopyOnWrite in order to delay the clone of the literal if it's not necessary
                         // This allows something like e.g. x[0][5][2] to only clone the innermost value instead of the full multi-dimensional array
-                        let shared_cloned = SharedValue::clone_shared(value);
+                        let shared_cloned = Shared::clone(value);
                         let cow = CopyOnWriteValue::shared_in_place_of_owned(shared_cloned);
                         context.return_returned_value(ReturnedValue::CopyOnWrite(cow))?
                     }
@@ -150,7 +150,13 @@ impl ExpressionNode {
             // - Property assignment (allowing for creation of fields)
             // - Index assignment (allowing for creation of keys)
             // - Assignment to any mutable value (e.g. x.as_mut())
-            _ => AssigneeAssigner::start(context, self_node_id, value),
+            // TODO: Get proper span from the expression node
+            _ => AssigneeAssigner::start(
+                context,
+                self_node_id,
+                value,
+                Span::call_site().span_range(),
+            ),
         })
     }
 }

@@ -56,7 +56,7 @@ impl ZipIterators {
                     k,
                     v.key_span,
                     v.value
-                        .into_owned(span_range)
+                        .into_owned()
                         .expect_any_iterator("Each zip input")?
                         .into_inner(),
                 ))
@@ -75,7 +75,7 @@ impl ZipIterators {
         let vec = iterator
             .take(101)
             .map(|x| {
-                x.into_owned(span_range)
+                x.into_owned()
                     .expect_any_iterator("Each zip input")
                     .map(|x| x.into_inner())
             })

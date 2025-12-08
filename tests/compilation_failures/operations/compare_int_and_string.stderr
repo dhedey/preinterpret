@@ -1,5 +1,7 @@
 error: This argument is expected to be an integer, but it is a string
- --> tests/compilation_failures/operations/compare_int_and_string.rs:4:23
+ --> tests/compilation_failures/operations/compare_int_and_string.rs:4:13
   |
 4 |     let _ = run!(5 == "five");
-  |                       ^^^^^^
+  |             ^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the macro `run` (in Nightly builds, run with -Z macro-backtrace for more info)

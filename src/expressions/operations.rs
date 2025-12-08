@@ -291,19 +291,17 @@ impl BinaryOperation {
     ) -> ExecutionResult<Option<OwnedValue>> {
         match self {
             BinaryOperation::LogicalAnd { .. } => {
-                let Spanned(bool_ref, span): Spanned<&bool> =
-                    left.resolve_as("The left operand to &&")?;
-                if !*bool_ref {
-                    Ok(Some(bool_ref.into_owned_value(span)))
+                let bool: Spanned<&bool> = left.resolve_as("The left operand to &&")?;
+                if !**bool {
+                    Ok(Some((*bool).into_owned_value()))
                 } else {
                     Ok(None)
                 }
             }
             BinaryOperation::LogicalOr { .. } => {
-                let Spanned(bool_ref, span): Spanned<&bool> =
-                    left.resolve_as("The left operand to ||")?;
-                if *bool_ref {
-                    Ok(Some(bool_ref.into_owned_value(span)))
+                let bool: Spanned<&bool> = left.resolve_as("The left operand to ||")?;
+                if **bool {
+                    Ok(Some((*bool).into_owned_value()))
                 } else {
                     Ok(None)
                 }
@@ -315,8 +313,8 @@ impl BinaryOperation {
     #[allow(unused)]
     pub(crate) fn evaluate<L: IntoValue, R: IntoValue>(
         &self,
-        left: Spanned<Owned<L>>,
-        right: Spanned<Owned<R>>,
+        left: Owned<L>,
+        right: Owned<R>,
     ) -> ExecutionResult<ReturnedValue> {
         let left = left.into_owned_value();
         let right = right.into_owned_value();

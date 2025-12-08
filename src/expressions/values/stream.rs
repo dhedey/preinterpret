@@ -263,13 +263,14 @@ define_interface! {
         }
         pub(crate) mod unary_operations {
             [context] fn cast_to_value(this: Owned<StreamValue>) -> ExecutionResult<ReturnedValue> {
-                let (this, span_range) = this.deconstruct();
+                let this = this.into_inner();
                 let coerced = this.value.coerce_into_value();
                 if let Value::Stream(_) = &coerced {
-                    return span_range.value_err("The stream could not be coerced into a single value");
+                    // TODO: Track proper span through resolution
+                    return Span::call_site().span_range().value_err("The stream could not be coerced into a single value");
                 }
                 // Re-run the cast operation on the coerced value
-                context.operation.evaluate(coerced.into_owned(span_range))
+                context.operation.evaluate(coerced.into_owned())
             }
         }
         pub(crate) mod binary_operations {

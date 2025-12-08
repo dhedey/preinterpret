@@ -125,7 +125,7 @@ impl IfExpression {
             return else_code.evaluate(interpreter, requested_ownership);
         }
 
-        requested_ownership.map_from_owned(Value::None.into_owned(self.span_range()))
+        requested_ownership.map_from_owned(Value::None.into_owned())
     }
 }
 
@@ -196,7 +196,7 @@ impl WhileExpression {
             let body_result = self.body.evaluate_owned(interpreter);
             match interpreter.catch_control_flow(body_result, self.catch_location, scope)? {
                 ExecutionOutcome::Value(value) => {
-                    value.into_statement_result()?;
+                    value.into_statement_result(self.body.span().span_range())?;
                 }
                 ExecutionOutcome::ControlFlow(control_flow_interrupt) => {
                     match control_flow_interrupt {
@@ -213,7 +213,7 @@ impl WhileExpression {
                 }
             }
         }
-        ownership.map_none(self.span_range())
+        ownership.map_none()
     }
 }
 
@@ -276,7 +276,7 @@ impl LoopExpression {
             let body_result = self.body.evaluate_owned(interpreter);
             match interpreter.catch_control_flow(body_result, self.catch_location, scope)? {
                 ExecutionOutcome::Value(value) => {
-                    value.into_statement_result()?;
+                    value.into_statement_result(self.body.span().span_range())?;
                 }
                 ExecutionOutcome::ControlFlow(control_flow_interrupt) => {
                     match control_flow_interrupt {
@@ -382,7 +382,7 @@ impl ForExpression {
             let body_result = self.body.evaluate_owned(interpreter);
             match interpreter.catch_control_flow(body_result, self.catch_location, scope)? {
                 ExecutionOutcome::Value(value) => {
-                    value.into_statement_result()?;
+                    value.into_statement_result(self.body.span().span_range())?;
                 }
                 ExecutionOutcome::ControlFlow(control_flow_interrupt) => {
                     match control_flow_interrupt {
@@ -400,7 +400,7 @@ impl ForExpression {
             }
             interpreter.exit_scope(self.iteration_scope);
         }
-        ownership.map_none(self.span_range())
+        ownership.map_none()
     }
 }
 

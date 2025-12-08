@@ -127,9 +127,10 @@ impl IsArgument for IterableRef<'static> {
             ValueKind::Object => IterableRef::Object(IsArgument::from_argument(value)?),
             ValueKind::String => IterableRef::String(IsArgument::from_argument(value)?),
             _ => {
-                return value.type_err(
+                // TODO: Track proper span through argument resolution
+                return Span::call_site().span_range().type_err(
                     "Expected iterable (iterator, array, object, stream, range or string)",
-                )
+                );
             }
         })
     }
@@ -137,11 +138,12 @@ impl IsArgument for IterableRef<'static> {
 
 impl Spanned<IterableRef<'_>> {
     pub(crate) fn len(&self) -> ExecutionResult<usize> {
-        match &self.value {
-            IterableRef::Iterator(iterator) => iterator.len(self.span_range),
+        let span_range = self.span_range();
+        match &**self {
+            IterableRef::Iterator(iterator) => iterator.len(span_range),
             IterableRef::Array(value) => Ok(value.items.len()),
             IterableRef::Stream(value) => Ok(value.len()),
-            IterableRef::Range(value) => value.len(self.span_range),
+            IterableRef::Range(value) => value.len(span_range),
             IterableRef::Object(value) => Ok(value.entries.len()),
             // NB - this is different to string.len() which counts bytes
             IterableRef::String(value) => Ok(value.chars().count()),

@@ -86,7 +86,7 @@ impl EmbeddedStatements {
         self.content
             .evaluate(interpreter, self.span_range(), RequestedOwnership::owned())?
             .expect_owned()
-            .into_statement_result()
+            .into_statement_result(self.span_range())
     }
 }
 
@@ -312,18 +312,19 @@ impl ExpressionBlockContent {
     pub(crate) fn evaluate(
         &self,
         interpreter: &mut Interpreter,
-        output_span_range: SpanRange,
+        _output_span_range: SpanRange,
         ownership: RequestedOwnership,
     ) -> ExecutionResult<RequestedValue> {
         for (i, (statement, semicolon)) in self.statements.iter().enumerate() {
             let is_last = i == self.statements.len() - 1;
             if is_last && semicolon.is_none() {
                 let value = statement.evaluate_as_returning_expression(interpreter, ownership)?;
-                return Ok(value.with_span_range(output_span_range));
+                // Note: RequestedValue no longer carries spans; span is discarded
+                return Ok(value);
             } else {
                 statement.evaluate_as_statement(interpreter)?;
             }
         }
-        ownership.map_from_owned(Value::None.into_owned(output_span_range))
+        ownership.map_from_owned(Owned(Value::None))
     }
 }

@@ -37,6 +37,7 @@ struct PrivateUnit;
 
 pub(super) struct AssigneeAssigner {
     value: Value,
+    span_range: SpanRange,
 }
 
 impl AssigneeAssigner {
@@ -44,8 +45,9 @@ impl AssigneeAssigner {
         context: AssignmentContext,
         assignee: ExpressionNodeId,
         value: Value,
+        span_range: SpanRange,
     ) -> NextAction {
-        let frame = Self { value };
+        let frame = Self { value, span_range };
         context.request_assignee(frame, assignee, true)
     }
 }
@@ -64,9 +66,8 @@ impl EvaluationFrame for AssigneeAssigner {
     ) -> ExecutionResult<NextAction> {
         let mut assignee = value.expect_assignee();
         let value = self.value;
-        let span_range = assignee.span_range();
         assignee.set(value);
-        Ok(context.return_assignment_completion(span_range))
+        Ok(context.return_assignment_completion(self.span_range))
     }
 }
 
@@ -126,7 +127,7 @@ impl ArrayBasedAssigner {
     ) -> ExecutionResult<Self> {
         let span_range = assignee_span.span_range();
         let array: ArrayValue = value
-            .into_owned(span_range)
+            .into_owned()
             .resolve_as("The value destructured as an array")?;
         let mut has_seen_dot_dot = false;
         let mut prefix_assignees = Vec::new();
@@ -254,7 +255,7 @@ impl ObjectBasedAssigner {
     ) -> ExecutionResult<Self> {
         let span_range = assignee_span.span_range();
         let object: ObjectValue = value
-            .into_owned(span_range)
+            .into_owned()
             .resolve_as("The value destructured as an object")?;
 
         Ok(Self {

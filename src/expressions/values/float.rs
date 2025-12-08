@@ -26,7 +26,7 @@ impl FloatValue {
                 ));
             }
         }
-        .into_owned(lit.span()))
+        .into_owned())
     }
 
     /// Outputs this float value to a token stream.
@@ -82,9 +82,9 @@ impl FloatValue {
         this: Owned<FloatValue>,
         target: &FloatValue,
     ) -> ExecutionResult<Self> {
-        let (value, span_range) = this.deconstruct();
+        let value = this.into_inner();
         match value {
-            FloatValue::Untyped(this) => this.into_owned(span_range).into_kind(target.kind()),
+            FloatValue::Untyped(this) => this.into_owned().into_kind(target.kind()),
             other => Ok(other),
         }
     }
@@ -96,7 +96,7 @@ impl FloatValue {
         op: fn(BinaryOperationCallContext, Owned<FloatValue>, R) -> ExecutionResult<FloatValue>,
     ) -> ExecutionResult<()> {
         let left_value = core::mem::replace(&mut *left, FloatValue::F32(0.0));
-        let result = op(context, left_value.into_owned(left.span_range()), right)?;
+        let result = op(context, left_value.into_owned(), right)?;
         *left = result;
         Ok(())
     }

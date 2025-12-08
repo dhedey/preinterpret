@@ -51,19 +51,21 @@ impl<'a, T: ?Sized> ToSpannedRef<'a> for &'a T {
 impl<'a, T: ?Sized> From<Shared<T>> for AnyRef<'a, T> {
     fn from(value: Shared<T>) -> Self {
         Self {
-            inner: AnyRefInner::Encapsulated(value.shared_cell),
+            inner: AnyRefInner::Encapsulated(value.0),
         }
     }
 }
 
 impl<'a, T: ?Sized> From<Shared<T>> for SpannedAnyRef<'a, T> {
     fn from(value: Shared<T>) -> Self {
-        Self {
-            value: AnyRef {
-                inner: AnyRefInner::Encapsulated(value.shared_cell),
+        // TODO: Track proper span through shared value
+        let span_range = Span::call_site().span_range();
+        Spanned(
+            AnyRef {
+                inner: AnyRefInner::Encapsulated(value.0),
             },
-            span_range: value.span_range,
-        }
+            span_range,
+        )
     }
 }
 
@@ -123,19 +125,21 @@ impl<'a, T: ?Sized + 'static> IntoRefMut<'a> for &'a mut T {
 impl<'a, T: ?Sized> From<Mutable<T>> for AnyRefMut<'a, T> {
     fn from(value: Mutable<T>) -> Self {
         Self {
-            inner: AnyRefMutInner::Encapsulated(value.mut_cell),
+            inner: AnyRefMutInner::Encapsulated(value.0),
         }
     }
 }
 
 impl<'a, T: ?Sized> From<Mutable<T>> for SpannedAnyRefMut<'a, T> {
     fn from(value: Mutable<T>) -> Self {
-        Self {
-            value: AnyRefMut {
-                inner: AnyRefMutInner::Encapsulated(value.mut_cell),
+        // TODO: Track proper span through mutable value
+        let span_range = Span::call_site().span_range();
+        Spanned(
+            AnyRefMut {
+                inner: AnyRefMutInner::Encapsulated(value.0),
             },
-            span_range: value.span_range,
-        }
+            span_range,
+        )
     }
 }
 

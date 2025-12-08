@@ -114,8 +114,8 @@ pub(crate) fn apply_fn0<R>(
 where
     R: IsReturnable,
 {
-    let output_span_range = context.output_span_range;
-    f(context).to_returned_value(output_span_range)
+    let _output_span_range = context.output_span_range;
+    f(context).to_returned_value()
 }
 
 pub(crate) fn apply_fn1<A, R>(
@@ -127,8 +127,8 @@ where
     A: IsArgument,
     R: IsReturnable,
 {
-    let output_span_range = context.output_span_range;
-    f(context, A::from_argument(a)?).to_returned_value(output_span_range)
+    let _output_span_range = context.output_span_range;
+    f(context, A::from_argument(a)?).to_returned_value()
 }
 
 #[allow(unused)]
@@ -143,13 +143,13 @@ where
     B: IsArgument,
     C: IsReturnable,
 {
-    let output_span_range = context.output_span_range;
+    let _output_span_range = context.output_span_range;
     f(
         context,
         A::from_argument(a)?,
         b.map(|b| B::from_argument(b)).transpose()?,
     )
-    .to_returned_value(output_span_range)
+    .to_returned_value()
 }
 
 pub(crate) fn apply_fn2<A, B, C>(
@@ -163,8 +163,8 @@ where
     B: IsArgument,
     C: IsReturnable,
 {
-    let output_span_range = context.output_span_range;
-    f(context, A::from_argument(a)?, B::from_argument(b)?).to_returned_value(output_span_range)
+    let _output_span_range = context.output_span_range;
+    f(context, A::from_argument(a)?, B::from_argument(b)?).to_returned_value()
 }
 
 pub(crate) fn apply_fn2_optional1<A, B, C, D>(
@@ -180,14 +180,14 @@ where
     C: IsArgument,
     D: IsReturnable,
 {
-    let output_span_range = context.output_span_range;
+    let _output_span_range = context.output_span_range;
     f(
         context,
         A::from_argument(a)?,
         B::from_argument(b)?,
         c.map(|c| C::from_argument(c)).transpose()?,
     )
-    .to_returned_value(output_span_range)
+    .to_returned_value()
 }
 
 #[allow(unused)]
@@ -211,7 +211,7 @@ where
         B::from_argument(b)?,
         C::from_argument(c)?,
     )
-    .to_returned_value(output_span_range)
+    .to_returned_value()
 }
 
 pub(crate) fn apply_fn3_optional1<A, B, C, D, R>(
@@ -229,7 +229,7 @@ where
     D: IsArgument,
     R: IsReturnable,
 {
-    let output_span_range = context.output_span_range;
+    let _output_span_range = context.output_span_range;
     f(
         context,
         A::from_argument(a)?,
@@ -237,7 +237,7 @@ where
         C::from_argument(c)?,
         d.map(|d| D::from_argument(d)).transpose()?,
     )
-    .to_returned_value(output_span_range)
+    .to_returned_value()
 }
 
 macro_rules! create_unary_interface {
@@ -258,8 +258,8 @@ where
     A: IsArgument,
     R: IsReturnable,
 {
-    let output_span_range = context.output_span_range;
-    f(context, A::from_argument(a)?).to_returned_value(output_span_range)
+    let _output_span_range = context.output_span_range;
+    f(context, A::from_argument(a)?).to_returned_value()
 }
 
 macro_rules! create_binary_interface {
@@ -286,8 +286,8 @@ where
     B: IsArgument,
     R: IsReturnable,
 {
-    let output_span_range = context.output_span_range;
-    f(context, A::from_argument(lhs)?, B::from_argument(rhs)?).to_returned_value(output_span_range)
+    let _output_span_range = context.output_span_range;
+    f(context, A::from_argument(lhs)?, B::from_argument(rhs)?).to_returned_value()
 }
 
 pub(crate) struct MethodCallContext<'a> {

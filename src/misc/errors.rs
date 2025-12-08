@@ -318,12 +318,12 @@ pub(crate) struct BreakInterrupt {
 impl BreakInterrupt {
     pub(crate) fn into_value(
         self,
-        span_range: SpanRange,
+        _span_range: SpanRange,
         ownership: RequestedOwnership,
     ) -> ExecutionResult<RequestedValue> {
         let value = match self.value {
             Some(value) => value,
-            None => ().into_owned_value(span_range),
+            None => ().into_owned_value(),
         };
         ownership.map_from_owned(value)
     }

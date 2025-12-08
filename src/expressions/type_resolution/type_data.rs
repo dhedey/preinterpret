@@ -261,7 +261,9 @@ impl UnaryOperationInterface {
         input: ArgumentValue,
         operation: &UnaryOperation,
     ) -> ExecutionResult<ReturnedValue> {
-        let output_span_range = operation.output_span_range(input.span_range());
+        // TODO: Track proper span from input
+        let fallback_span = Span::call_site().span_range();
+        let output_span_range = operation.output_span_range(fallback_span);
         (self.method)(
             UnaryOperationCallContext {
                 operation,
@@ -293,7 +295,9 @@ impl BinaryOperationInterface {
         rhs: ArgumentValue,
         operation: &BinaryOperation,
     ) -> ExecutionResult<ReturnedValue> {
-        let output_span_range = SpanRange::new_between(lhs.span_range(), rhs.span_range());
+        // TODO: Track proper spans from lhs and rhs
+        let fallback_span = Span::call_site().span_range();
+        let output_span_range = fallback_span;
         (self.method)(
             BinaryOperationCallContext {
                 operation,

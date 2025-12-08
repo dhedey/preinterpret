@@ -15,10 +15,11 @@ macro_rules! impl_int_operations {
                     $(
                         fn neg(this: Owned<$integer_type>) -> ExecutionResult<$integer_type> {
                             ignore_all!($signed); // Include only for signed types
-                            let (value, span_range) = this.deconstruct();
+                            let value = this.into_inner();
                             match value.checked_neg() {
                                 Some(negated) => Ok(negated),
-                                None => span_range.value_err("Negating this value would overflow"),
+                                // TODO: Track proper span through resolution
+                                None => Span::call_site().span_range().value_err("Negating this value would overflow"),
                             }
                         }
                     )?

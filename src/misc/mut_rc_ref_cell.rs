@@ -100,6 +100,25 @@ impl<T: 'static + ?Sized, U: 'static + ?Sized> MutSubRcRefCell<T, U> {
             Err(_) => Err(error.unwrap()),
         }
     }
+
+    /// Like try_map but returns self on error instead of losing it
+    pub(crate) fn try_map_or_self<V: ?Sized>(
+        self,
+        f: impl FnOnce(&mut U) -> Option<&mut V>,
+    ) -> Result<MutSubRcRefCell<T, V>, Self> {
+        let pointed_at = Rc::clone(&self.pointed_at);
+        let outcome = RefMut::filter_map(self.ref_mut, f);
+        match outcome {
+            Ok(ref_mut) => Ok(MutSubRcRefCell {
+                ref_mut,
+                pointed_at,
+            }),
+            Err(original_ref_mut) => Err(MutSubRcRefCell {
+                ref_mut: original_ref_mut,
+                pointed_at,
+            }),
+        }
+    }
 }
 
 impl<T: 'static + ?Sized, U: 'static + ?Sized> DerefMut for MutSubRcRefCell<T, U> {

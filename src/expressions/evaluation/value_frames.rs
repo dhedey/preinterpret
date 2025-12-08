@@ -55,67 +55,31 @@ impl ArgumentValue {
     pub(crate) unsafe fn disable(&mut self) {
         match self {
             ArgumentValue::Owned(_) => {}
-            ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write.0.disable(),
-            ArgumentValue::Mutable(mutable) => mutable.0.disable(),
-            ArgumentValue::Assignee(assignee) => assignee.0 .0.disable(),
-            ArgumentValue::Shared(shared) => shared.0.disable(),
+            ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write.disable(),
+            ArgumentValue::Mutable(mutable) => mutable.disable(),
+            ArgumentValue::Assignee(assignee) => assignee.0.disable(),
+            ArgumentValue::Shared(shared) => shared.disable(),
         }
     }
 
     /// SAFETY:
     /// * Must only be used after a call to `disable()`.
+    ///
+    /// Returns an ownership error if re-enabling fails (e.g., due to conflicting borrows).
     pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
         match self {
             ArgumentValue::Owned(_) => Ok(()),
             ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write.enable(),
             ArgumentValue::Mutable(mutable) => mutable.enable(),
-            ArgumentValue::Assignee(assignee) => {
-                // assignee is Spanned<Assignee<Value>>
-                // We need to create a temp Spanned<Mutable<Value>> to call enable
-                let span = assignee.1;
-                assignee
-                    .0
-                     .0
-                     .0
-                    .enable()
-                    .map_err(|_| span.ownership_error("The variable cannot be modified as it is already being modified"))
-            }
+            ArgumentValue::Assignee(assignee) => assignee.0.enable(),
             ArgumentValue::Shared(shared) => shared.enable(),
         }
     }
 }
 
-impl HasSpanRange for ArgumentValue {
-    fn span_range(&self) -> SpanRange {
-        match self {
-            ArgumentValue::Owned(owned) => owned.span_range(),
-            ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write.span_range(),
-            ArgumentValue::Mutable(mutable) => mutable.span_range(),
-            ArgumentValue::Assignee(assignee) => assignee.span_range(),
-            ArgumentValue::Shared(shared) => shared.span_range(),
-        }
-    }
-}
-
-impl WithSpanRangeExt for ArgumentValue {
-    fn with_span_range(self, span_range: SpanRange) -> Self {
-        match self {
-            ArgumentValue::Owned(value) => ArgumentValue::Owned(value.with_span_range(span_range)),
-            ArgumentValue::Mutable(reference) => {
-                ArgumentValue::Mutable(reference.with_span_range(span_range))
-            }
-            ArgumentValue::Assignee(assignee) => {
-                ArgumentValue::Assignee(assignee.with_span_range(span_range))
-            }
-            ArgumentValue::Shared(shared) => {
-                ArgumentValue::Shared(shared.with_span_range(span_range))
-            }
-            ArgumentValue::CopyOnWrite(copy_on_write) => {
-                ArgumentValue::CopyOnWrite(copy_on_write.with_span_range(span_range))
-            }
-        }
-    }
-}
+// Note: ArgumentValue no longer implements HasSpanRange or WithSpanRangeExt
+// since the inner value types no longer carry spans internally.
+// Spans should be tracked separately at a higher level if needed.
 
 impl Deref for ArgumentValue {
     type Target = Value;
@@ -174,8 +138,8 @@ impl RequestedOwnership {
         }
     }
 
-    pub(crate) fn map_none(self, span_range: SpanRange) -> ExecutionResult<RequestedValue> {
-        self.map_from_owned(().into_owned_value(span_range))
+    pub(crate) fn map_none(self) -> ExecutionResult<RequestedValue> {
+        self.map_from_owned(().into_owned_value())
     }
 
     pub(crate) fn map_from_late_bound(
@@ -242,6 +206,8 @@ impl RequestedOwnership {
             RequestedOwnership::LateBound => Ok(RequestedValue::LateBound(LateBoundValue::Owned(
                 LateBoundOwnedValue {
                     owned: value,
+                    // TODO: Get proper span - using call_site as fallback
+                    span_range: Span::call_site().span_range(),
                     is_from_last_use: false,
                 },
             ))),
@@ -284,11 +250,9 @@ impl RequestedOwnership {
         assignee: AssigneeValue,
     ) -> ExecutionResult<RequestedValue> {
         match self {
-            RequestedOwnership::LateBound => {
-                // Convert Spanned<Assignee<Value>> to MutableValue = Spanned<Mutable<Value>>
-                let mutable = Spanned(assignee.0 .0, assignee.1);
-                Ok(RequestedValue::LateBound(LateBoundValue::Mutable(mutable)))
-            }
+            RequestedOwnership::LateBound => Ok(RequestedValue::LateBound(
+                LateBoundValue::Mutable(assignee.0),
+            )),
             RequestedOwnership::Concrete(requested) => requested
                 .map_from_assignee(assignee)
                 .map(Self::item_from_argument),
@@ -298,7 +262,7 @@ impl RequestedOwnership {
     pub(crate) fn map_from_shared(&self, shared: SharedValue) -> ExecutionResult<RequestedValue> {
         match self {
             RequestedOwnership::LateBound => Ok(RequestedValue::LateBound(
-                LateBoundValue::CopyOnWrite(CopyOnWriteValue::shared_in_place_of_shared(shared)),
+                LateBoundValue::CopyOnWrite(CopyOnWrite::shared_in_place_of_shared(shared)),
             )),
             RequestedOwnership::Concrete(requested) => requested
                 .map_from_shared(shared)
@@ -385,24 +349,26 @@ impl ArgumentOwnership {
         copy_on_write: CopyOnWriteValue,
     ) -> ExecutionResult<ArgumentValue> {
         match self {
-            ArgumentOwnership::Owned => Ok(ArgumentValue::Owned(
-                copy_on_write.into_owned_transparently()?,
-            )),
+            ArgumentOwnership::Owned => {
+                Ok(ArgumentValue::Owned(copy_on_write.into_owned_infallible()))
+            }
             ArgumentOwnership::Shared => Ok(ArgumentValue::Shared(copy_on_write.into_shared())),
             ArgumentOwnership::Mutable => {
                 if copy_on_write.acts_as_shared_reference() {
-                    copy_on_write.ownership_err("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone()` to get a mutable reference to a cloned value.")
+                    // TODO: Get proper span for error
+                    Span::call_site().ownership_err("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone()` to get a mutable reference to a cloned value.")
                 } else {
-                    Ok(ArgumentValue::Mutable(MutableValue::new_from_owned(
-                        copy_on_write.into_owned_transparently()?,
+                    Ok(ArgumentValue::Mutable(Mutable::new_from_owned(
+                        copy_on_write.into_owned_infallible().into_inner(),
                     )))
                 }
             }
             ArgumentOwnership::Assignee { .. } => {
+                // TODO: Get proper span for error
                 if copy_on_write.acts_as_shared_reference() {
-                    copy_on_write.ownership_err("A shared reference cannot be assigned to.")
+                    Span::call_site().ownership_err("A shared reference cannot be assigned to.")
                 } else {
-                    copy_on_write.ownership_err("An owned value cannot be assigned to.")
+                    Span::call_site().ownership_err("An owned value cannot be assigned to.")
                 }
             }
             ArgumentOwnership::CopyOnWrite | ArgumentOwnership::AsIs => {
@@ -414,7 +380,8 @@ impl ArgumentOwnership {
     pub(crate) fn map_from_shared(&self, shared: SharedValue) -> ExecutionResult<ArgumentValue> {
         self.map_from_shared_with_error_reason(
             shared,
-            |shared| shared.ownership_error("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone().as_mut()` to get a mutable reference."),
+            // TODO: Get proper span for error
+            |_shared| Span::call_site().ownership_error("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone().as_mut()` to get a mutable reference."),
         )
     }
 
@@ -424,9 +391,9 @@ impl ArgumentOwnership {
         mutable_error: impl FnOnce(SharedValue) -> ExecutionInterrupt,
     ) -> ExecutionResult<ArgumentValue> {
         match self {
-            ArgumentOwnership::Owned => Ok(ArgumentValue::Owned(shared.transparent_clone()?)),
+            ArgumentOwnership::Owned => Ok(ArgumentValue::Owned(shared.infallible_clone())),
             ArgumentOwnership::CopyOnWrite => Ok(ArgumentValue::CopyOnWrite(
-                CopyOnWriteValue::shared_in_place_of_shared(shared),
+                CopyOnWrite::shared_in_place_of_shared(shared),
             )),
             ArgumentOwnership::Assignee { .. } => Err(mutable_error(shared)),
             ArgumentOwnership::Mutable => Err(mutable_error(shared)),
@@ -444,9 +411,7 @@ impl ArgumentOwnership {
         &self,
         assignee: AssigneeValue,
     ) -> ExecutionResult<ArgumentValue> {
-        // Convert Spanned<Assignee<Value>> to Spanned<Mutable<Value>>
-        let mutable = Spanned(assignee.0 .0, assignee.1);
-        self.map_from_mutable_inner(mutable, false)
+        self.map_from_mutable_inner(assignee.0, false)
     }
 
     fn map_from_mutable_inner(
@@ -457,21 +422,20 @@ impl ArgumentOwnership {
         match self {
             ArgumentOwnership::Owned => {
                 if is_late_bound {
-                    Ok(ArgumentValue::Owned(mutable.transparent_clone()?))
+                    // Use infallible clone for late-bound values
+                    Ok(ArgumentValue::Owned(Owned(mutable.as_ref().clone())))
                 } else {
-                    mutable.ownership_err("An owned value is required, but a mutable reference was received. This indicates a possible bug. If this was intended, use `.clone()` to get an owned value.")
+                    // TODO: Get proper span for error
+                    Span::call_site().ownership_err("An owned value is required, but a mutable reference was received. This indicates a possible bug. If this was intended, use `.clone()` to get an owned value.")
                 }
             }
             ArgumentOwnership::CopyOnWrite => Ok(ArgumentValue::CopyOnWrite(
-                CopyOnWriteValue::shared_in_place_of_shared(mutable.into_shared()),
+                CopyOnWrite::shared_in_place_of_shared(mutable.into_shared()),
             )),
             ArgumentOwnership::Mutable | ArgumentOwnership::AsIs => {
                 Ok(ArgumentValue::Mutable(mutable))
             }
-            ArgumentOwnership::Assignee { .. } => {
-                // Convert Spanned<Mutable<Value>> to Spanned<Assignee<Value>>
-                Ok(ArgumentValue::Assignee(Spanned(Assignee(mutable.0), mutable.1)))
-            }
+            ArgumentOwnership::Assignee { .. } => Ok(ArgumentValue::Assignee(Assignee(mutable))),
             ArgumentOwnership::Shared => Ok(ArgumentValue::Shared(mutable.into_shared())),
         }
     }
@@ -488,19 +452,22 @@ impl ArgumentOwnership {
         match self {
             ArgumentOwnership::Owned | ArgumentOwnership::AsIs => Ok(ArgumentValue::Owned(owned)),
             ArgumentOwnership::CopyOnWrite => {
-                Ok(ArgumentValue::CopyOnWrite(CopyOnWriteValue::owned(owned)))
+                Ok(ArgumentValue::CopyOnWrite(CopyOnWrite::owned(owned)))
             }
-            ArgumentOwnership::Mutable => {
-                Ok(ArgumentValue::Mutable(MutableValue::new_from_owned(owned)))
-            }
+            ArgumentOwnership::Mutable => Ok(ArgumentValue::Mutable(Mutable::new_from_owned(
+                owned.into_inner(),
+            ))),
             ArgumentOwnership::Assignee { .. } => {
+                // TODO: Get proper span for error
                 if is_from_last_use {
-                    owned.ownership_err("The final usage of a variable cannot be assigned to. You can use `let _ = ..` to discard a value.")
+                    Span::call_site().ownership_err("The final usage of a variable cannot be assigned to. You can use `let _ = ..` to discard a value.")
                 } else {
-                    owned.ownership_err("An owned value cannot be assigned to.")
+                    Span::call_site().ownership_err("An owned value cannot be assigned to.")
                 }
             }
-            ArgumentOwnership::Shared => Ok(ArgumentValue::Shared(SharedValue::new_from_owned(owned))),
+            ArgumentOwnership::Shared => Ok(ArgumentValue::Shared(Shared::new_from_owned(
+                owned.into_inner(),
+            ))),
         }
     }
 }
@@ -819,9 +786,10 @@ impl EvaluationFrame for BinaryOperationBuilder {
                 let left_late_bound = value.expect_late_bound();
 
                 // Check for lazy evaluation first (short-circuit operators)
+                // TODO: Get proper span for left value
                 let left_value = left_late_bound
                     .as_ref()
-                    .spanned(left_late_bound.span_range());
+                    .spanned(self.operation.span_range());
                 if let Some(result) = self.operation.lazy_evaluate(left_value)? {
                     context.return_returned_value(ReturnedValue::Owned(result))?
                 } else {
@@ -870,6 +838,7 @@ impl EvaluationFrame for BinaryOperationBuilder {
                 unsafe {
                     // SAFETY: We disabled left above
                     right.disable();
+                    // SAFETY: enable() may fail if left and right reference the same variable
                     left.enable()?;
                     right.enable()?;
                 }
@@ -976,15 +945,15 @@ impl EvaluationFrame for ValueIndexAccessBuilder {
             }
             IndexPath::OnIndexBranch { source } => {
                 let index = value.expect_shared();
+                // Wrap index value in Spanned using access span
+                let index_spanned = index.as_ref().spanned(self.access.span_range());
 
                 let auto_create = context.requested_ownership().requests_auto_create();
                 context.return_not_necessarily_matching_requested(
                     source.expect_any_value_and_map(
-                        |shared| shared.resolve_indexed(self.access, index.as_spanned()),
-                        |mutable| {
-                            mutable.resolve_indexed(self.access, index.as_spanned(), auto_create)
-                        },
-                        |owned| owned.resolve_indexed(self.access, index.as_spanned()),
+                        |shared| shared.resolve_indexed(self.access, index_spanned),
+                        |mutable| mutable.resolve_indexed(self.access, index_spanned, auto_create),
+                        |owned| owned.resolve_indexed(self.access, index_spanned),
                     )?,
                 )?
             }
@@ -1308,7 +1277,7 @@ impl EvaluationFrame for MethodCallBuilder {
                         // - We enable left-to-right for intuitive error messages: later borrows will report errors
                         unsafe {
                             for argument in &mut arguments {
-                                // SAFETY: We disabled them above
+                                // SAFETY: enable() may fail if arguments conflict (e.g., same variable)
                                 argument.enable()?;
                             }
                         }

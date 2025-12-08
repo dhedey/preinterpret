@@ -550,7 +550,7 @@ define_interface! {
 
             fn as_mut(this: ArgumentValue) -> ExecutionResult<MutableValue> {
                 Ok(match this {
-                    ArgumentValue::Owned(owned) => Mutable::new_from_owned(owned),
+                    ArgumentValue::Owned(owned) => Mutable::new_from_owned(owned.into_inner()),
                     ArgumentValue::CopyOnWrite(copy_on_write) => ArgumentOwnership::Mutable.map_from_copy_on_write(copy_on_write)?.expect_mutable(),
                     ArgumentValue::Mutable(mutable) => mutable,
                     ArgumentValue::Assignee(assignee) => assignee.0,
@@ -573,32 +573,40 @@ define_interface! {
             }
 
             fn debug(this: CopyOnWriteValue) -> ExecutionResult<()> {
-                let span_range = this.span_range();
+                // TODO: Track proper span through argument resolution
+                let span_range = Span::call_site().span_range();
                 let message = this.concat_recursive(&ConcatBehaviour::debug(span_range))?;
                 span_range.debug_err(message)
             }
 
             fn to_debug_string(this: CopyOnWriteValue) -> ExecutionResult<String> {
-                let span_range = this.span_range();
+                // TODO: Track proper span through argument resolution
+                let span_range = Span::call_site().span_range();
                 this.concat_recursive(&ConcatBehaviour::debug(span_range))
             }
 
             fn to_stream(input: CopyOnWriteValue) -> ExecutionResult<OutputStream> {
+                // TODO: Track proper span through argument resolution
+                let span_range = Span::call_site().span_range();
                 input.map_into(
-                    |shared| shared.output_to_new_stream(Grouping::Flattened, shared.span_range()),
-                    |owned| owned.value.into_stream(Grouping::Flattened, owned.span_range),
+                    |shared| shared.output_to_new_stream(Grouping::Flattened, span_range),
+                    |owned| owned.0.into_stream(Grouping::Flattened, span_range),
                 )
             }
 
             fn to_group(input: CopyOnWriteValue) -> ExecutionResult<OutputStream> {
+                // TODO: Track proper span through argument resolution
+                let span_range = Span::call_site().span_range();
                 input.map_into(
-                    |shared| shared.output_to_new_stream(Grouping::Grouped, shared.span_range()),
-                    |owned| owned.value.into_stream(Grouping::Grouped, owned.span_range),
+                    |shared| shared.output_to_new_stream(Grouping::Grouped, span_range),
+                    |owned| owned.0.into_stream(Grouping::Grouped, span_range),
                 )
             }
 
             fn to_string(input: SharedValue) -> ExecutionResult<String> {
-                input.concat_recursive(&ConcatBehaviour::standard(input.span_range()))
+                // TODO: Track proper span through argument resolution
+                let span_range = Span::call_site().span_range();
+                input.concat_recursive(&ConcatBehaviour::standard(span_range))
             }
 
             [context] fn with_span(this: CopyOnWriteValue, spans: AnyRef<StreamValue>) -> ExecutionResult<OutputStream> {
@@ -662,7 +670,9 @@ define_interface! {
         }
         pub(crate) mod unary_operations {
             fn cast_to_string(input: OwnedValue) -> ExecutionResult<String> {
-                let (input, span_range) = input.deconstruct();
+                let input = input.into_inner();
+                // TODO: Track proper span through argument resolution
+                let span_range = Span::call_site().span_range();
                 input.concat_recursive(&ConcatBehaviour::standard(span_range))
             }
 
@@ -706,11 +716,11 @@ define_interface! {
 
 pub(crate) trait IntoValue: Sized {
     fn into_value(self) -> Value;
-    fn into_owned(self, span_range: impl HasSpanRange) -> Spanned<Owned<Self>> {
-        Spanned(Owned(self), span_range.span_range())
+    fn into_owned(self) -> Owned<Self> {
+        Owned::new(self)
     }
-    fn into_owned_value(self, span_range: impl HasSpanRange) -> OwnedValue {
-        OwnedValue::new(self.into_value(), span_range.span_range())
+    fn into_owned_value(self) -> OwnedValue {
+        Owned(self.into_value())
     }
 }
 
@@ -744,10 +754,7 @@ impl Value {
         };
         match matched {
             Some(value) => value,
-            None => {
-                let span = lit.span();
-                Self::UnsupportedLiteral(UnsupportedLiteral { lit }).into_owned(span)
-            }
+            None => Self::UnsupportedLiteral(UnsupportedLiteral { lit }).into_owned(),
         }
     }
 
@@ -1083,14 +1090,16 @@ impl HasSpanRange for ToStreamContext<'_> {
 
 impl OwnedValue {
     pub(crate) fn into_stream(self) -> ExecutionResult<OutputStream> {
-        self.value.into_stream(Grouping::Flattened, self.span_range)
+        // TODO: Track proper span through owned value
+        let span_range = Span::call_site().span_range();
+        self.0.into_stream(Grouping::Flattened, span_range)
     }
 
     pub(crate) fn expect_any_iterator(
         self,
         resolution_target: &str,
     ) -> ExecutionResult<Owned<IteratorValue>> {
-        IterableValue::resolve_owned(self, resolution_target)?.try_map(|v, _| v.into_iterator())
+        IterableValue::resolve_owned(self, resolution_target)?.try_map(|v| v.into_iterator())
     }
 }
 

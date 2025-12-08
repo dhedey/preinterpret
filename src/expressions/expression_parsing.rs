@@ -121,7 +121,7 @@ impl<'a> ExpressionParser<'a> {
                     "true" | "false" => {
                         let bool = input.parse::<syn::LitBool>()?;
                         UnaryAtom::Leaf(Leaf::Value(SharedValue::new_from_owned(
-                            BooleanValue::for_litbool(&bool).into_owned_value(),
+                            BooleanValue::for_litbool(&bool).into_value(),
                         )))
                     }
                     "if" => UnaryAtom::Leaf(Leaf::IfExpression(Box::new(input.parse()?))),
@@ -130,9 +130,10 @@ impl<'a> ExpressionParser<'a> {
                     "for" => UnaryAtom::Leaf(Leaf::ForExpression(Box::new(input.parse()?))),
                     "attempt" => UnaryAtom::Leaf(Leaf::AttemptExpression(Box::new(input.parse()?))),
                     "parse" => return Ok(UnaryAtom::Leaf(Leaf::ParseExpression(Box::new(input.parse()?)))),
-                    "None" => UnaryAtom::Leaf(Leaf::Value(SharedValue::new_from_owned(
-                        Value::None.into_owned(input.parse_any_ident()?.span_range()),
-                    ))),
+                    "None" => {
+                        let _ = input.parse_any_ident()?; // consume the "None" token
+                        UnaryAtom::Leaf(Leaf::Value(SharedValue::new_from_owned(Value::None)))
+                    }
                     _ => {
                         let (_ident, next) = input.cursor().ident().unwrap();
                         if let Some((_, next)) = next.punct_matching(':') {
@@ -146,7 +147,7 @@ impl<'a> ExpressionParser<'a> {
             },
             SourcePeekMatch::Literal(_) => {
                 let value = Value::for_syn_lit(input.parse()?);
-                UnaryAtom::Leaf(Leaf::Value(SharedValue::new_from_owned(value)))
+                UnaryAtom::Leaf(Leaf::Value(SharedValue::new_from_owned(value.into_inner())))
             },
             SourcePeekMatch::StreamLiteral(_) => {
                 UnaryAtom::Leaf(Leaf::StreamLiteral(input.parse()?))

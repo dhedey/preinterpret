@@ -1,5 +1,11 @@
 error: Invalid close delimiter 'x'. Expected ')', '}', or ']'
- --> tests/compilation_failures/parsing/close_invalid_delimiter.rs:6:26
+ --> tests/compilation_failures/parsing/close_invalid_delimiter.rs:4:5
   |
-6 |             parser.close('x');
-  |                          ^^^
+4 | /     run!(
+5 | |         let @parser[#{
+6 | |             parser.close('x');
+7 | |         }] = %[Hello World];
+8 | |     );
+  | |_____^
+  |
+  = note: this error originates in the macro `run` (in Nightly builds, run with -Z macro-backtrace for more info)

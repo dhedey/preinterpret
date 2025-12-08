@@ -320,10 +320,11 @@ define_interface! {
         }
         pub(crate) mod unary_operations {
             [context] fn cast_singleton_to_value(this: Owned<IteratorValue>) -> ExecutionResult<ReturnedValue> {
-                let (this, input_span_range) = this.deconstruct();
+                let this = this.into_inner();
                 match this.singleton_value() {
-                    Some(value) => context.operation.evaluate(Owned::new(value, input_span_range)),
-                    None => input_span_range.value_err("Only an iterator with one item can be cast to this value")
+                    Some(value) => context.operation.evaluate(Owned::new(value)),
+                    // TODO: Track proper span through resolution
+                    None => Span::call_site().span_range().value_err("Only an iterator with one item can be cast to this value")
                 }
             }
         }
