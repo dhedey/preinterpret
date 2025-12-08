@@ -154,14 +154,14 @@ impl<T: ResolvableOwned<V>, V> ResolveAs<T> for Spanned<Owned<V>> {
 // Sadly this can't be changed Value => V because of spurious issues with
 // https://github.com/rust-lang/rust/issues/48869
 // Instead, we could introduce a different trait ResolveAs2 if needed.
-impl<T: ResolvableOwned<Value>> ResolveAs<Owned<T>> for Owned<Value> {
-    fn resolve_as(self, resolution_target: &str) -> ExecutionResult<Owned<T>> {
+impl<T: ResolvableOwned<Value>> ResolveAs<Spanned<Owned<T>>> for Spanned<Owned<Value>> {
+    fn resolve_as(self, resolution_target: &str) -> ExecutionResult<Spanned<Owned<T>>> {
         T::resolve_owned(self, resolution_target)
     }
 }
 
-impl<T: ResolvableShared<Value> + ?Sized> ResolveAs<Shared<T>> for Shared<Value> {
-    fn resolve_as(self, resolution_target: &str) -> ExecutionResult<Shared<T>> {
+impl<T: ResolvableShared<Value> + ?Sized> ResolveAs<Spanned<Shared<T>>> for Spanned<Shared<Value>> {
+    fn resolve_as(self, resolution_target: &str) -> ExecutionResult<Spanned<Shared<T>>> {
         T::resolve_shared(self, resolution_target)
     }
 }
@@ -178,8 +178,8 @@ impl<'a, T: ResolvableShared<Value> + ?Sized> ResolveAs<Spanned<&'a T>> for Span
     }
 }
 
-impl<T: ResolvableMutable<Value> + ?Sized> ResolveAs<Mutable<T>> for Mutable<Value> {
-    fn resolve_as(self, resolution_target: &str) -> ExecutionResult<Mutable<T>> {
+impl<T: ResolvableMutable<Value> + ?Sized> ResolveAs<Spanned<Mutable<T>>> for Spanned<Mutable<Value>> {
+    fn resolve_as(self, resolution_target: &str) -> ExecutionResult<Spanned<Mutable<T>>> {
         T::resolve_mutable(self, resolution_target)
     }
 }
@@ -208,9 +208,9 @@ pub(crate) trait ResolvableOwned<T>: Sized {
     fn resolve_owned_from_value(
         value: T,
         context: ResolutionContext,
-    ) -> ExecutionResult<Owned<Self>> {
+    ) -> ExecutionResult<Spanned<Owned<Self>>> {
         let span_range = *context.span_range;
-        Self::resolve_from_value(value, context).map(|v| Owned::new(v, span_range))
+        Self::resolve_from_value(value, context).map(|v| Spanned(Owned(v), span_range))
     }
 
     /// The `resolution_target` should be capitalized, e.g. "This argument" or "The value destructed with an object pattern"

@@ -39,7 +39,7 @@ impl IsReturnable for ReturnedValue {
     }
 }
 
-impl IsReturnable for Shared<Value> {
+impl IsReturnable for SharedValue {
     fn to_returned_value(self, output_span_range: SpanRange) -> ExecutionResult<ReturnedValue> {
         Ok(ReturnedValue::Shared(
             self.update_span_range(|_| output_span_range),
@@ -47,7 +47,7 @@ impl IsReturnable for Shared<Value> {
     }
 }
 
-impl IsReturnable for Mutable<Value> {
+impl IsReturnable for MutableValue {
     fn to_returned_value(self, output_span_range: SpanRange) -> ExecutionResult<ReturnedValue> {
         Ok(ReturnedValue::Mutable(
             self.update_span_range(|_| output_span_range),
@@ -63,10 +63,10 @@ impl<T: IntoValue> IsReturnable for T {
     }
 }
 
-impl<T: IntoValue> IsReturnable for Owned<T> {
+impl<T: IntoValue> IsReturnable for Spanned<Owned<T>> {
     fn to_returned_value(self, output_span_range: SpanRange) -> ExecutionResult<ReturnedValue> {
         Ok(ReturnedValue::Owned(
-            self.map(|f, _| f.into_value())
+            self.map_owned(|f, _| f.into_value())
                 .with_span_range(output_span_range),
         ))
     }
