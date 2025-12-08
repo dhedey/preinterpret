@@ -4,20 +4,20 @@ use std::borrow::{Borrow, ToOwned};
 use std::cell::*;
 use std::rc::Rc;
 
-pub(super) enum VariableContent {
+pub(super) enum VariableState {
     Uninitialized,
     Value(Rc<RefCell<Value>>),
     Finished,
 }
 
-impl VariableContent {
+impl VariableState {
     pub(crate) fn define(&mut self, value: Value) {
         match self {
-            content @ VariableContent::Uninitialized => {
-                *content = VariableContent::Value(Rc::new(RefCell::new(value)));
+            content @ VariableState::Uninitialized => {
+                *content = VariableState::Value(Rc::new(RefCell::new(value)));
             }
-            VariableContent::Value(_) => panic!("Cannot define existing variable"),
-            VariableContent::Finished => panic!("Cannot define finished variable"),
+            VariableState::Value(_) => panic!("Cannot define existing variable"),
+            VariableState::Finished => panic!("Cannot define finished variable"),
         }
     }
 
@@ -35,10 +35,10 @@ impl VariableContent {
         // return a fully owned value without observable mutation,
         // but it's likely confusingly inconsistent, so it's better to just block it entirely.
         let value_rc = if is_final && blocked_from_mutation.is_none() {
-            let content = std::mem::replace(self, VariableContent::Finished);
+            let content = std::mem::replace(self, VariableState::Finished);
             match content {
-                VariableContent::Uninitialized => panic!("{}", UNITIALIZED_ERR),
-                VariableContent::Value(ref_cell) => match Rc::try_unwrap(ref_cell) {
+                VariableState::Uninitialized => panic!("{}", UNITIALIZED_ERR),
+                VariableState::Value(ref_cell) => match Rc::try_unwrap(ref_cell) {
                     Ok(ref_cell) => {
                         if matches!(
                             ownership,
@@ -57,13 +57,13 @@ impl VariableContent {
                     // * `let x = %[]; x.assert_eq(x + %[], %[]);` - errors because the final `x` is shared but it needs to be owned
                     Err(rc) => rc,
                 },
-                VariableContent::Finished => panic!("{}", FINISHED_ERR),
+                VariableState::Finished => panic!("{}", FINISHED_ERR),
             }
         } else {
             match self {
-                VariableContent::Uninitialized => panic!("{}", UNITIALIZED_ERR),
-                VariableContent::Value(ref_cell) => Rc::clone(ref_cell),
-                VariableContent::Finished => panic!("{}", FINISHED_ERR),
+                VariableState::Uninitialized => panic!("{}", UNITIALIZED_ERR),
+                VariableState::Value(ref_cell) => Rc::clone(ref_cell),
+                VariableState::Finished => panic!("{}", FINISHED_ERR),
             }
         };
         let binding = VariableBinding {

@@ -123,7 +123,7 @@ impl Interpreter {
         let variables = {
             let mut map = HashMap::new();
             for definition_id in new_scope.definitions.iter() {
-                map.insert(*definition_id, VariableContent::Uninitialized);
+                map.insert(*definition_id, VariableState::Uninitialized);
             }
             map
         };
@@ -396,7 +396,7 @@ pub(crate) enum AttemptOutcome<T> {
 
 struct RuntimeScope {
     id: ScopeId,
-    variables: HashMap<VariableDefinitionId, VariableContent>,
+    variables: HashMap<VariableDefinitionId, VariableState>,
 }
 
 impl RuntimeScope {

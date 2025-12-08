@@ -99,8 +99,8 @@ impl IterableValue {
             IterableValue::Stream(value) => IteratorValue::new_for_stream(value),
             IterableValue::Iterator(value) => value,
             IterableValue::Range(value) => IteratorValue::new_for_range(value)?,
-            IterableValue::Object(value) => IteratorValue::new_for_object(value)?,
-            IterableValue::String(value) => IteratorValue::new_for_string(value)?,
+            IterableValue::Object(value) => IteratorValue::new_for_object(value),
+            IterableValue::String(value) => IteratorValue::new_for_string(value),
         })
     }
 }

@@ -2,8 +2,24 @@ use super::*;
 
 /// A flexible type which can either be a reference to a value of type `T`,
 /// or an encapsulated reference from a [`Shared<T>`].
-pub(crate) struct AnyRef<'a, T: 'static + ?Sized> {
+pub(crate) struct AnyRef<'a, T: ?Sized + 'static> {
     inner: AnyRefInner<'a, T>,
+}
+
+impl<'a, T: ?Sized + 'static> AnyRef<'a, T> {
+    pub(crate) fn map_optional<S: ?Sized>(
+        self,
+        f: impl for<'r> FnOnce(&'r T) -> Option<&'r S>,
+    ) -> Option<AnyRef<'a, S>> {
+        Some(match self.inner {
+            AnyRefInner::Direct(value) => AnyRef {
+                inner: AnyRefInner::Direct(f(value)?),
+            },
+            AnyRefInner::Encapsulated(shared) => AnyRef {
+                inner: AnyRefInner::Encapsulated(shared.try_map(|x| f(x).ok_or(())).ok()?),
+            },
+        })
+    }
 }
 
 pub(crate) type SpannedAnyRef<'a, T> = Spanned<AnyRef<'a, T>>;

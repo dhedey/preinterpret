@@ -30,7 +30,7 @@ impl IteratorValue {
         Ok(Self::new_custom(iterator))
     }
 
-    pub(crate) fn new_for_object(object: ObjectValue) -> ExecutionResult<Self> {
+    pub(crate) fn new_for_object(object: ObjectValue) -> Self {
         // We have to collect to vec and back to make it clonable
         let iterator = object
             .entries
@@ -38,10 +38,10 @@ impl IteratorValue {
             .map(|(k, v)| vec![k.into_value(), v.value].into_value())
             .collect::<Vec<_>>()
             .into_iter();
-        Ok(Self::new_vec(iterator))
+        Self::new_vec(iterator)
     }
 
-    pub(crate) fn new_for_string(string: StringValue) -> ExecutionResult<Self> {
+    pub(crate) fn new_for_string(string: StringValue) -> Self {
         // We have to collect to vec and back to make the iterator owned
         // That's because value.chars() creates a `Chars<'_>` iterator which
         // borrows from the string, which we don't allow in a Boxed iterator
@@ -51,7 +51,7 @@ impl IteratorValue {
             .map(|c| c.into_value())
             .collect::<Vec<_>>()
             .into_iter();
-        Ok(Self::new_vec(iterator))
+        Self::new_vec(iterator)
     }
 
     fn new_vec(iterator: std::vec::IntoIter<Value>) -> Self {

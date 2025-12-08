@@ -190,9 +190,33 @@ First, read the @./2025-11-vision.md
 
 ## Methods and closures
 
+- [ ] Improved Shared/Mutable handling - See the `Better handling of value sub-references` section
+  * A function specifies the bindings of its variables
+  * If we have `my_len = |x: &array| x.len()` and invoke it as `my_len(a.b)` then
+    when I invoke it, I need to end up with the variable `x := &a.b`
+  * This is a problem - if we imagine changing what can be stored in a variable to
+    the following, then it's clear that we need some way to have a `SharedValue` which
+    has an outer-enum instead of an inner-enum.
+  * We also need to think about how things like `IterableValue` works. Perhaps it's like an interface,
+    and so defined via `Box<dyn Iterable>` / `Ref<dyn Iterable>` etc?
+```rust
+// Before
+enum VariableContent {
+    Owned(Rc<RefCell<Value>>),
+    Shared(SharedSubRcRefCell<Value, T>),
+    Mutable(MutSubRcRefCell<Value, T>),
+}
+// After
+enum VariableContent {
+    Owned(ValueReferencable),
+    Shared(ValueRef<'static>),      // 'static => only SharedSubRcRefCell, no actual refs
+    Mutable(ValueMut<'static>),     // 'static => only MutSubRcRefCell, no refs
+}
+``` 
 - [ ] Introduce basic function values
   * Value type function `let my_func = |x, y, z| { ... };`
-  * Parameters can be `x` (Owned), `&x` (Shared) or `&mut x` (Mutable)
+  * Parameters can be `x` (Owned), `&x` (Shared) or `&mut x` (Mutable), shorthand for
+    e.g. `x: &value`
   * To start with, they are not closures (i.e. they can't capture any outer variables)
   - [ ] Break/continue label resolution in functions/closures
     * Functions and closures must resolve break/continue labels statically
@@ -483,17 +507,95 @@ Also:
 
 ## Better handling of value sub-references
 
-Returning refs of sub-values requires taking the enum outside of the reference, i.e. some `ExpressionValueRef<'a>`.
+### OPTION 1 - Enums with GATs
 
-One option We can work it like `IterableRef`, but perhaps we can do better? 
+> [!NOTE]
+> See `sandbox/gat_value.rs` for playing around with this idea
 
-- [ ] Trial if `Shared<ExpressionValue>` can actually store an `ExpressionValueRef<'a>` (which just stores `&'a`, not the `Ref` variable)...
-  * This could be done by adding GATs (raising MSRV to 1.65) so that TypeData can have a `Ref<'T>`
-  * And then `Shared<T>` can store a `<T as ..Target>::Type::Ref<'T>` (in the file, this can be encapsulated as a `HasRefType` trait, which can be blanket implemeted for types implementing `..Target`)
-  * And then have a `AdvancedCellRef<T>` store a `<T as ..Target>::Type::Ref<'T>` which can be owned and we can manually call increase strong count etc on the `RefCell`.
-  * To implement `AdvancedCellRef::map`, we'll need `TypeData::Ref<'T>` to implement Target in a self-fulfilling way. (i.e. `HasRefType { type Ref<'a>: HasRefParent<Parent = Self> }`, `HasRefParent { type Parent: HasRefType })`)
-  * If this works, we can replace our `Ref<T>` with `T: HasRefType`
+Returning/passing refs of sub-values requires taking the enum outside of the reference,
+i.e. some `ValueRef<'a>`, perhaps similar to `IterableRef`?
+
+```rust
+enum ValueRef<'a> {
+   Integer(IntegerRef<'a>),
+   Object(AnyRef<'a, ObjectValue>),
+   // ... 
+}
+```
+
+We could even consider abusing GATs further, to define the structures only once:
+```rust
+trait OwnershipSelector {
+  type Leaf<T>;
+}
+struct IsOwned;
+impl OwnershipSelector for IsOwned {
+  type Leaf<T> = T;
+}
+// Roughly equivalent to an owned, but wrapped so that it can be turned into a Shared/Mutable easily.
+struct IsReferencable;
+impl OwnershipSelector for IsReferencable {
+  type Leaf<T> = Rc<RefCell<T>>;
+}
+struct IsRef<'a>;
+impl<'a> OwnershipSelector for IsRef<'a> {
+  type Leaf<T> = AnyRef<'a, T>;
+}
+struct IsMut<'a>;
+impl<'a> OwnershipSelector for IsMut<'a> {
+  type Leaf<T> = AnyMutRef<'a, T>;
+}
+
+enum ValueWhich<H: OwnershipSelector> {
+  Integer(IntegerStructure<H>),
+  Object(H::Leaf::<ObjectValue>),
+// ...
+}
+
+type Value = ValueWhich<IsOwned>;
+type ValueReferencable = ValueWhich<IsReferencable>;
+type ValueRef<'a> = ValueWhich<IsRef<'a>>;
+type ValueMut<'a> = ValueWhich<IsMut<'a>>;
+```
+
+- [ ] Trial if `Shared<Value>` can actually store an `ValueRef<'a>` (which just stores `&'a`, not the `Ref` variable)...
+  * This could be done by adding GATs (raising MSRV to 1.65) so that TypeData can have a `Ref<'T>`,
+    with `Value::Ref<'T> = ValueRef<'T>`... although we only really need GATs for allowing arbitrary
+    references, not just static `SharedSubRcRefCell<Value, T>` from Shared
+  * And then `Shared<'t, T>` can wrap a `<T as ..Target>::Type::Ref<'t, T>` (in the file, this can be encapsulated as a `HasRefType` trait, which can be blanket implemeted for types implementing `..Target`).
+  * This would mean e.g. `Shared<String>` could wrap a `&str`.
+  * 6 months later I'm not sure what this means:
+    * And then have a `AdvancedCellRef<T>` store a `<T as ..Target>::Type::Ref<'T>` which can be owned and we can manually call increase strong count etc on the `RefCell`.
+    * To implement `AdvancedCellRef::map`, we'll need `TypeData::Ref<'T>` to implement Target in a self-fulfilling way. (i.e. `HasRefType { type Ref<'a>: HasRefParent<Parent = Self> }`, `HasRefParent { type Parent: HasRefType })`)
+    * If this works, we can replace our `Ref<T>` with `T: HasRefType`
   * Migrate `IterableRef`
+
+### OPTION 2 - Box + Dyn
+
+> [!NOTE]
+> See `sandbox/dyn_value.rs` for playing around with this idea
+
+If we can make this work, it's perhaps slightly less performant (I wonder how much?) but would probably compile faster, and be less tied to structure; so support.
+
+See below for some rough ideas.
+
+For owned values:
+* `Box<dyn IsValue>` with `IsValue: Any` (maybe using https://docs.rs/downcast-rs/latest/downcast_rs/ to avoid `Any`)
+* From that, `IsValue` allows resolving `&'static TypeData`
+* Which can expose methods such as `as_integer(Box<dyn IsValue>) -> Option<Box<dyn IsInteger>>`
+  * Which can downcast `Box<dyn IsValue>` to specific value, e.g. `Box<u32>`
+  * Then can upcast that to a specific trait such as `Box<dyn IsInteger>` or `Box<dyn IsIterable>`
+
+For reference values:
+* `AnyRef<dyn IsValue>`
+* `TypeData` can expose methods such as `as_integer_ref(AnyRef<dyn IsValue>) -> Option<AnyRef<dyn IsInteger>>`
+  .. using `downcast_ref` and then upcasting...
+  ... I wonder if this can be automatic. `if Self::Value : IsInteger` then we implement with a cast, if not?
+
+For mutable values:
+* `AnyRefMut<dyn IsValue>`
+* `TypeData` can expose methods such as `as_integer_mut(AnyRefMut<dyn IsValue>) -> Option<AnyRefMut<dyn IsInteger>>`
+  .. using `downcast_mut` and then upcasting.
 
 ## Cloning
 
@@ -536,7 +638,7 @@ And then we need to:
 - [ ] Update the module docstring to point to the book.
 
 Sidenote - crabtime comparison:
-* Compare to https://www.reddit.com/r/rust/comments/1j42fgi/media_introducing_eval_macro_a_new_way_to_write i.e. https://crates.io/crates/crabtime - thoughts on crabtime:
+  * Compare to https://www.reddit.com/r/rust/comments/1j42fgi/media_introducing_eval_macro_a_new_way_to_write i.e. https://crates.io/crates/crabtime - thoughts on crabtime:
 => Looks great!
 => Likely has faster compile times compared with preinterpret
 => Why don't they use a cheap hash of the code as a cache key?
