@@ -28,7 +28,7 @@ impl ExpressionNode {
                     Leaf::Block(block) => context.evaluate(|interpreter, ownership| {
                         block.evaluate(interpreter, ownership)
                     })?,
-                    Leaf::Value(value) => {
+                    Leaf::Value(Spanned(value, _span_range)) => {
                         // We return a freely clonable CopyOnWrite in order to delay the clone of the literal if it's not necessary
                         // This allows something like e.g. x[0][5][2] to only clone the innermost value instead of the full multi-dimensional array
                         let shared_cloned = Shared::clone(value);

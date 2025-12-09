@@ -154,7 +154,7 @@ pub(super) enum Leaf {
     Variable(VariableReference),
     TypeProperty(TypeProperty),
     Discarded(Token![_]),
-    Value(SharedValue),
+    Value(Spanned<SharedValue>),
     StreamLiteral(StreamLiteral),
     ParseTemplateLiteral(ParseTemplateLiteral),
     IfExpression(Box<IfExpression>),
@@ -172,8 +172,7 @@ impl HasSpanRange for Leaf {
             Leaf::TypeProperty(type_property) => type_property.span_range(),
             Leaf::Discarded(token) => token.span_range(),
             Leaf::Block(block) => block.span_range(),
-            // Shared values no longer carry spans - use call_site as fallback
-            Leaf::Value(_value) => Span::call_site().span_range(),
+            Leaf::Value(spanned_value) => spanned_value.span_range(),
             Leaf::StreamLiteral(stream) => stream.span_range(),
             Leaf::ParseTemplateLiteral(stream) => stream.span_range(),
             Leaf::IfExpression(expression) => expression.span_range(),

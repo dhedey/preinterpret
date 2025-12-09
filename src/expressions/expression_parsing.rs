@@ -120,8 +120,10 @@ impl<'a> ExpressionParser<'a> {
                     "_" => UnaryAtom::Leaf(Leaf::Discarded(input.parse()?)),
                     "true" | "false" => {
                         let bool = input.parse::<syn::LitBool>()?;
-                        UnaryAtom::Leaf(Leaf::Value(SharedValue::new_from_owned(
-                            BooleanValue::for_litbool(&bool).into_value(),
+                        let span_range = bool.span().span_range();
+                        UnaryAtom::Leaf(Leaf::Value(Spanned(
+                            SharedValue::new_from_owned(BooleanValue::for_litbool(&bool).into_value()),
+                            span_range,
                         )))
                     }
                     "if" => UnaryAtom::Leaf(Leaf::IfExpression(Box::new(input.parse()?))),
@@ -131,8 +133,12 @@ impl<'a> ExpressionParser<'a> {
                     "attempt" => UnaryAtom::Leaf(Leaf::AttemptExpression(Box::new(input.parse()?))),
                     "parse" => return Ok(UnaryAtom::Leaf(Leaf::ParseExpression(Box::new(input.parse()?)))),
                     "None" => {
-                        let _ = input.parse_any_ident()?; // consume the "None" token
-                        UnaryAtom::Leaf(Leaf::Value(SharedValue::new_from_owned(Value::None)))
+                        let none_ident = input.parse_any_ident()?; // consume the "None" token
+                        let span_range = none_ident.span().span_range();
+                        UnaryAtom::Leaf(Leaf::Value(Spanned(
+                            SharedValue::new_from_owned(Value::None),
+                            span_range,
+                        )))
                     }
                     _ => {
                         let (_ident, next) = input.cursor().ident().unwrap();
@@ -146,8 +152,13 @@ impl<'a> ExpressionParser<'a> {
                 }
             },
             SourcePeekMatch::Literal(_) => {
-                let value = Value::for_syn_lit(input.parse()?);
-                UnaryAtom::Leaf(Leaf::Value(SharedValue::new_from_owned(value.into_inner())))
+                let lit: syn::Lit = input.parse()?;
+                let span_range = lit.span().span_range();
+                let value = Value::for_syn_lit(lit);
+                UnaryAtom::Leaf(Leaf::Value(Spanned(
+                    SharedValue::new_from_owned(value.into_inner()),
+                    span_range,
+                )))
             },
             SourcePeekMatch::StreamLiteral(_) => {
                 UnaryAtom::Leaf(Leaf::StreamLiteral(input.parse()?))
