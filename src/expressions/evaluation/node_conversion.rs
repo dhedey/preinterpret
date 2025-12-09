@@ -26,7 +26,7 @@ impl ExpressionNode {
                         context.evaluate(|_, ownership| type_property.resolve(ownership))?
                     }
                     Leaf::Block(block) => context.evaluate(|interpreter, ownership| {
-                        block.evaluate(interpreter, ownership)
+                        block.evaluate_unspanned(interpreter, ownership)
                     })?,
                     Leaf::Value(Spanned(value, _span_range)) => {
                         // We return a freely clonable CopyOnWrite in order to delay the clone of the literal if it's not necessary
@@ -39,7 +39,7 @@ impl ExpressionNode {
                         let value = context
                             .interpreter()
                             .capture_output(|interpreter| stream_literal.interpret(interpreter))?;
-                        context.return_value(value, stream_literal.span_range())?
+                        context.return_value(value)?
                     }
                     Leaf::ParseTemplateLiteral(consume_literal) => {
                         context.evaluate(|interpreter, ownership| {
@@ -48,32 +48,32 @@ impl ExpressionNode {
                     }
                     Leaf::IfExpression(if_expression) => {
                         context.evaluate(|interpreter, ownership| {
-                            if_expression.evaluate(interpreter, ownership)
+                            if_expression.evaluate_unspanned(interpreter, ownership)
                         })?
                     }
                     Leaf::LoopExpression(loop_expression) => {
                         context.evaluate(|interpreter, ownership| {
-                            loop_expression.evaluate(interpreter, ownership)
+                            loop_expression.evaluate_unspanned(interpreter, ownership)
                         })?
                     }
                     Leaf::WhileExpression(while_expression) => {
                         context.evaluate(|interpreter, ownership| {
-                            while_expression.evaluate(interpreter, ownership)
+                            while_expression.evaluate_unspanned(interpreter, ownership)
                         })?
                     }
                     Leaf::ForExpression(for_expression) => {
                         context.evaluate(|interpreter, ownership| {
-                            for_expression.evaluate(interpreter, ownership)
+                            for_expression.evaluate_unspanned(interpreter, ownership)
                         })?
                     }
                     Leaf::AttemptExpression(attempt_expression) => {
                         context.evaluate(|interpreter, ownership| {
-                            attempt_expression.evaluate(interpreter, ownership)
+                            attempt_expression.evaluate_unspanned(interpreter, ownership)
                         })?
                     }
                     Leaf::ParseExpression(parse_expression) => {
                         context.evaluate(|interpreter, ownership| {
-                            parse_expression.evaluate(interpreter, ownership)
+                            parse_expression.evaluate_unspanned(interpreter, ownership)
                         })?
                     }
                 }

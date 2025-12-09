@@ -533,11 +533,12 @@ impl EvaluationFrame for GroupBuilder {
 
     fn handle_next(
         self,
-        context: ValueContext,
+        mut context: ValueContext,
         value: RequestedValue,
     ) -> ExecutionResult<NextAction> {
         let inner = value.expect_owned();
-        context.return_value(inner, self.span.span_range())
+        context.set_output_span(self.span.span_range());
+        context.return_value(inner)
     }
 }
 
@@ -561,7 +562,7 @@ impl ArrayBuilder {
         .next(context)
     }
 
-    pub(super) fn next(self, context: ValueContext) -> ExecutionResult<NextAction> {
+    pub(super) fn next(self, mut context: ValueContext) -> ExecutionResult<NextAction> {
         Ok(
             match self
                 .unevaluated_items
@@ -569,7 +570,10 @@ impl ArrayBuilder {
                 .cloned()
             {
                 Some(next) => context.request_owned(self, next),
-                None => context.return_value(self.evaluated_items, self.span.span_range())?,
+                None => {
+                    context.set_output_span(self.span.span_range());
+                    context.return_value(self.evaluated_items)?
+                }
             },
         )
     }
@@ -626,7 +630,7 @@ impl ObjectBuilder {
         .next(context)
     }
 
-    fn next(mut self: Box<Self>, context: ValueContext) -> ExecutionResult<NextAction> {
+    fn next(mut self: Box<Self>, mut context: ValueContext) -> ExecutionResult<NextAction> {
         Ok(
             match self
                 .unevaluated_entries
@@ -648,7 +652,10 @@ impl ObjectBuilder {
                     self.pending = Some(PendingEntryPath::OnIndexKeyBranch { access, value_node });
                     context.request_owned(self, index)
                 }
-                None => context.return_value(self.evaluated_entries, self.span.span_range())?,
+                None => {
+                    context.set_output_span(self.span.span_range());
+                    context.return_value(self.evaluated_entries)?
+                }
             },
         )
     }
@@ -973,7 +980,7 @@ enum RangePath {
 
 impl RangeBuilder {
     pub(super) fn start(
-        context: ValueContext,
+        mut context: ValueContext,
         left: &Option<ExpressionNodeId>,
         range_limits: &syn::RangeLimits,
         right: &Option<ExpressionNodeId>,
@@ -982,7 +989,8 @@ impl RangeBuilder {
             (None, None) => match range_limits {
                 syn::RangeLimits::HalfOpen(token) => {
                     let inner = RangeValueInner::RangeFull { token: *token };
-                    context.return_value(inner, token.span_range())?
+                    context.set_output_span(token.span_range());
+                    context.return_value(inner)?
                 }
                 syn::RangeLimits::Closed(_) => {
                     unreachable!(
@@ -1017,7 +1025,7 @@ impl EvaluationFrame for RangeBuilder {
 
     fn handle_next(
         mut self,
-        context: ValueContext,
+        mut context: ValueContext,
         value: RequestedValue,
     ) -> ExecutionResult<NextAction> {
         // TODO[range-refactor]: Change to not always clone the value
@@ -1032,7 +1040,8 @@ impl EvaluationFrame for RangeBuilder {
                     start_inclusive: value,
                     token,
                 };
-                context.return_value(inner, token.span_range())?
+                context.set_output_span(token.span_range());
+                context.return_value(inner)?
             }
             (RangePath::OnLeftBranch { right: None }, syn::RangeLimits::Closed(_)) => {
                 unreachable!("A closed range should have been given a right in continue_range(..)")
@@ -1043,7 +1052,8 @@ impl EvaluationFrame for RangeBuilder {
                     token,
                     end_exclusive: value,
                 };
-                context.return_value(inner, token.span_range())?
+                context.set_output_span(token.span_range());
+                context.return_value(inner)?
             }
             (RangePath::OnRightBranch { left: Some(left) }, syn::RangeLimits::Closed(token)) => {
                 let inner = RangeValueInner::RangeInclusive {
@@ -1051,21 +1061,24 @@ impl EvaluationFrame for RangeBuilder {
                     token,
                     end_inclusive: value,
                 };
-                context.return_value(inner, token.span_range())?
+                context.set_output_span(token.span_range());
+                context.return_value(inner)?
             }
             (RangePath::OnRightBranch { left: None }, syn::RangeLimits::HalfOpen(token)) => {
                 let inner = RangeValueInner::RangeTo {
                     token,
                     end_exclusive: value,
                 };
-                context.return_value(inner, token.span_range())?
+                context.set_output_span(token.span_range());
+                context.return_value(inner)?
             }
             (RangePath::OnRightBranch { left: None }, syn::RangeLimits::Closed(token)) => {
                 let inner = RangeValueInner::RangeToInclusive {
                     token,
                     end_inclusive: value,
                 };
-                context.return_value(inner, token.span_range())?
+                context.set_output_span(token.span_range());
+                context.return_value(inner)?
             }
         })
     }
@@ -1106,7 +1119,7 @@ impl EvaluationFrame for AssignmentBuilder {
 
     fn handle_next(
         mut self,
-        context: ValueContext,
+        mut context: ValueContext,
         value: RequestedValue,
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
@@ -1117,7 +1130,8 @@ impl EvaluationFrame for AssignmentBuilder {
             }
             AssignmentPath::OnAwaitingAssignment => {
                 let AssignmentCompletion { span_range } = value.expect_assignment_completion();
-                context.return_value((), span_range)?
+                context.set_output_span(span_range);
+                context.return_value(())?
             }
         })
     }

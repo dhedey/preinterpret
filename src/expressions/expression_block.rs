@@ -145,14 +145,14 @@ impl HasSpan for ExpressionBlock {
     }
 }
 
-impl ExpressionBlock {
-    pub(crate) fn evaluate(
+impl Evaluate for ExpressionBlock {
+    fn evaluate_unspanned(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
     ) -> ExecutionResult<RequestedValue> {
         let scope = interpreter.current_scope_id();
-        let output_result = self.scoped_block.evaluate(interpreter, ownership);
+        let output_result = self.scoped_block.evaluate_unspanned(interpreter, ownership);
 
         // If this block has a label, catch breaks targeting this specific catch location
         let output = if let Some((_, catch_location)) = &self.label {
@@ -205,8 +205,8 @@ impl HasSpan for ScopedBlock {
     }
 }
 
-impl ScopedBlock {
-    pub(crate) fn evaluate(
+impl Evaluate for ScopedBlock {
+    fn evaluate_unspanned(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
@@ -218,13 +218,15 @@ impl ScopedBlock {
         interpreter.exit_scope(self.scope);
         Ok(output)
     }
+}
 
+impl ScopedBlock {
     pub(crate) fn evaluate_owned(
         &self,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<OwnedValue> {
         self.evaluate(interpreter, RequestedOwnership::owned())
-            .map(|x| x.expect_owned())
+            .map(|Spanned(value, _)| value.expect_owned())
     }
 }
 
@@ -251,8 +253,8 @@ impl HasSpan for UnscopedBlock {
     }
 }
 
-impl UnscopedBlock {
-    pub(crate) fn evaluate(
+impl Evaluate for UnscopedBlock {
+    fn evaluate_unspanned(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
@@ -260,13 +262,15 @@ impl UnscopedBlock {
         self.content
             .evaluate(interpreter, self.span().into(), ownership)
     }
+}
 
+impl UnscopedBlock {
     pub(crate) fn evaluate_owned(
         &self,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<OwnedValue> {
         self.evaluate(interpreter, RequestedOwnership::owned())
-            .map(|x| x.expect_owned())
+            .map(|Spanned(value, _)| value.expect_owned())
     }
 }
 

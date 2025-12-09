@@ -35,7 +35,9 @@ impl Expression {
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
     ) -> ExecutionResult<RequestedValue> {
-        ExpressionEvaluator::new(&self.nodes).evaluate(self.root, interpreter, ownership)
+        let Spanned(value, _span) =
+            ExpressionEvaluator::new(&self.nodes).evaluate(self.root, interpreter, ownership)?;
+        Ok(value)
     }
 
     pub(crate) fn evaluate_owned(
@@ -73,23 +75,23 @@ impl Expression {
         let fallback_span = Span::call_site().span_range();
         match &self.nodes.get(self.root) {
             ExpressionNode::Leaf(Leaf::Block(block)) => block
-                .evaluate(interpreter, RequestedOwnership::owned())?
+                .evaluate_unspanned(interpreter, RequestedOwnership::owned())?
                 .expect_owned()
                 .into_statement_result(block.span().span_range()),
             ExpressionNode::Leaf(Leaf::IfExpression(if_expression)) => if_expression
-                .evaluate(interpreter, RequestedOwnership::owned())?
+                .evaluate_unspanned(interpreter, RequestedOwnership::owned())?
                 .expect_owned()
                 .into_statement_result(if_expression.span_range()),
             ExpressionNode::Leaf(Leaf::LoopExpression(loop_expression)) => loop_expression
-                .evaluate(interpreter, RequestedOwnership::owned())?
+                .evaluate_unspanned(interpreter, RequestedOwnership::owned())?
                 .expect_owned()
                 .into_statement_result(loop_expression.span_range()),
             ExpressionNode::Leaf(Leaf::WhileExpression(while_expression)) => while_expression
-                .evaluate(interpreter, RequestedOwnership::owned())?
+                .evaluate_unspanned(interpreter, RequestedOwnership::owned())?
                 .expect_owned()
                 .into_statement_result(while_expression.span_range()),
             ExpressionNode::Leaf(Leaf::ForExpression(for_expression)) => for_expression
-                .evaluate(interpreter, RequestedOwnership::owned())?
+                .evaluate_unspanned(interpreter, RequestedOwnership::owned())?
                 .expect_owned()
                 .into_statement_result(for_expression.span_range()),
             _ => self
@@ -181,6 +183,33 @@ impl HasSpanRange for Leaf {
             Leaf::ForExpression(expression) => expression.span_range(),
             Leaf::AttemptExpression(expression) => expression.span_range(),
             Leaf::ParseExpression(expression) => expression.span_range(),
+        }
+    }
+}
+
+impl ExpressionNode {
+    /// Returns a span representing this node.
+    ///
+    /// For leaf nodes, this is the full span of the leaf.
+    /// For compound nodes, this returns the span of the primary structural element
+    /// (operator, brackets, etc.). The full span of a compound expression would
+    /// require looking up child node spans in the Arena.
+    pub(super) fn span_range(&self) -> SpanRange {
+        match self {
+            ExpressionNode::Leaf(leaf) => leaf.span_range(),
+            ExpressionNode::Grouped { delim_span, .. } => delim_span.join().span_range(),
+            ExpressionNode::Array { brackets, .. } => brackets.span_range(),
+            ExpressionNode::Object { braces, .. } => braces.span_range(),
+            ExpressionNode::UnaryOperation { operation, .. } => operation.span_range(),
+            ExpressionNode::BinaryOperation { operation, .. } => operation.span_range(),
+            ExpressionNode::Property { access, .. } => access.span_range(),
+            ExpressionNode::MethodCall { method, .. } => method.span_range(),
+            ExpressionNode::Index { access, .. } => access.span_range(),
+            ExpressionNode::Range { range_limits, .. } => match range_limits {
+                syn::RangeLimits::HalfOpen(token) => token.span_range(),
+                syn::RangeLimits::Closed(token) => token.span_range(),
+            },
+            ExpressionNode::Assignment { equals_token, .. } => equals_token.span_range(),
         }
     }
 }

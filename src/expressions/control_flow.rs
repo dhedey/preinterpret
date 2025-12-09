@@ -97,8 +97,8 @@ impl ParseSource for IfExpression {
     }
 }
 
-impl IfExpression {
-    pub(crate) fn evaluate(
+impl Evaluate for IfExpression {
+    fn evaluate_unspanned(
         &self,
         interpreter: &mut Interpreter,
         requested_ownership: RequestedOwnership,
@@ -109,7 +109,9 @@ impl IfExpression {
             .resolve_as("An if condition")?;
 
         if evaluated_condition {
-            return self.then_code.evaluate(interpreter, requested_ownership);
+            return self
+                .then_code
+                .evaluate_unspanned(interpreter, requested_ownership);
         }
 
         for (condition, code) in &self.else_ifs {
@@ -117,12 +119,12 @@ impl IfExpression {
                 .evaluate_owned(interpreter)?
                 .resolve_as("An else if condition")?;
             if evaluated_condition {
-                return code.evaluate(interpreter, requested_ownership);
+                return code.evaluate_unspanned(interpreter, requested_ownership);
             }
         }
 
         if let Some(else_code) = &self.else_code {
-            return else_code.evaluate(interpreter, requested_ownership);
+            return else_code.evaluate_unspanned(interpreter, requested_ownership);
         }
 
         requested_ownership.map_from_owned(Value::None.into_owned())
@@ -177,8 +179,8 @@ impl ParseSource for WhileExpression {
     }
 }
 
-impl WhileExpression {
-    pub(crate) fn evaluate(
+impl Evaluate for WhileExpression {
+    fn evaluate_unspanned(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
@@ -260,8 +262,8 @@ impl ParseSource for LoopExpression {
     }
 }
 
-impl LoopExpression {
-    pub(crate) fn evaluate(
+impl Evaluate for LoopExpression {
+    fn evaluate_unspanned(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
@@ -358,8 +360,8 @@ impl ParseSource for ForExpression {
     }
 }
 
-impl ForExpression {
-    pub(crate) fn evaluate(
+impl Evaluate for ForExpression {
+    fn evaluate_unspanned(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
@@ -503,8 +505,8 @@ impl ParseSource for AttemptExpression {
     }
 }
 
-impl AttemptExpression {
-    pub(crate) fn evaluate(
+impl Evaluate for AttemptExpression {
+    fn evaluate_unspanned(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
@@ -598,8 +600,8 @@ impl ParseSource for ParseExpression {
     }
 }
 
-impl ParseExpression {
-    pub(crate) fn evaluate(
+impl Evaluate for ParseExpression {
+    fn evaluate_unspanned(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
@@ -613,7 +615,7 @@ impl ParseExpression {
 
         let output = interpreter.start_parse(input, |interpreter, handle| {
             self.parser_variable.define(interpreter, handle);
-            self.body.evaluate(interpreter, ownership)
+            self.body.evaluate_unspanned(interpreter, ownership)
         })?;
 
         interpreter.exit_scope(self.scope);
