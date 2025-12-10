@@ -3,6 +3,15 @@
 ## Branch
 `claude/spanned-tuple-syntax-01JZSqAGdbXoqk3ozc2V4xiS`
 
+## Instructions
+
+Hi Claude! What I'd like to do is the following:
+
+* Move SpanRanges out from inside types like `Owned`, `Shared`, `CopyOnWrite`, `RequestedValue` etc to be always on the *outside*, e.g. `Spanned<Owned<T>>`, `Spanned<RequestedValue>`
+* Sometimes we won't need a span at all; other times we'll need a span in order to throw sensible errors.
+* We shouldn't make any functional changes, just move where the spans live. All arguments to evaluation and all returned values after evaluation will want span ranges still.
+* What we can do is destructure `Spanned(value, span_range)` in method's arguments, and easily construct a spanned back with `value.spanned(span_range)`
+
 ## Completed Work
 
 ### 1. Core Refactoring (commits ed71d07, 90f8037, d66bc64)
