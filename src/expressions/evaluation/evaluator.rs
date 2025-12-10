@@ -480,7 +480,7 @@ impl RequestedValueType for AssignmentType {
 impl<'a> Context<'a, AssignmentType> {
     pub(super) fn return_assignment_completion(self, span_range: SpanRange) -> NextAction {
         NextActionInner::HandleReturnedValue(Spanned(
-            RequestedValue::AssignmentCompletion(AssignmentCompletion { span_range }),
+            RequestedValue::AssignmentCompletion(AssignmentCompletion),
             span_range,
         ))
         .into()

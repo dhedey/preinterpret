@@ -1,14 +1,6 @@
 use super::*;
 
-pub(crate) struct AssignmentCompletion {
-    pub(super) span_range: SpanRange,
-}
-
-impl WithSpanRangeExt for AssignmentCompletion {
-    fn with_span_range(self, span_range: SpanRange) -> Self {
-        Self { span_range }
-    }
-}
+pub(crate) struct AssignmentCompletion;
 
 /// Handlers which return an AssignmentCompletion
 pub(super) enum AnyAssignmentFrame {
@@ -92,10 +84,10 @@ impl EvaluationFrame for GroupedAssigner {
     fn handle_next(
         self,
         context: AssignmentContext,
-        Spanned(value, _span): Spanned<RequestedValue>,
+        Spanned(value, span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
-        let AssignmentCompletion { span_range } = value.expect_assignment_completion();
-        Ok(context.return_assignment_completion(span_range))
+        let AssignmentCompletion = value.expect_assignment_completion();
+        Ok(context.return_assignment_completion(span))
     }
 }
 
@@ -214,7 +206,7 @@ impl EvaluationFrame for ArrayBasedAssigner {
         context: AssignmentContext,
         Spanned(value, _span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
-        let AssignmentCompletion { .. } = value.expect_assignment_completion();
+        let AssignmentCompletion = value.expect_assignment_completion();
         Ok(self.handle_next_subassignment(context))
     }
 }
@@ -337,7 +329,7 @@ impl EvaluationFrame for Box<ObjectBasedAssigner> {
                 self.handle_index_value(context, access, index_place.as_ref(), assignee_node)
             }
             ObjectAssignmentState::WaitingForSubassignment => {
-                let AssignmentCompletion { .. } = value.expect_assignment_completion();
+                let AssignmentCompletion = value.expect_assignment_completion();
                 self.handle_next_subassignment(context)
             }
         }

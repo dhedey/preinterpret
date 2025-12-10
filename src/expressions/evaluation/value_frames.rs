@@ -1136,7 +1136,7 @@ impl EvaluationFrame for AssignmentBuilder {
     fn handle_next(
         mut self,
         context: ValueContext,
-        Spanned(value, _span): Spanned<RequestedValue>,
+        Spanned(value, span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
             AssignmentPath::OnValueBranch { assignee } => {
@@ -1145,8 +1145,8 @@ impl EvaluationFrame for AssignmentBuilder {
                 context.request_assignment(self, assignee, value)
             }
             AssignmentPath::OnAwaitingAssignment => {
-                let AssignmentCompletion { span_range } = value.expect_assignment_completion();
-                context.return_value((), span_range)?
+                let AssignmentCompletion = value.expect_assignment_completion();
+                context.return_value((), span)?
             }
         })
     }
