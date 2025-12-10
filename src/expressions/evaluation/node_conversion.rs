@@ -159,13 +159,7 @@ impl ExpressionNode {
             // - Property assignment (allowing for creation of fields)
             // - Index assignment (allowing for creation of keys)
             // - Assignment to any mutable value (e.g. x.as_mut())
-            // TODO: Get proper span from the expression node
-            _ => AssigneeAssigner::start(
-                context,
-                self_node_id,
-                value,
-                Span::call_site().span_range(),
-            ),
+            _ => AssigneeAssigner::start(context, self_node_id, value),
         })
     }
 }

@@ -37,7 +37,6 @@ struct PrivateUnit;
 
 pub(super) struct AssigneeAssigner {
     value: Value,
-    span_range: SpanRange,
 }
 
 impl AssigneeAssigner {
@@ -45,9 +44,8 @@ impl AssigneeAssigner {
         context: AssignmentContext,
         assignee: ExpressionNodeId,
         value: Value,
-        span_range: SpanRange,
     ) -> NextAction {
-        let frame = Self { value, span_range };
+        let frame = Self { value };
         context.request_assignee(frame, assignee, true)
     }
 }
@@ -62,12 +60,12 @@ impl EvaluationFrame for AssigneeAssigner {
     fn handle_next(
         self,
         context: AssignmentContext,
-        Spanned(value, _span): Spanned<RequestedValue>,
+        Spanned(value, span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         let mut assignee = value.expect_assignee();
         let value = self.value;
         assignee.set(value);
-        Ok(context.return_assignment_completion(self.span_range))
+        Ok(context.return_assignment_completion(span))
     }
 }
 

@@ -996,13 +996,8 @@ pub(super) struct RangeBuilder {
 }
 
 enum RangePath {
-    OnLeftBranch {
-        right: Option<ExpressionNodeId>,
-    },
-    OnRightBranch {
-        left: Option<Value>,
-        left_span: Option<SpanRange>,
-    },
+    OnLeftBranch { right: Option<ExpressionNodeId> },
+    OnRightBranch { left: Option<Value> },
 }
 
 impl RangeBuilder {
@@ -1027,10 +1022,7 @@ impl RangeBuilder {
             (None, Some(right)) => context.request_owned(
                 Self {
                     range_limits: *range_limits,
-                    state: RangePath::OnRightBranch {
-                        left: None,
-                        left_span: None,
-                    },
+                    state: RangePath::OnRightBranch { left: None },
                 },
                 *right,
             ),
@@ -1055,16 +1047,13 @@ impl EvaluationFrame for RangeBuilder {
     fn handle_next(
         mut self,
         context: ValueContext,
-        Spanned(value, value_span): Spanned<RequestedValue>,
+        Spanned(value, _span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         // TODO[range-refactor]: Change to not always clone the value
         let value = value.expect_owned().into_inner();
         Ok(match (self.state, self.range_limits) {
             (RangePath::OnLeftBranch { right: Some(right) }, _) => {
-                self.state = RangePath::OnRightBranch {
-                    left: Some(value),
-                    left_span: Some(value_span),
-                };
+                self.state = RangePath::OnRightBranch { left: Some(value) };
                 context.request_owned(self, right)
             }
             (RangePath::OnLeftBranch { right: None }, syn::RangeLimits::HalfOpen(token)) => {
@@ -1072,79 +1061,40 @@ impl EvaluationFrame for RangeBuilder {
                     start_inclusive: value,
                     token,
                 };
-                // Span from left value through the range token
-                let result_span = SpanRange::new_between(value_span, token.span_range());
-                context.return_value(inner, result_span)?
+                context.return_value(inner, token.span_range())?
             }
             (RangePath::OnLeftBranch { right: None }, syn::RangeLimits::Closed(_)) => {
                 unreachable!("A closed range should have been given a right in continue_range(..)")
             }
-            (
-                RangePath::OnRightBranch {
-                    left: Some(left),
-                    left_span: Some(left_span),
-                },
-                syn::RangeLimits::HalfOpen(token),
-            ) => {
+            (RangePath::OnRightBranch { left: Some(left) }, syn::RangeLimits::HalfOpen(token)) => {
                 let inner = RangeValueInner::Range {
                     start_inclusive: left,
                     token,
                     end_exclusive: value,
                 };
-                // Span from left value through right value
-                let result_span = SpanRange::new_between(left_span, value_span);
-                context.return_value(inner, result_span)?
+                context.return_value(inner, token.span_range())?
             }
-            (
-                RangePath::OnRightBranch {
-                    left: Some(left),
-                    left_span: Some(left_span),
-                },
-                syn::RangeLimits::Closed(token),
-            ) => {
+            (RangePath::OnRightBranch { left: Some(left) }, syn::RangeLimits::Closed(token)) => {
                 let inner = RangeValueInner::RangeInclusive {
                     start_inclusive: left,
                     token,
                     end_inclusive: value,
                 };
-                // Span from left value through right value
-                let result_span = SpanRange::new_between(left_span, value_span);
-                context.return_value(inner, result_span)?
+                context.return_value(inner, token.span_range())?
             }
-            (
-                RangePath::OnRightBranch {
-                    left: None,
-                    left_span: None,
-                },
-                syn::RangeLimits::HalfOpen(token),
-            ) => {
+            (RangePath::OnRightBranch { left: None }, syn::RangeLimits::HalfOpen(token)) => {
                 let inner = RangeValueInner::RangeTo {
                     token,
                     end_exclusive: value,
                 };
-                // Span from range token through right value
-                let result_span = SpanRange::new_between(token.span_range(), value_span);
-                context.return_value(inner, result_span)?
+                context.return_value(inner, token.span_range())?
             }
-            (
-                RangePath::OnRightBranch {
-                    left: None,
-                    left_span: None,
-                },
-                syn::RangeLimits::Closed(token),
-            ) => {
+            (RangePath::OnRightBranch { left: None }, syn::RangeLimits::Closed(token)) => {
                 let inner = RangeValueInner::RangeToInclusive {
                     token,
                     end_inclusive: value,
                 };
-                // Span from range token through right value
-                let result_span = SpanRange::new_between(token.span_range(), value_span);
-                context.return_value(inner, result_span)?
-            }
-            // Handle mismatched patterns that shouldn't occur
-            (RangePath::OnRightBranch { left: Some(_), .. }, _)
-            | (RangePath::OnRightBranch { left: None, .. }, _) => {
-                unreachable!("Mismatched RangePath state")
+                context.return_value(inner, token.span_range())?
             }
         })
     }
