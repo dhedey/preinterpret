@@ -427,7 +427,7 @@ impl<'a> Context<'a, ValueType> {
         value: ArgumentValue,
         span: SpanRange,
     ) -> ExecutionResult<NextAction> {
-        let value = self.request.map_from_argument(value)?;
+        let value = self.request.map_from_argument(value, span)?;
         Ok(NextAction::return_requested(Spanned(value, span)))
     }
 
@@ -436,7 +436,7 @@ impl<'a> Context<'a, ValueType> {
         value: ReturnedValue,
         span: SpanRange,
     ) -> ExecutionResult<NextAction> {
-        let value = self.request.map_from_returned(value)?;
+        let value = self.request.map_from_returned(value, span)?;
         Ok(NextAction::return_requested(Spanned(value, span)))
     }
 
@@ -450,7 +450,7 @@ impl<'a> Context<'a, ValueType> {
         value: RequestedValue,
         span: SpanRange,
     ) -> ExecutionResult<NextAction> {
-        let value = self.request.map_from_requested(value)?;
+        let value = self.request.map_from_requested(value, span)?;
         Ok(NextAction::return_requested(Spanned(value, span)))
     }
 
@@ -459,7 +459,7 @@ impl<'a> Context<'a, ValueType> {
         value: impl IsReturnable,
         span: SpanRange,
     ) -> ExecutionResult<NextAction> {
-        let value = self.request.map_from_returned(value.to_returned_value()?)?;
+        let value = self.request.map_from_returned(value.to_returned_value()?, span)?;
         Ok(NextAction::return_requested(Spanned(value, span)))
     }
 }

@@ -127,7 +127,7 @@ impl Evaluate for IfExpression {
             return else_code.evaluate_unspanned(interpreter, requested_ownership);
         }
 
-        requested_ownership.map_from_owned(Value::None.into_owned())
+        requested_ownership.map_from_owned(Value::None.into_owned(), self.span_range())
     }
 }
 
@@ -215,7 +215,7 @@ impl Evaluate for WhileExpression {
                 }
             }
         }
-        ownership.map_none()
+        ownership.map_none(self.span_range())
     }
 }
 
@@ -402,7 +402,7 @@ impl Evaluate for ForExpression {
             }
             interpreter.exit_scope(self.iteration_scope);
         }
-        ownership.map_none()
+        ownership.map_none(self.span_range())
     }
 }
 

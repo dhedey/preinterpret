@@ -138,8 +138,8 @@ impl RequestedOwnership {
         }
     }
 
-    pub(crate) fn map_none(self) -> ExecutionResult<RequestedValue> {
-        self.map_from_owned(().into_owned_value())
+    pub(crate) fn map_none(self, span: SpanRange) -> ExecutionResult<RequestedValue> {
+        self.map_from_owned(().into_owned_value(), span)
     }
 
     pub(crate) fn map_from_late_bound(
@@ -157,9 +157,10 @@ impl RequestedOwnership {
     pub(crate) fn map_from_argument(
         &self,
         value: ArgumentValue,
+        span: SpanRange,
     ) -> ExecutionResult<RequestedValue> {
         match value {
-            ArgumentValue::Owned(owned) => self.map_from_owned(owned),
+            ArgumentValue::Owned(owned) => self.map_from_owned(owned, span),
             ArgumentValue::Mutable(mutable) => self.map_from_mutable(mutable),
             ArgumentValue::Assignee(assignee) => self.map_from_assignee(assignee),
             ArgumentValue::Shared(shared) => self.map_from_shared(shared),
@@ -170,9 +171,10 @@ impl RequestedOwnership {
     pub(crate) fn map_from_returned(
         &self,
         value: ReturnedValue,
+        span: SpanRange,
     ) -> ExecutionResult<RequestedValue> {
         match value {
-            ReturnedValue::Owned(owned) => self.map_from_owned(owned),
+            ReturnedValue::Owned(owned) => self.map_from_owned(owned, span),
             ReturnedValue::Mutable(mutable) => self.map_from_mutable(mutable),
             ReturnedValue::Shared(shared) => self.map_from_shared(shared),
             ReturnedValue::CopyOnWrite(copy_on_write) => self.map_from_copy_on_write(copy_on_write),
@@ -183,9 +185,10 @@ impl RequestedOwnership {
     pub(crate) fn map_from_requested(
         &self,
         requested: RequestedValue,
+        span: SpanRange,
     ) -> ExecutionResult<RequestedValue> {
         match requested {
-            RequestedValue::Owned(owned) => self.map_from_owned(owned),
+            RequestedValue::Owned(owned) => self.map_from_owned(owned, span),
             RequestedValue::Shared(shared) => self.map_from_shared(shared),
             RequestedValue::Mutable(mutable) => self.map_from_mutable(mutable),
             RequestedValue::Assignee(assignee) => self.map_from_assignee(assignee),
@@ -201,18 +204,21 @@ impl RequestedOwnership {
         }
     }
 
-    pub(crate) fn map_from_owned(&self, value: OwnedValue) -> ExecutionResult<RequestedValue> {
+    pub(crate) fn map_from_owned(
+        &self,
+        value: OwnedValue,
+        span: SpanRange,
+    ) -> ExecutionResult<RequestedValue> {
         match self {
             RequestedOwnership::LateBound => Ok(RequestedValue::LateBound(LateBoundValue::Owned(
                 LateBoundOwnedValue {
                     owned: value,
-                    // TODO: Get proper span - using call_site as fallback
-                    span_range: Span::call_site().span_range(),
+                    span_range: span,
                     is_from_last_use: false,
                 },
             ))),
             RequestedOwnership::Concrete(requested) => requested
-                .map_from_owned(value)
+                .map_from_owned(value, span)
                 .map(Self::item_from_argument),
         }
     }
@@ -331,7 +337,7 @@ impl ArgumentOwnership {
     ) -> ExecutionResult<ArgumentValue> {
         match late_bound {
             LateBoundValue::Owned(owned) => {
-                self.map_from_owned_with_is_last_use(owned.owned, owned.is_from_last_use)
+                self.map_from_owned_with_is_last_use(owned.owned, owned.span_range, owned.is_from_last_use)
             }
             LateBoundValue::CopyOnWrite(copy_on_write) => {
                 self.map_from_copy_on_write(copy_on_write)
@@ -440,13 +446,18 @@ impl ArgumentOwnership {
         }
     }
 
-    pub(crate) fn map_from_owned(&self, owned: OwnedValue) -> ExecutionResult<ArgumentValue> {
-        self.map_from_owned_with_is_last_use(owned, false)
+    pub(crate) fn map_from_owned(
+        &self,
+        owned: OwnedValue,
+        span: SpanRange,
+    ) -> ExecutionResult<ArgumentValue> {
+        self.map_from_owned_with_is_last_use(owned, span, false)
     }
 
     fn map_from_owned_with_is_last_use(
         &self,
         owned: OwnedValue,
+        span: SpanRange,
         is_from_last_use: bool,
     ) -> ExecutionResult<ArgumentValue> {
         match self {
@@ -458,11 +469,10 @@ impl ArgumentOwnership {
                 owned.into_inner(),
             ))),
             ArgumentOwnership::Assignee { .. } => {
-                // TODO: Get proper span for error
                 if is_from_last_use {
-                    Span::call_site().ownership_err("The final usage of a variable cannot be assigned to. You can use `let _ = ..` to discard a value.")
+                    span.ownership_err("The final usage of a variable cannot be assigned to. You can use `let _ = ..` to discard a value.")
                 } else {
-                    Span::call_site().ownership_err("An owned value cannot be assigned to.")
+                    span.ownership_err("An owned value cannot be assigned to.")
                 }
             }
             ArgumentOwnership::Shared => Ok(ArgumentValue::Shared(Shared::new_from_owned(
@@ -728,7 +738,7 @@ impl EvaluationFrame for UnaryOperationBuilder {
         // Try method resolution first
         if let Some(interface) = operand_kind.resolve_unary_operation(&self.operation) {
             let resolved_value = late_bound_value.resolve(interface.argument_ownership())?;
-            let result = interface.execute(resolved_value, &self.operation)?;
+            let result = interface.execute(Spanned(resolved_value, operand_span), &self.operation)?;
             // The result span covers the operator and operand
             let result_span = self.operation.output_span_range(operand_span);
             return context.return_returned_value(result, result_span);
@@ -855,7 +865,11 @@ impl EvaluationFrame for BinaryOperationBuilder {
                     left.enable()?;
                     right.enable()?;
                 }
-                let result = interface.execute(left, right, &self.operation)?;
+                let result = interface.execute(
+                    Spanned(left, left_span),
+                    Spanned(right, right_span),
+                    &self.operation,
+                )?;
                 // The result span covers left operand through right operand
                 let result_span = SpanRange::new_between(left_span, right_span);
                 return context.return_returned_value(result, result_span);

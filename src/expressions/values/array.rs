@@ -196,7 +196,7 @@ define_interface! {
                 let mut this = this.into_inner();
                 let length = this.items.len();
                 if length == 1 {
-                    context.operation.evaluate(this.items.pop().unwrap().into_owned())
+                    context.operation.evaluate(this.items.pop().unwrap().into_owned(), context.output_span_range)
                 } else {
                     context.operation.value_err(format!(
                         "Only a singleton array can be cast to this value but the array has {} elements",

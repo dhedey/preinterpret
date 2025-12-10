@@ -266,11 +266,10 @@ define_interface! {
                 let this = this.into_inner();
                 let coerced = this.value.coerce_into_value();
                 if let Value::Stream(_) = &coerced {
-                    // TODO: Track proper span through resolution
-                    return Span::call_site().span_range().value_err("The stream could not be coerced into a single value");
+                    return context.output_span_range.value_err("The stream could not be coerced into a single value");
                 }
                 // Re-run the cast operation on the coerced value
-                context.operation.evaluate(coerced.into_owned())
+                context.operation.evaluate(coerced.into_owned(), context.output_span_range)
             }
         }
         pub(crate) mod binary_operations {

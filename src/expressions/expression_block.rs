@@ -316,7 +316,7 @@ impl ExpressionBlockContent {
     pub(crate) fn evaluate(
         &self,
         interpreter: &mut Interpreter,
-        _output_span_range: SpanRange,
+        output_span_range: SpanRange,
         ownership: RequestedOwnership,
     ) -> ExecutionResult<RequestedValue> {
         for (i, (statement, semicolon)) in self.statements.iter().enumerate() {
@@ -329,6 +329,6 @@ impl ExpressionBlockContent {
                 statement.evaluate_as_statement(interpreter)?;
             }
         }
-        ownership.map_from_owned(Owned(Value::None))
+        ownership.map_from_owned(Owned(Value::None), output_span_range)
     }
 }

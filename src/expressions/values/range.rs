@@ -372,7 +372,7 @@ define_interface! {
         pub(crate) mod unary_operations {
             [context] fn cast_via_iterator(this: Owned<RangeValue>) -> ExecutionResult<ReturnedValue> {
                 let this_iterator = this.try_map(IteratorValue::new_for_range)?;
-                context.operation.evaluate(this_iterator)
+                context.operation.evaluate(this_iterator, context.output_span_range)
             }
         }
         pub(crate) mod binary_operations {}

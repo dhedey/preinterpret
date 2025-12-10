@@ -258,12 +258,10 @@ pub(crate) struct UnaryOperationInterface {
 impl UnaryOperationInterface {
     pub(crate) fn execute(
         &self,
-        input: ArgumentValue,
+        Spanned(input, input_span): Spanned<ArgumentValue>,
         operation: &UnaryOperation,
     ) -> ExecutionResult<ReturnedValue> {
-        // TODO: Track proper span from input
-        let fallback_span = Span::call_site().span_range();
-        let output_span_range = operation.output_span_range(fallback_span);
+        let output_span_range = operation.output_span_range(input_span);
         (self.method)(
             UnaryOperationCallContext {
                 operation,
@@ -291,13 +289,11 @@ pub(crate) struct BinaryOperationInterface {
 impl BinaryOperationInterface {
     pub(crate) fn execute(
         &self,
-        lhs: ArgumentValue,
-        rhs: ArgumentValue,
+        Spanned(lhs, lhs_span): Spanned<ArgumentValue>,
+        Spanned(rhs, rhs_span): Spanned<ArgumentValue>,
         operation: &BinaryOperation,
     ) -> ExecutionResult<ReturnedValue> {
-        // TODO: Track proper spans from lhs and rhs
-        let fallback_span = Span::call_site().span_range();
-        let output_span_range = fallback_span;
+        let output_span_range = SpanRange::new_between(lhs_span, rhs_span);
         (self.method)(
             BinaryOperationCallContext {
                 operation,
