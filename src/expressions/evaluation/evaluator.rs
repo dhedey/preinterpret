@@ -61,24 +61,18 @@ impl<'a> ExpressionEvaluator<'a> {
     ) -> ExecutionResult<StepResult> {
         Ok(StepResult::Continue(match action {
             NextActionInner::ReadNodeAsValue(node, ownership) => {
-                let expression_node = self.nodes.get(node);
-                let output_span_range = expression_node.span_range();
-                expression_node.handle_as_value(Context {
+                self.nodes.get(node).handle_as_value(Context {
                     request: ownership,
                     interpreter,
                     stack: &mut self.stack,
-                    output_span_range,
                 })?
             }
             NextActionInner::ReadNodeAsAssignmentTarget(node, value) => {
-                let expression_node = self.nodes.get(node);
-                let output_span_range = expression_node.span_range();
-                expression_node.handle_as_assignment_target(
+                self.nodes.get(node).handle_as_assignment_target(
                     Context {
                         stack: &mut self.stack,
                         interpreter,
                         request: (),
-                        output_span_range,
                     },
                     self.nodes,
                     node,
@@ -269,25 +263,22 @@ impl AnyEvaluationHandler {
         stack: &mut EvaluationStack,
         spanned_value: SpannedRequestedValue,
     ) -> ExecutionResult<NextAction> {
-        let Spanned(value, output_span_range) = spanned_value;
         match self {
             AnyEvaluationHandler::Value(handler, ownership) => handler.handle_next(
                 Context {
                     interpreter,
                     stack,
                     request: ownership,
-                    output_span_range,
                 },
-                value,
+                spanned_value,
             ),
             AnyEvaluationHandler::Assignment(handler) => handler.handle_next(
                 Context {
                     interpreter,
                     stack,
                     request: (),
-                    output_span_range,
                 },
-                value,
+                spanned_value,
             ),
         }
     }
@@ -297,17 +288,9 @@ pub(super) struct Context<'a, T: RequestedValueType> {
     interpreter: &'a mut Interpreter,
     stack: &'a mut EvaluationStack,
     request: T::RequestConstraints,
-    pub(super) output_span_range: SpanRange,
 }
 
 impl<'a, T: RequestedValueType> Context<'a, T> {
-    /// Updates the output span range. Call this before returning if you need to
-    /// override the span with a different one (e.g., for grouped expressions where
-    /// the span should cover the entire grouping, not just the inner expression).
-    pub(super) fn set_output_span(&mut self, span_range: SpanRange) {
-        self.output_span_range = span_range;
-    }
-
     pub(super) fn request_owned<H: EvaluationFrame<ReturnType = T>>(
         self,
         handler: H,
@@ -387,7 +370,7 @@ pub(super) trait EvaluationFrame: Sized {
     fn handle_next(
         self,
         context: Context<Self::ReturnType>,
-        value: RequestedValue,
+        value: Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction>;
 }
 
@@ -420,39 +403,41 @@ impl<'a> Context<'a, ValueType> {
         self.request
     }
 
+    /// Helper to evaluate a closure and return the result with the given span.
     pub(super) fn evaluate(
         self,
         f: impl FnOnce(&mut Interpreter, RequestedOwnership) -> ExecutionResult<RequestedValue>,
+        span: SpanRange,
     ) -> ExecutionResult<NextAction> {
         let value = f(self.interpreter, self.request)?;
-        self.return_not_necessarily_matching_requested(value)
+        self.return_not_necessarily_matching_requested(value, span)
     }
 
     pub(super) fn return_late_bound(
         self,
         late_bound: LateBoundValue,
+        span: SpanRange,
     ) -> ExecutionResult<NextAction> {
         let value = self.request.map_from_late_bound(late_bound)?;
-        Ok(NextAction::return_requested(Spanned(
-            value,
-            self.output_span_range,
-        )))
+        Ok(NextAction::return_requested(Spanned(value, span)))
     }
 
-    pub(super) fn return_argument_value(self, value: ArgumentValue) -> ExecutionResult<NextAction> {
+    pub(super) fn return_argument_value(
+        self,
+        value: ArgumentValue,
+        span: SpanRange,
+    ) -> ExecutionResult<NextAction> {
         let value = self.request.map_from_argument(value)?;
-        Ok(NextAction::return_requested(Spanned(
-            value,
-            self.output_span_range,
-        )))
+        Ok(NextAction::return_requested(Spanned(value, span)))
     }
 
-    pub(super) fn return_returned_value(self, value: ReturnedValue) -> ExecutionResult<NextAction> {
+    pub(super) fn return_returned_value(
+        self,
+        value: ReturnedValue,
+        span: SpanRange,
+    ) -> ExecutionResult<NextAction> {
         let value = self.request.map_from_returned(value)?;
-        Ok(NextAction::return_requested(Spanned(
-            value,
-            self.output_span_range,
-        )))
+        Ok(NextAction::return_requested(Spanned(value, span)))
     }
 
     /// Note: This doesn't assume that the requested ownership matches the value's ownership.
@@ -463,20 +448,19 @@ impl<'a> Context<'a, ValueType> {
     pub(super) fn return_not_necessarily_matching_requested(
         self,
         value: RequestedValue,
+        span: SpanRange,
     ) -> ExecutionResult<NextAction> {
         let value = self.request.map_from_requested(value)?;
-        Ok(NextAction::return_requested(Spanned(
-            value,
-            self.output_span_range,
-        )))
+        Ok(NextAction::return_requested(Spanned(value, span)))
     }
 
-    pub(super) fn return_value(self, value: impl IsReturnable) -> ExecutionResult<NextAction> {
+    pub(super) fn return_value(
+        self,
+        value: impl IsReturnable,
+        span: SpanRange,
+    ) -> ExecutionResult<NextAction> {
         let value = self.request.map_from_returned(value.to_returned_value()?)?;
-        Ok(NextAction::return_requested(Spanned(
-            value,
-            self.output_span_range,
-        )))
+        Ok(NextAction::return_requested(Spanned(value, span)))
     }
 }
 

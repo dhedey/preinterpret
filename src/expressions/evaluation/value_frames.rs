@@ -490,7 +490,7 @@ impl AnyValueFrame {
     pub(super) fn handle_next(
         self,
         context: Context<ValueType>,
-        value: RequestedValue,
+        value: Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         match self {
             AnyValueFrame::Group(frame) => frame.handle_next(context, value),
@@ -533,12 +533,12 @@ impl EvaluationFrame for GroupBuilder {
 
     fn handle_next(
         self,
-        mut context: ValueContext,
-        value: RequestedValue,
+        context: ValueContext,
+        Spanned(value, _span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         let inner = value.expect_owned();
-        context.set_output_span(self.span.span_range());
-        context.return_value(inner)
+        // Use the grouped expression's span, not the inner expression's span
+        context.return_value(inner, self.span.span_range())
     }
 }
 
@@ -562,7 +562,7 @@ impl ArrayBuilder {
         .next(context)
     }
 
-    pub(super) fn next(self, mut context: ValueContext) -> ExecutionResult<NextAction> {
+    pub(super) fn next(self, context: ValueContext) -> ExecutionResult<NextAction> {
         Ok(
             match self
                 .unevaluated_items
@@ -570,10 +570,7 @@ impl ArrayBuilder {
                 .cloned()
             {
                 Some(next) => context.request_owned(self, next),
-                None => {
-                    context.set_output_span(self.span.span_range());
-                    context.return_value(self.evaluated_items)?
-                }
+                None => context.return_value(self.evaluated_items, self.span.span_range())?,
             },
         )
     }
@@ -589,7 +586,7 @@ impl EvaluationFrame for ArrayBuilder {
     fn handle_next(
         mut self,
         context: ValueContext,
-        value: RequestedValue,
+        Spanned(value, _span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         let value = value.expect_owned();
         self.evaluated_items.push(value.into_inner());
@@ -630,7 +627,7 @@ impl ObjectBuilder {
         .next(context)
     }
 
-    fn next(mut self: Box<Self>, mut context: ValueContext) -> ExecutionResult<NextAction> {
+    fn next(mut self: Box<Self>, context: ValueContext) -> ExecutionResult<NextAction> {
         Ok(
             match self
                 .unevaluated_entries
@@ -652,10 +649,7 @@ impl ObjectBuilder {
                     self.pending = Some(PendingEntryPath::OnIndexKeyBranch { access, value_node });
                     context.request_owned(self, index)
                 }
-                None => {
-                    context.set_output_span(self.span.span_range());
-                    context.return_value(self.evaluated_entries)?
-                }
+                None => context.return_value(self.evaluated_entries, self.span.span_range())?,
             },
         )
     }
@@ -671,7 +665,7 @@ impl EvaluationFrame for Box<ObjectBuilder> {
     fn handle_next(
         mut self,
         context: ValueContext,
-        value: RequestedValue,
+        Spanned(value, _span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         let pending = self.pending.take();
         Ok(match pending {
@@ -726,7 +720,7 @@ impl EvaluationFrame for UnaryOperationBuilder {
     fn handle_next(
         self,
         context: ValueContext,
-        value: RequestedValue,
+        Spanned(value, operand_span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         let late_bound_value = value.expect_late_bound();
         let operand_kind = late_bound_value.kind();
@@ -735,7 +729,9 @@ impl EvaluationFrame for UnaryOperationBuilder {
         if let Some(interface) = operand_kind.resolve_unary_operation(&self.operation) {
             let resolved_value = late_bound_value.resolve(interface.argument_ownership())?;
             let result = interface.execute(resolved_value, &self.operation)?;
-            return context.return_returned_value(result);
+            // The result span covers the operator and operand
+            let result_span = self.operation.output_span_range(operand_span);
+            return context.return_returned_value(result, result_span);
         }
         self.operation.type_err(format!(
             "The {} operator is not supported for {} values",
@@ -756,6 +752,7 @@ enum BinaryPath {
     },
     OnRightBranch {
         left: ArgumentValue,
+        left_span: SpanRange,
         interface: BinaryOperationInterface,
     },
 }
@@ -786,19 +783,22 @@ impl EvaluationFrame for BinaryOperationBuilder {
     fn handle_next(
         mut self,
         context: ValueContext,
-        value: RequestedValue,
+        Spanned(value, span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
             BinaryPath::OnLeftBranch { right } => {
                 let left_late_bound = value.expect_late_bound();
+                let left_span = span;
 
                 // Check for lazy evaluation first (short-circuit operators)
-                // TODO: Get proper span for left value
+                // Use operator span for type errors since the error is about the operation's requirements
                 let left_value = left_late_bound
                     .as_ref()
                     .spanned(self.operation.span_range());
                 if let Some(result) = self.operation.lazy_evaluate(left_value)? {
-                    context.return_returned_value(ReturnedValue::Owned(result))?
+                    // For short-circuit, the result span is just the left operand's span
+                    // (the right operand was never evaluated)
+                    context.return_returned_value(ReturnedValue::Owned(result), left_span)?
                 } else {
                     // Try method resolution based on left operand's kind and resolve left operand immediately
                     let interface = left_late_bound
@@ -818,7 +818,11 @@ impl EvaluationFrame for BinaryOperationBuilder {
                                 left.disable();
                             }
 
-                            self.state = BinaryPath::OnRightBranch { left, interface };
+                            self.state = BinaryPath::OnRightBranch {
+                                left,
+                                left_span,
+                                interface,
+                            };
                             context.request_argument_value(self, right, rhs_ownership)
                         }
                         None => {
@@ -833,9 +837,11 @@ impl EvaluationFrame for BinaryOperationBuilder {
             }
             BinaryPath::OnRightBranch {
                 mut left,
+                left_span,
                 interface,
             } => {
                 let mut right = value.expect_argument_value();
+                let right_span = span;
 
                 // NOTE:
                 // - This disable/enable flow allows us to do x += x without issues
@@ -850,7 +856,9 @@ impl EvaluationFrame for BinaryOperationBuilder {
                     right.enable()?;
                 }
                 let result = interface.execute(left, right, &self.operation)?;
-                return context.return_returned_value(result);
+                // The result span covers left operand through right operand
+                let result_span = SpanRange::new_between(left_span, right_span);
+                return context.return_returned_value(result, result_span);
             }
         })
     }
@@ -887,7 +895,7 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
     fn handle_next(
         self,
         context: ValueContext,
-        value: RequestedValue,
+        Spanned(value, source_span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         let auto_create = context.requested_ownership().requests_auto_create();
         let mapped = value.expect_any_value_and_map(
@@ -895,7 +903,9 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
             |mutable| mutable.resolve_property(&self.access, auto_create),
             |owned| owned.resolve_property(&self.access),
         )?;
-        context.return_not_necessarily_matching_requested(mapped)
+        // The result span covers source through property
+        let result_span = SpanRange::new_between(source_span, self.access.span_range());
+        context.return_not_necessarily_matching_requested(mapped, result_span)
     }
 }
 
@@ -905,8 +915,13 @@ pub(super) struct ValueIndexAccessBuilder {
 }
 
 enum IndexPath {
-    OnSourceBranch { index: ExpressionNodeId },
-    OnIndexBranch { source: RequestedValue },
+    OnSourceBranch {
+        index: ExpressionNodeId,
+    },
+    OnIndexBranch {
+        source: RequestedValue,
+        source_span: SpanRange,
+    },
 }
 
 impl ValueIndexAccessBuilder {
@@ -940,29 +955,36 @@ impl EvaluationFrame for ValueIndexAccessBuilder {
     fn handle_next(
         mut self,
         context: ValueContext,
-        value: RequestedValue,
+        Spanned(value, span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
             IndexPath::OnSourceBranch { index } => {
-                self.state = IndexPath::OnIndexBranch { source: value };
+                self.state = IndexPath::OnIndexBranch {
+                    source: value,
+                    source_span: span,
+                };
                 // This is a value, so we are _accessing it_ and can't create values
                 // (that's only possible in a place!) - therefore we don't need an owned key,
                 // and can use &index for reading values from our array
                 context.request_shared(self, index)
             }
-            IndexPath::OnIndexBranch { source } => {
+            IndexPath::OnIndexBranch {
+                source,
+                source_span,
+            } => {
                 let index = value.expect_shared();
                 // Wrap index value in Spanned using access span
                 let index_spanned = index.as_ref().spanned(self.access.span_range());
 
                 let auto_create = context.requested_ownership().requests_auto_create();
-                context.return_not_necessarily_matching_requested(
-                    source.expect_any_value_and_map(
-                        |shared| shared.resolve_indexed(self.access, index_spanned),
-                        |mutable| mutable.resolve_indexed(self.access, index_spanned, auto_create),
-                        |owned| owned.resolve_indexed(self.access, index_spanned),
-                    )?,
-                )?
+                let result = source.expect_any_value_and_map(
+                    |shared| shared.resolve_indexed(self.access, index_spanned),
+                    |mutable| mutable.resolve_indexed(self.access, index_spanned, auto_create),
+                    |owned| owned.resolve_indexed(self.access, index_spanned),
+                )?;
+                // The result span covers source through brackets
+                let result_span = SpanRange::new_between(source_span, self.access.span_range());
+                context.return_not_necessarily_matching_requested(result, result_span)?
             }
         })
     }
@@ -974,13 +996,18 @@ pub(super) struct RangeBuilder {
 }
 
 enum RangePath {
-    OnLeftBranch { right: Option<ExpressionNodeId> },
-    OnRightBranch { left: Option<Value> },
+    OnLeftBranch {
+        right: Option<ExpressionNodeId>,
+    },
+    OnRightBranch {
+        left: Option<Value>,
+        left_span: Option<SpanRange>,
+    },
 }
 
 impl RangeBuilder {
     pub(super) fn start(
-        mut context: ValueContext,
+        context: ValueContext,
         left: &Option<ExpressionNodeId>,
         range_limits: &syn::RangeLimits,
         right: &Option<ExpressionNodeId>,
@@ -989,8 +1016,7 @@ impl RangeBuilder {
             (None, None) => match range_limits {
                 syn::RangeLimits::HalfOpen(token) => {
                     let inner = RangeValueInner::RangeFull { token: *token };
-                    context.set_output_span(token.span_range());
-                    context.return_value(inner)?
+                    context.return_value(inner, token.span_range())?
                 }
                 syn::RangeLimits::Closed(_) => {
                     unreachable!(
@@ -1001,7 +1027,10 @@ impl RangeBuilder {
             (None, Some(right)) => context.request_owned(
                 Self {
                     range_limits: *range_limits,
-                    state: RangePath::OnRightBranch { left: None },
+                    state: RangePath::OnRightBranch {
+                        left: None,
+                        left_span: None,
+                    },
                 },
                 *right,
             ),
@@ -1025,14 +1054,17 @@ impl EvaluationFrame for RangeBuilder {
 
     fn handle_next(
         mut self,
-        mut context: ValueContext,
-        value: RequestedValue,
+        context: ValueContext,
+        Spanned(value, value_span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         // TODO[range-refactor]: Change to not always clone the value
         let value = value.expect_owned().into_inner();
         Ok(match (self.state, self.range_limits) {
             (RangePath::OnLeftBranch { right: Some(right) }, _) => {
-                self.state = RangePath::OnRightBranch { left: Some(value) };
+                self.state = RangePath::OnRightBranch {
+                    left: Some(value),
+                    left_span: Some(value_span),
+                };
                 context.request_owned(self, right)
             }
             (RangePath::OnLeftBranch { right: None }, syn::RangeLimits::HalfOpen(token)) => {
@@ -1040,45 +1072,79 @@ impl EvaluationFrame for RangeBuilder {
                     start_inclusive: value,
                     token,
                 };
-                context.set_output_span(token.span_range());
-                context.return_value(inner)?
+                // Span from left value through the range token
+                let result_span = SpanRange::new_between(value_span, token.span_range());
+                context.return_value(inner, result_span)?
             }
             (RangePath::OnLeftBranch { right: None }, syn::RangeLimits::Closed(_)) => {
                 unreachable!("A closed range should have been given a right in continue_range(..)")
             }
-            (RangePath::OnRightBranch { left: Some(left) }, syn::RangeLimits::HalfOpen(token)) => {
+            (
+                RangePath::OnRightBranch {
+                    left: Some(left),
+                    left_span: Some(left_span),
+                },
+                syn::RangeLimits::HalfOpen(token),
+            ) => {
                 let inner = RangeValueInner::Range {
                     start_inclusive: left,
                     token,
                     end_exclusive: value,
                 };
-                context.set_output_span(token.span_range());
-                context.return_value(inner)?
+                // Span from left value through right value
+                let result_span = SpanRange::new_between(left_span, value_span);
+                context.return_value(inner, result_span)?
             }
-            (RangePath::OnRightBranch { left: Some(left) }, syn::RangeLimits::Closed(token)) => {
+            (
+                RangePath::OnRightBranch {
+                    left: Some(left),
+                    left_span: Some(left_span),
+                },
+                syn::RangeLimits::Closed(token),
+            ) => {
                 let inner = RangeValueInner::RangeInclusive {
                     start_inclusive: left,
                     token,
                     end_inclusive: value,
                 };
-                context.set_output_span(token.span_range());
-                context.return_value(inner)?
+                // Span from left value through right value
+                let result_span = SpanRange::new_between(left_span, value_span);
+                context.return_value(inner, result_span)?
             }
-            (RangePath::OnRightBranch { left: None }, syn::RangeLimits::HalfOpen(token)) => {
+            (
+                RangePath::OnRightBranch {
+                    left: None,
+                    left_span: None,
+                },
+                syn::RangeLimits::HalfOpen(token),
+            ) => {
                 let inner = RangeValueInner::RangeTo {
                     token,
                     end_exclusive: value,
                 };
-                context.set_output_span(token.span_range());
-                context.return_value(inner)?
+                // Span from range token through right value
+                let result_span = SpanRange::new_between(token.span_range(), value_span);
+                context.return_value(inner, result_span)?
             }
-            (RangePath::OnRightBranch { left: None }, syn::RangeLimits::Closed(token)) => {
+            (
+                RangePath::OnRightBranch {
+                    left: None,
+                    left_span: None,
+                },
+                syn::RangeLimits::Closed(token),
+            ) => {
                 let inner = RangeValueInner::RangeToInclusive {
                     token,
                     end_inclusive: value,
                 };
-                context.set_output_span(token.span_range());
-                context.return_value(inner)?
+                // Span from range token through right value
+                let result_span = SpanRange::new_between(token.span_range(), value_span);
+                context.return_value(inner, result_span)?
+            }
+            // Handle mismatched patterns that shouldn't occur
+            (RangePath::OnRightBranch { left: Some(_), .. }, _)
+            | (RangePath::OnRightBranch { left: None, .. }, _) => {
+                unreachable!("Mismatched RangePath state")
             }
         })
     }
@@ -1119,8 +1185,8 @@ impl EvaluationFrame for AssignmentBuilder {
 
     fn handle_next(
         mut self,
-        mut context: ValueContext,
-        value: RequestedValue,
+        context: ValueContext,
+        Spanned(value, _span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
             AssignmentPath::OnValueBranch { assignee } => {
@@ -1130,8 +1196,7 @@ impl EvaluationFrame for AssignmentBuilder {
             }
             AssignmentPath::OnAwaitingAssignment => {
                 let AssignmentCompletion { span_range } = value.expect_assignment_completion();
-                context.set_output_span(span_range);
-                context.return_value(())?
+                context.return_value((), span_range)?
             }
         })
     }
@@ -1184,7 +1249,7 @@ impl EvaluationFrame for MethodCallBuilder {
     fn handle_next(
         mut self,
         mut context: ValueContext,
-        value: RequestedValue,
+        Spanned(value, _span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         // Handle expected item based on current state
         match self.state {
@@ -1303,7 +1368,7 @@ impl EvaluationFrame for MethodCallBuilder {
                     interpreter: context.interpreter(),
                 };
                 let output = method.execute(arguments, &mut call_context)?;
-                context.return_returned_value(output)?
+                context.return_returned_value(output, self.method.span_range())?
             }
         })
     }

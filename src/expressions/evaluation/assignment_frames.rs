@@ -22,7 +22,7 @@ impl AnyAssignmentFrame {
     pub(super) fn handle_next(
         self,
         context: Context<AssignmentType>,
-        value: RequestedValue,
+        value: Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         match self {
             Self::Assignee(frame) => frame.handle_next(context, value),
@@ -62,7 +62,7 @@ impl EvaluationFrame for AssigneeAssigner {
     fn handle_next(
         self,
         context: AssignmentContext,
-        value: RequestedValue,
+        Spanned(value, _span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         let mut assignee = value.expect_assignee();
         let value = self.value;
@@ -94,7 +94,7 @@ impl EvaluationFrame for GroupedAssigner {
     fn handle_next(
         self,
         context: AssignmentContext,
-        value: RequestedValue,
+        Spanned(value, _span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         let AssignmentCompletion { span_range } = value.expect_assignment_completion();
         Ok(context.return_assignment_completion(span_range))
@@ -214,7 +214,7 @@ impl EvaluationFrame for ArrayBasedAssigner {
     fn handle_next(
         self,
         context: AssignmentContext,
-        value: RequestedValue,
+        Spanned(value, _span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         let AssignmentCompletion { .. } = value.expect_assignment_completion();
         Ok(self.handle_next_subassignment(context))
@@ -328,7 +328,7 @@ impl EvaluationFrame for Box<ObjectBasedAssigner> {
     fn handle_next(
         self,
         context: AssignmentContext,
-        value: RequestedValue,
+        Spanned(value, _span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         match self.state {
             ObjectAssignmentState::ResolvingIndex {
