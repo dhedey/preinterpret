@@ -189,14 +189,11 @@ impl Evaluate for WhileExpression {
         let mut iteration_counter = interpreter.start_iteration_counter(&span);
 
         let scope = interpreter.current_scope_id();
-        loop {
-            let condition_is_true: bool = self
-                .condition
-                .evaluate_owned(interpreter)?
-                .resolve_as("A while condition")?;
-            if !condition_is_true {
-                break;
-            }
+        while self
+            .condition
+            .evaluate_owned(interpreter)?
+            .resolve_as("A while condition")?
+        {
             iteration_counter.increment_and_check()?;
             let body_result = self.body.evaluate_owned(interpreter);
             match interpreter.catch_control_flow(body_result, self.catch_location, scope)? {

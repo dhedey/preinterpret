@@ -588,7 +588,7 @@ impl EvaluationFrame for GroupBuilder {
     ) -> ExecutionResult<NextAction> {
         let inner = value.expect_owned();
         // Use the grouped expression's span, not the inner expression's span
-        context.return_value(inner, self.span.span_range())
+        context.return_value(Spanned(inner, self.span.span_range()))
     }
 }
 
@@ -620,7 +620,9 @@ impl ArrayBuilder {
                 .cloned()
             {
                 Some(next) => context.request_owned(self, next),
-                None => context.return_value(self.evaluated_items, self.span.span_range())?,
+                None => {
+                    context.return_value(Spanned(self.evaluated_items, self.span.span_range()))?
+                }
             },
         )
     }
@@ -699,7 +701,9 @@ impl ObjectBuilder {
                     self.pending = Some(PendingEntryPath::OnIndexKeyBranch { access, value_node });
                     context.request_owned(self, index)
                 }
-                None => context.return_value(self.evaluated_entries, self.span.span_range())?,
+                None => {
+                    context.return_value(Spanned(self.evaluated_entries, self.span.span_range()))?
+                }
             },
         )
     }
@@ -784,7 +788,7 @@ impl EvaluationFrame for UnaryOperationBuilder {
                 interface.execute(Spanned(resolved_value, operand_span), &self.operation)?;
             // The result span covers the operator and operand
             let result_span = self.operation.output_span_range(operand_span);
-            return context.return_returned_value(result, result_span);
+            return context.return_returned_value(Spanned(result, result_span));
         }
         self.operation.type_err(format!(
             "The {} operator is not supported for {} values",
@@ -850,7 +854,8 @@ impl EvaluationFrame for BinaryOperationBuilder {
                 if let Some(result) = self.operation.lazy_evaluate(left_value)? {
                     // For short-circuit, the result span is just the left operand's span
                     // (the right operand was never evaluated)
-                    context.return_returned_value(ReturnedValue::Owned(result), left_span)?
+                    context
+                        .return_returned_value(Spanned(ReturnedValue::Owned(result), left_span))?
                 } else {
                     // Try method resolution based on left operand's kind and resolve left operand immediately
                     let interface = left_late_bound
@@ -906,7 +911,7 @@ impl EvaluationFrame for BinaryOperationBuilder {
                 // The result span covers left operand through right operand
                 let result_span = SpanRange::new_between(left.1, right.1);
                 let result = interface.execute(left, right, &self.operation)?;
-                return context.return_returned_value(result, result_span);
+                return context.return_returned_value(Spanned(result, result_span));
             }
         })
     }
@@ -953,7 +958,7 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
         )?;
         // The result span covers source through property
         let result_span = SpanRange::new_between(source_span, self.access.span_range());
-        context.return_not_necessarily_matching_requested(mapped, result_span)
+        context.return_not_necessarily_matching_requested(Spanned(mapped, result_span))
     }
 }
 
@@ -1032,7 +1037,7 @@ impl EvaluationFrame for ValueIndexAccessBuilder {
                 )?;
                 // The result span covers source through brackets
                 let result_span = SpanRange::new_between(source_span, self.access.span_range());
-                context.return_not_necessarily_matching_requested(result, result_span)?
+                context.return_not_necessarily_matching_requested(Spanned(result, result_span))?
             }
         })
     }
@@ -1059,7 +1064,7 @@ impl RangeBuilder {
             (None, None) => match range_limits {
                 syn::RangeLimits::HalfOpen(token) => {
                     let inner = RangeValueInner::RangeFull { token: *token };
-                    context.return_value(inner, token.span_range())?
+                    context.return_value(Spanned(inner, token.span_range()))?
                 }
                 syn::RangeLimits::Closed(_) => {
                     unreachable!(
@@ -1109,7 +1114,7 @@ impl EvaluationFrame for RangeBuilder {
                     start_inclusive: value,
                     token,
                 };
-                context.return_value(inner, token.span_range())?
+                context.return_value(Spanned(inner, token.span_range()))?
             }
             (RangePath::OnLeftBranch { right: None }, syn::RangeLimits::Closed(_)) => {
                 unreachable!("A closed range should have been given a right in continue_range(..)")
@@ -1120,7 +1125,7 @@ impl EvaluationFrame for RangeBuilder {
                     token,
                     end_exclusive: value,
                 };
-                context.return_value(inner, token.span_range())?
+                context.return_value(Spanned(inner, token.span_range()))?
             }
             (RangePath::OnRightBranch { left: Some(left) }, syn::RangeLimits::Closed(token)) => {
                 let inner = RangeValueInner::RangeInclusive {
@@ -1128,21 +1133,21 @@ impl EvaluationFrame for RangeBuilder {
                     token,
                     end_inclusive: value,
                 };
-                context.return_value(inner, token.span_range())?
+                context.return_value(Spanned(inner, token.span_range()))?
             }
             (RangePath::OnRightBranch { left: None }, syn::RangeLimits::HalfOpen(token)) => {
                 let inner = RangeValueInner::RangeTo {
                     token,
                     end_exclusive: value,
                 };
-                context.return_value(inner, token.span_range())?
+                context.return_value(Spanned(inner, token.span_range()))?
             }
             (RangePath::OnRightBranch { left: None }, syn::RangeLimits::Closed(token)) => {
                 let inner = RangeValueInner::RangeToInclusive {
                     token,
                     end_inclusive: value,
                 };
-                context.return_value(inner, token.span_range())?
+                context.return_value(Spanned(inner, token.span_range()))?
             }
         })
     }
@@ -1194,7 +1199,7 @@ impl EvaluationFrame for AssignmentBuilder {
             }
             AssignmentPath::OnAwaitingAssignment => {
                 let AssignmentCompletion = value.expect_assignment_completion();
-                context.return_value((), span)?
+                context.return_value(Spanned((), span))?
             }
         })
     }
@@ -1373,7 +1378,7 @@ impl EvaluationFrame for MethodCallBuilder {
                     interpreter: context.interpreter(),
                 };
                 let output = method.execute(arguments, &mut call_context)?;
-                context.return_returned_value(output, self.method.span_range())?
+                context.return_returned_value(Spanned(output, self.method.span_range()))?
             }
         })
     }

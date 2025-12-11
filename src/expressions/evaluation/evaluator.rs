@@ -403,14 +403,13 @@ impl<'a> Context<'a, ValueType> {
         self.request
     }
 
-    /// Helper to evaluate a closure and return the result with the given span.
+    /// Helper to evaluate a closure and return the spanned result.
     pub(super) fn evaluate(
         self,
-        f: impl FnOnce(&mut Interpreter, RequestedOwnership) -> ExecutionResult<RequestedValue>,
-        span: SpanRange,
+        f: impl FnOnce(&mut Interpreter, RequestedOwnership) -> ExecutionResult<Spanned<RequestedValue>>,
     ) -> ExecutionResult<NextAction> {
-        let value = f(self.interpreter, self.request)?;
-        self.return_not_necessarily_matching_requested(value, span)
+        let spanned_value = f(self.interpreter, self.request)?;
+        self.return_not_necessarily_matching_requested(spanned_value)
     }
 
     pub(super) fn return_late_bound(
@@ -423,19 +422,17 @@ impl<'a> Context<'a, ValueType> {
 
     pub(super) fn return_argument_value(
         self,
-        value: ArgumentValue,
-        span: SpanRange,
+        spanned_value: Spanned<ArgumentValue>,
     ) -> ExecutionResult<NextAction> {
-        let spanned_value = self.request.map_from_argument(Spanned(value, span))?;
+        let spanned_value = self.request.map_from_argument(spanned_value)?;
         Ok(NextAction::return_requested(spanned_value))
     }
 
     pub(super) fn return_returned_value(
         self,
-        value: ReturnedValue,
-        span: SpanRange,
+        spanned_value: Spanned<ReturnedValue>,
     ) -> ExecutionResult<NextAction> {
-        let spanned_value = self.request.map_from_returned(Spanned(value, span))?;
+        let spanned_value = self.request.map_from_returned(spanned_value)?;
         Ok(NextAction::return_requested(spanned_value))
     }
 
@@ -446,17 +443,15 @@ impl<'a> Context<'a, ValueType> {
     /// See e.g. [`ValuePropertyAccessBuilder`].
     pub(super) fn return_not_necessarily_matching_requested(
         self,
-        value: RequestedValue,
-        span: SpanRange,
+        spanned_value: Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
-        let spanned_value = self.request.map_from_requested(Spanned(value, span))?;
+        let spanned_value = self.request.map_from_requested(spanned_value)?;
         Ok(NextAction::return_requested(spanned_value))
     }
 
-    pub(super) fn return_value(
+    pub(super) fn return_value<T: IsReturnable>(
         self,
-        value: impl IsReturnable,
-        span: SpanRange,
+        Spanned(value, span): Spanned<T>,
     ) -> ExecutionResult<NextAction> {
         let spanned_value = self
             .request

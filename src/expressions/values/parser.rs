@@ -345,8 +345,8 @@ impl ParseSource for ParseTemplateLiteral {
     }
 }
 
-impl ParseTemplateLiteral {
-    pub(crate) fn evaluate(
+impl Evaluate for ParseTemplateLiteral {
+    fn evaluate(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
