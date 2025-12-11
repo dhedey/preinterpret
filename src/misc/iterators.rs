@@ -57,7 +57,7 @@ impl ZipIterators {
                     v.key_span,
                     v.value
                         .into_owned()
-                        .expect_any_iterator("Each zip input")?
+                        .expect_any_iterator(v.key_span.span_range(), "Each zip input")?
                         .into_inner(),
                 ))
             })
@@ -76,7 +76,7 @@ impl ZipIterators {
             .take(101)
             .map(|x| {
                 x.into_owned()
-                    .expect_any_iterator("Each zip input")
+                    .expect_any_iterator(span_range, "Each zip input")
                     .map(|x| x.into_inner())
             })
             .collect::<Result<Vec<_>, _>>()?;

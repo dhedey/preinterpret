@@ -1,7 +1,5 @@
 error: This argument is expected to be an integer, but it is an array
- --> tests/compilation_failures/operations/add_int_and_array.rs:4:13
+ --> tests/compilation_failures/operations/add_int_and_array.rs:4:18
   |
 4 |     let _ = run!(1 + []);
-  |             ^^^^^^^^^^^^
-  |
-  = note: this error originates in the macro `run` (in Nightly builds, run with -Z macro-backtrace for more info)
+  |                  ^^^^^^

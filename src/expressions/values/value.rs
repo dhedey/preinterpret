@@ -1097,9 +1097,10 @@ impl OwnedValue {
 
     pub(crate) fn expect_any_iterator(
         self,
+        span: SpanRange,
         resolution_target: &str,
     ) -> ExecutionResult<Owned<IteratorValue>> {
-        IterableValue::resolve_owned(self, resolution_target)?.try_map(|v| v.into_iterator())
+        IterableValue::resolve_owned(self, span, resolution_target)?.try_map(|v| v.into_iterator())
     }
 }
 

@@ -459,7 +459,9 @@ impl<'a> Context<'a, ValueType> {
         value: impl IsReturnable,
         span: SpanRange,
     ) -> ExecutionResult<NextAction> {
-        let value = self.request.map_from_returned(value.to_returned_value()?, span)?;
+        let value = self
+            .request
+            .map_from_returned(value.to_returned_value()?, span)?;
         Ok(NextAction::return_requested(Spanned(value, span)))
     }
 }

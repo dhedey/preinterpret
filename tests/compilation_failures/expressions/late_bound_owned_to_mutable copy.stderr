@@ -1,12 +1,5 @@
 error: An owned value cannot be assigned to.
- --> tests/compilation_failures/expressions/late_bound_owned_to_mutable copy.rs:4:13
+ --> tests/compilation_failures/expressions/late_bound_owned_to_mutable copy.rs:6:9
   |
-4 |       let _ = run!{
-  |  _____________^
-5 | |         let a = "a";
-6 | |         "b".swap(a);
-7 | |         a
-8 | |     };
-  | |_____^
-  |
-  = note: this error originates in the macro `run` (in Nightly builds, run with -Z macro-backtrace for more info)
+6 |         "b".swap(a);
+  |         ^^^

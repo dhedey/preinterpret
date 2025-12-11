@@ -91,7 +91,7 @@ impl ArrayValue {
     ) -> ExecutionResult<usize> {
         let index: usize = (**integer)
             .into_owned_value()
-            .resolve_as("An array index")?;
+            .resolve_as(integer.span_range(), "An array index")?;
         if is_exclusive {
             if index <= self.items.len() {
                 Ok(index)

@@ -32,10 +32,11 @@ impl UntypedFloat {
     pub(crate) fn paired_operation(
         self,
         rhs: Owned<FloatValue>,
+        context: BinaryOperationCallContext,
         perform_fn: fn(FallbackFloat, FallbackFloat) -> FallbackFloat,
     ) -> ExecutionResult<FloatValue> {
         let lhs = self.0;
-        let rhs: UntypedFloat = rhs.resolve_as("This operand")?;
+        let rhs: UntypedFloat = rhs.resolve_as(context.output_span_range, "This operand")?;
         let rhs = rhs.0;
         let output = perform_fn(lhs, rhs);
         Ok(FloatValue::Untyped(UntypedFloat::from_fallback(output)))
@@ -44,10 +45,11 @@ impl UntypedFloat {
     pub(crate) fn paired_comparison(
         self,
         rhs: Owned<FloatValue>,
+        span: SpanRange,
         compare_fn: fn(FallbackFloat, FallbackFloat) -> bool,
     ) -> ExecutionResult<bool> {
         let lhs = self.0;
-        let rhs: UntypedFloat = rhs.resolve_as("This operand")?;
+        let rhs: UntypedFloat = rhs.resolve_as(span, "This operand")?;
         let rhs = rhs.0;
         Ok(compare_fn(lhs, rhs))
     }

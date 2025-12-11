@@ -176,7 +176,11 @@ impl<'a, T: ResolvableShared<Value> + ?Sized> ResolveAs<&'a T> for Spanned<&'a V
 }
 
 impl<'a, T: ResolvableShared<Value> + ?Sized> ResolveAs<Spanned<&'a T>> for Spanned<&'a Value> {
-    fn resolve_as(self, _span: SpanRange, resolution_target: &str) -> ExecutionResult<Spanned<&'a T>> {
+    fn resolve_as(
+        self,
+        _span: SpanRange,
+        resolution_target: &str,
+    ) -> ExecutionResult<Spanned<&'a T>> {
         // Use span from self
         T::resolve_spanned_ref(self, resolution_target)
     }
@@ -198,7 +202,11 @@ impl<'a, T: ResolvableMutable<Value> + ?Sized> ResolveAs<&'a mut T> for Spanned<
 impl<'a, T: ResolvableMutable<Value> + ?Sized> ResolveAs<Spanned<&'a mut T>>
     for Spanned<&'a mut Value>
 {
-    fn resolve_as(self, _span: SpanRange, resolution_target: &str) -> ExecutionResult<Spanned<&'a mut T>> {
+    fn resolve_as(
+        self,
+        _span: SpanRange,
+        resolution_target: &str,
+    ) -> ExecutionResult<Spanned<&'a mut T>> {
         // Use span from self
         T::resolve_spanned_ref_mut(self, resolution_target)
     }
@@ -306,7 +314,11 @@ pub(crate) trait ResolvableMutable<T> {
         span: SpanRange,
         resolution_target: &str,
     ) -> ExecutionResult<Assignee<Self>> {
-        Ok(Assignee(Self::resolve_mutable(value.0, span, resolution_target)?))
+        Ok(Assignee(Self::resolve_mutable(
+            value.0,
+            span,
+            resolution_target,
+        )?))
     }
 
     fn resolve_mutable(

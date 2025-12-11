@@ -164,7 +164,9 @@ impl RequestedOwnership {
             ArgumentValue::Mutable(mutable) => self.map_from_mutable(mutable, span),
             ArgumentValue::Assignee(assignee) => self.map_from_assignee(assignee, span),
             ArgumentValue::Shared(shared) => self.map_from_shared(shared, span),
-            ArgumentValue::CopyOnWrite(copy_on_write) => self.map_from_copy_on_write(copy_on_write, span),
+            ArgumentValue::CopyOnWrite(copy_on_write) => {
+                self.map_from_copy_on_write(copy_on_write, span)
+            }
         }
     }
 
@@ -177,7 +179,9 @@ impl RequestedOwnership {
             ReturnedValue::Owned(owned) => self.map_from_owned(owned, span),
             ReturnedValue::Mutable(mutable) => self.map_from_mutable(mutable, span),
             ReturnedValue::Shared(shared) => self.map_from_shared(shared, span),
-            ReturnedValue::CopyOnWrite(copy_on_write) => self.map_from_copy_on_write(copy_on_write, span),
+            ReturnedValue::CopyOnWrite(copy_on_write) => {
+                self.map_from_copy_on_write(copy_on_write, span)
+            }
         }
     }
 
@@ -346,7 +350,11 @@ impl ArgumentOwnership {
         match late_bound {
             LateBoundValue::Owned(owned) => {
                 // Use the span from the owned value, not the caller's span
-                self.map_from_owned_with_is_last_use(owned.owned, owned.span_range, owned.is_from_last_use)
+                self.map_from_owned_with_is_last_use(
+                    owned.owned,
+                    owned.span_range,
+                    owned.is_from_last_use,
+                )
             }
             LateBoundValue::CopyOnWrite(copy_on_write) => {
                 self.map_from_copy_on_write(copy_on_write, span)
@@ -753,8 +761,10 @@ impl EvaluationFrame for UnaryOperationBuilder {
 
         // Try method resolution first
         if let Some(interface) = operand_kind.resolve_unary_operation(&self.operation) {
-            let resolved_value = late_bound_value.resolve(interface.argument_ownership(), operand_span)?;
-            let result = interface.execute(Spanned(resolved_value, operand_span), &self.operation)?;
+            let resolved_value =
+                late_bound_value.resolve(interface.argument_ownership(), operand_span)?;
+            let result =
+                interface.execute(Spanned(resolved_value, operand_span), &self.operation)?;
             // The result span covers the operator and operand
             let result_span = self.operation.output_span_range(operand_span);
             return context.return_returned_value(result, result_span);

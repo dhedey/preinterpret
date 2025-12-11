@@ -531,9 +531,10 @@ impl Evaluate for AttemptExpression {
                 arm.arm_scope,
                 self.catch_location,
                 |interpreter| -> ExecutionResult<()> {
-                    arm.lhs
-                        .evaluate_owned(interpreter)?
-                        .resolve_as(lhs_span, "The returned value from the left half of an attempt arm")
+                    arm.lhs.evaluate_owned(interpreter)?.resolve_as(
+                        lhs_span,
+                        "The returned value from the left half of an attempt arm",
+                    )
                 },
                 guard_clause(arm.guard.as_ref()),
                 MutationBlockReason::AttemptRevertibleSegment,

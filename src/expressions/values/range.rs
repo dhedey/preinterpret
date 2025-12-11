@@ -412,7 +412,7 @@ fn resolve_range<T: ResolvableOwned<Value> + ResolvableRange>(
 ) -> ExecutionResult<Box<dyn ClonableIterator<Item = Value>>> {
     let definition = match (end, dots) {
         (Some(end), dots) => {
-            let end = end.resolve_as("The end of this range bound")?;
+            let end = end.resolve_as(dots.span_range(), "The end of this range bound")?;
             IterableRangeOf::RangeFromTo { start, dots, end }
         }
         (None, RangeLimits::HalfOpen(dots)) => IterableRangeOf::RangeFrom { start, dots },

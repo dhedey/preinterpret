@@ -357,7 +357,10 @@ impl ParseTemplateLiteral {
         let parser: Shared<ParserValue> = self
             .parser_reference
             .resolve_shared(interpreter)?
-            .resolve_as("The value bound by a consume literal")?;
+            .resolve_as(
+                self.parser_reference.span_range(),
+                "The value bound by a consume literal",
+            )?;
 
         parser.parse_with(interpreter, |interpreter| self.content.consume(interpreter))?;
 

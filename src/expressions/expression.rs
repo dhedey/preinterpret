@@ -222,7 +222,11 @@ impl ExpressionNode {
                 let input_span = nodes.get(*input).span_range(nodes);
                 SpanRange::new_between(operation.span(), input_span)
             }
-            ExpressionNode::BinaryOperation { left_input, right_input, .. } => {
+            ExpressionNode::BinaryOperation {
+                left_input,
+                right_input,
+                ..
+            } => {
                 let left_span = nodes.get(*left_input).span_range(nodes);
                 let right_span = nodes.get(*right_input).span_range(nodes);
                 SpanRange::new_between(left_span, right_span)
@@ -231,7 +235,11 @@ impl ExpressionNode {
                 let node_span = nodes.get(*node).span_range(nodes);
                 SpanRange::new_between(node_span, access.span_range())
             }
-            ExpressionNode::MethodCall { node, method, parameters } => {
+            ExpressionNode::MethodCall {
+                node,
+                method,
+                parameters,
+            } => {
                 let node_span = nodes.get(*node).span_range(nodes);
                 if let Some(last_param) = parameters.last() {
                     let last_span = nodes.get(*last_param).span_range(nodes);
@@ -244,7 +252,11 @@ impl ExpressionNode {
                 let node_span = nodes.get(*node).span_range(nodes);
                 SpanRange::new_between(node_span, access.span_range())
             }
-            ExpressionNode::Range { left, range_limits, right } => {
+            ExpressionNode::Range {
+                left,
+                range_limits,
+                right,
+            } => {
                 let left_span = left.map(|n| nodes.get(n).span_range(nodes));
                 let right_span = right.map(|n| nodes.get(n).span_range(nodes));
                 let range_span = match range_limits {
@@ -258,7 +270,9 @@ impl ExpressionNode {
                     (None, None) => range_span,
                 }
             }
-            ExpressionNode::Assignment { assignee, value, .. } => {
+            ExpressionNode::Assignment {
+                assignee, value, ..
+            } => {
                 let assignee_span = nodes.get(*assignee).span_range(nodes);
                 let value_span = nodes.get(*value).span_range(nodes);
                 SpanRange::new_between(assignee_span, value_span)

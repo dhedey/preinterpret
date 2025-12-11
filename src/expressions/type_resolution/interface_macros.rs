@@ -147,7 +147,8 @@ where
     f(
         context,
         A::from_argument(a, output_span_range)?,
-        b.map(|b| B::from_argument(b, output_span_range)).transpose()?,
+        b.map(|b| B::from_argument(b, output_span_range))
+            .transpose()?,
     )
     .to_returned_value()
 }
@@ -164,7 +165,12 @@ where
     C: IsReturnable,
 {
     let output_span_range = context.output_span_range;
-    f(context, A::from_argument(a, output_span_range)?, B::from_argument(b, output_span_range)?).to_returned_value()
+    f(
+        context,
+        A::from_argument(a, output_span_range)?,
+        B::from_argument(b, output_span_range)?,
+    )
+    .to_returned_value()
 }
 
 pub(crate) fn apply_fn2_optional1<A, B, C, D>(
@@ -185,7 +191,8 @@ where
         context,
         A::from_argument(a, output_span_range)?,
         B::from_argument(b, output_span_range)?,
-        c.map(|c| C::from_argument(c, output_span_range)).transpose()?,
+        c.map(|c| C::from_argument(c, output_span_range))
+            .transpose()?,
     )
     .to_returned_value()
 }
@@ -235,7 +242,8 @@ where
         A::from_argument(a, output_span_range)?,
         B::from_argument(b, output_span_range)?,
         C::from_argument(c, output_span_range)?,
-        d.map(|d| D::from_argument(d, output_span_range)).transpose()?,
+        d.map(|d| D::from_argument(d, output_span_range))
+            .transpose()?,
     )
     .to_returned_value()
 }
@@ -287,7 +295,12 @@ where
     R: IsReturnable,
 {
     let output_span_range = context.output_span_range;
-    f(context, A::from_argument(lhs, output_span_range)?, B::from_argument(rhs, output_span_range)?).to_returned_value()
+    f(
+        context,
+        A::from_argument(lhs, output_span_range)?,
+        B::from_argument(rhs, output_span_range)?,
+    )
+    .to_returned_value()
 }
 
 pub(crate) struct MethodCallContext<'a> {

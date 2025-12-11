@@ -95,7 +95,9 @@ impl UnaryOperation {
                 input.articled_value_type(),
             ))
         })?;
-        let input = method.argument_ownership.map_from_owned(input, input_span)?;
+        let input = method
+            .argument_ownership
+            .map_from_owned(input, input_span)?;
         method.execute(Spanned(input, input_span), self)
     }
 }
@@ -295,7 +297,8 @@ impl BinaryOperation {
     ) -> ExecutionResult<Option<OwnedValue>> {
         match self {
             BinaryOperation::LogicalAnd { .. } => {
-                let bool: Spanned<&bool> = left.resolve_as(left.span_range(), "The left operand to &&")?;
+                let bool: Spanned<&bool> =
+                    left.resolve_as(left.span_range(), "The left operand to &&")?;
                 if !**bool {
                     Ok(Some((*bool).into_owned_value()))
                 } else {
@@ -303,7 +306,8 @@ impl BinaryOperation {
                 }
             }
             BinaryOperation::LogicalOr { .. } => {
-                let bool: Spanned<&bool> = left.resolve_as(left.span_range(), "The left operand to ||")?;
+                let bool: Spanned<&bool> =
+                    left.resolve_as(left.span_range(), "The left operand to ||")?;
                 if **bool {
                     Ok(Some((*bool).into_owned_value()))
                 } else {

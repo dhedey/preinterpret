@@ -113,14 +113,14 @@ macro_rules! define_typed_object {
                                 {
                                     // Need to return the $optional_field_type
                                     match optional {
-                                        Some(value) => ResolveAs::<$optional_field_type>::resolve_as(value.into_owned(), stringify!($optional_field))?,
+                                        Some(value) => ResolveAs::<$optional_field_type>::resolve_as(value.into_owned(), fallback_span, stringify!($optional_field))?,
                                         None => $($optional_field_default)?,
                                     }
                                 }
                                 {
                                     // Need to return Option<$optional_field_type>
                                     match optional {
-                                        Some(value) => Some(ResolveAs::<$optional_field_type>::resolve_as(value.into_owned(), stringify!($optional_field))?),
+                                        Some(value) => Some(ResolveAs::<$optional_field_type>::resolve_as(value.into_owned(), fallback_span, stringify!($optional_field))?),
                                         None => None,
                                     }
                                 }
