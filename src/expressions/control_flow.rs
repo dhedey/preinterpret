@@ -98,33 +98,31 @@ impl ParseSource for IfExpression {
 }
 
 impl Evaluate for IfExpression {
-    fn evaluate_unspanned(
+    fn evaluate(
         &self,
         interpreter: &mut Interpreter,
         requested_ownership: RequestedOwnership,
     ) -> ExecutionResult<RequestedValue> {
-        let evaluated_condition: bool = self
-            .condition
-            .evaluate_owned(interpreter)?
-            .resolve_as(self.condition.span_range(), "An if condition")?;
+        let Spanned(condition_value, condition_span) =
+            self.condition.evaluate_owned(interpreter)?;
+        let evaluated_condition: bool =
+            condition_value.resolve_as(condition_span, "An if condition")?;
 
         if evaluated_condition {
-            return self
-                .then_code
-                .evaluate_unspanned(interpreter, requested_ownership);
+            return self.then_code.evaluate(interpreter, requested_ownership);
         }
 
         for (condition, code) in &self.else_ifs {
-            let evaluated_condition: bool = condition
-                .evaluate_owned(interpreter)?
-                .resolve_as(condition.span_range(), "An else if condition")?;
+            let Spanned(condition_value, condition_span) = condition.evaluate_owned(interpreter)?;
+            let evaluated_condition: bool =
+                condition_value.resolve_as(condition_span, "An else if condition")?;
             if evaluated_condition {
-                return code.evaluate_unspanned(interpreter, requested_ownership);
+                return code.evaluate(interpreter, requested_ownership);
             }
         }
 
         if let Some(else_code) = &self.else_code {
-            return else_code.evaluate_unspanned(interpreter, requested_ownership);
+            return else_code.evaluate(interpreter, requested_ownership);
         }
 
         requested_ownership.map_from_owned(Value::None.into_owned(), self.span_range())
@@ -180,7 +178,7 @@ impl ParseSource for WhileExpression {
 }
 
 impl Evaluate for WhileExpression {
-    fn evaluate_unspanned(
+    fn evaluate(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
@@ -189,11 +187,12 @@ impl Evaluate for WhileExpression {
         let mut iteration_counter = interpreter.start_iteration_counter(&span);
 
         let scope = interpreter.current_scope_id();
-        while self
-            .condition
-            .evaluate_owned(interpreter)?
-            .resolve_as(self.condition.span_range(), "A while condition")?
-        {
+        loop {
+            let Spanned(condition_value, condition_span) =
+                self.condition.evaluate_owned(interpreter)?;
+            if !condition_value.resolve_as(condition_span, "A while condition")? {
+                break;
+            }
             iteration_counter.increment_and_check()?;
             let body_result = self.body.evaluate_owned(interpreter);
             match interpreter.catch_control_flow(body_result, self.catch_location, scope)? {
@@ -263,7 +262,7 @@ impl ParseSource for LoopExpression {
 }
 
 impl Evaluate for LoopExpression {
-    fn evaluate_unspanned(
+    fn evaluate(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
@@ -361,15 +360,14 @@ impl ParseSource for ForExpression {
 }
 
 impl Evaluate for ForExpression {
-    fn evaluate_unspanned(
+    fn evaluate(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
     ) -> ExecutionResult<RequestedValue> {
-        let iterable: IterableValue = self
-            .iterable
-            .evaluate_owned(interpreter)?
-            .resolve_as(self.iterable.span_range(), "A for loop iterable")?;
+        let Spanned(iterable_value, iterable_span) = self.iterable.evaluate_owned(interpreter)?;
+        let iterable: IterableValue =
+            iterable_value.resolve_as(iterable_span, "A for loop iterable")?;
 
         let span = self.body.span();
         let scope = interpreter.current_scope_id();
@@ -506,7 +504,7 @@ impl ParseSource for AttemptExpression {
 }
 
 impl Evaluate for AttemptExpression {
-    fn evaluate_unspanned(
+    fn evaluate(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
@@ -517,11 +515,9 @@ impl Evaluate for AttemptExpression {
         ) -> Option<impl for<'b> FnOnce(&'b mut Interpreter) -> ExecutionResult<bool> + 'a>
         {
             guard.map(|(_, guard_expression)| {
-                let span = guard_expression.span_range();
                 move |interpreter: &mut Interpreter| -> ExecutionResult<bool> {
-                    guard_expression
-                        .evaluate_owned(interpreter)?
-                        .resolve_as(span, "The guard condition of an attempt arm")
+                    let Spanned(value, span) = guard_expression.evaluate_owned(interpreter)?;
+                    value.resolve_as(span, "The guard condition of an attempt arm")
                 }
             })
         }
@@ -546,7 +542,7 @@ impl Evaluate for AttemptExpression {
                     continue;
                 }
             }
-            let output = arm.rhs.evaluate(interpreter, ownership)?;
+            let Spanned(output, _) = arm.rhs.evaluate(interpreter, ownership)?;
             interpreter.exit_scope(arm.arm_scope);
             return Ok(output);
         }
@@ -604,21 +600,19 @@ impl ParseSource for ParseExpression {
 }
 
 impl Evaluate for ParseExpression {
-    fn evaluate_unspanned(
+    fn evaluate(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
     ) -> ExecutionResult<RequestedValue> {
-        let input = self
-            .input
-            .evaluate_owned(interpreter)?
-            .resolve_as(self.input.span_range(), "The input to a parse expression")?;
+        let Spanned(input_value, input_span) = self.input.evaluate_owned(interpreter)?;
+        let input = input_value.resolve_as(input_span, "The input to a parse expression")?;
 
         interpreter.enter_scope(self.scope);
 
         let output = interpreter.start_parse(input, |interpreter, handle| {
             self.parser_variable.define(interpreter, handle);
-            self.body.evaluate_unspanned(interpreter, ownership)
+            self.body.evaluate(interpreter, ownership)
         })?;
 
         interpreter.exit_scope(self.scope);

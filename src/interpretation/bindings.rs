@@ -358,6 +358,13 @@ impl OwnedValue {
     }
 }
 
+impl Spanned<OwnedValue> {
+    pub(crate) fn into_statement_result(self) -> ExecutionResult<()> {
+        let Spanned(value, span_range) = self;
+        value.into_statement_result(span_range)
+    }
+}
+
 impl<T: IntoValue> Owned<T> {
     pub(crate) fn into_value(self) -> Value {
         self.0.into_value()

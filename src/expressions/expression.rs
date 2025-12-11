@@ -34,28 +34,26 @@ impl Expression {
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
-    ) -> ExecutionResult<RequestedValue> {
-        let Spanned(value, _span) =
-            ExpressionEvaluator::new(&self.nodes).evaluate(self.root, interpreter, ownership)?;
-        Ok(value)
+    ) -> ExecutionResult<Spanned<RequestedValue>> {
+        ExpressionEvaluator::new(&self.nodes).evaluate(self.root, interpreter, ownership)
     }
 
     pub(crate) fn evaluate_owned(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<OwnedValue> {
+    ) -> ExecutionResult<Spanned<OwnedValue>> {
         Ok(self
             .evaluate(interpreter, RequestedOwnership::owned())?
-            .expect_owned())
+            .map(|v, _| v.expect_owned()))
     }
 
     pub(crate) fn evaluate_shared(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<SharedValue> {
+    ) -> ExecutionResult<Spanned<SharedValue>> {
         Ok(self
             .evaluate(interpreter, RequestedOwnership::shared())?
-            .expect_shared())
+            .map(|v, _| v.expect_shared()))
     }
 
     pub(crate) fn is_valid_as_statement_without_semicolon(&self) -> bool {
@@ -75,32 +73,28 @@ impl Expression {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         // This must align with is_valid_as_statement_without_semicolon
-        // TODO: Get proper span from expression nodes
-        let fallback_span = Span::call_site().span_range();
         match &self.nodes.get(self.root) {
             ExpressionNode::Leaf(Leaf::Block(block)) => block
-                .evaluate_unspanned(interpreter, RequestedOwnership::owned())?
-                .expect_owned()
-                .into_statement_result(block.span().span_range()),
+                .evaluate_spanned(interpreter, RequestedOwnership::owned())?
+                .map(|v, _| v.expect_owned())
+                .into_statement_result(),
             ExpressionNode::Leaf(Leaf::IfExpression(if_expression)) => if_expression
-                .evaluate_unspanned(interpreter, RequestedOwnership::owned())?
-                .expect_owned()
-                .into_statement_result(if_expression.span_range()),
+                .evaluate_spanned(interpreter, RequestedOwnership::owned())?
+                .map(|v, _| v.expect_owned())
+                .into_statement_result(),
             ExpressionNode::Leaf(Leaf::LoopExpression(loop_expression)) => loop_expression
-                .evaluate_unspanned(interpreter, RequestedOwnership::owned())?
-                .expect_owned()
-                .into_statement_result(loop_expression.span_range()),
+                .evaluate_spanned(interpreter, RequestedOwnership::owned())?
+                .map(|v, _| v.expect_owned())
+                .into_statement_result(),
             ExpressionNode::Leaf(Leaf::WhileExpression(while_expression)) => while_expression
-                .evaluate_unspanned(interpreter, RequestedOwnership::owned())?
-                .expect_owned()
-                .into_statement_result(while_expression.span_range()),
+                .evaluate_spanned(interpreter, RequestedOwnership::owned())?
+                .map(|v, _| v.expect_owned())
+                .into_statement_result(),
             ExpressionNode::Leaf(Leaf::ForExpression(for_expression)) => for_expression
-                .evaluate_unspanned(interpreter, RequestedOwnership::owned())?
-                .expect_owned()
-                .into_statement_result(for_expression.span_range()),
-            _ => self
-                .evaluate_owned(interpreter)?
-                .into_statement_result(fallback_span),
+                .evaluate_spanned(interpreter, RequestedOwnership::owned())?
+                .map(|v, _| v.expect_owned())
+                .into_statement_result(),
+            _ => self.evaluate_owned(interpreter)?.into_statement_result(),
         }
     }
 }

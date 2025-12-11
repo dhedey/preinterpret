@@ -73,7 +73,10 @@ impl Statement {
         ownership: RequestedOwnership,
     ) -> ExecutionResult<RequestedValue> {
         match self {
-            Statement::Expression(expression) => expression.evaluate(interpreter, ownership),
+            Statement::Expression(expression) => {
+                let Spanned(value, _) = expression.evaluate(interpreter, ownership)?;
+                Ok(value)
+            }
             Statement::LetStatement(_)
             | Statement::BreakStatement(_)
             | Statement::ContinueStatement(_)
@@ -142,10 +145,10 @@ impl LetStatement {
             assignment,
         } = self;
         let value = match assignment {
-            Some(assignment) => assignment
-                .expression
-                .evaluate_owned(interpreter)?
-                .into_inner(),
+            Some(assignment) => {
+                let Spanned(value, _) = assignment.expression.evaluate_owned(interpreter)?;
+                value.into_inner()
+            }
             None => Value::None,
         };
         pattern.handle_destructure(interpreter, value)?;
@@ -239,7 +242,8 @@ impl BreakStatement {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         let value = if let Some(expr) = &self.value {
-            Some(expr.evaluate_owned(interpreter)?)
+            let Spanned(value, _) = expr.evaluate_owned(interpreter)?;
+            Some(value)
         } else {
             None
         };

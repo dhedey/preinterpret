@@ -2,21 +2,21 @@ use super::*;
 
 /// Trait for types that can be evaluated to produce a value with span information.
 ///
-/// Types implementing this trait provide `evaluate_unspanned()` which returns the raw value,
-/// and get a default `evaluate()` implementation that wraps the result with the type's span.
+/// Types implementing this trait provide `evaluate()` which returns the raw value,
+/// and get a default `evaluate_spanned()` implementation that wraps the result with the type's span.
 pub(crate) trait Evaluate: HasSpanRange {
-    fn evaluate_unspanned(
+    fn evaluate(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
     ) -> ExecutionResult<RequestedValue>;
 
-    fn evaluate(
+    fn evaluate_spanned(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
     ) -> ExecutionResult<Spanned<RequestedValue>> {
-        let value = self.evaluate_unspanned(interpreter, ownership)?;
+        let value = self.evaluate(interpreter, ownership)?;
         Ok(Spanned(value, self.span_range()))
     }
 }

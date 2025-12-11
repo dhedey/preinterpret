@@ -1,11 +1,5 @@
 error: A non-returning statement must not return a value. If you wish to explicitly discard the expression's result, use `let _ = ...;`. Alternatively, If you wish to output the value into the parent token stream, use `emit ...;`
- --> tests/compilation_failures/expressions/expression_block_semicolon_expressions_cannot_return_value.rs:4:13
+ --> tests/compilation_failures/expressions/expression_block_semicolon_expressions_cannot_return_value.rs:5:9
   |
-4 |       let _ = run!{
-  |  _____________^
-5 | |         1 + 2 + 3 + 4;
-6 | |         "This gets returned"
-7 | |     };
-  | |_____^
-  |
-  = note: this error originates in the macro `run` (in Nightly builds, run with -Z macro-backtrace for more info)
+5 |         1 + 2 + 3 + 4;
+  |         ^^^^^^^^^^^^^

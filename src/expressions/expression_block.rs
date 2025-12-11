@@ -146,13 +146,13 @@ impl HasSpan for ExpressionBlock {
 }
 
 impl Evaluate for ExpressionBlock {
-    fn evaluate_unspanned(
+    fn evaluate(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
     ) -> ExecutionResult<RequestedValue> {
         let scope = interpreter.current_scope_id();
-        let output_result = self.scoped_block.evaluate_unspanned(interpreter, ownership);
+        let output_result = self.scoped_block.evaluate(interpreter, ownership);
 
         // If this block has a label, catch breaks targeting this specific catch location
         let output = if let Some((_, catch_location)) = &self.label {
@@ -206,7 +206,7 @@ impl HasSpan for ScopedBlock {
 }
 
 impl Evaluate for ScopedBlock {
-    fn evaluate_unspanned(
+    fn evaluate(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
@@ -226,7 +226,7 @@ impl ScopedBlock {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<OwnedValue> {
         self.evaluate(interpreter, RequestedOwnership::owned())
-            .map(|Spanned(value, _)| value.expect_owned())
+            .map(|value| value.expect_owned())
     }
 }
 
@@ -254,7 +254,7 @@ impl HasSpan for UnscopedBlock {
 }
 
 impl Evaluate for UnscopedBlock {
-    fn evaluate_unspanned(
+    fn evaluate(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
@@ -270,7 +270,7 @@ impl UnscopedBlock {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<OwnedValue> {
         self.evaluate(interpreter, RequestedOwnership::owned())
-            .map(|Spanned(value, _)| value.expect_owned())
+            .map(|value| value.expect_owned())
     }
 }
 
