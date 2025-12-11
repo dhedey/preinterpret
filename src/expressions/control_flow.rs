@@ -125,7 +125,7 @@ impl Evaluate for IfExpression {
             return else_code.evaluate(interpreter, requested_ownership);
         }
 
-        requested_ownership.map_from_owned(Value::None.into_owned(), self.span_range())
+        requested_ownership.map_from_owned(Spanned(Value::None.into_owned(), self.span_range()))
     }
 }
 
@@ -199,7 +199,7 @@ impl Evaluate for WhileExpression {
             let body_result = self.body.evaluate_owned(interpreter);
             match interpreter.catch_control_flow(body_result, self.catch_location, scope)? {
                 ExecutionOutcome::Value(value) => {
-                    value.into_statement_result(self.body.span().span_range())?;
+                    value.into_statement_result()?;
                 }
                 ExecutionOutcome::ControlFlow(control_flow_interrupt) => {
                     match control_flow_interrupt {
@@ -279,7 +279,7 @@ impl Evaluate for LoopExpression {
             let body_result = self.body.evaluate_owned(interpreter);
             match interpreter.catch_control_flow(body_result, self.catch_location, scope)? {
                 ExecutionOutcome::Value(value) => {
-                    value.into_statement_result(self.body.span().span_range())?;
+                    value.into_statement_result()?;
                 }
                 ExecutionOutcome::ControlFlow(control_flow_interrupt) => {
                     match control_flow_interrupt {
@@ -385,7 +385,7 @@ impl Evaluate for ForExpression {
             let body_result = self.body.evaluate_owned(interpreter);
             match interpreter.catch_control_flow(body_result, self.catch_location, scope)? {
                 ExecutionOutcome::Value(value) => {
-                    value.into_statement_result(self.body.span().span_range())?;
+                    value.into_statement_result()?;
                 }
                 ExecutionOutcome::ControlFlow(control_flow_interrupt) => {
                     match control_flow_interrupt {
@@ -526,12 +526,12 @@ impl Evaluate for AttemptExpression {
             })
         }
         for arm in self.arms.iter() {
-            let lhs_span = arm.lhs.span().span_range();
             let attempt_outcome = interpreter.enter_scope_starting_with_revertible_segment(
                 arm.arm_scope,
                 self.catch_location,
                 |interpreter| -> ExecutionResult<()> {
-                    Spanned(arm.lhs.evaluate_owned(interpreter)?, lhs_span)
+                    arm.lhs
+                        .evaluate_owned(interpreter)?
                         .resolve_as("The returned value from the left half of an attempt arm")
                 },
                 guard_clause(arm.guard.as_ref()),

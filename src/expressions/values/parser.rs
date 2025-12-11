@@ -359,7 +359,7 @@ impl ParseTemplateLiteral {
 
         parser.parse_with(interpreter, |interpreter| self.content.consume(interpreter))?;
 
-        ownership.map_from_owned(().into_owned_value(), self.span_range())
+        ownership.map_from_owned(Spanned(().into_owned_value(), self.span_range()))
     }
 }
 

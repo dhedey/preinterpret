@@ -92,7 +92,7 @@ impl ParseError {
 pub(crate) type ExecutionResult<T> = core::result::Result<T, ExecutionInterrupt>;
 
 pub(crate) enum ExecutionOutcome<T> {
-    Value(T),
+    Value(Spanned<T>),
     ControlFlow(ControlFlowInterrupt),
 }
 
@@ -325,7 +325,7 @@ impl BreakInterrupt {
             Some(value) => value,
             None => ().into_owned_value(),
         };
-        ownership.map_from_owned(value, span_range)
+        ownership.map_from_owned(Spanned(value, span_range))
     }
 }
 

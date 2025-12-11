@@ -156,7 +156,7 @@ impl RequestedOwnership {
     }
 
     pub(crate) fn map_none(self, span: SpanRange) -> ExecutionResult<RequestedValue> {
-        self.map_from_owned(().into_owned_value(), span)
+        self.map_from_owned(Spanned(().into_owned_value(), span))
     }
 
     pub(crate) fn map_from_late_bound(
@@ -177,7 +177,7 @@ impl RequestedOwnership {
         span: SpanRange,
     ) -> ExecutionResult<RequestedValue> {
         match value {
-            ArgumentValue::Owned(owned) => self.map_from_owned(owned, span),
+            ArgumentValue::Owned(owned) => self.map_from_owned(Spanned(owned, span)),
             ArgumentValue::Mutable(mutable) => self.map_from_mutable(mutable, span),
             ArgumentValue::Assignee(assignee) => self.map_from_assignee(assignee, span),
             ArgumentValue::Shared(shared) => self.map_from_shared(shared, span),
@@ -193,7 +193,7 @@ impl RequestedOwnership {
         span: SpanRange,
     ) -> ExecutionResult<RequestedValue> {
         match value {
-            ReturnedValue::Owned(owned) => self.map_from_owned(owned, span),
+            ReturnedValue::Owned(owned) => self.map_from_owned(Spanned(owned, span)),
             ReturnedValue::Mutable(mutable) => self.map_from_mutable(mutable, span),
             ReturnedValue::Shared(shared) => self.map_from_shared(shared, span),
             ReturnedValue::CopyOnWrite(copy_on_write) => {
@@ -209,7 +209,7 @@ impl RequestedOwnership {
         span: SpanRange,
     ) -> ExecutionResult<RequestedValue> {
         match requested {
-            RequestedValue::Owned(owned) => self.map_from_owned(owned, span),
+            RequestedValue::Owned(owned) => self.map_from_owned(Spanned(owned, span)),
             RequestedValue::Shared(shared) => self.map_from_shared(shared, span),
             RequestedValue::Mutable(mutable) => self.map_from_mutable(mutable, span),
             RequestedValue::Assignee(assignee) => self.map_from_assignee(assignee, span),
@@ -227,8 +227,7 @@ impl RequestedOwnership {
 
     pub(crate) fn map_from_owned(
         &self,
-        value: OwnedValue,
-        span: SpanRange,
+        Spanned(value, span): Spanned<OwnedValue>,
     ) -> ExecutionResult<RequestedValue> {
         match self {
             RequestedOwnership::LateBound => Ok(RequestedValue::LateBound(LateBoundValue::Owned(
@@ -239,7 +238,7 @@ impl RequestedOwnership {
                 },
             ))),
             RequestedOwnership::Concrete(requested) => requested
-                .map_from_owned(value, span)
+                .map_from_owned(Spanned(value, span))
                 .map(Self::item_from_argument),
         }
     }
@@ -368,8 +367,7 @@ impl ArgumentOwnership {
             LateBoundValue::Owned(owned) => {
                 // Use the span from the owned value, not the caller's span
                 self.map_from_owned_with_is_last_use(
-                    owned.owned,
-                    owned.span_range,
+                    Spanned(owned.owned, owned.span_range),
                     owned.is_from_last_use,
                 )
             }
@@ -489,16 +487,14 @@ impl ArgumentOwnership {
 
     pub(crate) fn map_from_owned(
         &self,
-        owned: OwnedValue,
-        span: SpanRange,
+        Spanned(owned, span): Spanned<OwnedValue>,
     ) -> ExecutionResult<ArgumentValue> {
-        self.map_from_owned_with_is_last_use(owned, span, false)
+        self.map_from_owned_with_is_last_use(Spanned(owned, span), false)
     }
 
     fn map_from_owned_with_is_last_use(
         &self,
-        owned: OwnedValue,
-        span: SpanRange,
+        Spanned(owned, span): Spanned<OwnedValue>,
         is_from_last_use: bool,
     ) -> ExecutionResult<ArgumentValue> {
         match self {

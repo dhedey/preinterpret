@@ -152,12 +152,12 @@ impl Evaluate for ExpressionBlock {
         ownership: RequestedOwnership,
     ) -> ExecutionResult<RequestedValue> {
         let scope = interpreter.current_scope_id();
-        let output_result = self.scoped_block.evaluate(interpreter, ownership);
 
         // If this block has a label, catch breaks targeting this specific catch location
         let output = if let Some((_, catch_location)) = &self.label {
+            let output_result = self.scoped_block.evaluate_spanned(interpreter, ownership);
             match interpreter.catch_control_flow(output_result, *catch_location, scope)? {
-                ExecutionOutcome::Value(value) => value,
+                ExecutionOutcome::Value(Spanned(value, _)) => value,
                 ExecutionOutcome::ControlFlow(ControlFlowInterrupt::Break(break_interrupt)) => {
                     break_interrupt.into_value(self.span_range(), ownership)?
                 }
@@ -167,7 +167,7 @@ impl Evaluate for ExpressionBlock {
             }
         } else {
             // No label, just evaluate the block normally
-            output_result?
+            self.scoped_block.evaluate(interpreter, ownership)?
         };
         Ok(output)
     }
@@ -224,9 +224,10 @@ impl ScopedBlock {
     pub(crate) fn evaluate_owned(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<OwnedValue> {
+    ) -> ExecutionResult<Spanned<OwnedValue>> {
+        let span_range = self.span().span_range();
         self.evaluate(interpreter, RequestedOwnership::owned())
-            .map(|value| value.expect_owned())
+            .map(|value| Spanned(value.expect_owned(), span_range))
     }
 }
 
@@ -268,9 +269,10 @@ impl UnscopedBlock {
     pub(crate) fn evaluate_owned(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<OwnedValue> {
+    ) -> ExecutionResult<Spanned<OwnedValue>> {
+        let span_range = self.span().span_range();
         self.evaluate(interpreter, RequestedOwnership::owned())
-            .map(|value| value.expect_owned())
+            .map(|value| Spanned(value.expect_owned(), span_range))
     }
 }
 
@@ -329,6 +331,6 @@ impl ExpressionBlockContent {
                 statement.evaluate_as_statement(interpreter)?;
             }
         }
-        ownership.map_from_owned(Owned(Value::None), output_span_range)
+        ownership.map_from_owned(Spanned(Owned(Value::None), output_span_range))
     }
 }

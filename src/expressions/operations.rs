@@ -97,7 +97,7 @@ impl UnaryOperation {
         })?;
         let input = method
             .argument_ownership
-            .map_from_owned(input, input_span)?;
+            .map_from_owned(Spanned(input, input_span))?;
         method.execute(Spanned(input, input_span), self)
     }
 }
@@ -328,8 +328,12 @@ impl BinaryOperation {
         let right = right.into_owned_value();
         match left.kind().resolve_binary_operation(self) {
             Some(interface) => {
-                let left = interface.lhs_ownership.map_from_owned(left, left_span)?;
-                let right = interface.rhs_ownership.map_from_owned(right, right_span)?;
+                let left = interface
+                    .lhs_ownership
+                    .map_from_owned(Spanned(left, left_span))?;
+                let right = interface
+                    .rhs_ownership
+                    .map_from_owned(Spanned(right, right_span))?;
                 interface.execute(Spanned(left, left_span), Spanned(right, right_span), self)
             }
             None => self.type_err(format!(

@@ -142,7 +142,7 @@ impl Interpreter {
 
     pub(crate) fn catch_control_flow<T>(
         &mut self,
-        input: ExecutionResult<T>,
+        input: ExecutionResult<Spanned<T>>,
         catch_location_id: CatchLocationId,
         return_to_scope: ScopeId,
     ) -> ExecutionResult<ExecutionOutcome<T>> {
