@@ -81,9 +81,7 @@ impl ArgumentValue {
 // since the inner value types no longer carry spans internally.
 // Spans should be tracked separately at a higher level if needed.
 
-pub(crate) type SpannedArgumentValue = Spanned<ArgumentValue>;
-
-impl SpannedArgumentValue {
+impl Spanned<ArgumentValue> {
     /// SAFETY:
     /// * Must be paired with a call to `enable()` before any further use of the value.
     /// * Must not use the value while disabled.
@@ -807,7 +805,7 @@ enum BinaryPath {
         right: ExpressionNodeId,
     },
     OnRightBranch {
-        left: SpannedArgumentValue,
+        left: Spanned<ArgumentValue>,
         interface: BinaryOperationInterface,
     },
 }
@@ -1213,7 +1211,7 @@ enum MethodCallPath {
     CallerPath,
     ArgumentsPath {
         method: MethodInterface,
-        disabled_evaluated_arguments_including_caller: Vec<SpannedArgumentValue>,
+        disabled_evaluated_arguments_including_caller: Vec<Spanned<ArgumentValue>>,
     },
 }
 
