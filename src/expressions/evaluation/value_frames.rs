@@ -62,11 +62,8 @@ impl ArgumentValue {
         }
     }
 
-    /// SAFETY:
-    /// * Must only be used after a call to `disable()`.
-    ///
-    /// Returns an ownership error if re-enabling fails (e.g., due to conflicting borrows).
-    pub(crate) unsafe fn enable(&mut self, span_range: SpanRange) -> ExecutionResult<()> {
+    /// SAFETY: Must only be used after a call to `disable()`.
+    unsafe fn enable(&mut self, span_range: SpanRange) -> ExecutionResult<()> {
         match self {
             ArgumentValue::Owned(_) => Ok(()),
             ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write.enable(span_range),
@@ -384,7 +381,7 @@ impl ArgumentOwnership {
                 self.map_from_mutable_inner(Spanned(mutable, span), true)
             }
             LateBoundValue::Shared(late_bound_shared) => self
-                .map_from_shared_with_error_reason(late_bound_shared.shared, |_| {
+                .map_from_shared_with_error_reason(Spanned(late_bound_shared.shared, span), |_| {
                     ExecutionInterrupt::ownership_error(late_bound_shared.reason_not_mutable)
                 }),
         }
@@ -423,26 +420,29 @@ impl ArgumentOwnership {
 
     pub(crate) fn map_from_shared(
         &self,
-        Spanned(shared, span): Spanned<SharedValue>,
+        spanned_shared: Spanned<SharedValue>,
     ) -> ExecutionResult<ArgumentValue> {
         self.map_from_shared_with_error_reason(
-            shared,
-            |_shared| span.ownership_error("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone().as_mut()` to get a mutable reference."),
+            spanned_shared,
+            |span| span.ownership_error("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone().as_mut()` to get a mutable reference."),
         )
     }
 
     fn map_from_shared_with_error_reason(
         &self,
-        shared: SharedValue,
-        mutable_error: impl FnOnce(SharedValue) -> ExecutionInterrupt,
+        Spanned(shared, span): Spanned<SharedValue>,
+        mutable_error: impl FnOnce(SpanRange) -> ExecutionInterrupt,
     ) -> ExecutionResult<ArgumentValue> {
         match self {
-            ArgumentOwnership::Owned => Ok(ArgumentValue::Owned(shared.infallible_clone())),
+            ArgumentOwnership::Owned => {
+                let value = shared.as_ref().try_transparent_clone(span)?;
+                Ok(ArgumentValue::Owned(Owned(value)))
+            }
             ArgumentOwnership::CopyOnWrite => Ok(ArgumentValue::CopyOnWrite(
                 CopyOnWrite::shared_in_place_of_shared(shared),
             )),
-            ArgumentOwnership::Assignee { .. } => Err(mutable_error(shared)),
-            ArgumentOwnership::Mutable => Err(mutable_error(shared)),
+            ArgumentOwnership::Assignee { .. } => Err(mutable_error(span)),
+            ArgumentOwnership::Mutable => Err(mutable_error(span)),
             ArgumentOwnership::Shared | ArgumentOwnership::AsIs => {
                 Ok(ArgumentValue::Shared(shared))
             }
@@ -465,14 +465,15 @@ impl ArgumentOwnership {
 
     fn map_from_mutable_inner(
         &self,
-        Spanned(mutable, span): Spanned<MutableValue>,
+        spanned_mutable: Spanned<MutableValue>,
         is_late_bound: bool,
     ) -> ExecutionResult<ArgumentValue> {
+        let Spanned(mutable, span) = spanned_mutable;
         match self {
             ArgumentOwnership::Owned => {
                 if is_late_bound {
-                    // Use infallible clone for late-bound values
-                    Ok(ArgumentValue::Owned(Owned(mutable.as_ref().clone())))
+                    let value = mutable.as_ref().try_transparent_clone(span)?;
+                    Ok(ArgumentValue::Owned(Owned(value)))
                 } else {
                     span.ownership_err("An owned value is required, but a mutable reference was received. This indicates a possible bug. If this was intended, use `.clone()` to get an owned value.")
                 }

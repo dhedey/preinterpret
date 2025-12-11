@@ -414,10 +414,7 @@ impl<T: ?Sized> Mutable<T> {
         self.0.disable();
     }
 
-    /// SAFETY:
-    /// * Must only be used after a call to `disable()`.
-    ///
-    /// Returns an ownership error if re-enabling fails (e.g., due to conflicting borrows).
+    /// SAFETY: Must only be used after a call to `disable()`.
     pub(crate) unsafe fn enable(&mut self, span_range: SpanRange) -> ExecutionResult<()> {
         self.0
             .enable()
@@ -425,7 +422,7 @@ impl<T: ?Sized> Mutable<T> {
     }
 }
 
-static MUTABLE_ERROR_MESSAGE: &str =
+pub(crate) static MUTABLE_ERROR_MESSAGE: &str =
     "The variable cannot be modified as it is already being modified";
 
 impl Spanned<Mutable<Value>> {
@@ -445,6 +442,11 @@ impl Spanned<Mutable<Value>> {
              .0
             .enable()
             .map_err(|_| self.1.ownership_error(MUTABLE_ERROR_MESSAGE))
+    }
+
+    pub(crate) fn transparent_clone(&self) -> ExecutionResult<OwnedValue> {
+        let value = self.0.as_ref().try_transparent_clone(self.1)?;
+        Ok(Owned(value))
     }
 }
 
@@ -552,10 +554,7 @@ impl<T: ?Sized> Shared<T> {
         self.0.disable();
     }
 
-    /// SAFETY:
-    /// * Must only be used after a call to `disable()`.
-    ///
-    /// Returns an ownership error if re-enabling fails (e.g., due to conflicting borrows).
+    /// SAFETY: Must only be used after a call to `disable()`.
     pub(crate) unsafe fn enable(&mut self, span_range: SpanRange) -> ExecutionResult<()> {
         self.0
             .enable()
@@ -563,7 +562,8 @@ impl<T: ?Sized> Shared<T> {
     }
 }
 
-static SHARED_ERROR_MESSAGE: &str = "The variable cannot be read as it is already being modified";
+pub(crate) static SHARED_ERROR_MESSAGE: &str =
+    "The variable cannot be read as it is already being modified";
 
 impl Spanned<Shared<Value>> {
     /// SAFETY:
@@ -582,6 +582,11 @@ impl Spanned<Shared<Value>> {
              .0
             .enable()
             .map_err(|_| self.1.ownership_error(SHARED_ERROR_MESSAGE))
+    }
+
+    pub(crate) fn transparent_clone(&self) -> ExecutionResult<OwnedValue> {
+        let value = self.0.as_ref().try_transparent_clone(self.1)?;
+        Ok(Owned(value))
     }
 }
 
@@ -727,10 +732,7 @@ impl<T: 'static + ToOwned + ?Sized> CopyOnWrite<T> {
         }
     }
 
-    /// SAFETY:
-    /// * Must only be used after a call to `disable()`.
-    ///
-    /// Returns an ownership error if re-enabling fails (e.g., due to conflicting borrows).
+    /// SAFETY: Must only be used after a call to `disable()`.
     pub(crate) unsafe fn enable(&mut self, span_range: SpanRange) -> ExecutionResult<()> {
         match &mut self.inner {
             CopyOnWriteInner::Owned(_) => Ok(()),
