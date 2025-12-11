@@ -70,10 +70,9 @@ impl Shared<ParserValue> {
     pub(crate) fn parser<'i>(
         &self,
         interpreter: &'i mut Interpreter,
+        span_range: SpanRange,
     ) -> ExecutionResult<OutputParseStream<'i>> {
-        // TODO: Track proper span through parser value
-        let fallback_span = Span::call_site().span_range();
-        interpreter.parser(self.handle, fallback_span)
+        interpreter.parser(self.handle, span_range)
     }
 
     pub(crate) fn parse_with<T>(
@@ -89,7 +88,7 @@ fn parser<'a>(
     this: Shared<ParserValue>,
     context: &'a mut MethodCallContext,
 ) -> ExecutionResult<OutputParseStream<'a>> {
-    this.parser(context.interpreter)
+    this.parser(context.interpreter, context.output_span_range)
 }
 
 define_interface! {
@@ -163,10 +162,9 @@ define_interface! {
             // Must be paired with `close`.
             [context] fn open(this: Shared<ParserValue>, delimiter_char: Owned<char>) -> ExecutionResult<()> {
                 let delimiter_char = delimiter_char.into_inner();
-                // TODO: Track proper span through argument resolution
-                let fallback_span = Span::call_site().span_range();
+                let span_range = context.output_span_range;
                 let delimiter = delimiter_from_open_char(delimiter_char)
-                    .ok_or_else(|| fallback_span.value_error(format!(
+                    .ok_or_else(|| span_range.value_error(format!(
                         "Invalid open delimiter '{}'. Expected '(', '{{', or '['", delimiter_char
                     )))?;
                 this.parse_with(context.interpreter, |interpreter| {
@@ -179,16 +177,15 @@ define_interface! {
             // The close character must match: ')' for '(', '}' for '{', ']' for '['
             [context] fn close(this: Shared<ParserValue>, delimiter_char: Owned<char>) -> ExecutionResult<()> {
                 let delimiter_char = delimiter_char.into_inner();
-                // TODO: Track proper span through argument resolution
-                let fallback_span = Span::call_site().span_range();
+                let span_range = context.output_span_range;
                 let expected_delimiter = delimiter_from_close_char(delimiter_char)
-                    .ok_or_else(|| fallback_span.value_error(format!(
+                    .ok_or_else(|| span_range.value_error(format!(
                         "Invalid close delimiter '{}'. Expected ')', '}}', or ']'", delimiter_char
                     )))?;
                 this.parse_with(context.interpreter, |interpreter| {
                     // Check if there's a group to close first
                     if !interpreter.has_active_input_group() {
-                        return Err(fallback_span.value_error(format!(
+                        return Err(span_range.value_error(format!(
                             "attempting to close '{}' isn't valid, because there is no open group",
                             expected_delimiter.description_of_close()
                         )));

@@ -1,7 +1,5 @@
 error: To protect against infinite loops, only a maximum of 1000 items can be output to a string from an iterator. You can use .to_vec() to avoid this limit. This can't currently be reconfigured with the iteration limit.
- --> tests/compilation_failures/iteration/long_iterable_to_string.rs:4:5
+ --> tests/compilation_failures/iteration/long_iterable_to_string.rs:4:32
   |
 4 |     run!((0..10000).into_iter().to_string())
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  |
-  = note: this error originates in the macro `run` (in Nightly builds, run with -Z macro-backtrace for more info)
+  |                                ^^^^^^^^^^^^

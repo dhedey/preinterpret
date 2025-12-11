@@ -462,12 +462,10 @@ impl<T: ?Sized> Mutable<T> {
     /// * Must only be used after a call to `disable()`.
     ///
     /// Returns an ownership error if re-enabling fails (e.g., due to conflicting borrows).
-    pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
-        self.0.enable().map_err(|_| {
-            Span::call_site()
-                .span_range()
-                .ownership_error(MUTABLE_ERROR_MESSAGE)
-        })
+    pub(crate) unsafe fn enable(&mut self, span_range: SpanRange) -> ExecutionResult<()> {
+        self.0
+            .enable()
+            .map_err(|_| span_range.ownership_error(MUTABLE_ERROR_MESSAGE))
     }
 }
 
@@ -582,12 +580,10 @@ impl<T: ?Sized> Shared<T> {
     /// * Must only be used after a call to `disable()`.
     ///
     /// Returns an ownership error if re-enabling fails (e.g., due to conflicting borrows).
-    pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
-        self.0.enable().map_err(|_| {
-            Span::call_site()
-                .span_range()
-                .ownership_error(SHARED_ERROR_MESSAGE)
-        })
+    pub(crate) unsafe fn enable(&mut self, span_range: SpanRange) -> ExecutionResult<()> {
+        self.0
+            .enable()
+            .map_err(|_| span_range.ownership_error(SHARED_ERROR_MESSAGE))
     }
 }
 
@@ -739,11 +735,11 @@ impl<T: 'static + ToOwned + ?Sized> CopyOnWrite<T> {
     /// * Must only be used after a call to `disable()`.
     ///
     /// Returns an ownership error if re-enabling fails (e.g., due to conflicting borrows).
-    pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
+    pub(crate) unsafe fn enable(&mut self, span_range: SpanRange) -> ExecutionResult<()> {
         match &mut self.inner {
             CopyOnWriteInner::Owned(_) => Ok(()),
-            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => shared.enable(),
-            CopyOnWriteInner::SharedWithTransparentCloning(shared) => shared.enable(),
+            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => shared.enable(span_range),
+            CopyOnWriteInner::SharedWithTransparentCloning(shared) => shared.enable(span_range),
         }
     }
 }

@@ -1,14 +1,5 @@
 error: This parser is no longer available
-  --> tests/compilation_failures/parsing/smuggling_parser_out.rs:4:13
+  --> tests/compilation_failures/parsing/smuggling_parser_out.rs:11:31
    |
- 4 |       let _ = run! {
-   |  _____________^
- 5 | |         let smuggled_input;
- 6 | |         parse %[Hello World] => |input| {
- 7 | |             let _ = input.ident();
-...  |
-11 | |         let _ = smuggled_input.ident();
-12 | |     };
-   | |_____^
-   |
-   = note: this error originates in the macro `run` (in Nightly builds, run with -Z macro-backtrace for more info)
+11 |         let _ = smuggled_input.ident();
+   |                               ^^^^^^^^

@@ -1,12 +1,5 @@
 error: The variable cannot be modified as it is already being modified
- --> tests/compilation_failures/expressions/swap_itself.rs:4:13
+ --> tests/compilation_failures/expressions/swap_itself.rs:6:10
   |
-4 |       let _ = run!{
-  |  _____________^
-5 | |         let a = "a";
-6 | |         a.swap(a);
-7 | |         a
-8 | |     };
-  | |_____^
-  |
-  = note: this error originates in the macro `run` (in Nightly builds, run with -Z macro-backtrace for more info)
+6 |         a.swap(a);
+  |          ^^^^^^^^

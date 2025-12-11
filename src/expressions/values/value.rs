@@ -572,40 +572,35 @@ define_interface! {
                 core::mem::replace(a.0.deref_mut(), b)
             }
 
-            fn debug(this: CopyOnWriteValue) -> ExecutionResult<()> {
-                // TODO: Track proper span through argument resolution
-                let span_range = Span::call_site().span_range();
+            [context] fn debug(this: CopyOnWriteValue) -> ExecutionResult<()> {
+                let span_range = context.output_span_range;
                 let message = this.concat_recursive(&ConcatBehaviour::debug(span_range))?;
                 span_range.debug_err(message)
             }
 
-            fn to_debug_string(this: CopyOnWriteValue) -> ExecutionResult<String> {
-                // TODO: Track proper span through argument resolution
-                let span_range = Span::call_site().span_range();
+            [context] fn to_debug_string(this: CopyOnWriteValue) -> ExecutionResult<String> {
+                let span_range = context.output_span_range;
                 this.concat_recursive(&ConcatBehaviour::debug(span_range))
             }
 
-            fn to_stream(input: CopyOnWriteValue) -> ExecutionResult<OutputStream> {
-                // TODO: Track proper span through argument resolution
-                let span_range = Span::call_site().span_range();
+            [context] fn to_stream(input: CopyOnWriteValue) -> ExecutionResult<OutputStream> {
+                let span_range = context.output_span_range;
                 input.map_into(
                     |shared| shared.output_to_new_stream(Grouping::Flattened, span_range),
                     |owned| owned.0.into_stream(Grouping::Flattened, span_range),
                 )
             }
 
-            fn to_group(input: CopyOnWriteValue) -> ExecutionResult<OutputStream> {
-                // TODO: Track proper span through argument resolution
-                let span_range = Span::call_site().span_range();
+            [context] fn to_group(input: CopyOnWriteValue) -> ExecutionResult<OutputStream> {
+                let span_range = context.output_span_range;
                 input.map_into(
                     |shared| shared.output_to_new_stream(Grouping::Grouped, span_range),
                     |owned| owned.0.into_stream(Grouping::Grouped, span_range),
                 )
             }
 
-            fn to_string(input: SharedValue) -> ExecutionResult<String> {
-                // TODO: Track proper span through argument resolution
-                let span_range = Span::call_site().span_range();
+            [context] fn to_string(input: SharedValue) -> ExecutionResult<String> {
+                let span_range = context.output_span_range;
                 input.concat_recursive(&ConcatBehaviour::standard(span_range))
             }
 
@@ -613,7 +608,7 @@ define_interface! {
                 let mut this = to_stream(context, this)?;
                 let span_to_use = match spans.resolve_content_span_range() {
                     Some(span_range) => span_range.span_from_join_else_start(),
-                    None => Span::call_site(),
+                    None => context.output_span_range.span_from_join_else_start(),
                 };
                 this.replace_first_level_spans(span_to_use);
                 Ok(this)
@@ -638,46 +633,50 @@ define_interface! {
             // ===============================
 
             [context] fn to_ident(this: OwnedValue) -> ExecutionResult<Ident> {
-                let stream = this.into_stream()?;
-                let spanned = stream.into_spanned_ref(context.output_span_range);
+                let span_range = context.output_span_range;
+                let stream = this.into_stream(span_range)?;
+                let spanned = stream.into_spanned_ref(span_range);
                 stream_interface::methods::to_ident(context, spanned)
             }
 
             [context] fn to_ident_camel(this: OwnedValue) -> ExecutionResult<Ident> {
-                let stream = this.into_stream()?;
-                let spanned = stream.into_spanned_ref(context.output_span_range);
+                let span_range = context.output_span_range;
+                let stream = this.into_stream(span_range)?;
+                let spanned = stream.into_spanned_ref(span_range);
                 stream_interface::methods::to_ident_camel(context, spanned)
             }
 
             [context] fn to_ident_snake(this: OwnedValue) -> ExecutionResult<Ident> {
-                let stream = this.into_stream()?;
-                let spanned = stream.into_spanned_ref(context.output_span_range);
+                let span_range = context.output_span_range;
+                let stream = this.into_stream(span_range)?;
+                let spanned = stream.into_spanned_ref(span_range);
                 stream_interface::methods::to_ident_snake(context, spanned)
             }
 
             [context] fn to_ident_upper_snake(this: OwnedValue) -> ExecutionResult<Ident> {
-                let stream = this.into_stream()?;
-                let spanned = stream.into_spanned_ref(context.output_span_range);
+                let span_range = context.output_span_range;
+                let stream = this.into_stream(span_range)?;
+                let spanned = stream.into_spanned_ref(span_range);
                 stream_interface::methods::to_ident_upper_snake(context, spanned)
             }
 
             // Some literals become Value::UnsupportedLiteral but can still be round-tripped back to a stream
             [context] fn to_literal(this: OwnedValue) -> ExecutionResult<Value> {
-                let stream = this.into_stream()?;
-                let spanned = stream.into_spanned_ref(context.output_span_range);
+                let span_range = context.output_span_range;
+                let stream = this.into_stream(span_range)?;
+                let spanned = stream.into_spanned_ref(span_range);
                 stream_interface::methods::to_literal(context, spanned)
             }
         }
         pub(crate) mod unary_operations {
-            fn cast_to_string(input: OwnedValue) -> ExecutionResult<String> {
+            [context] fn cast_to_string(input: OwnedValue) -> ExecutionResult<String> {
                 let input = input.into_inner();
-                // TODO: Track proper span through argument resolution
-                let span_range = Span::call_site().span_range();
+                let span_range = context.output_span_range;
                 input.concat_recursive(&ConcatBehaviour::standard(span_range))
             }
 
-            fn cast_to_stream(input: OwnedValue) -> ExecutionResult<OutputStream> {
-                input.into_stream()
+            [context] fn cast_to_stream(input: OwnedValue) -> ExecutionResult<OutputStream> {
+                input.into_stream(context.output_span_range)
             }
         }
         pub(crate) mod binary_operations {
@@ -1089,9 +1088,7 @@ impl HasSpanRange for ToStreamContext<'_> {
 }
 
 impl OwnedValue {
-    pub(crate) fn into_stream(self) -> ExecutionResult<OutputStream> {
-        // TODO: Track proper span through owned value
-        let span_range = Span::call_site().span_range();
+    pub(crate) fn into_stream(self, span_range: SpanRange) -> ExecutionResult<OutputStream> {
         self.0.into_stream(Grouping::Flattened, span_range)
     }
 

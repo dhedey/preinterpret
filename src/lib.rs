@@ -540,7 +540,7 @@ fn preinterpret_run_internal(input: TokenStream) -> SynResult<TokenStream> {
             Span::call_site().into(),
             RequestedOwnership::owned(),
         )
-        .and_then(|x| x.expect_owned().into_stream())
+        .and_then(|x| x.expect_owned().into_stream(Span::call_site().span_range()))
         .convert_to_final_result()?;
 
     let mut output_stream = interpreter.complete();
@@ -666,7 +666,7 @@ mod benchmarking {
                         Span::call_site().into(),
                         RequestedOwnership::owned(),
                     )
-                    .and_then(|x| x.expect_owned().into_stream())
+                    .and_then(|x| x.expect_owned().into_stream(Span::call_site().span_range()))
                     .convert_to_final_result()?;
 
                 let mut output_stream = interpreter.complete();

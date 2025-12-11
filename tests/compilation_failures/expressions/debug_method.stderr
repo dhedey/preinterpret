@@ -1,11 +1,5 @@
 error: [1, 2]
- --> tests/compilation_failures/expressions/debug_method.rs:4:13
+ --> tests/compilation_failures/expressions/debug_method.rs:6:10
   |
-4 |       let _ = run!{
-  |  _____________^
-5 | |         let x = [1, 2];
-6 | |         x.debug()
-7 | |     };
-  | |_____^
-  |
-  = note: this error originates in the macro `run` (in Nightly builds, run with -Z macro-backtrace for more info)
+6 |         x.debug()
+  |          ^^^^^^^^

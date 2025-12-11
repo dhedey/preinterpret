@@ -69,7 +69,8 @@ macro_rules! define_typed_object {
 
         impl ResolvableOwned<Value> for $model {
             fn resolve_from_value(value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
-                Self::try_from(ObjectValue::resolve_owned_from_value(value, context)?)
+                let span_range = context.error_span_range();
+                Self::from_object_value(ObjectValue::resolve_owned_from_value(value, context)?, span_range)
             }
         }
 
@@ -93,14 +94,10 @@ macro_rules! define_typed_object {
             }
         }
 
-        impl TryFrom<Owned<ObjectValue>> for $model {
-            type Error = ExecutionInterrupt;
-
-            fn try_from(object: Owned<ObjectValue>) -> Result<Self, Self::Error> {
+        impl $model {
+            fn from_object_value(object: Owned<ObjectValue>, span_range: SpanRange) -> ExecutionResult<Self> {
                 let mut object = object.into_inner();
-                // TODO: Track proper span through resolution
-                let fallback_span = Span::call_site().span_range();
-                (&object).spanned(fallback_span).validate(&Self::validation())?;
+                (&object).spanned(span_range).validate(&Self::validation())?;
                 Ok($model {
                     $(
                         $required_field: object.remove_or_none(stringify!($required_field)),
@@ -113,14 +110,14 @@ macro_rules! define_typed_object {
                                 {
                                     // Need to return the $optional_field_type
                                     match optional {
-                                        Some(value) => ResolveAs::<$optional_field_type>::resolve_as(Spanned(value.into_owned(), fallback_span), stringify!($optional_field))?,
+                                        Some(value) => ResolveAs::<$optional_field_type>::resolve_as(Spanned(value.into_owned(), span_range), stringify!($optional_field))?,
                                         None => $($optional_field_default)?,
                                     }
                                 }
                                 {
                                     // Need to return Option<$optional_field_type>
                                     match optional {
-                                        Some(value) => Some(ResolveAs::<$optional_field_type>::resolve_as(Spanned(value.into_owned(), fallback_span), stringify!($optional_field))?),
+                                        Some(value) => Some(ResolveAs::<$optional_field_type>::resolve_as(Spanned(value.into_owned(), span_range), stringify!($optional_field))?),
                                         None => None,
                                     }
                                 }

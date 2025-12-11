@@ -66,13 +66,13 @@ impl ArgumentValue {
     /// * Must only be used after a call to `disable()`.
     ///
     /// Returns an ownership error if re-enabling fails (e.g., due to conflicting borrows).
-    pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
+    pub(crate) unsafe fn enable(&mut self, span_range: SpanRange) -> ExecutionResult<()> {
         match self {
             ArgumentValue::Owned(_) => Ok(()),
-            ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write.enable(),
-            ArgumentValue::Mutable(mutable) => mutable.enable(),
-            ArgumentValue::Assignee(assignee) => assignee.0.enable(),
-            ArgumentValue::Shared(shared) => shared.enable(),
+            ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write.enable(span_range),
+            ArgumentValue::Mutable(mutable) => mutable.enable(span_range),
+            ArgumentValue::Assignee(assignee) => assignee.0.enable(span_range),
+            ArgumentValue::Shared(shared) => shared.enable(span_range),
         }
     }
 }
@@ -889,8 +889,8 @@ impl EvaluationFrame for BinaryOperationBuilder {
                     // SAFETY: We disabled left above
                     right.disable();
                     // SAFETY: enable() may fail if left and right reference the same variable
-                    left.enable()?;
-                    right.enable()?;
+                    left.enable(left_span)?;
+                    right.enable(right_span)?;
                 }
                 let result = interface.execute(
                     Spanned(left, left_span),
@@ -1345,10 +1345,11 @@ impl EvaluationFrame for MethodCallBuilder {
                         // - This disable/enable flow allows us to do things like vec.push(vec.len())
                         // - Read https://rust-lang.github.io/rfcs/2025-nested-method-calls.html for more details
                         // - We enable left-to-right for intuitive error messages: later borrows will report errors
+                        let method_span = self.method.span_range();
                         unsafe {
                             for argument in &mut arguments {
                                 // SAFETY: enable() may fail if arguments conflict (e.g., same variable)
-                                argument.enable()?;
+                                argument.enable(method_span)?;
                             }
                         }
                         (arguments, method)

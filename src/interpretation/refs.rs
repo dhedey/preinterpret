@@ -56,16 +56,13 @@ impl<'a, T: ?Sized> From<Shared<T>> for AnyRef<'a, T> {
     }
 }
 
-impl<'a, T: ?Sized> From<Shared<T>> for SpannedAnyRef<'a, T> {
-    fn from(value: Shared<T>) -> Self {
-        // TODO: Track proper span through shared value
-        let span_range = Span::call_site().span_range();
-        Spanned(
-            AnyRef {
-                inner: AnyRefInner::Encapsulated(value.0),
-            },
-            span_range,
-        )
+impl<T: ?Sized> ToSpannedRef<'static> for Shared<T> {
+    type Target = T;
+    fn into_ref(self) -> AnyRef<'static, Self::Target> {
+        self.into()
+    }
+    fn into_spanned_ref(self, source: impl HasSpanRange) -> SpannedAnyRef<'static, Self::Target> {
+        AnyRef::from(self).spanned(source)
     }
 }
 
@@ -130,16 +127,12 @@ impl<'a, T: ?Sized> From<Mutable<T>> for AnyRefMut<'a, T> {
     }
 }
 
-impl<'a, T: ?Sized> From<Mutable<T>> for SpannedAnyRefMut<'a, T> {
-    fn from(value: Mutable<T>) -> Self {
-        // TODO: Track proper span through mutable value
-        let span_range = Span::call_site().span_range();
-        Spanned(
-            AnyRefMut {
-                inner: AnyRefMutInner::Encapsulated(value.0),
-            },
-            span_range,
-        )
+impl<T: ?Sized> Mutable<T> {
+    pub(crate) fn into_spanned_ref_mut(
+        self,
+        source: impl HasSpanRange,
+    ) -> SpannedAnyRefMut<'static, T> {
+        AnyRefMut::from(self).spanned(source)
     }
 }
 
