@@ -81,6 +81,25 @@ impl ArgumentValue {
 // since the inner value types no longer carry spans internally.
 // Spans should be tracked separately at a higher level if needed.
 
+pub(crate) type SpannedArgumentValue = Spanned<ArgumentValue>;
+
+impl SpannedArgumentValue {
+    /// SAFETY:
+    /// * Must be paired with a call to `enable()` before any further use of the value.
+    /// * Must not use the value while disabled.
+    pub(crate) unsafe fn disable(&mut self) {
+        self.0.disable();
+    }
+
+    /// SAFETY:
+    /// * Must only be used after a call to `disable()`.
+    ///
+    /// Returns an ownership error if re-enabling fails (e.g., due to conflicting borrows).
+    pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
+        self.0.enable(self.1)
+    }
+}
+
 impl Deref for ArgumentValue {
     type Target = Value;
 
@@ -788,8 +807,7 @@ enum BinaryPath {
         right: ExpressionNodeId,
     },
     OnRightBranch {
-        left: ArgumentValue,
-        left_span: SpanRange,
+        left: SpannedArgumentValue,
         interface: BinaryOperationInterface,
     },
 }
@@ -846,20 +864,17 @@ impl EvaluationFrame for BinaryOperationBuilder {
                     match interface {
                         Some(interface) => {
                             let rhs_ownership = interface.rhs_ownership();
-                            let mut left = interface
+                            let left = interface
                                 .lhs_ownership()
                                 .map_from_late_bound(left_late_bound, left_span)?;
+                            let mut left = Spanned(left, left_span);
 
                             unsafe {
                                 // SAFETY: We re-enable it below and don't use it while disabled
                                 left.disable();
                             }
 
-                            self.state = BinaryPath::OnRightBranch {
-                                left,
-                                left_span,
-                                interface,
-                            };
+                            self.state = BinaryPath::OnRightBranch { left, interface };
                             context.request_argument_value(self, right, rhs_ownership)
                         }
                         None => {
@@ -874,11 +889,10 @@ impl EvaluationFrame for BinaryOperationBuilder {
             }
             BinaryPath::OnRightBranch {
                 mut left,
-                left_span,
                 interface,
             } => {
-                let mut right = value.expect_argument_value();
-                let right_span = span;
+                let right = value.expect_argument_value();
+                let mut right = Spanned(right, span);
 
                 // NOTE:
                 // - This disable/enable flow allows us to do x += x without issues
@@ -889,16 +903,12 @@ impl EvaluationFrame for BinaryOperationBuilder {
                     // SAFETY: We disabled left above
                     right.disable();
                     // SAFETY: enable() may fail if left and right reference the same variable
-                    left.enable(left_span)?;
-                    right.enable(right_span)?;
+                    left.enable()?;
+                    right.enable()?;
                 }
-                let result = interface.execute(
-                    Spanned(left, left_span),
-                    Spanned(right, right_span),
-                    &self.operation,
-                )?;
                 // The result span covers left operand through right operand
-                let result_span = SpanRange::new_between(left_span, right_span);
+                let result_span = SpanRange::new_between(left.1, right.1);
+                let result = interface.execute(left, right, &self.operation)?;
                 return context.return_returned_value(result, result_span);
             }
         })
@@ -1203,7 +1213,7 @@ enum MethodCallPath {
     CallerPath,
     ArgumentsPath {
         method: MethodInterface,
-        disabled_evaluated_arguments_including_caller: Vec<ArgumentValue>,
+        disabled_evaluated_arguments_including_caller: Vec<SpannedArgumentValue>,
     },
 }
 
@@ -1240,11 +1250,12 @@ impl EvaluationFrame for MethodCallBuilder {
     fn handle_next(
         mut self,
         mut context: ValueContext,
-        Spanned(value, caller_span): Spanned<RequestedValue>,
+        Spanned(value, span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         // Handle expected item based on current state
         match self.state {
             MethodCallPath::CallerPath => {
+                let caller_span = span;
                 let caller = value.expect_late_bound();
                 let method = caller
                     .as_ref()
@@ -1288,7 +1299,8 @@ impl EvaluationFrame for MethodCallBuilder {
                         non_caller_arguments,
                     ));
                 }
-                let mut caller = argument_ownerships[0].map_from_late_bound(caller, caller_span)?;
+                let caller = argument_ownerships[0].map_from_late_bound(caller, caller_span)?;
+                let mut caller = Spanned(caller, caller_span);
 
                 // We skip 1 to ignore the caller
                 let non_self_argument_ownerships: iter::Skip<
@@ -1321,7 +1333,8 @@ impl EvaluationFrame for MethodCallBuilder {
                 ref mut disabled_evaluated_arguments_including_caller,
                 ..
             } => {
-                let mut argument = value.expect_argument_value();
+                let argument = value.expect_argument_value();
+                let mut argument = Spanned(argument, span);
                 unsafe {
                     // SAFETY: We enable it again before use
                     argument.disable();
@@ -1345,13 +1358,15 @@ impl EvaluationFrame for MethodCallBuilder {
                         // - This disable/enable flow allows us to do things like vec.push(vec.len())
                         // - Read https://rust-lang.github.io/rfcs/2025-nested-method-calls.html for more details
                         // - We enable left-to-right for intuitive error messages: later borrows will report errors
-                        let method_span = self.method.span_range();
                         unsafe {
                             for argument in &mut arguments {
                                 // SAFETY: enable() may fail if arguments conflict (e.g., same variable)
-                                argument.enable(method_span)?;
+                                argument.enable()?;
                             }
                         }
+                        // Extract the inner ArgumentValues for the method call
+                        let arguments: Vec<ArgumentValue> =
+                            arguments.into_iter().map(|s| s.0).collect();
                         (arguments, method)
                     }
                 };

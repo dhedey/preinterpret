@@ -472,6 +472,26 @@ impl<T: ?Sized> Mutable<T> {
 static MUTABLE_ERROR_MESSAGE: &str =
     "The variable cannot be modified as it is already being modified";
 
+impl Spanned<Mutable<Value>> {
+    /// SAFETY:
+    /// * Must be paired with a call to `enable()` before any further use of the value.
+    /// * Must not use the value while disabled.
+    pub(crate) unsafe fn disable(&mut self) {
+        self.0.disable();
+    }
+
+    /// SAFETY:
+    /// * Must only be used after a call to `disable()`.
+    ///
+    /// Returns an ownership error if re-enabling fails (e.g., due to conflicting borrows).
+    pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
+        self.0
+             .0
+            .enable()
+            .map_err(|_| self.1.ownership_error(MUTABLE_ERROR_MESSAGE))
+    }
+}
+
 #[allow(unused)]
 impl Mutable<Value> {
     pub(crate) fn new_from_owned(value: Value) -> Self {
@@ -588,6 +608,26 @@ impl<T: ?Sized> Shared<T> {
 }
 
 static SHARED_ERROR_MESSAGE: &str = "The variable cannot be read as it is already being modified";
+
+impl Spanned<Shared<Value>> {
+    /// SAFETY:
+    /// * Must be paired with a call to `enable()` before any further use of the value.
+    /// * Must not use the value while disabled.
+    pub(crate) unsafe fn disable(&mut self) {
+        self.0.disable();
+    }
+
+    /// SAFETY:
+    /// * Must only be used after a call to `disable()`.
+    ///
+    /// Returns an ownership error if re-enabling fails (e.g., due to conflicting borrows).
+    pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
+        self.0
+             .0
+            .enable()
+            .map_err(|_| self.1.ownership_error(SHARED_ERROR_MESSAGE))
+    }
+}
 
 impl Shared<Value> {
     pub(crate) fn new_from_owned(value: Value) -> Self {
@@ -741,6 +781,23 @@ impl<T: 'static + ToOwned + ?Sized> CopyOnWrite<T> {
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => shared.enable(span_range),
             CopyOnWriteInner::SharedWithTransparentCloning(shared) => shared.enable(span_range),
         }
+    }
+}
+
+impl Spanned<CopyOnWrite<Value>> {
+    /// SAFETY:
+    /// * Must be paired with a call to `enable()` before any further use of the value.
+    /// * Must not use the value while disabled.
+    pub(crate) unsafe fn disable(&mut self) {
+        self.0.disable();
+    }
+
+    /// SAFETY:
+    /// * Must only be used after a call to `disable()`.
+    ///
+    /// Returns an ownership error if re-enabling fails (e.g., due to conflicting borrows).
+    pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
+        self.0.enable(self.1)
     }
 }
 
