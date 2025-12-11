@@ -415,10 +415,9 @@ impl<'a> Context<'a, ValueType> {
 
     pub(super) fn return_late_bound(
         self,
-        late_bound: LateBoundValue,
-        span: SpanRange,
+        late_bound: Spanned<LateBoundValue>,
     ) -> ExecutionResult<NextAction> {
-        let spanned_value = self.request.map_from_late_bound(late_bound, span)?;
+        let spanned_value = self.request.map_from_late_bound(late_bound)?;
         Ok(NextAction::return_requested(spanned_value))
     }
 

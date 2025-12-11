@@ -27,9 +27,11 @@ impl VariableState {
         is_final: bool,
         ownership: RequestedOwnership,
         blocked_from_mutation: Option<MutationBlockReason>,
-    ) -> ExecutionResult<LateBoundValue> {
+    ) -> ExecutionResult<Spanned<LateBoundValue>> {
         const UNITIALIZED_ERR: &str = "Cannot resolve uninitialized variable. This shouldn't be possible, because all variables are set on first use.";
         const FINISHED_ERR: &str = "Cannot resolve finished variable. This shouldn't be possible, because is_final should be marked correctly. If you see this error, please report a bug to preinterpret on github with a reproduction case.";
+
+        let span_range = variable_span.span_range();
 
         // If blocked from mutation, we technically could allow is_final to work and
         // return a fully owned value without observable mutation,
@@ -46,11 +48,13 @@ impl VariableState {
                         ) {
                             return variable_span.control_flow_err("The final usage of a variable cannot be assigned to. You can use `let _ = ..` to discard a value.");
                         }
-                        return Ok(LateBoundValue::Owned(LateBoundOwnedValue {
-                            owned: Owned(ref_cell.into_inner()),
-                            span_range: variable_span.span_range(),
-                            is_from_last_use: true,
-                        }));
+                        return Ok(Spanned(
+                            LateBoundValue::Owned(LateBoundOwnedValue {
+                                owned: Owned(ref_cell.into_inner()),
+                                is_from_last_use: true,
+                            }),
+                            span_range,
+                        ));
                     }
                     // It's currently referenced, proceed with normal late-bound resolution.
                     // e.g.
@@ -71,7 +75,6 @@ impl VariableState {
             data: value_rc,
             variable_span,
         };
-        let span_range = variable_span.span_range();
         let resolved = match ownership {
             RequestedOwnership::LateBound => binding.into_late_bound(),
             RequestedOwnership::Concrete(ownership) => match ownership {
@@ -79,7 +82,6 @@ impl VariableState {
                     binding.into_transparently_cloned(span_range).map(|owned| {
                         LateBoundValue::Owned(LateBoundOwnedValue {
                             owned,
-                            span_range,
                             is_from_last_use: false,
                         })
                     })
@@ -98,22 +100,22 @@ impl VariableState {
                     .map(LateBoundValue::CopyOnWrite),
             },
         };
-        if let Some(mutation_block_reason) = blocked_from_mutation {
+        let late_bound = if let Some(mutation_block_reason) = blocked_from_mutation {
             match resolved {
                 Ok(LateBoundValue::Mutable(mutable)) => {
                     let reason_not_mutable = variable_span
                         .syn_error(mutation_block_reason.error_message("mutate this variable"));
-                    Ok(LateBoundValue::Shared(LateBoundSharedValue {
-                        shared: mutable.into_shared(),
-                        span_range: variable_span.span_range(),
+                    Ok(LateBoundValue::Shared(LateBoundSharedValue::new(
+                        mutable.into_shared(),
                         reason_not_mutable,
-                    }))
+                    )))
                 }
                 x => x,
             }
         } else {
             resolved
-        }
+        }?;
+        Ok(Spanned(late_bound, span_range))
     }
 }
 
@@ -145,7 +147,6 @@ impl VariableBinding {
     }
 
     pub(crate) fn into_late_bound(self) -> ExecutionResult<LateBoundValue> {
-        let span_range = self.variable_span.span_range();
         match MutableValue::new_from_variable(self.clone()) {
             Ok(value) => Ok(LateBoundValue::Mutable(value)),
             Err(reason_not_mutable) => {
@@ -154,7 +155,6 @@ impl VariableBinding {
                 let shared = self.into_shared()?;
                 Ok(LateBoundValue::Shared(LateBoundSharedValue::new(
                     shared,
-                    span_range,
                     reason_not_mutable,
                 )))
             }
@@ -164,59 +164,20 @@ impl VariableBinding {
 
 pub(crate) struct LateBoundOwnedValue {
     pub(crate) owned: OwnedValue,
-    pub(crate) span_range: SpanRange,
     pub(crate) is_from_last_use: bool,
-}
-
-impl HasSpanRange for LateBoundOwnedValue {
-    fn span_range(&self) -> SpanRange {
-        self.span_range
-    }
-}
-
-impl WithSpanRangeExt for LateBoundOwnedValue {
-    fn with_span_range(self, span_range: SpanRange) -> Self {
-        Self {
-            owned: self.owned,
-            span_range,
-            is_from_last_use: self.is_from_last_use,
-        }
-    }
 }
 
 /// A shared value where mutable access failed for a specific reason
 pub(crate) struct LateBoundSharedValue {
     pub(crate) shared: SharedValue,
-    pub(crate) span_range: SpanRange,
     pub(crate) reason_not_mutable: syn::Error,
 }
 
 impl LateBoundSharedValue {
-    pub(crate) fn new(
-        shared: SharedValue,
-        span_range: SpanRange,
-        reason_not_mutable: syn::Error,
-    ) -> Self {
+    pub(crate) fn new(shared: SharedValue, reason_not_mutable: syn::Error) -> Self {
         Self {
             shared,
-            span_range,
             reason_not_mutable,
-        }
-    }
-}
-
-impl HasSpanRange for LateBoundSharedValue {
-    fn span_range(&self) -> SpanRange {
-        self.span_range
-    }
-}
-
-impl WithSpanRangeExt for LateBoundSharedValue {
-    fn with_span_range(self, span_range: SpanRange) -> Self {
-        Self {
-            shared: self.shared,
-            span_range,
-            reason_not_mutable: self.reason_not_mutable,
         }
     }
 }
@@ -242,15 +203,13 @@ pub(crate) enum LateBoundValue {
     Shared(LateBoundSharedValue),
 }
 
-impl LateBoundValue {
-    pub(crate) fn resolve(
-        self,
-        ownership: ArgumentOwnership,
-        span: SpanRange,
-    ) -> ExecutionResult<ArgumentValue> {
-        ownership.map_from_late_bound(self, span)
+impl Spanned<LateBoundValue> {
+    pub(crate) fn resolve(self, ownership: ArgumentOwnership) -> ExecutionResult<ArgumentValue> {
+        ownership.map_from_late_bound(self)
     }
+}
 
+impl LateBoundValue {
     pub(crate) fn map_any(
         self,
         map_shared: impl FnOnce(SharedValue) -> ExecutionResult<SharedValue>,
@@ -260,7 +219,6 @@ impl LateBoundValue {
         Ok(match self {
             LateBoundValue::Owned(owned) => LateBoundValue::Owned(LateBoundOwnedValue {
                 owned: map_owned(owned.owned)?,
-                span_range: owned.span_range,
                 is_from_last_use: owned.is_from_last_use,
             }),
             LateBoundValue::CopyOnWrite(copy_on_write) => {
@@ -269,11 +227,9 @@ impl LateBoundValue {
             LateBoundValue::Mutable(mutable) => LateBoundValue::Mutable(map_mutable(mutable)?),
             LateBoundValue::Shared(LateBoundSharedValue {
                 shared,
-                span_range,
                 reason_not_mutable,
             }) => LateBoundValue::Shared(LateBoundSharedValue::new(
                 map_shared(shared)?,
-                span_range,
                 reason_not_mutable,
             )),
         })

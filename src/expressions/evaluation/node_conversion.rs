@@ -14,7 +14,7 @@ impl ExpressionNode {
                     Leaf::Variable(variable) => match context.requested_ownership() {
                         RequestedOwnership::LateBound => {
                             let late_bound = variable.resolve_late_bound(context.interpreter())?;
-                            context.return_late_bound(late_bound, variable.span_range())?
+                            context.return_late_bound(late_bound)?
                         }
                         RequestedOwnership::Concrete(ownership) => {
                             let resolved =

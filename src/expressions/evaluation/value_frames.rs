@@ -161,8 +161,7 @@ impl RequestedOwnership {
 
     pub(crate) fn map_from_late_bound(
         &self,
-        late_bound: LateBoundValue,
-        span: SpanRange,
+        Spanned(late_bound, span): Spanned<LateBoundValue>,
     ) -> ExecutionResult<Spanned<RequestedValue>> {
         Ok(Spanned(
             match self {
@@ -215,7 +214,7 @@ impl RequestedOwnership {
             RequestedValue::Mutable(mutable) => self.map_from_mutable(Spanned(mutable, span)),
             RequestedValue::Assignee(assignee) => self.map_from_assignee(Spanned(assignee, span)),
             RequestedValue::LateBound(late_bound_value) => {
-                self.map_from_late_bound(late_bound_value, span)
+                self.map_from_late_bound(Spanned(late_bound_value, span))
             }
             RequestedValue::CopyOnWrite(copy_on_write) => {
                 self.map_from_copy_on_write(Spanned(copy_on_write, span))
@@ -235,7 +234,6 @@ impl RequestedOwnership {
                 RequestedOwnership::LateBound => {
                     RequestedValue::LateBound(LateBoundValue::Owned(LateBoundOwnedValue {
                         owned: value,
-                        span_range: span,
                         is_from_last_use: false,
                     }))
                 }
@@ -372,17 +370,13 @@ pub(crate) enum ArgumentOwnership {
 impl ArgumentOwnership {
     pub(crate) fn map_from_late_bound(
         &self,
-        late_bound: LateBoundValue,
-        span: SpanRange,
+        Spanned(late_bound, span): Spanned<LateBoundValue>,
     ) -> ExecutionResult<ArgumentValue> {
         match late_bound {
-            LateBoundValue::Owned(owned) => {
-                // Use the span from the owned value, not the caller's span
-                self.map_from_owned_with_is_last_use(
-                    Spanned(owned.owned, owned.span_range),
-                    owned.is_from_last_use,
-                )
-            }
+            LateBoundValue::Owned(owned) => self.map_from_owned_with_is_last_use(
+                Spanned(owned.owned, span),
+                owned.is_from_last_use,
+            ),
             LateBoundValue::CopyOnWrite(copy_on_write) => {
                 self.map_from_copy_on_write(Spanned(copy_on_write, span))
             }
@@ -785,7 +779,7 @@ impl EvaluationFrame for UnaryOperationBuilder {
         // Try method resolution first
         if let Some(interface) = operand_kind.resolve_unary_operation(&self.operation) {
             let resolved_value =
-                late_bound_value.resolve(interface.argument_ownership(), operand_span)?;
+                Spanned(late_bound_value, operand_span).resolve(interface.argument_ownership())?;
             let result =
                 interface.execute(Spanned(resolved_value, operand_span), &self.operation)?;
             // The result span covers the operator and operand
@@ -869,7 +863,7 @@ impl EvaluationFrame for BinaryOperationBuilder {
                             let rhs_ownership = interface.rhs_ownership();
                             let left = interface
                                 .lhs_ownership()
-                                .map_from_late_bound(left_late_bound, left_span)?;
+                                .map_from_late_bound(Spanned(left_late_bound, left_span))?;
                             let mut left = Spanned(left, left_span);
 
                             unsafe {
@@ -1302,7 +1296,8 @@ impl EvaluationFrame for MethodCallBuilder {
                         non_caller_arguments,
                     ));
                 }
-                let caller = argument_ownerships[0].map_from_late_bound(caller, caller_span)?;
+                let caller =
+                    argument_ownerships[0].map_from_late_bound(Spanned(caller, caller_span))?;
                 let mut caller = Spanned(caller, caller_span);
 
                 // We skip 1 to ignore the caller
