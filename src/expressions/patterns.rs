@@ -113,10 +113,8 @@ impl HandleDestructure for ArrayPattern {
         interpreter: &mut Interpreter,
         value: Value,
     ) -> ExecutionResult<()> {
-        let array: ArrayValue = value.into_owned().resolve_as(
-            self.brackets.span_range(),
-            "The value destructured with an array pattern",
-        )?;
+        let array: ArrayValue = Spanned(value.into_owned(), self.brackets.span_range())
+            .resolve_as("The value destructured with an array pattern")?;
         let mut has_seen_dot_dot = false;
         let mut prefix_assignees = Vec::new();
         let mut suffix_assignees = Vec::new();
@@ -230,10 +228,8 @@ impl HandleDestructure for ObjectPattern {
         interpreter: &mut Interpreter,
         value: Value,
     ) -> ExecutionResult<()> {
-        let object: ObjectValue = value.into_owned().resolve_as(
-            self._braces.span_range(),
-            "The value destructured with an object pattern",
-        )?;
+        let object: ObjectValue = Spanned(value.into_owned(), self._braces.span_range())
+            .resolve_as("The value destructured with an object pattern")?;
         let mut value_map = object.entries;
         let mut already_used_keys = HashSet::with_capacity(self.entries.len());
         for entry in self.entries.iter() {
@@ -358,10 +354,8 @@ impl HandleDestructure for StreamPattern {
         interpreter: &mut Interpreter,
         value: Value,
     ) -> ExecutionResult<()> {
-        let stream: StreamValue = value.into_owned().resolve_as(
-            self._brackets.span_range(),
-            "The value destructured with a stream pattern",
-        )?;
+        let stream: StreamValue = Spanned(value.into_owned(), self._brackets.span_range())
+            .resolve_as("The value destructured with a stream pattern")?;
         interpreter.start_parse(stream.value, |interpreter, _| {
             self.content.consume(interpreter)
         })
@@ -404,10 +398,8 @@ impl HandleDestructure for ParseTemplatePattern {
         interpreter: &mut Interpreter,
         value: Value,
     ) -> ExecutionResult<()> {
-        let stream: StreamValue = value.into_owned().resolve_as(
-            self._brackets.span_range(),
-            "The value destructured with a parse template pattern",
-        )?;
+        let stream: StreamValue = Spanned(value.into_owned(), self._brackets.span_range())
+            .resolve_as("The value destructured with a parse template pattern")?;
         interpreter.start_parse(stream.value, |interpreter, handle| {
             self.parser_definition.define(interpreter, handle);
             self.content.consume(interpreter)

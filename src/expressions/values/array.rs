@@ -89,9 +89,8 @@ impl ArrayValue {
         integer: Spanned<&IntegerValue>,
         is_exclusive: bool,
     ) -> ExecutionResult<usize> {
-        let index: usize = (**integer)
-            .into_owned_value()
-            .resolve_as(integer.span_range(), "An array index")?;
+        let index: usize = Spanned((**integer).into_owned_value(), integer.span_range())
+            .resolve_as("An array index")?;
         if is_exclusive {
             if index <= self.items.len() {
                 Ok(index)

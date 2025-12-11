@@ -65,12 +65,12 @@ impl UntypedInteger {
 
     pub(crate) fn paired_operation(
         self,
-        rhs: Owned<IntegerValue>,
+        rhs: Spanned<Owned<IntegerValue>>,
         context: BinaryOperationCallContext,
         perform_fn: fn(FallbackInteger, FallbackInteger) -> Option<FallbackInteger>,
     ) -> ExecutionResult<IntegerValue> {
         let lhs = self.0;
-        let rhs: UntypedInteger = rhs.resolve_as(context.output_span_range, "This operand")?;
+        let rhs: UntypedInteger = rhs.resolve_as("This operand")?;
         let rhs = rhs.0;
         let output = perform_fn(lhs, rhs)
             .ok_or_else(|| UntypedInteger::binary_overflow_error(context, lhs, rhs))?;
@@ -79,12 +79,11 @@ impl UntypedInteger {
 
     pub(crate) fn paired_comparison(
         self,
-        rhs: Owned<IntegerValue>,
-        span: SpanRange,
+        rhs: Spanned<Owned<IntegerValue>>,
         compare_fn: fn(FallbackInteger, FallbackInteger) -> bool,
     ) -> ExecutionResult<bool> {
         let lhs = self.0;
-        let rhs: UntypedInteger = rhs.resolve_as(span, "This operand")?;
+        let rhs: UntypedInteger = rhs.resolve_as("This operand")?;
         let rhs = rhs.0;
         Ok(compare_fn(lhs, rhs))
     }

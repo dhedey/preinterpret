@@ -144,57 +144,54 @@ impl<T: IsArgument> IsArgument for Spanned<T> {
 
 pub(crate) trait ResolveAs<T> {
     /// The `resolution_target` should be capitalized, e.g. "This argument" or "The value destructed with an object pattern"
-    fn resolve_as(self, span: SpanRange, resolution_target: &str) -> ExecutionResult<T>;
+    fn resolve_as(self, resolution_target: &str) -> ExecutionResult<T>;
 }
 
-impl<T: ResolvableOwned<V>, V> ResolveAs<T> for Owned<V> {
-    fn resolve_as(self, span: SpanRange, resolution_target: &str) -> ExecutionResult<T> {
-        T::resolve_value(self, span, resolution_target)
+impl<T: ResolvableOwned<V>, V> ResolveAs<T> for Spanned<Owned<V>> {
+    fn resolve_as(self, resolution_target: &str) -> ExecutionResult<T> {
+        let Spanned(value, span) = self;
+        T::resolve_value(value, span, resolution_target)
     }
 }
 
 // Sadly this can't be changed Value => V because of spurious issues with
 // https://github.com/rust-lang/rust/issues/48869
 // Instead, we could introduce a different trait ResolveAs2 if needed.
-impl<T: ResolvableOwned<Value>> ResolveAs<Owned<T>> for Owned<Value> {
-    fn resolve_as(self, span: SpanRange, resolution_target: &str) -> ExecutionResult<Owned<T>> {
-        T::resolve_owned(self, span, resolution_target)
+impl<T: ResolvableOwned<Value>> ResolveAs<Owned<T>> for Spanned<Owned<Value>> {
+    fn resolve_as(self, resolution_target: &str) -> ExecutionResult<Owned<T>> {
+        let Spanned(value, span) = self;
+        T::resolve_owned(value, span, resolution_target)
     }
 }
 
-impl<T: ResolvableShared<Value> + ?Sized> ResolveAs<Shared<T>> for Shared<Value> {
-    fn resolve_as(self, span: SpanRange, resolution_target: &str) -> ExecutionResult<Shared<T>> {
-        T::resolve_shared(self, span, resolution_target)
+impl<T: ResolvableShared<Value> + ?Sized> ResolveAs<Shared<T>> for Spanned<Shared<Value>> {
+    fn resolve_as(self, resolution_target: &str) -> ExecutionResult<Shared<T>> {
+        let Spanned(value, span) = self;
+        T::resolve_shared(value, span, resolution_target)
     }
 }
 
 impl<'a, T: ResolvableShared<Value> + ?Sized> ResolveAs<&'a T> for Spanned<&'a Value> {
-    fn resolve_as(self, _span: SpanRange, resolution_target: &str) -> ExecutionResult<&'a T> {
-        // Use span from self
+    fn resolve_as(self, resolution_target: &str) -> ExecutionResult<&'a T> {
         T::resolve_ref(self, resolution_target)
     }
 }
 
 impl<'a, T: ResolvableShared<Value> + ?Sized> ResolveAs<Spanned<&'a T>> for Spanned<&'a Value> {
-    fn resolve_as(
-        self,
-        _span: SpanRange,
-        resolution_target: &str,
-    ) -> ExecutionResult<Spanned<&'a T>> {
-        // Use span from self
+    fn resolve_as(self, resolution_target: &str) -> ExecutionResult<Spanned<&'a T>> {
         T::resolve_spanned_ref(self, resolution_target)
     }
 }
 
-impl<T: ResolvableMutable<Value> + ?Sized> ResolveAs<Mutable<T>> for Mutable<Value> {
-    fn resolve_as(self, span: SpanRange, resolution_target: &str) -> ExecutionResult<Mutable<T>> {
-        T::resolve_mutable(self, span, resolution_target)
+impl<T: ResolvableMutable<Value> + ?Sized> ResolveAs<Mutable<T>> for Spanned<Mutable<Value>> {
+    fn resolve_as(self, resolution_target: &str) -> ExecutionResult<Mutable<T>> {
+        let Spanned(value, span) = self;
+        T::resolve_mutable(value, span, resolution_target)
     }
 }
 
 impl<'a, T: ResolvableMutable<Value> + ?Sized> ResolveAs<&'a mut T> for Spanned<&'a mut Value> {
-    fn resolve_as(self, _span: SpanRange, resolution_target: &str) -> ExecutionResult<&'a mut T> {
-        // Use span from self
+    fn resolve_as(self, resolution_target: &str) -> ExecutionResult<&'a mut T> {
         T::resolve_ref_mut(self, resolution_target)
     }
 }
@@ -202,12 +199,7 @@ impl<'a, T: ResolvableMutable<Value> + ?Sized> ResolveAs<&'a mut T> for Spanned<
 impl<'a, T: ResolvableMutable<Value> + ?Sized> ResolveAs<Spanned<&'a mut T>>
     for Spanned<&'a mut Value>
 {
-    fn resolve_as(
-        self,
-        _span: SpanRange,
-        resolution_target: &str,
-    ) -> ExecutionResult<Spanned<&'a mut T>> {
-        // Use span from self
+    fn resolve_as(self, resolution_target: &str) -> ExecutionResult<Spanned<&'a mut T>> {
         T::resolve_spanned_ref_mut(self, resolution_target)
     }
 }

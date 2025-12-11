@@ -30,7 +30,7 @@ pub(crate) struct ObjectEntry {
 
 impl ObjectValue {
     pub(super) fn into_indexed(mut self, index: Spanned<&Value>) -> ExecutionResult<Value> {
-        let key = index.resolve_as(index.span_range(), "An object key")?;
+        let key = index.resolve_as("An object key")?;
         Ok(self.remove_or_none(key))
     }
 
@@ -64,12 +64,12 @@ impl ObjectValue {
         index: Spanned<&Value>,
         auto_create: bool,
     ) -> ExecutionResult<&mut Value> {
-        let index: Spanned<&str> = index.resolve_as(index.span_range(), "An object key")?;
+        let index: Spanned<&str> = index.resolve_as("An object key")?;
         self.mut_entry(index.map(|s, _| s.to_string()), auto_create)
     }
 
     pub(super) fn index_ref(&self, index: Spanned<&Value>) -> ExecutionResult<&Value> {
-        let key: Spanned<&str> = index.resolve_as(index.span_range(), "An object key")?;
+        let key: Spanned<&str> = index.resolve_as("An object key")?;
         let entry = self.entries.get(*key).ok_or_else(|| {
             key.value_error(format!("The object does not have a field named `{}`", *key))
         })?;

@@ -592,8 +592,8 @@ fn test_iterable_mapping() {
     let iterator = as_iterable.0.into_iterator().unwrap();
     let collected: Vec<u32> = iterator
         .map(|v| {
-            Owned::new(v)
-                .resolve_as(Span::call_site().span_range(), "u32")
+            Spanned(Owned::new(v), Span::call_site().span_range())
+                .resolve_as("u32")
                 .unwrap()
         })
         .collect();

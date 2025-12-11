@@ -354,13 +354,11 @@ impl ParseTemplateLiteral {
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
     ) -> ExecutionResult<RequestedValue> {
-        let parser: Shared<ParserValue> = self
-            .parser_reference
-            .resolve_shared(interpreter)?
-            .resolve_as(
-                self.parser_reference.span_range(),
-                "The value bound by a consume literal",
-            )?;
+        let parser: Shared<ParserValue> = Spanned(
+            self.parser_reference.resolve_shared(interpreter)?,
+            self.parser_reference.span_range(),
+        )
+        .resolve_as("The value bound by a consume literal")?;
 
         parser.parse_with(interpreter, |interpreter| self.content.consume(interpreter))?;
 

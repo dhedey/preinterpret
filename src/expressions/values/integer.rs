@@ -229,6 +229,7 @@ define_interface! {
         }
         pub(crate) mod binary_operations {
             [context] fn add(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
+                let right = Spanned(right, context.output_span_range);
                 match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
                     IntegerValue::Untyped(left) => left.paired_operation(right, context, FallbackInteger::checked_add),
                     IntegerValue::U8(left) => left.paired_operation(right, context, u8::checked_add),
@@ -251,6 +252,7 @@ define_interface! {
             }
 
             [context] fn sub(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
+                let right = Spanned(right, context.output_span_range);
                 match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
                     IntegerValue::Untyped(left) => left.paired_operation(right, context, FallbackInteger::checked_sub),
                     IntegerValue::U8(left) => left.paired_operation(right, context, u8::checked_sub),
@@ -273,6 +275,7 @@ define_interface! {
             }
 
             [context] fn mul(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
+                let right = Spanned(right, context.output_span_range);
                 match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
                     IntegerValue::Untyped(left) => left.paired_operation(right, context, FallbackInteger::checked_mul),
                     IntegerValue::U8(left) => left.paired_operation(right, context, u8::checked_mul),
@@ -295,6 +298,7 @@ define_interface! {
             }
 
             [context] fn div(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
+                let right = Spanned(right, context.output_span_range);
                 match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
                     IntegerValue::Untyped(left) => left.paired_operation(right, context, FallbackInteger::checked_div),
                     IntegerValue::U8(left) => left.paired_operation(right, context, u8::checked_div),
@@ -317,6 +321,7 @@ define_interface! {
             }
 
             [context] fn rem(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
+                let right = Spanned(right, context.output_span_range);
                 match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
                     IntegerValue::Untyped(left) => left.paired_operation(right, context, FallbackInteger::checked_rem),
                     IntegerValue::U8(left) => left.paired_operation(right, context, u8::checked_rem),
@@ -339,6 +344,7 @@ define_interface! {
             }
 
             [context] fn bitxor(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
+                let right = Spanned(right, context.output_span_range);
                 match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
                     IntegerValue::Untyped(left) => left.paired_operation(right, context, |a, b| Some(a ^ b)),
                     IntegerValue::U8(left) => left.paired_operation(right, context, |a, b| Some(a ^ b)),
@@ -361,6 +367,7 @@ define_interface! {
             }
 
             [context] fn bitand(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
+                let right = Spanned(right, context.output_span_range);
                 match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
                     IntegerValue::Untyped(left) => left.paired_operation(right, context, |a, b| Some(a & b)),
                     IntegerValue::U8(left) => left.paired_operation(right, context, |a, b| Some(a & b)),
@@ -383,6 +390,7 @@ define_interface! {
             }
 
             [context] fn bitor(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
+                let right = Spanned(right, context.output_span_range);
                 match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
                     IntegerValue::Untyped(left) => left.paired_operation(right, context, |a, b| Some(a | b)),
                     IntegerValue::U8(left) => left.paired_operation(right, context, |a, b| Some(a | b)),
@@ -451,116 +459,116 @@ define_interface! {
             }
 
             [context] fn lt(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<bool> {
-                let span = context.output_span_range;
+                let right = Spanned(right, context.output_span_range);
                 match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
-                    IntegerValue::Untyped(left) => left.paired_comparison(right, span, |a, b| a < b),
-                    IntegerValue::U8(left) => left.paired_comparison(right, span, |a, b| a < b),
-                    IntegerValue::U16(left) => left.paired_comparison(right, span, |a, b| a < b),
-                    IntegerValue::U32(left) => left.paired_comparison(right, span, |a, b| a < b),
-                    IntegerValue::U64(left) => left.paired_comparison(right, span, |a, b| a < b),
-                    IntegerValue::U128(left) => left.paired_comparison(right, span, |a, b| a < b),
-                    IntegerValue::Usize(left) => left.paired_comparison(right, span, |a, b| a < b),
-                    IntegerValue::I8(left) => left.paired_comparison(right, span, |a, b| a < b),
-                    IntegerValue::I16(left) => left.paired_comparison(right, span, |a, b| a < b),
-                    IntegerValue::I32(left) => left.paired_comparison(right, span, |a, b| a < b),
-                    IntegerValue::I64(left) => left.paired_comparison(right, span, |a, b| a < b),
-                    IntegerValue::I128(left) => left.paired_comparison(right, span, |a, b| a < b),
-                    IntegerValue::Isize(left) => left.paired_comparison(right, span, |a, b| a < b),
+                    IntegerValue::Untyped(left) => left.paired_comparison(right, |a, b| a < b),
+                    IntegerValue::U8(left) => left.paired_comparison(right, |a, b| a < b),
+                    IntegerValue::U16(left) => left.paired_comparison(right, |a, b| a < b),
+                    IntegerValue::U32(left) => left.paired_comparison(right, |a, b| a < b),
+                    IntegerValue::U64(left) => left.paired_comparison(right, |a, b| a < b),
+                    IntegerValue::U128(left) => left.paired_comparison(right, |a, b| a < b),
+                    IntegerValue::Usize(left) => left.paired_comparison(right, |a, b| a < b),
+                    IntegerValue::I8(left) => left.paired_comparison(right, |a, b| a < b),
+                    IntegerValue::I16(left) => left.paired_comparison(right, |a, b| a < b),
+                    IntegerValue::I32(left) => left.paired_comparison(right, |a, b| a < b),
+                    IntegerValue::I64(left) => left.paired_comparison(right, |a, b| a < b),
+                    IntegerValue::I128(left) => left.paired_comparison(right, |a, b| a < b),
+                    IntegerValue::Isize(left) => left.paired_comparison(right, |a, b| a < b),
                 }
             }
 
             [context] fn le(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<bool> {
-                let span = context.output_span_range;
+                let right = Spanned(right, context.output_span_range);
                 match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
-                    IntegerValue::Untyped(left) => left.paired_comparison(right, span, |a, b| a <= b),
-                    IntegerValue::U8(left) => left.paired_comparison(right, span, |a, b| a <= b),
-                    IntegerValue::U16(left) => left.paired_comparison(right, span, |a, b| a <= b),
-                    IntegerValue::U32(left) => left.paired_comparison(right, span, |a, b| a <= b),
-                    IntegerValue::U64(left) => left.paired_comparison(right, span, |a, b| a <= b),
-                    IntegerValue::U128(left) => left.paired_comparison(right, span, |a, b| a <= b),
-                    IntegerValue::Usize(left) => left.paired_comparison(right, span, |a, b| a <= b),
-                    IntegerValue::I8(left) => left.paired_comparison(right, span, |a, b| a <= b),
-                    IntegerValue::I16(left) => left.paired_comparison(right, span, |a, b| a <= b),
-                    IntegerValue::I32(left) => left.paired_comparison(right, span, |a, b| a <= b),
-                    IntegerValue::I64(left) => left.paired_comparison(right, span, |a, b| a <= b),
-                    IntegerValue::I128(left) => left.paired_comparison(right, span, |a, b| a <= b),
-                    IntegerValue::Isize(left) => left.paired_comparison(right, span, |a, b| a <= b),
+                    IntegerValue::Untyped(left) => left.paired_comparison(right, |a, b| a <= b),
+                    IntegerValue::U8(left) => left.paired_comparison(right, |a, b| a <= b),
+                    IntegerValue::U16(left) => left.paired_comparison(right, |a, b| a <= b),
+                    IntegerValue::U32(left) => left.paired_comparison(right, |a, b| a <= b),
+                    IntegerValue::U64(left) => left.paired_comparison(right, |a, b| a <= b),
+                    IntegerValue::U128(left) => left.paired_comparison(right, |a, b| a <= b),
+                    IntegerValue::Usize(left) => left.paired_comparison(right, |a, b| a <= b),
+                    IntegerValue::I8(left) => left.paired_comparison(right, |a, b| a <= b),
+                    IntegerValue::I16(left) => left.paired_comparison(right, |a, b| a <= b),
+                    IntegerValue::I32(left) => left.paired_comparison(right, |a, b| a <= b),
+                    IntegerValue::I64(left) => left.paired_comparison(right, |a, b| a <= b),
+                    IntegerValue::I128(left) => left.paired_comparison(right, |a, b| a <= b),
+                    IntegerValue::Isize(left) => left.paired_comparison(right, |a, b| a <= b),
                 }
             }
 
             [context] fn gt(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<bool> {
-                let span = context.output_span_range;
+                let right = Spanned(right, context.output_span_range);
                 match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
-                    IntegerValue::Untyped(left) => left.paired_comparison(right, span, |a, b| a > b),
-                    IntegerValue::U8(left) => left.paired_comparison(right, span, |a, b| a > b),
-                    IntegerValue::U16(left) => left.paired_comparison(right, span, |a, b| a > b),
-                    IntegerValue::U32(left) => left.paired_comparison(right, span, |a, b| a > b),
-                    IntegerValue::U64(left) => left.paired_comparison(right, span, |a, b| a > b),
-                    IntegerValue::U128(left) => left.paired_comparison(right, span, |a, b| a > b),
-                    IntegerValue::Usize(left) => left.paired_comparison(right, span, |a, b| a > b),
-                    IntegerValue::I8(left) => left.paired_comparison(right, span, |a, b| a > b),
-                    IntegerValue::I16(left) => left.paired_comparison(right, span, |a, b| a > b),
-                    IntegerValue::I32(left) => left.paired_comparison(right, span, |a, b| a > b),
-                    IntegerValue::I64(left) => left.paired_comparison(right, span, |a, b| a > b),
-                    IntegerValue::I128(left) => left.paired_comparison(right, span, |a, b| a > b),
-                    IntegerValue::Isize(left) => left.paired_comparison(right, span, |a, b| a > b),
+                    IntegerValue::Untyped(left) => left.paired_comparison(right, |a, b| a > b),
+                    IntegerValue::U8(left) => left.paired_comparison(right, |a, b| a > b),
+                    IntegerValue::U16(left) => left.paired_comparison(right, |a, b| a > b),
+                    IntegerValue::U32(left) => left.paired_comparison(right, |a, b| a > b),
+                    IntegerValue::U64(left) => left.paired_comparison(right, |a, b| a > b),
+                    IntegerValue::U128(left) => left.paired_comparison(right, |a, b| a > b),
+                    IntegerValue::Usize(left) => left.paired_comparison(right, |a, b| a > b),
+                    IntegerValue::I8(left) => left.paired_comparison(right, |a, b| a > b),
+                    IntegerValue::I16(left) => left.paired_comparison(right, |a, b| a > b),
+                    IntegerValue::I32(left) => left.paired_comparison(right, |a, b| a > b),
+                    IntegerValue::I64(left) => left.paired_comparison(right, |a, b| a > b),
+                    IntegerValue::I128(left) => left.paired_comparison(right, |a, b| a > b),
+                    IntegerValue::Isize(left) => left.paired_comparison(right, |a, b| a > b),
                 }
             }
 
             [context] fn ge(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<bool> {
-                let span = context.output_span_range;
+                let right = Spanned(right, context.output_span_range);
                 match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
-                    IntegerValue::Untyped(left) => left.paired_comparison(right, span, |a, b| a >= b),
-                    IntegerValue::U8(left) => left.paired_comparison(right, span, |a, b| a >= b),
-                    IntegerValue::U16(left) => left.paired_comparison(right, span, |a, b| a >= b),
-                    IntegerValue::U32(left) => left.paired_comparison(right, span, |a, b| a >= b),
-                    IntegerValue::U64(left) => left.paired_comparison(right, span, |a, b| a >= b),
-                    IntegerValue::U128(left) => left.paired_comparison(right, span, |a, b| a >= b),
-                    IntegerValue::Usize(left) => left.paired_comparison(right, span, |a, b| a >= b),
-                    IntegerValue::I8(left) => left.paired_comparison(right, span, |a, b| a >= b),
-                    IntegerValue::I16(left) => left.paired_comparison(right, span, |a, b| a >= b),
-                    IntegerValue::I32(left) => left.paired_comparison(right, span, |a, b| a >= b),
-                    IntegerValue::I64(left) => left.paired_comparison(right, span, |a, b| a >= b),
-                    IntegerValue::I128(left) => left.paired_comparison(right, span, |a, b| a >= b),
-                    IntegerValue::Isize(left) => left.paired_comparison(right, span, |a, b| a >= b),
+                    IntegerValue::Untyped(left) => left.paired_comparison(right, |a, b| a >= b),
+                    IntegerValue::U8(left) => left.paired_comparison(right, |a, b| a >= b),
+                    IntegerValue::U16(left) => left.paired_comparison(right, |a, b| a >= b),
+                    IntegerValue::U32(left) => left.paired_comparison(right, |a, b| a >= b),
+                    IntegerValue::U64(left) => left.paired_comparison(right, |a, b| a >= b),
+                    IntegerValue::U128(left) => left.paired_comparison(right, |a, b| a >= b),
+                    IntegerValue::Usize(left) => left.paired_comparison(right, |a, b| a >= b),
+                    IntegerValue::I8(left) => left.paired_comparison(right, |a, b| a >= b),
+                    IntegerValue::I16(left) => left.paired_comparison(right, |a, b| a >= b),
+                    IntegerValue::I32(left) => left.paired_comparison(right, |a, b| a >= b),
+                    IntegerValue::I64(left) => left.paired_comparison(right, |a, b| a >= b),
+                    IntegerValue::I128(left) => left.paired_comparison(right, |a, b| a >= b),
+                    IntegerValue::Isize(left) => left.paired_comparison(right, |a, b| a >= b),
                 }
             }
 
             [context] fn eq(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<bool> {
-                let span = context.output_span_range;
+                let right = Spanned(right, context.output_span_range);
                 match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
-                    IntegerValue::Untyped(left) => left.paired_comparison(right, span, |a, b| a == b),
-                    IntegerValue::U8(left) => left.paired_comparison(right, span, |a, b| a == b),
-                    IntegerValue::U16(left) => left.paired_comparison(right, span, |a, b| a == b),
-                    IntegerValue::U32(left) => left.paired_comparison(right, span, |a, b| a == b),
-                    IntegerValue::U64(left) => left.paired_comparison(right, span, |a, b| a == b),
-                    IntegerValue::U128(left) => left.paired_comparison(right, span, |a, b| a == b),
-                    IntegerValue::Usize(left) => left.paired_comparison(right, span, |a, b| a == b),
-                    IntegerValue::I8(left) => left.paired_comparison(right, span, |a, b| a == b),
-                    IntegerValue::I16(left) => left.paired_comparison(right, span, |a, b| a == b),
-                    IntegerValue::I32(left) => left.paired_comparison(right, span, |a, b| a == b),
-                    IntegerValue::I64(left) => left.paired_comparison(right, span, |a, b| a == b),
-                    IntegerValue::I128(left) => left.paired_comparison(right, span, |a, b| a == b),
-                    IntegerValue::Isize(left) => left.paired_comparison(right, span, |a, b| a == b),
+                    IntegerValue::Untyped(left) => left.paired_comparison(right, |a, b| a == b),
+                    IntegerValue::U8(left) => left.paired_comparison(right, |a, b| a == b),
+                    IntegerValue::U16(left) => left.paired_comparison(right, |a, b| a == b),
+                    IntegerValue::U32(left) => left.paired_comparison(right, |a, b| a == b),
+                    IntegerValue::U64(left) => left.paired_comparison(right, |a, b| a == b),
+                    IntegerValue::U128(left) => left.paired_comparison(right, |a, b| a == b),
+                    IntegerValue::Usize(left) => left.paired_comparison(right, |a, b| a == b),
+                    IntegerValue::I8(left) => left.paired_comparison(right, |a, b| a == b),
+                    IntegerValue::I16(left) => left.paired_comparison(right, |a, b| a == b),
+                    IntegerValue::I32(left) => left.paired_comparison(right, |a, b| a == b),
+                    IntegerValue::I64(left) => left.paired_comparison(right, |a, b| a == b),
+                    IntegerValue::I128(left) => left.paired_comparison(right, |a, b| a == b),
+                    IntegerValue::Isize(left) => left.paired_comparison(right, |a, b| a == b),
                 }
             }
 
             [context] fn ne(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<bool> {
-                let span = context.output_span_range;
+                let right = Spanned(right, context.output_span_range);
                 match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
-                    IntegerValue::Untyped(left) => left.paired_comparison(right, span, |a, b| a != b),
-                    IntegerValue::U8(left) => left.paired_comparison(right, span, |a, b| a != b),
-                    IntegerValue::U16(left) => left.paired_comparison(right, span, |a, b| a != b),
-                    IntegerValue::U32(left) => left.paired_comparison(right, span, |a, b| a != b),
-                    IntegerValue::U64(left) => left.paired_comparison(right, span, |a, b| a != b),
-                    IntegerValue::U128(left) => left.paired_comparison(right, span, |a, b| a != b),
-                    IntegerValue::Usize(left) => left.paired_comparison(right, span, |a, b| a != b),
-                    IntegerValue::I8(left) => left.paired_comparison(right, span, |a, b| a != b),
-                    IntegerValue::I16(left) => left.paired_comparison(right, span, |a, b| a != b),
-                    IntegerValue::I32(left) => left.paired_comparison(right, span, |a, b| a != b),
-                    IntegerValue::I64(left) => left.paired_comparison(right, span, |a, b| a != b),
-                    IntegerValue::I128(left) => left.paired_comparison(right, span, |a, b| a != b),
-                    IntegerValue::Isize(left) => left.paired_comparison(right, span, |a, b| a != b),
+                    IntegerValue::Untyped(left) => left.paired_comparison(right, |a, b| a != b),
+                    IntegerValue::U8(left) => left.paired_comparison(right, |a, b| a != b),
+                    IntegerValue::U16(left) => left.paired_comparison(right, |a, b| a != b),
+                    IntegerValue::U32(left) => left.paired_comparison(right, |a, b| a != b),
+                    IntegerValue::U64(left) => left.paired_comparison(right, |a, b| a != b),
+                    IntegerValue::U128(left) => left.paired_comparison(right, |a, b| a != b),
+                    IntegerValue::Usize(left) => left.paired_comparison(right, |a, b| a != b),
+                    IntegerValue::I8(left) => left.paired_comparison(right, |a, b| a != b),
+                    IntegerValue::I16(left) => left.paired_comparison(right, |a, b| a != b),
+                    IntegerValue::I32(left) => left.paired_comparison(right, |a, b| a != b),
+                    IntegerValue::I64(left) => left.paired_comparison(right, |a, b| a != b),
+                    IntegerValue::I128(left) => left.paired_comparison(right, |a, b| a != b),
+                    IntegerValue::Isize(left) => left.paired_comparison(right, |a, b| a != b),
                 }
             }
         }

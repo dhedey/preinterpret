@@ -705,7 +705,8 @@ impl EvaluationFrame for Box<ObjectBuilder> {
         Ok(match pending {
             Some(PendingEntryPath::OnIndexKeyBranch { access, value_node }) => {
                 let value = value.expect_owned();
-                let key: String = value.resolve_as(access.span_range(), "An object key")?;
+                let key: String =
+                    Spanned(value, access.span_range()).resolve_as("An object key")?;
                 if self.evaluated_entries.contains_key(&key) {
                     return access.syntax_err(format!("The key {} has already been set", key));
                 }
