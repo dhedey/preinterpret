@@ -325,7 +325,9 @@ impl BreakInterrupt {
             Some(value) => value,
             None => ().into_owned_value(),
         };
-        ownership.map_from_owned(Spanned(value, span_range))
+        ownership
+            .map_from_owned(Spanned(value, span_range))
+            .map(|spanned| spanned.0)
     }
 }
 

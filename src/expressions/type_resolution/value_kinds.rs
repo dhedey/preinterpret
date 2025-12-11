@@ -484,9 +484,12 @@ impl TypeProperty {
         // TODO[performance] - lazily initialize properties as Shared
         let resolved_property = resolver.resolve_type_property(&self.property.to_string());
         match resolved_property {
-            Some(value) => {
-                ownership.map_from_shared(SharedValue::new_from_owned(value), self.span_range())
-            }
+            Some(value) => ownership
+                .map_from_shared(Spanned(
+                    SharedValue::new_from_owned(value),
+                    self.span_range(),
+                ))
+                .map(|spanned| spanned.0),
             None => self.type_err(format!(
                 "Type '{}' has no property named '{}'",
                 self.source_type.source_name(),

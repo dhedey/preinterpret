@@ -551,10 +551,14 @@ define_interface! {
             [context] fn as_mut(this: ArgumentValue) -> ExecutionResult<MutableValue> {
                 Ok(match this {
                     ArgumentValue::Owned(owned) => Mutable::new_from_owned(owned.into_inner()),
-                    ArgumentValue::CopyOnWrite(copy_on_write) => ArgumentOwnership::Mutable.map_from_copy_on_write(copy_on_write, context.output_span_range)?.expect_mutable(),
+                    ArgumentValue::CopyOnWrite(copy_on_write) => ArgumentOwnership::Mutable
+                        .map_from_copy_on_write(Spanned(copy_on_write, context.output_span_range))?
+                        .expect_mutable(),
                     ArgumentValue::Mutable(mutable) => mutable,
                     ArgumentValue::Assignee(assignee) => assignee.0,
-                    ArgumentValue::Shared(shared) => ArgumentOwnership::Mutable.map_from_shared(shared, context.output_span_range)?.expect_mutable(),
+                    ArgumentValue::Shared(shared) => ArgumentOwnership::Mutable
+                        .map_from_shared(Spanned(shared, context.output_span_range))?
+                        .expect_mutable(),
                 })
             }
 
