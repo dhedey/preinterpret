@@ -301,7 +301,7 @@ impl<'a, K: IsType, H: IsOwnership> Spanned<Actual<'a, K, H>> {
         self,
         description: &str,
     ) -> ExecutionResult<Actual<'a, U, H>> {
-        let Spanned { value, span_range } = self;
+        let Spanned(value, span_range) = self;
         U::resolve(value, span_range, description)
     }
 }
