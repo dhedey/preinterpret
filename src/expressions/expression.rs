@@ -66,6 +66,10 @@ impl Expression {
         )
     }
 
+    pub(crate) fn span_range(&self) -> SpanRange {
+        self.nodes.get(self.root).span_range(&self.nodes)
+    }
+
     pub(crate) fn evaluate_as_statement(
         &self,
         interpreter: &mut Interpreter,
@@ -203,6 +207,62 @@ impl Leaf {
             | Leaf::Value(_)
             | Leaf::StreamLiteral(_)
             | Leaf::ParseTemplateLiteral(_) => false,
+        }
+    }
+}
+
+impl ExpressionNode {
+    fn span_range(&self, nodes: &Arena<ExpressionNodeId, ExpressionNode>) -> SpanRange {
+        match self {
+            ExpressionNode::Leaf(leaf) => leaf.span_range(),
+            ExpressionNode::Grouped { delim_span, .. } => delim_span.span_range(),
+            ExpressionNode::Array { brackets, .. } => brackets.span_range(),
+            ExpressionNode::Object { braces, .. } => braces.span_range(),
+            ExpressionNode::UnaryOperation { operation, input } => {
+                let input_span = nodes.get(*input).span_range(nodes);
+                SpanRange::new_between(operation.span(), input_span)
+            }
+            ExpressionNode::BinaryOperation { left_input, right_input, .. } => {
+                let left_span = nodes.get(*left_input).span_range(nodes);
+                let right_span = nodes.get(*right_input).span_range(nodes);
+                SpanRange::new_between(left_span, right_span)
+            }
+            ExpressionNode::Property { node, access } => {
+                let node_span = nodes.get(*node).span_range(nodes);
+                SpanRange::new_between(node_span, access.span_range())
+            }
+            ExpressionNode::MethodCall { node, method, parameters } => {
+                let node_span = nodes.get(*node).span_range(nodes);
+                if let Some(last_param) = parameters.last() {
+                    let last_span = nodes.get(*last_param).span_range(nodes);
+                    SpanRange::new_between(node_span, last_span)
+                } else {
+                    SpanRange::new_between(node_span, method.span_range())
+                }
+            }
+            ExpressionNode::Index { node, access, .. } => {
+                let node_span = nodes.get(*node).span_range(nodes);
+                SpanRange::new_between(node_span, access.span_range())
+            }
+            ExpressionNode::Range { left, range_limits, right } => {
+                let left_span = left.map(|n| nodes.get(n).span_range(nodes));
+                let right_span = right.map(|n| nodes.get(n).span_range(nodes));
+                let range_span = match range_limits {
+                    syn::RangeLimits::HalfOpen(t) => t.spans[0].span_range(),
+                    syn::RangeLimits::Closed(t) => t.spans[0].span_range(),
+                };
+                match (left_span, right_span) {
+                    (Some(l), Some(r)) => SpanRange::new_between(l, r),
+                    (Some(l), None) => SpanRange::new_between(l, range_span),
+                    (None, Some(r)) => SpanRange::new_between(range_span, r),
+                    (None, None) => range_span,
+                }
+            }
+            ExpressionNode::Assignment { assignee, value, .. } => {
+                let assignee_span = nodes.get(*assignee).span_range(nodes);
+                let value_span = nodes.get(*value).span_range(nodes);
+                SpanRange::new_between(assignee_span, value_span)
+            }
         }
     }
 }

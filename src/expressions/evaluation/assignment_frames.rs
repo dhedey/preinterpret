@@ -118,7 +118,7 @@ impl ArrayBasedAssigner {
         let span_range = assignee_span.span_range();
         let array: ArrayValue = value
             .into_owned()
-            .resolve_as("The value destructured as an array")?;
+            .resolve_as(span_range, "The value destructured as an array")?;
         let mut has_seen_dot_dot = false;
         let mut prefix_assignees = Vec::new();
         let mut suffix_assignees = Vec::new();
@@ -246,7 +246,7 @@ impl ObjectBasedAssigner {
         let span_range = assignee_span.span_range();
         let object: ObjectValue = value
             .into_owned()
-            .resolve_as("The value destructured as an object")?;
+            .resolve_as(span_range, "The value destructured as an object")?;
 
         Ok(Self {
             span_range,
@@ -266,7 +266,7 @@ impl ObjectBasedAssigner {
     ) -> ExecutionResult<NextAction> {
         let key: &str = index
             .spanned(access.span_range())
-            .resolve_as("An object key")?;
+            .resolve_as(access.span_range(), "An object key")?;
         let value = self.resolve_value(key.to_string(), access.span())?;
         Ok(context.request_assignment(self, assignee_node, value))
     }

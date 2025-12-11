@@ -145,7 +145,7 @@ impl VariableReference {
     ) -> ExecutionResult<ArgumentValue> {
         interpreter
             .resolve(self, RequestedOwnership::Concrete(ownership))?
-            .resolve(ownership)
+            .resolve(ownership, self.span().span_range())
     }
 
     pub(crate) fn resolve_shared(

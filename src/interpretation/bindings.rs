@@ -243,8 +243,12 @@ pub(crate) enum LateBoundValue {
 }
 
 impl LateBoundValue {
-    pub(crate) fn resolve(self, ownership: ArgumentOwnership) -> ExecutionResult<ArgumentValue> {
-        ownership.map_from_late_bound(self)
+    pub(crate) fn resolve(
+        self,
+        ownership: ArgumentOwnership,
+        span: SpanRange,
+    ) -> ExecutionResult<ArgumentValue> {
+        ownership.map_from_late_bound(self, span)
     }
 
     pub(crate) fn map_any(

@@ -4,159 +4,92 @@ This document tracks the fixes needed to remove all `Span::call_site()` occurren
 
 **Principle**: Spans live on the *outside* via `Spanned<T>` wrappers, not embedded in types.
 
+**Current Status**: IN PROGRESS - Major API changes made, ~103 compilation errors remaining.
+
 ---
 
-## Category 3: Operation Interface Spans (`type_data.rs`)
+## Summary of Changes Made
 
-**Status**: [ ] Not started
+### Core API Changes
 
-**Files**: `src/expressions/type_resolution/type_data.rs`
+1. **`IsArgument::from_argument`** - Now takes `span: SpanRange` parameter
+2. **`ResolveAs::resolve_as`** - Now takes `span: SpanRange` parameter
+3. **`ResolvableOwned::resolve_value`, `resolve_owned`** - Now take `span: SpanRange` parameter
+4. **`ResolvableShared::resolve_shared`** - Now takes `span: SpanRange` parameter
+5. **`ResolvableMutable::resolve_mutable`, `resolve_assignee`** - Now take `span: SpanRange` parameter
+6. **`HandleBinaryOperation::paired_operation_no_overflow`, `paired_comparison`** - Now take `span: SpanRange` parameter
+7. **`Expression::span_range()`** - Added method to compute span from root node
+8. **`ExpressionNode::span_range()`** - Added method to compute span recursively
 
-**Problem**: `UnaryOperationInterface::execute` and `BinaryOperationInterface::execute` need input spans to compute output spans.
+### Files Updated
 
-**Original code**:
+- `src/expressions/type_resolution/arguments.rs` - Core resolution traits
+- `src/expressions/type_resolution/interface_macros.rs` - Apply functions pass spans
+- `src/expressions/operations.rs` - Binary operation traits
+- `src/expressions/control_flow.rs` - Control flow expressions use proper spans
+- `src/expressions/expression.rs` - Added span_range methods
+- `src/expressions/evaluation/assignment_frames.rs` - Assignment destructuring
+- `src/expressions/evaluation/value_frames.rs` - Object key resolution
+- `src/expressions/values/float.rs` - Float operations with [context]
+- `src/expressions/values/iterable.rs` - IterableRef from_argument
+
+---
+
+## Remaining Work
+
+### Files Still Needing Updates
+
+1. **`src/expressions/patterns.rs`** - Multiple `resolve_as` calls need span parameter
+2. **`src/expressions/values/integer.rs`** - All binary operations need `[context]` and span
+3. **`src/expressions/values/integer_subtypes.rs`** - Binary operations
+4. **`src/expressions/values/integer_untyped.rs`** - Binary operations
+5. **`src/expressions/values/float_subtypes.rs`** - If any binary operations exist
+6. **`src/expressions/values/float_untyped.rs`** - Binary operations
+7. **`src/expressions/values/array.rs`** - `resolve_as` for array index
+8. **`src/expressions/values/object.rs`** - `resolve_as` for object keys
+9. **`src/expressions/values/range.rs`** - `resolve_as` for range bounds
+10. **`src/expressions/values/parser.rs`** - `resolve_as` for parser values
+11. **`src/expressions/values/value.rs`** - Various remaining call_site usages
+12. **`src/expressions/statements.rs`** - Statement span handling
+13. **`src/misc/field_inputs.rs`** - Field input spans
+
+### Pattern for Fixes
+
+For operations without `[context]`, add `[context]` attribute:
 ```rust
-fn execute(&self, input: ArgumentValue, operation: &UnaryOperation) {
-    let output_span_range = operation.output_span_range(input.span_range());
+// Before
+fn add(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
+    left.paired_comparison(right, |a, b| a + b)
+}
+
+// After
+[context] fn add(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
+    let span = context.output_span_range;
+    left.paired_comparison(right, span, |a, b| a + b)
 }
 ```
 
-**Current (broken)**:
+For `resolve_as` calls, pass the span:
 ```rust
-fn execute(&self, input: ArgumentValue, operation: &UnaryOperation) {
-    let fallback_span = Span::call_site().span_range();  // BAD
-    let output_span_range = operation.output_span_range(fallback_span);
-}
+// Before
+value.resolve_as("message")
+
+// After
+value.resolve_as(span_range, "message")
 ```
-
-**Fix**: Change to take `Spanned<ArgumentValue>`:
-```rust
-fn execute(&self, Spanned(input, input_span): Spanned<ArgumentValue>, operation: &UnaryOperation) {
-    let output_span_range = operation.output_span_range(input_span);
-}
-```
-
-**Call sites to update** (spans already available!):
-- `value_frames.rs:731` - has `operand_span`
-- `value_frames.rs:858` - has `left_span`, `right_span`
-- `operations.rs:95` - needs span threaded through `UnaryOperation::evaluate`
-
----
-
-## Category 2: Ownership Mapping Errors (`value_frames.rs`)
-
-**Status**: [ ] Not started
-
-**Files**: `src/expressions/evaluation/value_frames.rs`
-
-**Problem**: `ArgumentOwnership::map_from_*` methods need spans for ownership error messages.
-
-**Occurrences** (10 total):
-- `map_from_late_bound` - `LateBoundOwnedValue` span_range field
-- `map_from_copy_on_write` - 3 ownership errors
-- `map_from_shared` - 1 ownership error
-- `map_from_mutable` - 1 ownership error
-- `map_from_owned` - 3 ownership errors
-
-**Fix**: Add `span_range: SpanRange` parameter to all `map_from_*` methods.
-
----
-
-## Category 1: Type Resolution Functions (`arguments.rs`)
-
-**Status**: [ ] Not started
-
-**Files**: `src/expressions/type_resolution/arguments.rs`
-
-**Problem**: `ResolvableOwned`/`ResolvableShared`/`ResolvableMutable` methods lost access to spans.
-
-**Occurrences** (6 total):
-- `IsArgument for Spanned<T>::from_argument`
-- `ResolvableOwned::resolve_value`
-- `ResolvableOwned::resolve_owned`
-- `ResolvableShared::resolve_shared`
-- `ResolvableMutable::resolve_mutable`
-
-**Fix**: These methods should take `Spanned<Owned<T>>`, `Spanned<Shared<T>>`, etc.
-
----
-
-## Categories 4-8: Value Type Operations
-
-**Status**: [ ] Not started
-
-### Category 4: `integer.rs` (2 occurrences)
-- `coerce_to_other_type` - needs `Spanned<Owned<IntegerValue>>`
-- `coerce_to_target_type` - needs `Spanned<Owned<IntegerValue>>`
-
-### Category 5: `integer_subtypes.rs` / `integer_untyped.rs` (2 occurrences)
-- Signed integer `neg` overflow error
-- Untyped integer `neg` overflow error
-
-### Category 6: `iterable.rs` (1 occurrence)
-- `IterableRef::from_argument` type error
-
-### Category 7: `iterator.rs` (1 occurrence)
-- `cast_singleton_to_value` error
-
-### Category 8: `stream.rs` (multiple occurrences)
-- `cast_to_value` coercion error
-- Debug output methods
-- Concatenation operations
-
-**Fix**: These unary operations receive arguments via the interface system. The span should flow through `UnaryOperationCallContext` (available as `output_span_range`) or operations should receive `Spanned<Owned<T>>`.
-
----
-
-## Category 9: Parser Errors (`parser.rs`)
-
-**Status**: [ ] Not started
-
-**Files**: `src/expressions/values/parser.rs`
-
-**Occurrences** (3):
-- `as_parse_stream` - needs span from `Shared<ParserValue>`
-- `open` delimiter error - needs span from `Owned<char>`
-- `close` delimiter error - needs span from `Owned<char>`
-
-**Fix**: Take `Spanned<Shared<ParserValue>>` and `Spanned<Owned<char>>`.
-
----
-
-## Category 10: Statement/Expression Spans
-
-**Status**: [ ] Keep using leaf spans (per user guidance)
-
-**Files**: `src/expressions/expression.rs`, `src/expressions/statements.rs`
-
-**Guidance**: Use leaf spans (e.g., `block.span().span_range()`). Avoid functional changes.
-
----
-
-## Execution Order
-
-1. **Category 3 first** - Operation interfaces are foundational
-2. **Category 2** - Ownership mapping uses operation results
-3. **Categories 4-8** - Value operations depend on interface changes
-4. **Category 1** - Resolution functions (may cascade from above)
-5. **Category 9** - Parser (relatively isolated)
-6. **Category 10** - Already handled with leaf spans
 
 ---
 
 ## Progress Tracking
 
 - [x] Category 3: `type_data.rs` operation spans - **DONE**: `Spanned<ArgumentValue>` now used
-- [x] Category 2 partial: `value_frames.rs` `map_from_owned` - **DONE**: spans threaded through
-- [ ] Category 2 remaining: `value_frames.rs` `map_from_copy_on_write`, `map_from_shared`, `map_from_mutable` (6 usages)
-- [ ] Category 1: `arguments.rs` resolution functions (5 usages)
-- [ ] Category 4: `integer.rs` coercion (2 usages)
-- [ ] Category 5: `integer_subtypes.rs` / `integer_untyped.rs` negation (2 usages)
-- [ ] Category 6: `iterable.rs` type error (1 usage)
-- [x] Category 7: `iterator.rs` singleton cast - **DONE**: uses `context.output_span_range`
-- [x] Category 8 partial: `stream.rs` cast_to_value - **DONE**: uses `context.output_span_range`
-- [ ] Category 8 remaining: `stream.rs` debug output and concatenation (~7 usages)
-- [ ] Category 9: `parser.rs` errors (3 usages)
-- [ ] Category 10: `expression.rs` / `statements.rs` (2 usages - may want leaf spans)
+- [x] Category 2: `value_frames.rs` ownership mappings - **DONE**: All `map_from_*` take spans
+- [x] Category 1 partial: `arguments.rs` - **IN PROGRESS**: Core traits updated, call sites need fixing
+- [x] Float operations - **DONE**: All operations now use `[context]`
+- [ ] Integer operations - Need `[context]` on binary operations
+- [ ] Patterns - Need span parameters on `resolve_as` calls
+- [ ] Array/Object/Range - Need span parameters on `resolve_as` calls
+- [ ] Parser - Need span parameters
+- [ ] Remaining value.rs usages
 
-**Remaining: ~28 call_site usages**
+**Remaining: ~103 compilation errors**

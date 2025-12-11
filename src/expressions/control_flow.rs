@@ -106,7 +106,7 @@ impl Evaluate for IfExpression {
         let evaluated_condition: bool = self
             .condition
             .evaluate_owned(interpreter)?
-            .resolve_as("An if condition")?;
+            .resolve_as(self.condition.span_range(), "An if condition")?;
 
         if evaluated_condition {
             return self
@@ -117,7 +117,7 @@ impl Evaluate for IfExpression {
         for (condition, code) in &self.else_ifs {
             let evaluated_condition: bool = condition
                 .evaluate_owned(interpreter)?
-                .resolve_as("An else if condition")?;
+                .resolve_as(condition.span_range(), "An else if condition")?;
             if evaluated_condition {
                 return code.evaluate_unspanned(interpreter, requested_ownership);
             }
@@ -192,7 +192,7 @@ impl Evaluate for WhileExpression {
         while self
             .condition
             .evaluate_owned(interpreter)?
-            .resolve_as("A while condition")?
+            .resolve_as(self.condition.span_range(), "A while condition")?
         {
             iteration_counter.increment_and_check()?;
             let body_result = self.body.evaluate_owned(interpreter);
@@ -369,7 +369,7 @@ impl Evaluate for ForExpression {
         let iterable: IterableValue = self
             .iterable
             .evaluate_owned(interpreter)?
-            .resolve_as("A for loop iterable")?;
+            .resolve_as(self.iterable.span_range(), "A for loop iterable")?;
 
         let span = self.body.span();
         let scope = interpreter.current_scope_id();
@@ -517,21 +517,23 @@ impl Evaluate for AttemptExpression {
         ) -> Option<impl for<'b> FnOnce(&'b mut Interpreter) -> ExecutionResult<bool> + 'a>
         {
             guard.map(|(_, guard_expression)| {
+                let span = guard_expression.span_range();
                 move |interpreter: &mut Interpreter| -> ExecutionResult<bool> {
                     guard_expression
                         .evaluate_owned(interpreter)?
-                        .resolve_as("The guard condition of an attempt arm")
+                        .resolve_as(span, "The guard condition of an attempt arm")
                 }
             })
         }
         for arm in self.arms.iter() {
+            let lhs_span = arm.lhs.span().span_range();
             let attempt_outcome = interpreter.enter_scope_starting_with_revertible_segment(
                 arm.arm_scope,
                 self.catch_location,
                 |interpreter| -> ExecutionResult<()> {
                     arm.lhs
                         .evaluate_owned(interpreter)?
-                        .resolve_as("The returned value from the left half of an attempt arm")
+                        .resolve_as(lhs_span, "The returned value from the left half of an attempt arm")
                 },
                 guard_clause(arm.guard.as_ref()),
                 MutationBlockReason::AttemptRevertibleSegment,
@@ -609,7 +611,7 @@ impl Evaluate for ParseExpression {
         let input = self
             .input
             .evaluate_owned(interpreter)?
-            .resolve_as("The input to a parse expression")?;
+            .resolve_as(self.input.span_range(), "The input to a parse expression")?;
 
         interpreter.enter_scope(self.scope);
 

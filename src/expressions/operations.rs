@@ -295,7 +295,7 @@ impl BinaryOperation {
     ) -> ExecutionResult<Option<OwnedValue>> {
         match self {
             BinaryOperation::LogicalAnd { .. } => {
-                let bool: Spanned<&bool> = left.resolve_as("The left operand to &&")?;
+                let bool: Spanned<&bool> = left.resolve_as(left.span_range(), "The left operand to &&")?;
                 if !**bool {
                     Ok(Some((*bool).into_owned_value()))
                 } else {
@@ -303,7 +303,7 @@ impl BinaryOperation {
                 }
             }
             BinaryOperation::LogicalOr { .. } => {
-                let bool: Spanned<&bool> = left.resolve_as("The left operand to ||")?;
+                let bool: Spanned<&bool> = left.resolve_as(left.span_range(), "The left operand to ||")?;
                 if **bool {
                     Ok(Some((*bool).into_owned_value()))
                 } else {
@@ -443,7 +443,7 @@ pub(super) trait HandleBinaryOperation: Sized + std::fmt::Display + Copy {
         perform_fn: fn(Self, Self) -> Option<Self>,
     ) -> ExecutionResult<T> {
         let lhs = self;
-        let rhs = rhs.resolve_as("This operand")?;
+        let rhs = rhs.resolve_as(context.output_span_range, "This operand")?;
         perform_fn(lhs, rhs)
             .map(|r| r.into())
             .ok_or_else(|| Self::binary_overflow_error(context, lhs, rhs))
@@ -452,20 +452,22 @@ pub(super) trait HandleBinaryOperation: Sized + std::fmt::Display + Copy {
     fn paired_operation_no_overflow<T: From<Self>>(
         self,
         rhs: impl ResolveAs<Self>,
+        span: SpanRange,
         perform_fn: fn(Self, Self) -> Self,
     ) -> ExecutionResult<T> {
         let lhs = self;
-        let rhs = rhs.resolve_as("This operand")?;
+        let rhs = rhs.resolve_as(span, "This operand")?;
         Ok(perform_fn(lhs, rhs).into())
     }
 
     fn paired_comparison(
         self,
         rhs: impl ResolveAs<Self>,
+        span: SpanRange,
         compare_fn: fn(Self, Self) -> bool,
     ) -> ExecutionResult<bool> {
         let lhs = self;
-        let rhs = rhs.resolve_as("This operand")?;
+        let rhs = rhs.resolve_as(span, "This operand")?;
         Ok(compare_fn(lhs, rhs))
     }
 
