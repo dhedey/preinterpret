@@ -130,14 +130,8 @@ trait IsType: Sized {
     }
 }
 
-trait MapToType<T: IsType>: IsType {
-    fn map_to_type<'a, H: IsOwnership>(content: Self::Content<'a, H>) -> T::Content<'a, H>;
-}
-
-impl<T: IsChildType<ParentType = U>, U: MapToType<A>, A: IsType> MapToType<A> for T {
-    fn map_to_type<'a, H: IsOwnership>(content: Self::Content<'a, H>) -> A::Content<'a, H> {
-        U::map_to_type(T::into_parent(content))
-    }
+trait MapToType<T: IsType, H: IsOwnership>: IsType {
+    fn map_to_type<'a>(content: Self::Content<'a, H>) -> T::Content<'a, H>;
 }
 
 trait MaybeMapFromType<T: IsType, H: IsOwnership>: IsType {
@@ -162,42 +156,6 @@ trait MaybeMapFromType<T: IsType, H: IsOwnership>: IsType {
     }
 }
 
-// *sigh*
-// To avoid implementation conflict errors, we have to implement for each H separately
-impl<T: IsChildType<ParentType = U>, U: MaybeMapFromType<A, BeOwned>, A: IsType>
-    MaybeMapFromType<A, BeOwned> for T
-{
-    fn maybe_map_from_type<'a>(
-        content: A::Content<'a, BeOwned>,
-    ) -> Option<Self::Content<'a, BeOwned>> {
-        T::from_parent(U::maybe_map_from_type(content)?)
-    }
-}
-
-impl<T: IsChildType<ParentType = U>, U: MaybeMapFromType<A, BeAnyRef>, A: IsType>
-    MaybeMapFromType<A, BeAnyRef> for T
-{
-    fn maybe_map_from_type<'a>(
-        content: A::Content<'a, BeAnyRef>,
-    ) -> Option<Self::Content<'a, BeAnyRef>> {
-        T::from_parent(U::maybe_map_from_type(content)?)
-    }
-}
-
-// TODO: Add for BeReferencable, BeAnyRef, BeAnyRefMut etc.
-
-impl MapToType<ValueType> for ValueType {
-    fn map_to_type<'a, H: IsOwnership>(content: Self::Content<'a, H>) -> Self::Content<'a, H> {
-        content
-    }
-}
-
-impl<H: IsOwnership> MaybeMapFromType<ValueType, H> for ValueType {
-    fn maybe_map_from_type<'a>(content: Self::Content<'a, H>) -> Option<Self::Content<'a, H>> {
-        Some(content)
-    }
-}
-
 trait IsChildType: IsType {
     type ParentType: IsType;
     fn into_parent<'a, H: IsOwnership>(
@@ -208,7 +166,77 @@ trait IsChildType: IsType {
     ) -> Option<Self::Content<'a, H>>;
 }
 
+macro_rules! impl_ancestor_chain_conversions {
+    ($child:ty => $parent:ty => [$($ancestor:ty),* $(,)?]) => {
+        impl<H: IsOwnership> MaybeMapFromType<$child, H> for $child
+        {
+            fn maybe_map_from_type<'a>(
+                content: <$child as IsType>::Content<'a, H>,
+            ) -> Option<<$child as IsType>::Content<'a, H>> {
+                Some(content)
+            }
+        }
+
+        impl<H: IsOwnership> MapToType<$child, H> for $child
+        {
+            fn map_to_type<'a>(
+                content: <$child as IsType>::Content<'a, H>,
+            ) -> <$child as IsType>::Content<'a, H> {
+                content
+            }
+        }
+
+        impl<H: IsOwnership> MaybeMapFromType<$parent, H> for $child
+        {
+            fn maybe_map_from_type<'a>(
+                content: <$parent as IsType>::Content<'a, H>,
+            ) -> Option<<$child as IsType>::Content<'a, H>> {
+                <$child as IsChildType>::from_parent(content)
+            }
+        }
+
+        impl<H: IsOwnership> MapToType<$parent, H> for $child
+        {
+            fn map_to_type<'a>(
+                content: <$child as IsType>::Content<'a, H>,
+            ) -> <$parent as IsType>::Content<'a, H> {
+                <$child as IsChildType>::into_parent(content)
+            }
+        }
+
+        $(
+            impl<H: IsOwnership> MaybeMapFromType<$ancestor, H> for $child {
+                fn maybe_map_from_type<'a>(
+                    content: <$ancestor as IsType>::Content<'a, H>,
+                ) -> Option<<$child as IsType>::Content<'a, H>> {
+                    <$child as MaybeMapFromType<$parent, H>>::maybe_map_from_type(<$parent as MaybeMapFromType<$ancestor, H>>::maybe_map_from_type(content)?)
+                }
+            }
+
+            impl<H: IsOwnership> MapToType<$ancestor, H> for $child {
+                fn map_to_type<'a>(
+                    content: <$child as IsType>::Content<'a, H>,
+                ) -> <$ancestor as IsType>::Content<'a, H> {
+                    <$parent as MapToType<$ancestor, H>>::map_to_type(<$child as MapToType<$parent, H>>::map_to_type(content))
+                }
+            }
+        )*
+    };
+}
+
 struct ValueType;
+
+impl<H: IsOwnership> MapToType<ValueType, H> for ValueType {
+    fn map_to_type<'a>(content: Self::Content<'a, H>) -> Self::Content<'a, H> {
+        content
+    }
+}
+
+impl<H: IsOwnership> MaybeMapFromType<ValueType, H> for ValueType {
+    fn maybe_map_from_type<'a>(content: Self::Content<'a, H>) -> Option<Self::Content<'a, H>> {
+        Some(content)
+    }
+}
 
 impl IsType for ValueType {
     type Content<'a, H: IsOwnership> = ValueContent<'a, H>;
@@ -258,7 +286,7 @@ impl<'a, K: IsType, H: IsOwnership> Actual<'a, K, H> {
 
     fn map_type<U: IsType>(self) -> Actual<'a, U, H>
     where
-        K: MapToType<U>,
+        K: MapToType<U, H>,
     {
         Actual(K::map_to_type(self.0))
     }
@@ -268,13 +296,23 @@ impl<'a, K: IsType, H: IsOwnership> Actual<'a, K, H> {
     }
 }
 
+impl<'a, K: IsType, H: IsOwnership> Spanned<Actual<'a, K, H>> {
+    fn resolve_as<U: MaybeMapFromType<K, H>>(
+        self,
+        description: &str,
+    ) -> ExecutionResult<Actual<'a, U, H>> {
+        let Spanned { value, span_range } = self;
+        U::resolve(value, span_range, description)
+    }
+}
+
 impl<'a, K: IsType> Actual<'a, K, BeOwned> {
     fn into_referencable(self) -> Actual<'a, K, BeReferencable> {
         self.map_ownership::<OwnedToReferencableMapper>()
     }
 }
 
-impl<'a, K: IsType + MapToType<ValueType>, H: IsOwnership> Actual<'a, K, H> {
+impl<'a, K: IsType + MapToType<ValueType, H>, H: IsOwnership> Actual<'a, K, H> {
     fn into_value(self) -> Actual<'a, ValueType, H> {
         self.map_type()
     }
@@ -307,6 +345,29 @@ impl IsType for ObjectType {
     }
 }
 
+impl_ancestor_chain_conversions!(
+    ObjectType => ValueType => []
+);
+
+impl IsChildType for ObjectType {
+    type ParentType = ValueType;
+
+    fn into_parent<'a, H: IsOwnership>(
+        content: Self::Content<'a, H>,
+    ) -> <Self::ParentType as IsType>::Content<'a, H> {
+        ValueContent::Object(Actual(content))
+    }
+
+    fn from_parent<'a, H: IsOwnership>(
+        content: <Self::ParentType as IsType>::Content<'a, H>,
+    ) -> Option<Self::Content<'a, H>> {
+        match content {
+            ValueContent::Object(o) => Some(o.0),
+            _ => None,
+        }
+    }
+}
+
 enum IntegerContent<'a, H: IsOwnership> {
     U32(Actual<'a, U32Type, H>),
     // ...
@@ -333,6 +394,10 @@ impl IsType for IntegerType {
         }
     }
 }
+
+impl_ancestor_chain_conversions!(
+    IntegerType => ValueType => []
+);
 
 impl IsChildType for IntegerType {
     type ParentType = ValueType;
@@ -411,11 +476,9 @@ impl IsChildType for U32Type {
     }
 }
 
-impl<H: IsOwnership> MaybeMapFromType<U32Type, H> for U32Type {
-    fn maybe_map_from_type<'a>(content: Self::Content<'a, H>) -> Option<Self::Content<'a, H>> {
-        Some(content)
-    }
-}
+impl_ancestor_chain_conversions!(
+    U32Type => IntegerType => [ValueType]
+);
 
 #[test]
 fn test() {
