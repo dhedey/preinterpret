@@ -757,6 +757,11 @@ impl Spanned<CopyOnWrite<Value>> {
     pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
         self.0.enable(self.1)
     }
+
+    /// Converts to owned, using transparent clone for shared values where cloning was not requested
+    pub(crate) fn into_owned_transparently(self) -> ExecutionResult<OwnedValue> {
+        self.0.into_owned_transparently(self.1)
+    }
 }
 
 impl<T: ?Sized + ToOwned> AsRef<T> for CopyOnWrite<T> {
@@ -784,6 +789,18 @@ impl CopyOnWrite<Value> {
             CopyOnWriteInner::Owned(owned) => owned,
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => shared.infallible_clone(),
             CopyOnWriteInner::SharedWithTransparentCloning(shared) => shared.infallible_clone(),
+        }
+    }
+
+    /// Converts to owned, using transparent clone for shared values where cloning was not requested
+    pub(crate) fn into_owned_transparently(self, span: SpanRange) -> ExecutionResult<OwnedValue> {
+        match self.inner {
+            CopyOnWriteInner::Owned(owned) => Ok(owned),
+            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => Ok(shared.infallible_clone()),
+            CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
+                let value = shared.as_ref().try_transparent_clone(span)?;
+                Ok(Owned(value))
+            }
         }
     }
 

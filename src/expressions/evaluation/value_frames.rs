@@ -392,16 +392,16 @@ impl ArgumentOwnership {
         Spanned(copy_on_write, span): Spanned<CopyOnWriteValue>,
     ) -> ExecutionResult<ArgumentValue> {
         match self {
-            ArgumentOwnership::Owned => {
-                Ok(ArgumentValue::Owned(copy_on_write.into_owned_infallible()))
-            }
+            ArgumentOwnership::Owned => Ok(ArgumentValue::Owned(
+                copy_on_write.into_owned_transparently(span)?,
+            )),
             ArgumentOwnership::Shared => Ok(ArgumentValue::Shared(copy_on_write.into_shared())),
             ArgumentOwnership::Mutable => {
                 if copy_on_write.acts_as_shared_reference() {
                     span.ownership_err("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone()` to get a mutable reference to a cloned value.")
                 } else {
                     Ok(ArgumentValue::Mutable(Mutable::new_from_owned(
-                        copy_on_write.into_owned_infallible().into_inner(),
+                        copy_on_write.into_owned_transparently(span)?.into_inner(),
                     )))
                 }
             }
