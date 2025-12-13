@@ -224,10 +224,7 @@ impl RequestedValue {
             }
             RequestedValue::Owned(value) => RequestedValue::Owned(map_owned(value)?),
             RequestedValue::Assignee(assignee) => {
-                // Assignee is Assignee(Mutable<Value>)
-                // Extract the inner Mutable, map it, then rewrap in Assignee
-                let mapped = map_mutable(assignee.0)?;
-                RequestedValue::Assignee(Assignee(mapped))
+                RequestedValue::Assignee(Assignee(map_mutable(assignee.0)?))
             }
             RequestedValue::Mutable(mutable) => RequestedValue::Mutable(map_mutable(mutable)?),
             RequestedValue::Shared(shared) => RequestedValue::Shared(map_shared(shared)?),
@@ -429,21 +426,20 @@ impl<'a> Context<'a, ValueType> {
         self.request
     }
 
-    /// Helper to evaluate a closure and return the spanned result.
     pub(super) fn evaluate(
         self,
         f: impl FnOnce(&mut Interpreter, RequestedOwnership) -> ExecutionResult<Spanned<RequestedValue>>,
     ) -> ExecutionResult<NextAction> {
-        let spanned_value = f(self.interpreter, self.request)?;
-        self.return_not_necessarily_matching_requested(spanned_value)
+        let value = f(self.interpreter, self.request)?;
+        self.return_not_necessarily_matching_requested(value)
     }
 
     pub(super) fn return_late_bound(
         self,
         late_bound: Spanned<LateBoundValue>,
     ) -> ExecutionResult<NextAction> {
-        let spanned_value = self.request.map_from_late_bound(late_bound)?;
-        Ok(NextAction::return_requested(spanned_value))
+        let value = self.request.map_from_late_bound(late_bound)?;
+        Ok(NextAction::return_requested(value))
     }
 
     pub(super) fn return_argument_value(
