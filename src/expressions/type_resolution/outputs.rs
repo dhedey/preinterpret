@@ -11,18 +11,11 @@ pub(crate) enum ReturnedValue {
     Shared(SharedValue),
 }
 
-// Note: ReturnedValue no longer implements WithSpanRangeExt since the inner
-// value types no longer carry spans internally.
-// Spans should be tracked separately at a higher level if needed.
-
 // TODO: Find some way to selectively enable only on MSRV (e.g. following the build.rs feature flag pattern)
 // #[diagnostic::on_unimplemented(
 //     message = "`ResolvableOutput` is not implemented for `{Self}`",
 //     note = "`ResolvableOutput` is not implemented for `Shared<X>` or `Mutable<X>` unless `X` is `Value`. If we wish to change this, we'd need to have some way to represent some kind of `ExpressionReference`, i.e. a `Typed<Shared<..>>` rather than a `Shared<Typed<..>>`"
 // )]
-// Note: IsReturnable no longer takes or uses span_range since value types
-// no longer carry spans internally. The span should be tracked separately
-// at a higher level if needed.
 pub(crate) trait IsReturnable {
     fn to_returned_value(self) -> ExecutionResult<ReturnedValue>;
 }

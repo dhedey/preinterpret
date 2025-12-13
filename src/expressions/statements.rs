@@ -74,8 +74,7 @@ impl Statement {
     ) -> ExecutionResult<RequestedValue> {
         match self {
             Statement::Expression(expression) => {
-                let Spanned(value, _) = expression.evaluate(interpreter, ownership)?;
-                Ok(value)
+                expression.evaluate(interpreter, ownership).map(|v| v.0)
             }
             Statement::LetStatement(_)
             | Statement::BreakStatement(_)
@@ -146,8 +145,7 @@ impl LetStatement {
         } = self;
         let value = match assignment {
             Some(assignment) => {
-                let Spanned(value, _) = assignment.expression.evaluate_owned(interpreter)?;
-                value.into_inner()
+                assignment.expression.evaluate_owned(interpreter)?.0.0
             }
             None => Value::None,
         };
@@ -242,8 +240,7 @@ impl BreakStatement {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         let value = if let Some(expr) = &self.value {
-            let Spanned(value, _) = expr.evaluate_owned(interpreter)?;
-            Some(value)
+            Some(expr.evaluate_owned(interpreter)?.0)
         } else {
             None
         };
