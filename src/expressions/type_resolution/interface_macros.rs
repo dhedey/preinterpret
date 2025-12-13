@@ -30,7 +30,7 @@ macro_rules! handle_first_arg_type {
 }
 
 macro_rules! generate_unary_interface {
-    (REQUIRED [$ty1:tt] OPTIONAL [] ARGS[$method:path]) => {
+    (REQUIRED [$ty1:ty,] OPTIONAL [] ARGS[$method:path]) => {
         UnaryOperationInterface {
             method: |context, a| apply_unary_fn($method, a, context),
             argument_ownership: <$ty1 as IsArgument>::OWNERSHIP,
@@ -39,7 +39,7 @@ macro_rules! generate_unary_interface {
 }
 
 macro_rules! generate_binary_interface {
-    (REQUIRED [$ty1:tt $ty2:tt] OPTIONAL [] ARGS[$method:path]) => {
+    (REQUIRED [$ty1:ty, $ty2:ty,] OPTIONAL [] ARGS[$method:path]) => {
         BinaryOperationInterface {
             method: |context, a, b| apply_binary_fn($method, a, b, context),
             lhs_ownership: <$ty1 as IsArgument>::OWNERSHIP,
@@ -55,13 +55,13 @@ macro_rules! generate_method_interface {
             argument_ownership: [],
         }
     };
-    (REQUIRED [$ty1:tt] OPTIONAL [] ARGS[$method:path]) => {
+    (REQUIRED [$ty1:ty,] OPTIONAL [] ARGS[$method:path]) => {
         MethodInterface::Arity1 {
             method: |context, a| apply_fn1($method, a, context),
             argument_ownership: [<$ty1 as IsArgument>::OWNERSHIP],
         }
     };
-    (REQUIRED [$ty1:tt $ty2:tt] OPTIONAL [] ARGS[$method:path]) => {
+    (REQUIRED [$ty1:ty, $ty2:ty,] OPTIONAL [] ARGS[$method:path]) => {
         MethodInterface::Arity2 {
             method: |context, a, b| apply_fn2($method, a, b, context),
             argument_ownership: [
@@ -70,7 +70,7 @@ macro_rules! generate_method_interface {
             ],
         }
     };
-    (REQUIRED [$ty1:tt $ty2:tt $ty3:tt] OPTIONAL [] ARGS[$method:path]) => {
+    (REQUIRED [$ty1:ty, $ty2:ty, $ty3:ty,] OPTIONAL [] ARGS[$method:path]) => {
         MethodInterface::Arity3 {
             method: |context, a, b, c| apply_fn3($method, a, b, c, context),
             argument_ownership: [
@@ -80,7 +80,7 @@ macro_rules! generate_method_interface {
             ],
         }
     };
-    (REQUIRED [$ty1:tt] OPTIONAL [$ty2:tt] ARGS[$method:path]) => {
+    (REQUIRED [$ty1:ty,] OPTIONAL [$ty2:ty,] ARGS[$method:path]) => {
         MethodInterface::Arity1PlusOptional1 {
             method: |context, a, b| apply_fn1_optional1($method, a, b, context),
             argument_ownership: [
@@ -89,7 +89,7 @@ macro_rules! generate_method_interface {
             ],
         }
     };
-    (REQUIRED [$ty1:tt $ty2:tt] OPTIONAL [$ty3:tt] ARGS[$method:path]) => {
+    (REQUIRED [$ty1:ty, $ty2:ty,] OPTIONAL [$ty3:ty,] ARGS[$method:path]) => {
         MethodInterface::Arity2PlusOptional1 {
             method: |context, a, b, c| apply_fn2_optional1($method, a, b, c, context),
             argument_ownership: [
@@ -99,7 +99,7 @@ macro_rules! generate_method_interface {
             ],
         }
     };
-    (REQUIRED [$ty1:tt $ty2:tt $ty3:tt] OPTIONAL [$ty4:tt] ARGS[$method:path]) => {
+    (REQUIRED [$ty1:ty, $ty2:ty, $ty3:ty,] OPTIONAL [$ty4:ty,] ARGS[$method:path]) => {
         MethodInterface::Arity3PlusOptional1 {
             method: |context, a, b, c, d| apply_fn3_optional1($method, a, b, c, d, context),
             argument_ownership: [
@@ -120,15 +120,15 @@ macro_rules! parse_arg_types {
     };
     // Next tokens are `: Option<X>` - we have an optional argument
     ([REQUIRED $req:tt OPTIONAL[$($opt:tt)*] => $callback:ident! $callback_args:tt] : Option<$type:ty> $($rest:tt)*) => {
-        parse_arg_types!([REQUIRED $req OPTIONAL[$($opt)* $type] => $callback! $callback_args] $($rest)*)
+        parse_arg_types!([REQUIRED $req OPTIONAL[$($opt)* $type,] => $callback! $callback_args] $($rest)*)
     };
     // Next tokens are `: X)` - we have a required argument (variant 1)
     ([REQUIRED [$($req:tt)*] OPTIONAL $opt:tt => $callback:ident! $callback_args:tt] : $type:ty) => {
-        parse_arg_types!([REQUIRED[$($req)* $type] OPTIONAL $opt => $callback! $callback_args])
+        parse_arg_types!([REQUIRED[$($req)* $type,] OPTIONAL $opt => $callback! $callback_args])
     };
     // Next tokens are `: X, ...` - we have a required argument (variant 2)
     ([REQUIRED [$($req:tt)*] OPTIONAL $opt:tt => $callback:ident! $callback_args:tt] : $type:ty, $($rest:tt)*) => {
-        parse_arg_types!([REQUIRED[$($req)* $type] OPTIONAL $opt => $callback! $callback_args] $($rest)*)
+        parse_arg_types!([REQUIRED[$($req)* $type,] OPTIONAL $opt => $callback! $callback_args] $($rest)*)
     };
     // Next tokens are something else - ignore it and look at next
     ([REQUIRED $req:tt OPTIONAL $opt:tt => $callback:ident! $callback_args:tt] $consumed:tt $($rest:tt)*) => {
