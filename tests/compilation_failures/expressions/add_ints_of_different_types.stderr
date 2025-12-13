@@ -1,5 +1,5 @@
 error: This operand is expected to be a u32, but it is a u64
- --> tests/compilation_failures/expressions/add_ints_of_different_types.rs:5:11
+ --> tests/compilation_failures/expressions/add_ints_of_different_types.rs:5:18
   |
 5 |         #(1u32 + 2u64)
-  |           ^^^^^^^^^^^
+  |                  ^^^^

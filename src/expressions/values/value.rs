@@ -548,16 +548,16 @@ define_interface! {
                 this.into_owned_infallible()
             }
 
-            [context] fn as_mut(this: ArgumentValue) -> ExecutionResult<MutableValue> {
+            fn as_mut(Spanned(this, span): Spanned<ArgumentValue>) -> ExecutionResult<MutableValue> {
                 Ok(match this {
                     ArgumentValue::Owned(owned) => Mutable::new_from_owned(owned),
                     ArgumentValue::CopyOnWrite(copy_on_write) => ArgumentOwnership::Mutable
-                        .map_from_copy_on_write(Spanned(copy_on_write, context.output_span_range))?
+                        .map_from_copy_on_write(Spanned(copy_on_write, span))?
                         .expect_mutable(),
                     ArgumentValue::Mutable(mutable) => mutable,
                     ArgumentValue::Assignee(assignee) => assignee.0,
                     ArgumentValue::Shared(shared) => ArgumentOwnership::Mutable
-                        .map_from_shared(Spanned(shared, context.output_span_range))?
+                        .map_from_shared(Spanned(shared, span))?
                         .expect_mutable(),
                 })
             }
@@ -576,43 +576,38 @@ define_interface! {
                 core::mem::replace(a.0.deref_mut(), b)
             }
 
-            [context] fn debug(this: CopyOnWriteValue) -> ExecutionResult<()> {
-                let span_range = context.output_span_range;
+            fn debug(Spanned(this, span_range): Spanned<CopyOnWriteValue>) -> ExecutionResult<()> {
                 let message = this.concat_recursive(&ConcatBehaviour::debug(span_range))?;
                 span_range.debug_err(message)
             }
 
-            [context] fn to_debug_string(this: CopyOnWriteValue) -> ExecutionResult<String> {
-                let span_range = context.output_span_range;
+            fn to_debug_string(Spanned(this, span_range): Spanned<CopyOnWriteValue>) -> ExecutionResult<String> {
                 this.concat_recursive(&ConcatBehaviour::debug(span_range))
             }
 
-            [context] fn to_stream(input: CopyOnWriteValue) -> ExecutionResult<OutputStream> {
-                let span_range = context.output_span_range;
+            fn to_stream(Spanned(input, span_range): Spanned<CopyOnWriteValue>) -> ExecutionResult<OutputStream> {
                 input.map_into(
                     |shared| shared.output_to_new_stream(Grouping::Flattened, span_range),
                     |owned| owned.0.into_stream(Grouping::Flattened, span_range),
                 )
             }
 
-            [context] fn to_group(input: CopyOnWriteValue) -> ExecutionResult<OutputStream> {
-                let span_range = context.output_span_range;
+            fn to_group(Spanned(input, span_range): Spanned<CopyOnWriteValue>) -> ExecutionResult<OutputStream> {
                 input.map_into(
                     |shared| shared.output_to_new_stream(Grouping::Grouped, span_range),
                     |owned| owned.0.into_stream(Grouping::Grouped, span_range),
                 )
             }
 
-            [context] fn to_string(input: SharedValue) -> ExecutionResult<String> {
-                let span_range = context.output_span_range;
+            fn to_string(Spanned(input, span_range): Spanned<SharedValue>) -> ExecutionResult<String> {
                 input.concat_recursive(&ConcatBehaviour::standard(span_range))
             }
 
-            [context] fn with_span(this: CopyOnWriteValue, spans: AnyRef<StreamValue>) -> ExecutionResult<OutputStream> {
-                let mut this = to_stream(context, this)?;
+            [context] fn with_span(value: Spanned<CopyOnWriteValue>, spans: AnyRef<StreamValue>) -> ExecutionResult<OutputStream> {
+                let mut this = to_stream(context, value)?;
                 let span_to_use = match spans.resolve_content_span_range() {
                     Some(span_range) => span_range.span_from_join_else_start(),
-                    None => context.output_span_range.span_from_join_else_start(),
+                    None => Span::call_site(),
                 };
                 this.replace_first_level_spans(span_to_use);
                 Ok(this)
