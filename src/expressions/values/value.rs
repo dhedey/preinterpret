@@ -550,7 +550,7 @@ define_interface! {
 
             [context] fn as_mut(this: ArgumentValue) -> ExecutionResult<MutableValue> {
                 Ok(match this {
-                    ArgumentValue::Owned(owned) => Mutable::new_from_owned(owned.into_inner()),
+                    ArgumentValue::Owned(owned) => Mutable::new_from_owned(owned),
                     ArgumentValue::CopyOnWrite(copy_on_write) => ArgumentOwnership::Mutable
                         .map_from_copy_on_write(Spanned(copy_on_write, context.output_span_range))?
                         .expect_mutable(),

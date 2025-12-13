@@ -74,11 +74,10 @@ impl Spanned<&RangeValue> {
         self,
         array: &ArrayValue,
     ) -> ExecutionResult<std::ops::Range<usize>> {
-        let span_range = self.span_range();
-        let inner = &*self;
+        let Spanned(value, span_range) = self;
         let mut start = 0;
         let mut end = array.items.len();
-        Ok(match &*inner.inner {
+        Ok(match &*value.inner {
             RangeValueInner::Range {
                 start_inclusive,
                 end_exclusive,
@@ -370,9 +369,9 @@ define_interface! {
         pub(crate) mod methods {
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_via_iterator(this: Owned<RangeValue>) -> ExecutionResult<ReturnedValue> {
+            [context] fn cast_via_iterator(Spanned(this, span): Spanned<Owned<RangeValue>>) -> ExecutionResult<ReturnedValue> {
                 let this_iterator = this.try_map(IteratorValue::new_for_range)?;
-                Ok(context.operation.evaluate(Spanned(this_iterator, context.output_span_range))?.0)
+                Ok(context.operation.evaluate(Spanned(this_iterator, span))?.0)
             }
         }
         pub(crate) mod binary_operations {}
@@ -408,11 +407,11 @@ pub(super) enum IterableRangeOf<T> {
 fn resolve_range<T: ResolvableOwned<Value> + ResolvableRange>(
     start: T,
     dots: syn::RangeLimits,
-    end: Option<OwnedValue>,
+    end: Option<Spanned<OwnedValue>>,
 ) -> ExecutionResult<Box<dyn ClonableIterator<Item = Value>>> {
     let definition = match (end, dots) {
         (Some(end), dots) => {
-            let end = Spanned(end, dots.span_range()).resolve_as("The end of this range bound")?;
+            let end = end.resolve_as("The end of this range bound")?;
             IterableRangeOf::RangeFromTo { start, dots, end }
         }
         (None, RangeLimits::HalfOpen(dots)) => IterableRangeOf::RangeFrom { start, dots },
@@ -434,7 +433,11 @@ impl IterableRangeOf<Value> {
         self,
     ) -> ExecutionResult<Box<dyn ClonableIterator<Item = Value>>> {
         let (start, dots, end) = match self {
-            Self::RangeFromTo { start, dots, end } => (start, dots, Some(end.into_owned())),
+            Self::RangeFromTo { start, dots, end } => (
+                start,
+                dots,
+                Some(end.into_owned().spanned(dots.span_range())),
+            ),
             Self::RangeFrom { start, dots } => (start, RangeLimits::HalfOpen(dots), None),
         };
         match start {

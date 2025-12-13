@@ -137,12 +137,12 @@ impl IsArgument for IterableRef<'static> {
 
 impl Spanned<IterableRef<'_>> {
     pub(crate) fn len(&self) -> ExecutionResult<usize> {
-        let span_range = self.span_range();
-        match &**self {
-            IterableRef::Iterator(iterator) => iterator.len(span_range),
+        let Spanned(value, span) = self;
+        match value {
+            IterableRef::Iterator(iterator) => iterator.len(*span),
             IterableRef::Array(value) => Ok(value.items.len()),
             IterableRef::Stream(value) => Ok(value.len()),
-            IterableRef::Range(value) => value.len(span_range),
+            IterableRef::Range(value) => value.len(*span),
             IterableRef::Object(value) => Ok(value.entries.len()),
             // NB - this is different to string.len() which counts bytes
             IterableRef::String(value) => Ok(value.chars().count()),

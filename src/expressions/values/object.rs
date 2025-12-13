@@ -97,12 +97,10 @@ impl ObjectValue {
 
     fn mut_entry(
         &mut self,
-        key: Spanned<String>,
+        Spanned(key, key_span): Spanned<String>,
         auto_create: bool,
     ) -> ExecutionResult<&mut Value> {
         use std::collections::btree_map::*;
-        let key_span = key.span_range();
-        let Spanned(key, _) = key;
         Ok(match self.entries.entry(key) {
             Entry::Occupied(entry) => &mut entry.into_mut().value,
             Entry::Vacant(entry) => {

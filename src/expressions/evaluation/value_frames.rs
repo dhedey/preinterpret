@@ -417,7 +417,7 @@ impl ArgumentOwnership {
                     span.ownership_err("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone()` to get a mutable reference to a cloned value.")
                 } else {
                     Ok(ArgumentValue::Mutable(Mutable::new_from_owned(
-                        copy_on_write.into_owned_transparently(span)?.into_inner(),
+                        copy_on_write.into_owned_transparently(span)?,
                     )))
                 }
             }
@@ -521,9 +521,9 @@ impl ArgumentOwnership {
             ArgumentOwnership::CopyOnWrite => {
                 Ok(ArgumentValue::CopyOnWrite(CopyOnWrite::owned(owned)))
             }
-            ArgumentOwnership::Mutable => Ok(ArgumentValue::Mutable(Mutable::new_from_owned(
-                owned.into_inner(),
-            ))),
+            ArgumentOwnership::Mutable => {
+                Ok(ArgumentValue::Mutable(Mutable::new_from_owned(owned)))
+            }
             ArgumentOwnership::Assignee { .. } => {
                 if is_from_last_use {
                     span.ownership_err("The final usage of a variable cannot be assigned to. You can use `let _ = ..` to discard a value.")

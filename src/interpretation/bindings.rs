@@ -435,9 +435,9 @@ impl Spanned<Mutable<Value>> {
 }
 
 impl Mutable<Value> {
-    pub(crate) fn new_from_owned(value: Value) -> Self {
+    pub(crate) fn new_from_owned(value: OwnedValue) -> Self {
         // Unwrap is safe because it's a new refcell
-        Mutable(MutSubRcRefCell::new(Rc::new(RefCell::new(value))).unwrap())
+        Mutable(MutSubRcRefCell::new(Rc::new(RefCell::new(value.0))).unwrap())
     }
 
     fn new_from_variable(reference: VariableBinding) -> syn::Result<Self> {
