@@ -7,6 +7,7 @@ pub(crate) struct AnyRef<'a, T: ?Sized + 'static> {
 }
 
 impl<'a, T: ?Sized + 'static> AnyRef<'a, T> {
+    #[allow(unused)]
     pub(crate) fn map_optional<S: ?Sized>(
         self,
         f: impl for<'r> FnOnce(&'r T) -> Option<&'r S>,
