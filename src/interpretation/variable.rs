@@ -134,7 +134,7 @@ impl VariableReference {
     pub(crate) fn resolve_late_bound(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<LateBoundValue> {
+    ) -> ExecutionResult<Spanned<LateBoundValue>> {
         interpreter.resolve(self, RequestedOwnership::LateBound)
     }
 

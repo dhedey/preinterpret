@@ -1,5 +1,26 @@
 use super::*;
 
+/// Trait for types that can be evaluated to produce a value with span information.
+///
+/// Types implementing this trait provide `evaluate()` which returns the raw value,
+/// and get a default `evaluate_spanned()` implementation that wraps the result with the type's span.
+pub(crate) trait Evaluate: HasSpanRange {
+    fn evaluate(
+        &self,
+        interpreter: &mut Interpreter,
+        ownership: RequestedOwnership,
+    ) -> ExecutionResult<RequestedValue>;
+
+    fn evaluate_spanned(
+        &self,
+        interpreter: &mut Interpreter,
+        ownership: RequestedOwnership,
+    ) -> ExecutionResult<Spanned<RequestedValue>> {
+        let value = self.evaluate(interpreter, ownership)?;
+        Ok(Spanned(value, self.span_range()))
+    }
+}
+
 pub(in crate::expressions) struct ExpressionEvaluator<'a> {
     nodes: &'a Arena<ExpressionNodeId, ExpressionNode>,
     stack: EvaluationStack,
@@ -18,7 +39,7 @@ impl<'a> ExpressionEvaluator<'a> {
         root: ExpressionNodeId,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
-    ) -> ExecutionResult<RequestedValue> {
+    ) -> ExecutionResult<Spanned<RequestedValue>> {
         let mut next_action = NextActionInner::ReadNodeAsValue(root, ownership);
 
         loop {
@@ -86,13 +107,13 @@ impl EvaluationStack {
 
 pub(super) enum StepResult {
     Continue(NextAction),
-    Return(RequestedValue),
+    Return(Spanned<RequestedValue>),
 }
 
 pub(super) struct NextAction(NextActionInner);
 
 impl NextAction {
-    fn return_requested(value: RequestedValue) -> Self {
+    fn return_requested(value: Spanned<RequestedValue>) -> Self {
         NextActionInner::HandleReturnedValue(value).into()
     }
 }
@@ -105,7 +126,7 @@ enum NextActionInner {
     // (similar to patterns but for existing values/reassignments)
     // let a = ["x", "y"]; let b; [a[1], .. b] = [1, 2, 3, 4]
     ReadNodeAsAssignmentTarget(ExpressionNodeId, Value),
-    HandleReturnedValue(RequestedValue),
+    HandleReturnedValue(Spanned<RequestedValue>),
 }
 
 impl From<NextActionInner> for NextAction {
@@ -217,33 +238,36 @@ impl RequestedValue {
     }
 }
 
-impl WithSpanRangeExt for RequestedValue {
-    fn with_span_range(self, span_range: SpanRange) -> Self {
-        match self {
-            RequestedValue::LateBound(late_bound) => {
-                RequestedValue::LateBound(late_bound.with_span_range(span_range))
-            }
-            RequestedValue::Owned(value) => {
-                RequestedValue::Owned(value.with_span_range(span_range))
-            }
-            RequestedValue::Mutable(mutable) => {
-                RequestedValue::Mutable(mutable.with_span_range(span_range))
-            }
-            RequestedValue::Shared(shared) => {
-                RequestedValue::Shared(shared.with_span_range(span_range))
-            }
-            RequestedValue::CopyOnWrite(cow) => {
-                RequestedValue::CopyOnWrite(cow.with_span_range(span_range))
-            }
-            RequestedValue::Assignee(assignee) => {
-                RequestedValue::Assignee(assignee.with_span_range(span_range))
-            }
-            RequestedValue::AssignmentCompletion(assignment_completion) => {
-                RequestedValue::AssignmentCompletion(
-                    assignment_completion.with_span_range(span_range),
-                )
-            }
-        }
+#[allow(unused)]
+impl Spanned<RequestedValue> {
+    #[inline]
+    pub(crate) fn expect_owned(self) -> Spanned<OwnedValue> {
+        self.map(|v| v.expect_owned())
+    }
+
+    #[inline]
+    pub(crate) fn expect_shared(self) -> Spanned<SharedValue> {
+        self.map(|v| v.expect_shared())
+    }
+
+    #[inline]
+    pub(crate) fn expect_assignee(self) -> Spanned<AssigneeValue> {
+        self.map(|v| v.expect_assignee())
+    }
+
+    #[inline]
+    pub(crate) fn expect_late_bound(self) -> Spanned<LateBoundValue> {
+        self.map(|v| v.expect_late_bound())
+    }
+
+    #[inline]
+    pub(crate) fn expect_argument_value(self) -> Spanned<ArgumentValue> {
+        self.map(|v| v.expect_argument_value())
+    }
+
+    #[inline]
+    pub(crate) fn expect_assignment_completion(self) -> Spanned<AssignmentCompletion> {
+        self.map(|v| v.expect_assignment_completion())
     }
 }
 
@@ -260,7 +284,7 @@ impl AnyEvaluationHandler {
         self,
         interpreter: &mut Interpreter,
         stack: &mut EvaluationStack,
-        value: RequestedValue,
+        value: Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         match self {
             AnyEvaluationHandler::Value(handler, ownership) => handler.handle_next(
@@ -369,7 +393,7 @@ pub(super) trait EvaluationFrame: Sized {
     fn handle_next(
         self,
         context: Context<Self::ReturnType>,
-        value: RequestedValue,
+        value: Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction>;
 }
 
@@ -404,7 +428,7 @@ impl<'a> Context<'a, ValueType> {
 
     pub(super) fn evaluate(
         self,
-        f: impl FnOnce(&mut Interpreter, RequestedOwnership) -> ExecutionResult<RequestedValue>,
+        f: impl FnOnce(&mut Interpreter, RequestedOwnership) -> ExecutionResult<Spanned<RequestedValue>>,
     ) -> ExecutionResult<NextAction> {
         let value = f(self.interpreter, self.request)?;
         self.return_not_necessarily_matching_requested(value)
@@ -412,23 +436,26 @@ impl<'a> Context<'a, ValueType> {
 
     pub(super) fn return_late_bound(
         self,
-        late_bound: LateBoundValue,
+        late_bound: Spanned<LateBoundValue>,
     ) -> ExecutionResult<NextAction> {
-        Ok(NextAction::return_requested(
-            self.request.map_from_late_bound(late_bound)?,
-        ))
+        let value = self.request.map_from_late_bound(late_bound)?;
+        Ok(NextAction::return_requested(value))
     }
 
-    pub(super) fn return_argument_value(self, value: ArgumentValue) -> ExecutionResult<NextAction> {
-        Ok(NextAction::return_requested(
-            self.request.map_from_argument(value)?,
-        ))
+    pub(super) fn return_argument_value(
+        self,
+        value: Spanned<ArgumentValue>,
+    ) -> ExecutionResult<NextAction> {
+        let value = self.request.map_from_argument(value)?;
+        Ok(NextAction::return_requested(value))
     }
 
-    pub(super) fn return_returned_value(self, value: ReturnedValue) -> ExecutionResult<NextAction> {
-        Ok(NextAction::return_requested(
-            self.request.map_from_returned(value)?,
-        ))
+    pub(super) fn return_returned_value(
+        self,
+        value: Spanned<ReturnedValue>,
+    ) -> ExecutionResult<NextAction> {
+        let value = self.request.map_from_returned(value)?;
+        Ok(NextAction::return_requested(value))
     }
 
     /// Note: This doesn't assume that the requested ownership matches the value's ownership.
@@ -438,22 +465,20 @@ impl<'a> Context<'a, ValueType> {
     /// See e.g. [`ValuePropertyAccessBuilder`].
     pub(super) fn return_not_necessarily_matching_requested(
         self,
-        value: RequestedValue,
+        value: Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
-        Ok(NextAction::return_requested(
-            self.request.map_from_requested(value)?,
-        ))
+        let value = self.request.map_from_requested(value)?;
+        Ok(NextAction::return_requested(value))
     }
 
-    pub(super) fn return_value(
+    pub(super) fn return_value<T: IsReturnable>(
         self,
-        value: impl IsReturnable,
-        output_span_range: SpanRange,
+        value: Spanned<T>,
     ) -> ExecutionResult<NextAction> {
-        Ok(NextAction::return_requested(
-            self.request
-                .map_from_returned(value.to_returned_value(output_span_range)?)?,
-        ))
+        let value = self
+            .request
+            .map_from_returned(value.try_map(|v| v.to_returned_value())?)?;
+        Ok(NextAction::return_requested(value))
     }
 }
 
@@ -472,8 +497,9 @@ impl RequestedValueType for AssignmentType {
 
 impl<'a> Context<'a, AssignmentType> {
     pub(super) fn return_assignment_completion(self, span_range: SpanRange) -> NextAction {
-        NextActionInner::HandleReturnedValue(RequestedValue::AssignmentCompletion(
-            AssignmentCompletion { span_range },
+        NextActionInner::HandleReturnedValue(Spanned(
+            RequestedValue::AssignmentCompletion(AssignmentCompletion),
+            span_range,
         ))
         .into()
     }

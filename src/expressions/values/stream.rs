@@ -163,28 +163,28 @@ define_interface! {
             // STRING-BASED CONVERSION METHODS
             // ===============================
 
-            [context] fn to_ident(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Ident> {
+            [context] fn to_ident(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Ident> {
                 let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
-            [context] fn to_ident_camel(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_camel(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Ident> {
                 let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident_camel(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
-            [context] fn to_ident_snake(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_snake(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Ident> {
                 let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident_snake(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
-            [context] fn to_ident_upper_snake(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_upper_snake(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Ident> {
                 let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident_upper_snake(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
             // Some literals become Value::UnsupportedLiteral but can still be round-tripped back to a stream
-            [context] fn to_literal(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Value> {
+            [context] fn to_literal(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Value> {
                 let string = this.concat_recursive(&ConcatBehaviour::literal(this.span_range()));
                 let literal = string_interface::methods::to_literal(context, string.as_str().into_spanned_ref(this.span_range()))?;
                 Ok(Value::for_literal(literal).into_value())
@@ -218,7 +218,7 @@ define_interface! {
                 }
             }
 
-            fn assert_eq(this: Shared<StreamValue>, lhs: SpannedAnyRef<Value>, rhs: SpannedAnyRef<Value>, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
+            fn assert_eq(this: Shared<StreamValue>, lhs: Spanned<AnyRef<Value>>, rhs: Spanned<AnyRef<Value>>, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
                 let lhs_value: &Value = &lhs;
                 let rhs_value: &Value = &rhs;
                 match Value::debug_eq(lhs_value, rhs_value) {
@@ -239,21 +239,21 @@ define_interface! {
                 }
             }
 
-            [context] fn reinterpret_as_run(this: Owned<StreamValue>) -> ExecutionResult<OwnedValue> {
+            [context] fn reinterpret_as_run(Spanned(this, span_range): Spanned<Owned<StreamValue>>) -> ExecutionResult<OwnedValue> {
                 let source = this.into_inner().value.into_token_stream();
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(ExpressionBlockContent::parse, ExpressionBlockContent::control_flow_pass)?;
                 let mut inner_interpreter = Interpreter::new(scope_definitions);
-                let return_value = reparsed.evaluate(&mut inner_interpreter, context.output_span_range, RequestedOwnership::owned())?.expect_owned();
+                let return_value = reparsed.evaluate_spanned(&mut inner_interpreter, span_range, RequestedOwnership::owned())?.expect_owned();
                 if !inner_interpreter.complete().is_empty() {
-                    return context.control_flow_err("reinterpret_as_run does not allow non-empty stream output")
+                    return context.control_flow_err("reinterpret_as_run does not allow non-empty emit output")
                 }
-                Ok(return_value)
+                Ok(return_value.0)
             }
 
-            [context] fn reinterpret_as_stream(this: Owned<StreamValue>) -> ExecutionResult<OutputStream> {
+            fn reinterpret_as_stream(Spanned(this, span_range): Spanned<Owned<StreamValue>>) -> ExecutionResult<OutputStream> {
                 let source = this.into_inner().value.into_token_stream();
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(
-                    |input| SourceStream::parse_with_span(input, context.output_span_range.span_from_join_else_start()),
+                    |input| SourceStream::parse_with_span(input, span_range.span_from_join_else_start()),
                     SourceStream::control_flow_pass,
                 )?;
                 let mut inner_interpreter = Interpreter::new(scope_definitions);
@@ -262,14 +262,14 @@ define_interface! {
             }
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_to_value(this: Owned<StreamValue>) -> ExecutionResult<ReturnedValue> {
-                let (this, span_range) = this.deconstruct();
+            [context] fn cast_to_value(Spanned(this, span): Spanned<Owned<StreamValue>>) -> ExecutionResult<ReturnedValue> {
+                let this = this.into_inner();
                 let coerced = this.value.coerce_into_value();
                 if let Value::Stream(_) = &coerced {
-                    return span_range.value_err("The stream could not be coerced into a single value");
+                    return span.value_err("The stream could not be coerced into a single value");
                 }
                 // Re-run the cast operation on the coerced value
-                context.operation.evaluate(coerced.into_owned(span_range))
+                Ok(context.operation.evaluate(Spanned(coerced.into_owned(), span))?.0)
             }
         }
         pub(crate) mod binary_operations {

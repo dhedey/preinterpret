@@ -1,3 +1,4 @@
+#![allow(clippy::type_complexity)]
 use super::*;
 
 pub(in crate::expressions) trait MethodResolver {
@@ -91,56 +92,60 @@ pub(crate) enum MethodInterface {
         argument_ownership: [ArgumentOwnership; 0],
     },
     Arity1 {
-        method: fn(&mut MethodCallContext, ArgumentValue) -> ExecutionResult<ReturnedValue>,
+        method:
+            fn(&mut MethodCallContext, Spanned<ArgumentValue>) -> ExecutionResult<ReturnedValue>,
         argument_ownership: [ArgumentOwnership; 1],
     },
     /// 1 argument, 1 optional argument
     Arity1PlusOptional1 {
         method: fn(
             &mut MethodCallContext,
-            ArgumentValue,
-            Option<ArgumentValue>,
+            Spanned<ArgumentValue>,
+            Option<Spanned<ArgumentValue>>,
         ) -> ExecutionResult<ReturnedValue>,
         argument_ownership: [ArgumentOwnership; 2],
     },
     Arity2 {
         method: fn(
             &mut MethodCallContext,
-            ArgumentValue,
-            ArgumentValue,
+            Spanned<ArgumentValue>,
+            Spanned<ArgumentValue>,
         ) -> ExecutionResult<ReturnedValue>,
         argument_ownership: [ArgumentOwnership; 2],
     },
     Arity2PlusOptional1 {
         method: fn(
             &mut MethodCallContext,
-            ArgumentValue,
-            ArgumentValue,
-            Option<ArgumentValue>,
+            Spanned<ArgumentValue>,
+            Spanned<ArgumentValue>,
+            Option<Spanned<ArgumentValue>>,
         ) -> ExecutionResult<ReturnedValue>,
         argument_ownership: [ArgumentOwnership; 3],
     },
     Arity3 {
         method: fn(
             &mut MethodCallContext,
-            ArgumentValue,
-            ArgumentValue,
-            ArgumentValue,
+            Spanned<ArgumentValue>,
+            Spanned<ArgumentValue>,
+            Spanned<ArgumentValue>,
         ) -> ExecutionResult<ReturnedValue>,
         argument_ownership: [ArgumentOwnership; 3],
     },
     Arity3PlusOptional1 {
         method: fn(
             &mut MethodCallContext,
-            ArgumentValue,
-            ArgumentValue,
-            ArgumentValue,
-            Option<ArgumentValue>,
+            Spanned<ArgumentValue>,
+            Spanned<ArgumentValue>,
+            Spanned<ArgumentValue>,
+            Option<Spanned<ArgumentValue>>,
         ) -> ExecutionResult<ReturnedValue>,
         argument_ownership: [ArgumentOwnership; 4],
     },
     ArityAny {
-        method: fn(&mut MethodCallContext, Vec<ArgumentValue>) -> ExecutionResult<ReturnedValue>,
+        method: fn(
+            &mut MethodCallContext,
+            Vec<Spanned<ArgumentValue>>,
+        ) -> ExecutionResult<ReturnedValue>,
         argument_ownership: Vec<ArgumentOwnership>,
     },
 }
@@ -148,10 +153,10 @@ pub(crate) enum MethodInterface {
 impl MethodInterface {
     pub(crate) fn execute(
         &self,
-        arguments: Vec<ArgumentValue>,
+        arguments: Vec<Spanned<ArgumentValue>>,
         context: &mut MethodCallContext,
-    ) -> ExecutionResult<ReturnedValue> {
-        match self {
+    ) -> ExecutionResult<Spanned<ReturnedValue>> {
+        let output_value = match self {
             MethodInterface::Arity0 { method, .. } => {
                 if !arguments.is_empty() {
                     return context.output_span_range.type_err("Expected 0 arguments");
@@ -159,18 +164,22 @@ impl MethodInterface {
                 method(context)
             }
             MethodInterface::Arity1 { method, .. } => {
-                match <[ArgumentValue; 1]>::try_from(arguments) {
+                match <[Spanned<ArgumentValue>; 1]>::try_from(arguments) {
                     Ok([a]) => method(context, a),
                     Err(_) => context.output_span_range.type_err("Expected 1 argument"),
                 }
             }
             MethodInterface::Arity1PlusOptional1 { method, .. } => match arguments.len() {
                 1 => {
-                    let [a] = <[ArgumentValue; 1]>::try_from(arguments).ok().unwrap();
+                    let [a] = <[Spanned<ArgumentValue>; 1]>::try_from(arguments)
+                        .ok()
+                        .unwrap();
                     method(context, a, None)
                 }
                 2 => {
-                    let [a, b] = <[ArgumentValue; 2]>::try_from(arguments).ok().unwrap();
+                    let [a, b] = <[Spanned<ArgumentValue>; 2]>::try_from(arguments)
+                        .ok()
+                        .unwrap();
                     method(context, a, Some(b))
                 }
                 _ => context
@@ -178,18 +187,22 @@ impl MethodInterface {
                     .type_err("Expected 1 or 2 arguments"),
             },
             MethodInterface::Arity2 { method, .. } => {
-                match <[ArgumentValue; 2]>::try_from(arguments) {
+                match <[Spanned<ArgumentValue>; 2]>::try_from(arguments) {
                     Ok([a, b]) => method(context, a, b),
                     Err(_) => context.output_span_range.type_err("Expected 2 arguments"),
                 }
             }
             MethodInterface::Arity2PlusOptional1 { method, .. } => match arguments.len() {
                 2 => {
-                    let [a, b] = <[ArgumentValue; 2]>::try_from(arguments).ok().unwrap();
+                    let [a, b] = <[Spanned<ArgumentValue>; 2]>::try_from(arguments)
+                        .ok()
+                        .unwrap();
                     method(context, a, b, None)
                 }
                 3 => {
-                    let [a, b, c] = <[ArgumentValue; 3]>::try_from(arguments).ok().unwrap();
+                    let [a, b, c] = <[Spanned<ArgumentValue>; 3]>::try_from(arguments)
+                        .ok()
+                        .unwrap();
                     method(context, a, b, Some(c))
                 }
                 _ => context
@@ -197,18 +210,22 @@ impl MethodInterface {
                     .type_err("Expected 2 or 3 arguments"),
             },
             MethodInterface::Arity3 { method, .. } => {
-                match <[ArgumentValue; 3]>::try_from(arguments) {
+                match <[Spanned<ArgumentValue>; 3]>::try_from(arguments) {
                     Ok([a, b, c]) => method(context, a, b, c),
                     Err(_) => context.output_span_range.type_err("Expected 3 arguments"),
                 }
             }
             MethodInterface::Arity3PlusOptional1 { method, .. } => match arguments.len() {
                 3 => {
-                    let [a, b, c] = <[ArgumentValue; 3]>::try_from(arguments).ok().unwrap();
+                    let [a, b, c] = <[Spanned<ArgumentValue>; 3]>::try_from(arguments)
+                        .ok()
+                        .unwrap();
                     method(context, a, b, c, None)
                 }
                 4 => {
-                    let [a, b, c, d] = <[ArgumentValue; 4]>::try_from(arguments).ok().unwrap();
+                    let [a, b, c, d] = <[Spanned<ArgumentValue>; 4]>::try_from(arguments)
+                        .ok()
+                        .unwrap();
                     method(context, a, b, c, Some(d))
                 }
                 _ => context
@@ -216,7 +233,8 @@ impl MethodInterface {
                     .type_err("Expected 3 or 4 arguments"),
             },
             MethodInterface::ArityAny { method, .. } => method(context, arguments),
-        }
+        };
+        output_value.map(|v| v.spanned(context.output_span_range))
     }
 
     /// Returns (argument_ownerships, required_argument_count)
@@ -251,24 +269,23 @@ impl MethodInterface {
 }
 
 pub(crate) struct UnaryOperationInterface {
-    pub method: fn(UnaryOperationCallContext, ArgumentValue) -> ExecutionResult<ReturnedValue>,
+    pub method:
+        fn(UnaryOperationCallContext, Spanned<ArgumentValue>) -> ExecutionResult<ReturnedValue>,
     pub argument_ownership: ArgumentOwnership,
 }
 
 impl UnaryOperationInterface {
     pub(crate) fn execute(
         &self,
-        input: ArgumentValue,
+        Spanned(input, input_span): Spanned<ArgumentValue>,
         operation: &UnaryOperation,
-    ) -> ExecutionResult<ReturnedValue> {
-        let output_span_range = operation.output_span_range(input.span_range());
-        (self.method)(
-            UnaryOperationCallContext {
-                operation,
-                output_span_range,
-            },
-            input,
-        )
+    ) -> ExecutionResult<Spanned<ReturnedValue>> {
+        let output_span_range = operation.output_span_range(input_span);
+        Ok((self.method)(
+            UnaryOperationCallContext { operation },
+            Spanned(input, input_span),
+        )?
+        .spanned(output_span_range))
     }
 
     pub(crate) fn argument_ownership(&self) -> ArgumentOwnership {
@@ -279,8 +296,8 @@ impl UnaryOperationInterface {
 pub(crate) struct BinaryOperationInterface {
     pub method: fn(
         BinaryOperationCallContext,
-        ArgumentValue,
-        ArgumentValue,
+        Spanned<ArgumentValue>,
+        Spanned<ArgumentValue>,
     ) -> ExecutionResult<ReturnedValue>,
     pub lhs_ownership: ArgumentOwnership,
     pub rhs_ownership: ArgumentOwnership,
@@ -289,19 +306,17 @@ pub(crate) struct BinaryOperationInterface {
 impl BinaryOperationInterface {
     pub(crate) fn execute(
         &self,
-        lhs: ArgumentValue,
-        rhs: ArgumentValue,
+        Spanned(lhs, lhs_span): Spanned<ArgumentValue>,
+        Spanned(rhs, rhs_span): Spanned<ArgumentValue>,
         operation: &BinaryOperation,
-    ) -> ExecutionResult<ReturnedValue> {
-        let output_span_range = SpanRange::new_between(lhs.span_range(), rhs.span_range());
-        (self.method)(
-            BinaryOperationCallContext {
-                operation,
-                output_span_range,
-            },
-            lhs,
-            rhs,
-        )
+    ) -> ExecutionResult<Spanned<ReturnedValue>> {
+        let output_span_range = SpanRange::new_between(lhs_span, rhs_span);
+        Ok((self.method)(
+            BinaryOperationCallContext { operation },
+            Spanned(lhs, lhs_span),
+            Spanned(rhs, rhs_span),
+        )?
+        .spanned(output_span_range))
     }
 
     pub(crate) fn lhs_ownership(&self) -> ArgumentOwnership {

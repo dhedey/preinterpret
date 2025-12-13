@@ -48,61 +48,59 @@ impl ArgumentValue {
             _ => panic!("expect_shared() called on a non-shared ArgumentValue"),
         }
     }
+}
 
+impl Spanned<ArgumentValue> {
+    #[inline]
+    pub(crate) fn expect_owned(self) -> Spanned<OwnedValue> {
+        self.map(|value| value.expect_owned())
+    }
+
+    #[inline]
+    pub(crate) fn expect_mutable(self) -> Spanned<MutableValue> {
+        self.map(|value| value.expect_mutable())
+    }
+
+    #[inline]
+    pub(crate) fn expect_assignee(self) -> Spanned<AssigneeValue> {
+        self.map(|value| value.expect_assignee())
+    }
+
+    #[inline]
+    pub(crate) fn expect_shared(self) -> Spanned<SharedValue> {
+        self.map(|value| value.expect_shared())
+    }
+}
+
+// Note: ArgumentValue no longer implements HasSpanRange or WithSpanRangeExt
+// since the inner value types no longer carry spans internally.
+// Spans should be tracked separately at a higher level if needed.
+
+impl Spanned<&mut ArgumentValue> {
     /// SAFETY:
     /// * Must be paired with a call to `enable()` before any further use of the value.
     /// * Must not use the value while disabled.
     pub(crate) unsafe fn disable(&mut self) {
-        match self {
+        match &mut self.0 {
             ArgumentValue::Owned(_) => {}
-            ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write.disable(),
-            ArgumentValue::Mutable(mutable) => mutable.disable(),
-            ArgumentValue::Assignee(assignee) => assignee.0.disable(),
-            ArgumentValue::Shared(shared) => shared.disable(),
+            ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write.spanned(self.1).disable(),
+            ArgumentValue::Mutable(mutable) => mutable.spanned(self.1).disable(),
+            ArgumentValue::Assignee(assignee) => (&mut assignee.0).spanned(self.1).disable(),
+            ArgumentValue::Shared(shared) => shared.spanned(self.1).disable(),
         }
     }
 
     /// SAFETY:
     /// * Must only be used after a call to `disable()`.
+    ///
+    /// Returns an ownership error if re-enabling fails (e.g., due to conflicting borrows).
     pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
-        match self {
+        match &mut self.0 {
             ArgumentValue::Owned(_) => Ok(()),
-            ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write.enable(),
-            ArgumentValue::Mutable(mutable) => mutable.enable(),
-            ArgumentValue::Assignee(assignee) => assignee.0.enable(),
-            ArgumentValue::Shared(shared) => shared.enable(),
-        }
-    }
-}
-
-impl HasSpanRange for ArgumentValue {
-    fn span_range(&self) -> SpanRange {
-        match self {
-            ArgumentValue::Owned(owned) => owned.span_range(),
-            ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write.span_range(),
-            ArgumentValue::Mutable(mutable) => mutable.span_range(),
-            ArgumentValue::Assignee(assignee) => assignee.span_range(),
-            ArgumentValue::Shared(shared) => shared.span_range(),
-        }
-    }
-}
-
-impl WithSpanRangeExt for ArgumentValue {
-    fn with_span_range(self, span_range: SpanRange) -> Self {
-        match self {
-            ArgumentValue::Owned(value) => ArgumentValue::Owned(value.with_span_range(span_range)),
-            ArgumentValue::Mutable(reference) => {
-                ArgumentValue::Mutable(reference.with_span_range(span_range))
-            }
-            ArgumentValue::Assignee(assignee) => {
-                ArgumentValue::Assignee(assignee.with_span_range(span_range))
-            }
-            ArgumentValue::Shared(shared) => {
-                ArgumentValue::Shared(shared.with_span_range(span_range))
-            }
-            ArgumentValue::CopyOnWrite(copy_on_write) => {
-                ArgumentValue::CopyOnWrite(copy_on_write.with_span_range(span_range))
-            }
+            ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write.spanned(self.1).enable(),
+            ArgumentValue::Mutable(mutable) => mutable.spanned(self.1).enable(),
+            ArgumentValue::Assignee(assignee) => (&mut assignee.0).spanned(self.1).enable(),
+            ArgumentValue::Shared(shared) => shared.spanned(self.1).enable(),
         }
     }
 }
@@ -112,6 +110,12 @@ impl Deref for ArgumentValue {
 
     fn deref(&self) -> &Self::Target {
         self.as_ref()
+    }
+}
+
+impl AsMut<Self> for ArgumentValue {
+    fn as_mut(&mut self) -> &mut Self {
+        self
     }
 }
 
@@ -164,62 +168,69 @@ impl RequestedOwnership {
         }
     }
 
-    pub(crate) fn map_none(self, span_range: SpanRange) -> ExecutionResult<RequestedValue> {
-        self.map_from_owned(().into_owned_value(span_range))
+    pub(crate) fn map_none(self, span: SpanRange) -> ExecutionResult<Spanned<RequestedValue>> {
+        self.map_from_owned(Spanned(().into_owned_value(), span))
     }
 
     pub(crate) fn map_from_late_bound(
         &self,
-        late_bound: LateBoundValue,
-    ) -> ExecutionResult<RequestedValue> {
-        Ok(match self {
-            RequestedOwnership::LateBound => RequestedValue::LateBound(late_bound),
-            RequestedOwnership::Concrete(_) => {
-                panic!("Returning a late-bound reference when concrete ownership was requested")
-            }
-        })
+        Spanned(late_bound, span): Spanned<LateBoundValue>,
+    ) -> ExecutionResult<Spanned<RequestedValue>> {
+        Ok(Spanned(
+            match self {
+                RequestedOwnership::LateBound => RequestedValue::LateBound(late_bound),
+                RequestedOwnership::Concrete(_) => {
+                    panic!("Returning a late-bound reference when concrete ownership was requested")
+                }
+            },
+            span,
+        ))
     }
 
     pub(crate) fn map_from_argument(
         &self,
-        value: ArgumentValue,
-    ) -> ExecutionResult<RequestedValue> {
+        Spanned(value, span): Spanned<ArgumentValue>,
+    ) -> ExecutionResult<Spanned<RequestedValue>> {
         match value {
-            ArgumentValue::Owned(owned) => self.map_from_owned(owned),
-            ArgumentValue::Mutable(mutable) => self.map_from_mutable(mutable),
-            ArgumentValue::Assignee(assignee) => self.map_from_assignee(assignee),
-            ArgumentValue::Shared(shared) => self.map_from_shared(shared),
-            ArgumentValue::CopyOnWrite(copy_on_write) => self.map_from_copy_on_write(copy_on_write),
+            ArgumentValue::Owned(owned) => self.map_from_owned(Spanned(owned, span)),
+            ArgumentValue::Mutable(mutable) => self.map_from_mutable(Spanned(mutable, span)),
+            ArgumentValue::Assignee(assignee) => self.map_from_assignee(Spanned(assignee, span)),
+            ArgumentValue::Shared(shared) => self.map_from_shared(Spanned(shared, span)),
+            ArgumentValue::CopyOnWrite(copy_on_write) => {
+                self.map_from_copy_on_write(Spanned(copy_on_write, span))
+            }
         }
     }
 
     pub(crate) fn map_from_returned(
         &self,
-        value: ReturnedValue,
-    ) -> ExecutionResult<RequestedValue> {
+        Spanned(value, span): Spanned<ReturnedValue>,
+    ) -> ExecutionResult<Spanned<RequestedValue>> {
         match value {
-            ReturnedValue::Owned(owned) => self.map_from_owned(owned),
-            ReturnedValue::Mutable(mutable) => self.map_from_mutable(mutable),
-            ReturnedValue::Shared(shared) => self.map_from_shared(shared),
-            ReturnedValue::CopyOnWrite(copy_on_write) => self.map_from_copy_on_write(copy_on_write),
+            ReturnedValue::Owned(owned) => self.map_from_owned(Spanned(owned, span)),
+            ReturnedValue::Mutable(mutable) => self.map_from_mutable(Spanned(mutable, span)),
+            ReturnedValue::Shared(shared) => self.map_from_shared(Spanned(shared, span)),
+            ReturnedValue::CopyOnWrite(copy_on_write) => {
+                self.map_from_copy_on_write(Spanned(copy_on_write, span))
+            }
         }
     }
 
     /// This ensures the requested value's type aligns with the requested ownership.
     pub(crate) fn map_from_requested(
         &self,
-        requested: RequestedValue,
-    ) -> ExecutionResult<RequestedValue> {
+        Spanned(requested, span): Spanned<RequestedValue>,
+    ) -> ExecutionResult<Spanned<RequestedValue>> {
         match requested {
-            RequestedValue::Owned(owned) => self.map_from_owned(owned),
-            RequestedValue::Shared(shared) => self.map_from_shared(shared),
-            RequestedValue::Mutable(mutable) => self.map_from_mutable(mutable),
-            RequestedValue::Assignee(assignee) => self.map_from_assignee(assignee),
+            RequestedValue::Owned(owned) => self.map_from_owned(Spanned(owned, span)),
+            RequestedValue::Shared(shared) => self.map_from_shared(Spanned(shared, span)),
+            RequestedValue::Mutable(mutable) => self.map_from_mutable(Spanned(mutable, span)),
+            RequestedValue::Assignee(assignee) => self.map_from_assignee(Spanned(assignee, span)),
             RequestedValue::LateBound(late_bound_value) => {
-                self.map_from_late_bound(late_bound_value)
+                self.map_from_late_bound(Spanned(late_bound_value, span))
             }
             RequestedValue::CopyOnWrite(copy_on_write) => {
-                self.map_from_copy_on_write(copy_on_write)
+                self.map_from_copy_on_write(Spanned(copy_on_write, span))
             }
             RequestedValue::AssignmentCompletion { .. } => {
                 panic!("Returning a non-value item from a value context")
@@ -227,71 +238,92 @@ impl RequestedOwnership {
         }
     }
 
-    pub(crate) fn map_from_owned(&self, value: OwnedValue) -> ExecutionResult<RequestedValue> {
-        match self {
-            RequestedOwnership::LateBound => Ok(RequestedValue::LateBound(LateBoundValue::Owned(
-                LateBoundOwnedValue {
-                    owned: value,
-                    is_from_last_use: false,
-                },
-            ))),
-            RequestedOwnership::Concrete(requested) => requested
-                .map_from_owned(value)
-                .map(Self::item_from_argument),
-        }
+    pub(crate) fn map_from_owned(
+        &self,
+        Spanned(value, span): Spanned<OwnedValue>,
+    ) -> ExecutionResult<Spanned<RequestedValue>> {
+        Ok(Spanned(
+            match self {
+                RequestedOwnership::LateBound => {
+                    RequestedValue::LateBound(LateBoundValue::Owned(LateBoundOwnedValue {
+                        owned: value,
+                        is_from_last_use: false,
+                    }))
+                }
+                RequestedOwnership::Concrete(requested) => {
+                    Self::item_from_argument(requested.map_from_owned(Spanned(value, span))?)
+                }
+            },
+            span,
+        ))
     }
 
     pub(crate) fn map_from_copy_on_write(
         &self,
-        cow: CopyOnWriteValue,
-    ) -> ExecutionResult<RequestedValue> {
-        match self {
-            RequestedOwnership::LateBound => {
-                Ok(RequestedValue::LateBound(LateBoundValue::CopyOnWrite(cow)))
-            }
-            RequestedOwnership::Concrete(requested) => requested
-                .map_from_copy_on_write(cow)
-                .map(Self::item_from_argument),
-        }
+        Spanned(cow, span): Spanned<CopyOnWriteValue>,
+    ) -> ExecutionResult<Spanned<RequestedValue>> {
+        Ok(Spanned(
+            match self {
+                RequestedOwnership::LateBound => {
+                    RequestedValue::LateBound(LateBoundValue::CopyOnWrite(cow))
+                }
+                RequestedOwnership::Concrete(requested) => {
+                    Self::item_from_argument(requested.map_from_copy_on_write(Spanned(cow, span))?)
+                }
+            },
+            span,
+        ))
     }
 
     pub(crate) fn map_from_mutable(
         &self,
-        mutable: MutableValue,
-    ) -> ExecutionResult<RequestedValue> {
-        match self {
-            RequestedOwnership::LateBound => {
-                Ok(RequestedValue::LateBound(LateBoundValue::Mutable(mutable)))
-            }
-            RequestedOwnership::Concrete(requested) => requested
-                .map_from_mutable(mutable)
-                .map(Self::item_from_argument),
-        }
+        Spanned(mutable, span): Spanned<MutableValue>,
+    ) -> ExecutionResult<Spanned<RequestedValue>> {
+        Ok(Spanned(
+            match self {
+                RequestedOwnership::LateBound => {
+                    RequestedValue::LateBound(LateBoundValue::Mutable(mutable))
+                }
+                RequestedOwnership::Concrete(requested) => {
+                    Self::item_from_argument(requested.map_from_mutable(Spanned(mutable, span))?)
+                }
+            },
+            span,
+        ))
     }
 
     pub(crate) fn map_from_assignee(
         &self,
-        assignee: AssigneeValue,
-    ) -> ExecutionResult<RequestedValue> {
-        match self {
-            RequestedOwnership::LateBound => Ok(RequestedValue::LateBound(
-                LateBoundValue::Mutable(assignee.0),
-            )),
-            RequestedOwnership::Concrete(requested) => requested
-                .map_from_assignee(assignee)
-                .map(Self::item_from_argument),
-        }
+        Spanned(assignee, span): Spanned<AssigneeValue>,
+    ) -> ExecutionResult<Spanned<RequestedValue>> {
+        Ok(Spanned(
+            match self {
+                RequestedOwnership::LateBound => {
+                    RequestedValue::LateBound(LateBoundValue::Mutable(assignee.0))
+                }
+                RequestedOwnership::Concrete(requested) => {
+                    Self::item_from_argument(requested.map_from_assignee(Spanned(assignee, span))?)
+                }
+            },
+            span,
+        ))
     }
 
-    pub(crate) fn map_from_shared(&self, shared: SharedValue) -> ExecutionResult<RequestedValue> {
-        match self {
-            RequestedOwnership::LateBound => Ok(RequestedValue::LateBound(
-                LateBoundValue::CopyOnWrite(CopyOnWrite::shared_in_place_of_shared(shared)),
-            )),
-            RequestedOwnership::Concrete(requested) => requested
-                .map_from_shared(shared)
-                .map(Self::item_from_argument),
-        }
+    pub(crate) fn map_from_shared(
+        &self,
+        Spanned(shared, span): Spanned<SharedValue>,
+    ) -> ExecutionResult<Spanned<RequestedValue>> {
+        Ok(Spanned(
+            match self {
+                RequestedOwnership::LateBound => RequestedValue::LateBound(
+                    LateBoundValue::CopyOnWrite(CopyOnWrite::shared_in_place_of_shared(shared)),
+                ),
+                RequestedOwnership::Concrete(requested) => {
+                    Self::item_from_argument(requested.map_from_shared(Spanned(shared, span))?)
+                }
+            },
+            span,
+        ))
     }
 
     fn item_from_argument(value: ArgumentValue) -> RequestedValue {
@@ -351,18 +383,21 @@ pub(crate) enum ArgumentOwnership {
 impl ArgumentOwnership {
     pub(crate) fn map_from_late_bound(
         &self,
-        late_bound: LateBoundValue,
+        Spanned(late_bound, span): Spanned<LateBoundValue>,
     ) -> ExecutionResult<ArgumentValue> {
         match late_bound {
-            LateBoundValue::Owned(owned) => {
-                self.map_from_owned_with_is_last_use(owned.owned, owned.is_from_last_use)
-            }
+            LateBoundValue::Owned(owned) => self.map_from_owned_with_is_last_use(
+                Spanned(owned.owned, span),
+                owned.is_from_last_use,
+            ),
             LateBoundValue::CopyOnWrite(copy_on_write) => {
-                self.map_from_copy_on_write(copy_on_write)
+                self.map_from_copy_on_write(Spanned(copy_on_write, span))
             }
-            LateBoundValue::Mutable(mutable) => self.map_from_mutable_inner(mutable, true),
+            LateBoundValue::Mutable(mutable) => {
+                self.map_from_mutable_inner(Spanned(mutable, span), true)
+            }
             LateBoundValue::Shared(late_bound_shared) => self
-                .map_from_shared_with_error_reason(late_bound_shared.shared, |_| {
+                .map_from_shared_with_error_reason(Spanned(late_bound_shared.shared, span), |_| {
                     ExecutionInterrupt::ownership_error(late_bound_shared.reason_not_mutable)
                 }),
         }
@@ -370,27 +405,27 @@ impl ArgumentOwnership {
 
     pub(crate) fn map_from_copy_on_write(
         &self,
-        copy_on_write: CopyOnWriteValue,
+        Spanned(copy_on_write, span): Spanned<CopyOnWriteValue>,
     ) -> ExecutionResult<ArgumentValue> {
         match self {
             ArgumentOwnership::Owned => Ok(ArgumentValue::Owned(
-                copy_on_write.into_owned_transparently()?,
+                copy_on_write.into_owned_transparently(span)?,
             )),
             ArgumentOwnership::Shared => Ok(ArgumentValue::Shared(copy_on_write.into_shared())),
             ArgumentOwnership::Mutable => {
                 if copy_on_write.acts_as_shared_reference() {
-                    copy_on_write.ownership_err("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone()` to get a mutable reference to a cloned value.")
+                    span.ownership_err("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone()` to get a mutable reference to a cloned value.")
                 } else {
                     Ok(ArgumentValue::Mutable(Mutable::new_from_owned(
-                        copy_on_write.into_owned_transparently()?,
+                        copy_on_write.into_owned_transparently(span)?,
                     )))
                 }
             }
             ArgumentOwnership::Assignee { .. } => {
                 if copy_on_write.acts_as_shared_reference() {
-                    copy_on_write.ownership_err("A shared reference cannot be assigned to.")
+                    span.ownership_err("A shared reference cannot be assigned to.")
                 } else {
-                    copy_on_write.ownership_err("An owned value cannot be assigned to.")
+                    span.ownership_err("An owned value cannot be assigned to.")
                 }
             }
             ArgumentOwnership::CopyOnWrite | ArgumentOwnership::AsIs => {
@@ -399,53 +434,63 @@ impl ArgumentOwnership {
         }
     }
 
-    pub(crate) fn map_from_shared(&self, shared: SharedValue) -> ExecutionResult<ArgumentValue> {
+    pub(crate) fn map_from_shared(
+        &self,
+        shared: Spanned<SharedValue>,
+    ) -> ExecutionResult<ArgumentValue> {
         self.map_from_shared_with_error_reason(
             shared,
-            |shared| shared.ownership_error("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone().as_mut()` to get a mutable reference."),
+            |span| span.ownership_error("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone().as_mut()` to get a mutable reference."),
         )
     }
 
     fn map_from_shared_with_error_reason(
         &self,
-        shared: SharedValue,
-        mutable_error: impl FnOnce(SharedValue) -> ExecutionInterrupt,
+        Spanned(shared, span): Spanned<SharedValue>,
+        mutable_error: impl FnOnce(SpanRange) -> ExecutionInterrupt,
     ) -> ExecutionResult<ArgumentValue> {
         match self {
-            ArgumentOwnership::Owned => Ok(ArgumentValue::Owned(shared.transparent_clone()?)),
+            ArgumentOwnership::Owned => Ok(ArgumentValue::Owned(
+                Spanned(shared, span).transparent_clone()?,
+            )),
             ArgumentOwnership::CopyOnWrite => Ok(ArgumentValue::CopyOnWrite(
                 CopyOnWrite::shared_in_place_of_shared(shared),
             )),
-            ArgumentOwnership::Assignee { .. } => Err(mutable_error(shared)),
-            ArgumentOwnership::Mutable => Err(mutable_error(shared)),
+            ArgumentOwnership::Assignee { .. } => Err(mutable_error(span)),
+            ArgumentOwnership::Mutable => Err(mutable_error(span)),
             ArgumentOwnership::Shared | ArgumentOwnership::AsIs => {
                 Ok(ArgumentValue::Shared(shared))
             }
         }
     }
 
-    pub(crate) fn map_from_mutable(&self, mutable: MutableValue) -> ExecutionResult<ArgumentValue> {
-        self.map_from_mutable_inner(mutable, false)
+    pub(crate) fn map_from_mutable(
+        &self,
+        spanned_mutable: Spanned<MutableValue>,
+    ) -> ExecutionResult<ArgumentValue> {
+        self.map_from_mutable_inner(spanned_mutable, false)
     }
 
     pub(crate) fn map_from_assignee(
         &self,
-        assignee: AssigneeValue,
+        Spanned(assignee, span): Spanned<AssigneeValue>,
     ) -> ExecutionResult<ArgumentValue> {
-        self.map_from_mutable_inner(assignee.0, false)
+        self.map_from_mutable_inner(Spanned(assignee.0, span), false)
     }
 
     fn map_from_mutable_inner(
         &self,
-        mutable: MutableValue,
+        Spanned(mutable, span): Spanned<MutableValue>,
         is_late_bound: bool,
     ) -> ExecutionResult<ArgumentValue> {
         match self {
             ArgumentOwnership::Owned => {
                 if is_late_bound {
-                    Ok(ArgumentValue::Owned(mutable.transparent_clone()?))
+                    Ok(ArgumentValue::Owned(
+                        Spanned(mutable, span).transparent_clone()?,
+                    ))
                 } else {
-                    mutable.ownership_err("An owned value is required, but a mutable reference was received. This indicates a possible bug. If this was intended, use `.clone()` to get an owned value.")
+                    span.ownership_err("An owned value is required, but a mutable reference was received. This indicates a possible bug. If this was intended, use `.clone()` to get an owned value.")
                 }
             }
             ArgumentOwnership::CopyOnWrite => Ok(ArgumentValue::CopyOnWrite(
@@ -459,13 +504,16 @@ impl ArgumentOwnership {
         }
     }
 
-    pub(crate) fn map_from_owned(&self, owned: OwnedValue) -> ExecutionResult<ArgumentValue> {
+    pub(crate) fn map_from_owned(
+        &self,
+        owned: Spanned<OwnedValue>,
+    ) -> ExecutionResult<ArgumentValue> {
         self.map_from_owned_with_is_last_use(owned, false)
     }
 
     fn map_from_owned_with_is_last_use(
         &self,
-        owned: OwnedValue,
+        Spanned(owned, span): Spanned<OwnedValue>,
         is_from_last_use: bool,
     ) -> ExecutionResult<ArgumentValue> {
         match self {
@@ -478,9 +526,9 @@ impl ArgumentOwnership {
             }
             ArgumentOwnership::Assignee { .. } => {
                 if is_from_last_use {
-                    owned.ownership_err("The final usage of a variable cannot be assigned to. You can use `let _ = ..` to discard a value.")
+                    span.ownership_err("The final usage of a variable cannot be assigned to. You can use `let _ = ..` to discard a value.")
                 } else {
-                    owned.ownership_err("An owned value cannot be assigned to.")
+                    span.ownership_err("An owned value cannot be assigned to.")
                 }
             }
             ArgumentOwnership::Shared => Ok(ArgumentValue::Shared(Shared::new_from_owned(owned))),
@@ -506,7 +554,7 @@ impl AnyValueFrame {
     pub(super) fn handle_next(
         self,
         context: Context<ValueType>,
-        value: RequestedValue,
+        value: Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         match self {
             AnyValueFrame::Group(frame) => frame.handle_next(context, value),
@@ -550,10 +598,11 @@ impl EvaluationFrame for GroupBuilder {
     fn handle_next(
         self,
         context: ValueContext,
-        value: RequestedValue,
+        Spanned(value, _span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         let inner = value.expect_owned();
-        context.return_value(inner, self.span.span_range())
+        // Use the grouped expression's span, not the inner expression's span
+        context.return_value(Spanned(inner, self.span.span_range()))
     }
 }
 
@@ -585,7 +634,9 @@ impl ArrayBuilder {
                 .cloned()
             {
                 Some(next) => context.request_owned(self, next),
-                None => context.return_value(self.evaluated_items, self.span.span_range())?,
+                None => {
+                    context.return_value(Spanned(self.evaluated_items, self.span.span_range()))?
+                }
             },
         )
     }
@@ -601,7 +652,7 @@ impl EvaluationFrame for ArrayBuilder {
     fn handle_next(
         mut self,
         context: ValueContext,
-        value: RequestedValue,
+        Spanned(value, _span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         let value = value.expect_owned();
         self.evaluated_items.push(value.into_inner());
@@ -664,7 +715,9 @@ impl ObjectBuilder {
                     self.pending = Some(PendingEntryPath::OnIndexKeyBranch { access, value_node });
                     context.request_owned(self, index)
                 }
-                None => context.return_value(self.evaluated_entries, self.span.span_range())?,
+                None => {
+                    context.return_value(Spanned(self.evaluated_entries, self.span.span_range()))?
+                }
             },
         )
     }
@@ -680,13 +733,13 @@ impl EvaluationFrame for Box<ObjectBuilder> {
     fn handle_next(
         mut self,
         context: ValueContext,
-        value: RequestedValue,
+        Spanned(value, span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         let pending = self.pending.take();
         Ok(match pending {
             Some(PendingEntryPath::OnIndexKeyBranch { access, value_node }) => {
                 let value = value.expect_owned();
-                let key: String = value.resolve_as("An object key")?;
+                let key: String = Spanned(value, span).resolve_as("An object key")?;
                 if self.evaluated_entries.contains_key(&key) {
                     return access.syntax_err(format!("The key {} has already been set", key));
                 }
@@ -735,21 +788,23 @@ impl EvaluationFrame for UnaryOperationBuilder {
     fn handle_next(
         self,
         context: ValueContext,
-        value: RequestedValue,
+        operand: Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
-        let late_bound_value = value.expect_late_bound();
-        let operand_kind = late_bound_value.kind();
+        let operand = operand.expect_late_bound();
+        let operand_kind = operand.kind();
 
         // Try method resolution first
         if let Some(interface) = operand_kind.resolve_unary_operation(&self.operation) {
-            let resolved_value = late_bound_value.resolve(interface.argument_ownership())?;
-            let result = interface.execute(resolved_value, &self.operation)?;
+            let operand_span = operand.span_range();
+            let resolved_value = operand.resolve(interface.argument_ownership())?;
+            let result =
+                interface.execute(Spanned(resolved_value, operand_span), &self.operation)?;
             return context.return_returned_value(result);
         }
         self.operation.type_err(format!(
             "The {} operator is not supported for {} values",
             self.operation.symbolic_description(),
-            late_bound_value.value_type(),
+            operand.value_type(),
         ))
     }
 }
@@ -764,7 +819,7 @@ enum BinaryPath {
         right: ExpressionNodeId,
     },
     OnRightBranch {
-        left: ArgumentValue,
+        left: Spanned<ArgumentValue>,
         interface: BinaryOperationInterface,
     },
 }
@@ -795,35 +850,35 @@ impl EvaluationFrame for BinaryOperationBuilder {
     fn handle_next(
         mut self,
         context: ValueContext,
-        value: RequestedValue,
+        value: Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
             BinaryPath::OnLeftBranch { right } => {
-                let left_late_bound = value.expect_late_bound();
+                let Spanned(left, left_span) = value.expect_late_bound();
 
                 // Check for lazy evaluation first (short-circuit operators)
-                let left_value = left_late_bound
-                    .as_ref()
-                    .spanned(left_late_bound.span_range());
+                // Use operator span for type errors since the error is about the operation's requirements
+                let left_value = Spanned(left.as_value(), left_span);
                 if let Some(result) = self.operation.lazy_evaluate(left_value)? {
-                    context.return_returned_value(ReturnedValue::Owned(result))?
+                    // For short-circuit, the result span is just the left operand's span
+                    // (the right operand was never evaluated)
+                    context
+                        .return_returned_value(Spanned(ReturnedValue::Owned(result), left_span))?
                 } else {
                     // Try method resolution based on left operand's kind and resolve left operand immediately
-                    let interface = left_late_bound
-                        .as_ref()
-                        .kind()
-                        .resolve_binary_operation(&self.operation);
+                    let interface = left.kind().resolve_binary_operation(&self.operation);
 
                     match interface {
                         Some(interface) => {
                             let rhs_ownership = interface.rhs_ownership();
-                            let mut left = interface
+                            let left = interface
                                 .lhs_ownership()
-                                .map_from_late_bound(left_late_bound)?;
+                                .map_from_late_bound(Spanned(left, left_span))?;
+                            let mut left = Spanned(left, left_span);
 
                             unsafe {
                                 // SAFETY: We re-enable it below and don't use it while disabled
-                                left.disable();
+                                left.to_mut().disable();
                             }
 
                             self.state = BinaryPath::OnRightBranch { left, interface };
@@ -833,7 +888,7 @@ impl EvaluationFrame for BinaryOperationBuilder {
                             return self.operation.type_err(format!(
                                 "The {} operator is not supported for {} operand",
                                 self.operation.symbolic_description(),
-                                left_late_bound.articled_value_type(),
+                                left.articled_value_type(),
                             ));
                         }
                     }
@@ -852,9 +907,10 @@ impl EvaluationFrame for BinaryOperationBuilder {
                 //   If left and right clash, then the error message should be on the right, not the left
                 unsafe {
                     // SAFETY: We disabled left above
-                    right.disable();
-                    left.enable()?;
-                    right.enable()?;
+                    right.to_mut().disable();
+                    // SAFETY: enable() may fail if left and right reference the same variable
+                    left.to_mut().enable()?;
+                    right.to_mut().enable()?;
                 }
                 let result = interface.execute(left, right, &self.operation)?;
                 return context.return_returned_value(result);
@@ -894,15 +950,17 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
     fn handle_next(
         self,
         context: ValueContext,
-        value: RequestedValue,
+        Spanned(value, source_span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         let auto_create = context.requested_ownership().requests_auto_create();
         let mapped = value.expect_any_value_and_map(
-            |shared| shared.resolve_property(&self.access),
-            |mutable| mutable.resolve_property(&self.access, auto_create),
-            |owned| owned.resolve_property(&self.access),
+            |shared| shared.try_map(|value| value.property_ref(&self.access)),
+            |mutable| mutable.try_map(|value| value.property_mut(&self.access, auto_create)),
+            |owned| owned.try_map(|value| value.into_property(&self.access)),
         )?;
-        context.return_not_necessarily_matching_requested(mapped)
+        // The result span covers source through property
+        let result_span = SpanRange::new_between(source_span, self.access.span_range());
+        context.return_not_necessarily_matching_requested(Spanned(mapped, result_span))
     }
 }
 
@@ -913,7 +971,7 @@ pub(super) struct ValueIndexAccessBuilder {
 
 enum IndexPath {
     OnSourceBranch { index: ExpressionNodeId },
-    OnIndexBranch { source: RequestedValue },
+    OnIndexBranch { source: Spanned<RequestedValue> },
 }
 
 impl ValueIndexAccessBuilder {
@@ -947,29 +1005,34 @@ impl EvaluationFrame for ValueIndexAccessBuilder {
     fn handle_next(
         mut self,
         context: ValueContext,
-        value: RequestedValue,
+        Spanned(value, span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
             IndexPath::OnSourceBranch { index } => {
-                self.state = IndexPath::OnIndexBranch { source: value };
+                self.state = IndexPath::OnIndexBranch {
+                    source: Spanned(value, span),
+                };
                 // This is a value, so we are _accessing it_ and can't create values
                 // (that's only possible in a place!) - therefore we don't need an owned key,
                 // and can use &index for reading values from our array
                 context.request_shared(self, index)
             }
-            IndexPath::OnIndexBranch { source } => {
+            IndexPath::OnIndexBranch {
+                source: Spanned(source, source_span),
+            } => {
                 let index = value.expect_shared();
+                let index = index.as_ref().spanned(span);
 
                 let auto_create = context.requested_ownership().requests_auto_create();
-                context.return_not_necessarily_matching_requested(
-                    source.expect_any_value_and_map(
-                        |shared| shared.resolve_indexed(self.access, index.as_spanned()),
-                        |mutable| {
-                            mutable.resolve_indexed(self.access, index.as_spanned(), auto_create)
-                        },
-                        |owned| owned.resolve_indexed(self.access, index.as_spanned()),
-                    )?,
-                )?
+                let result = source.expect_any_value_and_map(
+                    |shared| shared.try_map(|value| value.index_ref(self.access, index)),
+                    |mutable| {
+                        mutable.try_map(|value| value.index_mut(self.access, index, auto_create))
+                    },
+                    |owned| owned.try_map(|value| value.into_indexed(self.access, index)),
+                )?;
+                let result_span = SpanRange::new_between(source_span, self.access.span_range());
+                context.return_not_necessarily_matching_requested(Spanned(result, result_span))?
             }
         })
     }
@@ -996,7 +1059,7 @@ impl RangeBuilder {
             (None, None) => match range_limits {
                 syn::RangeLimits::HalfOpen(token) => {
                     let inner = RangeValueInner::RangeFull { token: *token };
-                    context.return_value(inner, token.span_range())?
+                    context.return_value(Spanned(inner, token.span_range()))?
                 }
                 syn::RangeLimits::Closed(_) => {
                     unreachable!(
@@ -1032,7 +1095,7 @@ impl EvaluationFrame for RangeBuilder {
     fn handle_next(
         mut self,
         context: ValueContext,
-        value: RequestedValue,
+        Spanned(value, _span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         // TODO[range-refactor]: Change to not always clone the value
         let value = value.expect_owned().into_inner();
@@ -1046,7 +1109,7 @@ impl EvaluationFrame for RangeBuilder {
                     start_inclusive: value,
                     token,
                 };
-                context.return_value(inner, token.span_range())?
+                context.return_value(Spanned(inner, token.span_range()))?
             }
             (RangePath::OnLeftBranch { right: None }, syn::RangeLimits::Closed(_)) => {
                 unreachable!("A closed range should have been given a right in continue_range(..)")
@@ -1057,7 +1120,7 @@ impl EvaluationFrame for RangeBuilder {
                     token,
                     end_exclusive: value,
                 };
-                context.return_value(inner, token.span_range())?
+                context.return_value(Spanned(inner, token.span_range()))?
             }
             (RangePath::OnRightBranch { left: Some(left) }, syn::RangeLimits::Closed(token)) => {
                 let inner = RangeValueInner::RangeInclusive {
@@ -1065,21 +1128,21 @@ impl EvaluationFrame for RangeBuilder {
                     token,
                     end_inclusive: value,
                 };
-                context.return_value(inner, token.span_range())?
+                context.return_value(Spanned(inner, token.span_range()))?
             }
             (RangePath::OnRightBranch { left: None }, syn::RangeLimits::HalfOpen(token)) => {
                 let inner = RangeValueInner::RangeTo {
                     token,
                     end_exclusive: value,
                 };
-                context.return_value(inner, token.span_range())?
+                context.return_value(Spanned(inner, token.span_range()))?
             }
             (RangePath::OnRightBranch { left: None }, syn::RangeLimits::Closed(token)) => {
                 let inner = RangeValueInner::RangeToInclusive {
                     token,
                     end_inclusive: value,
                 };
-                context.return_value(inner, token.span_range())?
+                context.return_value(Spanned(inner, token.span_range()))?
             }
         })
     }
@@ -1121,7 +1184,7 @@ impl EvaluationFrame for AssignmentBuilder {
     fn handle_next(
         mut self,
         context: ValueContext,
-        value: RequestedValue,
+        Spanned(value, span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
             AssignmentPath::OnValueBranch { assignee } => {
@@ -1130,8 +1193,8 @@ impl EvaluationFrame for AssignmentBuilder {
                 context.request_assignment(self, assignee, value)
             }
             AssignmentPath::OnAwaitingAssignment => {
-                let AssignmentCompletion { span_range } = value.expect_assignment_completion();
-                context.return_value((), span_range)?
+                let AssignmentCompletion = value.expect_assignment_completion();
+                context.return_value(Spanned((), span))?
             }
         })
     }
@@ -1147,7 +1210,7 @@ enum MethodCallPath {
     CallerPath,
     ArgumentsPath {
         method: MethodInterface,
-        disabled_evaluated_arguments_including_caller: Vec<ArgumentValue>,
+        disabled_evaluated_arguments_including_caller: Vec<Spanned<ArgumentValue>>,
     },
 }
 
@@ -1184,14 +1247,14 @@ impl EvaluationFrame for MethodCallBuilder {
     fn handle_next(
         mut self,
         mut context: ValueContext,
-        value: RequestedValue,
+        Spanned(value, span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         // Handle expected item based on current state
         match self.state {
             MethodCallPath::CallerPath => {
+                let caller_span = span;
                 let caller = value.expect_late_bound();
                 let method = caller
-                    .as_ref()
                     .kind()
                     .resolve_method(self.method.method.to_string().as_str());
                 let method = match method {
@@ -1200,7 +1263,7 @@ impl EvaluationFrame for MethodCallBuilder {
                         return self.method.method.type_err(format!(
                             "The method {} does not exist on {}",
                             self.method.method,
-                            caller.as_ref().articled_value_type(),
+                            caller.articled_value_type(),
                         ))
                     }
                 };
@@ -1232,7 +1295,9 @@ impl EvaluationFrame for MethodCallBuilder {
                         non_caller_arguments,
                     ));
                 }
-                let mut caller = argument_ownerships[0].map_from_late_bound(caller)?;
+                let caller =
+                    argument_ownerships[0].map_from_late_bound(Spanned(caller, caller_span))?;
+                let mut caller = Spanned(caller, caller_span);
 
                 // We skip 1 to ignore the caller
                 let non_self_argument_ownerships: iter::Skip<
@@ -1253,7 +1318,7 @@ impl EvaluationFrame for MethodCallBuilder {
                             Vec::with_capacity(1 + self.unevaluated_parameters_stack.len());
                         unsafe {
                             // SAFETY: We enable it again before use
-                            caller.disable();
+                            caller.to_mut().disable();
                         }
                         params.push(caller);
                         params
@@ -1265,10 +1330,11 @@ impl EvaluationFrame for MethodCallBuilder {
                 ref mut disabled_evaluated_arguments_including_caller,
                 ..
             } => {
-                let mut argument = value.expect_argument_value();
+                let argument = value.expect_argument_value();
+                let mut argument = Spanned(argument, span);
                 unsafe {
                     // SAFETY: We enable it again before use
-                    argument.disable();
+                    argument.to_mut().disable();
                 }
                 disabled_evaluated_arguments_including_caller.push(argument);
             }
@@ -1292,7 +1358,8 @@ impl EvaluationFrame for MethodCallBuilder {
                         unsafe {
                             for argument in &mut arguments {
                                 // SAFETY: We disabled them above
-                                argument.enable()?;
+                                // NOTE: enable() may fail if arguments conflict (e.g., same variable)
+                                argument.to_mut().enable()?;
                             }
                         }
                         (arguments, method)

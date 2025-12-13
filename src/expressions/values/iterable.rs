@@ -118,18 +118,18 @@ impl IsArgument for IterableRef<'static> {
     type ValueType = IterableTypeData;
     const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Shared;
 
-    fn from_argument(value: ArgumentValue) -> ExecutionResult<Self> {
-        Ok(match value.kind() {
-            ValueKind::Iterator => IterableRef::Iterator(IsArgument::from_argument(value)?),
-            ValueKind::Array => IterableRef::Array(IsArgument::from_argument(value)?),
-            ValueKind::Stream => IterableRef::Stream(IsArgument::from_argument(value)?),
-            ValueKind::Range(_) => IterableRef::Range(IsArgument::from_argument(value)?),
-            ValueKind::Object => IterableRef::Object(IsArgument::from_argument(value)?),
-            ValueKind::String => IterableRef::String(IsArgument::from_argument(value)?),
+    fn from_argument(argument: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+        Ok(match argument.kind() {
+            ValueKind::Iterator => IterableRef::Iterator(IsArgument::from_argument(argument)?),
+            ValueKind::Array => IterableRef::Array(IsArgument::from_argument(argument)?),
+            ValueKind::Stream => IterableRef::Stream(IsArgument::from_argument(argument)?),
+            ValueKind::Range(_) => IterableRef::Range(IsArgument::from_argument(argument)?),
+            ValueKind::Object => IterableRef::Object(IsArgument::from_argument(argument)?),
+            ValueKind::String => IterableRef::String(IsArgument::from_argument(argument)?),
             _ => {
-                return value.type_err(
+                return argument.type_err(
                     "Expected iterable (iterator, array, object, stream, range or string)",
-                )
+                );
             }
         })
     }
@@ -137,11 +137,12 @@ impl IsArgument for IterableRef<'static> {
 
 impl Spanned<IterableRef<'_>> {
     pub(crate) fn len(&self) -> ExecutionResult<usize> {
-        match &self.value {
-            IterableRef::Iterator(iterator) => iterator.len(self.span_range),
+        let Spanned(value, span) = self;
+        match value {
+            IterableRef::Iterator(iterator) => iterator.len(*span),
             IterableRef::Array(value) => Ok(value.items.len()),
             IterableRef::Stream(value) => Ok(value.len()),
-            IterableRef::Range(value) => value.len(self.span_range),
+            IterableRef::Range(value) => value.len(*span),
             IterableRef::Object(value) => Ok(value.entries.len()),
             // NB - this is different to string.len() which counts bytes
             IterableRef::String(value) => Ok(value.chars().count()),

@@ -65,16 +65,13 @@ impl ObjectValue {
         auto_create: bool,
     ) -> ExecutionResult<&mut Value> {
         let index: Spanned<&str> = index.resolve_as("An object key")?;
-        self.mut_entry(index.map(|s, _| s.to_string()), auto_create)
+        self.mut_entry(index.map(|s| s.to_string()), auto_create)
     }
 
     pub(super) fn index_ref(&self, index: Spanned<&Value>) -> ExecutionResult<&Value> {
         let key: Spanned<&str> = index.resolve_as("An object key")?;
-        let entry = self.entries.get(key.value).ok_or_else(|| {
-            key.value_error(format!(
-                "The object does not have a field named `{}`",
-                key.value
-            ))
+        let entry = self.entries.get(*key).ok_or_else(|| {
+            key.value_error(format!("The object does not have a field named `{}`", *key))
         })?;
         Ok(&entry.value)
     }
@@ -100,11 +97,10 @@ impl ObjectValue {
 
     fn mut_entry(
         &mut self,
-        key: Spanned<String>,
+        Spanned(key, key_span): Spanned<String>,
         auto_create: bool,
     ) -> ExecutionResult<&mut Value> {
         use std::collections::btree_map::*;
-        let (key, key_span) = key.deconstruct();
         Ok(match self.entries.entry(key) {
             Entry::Occupied(entry) => &mut entry.into_mut().value,
             Entry::Vacant(entry) => {

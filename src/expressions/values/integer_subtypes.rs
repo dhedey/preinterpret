@@ -13,12 +13,12 @@ macro_rules! impl_int_operations {
                 }
                 pub(crate) mod unary_operations {
                     $(
-                        fn neg(this: Owned<$integer_type>) -> ExecutionResult<$integer_type> {
+                        fn neg(Spanned(value, span): Spanned<Owned<$integer_type>>) -> ExecutionResult<$integer_type> {
                             ignore_all!($signed); // Include only for signed types
-                            let (value, span_range) = this.deconstruct();
+                            let value = value.into_inner();
                             match value.checked_neg() {
                                 Some(negated) => Ok(negated),
-                                None => span_range.value_err("Negating this value would overflow"),
+                                None => span.value_err("Negating this value would overflow"),
                             }
                         }
                     )?

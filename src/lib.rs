@@ -481,7 +481,6 @@ mod extensions;
 mod internal_prelude;
 mod interpretation;
 mod misc;
-mod sandbox;
 
 use internal_prelude::*;
 
@@ -534,12 +533,9 @@ fn preinterpret_run_internal(input: TokenStream) -> SynResult<TokenStream> {
 
     let mut interpreter = Interpreter::new(parse_state);
 
+    let entry_span = Span::call_site().span_range();
     let returned_stream = content
-        .evaluate(
-            &mut interpreter,
-            Span::call_site().into(),
-            RequestedOwnership::owned(),
-        )
+        .evaluate_spanned(&mut interpreter, entry_span, RequestedOwnership::owned())
         .and_then(|x| x.expect_owned().into_stream())
         .convert_to_final_result()?;
 
@@ -660,12 +656,9 @@ mod benchmarking {
 
             let output = context.time("evaluation", move || -> SynResult<OutputStream> {
                 let mut interpreter = Interpreter::new(scopes);
+                let entry_span = Span::call_site().span_range();
                 let returned_stream = parsed
-                    .evaluate(
-                        &mut interpreter,
-                        Span::call_site().into(),
-                        RequestedOwnership::owned(),
-                    )
+                    .evaluate_spanned(&mut interpreter, entry_span, RequestedOwnership::owned())
                     .and_then(|x| x.expect_owned().into_stream())
                     .convert_to_final_result()?;
 

@@ -1,14 +1,6 @@
 use super::*;
 
-pub(crate) struct AssignmentCompletion {
-    pub(super) span_range: SpanRange,
-}
-
-impl WithSpanRangeExt for AssignmentCompletion {
-    fn with_span_range(self, span_range: SpanRange) -> Self {
-        Self { span_range }
-    }
-}
+pub(crate) struct AssignmentCompletion;
 
 /// Handlers which return an AssignmentCompletion
 pub(super) enum AnyAssignmentFrame {
@@ -22,7 +14,7 @@ impl AnyAssignmentFrame {
     pub(super) fn handle_next(
         self,
         context: Context<AssignmentType>,
-        value: RequestedValue,
+        value: Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         match self {
             Self::Assignee(frame) => frame.handle_next(context, value),
@@ -60,13 +52,12 @@ impl EvaluationFrame for AssigneeAssigner {
     fn handle_next(
         self,
         context: AssignmentContext,
-        value: RequestedValue,
+        Spanned(value, span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         let mut assignee = value.expect_assignee();
         let value = self.value;
-        let span_range = assignee.span_range();
         assignee.set(value);
-        Ok(context.return_assignment_completion(span_range))
+        Ok(context.return_assignment_completion(span))
     }
 }
 
@@ -93,10 +84,10 @@ impl EvaluationFrame for GroupedAssigner {
     fn handle_next(
         self,
         context: AssignmentContext,
-        value: RequestedValue,
+        Spanned(value, span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
-        let AssignmentCompletion { span_range } = value.expect_assignment_completion();
-        Ok(context.return_assignment_completion(span_range))
+        let AssignmentCompletion = value.expect_assignment_completion();
+        Ok(context.return_assignment_completion(span))
     }
 }
 
@@ -125,8 +116,7 @@ impl ArrayBasedAssigner {
         value: Value,
     ) -> ExecutionResult<Self> {
         let span_range = assignee_span.span_range();
-        let array: ArrayValue = value
-            .into_owned(span_range)
+        let array: ArrayValue = Spanned(value.into_owned(), span_range)
             .resolve_as("The value destructured as an array")?;
         let mut has_seen_dot_dot = false;
         let mut prefix_assignees = Vec::new();
@@ -213,9 +203,9 @@ impl EvaluationFrame for ArrayBasedAssigner {
     fn handle_next(
         self,
         context: AssignmentContext,
-        value: RequestedValue,
+        Spanned(value, _span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
-        let AssignmentCompletion { .. } = value.expect_assignment_completion();
+        let AssignmentCompletion = value.expect_assignment_completion();
         Ok(self.handle_next_subassignment(context))
     }
 }
@@ -253,8 +243,7 @@ impl ObjectBasedAssigner {
         value: Value,
     ) -> ExecutionResult<Self> {
         let span_range = assignee_span.span_range();
-        let object: ObjectValue = value
-            .into_owned(span_range)
+        let object: ObjectValue = Spanned(value.into_owned(), span_range)
             .resolve_as("The value destructured as an object")?;
 
         Ok(Self {
@@ -327,7 +316,7 @@ impl EvaluationFrame for Box<ObjectBasedAssigner> {
     fn handle_next(
         self,
         context: AssignmentContext,
-        value: RequestedValue,
+        Spanned(value, _span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         match self.state {
             ObjectAssignmentState::ResolvingIndex {
@@ -338,7 +327,7 @@ impl EvaluationFrame for Box<ObjectBasedAssigner> {
                 self.handle_index_value(context, access, index_place.as_ref(), assignee_node)
             }
             ObjectAssignmentState::WaitingForSubassignment => {
-                let AssignmentCompletion { .. } = value.expect_assignment_completion();
+                let AssignmentCompletion = value.expect_assignment_completion();
                 self.handle_next_subassignment(context)
             }
         }

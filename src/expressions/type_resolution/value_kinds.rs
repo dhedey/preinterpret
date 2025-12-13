@@ -479,13 +479,17 @@ impl ParseSource for TypeProperty {
 }
 
 impl TypeProperty {
-    pub(crate) fn resolve(&self, ownership: RequestedOwnership) -> ExecutionResult<RequestedValue> {
+    pub(crate) fn resolve_spanned(
+        &self,
+        ownership: RequestedOwnership,
+    ) -> ExecutionResult<Spanned<RequestedValue>> {
         let resolver = self.source_type.kind.method_resolver();
         // TODO[performance] - lazily initialize properties as Shared
         let resolved_property = resolver.resolve_type_property(&self.property.to_string());
         match resolved_property {
-            Some(value) => ownership.map_from_shared(SharedValue::new_from_owned(
-                value.into_owned(self.span_range()),
+            Some(value) => ownership.map_from_shared(Spanned(
+                SharedValue::new_from_owned(value.into_owned_value()),
+                self.span_range(),
             )),
             None => self.type_err(format!(
                 "Type '{}' has no property named '{}'",

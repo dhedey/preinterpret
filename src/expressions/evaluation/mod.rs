@@ -7,5 +7,6 @@ mod value_frames;
 use super::*;
 use assignment_frames::*;
 pub(super) use control_flow_analysis::*;
-pub(crate) use evaluator::*;
+pub(super) use evaluator::*;
+pub(crate) use evaluator::{Evaluate, RequestedValue};
 pub(crate) use value_frames::*;

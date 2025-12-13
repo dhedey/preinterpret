@@ -49,23 +49,9 @@ impl UntypedInteger {
         })
     }
 
-    pub(crate) fn into_kind(
-        self,
-        kind: IntegerKind,
-        span_range: SpanRange,
-    ) -> ExecutionResult<IntegerValue> {
-        self.try_into_kind(kind).ok_or_else(|| {
-            span_range.value_error(format!(
-                "The integer value {} does not fit into {}",
-                self.0,
-                kind.articled_display_name()
-            ))
-        })
-    }
-
     pub(crate) fn paired_operation(
         self,
-        rhs: Owned<IntegerValue>,
+        rhs: Spanned<Owned<IntegerValue>>,
         context: BinaryOperationCallContext,
         perform_fn: fn(FallbackInteger, FallbackInteger) -> Option<FallbackInteger>,
     ) -> ExecutionResult<IntegerValue> {
@@ -79,7 +65,7 @@ impl UntypedInteger {
 
     pub(crate) fn paired_comparison(
         self,
-        rhs: Owned<IntegerValue>,
+        rhs: Spanned<Owned<IntegerValue>>,
         compare_fn: fn(FallbackInteger, FallbackInteger) -> bool,
     ) -> ExecutionResult<bool> {
         let lhs = self.0;
@@ -113,6 +99,19 @@ impl UntypedInteger {
     }
 }
 
+impl Spanned<UntypedInteger> {
+    pub(crate) fn into_kind(self, kind: IntegerKind) -> ExecutionResult<IntegerValue> {
+        let Spanned(value, span_range) = self;
+        value.try_into_kind(kind).ok_or_else(|| {
+            span_range.value_error(format!(
+                "The integer value {} does not fit into {}",
+                value.0,
+                kind.articled_display_name()
+            ))
+        })
+    }
+}
+
 impl HasValueKind for UntypedInteger {
     type SpecificKind = IntegerKind;
 
@@ -134,12 +133,12 @@ define_interface! {
         pub(crate) mod methods {
         }
         pub(crate) mod unary_operations {
-            fn neg(this: Owned<UntypedInteger>) -> ExecutionResult<UntypedInteger> {
-                let (value, span_range) = this.deconstruct();
+            fn neg(Spanned(value, span): Spanned<Owned<UntypedInteger>>) -> ExecutionResult<UntypedInteger> {
+                let value = value.into_inner();
                 let input = value.into_fallback();
                 match input.checked_neg() {
                     Some(negated) => Ok(UntypedInteger::from_fallback(negated)),
-                    None => span_range.value_err("Negating this value would overflow in i128 space"),
+                    None => span.value_err("Negating this value would overflow in i128 space"),
                 }
             }
 

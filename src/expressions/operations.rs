@@ -82,7 +82,10 @@ impl UnaryOperation {
         operand_span_range
     }
 
-    pub(super) fn evaluate<T: IntoValue>(&self, input: Owned<T>) -> ExecutionResult<ReturnedValue> {
+    pub(super) fn evaluate<T: IntoValue>(
+        &self,
+        Spanned(input, input_span): Spanned<Owned<T>>,
+    ) -> ExecutionResult<Spanned<ReturnedValue>> {
         let input = input.into_owned_value();
         let method = input.kind().resolve_unary_operation(self).ok_or_else(|| {
             self.type_error(format!(
@@ -91,8 +94,10 @@ impl UnaryOperation {
                 input.articled_value_type(),
             ))
         })?;
-        let input = method.argument_ownership.map_from_owned(input)?;
-        method.execute(input, self)
+        let input = method
+            .argument_ownership
+            .map_from_owned(Spanned(input, input_span))?;
+        method.execute(Spanned(input, input_span), self)
     }
 }
 
@@ -292,16 +297,16 @@ impl BinaryOperation {
         match self {
             BinaryOperation::LogicalAnd { .. } => {
                 let bool: Spanned<&bool> = left.resolve_as("The left operand to &&")?;
-                if !*bool.value {
-                    Ok(Some(bool.value.into_owned_value(bool.span_range)))
+                if !**bool {
+                    Ok(Some((*bool).into_owned_value()))
                 } else {
                     Ok(None)
                 }
             }
             BinaryOperation::LogicalOr { .. } => {
                 let bool: Spanned<&bool> = left.resolve_as("The left operand to ||")?;
-                if *bool.value {
-                    Ok(Some(bool.value.into_owned_value(bool.span_range)))
+                if **bool {
+                    Ok(Some((*bool).into_owned_value()))
                 } else {
                     Ok(None)
                 }
@@ -313,16 +318,20 @@ impl BinaryOperation {
     #[allow(unused)]
     pub(crate) fn evaluate<L: IntoValue, R: IntoValue>(
         &self,
-        left: Owned<L>,
-        right: Owned<R>,
-    ) -> ExecutionResult<ReturnedValue> {
+        Spanned(left, left_span): Spanned<Owned<L>>,
+        Spanned(right, right_span): Spanned<Owned<R>>,
+    ) -> ExecutionResult<Spanned<ReturnedValue>> {
         let left = left.into_owned_value();
         let right = right.into_owned_value();
         match left.kind().resolve_binary_operation(self) {
             Some(interface) => {
-                let left = interface.lhs_ownership.map_from_owned(left)?;
-                let right = interface.rhs_ownership.map_from_owned(right)?;
-                interface.execute(left, right, self)
+                let left = interface
+                    .lhs_ownership
+                    .map_from_owned(Spanned(left, left_span))?;
+                let right = interface
+                    .rhs_ownership
+                    .map_from_owned(Spanned(right, right_span))?;
+                interface.execute(Spanned(left, left_span), Spanned(right, right_span), self)
             }
             None => self.type_err(format!(
                 "The {} operator is not supported for {} operand",

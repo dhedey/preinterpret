@@ -72,7 +72,8 @@ impl Interpret for EmbeddedStatements {
     fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         let value = self
             .content
-            .evaluate(interpreter, self.span_range(), RequestedOwnership::shared())?
+            .evaluate_spanned(interpreter, self.span_range(), RequestedOwnership::shared())?
+            .0
             .expect_shared();
         value.output_to(
             Grouping::Flattened,
@@ -84,8 +85,8 @@ impl Interpret for EmbeddedStatements {
 impl EmbeddedStatements {
     pub(crate) fn consume(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         self.content
-            .evaluate(interpreter, self.span_range(), RequestedOwnership::owned())?
-            .expect_owned()
+            .evaluate_spanned(interpreter, self.span_range(), RequestedOwnership::owned())?
+            .map(|v| v.expect_owned())
             .into_statement_result()
     }
 }
@@ -145,19 +146,19 @@ impl HasSpan for ExpressionBlock {
     }
 }
 
-impl ExpressionBlock {
-    pub(crate) fn evaluate(
+impl Evaluate for ExpressionBlock {
+    fn evaluate(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
     ) -> ExecutionResult<RequestedValue> {
         let scope = interpreter.current_scope_id();
-        let output_result = self.scoped_block.evaluate(interpreter, ownership);
 
         // If this block has a label, catch breaks targeting this specific catch location
         let output = if let Some((_, catch_location)) = &self.label {
+            let output_result = self.scoped_block.evaluate_spanned(interpreter, ownership);
             match interpreter.catch_control_flow(output_result, *catch_location, scope)? {
-                ExecutionOutcome::Value(value) => value,
+                ExecutionOutcome::Value(Spanned(value, _)) => value,
                 ExecutionOutcome::ControlFlow(ControlFlowInterrupt::Break(break_interrupt)) => {
                     break_interrupt.into_value(self.span_range(), ownership)?
                 }
@@ -167,7 +168,7 @@ impl ExpressionBlock {
             }
         } else {
             // No label, just evaluate the block normally
-            output_result?
+            self.scoped_block.evaluate(interpreter, ownership)?
         };
         Ok(output)
     }
@@ -205,8 +206,8 @@ impl HasSpan for ScopedBlock {
     }
 }
 
-impl ScopedBlock {
-    pub(crate) fn evaluate(
+impl Evaluate for ScopedBlock {
+    fn evaluate(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
@@ -214,17 +215,20 @@ impl ScopedBlock {
         interpreter.enter_scope(self.scope);
         let output = self
             .content
-            .evaluate(interpreter, self.span().into(), ownership)?;
+            .evaluate_spanned(interpreter, self.span().into(), ownership)?;
         interpreter.exit_scope(self.scope);
-        Ok(output)
+        Ok(output.0)
     }
+}
 
+impl ScopedBlock {
     pub(crate) fn evaluate_owned(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<OwnedValue> {
+    ) -> ExecutionResult<Spanned<OwnedValue>> {
+        let span_range = self.span().span_range();
         self.evaluate(interpreter, RequestedOwnership::owned())
-            .map(|x| x.expect_owned())
+            .map(|value| Spanned(value.expect_owned(), span_range))
     }
 }
 
@@ -251,22 +255,26 @@ impl HasSpan for UnscopedBlock {
     }
 }
 
-impl UnscopedBlock {
-    pub(crate) fn evaluate(
+impl Evaluate for UnscopedBlock {
+    fn evaluate(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
     ) -> ExecutionResult<RequestedValue> {
         self.content
-            .evaluate(interpreter, self.span().into(), ownership)
+            .evaluate_spanned(interpreter, self.span().into(), ownership)
+            .map(|v| v.0)
     }
+}
 
+impl UnscopedBlock {
     pub(crate) fn evaluate_owned(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<OwnedValue> {
+    ) -> ExecutionResult<Spanned<OwnedValue>> {
+        let span_range = self.span().span_range();
         self.evaluate(interpreter, RequestedOwnership::owned())
-            .map(|x| x.expect_owned())
+            .map(|value| Spanned(value.expect_owned(), span_range))
     }
 }
 
@@ -309,21 +317,21 @@ impl ParseSource for ExpressionBlockContent {
 }
 
 impl ExpressionBlockContent {
-    pub(crate) fn evaluate(
+    pub(crate) fn evaluate_spanned(
         &self,
         interpreter: &mut Interpreter,
-        output_span_range: SpanRange,
+        output_span: SpanRange,
         ownership: RequestedOwnership,
-    ) -> ExecutionResult<RequestedValue> {
+    ) -> ExecutionResult<Spanned<RequestedValue>> {
         for (i, (statement, semicolon)) in self.statements.iter().enumerate() {
             let is_last = i == self.statements.len() - 1;
             if is_last && semicolon.is_none() {
                 let value = statement.evaluate_as_returning_expression(interpreter, ownership)?;
-                return Ok(value.with_span_range(output_span_range));
+                return Ok(value.spanned(output_span));
             } else {
                 statement.evaluate_as_statement(interpreter)?;
             }
         }
-        ownership.map_from_owned(Value::None.into_owned(output_span_range))
+        ownership.map_from_owned(Spanned(Owned(Value::None), output_span))
     }
 }

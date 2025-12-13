@@ -21,7 +21,7 @@ impl Debug for BooleanValue {
 
 impl BooleanValue {
     pub(crate) fn for_litbool(lit: &syn::LitBool) -> Owned<Self> {
-        Self { value: lit.value }.into_owned(lit.span)
+        Self { value: lit.value }.into_owned()
     }
 
     pub(super) fn to_ident(&self, span: Span) -> Ident {

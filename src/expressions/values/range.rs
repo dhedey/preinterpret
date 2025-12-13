@@ -74,27 +74,27 @@ impl Spanned<&RangeValue> {
         self,
         array: &ArrayValue,
     ) -> ExecutionResult<std::ops::Range<usize>> {
-        let (inner, span_range) = self.deconstruct();
+        let Spanned(value, span_range) = self;
         let mut start = 0;
         let mut end = array.items.len();
-        Ok(match &*inner.inner {
+        Ok(match &*value.inner {
             RangeValueInner::Range {
                 start_inclusive,
                 end_exclusive,
                 ..
             } => {
-                start = array.resolve_valid_index(start_inclusive.spanned(span_range), false)?;
-                end = array.resolve_valid_index(end_exclusive.spanned(span_range), true)?;
+                start = array.resolve_valid_index(Spanned(start_inclusive, span_range), false)?;
+                end = array.resolve_valid_index(Spanned(end_exclusive, span_range), true)?;
                 start..end
             }
             RangeValueInner::RangeFrom {
                 start_inclusive, ..
             } => {
-                start = array.resolve_valid_index(start_inclusive.spanned(span_range), false)?;
+                start = array.resolve_valid_index(Spanned(start_inclusive, span_range), false)?;
                 start..array.items.len()
             }
             RangeValueInner::RangeTo { end_exclusive, .. } => {
-                end = array.resolve_valid_index(end_exclusive.spanned(span_range), true)?;
+                end = array.resolve_valid_index(Spanned(end_exclusive, span_range), true)?;
                 start..end
             }
             RangeValueInner::RangeFull { .. } => start..end,
@@ -103,14 +103,14 @@ impl Spanned<&RangeValue> {
                 end_inclusive,
                 ..
             } => {
-                start = array.resolve_valid_index(start_inclusive.spanned(span_range), false)?;
+                start = array.resolve_valid_index(Spanned(start_inclusive, span_range), false)?;
                 // +1 is safe because it must be < array length.
-                end = array.resolve_valid_index(end_inclusive.spanned(span_range), false)? + 1;
+                end = array.resolve_valid_index(Spanned(end_inclusive, span_range), false)? + 1;
                 start..end
             }
             RangeValueInner::RangeToInclusive { end_inclusive, .. } => {
                 // +1 is safe because it must be < array length.
-                end = array.resolve_valid_index(end_inclusive.spanned(span_range), false)? + 1;
+                end = array.resolve_valid_index(Spanned(end_inclusive, span_range), false)? + 1;
                 start..end
             }
         })
@@ -369,9 +369,9 @@ define_interface! {
         pub(crate) mod methods {
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_via_iterator(this: Owned<RangeValue>) -> ExecutionResult<ReturnedValue> {
-                let this_iterator = this.try_map(|this, _| IteratorValue::new_for_range(this))?;
-                context.operation.evaluate(this_iterator)
+            [context] fn cast_via_iterator(Spanned(this, span): Spanned<Owned<RangeValue>>) -> ExecutionResult<ReturnedValue> {
+                let this_iterator = this.try_map(IteratorValue::new_for_range)?;
+                Ok(context.operation.evaluate(Spanned(this_iterator, span))?.0)
             }
         }
         pub(crate) mod binary_operations {}
@@ -407,7 +407,7 @@ pub(super) enum IterableRangeOf<T> {
 fn resolve_range<T: ResolvableOwned<Value> + ResolvableRange>(
     start: T,
     dots: syn::RangeLimits,
-    end: Option<OwnedValue>,
+    end: Option<Spanned<OwnedValue>>,
 ) -> ExecutionResult<Box<dyn ClonableIterator<Item = Value>>> {
     let definition = match (end, dots) {
         (Some(end), dots) => {
@@ -433,17 +433,18 @@ impl IterableRangeOf<Value> {
         self,
     ) -> ExecutionResult<Box<dyn ClonableIterator<Item = Value>>> {
         let (start, dots, end) = match self {
-            Self::RangeFromTo { start, dots, end } => {
-                (start, dots, Some(end.into_owned(dots.span_range())))
-            }
+            Self::RangeFromTo { start, dots, end } => (
+                start,
+                dots,
+                Some(end.into_owned().spanned(dots.span_range())),
+            ),
             Self::RangeFrom { start, dots } => (start, RangeLimits::HalfOpen(dots), None),
         };
-        let span_range = dots.span_range();
         match start {
             Value::Integer(mut start) => {
                 if let Some(end) = &end {
                     start = IntegerValue::resolve_untyped_to_match_other(
-                        start.into_owned(span_range),
+                        start.into_owned().spanned(dots.span_range()),
                         end,
                     )?;
                 }

@@ -73,7 +73,9 @@ impl Statement {
         ownership: RequestedOwnership,
     ) -> ExecutionResult<RequestedValue> {
         match self {
-            Statement::Expression(expression) => expression.evaluate(interpreter, ownership),
+            Statement::Expression(expression) => {
+                expression.evaluate(interpreter, ownership).map(|v| v.0)
+            }
             Statement::LetStatement(_)
             | Statement::BreakStatement(_)
             | Statement::ContinueStatement(_)
@@ -142,10 +144,7 @@ impl LetStatement {
             assignment,
         } = self;
         let value = match assignment {
-            Some(assignment) => assignment
-                .expression
-                .evaluate_owned(interpreter)?
-                .into_inner(),
+            Some(assignment) => assignment.expression.evaluate_owned(interpreter)?.0 .0,
             None => Value::None,
         };
         pattern.handle_destructure(interpreter, value)?;
@@ -239,7 +238,7 @@ impl BreakStatement {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         let value = if let Some(expr) = &self.value {
-            Some(expr.evaluate_owned(interpreter)?)
+            Some(expr.evaluate_owned(interpreter)?.0)
         } else {
             None
         };
@@ -369,10 +368,10 @@ impl EmitStatement {
         &self,
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
-        let value = self.expression.evaluate_owned(interpreter)?;
+        let Spanned(value, span) = self.expression.evaluate_owned(interpreter)?;
         value.output_to(
             Grouping::Flattened,
-            &mut ToStreamContext::new(interpreter.output(&self.emit)?, value.span_range()),
+            &mut ToStreamContext::new(interpreter.output(&self.emit)?, span),
         )
     }
 }

@@ -34,14 +34,14 @@ impl Expression {
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
-    ) -> ExecutionResult<RequestedValue> {
+    ) -> ExecutionResult<Spanned<RequestedValue>> {
         ExpressionEvaluator::new(&self.nodes).evaluate(self.root, interpreter, ownership)
     }
 
     pub(crate) fn evaluate_owned(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<OwnedValue> {
+    ) -> ExecutionResult<Spanned<OwnedValue>> {
         Ok(self
             .evaluate(interpreter, RequestedOwnership::owned())?
             .expect_owned())
@@ -50,7 +50,7 @@ impl Expression {
     pub(crate) fn evaluate_shared(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<SharedValue> {
+    ) -> ExecutionResult<Spanned<SharedValue>> {
         Ok(self
             .evaluate(interpreter, RequestedOwnership::shared())?
             .expect_shared())
@@ -71,23 +71,23 @@ impl Expression {
         // This must align with is_valid_as_statement_without_semicolon
         match &self.nodes.get(self.root) {
             ExpressionNode::Leaf(Leaf::Block(block)) => block
-                .evaluate(interpreter, RequestedOwnership::owned())?
+                .evaluate_spanned(interpreter, RequestedOwnership::owned())?
                 .expect_owned()
                 .into_statement_result(),
             ExpressionNode::Leaf(Leaf::IfExpression(if_expression)) => if_expression
-                .evaluate(interpreter, RequestedOwnership::owned())?
+                .evaluate_spanned(interpreter, RequestedOwnership::owned())?
                 .expect_owned()
                 .into_statement_result(),
             ExpressionNode::Leaf(Leaf::LoopExpression(loop_expression)) => loop_expression
-                .evaluate(interpreter, RequestedOwnership::owned())?
+                .evaluate_spanned(interpreter, RequestedOwnership::owned())?
                 .expect_owned()
                 .into_statement_result(),
             ExpressionNode::Leaf(Leaf::WhileExpression(while_expression)) => while_expression
-                .evaluate(interpreter, RequestedOwnership::owned())?
+                .evaluate_spanned(interpreter, RequestedOwnership::owned())?
                 .expect_owned()
                 .into_statement_result(),
             ExpressionNode::Leaf(Leaf::ForExpression(for_expression)) => for_expression
-                .evaluate(interpreter, RequestedOwnership::owned())?
+                .evaluate_spanned(interpreter, RequestedOwnership::owned())?
                 .expect_owned()
                 .into_statement_result(),
             _ => self.evaluate_owned(interpreter)?.into_statement_result(),
@@ -150,7 +150,7 @@ pub(super) enum Leaf {
     Variable(VariableReference),
     TypeProperty(TypeProperty),
     Discarded(Token![_]),
-    Value(SharedValue),
+    Value(Spanned<SharedValue>),
     StreamLiteral(StreamLiteral),
     ParseTemplateLiteral(ParseTemplateLiteral),
     IfExpression(Box<IfExpression>),

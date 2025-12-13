@@ -301,7 +301,7 @@ impl<'a, K: IsType, H: IsOwnership> Spanned<Actual<'a, K, H>> {
         self,
         description: &str,
     ) -> ExecutionResult<Actual<'a, U, H>> {
-        let Spanned { value, span_range } = self;
+        let Spanned(value, span_range) = self;
         U::resolve(value, span_range, description)
     }
 }
@@ -655,7 +655,7 @@ fn test_iterable_mapping() {
     let iterator = as_iterable.0.into_iterator().unwrap();
     let collected: Vec<u32> = iterator
         .map(|v| {
-            Owned::new(v, Span::call_site().span_range())
+            Spanned(Owned::new(v), Span::call_site().span_range())
                 .resolve_as("u32")
                 .unwrap()
         })

@@ -97,8 +97,8 @@ impl ParseSource for IfExpression {
     }
 }
 
-impl IfExpression {
-    pub(crate) fn evaluate(
+impl Evaluate for IfExpression {
+    fn evaluate(
         &self,
         interpreter: &mut Interpreter,
         requested_ownership: RequestedOwnership,
@@ -125,7 +125,9 @@ impl IfExpression {
             return else_code.evaluate(interpreter, requested_ownership);
         }
 
-        requested_ownership.map_from_owned(Value::None.into_owned(self.span_range()))
+        requested_ownership
+            .map_from_owned(Spanned(Value::None.into_owned(), self.span_range()))
+            .map(|spanned| spanned.0)
     }
 }
 
@@ -177,8 +179,8 @@ impl ParseSource for WhileExpression {
     }
 }
 
-impl WhileExpression {
-    pub(crate) fn evaluate(
+impl Evaluate for WhileExpression {
+    fn evaluate(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
@@ -213,7 +215,9 @@ impl WhileExpression {
                 }
             }
         }
-        ownership.map_none(self.span_range())
+        ownership
+            .map_none(self.span_range())
+            .map(|spanned| spanned.0)
     }
 }
 
@@ -260,8 +264,8 @@ impl ParseSource for LoopExpression {
     }
 }
 
-impl LoopExpression {
-    pub(crate) fn evaluate(
+impl Evaluate for LoopExpression {
+    fn evaluate(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
@@ -358,8 +362,8 @@ impl ParseSource for ForExpression {
     }
 }
 
-impl ForExpression {
-    pub(crate) fn evaluate(
+impl Evaluate for ForExpression {
+    fn evaluate(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
@@ -400,7 +404,9 @@ impl ForExpression {
             }
             interpreter.exit_scope(self.iteration_scope);
         }
-        ownership.map_none(self.span_range())
+        ownership
+            .map_none(self.span_range())
+            .map(|spanned| spanned.0)
     }
 }
 
@@ -503,8 +509,8 @@ impl ParseSource for AttemptExpression {
     }
 }
 
-impl AttemptExpression {
-    pub(crate) fn evaluate(
+impl Evaluate for AttemptExpression {
+    fn evaluate(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
@@ -541,7 +547,7 @@ impl AttemptExpression {
                     continue;
                 }
             }
-            let output = arm.rhs.evaluate(interpreter, ownership)?;
+            let Spanned(output, _) = arm.rhs.evaluate(interpreter, ownership)?;
             interpreter.exit_scope(arm.arm_scope);
             return Ok(output);
         }
@@ -598,8 +604,8 @@ impl ParseSource for ParseExpression {
     }
 }
 
-impl ParseExpression {
-    pub(crate) fn evaluate(
+impl Evaluate for ParseExpression {
+    fn evaluate(
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,

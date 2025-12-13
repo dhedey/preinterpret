@@ -27,9 +27,11 @@ impl VariableState {
         is_final: bool,
         ownership: RequestedOwnership,
         blocked_from_mutation: Option<MutationBlockReason>,
-    ) -> ExecutionResult<LateBoundValue> {
+    ) -> ExecutionResult<Spanned<LateBoundValue>> {
         const UNITIALIZED_ERR: &str = "Cannot resolve uninitialized variable. This shouldn't be possible, because all variables are set on first use.";
         const FINISHED_ERR: &str = "Cannot resolve finished variable. This shouldn't be possible, because is_final should be marked correctly. If you see this error, please report a bug to preinterpret on github with a reproduction case.";
+
+        let span_range = variable_span.span_range();
 
         // If blocked from mutation, we technically could allow is_final to work and
         // return a fully owned value without observable mutation,
@@ -46,10 +48,13 @@ impl VariableState {
                         ) {
                             return variable_span.control_flow_err("The final usage of a variable cannot be assigned to. You can use `let _ = ..` to discard a value.");
                         }
-                        return Ok(LateBoundValue::Owned(LateBoundOwnedValue {
-                            owned: ref_cell.into_inner().into_owned(variable_span.span_range()),
-                            is_from_last_use: true,
-                        }));
+                        return Ok(Spanned(
+                            LateBoundValue::Owned(LateBoundOwnedValue {
+                                owned: Owned(ref_cell.into_inner()),
+                                is_from_last_use: true,
+                            }),
+                            span_range,
+                        ));
                     }
                     // It's currently referenced, proceed with normal late-bound resolution.
                     // e.g.
@@ -93,21 +98,22 @@ impl VariableState {
                     .map(LateBoundValue::CopyOnWrite),
             },
         };
-        if let Some(mutation_block_reason) = blocked_from_mutation {
+        let late_bound = if let Some(mutation_block_reason) = blocked_from_mutation {
             match resolved {
                 Ok(LateBoundValue::Mutable(mutable)) => {
-                    let reason_not_mutable = mutable
+                    let reason_not_mutable = variable_span
                         .syn_error(mutation_block_reason.error_message("mutate this variable"));
-                    Ok(LateBoundValue::Shared(LateBoundSharedValue {
-                        shared: mutable.into_shared(),
+                    Ok(LateBoundValue::Shared(LateBoundSharedValue::new(
+                        mutable.into_shared(),
                         reason_not_mutable,
-                    }))
+                    )))
                 }
                 x => x,
             }
         } else {
             resolved
-        }
+        }?;
+        Ok(Spanned(late_bound, span_range))
     }
 }
 
@@ -119,21 +125,24 @@ pub(crate) struct VariableBinding {
 
 #[allow(unused)]
 impl VariableBinding {
-    /// Gets the cloned expression value, setting the span range appropriately
+    /// Gets the cloned expression value
     /// This only works if the value can be transparently cloned
     pub(crate) fn into_transparently_cloned(self) -> ExecutionResult<OwnedValue> {
-        self.into_shared()?.transparent_clone()
+        let span_range = self.variable_span.span_range();
+        let shared = self.into_shared()?;
+        let value = shared.as_ref().try_transparent_clone(span_range)?;
+        Ok(Owned(value))
     }
 
-    pub(crate) fn into_mut(self) -> ExecutionResult<MutableValue> {
+    fn into_mut(self) -> ExecutionResult<MutableValue> {
         MutableValue::new_from_variable(self).map_err(ExecutionInterrupt::ownership_error)
     }
 
-    pub(crate) fn into_shared(self) -> ExecutionResult<SharedValue> {
+    fn into_shared(self) -> ExecutionResult<SharedValue> {
         SharedValue::new_from_variable(self).map_err(ExecutionInterrupt::ownership_error)
     }
 
-    pub(crate) fn into_late_bound(self) -> ExecutionResult<LateBoundValue> {
+    fn into_late_bound(self) -> ExecutionResult<LateBoundValue> {
         match MutableValue::new_from_variable(self.clone()) {
             Ok(value) => Ok(LateBoundValue::Mutable(value)),
             Err(reason_not_mutable) => {
@@ -154,15 +163,6 @@ pub(crate) struct LateBoundOwnedValue {
     pub(crate) is_from_last_use: bool,
 }
 
-impl WithSpanRangeExt for LateBoundOwnedValue {
-    fn with_span_range(self, span_range: SpanRange) -> Self {
-        Self {
-            owned: self.owned.with_span_range(span_range),
-            is_from_last_use: self.is_from_last_use,
-        }
-    }
-}
-
 /// A shared value where mutable access failed for a specific reason
 pub(crate) struct LateBoundSharedValue {
     pub(crate) shared: SharedValue,
@@ -174,15 +174,6 @@ impl LateBoundSharedValue {
         Self {
             shared,
             reason_not_mutable,
-        }
-    }
-}
-
-impl WithSpanRangeExt for LateBoundSharedValue {
-    fn with_span_range(self, span_range: SpanRange) -> Self {
-        Self {
-            shared: self.shared.with_span_range(span_range),
-            reason_not_mutable: self.reason_not_mutable,
         }
     }
 }
@@ -208,11 +199,13 @@ pub(crate) enum LateBoundValue {
     Shared(LateBoundSharedValue),
 }
 
-impl LateBoundValue {
+impl Spanned<LateBoundValue> {
     pub(crate) fn resolve(self, ownership: ArgumentOwnership) -> ExecutionResult<ArgumentValue> {
         ownership.map_from_late_bound(self)
     }
+}
 
+impl LateBoundValue {
     pub(crate) fn map_any(
         self,
         map_shared: impl FnOnce(SharedValue) -> ExecutionResult<SharedValue>,
@@ -237,18 +230,8 @@ impl LateBoundValue {
             )),
         })
     }
-}
 
-impl Deref for LateBoundValue {
-    type Target = Value;
-
-    fn deref(&self) -> &Self::Target {
-        self.as_ref()
-    }
-}
-
-impl AsRef<Value> for LateBoundValue {
-    fn as_ref(&self) -> &Value {
+    pub(crate) fn as_value(&self) -> &Value {
         match self {
             LateBoundValue::Owned(owned) => &owned.owned,
             LateBoundValue::CopyOnWrite(cow) => cow.as_ref(),
@@ -258,147 +241,70 @@ impl AsRef<Value> for LateBoundValue {
     }
 }
 
-impl HasSpanRange for LateBoundValue {
-    fn span_range(&self) -> SpanRange {
-        match self {
-            LateBoundValue::Owned(owned) => owned.owned.span_range,
-            LateBoundValue::CopyOnWrite(cow) => cow.span_range(),
-            LateBoundValue::Mutable(mutable) => mutable.span_range,
-            LateBoundValue::Shared(shared) => shared.shared.span_range,
-        }
-    }
-}
+impl Deref for LateBoundValue {
+    type Target = Value;
 
-impl WithSpanRangeExt for LateBoundValue {
-    fn with_span_range(self, span_range: SpanRange) -> Self {
-        match self {
-            LateBoundValue::Owned(owned) => {
-                LateBoundValue::Owned(owned.with_span_range(span_range))
-            }
-            LateBoundValue::CopyOnWrite(cow) => {
-                LateBoundValue::CopyOnWrite(cow.with_span_range(span_range))
-            }
-            LateBoundValue::Mutable(mutable) => {
-                LateBoundValue::Mutable(mutable.with_span_range(span_range))
-            }
-            LateBoundValue::Shared(shared) => {
-                LateBoundValue::Shared(shared.with_span_range(span_range))
-            }
-        }
+    fn deref(&self) -> &Self::Target {
+        self.as_value()
     }
 }
 
 pub(crate) type OwnedValue = Owned<Value>;
 
-/// A binding of an owned value along with a span of the whole access.
+/// A semantic wrapper for floating owned values.
 ///
-/// For example, for `x.y[4]`, this would capture both:
-/// * The owned value
+/// Can be destructured as: `Owned(value): Owned<T>`
+///
+/// If you need span information, wrap with `Spanned<Owned<T>>`. For example, for `x.y[4]`, this would capture both:
+/// * The output owned value
 /// * The lexical span of the tokens `x.y[4]`
-pub(crate) struct Owned<T: 'static> {
-    pub(crate) value: T,
-    /// The span-range of the current binding to the value.
-    pub(crate) span_range: SpanRange,
-}
+pub(crate) struct Owned<T: 'static>(pub(crate) T);
 
 #[allow(unused)]
 impl<T> Owned<T> {
-    pub(crate) fn new(value: T, span_range: SpanRange) -> Self {
-        Self { value, span_range }
-    }
-
-    pub(crate) fn deconstruct(self) -> (T, SpanRange) {
-        (self.value, self.span_range)
+    pub(crate) fn new(value: T) -> Self {
+        Owned(value)
     }
 
     pub(crate) fn into_inner(self) -> T {
-        self.value
+        self.0
     }
 
-    pub(crate) fn as_ref<'a>(&'a self) -> SpannedAnyRef<'a, T> {
-        self.value.into_spanned_ref(self.span_range)
+    pub(crate) fn map<V>(self, value_map: impl FnOnce(T) -> V) -> Owned<V> {
+        Owned(value_map(self.0))
     }
 
-    pub(crate) fn as_mut<'a>(&'a mut self) -> SpannedAnyRefMut<'a, T> {
-        self.value.into_spanned_ref_mut(self.span_range)
-    }
-
-    pub(crate) fn map<V>(self, value_map: impl FnOnce(T, &SpanRange) -> V) -> Owned<V> {
-        Owned {
-            value: value_map(self.value, &self.span_range),
-            span_range: self.span_range,
-        }
-    }
-
-    pub(crate) fn try_map<V>(
+    pub(crate) fn try_map<V, E>(
         self,
-        value_map: impl FnOnce(T, &SpanRange) -> ExecutionResult<V>,
-    ) -> ExecutionResult<Owned<V>> {
-        Ok(Owned {
-            value: value_map(self.value, &self.span_range)?,
-            span_range: self.span_range,
-        })
-    }
-
-    pub(crate) fn update_span_range(
-        self,
-        span_range_map: impl FnOnce(SpanRange) -> SpanRange,
-    ) -> Self {
-        Self {
-            value: self.value,
-            span_range: span_range_map(self.span_range),
-        }
+        value_map: impl FnOnce(T) -> Result<V, E>,
+    ) -> Result<Owned<V>, E> {
+        Ok(Owned(value_map(self.0)?))
     }
 }
 
-impl OwnedValue {
-    pub(crate) fn resolve_indexed(
-        self,
-        access: IndexAccess,
-        index: Spanned<&Value>,
-    ) -> ExecutionResult<Self> {
-        self.update_span_range(|span_range| SpanRange::new_between(span_range, access.span_range()))
-            .try_map(|value, _| value.into_indexed(access, index))
-    }
-
-    pub(crate) fn resolve_property(self, access: &PropertyAccess) -> ExecutionResult<Self> {
-        self.update_span_range(|span_range| SpanRange::new_between(span_range, access.span_range()))
-            .try_map(|value, _| value.into_property(access))
-    }
-
+impl Spanned<OwnedValue> {
     pub(crate) fn into_statement_result(self) -> ExecutionResult<()> {
-        match self.value {
+        let Spanned(value, span_range) = self;
+        match value.0 {
             Value::None => Ok(()),
-            _ => self
-                .span_range
-                .control_flow_err("A non-returning statement must not return a value. If you wish to explicitly discard the expression's result, use `let _ = ...;`. Alternatively, If you wish to output the value into the parent token stream, use `emit ...;`"),
+            _ => span_range.control_flow_err("A non-returning statement must not return a value. If you wish to explicitly discard the expression's result, use `let _ = ...;`. Alternatively, If you wish to output the value into the parent token stream, use `emit ...;`"),
         }
     }
 }
 
 impl<T: IntoValue> Owned<T> {
     pub(crate) fn into_value(self) -> Value {
-        self.value.into_value()
+        self.0.into_value()
     }
 
     pub(crate) fn into_owned_value(self) -> OwnedValue {
-        let span_range = self.span_range;
-        Owned {
-            value: self.into_value(),
-            span_range,
-        }
-    }
-}
-
-impl<T> HasSpanRange for Owned<T> {
-    fn span_range(&self) -> SpanRange {
-        self.span_range
+        Owned(self.into_value())
     }
 }
 
 impl From<OwnedValue> for Value {
     fn from(value: OwnedValue) -> Self {
-        value.value
+        value.0
     }
 }
 
@@ -406,47 +312,28 @@ impl<T> Deref for Owned<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &self.value
+        &self.0
     }
 }
 
 impl<T> DerefMut for Owned<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.value
-    }
-}
-
-impl<T> WithSpanRangeExt for Owned<T> {
-    fn with_span_range(self, span_range: SpanRange) -> Self {
-        Self {
-            value: self.value,
-            span_range,
-        }
+        &mut self.0
     }
 }
 
 pub(crate) type MutableValue = Mutable<Value>;
 pub(crate) type AssigneeValue = Assignee<Value>;
 
-/// A binding of a unique (mutable) reference to a value
+/// A binding of a unique (mutable) reference to a value.
 /// See [`ArgumentOwnership::Assignee`] for more details.
+///
+/// If you need span information, wrap with `Spanned<Assignee<T>>`.
 pub(crate) struct Assignee<T: 'static + ?Sized>(pub Mutable<T>);
-
-impl<T: 'static + ?Sized> WithSpanRangeExt for Assignee<T> {
-    fn with_span_range(self, span_range: SpanRange) -> Self {
-        Self(self.0.with_span_range(span_range))
-    }
-}
-
-impl<T: 'static + ?Sized> HasSpanRange for Assignee<T> {
-    fn span_range(&self) -> SpanRange {
-        self.0.span_range()
-    }
-}
 
 impl AssigneeValue {
     pub(crate) fn set(&mut self, content: impl IntoValue) {
-        *self.0.mut_cell = content.into_value();
+        *self.0 .0 = content.into_value();
     }
 }
 
@@ -464,23 +351,16 @@ impl<T: 'static + ?Sized> DerefMut for Assignee<T> {
     }
 }
 
-/// A binding of a unique (mutable) reference to a value
-/// (e.g. inside a variable) along with a span of the whole access.
+/// A simple wrapper for a mutable reference to a value.
 ///
-/// For example, for `x.y[4]`, this captures both:
-/// * The mutable reference to the location under `x`
-/// * The lexical span of the tokens `x.y[4]`
-pub(crate) struct Mutable<T: 'static + ?Sized> {
-    pub(super) mut_cell: MutSubRcRefCell<Value, T>,
-    pub(super) span_range: SpanRange,
-}
+/// Can be destructured as: `Mutable(cell): Mutable<T>`
+///
+/// If you need span information, wrap with `Spanned<Mutable<T>>`.
+pub(crate) struct Mutable<T: 'static + ?Sized>(pub(crate) MutSubRcRefCell<Value, T>);
 
 impl<T: ?Sized> Mutable<T> {
     pub(crate) fn into_shared(self) -> Shared<T> {
-        Shared {
-            shared_cell: self.mut_cell.into_shared(),
-            span_range: self.span_range,
-        }
+        Shared(self.0.into_shared())
     }
 
     #[allow(unused)]
@@ -488,132 +368,69 @@ impl<T: ?Sized> Mutable<T> {
         self,
         value_map: impl for<'a> FnOnce(&'a mut T) -> &'a mut V,
     ) -> Mutable<V> {
-        Mutable {
-            mut_cell: self.mut_cell.map(value_map),
-            span_range: self.span_range,
-        }
+        Mutable(self.0.map(value_map))
     }
 
-    pub(crate) fn try_map<V: ?Sized>(
+    pub(crate) fn try_map<V: ?Sized, E>(
         self,
-        value_map: impl for<'a, 'b> FnOnce(&'a mut T, &'b SpanRange) -> ExecutionResult<&'a mut V>,
-    ) -> ExecutionResult<Mutable<V>> {
-        Ok(Mutable {
-            mut_cell: self
-                .mut_cell
-                .try_map(|value| value_map(value, &self.span_range))?,
-            span_range: self.span_range,
-        })
+        value_map: impl for<'a> FnOnce(&'a mut T) -> Result<&'a mut V, E>,
+    ) -> Result<Mutable<V>, E> {
+        Ok(Mutable(self.0.try_map(value_map)?))
     }
+}
 
-    pub(crate) fn update_span_range(
-        self,
-        span_range_map: impl FnOnce(SpanRange) -> SpanRange,
-    ) -> Self {
-        Self {
-            mut_cell: self.mut_cell,
-            span_range: span_range_map(self.span_range),
-        }
-    }
+pub(crate) static MUTABLE_ERROR_MESSAGE: &str =
+    "The variable cannot be modified as it is already being modified";
 
+impl Spanned<&mut Mutable<Value>> {
     /// SAFETY:
     /// * Must be paired with a call to `enable()` before any further use of the value.
     /// * Must not use the value while disabled.
     pub(crate) unsafe fn disable(&mut self) {
-        self.mut_cell.disable();
+        self.0 .0.disable();
     }
 
     /// SAFETY:
     /// * Must only be used after a call to `disable()`.
+    ///
+    /// Returns an ownership error if re-enabling fails (e.g., due to conflicting borrows).
     pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
-        self.mut_cell
+        self.0
+             .0
             .enable()
-            .map_err(|_| self.span_range.ownership_error(MUTABLE_ERROR_MESSAGE))
+            .map_err(|_| self.1.ownership_error(MUTABLE_ERROR_MESSAGE))
     }
 }
 
-static MUTABLE_ERROR_MESSAGE: &str =
-    "The variable cannot be modified as it is already being modified";
+impl Spanned<Mutable<Value>> {
+    pub(crate) fn transparent_clone(&self) -> ExecutionResult<OwnedValue> {
+        let value = self.0.as_ref().try_transparent_clone(self.1)?;
+        Ok(Owned(value))
+    }
+}
 
-#[allow(unused)]
 impl Mutable<Value> {
     pub(crate) fn new_from_owned(value: OwnedValue) -> Self {
-        let span_range = value.span_range;
-        Self {
-            // Unwrap is safe because it's a new refcell
-            mut_cell: MutSubRcRefCell::new(Rc::new(RefCell::new(value.value))).unwrap(),
-            span_range,
-        }
-    }
-
-    pub(crate) fn transparent_clone(&self) -> ExecutionResult<OwnedValue> {
-        let value = self.as_ref().try_transparent_clone(self.span_range)?;
-        Ok(OwnedValue::new(value, self.span_range))
+        // Unwrap is safe because it's a new refcell
+        Mutable(MutSubRcRefCell::new(Rc::new(RefCell::new(value.0))).unwrap())
     }
 
     fn new_from_variable(reference: VariableBinding) -> syn::Result<Self> {
-        Ok(Self {
-            mut_cell: MutSubRcRefCell::new(reference.data)
-                .map_err(|_| reference.variable_span.syn_error(MUTABLE_ERROR_MESSAGE))?,
-            span_range: reference.variable_span.span_range(),
-        })
-    }
-
-    pub(crate) fn into_stream(self) -> ExecutionResult<Mutable<OutputStream>> {
-        self.try_map(|value, span_range| match value {
-            Value::Stream(stream) => Ok(&mut stream.value),
-            _ => span_range.type_err("The variable is not a stream"),
-        })
-    }
-
-    pub(crate) fn resolve_indexed(
-        self,
-        access: IndexAccess,
-        index: Spanned<&Value>,
-        auto_create: bool,
-    ) -> ExecutionResult<Self> {
-        self.update_span_range(|span_range| SpanRange::new_between(span_range, access.span_range()))
-            .try_map(|value, _| value.index_mut(access, index, auto_create))
-    }
-
-    pub(crate) fn resolve_property(
-        self,
-        access: &PropertyAccess,
-        auto_create: bool,
-    ) -> ExecutionResult<Self> {
-        self.update_span_range(|span_range| SpanRange::new_between(span_range, access.span_range()))
-            .try_map(|value, _| value.property_mut(access, auto_create))
-    }
-
-    pub(crate) fn set(&mut self, content: impl IntoValue) {
-        *self.mut_cell = content.into_value();
+        Ok(Mutable(MutSubRcRefCell::new(reference.data).map_err(
+            |_| reference.variable_span.syn_error(MUTABLE_ERROR_MESSAGE),
+        )?))
     }
 }
 
 impl<T: ?Sized> AsMut<T> for Mutable<T> {
     fn as_mut(&mut self) -> &mut T {
-        &mut self.mut_cell
+        &mut self.0
     }
 }
 
 impl<T: ?Sized> AsRef<T> for Mutable<T> {
     fn as_ref(&self) -> &T {
-        &self.mut_cell
-    }
-}
-
-impl<T: ?Sized> HasSpanRange for Mutable<T> {
-    fn span_range(&self) -> SpanRange {
-        self.span_range
-    }
-}
-
-impl<T: ?Sized> WithSpanRangeExt for Mutable<T> {
-    fn with_span_range(self, span_range: SpanRange) -> Self {
-        Self {
-            mut_cell: self.mut_cell,
-            span_range,
-        }
+        &self.0
     }
 }
 
@@ -621,137 +438,93 @@ impl<T: ?Sized> Deref for Mutable<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &self.mut_cell
+        &self.0
     }
 }
 
 impl<T: ?Sized> DerefMut for Mutable<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.mut_cell
+        &mut self.0
     }
 }
 
 pub(crate) type SharedValue = Shared<Value>;
 
-/// A binding of a shared (immutable) reference to a value
-/// (e.g. inside a variable) along with a span of the whole access.
+/// A simple wrapper for a shared (immutable) reference to a value.
 ///
-/// For example, for `x.y[4]`, this captures both:
-/// * The mutable reference to the location under `x`
-/// * The lexical span of the tokens `x.y[4]`
-pub(crate) struct Shared<T: 'static + ?Sized> {
-    pub(super) shared_cell: SharedSubRcRefCell<Value, T>,
-    pub(super) span_range: SpanRange,
-}
+/// Can be destructured as: `Shared(cell): Shared<T>`
+///
+/// If you need span information, wrap with `Spanned<Shared<T>>`.
+pub(crate) struct Shared<T: 'static + ?Sized>(pub(crate) SharedSubRcRefCell<Value, T>);
 
 #[allow(unused)]
 impl<T: ?Sized> Shared<T> {
     pub(crate) fn clone(this: &Shared<T>) -> Self {
-        Self {
-            shared_cell: SharedSubRcRefCell::clone(&this.shared_cell),
-            span_range: this.span_range,
-        }
+        Shared(SharedSubRcRefCell::clone(&this.0))
     }
 
-    pub(crate) fn as_spanned(&self) -> Spanned<&T> {
-        self.as_ref().spanned(self.span_range)
-    }
-
-    pub(crate) fn try_map<V: ?Sized>(
+    pub(crate) fn try_map<V: ?Sized, E>(
         self,
-        value_map: impl for<'a, 'b> FnOnce(&'a T, &'b SpanRange) -> ExecutionResult<&'a V>,
-    ) -> ExecutionResult<Shared<V>> {
-        Ok(Shared {
-            shared_cell: self
-                .shared_cell
-                .try_map(|value| value_map(value, &self.span_range))?,
-            span_range: self.span_range,
-        })
+        value_map: impl for<'a> FnOnce(&'a T) -> Result<&'a V, E>,
+    ) -> Result<Shared<V>, E> {
+        Ok(Shared(self.0.try_map(value_map)?))
     }
 
-    pub(crate) fn map<V: ?Sized>(
-        self,
-        value_map: impl FnOnce(&T) -> &V,
-    ) -> ExecutionResult<Shared<V>> {
-        Ok(Shared {
-            shared_cell: self.shared_cell.map(value_map),
-            span_range: self.span_range,
-        })
+    pub(crate) fn map<V: ?Sized>(self, value_map: impl FnOnce(&T) -> &V) -> Shared<V> {
+        Shared(self.0.map(value_map))
     }
+}
 
-    pub(crate) fn update_span_range(
-        self,
-        span_range_map: impl FnOnce(SpanRange) -> SpanRange,
-    ) -> Self {
-        Self {
-            shared_cell: self.shared_cell,
-            span_range: span_range_map(self.span_range),
-        }
-    }
+pub(crate) static SHARED_ERROR_MESSAGE: &str =
+    "The variable cannot be read as it is already being modified";
 
+impl Spanned<&mut Shared<Value>> {
     /// SAFETY:
     /// * Must be paired with a call to `enable()` before any further use of the value.
     /// * Must not use the value while disabled.
     pub(crate) unsafe fn disable(&mut self) {
-        self.shared_cell.disable();
+        self.0 .0.disable();
     }
 
     /// SAFETY:
-    /// * Must only be used after with a call to `enable()`.
+    /// * Must only be used after a call to `disable()`.
+    ///
+    /// Returns an ownership error if re-enabling fails (e.g., due to conflicting borrows).
     pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
-        self.shared_cell
+        self.0
+             .0
             .enable()
-            .map_err(|_| self.span_range.ownership_error(SHARED_ERROR_MESSAGE))
+            .map_err(|_| self.1.ownership_error(SHARED_ERROR_MESSAGE))
     }
 }
 
-static SHARED_ERROR_MESSAGE: &str = "The variable cannot be read as it is already being modified";
+impl Spanned<Shared<Value>> {
+    pub(crate) fn transparent_clone(&self) -> ExecutionResult<OwnedValue> {
+        let value = self.0.as_ref().try_transparent_clone(self.1)?;
+        Ok(Owned(value))
+    }
+}
 
 impl Shared<Value> {
     pub(crate) fn new_from_owned(value: OwnedValue) -> Self {
-        let span_range = value.span_range;
-        Self {
-            // Unwrap is safe because it's a new refcell
-            shared_cell: SharedSubRcRefCell::new(Rc::new(RefCell::new(value.value))).unwrap(),
-            span_range,
-        }
-    }
-
-    pub(crate) fn transparent_clone(&self) -> ExecutionResult<OwnedValue> {
-        let value = self.as_ref().try_transparent_clone(self.span_range)?;
-        Ok(OwnedValue::new(value, self.span_range))
+        // Unwrap is safe because it's a new refcell
+        Shared(SharedSubRcRefCell::new(Rc::new(RefCell::new(value.0))).unwrap())
     }
 
     pub(crate) fn infallible_clone(&self) -> OwnedValue {
-        self.as_ref().clone().into_owned(self.span_range)
+        Owned(self.0.clone())
     }
 
     fn new_from_variable(reference: VariableBinding) -> syn::Result<Self> {
-        Ok(Self {
-            shared_cell: SharedSubRcRefCell::new(reference.data)
-                .map_err(|_| reference.variable_span.syn_error(SHARED_ERROR_MESSAGE))?,
-            span_range: reference.variable_span.span_range(),
-        })
-    }
-
-    pub(crate) fn resolve_indexed(
-        self,
-        access: IndexAccess,
-        index: Spanned<&Value>,
-    ) -> ExecutionResult<Self> {
-        self.update_span_range(|old_span| SpanRange::new_between(old_span, access))
-            .try_map(|value, _| value.index_ref(access, index))
-    }
-
-    pub(crate) fn resolve_property(self, access: &PropertyAccess) -> ExecutionResult<Self> {
-        self.update_span_range(|old_span| SpanRange::new_between(old_span, access.span_range()))
-            .try_map(|value, _| value.property_ref(access))
+        Ok(Shared(SharedSubRcRefCell::new(reference.data).map_err(
+            |_| reference.variable_span.syn_error(SHARED_ERROR_MESSAGE),
+        )?))
     }
 }
 
 impl<T: ?Sized> AsRef<T> for Shared<T> {
     fn as_ref(&self) -> &T {
-        &self.shared_cell
+        &self.0
     }
 }
 
@@ -759,22 +532,7 @@ impl<T: ?Sized> Deref for Shared<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &self.shared_cell
-    }
-}
-
-impl<T: ?Sized> HasSpanRange for Shared<T> {
-    fn span_range(&self) -> SpanRange {
-        self.span_range
-    }
-}
-
-impl<T: ?Sized> WithSpanRangeExt for Shared<T> {
-    fn with_span_range(self, span_range: SpanRange) -> Self {
-        Self {
-            shared_cell: self.shared_cell,
-            span_range,
-        }
+        &self.0
     }
 }
 
@@ -819,10 +577,10 @@ impl<T: 'static + ToOwned + ?Sized> CopyOnWrite<T> {
         map: impl FnOnce(T::Owned) -> Result<U, T::Owned>,
     ) -> Result<U, Self> {
         match self.inner {
-            CopyOnWriteInner::Owned(owned) => match map(owned.value) {
+            CopyOnWriteInner::Owned(Owned(value)) => match map(value) {
                 Ok(mapped) => Ok(mapped),
                 Err(other) => Err(Self {
-                    inner: CopyOnWriteInner::Owned(Owned::new(other, owned.span_range)),
+                    inner: CopyOnWriteInner::Owned(Owned::new(other)),
                 }),
             },
             other => Err(Self { inner: other }),
@@ -865,25 +623,37 @@ impl<T: 'static + ToOwned + ?Sized> CopyOnWrite<T> {
             CopyOnWriteInner::SharedWithTransparentCloning(shared) => map_shared(shared),
         }
     }
+}
 
+impl Spanned<&mut CopyOnWrite<Value>> {
     /// SAFETY:
     /// * Must be paired with a call to `enable()` before any further use of the value.
     /// * Must not use the value while disabled.
     pub(crate) unsafe fn disable(&mut self) {
-        match &mut self.inner {
+        match &mut self.0.inner {
             CopyOnWriteInner::Owned(_) => {}
-            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => shared.disable(),
-            CopyOnWriteInner::SharedWithTransparentCloning(shared) => shared.disable(),
+            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
+                shared.spanned(self.1).disable()
+            }
+            CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
+                shared.spanned(self.1).disable()
+            }
         }
     }
 
     /// SAFETY:
     /// * Must only be used after a call to `disable()`.
+    ///
+    /// Returns an ownership error if re-enabling fails (e.g., due to conflicting borrows).
     pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
-        match &mut self.inner {
+        match &mut self.0.inner {
             CopyOnWriteInner::Owned(_) => Ok(()),
-            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => shared.enable(),
-            CopyOnWriteInner::SharedWithTransparentCloning(shared) => shared.enable(),
+            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
+                shared.spanned(self.1).enable()
+            }
+            CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
+                shared.spanned(self.1).enable()
+            }
         }
     }
 }
@@ -916,12 +686,15 @@ impl CopyOnWrite<Value> {
         }
     }
 
-    /// Converts to owned, cloning if necessary
-    pub(crate) fn into_owned_transparently(self) -> ExecutionResult<OwnedValue> {
+    /// Converts to owned, using transparent clone for shared values where cloning was not requested
+    pub(crate) fn into_owned_transparently(self, span: SpanRange) -> ExecutionResult<OwnedValue> {
         match self.inner {
             CopyOnWriteInner::Owned(owned) => Ok(owned),
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => Ok(shared.infallible_clone()),
-            CopyOnWriteInner::SharedWithTransparentCloning(shared) => shared.transparent_clone(),
+            CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
+                let value = shared.as_ref().try_transparent_clone(span)?;
+                Ok(Owned(value))
+            }
         }
     }
 
@@ -931,33 +704,6 @@ impl CopyOnWrite<Value> {
             CopyOnWriteInner::Owned(owned) => SharedValue::new_from_owned(owned),
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => shared,
             CopyOnWriteInner::SharedWithTransparentCloning(shared) => shared,
-        }
-    }
-}
-
-impl<T: ?Sized + ToOwned> WithSpanRangeExt for CopyOnWrite<T> {
-    fn with_span_range(self, span_range: SpanRange) -> Self {
-        let inner = match self.inner {
-            CopyOnWriteInner::Owned(owned) => {
-                CopyOnWriteInner::Owned(owned.with_span_range(span_range))
-            }
-            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
-                CopyOnWriteInner::SharedWithInfallibleCloning(shared.with_span_range(span_range))
-            }
-            CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
-                CopyOnWriteInner::SharedWithTransparentCloning(shared.with_span_range(span_range))
-            }
-        };
-        Self { inner }
-    }
-}
-
-impl<T: ToOwned + ?Sized> HasSpanRange for CopyOnWrite<T> {
-    fn span_range(&self) -> SpanRange {
-        match self.inner {
-            CopyOnWriteInner::Owned(ref owned) => owned.span_range(),
-            CopyOnWriteInner::SharedWithInfallibleCloning(ref shared) => shared.span_range(),
-            CopyOnWriteInner::SharedWithTransparentCloning(ref shared) => shared.span_range(),
         }
     }
 }

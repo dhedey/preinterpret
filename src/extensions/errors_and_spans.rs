@@ -440,38 +440,42 @@ single_span_token! {
     Token![|],
 }
 
-pub(crate) struct Spanned<T> {
-    pub(crate) value: T,
-    pub(crate) span_range: SpanRange,
+pub(crate) struct Spanned<T>(pub(crate) T, pub(crate) SpanRange);
+
+impl<T: Clone> Clone for Spanned<T> {
+    fn clone(&self) -> Self {
+        Spanned(self.0.clone(), self.1)
+    }
 }
 
+impl<T: Copy> Copy for Spanned<T> {}
+
 impl<T> Spanned<T> {
-    pub(crate) fn deconstruct(self) -> (T, SpanRange) {
-        (self.value, self.span_range)
-    }
-
+    #[inline]
     #[allow(unused)]
-    pub(crate) fn map<U>(self, f: impl FnOnce(T, &SpanRange) -> U) -> Spanned<U> {
-        Spanned {
-            value: f(self.value, &self.span_range),
-            span_range: self.span_range,
-        }
+    pub(crate) fn to_ref(&self) -> Spanned<&T> {
+        Spanned(&self.0, self.1)
     }
 
-    pub(crate) fn try_map<U, E>(
-        self,
-        f: impl FnOnce(T, &SpanRange) -> Result<U, E>,
-    ) -> Result<Spanned<U>, E> {
-        Ok(Spanned {
-            value: f(self.value, &self.span_range)?,
-            span_range: self.span_range,
-        })
+    #[inline]
+    pub(crate) fn to_mut(&mut self) -> Spanned<&mut T> {
+        Spanned(&mut self.0, self.1)
+    }
+
+    #[inline]
+    pub(crate) fn map<U>(self, f: impl FnOnce(T) -> U) -> Spanned<U> {
+        Spanned(f(self.0), self.1)
+    }
+
+    #[inline]
+    pub(crate) fn try_map<U, E>(self, f: impl FnOnce(T) -> Result<U, E>) -> Result<Spanned<U>, E> {
+        Ok(Spanned(f(self.0)?, self.1))
     }
 }
 
 impl<T> HasSpanRange for Spanned<T> {
     fn span_range(&self) -> SpanRange {
-        self.span_range
+        self.1
     }
 }
 
@@ -479,25 +483,25 @@ impl<T> Deref for Spanned<T> {
     type Target = T;
 
     fn deref(&self) -> &T {
-        &self.value
+        &self.0
     }
 }
 
 impl<T> DerefMut for Spanned<T> {
     fn deref_mut(&mut self) -> &mut T {
-        &mut self.value
+        &mut self.0
     }
 }
 
 impl<X, T: AsRef<X>> AsRef<X> for Spanned<T> {
     fn as_ref(&self) -> &X {
-        self.value.as_ref()
+        self.0.as_ref()
     }
 }
 
 impl<X, T: AsMut<X>> AsMut<X> for Spanned<T> {
     fn as_mut(&mut self) -> &mut X {
-        self.value.as_mut()
+        self.0.as_mut()
     }
 }
 
@@ -506,10 +510,8 @@ pub(crate) trait ToSpanned: Sized {
 }
 
 impl<T> ToSpanned for T {
+    #[inline]
     fn spanned(self, source: impl HasSpanRange) -> Spanned<Self> {
-        Spanned {
-            value: self,
-            span_range: source.span_range(),
-        }
+        Spanned(self, source.span_range())
     }
 }

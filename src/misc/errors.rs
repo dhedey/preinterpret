@@ -92,7 +92,7 @@ impl ParseError {
 pub(crate) type ExecutionResult<T> = core::result::Result<T, ExecutionInterrupt>;
 
 pub(crate) enum ExecutionOutcome<T> {
-    Value(T),
+    Value(Spanned<T>),
     ControlFlow(ControlFlowInterrupt),
 }
 
@@ -323,9 +323,11 @@ impl BreakInterrupt {
     ) -> ExecutionResult<RequestedValue> {
         let value = match self.value {
             Some(value) => value,
-            None => ().into_owned_value(span_range),
+            None => ().into_owned_value(),
         };
-        ownership.map_from_owned(value)
+        ownership
+            .map_from_owned(Spanned(value, span_range))
+            .map(|spanned| spanned.0)
     }
 }
 

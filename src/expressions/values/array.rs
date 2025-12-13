@@ -21,16 +21,18 @@ impl ArrayValue {
         Ok(())
     }
 
-    pub(super) fn into_indexed(mut self, index: Spanned<&Value>) -> ExecutionResult<Value> {
-        let (index, span_range) = index.deconstruct();
+    pub(super) fn into_indexed(
+        mut self,
+        Spanned(index, span_range): Spanned<&Value>,
+    ) -> ExecutionResult<Value> {
         Ok(match index {
             Value::Integer(integer) => {
                 let index =
-                    self.resolve_valid_index_from_integer(integer.spanned(span_range), false)?;
+                    self.resolve_valid_index_from_integer(Spanned(integer, span_range), false)?;
                 std::mem::replace(&mut self.items[index], Value::None)
             }
             Value::Range(range) => {
-                let range = range.spanned(span_range).resolve_to_index_range(&self)?;
+                let range = Spanned(range, span_range).resolve_to_index_range(&self)?;
                 let new_items: Vec<_> = self.items.drain(range).collect();
                 new_items.into_value()
             }
@@ -38,12 +40,14 @@ impl ArrayValue {
         })
     }
 
-    pub(super) fn index_mut(&mut self, index: Spanned<&Value>) -> ExecutionResult<&mut Value> {
-        let (index, span_range) = index.deconstruct();
+    pub(super) fn index_mut(
+        &mut self,
+        Spanned(index, span_range): Spanned<&Value>,
+    ) -> ExecutionResult<&mut Value> {
         Ok(match index {
             Value::Integer(integer) => {
                 let index =
-                    self.resolve_valid_index_from_integer(integer.spanned(span_range), false)?;
+                    self.resolve_valid_index_from_integer(Spanned(integer, span_range), false)?;
                 &mut self.items[index]
             }
             Value::Range(..) => {
@@ -54,12 +58,14 @@ impl ArrayValue {
         })
     }
 
-    pub(super) fn index_ref(&self, index: Spanned<&Value>) -> ExecutionResult<&Value> {
-        let (index, span_range) = index.deconstruct();
+    pub(super) fn index_ref(
+        &self,
+        Spanned(index, span_range): Spanned<&Value>,
+    ) -> ExecutionResult<&Value> {
         Ok(match index {
             Value::Integer(integer) => {
                 let index =
-                    self.resolve_valid_index_from_integer(integer.spanned(span_range), false)?;
+                    self.resolve_valid_index_from_integer(Spanned(integer, span_range), false)?;
                 &self.items[index]
             }
             Value::Range(..) => {
@@ -72,13 +78,12 @@ impl ArrayValue {
 
     pub(super) fn resolve_valid_index(
         &self,
-        index: Spanned<&Value>,
+        Spanned(index, span_range): Spanned<&Value>,
         is_exclusive: bool,
     ) -> ExecutionResult<usize> {
-        let (index, span_range) = index.deconstruct();
         match index {
             Value::Integer(int) => {
-                self.resolve_valid_index_from_integer(int.spanned(span_range), is_exclusive)
+                self.resolve_valid_index_from_integer(Spanned(int, span_range), is_exclusive)
             }
             _ => span_range.type_err("The index must be an integer"),
         }
@@ -86,17 +91,16 @@ impl ArrayValue {
 
     fn resolve_valid_index_from_integer(
         &self,
-        integer: Spanned<&IntegerValue>,
+        Spanned(integer, span): Spanned<&IntegerValue>,
         is_exclusive: bool,
     ) -> ExecutionResult<usize> {
-        let index: usize = (**integer)
-            .into_owned_value(integer.span_range)
-            .resolve_as("An array index")?;
+        let index: usize =
+            Spanned((*integer).into_owned_value(), span).resolve_as("An array index")?;
         if is_exclusive {
             if index <= self.items.len() {
                 Ok(index)
             } else {
-                integer.value_err(format!(
+                span.value_err(format!(
                     "Exclusive index of {} must be less than or equal to the array length of {}",
                     index,
                     self.items.len()
@@ -105,7 +109,7 @@ impl ArrayValue {
         } else if index < self.items.len() {
             Ok(index)
         } else {
-            integer.value_err(format!(
+            span.value_err(format!(
                 "Inclusive index of {} must be less than the array length of {}",
                 index,
                 self.items.len()
@@ -192,11 +196,11 @@ define_interface! {
             }
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_to_numeric(this: Owned<ArrayValue>) -> ExecutionResult<ReturnedValue> {
-                let (mut this, span_range) = this.deconstruct();
+            [context] fn cast_to_numeric(Spanned(this, span): Spanned<Owned<ArrayValue>>) -> ExecutionResult<ReturnedValue> {
+                let mut this = this.into_inner();
                 let length = this.items.len();
                 if length == 1 {
-                    context.operation.evaluate(this.items.pop().unwrap().into_owned(span_range))
+                    Ok(context.operation.evaluate(this.items.pop().unwrap().into_owned().spanned(span))?.0)
                 } else {
                     context.operation.value_err(format!(
                         "Only a singleton array can be cast to this value but the array has {} elements",

@@ -11,70 +11,48 @@ pub(crate) enum ReturnedValue {
     Shared(SharedValue),
 }
 
-impl WithSpanRangeExt for ReturnedValue {
-    fn with_span_range(self, span_range: SpanRange) -> Self {
-        match self {
-            ReturnedValue::Owned(v) => ReturnedValue::Owned(v.with_span_range(span_range)),
-            ReturnedValue::CopyOnWrite(v) => {
-                ReturnedValue::CopyOnWrite(v.with_span_range(span_range))
-            }
-            ReturnedValue::Mutable(v) => ReturnedValue::Mutable(v.with_span_range(span_range)),
-            ReturnedValue::Shared(v) => ReturnedValue::Shared(v.with_span_range(span_range)),
-        }
-    }
-}
-
 // TODO: Find some way to selectively enable only on MSRV (e.g. following the build.rs feature flag pattern)
 // #[diagnostic::on_unimplemented(
 //     message = "`ResolvableOutput` is not implemented for `{Self}`",
 //     note = "`ResolvableOutput` is not implemented for `Shared<X>` or `Mutable<X>` unless `X` is `Value`. If we wish to change this, we'd need to have some way to represent some kind of `ExpressionReference`, i.e. a `Typed<Shared<..>>` rather than a `Shared<Typed<..>>`"
 // )]
 pub(crate) trait IsReturnable {
-    fn to_returned_value(self, output_span_range: SpanRange) -> ExecutionResult<ReturnedValue>;
+    fn to_returned_value(self) -> ExecutionResult<ReturnedValue>;
 }
 
 impl IsReturnable for ReturnedValue {
-    fn to_returned_value(self, output_span_range: SpanRange) -> ExecutionResult<ReturnedValue> {
-        Ok(self.with_span_range(output_span_range))
+    fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
+        Ok(self)
     }
 }
 
 impl IsReturnable for Shared<Value> {
-    fn to_returned_value(self, output_span_range: SpanRange) -> ExecutionResult<ReturnedValue> {
-        Ok(ReturnedValue::Shared(
-            self.update_span_range(|_| output_span_range),
-        ))
+    fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
+        Ok(ReturnedValue::Shared(self))
     }
 }
 
 impl IsReturnable for Mutable<Value> {
-    fn to_returned_value(self, output_span_range: SpanRange) -> ExecutionResult<ReturnedValue> {
-        Ok(ReturnedValue::Mutable(
-            self.update_span_range(|_| output_span_range),
-        ))
+    fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
+        Ok(ReturnedValue::Mutable(self))
     }
 }
 
 impl<T: IntoValue> IsReturnable for T {
-    fn to_returned_value(self, output_span_range: SpanRange) -> ExecutionResult<ReturnedValue> {
-        Ok(ReturnedValue::Owned(
-            self.into_owned_value(output_span_range),
-        ))
+    fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
+        Ok(ReturnedValue::Owned(Owned(self.into_value())))
     }
 }
 
 impl<T: IntoValue> IsReturnable for Owned<T> {
-    fn to_returned_value(self, output_span_range: SpanRange) -> ExecutionResult<ReturnedValue> {
-        Ok(ReturnedValue::Owned(
-            self.map(|f, _| f.into_value())
-                .with_span_range(output_span_range),
-        ))
+    fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
+        Ok(ReturnedValue::Owned(self.map(|f| f.into_value())))
     }
 }
 
 impl<T: IsReturnable> IsReturnable for ExecutionResult<T> {
-    fn to_returned_value(self, output_span_range: SpanRange) -> ExecutionResult<ReturnedValue> {
-        self?.to_returned_value(output_span_range)
+    fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
+        self?.to_returned_value()
     }
 }
 
@@ -100,9 +78,9 @@ impl<T: StreamAppender> From<T> for StreamOutput<T> {
     }
 }
 impl<T: StreamAppender> IsReturnable for StreamOutput<T> {
-    fn to_returned_value(self, output_span_range: SpanRange) -> ExecutionResult<ReturnedValue> {
+    fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
         let mut output = OutputStream::new();
         self.0.append(&mut output)?;
-        output.to_returned_value(output_span_range)
+        output.to_returned_value()
     }
 }

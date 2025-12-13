@@ -19,7 +19,7 @@ impl Debug for CharValue {
 
 impl CharValue {
     pub(super) fn for_litchar(lit: &syn::LitChar) -> Owned<Self> {
-        Self { value: lit.value() }.into_owned(lit.span())
+        Self { value: lit.value() }.into_owned()
     }
 
     pub(super) fn to_literal(&self, span: Span) -> Literal {
