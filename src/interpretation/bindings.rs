@@ -305,19 +305,15 @@ impl OwnedValue {
     pub(crate) fn resolve_property(self, access: &PropertyAccess) -> ExecutionResult<Self> {
         self.try_map(|value| value.into_property(access))
     }
-
-    pub(crate) fn into_statement_result(self, span_range: SpanRange) -> ExecutionResult<()> {
-        match self.0 {
-            Value::None => Ok(()),
-            _ => span_range.control_flow_err("A non-returning statement must not return a value. If you wish to explicitly discard the expression's result, use `let _ = ...;`. Alternatively, If you wish to output the value into the parent token stream, use `emit ...;`"),
-        }
-    }
 }
 
 impl Spanned<OwnedValue> {
     pub(crate) fn into_statement_result(self) -> ExecutionResult<()> {
         let Spanned(value, span_range) = self;
-        value.into_statement_result(span_range)
+        match value.0 {
+            Value::None => Ok(()),
+            _ => span_range.control_flow_err("A non-returning statement must not return a value. If you wish to explicitly discard the expression's result, use `let _ = ...;`. Alternatively, If you wish to output the value into the parent token stream, use `emit ...;`"),
+        }
     }
 }
 
@@ -406,31 +402,17 @@ impl<T: ?Sized> Mutable<T> {
     ) -> Result<Mutable<V>, E> {
         Ok(Mutable(self.0.try_map(value_map)?))
     }
-
-    /// SAFETY:
-    /// * Must be paired with a call to `enable()` before any further use of the value.
-    /// * Must not use the value while disabled.
-    pub(crate) unsafe fn disable(&mut self) {
-        self.0.disable();
-    }
-
-    /// SAFETY: Must only be used after a call to `disable()`.
-    pub(crate) unsafe fn enable(&mut self, span_range: SpanRange) -> ExecutionResult<()> {
-        self.0
-            .enable()
-            .map_err(|_| span_range.ownership_error(MUTABLE_ERROR_MESSAGE))
-    }
 }
 
 pub(crate) static MUTABLE_ERROR_MESSAGE: &str =
     "The variable cannot be modified as it is already being modified";
 
-impl Spanned<Mutable<Value>> {
+impl Spanned<&mut Mutable<Value>> {
     /// SAFETY:
     /// * Must be paired with a call to `enable()` before any further use of the value.
     /// * Must not use the value while disabled.
     pub(crate) unsafe fn disable(&mut self) {
-        self.0.disable();
+        self.0 .0.disable();
     }
 
     /// SAFETY:
@@ -443,14 +425,15 @@ impl Spanned<Mutable<Value>> {
             .enable()
             .map_err(|_| self.1.ownership_error(MUTABLE_ERROR_MESSAGE))
     }
+}
 
+impl Spanned<Mutable<Value>> {
     pub(crate) fn transparent_clone(&self) -> ExecutionResult<OwnedValue> {
         let value = self.0.as_ref().try_transparent_clone(self.1)?;
         Ok(Owned(value))
     }
 }
 
-#[allow(unused)]
 impl Mutable<Value> {
     pub(crate) fn new_from_owned(value: Value) -> Self {
         // Unwrap is safe because it's a new refcell
@@ -461,16 +444,6 @@ impl Mutable<Value> {
         Ok(Mutable(MutSubRcRefCell::new(reference.data).map_err(
             |_| reference.variable_span.syn_error(MUTABLE_ERROR_MESSAGE),
         )?))
-    }
-
-    pub(crate) fn into_stream(self) -> Result<Mutable<OutputStream>, Self> {
-        match self.0.try_map_or_self(|value| match value {
-            Value::Stream(stream) => Some(&mut stream.value),
-            _ => None,
-        }) {
-            Ok(stream) => Ok(Mutable(stream)),
-            Err(cell) => Err(Mutable(cell)),
-        }
     }
 
     pub(crate) fn resolve_indexed(
@@ -488,10 +461,6 @@ impl Mutable<Value> {
         auto_create: bool,
     ) -> ExecutionResult<Self> {
         self.try_map(|value| value.property_mut(access, auto_create))
-    }
-
-    pub(crate) fn set(&mut self, content: impl IntoValue) {
-        *self.0 = content.into_value();
     }
 }
 
@@ -546,31 +515,17 @@ impl<T: ?Sized> Shared<T> {
     pub(crate) fn map<V: ?Sized>(self, value_map: impl FnOnce(&T) -> &V) -> Shared<V> {
         Shared(self.0.map(value_map))
     }
-
-    /// SAFETY:
-    /// * Must be paired with a call to `enable()` before any further use of the value.
-    /// * Must not use the value while disabled.
-    pub(crate) unsafe fn disable(&mut self) {
-        self.0.disable();
-    }
-
-    /// SAFETY: Must only be used after a call to `disable()`.
-    pub(crate) unsafe fn enable(&mut self, span_range: SpanRange) -> ExecutionResult<()> {
-        self.0
-            .enable()
-            .map_err(|_| span_range.ownership_error(SHARED_ERROR_MESSAGE))
-    }
 }
 
 pub(crate) static SHARED_ERROR_MESSAGE: &str =
     "The variable cannot be read as it is already being modified";
 
-impl Spanned<Shared<Value>> {
+impl Spanned<&mut Shared<Value>> {
     /// SAFETY:
     /// * Must be paired with a call to `enable()` before any further use of the value.
     /// * Must not use the value while disabled.
     pub(crate) unsafe fn disable(&mut self) {
-        self.0.disable();
+        self.0 .0.disable();
     }
 
     /// SAFETY:
@@ -583,7 +538,9 @@ impl Spanned<Shared<Value>> {
             .enable()
             .map_err(|_| self.1.ownership_error(SHARED_ERROR_MESSAGE))
     }
+}
 
+impl Spanned<Shared<Value>> {
     pub(crate) fn transparent_clone(&self) -> ExecutionResult<OwnedValue> {
         let value = self.0.as_ref().try_transparent_clone(self.1)?;
         Ok(Owned(value))
@@ -720,34 +677,22 @@ impl<T: 'static + ToOwned + ?Sized> CopyOnWrite<T> {
             CopyOnWriteInner::SharedWithTransparentCloning(shared) => map_shared(shared),
         }
     }
-
-    /// SAFETY:
-    /// * Must be paired with a call to `enable()` before any further use of the value.
-    /// * Must not use the value while disabled.
-    pub(crate) unsafe fn disable(&mut self) {
-        match &mut self.inner {
-            CopyOnWriteInner::Owned(_) => {}
-            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => shared.disable(),
-            CopyOnWriteInner::SharedWithTransparentCloning(shared) => shared.disable(),
-        }
-    }
-
-    /// SAFETY: Must only be used after a call to `disable()`.
-    pub(crate) unsafe fn enable(&mut self, span_range: SpanRange) -> ExecutionResult<()> {
-        match &mut self.inner {
-            CopyOnWriteInner::Owned(_) => Ok(()),
-            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => shared.enable(span_range),
-            CopyOnWriteInner::SharedWithTransparentCloning(shared) => shared.enable(span_range),
-        }
-    }
 }
 
-impl Spanned<CopyOnWrite<Value>> {
+impl Spanned<&mut CopyOnWrite<Value>> {
     /// SAFETY:
     /// * Must be paired with a call to `enable()` before any further use of the value.
     /// * Must not use the value while disabled.
     pub(crate) unsafe fn disable(&mut self) {
-        self.0.disable();
+        match &mut self.0.inner {
+            CopyOnWriteInner::Owned(_) => {}
+            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
+                shared.spanned(self.1).disable()
+            }
+            CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
+                shared.spanned(self.1).disable()
+            }
+        }
     }
 
     /// SAFETY:
@@ -755,12 +700,15 @@ impl Spanned<CopyOnWrite<Value>> {
     ///
     /// Returns an ownership error if re-enabling fails (e.g., due to conflicting borrows).
     pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
-        self.0.enable(self.1)
-    }
-
-    /// Converts to owned, using transparent clone for shared values where cloning was not requested
-    pub(crate) fn into_owned_transparently(self) -> ExecutionResult<OwnedValue> {
-        self.0.into_owned_transparently(self.1)
+        match &mut self.0.inner {
+            CopyOnWriteInner::Owned(_) => Ok(()),
+            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
+                shared.spanned(self.1).enable()
+            }
+            CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
+                shared.spanned(self.1).enable()
+            }
+        }
     }
 }
 

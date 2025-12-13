@@ -451,26 +451,25 @@ impl<T: Clone> Clone for Spanned<T> {
 impl<T: Copy> Copy for Spanned<T> {}
 
 impl<T> Spanned<T> {
+    #[inline]
     #[allow(unused)]
-    pub(crate) fn new(value: T, span_range: SpanRange) -> Self {
-        Spanned(value, span_range)
+    pub(crate) fn to_ref(&self) -> Spanned<&T> {
+        Spanned(&self.0, self.1)
     }
 
-    #[allow(unused)]
-    pub(crate) fn map<U>(self, f: impl FnOnce(T, &SpanRange) -> U) -> Spanned<U> {
-        Spanned(f(self.0, &self.1), self.1)
+    #[inline]
+    pub(crate) fn to_mut(&mut self) -> Spanned<&mut T> {
+        Spanned(&mut self.0, self.1)
     }
 
-    pub(crate) fn try_map<U, E>(
-        self,
-        f: impl FnOnce(T, &SpanRange) -> Result<U, E>,
-    ) -> Result<Spanned<U>, E> {
-        Ok(Spanned(f(self.0, &self.1)?, self.1))
+    #[inline]
+    pub(crate) fn map<U>(self, f: impl FnOnce(T) -> U) -> Spanned<U> {
+        Spanned(f(self.0), self.1)
     }
 
-    #[allow(unused)]
-    pub(crate) fn with_span_range(self, span_range: SpanRange) -> Self {
-        Spanned(self.0, span_range)
+    #[inline]
+    pub(crate) fn try_map<U, E>(self, f: impl FnOnce(T) -> Result<U, E>) -> Result<Spanned<U>, E> {
+        Ok(Spanned(f(self.0)?, self.1))
     }
 }
 
@@ -511,6 +510,7 @@ pub(crate) trait ToSpanned: Sized {
 }
 
 impl<T> ToSpanned for T {
+    #[inline]
     fn spanned(self, source: impl HasSpanRange) -> Spanned<Self> {
         Spanned(self, source.span_range())
     }

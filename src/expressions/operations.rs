@@ -84,9 +84,8 @@ impl UnaryOperation {
 
     pub(super) fn evaluate<T: IntoValue>(
         &self,
-        input: Owned<T>,
-        input_span: SpanRange,
-    ) -> ExecutionResult<ReturnedValue> {
+        Spanned(input, input_span): Spanned<Owned<T>>,
+    ) -> ExecutionResult<Spanned<ReturnedValue>> {
         let input = input.into_owned_value();
         let method = input.kind().resolve_unary_operation(self).ok_or_else(|| {
             self.type_error(format!(
@@ -319,11 +318,9 @@ impl BinaryOperation {
     #[allow(unused)]
     pub(crate) fn evaluate<L: IntoValue, R: IntoValue>(
         &self,
-        left: Owned<L>,
-        left_span: SpanRange,
-        right: Owned<R>,
-        right_span: SpanRange,
-    ) -> ExecutionResult<ReturnedValue> {
+        Spanned(left, left_span): Spanned<Owned<L>>,
+        Spanned(right, right_span): Spanned<Owned<R>>,
+    ) -> ExecutionResult<Spanned<ReturnedValue>> {
         let left = left.into_owned_value();
         let right = right.into_owned_value();
         match left.kind().resolve_binary_operation(self) {

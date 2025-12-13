@@ -118,16 +118,16 @@ impl IsArgument for IterableRef<'static> {
     type ValueType = IterableTypeData;
     const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Shared;
 
-    fn from_argument(value: ArgumentValue, span: SpanRange) -> ExecutionResult<Self> {
-        Ok(match value.kind() {
-            ValueKind::Iterator => IterableRef::Iterator(IsArgument::from_argument(value, span)?),
-            ValueKind::Array => IterableRef::Array(IsArgument::from_argument(value, span)?),
-            ValueKind::Stream => IterableRef::Stream(IsArgument::from_argument(value, span)?),
-            ValueKind::Range(_) => IterableRef::Range(IsArgument::from_argument(value, span)?),
-            ValueKind::Object => IterableRef::Object(IsArgument::from_argument(value, span)?),
-            ValueKind::String => IterableRef::String(IsArgument::from_argument(value, span)?),
+    fn from_argument(argument: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+        Ok(match argument.kind() {
+            ValueKind::Iterator => IterableRef::Iterator(IsArgument::from_argument(argument)?),
+            ValueKind::Array => IterableRef::Array(IsArgument::from_argument(argument)?),
+            ValueKind::Stream => IterableRef::Stream(IsArgument::from_argument(argument)?),
+            ValueKind::Range(_) => IterableRef::Range(IsArgument::from_argument(argument)?),
+            ValueKind::Object => IterableRef::Object(IsArgument::from_argument(argument)?),
+            ValueKind::String => IterableRef::String(IsArgument::from_argument(argument)?),
             _ => {
-                return span.type_err(
+                return argument.type_err(
                     "Expected iterable (iterator, array, object, stream, range or string)",
                 );
             }

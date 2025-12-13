@@ -536,8 +536,8 @@ fn preinterpret_run_internal(input: TokenStream) -> SynResult<TokenStream> {
 
     let entry_span = Span::call_site().span_range();
     let returned_stream = content
-        .evaluate(&mut interpreter, entry_span, RequestedOwnership::owned())
-        .and_then(|x| x.expect_owned().into_stream(entry_span))
+        .evaluate_spanned(&mut interpreter, entry_span, RequestedOwnership::owned())
+        .and_then(|x| x.expect_owned().into_stream())
         .convert_to_final_result()?;
 
     let mut output_stream = interpreter.complete();

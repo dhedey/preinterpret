@@ -244,9 +244,38 @@ impl RequestedValue {
     }
 }
 
-// Note: RequestedValue no longer implements WithSpanRangeExt since the inner
-// value types (Owned, Mutable, Shared, etc.) no longer carry spans internally.
-// Spans should be tracked separately at a higher level if needed.
+#[allow(unused)]
+impl Spanned<RequestedValue> {
+    #[inline]
+    pub(crate) fn expect_owned(self) -> Spanned<OwnedValue> {
+        self.map(|v| v.expect_owned())
+    }
+
+    #[inline]
+    pub(crate) fn expect_shared(self) -> Spanned<SharedValue> {
+        self.map(|v| v.expect_shared())
+    }
+
+    #[inline]
+    pub(crate) fn expect_assignee(self) -> Spanned<AssigneeValue> {
+        self.map(|v| v.expect_assignee())
+    }
+
+    #[inline]
+    pub(crate) fn expect_late_bound(self) -> Spanned<LateBoundValue> {
+        self.map(|v| v.expect_late_bound())
+    }
+
+    #[inline]
+    pub(crate) fn expect_argument_value(self) -> Spanned<ArgumentValue> {
+        self.map(|v| v.expect_argument_value())
+    }
+
+    #[inline]
+    pub(crate) fn expect_assignment_completion(self) -> Spanned<AssignmentCompletion> {
+        self.map(|v| v.expect_assignment_completion())
+    }
+}
 
 /// See the [rust reference] for a good description of assignee vs place.
 ///

@@ -14,70 +14,65 @@ macro_rules! if_empty {
 }
 
 macro_rules! handle_first_arg_type {
-    // By value
-    ($($arg_part:ident)+ : $type:ty, $($rest:tt)*) => {
+    ([NEXT] : $type:ty) => {
         $type
+    };
+    ([NEXT] : $type:ty, $($rest:tt)*) => {
+        $type
+    };
+    ([NEXT] $consumed:tt $($rest:tt)*) => {
+        handle_first_arg_type!([NEXT] $($rest)*)
+    };
+    // Start
+    ($first:tt $($rest:tt)*) => {
+        handle_first_arg_type!([NEXT] $($rest)*)
     };
 }
 
-macro_rules! create_method_interface {
-    ($method_name:path[$(,)?]) => {
+macro_rules! generate_unary_interface {
+    (REQUIRED [$ty1:tt] OPTIONAL [] ARGS[$method:path]) => {
+        UnaryOperationInterface {
+            method: |context, a| apply_unary_fn($method, a, context),
+            argument_ownership: <$ty1 as IsArgument>::OWNERSHIP,
+        }
+    };
+}
+
+macro_rules! generate_binary_interface {
+    (REQUIRED [$ty1:tt $ty2:tt] OPTIONAL [] ARGS[$method:path]) => {
+        BinaryOperationInterface {
+            method: |context, a, b| apply_binary_fn($method, a, b, context),
+            lhs_ownership: <$ty1 as IsArgument>::OWNERSHIP,
+            rhs_ownership: <$ty2 as IsArgument>::OWNERSHIP,
+        }
+    };
+}
+
+macro_rules! generate_method_interface {
+    (REQUIRED [] OPTIONAL [] ARGS[$method:path]) => {
         MethodInterface::Arity0 {
-            method: |context| apply_fn0($method_name, context),
+            method: |context| apply_fn0($method, context),
             argument_ownership: [],
         }
     };
-    ($method_name:path[$($arg_part:ident)+ : $ty:ty $(,)?]) => {
+    (REQUIRED [$ty1:tt] OPTIONAL [] ARGS[$method:path]) => {
         MethodInterface::Arity1 {
-            method: |context, a| apply_fn1($method_name, a, context),
-            argument_ownership: [<$ty as IsArgument>::OWNERSHIP],
+            method: |context, a| apply_fn1($method, a, context),
+            argument_ownership: [<$ty1 as IsArgument>::OWNERSHIP],
         }
     };
-    ($method_name:path[
-        $($arg_part1:ident)+ : $ty1:ty,
-        $($arg_part2:ident)+ : Option<$ty2:ty> $(,)?
-    ]) => {
-        MethodInterface::Arity1PlusOptional1 {
-            method: |context, a, b| apply_fn1_optional1($method_name, a, b, context),
-            argument_ownership: [
-                <$ty1 as IsArgument>::OWNERSHIP,
-                <$ty2 as IsArgument>::OWNERSHIP,
-            ],
-        }
-    };
-    ($method_name:path[
-        $($arg_part1:ident)+ : $ty1:ty,
-        $($arg_part2:ident)+ : $ty2:ty $(,)?
-    ]) => {
+    (REQUIRED [$ty1:tt $ty2:tt] OPTIONAL [] ARGS[$method:path]) => {
         MethodInterface::Arity2 {
-            method: |context, a, b| apply_fn2($method_name, a, b, context),
+            method: |context, a, b| apply_fn2($method, a, b, context),
             argument_ownership: [
                 <$ty1 as IsArgument>::OWNERSHIP,
                 <$ty2 as IsArgument>::OWNERSHIP,
             ],
         }
     };
-    ($method_name:path[
-        $($arg_part1:ident)+ : $ty1:ty,
-        $($arg_part2:ident)+ : $ty2:ty,
-        $($arg_part3:ident)+ : Option<$ty3:ty> $(,)?
-    ]) => {
-        MethodInterface::Arity2PlusOptional1 {
-            method: |context, a, b, c| apply_fn2_optional1($method_name, a, b, c, context),
-            argument_ownership: [
-                <$ty1 as IsArgument>::OWNERSHIP,
-                <$ty2 as IsArgument>::OWNERSHIP,
-                <$ty3 as IsArgument>::OWNERSHIP,
-            ],
-        }
-    };
-    ($method_name:path[
-        $($arg_part1:ident)+ : $ty1:ty,
-        $($arg_part2:ident)+ : $ty2:ty,
-        $($arg_part3:ident)+ : $ty3:ty $(,)?
-    ]) => {
+    (REQUIRED [$ty1:tt $ty2:tt $ty3:tt] OPTIONAL [] ARGS[$method:path]) => {
         MethodInterface::Arity3 {
-            method: |context, a, b, c| apply_fn3($method_name, a, b, c, context),
+            method: |context, a, b, c| apply_fn3($method, a, b, c, context),
             argument_ownership: [
                 <$ty1 as IsArgument>::OWNERSHIP,
                 <$ty2 as IsArgument>::OWNERSHIP,
@@ -85,14 +80,28 @@ macro_rules! create_method_interface {
             ],
         }
     };
-    ($method_name:path[
-        $($arg_part1:ident)+ : $ty1:ty,
-        $($arg_part2:ident)+ : $ty2:ty,
-        $($arg_part3:ident)+ : $ty3:ty,
-        $($arg_part4:ident)+ : Option<$ty4:ty> $(,)?
-    ]) => {
+    (REQUIRED [$ty1:tt] OPTIONAL [$ty2:tt] ARGS[$method:path]) => {
+        MethodInterface::Arity1PlusOptional1 {
+            method: |context, a, b| apply_fn1_optional1($method, a, b, context),
+            argument_ownership: [
+                <$ty1 as IsArgument>::OWNERSHIP,
+                <$ty2 as IsArgument>::OWNERSHIP,
+            ],
+        }
+    };
+    (REQUIRED [$ty1:tt $ty2:tt] OPTIONAL [$ty3:tt] ARGS[$method:path]) => {
+        MethodInterface::Arity2PlusOptional1 {
+            method: |context, a, b, c| apply_fn2_optional1($method, a, b, c, context),
+            argument_ownership: [
+                <$ty1 as IsArgument>::OWNERSHIP,
+                <$ty2 as IsArgument>::OWNERSHIP,
+                <$ty3 as IsArgument>::OWNERSHIP,
+            ],
+        }
+    };
+    (REQUIRED [$ty1:tt $ty2:tt $ty3:tt] OPTIONAL [$ty4:tt] ARGS[$method:path]) => {
         MethodInterface::Arity3PlusOptional1 {
-            method: |context, a, b, c, d| apply_fn3_optional1($method_name, a, b, c, d, context),
+            method: |context, a, b, c, d| apply_fn3_optional1($method, a, b, c, d, context),
             argument_ownership: [
                 <$ty1 as IsArgument>::OWNERSHIP,
                 <$ty2 as IsArgument>::OWNERSHIP,
@@ -100,6 +109,34 @@ macro_rules! create_method_interface {
                 <$ty4 as IsArgument>::OWNERSHIP,
             ],
         }
+    };
+}
+
+macro_rules! parse_arg_types {
+    // Nothing left - activate callback
+    ([REQUIRED $req:tt OPTIONAL $opt:tt => $callback:ident! $callback_args:tt]) => {
+        // log_syntax!(REQUIRED $req OPTIONAL $opt ARGS $callback_args)
+        $callback!(REQUIRED $req OPTIONAL $opt ARGS $callback_args)
+    };
+    // Next tokens are `: Option<X>` - we have an optional argument
+    ([REQUIRED $req:tt OPTIONAL[$($opt:tt)*] => $callback:ident! $callback_args:tt] : Option<$type:ty> $($rest:tt)*) => {
+        parse_arg_types!([REQUIRED $req OPTIONAL[$($opt)* $type] => $callback! $callback_args] $($rest)*)
+    };
+    // Next tokens are `: X)` - we have a required argument (variant 1)
+    ([REQUIRED [$($req:tt)*] OPTIONAL $opt:tt => $callback:ident! $callback_args:tt] : $type:ty) => {
+        parse_arg_types!([REQUIRED[$($req)* $type] OPTIONAL $opt => $callback! $callback_args])
+    };
+    // Next tokens are `: X, ...` - we have a required argument (variant 2)
+    ([REQUIRED [$($req:tt)*] OPTIONAL $opt:tt => $callback:ident! $callback_args:tt] : $type:ty, $($rest:tt)*) => {
+        parse_arg_types!([REQUIRED[$($req)* $type] OPTIONAL $opt => $callback! $callback_args] $($rest)*)
+    };
+    // Next tokens are something else - ignore it and look at next
+    ([REQUIRED $req:tt OPTIONAL $opt:tt => $callback:ident! $callback_args:tt] $consumed:tt $($rest:tt)*) => {
+        parse_arg_types!([REQUIRED $req OPTIONAL $opt => $callback! $callback_args] $($rest)*)
+    };
+    // Start
+    ([CALLBACK: $callback:ident! $callback_args:tt] $($rest:tt)*) => {
+        parse_arg_types!([REQUIRED[] OPTIONAL[] => $callback! $callback_args] $($rest)*)
     };
 }
 
@@ -120,22 +157,21 @@ where
 
 pub(crate) fn apply_fn1<A, R>(
     f: fn(&mut MethodCallContext, A) -> R,
-    a: ArgumentValue,
+    a: Spanned<ArgumentValue>,
     context: &mut MethodCallContext,
 ) -> ExecutionResult<ReturnedValue>
 where
     A: IsArgument,
     R: IsReturnable,
 {
-    let output_span_range = context.output_span_range;
-    f(context, A::from_argument(a, output_span_range)?).to_returned_value()
+    f(context, A::from_argument(a)?).to_returned_value()
 }
 
 #[allow(unused)]
 pub(crate) fn apply_fn1_optional1<A, B, C>(
     f: fn(&mut MethodCallContext, A, Option<B>) -> C,
-    a: ArgumentValue,
-    b: Option<ArgumentValue>,
+    a: Spanned<ArgumentValue>,
+    b: Option<Spanned<ArgumentValue>>,
     context: &mut MethodCallContext,
 ) -> ExecutionResult<ReturnedValue>
 where
@@ -146,17 +182,16 @@ where
     let output_span_range = context.output_span_range;
     f(
         context,
-        A::from_argument(a, output_span_range)?,
-        b.map(|b| B::from_argument(b, output_span_range))
-            .transpose()?,
+        A::from_argument(a)?,
+        b.map(|b| B::from_argument(b)).transpose()?,
     )
     .to_returned_value()
 }
 
 pub(crate) fn apply_fn2<A, B, C>(
     f: fn(&mut MethodCallContext, A, B) -> C,
-    a: ArgumentValue,
-    b: ArgumentValue,
+    a: Spanned<ArgumentValue>,
+    b: Spanned<ArgumentValue>,
     context: &mut MethodCallContext,
 ) -> ExecutionResult<ReturnedValue>
 where
@@ -164,20 +199,14 @@ where
     B: IsArgument,
     C: IsReturnable,
 {
-    let output_span_range = context.output_span_range;
-    f(
-        context,
-        A::from_argument(a, output_span_range)?,
-        B::from_argument(b, output_span_range)?,
-    )
-    .to_returned_value()
+    f(context, A::from_argument(a)?, B::from_argument(b)?).to_returned_value()
 }
 
 pub(crate) fn apply_fn2_optional1<A, B, C, D>(
     f: fn(&mut MethodCallContext, A, B, Option<C>) -> D,
-    a: ArgumentValue,
-    b: ArgumentValue,
-    c: Option<ArgumentValue>,
+    a: Spanned<ArgumentValue>,
+    b: Spanned<ArgumentValue>,
+    c: Option<Spanned<ArgumentValue>>,
     context: &mut MethodCallContext,
 ) -> ExecutionResult<ReturnedValue>
 where
@@ -186,13 +215,11 @@ where
     C: IsArgument,
     D: IsReturnable,
 {
-    let output_span_range = context.output_span_range;
     f(
         context,
-        A::from_argument(a, output_span_range)?,
-        B::from_argument(b, output_span_range)?,
-        c.map(|c| C::from_argument(c, output_span_range))
-            .transpose()?,
+        A::from_argument(a)?,
+        B::from_argument(b)?,
+        c.map(|c| C::from_argument(c)).transpose()?,
     )
     .to_returned_value()
 }
@@ -200,9 +227,9 @@ where
 #[allow(unused)]
 pub(crate) fn apply_fn3<A, B, C, R>(
     f: fn(&mut MethodCallContext, A, B, C) -> R,
-    a: ArgumentValue,
-    b: ArgumentValue,
-    c: ArgumentValue,
+    a: Spanned<ArgumentValue>,
+    b: Spanned<ArgumentValue>,
+    c: Spanned<ArgumentValue>,
     context: &mut MethodCallContext,
 ) -> ExecutionResult<ReturnedValue>
 where
@@ -211,22 +238,21 @@ where
     C: IsArgument,
     R: IsReturnable,
 {
-    let output_span_range = context.output_span_range;
     f(
         context,
-        A::from_argument(a, output_span_range)?,
-        B::from_argument(b, output_span_range)?,
-        C::from_argument(c, output_span_range)?,
+        A::from_argument(a)?,
+        B::from_argument(b)?,
+        C::from_argument(c)?,
     )
     .to_returned_value()
 }
 
 pub(crate) fn apply_fn3_optional1<A, B, C, D, R>(
     f: fn(&mut MethodCallContext, A, B, C, Option<D>) -> R,
-    a: ArgumentValue,
-    b: ArgumentValue,
-    c: ArgumentValue,
-    d: Option<ArgumentValue>,
+    a: Spanned<ArgumentValue>,
+    b: Spanned<ArgumentValue>,
+    c: Spanned<ArgumentValue>,
+    d: Option<Spanned<ArgumentValue>>,
     context: &mut MethodCallContext,
 ) -> ExecutionResult<ReturnedValue>
 where
@@ -236,57 +262,32 @@ where
     D: IsArgument,
     R: IsReturnable,
 {
-    let output_span_range = context.output_span_range;
     f(
         context,
-        A::from_argument(a, output_span_range)?,
-        B::from_argument(b, output_span_range)?,
-        C::from_argument(c, output_span_range)?,
-        d.map(|d| D::from_argument(d, output_span_range))
-            .transpose()?,
+        A::from_argument(a)?,
+        B::from_argument(b)?,
+        C::from_argument(c)?,
+        d.map(|d| D::from_argument(d)).transpose()?,
     )
     .to_returned_value()
 }
 
-macro_rules! create_unary_interface {
-    ($method_name:path[$($arg_part:ident)+ : $ty:ty $(,)?]) => {
-        UnaryOperationInterface {
-            method: |context, a| apply_unary_fn($method_name, a, context),
-            argument_ownership: <$ty as IsArgument>::OWNERSHIP,
-        }
-    };
-}
-
 pub(crate) fn apply_unary_fn<A, R>(
     f: fn(UnaryOperationCallContext, A) -> R,
-    a: ArgumentValue,
+    a: Spanned<ArgumentValue>,
     context: UnaryOperationCallContext,
 ) -> ExecutionResult<ReturnedValue>
 where
     A: IsArgument,
     R: IsReturnable,
 {
-    let output_span_range = context.output_span_range;
-    f(context, A::from_argument(a, output_span_range)?).to_returned_value()
-}
-
-macro_rules! create_binary_interface {
-    ($method_name:path[
-        $($lhs_part:ident)+ : $lhs_ty:ty,
-        $($rhs_part:ident)+ : $rhs_ty:ty $(,)?
-    ]) => {
-        BinaryOperationInterface {
-            method: |context, lhs, rhs| apply_binary_fn($method_name, lhs, rhs, context),
-            lhs_ownership: <$lhs_ty as IsArgument>::OWNERSHIP,
-            rhs_ownership: <$rhs_ty as IsArgument>::OWNERSHIP,
-        }
-    };
+    f(context, A::from_argument(a)?).to_returned_value()
 }
 
 pub(crate) fn apply_binary_fn<A, B, R>(
     f: fn(BinaryOperationCallContext, A, B) -> R,
-    lhs: ArgumentValue,
-    rhs: ArgumentValue,
+    lhs: Spanned<ArgumentValue>,
+    rhs: Spanned<ArgumentValue>,
     context: BinaryOperationCallContext,
 ) -> ExecutionResult<ReturnedValue>
 where
@@ -294,13 +295,7 @@ where
     B: IsArgument,
     R: IsReturnable,
 {
-    let output_span_range = context.output_span_range;
-    f(
-        context,
-        A::from_argument(lhs, output_span_range)?,
-        B::from_argument(rhs, output_span_range)?,
-    )
-    .to_returned_value()
+    f(context, A::from_argument(lhs)?, B::from_argument(rhs)?).to_returned_value()
 }
 
 pub(crate) struct MethodCallContext<'a> {
@@ -422,7 +417,7 @@ macro_rules! define_interface {
                 use super::*;
                 $(
                     $mod_methods_vis fn $method_name() -> MethodInterface {
-                        create_method_interface!(methods::$method_name[$($method_args)*])
+                        parse_arg_types!([CALLBACK: generate_method_interface![methods::$method_name]] $($method_args)*)
                     }
                 )*
             }
@@ -442,7 +437,7 @@ macro_rules! define_interface {
                 use super::*;
                 $(
                     $mod_unary_operations_vis fn $unary_name() -> UnaryOperationInterface {
-                        create_unary_interface!(unary_operations::$unary_name[$($unary_args)*])
+                        parse_arg_types!([CALLBACK: generate_unary_interface![unary_operations::$unary_name]] $($unary_args)*)
                     }
                 )*
             }
@@ -462,7 +457,7 @@ macro_rules! define_interface {
                 use super::*;
                 $(
                     $mod_binary_operations_vis fn $binary_name() -> BinaryOperationInterface {
-                        create_binary_interface!(binary_operations::$binary_name[$($binary_args)*])
+                        parse_arg_types!([CALLBACK: generate_binary_interface![binary_operations::$binary_name]] $($binary_args)*)
                     }
                 )*
             }
@@ -490,6 +485,6 @@ macro_rules! define_interface {
 }
 
 pub(crate) use {
-    create_binary_interface, create_method_interface, create_unary_interface, define_interface,
-    handle_first_arg_type, if_empty, ignore_all,
+    define_interface, generate_binary_interface, generate_method_interface,
+    generate_unary_interface, handle_first_arg_type, if_empty, ignore_all, parse_arg_types,
 };

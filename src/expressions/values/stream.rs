@@ -243,11 +243,11 @@ define_interface! {
                 let source = this.into_inner().value.into_token_stream();
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(ExpressionBlockContent::parse, ExpressionBlockContent::control_flow_pass)?;
                 let mut inner_interpreter = Interpreter::new(scope_definitions);
-                let return_value = reparsed.evaluate(&mut inner_interpreter, context.output_span_range, RequestedOwnership::owned())?.expect_owned();
+                let return_value = reparsed.evaluate_spanned(&mut inner_interpreter, context.output_span_range, RequestedOwnership::owned())?.expect_owned();
                 if !inner_interpreter.complete().is_empty() {
                     return context.control_flow_err("reinterpret_as_run does not allow non-empty stream output")
                 }
-                Ok(return_value)
+                Ok(return_value.0)
             }
 
             [context] fn reinterpret_as_stream(this: Owned<StreamValue>) -> ExecutionResult<OutputStream> {
@@ -269,7 +269,7 @@ define_interface! {
                     return context.output_span_range.value_err("The stream could not be coerced into a single value");
                 }
                 // Re-run the cast operation on the coerced value
-                context.operation.evaluate(coerced.into_owned(), context.output_span_range)
+                Ok(context.operation.evaluate(Spanned(coerced.into_owned(), context.output_span_range))?.0)
             }
         }
         pub(crate) mod binary_operations {

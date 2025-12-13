@@ -88,10 +88,6 @@ pub(crate) struct AnyRefMut<'a, T: 'static + ?Sized> {
     inner: AnyRefMutInner<'a, T>,
 }
 
-/// A [`SpannedRefMut<T>`] is a more flexible [`Shared<T>`] which can also cheaply host a
-/// `(&'a T, SpanRange)`.
-pub(crate) type SpannedAnyRefMut<'a, T> = Spanned<AnyRefMut<'a, T>>;
-
 impl<'a, T: ?Sized> From<&'a mut T> for AnyRefMut<'a, T> {
     fn from(value: &'a mut T) -> Self {
         Self {
@@ -104,15 +100,10 @@ impl<'a, T: ?Sized> From<&'a mut T> for AnyRefMut<'a, T> {
 pub(crate) trait IntoRefMut<'a> {
     type Target: ?Sized;
     fn into_ref_mut(self) -> AnyRefMut<'a, Self::Target>;
-    fn into_spanned_ref_mut(self, source: impl HasSpanRange) -> SpannedAnyRefMut<'a, Self::Target>;
 }
 
 impl<'a, T: ?Sized + 'static> IntoRefMut<'a> for &'a mut T {
     type Target = T;
-
-    fn into_spanned_ref_mut(self, source: impl HasSpanRange) -> SpannedAnyRefMut<'a, T> {
-        self.into_ref_mut().spanned(source)
-    }
 
     fn into_ref_mut(self) -> AnyRefMut<'a, Self::Target> {
         self.into()
@@ -124,15 +115,6 @@ impl<'a, T: ?Sized> From<Mutable<T>> for AnyRefMut<'a, T> {
         Self {
             inner: AnyRefMutInner::Encapsulated(value.0),
         }
-    }
-}
-
-impl<T: ?Sized> Mutable<T> {
-    pub(crate) fn into_spanned_ref_mut(
-        self,
-        source: impl HasSpanRange,
-    ) -> SpannedAnyRefMut<'static, T> {
-        AnyRefMut::from(self).spanned(source)
     }
 }
 

@@ -322,7 +322,7 @@ define_interface! {
             [context] fn cast_singleton_to_value(this: Owned<IteratorValue>) -> ExecutionResult<ReturnedValue> {
                 let this = this.into_inner();
                 match this.singleton_value() {
-                    Some(value) => context.operation.evaluate(Owned::new(value), context.output_span_range),
+                    Some(value) => Ok(context.operation.evaluate(Spanned(Owned::new(value), context.output_span_range))?.0),
                     None => context.output_span_range.value_err("Only an iterator with one item can be cast to this value")
                 }
             }

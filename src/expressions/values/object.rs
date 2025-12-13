@@ -65,7 +65,7 @@ impl ObjectValue {
         auto_create: bool,
     ) -> ExecutionResult<&mut Value> {
         let index: Spanned<&str> = index.resolve_as("An object key")?;
-        self.mut_entry(index.map(|s, _| s.to_string()), auto_create)
+        self.mut_entry(index.map(|s| s.to_string()), auto_create)
     }
 
     pub(super) fn index_ref(&self, index: Spanned<&Value>) -> ExecutionResult<&Value> {
