@@ -488,7 +488,7 @@ impl TypeProperty {
         let resolved_property = resolver.resolve_type_property(&self.property.to_string());
         match resolved_property {
             Some(value) => ownership.map_from_shared(Spanned(
-                SharedValue::new_from_owned(value),
+                SharedValue::new_from_owned(value.into_owned_value()),
                 self.span_range(),
             )),
             None => self.type_err(format!(

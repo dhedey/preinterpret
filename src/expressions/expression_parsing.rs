@@ -120,10 +120,9 @@ impl<'a> ExpressionParser<'a> {
                     "_" => UnaryAtom::Leaf(Leaf::Discarded(input.parse()?)),
                     "true" | "false" => {
                         let bool = input.parse::<syn::LitBool>()?;
-                        let span_range = bool.span().span_range();
                         UnaryAtom::Leaf(Leaf::Value(Spanned(
-                            SharedValue::new_from_owned(BooleanValue::for_litbool(&bool).into_value()),
-                            span_range,
+                            SharedValue::new_from_owned(BooleanValue::for_litbool(&bool).into_owned_value()),
+                            bool.span.span_range(),
                         )))
                     }
                     "if" => UnaryAtom::Leaf(Leaf::IfExpression(Box::new(input.parse()?))),
@@ -134,10 +133,9 @@ impl<'a> ExpressionParser<'a> {
                     "parse" => return Ok(UnaryAtom::Leaf(Leaf::ParseExpression(Box::new(input.parse()?)))),
                     "None" => {
                         let none_ident = input.parse_any_ident()?; // consume the "None" token
-                        let span_range = none_ident.span().span_range();
                         UnaryAtom::Leaf(Leaf::Value(Spanned(
-                            SharedValue::new_from_owned(Value::None),
-                            span_range,
+                            SharedValue::new_from_owned(Value::None.into_owned_value()),
+                            none_ident.span().span_range(),
                         )))
                     }
                     _ => {
@@ -154,9 +152,8 @@ impl<'a> ExpressionParser<'a> {
             SourcePeekMatch::Literal(_) => {
                 let lit: syn::Lit = input.parse()?;
                 let span_range = lit.span().span_range();
-                let value = Value::for_syn_lit(lit);
                 UnaryAtom::Leaf(Leaf::Value(Spanned(
-                    SharedValue::new_from_owned(value.into_inner()),
+                    SharedValue::new_from_owned(Value::for_syn_lit(lit)),
                     span_range,
                 )))
             },

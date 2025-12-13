@@ -531,9 +531,7 @@ impl ArgumentOwnership {
                     span.ownership_err("An owned value cannot be assigned to.")
                 }
             }
-            ArgumentOwnership::Shared => Ok(ArgumentValue::Shared(Shared::new_from_owned(
-                owned.into_inner(),
-            ))),
+            ArgumentOwnership::Shared => Ok(ArgumentValue::Shared(Shared::new_from_owned(owned))),
         }
     }
 }

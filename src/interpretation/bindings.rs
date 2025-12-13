@@ -548,9 +548,9 @@ impl Spanned<Shared<Value>> {
 }
 
 impl Shared<Value> {
-    pub(crate) fn new_from_owned(value: Value) -> Self {
+    pub(crate) fn new_from_owned(value: OwnedValue) -> Self {
         // Unwrap is safe because it's a new refcell
-        Shared(SharedSubRcRefCell::new(Rc::new(RefCell::new(value))).unwrap())
+        Shared(SharedSubRcRefCell::new(Rc::new(RefCell::new(value.0))).unwrap())
     }
 
     pub(crate) fn infallible_clone(&self) -> OwnedValue {
@@ -755,7 +755,7 @@ impl CopyOnWrite<Value> {
     /// Converts to shared reference
     pub(crate) fn into_shared(self) -> SharedValue {
         match self.inner {
-            CopyOnWriteInner::Owned(Owned(value)) => SharedValue::new_from_owned(value),
+            CopyOnWriteInner::Owned(owned) => SharedValue::new_from_owned(owned),
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => shared,
             CopyOnWriteInner::SharedWithTransparentCloning(shared) => shared,
         }
