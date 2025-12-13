@@ -481,7 +481,6 @@ mod extensions;
 mod internal_prelude;
 mod interpretation;
 mod misc;
-mod sandbox;
 
 use internal_prelude::*;
 
