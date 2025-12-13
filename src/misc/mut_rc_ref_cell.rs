@@ -1,6 +1,5 @@
 use crate::internal_prelude::*;
-use std::cell::{BorrowError, BorrowMutError, Ref, RefCell, RefMut};
-use std::rc::Rc;
+use std::cell::{BorrowError, BorrowMutError};
 
 /// A mutable reference to a sub-value `U` inside a [`Rc<RefCell<T>>`].
 /// Only one [`MutSubRcRefCell`] can exist at a time for a given [`Rc<RefCell<T>>`].

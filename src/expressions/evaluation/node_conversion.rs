@@ -3,7 +3,7 @@ use super::*;
 impl ExpressionNode {
     pub(super) fn handle_as_value(
         &self,
-        mut context: Context<ValueType>,
+        mut context: Context<ReturnsValue>,
     ) -> ExecutionResult<NextAction> {
         Ok(match self {
             ExpressionNode::Leaf(leaf) => {

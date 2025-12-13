@@ -13,7 +13,7 @@ pub(super) enum AnyAssignmentFrame {
 impl AnyAssignmentFrame {
     pub(super) fn handle_next(
         self,
-        context: Context<AssignmentType>,
+        context: Context<ReturnsAssignmentCompletion>,
         value: Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         match self {
@@ -43,7 +43,7 @@ impl AssigneeAssigner {
 }
 
 impl EvaluationFrame for AssigneeAssigner {
-    type ReturnType = AssignmentType;
+    type ReturnType = ReturnsAssignmentCompletion;
 
     fn into_any(self) -> AnyAssignmentFrame {
         AnyAssignmentFrame::Assignee(self)
@@ -75,7 +75,7 @@ impl GroupedAssigner {
 }
 
 impl EvaluationFrame for GroupedAssigner {
-    type ReturnType = AssignmentType;
+    type ReturnType = ReturnsAssignmentCompletion;
 
     fn into_any(self) -> AnyAssignmentFrame {
         AnyAssignmentFrame::Grouped(self)
@@ -194,7 +194,7 @@ impl ArrayBasedAssigner {
 }
 
 impl EvaluationFrame for ArrayBasedAssigner {
-    type ReturnType = AssignmentType;
+    type ReturnType = ReturnsAssignmentCompletion;
 
     fn into_any(self) -> AnyAssignmentFrame {
         AnyAssignmentFrame::Array(self)
@@ -307,7 +307,7 @@ impl ObjectBasedAssigner {
 }
 
 impl EvaluationFrame for Box<ObjectBasedAssigner> {
-    type ReturnType = AssignmentType;
+    type ReturnType = ReturnsAssignmentCompletion;
 
     fn into_any(self) -> AnyAssignmentFrame {
         AnyAssignmentFrame::Object(self)

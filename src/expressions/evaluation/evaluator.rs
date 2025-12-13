@@ -406,10 +406,10 @@ pub(super) trait RequestedValueType {
     ) -> AnyEvaluationHandler;
 }
 
-pub(super) struct ValueType;
-pub(super) type ValueContext<'a> = Context<'a, ValueType>;
+pub(super) struct ReturnsValue;
+pub(super) type ValueContext<'a> = Context<'a, ReturnsValue>;
 
-impl RequestedValueType for ValueType {
+impl RequestedValueType for ReturnsValue {
     type RequestConstraints = RequestedOwnership;
     type AnyHandler = AnyValueFrame;
 
@@ -421,7 +421,7 @@ impl RequestedValueType for ValueType {
     }
 }
 
-impl<'a> Context<'a, ValueType> {
+impl<'a> Context<'a, ReturnsValue> {
     pub(super) fn requested_ownership(&self) -> RequestedOwnership {
         self.request
     }
@@ -482,11 +482,11 @@ impl<'a> Context<'a, ValueType> {
     }
 }
 
-pub(super) struct AssignmentType;
+pub(super) struct ReturnsAssignmentCompletion;
 
-pub(super) type AssignmentContext<'a> = Context<'a, AssignmentType>;
+pub(super) type AssignmentContext<'a> = Context<'a, ReturnsAssignmentCompletion>;
 
-impl RequestedValueType for AssignmentType {
+impl RequestedValueType for ReturnsAssignmentCompletion {
     type RequestConstraints = ();
     type AnyHandler = AnyAssignmentFrame;
 
@@ -495,7 +495,7 @@ impl RequestedValueType for AssignmentType {
     }
 }
 
-impl<'a> Context<'a, AssignmentType> {
+impl<'a> Context<'a, ReturnsAssignmentCompletion> {
     pub(super) fn return_assignment_completion(self, span_range: SpanRange) -> NextAction {
         NextActionInner::HandleReturnedValue(Spanned(
             RequestedValue::AssignmentCompletion(AssignmentCompletion),
