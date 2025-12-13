@@ -69,8 +69,7 @@ macro_rules! define_typed_object {
 
         impl ResolvableOwned<Value> for $model {
             fn resolve_from_value(value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
-                let span_range = context.error_span_range();
-                Self::from_object_value(ObjectValue::resolve_owned_from_value(value, context)?, span_range)
+                Self::from_object_value(ObjectValue::resolve_spanned_owned_from_value(value, context)?)
             }
         }
 
@@ -95,7 +94,7 @@ macro_rules! define_typed_object {
         }
 
         impl $model {
-            fn from_object_value(object: Owned<ObjectValue>, span_range: SpanRange) -> ExecutionResult<Self> {
+            fn from_object_value(Spanned(object, span_range): Spanned<Owned<ObjectValue>>) -> ExecutionResult<Self> {
                 let mut object = object.into_inner();
                 (&object).spanned(span_range).validate(&Self::validation())?;
                 Ok($model {

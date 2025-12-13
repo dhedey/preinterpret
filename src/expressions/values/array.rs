@@ -196,11 +196,11 @@ define_interface! {
             }
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_to_numeric(this: Owned<ArrayValue>) -> ExecutionResult<ReturnedValue> {
+            [context] fn cast_to_numeric(Spanned(this, span): Spanned<Owned<ArrayValue>>) -> ExecutionResult<ReturnedValue> {
                 let mut this = this.into_inner();
                 let length = this.items.len();
                 if length == 1 {
-                    Ok(context.operation.evaluate(this.items.pop().unwrap().into_owned().spanned(context.output_span_range))?.0)
+                    Ok(context.operation.evaluate(this.items.pop().unwrap().into_owned().spanned(span))?.0)
                 } else {
                     context.operation.value_err(format!(
                         "Only a singleton array can be cast to this value but the array has {} elements",

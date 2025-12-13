@@ -282,10 +282,7 @@ impl UnaryOperationInterface {
     ) -> ExecutionResult<Spanned<ReturnedValue>> {
         let output_span_range = operation.output_span_range(input_span);
         Ok((self.method)(
-            UnaryOperationCallContext {
-                operation,
-                output_span_range,
-            },
+            UnaryOperationCallContext { operation },
             Spanned(input, input_span),
         )?
         .spanned(output_span_range))

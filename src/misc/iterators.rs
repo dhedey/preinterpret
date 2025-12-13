@@ -57,7 +57,7 @@ impl ZipIterators {
                     v.key_span,
                     v.value
                         .into_owned()
-                        .spanned(v.key_span)
+                        .spanned(span_range)
                         .resolve_any_iterator("Each zip input")?
                         .into_inner(),
                 ))

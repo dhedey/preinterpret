@@ -15,6 +15,12 @@ impl<'a> ResolutionContext<'a> {
         }
     }
 
+    #[inline]
+    pub(crate) fn value_span_range(&self) -> SpanRange {
+        *self.span_range
+    }
+
+    #[inline]
     pub(crate) fn error_span_range(&self) -> SpanRange {
         *self.span_range
     }
@@ -212,6 +218,14 @@ pub(crate) trait ResolvableArgumentTarget {
 
 pub(crate) trait ResolvableOwned<T>: Sized {
     fn resolve_from_value(value: T, context: ResolutionContext) -> ExecutionResult<Self>;
+
+    fn resolve_spanned_owned_from_value(
+        value: T,
+        context: ResolutionContext,
+    ) -> ExecutionResult<Spanned<Owned<Self>>> {
+        let span_range = context.span_range;
+        Self::resolve_from_value(value, context).map(|v| Owned(v).spanned(*span_range))
+    }
 
     fn resolve_owned_from_value(
         value: T,

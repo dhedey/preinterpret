@@ -78,14 +78,12 @@ impl VariableState {
         let resolved = match ownership {
             RequestedOwnership::LateBound => binding.into_late_bound(),
             RequestedOwnership::Concrete(ownership) => match ownership {
-                ArgumentOwnership::Owned => {
-                    binding.into_transparently_cloned(span_range).map(|owned| {
-                        LateBoundValue::Owned(LateBoundOwnedValue {
-                            owned,
-                            is_from_last_use: false,
-                        })
+                ArgumentOwnership::Owned => binding.into_transparently_cloned().map(|owned| {
+                    LateBoundValue::Owned(LateBoundOwnedValue {
+                        owned,
+                        is_from_last_use: false,
                     })
-                }
+                }),
                 ArgumentOwnership::Shared => binding
                     .into_shared()
                     .map(CopyOnWrite::shared_in_place_of_shared)
@@ -129,24 +127,22 @@ pub(crate) struct VariableBinding {
 impl VariableBinding {
     /// Gets the cloned expression value
     /// This only works if the value can be transparently cloned
-    pub(crate) fn into_transparently_cloned(
-        self,
-        span_range: SpanRange,
-    ) -> ExecutionResult<OwnedValue> {
+    pub(crate) fn into_transparently_cloned(self) -> ExecutionResult<OwnedValue> {
+        let span_range = self.variable_span.span_range();
         let shared = self.into_shared()?;
         let value = shared.as_ref().try_transparent_clone(span_range)?;
         Ok(Owned(value))
     }
 
-    pub(crate) fn into_mut(self) -> ExecutionResult<MutableValue> {
+    fn into_mut(self) -> ExecutionResult<MutableValue> {
         MutableValue::new_from_variable(self).map_err(ExecutionInterrupt::ownership_error)
     }
 
-    pub(crate) fn into_shared(self) -> ExecutionResult<SharedValue> {
+    fn into_shared(self) -> ExecutionResult<SharedValue> {
         SharedValue::new_from_variable(self).map_err(ExecutionInterrupt::ownership_error)
     }
 
-    pub(crate) fn into_late_bound(self) -> ExecutionResult<LateBoundValue> {
+    fn into_late_bound(self) -> ExecutionResult<LateBoundValue> {
         match MutableValue::new_from_variable(self.clone()) {
             Ok(value) => Ok(LateBoundValue::Mutable(value)),
             Err(reason_not_mutable) => {
@@ -234,18 +230,8 @@ impl LateBoundValue {
             )),
         })
     }
-}
 
-impl Deref for LateBoundValue {
-    type Target = Value;
-
-    fn deref(&self) -> &Self::Target {
-        self.as_ref()
-    }
-}
-
-impl AsRef<Value> for LateBoundValue {
-    fn as_ref(&self) -> &Value {
+    pub(crate) fn as_value(&self) -> &Value {
         match self {
             LateBoundValue::Owned(owned) => &owned.owned,
             LateBoundValue::CopyOnWrite(cow) => cow.as_ref(),
@@ -255,20 +241,23 @@ impl AsRef<Value> for LateBoundValue {
     }
 }
 
-// Note: LateBoundValue no longer implements HasSpanRange since its variants
-// have different span semantics. Use the span_range field on specific variants.
+impl Deref for LateBoundValue {
+    type Target = Value;
 
-// Note: LateBoundValue no longer implements WithSpanRangeExt since CopyOnWrite
-// and Mutable no longer carry spans. The LateBoundOwnedValue and LateBoundSharedValue
-// variants have their own span_range fields.
+    fn deref(&self) -> &Self::Target {
+        self.as_value()
+    }
+}
 
 pub(crate) type OwnedValue = Owned<Value>;
 
-/// A simple wrapper for owned values.
+/// A semantic wrapper for floating owned values.
 ///
 /// Can be destructured as: `Owned(value): Owned<T>`
 ///
-/// If you need span information, wrap with `Spanned<Owned<T>>`.
+/// If you need span information, wrap with `Spanned<Owned<T>>`. For example, for `x.y[4]`, this would capture both:
+/// * The output owned value
+/// * The lexical span of the tokens `x.y[4]`
 pub(crate) struct Owned<T: 'static>(pub(crate) T);
 
 #[allow(unused)]
@@ -290,20 +279,6 @@ impl<T> Owned<T> {
         value_map: impl FnOnce(T) -> Result<V, E>,
     ) -> Result<Owned<V>, E> {
         Ok(Owned(value_map(self.0)?))
-    }
-}
-
-impl OwnedValue {
-    pub(crate) fn resolve_indexed(
-        self,
-        access: IndexAccess,
-        index: Spanned<&Value>,
-    ) -> ExecutionResult<Self> {
-        self.try_map(|value| value.into_indexed(access, index))
-    }
-
-    pub(crate) fn resolve_property(self, access: &PropertyAccess) -> ExecutionResult<Self> {
-        self.try_map(|value| value.into_property(access))
     }
 }
 
@@ -445,23 +420,6 @@ impl Mutable<Value> {
             |_| reference.variable_span.syn_error(MUTABLE_ERROR_MESSAGE),
         )?))
     }
-
-    pub(crate) fn resolve_indexed(
-        self,
-        access: IndexAccess,
-        index: Spanned<&Value>,
-        auto_create: bool,
-    ) -> ExecutionResult<Self> {
-        self.try_map(|value| value.index_mut(access, index, auto_create))
-    }
-
-    pub(crate) fn resolve_property(
-        self,
-        access: &PropertyAccess,
-        auto_create: bool,
-    ) -> ExecutionResult<Self> {
-        self.try_map(|value| value.property_mut(access, auto_create))
-    }
 }
 
 impl<T: ?Sized> AsMut<T> for Mutable<T> {
@@ -554,25 +512,13 @@ impl Shared<Value> {
     }
 
     pub(crate) fn infallible_clone(&self) -> OwnedValue {
-        Owned(self.as_ref().clone())
+        Owned(self.0.clone())
     }
 
     fn new_from_variable(reference: VariableBinding) -> syn::Result<Self> {
         Ok(Shared(SharedSubRcRefCell::new(reference.data).map_err(
             |_| reference.variable_span.syn_error(SHARED_ERROR_MESSAGE),
         )?))
-    }
-
-    pub(crate) fn resolve_indexed(
-        self,
-        access: IndexAccess,
-        index: Spanned<&Value>,
-    ) -> ExecutionResult<Self> {
-        self.try_map(|value| value.index_ref(access, index))
-    }
-
-    pub(crate) fn resolve_property(self, access: &PropertyAccess) -> ExecutionResult<Self> {
-        self.try_map(|value| value.property_ref(access))
     }
 }
 

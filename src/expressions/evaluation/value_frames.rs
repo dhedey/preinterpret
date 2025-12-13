@@ -788,15 +788,15 @@ impl EvaluationFrame for UnaryOperationBuilder {
     fn handle_next(
         self,
         context: ValueContext,
-        Spanned(value, operand_span): Spanned<RequestedValue>,
+        operand: Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
-        let operand = value.expect_late_bound();
+        let operand = operand.expect_late_bound();
         let operand_kind = operand.kind();
 
         // Try method resolution first
         if let Some(interface) = operand_kind.resolve_unary_operation(&self.operation) {
-            let resolved_value =
-                Spanned(operand, operand_span).resolve(interface.argument_ownership())?;
+            let operand_span = operand.span_range();
+            let resolved_value = operand.resolve(interface.argument_ownership())?;
             let result =
                 interface.execute(Spanned(resolved_value, operand_span), &self.operation)?;
             return context.return_returned_value(result);
@@ -850,18 +850,15 @@ impl EvaluationFrame for BinaryOperationBuilder {
     fn handle_next(
         mut self,
         context: ValueContext,
-        Spanned(value, span): Spanned<RequestedValue>,
+        value: Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
             BinaryPath::OnLeftBranch { right } => {
-                let left_late_bound = value.expect_late_bound();
-                let left_span = span;
+                let Spanned(left, left_span) = value.expect_late_bound();
 
                 // Check for lazy evaluation first (short-circuit operators)
                 // Use operator span for type errors since the error is about the operation's requirements
-                let left_value = left_late_bound
-                    .as_ref()
-                    .spanned(self.operation.span_range());
+                let left_value = Spanned(left.as_value(), left_span);
                 if let Some(result) = self.operation.lazy_evaluate(left_value)? {
                     // For short-circuit, the result span is just the left operand's span
                     // (the right operand was never evaluated)
@@ -869,17 +866,14 @@ impl EvaluationFrame for BinaryOperationBuilder {
                         .return_returned_value(Spanned(ReturnedValue::Owned(result), left_span))?
                 } else {
                     // Try method resolution based on left operand's kind and resolve left operand immediately
-                    let interface = left_late_bound
-                        .as_ref()
-                        .kind()
-                        .resolve_binary_operation(&self.operation);
+                    let interface = left.kind().resolve_binary_operation(&self.operation);
 
                     match interface {
                         Some(interface) => {
                             let rhs_ownership = interface.rhs_ownership();
                             let left = interface
                                 .lhs_ownership()
-                                .map_from_late_bound(Spanned(left_late_bound, left_span))?;
+                                .map_from_late_bound(Spanned(left, left_span))?;
                             let mut left = Spanned(left, left_span);
 
                             unsafe {
@@ -894,7 +888,7 @@ impl EvaluationFrame for BinaryOperationBuilder {
                             return self.operation.type_err(format!(
                                 "The {} operator is not supported for {} operand",
                                 self.operation.symbolic_description(),
-                                left_late_bound.articled_value_type(),
+                                left.articled_value_type(),
                             ));
                         }
                     }
@@ -904,8 +898,7 @@ impl EvaluationFrame for BinaryOperationBuilder {
                 mut left,
                 interface,
             } => {
-                let right = value.expect_argument_value();
-                let mut right = Spanned(right, span);
+                let mut right = value.expect_argument_value();
 
                 // NOTE:
                 // - This disable/enable flow allows us to do x += x without issues
@@ -961,9 +954,9 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
     ) -> ExecutionResult<NextAction> {
         let auto_create = context.requested_ownership().requests_auto_create();
         let mapped = value.expect_any_value_and_map(
-            |shared| shared.resolve_property(&self.access),
-            |mutable| mutable.resolve_property(&self.access, auto_create),
-            |owned| owned.resolve_property(&self.access),
+            |shared| shared.try_map(|value| value.property_ref(&self.access)),
+            |mutable| mutable.try_map(|value| value.property_mut(&self.access, auto_create)),
+            |owned| owned.try_map(|value| value.into_property(&self.access)),
         )?;
         // The result span covers source through property
         let result_span = SpanRange::new_between(source_span, self.access.span_range());
@@ -1032,9 +1025,11 @@ impl EvaluationFrame for ValueIndexAccessBuilder {
 
                 let auto_create = context.requested_ownership().requests_auto_create();
                 let result = source.expect_any_value_and_map(
-                    |shared| shared.resolve_indexed(self.access, index),
-                    |mutable| mutable.resolve_indexed(self.access, index, auto_create),
-                    |owned| owned.resolve_indexed(self.access, index),
+                    |shared| shared.try_map(|value| value.index_ref(self.access, index)),
+                    |mutable| {
+                        mutable.try_map(|value| value.index_mut(self.access, index, auto_create))
+                    },
+                    |owned| owned.try_map(|value| value.into_indexed(self.access, index)),
                 )?;
                 let result_span = SpanRange::new_between(source_span, self.access.span_range());
                 context.return_not_necessarily_matching_requested(Spanned(result, result_span))?
@@ -1260,7 +1255,6 @@ impl EvaluationFrame for MethodCallBuilder {
                 let caller_span = span;
                 let caller = value.expect_late_bound();
                 let method = caller
-                    .as_ref()
                     .kind()
                     .resolve_method(self.method.method.to_string().as_str());
                 let method = match method {
@@ -1269,7 +1263,7 @@ impl EvaluationFrame for MethodCallBuilder {
                         return self.method.method.type_err(format!(
                             "The method {} does not exist on {}",
                             self.method.method,
-                            caller.as_ref().articled_value_type(),
+                            caller.articled_value_type(),
                         ))
                     }
                 };

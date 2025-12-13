@@ -159,14 +159,13 @@ define_interface! {
 
             // Opens a group with the specified delimiter character ('(', '{', or '[').
             // Must be paired with `close`.
-            [context] fn open(this: Spanned<Shared<ParserValue>>, delimiter_char: Owned<char>) -> ExecutionResult<()> {
+            [context] fn open(Spanned(this, span): Spanned<Shared<ParserValue>>, delimiter_char: Owned<char>) -> ExecutionResult<()> {
                 let delimiter_char = delimiter_char.into_inner();
-                let span_range = context.output_span_range;
                 let delimiter = delimiter_from_open_char(delimiter_char)
-                    .ok_or_else(|| span_range.value_error(format!(
+                    .ok_or_else(|| span.value_error(format!(
                         "Invalid open delimiter '{}'. Expected '(', '{{', or '['", delimiter_char
                     )))?;
-                this.parse_with(context.interpreter, |interpreter| {
+                Spanned(this, span).parse_with(context.interpreter, |interpreter| {
                     interpreter.enter_input_group(Some(delimiter))?;
                     Ok(())
                 })
@@ -174,17 +173,16 @@ define_interface! {
 
             // Closes the current group. Must be paired with a prior `open`.
             // The close character must match: ')' for '(', '}' for '{', ']' for '['
-            [context] fn close(this: Spanned<Shared<ParserValue>>, delimiter_char: Owned<char>) -> ExecutionResult<()> {
+            [context] fn close(Spanned(this, span): Spanned<Shared<ParserValue>>, delimiter_char: Owned<char>) -> ExecutionResult<()> {
                 let delimiter_char = delimiter_char.into_inner();
-                let span_range = context.output_span_range;
                 let expected_delimiter = delimiter_from_close_char(delimiter_char)
-                    .ok_or_else(|| span_range.value_error(format!(
+                    .ok_or_else(|| span.value_error(format!(
                         "Invalid close delimiter '{}'. Expected ')', '}}', or ']'", delimiter_char
                     )))?;
-                this.parse_with(context.interpreter, |interpreter| {
+                Spanned(this, span).parse_with(context.interpreter, |interpreter| {
                     // Check if there's a group to close first
                     if !interpreter.has_active_input_group() {
-                        return Err(span_range.value_error(format!(
+                        return Err(span.value_error(format!(
                             "attempting to close '{}' isn't valid, because there is no open group",
                             expected_delimiter.description_of_close()
                         )));
