@@ -553,7 +553,7 @@ pub(super) enum AnyValueFrame {
 impl AnyValueFrame {
     pub(super) fn handle_next(
         self,
-        context: Context<ValueType>,
+        context: Context<ReturnsValue>,
         value: Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         match self {
@@ -589,7 +589,7 @@ impl GroupBuilder {
 }
 
 impl EvaluationFrame for GroupBuilder {
-    type ReturnType = ValueType;
+    type ReturnType = ReturnsValue;
 
     fn into_any(self) -> AnyValueFrame {
         AnyValueFrame::Group(self)
@@ -643,7 +643,7 @@ impl ArrayBuilder {
 }
 
 impl EvaluationFrame for ArrayBuilder {
-    type ReturnType = ValueType;
+    type ReturnType = ReturnsValue;
 
     fn into_any(self) -> AnyValueFrame {
         AnyValueFrame::Array(self)
@@ -724,7 +724,7 @@ impl ObjectBuilder {
 }
 
 impl EvaluationFrame for Box<ObjectBuilder> {
-    type ReturnType = ValueType;
+    type ReturnType = ReturnsValue;
 
     fn into_any(self) -> AnyValueFrame {
         AnyValueFrame::Object(self)
@@ -779,7 +779,7 @@ impl UnaryOperationBuilder {
 }
 
 impl EvaluationFrame for UnaryOperationBuilder {
-    type ReturnType = ValueType;
+    type ReturnType = ReturnsValue;
 
     fn into_any(self) -> AnyValueFrame {
         AnyValueFrame::UnaryOperation(self)
@@ -841,7 +841,7 @@ impl BinaryOperationBuilder {
 }
 
 impl EvaluationFrame for BinaryOperationBuilder {
-    type ReturnType = ValueType;
+    type ReturnType = ReturnsValue;
 
     fn into_any(self) -> AnyValueFrame {
         AnyValueFrame::BinaryOperation(self)
@@ -941,7 +941,7 @@ impl ValuePropertyAccessBuilder {
 }
 
 impl EvaluationFrame for ValuePropertyAccessBuilder {
-    type ReturnType = ValueType;
+    type ReturnType = ReturnsValue;
 
     fn into_any(self) -> AnyValueFrame {
         AnyValueFrame::PropertyAccess(self)
@@ -996,7 +996,7 @@ impl ValueIndexAccessBuilder {
 }
 
 impl EvaluationFrame for ValueIndexAccessBuilder {
-    type ReturnType = ValueType;
+    type ReturnType = ReturnsValue;
 
     fn into_any(self) -> AnyValueFrame {
         AnyValueFrame::IndexAccess(self)
@@ -1086,7 +1086,7 @@ impl RangeBuilder {
 }
 
 impl EvaluationFrame for RangeBuilder {
-    type ReturnType = ValueType;
+    type ReturnType = ReturnsValue;
 
     fn into_any(self) -> AnyValueFrame {
         AnyValueFrame::Range(self)
@@ -1175,7 +1175,7 @@ impl AssignmentBuilder {
 }
 
 impl EvaluationFrame for AssignmentBuilder {
-    type ReturnType = ValueType;
+    type ReturnType = ReturnsValue;
 
     fn into_any(self) -> AnyValueFrame {
         AnyValueFrame::Assignment(self)
@@ -1238,7 +1238,7 @@ impl MethodCallBuilder {
 }
 
 impl EvaluationFrame for MethodCallBuilder {
-    type ReturnType = ValueType;
+    type ReturnType = ReturnsValue;
 
     fn into_any(self) -> AnyValueFrame {
         AnyValueFrame::MethodCall(self)

@@ -1,5 +1,4 @@
 use super::*;
-use crate::internal_prelude::*;
 
 #[derive(Copy, Clone)]
 pub(crate) enum FloatValue {

@@ -1,25 +1,28 @@
-pub(crate) use core::iter;
-pub(crate) use core::marker::PhantomData;
-pub(crate) use core::ops::{Deref, DerefMut};
-pub(crate) use proc_macro2::extra::*;
-pub(crate) use proc_macro2::*;
+pub(crate) use proc_macro2::{extra::*, *};
 pub(crate) use quote::ToTokens;
 pub(crate) use std::{
     borrow::Borrow,
     borrow::Cow,
+    cell::{Ref, RefCell, RefMut},
     collections::{BTreeMap, HashMap, HashSet},
     fmt::Debug,
+    iter,
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+    rc::Rc,
     str::FromStr,
 };
-pub(crate) use syn::buffer::Cursor;
-pub(crate) use syn::ext::IdentExt as SynIdentExt;
-pub(crate) use syn::parse::{
-    discouraged::Speculative, Parse as SynParse, ParseBuffer as SynParseBuffer,
-    ParseStream as SynParseStream, Parser as SynParser,
+pub(crate) use syn::{
+    buffer::Cursor,
+    ext::IdentExt as SynIdentExt,
+    parse::{
+        discouraged::Speculative, Parse as SynParse, ParseBuffer as SynParseBuffer,
+        ParseStream as SynParseStream, Parser as SynParser,
+    },
+    parse_str,
+    punctuated::Punctuated,
+    Error as SynError, Lit, LitFloat, LitInt, Result as SynResult, Token,
 };
-pub(crate) use syn::punctuated::Punctuated;
-pub(crate) use syn::{parse_str, Lit, LitFloat, LitInt, Token};
-pub(crate) use syn::{Error as SynError, Result as SynResult};
 
 pub(crate) use crate::expressions::*;
 pub(crate) use crate::extensions::*;
