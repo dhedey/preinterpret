@@ -163,28 +163,28 @@ define_interface! {
             // STRING-BASED CONVERSION METHODS
             // ===============================
 
-            [context] fn to_ident(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Ident> {
+            [context] fn to_ident(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Ident> {
                 let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
-            [context] fn to_ident_camel(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_camel(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Ident> {
                 let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident_camel(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
-            [context] fn to_ident_snake(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_snake(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Ident> {
                 let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident_snake(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
-            [context] fn to_ident_upper_snake(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_upper_snake(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Ident> {
                 let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident_upper_snake(context, string.as_str().into_spanned_ref(this.span_range()))
             }
 
             // Some literals become Value::UnsupportedLiteral but can still be round-tripped back to a stream
-            [context] fn to_literal(this: SpannedAnyRef<OutputStream>) -> ExecutionResult<Value> {
+            [context] fn to_literal(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Value> {
                 let string = this.concat_recursive(&ConcatBehaviour::literal(this.span_range()));
                 let literal = string_interface::methods::to_literal(context, string.as_str().into_spanned_ref(this.span_range()))?;
                 Ok(Value::for_literal(literal).into_value())
@@ -218,7 +218,7 @@ define_interface! {
                 }
             }
 
-            fn assert_eq(this: Shared<StreamValue>, lhs: SpannedAnyRef<Value>, rhs: SpannedAnyRef<Value>, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
+            fn assert_eq(this: Shared<StreamValue>, lhs: Spanned<AnyRef<Value>>, rhs: Spanned<AnyRef<Value>>, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
                 let lhs_value: &Value = &lhs;
                 let rhs_value: &Value = &rhs;
                 match Value::debug_eq(lhs_value, rhs_value) {

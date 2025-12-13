@@ -22,8 +22,6 @@ impl<'a, T: ?Sized + 'static> AnyRef<'a, T> {
     }
 }
 
-pub(crate) type SpannedAnyRef<'a, T> = Spanned<AnyRef<'a, T>>;
-
 impl<'a, T: ?Sized> From<&'a T> for AnyRef<'a, T> {
     fn from(value: &'a T) -> Self {
         Self {
@@ -35,7 +33,7 @@ impl<'a, T: ?Sized> From<&'a T> for AnyRef<'a, T> {
 pub(crate) trait ToSpannedRef<'a> {
     type Target: ?Sized;
     fn into_ref(self) -> AnyRef<'a, Self::Target>;
-    fn into_spanned_ref(self, source: impl HasSpanRange) -> SpannedAnyRef<'a, Self::Target>;
+    fn into_spanned_ref(self, source: impl HasSpanRange) -> Spanned<AnyRef<'a, Self::Target>>;
 }
 
 impl<'a, T: ?Sized> ToSpannedRef<'a> for &'a T {
@@ -43,7 +41,7 @@ impl<'a, T: ?Sized> ToSpannedRef<'a> for &'a T {
     fn into_ref(self) -> AnyRef<'a, Self::Target> {
         self.into()
     }
-    fn into_spanned_ref(self, source: impl HasSpanRange) -> SpannedAnyRef<'a, Self::Target> {
+    fn into_spanned_ref(self, source: impl HasSpanRange) -> Spanned<AnyRef<'a, Self::Target>> {
         self.into_ref().spanned(source)
     }
 }
@@ -61,7 +59,7 @@ impl<T: ?Sized> ToSpannedRef<'static> for Shared<T> {
     fn into_ref(self) -> AnyRef<'static, Self::Target> {
         self.into()
     }
-    fn into_spanned_ref(self, source: impl HasSpanRange) -> SpannedAnyRef<'static, Self::Target> {
+    fn into_spanned_ref(self, source: impl HasSpanRange) -> Spanned<AnyRef<'static, Self::Target>> {
         AnyRef::from(self).spanned(source)
     }
 }

@@ -39,7 +39,7 @@ impl<'a> ExpressionEvaluator<'a> {
         root: ExpressionNodeId,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
-    ) -> ExecutionResult<SpannedRequestedValue> {
+    ) -> ExecutionResult<Spanned<RequestedValue>> {
         let mut next_action = NextActionInner::ReadNodeAsValue(root, ownership);
 
         loop {
@@ -105,18 +105,15 @@ impl EvaluationStack {
     }
 }
 
-/// A `RequestedValue` with its associated span.
-pub(crate) type SpannedRequestedValue = Spanned<RequestedValue>;
-
 pub(super) enum StepResult {
     Continue(NextAction),
-    Return(SpannedRequestedValue),
+    Return(Spanned<RequestedValue>),
 }
 
 pub(super) struct NextAction(NextActionInner);
 
 impl NextAction {
-    fn return_requested(value: SpannedRequestedValue) -> Self {
+    fn return_requested(value: Spanned<RequestedValue>) -> Self {
         NextActionInner::HandleReturnedValue(value).into()
     }
 }
@@ -129,7 +126,7 @@ enum NextActionInner {
     // (similar to patterns but for existing values/reassignments)
     // let a = ["x", "y"]; let b; [a[1], .. b] = [1, 2, 3, 4]
     ReadNodeAsAssignmentTarget(ExpressionNodeId, Value),
-    HandleReturnedValue(SpannedRequestedValue),
+    HandleReturnedValue(Spanned<RequestedValue>),
 }
 
 impl From<NextActionInner> for NextAction {
@@ -290,7 +287,7 @@ impl AnyEvaluationHandler {
         self,
         interpreter: &mut Interpreter,
         stack: &mut EvaluationStack,
-        spanned_value: SpannedRequestedValue,
+        spanned_value: Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         match self {
             AnyEvaluationHandler::Value(handler, ownership) => handler.handle_next(
