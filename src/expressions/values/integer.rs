@@ -53,39 +53,39 @@ impl IntegerValue {
     }
 
     pub(crate) fn resolve_untyped_to_match_other(
-        this: Owned<IntegerValue>,
+        Spanned(Owned(value), span): Spanned<Owned<IntegerValue>>,
         other: &Value,
-        span: SpanRange,
     ) -> ExecutionResult<Self> {
-        let value = this.into_inner();
         match (value, other) {
             (IntegerValue::Untyped(this), Value::Integer(other)) => {
-                this.into_kind(other.kind(), span)
+                this.spanned(span).into_kind(other.kind())
             }
             (value, _) => Ok(value),
         }
     }
 
     pub(crate) fn resolve_untyped_to_match(
-        this: Owned<IntegerValue>,
+        Spanned(Owned(value), span): Spanned<Owned<IntegerValue>>,
         target: &IntegerValue,
-        span: SpanRange,
     ) -> ExecutionResult<Self> {
-        let value = this.into_inner();
         match value {
-            IntegerValue::Untyped(this) => this.into_kind(target.kind(), span),
-            other => Ok(other),
+            IntegerValue::Untyped(this) => this.spanned(span).into_kind(target.kind()),
+            value => Ok(value),
         }
     }
 
     pub(crate) fn assign_op<R>(
-        mut left: Assignee<IntegerValue>,
+        Spanned(mut left, left_span): Spanned<Assignee<IntegerValue>>,
         right: R,
         context: BinaryOperationCallContext,
-        op: fn(BinaryOperationCallContext, Owned<IntegerValue>, R) -> ExecutionResult<IntegerValue>,
+        op: fn(
+            BinaryOperationCallContext,
+            Spanned<Owned<IntegerValue>>,
+            R,
+        ) -> ExecutionResult<IntegerValue>,
     ) -> ExecutionResult<()> {
         let left_value = core::mem::replace(&mut *left, IntegerValue::U32(0));
-        let result = op(context, left_value.into_owned(), right)?;
+        let result = op(context, Spanned(Owned(left_value), left_span), right)?;
         *left = result;
         Ok(())
     }
@@ -228,9 +228,8 @@ define_interface! {
         pub(crate) mod unary_operations {
         }
         pub(crate) mod binary_operations {
-            [context] fn add(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
-                let right = Spanned(right, context.output_span_range);
-                match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
+            [context] fn add(left: Spanned<Owned<IntegerValue>>, right: Spanned<Owned<IntegerValue>>) -> ExecutionResult<IntegerValue> {
+                match IntegerValue::resolve_untyped_to_match(left, &right)? {
                     IntegerValue::Untyped(left) => left.paired_operation(right, context, FallbackInteger::checked_add),
                     IntegerValue::U8(left) => left.paired_operation(right, context, u8::checked_add),
                     IntegerValue::U16(left) => left.paired_operation(right, context, u16::checked_add),
@@ -247,13 +246,12 @@ define_interface! {
                 }
             }
 
-            [context] fn add_assign(lhs: Assignee<IntegerValue>, rhs: Owned<IntegerValue>) -> ExecutionResult<()> {
+            [context] fn add_assign(lhs: Spanned<Assignee<IntegerValue>>, rhs: Spanned<Owned<IntegerValue>>) -> ExecutionResult<()> {
                 IntegerValue::assign_op(lhs, rhs, context, add)
             }
 
-            [context] fn sub(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
-                let right = Spanned(right, context.output_span_range);
-                match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
+            [context] fn sub(left: Spanned<Owned<IntegerValue>>, right: Spanned<Owned<IntegerValue>>) -> ExecutionResult<IntegerValue> {
+                match IntegerValue::resolve_untyped_to_match(left, &right)? {
                     IntegerValue::Untyped(left) => left.paired_operation(right, context, FallbackInteger::checked_sub),
                     IntegerValue::U8(left) => left.paired_operation(right, context, u8::checked_sub),
                     IntegerValue::U16(left) => left.paired_operation(right, context, u16::checked_sub),
@@ -270,13 +268,12 @@ define_interface! {
                 }
             }
 
-            [context] fn sub_assign(lhs: Assignee<IntegerValue>, rhs: Owned<IntegerValue>) -> ExecutionResult<()> {
+            [context] fn sub_assign(lhs: Spanned<Assignee<IntegerValue>>, rhs: Spanned<Owned<IntegerValue>>) -> ExecutionResult<()> {
                 IntegerValue::assign_op(lhs, rhs, context, sub)
             }
 
-            [context] fn mul(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
-                let right = Spanned(right, context.output_span_range);
-                match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
+            [context] fn mul(left: Spanned<Owned<IntegerValue>>, right: Spanned<Owned<IntegerValue>>) -> ExecutionResult<IntegerValue> {
+                match IntegerValue::resolve_untyped_to_match(left, &right)? {
                     IntegerValue::Untyped(left) => left.paired_operation(right, context, FallbackInteger::checked_mul),
                     IntegerValue::U8(left) => left.paired_operation(right, context, u8::checked_mul),
                     IntegerValue::U16(left) => left.paired_operation(right, context, u16::checked_mul),
@@ -293,13 +290,12 @@ define_interface! {
                 }
             }
 
-            [context] fn mul_assign(lhs: Assignee<IntegerValue>, rhs: Owned<IntegerValue>) -> ExecutionResult<()> {
+            [context] fn mul_assign(lhs: Spanned<Assignee<IntegerValue>>, rhs: Spanned<Owned<IntegerValue>>) -> ExecutionResult<()> {
                 IntegerValue::assign_op(lhs, rhs, context, mul)
             }
 
-            [context] fn div(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
-                let right = Spanned(right, context.output_span_range);
-                match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
+            [context] fn div(left: Spanned<Owned<IntegerValue>>, right: Spanned<Owned<IntegerValue>>) -> ExecutionResult<IntegerValue> {
+                match IntegerValue::resolve_untyped_to_match(left, &right)? {
                     IntegerValue::Untyped(left) => left.paired_operation(right, context, FallbackInteger::checked_div),
                     IntegerValue::U8(left) => left.paired_operation(right, context, u8::checked_div),
                     IntegerValue::U16(left) => left.paired_operation(right, context, u16::checked_div),
@@ -316,13 +312,12 @@ define_interface! {
                 }
             }
 
-            [context] fn div_assign(lhs: Assignee<IntegerValue>, rhs: Owned<IntegerValue>) -> ExecutionResult<()> {
+            [context] fn div_assign(lhs: Spanned<Assignee<IntegerValue>>, rhs: Spanned<Owned<IntegerValue>>) -> ExecutionResult<()> {
                 IntegerValue::assign_op(lhs, rhs, context, div)
             }
 
-            [context] fn rem(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
-                let right = Spanned(right, context.output_span_range);
-                match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
+            [context] fn rem(left: Spanned<Owned<IntegerValue>>, right: Spanned<Owned<IntegerValue>>) -> ExecutionResult<IntegerValue> {
+                match IntegerValue::resolve_untyped_to_match(left, &right)? {
                     IntegerValue::Untyped(left) => left.paired_operation(right, context, FallbackInteger::checked_rem),
                     IntegerValue::U8(left) => left.paired_operation(right, context, u8::checked_rem),
                     IntegerValue::U16(left) => left.paired_operation(right, context, u16::checked_rem),
@@ -339,13 +334,12 @@ define_interface! {
                 }
             }
 
-            [context] fn rem_assign(lhs: Assignee<IntegerValue>, rhs: Owned<IntegerValue>) -> ExecutionResult<()> {
+            [context] fn rem_assign(lhs: Spanned<Assignee<IntegerValue>>, rhs: Spanned<Owned<IntegerValue>>) -> ExecutionResult<()> {
                 IntegerValue::assign_op(lhs, rhs, context, rem)
             }
 
-            [context] fn bitxor(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
-                let right = Spanned(right, context.output_span_range);
-                match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
+            [context] fn bitxor(left: Spanned<Owned<IntegerValue>>, right: Spanned<Owned<IntegerValue>>) -> ExecutionResult<IntegerValue> {
+                match IntegerValue::resolve_untyped_to_match(left, &right)? {
                     IntegerValue::Untyped(left) => left.paired_operation(right, context, |a, b| Some(a ^ b)),
                     IntegerValue::U8(left) => left.paired_operation(right, context, |a, b| Some(a ^ b)),
                     IntegerValue::U16(left) => left.paired_operation(right, context, |a, b| Some(a ^ b)),
@@ -362,13 +356,12 @@ define_interface! {
                 }
             }
 
-            [context] fn bitxor_assign(lhs: Assignee<IntegerValue>, rhs: Owned<IntegerValue>) -> ExecutionResult<()> {
+            [context] fn bitxor_assign(lhs: Spanned<Assignee<IntegerValue>>, rhs: Spanned<Owned<IntegerValue>>) -> ExecutionResult<()> {
                 IntegerValue::assign_op(lhs, rhs, context, bitxor)
             }
 
-            [context] fn bitand(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
-                let right = Spanned(right, context.output_span_range);
-                match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
+            [context] fn bitand(left: Spanned<Owned<IntegerValue>>, right: Spanned<Owned<IntegerValue>>) -> ExecutionResult<IntegerValue> {
+                match IntegerValue::resolve_untyped_to_match(left, &right)? {
                     IntegerValue::Untyped(left) => left.paired_operation(right, context, |a, b| Some(a & b)),
                     IntegerValue::U8(left) => left.paired_operation(right, context, |a, b| Some(a & b)),
                     IntegerValue::U16(left) => left.paired_operation(right, context, |a, b| Some(a & b)),
@@ -385,13 +378,12 @@ define_interface! {
                 }
             }
 
-            [context] fn bitand_assign(lhs: Assignee<IntegerValue>, rhs: Owned<IntegerValue>) -> ExecutionResult<()> {
+            [context] fn bitand_assign(lhs: Spanned<Assignee<IntegerValue>>, rhs: Spanned<Owned<IntegerValue>>) -> ExecutionResult<()> {
                 IntegerValue::assign_op(lhs, rhs, context, bitand)
             }
 
-            [context] fn bitor(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<IntegerValue> {
-                let right = Spanned(right, context.output_span_range);
-                match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
+            [context] fn bitor(left: Spanned<Owned<IntegerValue>>, right: Spanned<Owned<IntegerValue>>) -> ExecutionResult<IntegerValue> {
+                match IntegerValue::resolve_untyped_to_match(left, &right)? {
                     IntegerValue::Untyped(left) => left.paired_operation(right, context, |a, b| Some(a | b)),
                     IntegerValue::U8(left) => left.paired_operation(right, context, |a, b| Some(a | b)),
                     IntegerValue::U16(left) => left.paired_operation(right, context, |a, b| Some(a | b)),
@@ -408,13 +400,12 @@ define_interface! {
                 }
             }
 
-            [context] fn bitor_assign(lhs: Assignee<IntegerValue>, rhs: Owned<IntegerValue>) -> ExecutionResult<()> {
+            [context] fn bitor_assign(lhs: Spanned<Assignee<IntegerValue>>, rhs: Spanned<Owned<IntegerValue>>) -> ExecutionResult<()> {
                 IntegerValue::assign_op(lhs, rhs, context, bitor)
             }
 
-            [context] fn shift_left(lhs: Owned<IntegerValue>, right: CoercedToU32) -> ExecutionResult<IntegerValue> {
-                let CoercedToU32(right) = right;
-                match lhs.into_inner() {
+            [context] fn shift_left(lhs: Spanned<Owned<IntegerValue>>, CoercedToU32(right): CoercedToU32) -> ExecutionResult<IntegerValue> {
+                match lhs.0.into_inner() {
                     IntegerValue::Untyped(left) => left.shift_operation(right, context, FallbackInteger::checked_shl),
                     IntegerValue::U8(left) => left.shift_operation(right, context, u8::checked_shl),
                     IntegerValue::U16(left) => left.shift_operation(right, context, u16::checked_shl),
@@ -431,13 +422,12 @@ define_interface! {
                 }
             }
 
-            [context] fn shift_left_assign(lhs: Assignee<IntegerValue>, rhs: CoercedToU32) -> ExecutionResult<()> {
+            [context] fn shift_left_assign(lhs: Spanned<Assignee<IntegerValue>>, rhs: CoercedToU32) -> ExecutionResult<()> {
                 IntegerValue::assign_op(lhs, rhs, context, shift_left)
             }
 
-            [context] fn shift_right(lhs: Owned<IntegerValue>, right: CoercedToU32) -> ExecutionResult<IntegerValue> {
-                let CoercedToU32(right) = right;
-                match lhs.into_inner() {
+            [context] fn shift_right(lhs: Spanned<Owned<IntegerValue>>, CoercedToU32(right): CoercedToU32) -> ExecutionResult<IntegerValue> {
+                match lhs.0.into_inner() {
                     IntegerValue::Untyped(left) => left.shift_operation(right, context, FallbackInteger::checked_shr),
                     IntegerValue::U8(left) => left.shift_operation(right, context, u8::checked_shr),
                     IntegerValue::U16(left) => left.shift_operation(right, context, u16::checked_shr),
@@ -454,13 +444,12 @@ define_interface! {
                 }
             }
 
-            [context] fn shift_right_assign(lhs: Assignee<IntegerValue>, rhs: CoercedToU32) -> ExecutionResult<()> {
+            [context] fn shift_right_assign(lhs: Spanned<Assignee<IntegerValue>>, rhs: CoercedToU32) -> ExecutionResult<()> {
                 IntegerValue::assign_op(lhs, rhs, context, shift_right)
             }
 
-            [context] fn lt(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<bool> {
-                let right = Spanned(right, context.output_span_range);
-                match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
+            fn lt(left: Spanned<Owned<IntegerValue>>, right: Spanned<Owned<IntegerValue>>) -> ExecutionResult<bool> {
+                match IntegerValue::resolve_untyped_to_match(left, &right)? {
                     IntegerValue::Untyped(left) => left.paired_comparison(right, |a, b| a < b),
                     IntegerValue::U8(left) => left.paired_comparison(right, |a, b| a < b),
                     IntegerValue::U16(left) => left.paired_comparison(right, |a, b| a < b),
@@ -477,9 +466,8 @@ define_interface! {
                 }
             }
 
-            [context] fn le(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<bool> {
-                let right = Spanned(right, context.output_span_range);
-                match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
+            fn le(left: Spanned<Owned<IntegerValue>>, right: Spanned<Owned<IntegerValue>>) -> ExecutionResult<bool> {
+                match IntegerValue::resolve_untyped_to_match(left, &right)? {
                     IntegerValue::Untyped(left) => left.paired_comparison(right, |a, b| a <= b),
                     IntegerValue::U8(left) => left.paired_comparison(right, |a, b| a <= b),
                     IntegerValue::U16(left) => left.paired_comparison(right, |a, b| a <= b),
@@ -496,9 +484,8 @@ define_interface! {
                 }
             }
 
-            [context] fn gt(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<bool> {
-                let right = Spanned(right, context.output_span_range);
-                match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
+            fn gt(left: Spanned<Owned<IntegerValue>>, right: Spanned<Owned<IntegerValue>>) -> ExecutionResult<bool> {
+                match IntegerValue::resolve_untyped_to_match(left, &right)? {
                     IntegerValue::Untyped(left) => left.paired_comparison(right, |a, b| a > b),
                     IntegerValue::U8(left) => left.paired_comparison(right, |a, b| a > b),
                     IntegerValue::U16(left) => left.paired_comparison(right, |a, b| a > b),
@@ -515,9 +502,8 @@ define_interface! {
                 }
             }
 
-            [context] fn ge(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<bool> {
-                let right = Spanned(right, context.output_span_range);
-                match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
+            fn ge(left: Spanned<Owned<IntegerValue>>, right: Spanned<Owned<IntegerValue>>) -> ExecutionResult<bool> {
+                match IntegerValue::resolve_untyped_to_match(left, &right)? {
                     IntegerValue::Untyped(left) => left.paired_comparison(right, |a, b| a >= b),
                     IntegerValue::U8(left) => left.paired_comparison(right, |a, b| a >= b),
                     IntegerValue::U16(left) => left.paired_comparison(right, |a, b| a >= b),
@@ -534,9 +520,8 @@ define_interface! {
                 }
             }
 
-            [context] fn eq(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<bool> {
-                let right = Spanned(right, context.output_span_range);
-                match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
+            fn eq(left: Spanned<Owned<IntegerValue>>, right: Spanned<Owned<IntegerValue>>) -> ExecutionResult<bool> {
+                match IntegerValue::resolve_untyped_to_match(left, &right)? {
                     IntegerValue::Untyped(left) => left.paired_comparison(right, |a, b| a == b),
                     IntegerValue::U8(left) => left.paired_comparison(right, |a, b| a == b),
                     IntegerValue::U16(left) => left.paired_comparison(right, |a, b| a == b),
@@ -553,9 +538,8 @@ define_interface! {
                 }
             }
 
-            [context] fn ne(left: Owned<IntegerValue>, right: Owned<IntegerValue>) -> ExecutionResult<bool> {
-                let right = Spanned(right, context.output_span_range);
-                match IntegerValue::resolve_untyped_to_match(left, &right, context.output_span_range)? {
+            fn ne(left: Spanned<Owned<IntegerValue>>, right: Spanned<Owned<IntegerValue>>) -> ExecutionResult<bool> {
+                match IntegerValue::resolve_untyped_to_match(left, &right)? {
                     IntegerValue::Untyped(left) => left.paired_comparison(right, |a, b| a != b),
                     IntegerValue::U8(left) => left.paired_comparison(right, |a, b| a != b),
                     IntegerValue::U16(left) => left.paired_comparison(right, |a, b| a != b),

@@ -318,7 +318,6 @@ pub(crate) struct UnaryOperationCallContext<'a> {
 #[derive(Clone, Copy)]
 pub(crate) struct BinaryOperationCallContext<'a> {
     pub operation: &'a BinaryOperation,
-    pub output_span_range: SpanRange,
 }
 
 impl<'a> BinaryOperationCallContext<'a> {

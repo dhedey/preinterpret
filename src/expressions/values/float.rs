@@ -78,14 +78,10 @@ impl FloatValue {
         self.to_unspanned_literal().with_span(span)
     }
 
-    pub(crate) fn resolve_untyped_to_match(
-        this: Owned<FloatValue>,
-        target: &FloatValue,
-    ) -> ExecutionResult<Self> {
-        let value = this.into_inner();
-        match value {
+    pub(crate) fn resolve_untyped_to_match(this: Owned<FloatValue>, target: &FloatValue) -> Self {
+        match this.into_inner() {
             FloatValue::Untyped(this) => this.into_owned().into_kind(target.kind()),
-            other => Ok(other),
+            other => other,
         }
     }
 
@@ -138,10 +134,10 @@ impl FloatValue {
     fn align_types(mut lhs: Self, mut rhs: Self) -> (Self, Self) {
         match (&lhs, &rhs) {
             (FloatValue::Untyped(l), typed) if !matches!(typed, FloatValue::Untyped(_)) => {
-                lhs = l.into_kind_infallible(typed.kind());
+                lhs = l.into_kind(typed.kind());
             }
             (typed, FloatValue::Untyped(r)) if !matches!(typed, FloatValue::Untyped(_)) => {
-                rhs = r.into_kind_infallible(lhs.kind());
+                rhs = r.into_kind(lhs.kind());
             }
             _ => {} // Both same type or both untyped - no conversion needed
         }
@@ -226,119 +222,108 @@ define_interface! {
         pub(crate) mod unary_operations {
         }
         pub(crate) mod binary_operations {
-            [context] fn add(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<FloatValue> {
-                let right = Spanned(right, context.output_span_range);
-                match FloatValue::resolve_untyped_to_match(left, &right)? {
+            fn add(left: Owned<FloatValue>, right: Spanned<Owned<FloatValue>>) -> ExecutionResult<FloatValue> {
+                match FloatValue::resolve_untyped_to_match(left, &right) {
                     FloatValue::Untyped(left) => left.paired_operation(right, |a, b| a + b),
                     FloatValue::F32(left) => left.paired_operation_no_overflow(right, |a, b| a + b),
                     FloatValue::F64(left) => left.paired_operation_no_overflow(right, |a, b| a + b),
                 }
             }
 
-            [context] fn add_assign(left: Assignee<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<()> {
+            [context] fn add_assign(left: Assignee<FloatValue>, right: Spanned<Owned<FloatValue>>) -> ExecutionResult<()> {
                 FloatValue::assign_op(left, right, context, add)
             }
 
-            [context] fn sub(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<FloatValue> {
-                let right = Spanned(right, context.output_span_range);
-                match FloatValue::resolve_untyped_to_match(left, &right)? {
+            fn sub(left: Owned<FloatValue>, right: Spanned<Owned<FloatValue>>) -> ExecutionResult<FloatValue> {
+                match FloatValue::resolve_untyped_to_match(left, &right) {
                     FloatValue::Untyped(left) => left.paired_operation(right, |a, b| a - b),
                     FloatValue::F32(left) => left.paired_operation_no_overflow(right, |a, b| a - b),
                     FloatValue::F64(left) => left.paired_operation_no_overflow(right, |a, b| a - b),
                 }
             }
 
-            [context] fn sub_assign(left: Assignee<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<()> {
+            [context] fn sub_assign(left: Assignee<FloatValue>, right: Spanned<Owned<FloatValue>>) -> ExecutionResult<()> {
                 FloatValue::assign_op(left, right, context, sub)
             }
 
-            [context] fn mul(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<FloatValue> {
-                let right = Spanned(right, context.output_span_range);
-                match FloatValue::resolve_untyped_to_match(left, &right)? {
+            fn mul(left: Owned<FloatValue>, right: Spanned<Owned<FloatValue>>) -> ExecutionResult<FloatValue> {
+                match FloatValue::resolve_untyped_to_match(left, &right) {
                     FloatValue::Untyped(left) => left.paired_operation(right, |a, b| a * b),
                     FloatValue::F32(left) => left.paired_operation_no_overflow(right, |a, b| a * b),
                     FloatValue::F64(left) => left.paired_operation_no_overflow(right, |a, b| a * b),
                 }
             }
 
-            [context] fn mul_assign(left: Assignee<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<()> {
+            [context] fn mul_assign(left: Assignee<FloatValue>, right: Spanned<Owned<FloatValue>>) -> ExecutionResult<()> {
                 FloatValue::assign_op(left, right, context, mul)
             }
 
-            [context] fn div(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<FloatValue> {
-                let right = Spanned(right, context.output_span_range);
-                match FloatValue::resolve_untyped_to_match(left, &right)? {
+            fn div(left: Owned<FloatValue>, right: Spanned<Owned<FloatValue>>) -> ExecutionResult<FloatValue> {
+                match FloatValue::resolve_untyped_to_match(left, &right) {
                     FloatValue::Untyped(left) => left.paired_operation(right, |a, b| a / b),
                     FloatValue::F32(left) => left.paired_operation_no_overflow(right, |a, b| a / b),
                     FloatValue::F64(left) => left.paired_operation_no_overflow(right, |a, b| a / b),
                 }
             }
 
-            [context] fn div_assign(left: Assignee<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<()> {
+            [context] fn div_assign(left: Assignee<FloatValue>, right: Spanned<Owned<FloatValue>>) -> ExecutionResult<()> {
                 FloatValue::assign_op(left, right, context, div)
             }
 
-            [context] fn rem(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<FloatValue> {
-                let right = Spanned(right, context.output_span_range);
-                match FloatValue::resolve_untyped_to_match(left, &right)? {
+            fn rem(left: Owned<FloatValue>, right: Spanned<Owned<FloatValue>>) -> ExecutionResult<FloatValue> {
+                match FloatValue::resolve_untyped_to_match(left, &right) {
                     FloatValue::Untyped(left) => left.paired_operation(right, |a, b| a % b),
                     FloatValue::F32(left) => left.paired_operation_no_overflow(right, |a, b| a % b),
                     FloatValue::F64(left) => left.paired_operation_no_overflow(right, |a, b| a % b),
                 }
             }
 
-            [context] fn rem_assign(left: Assignee<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<()> {
+            [context] fn rem_assign(left: Assignee<FloatValue>, right: Spanned<Owned<FloatValue>>) -> ExecutionResult<()> {
                 FloatValue::assign_op(left, right, context, rem)
             }
 
-            [context] fn lt(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<bool> {
-                let right = Spanned(right, context.output_span_range);
-                match FloatValue::resolve_untyped_to_match(left, &right)? {
+            fn lt(left: Owned<FloatValue>, right: Spanned<Owned<FloatValue>>) -> ExecutionResult<bool> {
+                match FloatValue::resolve_untyped_to_match(left, &right) {
                     FloatValue::Untyped(left) => left.paired_comparison(right, |a, b| a < b),
                     FloatValue::F32(left) => left.paired_comparison(right, |a, b| a < b),
                     FloatValue::F64(left) => left.paired_comparison(right, |a, b| a < b),
                 }
             }
 
-            [context] fn le(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<bool> {
-                let right = Spanned(right, context.output_span_range);
-                match FloatValue::resolve_untyped_to_match(left, &right)? {
+            fn le(left: Owned<FloatValue>, right: Spanned<Owned<FloatValue>>) -> ExecutionResult<bool> {
+                match FloatValue::resolve_untyped_to_match(left, &right) {
                     FloatValue::Untyped(left) => left.paired_comparison(right, |a, b| a <= b),
                     FloatValue::F32(left) => left.paired_comparison(right, |a, b| a <= b),
                     FloatValue::F64(left) => left.paired_comparison(right, |a, b| a <= b),
                 }
             }
 
-            [context] fn gt(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<bool> {
-                let right = Spanned(right, context.output_span_range);
-                match FloatValue::resolve_untyped_to_match(left, &right)? {
+            fn gt(left: Owned<FloatValue>, right: Spanned<Owned<FloatValue>>) -> ExecutionResult<bool> {
+                match FloatValue::resolve_untyped_to_match(left, &right) {
                     FloatValue::Untyped(left) => left.paired_comparison(right, |a, b| a > b),
                     FloatValue::F32(left) => left.paired_comparison(right, |a, b| a > b),
                     FloatValue::F64(left) => left.paired_comparison(right, |a, b| a > b),
                 }
             }
 
-            [context] fn ge(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<bool> {
-                let right = Spanned(right, context.output_span_range);
-                match FloatValue::resolve_untyped_to_match(left, &right)? {
+            fn ge(left: Owned<FloatValue>, right: Spanned<Owned<FloatValue>>) -> ExecutionResult<bool> {
+                match FloatValue::resolve_untyped_to_match(left, &right) {
                     FloatValue::Untyped(left) => left.paired_comparison(right, |a, b| a >= b),
                     FloatValue::F32(left) => left.paired_comparison(right, |a, b| a >= b),
                     FloatValue::F64(left) => left.paired_comparison(right, |a, b| a >= b),
                 }
             }
 
-            [context] fn eq(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<bool> {
-                let right = Spanned(right, context.output_span_range);
-                match FloatValue::resolve_untyped_to_match(left, &right)? {
+            fn eq(left: Owned<FloatValue>, right: Spanned<Owned<FloatValue>>) -> ExecutionResult<bool> {
+                match FloatValue::resolve_untyped_to_match(left, &right) {
                     FloatValue::Untyped(left) => left.paired_comparison(right, |a, b| a == b),
                     FloatValue::F32(left) => left.paired_comparison(right, |a, b| a == b),
                     FloatValue::F64(left) => left.paired_comparison(right, |a, b| a == b),
                 }
             }
 
-            [context] fn ne(left: Owned<FloatValue>, right: Owned<FloatValue>) -> ExecutionResult<bool> {
-                let right = Spanned(right, context.output_span_range);
-                match FloatValue::resolve_untyped_to_match(left, &right)? {
+            fn ne(left: Owned<FloatValue>, right: Spanned<Owned<FloatValue>>) -> ExecutionResult<bool> {
+                match FloatValue::resolve_untyped_to_match(left, &right) {
                     FloatValue::Untyped(left) => left.paired_comparison(right, |a, b| a != b),
                     FloatValue::F32(left) => left.paired_comparison(right, |a, b| a != b),
                     FloatValue::F64(left) => left.paired_comparison(right, |a, b| a != b),

@@ -21,13 +21,15 @@ impl ArrayValue {
         Ok(())
     }
 
-    pub(super) fn into_indexed(mut self, index: Spanned<&Value>) -> ExecutionResult<Value> {
-        let span_range = index.span_range();
-        Ok(match &*index {
+    pub(super) fn into_indexed(
+        mut self,
+        Spanned(index, span_range): Spanned<&Value>,
+    ) -> ExecutionResult<Value> {
+        Ok(match index {
             Value::Integer(integer) => {
-                let idx =
+                let index =
                     self.resolve_valid_index_from_integer(Spanned(integer, span_range), false)?;
-                std::mem::replace(&mut self.items[idx], Value::None)
+                std::mem::replace(&mut self.items[index], Value::None)
             }
             Value::Range(range) => {
                 let range = Spanned(range, span_range).resolve_to_index_range(&self)?;
@@ -38,13 +40,15 @@ impl ArrayValue {
         })
     }
 
-    pub(super) fn index_mut(&mut self, index: Spanned<&Value>) -> ExecutionResult<&mut Value> {
-        let span_range = index.span_range();
-        Ok(match &*index {
+    pub(super) fn index_mut(
+        &mut self,
+        Spanned(index, span_range): Spanned<&Value>,
+    ) -> ExecutionResult<&mut Value> {
+        Ok(match index {
             Value::Integer(integer) => {
-                let idx =
+                let index =
                     self.resolve_valid_index_from_integer(Spanned(integer, span_range), false)?;
-                &mut self.items[idx]
+                &mut self.items[index]
             }
             Value::Range(..) => {
                 // Temporary until we add slice types - we error here
@@ -54,13 +58,15 @@ impl ArrayValue {
         })
     }
 
-    pub(super) fn index_ref(&self, index: Spanned<&Value>) -> ExecutionResult<&Value> {
-        let span_range = index.span_range();
-        Ok(match &*index {
+    pub(super) fn index_ref(
+        &self,
+        Spanned(index, span_range): Spanned<&Value>,
+    ) -> ExecutionResult<&Value> {
+        Ok(match index {
             Value::Integer(integer) => {
-                let idx =
+                let index =
                     self.resolve_valid_index_from_integer(Spanned(integer, span_range), false)?;
-                &self.items[idx]
+                &self.items[index]
             }
             Value::Range(..) => {
                 // Temporary until we add slice types - we error here
@@ -72,11 +78,10 @@ impl ArrayValue {
 
     pub(super) fn resolve_valid_index(
         &self,
-        index: Spanned<&Value>,
+        Spanned(index, span_range): Spanned<&Value>,
         is_exclusive: bool,
     ) -> ExecutionResult<usize> {
-        let span_range = index.span_range();
-        match &*index {
+        match index {
             Value::Integer(int) => {
                 self.resolve_valid_index_from_integer(Spanned(int, span_range), is_exclusive)
             }
@@ -86,16 +91,16 @@ impl ArrayValue {
 
     fn resolve_valid_index_from_integer(
         &self,
-        integer: Spanned<&IntegerValue>,
+        Spanned(integer, span): Spanned<&IntegerValue>,
         is_exclusive: bool,
     ) -> ExecutionResult<usize> {
-        let index: usize = Spanned((**integer).into_owned_value(), integer.span_range())
-            .resolve_as("An array index")?;
+        let index: usize =
+            Spanned((*integer).into_owned_value(), span).resolve_as("An array index")?;
         if is_exclusive {
             if index <= self.items.len() {
                 Ok(index)
             } else {
-                integer.value_err(format!(
+                span.value_err(format!(
                     "Exclusive index of {} must be less than or equal to the array length of {}",
                     index,
                     self.items.len()
@@ -104,7 +109,7 @@ impl ArrayValue {
         } else if index < self.items.len() {
             Ok(index)
         } else {
-            integer.value_err(format!(
+            span.value_err(format!(
                 "Inclusive index of {} must be less than the array length of {}",
                 index,
                 self.items.len()

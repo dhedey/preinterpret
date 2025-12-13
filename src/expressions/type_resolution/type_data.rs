@@ -315,10 +315,7 @@ impl BinaryOperationInterface {
     ) -> ExecutionResult<Spanned<ReturnedValue>> {
         let output_span_range = SpanRange::new_between(lhs_span, rhs_span);
         Ok((self.method)(
-            BinaryOperationCallContext {
-                operation,
-                output_span_range,
-            },
+            BinaryOperationCallContext { operation },
             Spanned(lhs, lhs_span),
             Spanned(rhs, rhs_span),
         )?

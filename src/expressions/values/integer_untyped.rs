@@ -49,20 +49,6 @@ impl UntypedInteger {
         })
     }
 
-    pub(crate) fn into_kind(
-        self,
-        kind: IntegerKind,
-        span_range: SpanRange,
-    ) -> ExecutionResult<IntegerValue> {
-        self.try_into_kind(kind).ok_or_else(|| {
-            span_range.value_error(format!(
-                "The integer value {} does not fit into {}",
-                self.0,
-                kind.articled_display_name()
-            ))
-        })
-    }
-
     pub(crate) fn paired_operation(
         self,
         rhs: Spanned<Owned<IntegerValue>>,
@@ -110,6 +96,19 @@ impl UntypedInteger {
 
     pub(super) fn to_unspanned_literal(self) -> Literal {
         Literal::i128_unsuffixed(self.0)
+    }
+}
+
+impl Spanned<UntypedInteger> {
+    pub(crate) fn into_kind(self, kind: IntegerKind) -> ExecutionResult<IntegerValue> {
+        let Spanned(value, span_range) = self;
+        value.try_into_kind(kind).ok_or_else(|| {
+            span_range.value_error(format!(
+                "The integer value {} does not fit into {}",
+                value.0,
+                kind.articled_display_name()
+            ))
+        })
     }
 }
 

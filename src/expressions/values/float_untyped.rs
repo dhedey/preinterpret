@@ -15,13 +15,9 @@ impl UntypedFloat {
         })?))
     }
 
-    pub(crate) fn into_kind(self, kind: FloatKind) -> ExecutionResult<FloatValue> {
-        Ok(self.into_kind_infallible(kind))
-    }
-
     /// Converts an untyped float to a specific float kind.
     /// Unlike integers, float conversion never fails (may lose precision).
-    pub(crate) fn into_kind_infallible(self, kind: FloatKind) -> FloatValue {
+    pub(crate) fn into_kind(self, kind: FloatKind) -> FloatValue {
         match kind {
             FloatKind::Untyped => FloatValue::Untyped(self),
             FloatKind::F32 => FloatValue::F32(self.0 as f32),
