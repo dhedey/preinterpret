@@ -287,7 +287,7 @@ impl AnyEvaluationHandler {
         self,
         interpreter: &mut Interpreter,
         stack: &mut EvaluationStack,
-        spanned_value: Spanned<RequestedValue>,
+        value: Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         match self {
             AnyEvaluationHandler::Value(handler, ownership) => handler.handle_next(
@@ -296,7 +296,7 @@ impl AnyEvaluationHandler {
                     stack,
                     request: ownership,
                 },
-                spanned_value,
+                value,
             ),
             AnyEvaluationHandler::Assignment(handler) => handler.handle_next(
                 Context {
@@ -304,7 +304,7 @@ impl AnyEvaluationHandler {
                     stack,
                     request: (),
                 },
-                spanned_value,
+                value,
             ),
         }
     }
@@ -448,18 +448,18 @@ impl<'a> Context<'a, ValueType> {
 
     pub(super) fn return_argument_value(
         self,
-        spanned_value: Spanned<ArgumentValue>,
+        value: Spanned<ArgumentValue>,
     ) -> ExecutionResult<NextAction> {
-        let spanned_value = self.request.map_from_argument(spanned_value)?;
-        Ok(NextAction::return_requested(spanned_value))
+        let value = self.request.map_from_argument(value)?;
+        Ok(NextAction::return_requested(value))
     }
 
     pub(super) fn return_returned_value(
         self,
-        spanned_value: Spanned<ReturnedValue>,
+        value: Spanned<ReturnedValue>,
     ) -> ExecutionResult<NextAction> {
-        let spanned_value = self.request.map_from_returned(spanned_value)?;
-        Ok(NextAction::return_requested(spanned_value))
+        let value = self.request.map_from_returned(value)?;
+        Ok(NextAction::return_requested(value))
     }
 
     /// Note: This doesn't assume that the requested ownership matches the value's ownership.
@@ -469,20 +469,20 @@ impl<'a> Context<'a, ValueType> {
     /// See e.g. [`ValuePropertyAccessBuilder`].
     pub(super) fn return_not_necessarily_matching_requested(
         self,
-        spanned_value: Spanned<RequestedValue>,
+        value: Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
-        let spanned_value = self.request.map_from_requested(spanned_value)?;
-        Ok(NextAction::return_requested(spanned_value))
+        let value = self.request.map_from_requested(value)?;
+        Ok(NextAction::return_requested(value))
     }
 
     pub(super) fn return_value<T: IsReturnable>(
         self,
-        Spanned(value, span): Spanned<T>,
+        value: Spanned<T>,
     ) -> ExecutionResult<NextAction> {
-        let spanned_value = self
+        let value = self
             .request
-            .map_from_returned(Spanned(value.to_returned_value()?, span))?;
-        Ok(NextAction::return_requested(spanned_value))
+            .map_from_returned(value.try_map(|v| v.to_returned_value())?)?;
+        Ok(NextAction::return_requested(value))
     }
 }
 
