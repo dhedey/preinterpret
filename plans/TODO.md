@@ -188,9 +188,27 @@ First, read the @./2025-11-vision.md
 - [x] `token_tree()`
 - [x] `open('(')` and `close(')')`
 
+## Better handling of value sub-references
+
+- [x] Migrate from `Owned` having a span to a `Spanned<Owned>`
+- [ ] Implement and roll-out GATs
+  - [x] Initial shell implementation in `concepts` folder
+  - [x] Improved error handling in the macro (e.g. required arg after optional; no matching strongly-typed signature)
+  - [ ] Complete ownership definitions and inter-conversions, including maybe-erroring inter-conversions (possibly with `Result<X, Mapper::Error>` which we can map out of):
+    - [ ] Owned
+    - [ ] Mutable, Owned => Mutable
+    - [ ] Shared, Owned => Shared
+    - [ ] Assignee, Mutable <=> Assignee
+    - [ ] CopyOnWrite, Shared => CopyOnWrite x2, Owned => CopyOnWrite
+    - [ ] LateBound, Tons of conversions into it
+    - [ ] Argument, and `ArgumentOwnership` driven conversions into it
+  - [ ] Complete value definitions
+  - [ ] Replace `Owned`, `Shared` etc as type references to `Actual<..>`
+  - [ ] Remove old definitions
+
 ## Methods and closures
 
-- [ ] Improved Shared/Mutable handling - See the `Better handling of value sub-references` section
+- [ ] Improved Shared/Mutable handling - See the `Better handling of value sub-references` section. The key requirement is we need to allow a `Shared<X>` to map back to a `Shared<Value>`. Moving the "sharedness" to the leaves permits this.
   * A function specifies the bindings of its variables
   * If we have `my_len = |x: &array| x.len()` and invoke it as `my_len(a.b)` then
     when I invoke it, I need to end up with the variable `x := &a.b`
@@ -204,13 +222,13 @@ First, read the @./2025-11-vision.md
 enum VariableContent {
     Owned(Rc<RefCell<Value>>),
     Shared(SharedSubRcRefCell<Value, T>),
-    Mutable(MutSubRcRefCell<Value, T>),
+    Mutable(MutableSubRcRefCell<Value, T>),
 }
 // After
 enum VariableContent {
     Owned(ValueReferencable),
     Shared(ValueRef<'static>),      // 'static => only SharedSubRcRefCell, no actual refs
-    Mutable(ValueMut<'static>),     // 'static => only MutSubRcRefCell, no refs
+    Mutable(ValueMut<'static>),     // 'static => only MutableSubRcRefCell, no refs
 }
 ``` 
 - [ ] Introduce basic function values

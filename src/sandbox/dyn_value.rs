@@ -1,5 +1,9 @@
 #![allow(unused)]
 
+// NOTE: This was an alternative design for modelling the type structure
+// But we ended up going with enums/GATs instead for simplicity
+// Non-hierarchical types such as "Iterable" are defined as `Box<dyn>` though
+
 use std::any::Any;
 trait IsValue: Any {
     type TypeData: 'static + TypeData<Value = Self>;

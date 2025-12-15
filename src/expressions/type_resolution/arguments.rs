@@ -94,7 +94,7 @@ impl<T: ResolvableMutable<Value> + ResolvableArgumentTarget + ?Sized> IsArgument
     }
 }
 
-impl<T: 'static + ?Sized> IsArgument for AnyRefMut<'static, T>
+impl<T: 'static + ?Sized> IsArgument for AnyMut<'static, T>
 where
     Mutable<T>: IsArgument,
 {

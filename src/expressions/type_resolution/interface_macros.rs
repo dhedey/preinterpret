@@ -110,6 +110,9 @@ macro_rules! generate_method_interface {
             ],
         }
     };
+    (REQUIRED $req:tt OPTIONAL $opt:tt ARGS[$($arg:tt)*]) => {
+        compile_error!(stringify!("This method arity is currently unsupported - add support in `MethodInterface` and `generate_method_interface`: ", $($arg)*));
+    };
 }
 
 macro_rules! parse_arg_types {
@@ -123,12 +126,18 @@ macro_rules! parse_arg_types {
         parse_arg_types!([REQUIRED $req OPTIONAL[$($opt)* $type,] => $callback! $callback_args] $($rest)*)
     };
     // Next tokens are `: X)` - we have a required argument (variant 1)
+    ([REQUIRED [$($req:tt)*] OPTIONAL [] => $callback:ident! $callback_args:tt] : $type:ty) => {
+        parse_arg_types!([REQUIRED[$($req)* $type,] OPTIONAL [] => $callback! $callback_args])
+    };
     ([REQUIRED [$($req:tt)*] OPTIONAL $opt:tt => $callback:ident! $callback_args:tt] : $type:ty) => {
-        parse_arg_types!([REQUIRED[$($req)* $type,] OPTIONAL $opt => $callback! $callback_args])
+        compile_error!(stringify!("Required arguments must come before optional arguments:" $type));
     };
     // Next tokens are `: X, ...` - we have a required argument (variant 2)
+    ([REQUIRED [$($req:tt)*] OPTIONAL [] => $callback:ident! $callback_args:tt] : $type:ty, $($rest:tt)*) => {
+        parse_arg_types!([REQUIRED[$($req)* $type,] OPTIONAL [] => $callback! $callback_args] $($rest)*)
+    };
     ([REQUIRED [$($req:tt)*] OPTIONAL $opt:tt => $callback:ident! $callback_args:tt] : $type:ty, $($rest:tt)*) => {
-        parse_arg_types!([REQUIRED[$($req)* $type,] OPTIONAL $opt => $callback! $callback_args] $($rest)*)
+        compile_error!(stringify!("Required arguments must come before optional arguments:" $type));
     };
     // Next tokens are something else - ignore it and look at next
     ([REQUIRED $req:tt OPTIONAL $opt:tt => $callback:ident! $callback_args:tt] $consumed:tt $($rest:tt)*) => {

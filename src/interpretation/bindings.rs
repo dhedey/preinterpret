@@ -356,7 +356,7 @@ impl<T: 'static + ?Sized> DerefMut for Assignee<T> {
 /// Can be destructured as: `Mutable(cell): Mutable<T>`
 ///
 /// If you need span information, wrap with `Spanned<Mutable<T>>`.
-pub(crate) struct Mutable<T: 'static + ?Sized>(pub(crate) MutSubRcRefCell<Value, T>);
+pub(crate) struct Mutable<T: 'static + ?Sized>(pub(crate) MutableSubRcRefCell<Value, T>);
 
 impl<T: ?Sized> Mutable<T> {
     pub(crate) fn into_shared(self) -> Shared<T> {
@@ -412,11 +412,11 @@ impl Spanned<Mutable<Value>> {
 impl Mutable<Value> {
     pub(crate) fn new_from_owned(value: OwnedValue) -> Self {
         // Unwrap is safe because it's a new refcell
-        Mutable(MutSubRcRefCell::new(Rc::new(RefCell::new(value.0))).unwrap())
+        Mutable(MutableSubRcRefCell::new(Rc::new(RefCell::new(value.0))).unwrap())
     }
 
     fn new_from_variable(reference: VariableBinding) -> syn::Result<Self> {
-        Ok(Mutable(MutSubRcRefCell::new(reference.data).map_err(
+        Ok(Mutable(MutableSubRcRefCell::new(reference.data).map_err(
             |_| reference.variable_span.syn_error(MUTABLE_ERROR_MESSAGE),
         )?))
     }
