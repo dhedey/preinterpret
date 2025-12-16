@@ -33,19 +33,19 @@ pub(crate) trait GeneralMapper<F: IsForm> {
         >;
 }
 
-pub(crate) trait MapToType<T: IsType, F: IsForm>: IsType {
-    fn map_to_type<'a>(content: Self::Content<'a, F>) -> T::Content<'a, F>;
+pub(crate) trait UpcastTo<T: IsType, F: IsForm>: IsType {
+    fn upcast_to<'a>(content: Self::Content<'a, F>) -> T::Content<'a, F>;
 }
 
-pub(crate) trait MaybeMapFromType<T: IsType, F: IsForm>: IsType {
-    fn maybe_map_from_type<'a>(content: T::Content<'a, F>) -> Option<Self::Content<'a, F>>;
+pub(crate) trait DowncastFrom<T: IsType, F: IsForm>: IsType {
+    fn downcast_from<'a>(content: T::Content<'a, F>) -> Option<Self::Content<'a, F>>;
 
     fn resolve<'a>(
         actual: Actual<'a, T, F>,
         span_range: SpanRange,
         resolution_target: &str,
     ) -> ExecutionResult<Actual<'a, Self, F>> {
-        let content = match Self::maybe_map_from_type(actual.0) {
+        let content = match Self::downcast_from(actual.0) {
             Some(c) => c,
             None => {
                 return span_range.value_err(format!(
@@ -72,36 +72,36 @@ pub(crate) trait IsChildType: IsType {
 
 macro_rules! impl_ancestor_chain_conversions {
     ($child:ty => $parent:ty => [$($ancestor:ty),* $(,)?]) => {
-        impl<F: IsForm> MaybeMapFromType<$child, F> for $child
+        impl<F: IsForm> DowncastFrom<$child, F> for $child
         {
-            fn maybe_map_from_type<'a>(
+            fn downcast_from<'a>(
                 content: <$child as IsType>::Content<'a, F>,
             ) -> Option<<$child as IsType>::Content<'a, F>> {
                 Some(content)
             }
         }
 
-        impl<F: IsForm> MapToType<$child, F> for $child
+        impl<F: IsForm> UpcastTo<$child, F> for $child
         {
-            fn map_to_type<'a>(
+            fn upcast_to<'a>(
                 content: <$child as IsType>::Content<'a, F>,
             ) -> <$child as IsType>::Content<'a, F> {
                 content
             }
         }
 
-        impl<F: IsForm> MaybeMapFromType<$parent, F> for $child
+        impl<F: IsForm> DowncastFrom<$parent, F> for $child
         {
-            fn maybe_map_from_type<'a>(
+            fn downcast_from<'a>(
                 content: <$parent as IsType>::Content<'a, F>,
             ) -> Option<<$child as IsType>::Content<'a, F>> {
                 <$child as IsChildType>::from_parent(content)
             }
         }
 
-        impl<F: IsForm> MapToType<$parent, F> for $child
+        impl<F: IsForm> UpcastTo<$parent, F> for $child
         {
-            fn map_to_type<'a>(
+            fn upcast_to<'a>(
                 content: <$child as IsType>::Content<'a, F>,
             ) -> <$parent as IsType>::Content<'a, F> {
                 <$child as IsChildType>::into_parent(content)
@@ -109,19 +109,19 @@ macro_rules! impl_ancestor_chain_conversions {
         }
 
         $(
-            impl<F: IsForm> MaybeMapFromType<$ancestor, F> for $child {
-                fn maybe_map_from_type<'a>(
+            impl<F: IsForm> DowncastFrom<$ancestor, F> for $child {
+                fn downcast_from<'a>(
                     content: <$ancestor as IsType>::Content<'a, F>,
                 ) -> Option<<$child as IsType>::Content<'a, F>> {
-                    <$child as MaybeMapFromType<$parent, F>>::maybe_map_from_type(<$parent as MaybeMapFromType<$ancestor, F>>::maybe_map_from_type(content)?)
+                    <$child as DowncastFrom<$parent, F>>::downcast_from(<$parent as DowncastFrom<$ancestor, F>>::downcast_from(content)?)
                 }
             }
 
-            impl<F: IsForm> MapToType<$ancestor, F> for $child {
-                fn map_to_type<'a>(
+            impl<F: IsForm> UpcastTo<$ancestor, F> for $child {
+                fn upcast_to<'a>(
                     content: <$child as IsType>::Content<'a, F>,
                 ) -> <$ancestor as IsType>::Content<'a, F> {
-                    <$parent as MapToType<$ancestor, F>>::map_to_type(<$child as MapToType<$parent, F>>::map_to_type(content))
+                    <$parent as UpcastTo<$ancestor, F>>::upcast_to(<$child as UpcastTo<$parent, F>>::upcast_to(content))
                 }
             }
         )*

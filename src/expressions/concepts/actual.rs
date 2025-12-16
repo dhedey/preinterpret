@@ -11,14 +11,14 @@ impl<'a, T: IsType, F: IsForm> Actual<'a, T, F> {
     #[inline]
     pub(crate) fn map_type<S: IsType>(self) -> Actual<'a, S, F>
     where
-        T: MapToType<S, F>,
+        T: UpcastTo<S, F>,
     {
-        Actual(T::map_to_type(self.0))
+        Actual(T::upcast_to(self.0))
     }
 
     #[inline]
-    pub(crate) fn map_type_maybe<U: MaybeMapFromType<T, F>>(self) -> Option<Actual<'a, U, F>> {
-        Some(Actual(U::maybe_map_from_type(self.0)?))
+    pub(crate) fn map_type_maybe<U: DowncastFrom<T, F>>(self) -> Option<Actual<'a, U, F>> {
+        Some(Actual(U::downcast_from(self.0)?))
     }
 
     #[inline]
@@ -34,16 +34,20 @@ impl<'a, T: IsType, F: IsForm> Actual<'a, T, F> {
 
 impl<'a, T: IsType, F: IsForm> Spanned<Actual<'a, T, F>> {
     #[inline]
-    pub(crate) fn resolve_as<U: MaybeMapFromType<T, F>>(
+    pub(crate) fn resolve_as<X: FromValueContent<'a, Form = F>>(
         self,
         description: &str,
-    ) -> ExecutionResult<Actual<'a, U, F>> {
+    ) -> ExecutionResult<X>
+    where
+        <X as IsValueContent<'a>>::Type: DowncastFrom<T, F>,
+    {
         let Spanned(value, span_range) = self;
-        U::resolve(value, span_range, description)
+        let resolved = <<X as IsValueContent<'a>>::Type>::resolve(value, span_range, description)?;
+        Ok(X::from_actual(resolved))
     }
 }
 
-impl<'a, T: IsType + MapToType<ValueType, F>, F: IsForm> Actual<'a, T, F> {
+impl<'a, T: IsType + UpcastTo<ValueType, F>, F: IsForm> Actual<'a, T, F> {
     pub(crate) fn into_value(self) -> Actual<'a, ValueType, F> {
         self.map_type()
     }

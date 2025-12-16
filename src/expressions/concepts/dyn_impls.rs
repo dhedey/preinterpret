@@ -28,10 +28,8 @@ impl<'a> IsValueContent<'a> for dyn IsIterable {
 
 impl IsDynLeaf for dyn IsIterable {}
 
-impl<T: IsHierarchyType, F: IsForm> MaybeMapFromType<T, F> for IterableType {
-    fn maybe_map_from_type<'a>(
-        content: <T as IsType>::Content<'a, F>,
-    ) -> Option<Self::Content<'a, F>> {
+impl<T: IsHierarchyType, F: IsForm> DowncastFrom<T, F> for IterableType {
+    fn downcast_from<'a>(content: <T as IsType>::Content<'a, F>) -> Option<Self::Content<'a, F>> {
         match T::map_with::<'a, F, DynMapper<dyn IsIterable>>(content) {
             Ok(_) => panic!("DynMapper is expected to always short-circuit"),
             Err(dyn_leaf) => dyn_leaf,

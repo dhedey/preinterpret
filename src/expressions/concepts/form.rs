@@ -36,9 +36,9 @@ pub(crate) trait MapIntoReturned: IsForm {
 // Clashes with other blanket impl it will replace!
 //
 // impl<
-//     X: FromValueContent<'static, TypeData = T, Ownership = F>,
+//     X: FromValueContent<'static, Type = T, Form = F>,
 //     F: IsForm + MapFromArgument,
-//     T: MaybeMapFromType<ValueType, F>,
+//     T: DowncastFrom<ValueType, F>,
 // > IsArgument for X {
 //     type ValueType = T;
 //     const OWNERSHIP: ArgumentOwnership = F::ARGUMENT_OWNERSHIP;
@@ -54,7 +54,7 @@ pub(crate) trait MapIntoReturned: IsForm {
 // impl<
 //     X: IntoValueContent<'static, TypeData = T, Ownership = F>,
 //     F: IsForm + MapIntoReturned,
-//     T: MapToType<ValueType, F>,
+//     T: UpcastTo<ValueType, F>,
 // > IsReturnable for X {
 //     fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
 //         let type_mapped = self.into_actual()

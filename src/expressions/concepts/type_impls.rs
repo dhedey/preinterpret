@@ -9,23 +9,23 @@ pub(crate) struct ValueType;
 // type ValueRef<'a> = Actual<'a, ValueType, BeAnyRef>;
 // type ValueMut<'a> = Actual<'a, ValueType, BeAnyRefMut>;
 
-impl<F: IsForm> MapToType<ValueType, F> for ValueType {
-    fn map_to_type<'a>(content: Self::Content<'a, F>) -> Self::Content<'a, F> {
-        content
-    }
-}
-
-impl<F: IsForm> MaybeMapFromType<ValueType, F> for ValueType {
-    fn maybe_map_from_type<'a>(content: Self::Content<'a, F>) -> Option<Self::Content<'a, F>> {
-        Some(content)
-    }
-}
-
 impl IsType for ValueType {
     type Content<'a, F: IsForm> = ValueContent<'a, F>;
 
     fn articled_type_name() -> &'static str {
         "any value"
+    }
+}
+
+impl<F: IsForm> UpcastTo<ValueType, F> for ValueType {
+    fn upcast_to<'a>(content: Self::Content<'a, F>) -> Self::Content<'a, F> {
+        content
+    }
+}
+
+impl<F: IsForm> DowncastFrom<ValueType, F> for ValueType {
+    fn downcast_from<'a>(content: Self::Content<'a, F>) -> Option<Self::Content<'a, F>> {
+        Some(content)
     }
 }
 

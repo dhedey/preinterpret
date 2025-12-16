@@ -23,3 +23,13 @@ impl MapFromArgument for BeOwned {
         todo!()
     }
 }
+
+#[test]
+fn can_resolve_owned() {
+    let owned_value: Owned<U64Type> = Owned::of(42u64);
+    let resolved = owned_value
+        .spanned(Span::call_site().span_range())
+        .resolve_as::<u64>("My value")
+        .unwrap();
+    assert_eq!(resolved, 42u64);
+}
