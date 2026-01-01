@@ -57,7 +57,7 @@ pub(crate) enum SourcePeekMatch {
     Ident(Ident),
     Punct(Punct),
     Literal(Literal),
-    StreamLiteral(StreamLiteralKind),
+    StreamLiteral,
     ObjectLiteral,
     End,
 }
@@ -77,14 +77,11 @@ fn detect_preinterpret_grammar(cursor: syn::buffer::Cursor) -> SourcePeekMatch {
 
     if let Some((_, next)) = cursor.punct_matching('%') {
         if next.group_matching(Delimiter::Bracket).is_some() {
-            return SourcePeekMatch::StreamLiteral(StreamLiteralKind::Regular);
+            return SourcePeekMatch::StreamLiteral;
         }
-        if let Some((ident, _)) = next.ident() {
-            let ident_string = ident.to_string();
-            match ident_string.as_str() {
-                "raw" => return SourcePeekMatch::StreamLiteral(StreamLiteralKind::Raw),
-                "group" => return SourcePeekMatch::StreamLiteral(StreamLiteralKind::Grouped),
-                _ => {}
+        if let Some((ident, next)) = next.ident() {
+            if next.group_matching(Delimiter::Bracket).is_some() {
+                return SourcePeekMatch::StreamLiteral;
             }
         }
         if next.group_matching(Delimiter::Brace).is_some() {

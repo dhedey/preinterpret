@@ -157,7 +157,7 @@ impl<'a> ExpressionParser<'a> {
                     span_range,
                 )))
             },
-            SourcePeekMatch::StreamLiteral(_) => {
+            SourcePeekMatch::StreamLiteral => {
                 UnaryAtom::Leaf(Leaf::StreamLiteral(input.parse()?))
             }
             SourcePeekMatch::ObjectLiteral => {

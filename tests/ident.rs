@@ -13,6 +13,7 @@ macro_rules! assert_ident {
 #[test]
 #[allow(non_snake_case)]
 fn test_ident() {
+    assert_ident!((%ident[a B C _D E]), aBC_DE);
     assert_ident!((%[a B C _D E].to_ident()), aBC_DE);
     assert_ident!((%[a 12 "3"].to_ident()), a123);
     assert_ident!((%["MyString"].to_ident()), MyString);
@@ -22,6 +23,7 @@ fn test_ident() {
 #[test]
 #[allow(non_snake_case)]
 fn test_ident_camel() {
+    assert_ident!((%ident_camel[a B C _D E]), ABcDe);
     assert_ident!((%[a B C _D E].to_ident_camel()), ABcDe);
     assert_ident!((%[a 12 "3"].to_ident_camel()), A123);
     assert_ident!((%["MyString"].to_ident_camel()), MyString);
@@ -32,6 +34,7 @@ fn test_ident_camel() {
 #[test]
 #[allow(non_snake_case)]
 fn test_ident_snake() {
+    assert_ident!((%ident_snake[a B C _D E]), a_bc_de);
     assert_ident!((%[a B C _D E].to_ident_snake()), a_bc_de);
     assert_ident!((%[a 12 "3"].to_ident_snake()), a123);
     assert_ident!((%["MyString"].to_ident_snake()), my_string);
@@ -42,6 +45,7 @@ fn test_ident_snake() {
 #[test]
 #[allow(non_snake_case)]
 fn test_ident_upper_snake() {
+    assert_ident!((%ident_upper_snake[a B C _D E]), A_BC_DE);
     assert_ident!((%[a B C _D E].to_ident_upper_snake()), A_BC_DE);
     assert_ident!((%[a 12 "3"].to_ident_upper_snake()), A123);
     assert_ident!((%["MyString"].to_ident_upper_snake()), MY_STRING);

@@ -59,6 +59,28 @@ impl IntoValue for &str {
     }
 }
 
+pub(crate) fn string_to_ident(
+    str: &str,
+    error_source: &impl HasSpanRange,
+    span: Span,
+) -> ExecutionResult<Ident> {
+    let ident = parse_str::<Ident>(str).map_err(|err| {
+        error_source.value_error(format!("`{}` is not a valid ident: {:?}", str, err))
+    })?;
+    Ok(ident.with_span(span))
+}
+
+pub(crate) fn string_to_literal(
+    str: &str,
+    error_source: &impl HasSpanRange,
+    span: Span,
+) -> ExecutionResult<Literal> {
+    let literal = Literal::from_str(str).map_err(|err| {
+        error_source.value_error(format!("`{}` is not a valid literal: {:?}", str, err))
+    })?;
+    Ok(literal.with_span(span))
+}
+
 define_interface! {
     struct StringTypeData,
     parent: IterableTypeData,
@@ -68,45 +90,26 @@ define_interface! {
             // CONVERSION METHODS
             // ==================
             [context] fn to_ident(this: Spanned<AnyRef<str>>) -> ExecutionResult<Ident> {
-                let str: &str = &this;
-                let ident = parse_str::<Ident>(str)
-                    .map_err(|err| this.value_error(format!("`{}` is not a valid ident: {:?}", str, err)))?
-                    .with_span(context.span_from_join_else_start());
-                Ok(ident)
+                string_to_ident(&this, &this, context.span_from_join_else_start())
             }
 
             [context] fn to_ident_camel(this: Spanned<AnyRef<str>>) -> ExecutionResult<Ident> {
                 let str = string_conversion::to_upper_camel_case(&this);
-                let ident = parse_str::<Ident>(&str)
-                    .map_err(|err| this.value_error(format!("`{}` is not a valid ident: {:?}", str, err)))?
-                    .with_span(context.span_from_join_else_start());
-                Ok(ident)
+                string_to_ident(&str, &this, context.span_from_join_else_start())
             }
 
             [context] fn to_ident_snake(this: Spanned<AnyRef<str>>) -> ExecutionResult<Ident> {
                 let str = string_conversion::to_lower_snake_case(&this);
-                let ident = parse_str::<Ident>(&str)
-                    .map_err(|err| this.value_error(format!("`{}` is not a valid ident: {:?}", str, err)))?
-                    .with_span(context.span_from_join_else_start());
-                Ok(ident)
+                string_to_ident(&str, &this, context.span_from_join_else_start())
             }
 
             [context] fn to_ident_upper_snake(this: Spanned<AnyRef<str>>) -> ExecutionResult<Ident> {
                 let str = string_conversion::to_upper_snake_case(&this);
-                let ident = parse_str::<Ident>(&str)
-                    .map_err(|err| this.value_error(format!("`{}` is not a valid ident: {:?}", str, err)))?
-                    .with_span(context.span_from_join_else_start());
-                Ok(ident)
+                string_to_ident(&str, &this, context.span_from_join_else_start())
             }
 
             [context] fn to_literal(this: Spanned<AnyRef<str>>) -> ExecutionResult<Literal> {
-                let str: &str = &this;
-                let literal = Literal::from_str(str)
-                    .map_err(|err| {
-                        this.value_error(format!("`{}` is not a valid literal: {:?}", str, err))
-                    })?
-                    .with_span(context.span_from_join_else_start());
-                Ok(literal)
+                string_to_literal(&this, &this, context.span_from_join_else_start())
             }
 
             // ======================
