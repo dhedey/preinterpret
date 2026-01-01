@@ -1,5 +1,9 @@
 # Major Version 0.2
 
+## 0.2.1
+
+No changes, just doc updates.
+
 ## 0.2.0
 
 * Rename the string case conversion commands to be less noisy by getting rid of the case suffix
