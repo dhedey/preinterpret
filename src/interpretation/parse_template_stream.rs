@@ -67,7 +67,7 @@ impl ParseSource for ParseTemplateItem {
                 let ident = input.parse_any_ident()?;
                 ParseTemplateItem::Ident(ident.to_string())
             }
-            SourcePeekMatch::StreamLiteral(_) => return input.parse_err("Stream literals cannot be embedded into a parse template stream. Use { parser.read(%[...]); } to parse the content of a stream."),
+            SourcePeekMatch::StreamLiteral => return input.parse_err("Stream literals cannot be embedded into a parse template stream. Use { parser.read(%[...]); } to parse the content of a stream."),
             SourcePeekMatch::ObjectLiteral => return input.parse_err("Object literals cannot be embedded into a parse template stream."),
             SourcePeekMatch::End => return input.parse_err("Expected some item."),
         })

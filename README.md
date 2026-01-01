@@ -74,7 +74,7 @@ macro_rules! create_my_type {
         }
     ) => {preinterpret::stream! {
         #{
-            let type_name = %[My $type_name].to_ident();
+            let type_name = %ident[My $type_name];
         }
         
         $(#[$attributes])*
@@ -84,7 +84,7 @@ macro_rules! create_my_type {
 
         impl #type_name {
             $(
-                fn #(%[my_ $inner_type].to_ident_snake())(&self) -> &$inner_type {
+                fn %ident_snake[my_ $inner_type](&self) -> &$inner_type {
                     &self.$field_name
                 }
             )*
@@ -126,7 +126,7 @@ macro_rules! create_my_type {
         }
     ) => {preinterpret::stream! {
         #{
-            let type_name = %[My $type_name].to_ident();
+            let type_name = %ident[My $type_name];
         }
         
         $(#[$attributes])*
@@ -136,7 +136,7 @@ macro_rules! create_my_type {
 
         impl #type_name {
             $(
-                fn #(%[my_ $inner_type].to_ident_snake())(&self) -> &$inner_type {
+                fn %ident_snake[my_ $inner_type](&self) -> &$inner_type {
                     &self.$field_name
                 }
             )*
@@ -171,25 +171,25 @@ Preinterpret commands take token streams as input, and return token streams as o
 
 If migrating from [paste](https://crates.io/crates/paste), the main difference is that you need to specify _what kind of concatenated thing you want to create_. Paste tried to work this out magically from context, but sometimes got it wrong.
 
-In other words, you typically want to replace `[< ... >]` with `[!ident! ...]`, and sometimes `[!string! ...]` or `[!literal! ...]`:
-* To create type and function names, use `[!ident! My #preinterpret_type_name $macro_type_name]`, `[!ident_camel! ...]`, `[!ident_snake! ...]` or `[!ident_upper_snake! ...]`
-* For doc macros or concatenated strings, use `[!string! "My type is: " #type_name]`
-* If you're creating literals of some kind by concatenating parts together, use `[!literal! 32 u32]`
+In other words, you typically want to replace `[< ... >]` with `%ident[...]`, and sometimes `%string[...]` or `%literal[...]`:
+* To create type and function names, use `%ident[My #preinterpret_type_name $macro_type_name]`, `%ident_camel[...]`, `%ident_snake[...]` or `%ident_upper_snake[...]`
+* For doc macros or concatenated strings, use `%string["My type is: " #type_name]`
+* If you're creating literals of some kind by concatenating parts together, use `%literal[32 u32]`
 
 For example:
 
 ```rust
 preinterpret::stream! {
     #{
-        let type_name = %[HelloWorld];
+        let type_name = %ident[Hello World];
     }
 
     struct #type_name;
 
-    #[doc = #(%["This type is called [`" #type_name "`]"].to_string())]
+    #[doc = %string["This type is called [`" #type_name "`]"]]
     impl #type_name {
-        fn #(%[say_ #type_name].to_ident_snake())() -> &'static str {
-            #(%["It's time to say: " #(type_name.to_string().to_title_case()) "!"].to_string())
+        fn %ident_snake[say_ #type_name]() -> &'static str {
+            %string["It's time to say: " #(type_name.to_string().to_title_case()) "!"]
         }
     }
 }

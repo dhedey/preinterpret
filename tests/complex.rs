@@ -6,11 +6,11 @@ preinterpret::run! {
     let bytes = 32;
     let postfix = %[Hello World #bytes];
     let some_symbols = %[and some symbols such as %raw[#] and #123];
-    let MyRawVar = %raw[Test no #str $(%[replacement].to_ident())];
+    let MyRawVar = %raw[Test no #str $(%[replacement].to_ident()) #raw[abc] #ident[def]];
     let _ = %raw[non - sensical !code :D - ignored (!)];
     %[
         struct MyStruct;
-        type #(%[X "Boo" #(%[Hello 1].to_string()) #postfix].to_ident()) = MyStruct;
+        type %ident[X "Boo" #(%[Hello 1].to_string()) #postfix] = MyStruct;
         const NUM: u32 = #(%[1337u #bytes].to_literal());
         const STRING: &str = #(MyRawVar.to_string());
         const SNAKE_CASE: &str = #("MyVar".to_lower_snake_case());
@@ -32,6 +32,9 @@ fn test_complex_compilation_failures() {
 fn complex_example_evaluates_correctly() {
     let _x: XBooHello1HelloWorld32 = MyStruct;
     assert_eq!(NUM, 1337u32);
-    assert_eq!(STRING, "Testno#str$(%[replacement].to_ident())");
+    assert_eq!(
+        STRING,
+        "Testno#str$(%[replacement].to_ident())#raw[abc]#ident[def]"
+    );
     assert_eq!(SNAKE_CASE, "my_var");
 }
