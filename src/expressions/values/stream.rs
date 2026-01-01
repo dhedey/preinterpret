@@ -336,7 +336,7 @@ impl ParseSource for StreamLiteral {
                 }
             }
         }
-        input.parse_err("Expected `%[..]` or `%xxx[..]` with xxx = raw, group, string, ident, ident_camel, ident_snake, ident_upper_snake or literal")
+        input.parse_err("A preinterpret stream-based literal is `%[..]` or `%xxx[..]` with xxx = raw, group, string, ident, ident_camel, ident_snake, ident_upper_snake or literal.")
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {

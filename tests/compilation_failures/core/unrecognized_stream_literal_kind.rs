@@ -1,5 +1,5 @@
 use preinterpret::*;
 
 fn main() {
-    run!(%unknown[_]);
+    stream!(%unknown[_]);
 }

@@ -1,5 +1,0 @@
-error: Expected `%[..]` or `%xxx[..]` with xxx = raw, group, string, ident, ident_camel, ident_snake, ident_upper_snake or literal
- --> tests/compilation_failures/core/unrecognize_stream_literal_kind.rs:4:10
-  |
-4 |     run!(%unknown[_]);
-  |          ^

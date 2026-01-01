@@ -1,0 +1,6 @@
+error: A preinterpret stream-based literal is `%[..]` or `%xxx[..]` with xxx = raw, group, string, ident, ident_camel, ident_snake, ident_upper_snake or literal.
+       If this wasn't intended to be a stream-based literal, replace % with %raw[%].
+ --> tests/compilation_failures/core/unrecognized_stream_literal_kind.rs:4:13
+  |
+4 |     stream!(%unknown[_]);
+  |             ^
