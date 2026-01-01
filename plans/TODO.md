@@ -188,6 +188,14 @@ First, read the @./2025-11-vision.md
 - [x] `token_tree()`
 - [x] `open('(')` and `close(')')`
 
+## More literal kinds
+
+- [ ] `%string[ .. ]`
+- [ ] `%ident[ .. ]`
+- [ ] `%ident_camel[ .. ]`
+- [ ] `%ident_upper_camel[ .. ]`
+- [ ] Update README.md for these
+
 ## Methods and closures
 
 - [ ] Improved Shared/Mutable handling - See the `Better handling of value sub-references` section
