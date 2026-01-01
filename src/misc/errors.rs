@@ -80,6 +80,10 @@ impl ParseError {
         ParseError(DetailedError::Standard(error))
     }
 
+    pub(crate) fn add_context_if_none(self, context: impl std::fmt::Display) -> Self {
+        ParseError(self.0.add_context_if_none(context))
+    }
+
     /// This is not a `From` because it wants to be explicit
     pub(crate) fn convert_to_final_error(self) -> syn::Error {
         self.0.convert_to_final_error()
