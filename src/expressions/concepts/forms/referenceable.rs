@@ -29,8 +29,9 @@ impl MapFromArgument for BeReferenceable {
 
 impl<'a, T: IsHierarchyType> Actual<'a, T, BeOwned> {
     pub(crate) fn into_referencable(self) -> Actual<'a, T, BeReferenceable> {
-        let Ok(output) = self.map_with::<OwnedToReferencableMapper>();
-        output
+        match self.map_with::<OwnedToReferencableMapper>() {
+            Ok(output) => output,
+        }
     }
 }
 
