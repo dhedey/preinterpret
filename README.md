@@ -15,18 +15,34 @@ If updating this readme, please ensure that the lib.rs rustdoc is also updated:
 * Run ./style-fix.sh
 -->
 
-This crate provides the `preinterpret!` macro, which works as a simple pre-processor to the token stream. It takes inspiration from and effectively combines the [quote](https://crates.io/crates/quote), [paste](https://crates.io/crates/paste) and [syn](https://crates.io/crates/syn) crates, to empower code generation authors and declarative macro writers, bringing:
+This crate provides the `preinterpret!` macro, a simple pre-processor of the token stream. It can be used inside the output of a declarative macro, or as a mini code generation tool all of its own.
 
-* **Heightened [readability](#readability)** - quote-like variable definition and substitution make it easier to work with code generation code.
-* **Heightened [expressivity](#expressivity)** - a toolkit of simple commands reduce boilerplate, and mitigate the need to build custom procedural macros in some cases.
-* **Heightened [simplicity](#simplicity)** - helping developers avoid the confusing corners [[1](https://veykril.github.io/tlborm/decl-macros/patterns/callbacks.html), [2](https://github.com/rust-lang/rust/issues/96184#issue-1207293401), [3](https://veykril.github.io/tlborm/decl-macros/minutiae/metavar-and-expansion.html), [4](https://veykril.github.io/tlborm/decl-macros/patterns/push-down-acc.html)] of declarative macro land.
+It is a more powerful replacement for [paste](https://crates.io/crates/paste), and also brings functionality typically reserved for procedural macros: [quote](https://crates.io/crates/quote)-like token-stream substitution and some [syn](https://crates.io/crates/syn)-based functionality for operating on tokens and literals.
 
-The `preinterpret!` macro can be used inside the output of a declarative macro, or by itself, functioning as a mini code generation tool all of its own.
+```rust
+preinterpret::preinterpret! {
+    [!set! #type_name = HelloWorld]
+
+    struct #type_name;
+
+    #[doc = [!string! "This type is called [`" #type_name "`]"]]
+    impl #type_name {
+        fn [!ident_snake! say_ #type_name]() -> &'static str {
+            [!string! "It's time to say: " [!title! #type_name] "!"]
+        }
+    }
+}
+assert_eq!(HelloWorld::say_hello_world(), "It's time to say: Hello World!")
+```
+
+To install, add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
 preinterpret = "0.2"
 ```
+
+This README concerns `preinterpret` v0.2 which offers a simple pre-processor. A much more comprehensive rust-inspired interpreter is coming in v1.0, currently in progress on the `develop` branch.
 
 ## User Guide
 
@@ -171,6 +187,12 @@ The following commands output strings, whilst also dropping non-alphanumeric cha
 > A wide ranging set of tests covering behaviour are in [tests/string.rs](https://www.github.com/dhedey/preinterpret/blob/main/tests/string.rs).
 
 ## Motivation
+
+Compared to writing just declarative macros, preinterpret provides:
+
+* **Heightened [readability](#readability)** - quote-like variable definition and substitution make it easier to work with code generation code.
+* **Heightened [expressivity](#expressivity)** - a toolkit of simple commands reduce boilerplate, and mitigate the need to build custom procedural macros in some cases.
+* **Heightened [simplicity](#simplicity)** - helping developers avoid the confusing corners [[1](https://veykril.github.io/tlborm/decl-macros/patterns/callbacks.html), [2](https://github.com/rust-lang/rust/issues/96184#issue-1207293401), [3](https://veykril.github.io/tlborm/decl-macros/minutiae/metavar-and-expansion.html), [4](https://veykril.github.io/tlborm/decl-macros/patterns/push-down-acc.html)] of declarative macro land.
 
 ### Readability
 
@@ -332,176 +354,17 @@ macro_rules! impl_new_type {
 }
 ```
 
-## Future Extension Possibilities
+## Roadmap
 
-### Add github docs page / rust book
-
-Add a github docs page / rust book at this repository, to allow us to build out a suite of examples, like `serde` or the little book of macros.
-
-### Destructuring / Parsing Syntax, and Declarative Macros 2.0
-
-I have a vision for having preinterpret effectively replace the use of declarative macros in the Rust ecosystem, by:
-
-* Enabling writing intuitive, procedural code, which feels a lot like normal rust
-* Exposing the power of [syn](https://crates.io/crates/syn) into this language, and preparing people to write procedural macros
-
-This would avoid pretty much all of the main the complexities of declarative macros:
-
-* The entirely lacking compile errors and auto-complete when it can't match tokens.
-* What the metavariable types mean as `:ty`, `:tt`, `:vis` and how to use them all... And the fact that, once matched, all but `tt` are opaque for future matching.
-* Having to learn a new paradigm of inverted thinking, which is pretty alien to rust.
-* The `macro_rules!` declaration itself - I can never remember which brackets to use...
-
-The idea is that we create two new tools:
-
-* The `parse` command which can be built up of compasable parse-helpers (mostly wrapping `syn` calls), intuitively handling lots of common patterns seen in code
-* Add control flow (`for`, `match` and the like) which runs lazily and declaratively, over the token stream primitive
-
-In more detail:
-
-* `[!parse! (DESTRUCTURING) = (INPUT)]` is a more general `[!set!]` which acts like a `let <XX> = <YY> else { panic!() }`. It takes a `()`-wrapped parse destructuring on the left and a token stream as input on the right. Any `#x` in the parse definition acts as a binding rather than as a substitution. Parsing will handled commas intelligently, and accept intelligent parse operations to do heavy-lifting for the user. Parse operations look like `[!OPERATION! DESTRUCTURING]` with the operation name in `UPPER_SNAKE_CASE`. Some examples might be:
-    * `[!FIELDS! { hello: #a, world?: #b }]` - which can be parsed in any order, cope with trailing commas, and forbid fields in the source stream which aren't in the destructuring.
-    * `[!SUBFIELDS! { hello: #a, world?: #b }]` - which can parse fields in any order, cope with trailing commas, and allow fields in the source stream which aren't in the destructuring.
-    * `[!ITEM! { #ident, #impl_generics, ... }]` - which calls syn's parse item on the token
-    * `[!IDENT! #x]`, `[!LITERAL! #x]`, `[!TYPE! { tokens: #x, path: #y }]` and the like to parse idents / literals etc directly from the token stream (rather than token streams). These will either take just a variable to capture the full token stream, or support an optional-argument style binding, where the developer can request certain sub-patterns or mapped token streams.
-    * More tailored examples, such as `[!GENERICS! { impl: #x, type: #y, where: #z }]` which uses syn to parse the generics, and then uses subfields on the result.
-    * Possibly `[!GROUPED! #x]` to parse a group with no brackets, to avoid parser ambiguity in some cases
-    * `[!OPTIONAL! ...]` might be supported, but other complex logic (loops, matching) is delayed lazily until interpretation time - which feels more intuitive.
-* `[!for! (DESTRUCTURING) in (INPUT) { ... }]` which operates like the rust `for` loop, and uses a parse destructuring on the left, and has support for optional commas between values
-* `[!match! (INPUT) => { (DESTRUCTURING_1) => { ... }, (DESTRUCTURING_2) => { ... }, (#fallback) => { ... } }]` which operates like a rust `match` expression, and can replace the function of the branches of declarative macro inputs.
-* `[!macro_rules! name!(DESTRUCTURING) = { ... }]` which can define a declarative macro, but just parses its inputs as a token stream, and uses preinterpret for its heavy lifting.
-
-And then we can end up with syntax like the following:
-
-```rust,ignore
-// =================================================
-// Hypothetical future syntax - not yet implemented!
-// =================================================
-
-// A simple macro can just take a token stream as input
-preinterpret::preinterpret! {
-    [!macro_rules! my_macro!(#input) {
-        [!for! (#trait for #type) in (#input) {
-            impl #trait for #type
-        }]
-    }]
-}
-my_macro!(
-    MyTrait for MyType,
-    MyTrait for MyType2,
-);
-
-// It can also parse its input in the declaration.
-// Repeated sections have to be captured as a stream, and delegated to explicit lazy [!for! ...] binding.
-// This enforces a more procedural code style, and gives clearer compiler errors.
-preinterpret::preinterpret! {
-    [!macro_rules! multi_impl_super_duper!(
-        #type_list,
-        ImplOptions [!FIELDS! {
-            greeting: #hello,
-            location: #world,
-            punctuation?: #punct = ("!") // Default
-        }]
-    ) = {
-        [!for! (
-            #type [!GENERICS! { impl: #impl_generics, type: #type_generics }]
-        ) in (#type_list) {
-            impl<#impl_generics> SuperDuper for #type #type_generics {
-                const Hello: &'static str = [!string! #hello " " #world #punct];
-            }
-        }]
-    }]
-}
-```
-
-### Possible extension: Integer commands
-
-Each of these commands functions in three steps:
-* Apply the interpreter to the token stream, which recursively executes preinterpret commands.
-* Iterate over each token (recursing into groups), expecting each to be an integer literal.
-* Apply some command-specific mapping to this stream of integer literals, and output a single integer literal without its type suffix. The suffix can be added back manually if required with a wrapper such as `[!literal! [!add! 1 2] u64]`.
-
-Integer commands under consideration are:
-
-* `[!add! 5u64 9 32]` outputs `46`. It takes any number of integers and outputs their sum. The calculation operates in `u128` space.
-* `[!sub! 64u32 1u32]` outputs `63`. It takes two integers and outputs their difference. The calculation operates in `i128` space.
-* `[!mod! $length 2]` outputs `0` if `$length` is even, else `1`. It takes two integers `a` and `b`, and outputs `a mod b`.
-
-We also support the following assignment commands:
-
-* `[!increment! #i]` is shorthand for `[!set! #i = [!add! #i 1]]` and outputs no tokens.
-
-Even better - we could even support calculator-style expression interpretation:
-
-* `[!usize! (5 + 10) / mod(4, 2)]` outputs `7usize`
-
-### Possible extension: User-defined commands
-
-* `[!define! [!my_command! <PARSE_DESTRUCTURING>] { <OUTPUT> }]`
-
-### Possible extension: Boolean commands
-
-Each of these commands functions in three steps:
-* Apply the interpreter to the token stream, which recursively executes preinterpret commands.
-* Expects to read exactly two token trees (unless otherwise specified)
-* Apply some command-specific comparison, and outputs the boolean literal `true` or `false`.
-
-Comparison commands under consideration are:
-* `[!eq! #foo #bar]` outputs `true` if `#foo` and `#bar` are exactly the same token tree, via structural equality. For example:
-  * `[!eq! (3 4) (3   4)]` outputs `true` because the token stream ignores spacing.
-  * `[!eq! 1u64 1]` outputs `false` because these are different literals.
-* `[!lt! #foo #bar]` outputs `true` if `#foo` is an integer literal and less than `#bar`
-* `[!gt! #foo #bar]` outputs `true` if `#foo` is an integer literal and greater than `#bar`
-* `[!lte! #foo #bar]` outputs `true` if `#foo` is an integer literal and less than or equal to `#bar`
-* `[!gte! #foo #bar]` outputs `true` if `#foo` is an integer literal and greater than or equal to `#bar`
-* `[!not! #foo]` expects a single boolean literal, and outputs the negation of `#foo`
-* `[!str_contains! "needle" [!string! haystack]]` expects two string literals, and outputs `true` if the first string is a substring of the second string.
-
-### Possible extension: Token stream commands
-
-* `[!skip! 4 from [#stream]]` reads and drops the first 4 token trees from the stream, and outputs the rest
-* `[!ungroup! (#stream)]` outputs `#stream`. It expects to receive a single group (i.e. wrapped in brackets), and unwraps it.
-
-### Possible extension: Control flow commands
-
-#### If statement
-
-`[!if! #cond then { #a } else { #b }]` outputs `#a` if `#cond` is `true`, else `#b` if `#cond` is false.
-
-The `if` command works as follows:
-* It starts by only interpreting its first token tree, and expects to see a single `true` or `false` literal.
-* It then expects to reads an unintepreted `then` ident, following by a single `{ .. }` group, whose contents get interpreted and output only if the condition was `true`.
-* It optionally also reads an `else` ident and a by a single `{ .. }` group, whose contents get interpreted and output only if the condition was `false`.
-
-#### For loop
-
-* `[!for! #token_tree in [#stream] { ... }]`
-
-#### Goto and label
-
-* `[!label! loop_start]` - defines a label which can be returned to. Effectively, it takes a clones of the remaining token stream after the label in the interpreter.
-* `[!goto! loop_start]` - jumps to the last execution of `[!label! loop_start]`. It unrolls the preinterpret stack (dropping all unwritten token streams) until it finds a stackframe in which the interpreter has the defined label, and continues the token stream from there.
-
-```rust,ignore
-// Hypothetical future syntax - not yet implemented!
-preinterpret::preinterpret!{
-    [!set! #i = 0]
-    [!label! loop]
-    const [!ident! AB #i]: u8 = 0;
-    [!increment! #i]
-    [!if! [!lte! #i 100] then { [!goto! loop] }]
-}
-```
+A much more fully-featured rust-inspired compile-time language and interpeter is coming in v1.0, currently on the [develop](https://github.com/dhedey/preinterpret/pull/3) branch, offering:
+* Values
+* Expressions
+* Built in functions/methods
+* Parsing
 
 ### Possible extension: Eager expansion of macros
 
 When [eager expansion of macros returning literals](https://github.com/rust-lang/rust/issues/90765) is stabilized, it would be nice to include a command to do that, which could be used to include code, for example: `[!expand_literal_macros! include!("my-poem.txt")]`.
-
-### Possible extension: Explicit parsing feature to enable syn
-
-The heavy `syn` library is (in basic preinterpret) only needed for literal parsing, and error conversion into compile errors.
-
-We could add a parsing feature to speed up compile times a lot for stacks which don't need the parsing functionality.
 
 ## License
 
