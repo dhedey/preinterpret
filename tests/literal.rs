@@ -3,7 +3,13 @@ mod prelude;
 use prelude::*;
 
 #[test]
+fn test_concatenated_stream_string_literal() {
+    assert_eq!(run!(%string[hello World! "\""]), "helloWorld!\"");
+}
+
+#[test]
 fn test_string_literal() {
+    assert_eq!(run!(%literal['"' hello World! "\""]), "helloWorld!");
     assert_eq!(run!(%['"' hello World! "\""].to_literal()), "helloWorld!");
 }
 

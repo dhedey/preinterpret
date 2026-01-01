@@ -315,13 +315,7 @@ pub(crate) enum StreamLiteral {
     Raw(RawStreamLiteral),
     Grouped(GroupedStreamLiteral),
     // We're missing a grouped raw, but that can be achieved with %group[%raw[...]]
-}
-
-#[derive(Copy, Clone)]
-pub(crate) enum StreamLiteralKind {
-    Regular,
-    Raw,
-    Grouped,
+    Concatenated(ConcatenatedStreamLiteral),
 }
 
 impl ParseSource for StreamLiteral {
@@ -329,13 +323,20 @@ impl ParseSource for StreamLiteral {
         if let Some((_, next)) = input.cursor().punct_matching('%') {
             if next.group_matching(Delimiter::Bracket).is_some() {
                 return Ok(StreamLiteral::Regular(input.parse()?));
-            } else if next.ident_matching("raw").is_some() {
-                return Ok(StreamLiteral::Raw(input.parse()?));
-            } else if next.ident_matching("group").is_some() {
-                return Ok(StreamLiteral::Grouped(input.parse()?));
+            }
+            if let Some((ident, _)) = next.ident() {
+                match ident.to_string().as_str() {
+                    "raw" => return Ok(StreamLiteral::Raw(input.parse()?)),
+                    "group" => return Ok(StreamLiteral::Grouped(input.parse()?)),
+                    "string" | "ident" | "ident_camel" | "ident_snake" | "ident_upper_snake"
+                    | "literal" => {
+                        return Ok(StreamLiteral::Concatenated(input.parse()?));
+                    }
+                    _ => {}
+                }
             }
         }
-        input.parse_err("Expected `%[..]`, `%raw[..]` or `%group[..]` to start a stream literal")
+        input.parse_err("A preinterpret stream-based literal is `%[..]` or `%xxx[..]` with xxx = raw, group, string, ident, ident_camel, ident_snake, ident_upper_snake or literal.")
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
@@ -343,6 +344,7 @@ impl ParseSource for StreamLiteral {
             StreamLiteral::Regular(lit) => lit.control_flow_pass(context),
             StreamLiteral::Raw(lit) => lit.control_flow_pass(context),
             StreamLiteral::Grouped(lit) => lit.control_flow_pass(context),
+            StreamLiteral::Concatenated(lit) => lit.control_flow_pass(context),
         }
     }
 }
@@ -353,6 +355,7 @@ impl Interpret for StreamLiteral {
             StreamLiteral::Regular(lit) => lit.interpret(interpreter),
             StreamLiteral::Raw(lit) => lit.interpret(interpreter),
             StreamLiteral::Grouped(lit) => lit.interpret(interpreter),
+            StreamLiteral::Concatenated(lit) => lit.interpret(interpreter),
         }
     }
 }
@@ -363,6 +366,7 @@ impl HasSpanRange for StreamLiteral {
             StreamLiteral::Regular(lit) => lit.span_range(),
             StreamLiteral::Raw(lit) => lit.span_range(),
             StreamLiteral::Grouped(lit) => lit.span_range(),
+            StreamLiteral::Concatenated(lit) => lit.span_range(),
         }
     }
 }
@@ -478,6 +482,100 @@ impl Interpret for GroupedStreamLiteral {
 }
 
 impl HasSpanRange for GroupedStreamLiteral {
+    fn span_range(&self) -> SpanRange {
+        SpanRange::new_between(self.prefix.span, self.brackets.span())
+    }
+}
+
+pub(crate) struct ConcatenatedStreamLiteral {
+    prefix: Token![%],
+    _kind_ident: Unused<Ident>,
+    kind: ConcatenatedStreamLiteralKind,
+    brackets: Brackets,
+    content: SourceStream,
+}
+
+#[derive(Copy, Clone)]
+pub(crate) enum ConcatenatedStreamLiteralKind {
+    String,
+    Ident,
+    IdentCamel,
+    IdentSnake,
+    IdentUpperSnake,
+    Literal,
+}
+
+impl ParseSource for ConcatenatedStreamLiteral {
+    fn parse(input: SourceParser) -> ParseResult<Self> {
+        let prefix = input.parse()?;
+        let kind_ident = input.parse_any_ident()?;
+        let kind = match kind_ident.to_string().as_str() {
+            "string" => ConcatenatedStreamLiteralKind::String,
+            "ident" => ConcatenatedStreamLiteralKind::Ident,
+            "ident_camel" => ConcatenatedStreamLiteralKind::IdentCamel,
+            "ident_snake" => ConcatenatedStreamLiteralKind::IdentSnake,
+            "ident_upper_snake" => ConcatenatedStreamLiteralKind::IdentUpperSnake,
+            "literal" => ConcatenatedStreamLiteralKind::Literal,
+            _ => {
+                return input.parse_err("Expected one of `string`, `ident`, `ident_camel`, `ident_snake` or `ident_upper_snake`");
+            }
+        };
+        let (brackets, inner) = input.parse_brackets()?;
+        let content = SourceStream::parse_with_span(&inner, brackets.span())?;
+        Ok(Self {
+            prefix,
+            _kind_ident: Unused::new(kind_ident),
+            kind,
+            brackets,
+            content,
+        })
+    }
+
+    fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        self.content.control_flow_pass(context)
+    }
+}
+
+impl Interpret for ConcatenatedStreamLiteral {
+    fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+        let stream =
+            interpreter.capture_output(|interpreter| self.content.interpret(interpreter))?;
+        let string = stream.concat_recursive(&ConcatBehaviour::standard(self.span_range()));
+        let ident_span = StreamValue { value: stream }
+            .resolve_content_span_range()
+            .unwrap_or_else(|| self.span_range())
+            .join_into_span_else_start();
+        let value = match self.kind {
+            ConcatenatedStreamLiteralKind::String => string.into_value(),
+            ConcatenatedStreamLiteralKind::Ident => {
+                let str = &string;
+                string_to_ident(str, self, ident_span)?.into_value()
+            }
+            ConcatenatedStreamLiteralKind::IdentCamel => {
+                let str = &string_conversion::to_upper_camel_case(&string);
+                string_to_ident(str, self, ident_span)?.into_value()
+            }
+            ConcatenatedStreamLiteralKind::IdentSnake => {
+                let str = &string_conversion::to_lower_snake_case(&string);
+                string_to_ident(str, self, ident_span)?.into_value()
+            }
+            ConcatenatedStreamLiteralKind::IdentUpperSnake => {
+                let str = &string_conversion::to_upper_snake_case(&string);
+                string_to_ident(str, self, ident_span)?.into_value()
+            }
+            ConcatenatedStreamLiteralKind::Literal => {
+                let str = &string;
+                string_to_literal(str, self, ident_span)?.into_value()
+            }
+        };
+        value.output_to(
+            Grouping::Flattened,
+            &mut ToStreamContext::new(interpreter.output(self)?, self.span_range()),
+        )
+    }
+}
+
+impl HasSpanRange for ConcatenatedStreamLiteral {
     fn span_range(&self) -> SpanRange {
         SpanRange::new_between(self.prefix.span, self.brackets.span())
     }

@@ -63,7 +63,7 @@ impl ParseSource for SourceItem {
             SourcePeekMatch::Punct(_) => SourceItem::Punct(input.parse_any_punct()?),
             SourcePeekMatch::Ident(_) => SourceItem::Ident(input.parse_any_ident()?),
             SourcePeekMatch::Literal(_) => SourceItem::Literal(input.parse()?),
-            SourcePeekMatch::StreamLiteral(_) => SourceItem::StreamLiteral(input.parse()?),
+            SourcePeekMatch::StreamLiteral => SourceItem::StreamLiteral(input.parse().map_err(|err| err.add_context_if_none("If this wasn't intended to be a stream-based literal, replace % with %raw[%]."))?),
             SourcePeekMatch::ObjectLiteral => return input.parse_err("Object literals are only supported in an expression context, not a stream context."),
             SourcePeekMatch::End => return input.parse_err("Expected some item."),
         })

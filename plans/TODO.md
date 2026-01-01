@@ -188,6 +188,16 @@ First, read the @./2025-11-vision.md
 - [x] `token_tree()`
 - [x] `open('(')` and `close(')')`
 
+## More literal kinds
+
+- [x] `%string[ .. ]`
+- [x] `%ident[ .. ]`
+- [x] `%ident_camel[ .. ]`
+- [x] `%ident_snake[ .. ]`
+- [x] `%ident_upper_snake[ .. ]`
+- [x] `%literal[ .. ]`
+- [x] Update README.md for these
+
 ## Better handling of value sub-references
 
 - [x] Migrate from `Owned` having a span to a `Spanned<Owned>`
