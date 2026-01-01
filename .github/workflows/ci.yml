@@ -39,14 +39,14 @@ jobs:
           path: Cargo.lock
 
   msrv:
-    name: MSRV (1.61) Compiles
+    name: Fresh install of MSRV across self (1.61) + latest dependencies (1.68) compiles
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.61
+          toolchain: 1.68
       - run: cargo check
 
   style-check:

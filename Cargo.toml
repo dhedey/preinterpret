@@ -11,7 +11,8 @@ keywords = ["macros", "declarative-macros", "toolkit", "interpreter", "preproces
 # And whilst there's a development-tools::procedural-macro-helpers, there's no declarative macro category.
 categories = ["development-tools", "compilers"]
 # MSRV 1.56.0 is the start of Edition 2021
-# MSRV 1.61.0 is the current MSRV of syn
+# MSRV 1.61.0 was the old MSRV of syn
+# MRSV 1.68.0 is the new latest MSRV of syn (as of syn 2.0.107 released on 19th October 2025) - but keeping on MSRV 1.61.0 for now
 # If changing this, also update the local-check-msrv.sh script and ci.yml
 rust-version = "1.61"
 
