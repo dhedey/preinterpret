@@ -35,21 +35,25 @@
 //! Sometimes you just need to generate lots of similar code, and preinterpet can be used directly:
 //! 
 //! ```rust
+//! trait TupleLength {
+//!     fn len(&self) -> usize;
+//! }
 //! preinterpret::run!{
 //!     for N in 0..=12 {
 //!         let type_params = %[];
 //!         for a in ('A'..'Z').into_iter().take(N) {
-//!             type_params += a.to_ident() + %[,]
+//!             type_params += a.to_ident() + %[,];
 //!         }
 //!         emit %[
-//!             impl<#type_params> TupleMeasure for (#type_params) {
+//!             impl<#type_params> TupleLength for (#type_params) {
 //!                 fn len(&self) -> usize {
 //!                     #N
 //!                 }
 //!             }
-//!         ]
+//!         ];
 //!     }
 //! }
+//! assert_eq!(('a', 'b', 'c').len(), 3);
 //! ```
 //! 
 //! ### Inside procedural macros
