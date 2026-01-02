@@ -49,7 +49,7 @@ pub(crate) enum ValueKind {
     Array,
     Object,
     Stream,
-    Range(RangeKind),
+    Range,
     Iterator,
     Parser,
 }
@@ -81,12 +81,7 @@ impl ValueKind {
             "array" => ValueKind::Array,
             "object" => ValueKind::Object,
             "stream" => ValueKind::Stream,
-            "range_from_to" => ValueKind::Range(RangeKind::FromTo),
-            "range_from" => ValueKind::Range(RangeKind::From),
-            "range_to" => ValueKind::Range(RangeKind::To),
-            "range_full" => ValueKind::Range(RangeKind::Full),
-            "range_from_to_inclusive" => ValueKind::Range(RangeKind::FromToInclusive),
-            "range_to_inclusive" => ValueKind::Range(RangeKind::ToInclusive),
+            "range" => ValueKind::Range,
             "iterator" => ValueKind::Iterator,
             "parser" => ValueKind::Parser,
             _ => return None,
@@ -119,12 +114,7 @@ impl ValueKind {
             ValueKind::Array => "array",
             ValueKind::Object => "object",
             ValueKind::Stream => "stream",
-            ValueKind::Range(RangeKind::FromTo) => "range_from_to",
-            ValueKind::Range(RangeKind::From) => "range_from",
-            ValueKind::Range(RangeKind::To) => "range_to",
-            ValueKind::Range(RangeKind::Full) => "range_full",
-            ValueKind::Range(RangeKind::FromToInclusive) => "range_from_to_inclusive",
-            ValueKind::Range(RangeKind::ToInclusive) => "range_to_inclusive",
+            ValueKind::Range => "range",
             ValueKind::Iterator => "iterator",
             ValueKind::Parser => "parser",
         }
@@ -145,7 +135,7 @@ impl IsSpecificLeafKind for ValueKind {
             ValueKind::Array => "an array",
             ValueKind::Object => "an object",
             ValueKind::Stream => "a stream",
-            ValueKind::Range(kind) => kind.articled_display_name(),
+            ValueKind::Range => "a range",
             ValueKind::Iterator => "an iterator",
             ValueKind::Parser => "a parser",
         }
@@ -165,7 +155,7 @@ impl ValueKind {
             ValueKind::Array => &ArrayTypeData,
             ValueKind::Object => &ObjectTypeData,
             ValueKind::Stream => &StreamTypeData,
-            ValueKind::Range(_) => &RangeTypeData,
+            ValueKind::Range => &RangeTypeData,
             ValueKind::Iterator => &IteratorTypeData,
             ValueKind::Parser => &ParserTypeData,
         }
@@ -190,7 +180,7 @@ impl ValueKind {
             ValueKind::Array => false,
             ValueKind::Object => false,
             ValueKind::Stream => false,
-            ValueKind::Range(_) => true,
+            ValueKind::Range => true,
             ValueKind::Iterator => false,
             // A parser is a handle, so can be cloned transparently.
             // It may fail to be able to be used to parse if the underlying stream is out of scope of course.

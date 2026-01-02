@@ -52,9 +52,16 @@ pub(crate) trait EqualityContext {
     /// Values of the same type are not equal.
     fn leaf_values_not_equal<T: Debug>(&mut self, lhs: &T, rhs: &T) -> Self::Result;
 
-    /// Values have different types.
+    /// Values have different kinds.
     fn kind_mismatch<L: HasValueKind, R: HasValueKind>(&mut self, lhs: &L, rhs: &R)
         -> Self::Result;
+
+    /// Range values have different structures.
+    fn range_structure_mismatch(
+        &mut self,
+        lhs: RangeStructure,
+        rhs: RangeStructure,
+    ) -> Self::Result;
 
     /// Arrays or iterators have different lengths.
     fn lengths_unequal(&mut self, lhs_len: Option<usize>, rhs_len: Option<usize>) -> Self::Result;
@@ -106,6 +113,11 @@ impl EqualityContext for SimpleEquality {
 
     #[inline]
     fn kind_mismatch<L: HasValueKind, R: HasValueKind>(&mut self, _lhs: &L, _rhs: &R) -> bool {
+        false
+    }
+
+    #[inline]
+    fn range_structure_mismatch(&mut self, _lhs: RangeStructure, _rhs: RangeStructure) -> bool {
         false
     }
 
@@ -190,6 +202,21 @@ impl EqualityContext for TypedEquality {
             lhs.articled_kind(),
             path_str,
             rhs.articled_kind()
+        )))
+    }
+
+    fn range_structure_mismatch(
+        &mut self,
+        lhs: RangeStructure,
+        rhs: RangeStructure,
+    ) -> Self::Result {
+        let path_str = PathSegment::fmt_path(&self.path);
+        Err(self.error_span.type_error(format!(
+            "lhs{} is {}, but rhs{} is {}",
+            path_str,
+            lhs.articled_display_name(),
+            path_str,
+            rhs.articled_display_name()
         )))
     }
 
@@ -279,6 +306,11 @@ pub(crate) enum DebugInequalityReason {
         lhs_kind: ValueKind,
         rhs_kind: ValueKind,
     },
+    /// Ranges have incompatible structures.
+    RangeStructureMismatch {
+        lhs_structure: RangeStructure,
+        rhs_structure: RangeStructure,
+    },
     /// Collections have different lengths.
     LengthMismatch {
         lhs_len: Option<usize>,
@@ -316,6 +348,18 @@ impl DebugEqualityError {
                 )
             }
             DebugInequalityReason::ValueKindMismatch { lhs_kind, rhs_kind } => {
+                format!(
+                    "lhs{} is {}, but rhs{} is {}",
+                    path_str,
+                    lhs_kind.articled_display_name(),
+                    path_str,
+                    rhs_kind.articled_display_name()
+                )
+            }
+            DebugInequalityReason::RangeStructureMismatch {
+                lhs_structure: lhs_kind,
+                rhs_structure: rhs_kind,
+            } => {
                 format!(
                     "lhs{} is {}, but rhs{} is {}",
                     path_str,
@@ -405,6 +449,20 @@ impl EqualityContext for DebugEquality {
             reason: DebugInequalityReason::ValueKindMismatch {
                 lhs_kind: lhs.value_kind(),
                 rhs_kind: rhs.value_kind(),
+            },
+        })?
+    }
+
+    fn range_structure_mismatch(
+        &mut self,
+        lhs: RangeStructure,
+        rhs: RangeStructure,
+    ) -> Result<(), DebugEqualityError> {
+        Err(DebugEqualityErrorInner {
+            path: self.path.clone(),
+            reason: DebugInequalityReason::RangeStructureMismatch {
+                lhs_structure: lhs,
+                rhs_structure: rhs,
             },
         })?
     }
@@ -1119,7 +1177,7 @@ impl HasValueKind for Value {
             Value::Array(_) => ValueKind::Array,
             Value::Object(_) => ValueKind::Object,
             Value::Stream(_) => ValueKind::Stream,
-            Value::Range(range) => ValueKind::Range(range.kind()),
+            Value::Range(_) => ValueKind::Range,
             Value::Iterator(_) => ValueKind::Iterator,
             Value::Parser(_) => ValueKind::Parser,
             Value::UnsupportedLiteral(_) => ValueKind::UnsupportedLiteral,

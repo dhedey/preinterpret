@@ -123,7 +123,7 @@ impl IsArgument for IterableRef<'static> {
             ValueKind::Iterator => IterableRef::Iterator(IsArgument::from_argument(argument)?),
             ValueKind::Array => IterableRef::Array(IsArgument::from_argument(argument)?),
             ValueKind::Stream => IterableRef::Stream(IsArgument::from_argument(argument)?),
-            ValueKind::Range(_) => IterableRef::Range(IsArgument::from_argument(argument)?),
+            ValueKind::Range => IterableRef::Range(IsArgument::from_argument(argument)?),
             ValueKind::Object => IterableRef::Object(IsArgument::from_argument(argument)?),
             ValueKind::String => IterableRef::String(IsArgument::from_argument(argument)?),
             _ => {

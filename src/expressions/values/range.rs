@@ -118,7 +118,7 @@ impl Spanned<&RangeValue> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum RangeKind {
+pub(crate) enum RangeStructure {
     /// `start .. end`
     FromTo,
     /// `start ..`
@@ -133,30 +133,24 @@ pub(crate) enum RangeKind {
     ToInclusive,
 }
 
-impl IsSpecificLeafKind for RangeKind {
-    fn articled_display_name(&self) -> &'static str {
+impl RangeStructure {
+    pub(crate) fn articled_display_name(&self) -> &'static str {
         match self {
-            RangeKind::FromTo => "a range start..end",
-            RangeKind::From => "a range start..",
-            RangeKind::To => "a range ..end",
-            RangeKind::Full => "a range ..",
-            RangeKind::FromToInclusive => "a range start..=end",
-            RangeKind::ToInclusive => "a range ..=end",
+            RangeStructure::FromTo => "a range start..end",
+            RangeStructure::From => "a range start..",
+            RangeStructure::To => "a range ..end",
+            RangeStructure::Full => "a range ..",
+            RangeStructure::FromToInclusive => "a range start..=end",
+            RangeStructure::ToInclusive => "a range ..=end",
         }
     }
 }
 
-impl From<RangeKind> for ValueKind {
-    fn from(kind: RangeKind) -> Self {
-        ValueKind::Range(kind)
-    }
-}
-
 impl HasValueKind for RangeValue {
-    type SpecificKind = RangeKind;
+    type SpecificKind = ValueKind;
 
-    fn kind(&self) -> RangeKind {
-        self.inner.kind()
+    fn kind(&self) -> ValueKind {
+        ValueKind::Range
     }
 }
 
@@ -233,7 +227,10 @@ impl ValuesEqual for RangeValue {
                     ..
                 },
             ) => ctx.with_range_end(|ctx| l_end.test_equality(r_end, ctx)),
-            _ => ctx.kind_mismatch(self, other),
+            _ => ctx.range_structure_mismatch(
+                self.inner.structure_kind(),
+                other.inner.structure_kind(),
+            ),
         }
     }
 }
@@ -275,14 +272,14 @@ pub(crate) enum RangeValueInner {
 }
 
 impl RangeValueInner {
-    fn kind(&self) -> RangeKind {
+    fn structure_kind(&self) -> RangeStructure {
         match self {
-            Self::Range { .. } => RangeKind::FromTo,
-            Self::RangeFrom { .. } => RangeKind::From,
-            Self::RangeTo { .. } => RangeKind::To,
-            Self::RangeFull { .. } => RangeKind::Full,
-            Self::RangeInclusive { .. } => RangeKind::FromToInclusive,
-            Self::RangeToInclusive { .. } => RangeKind::ToInclusive,
+            Self::Range { .. } => RangeStructure::FromTo,
+            Self::RangeFrom { .. } => RangeStructure::From,
+            Self::RangeTo { .. } => RangeStructure::To,
+            Self::RangeFull { .. } => RangeStructure::Full,
+            Self::RangeInclusive { .. } => RangeStructure::FromToInclusive,
+            Self::RangeToInclusive { .. } => RangeStructure::ToInclusive,
         }
     }
 
