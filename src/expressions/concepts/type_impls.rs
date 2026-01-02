@@ -7,38 +7,58 @@ pub(crate) type QqqValueReferencable = Actual<'static, ValueType, BeReferenceabl
 pub(crate) type QqqValueRef<'a> = Actual<'a, ValueType, BeAnyRef>;
 pub(crate) type QqqValueMut<'a> = Actual<'a, ValueType, BeAnyMut>;
 
+impl From<XxxValueKind> for ValueKind {
+    fn from(_kind: XxxValueKind) -> Self {
+        unimplemented!()
+    }
+}
+
 define_parent_type! {
     pub(crate) ValueType,
-    pub(crate) enum ValueContent {
+    content: pub(crate) ValueContent,
+    kind: pub(crate) XxxValueKind,
+    parent_kind: ParentTypeKind::Value,
+    variants: {
         Integer => IntegerType,
         Object => ObjectType,
     },
-    "any value",
+    type_name: "value",
+    articled_display_name: "any value",
 }
 
 define_parent_type! {
     pub(crate) IntegerType => ValueType(ValueContent::Integer),
-    pub(crate) enum IntegerContent {
+    content: pub(crate) IntegerContent,
+    kind: pub(crate) XxxIntegerKind,
+    parent_kind: ParentTypeKind::Integer,
+    variants: {
         U32 => U32Type,
         U64 => U64Type,
     },
-    "an integer",
+    type_name: "integer",
+    articled_display_name: "an integer",
 }
 
 define_leaf_type! {
-    pub(crate) U32Type => IntegerType(IntegerContent::U32, IntegerKind::U32) => ValueType,
-    u32,
-    "a u32",
+    pub(crate) U32Type => IntegerType(IntegerContent::U32) => ValueType,
+    content: u32,
+    kind: pub(crate) U32Kind,
+    type_name: "u32",
+    articled_display_name: "a u32",
 }
 
 define_leaf_type! {
-    pub(crate) U64Type => IntegerType(IntegerContent::U64, IntegerKind::U64) => ValueType,
-    u64,
-    "a u64",
+    pub(crate) U64Type => IntegerType(IntegerContent::U64) => ValueType,
+    content: u64,
+    kind: pub(crate) U64Kind,
+    type_name: "u64",
+    articled_display_name: "a u64",
 }
 
 define_leaf_type! {
-    pub(crate) ObjectType => ValueType(ValueContent::Object, ValueKind::Object),
-    ObjectValue,
-    "an object",
+    pub(crate) ObjectType => ValueType(ValueContent::Object),
+    content: ObjectValue,
+    kind: pub(crate) ObjectKind,
+    type_name: "object",
+    articled_display_name: "an object",
 }

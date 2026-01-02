@@ -6,6 +6,9 @@ pub(crate) trait IsIterable: 'static {
 }
 
 define_dyn_type!(
-    dyn IsIterable => "an iterable (e.g. array, list, etc.)",
-    pub(crate) IterableType
+    pub(crate) IterableType,
+    content: dyn IsIterable,
+    dyn_kind: DynTypeKind::Iterable,
+    type_name: "iterable",
+    articled_display_name: "an iterable (e.g. array, list, etc.)",
 );

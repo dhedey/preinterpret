@@ -3,6 +3,7 @@ use super::*;
 /// A trait for specific value kinds that can provide a display name.
 /// This is implemented by `ValueKind`, `IntegerKind`, `FloatKind`, etc.
 pub(crate) trait IsSpecificLeafKind: Copy + Into<ValueKind> {
+    fn method_resolver(&self) -> &'static dyn MethodResolver;
     fn articled_display_name(&self) -> &'static str;
 }
 
@@ -140,9 +141,7 @@ impl IsSpecificLeafKind for ValueKind {
             ValueKind::Parser => "a parser",
         }
     }
-}
 
-impl ValueKind {
     fn method_resolver(&self) -> &'static dyn MethodResolver {
         match self {
             ValueKind::None => &NoneTypeData,
@@ -160,7 +159,9 @@ impl ValueKind {
             ValueKind::Parser => &ParserTypeData,
         }
     }
+}
 
+impl ValueKind {
     /// This should be true for types which users expect to have value
     /// semantics, but false for types which are expensive to clone or
     /// are expected to have reference semantics.
@@ -248,16 +249,8 @@ impl IsSpecificLeafKind for IntegerKind {
             IntegerKind::Usize => "a usize",
         }
     }
-}
 
-impl From<IntegerKind> for ValueKind {
-    fn from(kind: IntegerKind) -> Self {
-        ValueKind::Integer(kind)
-    }
-}
-
-impl IntegerKind {
-    pub(in crate::expressions) fn method_resolver(&self) -> &'static dyn MethodResolver {
+    fn method_resolver(&self) -> &'static dyn MethodResolver {
         match self {
             IntegerKind::Untyped => &UntypedIntegerTypeData,
             IntegerKind::I8 => &I8TypeData,
@@ -276,6 +269,12 @@ impl IntegerKind {
     }
 }
 
+impl From<IntegerKind> for ValueKind {
+    fn from(kind: IntegerKind) -> Self {
+        ValueKind::Integer(kind)
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum FloatKind {
     Untyped,
@@ -291,21 +290,19 @@ impl IsSpecificLeafKind for FloatKind {
             FloatKind::F64 => "an f64",
         }
     }
-}
 
-impl From<FloatKind> for ValueKind {
-    fn from(kind: FloatKind) -> Self {
-        ValueKind::Float(kind)
-    }
-}
-
-impl FloatKind {
-    pub(in crate::expressions) fn method_resolver(&self) -> &'static dyn MethodResolver {
+    fn method_resolver(&self) -> &'static dyn MethodResolver {
         match self {
             FloatKind::Untyped => &UntypedFloatTypeData,
             FloatKind::F32 => &F32TypeData,
             FloatKind::F64 => &F64TypeData,
         }
+    }
+}
+
+impl From<FloatKind> for ValueKind {
+    fn from(kind: FloatKind) -> Self {
+        ValueKind::Float(kind)
     }
 }
 

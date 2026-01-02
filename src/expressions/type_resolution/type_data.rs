@@ -1,7 +1,7 @@
 #![allow(clippy::type_complexity)]
 use super::*;
 
-pub(in crate::expressions) trait MethodResolver {
+pub(crate) trait MethodResolver {
     /// Resolves a unary operation as a method interface for this type.
     fn resolve_method(&self, method_name: &str) -> Option<MethodInterface>;
 

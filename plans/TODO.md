@@ -206,7 +206,10 @@ First, read the @./2025-11-vision.md
   - [x] Improved error handling in the macro (e.g. required arg after optional; no matching strongly-typed signature)
   - [x] Separate Hierarchical and DynCompatible Forms
   - [x] Improved macro support
-  - [ ] Add source type name to type macro/s
+  - [x] Add source type name to type macro/s
+  - [ ] Add (temporary) ability to link to TypeData and resolve methods from there
+    - [ ] Then implement all the macros
+    - [ ] And use that to generate ValueKind from the new macros
   - [ ] Add ability to implement IsIterable
   - [ ] `CastTarget` simply wraps `TypeKind`
   - [ ] Complete ownership definitions and inter-conversions, including maybe-erroring inter-conversions (possibly with `Result<X, Mapper::Error>` which we can map out of):

@@ -11,12 +11,16 @@ impl TypeVariant for DynTypeVariant {}
 pub(crate) trait IsType: Sized {
     type Variant: TypeVariant;
 
-    fn articled_type_name() -> &'static str;
+    const SOURCE_TYPE_NAME: &'static str;
+    const ARTICLED_DISPLAY_NAME: &'static str;
+
+    fn type_kind() -> TypeKind;
 }
 
 pub(crate) trait IsHierarchicalType: IsType<Variant = HierarchicalTypeVariant> {
     // <F as form::IsFormOf<Self>>::Content<'a>> := Self::Content<'a, F>
     type Content<'a, F: IsHierarchicalForm>;
+    type LeafKind: IsSpecificLeafKind;
 
     fn map_with<'a, F: IsHierarchicalForm, M: LeafMapper<F>>(
         structure: Self::Content<'a, F>,
@@ -58,8 +62,8 @@ pub(crate) trait DowncastFrom<T: IsType, F: IsFormOf<T> + IsFormOf<Self>>: IsTyp
                 return span_range.value_err(format!(
                     "{} is expected to be {}, but it is {}",
                     resolution_target,
-                    Self::articled_type_name(),
-                    T::articled_type_name(),
+                    Self::ARTICLED_DISPLAY_NAME,
+                    T::ARTICLED_DISPLAY_NAME,
                 ))
             }
         };
@@ -214,23 +218,55 @@ where
 macro_rules! define_parent_type {
     (
         $type_def_vis:vis $type_def:ident $(=> $parent:ident($parent_content:ident :: $parent_variant:ident) $(=> $ancestor:ty)*)?,
-        $content_vis:vis enum $content:ident {
+        content: $content_vis:vis $content:ident,
+        kind: $kind_vis:vis $kind:ident,
+        parent_kind: ParentTypeKind::$parent_kind:ident,
+        variants: {
             $($variant:ident => $variant_type:ty,)*
         },
-        $articled_type_name:literal,
+        type_name: $source_type_name:literal,
+        articled_display_name: $articled_display_name:literal,
     ) => {
         $type_def_vis struct $type_def;
 
         impl IsType for $type_def {
             type Variant = HierarchicalTypeVariant;
 
-            fn articled_type_name() -> &'static str {
-                $articled_type_name
+            const SOURCE_TYPE_NAME: &'static str = $source_type_name;
+            const ARTICLED_DISPLAY_NAME: &'static str = $articled_display_name;
+
+            fn type_kind() -> TypeKind {
+                TypeKind::Parent(ParentTypeKind::$parent_kind)
+            }
+        }
+
+        impl MethodResolver for $type_def {
+            fn resolve_method(&self, _method_name: &str) -> Option<MethodInterface> {
+                unimplemented!()
+            }
+
+            fn resolve_unary_operation(
+                &self,
+                _operation: &UnaryOperation,
+            ) -> Option<UnaryOperationInterface> {
+                unimplemented!()
+            }
+
+            fn resolve_binary_operation(
+                &self,
+                _operation: &BinaryOperation,
+            ) -> Option<BinaryOperationInterface> {
+                unimplemented!()
+            }
+
+            fn resolve_type_property(&self, _property_name: &str) -> Option<Value> {
+                unimplemented!()
             }
         }
 
         impl IsHierarchicalType for $type_def {
             type Content<'a, F: IsHierarchicalForm> = $content<'a, F>;
+            type LeafKind = $kind;
 
             fn map_with<'a, F: IsHierarchicalForm, M: LeafMapper<F>>(
                 content: Self::Content<'a, F>,
@@ -245,6 +281,32 @@ macro_rules! define_parent_type {
             $( $variant(Actual<'a, $variant_type, F>), )*
         }
 
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        $kind_vis enum $kind {
+            $( $variant(<$variant_type as IsHierarchicalType>::LeafKind), )*
+        }
+
+        $(
+            impl From<$kind> for ValueKind {
+                fn from(kind: $kind) -> Self {
+                    let as_parent_kind = <$parent as IsHierarchicalType>::LeafKind::$parent_variant(kind);
+                    ValueKind::from(as_parent_kind)
+                }
+            }
+        )?
+
+        impl IsSpecificLeafKind for $kind {
+            fn articled_display_name(&self) -> &'static str {
+                match self {
+                    $( Self::$variant(x) => x.articled_display_name(), )*
+                }
+            }
+
+            fn method_resolver(&self) -> &'static dyn MethodResolver {
+                &$type_def
+            }
+        }
+
         impl_ancestor_chain_conversions!(
             $type_def $(=> $parent($parent_content :: $parent_variant) $(=> $ancestor)*)?
         );
@@ -255,33 +317,77 @@ pub(crate) use define_parent_type;
 
 macro_rules! define_leaf_type {
     (
-        $type_def_vis:vis $type_def:ident => $parent:ident($parent_content:ident :: $parent_variant:ident, $leaf_kind_type:ident :: $leaf_kind_variant:ident) $(=> $ancestor:ty)*,
-        $leaf_type:ty,
-        $articled_type_name:literal,
+        $type_def_vis:vis $type_def:ident => $parent:ident($parent_content:ident :: $parent_variant:ident) $(=> $ancestor:ty)*,
+        content: $leaf_type:ty,
+        kind: $kind_vis:vis $kind:ident,
+        type_name: $source_type_name:literal,
+        articled_display_name: $articled_display_name:literal,
     ) => {
         $type_def_vis struct $type_def;
 
         impl IsType for $type_def {
             type Variant = HierarchicalTypeVariant;
 
-            fn articled_type_name() -> &'static str {
-                $articled_type_name
+            const SOURCE_TYPE_NAME: &'static str = $source_type_name;
+            const ARTICLED_DISPLAY_NAME: &'static str = $articled_display_name;
+
+            fn type_kind() -> TypeKind {
+                TypeKind::Leaf(ValueKind::from($kind))
             }
-        }
-
-        impl HasLeafKind for $type_def {
-            type LeafKindType = $leaf_kind_type;
-
-            const KIND: Self::LeafKindType = $leaf_kind_type::$leaf_kind_variant;
         }
 
         impl IsHierarchicalType for $type_def {
             type Content<'a, F: IsHierarchicalForm> = F::Leaf<'a, $leaf_type>;
+            type LeafKind = $kind;
 
             fn map_with<'a, F: IsHierarchicalForm, M: LeafMapper<F>>(
                 content: Self::Content<'a, F>,
             ) -> Result<Self::Content<'a, M::OutputForm>, M::ShortCircuit<'a>> {
                 M::map_leaf::<$leaf_type>(content)
+            }
+        }
+
+        impl MethodResolver for $type_def {
+            fn resolve_method(&self, _method_name: &str) -> Option<MethodInterface> {
+                unimplemented!()
+            }
+
+            fn resolve_unary_operation(
+                &self,
+                _operation: &UnaryOperation,
+            ) -> Option<UnaryOperationInterface> {
+                unimplemented!()
+            }
+
+            fn resolve_binary_operation(
+                &self,
+                _operation: &BinaryOperation,
+            ) -> Option<BinaryOperationInterface> {
+                unimplemented!()
+            }
+
+            fn resolve_type_property(&self, _property_name: &str) -> Option<Value> {
+                unimplemented!()
+            }
+        }
+
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        $kind_vis struct $kind;
+
+        impl From<$kind> for ValueKind {
+            fn from(kind: $kind) -> Self {
+                let as_parent_kind = <$parent as IsHierarchicalType>::LeafKind::$parent_variant(kind);
+                ValueKind::from(as_parent_kind)
+            }
+        }
+
+        impl IsSpecificLeafKind for $kind {
+            fn articled_display_name(&self) -> &'static str {
+                $articled_display_name
+            }
+
+            fn method_resolver(&self) -> &'static dyn MethodResolver {
+                &$type_def
             }
         }
 
@@ -317,16 +423,22 @@ pub(crate) struct DynMapper<D: ?Sized>(std::marker::PhantomData<D>);
 
 macro_rules! define_dyn_type {
     (
-        $dyn_type:ty => $articled_type_name:literal,
-        $type_def_vis:vis $type_def:ident
+        $type_def_vis:vis $type_def:ident,
+        content: $dyn_type:ty,
+        dyn_kind: DynTypeKind::$dyn_kind:ident,
+        type_name: $source_type_name:literal,
+        articled_display_name: $articled_display_name:literal,
     ) => {
         $type_def_vis struct $type_def;
 
         impl IsType for $type_def {
             type Variant = DynTypeVariant;
 
-            fn articled_type_name() -> &'static str {
-                $articled_type_name
+            const SOURCE_TYPE_NAME: &'static str = $source_type_name;
+            const ARTICLED_DISPLAY_NAME: &'static str = $articled_display_name;
+
+            fn type_kind() -> TypeKind {
+                TypeKind::Dyn(DynTypeKind::$dyn_kind)
             }
         }
 
