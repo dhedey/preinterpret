@@ -204,6 +204,9 @@ First, read the @./2025-11-vision.md
 - [ ] Implement and roll-out GATs
   - [x] Initial shell implementation in `concepts` folder
   - [x] Improved error handling in the macro (e.g. required arg after optional; no matching strongly-typed signature)
+  - [x] Separate Hierarchical and DynCompatible Forms
+  - [x] Improved macro support
+  - [ ] Add ability to implement IsIterable
   - [ ] Complete ownership definitions and inter-conversions, including maybe-erroring inter-conversions (possibly with `Result<X, Mapper::Error>` which we can map out of):
     - [ ] Owned
     - [ ] Mutable, Owned => Mutable

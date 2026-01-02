@@ -1,21 +1,19 @@
 use super::*;
 
-type Referenceable<T> = Actual<'static, T, BeReferenceable>;
+type QqqReferenceable<T> = Actual<'static, T, BeReferenceable>;
 
-// Roughly equivalent to an owned, but wrapped so that it can be turned into a Shared/Mutable easily.
+/// Roughly equivalent to an owned, but wrapped so that it can be turned into a Shared/Mutable easily.
+/// This is useful for the content of variables.
+///
+/// Note that Referenceable form does not support dyn casting, because Rc<RefCell<T>> cannot be
+/// directly cast to Rc<RefCell<D>>.
 pub(crate) struct BeReferenceable;
 impl IsForm for BeReferenceable {
-    type Leaf<'a, T: IsValueLeaf> = Rc<RefCell<T>>;
-    type DynLeaf<'a, T: 'static + ?Sized> = Rc<RefCell<T>>;
-
     const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
+}
 
-    fn leaf_to_dyn<'a, T: IsValueLeaf + CastDyn<D>, D: ?Sized + 'static>(
-        _leaf: Self::Leaf<'a, T>,
-    ) -> Option<Self::DynLeaf<'a, D>> {
-        // Can't map Rc<RefCell<T>> to Rc<RefCell<D>> directly
-        panic!("Casting to dyn is not supported for Referenceable form")
-    }
+impl IsHierarchicalForm for BeReferenceable {
+    type Leaf<'a, T: IsValueLeaf> = Rc<RefCell<T>>;
 }
 
 impl MapFromArgument for BeReferenceable {
@@ -27,27 +25,22 @@ impl MapFromArgument for BeReferenceable {
     }
 }
 
-impl<'a, T: IsHierarchyType> Actual<'a, T, BeOwned> {
+impl<'a, T: IsHierarchicalType> Actual<'a, T, BeOwned> {
     pub(crate) fn into_referencable(self) -> Actual<'a, T, BeReferenceable> {
         match self.map_with::<OwnedToReferencableMapper>() {
             Ok(output) => output,
+            Err(infallible) => match infallible {}, // Need to include because of MSRV
         }
     }
 }
 
 pub(crate) struct OwnedToReferencableMapper;
 
-impl GeneralMapper<BeOwned> for OwnedToReferencableMapper {
+impl LeafMapper<BeOwned> for OwnedToReferencableMapper {
     type OutputForm = BeReferenceable;
     type ShortCircuit<'a> = std::convert::Infallible;
 
-    fn map_leaf<
-        'a,
-        L: IsValueLeaf,
-        T: for<'l> IsType<Content<'l, BeOwned> = <BeOwned as IsForm>::Leaf<'l, L>>,
-    >(
-        leaf: <BeOwned as IsForm>::Leaf<'a, L>,
-    ) -> Result<<Self::OutputForm as IsForm>::Leaf<'a, L>, Self::ShortCircuit<'a>> {
+    fn map_leaf<'a, L: IsValueLeaf>(leaf: L) -> Result<Rc<RefCell<L>>, Self::ShortCircuit<'a>> {
         Ok(Rc::new(RefCell::new(leaf)))
     }
 }

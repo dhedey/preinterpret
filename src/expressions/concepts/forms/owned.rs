@@ -1,13 +1,21 @@
 use super::*;
 
-type Owned<T> = Actual<'static, T, BeOwned>;
+pub(crate) type QqqOwned<T> = Actual<'static, T, BeOwned>;
 
 pub(crate) struct BeOwned;
 impl IsForm for BeOwned {
-    type Leaf<'a, T: IsValueLeaf> = T;
-    type DynLeaf<'a, T: 'static + ?Sized> = Box<T>;
     const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
+}
 
+impl IsHierarchicalForm for BeOwned {
+    type Leaf<'a, T: IsValueLeaf> = T;
+}
+
+impl IsDynCompatibleForm for BeOwned {
+    type DynLeaf<'a, T: 'static + ?Sized> = Box<T>;
+}
+
+impl IsDynMappableForm for BeOwned {
     fn leaf_to_dyn<'a, T: IsValueLeaf + CastDyn<D>, D: ?Sized + 'static>(
         leaf: Self::Leaf<'a, T>,
     ) -> Option<Self::DynLeaf<'a, D>> {
@@ -26,7 +34,7 @@ impl MapFromArgument for BeOwned {
 
 #[test]
 fn can_resolve_owned() {
-    let owned_value: Owned<U64Type> = Owned::of(42u64);
+    let owned_value: QqqOwned<U64Type> = QqqOwned::of(42u64);
     let resolved = owned_value
         .spanned(Span::call_site().span_range())
         .resolve_as::<u64>("My value")

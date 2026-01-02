@@ -10,14 +10,22 @@ use super::*;
 /// whether the method needs `x[a]` to be a shared reference, mutable reference or an owned value.
 ///
 /// So instead, we take the most powerful access we can have for `x[a]`, and convert it later.
-type LateBound<T> = Actual<'static, T, BeLateBound>;
+pub(crate) type QqqLateBound<T> = Actual<'static, T, BeLateBound>;
 
 pub(crate) struct BeLateBound;
 impl IsForm for BeLateBound {
-    type Leaf<'a, T: IsValueLeaf> = LateBoundContent<T, T>;
-    type DynLeaf<'a, T: 'static + ?Sized> = LateBoundContent<T, Box<T>>;
     const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::AsIs;
+}
 
+impl IsHierarchicalForm for BeLateBound {
+    type Leaf<'a, T: IsValueLeaf> = LateBoundContent<T, T>;
+}
+
+impl IsDynCompatibleForm for BeLateBound {
+    type DynLeaf<'a, T: 'static + ?Sized> = LateBoundContent<T, Box<T>>;
+}
+
+impl IsDynMappableForm for BeLateBound {
     fn leaf_to_dyn<'a, T: IsValueLeaf + CastDyn<D>, D: ?Sized + 'static>(
         _leaf: Self::Leaf<'a, T>,
     ) -> Option<Self::DynLeaf<'a, D>> {
