@@ -1,5 +1,14 @@
 use super::*;
 
+define_leaf_type! {
+    pub(crate) ArrayType => ValueType(ValueContent::Array),
+    content: ArrayValue,
+    kind: pub(crate) ArrayKind,
+    type_name: "array",
+    articled_display_name: "an array",
+    temp_type_data: ArrayTypeData,
+}
+
 #[derive(Clone)]
 pub(crate) struct ArrayValue {
     pub(crate) items: Vec<Value>,

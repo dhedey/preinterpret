@@ -1,5 +1,20 @@
 use super::*;
 
+define_parent_type! {
+    pub(crate) FloatType => ValueType(ValueContent::Float),
+    content: pub(crate) FloatContent,
+    leaf_kind: pub(crate) FloatLeafKind,
+    type_kind: ParentTypeKind::Float(pub(crate) FloatTypeKind),
+    variants: {
+        Untyped => UntypedFloatType,
+        F32 => F32Type,
+        F64 => F64Type,
+    },
+    type_name: "float",
+    articled_display_name: "a float",
+    temp_type_data: FloatTypeData,
+}
+
 #[derive(Copy, Clone)]
 pub(crate) enum FloatValue {
     Untyped(UntypedFloat),

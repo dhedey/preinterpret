@@ -2,6 +2,15 @@ use syn::RangeLimits;
 
 use super::*;
 
+define_leaf_type! {
+    pub(crate) RangeType => ValueType(ValueContent::Range),
+    content: RangeValue,
+    kind: pub(crate) RangeKind,
+    type_name: "range",
+    articled_display_name: "a range",
+    temp_type_data: RangeTypeData,
+}
+
 #[derive(Clone)]
 pub(crate) struct RangeValue {
     pub(crate) inner: Box<RangeValueInner>,

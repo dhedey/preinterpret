@@ -1,5 +1,14 @@
 use super::*;
 
+define_leaf_type! {
+    pub(crate) StreamType => ValueType(ValueContent::Stream),
+    content: StreamValue,
+    kind: pub(crate) StreamKind,
+    type_name: "stream",
+    articled_display_name: "a stream",
+    temp_type_data: StreamTypeData,
+}
+
 #[derive(Clone)]
 pub(crate) struct StreamValue {
     pub(crate) value: OutputStream,

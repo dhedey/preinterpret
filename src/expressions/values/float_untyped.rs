@@ -1,5 +1,14 @@
 use super::*;
 
+define_leaf_type! {
+    pub(crate) UntypedFloatType => FloatType(FloatContent::Untyped) => ValueType,
+    content: UntypedFloat,
+    kind: pub(crate) UntypedFloatKind,
+    type_name: "untyped_float",
+    articled_display_name: "an untyped float",
+    temp_type_data: UntypedFloatTypeData,
+}
+
 #[derive(Copy, Clone)]
 pub(crate) struct UntypedFloat(FallbackFloat);
 pub(crate) type FallbackFloat = f64;

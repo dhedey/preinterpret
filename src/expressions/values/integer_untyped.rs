@@ -1,5 +1,14 @@
 use super::*;
 
+define_leaf_type! {
+    pub(crate) UntypedIntegerType => IntegerType(IntegerContent::Untyped) => ValueType,
+    content: UntypedInteger,
+    kind: pub(crate) UntypedIntegerKind,
+    type_name: "untyped_int",
+    articled_display_name: "an untyped integer",
+    temp_type_data: UntypedIntegerTypeData,
+}
+
 #[derive(Copy, Clone)]
 pub(crate) struct UntypedInteger(FallbackInteger);
 pub(crate) type FallbackInteger = i128;

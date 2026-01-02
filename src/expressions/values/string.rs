@@ -1,5 +1,14 @@
 use super::*;
 
+define_leaf_type! {
+    pub(crate) StringType => ValueType(ValueContent::String),
+    content: String,
+    kind: pub(crate) StringKind,
+    type_name: "string",
+    articled_display_name: "a string",
+    temp_type_data: StringTypeData,
+}
+
 #[derive(Clone)]
 pub(crate) struct StringValue {
     pub(crate) value: String,

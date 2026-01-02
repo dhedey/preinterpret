@@ -4,6 +4,7 @@ use expression_parsing::*;
 
 mod concepts;
 mod control_flow;
+mod equality;
 mod evaluation;
 mod expression;
 mod expression_block;
@@ -18,6 +19,7 @@ mod values;
 #[allow(unused_imports)] // Whilst we're building it out
 pub(crate) use concepts::*;
 pub(crate) use control_flow::*;
+pub(crate) use equality::*;
 pub(crate) use evaluation::*;
 pub(crate) use expression::*;
 pub(crate) use expression_block::*;

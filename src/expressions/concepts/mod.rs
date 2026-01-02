@@ -5,12 +5,10 @@ mod actual;
 mod dyn_impls;
 mod form;
 mod forms;
-mod type_impls;
 mod type_traits;
 
 pub(crate) use actual::*;
 pub(crate) use dyn_impls::*;
 pub(crate) use form::*;
 pub(crate) use forms::*;
-pub(crate) use type_impls::*;
 pub(crate) use type_traits::*;

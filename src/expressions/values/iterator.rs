@@ -1,5 +1,14 @@
 use super::*;
 
+define_leaf_type! {
+    pub(crate) IteratorType => ValueType(ValueContent::Iterator),
+    content: IteratorValue,
+    kind: pub(crate) IteratorKind,
+    type_name: "iterator",
+    articled_display_name: "an iterator",
+    temp_type_data: IteratorTypeData,
+}
+
 #[derive(Clone)]
 pub(crate) struct IteratorValue {
     iterator: IteratorValueInner,

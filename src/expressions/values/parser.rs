@@ -1,5 +1,14 @@
 use super::*;
 
+define_leaf_type! {
+    pub(crate) ParserType => ValueType(ValueContent::Parser),
+    content: ParserHandle,
+    kind: pub(crate) ParserKind,
+    type_name: "parser",
+    articled_display_name: "a parser",
+    temp_type_data: ParserTypeData,
+}
+
 #[derive(Clone)]
 pub(crate) struct ParserValue {
     handle: ParserHandle,

@@ -164,7 +164,16 @@ macro_rules! impl_float_operations {
 impl_float_operations!(F32TypeData mod f32_interface: F32(f32), F64TypeData mod f64_interface: F64(f64));
 
 macro_rules! impl_resolvable_float_subtype {
-    ($value_type:ty, $type:ty, $variant:ident, $expected_msg:expr) => {
+    ($type_def:ident, $kind:ident, $value_type:ident, $type:ty, $variant:ident, $type_name:literal, $articled_display_name:expr) => {
+        define_leaf_type! {
+            pub(crate) $type_def => FloatType(FloatContent::$variant) => ValueType,
+            content: $type,
+            kind: pub(crate) $kind,
+            type_name: $type_name,
+            articled_display_name: $articled_display_name,
+            temp_type_data: $value_type,
+        }
+
         impl ResolvableArgumentTarget for $type {
             type ValueType = $value_type;
         }
@@ -183,7 +192,7 @@ macro_rules! impl_resolvable_float_subtype {
                 match value {
                     FloatValue::Untyped(x) => Ok(x.into_fallback() as $type),
                     FloatValue::$variant(x) => Ok(x),
-                    other => context.err($expected_msg, other),
+                    other => context.err($articled_display_name, other),
                 }
             }
         }
@@ -195,7 +204,7 @@ macro_rules! impl_resolvable_float_subtype {
             ) -> ExecutionResult<Self> {
                 match value {
                     Value::Float(x) => <$type>::resolve_from_value(x, context),
-                    other => context.err($expected_msg, other),
+                    other => context.err($articled_display_name, other),
                 }
             }
         }
@@ -207,7 +216,7 @@ macro_rules! impl_resolvable_float_subtype {
             ) -> ExecutionResult<&'a Self> {
                 match value {
                     Value::Float(FloatValue::$variant(x)) => Ok(x),
-                    other => context.err($expected_msg, other),
+                    other => context.err($articled_display_name, other),
                 }
             }
         }
@@ -219,12 +228,12 @@ macro_rules! impl_resolvable_float_subtype {
             ) -> ExecutionResult<&'a mut Self> {
                 match value {
                     Value::Float(FloatValue::$variant(x)) => Ok(x),
-                    other => context.err($expected_msg, other),
+                    other => context.err($articled_display_name, other),
                 }
             }
         }
     };
 }
 
-impl_resolvable_float_subtype!(F32TypeData, f32, F32, "an f32");
-impl_resolvable_float_subtype!(F64TypeData, f64, F64, "an f64");
+impl_resolvable_float_subtype!(F32Type, F32Kind, F32TypeData, f32, F32, "f32", "an f32");
+impl_resolvable_float_subtype!(F64Type, F64Kind, F64TypeData, f64, F64, "f64", "an f64");

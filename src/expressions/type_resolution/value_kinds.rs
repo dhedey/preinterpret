@@ -338,34 +338,34 @@ impl TypeKind {
 }
 
 pub(crate) enum ParentTypeKind {
-    Value,
-    Integer,
-    Float,
+    Value(ValueTypeKind),
+    Integer(IntegerTypeKind),
+    Float(FloatTypeKind),
 }
 
 impl ParentTypeKind {
     pub(crate) fn from_source_name(name: &str) -> Option<Self> {
         Some(match name {
-            "value" => ParentTypeKind::Value,
-            "int" => ParentTypeKind::Integer,
-            "float" => ParentTypeKind::Float,
+            ValueTypeKind::SOURCE_TYPE_NAME => ParentTypeKind::Value(ValueTypeKind),
+            IntegerTypeKind::SOURCE_TYPE_NAME => ParentTypeKind::Integer(IntegerTypeKind),
+            FloatTypeKind::SOURCE_TYPE_NAME => ParentTypeKind::Float(FloatTypeKind),
             _ => return None,
         })
     }
 
     pub(crate) fn source_name(&self) -> &'static str {
         match self {
-            ParentTypeKind::Value => "value",
-            ParentTypeKind::Integer => "int",
-            ParentTypeKind::Float => "float",
+            ParentTypeKind::Value(ValueTypeKind) => ValueTypeKind::SOURCE_TYPE_NAME,
+            ParentTypeKind::Integer(IntegerTypeKind) => IntegerTypeKind::SOURCE_TYPE_NAME,
+            ParentTypeKind::Float(FloatTypeKind) => FloatTypeKind::SOURCE_TYPE_NAME,
         }
     }
 
-    pub(in crate::expressions) fn method_resolver(&self) -> &'static dyn MethodResolver {
+    pub(crate) fn method_resolver(&self) -> &'static dyn MethodResolver {
         match self {
-            ParentTypeKind::Value => &ValueTypeData,
-            ParentTypeKind::Integer => &IntegerTypeData,
-            ParentTypeKind::Float => &FloatTypeData,
+            ParentTypeKind::Value(x) => x.method_resolver(),
+            ParentTypeKind::Integer(x) => x.method_resolver(),
+            ParentTypeKind::Float(x) => x.method_resolver(),
         }
     }
 }

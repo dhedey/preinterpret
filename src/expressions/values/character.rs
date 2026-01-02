@@ -1,5 +1,14 @@
 use super::*;
 
+define_leaf_type! {
+    pub(crate) CharType => ValueType(ValueContent::Char),
+    content: char,
+    kind: pub(crate) CharKind,
+    type_name: "char",
+    articled_display_name: "a char",
+    temp_type_data: CharTypeData,
+}
+
 #[derive(Clone)]
 pub(crate) struct CharValue {
     pub(super) value: char,

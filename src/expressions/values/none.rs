@@ -1,5 +1,15 @@
 use super::*;
 
+define_leaf_type! {
+    pub(crate) NoneType => ValueType(ValueContent::None),
+    content: (),
+    kind: pub(crate) NoneKind,
+    type_name: "none",
+    // Instead of saying "expected a none value", we can say "expected None"
+    articled_display_name: "None",
+    temp_type_data: NoneTypeData,
+}
+
 impl IntoValue for () {
     fn into_value(self) -> Value {
         Value::None

@@ -219,13 +219,14 @@ macro_rules! define_parent_type {
     (
         $type_def_vis:vis $type_def:ident $(=> $parent:ident($parent_content:ident :: $parent_variant:ident) $(=> $ancestor:ty)*)?,
         content: $content_vis:vis $content:ident,
-        kind: $kind_vis:vis $kind:ident,
-        parent_kind: ParentTypeKind::$parent_kind:ident,
+        leaf_kind: $leaf_kind_vis:vis $leaf_kind:ident,
+        type_kind: ParentTypeKind::$parent_kind:ident($type_kind_vis:vis $type_kind:ident),
         variants: {
             $($variant:ident => $variant_type:ty,)*
         },
         type_name: $source_type_name:literal,
         articled_display_name: $articled_display_name:literal,
+        temp_type_data: $type_data:ident,
     ) => {
         $type_def_vis struct $type_def;
 
@@ -236,37 +237,37 @@ macro_rules! define_parent_type {
             const ARTICLED_DISPLAY_NAME: &'static str = $articled_display_name;
 
             fn type_kind() -> TypeKind {
-                TypeKind::Parent(ParentTypeKind::$parent_kind)
+                TypeKind::Parent(ParentTypeKind::$parent_kind($type_kind))
             }
         }
 
         impl MethodResolver for $type_def {
-            fn resolve_method(&self, _method_name: &str) -> Option<MethodInterface> {
-                unimplemented!()
+            fn resolve_method(&self, method_name: &str) -> Option<MethodInterface> {
+                $type_data.resolve_method(method_name)
             }
 
             fn resolve_unary_operation(
                 &self,
-                _operation: &UnaryOperation,
+                operation: &UnaryOperation,
             ) -> Option<UnaryOperationInterface> {
-                unimplemented!()
+                $type_data.resolve_unary_operation(operation)
             }
 
             fn resolve_binary_operation(
                 &self,
-                _operation: &BinaryOperation,
+                operation: &BinaryOperation,
             ) -> Option<BinaryOperationInterface> {
-                unimplemented!()
+                $type_data.resolve_binary_operation(operation)
             }
 
-            fn resolve_type_property(&self, _property_name: &str) -> Option<Value> {
-                unimplemented!()
+            fn resolve_type_property(&self, property_name: &str) -> Option<Value> {
+                $type_data.resolve_type_property(property_name)
             }
         }
 
         impl IsHierarchicalType for $type_def {
             type Content<'a, F: IsHierarchicalForm> = $content<'a, F>;
-            type LeafKind = $kind;
+            type LeafKind = $leaf_kind;
 
             fn map_with<'a, F: IsHierarchicalForm, M: LeafMapper<F>>(
                 content: Self::Content<'a, F>,
@@ -282,20 +283,31 @@ macro_rules! define_parent_type {
         }
 
         #[derive(Clone, Copy, PartialEq, Eq)]
-        $kind_vis enum $kind {
+        $type_kind_vis struct $type_kind;
+
+        impl $type_kind {
+            pub(crate) const SOURCE_TYPE_NAME: &'static str = $source_type_name;
+
+            pub(crate) fn method_resolver(&self) -> &'static dyn MethodResolver {
+                &$type_def
+            }
+        }
+
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        $leaf_kind_vis enum $leaf_kind {
             $( $variant(<$variant_type as IsHierarchicalType>::LeafKind), )*
         }
 
         $(
-            impl From<$kind> for ValueKind {
-                fn from(kind: $kind) -> Self {
+            impl From<$leaf_kind> for ValueKind {
+                fn from(kind: $leaf_kind) -> Self {
                     let as_parent_kind = <$parent as IsHierarchicalType>::LeafKind::$parent_variant(kind);
                     ValueKind::from(as_parent_kind)
                 }
             }
         )?
 
-        impl IsSpecificLeafKind for $kind {
+        impl IsSpecificLeafKind for $leaf_kind {
             fn articled_display_name(&self) -> &'static str {
                 match self {
                     $( Self::$variant(x) => x.articled_display_name(), )*
@@ -303,7 +315,9 @@ macro_rules! define_parent_type {
             }
 
             fn method_resolver(&self) -> &'static dyn MethodResolver {
-                &$type_def
+                match self {
+                    $( Self::$variant(x) => x.method_resolver(), )*
+                }
             }
         }
 
@@ -322,6 +336,7 @@ macro_rules! define_leaf_type {
         kind: $kind_vis:vis $kind:ident,
         type_name: $source_type_name:literal,
         articled_display_name: $articled_display_name:literal,
+        temp_type_data: $type_data:ident,
     ) => {
         $type_def_vis struct $type_def;
 
@@ -348,26 +363,26 @@ macro_rules! define_leaf_type {
         }
 
         impl MethodResolver for $type_def {
-            fn resolve_method(&self, _method_name: &str) -> Option<MethodInterface> {
-                unimplemented!()
+            fn resolve_method(&self, method_name: &str) -> Option<MethodInterface> {
+                $type_data.resolve_method(method_name)
             }
 
             fn resolve_unary_operation(
                 &self,
-                _operation: &UnaryOperation,
+                operation: &UnaryOperation,
             ) -> Option<UnaryOperationInterface> {
-                unimplemented!()
+                $type_data.resolve_unary_operation(operation)
             }
 
             fn resolve_binary_operation(
                 &self,
-                _operation: &BinaryOperation,
+                operation: &BinaryOperation,
             ) -> Option<BinaryOperationInterface> {
-                unimplemented!()
+                $type_data.resolve_binary_operation(operation)
             }
 
-            fn resolve_type_property(&self, _property_name: &str) -> Option<Value> {
-                unimplemented!()
+            fn resolve_type_property(&self, property_name: &str) -> Option<Value> {
+                $type_data.resolve_type_property(property_name)
             }
         }
 

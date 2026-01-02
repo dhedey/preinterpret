@@ -1,5 +1,30 @@
 use super::*;
 
+define_parent_type! {
+    pub(crate) IntegerType => ValueType(ValueContent::Integer),
+    content: pub(crate) IntegerContent,
+    leaf_kind: pub(crate) IntegerLeafKind,
+    type_kind: ParentTypeKind::Integer(pub(crate) IntegerTypeKind),
+    variants: {
+        Untyped => UntypedIntegerType,
+        U8 => U8Type,
+        U16 => U16Type,
+        U32 => U32Type,
+        U64 => U64Type,
+        U128 => U128Type,
+        Usize => UsizeType,
+        I8 => I8Type,
+        I16 => I16Type,
+        I32 => I32Type,
+        I64 => I64Type,
+        I128 => I128Type,
+        Isize => IsizeType,
+    },
+    type_name: "int",
+    articled_display_name: "an integer",
+    temp_type_data: IntegerTypeData,
+}
+
 #[derive(Copy, Clone)]
 pub(crate) enum IntegerValue {
     Untyped(UntypedInteger),

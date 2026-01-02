@@ -2,6 +2,15 @@
 
 use super::*;
 
+define_leaf_type! {
+    pub(crate) BoolType => ValueType(ValueContent::Bool),
+    content: bool,
+    kind: pub(crate) BoolKind,
+    type_name: "bool",
+    articled_display_name: "a boolean",
+    temp_type_data: BooleanTypeData,
+}
+
 #[derive(Clone)]
 pub(crate) struct BooleanValue {
     pub(crate) value: bool,

@@ -114,9 +114,11 @@ pub(crate) enum CastTarget {
 impl CastTarget {
     fn from_source_type(s: TypeIdent) -> Option<Self> {
         Some(match s.kind {
-            TypeKind::Parent(ParentTypeKind::Integer) => CastTarget::Integer(IntegerKind::Untyped),
+            TypeKind::Parent(ParentTypeKind::Integer(_)) => {
+                CastTarget::Integer(IntegerKind::Untyped)
+            }
             TypeKind::Leaf(ValueKind::Integer(kind)) => CastTarget::Integer(kind),
-            TypeKind::Parent(ParentTypeKind::Float) => CastTarget::Float(FloatKind::Untyped),
+            TypeKind::Parent(ParentTypeKind::Float(_)) => CastTarget::Float(FloatKind::Untyped),
             TypeKind::Leaf(ValueKind::Float(kind)) => CastTarget::Float(kind),
             TypeKind::Leaf(ValueKind::Boolean) => CastTarget::Boolean,
             TypeKind::Leaf(ValueKind::String) => CastTarget::String,

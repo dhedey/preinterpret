@@ -1,5 +1,14 @@
 use super::*;
 
+define_leaf_type! {
+    pub(crate) ObjectType => ValueType(ValueContent::Object),
+    content: ObjectValue,
+    kind: pub(crate) ObjectKind,
+    type_name: "object",
+    articled_display_name: "an object",
+    temp_type_data: ObjectTypeData,
+}
+
 #[derive(Clone)]
 pub(crate) struct ObjectValue {
     pub(crate) entries: BTreeMap<String, ObjectEntry>,

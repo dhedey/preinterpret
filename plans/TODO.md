@@ -207,8 +207,10 @@ First, read the @./2025-11-vision.md
   - [x] Separate Hierarchical and DynCompatible Forms
   - [x] Improved macro support
   - [x] Add source type name to type macro/s
-  - [ ] Add (temporary) ability to link to TypeData and resolve methods from there
-    - [ ] Then implement all the macros
+  - [ ] Generate value kinds from the macros
+    - [x] Add (temporary) ability to link to TypeData and resolve methods from there
+    - [x] Then implement all the macros
+    - [ ] Add other methods to e.g. value kinds - i.e. Work out some way to _parse_ the value/type kinds
     - [ ] And use that to generate ValueKind from the new macros
   - [ ] Add ability to implement IsIterable
   - [ ] `CastTarget` simply wraps `TypeKind`

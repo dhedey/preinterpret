@@ -197,7 +197,16 @@ impl_int_operations!(
 );
 
 macro_rules! impl_resolvable_integer_subtype {
-    ($value_type:ty, $type:ty, $variant:ident, $expected_msg:expr) => {
+    ($type_def:ident, $kind:ident, $value_type:ident, $type:ty, $variant:ident, $type_name:literal, $articled_display_name:expr) => {
+        define_leaf_type! {
+            pub(crate) $type_def => IntegerType(IntegerContent::$variant) => ValueType,
+            content: $type,
+            kind: pub(crate) $kind,
+            type_name: $type_name,
+            articled_display_name: $articled_display_name,
+            temp_type_data: $value_type,
+        }
+
         impl ResolvableArgumentTarget for $type {
             type ValueType = $value_type;
         }
@@ -216,7 +225,7 @@ macro_rules! impl_resolvable_integer_subtype {
                 match value {
                     IntegerValue::Untyped(x) => Ok(x.into_fallback() as $type),
                     IntegerValue::$variant(x) => Ok(x),
-                    other => context.err($expected_msg, other),
+                    other => context.err($articled_display_name, other),
                 }
             }
         }
@@ -228,7 +237,7 @@ macro_rules! impl_resolvable_integer_subtype {
             ) -> ExecutionResult<Self> {
                 match value {
                     Value::Integer(x) => <$type>::resolve_from_value(x, context),
-                    other => context.err($expected_msg, other),
+                    other => context.err($articled_display_name, other),
                 }
             }
         }
@@ -240,7 +249,7 @@ macro_rules! impl_resolvable_integer_subtype {
             ) -> ExecutionResult<&'a Self> {
                 match value {
                     Value::Integer(IntegerValue::$variant(x)) => Ok(x),
-                    other => context.err($expected_msg, other),
+                    other => context.err($articled_display_name, other),
                 }
             }
         }
@@ -252,22 +261,54 @@ macro_rules! impl_resolvable_integer_subtype {
             ) -> ExecutionResult<&'a mut Self> {
                 match value {
                     Value::Integer(IntegerValue::$variant(x)) => Ok(x),
-                    other => context.err($expected_msg, other),
+                    other => context.err($articled_display_name, other),
                 }
             }
         }
     };
 }
 
-impl_resolvable_integer_subtype!(I8TypeData, i8, I8, "an i8");
-impl_resolvable_integer_subtype!(I16TypeData, i16, I16, "an i16");
-impl_resolvable_integer_subtype!(I32TypeData, i32, I32, "an i32");
-impl_resolvable_integer_subtype!(I64TypeData, i64, I64, "an i64");
-impl_resolvable_integer_subtype!(I128TypeData, i128, I128, "an i128");
-impl_resolvable_integer_subtype!(IsizeTypeData, isize, Isize, "an isize");
-impl_resolvable_integer_subtype!(U8TypeData, u8, U8, "a u8");
-impl_resolvable_integer_subtype!(U16TypeData, u16, U16, "a u16");
-impl_resolvable_integer_subtype!(U32TypeData, u32, U32, "a u32");
-impl_resolvable_integer_subtype!(U64TypeData, u64, U64, "a u64");
-impl_resolvable_integer_subtype!(U128TypeData, u128, U128, "a u128");
-impl_resolvable_integer_subtype!(UsizeTypeData, usize, Usize, "a usize");
+impl_resolvable_integer_subtype!(I8Type, I8Kind, I8TypeData, i8, I8, "i8", "an i8");
+impl_resolvable_integer_subtype!(I16Type, I16Kind, I16TypeData, i16, I16, "i16", "an i16");
+impl_resolvable_integer_subtype!(I32Type, I32Kind, I32TypeData, i32, I32, "i32", "an i32");
+impl_resolvable_integer_subtype!(I64Type, I64Kind, I64TypeData, i64, I64, "i64", "an i64");
+impl_resolvable_integer_subtype!(
+    I128Type,
+    I128Kind,
+    I128TypeData,
+    i128,
+    I128,
+    "i128",
+    "an i128"
+);
+impl_resolvable_integer_subtype!(
+    IsizeType,
+    IsizeKind,
+    IsizeTypeData,
+    isize,
+    Isize,
+    "isize",
+    "an isize"
+);
+impl_resolvable_integer_subtype!(U8Type, U8Kind, U8TypeData, u8, U8, "u8", "a u8");
+impl_resolvable_integer_subtype!(U16Type, U16Kind, U16TypeData, u16, U16, "u16", "a u16");
+impl_resolvable_integer_subtype!(U32Type, U32Kind, U32TypeData, u32, U32, "u32", "a u32");
+impl_resolvable_integer_subtype!(U64Type, U64Kind, U64TypeData, u64, U64, "u64", "a u64");
+impl_resolvable_integer_subtype!(
+    U128Type,
+    U128Kind,
+    U128TypeData,
+    u128,
+    U128,
+    "u128",
+    "a u128"
+);
+impl_resolvable_integer_subtype!(
+    UsizeType,
+    UsizeKind,
+    UsizeTypeData,
+    usize,
+    Usize,
+    "usize",
+    "a usize"
+);

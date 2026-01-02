@@ -1,5 +1,14 @@
 use super::*;
 
+define_leaf_type! {
+    pub(crate) UnsupportedLiteralType => ValueType(ValueContent::UnsupportedLiteral),
+    content: syn::Lit,
+    kind: pub(crate) UnsupportedLiteralKind,
+    type_name: "unsupported_literal",
+    articled_display_name: "an unsupported literal",
+    temp_type_data: UnsupportedLiteralTypeData,
+}
+
 #[derive(Clone)]
 pub(crate) struct UnsupportedLiteral {
     pub(crate) lit: syn::Lit,
