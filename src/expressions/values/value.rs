@@ -187,9 +187,9 @@ impl EqualityContext for TypedEquality {
         Err(self.error_span.type_error(format!(
             "lhs{} is {}, but rhs{} is {}",
             path_str,
-            lhs.articled_value_type(),
+            lhs.articled_kind(),
             path_str,
-            rhs.articled_value_type()
+            rhs.articled_kind()
         )))
     }
 
@@ -756,7 +756,7 @@ impl Value {
         if !self.value_kind().supports_transparent_cloning() {
             return error_span_range.ownership_err(format!(
                 "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .clone() explicitly.",
-                self.articled_value_type()
+                self.articled_kind()
             ));
         }
         Ok(self.clone())
@@ -816,7 +816,7 @@ impl Value {
         match self {
             Value::Array(array) => array.into_indexed(index),
             Value::Object(object) => object.into_indexed(index),
-            other => access.type_err(format!("Cannot index into a {}", other.value_type())),
+            other => access.type_err(format!("Cannot index into {}", other.articled_kind())),
         }
     }
 
@@ -829,7 +829,7 @@ impl Value {
         match self {
             Value::Array(array) => array.index_mut(index),
             Value::Object(object) => object.index_mut(index, auto_create),
-            other => access.type_err(format!("Cannot index into a {}", other.value_type())),
+            other => access.type_err(format!("Cannot index into {}", other.articled_kind())),
         }
     }
 
@@ -841,7 +841,7 @@ impl Value {
         match self {
             Value::Array(array) => array.index_ref(index),
             Value::Object(object) => object.index_ref(index),
-            other => access.type_err(format!("Cannot index into a {}", other.value_type())),
+            other => access.type_err(format!("Cannot index into {}", other.articled_kind())),
         }
     }
 
@@ -849,8 +849,8 @@ impl Value {
         match self {
             Value::Object(object) => object.into_property(access),
             other => access.type_err(format!(
-                "Cannot access properties on a {}",
-                other.value_type()
+                "Cannot access properties on {}",
+                other.articled_kind()
             )),
         }
     }
@@ -863,8 +863,8 @@ impl Value {
         match self {
             Value::Object(object) => object.property_mut(access, auto_create),
             other => access.type_err(format!(
-                "Cannot access properties on a {}",
-                other.value_type()
+                "Cannot access properties on {}",
+                other.articled_kind()
             )),
         }
     }
@@ -873,8 +873,8 @@ impl Value {
         match self {
             Value::Object(object) => object.property_ref(access),
             other => access.type_err(format!(
-                "Cannot access properties on a {}",
-                other.value_type()
+                "Cannot access properties on {}",
+                other.articled_kind()
             )),
         }
     }

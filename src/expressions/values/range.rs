@@ -120,39 +120,28 @@ impl Spanned<&RangeValue> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RangeKind {
     /// `start .. end`
-    Range,
+    FromTo,
     /// `start ..`
-    RangeFrom,
+    From,
     /// `.. end`
-    RangeTo,
+    To,
     /// `..`
-    RangeFull,
+    Full,
     /// `start ..= end`
-    RangeInclusive,
+    FromToInclusive,
     /// `..= end`
-    RangeToInclusive,
+    ToInclusive,
 }
 
-impl IsSpecificValueKind for RangeKind {
-    fn display_name(&self) -> &'static str {
-        match self {
-            RangeKind::Range => "range start..end",
-            RangeKind::RangeFrom => "range start..",
-            RangeKind::RangeTo => "range ..end",
-            RangeKind::RangeFull => "range ..",
-            RangeKind::RangeInclusive => "range start..=end",
-            RangeKind::RangeToInclusive => "range ..=end",
-        }
-    }
-
+impl IsSpecificLeafKind for RangeKind {
     fn articled_display_name(&self) -> &'static str {
         match self {
-            RangeKind::Range => "a range start..end",
-            RangeKind::RangeFrom => "a range start..",
-            RangeKind::RangeTo => "a range ..end",
-            RangeKind::RangeFull => "a range ..",
-            RangeKind::RangeInclusive => "a range start..=end",
-            RangeKind::RangeToInclusive => "a range ..=end",
+            RangeKind::FromTo => "a range start..end",
+            RangeKind::From => "a range start..",
+            RangeKind::To => "a range ..end",
+            RangeKind::Full => "a range ..",
+            RangeKind::FromToInclusive => "a range start..=end",
+            RangeKind::ToInclusive => "a range ..=end",
         }
     }
 }
@@ -288,12 +277,12 @@ pub(crate) enum RangeValueInner {
 impl RangeValueInner {
     fn kind(&self) -> RangeKind {
         match self {
-            Self::Range { .. } => RangeKind::Range,
-            Self::RangeFrom { .. } => RangeKind::RangeFrom,
-            Self::RangeTo { .. } => RangeKind::RangeTo,
-            Self::RangeFull { .. } => RangeKind::RangeFull,
-            Self::RangeInclusive { .. } => RangeKind::RangeInclusive,
-            Self::RangeToInclusive { .. } => RangeKind::RangeToInclusive,
+            Self::Range { .. } => RangeKind::FromTo,
+            Self::RangeFrom { .. } => RangeKind::From,
+            Self::RangeTo { .. } => RangeKind::To,
+            Self::RangeFull { .. } => RangeKind::Full,
+            Self::RangeInclusive { .. } => RangeKind::FromToInclusive,
+            Self::RangeToInclusive { .. } => RangeKind::ToInclusive,
         }
     }
 

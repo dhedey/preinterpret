@@ -802,9 +802,9 @@ impl EvaluationFrame for UnaryOperationBuilder {
             return context.return_returned_value(result);
         }
         self.operation.type_err(format!(
-            "The {} operator is not supported for {} values",
+            "The {} operator is not supported for {}",
             self.operation.symbolic_description(),
-            operand.value_type(),
+            operand.articled_kind(),
         ))
     }
 }
@@ -888,7 +888,7 @@ impl EvaluationFrame for BinaryOperationBuilder {
                             return self.operation.type_err(format!(
                                 "The {} operator is not supported for {} operand",
                                 self.operation.symbolic_description(),
-                                left.articled_value_type(),
+                                left.articled_kind(),
                             ));
                         }
                     }
@@ -1263,7 +1263,7 @@ impl EvaluationFrame for MethodCallBuilder {
                         return self.method.method.type_err(format!(
                             "The method {} does not exist on {}",
                             self.method.method,
-                            caller.articled_value_type(),
+                            caller.articled_kind(),
                         ))
                     }
                 };

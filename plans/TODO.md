@@ -206,7 +206,9 @@ First, read the @./2025-11-vision.md
   - [x] Improved error handling in the macro (e.g. required arg after optional; no matching strongly-typed signature)
   - [x] Separate Hierarchical and DynCompatible Forms
   - [x] Improved macro support
+  - [ ] Add source type name to type macro/s
   - [ ] Add ability to implement IsIterable
+  - [ ] `CastTarget` simply wraps `TypeKind`
   - [ ] Complete ownership definitions and inter-conversions, including maybe-erroring inter-conversions (possibly with `Result<X, Mapper::Error>` which we can map out of):
     - [ ] Owned
     - [ ] Mutable, Owned => Mutable
@@ -216,8 +218,11 @@ First, read the @./2025-11-vision.md
     - [ ] LateBound, Tons of conversions into it
     - [ ] Argument, and `ArgumentOwnership` driven conversions into it
   - [ ] Complete value definitions
+    - [ ] Strip wrapper types like `StreamValue` - can just use `OutputStream` as content
   - [ ] Replace `Owned`, `Shared` etc as type references to `Actual<..>`
   - [ ] Remove old definitions
+  - [ ] Generate test over all value kinds which checks for:
+    - [ ] source type has no spaces and is lower case, and is invertible
 
 ## Methods and closures
 

@@ -2,15 +2,13 @@ use super::*;
 
 /// A trait for specific value kinds that can provide a display name.
 /// This is implemented by `ValueKind`, `IntegerKind`, `FloatKind`, etc.
-pub(crate) trait IsSpecificValueKind: Copy + Into<ValueKind> {
-    fn display_name(&self) -> &'static str;
-
+pub(crate) trait IsSpecificLeafKind: Copy + Into<ValueKind> {
     fn articled_display_name(&self) -> &'static str;
 }
 
 /// A trait for types that have a value kind.
 pub(crate) trait HasValueKind {
-    type SpecificKind: IsSpecificValueKind;
+    type SpecificKind: IsSpecificLeafKind;
 
     fn kind(&self) -> Self::SpecificKind;
 
@@ -18,11 +16,7 @@ pub(crate) trait HasValueKind {
         self.kind().into()
     }
 
-    fn value_type(&self) -> &'static str {
-        self.kind().display_name()
-    }
-
-    fn articled_value_type(&self) -> &'static str {
+    fn articled_kind(&self) -> &'static str {
         self.kind().articled_display_name()
     }
 }
@@ -60,25 +54,84 @@ pub(crate) enum ValueKind {
     Parser,
 }
 
-impl IsSpecificValueKind for ValueKind {
-    fn display_name(&self) -> &'static str {
+impl ValueKind {
+    pub(crate) fn from_source_name(name: &str) -> Option<Self> {
+        Some(match name {
+            "none" => ValueKind::None,
+            "untyped_int" => ValueKind::Integer(IntegerKind::Untyped),
+            "i8" => ValueKind::Integer(IntegerKind::I8),
+            "i16" => ValueKind::Integer(IntegerKind::I16),
+            "i32" => ValueKind::Integer(IntegerKind::I32),
+            "i64" => ValueKind::Integer(IntegerKind::I64),
+            "i128" => ValueKind::Integer(IntegerKind::I128),
+            "isize" => ValueKind::Integer(IntegerKind::Isize),
+            "u8" => ValueKind::Integer(IntegerKind::U8),
+            "u16" => ValueKind::Integer(IntegerKind::U16),
+            "u32" => ValueKind::Integer(IntegerKind::U32),
+            "u64" => ValueKind::Integer(IntegerKind::U64),
+            "u128" => ValueKind::Integer(IntegerKind::U128),
+            "usize" => ValueKind::Integer(IntegerKind::Usize),
+            "untyped_float" => ValueKind::Float(FloatKind::Untyped),
+            "f32" => ValueKind::Float(FloatKind::F32),
+            "f64" => ValueKind::Float(FloatKind::F64),
+            "bool" => ValueKind::Boolean,
+            "string" => ValueKind::String,
+            "unsupported_literal" => ValueKind::UnsupportedLiteral,
+            "char" => ValueKind::Char,
+            "array" => ValueKind::Array,
+            "object" => ValueKind::Object,
+            "stream" => ValueKind::Stream,
+            "range_from_to" => ValueKind::Range(RangeKind::FromTo),
+            "range_from" => ValueKind::Range(RangeKind::From),
+            "range_to" => ValueKind::Range(RangeKind::To),
+            "range_full" => ValueKind::Range(RangeKind::Full),
+            "range_from_to_inclusive" => ValueKind::Range(RangeKind::FromToInclusive),
+            "range_to_inclusive" => ValueKind::Range(RangeKind::ToInclusive),
+            "iterator" => ValueKind::Iterator,
+            "parser" => ValueKind::Parser,
+            _ => return None,
+        })
+    }
+
+    pub(crate) fn source_name(&self) -> &'static str {
         match self {
-            ValueKind::None => "None",
-            ValueKind::Integer(kind) => kind.display_name(),
-            ValueKind::Float(kind) => kind.display_name(),
+            ValueKind::None => "none",
+            ValueKind::Integer(IntegerKind::Untyped) => "untyped_int",
+            ValueKind::Integer(IntegerKind::I8) => "i8",
+            ValueKind::Integer(IntegerKind::I16) => "i16",
+            ValueKind::Integer(IntegerKind::I32) => "i32",
+            ValueKind::Integer(IntegerKind::I64) => "i64",
+            ValueKind::Integer(IntegerKind::I128) => "i128",
+            ValueKind::Integer(IntegerKind::Isize) => "isize",
+            ValueKind::Integer(IntegerKind::U8) => "u8",
+            ValueKind::Integer(IntegerKind::U16) => "u16",
+            ValueKind::Integer(IntegerKind::U32) => "u32",
+            ValueKind::Integer(IntegerKind::U64) => "u64",
+            ValueKind::Integer(IntegerKind::U128) => "u128",
+            ValueKind::Integer(IntegerKind::Usize) => "usize",
+            ValueKind::Float(FloatKind::Untyped) => "untyped_float",
+            ValueKind::Float(FloatKind::F32) => "f32",
+            ValueKind::Float(FloatKind::F64) => "f64",
             ValueKind::Boolean => "bool",
             ValueKind::String => "string",
             ValueKind::Char => "char",
-            ValueKind::UnsupportedLiteral => "unsupported literal",
+            ValueKind::UnsupportedLiteral => "unsupported_literal",
             ValueKind::Array => "array",
             ValueKind::Object => "object",
             ValueKind::Stream => "stream",
-            ValueKind::Range(kind) => kind.display_name(),
+            ValueKind::Range(RangeKind::FromTo) => "range_from_to",
+            ValueKind::Range(RangeKind::From) => "range_from",
+            ValueKind::Range(RangeKind::To) => "range_to",
+            ValueKind::Range(RangeKind::Full) => "range_full",
+            ValueKind::Range(RangeKind::FromToInclusive) => "range_from_to_inclusive",
+            ValueKind::Range(RangeKind::ToInclusive) => "range_to_inclusive",
             ValueKind::Iterator => "iterator",
             ValueKind::Parser => "parser",
         }
     }
+}
 
+impl IsSpecificLeafKind for ValueKind {
     fn articled_display_name(&self) -> &'static str {
         match self {
             // Instead of saying "expected a none value", we can say "expected None"
@@ -99,35 +152,22 @@ impl IsSpecificValueKind for ValueKind {
     }
 }
 
-static NONE: NoneTypeData = NoneTypeData;
-static BOOLEAN: BooleanTypeData = BooleanTypeData;
-static STRING: StringTypeData = StringTypeData;
-static CHAR: CharTypeData = CharTypeData;
-static UNSUPPORTED_LITERAL: UnsupportedLiteralTypeData = UnsupportedLiteralTypeData;
-static ARRAY: ArrayTypeData = ArrayTypeData;
-static OBJECT: ObjectTypeData = ObjectTypeData;
-static STREAM: StreamTypeData = StreamTypeData;
-static RANGE: RangeTypeData = RangeTypeData;
-static ITERABLE: IterableTypeData = IterableTypeData;
-static ITERATOR: IteratorTypeData = IteratorTypeData;
-static PARSER: ParserTypeData = ParserTypeData;
-
 impl ValueKind {
     fn method_resolver(&self) -> &'static dyn MethodResolver {
         match self {
-            ValueKind::None => &NONE,
+            ValueKind::None => &NoneTypeData,
             ValueKind::Integer(kind) => kind.method_resolver(),
             ValueKind::Float(kind) => kind.method_resolver(),
-            ValueKind::Boolean => &BOOLEAN,
-            ValueKind::String => &STRING,
-            ValueKind::Char => &CHAR,
-            ValueKind::UnsupportedLiteral => &UNSUPPORTED_LITERAL,
-            ValueKind::Array => &ARRAY,
-            ValueKind::Object => &OBJECT,
-            ValueKind::Stream => &STREAM,
-            ValueKind::Range(_) => &RANGE,
-            ValueKind::Iterator => &ITERATOR,
-            ValueKind::Parser => &PARSER,
+            ValueKind::Boolean => &BooleanTypeData,
+            ValueKind::String => &StringTypeData,
+            ValueKind::Char => &CharTypeData,
+            ValueKind::UnsupportedLiteral => &UnsupportedLiteralTypeData,
+            ValueKind::Array => &ArrayTypeData,
+            ValueKind::Object => &ObjectTypeData,
+            ValueKind::Stream => &StreamTypeData,
+            ValueKind::Range(_) => &RangeTypeData,
+            ValueKind::Iterator => &IteratorTypeData,
+            ValueKind::Parser => &ParserTypeData,
         }
     }
 
@@ -200,25 +240,7 @@ pub(crate) enum IntegerKind {
     Usize,
 }
 
-impl IsSpecificValueKind for IntegerKind {
-    fn display_name(&self) -> &'static str {
-        match self {
-            IntegerKind::Untyped => "untyped integer",
-            IntegerKind::I8 => "i8",
-            IntegerKind::I16 => "i16",
-            IntegerKind::I32 => "i32",
-            IntegerKind::I64 => "i64",
-            IntegerKind::I128 => "i128",
-            IntegerKind::Isize => "isize",
-            IntegerKind::U8 => "u8",
-            IntegerKind::U16 => "u16",
-            IntegerKind::U32 => "u32",
-            IntegerKind::U64 => "u64",
-            IntegerKind::U128 => "u128",
-            IntegerKind::Usize => "usize",
-        }
-    }
-
+impl IsSpecificLeafKind for IntegerKind {
     fn articled_display_name(&self) -> &'static str {
         match self {
             IntegerKind::Untyped => "an untyped integer",
@@ -244,37 +266,22 @@ impl From<IntegerKind> for ValueKind {
     }
 }
 
-static INTEGER: IntegerTypeData = IntegerTypeData;
-static UNTYPED_INTEGER: UntypedIntegerTypeData = UntypedIntegerTypeData;
-static I8: I8TypeData = I8TypeData;
-static I16: I16TypeData = I16TypeData;
-static I32: I32TypeData = I32TypeData;
-static I64: I64TypeData = I64TypeData;
-static I128: I128TypeData = I128TypeData;
-static ISIZE: IsizeTypeData = IsizeTypeData;
-static U8: U8TypeData = U8TypeData;
-static U16: U16TypeData = U16TypeData;
-static U32: U32TypeData = U32TypeData;
-static U64: U64TypeData = U64TypeData;
-static U128: U128TypeData = U128TypeData;
-static USIZE: UsizeTypeData = UsizeTypeData;
-
 impl IntegerKind {
     pub(in crate::expressions) fn method_resolver(&self) -> &'static dyn MethodResolver {
         match self {
-            IntegerKind::Untyped => &UNTYPED_INTEGER,
-            IntegerKind::I8 => &I8,
-            IntegerKind::I16 => &I16,
-            IntegerKind::I32 => &I32,
-            IntegerKind::I64 => &I64,
-            IntegerKind::I128 => &I128,
-            IntegerKind::Isize => &ISIZE,
-            IntegerKind::U8 => &U8,
-            IntegerKind::U16 => &U16,
-            IntegerKind::U32 => &U32,
-            IntegerKind::U64 => &U64,
-            IntegerKind::U128 => &U128,
-            IntegerKind::Usize => &USIZE,
+            IntegerKind::Untyped => &UntypedIntegerTypeData,
+            IntegerKind::I8 => &I8TypeData,
+            IntegerKind::I16 => &I16TypeData,
+            IntegerKind::I32 => &I32TypeData,
+            IntegerKind::I64 => &I64TypeData,
+            IntegerKind::I128 => &I128TypeData,
+            IntegerKind::Isize => &IsizeTypeData,
+            IntegerKind::U8 => &U8TypeData,
+            IntegerKind::U16 => &U16TypeData,
+            IntegerKind::U32 => &U32TypeData,
+            IntegerKind::U64 => &U64TypeData,
+            IntegerKind::U128 => &U128TypeData,
+            IntegerKind::Usize => &UsizeTypeData,
         }
     }
 }
@@ -286,15 +293,7 @@ pub(crate) enum FloatKind {
     F64,
 }
 
-impl IsSpecificValueKind for FloatKind {
-    fn display_name(&self) -> &'static str {
-        match self {
-            FloatKind::Untyped => "untyped float",
-            FloatKind::F32 => "f32",
-            FloatKind::F64 => "f64",
-        }
-    }
-
+impl IsSpecificLeafKind for FloatKind {
     fn articled_display_name(&self) -> &'static str {
         match self {
             FloatKind::Untyped => "an untyped float",
@@ -310,106 +309,119 @@ impl From<FloatKind> for ValueKind {
     }
 }
 
-static FLOAT: FloatTypeData = FloatTypeData;
-static UNTYPED_FLOAT: UntypedFloatTypeData = UntypedFloatTypeData;
-static F32: F32TypeData = F32TypeData;
-static F64: F64TypeData = F64TypeData;
-
 impl FloatKind {
     pub(in crate::expressions) fn method_resolver(&self) -> &'static dyn MethodResolver {
         match self {
-            FloatKind::Untyped => &UNTYPED_FLOAT,
-            FloatKind::F32 => &F32,
-            FloatKind::F64 => &F64,
+            FloatKind::Untyped => &UntypedFloatTypeData,
+            FloatKind::F32 => &F32TypeData,
+            FloatKind::F64 => &F64TypeData,
         }
     }
-}
-
-pub(crate) struct Type {
-    span: Span,
-    pub(crate) kind: TypeKind,
 }
 
 // A ValueKind represents a kind of leaf value.
 // But a TypeKind represents a type in the hierarchy, which points at a type data.
 pub(crate) enum TypeKind {
-    Integer,
-    SpecificInteger(IntegerKind),
-    Float,
-    SpecificFloat(FloatKind),
-    Boolean,
-    String,
-    Char,
-    Array,
-    Object,
-    Stream,
-    Range,
-    Iterable,
-    Iterator,
-    Parser,
+    Leaf(ValueKind),
+    Parent(ParentTypeKind),
+    Dyn(DynTypeKind),
 }
 
-impl Type {
-    pub(crate) fn from_source_name(name: &str) -> Option<TypeKind> {
+impl TypeKind {
+    pub(crate) fn from_source_name(name: &str) -> Option<Self> {
+        if let Some(kind) = ValueKind::from_source_name(name) {
+            return Some(TypeKind::Leaf(kind));
+        }
+        if let Some(kind) = ParentTypeKind::from_source_name(name) {
+            return Some(TypeKind::Parent(kind));
+        }
+        if let Some(kind) = DynTypeKind::from_source_name(name) {
+            return Some(TypeKind::Dyn(kind));
+        }
+        None
+    }
+
+    pub(crate) fn source_name(&self) -> &'static str {
+        match self {
+            TypeKind::Leaf(leaf_kind) => leaf_kind.source_name(),
+            TypeKind::Parent(parent_kind) => parent_kind.source_name(),
+            TypeKind::Dyn(dyn_kind) => dyn_kind.source_name(),
+        }
+    }
+}
+
+pub(crate) enum ParentTypeKind {
+    Value,
+    Integer,
+    Float,
+}
+
+impl ParentTypeKind {
+    pub(crate) fn from_source_name(name: &str) -> Option<Self> {
         Some(match name {
-            "int" => TypeKind::Integer,
-            "i8" => TypeKind::SpecificInteger(IntegerKind::I8),
-            "i16" => TypeKind::SpecificInteger(IntegerKind::I16),
-            "i32" => TypeKind::SpecificInteger(IntegerKind::I32),
-            "i64" => TypeKind::SpecificInteger(IntegerKind::I64),
-            "i128" => TypeKind::SpecificInteger(IntegerKind::I128),
-            "isize" => TypeKind::SpecificInteger(IntegerKind::Isize),
-            "u8" => TypeKind::SpecificInteger(IntegerKind::U8),
-            "u16" => TypeKind::SpecificInteger(IntegerKind::U16),
-            "u32" => TypeKind::SpecificInteger(IntegerKind::U32),
-            "u64" => TypeKind::SpecificInteger(IntegerKind::U64),
-            "u128" => TypeKind::SpecificInteger(IntegerKind::U128),
-            "usize" => TypeKind::SpecificInteger(IntegerKind::Usize),
-            "float" => TypeKind::Float,
-            "f32" => TypeKind::SpecificFloat(FloatKind::F32),
-            "f64" => TypeKind::SpecificFloat(FloatKind::F64),
-            "bool" => TypeKind::Boolean,
-            "string" => TypeKind::String,
-            "char" => TypeKind::Char,
-            "array" => TypeKind::Array,
-            "object" => TypeKind::Object,
-            "stream" => TypeKind::Stream,
-            "range" => TypeKind::Range,
-            "iterable" => TypeKind::Iterable,
-            "iterator" => TypeKind::Iterator,
-            "parser" => TypeKind::Parser,
+            "value" => ParentTypeKind::Value,
+            "int" => ParentTypeKind::Integer,
+            "float" => ParentTypeKind::Float,
             _ => return None,
         })
     }
 
     pub(crate) fn source_name(&self) -> &'static str {
-        // This should be inverse of parse below
-        match &self.kind {
-            TypeKind::Integer => "int",
-            TypeKind::SpecificInteger(kind) => kind.display_name(),
-            TypeKind::Float => "float",
-            TypeKind::SpecificFloat(kind) => kind.display_name(),
-            TypeKind::Boolean => "bool",
-            TypeKind::String => "string",
-            TypeKind::Char => "char",
-            TypeKind::Array => "array",
-            TypeKind::Object => "object",
-            TypeKind::Stream => "stream",
-            TypeKind::Range => "range",
-            TypeKind::Iterable => "iterable",
-            TypeKind::Iterator => "iterator",
-            TypeKind::Parser => "parser",
+        match self {
+            ParentTypeKind::Value => "value",
+            ParentTypeKind::Integer => "int",
+            ParentTypeKind::Float => "float",
         }
     }
 
+    pub(in crate::expressions) fn method_resolver(&self) -> &'static dyn MethodResolver {
+        match self {
+            ParentTypeKind::Value => &ValueTypeData,
+            ParentTypeKind::Integer => &IntegerTypeData,
+            ParentTypeKind::Float => &FloatTypeData,
+        }
+    }
+}
+
+pub(crate) enum DynTypeKind {
+    Iterable,
+}
+
+impl DynTypeKind {
+    pub(in crate::expressions) fn method_resolver(&self) -> &'static dyn MethodResolver {
+        match self {
+            DynTypeKind::Iterable => &IterableTypeData,
+        }
+    }
+
+    pub(crate) fn from_source_name(name: &str) -> Option<Self> {
+        match name {
+            "iterable" => Some(DynTypeKind::Iterable),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn source_name(&self) -> &'static str {
+        match self {
+            DynTypeKind::Iterable => "iterable",
+        }
+    }
+}
+
+pub(crate) struct TypeIdent {
+    span: Span,
+    pub(crate) kind: TypeKind,
+}
+
+impl TypeIdent {
     pub(crate) fn from_ident(ident: &Ident) -> ParseResult<Self> {
         let span = ident.span();
         let name = ident.to_string();
-        let kind = match Self::from_source_name(name.as_str()) {
+        let kind = match TypeKind::from_source_name(name.as_str()) {
             Some(kind) => kind,
             None => {
                 let lower_case_name = name.to_lowercase();
-                let error_message = match Self::from_source_name(&lower_case_name) {
+                let error_message = match TypeKind::from_source_name(&lower_case_name) {
                     Some(_) => format!("Expected '{}'", lower_case_name),
                     None => match lower_case_name.as_str() {
                         "integer" => "Expected 'int'".to_string(),
@@ -427,7 +439,7 @@ impl Type {
     }
 }
 
-impl ParseSource for Type {
+impl ParseSource for TypeIdent {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         Self::from_ident(&input.parse()?)
     }
@@ -440,26 +452,15 @@ impl ParseSource for Type {
 impl TypeKind {
     pub(in crate::expressions) fn method_resolver(&self) -> &'static dyn MethodResolver {
         match self {
-            TypeKind::Integer => &INTEGER,
-            TypeKind::SpecificInteger(integer_kind) => integer_kind.method_resolver(),
-            TypeKind::Float => &FLOAT,
-            TypeKind::SpecificFloat(float_kind) => float_kind.method_resolver(),
-            TypeKind::Boolean => &BOOLEAN,
-            TypeKind::String => &STRING,
-            TypeKind::Char => &CHAR,
-            TypeKind::Array => &ARRAY,
-            TypeKind::Object => &OBJECT,
-            TypeKind::Stream => &STREAM,
-            TypeKind::Range => &RANGE,
-            TypeKind::Iterable => &ITERABLE,
-            TypeKind::Iterator => &ITERATOR,
-            TypeKind::Parser => &PARSER,
+            TypeKind::Leaf(leaf_kind) => leaf_kind.method_resolver(),
+            TypeKind::Parent(parent_kind) => parent_kind.method_resolver(),
+            TypeKind::Dyn(dyn_kind) => dyn_kind.method_resolver(),
         }
     }
 }
 
 pub(crate) struct TypeProperty {
-    pub(crate) source_type: Type,
+    pub(crate) source_type: TypeIdent,
     _colons: Unused<Token![::]>,
     pub(crate) property: Ident,
 }
@@ -493,7 +494,7 @@ impl TypeProperty {
             )),
             None => self.type_err(format!(
                 "Type '{}' has no property named '{}'",
-                self.source_type.source_name(),
+                self.source_type.kind.source_name(),
                 self.property,
             )),
         }

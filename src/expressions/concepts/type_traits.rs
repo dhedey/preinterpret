@@ -23,11 +23,7 @@ pub(crate) trait IsHierarchicalType: IsType<Variant = HierarchicalTypeVariant> {
     ) -> Result<Self::Content<'a, M::OutputForm>, M::ShortCircuit<'a>>;
 }
 
-pub(crate) trait IsDynType: IsType<Variant = DynTypeVariant>
-// TODO: Add this assertion somewhere to check that all DynTypes can be downcasted into
-// where
-//     DynMapper<Self::DynContent>: LeafMapper<BeOwned>,
-{
+pub(crate) trait IsDynType: IsType<Variant = DynTypeVariant> {
     type DynContent: ?Sized + 'static;
 }
 
@@ -188,6 +184,33 @@ pub(crate) trait CastDyn<T: ?Sized> {
     }
 }
 
+pub(crate) trait HasLeafKind {
+    type LeafKindType: IsSpecificLeafKind;
+
+    const KIND: Self::LeafKindType;
+
+    fn kind(&self) -> Self::LeafKindType {
+        Self::KIND
+    }
+
+    fn value_kind(&self) -> ValueKind {
+        self.kind().into()
+    }
+
+    fn articled_kind(&self) -> &'static str {
+        self.kind().articled_display_name()
+    }
+}
+
+impl<T: IntoValueContent<'static>> HasLeafKind for T
+where
+    T::Type: HasLeafKind,
+{
+    type LeafKindType = <T::Type as HasLeafKind>::LeafKindType;
+
+    const KIND: Self::LeafKindType = T::Type::KIND;
+}
+
 macro_rules! define_parent_type {
     (
         $type_def_vis:vis $type_def:ident $(=> $parent:ident($parent_content:ident :: $parent_variant:ident) $(=> $ancestor:ty)*)?,
@@ -232,7 +255,7 @@ pub(crate) use define_parent_type;
 
 macro_rules! define_leaf_type {
     (
-        $type_def_vis:vis $type_def:ident => $parent:ident($parent_content:ident :: $parent_variant:ident) $(=> $ancestor:ty)*,
+        $type_def_vis:vis $type_def:ident => $parent:ident($parent_content:ident :: $parent_variant:ident, $leaf_kind_type:ident :: $leaf_kind_variant:ident) $(=> $ancestor:ty)*,
         $leaf_type:ty,
         $articled_type_name:literal,
     ) => {
@@ -244,6 +267,12 @@ macro_rules! define_leaf_type {
             fn articled_type_name() -> &'static str {
                 $articled_type_name
             }
+        }
+
+        impl HasLeafKind for $type_def {
+            type LeafKindType = $leaf_kind_type;
+
+            const KIND: Self::LeafKindType = $leaf_kind_type::$leaf_kind_variant;
         }
 
         impl IsHierarchicalType for $type_def {

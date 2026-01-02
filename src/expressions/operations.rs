@@ -59,7 +59,7 @@ impl UnaryOperation {
         as_token: Token![as],
         target_ident: Ident,
     ) -> ParseResult<Self> {
-        let target = Type::from_ident(&target_ident)?;
+        let target = TypeIdent::from_ident(&target_ident)?;
         let target = CastTarget::from_source_type(target).ok_or_else(|| {
             target_ident.parse_error("This type is not supported in cast expressions")
         })?;
@@ -91,7 +91,7 @@ impl UnaryOperation {
             self.type_error(format!(
                 "The {} operator is not supported for {} operand",
                 self.symbolic_description(),
-                input.articled_value_type(),
+                input.articled_kind(),
             ))
         })?;
         let input = method
@@ -112,16 +112,16 @@ pub(crate) enum CastTarget {
 }
 
 impl CastTarget {
-    fn from_source_type(s: Type) -> Option<Self> {
+    fn from_source_type(s: TypeIdent) -> Option<Self> {
         Some(match s.kind {
-            TypeKind::Integer => CastTarget::Integer(IntegerKind::Untyped),
-            TypeKind::SpecificInteger(kind) => CastTarget::Integer(kind),
-            TypeKind::Float => CastTarget::Float(FloatKind::Untyped),
-            TypeKind::SpecificFloat(kind) => CastTarget::Float(kind),
-            TypeKind::Boolean => CastTarget::Boolean,
-            TypeKind::String => CastTarget::String,
-            TypeKind::Char => CastTarget::Char,
-            TypeKind::Stream => CastTarget::Stream,
+            TypeKind::Parent(ParentTypeKind::Integer) => CastTarget::Integer(IntegerKind::Untyped),
+            TypeKind::Leaf(ValueKind::Integer(kind)) => CastTarget::Integer(kind),
+            TypeKind::Parent(ParentTypeKind::Float) => CastTarget::Float(FloatKind::Untyped),
+            TypeKind::Leaf(ValueKind::Float(kind)) => CastTarget::Float(kind),
+            TypeKind::Leaf(ValueKind::Boolean) => CastTarget::Boolean,
+            TypeKind::Leaf(ValueKind::String) => CastTarget::String,
+            TypeKind::Leaf(ValueKind::Char) => CastTarget::Char,
+            TypeKind::Leaf(ValueKind::Stream) => CastTarget::Stream,
             _ => return None,
         })
     }
@@ -336,7 +336,7 @@ impl BinaryOperation {
             None => self.type_err(format!(
                 "The {} operator is not supported for {} operand",
                 self.symbolic_description(),
-                left.articled_value_type(),
+                left.articled_kind(),
             )),
         }
     }

@@ -26,19 +26,19 @@ define_parent_type! {
 }
 
 define_leaf_type! {
-    pub(crate) U32Type => IntegerType(IntegerContent::U32) => ValueType,
+    pub(crate) U32Type => IntegerType(IntegerContent::U32, IntegerKind::U32) => ValueType,
     u32,
     "a u32",
 }
 
 define_leaf_type! {
-    pub(crate) U64Type => IntegerType(IntegerContent::U64) => ValueType,
+    pub(crate) U64Type => IntegerType(IntegerContent::U64, IntegerKind::U64) => ValueType,
     u64,
     "a u64",
 }
 
 define_leaf_type! {
-    pub(crate) ObjectType => ValueType(ValueContent::Object),
+    pub(crate) ObjectType => ValueType(ValueContent::Object, ValueKind::Object),
     ObjectValue,
     "an object",
 }
