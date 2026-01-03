@@ -143,14 +143,6 @@ impl ArrayValue {
     }
 }
 
-impl HasValueKind for ArrayValue {
-    type SpecificKind = ValueKind;
-
-    fn kind(&self) -> ValueKind {
-        ValueKind::Array
-    }
-}
-
 impl ValuesEqual for ArrayValue {
     /// Recursively compares two arrays element-by-element.
     fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {

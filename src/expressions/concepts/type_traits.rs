@@ -18,13 +18,24 @@ pub(crate) trait IsType: Sized {
 }
 
 pub(crate) trait IsHierarchicalType: IsType<Variant = HierarchicalTypeVariant> {
-    // <F as form::IsFormOf<Self>>::Content<'a>> := Self::Content<'a, F>
+    // The following is always true, courtesy of the definition of IsFormOf:
+    //   <F as form::IsFormOf<Self>>::Content<'a>> := Self::Content<'a, F>
+    // So the following where clause can be added where needed to make types line up:
+    //   for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
     type Content<'a, F: IsHierarchicalForm>;
     type LeafKind: IsSpecificLeafKind;
 
     fn map_with<'a, F: IsHierarchicalForm, M: LeafMapper<F>>(
         structure: Self::Content<'a, F>,
     ) -> Result<Self::Content<'a, M::OutputForm>, M::ShortCircuit<'a>>;
+
+    fn content_to_leaf_kind<F: IsHierarchicalForm>(
+        content: &Self::Content<'_, F>,
+    ) -> Self::LeafKind;
+}
+
+pub(crate) trait IsLeafType: IsHierarchicalType {
+    fn leaf_kind() -> Self::LeafKind;
 }
 
 pub(crate) trait IsDynType: IsType<Variant = DynTypeVariant> {
@@ -189,15 +200,11 @@ pub(crate) trait CastDyn<T: ?Sized> {
 }
 
 pub(crate) trait HasLeafKind {
-    type LeafKindType: IsSpecificLeafKind;
+    type LeafKind: IsSpecificLeafKind;
 
-    const KIND: Self::LeafKindType;
+    fn kind(&self) -> Self::LeafKind;
 
-    fn kind(&self) -> Self::LeafKindType {
-        Self::KIND
-    }
-
-    fn value_kind(&self) -> ValueKind {
+    fn value_kind(&self) -> ValueLeafKind {
         self.kind().into()
     }
 
@@ -206,13 +213,22 @@ pub(crate) trait HasLeafKind {
     }
 }
 
-impl<T: IntoValueContent<'static>> HasLeafKind for T
-where
-    T::Type: HasLeafKind,
-{
-    type LeafKindType = <T::Type as HasLeafKind>::LeafKindType;
+// TODO[concepts]: Remove when we get rid of impl_resolvable_argument_for
+impl<T: HasLeafKind> HasLeafKind for &T {
+    type LeafKind = T::LeafKind;
 
-    const KIND: Self::LeafKindType = T::Type::KIND;
+    fn kind(&self) -> Self::LeafKind {
+        (**self).kind()
+    }
+}
+
+// TODO[concepts]: Remove when we get rid of impl_resolvable_argument_for
+impl<T: HasLeafKind> HasLeafKind for &mut T {
+    type LeafKind = T::LeafKind;
+
+    fn kind(&self) -> Self::LeafKind {
+        (**self).kind()
+    }
 }
 
 macro_rules! define_parent_type {
@@ -276,10 +292,28 @@ macro_rules! define_parent_type {
                     $( $content::$variant(x) => $content::$variant(x.map_with::<M>()?), )*
                 })
             }
+
+            fn content_to_leaf_kind<F: IsHierarchicalForm>(
+                content: &Self::Content<'_, F>,
+            ) -> Self::LeafKind {
+                content.kind()
+            }
         }
 
         $content_vis enum $content<'a, F: IsHierarchicalForm> {
             $( $variant(Actual<'a, $variant_type, F>), )*
+        }
+
+        impl<'a, F: IsHierarchicalForm> HasLeafKind for $content<'a, F> {
+            type LeafKind = $leaf_kind;
+
+            fn kind(&self) -> Self::LeafKind {
+                match self {
+                    $($content::$variant(x) => $leaf_kind::$variant(
+                        <$variant_type as IsHierarchicalType>::content_to_leaf_kind::<F>(&x.0)
+                    ),)*
+                }
+            }
         }
 
         #[derive(Clone, Copy, PartialEq, Eq)]
@@ -299,15 +333,21 @@ macro_rules! define_parent_type {
         }
 
         $(
-            impl From<$leaf_kind> for ValueKind {
+            impl From<$leaf_kind> for ValueLeafKind {
                 fn from(kind: $leaf_kind) -> Self {
                     let as_parent_kind = <$parent as IsHierarchicalType>::LeafKind::$parent_variant(kind);
-                    ValueKind::from(as_parent_kind)
+                    ValueLeafKind::from(as_parent_kind)
                 }
             }
         )?
 
         impl IsSpecificLeafKind for $leaf_kind {
+            fn source_type_name(&self) -> &'static str {
+                match self {
+                    $( Self::$variant(x) => x.source_type_name(), )*
+                }
+            }
+
             fn articled_display_name(&self) -> &'static str {
                 match self {
                     $( Self::$variant(x) => x.articled_display_name(), )*
@@ -332,7 +372,7 @@ pub(crate) use define_parent_type;
 macro_rules! define_leaf_type {
     (
         $type_def_vis:vis $type_def:ident => $parent:ident($parent_content:ident :: $parent_variant:ident) $(=> $ancestor:ty)*,
-        content: $leaf_type:ty,
+        content: $content_type:ty,
         kind: $kind_vis:vis $kind:ident,
         type_name: $source_type_name:literal,
         articled_display_name: $articled_display_name:literal,
@@ -347,18 +387,30 @@ macro_rules! define_leaf_type {
             const ARTICLED_DISPLAY_NAME: &'static str = $articled_display_name;
 
             fn type_kind() -> TypeKind {
-                TypeKind::Leaf(ValueKind::from($kind))
+                TypeKind::Leaf(ValueLeafKind::from($kind))
             }
         }
 
         impl IsHierarchicalType for $type_def {
-            type Content<'a, F: IsHierarchicalForm> = F::Leaf<'a, $leaf_type>;
+            type Content<'a, F: IsHierarchicalForm> = F::Leaf<'a, $content_type>;
             type LeafKind = $kind;
 
             fn map_with<'a, F: IsHierarchicalForm, M: LeafMapper<F>>(
                 content: Self::Content<'a, F>,
             ) -> Result<Self::Content<'a, M::OutputForm>, M::ShortCircuit<'a>> {
-                M::map_leaf::<$leaf_type>(content)
+                M::map_leaf::<$content_type>(content)
+            }
+
+            fn content_to_leaf_kind<F: IsHierarchicalForm>(
+                _content: &Self::Content<'_, F>,
+            ) -> Self::LeafKind {
+                $kind
+            }
+        }
+
+        impl IsLeafType for $type_def {
+            fn leaf_kind() -> $kind {
+                $kind
             }
         }
 
@@ -389,14 +441,18 @@ macro_rules! define_leaf_type {
         #[derive(Clone, Copy, PartialEq, Eq)]
         $kind_vis struct $kind;
 
-        impl From<$kind> for ValueKind {
+        impl From<$kind> for ValueLeafKind {
             fn from(kind: $kind) -> Self {
                 let as_parent_kind = <$parent as IsHierarchicalType>::LeafKind::$parent_variant(kind);
-                ValueKind::from(as_parent_kind)
+                ValueLeafKind::from(as_parent_kind)
             }
         }
 
         impl IsSpecificLeafKind for $kind {
+            fn source_type_name(&self) -> &'static str {
+                $source_type_name
+            }
+
             fn articled_display_name(&self) -> &'static str {
                 $articled_display_name
             }
@@ -406,25 +462,33 @@ macro_rules! define_leaf_type {
             }
         }
 
-        impl<'a> IsValueContent<'a> for $leaf_type {
+        impl<'a> IsValueContent<'a> for $content_type {
             type Type = $type_def;
             type Form = BeOwned;
         }
 
-        impl<'a> IntoValueContent<'a> for $leaf_type {
+        impl HasLeafKind for $content_type {
+            type LeafKind = $kind;
+
+            fn kind(&self) -> Self::LeafKind {
+                $kind
+            }
+        }
+
+        impl<'a> IntoValueContent<'a> for $content_type {
             fn into_content(self) -> Self {
                 self
             }
         }
 
-        impl<'a> FromValueContent<'a> for $leaf_type {
+        impl<'a> FromValueContent<'a> for $content_type {
             fn from_content(content: Self) -> Self {
                 content
             }
         }
 
-        impl IsValueLeaf for $leaf_type {}
-        impl CastDyn<dyn IsIterable> for $leaf_type {}
+        impl IsValueLeaf for $content_type {}
+        impl CastDyn<dyn IsIterable> for $content_type {}
 
         impl_ancestor_chain_conversions!(
             $type_def => $parent($parent_content :: $parent_variant) $(=> $ancestor)*

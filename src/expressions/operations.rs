@@ -87,13 +87,17 @@ impl UnaryOperation {
         Spanned(input, input_span): Spanned<Owned<T>>,
     ) -> ExecutionResult<Spanned<ReturnedValue>> {
         let input = input.into_owned_value();
-        let method = input.kind().resolve_unary_operation(self).ok_or_else(|| {
-            self.type_error(format!(
-                "The {} operator is not supported for {} operand",
-                self.symbolic_description(),
-                input.articled_kind(),
-            ))
-        })?;
+        let method = input
+            .kind()
+            .method_resolver()
+            .resolve_unary_operation(self)
+            .ok_or_else(|| {
+                self.type_error(format!(
+                    "The {} operator is not supported for {} operand",
+                    self.symbolic_description(),
+                    input.articled_kind(),
+                ))
+            })?;
         let input = method
             .argument_ownership
             .map_from_owned(Spanned(input, input_span))?;
@@ -103,8 +107,8 @@ impl UnaryOperation {
 
 #[derive(Copy, Clone)]
 pub(crate) enum CastTarget {
-    Integer(IntegerKind),
-    Float(FloatKind),
+    Integer(IntegerLeafKind),
+    Float(FloatLeafKind),
     Boolean,
     String,
     Char,
@@ -115,37 +119,40 @@ impl CastTarget {
     fn from_source_type(s: TypeIdent) -> Option<Self> {
         Some(match s.kind {
             TypeKind::Parent(ParentTypeKind::Integer(_)) => {
-                CastTarget::Integer(IntegerKind::Untyped)
+                CastTarget::Integer(IntegerLeafKind::Untyped(UntypedIntegerKind))
             }
-            TypeKind::Leaf(ValueKind::Integer(kind)) => CastTarget::Integer(kind),
-            TypeKind::Parent(ParentTypeKind::Float(_)) => CastTarget::Float(FloatKind::Untyped),
-            TypeKind::Leaf(ValueKind::Float(kind)) => CastTarget::Float(kind),
-            TypeKind::Leaf(ValueKind::Boolean) => CastTarget::Boolean,
-            TypeKind::Leaf(ValueKind::String) => CastTarget::String,
-            TypeKind::Leaf(ValueKind::Char) => CastTarget::Char,
-            TypeKind::Leaf(ValueKind::Stream) => CastTarget::Stream,
+            TypeKind::Leaf(ValueLeafKind::Integer(kind)) => CastTarget::Integer(kind),
+            TypeKind::Parent(ParentTypeKind::Float(_)) => {
+                CastTarget::Float(FloatLeafKind::Untyped(UntypedFloatKind))
+            }
+            TypeKind::Leaf(ValueLeafKind::Float(kind)) => CastTarget::Float(kind),
+            TypeKind::Leaf(ValueLeafKind::Bool(_)) => CastTarget::Boolean,
+            TypeKind::Leaf(ValueLeafKind::String(_)) => CastTarget::String,
+            TypeKind::Leaf(ValueLeafKind::Char(_)) => CastTarget::Char,
+            TypeKind::Leaf(ValueLeafKind::Stream(_)) => CastTarget::Stream,
             _ => return None,
         })
     }
 
+    // TODO[concepts]: Improve this / align with the type name
     fn symbolic_description(&self) -> &'static str {
         match self {
-            CastTarget::Integer(IntegerKind::Untyped) => "as int",
-            CastTarget::Integer(IntegerKind::U8) => "as u8",
-            CastTarget::Integer(IntegerKind::U16) => "as u16",
-            CastTarget::Integer(IntegerKind::U32) => "as u32",
-            CastTarget::Integer(IntegerKind::U64) => "as u64",
-            CastTarget::Integer(IntegerKind::U128) => "as u128",
-            CastTarget::Integer(IntegerKind::Usize) => "as usize",
-            CastTarget::Integer(IntegerKind::I8) => "as i8",
-            CastTarget::Integer(IntegerKind::I16) => "as i16",
-            CastTarget::Integer(IntegerKind::I32) => "as i32",
-            CastTarget::Integer(IntegerKind::I64) => "as i64",
-            CastTarget::Integer(IntegerKind::I128) => "as i128",
-            CastTarget::Integer(IntegerKind::Isize) => "as isize",
-            CastTarget::Float(FloatKind::Untyped) => "as float",
-            CastTarget::Float(FloatKind::F32) => "as f32",
-            CastTarget::Float(FloatKind::F64) => "as f64",
+            CastTarget::Integer(IntegerLeafKind::Untyped(_)) => "as int",
+            CastTarget::Integer(IntegerLeafKind::U8(_)) => "as u8",
+            CastTarget::Integer(IntegerLeafKind::U16(_)) => "as u16",
+            CastTarget::Integer(IntegerLeafKind::U32(_)) => "as u32",
+            CastTarget::Integer(IntegerLeafKind::U64(_)) => "as u64",
+            CastTarget::Integer(IntegerLeafKind::U128(_)) => "as u128",
+            CastTarget::Integer(IntegerLeafKind::Usize(_)) => "as usize",
+            CastTarget::Integer(IntegerLeafKind::I8(_)) => "as i8",
+            CastTarget::Integer(IntegerLeafKind::I16(_)) => "as i16",
+            CastTarget::Integer(IntegerLeafKind::I32(_)) => "as i32",
+            CastTarget::Integer(IntegerLeafKind::I64(_)) => "as i64",
+            CastTarget::Integer(IntegerLeafKind::I128(_)) => "as i128",
+            CastTarget::Integer(IntegerLeafKind::Isize(_)) => "as isize",
+            CastTarget::Float(FloatLeafKind::Untyped(_)) => "as float",
+            CastTarget::Float(FloatLeafKind::F32(_)) => "as f32",
+            CastTarget::Float(FloatLeafKind::F64(_)) => "as f64",
             CastTarget::Boolean => "as bool",
             CastTarget::String => "as string",
             CastTarget::Char => "as char",
@@ -325,7 +332,7 @@ impl BinaryOperation {
     ) -> ExecutionResult<Spanned<ReturnedValue>> {
         let left = left.into_owned_value();
         let right = right.into_owned_value();
-        match left.kind().resolve_binary_operation(self) {
+        match left.kind().method_resolver().resolve_binary_operation(self) {
             Some(interface) => {
                 let left = interface
                     .lhs_ownership

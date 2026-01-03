@@ -39,22 +39,22 @@ impl UntypedInteger {
     }
 
     /// Tries to convert to a specific integer kind, returning None if the value doesn't fit.
-    pub(crate) fn try_into_kind(self, kind: IntegerKind) -> Option<IntegerValue> {
+    pub(crate) fn try_into_kind(self, kind: IntegerLeafKind) -> Option<IntegerValue> {
         let value = self.0;
         Some(match kind {
-            IntegerKind::Untyped => IntegerValue::Untyped(UntypedInteger(value)),
-            IntegerKind::I8 => IntegerValue::I8(value.try_into().ok()?),
-            IntegerKind::I16 => IntegerValue::I16(value.try_into().ok()?),
-            IntegerKind::I32 => IntegerValue::I32(value.try_into().ok()?),
-            IntegerKind::I64 => IntegerValue::I64(value.try_into().ok()?),
-            IntegerKind::I128 => IntegerValue::I128(value),
-            IntegerKind::Isize => IntegerValue::Isize(value.try_into().ok()?),
-            IntegerKind::U8 => IntegerValue::U8(value.try_into().ok()?),
-            IntegerKind::U16 => IntegerValue::U16(value.try_into().ok()?),
-            IntegerKind::U32 => IntegerValue::U32(value.try_into().ok()?),
-            IntegerKind::U64 => IntegerValue::U64(value.try_into().ok()?),
-            IntegerKind::U128 => IntegerValue::U128(value.try_into().ok()?),
-            IntegerKind::Usize => IntegerValue::Usize(value.try_into().ok()?),
+            IntegerLeafKind::Untyped(_) => IntegerValue::Untyped(UntypedInteger(value)),
+            IntegerLeafKind::I8(_) => IntegerValue::I8(value.try_into().ok()?),
+            IntegerLeafKind::I16(_) => IntegerValue::I16(value.try_into().ok()?),
+            IntegerLeafKind::I32(_) => IntegerValue::I32(value.try_into().ok()?),
+            IntegerLeafKind::I64(_) => IntegerValue::I64(value.try_into().ok()?),
+            IntegerLeafKind::I128(_) => IntegerValue::I128(value),
+            IntegerLeafKind::Isize(_) => IntegerValue::Isize(value.try_into().ok()?),
+            IntegerLeafKind::U8(_) => IntegerValue::U8(value.try_into().ok()?),
+            IntegerLeafKind::U16(_) => IntegerValue::U16(value.try_into().ok()?),
+            IntegerLeafKind::U32(_) => IntegerValue::U32(value.try_into().ok()?),
+            IntegerLeafKind::U64(_) => IntegerValue::U64(value.try_into().ok()?),
+            IntegerLeafKind::U128(_) => IntegerValue::U128(value.try_into().ok()?),
+            IntegerLeafKind::Usize(_) => IntegerValue::Usize(value.try_into().ok()?),
         })
     }
 
@@ -109,7 +109,7 @@ impl UntypedInteger {
 }
 
 impl Spanned<UntypedInteger> {
-    pub(crate) fn into_kind(self, kind: IntegerKind) -> ExecutionResult<IntegerValue> {
+    pub(crate) fn into_kind(self, kind: IntegerLeafKind) -> ExecutionResult<IntegerValue> {
         let Spanned(value, span_range) = self;
         value.try_into_kind(kind).ok_or_else(|| {
             span_range.value_error(format!(
@@ -118,14 +118,6 @@ impl Spanned<UntypedInteger> {
                 kind.articled_display_name()
             ))
         })
-    }
-}
-
-impl HasValueKind for UntypedInteger {
-    type SpecificKind = IntegerKind;
-
-    fn kind(&self) -> IntegerKind {
-        IntegerKind::Untyped
     }
 }
 
@@ -226,22 +218,22 @@ define_interface! {
                 Some(match operation {
                     UnaryOperation::Neg { .. } => unary_definitions::neg(),
                     UnaryOperation::Cast { target, .. } => match target {
-                        CastTarget::Integer(IntegerKind::Untyped) => unary_definitions::cast_to_untyped_integer(),
-                        CastTarget::Integer(IntegerKind::I8) => unary_definitions::cast_to_i8(),
-                        CastTarget::Integer(IntegerKind::I16) => unary_definitions::cast_to_i16(),
-                        CastTarget::Integer(IntegerKind::I32) => unary_definitions::cast_to_i32(),
-                        CastTarget::Integer(IntegerKind::I64) => unary_definitions::cast_to_i64(),
-                        CastTarget::Integer(IntegerKind::I128) => unary_definitions::cast_to_i128(),
-                        CastTarget::Integer(IntegerKind::Isize) => unary_definitions::cast_to_isize(),
-                        CastTarget::Integer(IntegerKind::U8) => unary_definitions::cast_to_u8(),
-                        CastTarget::Integer(IntegerKind::U16) => unary_definitions::cast_to_u16(),
-                        CastTarget::Integer(IntegerKind::U32) => unary_definitions::cast_to_u32(),
-                        CastTarget::Integer(IntegerKind::U64) => unary_definitions::cast_to_u64(),
-                        CastTarget::Integer(IntegerKind::U128) => unary_definitions::cast_to_u128(),
-                        CastTarget::Integer(IntegerKind::Usize) => unary_definitions::cast_to_usize(),
-                        CastTarget::Float(FloatKind::Untyped) => unary_definitions::cast_to_untyped_float(),
-                        CastTarget::Float(FloatKind::F32) => unary_definitions::cast_to_f32(),
-                        CastTarget::Float(FloatKind::F64) => unary_definitions::cast_to_f64(),
+                        CastTarget::Integer(IntegerLeafKind::Untyped(_)) => unary_definitions::cast_to_untyped_integer(),
+                        CastTarget::Integer(IntegerLeafKind::I8(_)) => unary_definitions::cast_to_i8(),
+                        CastTarget::Integer(IntegerLeafKind::I16(_)) => unary_definitions::cast_to_i16(),
+                        CastTarget::Integer(IntegerLeafKind::I32(_)) => unary_definitions::cast_to_i32(),
+                        CastTarget::Integer(IntegerLeafKind::I64(_)) => unary_definitions::cast_to_i64(),
+                        CastTarget::Integer(IntegerLeafKind::I128(_)) => unary_definitions::cast_to_i128(),
+                        CastTarget::Integer(IntegerLeafKind::Isize(_)) => unary_definitions::cast_to_isize(),
+                        CastTarget::Integer(IntegerLeafKind::U8(_)) => unary_definitions::cast_to_u8(),
+                        CastTarget::Integer(IntegerLeafKind::U16(_)) => unary_definitions::cast_to_u16(),
+                        CastTarget::Integer(IntegerLeafKind::U32(_)) => unary_definitions::cast_to_u32(),
+                        CastTarget::Integer(IntegerLeafKind::U64(_)) => unary_definitions::cast_to_u64(),
+                        CastTarget::Integer(IntegerLeafKind::U128(_)) => unary_definitions::cast_to_u128(),
+                        CastTarget::Integer(IntegerLeafKind::Usize(_)) => unary_definitions::cast_to_usize(),
+                        CastTarget::Float(FloatLeafKind::Untyped(_)) => unary_definitions::cast_to_untyped_float(),
+                        CastTarget::Float(FloatLeafKind::F32(_)) => unary_definitions::cast_to_f32(),
+                        CastTarget::Float(FloatLeafKind::F64(_)) => unary_definitions::cast_to_f64(),
                         CastTarget::String => unary_definitions::cast_to_string(),
                         _ => return None,
                     },

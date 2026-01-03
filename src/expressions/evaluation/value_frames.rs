@@ -794,7 +794,10 @@ impl EvaluationFrame for UnaryOperationBuilder {
         let operand_kind = operand.kind();
 
         // Try method resolution first
-        if let Some(interface) = operand_kind.resolve_unary_operation(&self.operation) {
+        if let Some(interface) = operand_kind
+            .method_resolver()
+            .resolve_unary_operation(&self.operation)
+        {
             let operand_span = operand.span_range();
             let resolved_value = operand.resolve(interface.argument_ownership())?;
             let result =
@@ -866,7 +869,10 @@ impl EvaluationFrame for BinaryOperationBuilder {
                         .return_returned_value(Spanned(ReturnedValue::Owned(result), left_span))?
                 } else {
                     // Try method resolution based on left operand's kind and resolve left operand immediately
-                    let interface = left.kind().resolve_binary_operation(&self.operation);
+                    let interface = left
+                        .kind()
+                        .method_resolver()
+                        .resolve_binary_operation(&self.operation);
 
                     match interface {
                         Some(interface) => {
@@ -1256,6 +1262,7 @@ impl EvaluationFrame for MethodCallBuilder {
                 let caller = value.expect_late_bound();
                 let method = caller
                     .kind()
+                    .method_resolver()
                     .resolve_method(self.method.method.to_string().as_str());
                 let method = match method {
                     Some(m) => m,

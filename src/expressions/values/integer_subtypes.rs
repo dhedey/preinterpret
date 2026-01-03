@@ -116,22 +116,22 @@ macro_rules! impl_int_operations {
                                         unary_definitions::cast_to_char()
                                     }
                                 )?
-                                CastTarget::Integer(IntegerKind::Untyped) => unary_definitions::cast_to_untyped_integer(),
-                                CastTarget::Integer(IntegerKind::I8) => unary_definitions::cast_to_i8(),
-                                CastTarget::Integer(IntegerKind::I16) => unary_definitions::cast_to_i16(),
-                                CastTarget::Integer(IntegerKind::I32) => unary_definitions::cast_to_i32(),
-                                CastTarget::Integer(IntegerKind::I64) => unary_definitions::cast_to_i64(),
-                                CastTarget::Integer(IntegerKind::I128) => unary_definitions::cast_to_i128(),
-                                CastTarget::Integer(IntegerKind::Isize) => unary_definitions::cast_to_isize(),
-                                CastTarget::Integer(IntegerKind::U8) => unary_definitions::cast_to_u8(),
-                                CastTarget::Integer(IntegerKind::U16) => unary_definitions::cast_to_u16(),
-                                CastTarget::Integer(IntegerKind::U32) => unary_definitions::cast_to_u32(),
-                                CastTarget::Integer(IntegerKind::U64) => unary_definitions::cast_to_u64(),
-                                CastTarget::Integer(IntegerKind::U128) => unary_definitions::cast_to_u128(),
-                                CastTarget::Integer(IntegerKind::Usize) => unary_definitions::cast_to_usize(),
-                                CastTarget::Float(FloatKind::Untyped) => unary_definitions::cast_to_untyped_float(),
-                                CastTarget::Float(FloatKind::F32) => unary_definitions::cast_to_f32(),
-                                CastTarget::Float(FloatKind::F64) => unary_definitions::cast_to_f64(),
+                                CastTarget::Integer(IntegerLeafKind::Untyped(_)) => unary_definitions::cast_to_untyped_integer(),
+                                CastTarget::Integer(IntegerLeafKind::I8(_)) => unary_definitions::cast_to_i8(),
+                                CastTarget::Integer(IntegerLeafKind::I16(_)) => unary_definitions::cast_to_i16(),
+                                CastTarget::Integer(IntegerLeafKind::I32(_)) => unary_definitions::cast_to_i32(),
+                                CastTarget::Integer(IntegerLeafKind::I64(_)) => unary_definitions::cast_to_i64(),
+                                CastTarget::Integer(IntegerLeafKind::I128(_)) => unary_definitions::cast_to_i128(),
+                                CastTarget::Integer(IntegerLeafKind::Isize(_)) => unary_definitions::cast_to_isize(),
+                                CastTarget::Integer(IntegerLeafKind::U8(_)) => unary_definitions::cast_to_u8(),
+                                CastTarget::Integer(IntegerLeafKind::U16(_)) => unary_definitions::cast_to_u16(),
+                                CastTarget::Integer(IntegerLeafKind::U32(_)) => unary_definitions::cast_to_u32(),
+                                CastTarget::Integer(IntegerLeafKind::U64(_)) => unary_definitions::cast_to_u64(),
+                                CastTarget::Integer(IntegerLeafKind::U128(_)) => unary_definitions::cast_to_u128(),
+                                CastTarget::Integer(IntegerLeafKind::Usize(_)) => unary_definitions::cast_to_usize(),
+                                CastTarget::Float(FloatLeafKind::Untyped(_)) => unary_definitions::cast_to_untyped_float(),
+                                CastTarget::Float(FloatLeafKind::F32(_)) => unary_definitions::cast_to_f32(),
+                                CastTarget::Float(FloatLeafKind::F64(_)) => unary_definitions::cast_to_f64(),
                                 CastTarget::String => unary_definitions::cast_to_string(),
                                 _ => return None,
                             }
@@ -156,14 +156,6 @@ macro_rules! impl_int_operations {
                         }
                     }
                 }
-            }
-        }
-
-        impl HasValueKind for $integer_type {
-            type SpecificKind = IntegerKind;
-
-            fn kind(&self) -> IntegerKind {
-                IntegerKind::$integer_enum_variant
             }
         }
 

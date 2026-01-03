@@ -134,24 +134,25 @@ impl IntegerValue {
     }
 }
 
-impl HasValueKind for IntegerValue {
-    type SpecificKind = IntegerKind;
+// TODO[concepts]: Remove when this is auto-generated after Value changes
+impl HasLeafKind for IntegerValue {
+    type LeafKind = IntegerLeafKind;
 
-    fn kind(&self) -> IntegerKind {
+    fn kind(&self) -> IntegerLeafKind {
         match self {
-            Self::Untyped(_) => IntegerKind::Untyped,
-            Self::U8(_) => IntegerKind::U8,
-            Self::U16(_) => IntegerKind::U16,
-            Self::U32(_) => IntegerKind::U32,
-            Self::U64(_) => IntegerKind::U64,
-            Self::U128(_) => IntegerKind::U128,
-            Self::Usize(_) => IntegerKind::Usize,
-            Self::I8(_) => IntegerKind::I8,
-            Self::I16(_) => IntegerKind::I16,
-            Self::I32(_) => IntegerKind::I32,
-            Self::I64(_) => IntegerKind::I64,
-            Self::I128(_) => IntegerKind::I128,
-            Self::Isize(_) => IntegerKind::Isize,
+            IntegerValue::Untyped(_) => IntegerLeafKind::Untyped(UntypedIntegerKind),
+            IntegerValue::U8(_) => IntegerLeafKind::U8(U8Kind),
+            IntegerValue::U16(_) => IntegerLeafKind::U16(U16Kind),
+            IntegerValue::U32(_) => IntegerLeafKind::U32(U32Kind),
+            IntegerValue::U64(_) => IntegerLeafKind::U64(U64Kind),
+            IntegerValue::U128(_) => IntegerLeafKind::U128(U128Kind),
+            IntegerValue::Usize(_) => IntegerLeafKind::Usize(UsizeKind),
+            IntegerValue::I8(_) => IntegerLeafKind::I8(I8Kind),
+            IntegerValue::I16(_) => IntegerLeafKind::I16(I16Kind),
+            IntegerValue::I32(_) => IntegerLeafKind::I32(I32Kind),
+            IntegerValue::I64(_) => IntegerLeafKind::I64(I64Kind),
+            IntegerValue::I128(_) => IntegerLeafKind::I128(I128Kind),
+            IntegerValue::Isize(_) => IntegerLeafKind::Isize(IsizeKind),
         }
     }
 }

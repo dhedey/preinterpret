@@ -204,14 +204,6 @@ impl_resolvable_argument_for! {
     }
 }
 
-impl HasValueKind for IteratorValue {
-    type SpecificKind = ValueKind;
-
-    fn kind(&self) -> ValueKind {
-        ValueKind::Iterator
-    }
-}
-
 fn definite_size_hint(size_hint: (usize, Option<usize>)) -> Option<usize> {
     let (min, max) = size_hint;
     if let Some(max) = max {

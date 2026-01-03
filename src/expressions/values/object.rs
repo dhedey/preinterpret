@@ -250,14 +250,6 @@ impl Spanned<&ObjectValue> {
     }
 }
 
-impl HasValueKind for ObjectValue {
-    type SpecificKind = ValueKind;
-
-    fn kind(&self) -> ValueKind {
-        ValueKind::Object
-    }
-}
-
 impl IntoValue for BTreeMap<String, ObjectEntry> {
     fn into_value(self) -> Value {
         Value::Object(ObjectValue { entries: self })

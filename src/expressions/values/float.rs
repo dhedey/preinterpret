@@ -120,24 +120,25 @@ impl FloatValue {
     }
 }
 
-impl HasValueKind for FloatValue {
-    type SpecificKind = FloatKind;
-
-    fn kind(&self) -> FloatKind {
-        match self {
-            Self::Untyped(_) => FloatKind::Untyped,
-            Self::F32(_) => FloatKind::F32,
-            Self::F64(_) => FloatKind::F64,
-        }
-    }
-}
-
 impl Debug for FloatValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Untyped(v) => write!(f, "{}", v.into_fallback()),
             Self::F32(v) => write!(f, "{:?}", v),
             Self::F64(v) => write!(f, "{:?}", v),
+        }
+    }
+}
+
+// TODO[concepts]: Remove when this is auto-generated after Value changes
+impl HasLeafKind for FloatValue {
+    type LeafKind = FloatLeafKind;
+
+    fn kind(&self) -> FloatLeafKind {
+        match self {
+            FloatValue::Untyped(_) => FloatLeafKind::Untyped(UntypedFloatKind),
+            FloatValue::F32(_) => FloatLeafKind::F32(F32Kind),
+            FloatValue::F64(_) => FloatLeafKind::F64(F64Kind),
         }
     }
 }

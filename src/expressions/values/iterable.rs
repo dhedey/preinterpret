@@ -120,12 +120,14 @@ impl IsArgument for IterableRef<'static> {
 
     fn from_argument(argument: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
         Ok(match argument.kind() {
-            ValueKind::Iterator => IterableRef::Iterator(IsArgument::from_argument(argument)?),
-            ValueKind::Array => IterableRef::Array(IsArgument::from_argument(argument)?),
-            ValueKind::Stream => IterableRef::Stream(IsArgument::from_argument(argument)?),
-            ValueKind::Range => IterableRef::Range(IsArgument::from_argument(argument)?),
-            ValueKind::Object => IterableRef::Object(IsArgument::from_argument(argument)?),
-            ValueKind::String => IterableRef::String(IsArgument::from_argument(argument)?),
+            ValueLeafKind::Iterator(_) => {
+                IterableRef::Iterator(IsArgument::from_argument(argument)?)
+            }
+            ValueLeafKind::Array(_) => IterableRef::Array(IsArgument::from_argument(argument)?),
+            ValueLeafKind::Stream(_) => IterableRef::Stream(IsArgument::from_argument(argument)?),
+            ValueLeafKind::Range(_) => IterableRef::Range(IsArgument::from_argument(argument)?),
+            ValueLeafKind::Object(_) => IterableRef::Object(IsArgument::from_argument(argument)?),
+            ValueLeafKind::String(_) => IterableRef::String(IsArgument::from_argument(argument)?),
             _ => {
                 return argument.type_err(
                     "Expected iterable (iterator, array, object, stream, range or string)",

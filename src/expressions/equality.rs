@@ -53,8 +53,7 @@ pub(crate) trait EqualityContext {
     fn leaf_values_not_equal<T: Debug>(&mut self, lhs: &T, rhs: &T) -> Self::Result;
 
     /// Values have different kinds.
-    fn kind_mismatch<L: HasValueKind, R: HasValueKind>(&mut self, lhs: &L, rhs: &R)
-        -> Self::Result;
+    fn kind_mismatch<L: HasLeafKind, R: HasLeafKind>(&mut self, lhs: &L, rhs: &R) -> Self::Result;
 
     /// Range values have different structures.
     fn range_structure_mismatch(
@@ -112,7 +111,7 @@ impl EqualityContext for SimpleEquality {
     }
 
     #[inline]
-    fn kind_mismatch<L: HasValueKind, R: HasValueKind>(&mut self, _lhs: &L, _rhs: &R) -> bool {
+    fn kind_mismatch<L: HasLeafKind, R: HasLeafKind>(&mut self, _lhs: &L, _rhs: &R) -> bool {
         false
     }
 
@@ -190,7 +189,7 @@ impl EqualityContext for TypedEquality {
         Ok(false)
     }
 
-    fn kind_mismatch<L: HasValueKind, R: HasValueKind>(
+    fn kind_mismatch<L: HasLeafKind, R: HasLeafKind>(
         &mut self,
         lhs: &L,
         rhs: &R,
@@ -294,7 +293,7 @@ pub(crate) enum MissingSide {
 }
 
 /// The reason why two values were not equal.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) enum DebugInequalityReason {
     /// Values of the same type have different values.
     ValueMismatch {
@@ -302,9 +301,9 @@ pub(crate) enum DebugInequalityReason {
         rhs_display: String,
     },
     /// Values have incompatible value kinds.
-    ValueKindMismatch {
-        lhs_kind: ValueKind,
-        rhs_kind: ValueKind,
+    ValueLeafKindMismatch {
+        lhs_kind: ValueLeafKind,
+        rhs_kind: ValueLeafKind,
     },
     /// Ranges have incompatible structures.
     RangeStructureMismatch {
@@ -347,7 +346,7 @@ impl DebugEqualityError {
                     path_str, path_str, lhs_display, rhs_display
                 )
             }
-            DebugInequalityReason::ValueKindMismatch { lhs_kind, rhs_kind } => {
+            DebugInequalityReason::ValueLeafKindMismatch { lhs_kind, rhs_kind } => {
                 format!(
                     "lhs{} is {}, but rhs{} is {}",
                     path_str,
@@ -439,14 +438,14 @@ impl EqualityContext for DebugEquality {
         })?
     }
 
-    fn kind_mismatch<L: HasValueKind, R: HasValueKind>(
+    fn kind_mismatch<L: HasLeafKind, R: HasLeafKind>(
         &mut self,
         lhs: &L,
         rhs: &R,
     ) -> Result<(), DebugEqualityError> {
         Err(DebugEqualityErrorInner {
             path: self.path.clone(),
-            reason: DebugInequalityReason::ValueKindMismatch {
+            reason: DebugInequalityReason::ValueLeafKindMismatch {
                 lhs_kind: lhs.value_kind(),
                 rhs_kind: rhs.value_kind(),
             },
@@ -556,7 +555,7 @@ impl EqualityContext for DebugEquality {
 /// - `SimpleEquality`: Returns `false` on type mismatch (like JS `===`)
 /// - `TypedEquality`: Errors on type mismatch with path information
 /// - `DebugEquality`: Returns detailed error info for assertion messages
-pub(crate) trait ValuesEqual: Sized + HasValueKind {
+pub(crate) trait ValuesEqual: Sized + HasLeafKind {
     /// Compare two values for equality using the given context.
     fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result;
 

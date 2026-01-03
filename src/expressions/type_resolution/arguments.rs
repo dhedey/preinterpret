@@ -26,7 +26,7 @@ impl<'a> ResolutionContext<'a> {
     }
 
     /// Create an error for the resolution context.
-    pub(crate) fn err<T, V: HasValueKind>(
+    pub(crate) fn err<T, V: HasLeafKind>(
         &self,
         articled_expected_value_kind: &str,
         value: V,

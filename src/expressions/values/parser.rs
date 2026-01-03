@@ -14,11 +14,11 @@ pub(crate) struct ParserValue {
     handle: ParserHandle,
 }
 
-impl HasValueKind for ParserValue {
-    type SpecificKind = ValueKind;
+impl HasLeafKind for ParserValue {
+    type LeafKind = ParserKind;
 
-    fn kind(&self) -> ValueKind {
-        ValueKind::Parser
+    fn kind(&self) -> Self::LeafKind {
+        ParserKind
     }
 }
 

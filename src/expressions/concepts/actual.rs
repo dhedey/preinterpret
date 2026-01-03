@@ -30,9 +30,6 @@ impl<'a, T: IsType, F: IsFormOf<T>> Actual<'a, T, F> {
         self,
     ) -> Result<Actual<'a, T, M::OutputForm>, M::ShortCircuit<'a>>
     where
-        // TODO: See if we can move this bound lower down somehow?
-        // e.g. to IsHierarchicalType itself
-        // This may cause circular bound issues though, so let's do it in its own PR
         for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
         F: IsHierarchicalForm,
     {
@@ -75,6 +72,18 @@ impl<'a, T: IsType, F: IsFormOf<T>> Deref for Actual<'a, T, F> {
 impl<'a, T: IsType, F: IsFormOf<T>> DerefMut for Actual<'a, T, F> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+impl<'a, T: IsHierarchicalType, F: IsFormOf<T>> HasLeafKind for Actual<'a, T, F>
+where
+    F: IsHierarchicalForm,
+    for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
+{
+    type LeafKind = <T as IsHierarchicalType>::LeafKind;
+
+    fn kind(&self) -> Self::LeafKind {
+        <T as IsHierarchicalType>::content_to_leaf_kind::<F>(&self.0)
     }
 }
 

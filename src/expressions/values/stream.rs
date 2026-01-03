@@ -2,7 +2,7 @@ use super::*;
 
 define_leaf_type! {
     pub(crate) StreamType => ValueType(ValueContent::Stream),
-    content: StreamValue,
+    content: OutputStream,
     kind: pub(crate) StreamKind,
     type_name: "stream",
     articled_display_name: "a stream",
@@ -65,11 +65,11 @@ impl StreamValue {
     }
 }
 
-impl HasValueKind for StreamValue {
-    type SpecificKind = ValueKind;
+impl HasLeafKind for StreamValue {
+    type LeafKind = StreamKind;
 
-    fn kind(&self) -> ValueKind {
-        ValueKind::Stream
+    fn kind(&self) -> Self::LeafKind {
+        StreamKind
     }
 }
 

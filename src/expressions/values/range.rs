@@ -155,14 +155,6 @@ impl RangeStructure {
     }
 }
 
-impl HasValueKind for RangeValue {
-    type SpecificKind = ValueKind;
-
-    fn kind(&self) -> ValueKind {
-        ValueKind::Range
-    }
-}
-
 impl ValuesEqual for RangeValue {
     /// Ranges are equal if they have the same kind and the same bounds.
     fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {

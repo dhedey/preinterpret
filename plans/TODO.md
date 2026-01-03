@@ -210,24 +210,29 @@ First, read the @./2025-11-vision.md
   - [ ] Generate value kinds from the macros
     - [x] Add (temporary) ability to link to TypeData and resolve methods from there
     - [x] Then implement all the macros
-    - [ ] Add other methods to e.g. value kinds - i.e. Work out some way to _parse_ the value/type kinds
-    - [ ] And use that to generate ValueKind from the new macros
+    - [x] And use that to generate ValueLeafKind from the new macros
+    - [ ] Find a way to generate `from_source_name` - ideally efficiently
   - [ ] Add ability to implement IsIterable
   - [ ] `CastTarget` simply wraps `TypeKind`
+  - [ ] Create a `Ref` and a `Mut` form
+    - [ ] They won't implement `IsArgumentForm`
+    - [ ] Create suitably generic `as_ref()` and `as_mut()` methods on `Actual<F>`
+  - [ ] Stage 1 of the form migration:
+    - [ ] Replace `Owned` as type reference to `Actual<..>`
+    - [ ] Replace `Value`, `&Value` and `&mut Value` methods with methods on `Owned<Value>` / `Ref<Value>` / `Mut<Value>`
+    - [ ] And similarly for other values...
+  - [ ] Stage 2 of the form migration:
+    - [ ] Migrate `Shared`, `Mutable`, `Assignee`
   - [ ] Complete ownership definitions and inter-conversions, including maybe-erroring inter-conversions (possibly with `Result<X, Mapper::Error>` which we can map out of):
-    - [ ] Owned
-    - [ ] Mutable, Owned => Mutable
-    - [ ] Shared, Owned => Shared
-    - [ ] Assignee, Mutable <=> Assignee
     - [ ] CopyOnWrite, Shared => CopyOnWrite x2, Owned => CopyOnWrite
     - [ ] LateBound, Tons of conversions into it
     - [ ] Argument, and `ArgumentOwnership` driven conversions into it
-  - [ ] Complete value definitions
-    - [ ] Strip wrapper types like `StreamValue` - can just use `OutputStream` as content
-  - [ ] Replace `Owned`, `Shared` etc as type references to `Actual<..>`
+  - [ ] Strip wrapper types like `StreamValue` - can just use `OutputStream` as content
   - [ ] Remove old definitions
   - [ ] Generate test over all value kinds which checks for:
     - [ ] source type has no spaces and is lower case, and is invertible
+  - [ ] Clear up all `TODO[concepts]`
+  - [ ] Have variables store a `Referenceable`
 
 ## Methods and closures
 
@@ -524,7 +529,7 @@ Also:
 
 - [x] Merge `assignee_frames` into `value_frames` as per comment as the top of `assignee_frames`
 - [x] Rename `EvaluationItem` to `RequestedValue` and consider making `RequestedValue::AssignmentCompletion` wrap an `Owned<()>` so that it becomes truly a value.
-- [x] Merge `HasValueType` with `ValueKind`
+- [x] Merge `HasValueType` with `ValueLeafKind`
 - [ ] Add `preinterpret::macro` - can this be a declarative macro? Would be slightly more efficient, as it just needs to wrap a call to `preinterpret::stream` or `preinterpret::run`...
   - [ ] When we create `input = %raw[..]` we will need to set its `end_of_stream` span to the end of the
   macro_rules! macro somehow... I'm not sure how to get that span though.

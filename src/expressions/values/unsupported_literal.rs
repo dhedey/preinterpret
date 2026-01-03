@@ -30,11 +30,11 @@ impl Debug for UnsupportedLiteral {
     }
 }
 
-impl HasValueKind for UnsupportedLiteral {
-    type SpecificKind = ValueKind;
+impl HasLeafKind for UnsupportedLiteral {
+    type LeafKind = UnsupportedLiteralKind;
 
-    fn kind(&self) -> ValueKind {
-        ValueKind::UnsupportedLiteral
+    fn kind(&self) -> Self::LeafKind {
+        UnsupportedLiteralKind
     }
 }
 

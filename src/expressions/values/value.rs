@@ -1,11 +1,5 @@
 use super::*;
 
-impl From<ValueLeafKind> for ValueKind {
-    fn from(_kind: ValueLeafKind) -> Self {
-        unimplemented!()
-    }
-}
-
 // TODO[concepts]: Uncomment when ready
 // pub(crate) type QqqValue = Actual<'static, ValueType, BeOwned>;
 // pub(crate) type QqqValueReferencable = Actual<'static, ValueType, BeReferenceable>;
@@ -624,24 +618,27 @@ pub(crate) enum Grouping {
     Flattened,
 }
 
-impl HasValueKind for Value {
-    type SpecificKind = ValueKind;
+// TODO[concepts]: Remove when this is auto-generated after Value changes
+impl HasLeafKind for Value {
+    type LeafKind = ValueLeafKind;
 
-    fn kind(&self) -> ValueKind {
+    fn kind(&self) -> ValueLeafKind {
         match self {
-            Value::None => ValueKind::None,
-            Value::Integer(integer) => ValueKind::Integer(integer.kind()),
-            Value::Float(float) => ValueKind::Float(float.kind()),
-            Value::Boolean(_) => ValueKind::Boolean,
-            Value::String(_) => ValueKind::String,
-            Value::Char(_) => ValueKind::Char,
-            Value::Array(_) => ValueKind::Array,
-            Value::Object(_) => ValueKind::Object,
-            Value::Stream(_) => ValueKind::Stream,
-            Value::Range(_) => ValueKind::Range,
-            Value::Iterator(_) => ValueKind::Iterator,
-            Value::Parser(_) => ValueKind::Parser,
-            Value::UnsupportedLiteral(_) => ValueKind::UnsupportedLiteral,
+            Value::None => ValueLeafKind::None(NoneKind),
+            Value::Integer(integer) => ValueLeafKind::Integer(integer.kind()),
+            Value::Float(float) => ValueLeafKind::Float(float.kind()),
+            Value::Boolean(_) => ValueLeafKind::Bool(BoolKind),
+            Value::String(_) => ValueLeafKind::String(StringKind),
+            Value::Char(_) => ValueLeafKind::Char(CharKind),
+            Value::Array(_) => ValueLeafKind::Array(ArrayKind),
+            Value::Object(_) => ValueLeafKind::Object(ObjectKind),
+            Value::Stream(_) => ValueLeafKind::Stream(StreamKind),
+            Value::Range(_) => ValueLeafKind::Range(RangeKind),
+            Value::Iterator(_) => ValueLeafKind::Iterator(IteratorKind),
+            Value::Parser(_) => ValueLeafKind::Parser(ParserKind),
+            Value::UnsupportedLiteral(_) => {
+                ValueLeafKind::UnsupportedLiteral(UnsupportedLiteralKind)
+            }
         }
     }
 }

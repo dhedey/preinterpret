@@ -36,11 +36,11 @@ impl StringValue {
     }
 }
 
-impl HasValueKind for StringValue {
-    type SpecificKind = ValueKind;
+impl HasLeafKind for StringValue {
+    type LeafKind = StringKind;
 
-    fn kind(&self) -> ValueKind {
-        ValueKind::String
+    fn kind(&self) -> Self::LeafKind {
+        StringKind
     }
 }
 
