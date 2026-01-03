@@ -207,17 +207,19 @@ First, read the @./2025-11-vision.md
   - [x] Separate Hierarchical and DynCompatible Forms
   - [x] Improved macro support
   - [x] Add source type name to type macro/s
-  - [ ] Generate value kinds from the macros
+  - [x] Generate value kinds from the macros
     - [x] Add (temporary) ability to link to TypeData and resolve methods from there
     - [x] Then implement all the macros
     - [x] And use that to generate ValueLeafKind from the new macros
-    - [ ] Find a way to generate `from_source_name` - ideally efficiently
+    - [x] Find a way to generate `from_source_name` - ideally efficiently
   - [ ] Add ability to implement IsIterable
   - [ ] `CastTarget` simply wraps `TypeKind`
   - [x] Create a `Ref` and a `Mut` form
     - [x] They won't implement `IsArgumentForm`
     - [x] Create mappers and suitably generic `as_ref()` and `as_mut()` methods on `Actual<F>`
-  - [ ] Migrate method resolution to the trait macro properly 
+  - [ ] Migrate method resolution to the trait macro properly
+    - [ ] Possibly separate own-type resolution `dyn TypeDetails`
+    - [ ] And property resolution `dyn TypeFeatureResolver`
   - [ ] Stage 1 of the form migration:
     - [ ] Replace `Owned` as type reference to `Actual<..>`
     - [ ] Replace `Value`, `&Value` and `&mut Value` methods with methods on `Owned<Value>` / `Ref<Value>` / `Mut<Value>`
@@ -231,10 +233,14 @@ First, read the @./2025-11-vision.md
   - [ ] Strip wrapper types like `StreamValue` - can just use `OutputStream` as content
   - [ ] Remove old definitions
   - [ ] Generate test over all value kinds which checks for:
+    - [ ] Maybe over TypeKinds with https://docs.rs/inventory/latest/inventory/ registered as a dev dependency
+    - [ ] Check for duplicate TypeKind registrations
     - [ ] Source type has no spaces and is lower case, and is invertible
     - [ ] Ancestor types agree with type kinds
   - [ ] Clear up all `TODO[concepts]`
   - [ ] Have variables store a `Referenceable`
+  - [ ] Separate methods and functions
+  - [ ] Add ability to add comments to types, methods/functions and operations
 
 ## Methods and closures
 

@@ -9,41 +9,6 @@ pub(crate) trait IsSpecificLeafKind: Copy + Into<ValueLeafKind> {
 }
 
 impl ValueLeafKind {
-    pub(crate) fn from_source_name(name: &str) -> Option<Self> {
-        Some(match name {
-            "none" => ValueLeafKind::None(NoneKind),
-            "untyped_int" => ValueLeafKind::Integer(IntegerLeafKind::Untyped(UntypedIntegerKind)),
-            "i8" => ValueLeafKind::Integer(IntegerLeafKind::I8(I8Kind)),
-            "i16" => ValueLeafKind::Integer(IntegerLeafKind::I16(I16Kind)),
-            "i32" => ValueLeafKind::Integer(IntegerLeafKind::I32(I32Kind)),
-            "i64" => ValueLeafKind::Integer(IntegerLeafKind::I64(I64Kind)),
-            "i128" => ValueLeafKind::Integer(IntegerLeafKind::I128(I128Kind)),
-            "isize" => ValueLeafKind::Integer(IntegerLeafKind::Isize(IsizeKind)),
-            "u8" => ValueLeafKind::Integer(IntegerLeafKind::U8(U8Kind)),
-            "u16" => ValueLeafKind::Integer(IntegerLeafKind::U16(U16Kind)),
-            "u32" => ValueLeafKind::Integer(IntegerLeafKind::U32(U32Kind)),
-            "u64" => ValueLeafKind::Integer(IntegerLeafKind::U64(U64Kind)),
-            "u128" => ValueLeafKind::Integer(IntegerLeafKind::U128(U128Kind)),
-            "usize" => ValueLeafKind::Integer(IntegerLeafKind::Usize(UsizeKind)),
-            "untyped_float" => ValueLeafKind::Float(FloatLeafKind::Untyped(UntypedFloatKind)),
-            "f32" => ValueLeafKind::Float(FloatLeafKind::F32(F32Kind)),
-            "f64" => ValueLeafKind::Float(FloatLeafKind::F64(F64Kind)),
-            "bool" => ValueLeafKind::Bool(BoolKind),
-            "string" => ValueLeafKind::String(StringKind),
-            "unsupported_literal" => ValueLeafKind::UnsupportedLiteral(UnsupportedLiteralKind),
-            "char" => ValueLeafKind::Char(CharKind),
-            "array" => ValueLeafKind::Array(ArrayKind),
-            "object" => ValueLeafKind::Object(ObjectKind),
-            "stream" => ValueLeafKind::Stream(StreamKind),
-            "range" => ValueLeafKind::Range(RangeKind),
-            "iterator" => ValueLeafKind::Iterator(IteratorKind),
-            "parser" => ValueLeafKind::Parser(ParserKind),
-            _ => return None,
-        })
-    }
-}
-
-impl ValueLeafKind {
     /// This should be true for types which users expect to have value
     /// semantics, but false for types which are expensive to clone or
     /// are expected to have reference semantics.
@@ -82,14 +47,13 @@ pub(crate) enum TypeKind {
 
 impl TypeKind {
     pub(crate) fn from_source_name(name: &str) -> Option<Self> {
-        if let Some(kind) = ValueLeafKind::from_source_name(name) {
-            return Some(TypeKind::Leaf(kind));
+        // Parse Leaf and Parent TypeKinds
+        if let Some(tk) = <ValueType as IsType>::type_kind_from_source_name(name) {
+            return Some(tk);
         }
-        if let Some(kind) = ParentTypeKind::from_source_name(name) {
-            return Some(TypeKind::Parent(kind));
-        }
-        if let Some(kind) = DynTypeKind::from_source_name(name) {
-            return Some(TypeKind::Dyn(kind));
+        // Parse Dyn TypeKinds
+        if let Some(dyn_type_kind) = DynTypeKind::from_source_name(name) {
+            return Some(TypeKind::Dyn(dyn_type_kind));
         }
         None
     }
@@ -110,15 +74,6 @@ pub(crate) enum ParentTypeKind {
 }
 
 impl ParentTypeKind {
-    pub(crate) fn from_source_name(name: &str) -> Option<Self> {
-        Some(match name {
-            ValueTypeKind::SOURCE_TYPE_NAME => ParentTypeKind::Value(ValueTypeKind),
-            IntegerTypeKind::SOURCE_TYPE_NAME => ParentTypeKind::Integer(IntegerTypeKind),
-            FloatTypeKind::SOURCE_TYPE_NAME => ParentTypeKind::Float(FloatTypeKind),
-            _ => return None,
-        })
-    }
-
     pub(crate) fn source_name(&self) -> &'static str {
         match self {
             ParentTypeKind::Value(ValueTypeKind) => ValueTypeKind::SOURCE_TYPE_NAME,
@@ -141,22 +96,22 @@ pub(crate) enum DynTypeKind {
 }
 
 impl DynTypeKind {
-    pub(in crate::expressions) fn method_resolver(&self) -> &'static dyn MethodResolver {
-        match self {
-            DynTypeKind::Iterable => &IterableTypeData,
-        }
-    }
-
     pub(crate) fn from_source_name(name: &str) -> Option<Self> {
         match name {
-            "iterable" => Some(DynTypeKind::Iterable),
+            IterableType::SOURCE_TYPE_NAME => Some(DynTypeKind::Iterable),
             _ => None,
         }
     }
 
     pub(crate) fn source_name(&self) -> &'static str {
         match self {
-            DynTypeKind::Iterable => "iterable",
+            DynTypeKind::Iterable => IterableType::SOURCE_TYPE_NAME,
+        }
+    }
+
+    pub(crate) fn method_resolver(&self) -> &'static dyn MethodResolver {
+        match self {
+            DynTypeKind::Iterable => &IterableTypeData,
         }
     }
 }

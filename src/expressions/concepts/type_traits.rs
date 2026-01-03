@@ -15,6 +15,7 @@ pub(crate) trait IsType: Sized {
     const ARTICLED_DISPLAY_NAME: &'static str;
 
     fn type_kind() -> TypeKind;
+    fn type_kind_from_source_name(name: &str) -> Option<TypeKind>;
 }
 
 pub(crate) trait IsHierarchicalType: IsType<Variant = HierarchicalTypeVariant> {
@@ -281,6 +282,19 @@ macro_rules! define_parent_type {
             fn type_kind() -> TypeKind {
                 TypeKind::Parent(ParentTypeKind::$parent_kind($type_kind))
             }
+
+            #[inline]
+            fn type_kind_from_source_name(name: &str) -> Option<TypeKind> {
+                if name == Self::SOURCE_TYPE_NAME {
+                    return Some(Self::type_kind());
+                }
+                $(
+                    if let Some(type_kind) = <$variant_type as IsType>::type_kind_from_source_name(name) {
+                        return Some(type_kind);
+                    }
+                )*
+                None
+            }
         }
 
         impl MethodResolver for $type_def {
@@ -431,6 +445,15 @@ macro_rules! define_leaf_type {
             fn type_kind() -> TypeKind {
                 TypeKind::Leaf(ValueLeafKind::from($kind))
             }
+
+            #[inline]
+            fn type_kind_from_source_name(name: &str) -> Option<TypeKind> {
+                if name == Self::SOURCE_TYPE_NAME {
+                    Some(Self::type_kind())
+                } else {
+                    None
+                }
+            }
         }
 
         impl IsHierarchicalType for $type_def {
@@ -572,6 +595,15 @@ macro_rules! define_dyn_type {
 
             fn type_kind() -> TypeKind {
                 TypeKind::Dyn(DynTypeKind::$dyn_kind)
+            }
+
+            #[inline]
+            fn type_kind_from_source_name(name: &str) -> Option<TypeKind> {
+                if name == Self::SOURCE_TYPE_NAME {
+                    Some(Self::type_kind())
+                } else {
+                    None
+                }
             }
         }
 
