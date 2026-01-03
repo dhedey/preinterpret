@@ -3,9 +3,7 @@ use super::*;
 pub(crate) type QqqOwned<T> = Actual<'static, T, BeOwned>;
 
 pub(crate) struct BeOwned;
-impl IsForm for BeOwned {
-    const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
-}
+impl IsForm for BeOwned {}
 
 impl IsHierarchicalForm for BeOwned {
     type Leaf<'a, T: IsValueLeaf> = T;
@@ -23,7 +21,21 @@ impl IsDynMappableForm for BeOwned {
     }
 }
 
+impl LeafAsRefForm for BeOwned {
+    fn leaf_as_ref<'r, 'a: 'r, T: IsValueLeaf>(leaf: &'r Self::Leaf<'a, T>) -> &'r T {
+        leaf
+    }
+}
+
+impl LeafAsMutForm for BeOwned {
+    fn leaf_as_mut<'r, 'a: 'r, T: IsValueLeaf>(leaf: &'r mut Self::Leaf<'a, T>) -> &'r mut T {
+        leaf
+    }
+}
+
 impl MapFromArgument for BeOwned {
+    const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
+
     fn from_argument_value(
         _value: ArgumentValue,
     ) -> ExecutionResult<Actual<'static, ValueType, Self>> {
@@ -32,12 +44,31 @@ impl MapFromArgument for BeOwned {
     }
 }
 
-#[test]
-fn can_resolve_owned() {
-    let owned_value: QqqOwned<U64Type> = QqqOwned::of(42u64);
-    let resolved = owned_value
-        .spanned(Span::call_site().span_range())
-        .resolve_as::<u64>("My value")
-        .unwrap();
-    assert_eq!(resolved, 42u64);
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn can_resolve_owned() {
+        let owned_value: QqqOwned<U64Type> = QqqOwned::of(42u64);
+        let resolved = owned_value
+            .spanned(Span::call_site().span_range())
+            .resolve_as::<u64>("My value")
+            .unwrap();
+        assert_eq!(resolved, 42u64);
+    }
+
+    #[test]
+    fn can_as_ref_owned() {
+        let owned_value: QqqOwned<U64Type> = QqqOwned::of(42u64);
+        let as_ref: QqqRef<U64Type> = owned_value.as_ref();
+        assert_eq!(**as_ref, 42u64);
+    }
+
+    #[test]
+    fn can_as_mut_owned() {
+        let mut owned_value: QqqOwned<U64Type> = QqqOwned::of(42u64);
+        **owned_value.as_mut() = 41u64;
+        assert_eq!(owned_value.0, 41u64);
+    }
 }

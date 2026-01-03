@@ -3,12 +3,21 @@ use super::*;
 pub(crate) type QqqArgumentValue<T> = Actual<'static, T, BeArgument>;
 
 pub(crate) struct BeArgument;
-impl IsForm for BeArgument {
-    const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::AsIs;
-}
+impl IsForm for BeArgument {}
 
 impl IsHierarchicalForm for BeArgument {
     type Leaf<'a, T: IsValueLeaf> = ArgumentContent<T>;
+}
+
+impl MapFromArgument for BeArgument {
+    const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::AsIs;
+
+    fn from_argument_value(
+        value: ArgumentValue,
+    ) -> ExecutionResult<Actual<'static, ValueType, Self>> {
+        todo!()
+        // Ok(value)
+    }
 }
 
 pub(crate) enum ArgumentContent<T: IsValueLeaf> {

@@ -13,9 +13,7 @@ use super::*;
 pub(crate) type QqqLateBound<T> = Actual<'static, T, BeLateBound>;
 
 pub(crate) struct BeLateBound;
-impl IsForm for BeLateBound {
-    const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::AsIs;
-}
+impl IsForm for BeLateBound {}
 
 impl IsHierarchicalForm for BeLateBound {
     type Leaf<'a, T: IsValueLeaf> = LateBoundContent<T, T>;

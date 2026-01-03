@@ -1,9 +1,7 @@
 use super::*;
 
 pub(crate) struct BeAnyMut;
-impl IsForm for BeAnyMut {
-    const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Mutable;
-}
+impl IsForm for BeAnyMut {}
 impl IsHierarchicalForm for BeAnyMut {
     type Leaf<'a, T: IsValueLeaf> = crate::internal_prelude::AnyMut<'a, T>;
 }
@@ -20,10 +18,25 @@ impl IsDynMappableForm for BeAnyMut {
     }
 }
 
+impl LeafAsRefForm for BeAnyMut {
+    fn leaf_as_ref<'r, 'a: 'r, T: IsValueLeaf>(leaf: &'r Self::Leaf<'a, T>) -> &'r T {
+        leaf
+    }
+}
+
+impl LeafAsMutForm for BeAnyMut {
+    fn leaf_as_mut<'r, 'a: 'r, T: IsValueLeaf>(leaf: &'r mut Self::Leaf<'a, T>) -> &'r mut T {
+        leaf
+    }
+}
+
 impl MapFromArgument for BeAnyMut {
+    const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Mutable;
+
     fn from_argument_value(
         _value: ArgumentValue,
     ) -> ExecutionResult<Actual<'static, ValueType, Self>> {
         todo!()
+        // value.expect_mutable().as_any_mut()
     }
 }

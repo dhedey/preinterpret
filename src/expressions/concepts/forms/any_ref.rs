@@ -3,9 +3,7 @@ use super::*;
 type QqqAnyRef<'a, T> = Actual<'a, T, BeAnyRef>;
 
 pub(crate) struct BeAnyRef;
-impl IsForm for BeAnyRef {
-    const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Shared;
-}
+impl IsForm for BeAnyRef {}
 
 impl IsHierarchicalForm for BeAnyRef {
     type Leaf<'a, T: IsValueLeaf> = crate::internal_prelude::AnyRef<'a, T>;
@@ -23,10 +21,19 @@ impl IsDynMappableForm for BeAnyRef {
     }
 }
 
+impl LeafAsRefForm for BeAnyRef {
+    fn leaf_as_ref<'r, 'a: 'r, T: IsValueLeaf>(leaf: &'r Self::Leaf<'a, T>) -> &'r T {
+        leaf
+    }
+}
+
 impl MapFromArgument for BeAnyRef {
+    const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Shared;
+
     fn from_argument_value(
         _value: ArgumentValue,
     ) -> ExecutionResult<Actual<'static, ValueType, Self>> {
         todo!()
+        // value.expect_shared().as_any_ref()
     }
 }

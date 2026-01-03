@@ -1,0 +1,48 @@
+use super::*;
+
+pub(crate) type QqqRef<'a, T> = Actual<'a, T, BeRef>;
+
+/// It can't be an argument because arguments must be owned in some way;
+/// so that the drop glue can work properly (because they may come from
+/// e.g. a reference counted Shared handle)
+pub(crate) struct BeRef;
+impl IsForm for BeRef {}
+
+impl IsHierarchicalForm for BeRef {
+    type Leaf<'a, T: IsValueLeaf> = &'a T;
+}
+
+impl IsDynCompatibleForm for BeRef {
+    type DynLeaf<'a, T: 'static + ?Sized> = &'a T;
+}
+
+impl IsDynMappableForm for BeRef {
+    fn leaf_to_dyn<'a, T: IsValueLeaf + CastDyn<D>, D: ?Sized + 'static>(
+        leaf: Self::Leaf<'a, T>,
+    ) -> Option<Self::DynLeaf<'a, D>> {
+        T::map_ref(leaf)
+    }
+}
+
+pub(crate) struct ToRefMapper;
+
+impl<F: LeafAsRefForm> RefLeafMapper<F> for ToRefMapper {
+    type OutputForm = BeRef;
+    type ShortCircuit<'a> = Infallible;
+
+    fn map_leaf<'r, 'a: 'r, L: IsValueLeaf>(leaf: &'r F::Leaf<'a, L>) -> Result<&'r L, Infallible> {
+        Ok(F::leaf_as_ref(leaf))
+    }
+}
+
+impl<'a, T: IsHierarchicalType, F: IsFormOf<T>> Actual<'a, T, F>
+where
+    F: LeafAsRefForm,
+    for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
+{
+    pub(crate) fn as_ref<'r>(&'r self) -> Actual<'r, T, BeRef> {
+        match self.map_ref_with::<ToRefMapper>() {
+            Ok(x) => x,
+        }
+    }
+}

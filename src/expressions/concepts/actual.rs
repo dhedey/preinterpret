@@ -35,6 +35,28 @@ impl<'a, T: IsType, F: IsFormOf<T>> Actual<'a, T, F> {
     {
         T::map_with::<'a, F, M>(self.0).map(|c| Actual(c))
     }
+
+    #[inline]
+    pub(crate) fn map_ref_with<'r, M: RefLeafMapper<F>>(
+        &'r self,
+    ) -> Result<Actual<'r, T, M::OutputForm>, M::ShortCircuit<'a>>
+    where
+        for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
+        F: IsHierarchicalForm,
+    {
+        T::map_ref_with::<F, M>(&self.0).map(|c| Actual(c))
+    }
+
+    #[inline]
+    pub(crate) fn map_mut_with<'r, M: MutLeafMapper<F>>(
+        &'r mut self,
+    ) -> Result<Actual<'r, T, M::OutputForm>, M::ShortCircuit<'a>>
+    where
+        for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
+        F: IsHierarchicalForm,
+    {
+        T::map_mut_with::<F, M>(&mut self.0).map(|c| Actual(c))
+    }
 }
 
 impl<'a, T: IsType, F: IsFormOf<T>> Spanned<Actual<'a, T, F>> {

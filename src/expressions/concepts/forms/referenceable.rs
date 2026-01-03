@@ -8,15 +8,15 @@ type QqqReferenceable<T> = Actual<'static, T, BeReferenceable>;
 /// Note that Referenceable form does not support dyn casting, because Rc<RefCell<T>> cannot be
 /// directly cast to Rc<RefCell<D>>.
 pub(crate) struct BeReferenceable;
-impl IsForm for BeReferenceable {
-    const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
-}
+impl IsForm for BeReferenceable {}
 
 impl IsHierarchicalForm for BeReferenceable {
     type Leaf<'a, T: IsValueLeaf> = Rc<RefCell<T>>;
 }
 
 impl MapFromArgument for BeReferenceable {
+    const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
+
     fn from_argument_value(
         _value: ArgumentValue,
     ) -> ExecutionResult<Actual<'static, ValueType, Self>> {
@@ -38,7 +38,7 @@ pub(crate) struct OwnedToReferencableMapper;
 
 impl LeafMapper<BeOwned> for OwnedToReferencableMapper {
     type OutputForm = BeReferenceable;
-    type ShortCircuit<'a> = std::convert::Infallible;
+    type ShortCircuit<'a> = Infallible;
 
     fn map_leaf<'a, L: IsValueLeaf>(leaf: L) -> Result<Rc<RefCell<L>>, Self::ShortCircuit<'a>> {
         Ok(Rc::new(RefCell::new(leaf)))

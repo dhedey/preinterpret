@@ -214,9 +214,10 @@ First, read the @./2025-11-vision.md
     - [ ] Find a way to generate `from_source_name` - ideally efficiently
   - [ ] Add ability to implement IsIterable
   - [ ] `CastTarget` simply wraps `TypeKind`
-  - [ ] Create a `Ref` and a `Mut` form
-    - [ ] They won't implement `IsArgumentForm`
-    - [ ] Create suitably generic `as_ref()` and `as_mut()` methods on `Actual<F>`
+  - [x] Create a `Ref` and a `Mut` form
+    - [x] They won't implement `IsArgumentForm`
+    - [x] Create mappers and suitably generic `as_ref()` and `as_mut()` methods on `Actual<F>`
+  - [ ] Migrate method resolution to the trait macro properly 
   - [ ] Stage 1 of the form migration:
     - [ ] Replace `Owned` as type reference to `Actual<..>`
     - [ ] Replace `Value`, `&Value` and `&mut Value` methods with methods on `Owned<Value>` / `Ref<Value>` / `Mut<Value>`
@@ -230,7 +231,8 @@ First, read the @./2025-11-vision.md
   - [ ] Strip wrapper types like `StreamValue` - can just use `OutputStream` as content
   - [ ] Remove old definitions
   - [ ] Generate test over all value kinds which checks for:
-    - [ ] source type has no spaces and is lower case, and is invertible
+    - [ ] Source type has no spaces and is lower case, and is invertible
+    - [ ] Ancestor types agree with type kinds
   - [ ] Clear up all `TODO[concepts]`
   - [ ] Have variables store a `Referenceable`
 

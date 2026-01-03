@@ -11,6 +11,8 @@ mod mutable;
 mod owned;
 mod referenceable;
 mod shared;
+mod simple_mut;
+mod simple_ref;
 
 pub(crate) use any_mut::*;
 pub(crate) use any_ref::*;
@@ -22,3 +24,5 @@ pub(crate) use mutable::*;
 pub(crate) use owned::*;
 pub(crate) use referenceable::*;
 pub(crate) use shared::*;
+pub(crate) use simple_mut::*;
+pub(crate) use simple_ref::*;

@@ -3,9 +3,7 @@ use super::*;
 pub(crate) type QqqCopyOnWrite<T> = Actual<'static, T, BeCopyOnWrite>;
 
 pub(crate) struct BeCopyOnWrite;
-impl IsForm for BeCopyOnWrite {
-    const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::CopyOnWrite;
-}
+impl IsForm for BeCopyOnWrite {}
 
 impl IsHierarchicalForm for BeCopyOnWrite {
     type Leaf<'a, T: IsValueLeaf> = CopyOnWriteContent<T, T>;
@@ -21,6 +19,17 @@ impl IsDynMappableForm for BeCopyOnWrite {
     ) -> Option<Self::DynLeaf<'a, D>> {
         // TODO: Add back once we add a map to CopyOnWriteContent
         todo!()
+    }
+}
+
+impl MapFromArgument for BeCopyOnWrite {
+    const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::CopyOnWrite;
+
+    fn from_argument_value(
+        _value: ArgumentValue,
+    ) -> ExecutionResult<Actual<'static, ValueType, Self>> {
+        todo!()
+        // value.expect_copy_on_write()
     }
 }
 

@@ -7,9 +7,7 @@ use super::*;
 /// - [BeShared] representing [Shared] references
 /// - [BeMutable] representing [Mutable] references
 /// - [BeCopyOnWrite] representing [CopyOnWrite] values
-pub(crate) trait IsForm: Sized {
-    const ARGUMENT_OWNERSHIP: ArgumentOwnership;
-}
+pub(crate) trait IsForm: Sized {}
 
 pub(crate) trait IsFormOf<T: IsType>: IsForm {
     type Content<'a>;
@@ -34,6 +32,14 @@ impl<T: IsHierarchicalType, F: IsHierarchicalForm> IsFormOfForKind<T, Hierarchic
     type KindedContent<'a> = T::Content<'a, F>;
 }
 
+pub(crate) trait LeafAsRefForm: IsHierarchicalForm {
+    fn leaf_as_ref<'r, 'a: 'r, T: IsValueLeaf>(leaf: &'r Self::Leaf<'a, T>) -> &'r T;
+}
+
+pub(crate) trait LeafAsMutForm: IsHierarchicalForm {
+    fn leaf_as_mut<'r, 'a: 'r, T: IsValueLeaf>(leaf: &'r mut Self::Leaf<'a, T>) -> &'r mut T;
+}
+
 pub(crate) trait IsDynCompatibleForm: IsForm {
     /// The container for a dyn Trait based type.
     /// The DynLeaf can be similar to the standard leaf, but must be
@@ -52,6 +58,8 @@ pub(crate) trait IsDynMappableForm: IsHierarchicalForm + IsDynCompatibleForm {
 }
 
 pub(crate) trait MapFromArgument: IsFormOf<ValueType> {
+    const ARGUMENT_OWNERSHIP: ArgumentOwnership;
+
     fn from_argument_value(
         value: ArgumentValue,
     ) -> ExecutionResult<Actual<'static, ValueType, Self>>;
