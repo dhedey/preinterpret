@@ -283,7 +283,7 @@ macro_rules! define_parent_type {
                 TypeKind::Parent(ParentTypeKind::$parent_kind($type_kind))
             }
 
-            #[inline]
+            #[inline(always)]
             fn type_kind_from_source_name(name: &str) -> Option<TypeKind> {
                 if name == Self::SOURCE_TYPE_NAME {
                     return Some(Self::type_kind());
@@ -446,7 +446,10 @@ macro_rules! define_leaf_type {
                 TypeKind::Leaf(ValueLeafKind::from($kind))
             }
 
-            #[inline]
+            // This is called for every leaf in a row as part of parsing
+            // Use inline(always) to avoid function call overhead, even in Debug builds
+            // which are used when macros are run during development
+            #[inline(always)]
             fn type_kind_from_source_name(name: &str) -> Option<TypeKind> {
                 if name == Self::SOURCE_TYPE_NAME {
                     Some(Self::type_kind())
@@ -597,7 +600,10 @@ macro_rules! define_dyn_type {
                 TypeKind::Dyn(DynTypeKind::$dyn_kind)
             }
 
-            #[inline]
+            // This is called for every leaf in a row as part of parsing
+            // Use inline(always) to avoid function call overhead, even in Debug builds
+            // which are used when macros are run during development
+            #[inline(always)]
             fn type_kind_from_source_name(name: &str) -> Option<TypeKind> {
                 if name == Self::SOURCE_TYPE_NAME {
                     Some(Self::type_kind())
