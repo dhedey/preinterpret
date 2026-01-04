@@ -164,6 +164,7 @@ macro_rules! impl_resolvable_float_subtype {
             type_name: $type_name,
             articled_display_name: $articled_display_name,
             temp_type_data: $value_type,
+            dyn_impls: {},
         }
 
         impl ResolvableArgumentTarget for $type {

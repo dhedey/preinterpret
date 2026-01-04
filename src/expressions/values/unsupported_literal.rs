@@ -7,6 +7,7 @@ define_leaf_type! {
     type_name: "unsupported_literal",
     articled_display_name: "an unsupported literal",
     temp_type_data: UnsupportedLiteralTypeData,
+    dyn_impls: {},
 }
 
 #[derive(Clone)]

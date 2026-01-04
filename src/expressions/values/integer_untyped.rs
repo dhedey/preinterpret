@@ -7,6 +7,7 @@ define_leaf_type! {
     type_name: "untyped_int",
     articled_display_name: "an untyped integer",
     temp_type_data: UntypedIntegerTypeData,
+    dyn_impls: {},
 }
 
 #[derive(Copy, Clone)]

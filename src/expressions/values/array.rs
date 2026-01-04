@@ -7,6 +7,17 @@ define_leaf_type! {
     type_name: "array",
     articled_display_name: "an array",
     temp_type_data: ArrayTypeData,
+    dyn_impls: {
+        impl IsIterable {
+            fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
+                Ok(IteratorValue::new_for_array(*self))
+            }
+
+            fn len(&self, _error_span_range: SpanRange) -> ExecutionResult<usize> {
+                Ok(self.items.len())
+            }
+        }
+    },
 }
 
 #[derive(Clone)]

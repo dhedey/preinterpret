@@ -7,6 +7,19 @@ define_leaf_type! {
     type_name: "string",
     articled_display_name: "a string",
     temp_type_data: StringTypeData,
+    dyn_impls: {
+        impl IsIterable {
+            fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
+                Ok(IteratorValue::new_for_string_over_chars(*self))
+            }
+
+            fn len(&self, _error_span_range: SpanRange) -> ExecutionResult<usize> {
+                // The iterator is over chars, so this must count chars.
+                // But contrast, string.len() counts bytes
+                Ok(self.chars().count())
+            }
+        }
+    },
 }
 
 #[derive(Clone)]

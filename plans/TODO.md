@@ -212,7 +212,7 @@ First, read the @./2025-11-vision.md
     - [x] Then implement all the macros
     - [x] And use that to generate ValueLeafKind from the new macros
     - [x] Find a way to generate `from_source_name` - ideally efficiently
-  - [ ] Add ability to implement IsIterable
+  - [x] Add ability to implement IsIterable
   - [x] `CastTarget` simply wraps `TypeKind`
   - [x] Create a `Ref` and a `Mut` form
     - [x] They won't implement `IsArgumentForm`
@@ -220,6 +220,7 @@ First, read the @./2025-11-vision.md
   - [ ] Migrate method resolution to the trait macro properly
     - [ ] Possibly separate own-type resolution `dyn TypeDetails`
     - [ ] And property resolution `dyn TypeFeatureResolver`
+    - [ ] Allow dyns to be injected into resolution flow
   - [ ] Stage 1 of the form migration:
     - [ ] Replace `Owned` as type reference to `Actual<..>`
     - [ ] Replace `Value`, `&Value` and `&mut Value` methods with methods on `Owned<Value>` / `Ref<Value>` / `Mut<Value>`
@@ -227,8 +228,8 @@ First, read the @./2025-11-vision.md
   - [ ] Stage 2 of the form migration:
     - [ ] Migrate `Shared`, `Mutable`, `Assignee`
   - [ ] Stage 3
-    - [ ] Migtate `CopyOnWrite` ..
-    - [ ] FInish migrating to new Argument/Returned resolution and delete old cold
+    - [ ] Migrate `CopyOnWrite` ..
+    - [ ] Finish migrating to new Argument/Returned resolution and delete old code
   - [ ] Complete ownership definitions and inter-conversions, including maybe-erroring inter-conversions (possibly with `Result<X, Mapper::Error>` which we can map out of):
     - [ ] CopyOnWrite, Shared => CopyOnWrite x2, Owned => CopyOnWrite
     - [ ] LateBound, Tons of conversions into it

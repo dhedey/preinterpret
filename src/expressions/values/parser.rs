@@ -7,6 +7,7 @@ define_leaf_type! {
     type_name: "parser",
     articled_display_name: "a parser",
     temp_type_data: ParserTypeData,
+    dyn_impls: {},
 }
 
 #[derive(Clone)]

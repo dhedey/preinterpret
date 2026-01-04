@@ -9,6 +9,17 @@ define_leaf_type! {
     type_name: "range",
     articled_display_name: "a range",
     temp_type_data: RangeTypeData,
+    dyn_impls: {
+        impl IsIterable {
+            fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
+                IteratorValue::new_for_range(*self)
+            }
+
+            fn len(&self, error_span_range: SpanRange) -> ExecutionResult<usize> {
+                self.len(error_span_range)
+            }
+        }
+    },
 }
 
 #[derive(Clone)]

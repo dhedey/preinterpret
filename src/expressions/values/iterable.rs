@@ -1,5 +1,18 @@
 use super::*;
 
+pub(crate) trait IsIterable: 'static {
+    fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue>;
+    fn len(&self, error_span_range: SpanRange) -> ExecutionResult<usize>;
+}
+
+define_dyn_type!(
+    pub(crate) IterableType,
+    content: dyn IsIterable,
+    dyn_kind: DynTypeKind::Iterable,
+    type_name: "iterable",
+    articled_display_name: "an iterable (e.g. array, list, etc.)",
+);
+
 // If you add a new variant, also update:
 // * ResolvableOwned<Value> for IterableValue
 // * IsArgument for IterableRef
@@ -7,10 +20,10 @@ use super::*;
 pub(crate) enum IterableValue {
     Iterator(IteratorValue),
     Array(ArrayValue),
-    Stream(StreamValue),
+    Stream(OutputStream),
     Object(ObjectValue),
     Range(RangeValue),
-    String(StringValue),
+    String(String),
 }
 
 impl ResolvableArgumentTarget for IterableValue {
@@ -22,10 +35,10 @@ impl ResolvableOwned<Value> for IterableValue {
         Ok(match value {
             Value::Array(x) => Self::Array(x),
             Value::Object(x) => Self::Object(x),
-            Value::Stream(x) => Self::Stream(x),
+            Value::Stream(x) => Self::Stream(x.value),
             Value::Range(x) => Self::Range(x),
             Value::Iterator(x) => Self::Iterator(x),
-            Value::String(x) => Self::String(x),
+            Value::String(x) => Self::String(x.value),
             _ => {
                 return context.err(
                     "an iterable (iterator, array, object, stream, range or string)",
@@ -105,14 +118,14 @@ define_interface! {
 
 impl IterableValue {
     pub(crate) fn into_iterator(self) -> ExecutionResult<IteratorValue> {
-        Ok(match self {
-            IterableValue::Array(value) => IteratorValue::new_for_array(value),
-            IterableValue::Stream(value) => IteratorValue::new_for_stream(value),
-            IterableValue::Iterator(value) => value,
-            IterableValue::Range(value) => IteratorValue::new_for_range(value)?,
-            IterableValue::Object(value) => IteratorValue::new_for_object(value),
-            IterableValue::String(value) => IteratorValue::new_for_string(value),
-        })
+        match self {
+            IterableValue::Array(value) => Box::new(value).into_iterator(),
+            IterableValue::Stream(value) => Box::new(value).into_iterator(),
+            IterableValue::Iterator(value) => Box::new(value).into_iterator(),
+            IterableValue::Range(value) => Box::new(value).into_iterator(),
+            IterableValue::Object(value) => Box::new(value).into_iterator(),
+            IterableValue::String(value) => Box::new(value).into_iterator(),
+        }
     }
 }
 
@@ -122,7 +135,7 @@ pub(crate) enum IterableRef<'a> {
     Stream(AnyRef<'a, OutputStream>),
     Range(AnyRef<'a, RangeValue>),
     Object(AnyRef<'a, ObjectValue>),
-    String(AnyRef<'a, str>),
+    String(AnyRef<'a, String>),
 }
 
 impl IsArgument for IterableRef<'static> {
@@ -151,14 +164,14 @@ impl IsArgument for IterableRef<'static> {
 impl Spanned<IterableRef<'_>> {
     pub(crate) fn len(&self) -> ExecutionResult<usize> {
         let Spanned(value, span) = self;
+        let span = *span;
         match value {
-            IterableRef::Iterator(iterator) => iterator.len(*span),
-            IterableRef::Array(value) => Ok(value.items.len()),
-            IterableRef::Stream(value) => Ok(value.len()),
-            IterableRef::Range(value) => value.len(*span),
-            IterableRef::Object(value) => Ok(value.entries.len()),
-            // NB - this is different to string.len() which counts bytes
-            IterableRef::String(value) => Ok(value.chars().count()),
+            IterableRef::Iterator(iterator) => iterator.len(span),
+            IterableRef::Array(value) => value.len(span),
+            IterableRef::Stream(value) => <OutputStream as IsIterable>::len(value, span),
+            IterableRef::Range(value) => value.len(span),
+            IterableRef::Object(value) => value.len(span),
+            IterableRef::String(value) => <String as IsIterable>::len(value, span),
         }
     }
 }

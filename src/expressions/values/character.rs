@@ -7,6 +7,7 @@ define_leaf_type! {
     type_name: "char",
     articled_display_name: "a char",
     temp_type_data: CharTypeData,
+    dyn_impls: {},
 }
 
 #[derive(Clone)]

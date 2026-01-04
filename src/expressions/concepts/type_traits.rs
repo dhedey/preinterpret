@@ -427,6 +427,22 @@ macro_rules! define_parent_type {
 
 pub(crate) use define_parent_type;
 
+macro_rules! impl_fallback_is_iterable {
+    ({IsIterable $($haystack:tt)*} for $content_type:ty) => {
+        // Already implemented, ignoring
+    };
+    ({$discard:tt $($haystack:tt)*} for $content_type:ty) => {
+        // Recurse to check the rest
+        impl_is_iterable_if_missing!({$($haystack)*} for $content_type)
+    };
+    ({} for $content_type:ty) => {
+        // Implement fallback
+        impl CastDyn<dyn IsIterable> for $content_type {}
+    };
+}
+
+pub(crate) use impl_fallback_is_iterable;
+
 macro_rules! define_leaf_type {
     (
         $type_def_vis:vis $type_def:ident => $parent:ident($parent_content:ident :: $parent_variant:ident) $(=> $ancestor:ty)*,
@@ -435,6 +451,9 @@ macro_rules! define_leaf_type {
         type_name: $source_type_name:literal,
         articled_display_name: $articled_display_name:literal,
         temp_type_data: $type_data:ident,
+        dyn_impls: {
+            $(impl $dyn_trait:ident { $($dyn_trait_impl:tt)* })*
+        },
     ) => {
         $type_def_vis struct $type_def;
 
@@ -570,7 +589,24 @@ macro_rules! define_leaf_type {
         }
 
         impl IsValueLeaf for $content_type {}
-        impl CastDyn<dyn IsIterable> for $content_type {}
+
+        $(
+            impl $dyn_trait for $content_type {
+                $($dyn_trait_impl)*
+            }
+            impl CastDyn<dyn $dyn_trait> for $content_type {
+                fn map_boxed(self: Box<Self>) -> Option<Box<dyn $dyn_trait>> {
+                    Some(self)
+                }
+                fn map_ref(&self) -> Option<&dyn $dyn_trait> {
+                    Some(self)
+                }
+                fn map_mut(&mut self) -> Option<&mut dyn $dyn_trait> {
+                    Some(self)
+                }
+            }
+        )*
+        impl_fallback_is_iterable!({$($dyn_trait)*} for $content_type);
 
         impl_ancestor_chain_conversions!(
             $type_def => $parent($parent_content :: $parent_variant) $(=> $ancestor)*

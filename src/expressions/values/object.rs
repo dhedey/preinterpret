@@ -7,6 +7,17 @@ define_leaf_type! {
     type_name: "object",
     articled_display_name: "an object",
     temp_type_data: ObjectTypeData,
+    dyn_impls: {
+        impl IsIterable {
+            fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
+                Ok(IteratorValue::new_for_object(*self))
+            }
+
+            fn len(&self, _error_span_range: SpanRange) -> ExecutionResult<usize> {
+                Ok(self.entries.len())
+            }
+        }
+    },
 }
 
 #[derive(Clone)]

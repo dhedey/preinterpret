@@ -7,6 +7,17 @@ define_leaf_type! {
     type_name: "stream",
     articled_display_name: "a stream",
     temp_type_data: StreamTypeData,
+    dyn_impls: {
+        impl IsIterable {
+            fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
+                Ok(IteratorValue::new_for_stream(*self))
+            }
+
+            fn len(&self, _error_span_range: SpanRange) -> ExecutionResult<usize> {
+                Ok(self.len())
+            }
+        }
+    },
 }
 
 #[derive(Clone)]

@@ -9,6 +9,7 @@ define_leaf_type! {
     type_name: "bool",
     articled_display_name: "a bool",
     temp_type_data: BooleanTypeData,
+    dyn_impls: {},
 }
 
 #[derive(Clone)]

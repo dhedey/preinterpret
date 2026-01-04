@@ -7,6 +7,17 @@ define_leaf_type! {
     type_name: "iterator",
     articled_display_name: "an iterator",
     temp_type_data: IteratorTypeData,
+    dyn_impls: {
+        impl IsIterable {
+            fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
+                Ok(*self)
+            }
+
+            fn len(&self, error_span_range: SpanRange) -> ExecutionResult<usize> {
+                self.len(error_span_range)
+            }
+        }
+    },
 }
 
 #[derive(Clone)]
@@ -28,10 +39,8 @@ impl IteratorValue {
         Self::new_vec(array.items.into_iter())
     }
 
-    pub(crate) fn new_for_stream(stream: StreamValue) -> Self {
-        Self::new(IteratorValueInner::Stream(Box::new(
-            stream.value.into_iter(),
-        )))
+    pub(crate) fn new_for_stream(stream: OutputStream) -> Self {
+        Self::new(IteratorValueInner::Stream(Box::new(stream.into_iter())))
     }
 
     pub(crate) fn new_for_range(range: RangeValue) -> ExecutionResult<Self> {
@@ -50,12 +59,13 @@ impl IteratorValue {
         Self::new_vec(iterator)
     }
 
-    pub(crate) fn new_for_string(string: StringValue) -> Self {
+    pub(crate) fn new_for_string_over_chars(string: String) -> Self {
         // We have to collect to vec and back to make the iterator owned
         // That's because value.chars() creates a `Chars<'_>` iterator which
         // borrows from the string, which we don't allow in a Boxed iterator
+        // TODO: Replace with the owned iterator here to avoid this clone:
+        // https://internals.rust-lang.org/t/is-there-a-good-reason-why-string-has-no-into-chars/19496/5
         let iterator = string
-            .value
             .chars()
             .map(|c| c.into_value())
             .collect::<Vec<_>>()

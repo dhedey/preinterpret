@@ -135,7 +135,9 @@ impl TypeIdent {
                         "integer" => format!("Expected '{}'", IntegerType::SOURCE_TYPE_NAME),
                         "str" => format!("Expected '{}'", StringType::SOURCE_TYPE_NAME),
                         "character" => format!("Expected '{}'", CharType::SOURCE_TYPE_NAME),
-                        "list" => format!("Expected '{}'", ArrayType::SOURCE_TYPE_NAME),
+                        "list" | "vec" | "tuple" => {
+                            format!("Expected '{}'", ArrayType::SOURCE_TYPE_NAME)
+                        }
                         "obj" => format!("Expected '{}'", ObjectType::SOURCE_TYPE_NAME),
                         _ => format!("Unknown type '{}'", name),
                     },

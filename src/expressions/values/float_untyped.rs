@@ -7,6 +7,7 @@ define_leaf_type! {
     type_name: "untyped_float",
     articled_display_name: "an untyped float",
     temp_type_data: UntypedFloatTypeData,
+    dyn_impls: {},
 }
 
 #[derive(Copy, Clone)]

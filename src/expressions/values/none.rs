@@ -8,6 +8,7 @@ define_leaf_type! {
     // Instead of saying "expected a none value", we can say "expected None"
     articled_display_name: "None",
     temp_type_data: NoneTypeData,
+    dyn_impls: {},
 }
 
 impl IntoValue for () {
