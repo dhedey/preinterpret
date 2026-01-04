@@ -211,8 +211,8 @@ define_interface! {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
                     UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => return None,
-                    UnaryOperation::Cast { target, .. } => match target {
-                        CastTarget::String => unary_definitions::cast_to_string(),
+                    UnaryOperation::Cast { target: CastTarget(kind), .. } => match kind {
+                        ValueLeafKind::String(_) => unary_definitions::cast_to_string(),
                         _ => return None,
                     },
                 })

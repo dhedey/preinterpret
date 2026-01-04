@@ -271,7 +271,7 @@ define_interface! {
             }
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_to_value(Spanned(this, span): Spanned<Owned<StreamValue>>) -> ExecutionResult<ReturnedValue> {
+            [context] fn cast_coerced_to_value(Spanned(this, span): Spanned<Owned<StreamValue>>) -> ExecutionResult<ReturnedValue> {
                 let this = this.into_inner();
                 let coerced = this.value.coerce_into_value();
                 if let Value::Stream(_) = &coerced {
@@ -294,14 +294,7 @@ define_interface! {
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
-                    UnaryOperation::Cast {
-                        target:
-                            CastTarget::Boolean
-                            | CastTarget::Char
-                            | CastTarget::Integer(_)
-                            | CastTarget::Float(_),
-                        ..
-                    } => unary_definitions::cast_to_value(),
+                    UnaryOperation::Cast { target, .. } if target.is_singleton_target() => unary_definitions::cast_coerced_to_value(),
                     _ => return None,
                 })
             }

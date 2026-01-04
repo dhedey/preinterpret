@@ -26,7 +26,7 @@ fn main() {
         output
     });
     benchmark!("Lots of casts", {
-        0 as u32 as int as u8 as char as string as stream
+        0 as u32 as untyped_int as u8 as char as string as stream
     });
     benchmark!("Simple tuple impls", {
         for N in 0..=10 {

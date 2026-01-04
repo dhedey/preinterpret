@@ -196,9 +196,9 @@ define_interface! {
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
-                    UnaryOperation::Cast { target, .. } => match target {
-                        CastTarget::String => unary_definitions::cast_to_string(),
-                        CastTarget::Stream => unary_definitions::cast_to_stream(),
+                    UnaryOperation::Cast { target: CastTarget(kind), .. } => match kind {
+                        ValueLeafKind::String(_) => unary_definitions::cast_to_string(),
+                        ValueLeafKind::Stream(_) => unary_definitions::cast_to_stream(),
                         _ => return None,
                     },
                     _ => return None,

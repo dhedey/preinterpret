@@ -109,30 +109,30 @@ macro_rules! impl_int_operations {
                                     unary_definitions::neg()
                                 }
                             )?
-                            UnaryOperation::Cast { target, .. } => match target {
+                            UnaryOperation::Cast { target: CastTarget(kind), .. } => match kind {
                                 $(
-                                    CastTarget::Char => {
+                                    ValueLeafKind::Char(_) => {
                                         ignore_all!($char_cast); // Only include for types with CharCast
                                         unary_definitions::cast_to_char()
                                     }
                                 )?
-                                CastTarget::Integer(IntegerLeafKind::Untyped(_)) => unary_definitions::cast_to_untyped_integer(),
-                                CastTarget::Integer(IntegerLeafKind::I8(_)) => unary_definitions::cast_to_i8(),
-                                CastTarget::Integer(IntegerLeafKind::I16(_)) => unary_definitions::cast_to_i16(),
-                                CastTarget::Integer(IntegerLeafKind::I32(_)) => unary_definitions::cast_to_i32(),
-                                CastTarget::Integer(IntegerLeafKind::I64(_)) => unary_definitions::cast_to_i64(),
-                                CastTarget::Integer(IntegerLeafKind::I128(_)) => unary_definitions::cast_to_i128(),
-                                CastTarget::Integer(IntegerLeafKind::Isize(_)) => unary_definitions::cast_to_isize(),
-                                CastTarget::Integer(IntegerLeafKind::U8(_)) => unary_definitions::cast_to_u8(),
-                                CastTarget::Integer(IntegerLeafKind::U16(_)) => unary_definitions::cast_to_u16(),
-                                CastTarget::Integer(IntegerLeafKind::U32(_)) => unary_definitions::cast_to_u32(),
-                                CastTarget::Integer(IntegerLeafKind::U64(_)) => unary_definitions::cast_to_u64(),
-                                CastTarget::Integer(IntegerLeafKind::U128(_)) => unary_definitions::cast_to_u128(),
-                                CastTarget::Integer(IntegerLeafKind::Usize(_)) => unary_definitions::cast_to_usize(),
-                                CastTarget::Float(FloatLeafKind::Untyped(_)) => unary_definitions::cast_to_untyped_float(),
-                                CastTarget::Float(FloatLeafKind::F32(_)) => unary_definitions::cast_to_f32(),
-                                CastTarget::Float(FloatLeafKind::F64(_)) => unary_definitions::cast_to_f64(),
-                                CastTarget::String => unary_definitions::cast_to_string(),
+                                ValueLeafKind::Integer(IntegerLeafKind::Untyped(_)) => unary_definitions::cast_to_untyped_integer(),
+                                ValueLeafKind::Integer(IntegerLeafKind::I8(_)) => unary_definitions::cast_to_i8(),
+                                ValueLeafKind::Integer(IntegerLeafKind::I16(_)) => unary_definitions::cast_to_i16(),
+                                ValueLeafKind::Integer(IntegerLeafKind::I32(_)) => unary_definitions::cast_to_i32(),
+                                ValueLeafKind::Integer(IntegerLeafKind::I64(_)) => unary_definitions::cast_to_i64(),
+                                ValueLeafKind::Integer(IntegerLeafKind::I128(_)) => unary_definitions::cast_to_i128(),
+                                ValueLeafKind::Integer(IntegerLeafKind::Isize(_)) => unary_definitions::cast_to_isize(),
+                                ValueLeafKind::Integer(IntegerLeafKind::U8(_)) => unary_definitions::cast_to_u8(),
+                                ValueLeafKind::Integer(IntegerLeafKind::U16(_)) => unary_definitions::cast_to_u16(),
+                                ValueLeafKind::Integer(IntegerLeafKind::U32(_)) => unary_definitions::cast_to_u32(),
+                                ValueLeafKind::Integer(IntegerLeafKind::U64(_)) => unary_definitions::cast_to_u64(),
+                                ValueLeafKind::Integer(IntegerLeafKind::U128(_)) => unary_definitions::cast_to_u128(),
+                                ValueLeafKind::Integer(IntegerLeafKind::Usize(_)) => unary_definitions::cast_to_usize(),
+                                ValueLeafKind::Float(FloatLeafKind::Untyped(_)) => unary_definitions::cast_to_untyped_float(),
+                                ValueLeafKind::Float(FloatLeafKind::F32(_)) => unary_definitions::cast_to_f32(),
+                                ValueLeafKind::Float(FloatLeafKind::F64(_)) => unary_definitions::cast_to_f64(),
+                                ValueLeafKind::String(_) => unary_definitions::cast_to_string(),
                                 _ => return None,
                             }
                             _ => return None,

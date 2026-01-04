@@ -85,9 +85,20 @@ define_interface! {
             }
         }
         pub(crate) mod unary_operations {
+            fn cast_into_iterator(this: IterableValue) -> ExecutionResult<IteratorValue> {
+                this.into_iterator()
+            }
         }
         pub(crate) mod binary_operations {}
         interface_items {
+            fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
+                Some(match operation {
+                    UnaryOperation::Cast { target: CastTarget(ValueLeafKind::Iterator(_)), .. } =>{
+                        unary_definitions::cast_into_iterator()
+                    }
+                    _ => return None,
+                })
+            }
         }
     }
 }

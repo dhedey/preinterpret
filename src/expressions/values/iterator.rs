@@ -332,13 +332,11 @@ define_interface! {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
                     UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => return None,
-                    UnaryOperation::Cast { target, .. } => match target {
-                        CastTarget::Boolean
-                        | CastTarget::Char
-                        | CastTarget::Integer(_)
-                        | CastTarget::Float(_) => unary_definitions::cast_singleton_to_value(),
-                        _ => return None,
-                    },
+                    UnaryOperation::Cast { target, .. } => if target.is_singleton_target() {
+                        unary_definitions::cast_singleton_to_value()
+                    } else {
+                        return None;
+                    }
                 })
             }
         }

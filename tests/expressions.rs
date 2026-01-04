@@ -32,8 +32,8 @@ fn test_basic_evaluate_works() {
     assert!(run!(true || false && false)); // The && has priority
     assert!(run!(true | false & false)); // The & has priority
     assert_eq!(run!(true as u32 + 2), 3);
-    assert_eq!(run!(3.57 as int + 1), 4u32);
-    assert_eq!(run!(3.57 as int + 1), 4u64);
+    assert_eq!(run!(3.57 as untyped_int + 1), 4u32);
+    assert_eq!(run!(3.57 as untyped_int + 1), 4u64);
     assert_eq!(run!(0b1000 & 0b1101), 0b1000);
     assert_eq!(run!(0b1000 | 0b1101), 0b1101);
     assert_eq!(run!(0b1000 ^ 0b1101), 0b101);
@@ -53,7 +53,7 @@ fn test_basic_evaluate_works() {
         ),
         "%[5 + 2 = 7]"
     );
-    assert_eq!(run!(1 + (1..2) as int), 2);
+    assert_eq!(run!(1 + (1..2) as untyped_int), 2);
     assert!(!run!("hello" == "world"));
     assert!(run!("hello" == "hello"));
     assert!(run!('A' as u8 == 65));

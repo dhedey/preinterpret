@@ -1,0 +1,5 @@
+error: This type is not supported in cast expressions. Perhaps you want 'as untyped_int'?
+ --> tests/compilation_failures/expressions/cast_to_int.rs:5:16
+  |
+5 |         0u8 as int
+  |                ^^^

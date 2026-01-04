@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter};
+
 use super::*;
 
 pub(crate) trait Operation: HasSpanRange {
@@ -60,9 +62,7 @@ impl UnaryOperation {
         target_ident: Ident,
     ) -> ParseResult<Self> {
         let target = TypeIdent::from_ident(&target_ident)?;
-        let target = CastTarget::from_source_type(target).ok_or_else(|| {
-            target_ident.parse_error("This type is not supported in cast expressions")
-        })?;
+        let target = CastTarget::from_source_type(target)?;
 
         Ok(Self::Cast {
             as_token,
@@ -94,7 +94,7 @@ impl UnaryOperation {
             .ok_or_else(|| {
                 self.type_error(format!(
                     "The {} operator is not supported for {} operand",
-                    self.symbolic_description(),
+                    self,
                     input.articled_kind(),
                 ))
             })?;
@@ -106,67 +106,43 @@ impl UnaryOperation {
 }
 
 #[derive(Copy, Clone)]
-pub(crate) enum CastTarget {
-    Integer(IntegerLeafKind),
-    Float(FloatLeafKind),
-    Boolean,
-    String,
-    Char,
-    Stream,
-}
+pub(crate) struct CastTarget(pub(crate) ValueLeafKind);
 
 impl CastTarget {
-    fn from_source_type(s: TypeIdent) -> Option<Self> {
-        Some(match s.kind {
-            TypeKind::Parent(ParentTypeKind::Integer(_)) => {
-                CastTarget::Integer(IntegerLeafKind::Untyped(UntypedIntegerKind))
-            }
-            TypeKind::Leaf(ValueLeafKind::Integer(kind)) => CastTarget::Integer(kind),
-            TypeKind::Parent(ParentTypeKind::Float(_)) => {
-                CastTarget::Float(FloatLeafKind::Untyped(UntypedFloatKind))
-            }
-            TypeKind::Leaf(ValueLeafKind::Float(kind)) => CastTarget::Float(kind),
-            TypeKind::Leaf(ValueLeafKind::Bool(_)) => CastTarget::Boolean,
-            TypeKind::Leaf(ValueLeafKind::String(_)) => CastTarget::String,
-            TypeKind::Leaf(ValueLeafKind::Char(_)) => CastTarget::Char,
-            TypeKind::Leaf(ValueLeafKind::Stream(_)) => CastTarget::Stream,
-            _ => return None,
-        })
+    fn from_source_type(s: TypeIdent) -> ParseResult<Self> {
+        match s.kind {
+            TypeKind::Parent(ParentTypeKind::Integer(_)) => s.parse_err(format!(
+                "This type is not supported in cast expressions. Perhaps you want 'as {}'?",
+                UntypedIntegerKind.source_type_name()
+            )),
+            TypeKind::Parent(ParentTypeKind::Float(_)) => s.parse_err(format!(
+                "This type is not supported in cast expressions. Perhaps you want 'as {}'?",
+                UntypedFloatKind.source_type_name()
+            )),
+            TypeKind::Leaf(leaf_kind) => Ok(CastTarget(leaf_kind)),
+            _ => s.parse_err("This type is not supported in cast expressions"),
+        }
     }
 
-    // TODO[concepts]: Improve this / align with the type name
-    fn symbolic_description(&self) -> &'static str {
-        match self {
-            CastTarget::Integer(IntegerLeafKind::Untyped(_)) => "as int",
-            CastTarget::Integer(IntegerLeafKind::U8(_)) => "as u8",
-            CastTarget::Integer(IntegerLeafKind::U16(_)) => "as u16",
-            CastTarget::Integer(IntegerLeafKind::U32(_)) => "as u32",
-            CastTarget::Integer(IntegerLeafKind::U64(_)) => "as u64",
-            CastTarget::Integer(IntegerLeafKind::U128(_)) => "as u128",
-            CastTarget::Integer(IntegerLeafKind::Usize(_)) => "as usize",
-            CastTarget::Integer(IntegerLeafKind::I8(_)) => "as i8",
-            CastTarget::Integer(IntegerLeafKind::I16(_)) => "as i16",
-            CastTarget::Integer(IntegerLeafKind::I32(_)) => "as i32",
-            CastTarget::Integer(IntegerLeafKind::I64(_)) => "as i64",
-            CastTarget::Integer(IntegerLeafKind::I128(_)) => "as i128",
-            CastTarget::Integer(IntegerLeafKind::Isize(_)) => "as isize",
-            CastTarget::Float(FloatLeafKind::Untyped(_)) => "as float",
-            CastTarget::Float(FloatLeafKind::F32(_)) => "as f32",
-            CastTarget::Float(FloatLeafKind::F64(_)) => "as f64",
-            CastTarget::Boolean => "as bool",
-            CastTarget::String => "as string",
-            CastTarget::Char => "as char",
-            CastTarget::Stream => "as stream",
-        }
+    /// Denotes that this cast target for a singleton iterable
+    /// (e.g. array or stream)
+    pub(crate) fn is_singleton_target(&self) -> bool {
+        matches!(
+            self.0,
+            ValueLeafKind::Bool(_)
+                | ValueLeafKind::Char(_)
+                | ValueLeafKind::Integer(_)
+                | ValueLeafKind::Float(_)
+        )
     }
 }
 
-impl Operation for UnaryOperation {
-    fn symbolic_description(&self) -> &'static str {
+impl Display for UnaryOperation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            UnaryOperation::Neg { .. } => "-",
-            UnaryOperation::Not { .. } => "!",
-            UnaryOperation::Cast { target, .. } => target.symbolic_description(),
+            UnaryOperation::Neg { .. } => write!(f, "-"),
+            UnaryOperation::Not { .. } => write!(f, "!"),
+            UnaryOperation::Cast { target, .. } => write!(f, "as {}", target.0.source_type_name()),
         }
     }
 }

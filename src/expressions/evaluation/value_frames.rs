@@ -806,7 +806,7 @@ impl EvaluationFrame for UnaryOperationBuilder {
         }
         self.operation.type_err(format!(
             "The {} operator is not supported for {}",
-            self.operation.symbolic_description(),
+            self.operation,
             operand.articled_kind(),
         ))
     }

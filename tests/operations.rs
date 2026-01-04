@@ -1541,21 +1541,21 @@ mod cast_operations {
         assert_eq!(run!(256u32 as u8), 0u8); // overflow wraps
         assert_eq!(run!(-1i32 as u32), u32::MAX);
         assert_eq!(run!(5 as i32), 5i32);
-        assert_eq!(run!(5 as int), 5);
+        assert_eq!(run!(5 as untyped_int), 5);
     }
 
     #[test]
     fn cast_integer_to_float() {
         assert_eq!(run!(5u32 as f32), 5.0f32);
         assert_eq!(run!(5i32 as f64), 5.0f64);
-        assert_eq!(run!(5 as float), 5.0);
+        assert_eq!(run!(5 as untyped_float), 5.0);
     }
 
     #[test]
     fn cast_float_to_integer() {
         assert_eq!(run!(5.7f32 as i32), 5i32);
         assert_eq!(run!(5.7f64 as u32), 5u32);
-        assert_eq!(run!(5.7 as int), 5);
+        assert_eq!(run!(5.7 as untyped_int), 5);
     }
 
     #[test]
@@ -1577,7 +1577,7 @@ mod cast_operations {
     fn cast_char_to_integer() {
         assert_eq!(run!('A' as u8), 65u8);
         assert_eq!(run!('A' as u32), 65u32);
-        assert_eq!(run!('A' as int), 65);
+        assert_eq!(run!('A' as untyped_int), 65);
     }
 
     #[test]

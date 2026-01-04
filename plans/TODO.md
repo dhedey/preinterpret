@@ -213,7 +213,7 @@ First, read the @./2025-11-vision.md
     - [x] And use that to generate ValueLeafKind from the new macros
     - [x] Find a way to generate `from_source_name` - ideally efficiently
   - [ ] Add ability to implement IsIterable
-  - [ ] `CastTarget` simply wraps `TypeKind`
+  - [x] `CastTarget` simply wraps `TypeKind`
   - [x] Create a `Ref` and a `Mut` form
     - [x] They won't implement `IsArgumentForm`
     - [x] Create mappers and suitably generic `as_ref()` and `as_mut()` methods on `Actual<F>`
@@ -226,6 +226,9 @@ First, read the @./2025-11-vision.md
     - [ ] And similarly for other values...
   - [ ] Stage 2 of the form migration:
     - [ ] Migrate `Shared`, `Mutable`, `Assignee`
+  - [ ] Stage 3
+    - [ ] Migtate `CopyOnWrite` ..
+    - [ ] FInish migrating to new Argument/Returned resolution and delete old cold
   - [ ] Complete ownership definitions and inter-conversions, including maybe-erroring inter-conversions (possibly with `Result<X, Mapper::Error>` which we can map out of):
     - [ ] CopyOnWrite, Shared => CopyOnWrite x2, Owned => CopyOnWrite
     - [ ] LateBound, Tons of conversions into it
@@ -551,7 +554,7 @@ Also:
 - [ ] Better handling of `configure_preinterpret`:
   * Move `None.configure_preinterpret` to `preinterpret::set_iteration_limit(..)`
 - [ ] CastTarget revision:
-  * The `as int` operator is not supported for string values
+  * The `as untyped_int` operator is not supported for string values
   * The `as char` operator is not supported for untyped integer values
   * Add casts of any integer to char, via `char::from_u32(u32::try_from(x))`
   * Should we remove/replace any CastTargets?

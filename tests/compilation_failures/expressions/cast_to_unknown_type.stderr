@@ -1,0 +1,5 @@
+error: Unknown type 'nonexistent_type'
+ --> tests/compilation_failures/expressions/cast_to_unknown_type.rs:5:16
+  |
+5 |         0u8 as nonexistent_type
+  |                ^^^^^^^^^^^^^^^^

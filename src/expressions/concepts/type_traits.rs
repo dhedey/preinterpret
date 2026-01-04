@@ -376,7 +376,9 @@ macro_rules! define_parent_type {
         $type_kind_vis struct $type_kind;
 
         impl $type_kind {
-            pub(crate) const SOURCE_TYPE_NAME: &'static str = $source_type_name;
+            pub(crate) fn source_type_name(&self) -> &'static str {
+                $source_type_name
+            }
 
             pub(crate) fn method_resolver(&self) -> &'static dyn MethodResolver {
                 &$type_def

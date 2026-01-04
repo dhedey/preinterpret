@@ -76,9 +76,9 @@ pub(crate) enum ParentTypeKind {
 impl ParentTypeKind {
     pub(crate) fn source_name(&self) -> &'static str {
         match self {
-            ParentTypeKind::Value(ValueTypeKind) => ValueTypeKind::SOURCE_TYPE_NAME,
-            ParentTypeKind::Integer(IntegerTypeKind) => IntegerTypeKind::SOURCE_TYPE_NAME,
-            ParentTypeKind::Float(FloatTypeKind) => FloatTypeKind::SOURCE_TYPE_NAME,
+            ParentTypeKind::Value(x) => x.source_type_name(),
+            ParentTypeKind::Integer(x) => x.source_type_name(),
+            ParentTypeKind::Float(x) => x.source_type_name(),
         }
     }
 
@@ -132,11 +132,11 @@ impl TypeIdent {
                 let error_message = match TypeKind::from_source_name(&lower_case_name) {
                     Some(_) => format!("Expected '{}'", lower_case_name),
                     None => match lower_case_name.as_str() {
-                        "integer" => "Expected 'int'".to_string(),
-                        "str" => "Expected 'string'".to_string(),
-                        "character" => "Expected 'char'".to_string(),
-                        "list" => "Expected 'array'".to_string(),
-                        "obj" => "Expected 'object'".to_string(),
+                        "integer" => format!("Expected '{}'", IntegerType::SOURCE_TYPE_NAME),
+                        "str" => format!("Expected '{}'", StringType::SOURCE_TYPE_NAME),
+                        "character" => format!("Expected '{}'", CharType::SOURCE_TYPE_NAME),
+                        "list" => format!("Expected '{}'", ArrayType::SOURCE_TYPE_NAME),
+                        "obj" => format!("Expected '{}'", ObjectType::SOURCE_TYPE_NAME),
                         _ => format!("Unknown type '{}'", name),
                     },
                 };
@@ -144,6 +144,12 @@ impl TypeIdent {
             }
         };
         Ok(Self { span, kind })
+    }
+}
+
+impl HasSpan for TypeIdent {
+    fn span(&self) -> Span {
+        self.span
     }
 }
 

@@ -197,7 +197,7 @@ define_interface! {
             }
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_to_numeric(Spanned(this, span): Spanned<Owned<ArrayValue>>) -> ExecutionResult<ReturnedValue> {
+            [context] fn cast_singleton_to_value(Spanned(this, span): Spanned<Owned<ArrayValue>>) -> ExecutionResult<ReturnedValue> {
                 let mut this = this.into_inner();
                 let length = this.items.len();
                 if length == 1 {
@@ -224,13 +224,11 @@ define_interface! {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
                     UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => return None,
-                    UnaryOperation::Cast { target, .. } => match target {
-                        CastTarget::Boolean
-                        | CastTarget::Char
-                        | CastTarget::Integer(_)
-                        | CastTarget::Float(_) => unary_definitions::cast_to_numeric(),
-                        _ => return None,
-                    },
+                    UnaryOperation::Cast { target, .. } => if target.is_singleton_target() {
+                        unary_definitions::cast_singleton_to_value()
+                    } else {
+                        return None;
+                    }
                 })
             }
 
