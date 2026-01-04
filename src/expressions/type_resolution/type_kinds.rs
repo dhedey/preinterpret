@@ -5,7 +5,7 @@ use super::*;
 pub(crate) trait IsSpecificLeafKind: Copy + Into<ValueLeafKind> {
     fn source_type_name(&self) -> &'static str;
     fn articled_display_name(&self) -> &'static str;
-    fn method_resolver(&self) -> &'static dyn MethodResolver;
+    fn feature_resolver(&self) -> &'static dyn TypeFeatureResolver;
 }
 
 impl ValueLeafKind {
@@ -82,11 +82,11 @@ impl ParentTypeKind {
         }
     }
 
-    pub(crate) fn method_resolver(&self) -> &'static dyn MethodResolver {
+    pub(crate) fn feature_resolver(&self) -> &'static dyn TypeFeatureResolver {
         match self {
-            ParentTypeKind::Value(x) => x.method_resolver(),
-            ParentTypeKind::Integer(x) => x.method_resolver(),
-            ParentTypeKind::Float(x) => x.method_resolver(),
+            ParentTypeKind::Value(x) => x.feature_resolver(),
+            ParentTypeKind::Integer(x) => x.feature_resolver(),
+            ParentTypeKind::Float(x) => x.feature_resolver(),
         }
     }
 }
@@ -109,7 +109,7 @@ impl DynTypeKind {
         }
     }
 
-    pub(crate) fn method_resolver(&self) -> &'static dyn MethodResolver {
+    pub(crate) fn feature_resolver(&self) -> &'static dyn TypeFeatureResolver {
         match self {
             DynTypeKind::Iterable => &IterableTypeData,
         }
@@ -166,11 +166,11 @@ impl ParseSource for TypeIdent {
 }
 
 impl TypeKind {
-    pub(in crate::expressions) fn method_resolver(&self) -> &'static dyn MethodResolver {
+    pub(in crate::expressions) fn feature_resolver(&self) -> &'static dyn TypeFeatureResolver {
         match self {
-            TypeKind::Leaf(leaf_kind) => leaf_kind.method_resolver(),
-            TypeKind::Parent(parent_kind) => parent_kind.method_resolver(),
-            TypeKind::Dyn(dyn_kind) => dyn_kind.method_resolver(),
+            TypeKind::Leaf(leaf_kind) => leaf_kind.feature_resolver(),
+            TypeKind::Parent(parent_kind) => parent_kind.feature_resolver(),
+            TypeKind::Dyn(dyn_kind) => dyn_kind.feature_resolver(),
         }
     }
 }
@@ -200,7 +200,7 @@ impl TypeProperty {
         &self,
         ownership: RequestedOwnership,
     ) -> ExecutionResult<Spanned<RequestedValue>> {
-        let resolver = self.source_type.kind.method_resolver();
+        let resolver = self.source_type.kind.feature_resolver();
         // TODO[performance] - lazily initialize properties as Shared
         let resolved_property = resolver.resolve_type_property(&self.property.to_string());
         match resolved_property {

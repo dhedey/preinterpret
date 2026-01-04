@@ -1,7 +1,7 @@
 #![allow(clippy::type_complexity)]
 use super::*;
 
-pub(crate) trait MethodResolver {
+pub(crate) trait TypeFeatureResolver {
     /// Resolves a unary operation as a method interface for this type.
     fn resolve_method(&self, method_name: &str) -> Option<MethodInterface>;
 
@@ -21,7 +21,7 @@ pub(crate) trait MethodResolver {
     fn resolve_type_property(&self, _property_name: &str) -> Option<Value>;
 }
 
-impl<T: HierarchicalTypeData> MethodResolver for T {
+impl<T: HierarchicalTypeData> TypeFeatureResolver for T {
     fn resolve_method(&self, method_name: &str) -> Option<MethodInterface> {
         match Self::resolve_own_method(method_name) {
             Some(method) => Some(method),
@@ -50,36 +50,40 @@ impl<T: HierarchicalTypeData> MethodResolver for T {
     }
 
     fn resolve_type_property(&self, property_name: &str) -> Option<Value> {
-        <Self as HierarchicalTypeData>::resolve_type_property(property_name)
+        <Self as TypeData>::resolve_type_property(property_name)
     }
 }
 
-pub(crate) trait HierarchicalTypeData {
+// TODO[concepts]: Remove
+pub(crate) trait HierarchicalTypeData: TypeData {
     type Parent: HierarchicalTypeData;
     const PARENT: Option<Self::Parent>;
+}
 
-    fn assert_first_argument<T: IsArgument<ValueType = Self>>() {}
-
-    fn assert_output_type<T: IsReturnable>() {}
-
+pub(crate) trait TypeData {
+    /// Returns None if the method is not supported on this type itself.
+    /// The method may still be supported on a type further up the resolution chain.
     fn resolve_own_method(_method_name: &str) -> Option<MethodInterface> {
         None
     }
 
-    /// Resolves a unary operation as a method interface for this type.
-    /// Returns None if the operation should fallback to the legacy system.
+    /// Returns None if the operation is not supported on this type itself.
+    /// The operation may still be supported on a type further up the resolution chain.
     fn resolve_own_unary_operation(_operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
         None
     }
 
-    /// Resolves a binary operation as a method interface for this type.
-    /// Returns None if the operation is not supported by this type.
+    /// Returns None if the operation is not supported on this type itself.
+    /// The operation may still be supported on a type further up the resolution chain.
     fn resolve_own_binary_operation(
         _operation: &BinaryOperation,
     ) -> Option<BinaryOperationInterface> {
         None
     }
 
+    /// Returns a property on the type.
+    /// Properties are *not* currently resolved up the resolution chain... but maybe they should be?
+    /// ... similarly, maybe functions should be too, when they are added?
     fn resolve_type_property(_property_name: &str) -> Option<Value> {
         None
     }

@@ -89,7 +89,7 @@ impl UnaryOperation {
         let input = input.into_owned_value();
         let method = input
             .kind()
-            .method_resolver()
+            .feature_resolver()
             .resolve_unary_operation(self)
             .ok_or_else(|| {
                 self.type_error(format!(
@@ -308,7 +308,11 @@ impl BinaryOperation {
     ) -> ExecutionResult<Spanned<ReturnedValue>> {
         let left = left.into_owned_value();
         let right = right.into_owned_value();
-        match left.kind().method_resolver().resolve_binary_operation(self) {
+        match left
+            .kind()
+            .feature_resolver()
+            .resolve_binary_operation(self)
+        {
             Some(interface) => {
                 let left = interface
                     .lhs_ownership

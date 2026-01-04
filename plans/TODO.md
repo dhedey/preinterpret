@@ -218,13 +218,15 @@ First, read the @./2025-11-vision.md
     - [x] They won't implement `IsArgumentForm`
     - [x] Create mappers and suitably generic `as_ref()` and `as_mut()` methods on `Actual<F>`
   - [ ] Migrate method resolution to the trait macro properly
-    - [ ] Possibly separate own-type resolution `dyn TypeDetails`
-    - [ ] And property resolution `dyn TypeFeatureResolver`
-    - [ ] Allow dyns to be injected into resolution flow
+    - [x] And property resolution `dyn TypeFeatureResolver`
+    - [ ] Replace `impl TypeFeatureResolver for $type_def`
+    - [ ] Remove `temp_type_data: $type_data:ident,`
+    - [ ] Remove `HierarchicalTypeData`
   - [ ] Stage 1 of the form migration:
     - [ ] Replace `Owned` as type reference to `Actual<..>`
     - [ ] Replace `Value`, `&Value` and `&mut Value` methods with methods on `Owned<Value>` / `Ref<Value>` / `Mut<Value>`
     - [ ] And similarly for other values...
+    - [ ] Strip wrapper types like `StreamValue` - can just use `OutputStream` as content
   - [ ] Stage 2 of the form migration:
     - [ ] Migrate `Shared`, `Mutable`, `Assignee`
   - [ ] Stage 3
@@ -234,8 +236,6 @@ First, read the @./2025-11-vision.md
     - [ ] CopyOnWrite, Shared => CopyOnWrite x2, Owned => CopyOnWrite
     - [ ] LateBound, Tons of conversions into it
     - [ ] Argument, and `ArgumentOwnership` driven conversions into it
-  - [ ] Strip wrapper types like `StreamValue` - can just use `OutputStream` as content
-  - [ ] Remove old definitions
   - [ ] Generate test over all value kinds which checks for:
     - [ ] Maybe over TypeKinds with https://docs.rs/inventory/latest/inventory/ registered as a dev dependency
     - [ ] Check for duplicate TypeKind registrations

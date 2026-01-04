@@ -795,7 +795,7 @@ impl EvaluationFrame for UnaryOperationBuilder {
 
         // Try method resolution first
         if let Some(interface) = operand_kind
-            .method_resolver()
+            .feature_resolver()
             .resolve_unary_operation(&self.operation)
         {
             let operand_span = operand.span_range();
@@ -871,7 +871,7 @@ impl EvaluationFrame for BinaryOperationBuilder {
                     // Try method resolution based on left operand's kind and resolve left operand immediately
                     let interface = left
                         .kind()
-                        .method_resolver()
+                        .feature_resolver()
                         .resolve_binary_operation(&self.operation);
 
                     match interface {
@@ -1262,7 +1262,7 @@ impl EvaluationFrame for MethodCallBuilder {
                 let caller = value.expect_late_bound();
                 let method = caller
                     .kind()
-                    .method_resolver()
+                    .feature_resolver()
                     .resolve_method(self.method.method.to_string().as_str());
                 let method = match method {
                     Some(m) => m,

@@ -13,6 +13,7 @@ macro_rules! if_empty {
     };
 }
 
+#[cfg(test)]
 macro_rules! handle_first_arg_type {
     ([NEXT] : $type:ty) => {
         $type
@@ -382,29 +383,32 @@ macro_rules! define_interface {
             }
 
             #[allow(unused)]
+            #[cfg(test)]
             fn asserts() {
+                fn assert_first_argument<T: IsArgument<ValueType = $type_data>>() {}
+                fn assert_output_type<T: IsReturnable>() {}
                 $(
-                    $type_data::assert_first_argument::<handle_first_arg_type!($($method_args)*,)>();
+                    assert_first_argument::<handle_first_arg_type!($($method_args)*,)>();
                     if_exists! {
                         {$($method_ignore_type_assertion)?}
                         {}
-                        {$($type_data::assert_output_type::<$method_output_ty>();)?}
+                        {$(assert_output_type::<$method_output_ty>();)?}
                     }
                 )*
                 $(
-                    $type_data::assert_first_argument::<handle_first_arg_type!($($unary_args)*,)>();
+                    assert_first_argument::<handle_first_arg_type!($($unary_args)*,)>();
                     if_exists! {
                         {$($unary_ignore_type_assertion)?}
                         {}
-                        {$($type_data::assert_output_type::<$unary_output_ty>();)?}
+                        {$(assert_output_type::<$unary_output_ty>();)?}
                     }
                 )*
                 $(
-                    $type_data::assert_first_argument::<handle_first_arg_type!($($binary_args)*,)>();
+                    assert_first_argument::<handle_first_arg_type!($($binary_args)*,)>();
                     if_exists! {
                         {$($binary_ignore_type_assertion)?}
                         {}
-                        {$($type_data::assert_output_type::<$binary_output_ty>();)?}
+                        {$(assert_output_type::<$binary_output_ty>();)?}
                     }
                 )*
             }
@@ -472,7 +476,9 @@ macro_rules! define_interface {
             impl HierarchicalTypeData for $type_data {
                 type Parent = $parent_type_data;
                 const PARENT: Option<Self::Parent> = $mod_name::parent();
+            }
 
+            impl TypeData for $type_data {
                 #[allow(unreachable_code)]
                 fn resolve_own_method(method_name: &str) -> Option<MethodInterface> {
                     Some(match method_name {
@@ -491,7 +497,9 @@ macro_rules! define_interface {
     }
 }
 
+#[cfg(test)]
+pub(crate) use handle_first_arg_type;
 pub(crate) use {
     define_interface, generate_binary_interface, generate_method_interface,
-    generate_unary_interface, handle_first_arg_type, if_empty, ignore_all, parse_arg_types,
+    generate_unary_interface, if_empty, ignore_all, parse_arg_types,
 };

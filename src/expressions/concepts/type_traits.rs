@@ -297,7 +297,7 @@ macro_rules! define_parent_type {
             }
         }
 
-        impl MethodResolver for $type_def {
+        impl TypeFeatureResolver for $type_def {
             fn resolve_method(&self, method_name: &str) -> Option<MethodInterface> {
                 $type_data.resolve_method(method_name)
             }
@@ -380,7 +380,7 @@ macro_rules! define_parent_type {
                 $source_type_name
             }
 
-            pub(crate) fn method_resolver(&self) -> &'static dyn MethodResolver {
+            pub(crate) fn feature_resolver(&self) -> &'static dyn TypeFeatureResolver {
                 &$type_def
             }
         }
@@ -412,9 +412,9 @@ macro_rules! define_parent_type {
                 }
             }
 
-            fn method_resolver(&self) -> &'static dyn MethodResolver {
+            fn feature_resolver(&self) -> &'static dyn TypeFeatureResolver {
                 match self {
-                    $( Self::$variant(x) => x.method_resolver(), )*
+                    $( Self::$variant(x) => x.feature_resolver(), )*
                 }
             }
         }
@@ -515,7 +515,7 @@ macro_rules! define_leaf_type {
             }
         }
 
-        impl MethodResolver for $type_def {
+        impl TypeFeatureResolver for $type_def {
             fn resolve_method(&self, method_name: &str) -> Option<MethodInterface> {
                 $type_data.resolve_method(method_name)
             }
@@ -558,7 +558,7 @@ macro_rules! define_leaf_type {
                 $articled_display_name
             }
 
-            fn method_resolver(&self) -> &'static dyn MethodResolver {
+            fn feature_resolver(&self) -> &'static dyn TypeFeatureResolver {
                 &$type_def
             }
         }
