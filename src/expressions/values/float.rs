@@ -12,7 +12,6 @@ define_parent_type! {
     },
     type_name: "float",
     articled_display_name: "a float",
-    temp_type_data: FloatTypeData,
 }
 
 #[derive(Copy, Clone)]
@@ -189,9 +188,9 @@ impl ValuesEqual for FloatValue {
     }
 }
 
-define_interface! {
-    struct FloatTypeData,
-    parent: ValueTypeData,
+define_type_features! {
+    impl FloatType,
+    parent: ValueType,
     pub(crate) mod float_interface {
         pub(crate) mod methods {
             fn is_nan(this: FloatValue) -> bool {
@@ -377,7 +376,7 @@ define_interface! {
 }
 
 impl_resolvable_argument_for! {
-    FloatTypeData,
+    FloatType,
     (value, context) -> FloatValue {
         match value {
             Value::Float(value) => Ok(value),

@@ -8,9 +8,8 @@ define_leaf_type! {
     kind: pub(crate) RangeKind,
     type_name: "range",
     articled_display_name: "a range",
-    temp_type_data: RangeTypeData,
     dyn_impls: {
-        impl IsIterable {
+        IterableType: impl IsIterable {
             fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
                 IteratorValue::new_for_range(*self)
             }
@@ -351,7 +350,7 @@ impl IntoValue for RangeValueInner {
 }
 
 impl_resolvable_argument_for! {
-    RangeTypeData,
+    RangeType,
     (value, context) -> RangeValue {
         match value {
             Value::Range(value) => Ok(value),
@@ -360,9 +359,9 @@ impl_resolvable_argument_for! {
     }
 }
 
-define_interface! {
-    struct RangeTypeData,
-    parent: IterableTypeData,
+define_type_features! {
+    impl RangeType,
+    parent: IterableType,
     pub(crate) mod range_interface {
         pub(crate) mod methods {
         }
@@ -377,7 +376,7 @@ define_interface! {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
                     UnaryOperation::Cast { .. }
-                        if IteratorTypeData::resolve_own_unary_operation(operation).is_some() =>
+                        if IteratorType::resolve_own_unary_operation(operation).is_some() =>
                     {
                         unary_definitions::cast_via_iterator()
                     }

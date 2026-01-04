@@ -16,7 +16,7 @@ define_dyn_type!(
 // If you add a new variant, also update:
 // * ResolvableOwned<Value> for IterableValue
 // * IsArgument for IterableRef
-// * The parent of the value's TypeData to be IterableTypeData
+// * The parent of the value's TypeData to be IterableType
 pub(crate) enum IterableValue {
     Iterator(IteratorValue),
     Array(ArrayValue),
@@ -27,7 +27,7 @@ pub(crate) enum IterableValue {
 }
 
 impl ResolvableArgumentTarget for IterableValue {
-    type ValueType = IterableTypeData;
+    type ValueType = IterableType;
 }
 
 impl ResolvableOwned<Value> for IterableValue {
@@ -49,9 +49,9 @@ impl ResolvableOwned<Value> for IterableValue {
     }
 }
 
-define_interface! {
-    struct IterableTypeData,
-    parent: ValueTypeData,
+define_type_features! {
+    impl IterableType,
+    parent: ValueType,
     pub(crate) mod iterable_interface {
         pub(crate) mod methods {
             fn into_iter(this: IterableValue) -> ExecutionResult<IteratorValue> {
@@ -139,7 +139,7 @@ pub(crate) enum IterableRef<'a> {
 }
 
 impl IsArgument for IterableRef<'static> {
-    type ValueType = IterableTypeData;
+    type ValueType = IterableType;
     const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Shared;
 
     fn from_argument(argument: Spanned<ArgumentValue>) -> ExecutionResult<Self> {

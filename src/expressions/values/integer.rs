@@ -22,7 +22,6 @@ define_parent_type! {
     },
     type_name: "int",
     articled_display_name: "an integer",
-    temp_type_data: IntegerTypeData,
 }
 
 #[derive(Copy, Clone)]
@@ -245,9 +244,9 @@ impl ValuesEqual for IntegerValue {
     }
 }
 
-define_interface! {
-    struct IntegerTypeData,
-    parent: ValueTypeData,
+define_type_features! {
+    impl IntegerType,
+    parent: ValueType,
     pub(crate) mod integer_interface {
         pub(crate) mod methods {
         }
@@ -625,7 +624,7 @@ define_interface! {
 }
 
 impl_resolvable_argument_for! {
-    IntegerTypeData,
+    IntegerType,
     (value, context) -> IntegerValue {
         match value {
             Value::Integer(value) => Ok(value),
@@ -637,7 +636,7 @@ impl_resolvable_argument_for! {
 pub(crate) struct CoercedToU32(pub(crate) u32);
 
 impl ResolvableArgumentTarget for CoercedToU32 {
-    type ValueType = IntegerTypeData;
+    type ValueType = IntegerType;
 }
 
 impl ResolvableOwned<Value> for CoercedToU32 {

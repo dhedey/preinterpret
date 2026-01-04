@@ -111,7 +111,7 @@ impl DynTypeKind {
 
     pub(crate) fn feature_resolver(&self) -> &'static dyn TypeFeatureResolver {
         match self {
-            DynTypeKind::Iterable => &IterableTypeData,
+            DynTypeKind::Iterable => &IterableType,
         }
     }
 }

@@ -64,7 +64,7 @@ macro_rules! define_typed_object {
         }
 
         impl ResolvableArgumentTarget for $model {
-            type ValueType = ObjectTypeData;
+            type ValueType = ObjectType;
         }
 
         impl ResolvableOwned<Value> for $model {

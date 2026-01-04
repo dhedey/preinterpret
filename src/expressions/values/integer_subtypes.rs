@@ -5,9 +5,9 @@ macro_rules! impl_int_operations {
     (
         $($integer_type_data:ident mod $mod_name:ident: [$(CharCast[$char_cast:ident],)?$(Signed[$signed:ident],)?] $integer_enum_variant:ident($integer_type:ident)),* $(,)?
     ) => {$(
-        define_interface! {
-            struct $integer_type_data,
-            parent: IntegerTypeData,
+        define_type_features! {
+            impl $integer_type_data,
+            parent: IntegerType,
             pub(crate) mod $mod_name {
                 pub(crate) mod methods {
                 }
@@ -174,34 +174,33 @@ macro_rules! impl_int_operations {
 }
 
 impl_int_operations!(
-    U8TypeData mod u8_interface: [CharCast[yes],] U8(u8),
-    U16TypeData mod u16_interface: [] U16(u16),
-    U32TypeData mod u32_interface: [] U32(u32),
-    U64TypeData mod u64_interface: [] U64(u64),
-    U128TypeData mod u128_interface: [] U128(u128),
-    UsizeTypeData mod usize_interface: [] Usize(usize),
-    I8TypeData mod i8_interface: [Signed[yes],] I8(i8),
-    I16TypeData mod i16_interface: [Signed[yes],] I16(i16),
-    I32TypeData mod i32_interface: [Signed[yes],] I32(i32),
-    I64TypeData mod i64_interface: [Signed[yes],] I64(i64),
-    I128TypeData mod i128_interface: [Signed[yes],] I128(i128),
-    IsizeTypeData mod isize_interface: [Signed[yes],] Isize(isize),
+    U8Type mod u8_interface: [CharCast[yes],] U8(u8),
+    U16Type mod u16_interface: [] U16(u16),
+    U32Type mod u32_interface: [] U32(u32),
+    U64Type mod u64_interface: [] U64(u64),
+    U128Type mod u128_interface: [] U128(u128),
+    UsizeType mod usize_interface: [] Usize(usize),
+    I8Type mod i8_interface: [Signed[yes],] I8(i8),
+    I16Type mod i16_interface: [Signed[yes],] I16(i16),
+    I32Type mod i32_interface: [Signed[yes],] I32(i32),
+    I64Type mod i64_interface: [Signed[yes],] I64(i64),
+    I128Type mod i128_interface: [Signed[yes],] I128(i128),
+    IsizeType mod isize_interface: [Signed[yes],] Isize(isize),
 );
 
 macro_rules! impl_resolvable_integer_subtype {
-    ($type_def:ident, $kind:ident, $value_type:ident, $type:ty, $variant:ident, $type_name:literal, $articled_display_name:expr) => {
+    ($type_def:ident, $kind:ident, $type:ty, $variant:ident, $type_name:literal, $articled_display_name:expr) => {
         define_leaf_type! {
             pub(crate) $type_def => IntegerType(IntegerContent::$variant) => ValueType,
             content: $type,
             kind: pub(crate) $kind,
             type_name: $type_name,
             articled_display_name: $articled_display_name,
-            temp_type_data: $value_type,
             dyn_impls: {},
         }
 
         impl ResolvableArgumentTarget for $type {
-            type ValueType = $value_type;
+            type ValueType = $type_def;
         }
 
         impl From<$type> for IntegerValue {
@@ -261,47 +260,15 @@ macro_rules! impl_resolvable_integer_subtype {
     };
 }
 
-impl_resolvable_integer_subtype!(I8Type, I8Kind, I8TypeData, i8, I8, "i8", "an i8");
-impl_resolvable_integer_subtype!(I16Type, I16Kind, I16TypeData, i16, I16, "i16", "an i16");
-impl_resolvable_integer_subtype!(I32Type, I32Kind, I32TypeData, i32, I32, "i32", "an i32");
-impl_resolvable_integer_subtype!(I64Type, I64Kind, I64TypeData, i64, I64, "i64", "an i64");
-impl_resolvable_integer_subtype!(
-    I128Type,
-    I128Kind,
-    I128TypeData,
-    i128,
-    I128,
-    "i128",
-    "an i128"
-);
-impl_resolvable_integer_subtype!(
-    IsizeType,
-    IsizeKind,
-    IsizeTypeData,
-    isize,
-    Isize,
-    "isize",
-    "an isize"
-);
-impl_resolvable_integer_subtype!(U8Type, U8Kind, U8TypeData, u8, U8, "u8", "a u8");
-impl_resolvable_integer_subtype!(U16Type, U16Kind, U16TypeData, u16, U16, "u16", "a u16");
-impl_resolvable_integer_subtype!(U32Type, U32Kind, U32TypeData, u32, U32, "u32", "a u32");
-impl_resolvable_integer_subtype!(U64Type, U64Kind, U64TypeData, u64, U64, "u64", "a u64");
-impl_resolvable_integer_subtype!(
-    U128Type,
-    U128Kind,
-    U128TypeData,
-    u128,
-    U128,
-    "u128",
-    "a u128"
-);
-impl_resolvable_integer_subtype!(
-    UsizeType,
-    UsizeKind,
-    UsizeTypeData,
-    usize,
-    Usize,
-    "usize",
-    "a usize"
-);
+impl_resolvable_integer_subtype!(I8Type, I8Kind, i8, I8, "i8", "an i8");
+impl_resolvable_integer_subtype!(I16Type, I16Kind, i16, I16, "i16", "an i16");
+impl_resolvable_integer_subtype!(I32Type, I32Kind, i32, I32, "i32", "an i32");
+impl_resolvable_integer_subtype!(I64Type, I64Kind, i64, I64, "i64", "an i64");
+impl_resolvable_integer_subtype!(I128Type, I128Kind, i128, I128, "i128", "an i128");
+impl_resolvable_integer_subtype!(IsizeType, IsizeKind, isize, Isize, "isize", "an isize");
+impl_resolvable_integer_subtype!(U8Type, U8Kind, u8, U8, "u8", "a u8");
+impl_resolvable_integer_subtype!(U16Type, U16Kind, u16, U16, "u16", "a u16");
+impl_resolvable_integer_subtype!(U32Type, U32Kind, u32, U32, "u32", "a u32");
+impl_resolvable_integer_subtype!(U64Type, U64Kind, u64, U64, "u64", "a u64");
+impl_resolvable_integer_subtype!(U128Type, U128Kind, u128, U128, "u128", "a u128");
+impl_resolvable_integer_subtype!(UsizeType, UsizeKind, usize, Usize, "usize", "a usize");

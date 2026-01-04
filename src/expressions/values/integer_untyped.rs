@@ -6,7 +6,6 @@ define_leaf_type! {
     kind: pub(crate) UntypedIntegerKind,
     type_name: "untyped_int",
     articled_display_name: "an untyped integer",
-    temp_type_data: UntypedIntegerTypeData,
     dyn_impls: {},
 }
 
@@ -128,9 +127,9 @@ impl IntoValue for UntypedInteger {
     }
 }
 
-define_interface! {
-    struct UntypedIntegerTypeData,
-    parent: IntegerTypeData,
+define_type_features! {
+    impl UntypedIntegerType,
+    parent: IntegerType,
     pub(crate) mod untyped_integer_interface {
         pub(crate) mod methods {
         }
@@ -255,7 +254,7 @@ define_interface! {
 pub(crate) struct UntypedIntegerFallback(pub(crate) FallbackInteger);
 
 impl ResolvableArgumentTarget for UntypedIntegerFallback {
-    type ValueType = UntypedIntegerTypeData;
+    type ValueType = UntypedIntegerType;
 }
 
 impl ResolvableOwned<Value> for UntypedIntegerFallback {
@@ -279,7 +278,7 @@ impl ResolvableOwned<IntegerValue> for UntypedInteger {
 }
 
 impl_resolvable_argument_for! {
-    UntypedIntegerTypeData,
+    UntypedIntegerType,
     (value, context) -> UntypedInteger {
         match value {
             Value::Integer(IntegerValue::Untyped(x)) => Ok(x),

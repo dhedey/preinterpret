@@ -41,13 +41,13 @@ impl<'a> ResolutionContext<'a> {
 }
 
 pub(crate) trait IsArgument: Sized {
-    type ValueType: HierarchicalTypeData;
+    type ValueType: TypeData;
     const OWNERSHIP: ArgumentOwnership;
     fn from_argument(value: Spanned<ArgumentValue>) -> ExecutionResult<Self>;
 }
 
 impl IsArgument for ArgumentValue {
-    type ValueType = ValueTypeData;
+    type ValueType = ValueType;
     const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::AsIs;
 
     fn from_argument(Spanned(value, _): Spanned<ArgumentValue>) -> ExecutionResult<Self> {
@@ -213,7 +213,7 @@ impl<'a, T: ResolvableMutable<Value> + ?Sized> ResolveAs<Spanned<&'a mut T>>
 }
 
 pub(crate) trait ResolvableArgumentTarget {
-    type ValueType: HierarchicalTypeData;
+    type ValueType: TypeData;
 }
 
 pub(crate) trait ResolvableOwned<T>: Sized {
@@ -368,7 +368,7 @@ pub(crate) trait ResolvableMutable<T> {
 }
 
 impl ResolvableArgumentTarget for Value {
-    type ValueType = ValueTypeData;
+    type ValueType = ValueType;
 }
 
 impl ResolvableOwned<Value> for Value {

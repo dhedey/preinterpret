@@ -6,7 +6,6 @@ define_leaf_type! {
     kind: pub(crate) UnsupportedLiteralKind,
     type_name: "unsupported_literal",
     articled_display_name: "an unsupported literal",
-    temp_type_data: UnsupportedLiteralTypeData,
     dyn_impls: {},
 }
 
@@ -39,9 +38,9 @@ impl HasLeafKind for UnsupportedLiteral {
     }
 }
 
-define_interface! {
-    struct UnsupportedLiteralTypeData,
-    parent: ValueTypeData,
+define_type_features! {
+    impl UnsupportedLiteralType,
+    parent: ValueType,
     pub(crate) mod unsupported_literal_interface {
         pub(crate) mod methods {}
         pub(crate) mod unary_operations {}

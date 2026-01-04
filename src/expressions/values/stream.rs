@@ -6,9 +6,8 @@ define_leaf_type! {
     kind: pub(crate) StreamKind,
     type_name: "stream",
     articled_display_name: "a stream",
-    temp_type_data: StreamTypeData,
     dyn_impls: {
-        impl IsIterable {
+        IterableType: impl IsIterable {
             fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
                 Ok(IteratorValue::new_for_stream(*self))
             }
@@ -134,7 +133,7 @@ impl IntoValue for TokenStream {
 }
 
 impl_resolvable_argument_for! {
-    StreamTypeData,
+    StreamType,
     (value, context) -> StreamValue {
         match value {
             Value::Stream(value) => Ok(value),
@@ -147,9 +146,9 @@ impl_delegated_resolvable_argument_for!(
     (value: StreamValue) -> OutputStream { value.value }
 );
 
-define_interface! {
-    struct StreamTypeData,
-    parent: IterableTypeData,
+define_type_features! {
+    impl StreamType,
+    parent: IterableType,
     pub(crate) mod stream_interface {
         pub(crate) mod methods {
             // This is also on iterable, but is specialized here for performance

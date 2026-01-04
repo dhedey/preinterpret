@@ -121,6 +121,52 @@ pub(crate) trait IsChildType: IsHierarchicalType {
     ) -> Option<Self::Content<'a, F>>;
 }
 
+macro_rules! impl_type_feature_resolver {
+    (impl TypeFeatureResolver for $type_def:ty: [$($type_defs:ty)+]) => {
+        impl TypeFeatureResolver for $type_def {
+            fn resolve_method(&self, method_name: &str) -> Option<MethodInterface> {
+                $(
+                    if let Some(method) = <$type_defs as TypeData>::resolve_own_method(method_name) {
+                        return Some(method);
+                    };
+                )+
+                None
+            }
+
+            fn resolve_unary_operation(
+                &self,
+                operation: &UnaryOperation,
+            ) -> Option<UnaryOperationInterface> {
+                $(
+                    if let Some(operation) = <$type_defs as TypeData>::resolve_own_unary_operation(operation) {
+                        return Some(operation);
+                    };
+                )+
+                None
+            }
+
+            fn resolve_binary_operation(
+                &self,
+                operation: &BinaryOperation,
+            ) -> Option<BinaryOperationInterface> {
+                $(
+                    if let Some(operation) = <$type_defs as TypeData>::resolve_own_binary_operation(operation) {
+                        return Some(operation);
+                    };
+                )+
+                None
+            }
+
+            fn resolve_type_property(&self, property_name: &str) -> Option<Value> {
+                // Purposefully doesn't resolve parents, but TBC if this is right
+                <$type_def as TypeData>::resolve_type_property(property_name)
+            }
+        }
+    };
+}
+
+pub(crate) use impl_type_feature_resolver;
+
 macro_rules! impl_ancestor_chain_conversions {
     ($child:ty $(=> $parent:ident($parent_content:ident :: $parent_variant:ident) $(=> $ancestor:ty)*)?) => {
         impl<F: IsHierarchicalForm> DowncastFrom<$child, F> for $child
@@ -269,7 +315,6 @@ macro_rules! define_parent_type {
         },
         type_name: $source_type_name:literal,
         articled_display_name: $articled_display_name:literal,
-        temp_type_data: $type_data:ident,
     ) => {
         $type_def_vis struct $type_def;
 
@@ -297,28 +342,10 @@ macro_rules! define_parent_type {
             }
         }
 
-        impl TypeFeatureResolver for $type_def {
-            fn resolve_method(&self, method_name: &str) -> Option<MethodInterface> {
-                $type_data.resolve_method(method_name)
-            }
-
-            fn resolve_unary_operation(
-                &self,
-                operation: &UnaryOperation,
-            ) -> Option<UnaryOperationInterface> {
-                $type_data.resolve_unary_operation(operation)
-            }
-
-            fn resolve_binary_operation(
-                &self,
-                operation: &BinaryOperation,
-            ) -> Option<BinaryOperationInterface> {
-                $type_data.resolve_binary_operation(operation)
-            }
-
-            fn resolve_type_property(&self, property_name: &str) -> Option<Value> {
-                $type_data.resolve_type_property(property_name)
-            }
+        impl_type_feature_resolver! {
+            impl TypeFeatureResolver for $type_def: [
+                $type_def $( $parent $( $ancestor )* )?
+            ]
         }
 
         impl IsHierarchicalType for $type_def {
@@ -450,9 +477,8 @@ macro_rules! define_leaf_type {
         kind: $kind_vis:vis $kind:ident,
         type_name: $source_type_name:literal,
         articled_display_name: $articled_display_name:literal,
-        temp_type_data: $type_data:ident,
         dyn_impls: {
-            $(impl $dyn_trait:ident { $($dyn_trait_impl:tt)* })*
+            $($dyn_type:ty: impl $dyn_trait:ident { $($dyn_trait_impl:tt)* })*
         },
     ) => {
         $type_def_vis struct $type_def;
@@ -515,28 +541,10 @@ macro_rules! define_leaf_type {
             }
         }
 
-        impl TypeFeatureResolver for $type_def {
-            fn resolve_method(&self, method_name: &str) -> Option<MethodInterface> {
-                $type_data.resolve_method(method_name)
-            }
-
-            fn resolve_unary_operation(
-                &self,
-                operation: &UnaryOperation,
-            ) -> Option<UnaryOperationInterface> {
-                $type_data.resolve_unary_operation(operation)
-            }
-
-            fn resolve_binary_operation(
-                &self,
-                operation: &BinaryOperation,
-            ) -> Option<BinaryOperationInterface> {
-                $type_data.resolve_binary_operation(operation)
-            }
-
-            fn resolve_type_property(&self, property_name: &str) -> Option<Value> {
-                $type_data.resolve_type_property(property_name)
-            }
+        impl_type_feature_resolver! {
+            impl TypeFeatureResolver for $type_def: [
+                $type_def $($dyn_type)* $parent $( $ancestor )*
+            ]
         }
 
         #[derive(Clone, Copy, PartialEq, Eq)]
@@ -653,6 +661,10 @@ macro_rules! define_dyn_type {
 
         impl IsDynType for $type_def {
             type DynContent = $dyn_type;
+        }
+
+        impl_type_feature_resolver! {
+            impl TypeFeatureResolver for $type_def: [$type_def]
         }
 
         impl<'a> IsValueContent<'a> for $dyn_type {

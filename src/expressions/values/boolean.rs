@@ -8,7 +8,6 @@ define_leaf_type! {
     kind: pub(crate) BoolKind,
     type_name: "bool",
     articled_display_name: "a bool",
-    temp_type_data: BooleanTypeData,
     dyn_impls: {},
 }
 
@@ -63,9 +62,9 @@ impl IntoValue for bool {
     }
 }
 
-define_interface! {
-    struct BooleanTypeData,
-    parent: ValueTypeData,
+define_type_features! {
+    impl BoolType,
+    parent: ValueType,
     pub(crate) mod boolean_interface {
         pub(crate) mod methods {
         }
@@ -227,7 +226,7 @@ define_interface! {
 }
 
 impl_resolvable_argument_for! {
-    BooleanTypeData,
+    BoolType,
     (value, context) -> BooleanValue {
         match value {
             Value::Boolean(value) => Ok(value),

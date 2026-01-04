@@ -21,45 +21,6 @@ pub(crate) trait TypeFeatureResolver {
     fn resolve_type_property(&self, _property_name: &str) -> Option<Value>;
 }
 
-impl<T: HierarchicalTypeData> TypeFeatureResolver for T {
-    fn resolve_method(&self, method_name: &str) -> Option<MethodInterface> {
-        match Self::resolve_own_method(method_name) {
-            Some(method) => Some(method),
-            None => Self::PARENT.and_then(|p| p.resolve_method(method_name)),
-        }
-    }
-
-    fn resolve_unary_operation(
-        &self,
-        operation: &UnaryOperation,
-    ) -> Option<UnaryOperationInterface> {
-        match Self::resolve_own_unary_operation(operation) {
-            Some(method) => Some(method),
-            None => Self::PARENT.and_then(|p| p.resolve_unary_operation(operation)),
-        }
-    }
-
-    fn resolve_binary_operation(
-        &self,
-        operation: &BinaryOperation,
-    ) -> Option<BinaryOperationInterface> {
-        match Self::resolve_own_binary_operation(operation) {
-            Some(method) => Some(method),
-            None => Self::PARENT.and_then(|p| p.resolve_binary_operation(operation)),
-        }
-    }
-
-    fn resolve_type_property(&self, property_name: &str) -> Option<Value> {
-        <Self as TypeData>::resolve_type_property(property_name)
-    }
-}
-
-// TODO[concepts]: Remove
-pub(crate) trait HierarchicalTypeData: TypeData {
-    type Parent: HierarchicalTypeData;
-    const PARENT: Option<Self::Parent>;
-}
-
 pub(crate) trait TypeData {
     /// Returns None if the method is not supported on this type itself.
     /// The method may still be supported on a type further up the resolution chain.

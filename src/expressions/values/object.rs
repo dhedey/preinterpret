@@ -6,9 +6,8 @@ define_leaf_type! {
     kind: pub(crate) ObjectKind,
     type_name: "object",
     articled_display_name: "an object",
-    temp_type_data: ObjectTypeData,
     dyn_impls: {
-        impl IsIterable {
+        IterableType: impl IsIterable {
             fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
                 Ok(IteratorValue::new_for_object(*self))
             }
@@ -32,7 +31,7 @@ impl IntoValue for ObjectValue {
 }
 
 impl_resolvable_argument_for! {
-    ObjectTypeData,
+    ObjectType,
     (value, context) -> ObjectValue {
         match value {
             Value::Object(value) => Ok(value),
@@ -267,9 +266,9 @@ impl IntoValue for BTreeMap<String, ObjectEntry> {
     }
 }
 
-define_interface! {
-    struct ObjectTypeData,
-    parent: IterableTypeData,
+define_type_features! {
+    impl ObjectType,
+    parent: IterableType,
     pub(crate) mod object_interface {
         pub(crate) mod methods {
             [context] fn zip(this: ObjectValue) -> ExecutionResult<ArrayValue> {

@@ -30,7 +30,6 @@ define_parent_type! {
     },
     type_name: "value",
     articled_display_name: "any value",
-    temp_type_data: ValueTypeData,
 }
 
 #[derive(Clone)]
@@ -52,9 +51,9 @@ pub(crate) enum Value {
     Parser(ParserValue),
 }
 
-define_interface! {
-    struct ValueTypeData,
-    parent: ValueTypeData,
+define_type_features! {
+    impl ValueType,
+    parent: ValueType,
     pub(crate) mod value_interface {
         pub(crate) mod methods {
             fn clone(this: CopyOnWriteValue) -> OwnedValue {

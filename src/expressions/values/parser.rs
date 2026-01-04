@@ -6,7 +6,6 @@ define_leaf_type! {
     kind: pub(crate) ParserKind,
     type_name: "parser",
     articled_display_name: "a parser",
-    temp_type_data: ParserTypeData,
     dyn_impls: {},
 }
 
@@ -100,9 +99,9 @@ fn parser<'a>(
     this.parser(context.interpreter)
 }
 
-define_interface! {
-    struct ParserTypeData,
-    parent: ValueTypeData,
+define_type_features! {
+    impl ParserType,
+    parent: ValueType,
     pub(crate) mod parser_interface {
         pub(crate) mod methods {
             // GENERAL
@@ -289,7 +288,7 @@ define_interface! {
 }
 
 impl_resolvable_argument_for! {
-    ParserTypeData,
+    ParserType,
     (value, context) -> ParserValue {
         match value {
             Value::Parser(value) => Ok(value),

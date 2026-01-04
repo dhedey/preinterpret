@@ -6,7 +6,6 @@ define_leaf_type! {
     kind: pub(crate) UntypedFloatKind,
     type_name: "untyped_float",
     articled_display_name: "an untyped float",
-    temp_type_data: UntypedFloatTypeData,
     dyn_impls: {},
 }
 
@@ -77,9 +76,9 @@ impl IntoValue for UntypedFloat {
     }
 }
 
-define_interface! {
-    struct UntypedFloatTypeData,
-    parent: FloatTypeData,
+define_type_features! {
+    impl UntypedFloatType,
+    parent: FloatType,
     pub(crate) mod untyped_float_interface {
         pub(crate) mod methods {
         }
@@ -199,7 +198,7 @@ define_interface! {
 pub(crate) struct UntypedFloatFallback(pub FallbackFloat);
 
 impl ResolvableArgumentTarget for UntypedFloatFallback {
-    type ValueType = UntypedFloatTypeData;
+    type ValueType = UntypedFloatType;
 }
 
 impl ResolvableOwned<Value> for UntypedFloatFallback {
@@ -219,7 +218,7 @@ impl ResolvableOwned<FloatValue> for UntypedFloat {
 }
 
 impl_resolvable_argument_for! {
-    UntypedFloatTypeData,
+    UntypedFloatType,
     (value, context) -> UntypedFloat {
         match value {
             Value::Float(FloatValue::Untyped(x)) => Ok(x),

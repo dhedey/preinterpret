@@ -4,9 +4,9 @@ macro_rules! impl_float_operations {
     (
         $($type_data:ident mod $mod_name:ident: $float_enum_variant:ident($float_type:ident)),* $(,)?
     ) => {$(
-        define_interface! {
-            struct $type_data,
-            parent: FloatTypeData,
+        define_type_features! {
+            impl $type_data,
+            parent: FloatType,
             pub(crate) mod $mod_name {
                 pub(crate) mod methods {
                 }
@@ -153,22 +153,21 @@ macro_rules! impl_float_operations {
     )*};
 }
 
-impl_float_operations!(F32TypeData mod f32_interface: F32(f32), F64TypeData mod f64_interface: F64(f64));
+impl_float_operations!(F32Type mod f32_interface: F32(f32), F64Type mod f64_interface: F64(f64));
 
 macro_rules! impl_resolvable_float_subtype {
-    ($type_def:ident, $kind:ident, $value_type:ident, $type:ty, $variant:ident, $type_name:literal, $articled_display_name:expr) => {
+    ($type_def:ident, $kind:ident, $type:ty, $variant:ident, $type_name:literal, $articled_display_name:expr) => {
         define_leaf_type! {
             pub(crate) $type_def => FloatType(FloatContent::$variant) => ValueType,
             content: $type,
             kind: pub(crate) $kind,
             type_name: $type_name,
             articled_display_name: $articled_display_name,
-            temp_type_data: $value_type,
             dyn_impls: {},
         }
 
         impl ResolvableArgumentTarget for $type {
-            type ValueType = $value_type;
+            type ValueType = $type_def;
         }
 
         impl From<$type> for FloatValue {
@@ -228,5 +227,5 @@ macro_rules! impl_resolvable_float_subtype {
     };
 }
 
-impl_resolvable_float_subtype!(F32Type, F32Kind, F32TypeData, f32, F32, "f32", "an f32");
-impl_resolvable_float_subtype!(F64Type, F64Kind, F64TypeData, f64, F64, "f64", "an f64");
+impl_resolvable_float_subtype!(F32Type, F32Kind, f32, F32, "f32", "an f32");
+impl_resolvable_float_subtype!(F64Type, F64Kind, f64, F64, "f64", "an f64");

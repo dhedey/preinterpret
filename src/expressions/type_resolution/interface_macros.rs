@@ -340,10 +340,10 @@ impl<'a> BinaryOperationCallContext<'a> {
     }
 }
 
-macro_rules! define_interface {
+macro_rules! define_type_features {
     (
-        struct $type_data:ident,
-        parent: $parent_type_data:ident,
+        impl $type_def:ident,
+        parent: $parent_type_def:ident,
         $mod_vis:vis mod $mod_name:ident {
             $mod_methods_vis:vis mod methods {
                 $(
@@ -365,27 +365,13 @@ macro_rules! define_interface {
             }
         }
     ) => {
-        #[derive(Clone, Copy)]
-        pub(crate) struct $type_data;
-
         $mod_vis mod $mod_name {
             use super::*;
-
-            $mod_vis const fn parent() -> Option<$parent_type_data> {
-                // Type ids aren't const, and strings aren't const-comparable, but I can use this work-around:
-                // https://internals.rust-lang.org/t/why-i-cannot-compare-two-static-str-s-in-a-const-context/17726/2
-                const OWN_TYPE_NAME: &'static [u8] = stringify!($type_data).as_bytes();
-                const PARENT_TYPE_NAME: &'static [u8] = stringify!($parent_type_data).as_bytes();
-                match PARENT_TYPE_NAME {
-                    OWN_TYPE_NAME => None,
-                    _ => Some($parent_type_data),
-                }
-            }
 
             #[allow(unused)]
             #[cfg(test)]
             fn asserts() {
-                fn assert_first_argument<T: IsArgument<ValueType = $type_data>>() {}
+                fn assert_first_argument<T: IsArgument<ValueType = $type_def>>() {}
                 fn assert_output_type<T: IsReturnable>() {}
                 $(
                     assert_first_argument::<handle_first_arg_type!($($method_args)*,)>();
@@ -473,12 +459,7 @@ macro_rules! define_interface {
                 )*
             }
 
-            impl HierarchicalTypeData for $type_data {
-                type Parent = $parent_type_data;
-                const PARENT: Option<Self::Parent> = $mod_name::parent();
-            }
-
-            impl TypeData for $type_data {
+            impl TypeData for $type_def {
                 #[allow(unreachable_code)]
                 fn resolve_own_method(method_name: &str) -> Option<MethodInterface> {
                     Some(match method_name {
@@ -500,6 +481,6 @@ macro_rules! define_interface {
 #[cfg(test)]
 pub(crate) use handle_first_arg_type;
 pub(crate) use {
-    define_interface, generate_binary_interface, generate_method_interface,
+    define_type_features, generate_binary_interface, generate_method_interface,
     generate_unary_interface, if_empty, ignore_all, parse_arg_types,
 };

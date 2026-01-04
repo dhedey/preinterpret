@@ -6,7 +6,6 @@ define_leaf_type! {
     kind: pub(crate) CharKind,
     type_name: "char",
     articled_display_name: "a char",
-    temp_type_data: CharTypeData,
     dyn_impls: {},
 }
 
@@ -61,9 +60,9 @@ impl IntoValue for char {
     }
 }
 
-define_interface! {
-    struct CharTypeData,
-    parent: ValueTypeData,
+define_type_features! {
+    impl CharType,
+    parent: ValueType,
     pub(crate) mod char_interface {
         pub(crate) mod methods {
         }
@@ -196,7 +195,7 @@ define_interface! {
 }
 
 impl_resolvable_argument_for! {
-    CharTypeData,
+    CharType,
     (value, context) -> CharValue {
         match value {
             Value::Char(value) => Ok(value),

@@ -7,7 +7,6 @@ define_leaf_type! {
     type_name: "none",
     // Instead of saying "expected a none value", we can say "expected None"
     articled_display_name: "None",
-    temp_type_data: NoneTypeData,
     dyn_impls: {},
 }
 
@@ -18,7 +17,7 @@ impl IntoValue for () {
 }
 
 impl ResolvableArgumentTarget for () {
-    type ValueType = NoneTypeData;
+    type ValueType = NoneType;
 }
 
 impl ResolvableOwned<Value> for () {
@@ -36,9 +35,9 @@ define_optional_object! {
     }
 }
 
-define_interface! {
-    struct NoneTypeData,
-    parent: ValueTypeData,
+define_type_features! {
+    impl NoneType,
+    parent: ValueType,
     pub(crate) mod none_interface {
         pub(crate) mod methods {
             [context] fn configure_preinterpret(_none: (), inputs: SettingsInputs) {

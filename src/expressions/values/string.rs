@@ -6,9 +6,8 @@ define_leaf_type! {
     kind: pub(crate) StringKind,
     type_name: "string",
     articled_display_name: "a string",
-    temp_type_data: StringTypeData,
     dyn_impls: {
-        impl IsIterable {
+        IterableType: impl IsIterable {
             fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
                 Ok(IteratorValue::new_for_string_over_chars(*self))
             }
@@ -103,9 +102,9 @@ pub(crate) fn string_to_literal(
     Ok(literal.with_span(span))
 }
 
-define_interface! {
-    struct StringTypeData,
-    parent: IterableTypeData,
+define_type_features! {
+    impl StringType,
+    parent: IterableType,
     pub(crate) mod string_interface {
         pub(crate) mod methods {
             // ==================
@@ -251,7 +250,7 @@ define_interface! {
 }
 
 impl_resolvable_argument_for! {
-    StringTypeData,
+    StringType,
     (value, context) -> StringValue {
         match value {
             Value::String(value) => Ok(value),
@@ -265,7 +264,7 @@ impl_delegated_resolvable_argument_for!(
 );
 
 impl ResolvableArgumentTarget for str {
-    type ValueType = StringTypeData;
+    type ValueType = StringType;
 }
 
 impl ResolvableShared<Value> for str {

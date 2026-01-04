@@ -6,9 +6,8 @@ define_leaf_type! {
     kind: pub(crate) IteratorKind,
     type_name: "iterator",
     articled_display_name: "an iterator",
-    temp_type_data: IteratorTypeData,
     dyn_impls: {
-        impl IsIterable {
+        IterableType: impl IsIterable {
             fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
                 Ok(*self)
             }
@@ -205,7 +204,7 @@ impl IntoValue for IteratorValue {
 }
 
 impl_resolvable_argument_for! {
-    IteratorTypeData,
+    IteratorType,
     (value, context) -> IteratorValue {
         match value {
             Value::Iterator(value) => Ok(value),
@@ -299,9 +298,9 @@ impl Iterator for Mutable<IteratorValue> {
     }
 }
 
-define_interface! {
-    struct IteratorTypeData,
-    parent: IterableTypeData,
+define_type_features! {
+    impl IteratorType,
+    parent: IterableType,
     pub(crate) mod iterator_interface {
         pub(crate) mod methods {
             fn next(mut this: Mutable<IteratorValue>) -> Value {

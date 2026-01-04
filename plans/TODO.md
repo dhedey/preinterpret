@@ -217,11 +217,11 @@ First, read the @./2025-11-vision.md
   - [x] Create a `Ref` and a `Mut` form
     - [x] They won't implement `IsArgumentForm`
     - [x] Create mappers and suitably generic `as_ref()` and `as_mut()` methods on `Actual<F>`
-  - [ ] Migrate method resolution to the trait macro properly
+  - [x] Migrate method resolution to the trait macro properly
     - [x] And property resolution `dyn TypeFeatureResolver`
-    - [ ] Replace `impl TypeFeatureResolver for $type_def`
-    - [ ] Remove `temp_type_data: $type_data:ident,`
-    - [ ] Remove `HierarchicalTypeData`
+    - [x] Replace `impl TypeFeatureResolver for $type_def`
+    - [x] Remove `temp_type_data: $type_data:ident,`
+    - [x] Remove `HierarchicalTypeData`
   - [ ] Stage 1 of the form migration:
     - [ ] Replace `Owned` as type reference to `Actual<..>`
     - [ ] Replace `Value`, `&Value` and `&mut Value` methods with methods on `Owned<Value>` / `Ref<Value>` / `Mut<Value>`
@@ -230,11 +230,11 @@ First, read the @./2025-11-vision.md
   - [ ] Stage 2 of the form migration:
     - [ ] Migrate `Shared`, `Mutable`, `Assignee`
   - [ ] Stage 3
-    - [ ] Migrate `CopyOnWrite` ..
+    - [ ] Migrate `CopyOnWrite` and relevant interconversions
     - [ ] Finish migrating to new Argument/Returned resolution and delete old code
+    - [ ] Remove `impl_resolvable_argument_for` and `TODO[concepts]: Remove when we get rid of impl_resolvable_argument_for`
   - [ ] Complete ownership definitions and inter-conversions, including maybe-erroring inter-conversions (possibly with `Result<X, Mapper::Error>` which we can map out of):
-    - [ ] CopyOnWrite, Shared => CopyOnWrite x2, Owned => CopyOnWrite
-    - [ ] LateBound, Tons of conversions into it
+    - [ ] Consider migrating LateBound and interconversions
     - [ ] Argument, and `ArgumentOwnership` driven conversions into it
   - [ ] Generate test over all value kinds which checks for:
     - [ ] Maybe over TypeKinds with https://docs.rs/inventory/latest/inventory/ registered as a dev dependency
@@ -244,7 +244,7 @@ First, read the @./2025-11-vision.md
   - [ ] Clear up all `TODO[concepts]`
   - [ ] Have variables store a `Referenceable`
   - [ ] Separate methods and functions
-  - [ ] Add ability to add comments to types, methods/functions and operations
+  - [ ] Add ability to add comments to types, methods/functions and operations, and generate docs from them
 
 ## Methods and closures
 

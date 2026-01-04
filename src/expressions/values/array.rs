@@ -6,9 +6,8 @@ define_leaf_type! {
     kind: pub(crate) ArrayKind,
     type_name: "array",
     articled_display_name: "an array",
-    temp_type_data: ArrayTypeData,
     dyn_impls: {
-        impl IsIterable {
+        IterableType: impl IsIterable {
             fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
                 Ok(IteratorValue::new_for_array(*self))
             }
@@ -183,7 +182,7 @@ impl IntoValue for ArrayValue {
 }
 
 impl_resolvable_argument_for! {
-    ArrayTypeData,
+    ArrayType,
     (value, context) -> ArrayValue {
         match value {
             Value::Array(value) => Ok(value),
@@ -192,9 +191,9 @@ impl_resolvable_argument_for! {
     }
 }
 
-define_interface! {
-    struct ArrayTypeData,
-    parent: IterableTypeData,
+define_type_features! {
+    impl ArrayType,
+    parent: IterableType,
     pub(crate) mod array_interface {
         pub(crate) mod methods {
             fn push(mut this: Mutable<ArrayValue>, item: OwnedValue) -> ExecutionResult<()> {
