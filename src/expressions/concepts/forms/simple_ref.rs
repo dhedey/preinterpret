@@ -44,6 +44,7 @@ where
     pub(crate) fn as_ref<'r>(&'r self) -> Actual<'r, T, BeRef> {
         match self.map_ref_with::<ToRefMapper>() {
             Ok(x) => x,
+            Err(infallible) => match infallible {}, // Need to include because of MSRV
         }
     }
 }
