@@ -162,20 +162,20 @@ macro_rules! impl_resolvable_float_subtype {
             type ValueType = $type_def;
         }
 
-        impl From<$type> for FloatValue {
+        impl From<$type> for OwnedFloatContent {
             fn from(value: $type) -> Self {
-                FloatValue::$variant(value)
+                FloatContent::$variant(value)
             }
         }
 
-        impl ResolvableOwned<FloatValue> for $type {
+        impl ResolvableOwned<OwnedFloatContent> for $type {
             fn resolve_from_value(
-                value: FloatValue,
+                value: OwnedFloatContent,
                 context: ResolutionContext,
             ) -> ExecutionResult<Self> {
                 match value {
-                    FloatValue::Untyped(x) => Ok(x.into_fallback() as $type),
-                    FloatValue::$variant(x) => Ok(x),
+                    FloatContent::Untyped(x) => Ok(x.into_fallback() as $type),
+                    FloatContent::$variant(x) => Ok(x),
                     other => context.err($articled_display_name, other),
                 }
             }

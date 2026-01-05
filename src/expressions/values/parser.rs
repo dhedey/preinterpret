@@ -249,9 +249,9 @@ define_type_features! {
                 Ok(OutputStream::new_with(|s| s.push_tokens(float)))
             }
 
-            [context] fn float(this: Spanned<Shared<ParserHandle>>) -> ExecutionResult<FloatValue> {
+            [context] fn float(this: Spanned<Shared<ParserHandle>>) -> ExecutionResult<OwnedFloat> {
                 let float: syn::LitFloat = parser(this, context)?.parse()?;
-                Ok(FloatValue::for_litfloat(&float)?.into_inner())
+                Ok(OwnedFloat::for_litfloat(&float)?)
             }
         }
         pub(crate) mod unary_operations {

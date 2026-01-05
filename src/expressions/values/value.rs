@@ -227,7 +227,7 @@ impl Value {
                 Ok(int) => Some(int.into_owned_value()),
                 Err(_) => None,
             },
-            Lit::Float(lit) => match FloatValue::for_litfloat(lit) {
+            Lit::Float(lit) => match OwnedFloat::for_litfloat(lit) {
                 Ok(float) => Some(float.into_owned_value()),
                 Err(_) => None,
             },

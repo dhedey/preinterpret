@@ -981,6 +981,8 @@ mod float_compound_assignment {
     #[test]
     fn add_assign() {
         assert_eq!(run!(let x = 1.5; x += 2.5; x), 4.0);
+        assert_eq!(run!(let x = 1.5; x += 2.5f32; x), 4.0);
+        assert_eq!(run!(let x = 1.5; x += 2.5f64; x), 4.0);
         assert_eq!(run!(let x = 1.5f32; x += 2.5; x), 4.0f32);
         assert_eq!(run!(let x = 1.5f64; x += 2.5; x), 4.0f64);
     }

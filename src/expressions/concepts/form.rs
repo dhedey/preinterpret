@@ -80,7 +80,7 @@ pub(crate) trait MapIntoReturned: IsFormOf<ValueType> {
 // impl<
 //     X: FromValueContent<'static, Type = T, Form = F>,
 //     F: IsForm + MapFromArgument,
-//     T: DowncastFrom<ValueType, F>,
+//     T: TypeData + DowncastFrom<ValueType, F>,
 // > IsArgument for X {
 //     type ValueType = T;
 //     const OWNERSHIP: ArgumentOwnership = F::ARGUMENT_OWNERSHIP;
@@ -91,10 +91,28 @@ pub(crate) trait MapIntoReturned: IsFormOf<ValueType> {
 //     }
 // }
 
+// TODO[concepts]: Replace with the above impl when ready
+impl<
+    F: IsFormOf<T> + MapFromArgument,
+    T: TypeData + DowncastFrom<ValueType, F>,
+> IsArgument for Actual<'static, T, F>
+where
+    for<'l> ValueType: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<ValueType>>::Content<'l>>,
+    F: IsHierarchicalForm,
+{
+    type ValueType = T;
+    const OWNERSHIP: ArgumentOwnership = F::ARGUMENT_OWNERSHIP;
+    fn from_argument(Spanned(value, span_range): Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+        let ownership_mapped = F::from_argument_value(value)?;
+        let type_mapped = T::resolve(ownership_mapped.0, span_range, "This argument")?;
+        Ok(Actual(type_mapped))
+    }
+}
+
 // Clashes with other blanket impl it will replace!
 //
 // impl<
-//     X: IntoValueContent<'static, TypeData = T, Ownership = F>,
+//     X: IntoValueContent<'static, Type = T, Form = F>,
 //     F: IsForm + MapIntoReturned,
 //     T: UpcastTo<ValueType, F>,
 // > IsReturnable for X {
@@ -104,3 +122,15 @@ pub(crate) trait MapIntoReturned: IsFormOf<ValueType> {
 //         F::into_returned_value(type_mapped)
 //     }
 // }
+
+// TODO[concepts]: Replace with the above impl when ready
+impl<
+    F: IsFormOf<T> + MapIntoReturned,
+    T: UpcastTo<ValueType, F>,
+> IsReturnable for Actual<'static, T, F> {
+    fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
+        let type_mapped = self.into_actual()
+            .upcast::<ValueType>();
+        F::into_returned_value(type_mapped)
+    }
+}

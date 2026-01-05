@@ -26,42 +26,42 @@ impl UntypedFloat {
 
     /// Converts an untyped float to a specific float kind.
     /// Unlike integers, float conversion never fails (may lose precision).
-    pub(crate) fn into_kind(self, kind: FloatLeafKind) -> FloatValue {
+    pub(crate) fn into_kind(self, kind: FloatLeafKind) -> OwnedFloatContent {
         match kind {
-            FloatLeafKind::Untyped(_) => FloatValue::Untyped(self),
-            FloatLeafKind::F32(_) => FloatValue::F32(self.0 as f32),
-            FloatLeafKind::F64(_) => FloatValue::F64(self.0),
+            FloatLeafKind::Untyped(_) => FloatContent::Untyped(self),
+            FloatLeafKind::F32(_) => FloatContent::F32(self.0 as f32),
+            FloatLeafKind::F64(_) => FloatContent::F64(self.0),
         }
     }
 
     pub(crate) fn paired_operation(
         self,
-        rhs: Spanned<Owned<FloatValue>>,
+        rhs: Spanned<OwnedFloat>,
         perform_fn: fn(FallbackFloat, FallbackFloat) -> FallbackFloat,
-    ) -> ExecutionResult<FloatValue> {
+    ) -> ExecutionResult<OwnedFloatContent> {
         let lhs = self.0;
-        let rhs: UntypedFloat = rhs.resolve_as("This operand")?;
+        let rhs: UntypedFloat = rhs.resolve("This operand")?;
         let rhs = rhs.0;
         let output = perform_fn(lhs, rhs);
-        Ok(FloatValue::Untyped(UntypedFloat::from_fallback(output)))
+        Ok(FloatContent::Untyped(UntypedFloat::from_fallback(output)))
     }
 
     pub(crate) fn paired_comparison(
         self,
-        rhs: Spanned<Owned<FloatValue>>,
+        rhs: Spanned<OwnedFloat>,
         compare_fn: fn(FallbackFloat, FallbackFloat) -> bool,
     ) -> ExecutionResult<bool> {
         let lhs = self.0;
-        let rhs: UntypedFloat = rhs.resolve_as("This operand")?;
+        let rhs: UntypedFloat = rhs.resolve("This operand")?;
         let rhs = rhs.0;
         Ok(compare_fn(lhs, rhs))
     }
 
-    pub(super) fn into_fallback(self) -> FallbackFloat {
+    pub(crate) fn into_fallback(self) -> FallbackFloat {
         self.0
     }
 
-    pub(super) fn from_fallback(value: FallbackFloat) -> Self {
+    pub(crate) fn from_fallback(value: FallbackFloat) -> Self {
         Self(value)
     }
 
@@ -201,10 +201,10 @@ impl ResolvableOwned<Value> for UntypedFloatFallback {
     }
 }
 
-impl ResolvableOwned<FloatValue> for UntypedFloat {
-    fn resolve_from_value(value: FloatValue, context: ResolutionContext) -> ExecutionResult<Self> {
+impl ResolvableOwned<OwnedFloatContent> for UntypedFloat {
+    fn resolve_from_value(value: OwnedFloatContent, context: ResolutionContext) -> ExecutionResult<Self> {
         match value {
-            FloatValue::Untyped(value) => Ok(value),
+            FloatContent::Untyped(value) => Ok(value),
             _ => context.err("an untyped float", value),
         }
     }
@@ -214,7 +214,7 @@ impl_resolvable_argument_for! {
     UntypedFloatType,
     (value, context) -> UntypedFloat {
         match value {
-            ValueContent::Float(FloatValue::Untyped(x)) => Ok(x),
+            ValueContent::Float(FloatContent::Untyped(x)) => Ok(x),
             other => context.err("an untyped float", other),
         }
     }
