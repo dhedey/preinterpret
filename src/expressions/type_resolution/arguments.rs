@@ -2,6 +2,9 @@
 // TODO[unused-clearup]
 use super::*;
 
+/// Used for resolution of integers and floats from either typed or untyped literals.
+pub(crate) struct OptionalSuffix<T>(pub(crate) T);
+
 pub(crate) struct ResolutionContext<'a> {
     span_range: &'a SpanRange,
     resolution_target: &'a str,

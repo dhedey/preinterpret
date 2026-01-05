@@ -430,35 +430,35 @@ pub(super) trait HandleBinaryOperation: Sized + std::fmt::Display + Copy {
 
     fn paired_operation<T: From<Self>>(
         self,
-        rhs: impl ResolveAs<Self>,
+        rhs: impl ResolveAs<OptionalSuffix<Self>>,
         context: BinaryOperationCallContext,
         perform_fn: fn(Self, Self) -> Option<Self>,
     ) -> ExecutionResult<T> {
         let lhs = self;
         let rhs = rhs.resolve_as("This operand")?;
-        perform_fn(lhs, rhs)
+        perform_fn(lhs, rhs.0)
             .map(|r| r.into())
-            .ok_or_else(|| Self::binary_overflow_error(context, lhs, rhs))
+            .ok_or_else(|| Self::binary_overflow_error(context, lhs, rhs.0))
     }
 
     fn paired_operation_no_overflow<T: From<Self>>(
         self,
-        rhs: impl ResolveAs<Self>,
+        rhs: impl ResolveAs<OptionalSuffix<Self>>,
         perform_fn: fn(Self, Self) -> Self,
     ) -> ExecutionResult<T> {
         let lhs = self;
         let rhs = rhs.resolve_as("This operand")?;
-        Ok(perform_fn(lhs, rhs).into())
+        Ok(perform_fn(lhs, rhs.0).into())
     }
 
     fn paired_comparison(
         self,
-        rhs: impl ResolveAs<Self>,
+        rhs: impl ResolveAs<OptionalSuffix<Self>>,
         compare_fn: fn(Self, Self) -> bool,
     ) -> ExecutionResult<bool> {
         let lhs = self;
         let rhs = rhs.resolve_as("This operand")?;
-        Ok(compare_fn(lhs, rhs))
+        Ok(compare_fn(lhs, rhs.0))
     }
 
     fn shift_operation<O, T: From<O>>(

@@ -232,7 +232,17 @@ First, read the @./2025-11-vision.md
     - [x] Replace `Value` with `type Value = ValueContent<'static, BeOwned>`
     - [x] Get rid of the `Actual` wrapper inside content
     - [ ] ---
+    - [ ] Improve mappers:
+      - [ ] Try to replace `ToRefMapper` etc with a `FormMapper::<T, F1, F2>::map_content(content, |x| -> y)`
+      - [ ] 6 methods... `map_content`, `map_content_ref`, `map_content_mut`
+      - [ ] ... and a `ReduceMapper::<F1, T>::map(content, |x| -> y)`
+      - [ ] ... Probably remove e.g. `map_with` etc on actual?
+    - [ ] Trial getting rid of `Actual` completely?
+      * Maybe it's just a type alias?
+      * Downcast / Upcast become traits
     - [ ] Replace `type FloatValue = FloatValueContent` with `type FloatValue = QqqOwned<FloatValueType>` / `type FloatValueRef<'a> = QqqRef<FloatValueType>` / `type FloatValueMut = QqqMut<FloatValueType>`
+      - [x] Create new branch
+      - [x] Resolve issue with `2.3` not resolving into `2f32` any more
     - [ ] .. same for int...
     - [ ] Change `type Value<'a, F> = ValueContent<'a, F>` and `type OwnedValue` with:
       - [ ] `type OwnedValue = QqqOwned<ValueType>`

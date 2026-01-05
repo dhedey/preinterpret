@@ -192,6 +192,39 @@ macro_rules! impl_resolvable_integer_subtype {
             dyn_impls: {},
         }
 
+        impl IsArgument for OptionalSuffix<$type> {
+            type ValueType = IntegerType;
+            const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
+
+            fn from_argument(argument: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+                argument.expect_owned().resolve_as("This argument")
+            }
+        }
+
+        impl ResolveAs<OptionalSuffix<$type>> for Spanned<OwnedValue> {
+            fn resolve_as(self, resolution_target: &str) -> ExecutionResult<OptionalSuffix<$type>> {
+                let span = self.span_range();
+                let integer_value: Owned<IntegerValue> = self.resolve_as(resolution_target)?;
+                Spanned(integer_value, span).resolve_as(resolution_target)
+            }
+        }
+
+        impl ResolveAs<OptionalSuffix<$type>> for Spanned<Owned<IntegerValue>> {
+            fn resolve_as(self, resolution_target: &str) -> ExecutionResult<OptionalSuffix<$type>> {
+                let Spanned(value, span) = self;
+                match value.0 {
+                    IntegerValue::Untyped(v) => Ok(OptionalSuffix(v.into_fallback() as $type)),
+                    IntegerValue::$variant(v) => Ok(OptionalSuffix(v)),
+                    v => span.type_err(format!(
+                        "{} is expected to be {}, but it is {}",
+                        resolution_target,
+                        $kind.articled_display_name(),
+                        v.articled_kind(),
+                    )),
+                }
+            }
+        }
+
         impl ResolvableArgumentTarget for $type {
             type ValueType = $type_def;
         }

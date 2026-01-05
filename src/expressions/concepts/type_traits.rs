@@ -84,28 +84,34 @@ pub(crate) trait UpcastTo<T: IsType, F: IsFormOf<T> + IsFormOf<Self>>: IsType {
     ) -> <F as IsFormOf<T>>::Content<'a>;
 }
 
-pub(crate) trait DowncastFrom<T: IsType, F: IsFormOf<T> + IsFormOf<Self>>: IsType {
+pub(crate) trait DowncastFrom<
+    T: IsHierarchicalType,
+    F: IsHierarchicalForm + IsFormOf<T> + IsFormOf<Self>,
+>: IsType where
+    for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
+{
     fn downcast_from<'a>(
         content: <F as IsFormOf<T>>::Content<'a>,
     ) -> Option<<F as IsFormOf<Self>>::Content<'a>>;
 
     fn resolve<'a>(
-        actual: Actual<'a, T, F>,
+        content: <F as IsFormOf<T>>::Content<'a>,
         span_range: SpanRange,
         resolution_target: &str,
-    ) -> ExecutionResult<Actual<'a, Self, F>> {
-        let content = match Self::downcast_from(actual.0) {
+    ) -> ExecutionResult<<F as IsFormOf<Self>>::Content<'a>> {
+        let leaf_kind = T::content_to_leaf_kind::<F>(&content);
+        let content = match Self::downcast_from(content) {
             Some(c) => c,
             None => {
                 return span_range.value_err(format!(
                     "{} is expected to be {}, but it is {}",
                     resolution_target,
                     Self::ARTICLED_DISPLAY_NAME,
-                    T::ARTICLED_DISPLAY_NAME,
+                    leaf_kind.articled_display_name(),
                 ))
             }
         };
-        Ok(Actual(content))
+        Ok(content)
     }
 }
 
@@ -168,7 +174,7 @@ macro_rules! impl_type_feature_resolver {
 pub(crate) use impl_type_feature_resolver;
 
 macro_rules! impl_ancestor_chain_conversions {
-    ($child:ty $(=> $parent:ident($parent_content:ident :: $parent_variant:ident) $(=> $ancestor:ty)*)?) => {
+    ($child:ty $(=> $parent:ident ($parent_content:ident :: $parent_variant:ident) $(=> $ancestor:ty)*)?) => {
         impl<F: IsHierarchicalForm> DowncastFrom<$child, F> for $child
         {
             fn downcast_from<'a>(

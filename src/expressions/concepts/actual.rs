@@ -17,7 +17,14 @@ impl<'a, T: IsType, F: IsFormOf<T>> Actual<'a, T, F> {
     {
         Actual(T::upcast_to(self.0))
     }
+}
 
+// Hierarchical implementations
+impl<'a, T: IsType, F: IsFormOf<T>> Actual<'a, T, F>
+where
+    for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
+    F: IsHierarchicalForm,
+{
     #[inline]
     pub(crate) fn downcast<U: DowncastFrom<T, F>>(self) -> Option<Actual<'a, U, F>>
     where
@@ -29,40 +36,31 @@ impl<'a, T: IsType, F: IsFormOf<T>> Actual<'a, T, F> {
     #[inline]
     pub(crate) fn map_with<M: LeafMapper<F>>(
         self,
-    ) -> Result<Actual<'a, T, M::OutputForm>, M::ShortCircuit<'a>>
-    where
-        for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
-        F: IsHierarchicalForm,
-    {
+    ) -> Result<Actual<'a, T, M::OutputForm>, M::ShortCircuit<'a>> {
         T::map_with::<'a, F, M>(self.0).map(|c| Actual(c))
     }
 
     #[inline]
     pub(crate) fn map_ref_with<'r, M: RefLeafMapper<F>>(
         &'r self,
-    ) -> Result<Actual<'r, T, M::OutputForm>, M::ShortCircuit<'a>>
-    where
-        for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
-        F: IsHierarchicalForm,
-    {
+    ) -> Result<Actual<'r, T, M::OutputForm>, M::ShortCircuit<'a>> {
         T::map_ref_with::<F, M>(&self.0).map(|c| Actual(c))
     }
 
     #[inline]
     pub(crate) fn map_mut_with<'r, M: MutLeafMapper<F>>(
         &'r mut self,
-    ) -> Result<Actual<'r, T, M::OutputForm>, M::ShortCircuit<'a>>
-    where
-        for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
-        F: IsHierarchicalForm,
-    {
+    ) -> Result<Actual<'r, T, M::OutputForm>, M::ShortCircuit<'a>> {
         T::map_mut_with::<F, M>(&mut self.0).map(|c| Actual(c))
     }
 }
 
-impl<'a, T: IsType, F: IsFormOf<T>> Spanned<Actual<'a, T, F>> {
-    #[inline]
-    pub(crate) fn resolve_as<X: FromValueContent<'a, Form = F>>(
+impl<'a, T: IsType, F: IsFormOf<T>> Spanned<Actual<'a, T, F>>
+where
+    for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
+    F: IsHierarchicalForm,
+{
+    pub(crate) fn resolve<X: FromValueContent<'a, Form = F>>(
         self,
         description: &str,
     ) -> ExecutionResult<X>
@@ -71,8 +69,26 @@ impl<'a, T: IsType, F: IsFormOf<T>> Spanned<Actual<'a, T, F>> {
         <X as IsValueContent<'a>>::Type: DowncastFrom<T, F>,
     {
         let Spanned(value, span_range) = self;
-        let resolved = <<X as IsValueContent<'a>>::Type>::resolve(value, span_range, description)?;
-        Ok(X::from_actual(resolved))
+        let resolved =
+            <<X as IsValueContent<'a>>::Type>::resolve(value.0, span_range, description)?;
+        Ok(X::from_content(resolved))
+    }
+}
+
+// TODO[concepts]: Remove resolve_as eventually?
+impl<'a, T: IsType, F: IsFormOf<T>, X: FromValueContent<'a, Form = F>> ResolveAs<X>
+    for Spanned<Actual<'a, T, F>>
+where
+    for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
+    F: IsHierarchicalForm,
+    F: IsFormOf<<X as IsValueContent<'a>>::Type>,
+    <X as IsValueContent<'a>>::Type: DowncastFrom<T, F>,
+{
+    fn resolve_as(self, description: &str) -> ExecutionResult<X> {
+        let Spanned(value, span_range) = self;
+        let resolved =
+            <<X as IsValueContent<'a>>::Type>::resolve(value.0, span_range, description)?;
+        Ok(X::from_content(resolved))
     }
 }
 

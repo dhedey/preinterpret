@@ -47,10 +47,9 @@ impl MapFromArgument for BeOwned {
     const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
 
     fn from_argument_value(
-        _value: ArgumentValue,
+        value: ArgumentValue,
     ) -> ExecutionResult<Actual<'static, ValueType, Self>> {
-        // value.expect_owned()
-        todo!()
+        Ok(value.expect_owned().0.into_actual())
     }
 }
 
@@ -63,7 +62,7 @@ mod test {
         let owned_value: QqqOwned<U64Type> = QqqOwned::of(42u64);
         let resolved = owned_value
             .spanned(Span::call_site().span_range())
-            .resolve_as::<u64>("My value")
+            .resolve::<u64>("My value")
             .unwrap();
         assert_eq!(resolved, 42u64);
     }

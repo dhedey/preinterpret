@@ -355,7 +355,7 @@ impl HandleDestructure for StreamPattern {
         value: Value,
     ) -> ExecutionResult<()> {
         let stream = Spanned(Actual::of(value), self.brackets.span_range())
-            .resolve_as("The value destructured with a stream pattern")?;
+            .resolve("The value destructured with a stream pattern")?;
         interpreter.start_parse(stream, |interpreter, _| self.content.consume(interpreter))
     }
 }
@@ -397,7 +397,7 @@ impl HandleDestructure for ParseTemplatePattern {
         value: Value,
     ) -> ExecutionResult<()> {
         let stream = Spanned(Actual::of(value), self.brackets.span_range())
-            .resolve_as("The value destructured with a parse template pattern")?;
+            .resolve("The value destructured with a parse template pattern")?;
         interpreter.start_parse(stream, |interpreter, handle| {
             self.parser_definition.define(interpreter, handle);
             self.content.consume(interpreter)
