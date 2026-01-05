@@ -123,11 +123,13 @@ where
 // }
 
 // TODO[concepts]: Replace with the above impl when ready
-impl<F: IsFormOf<T> + MapIntoReturned, T: UpcastTo<ValueType, F>> IsReturnable
-    for Actual<'static, T, F>
-{
-    fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
-        let type_mapped = self.into_actual().upcast::<ValueType>();
-        F::into_returned_value(type_mapped)
-    }
-}
+// This conflicts with the impl `impl<T: IntoValue> IsReturnable for T {` on MSRV
+// and isn't needed right now... so leave it commented out.
+// impl<F: IsFormOf<T> + MapIntoReturned, T: UpcastTo<ValueType, F>> IsReturnable
+//     for Actual<'static, T, F>
+// {
+//     fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
+//         let type_mapped = self.into_actual().upcast::<ValueType>();
+//         F::into_returned_value(type_mapped)
+//     }
+// }
