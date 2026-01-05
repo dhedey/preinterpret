@@ -52,6 +52,7 @@ where
     pub(crate) fn as_mut<'r>(&'r mut self) -> Actual<'r, T, BeMut> {
         match self.map_mut_with::<ToMutMapper>() {
             Ok(x) => x,
+            Err(infallible) => match infallible {}, // Need to include because of MSRV
         }
     }
 }
