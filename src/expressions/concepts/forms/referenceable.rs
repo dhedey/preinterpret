@@ -7,6 +7,7 @@ type QqqReferenceable<T> = Actual<'static, T, BeReferenceable>;
 ///
 /// Note that Referenceable form does not support dyn casting, because Rc<RefCell<T>> cannot be
 /// directly cast to Rc<RefCell<D>>.
+#[derive(Copy, Clone)]
 pub(crate) struct BeReferenceable;
 impl IsForm for BeReferenceable {}
 

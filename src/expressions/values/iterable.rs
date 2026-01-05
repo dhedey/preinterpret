@@ -35,10 +35,10 @@ impl ResolvableOwned<Value> for IterableValue {
         Ok(match value {
             Value::Array(x) => Self::Array(x),
             Value::Object(x) => Self::Object(x),
-            Value::Stream(x) => Self::Stream(x.value),
+            Value::Stream(x) => Self::Stream(x),
             Value::Range(x) => Self::Range(x),
             Value::Iterator(x) => Self::Iterator(x),
-            Value::String(x) => Self::String(x.value),
+            Value::String(x) => Self::String(x),
             _ => {
                 return context.err(
                     "an iterable (iterator, array, object, stream, range or string)",
@@ -51,7 +51,6 @@ impl ResolvableOwned<Value> for IterableValue {
 
 define_type_features! {
     impl IterableType,
-    parent: ValueType,
     pub(crate) mod iterable_interface {
         pub(crate) mod methods {
             fn into_iter(this: IterableValue) -> ExecutionResult<IteratorValue> {

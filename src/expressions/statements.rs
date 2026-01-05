@@ -145,7 +145,7 @@ impl LetStatement {
         } = self;
         let value = match assignment {
             Some(assignment) => assignment.expression.evaluate_owned(interpreter)?.0 .0,
-            None => Value::None,
+            None => ().into_value(),
         };
         pattern.handle_destructure(interpreter, value)?;
         Ok(())

@@ -14,18 +14,7 @@ define_parent_type! {
     articled_display_name: "a float",
 }
 
-#[derive(Copy, Clone)]
-pub(crate) enum FloatValue {
-    Untyped(UntypedFloat),
-    F32(f32),
-    F64(f64),
-}
-
-impl IntoValue for FloatValue {
-    fn into_value(self) -> Value {
-        Value::Float(self)
-    }
-}
+pub(crate) type FloatValue = FloatContent<'static, BeOwned>;
 
 impl FloatValue {
     pub(super) fn for_litfloat(lit: &syn::LitFloat) -> ParseResult<Owned<Self>> {
@@ -129,19 +118,6 @@ impl Debug for FloatValue {
     }
 }
 
-// TODO[concepts]: Remove when this is auto-generated after Value changes
-impl HasLeafKind for FloatValue {
-    type LeafKind = FloatLeafKind;
-
-    fn kind(&self) -> FloatLeafKind {
-        match self {
-            FloatValue::Untyped(_) => FloatLeafKind::Untyped(UntypedFloatKind),
-            FloatValue::F32(_) => FloatLeafKind::F32(F32Kind),
-            FloatValue::F64(_) => FloatLeafKind::F64(F64Kind),
-        }
-    }
-}
-
 impl FloatValue {
     /// Aligns types for comparison - converts untyped to match the other's type.
     /// Unlike integers, float conversion never fails (may lose precision).
@@ -190,7 +166,6 @@ impl ValuesEqual for FloatValue {
 
 define_type_features! {
     impl FloatType,
-    parent: ValueType,
     pub(crate) mod float_interface {
         pub(crate) mod methods {
             fn is_nan(this: FloatValue) -> bool {

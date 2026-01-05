@@ -2,6 +2,7 @@ use super::*;
 
 pub(crate) type QqqArgumentValue<T> = Actual<'static, T, BeArgument>;
 
+#[derive(Copy, Clone)]
 pub(crate) struct BeArgument;
 impl IsForm for BeArgument {}
 

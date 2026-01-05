@@ -300,7 +300,7 @@ impl ObjectBasedAssigner {
             .entries
             .remove(&key)
             .map(|entry| entry.value)
-            .unwrap_or_else(|| Value::None);
+            .unwrap_or_else(|| ().into_value());
         self.already_used_keys.insert(key);
         Ok(value)
     }

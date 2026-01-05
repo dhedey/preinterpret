@@ -24,45 +24,24 @@ define_parent_type! {
     articled_display_name: "an integer",
 }
 
-#[derive(Copy, Clone)]
-pub(crate) enum IntegerValue {
-    Untyped(UntypedInteger),
-    U8(u8),
-    U16(u16),
-    U32(u32),
-    U64(u64),
-    U128(u128),
-    Usize(usize),
-    I8(i8),
-    I16(i16),
-    I32(i32),
-    I64(i64),
-    I128(i128),
-    Isize(isize),
-}
-
-impl IntoValue for IntegerValue {
-    fn into_value(self) -> Value {
-        Value::Integer(self)
-    }
-}
+pub(crate) type IntegerValue = IntegerContent<'static, BeOwned>;
 
 impl IntegerValue {
     pub(super) fn for_litint(lit: &syn::LitInt) -> ParseResult<Owned<Self>> {
         Ok(match lit.suffix() {
-            "" => Self::Untyped(UntypedInteger::new_from_lit_int(lit)?),
-            "u8" => Self::U8(lit.base10_parse()?),
-            "u16" => Self::U16(lit.base10_parse()?),
-            "u32" => Self::U32(lit.base10_parse()?),
-            "u64" => Self::U64(lit.base10_parse()?),
-            "u128" => Self::U128(lit.base10_parse()?),
-            "usize" => Self::Usize(lit.base10_parse()?),
-            "i8" => Self::I8(lit.base10_parse()?),
-            "i16" => Self::I16(lit.base10_parse()?),
-            "i32" => Self::I32(lit.base10_parse()?),
-            "i64" => Self::I64(lit.base10_parse()?),
-            "i128" => Self::I128(lit.base10_parse()?),
-            "isize" => Self::Isize(lit.base10_parse()?),
+            "" => IntegerContent::Untyped(UntypedInteger::new_from_lit_int(lit)?),
+            "u8" => IntegerContent::U8(lit.base10_parse()?),
+            "u16" => IntegerContent::U16(lit.base10_parse()?),
+            "u32" => IntegerContent::U32(lit.base10_parse()?),
+            "u64" => IntegerContent::U64(lit.base10_parse()?),
+            "u128" => IntegerContent::U128(lit.base10_parse()?),
+            "usize" => IntegerContent::Usize(lit.base10_parse()?),
+            "i8" => IntegerContent::I8(lit.base10_parse()?),
+            "i16" => IntegerContent::I16(lit.base10_parse()?),
+            "i32" => IntegerContent::I32(lit.base10_parse()?),
+            "i64" => IntegerContent::I64(lit.base10_parse()?),
+            "i128" => IntegerContent::I128(lit.base10_parse()?),
+            "isize" => IntegerContent::Isize(lit.base10_parse()?),
             suffix => {
                 return lit.span().parse_err(format!(
                     "The literal suffix {suffix} is not supported in preinterpret expressions"
@@ -129,29 +108,6 @@ impl IntegerValue {
             IntegerValue::I64(int) => Literal::i64_suffixed(int),
             IntegerValue::I128(int) => Literal::i128_suffixed(int),
             IntegerValue::Isize(int) => Literal::isize_suffixed(int),
-        }
-    }
-}
-
-// TODO[concepts]: Remove when this is auto-generated after Value changes
-impl HasLeafKind for IntegerValue {
-    type LeafKind = IntegerLeafKind;
-
-    fn kind(&self) -> IntegerLeafKind {
-        match self {
-            IntegerValue::Untyped(_) => IntegerLeafKind::Untyped(UntypedIntegerKind),
-            IntegerValue::U8(_) => IntegerLeafKind::U8(U8Kind),
-            IntegerValue::U16(_) => IntegerLeafKind::U16(U16Kind),
-            IntegerValue::U32(_) => IntegerLeafKind::U32(U32Kind),
-            IntegerValue::U64(_) => IntegerLeafKind::U64(U64Kind),
-            IntegerValue::U128(_) => IntegerLeafKind::U128(U128Kind),
-            IntegerValue::Usize(_) => IntegerLeafKind::Usize(UsizeKind),
-            IntegerValue::I8(_) => IntegerLeafKind::I8(I8Kind),
-            IntegerValue::I16(_) => IntegerLeafKind::I16(I16Kind),
-            IntegerValue::I32(_) => IntegerLeafKind::I32(I32Kind),
-            IntegerValue::I64(_) => IntegerLeafKind::I64(I64Kind),
-            IntegerValue::I128(_) => IntegerLeafKind::I128(I128Kind),
-            IntegerValue::Isize(_) => IntegerLeafKind::Isize(IsizeKind),
         }
     }
 }
@@ -246,7 +202,6 @@ impl ValuesEqual for IntegerValue {
 
 define_type_features! {
     impl IntegerType,
-    parent: ValueType,
     pub(crate) mod integer_interface {
         pub(crate) mod methods {
         }

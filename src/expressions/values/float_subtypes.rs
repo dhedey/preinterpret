@@ -6,7 +6,6 @@ macro_rules! impl_float_operations {
     ) => {$(
         define_type_features! {
             impl $type_data,
-            parent: FloatType,
             pub(crate) mod $mod_name {
                 pub(crate) mod methods {
                 }
@@ -138,13 +137,6 @@ macro_rules! impl_float_operations {
             }
         }
 
-        impl IntoValue for $float_type {
-            fn into_value(self) -> Value {
-                Value::Float(FloatValue::$float_enum_variant(self))
-            }
-        }
-
-
         impl HandleBinaryOperation for $float_type {
             fn type_name() -> &'static str {
                 stringify!($integer_type)
@@ -207,7 +199,7 @@ macro_rules! impl_resolvable_float_subtype {
                 context: ResolutionContext,
             ) -> ExecutionResult<&'a Self> {
                 match value {
-                    Value::Float(FloatValue::$variant(x)) => Ok(x),
+                    ValueContent::Float(FloatContent::$variant(x)) => Ok(x),
                     other => context.err($articled_display_name, other),
                 }
             }
@@ -219,7 +211,7 @@ macro_rules! impl_resolvable_float_subtype {
                 context: ResolutionContext,
             ) -> ExecutionResult<&'a mut Self> {
                 match value {
-                    Value::Float(FloatValue::$variant(x)) => Ok(x),
+                    ValueContent::Float(FloatContent::$variant(x)) => Ok(x),
                     other => context.err($articled_display_name, other),
                 }
             }

@@ -12,6 +12,7 @@ use super::*;
 /// So instead, we take the most powerful access we can have for `x[a]`, and convert it later.
 pub(crate) type QqqLateBound<T> = Actual<'static, T, BeLateBound>;
 
+#[derive(Copy, Clone)]
 pub(crate) struct BeLateBound;
 impl IsForm for BeLateBound {}
 

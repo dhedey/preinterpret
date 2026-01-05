@@ -343,7 +343,6 @@ impl<'a> BinaryOperationCallContext<'a> {
 macro_rules! define_type_features {
     (
         impl $type_def:ident,
-        parent: $parent_type_def:ident,
         $mod_vis:vis mod $mod_name:ident {
             $mod_methods_vis:vis mod methods {
                 $(

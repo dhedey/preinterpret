@@ -2,6 +2,7 @@ use super::*;
 
 type QqqAnyRef<'a, T> = Actual<'a, T, BeAnyRef>;
 
+#[derive(Copy, Clone)]
 pub(crate) struct BeAnyRef;
 impl IsForm for BeAnyRef {}
 

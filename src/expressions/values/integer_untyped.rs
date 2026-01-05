@@ -121,15 +121,8 @@ impl Spanned<UntypedInteger> {
     }
 }
 
-impl IntoValue for UntypedInteger {
-    fn into_value(self) -> Value {
-        Value::Integer(IntegerValue::Untyped(self))
-    }
-}
-
 define_type_features! {
     impl UntypedIntegerType,
-    parent: IntegerType,
     pub(crate) mod untyped_integer_interface {
         pub(crate) mod methods {
         }

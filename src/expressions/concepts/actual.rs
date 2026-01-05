@@ -1,5 +1,6 @@
 use super::*;
 
+#[derive(Copy, Clone)]
 pub(crate) struct Actual<'a, T: IsType, F: IsFormOf<T>>(pub(crate) F::Content<'a>);
 
 impl<'a, T: IsType, F: IsFormOf<T>> Actual<'a, T, F> {
@@ -123,6 +124,27 @@ pub(crate) trait IntoValueContent<'a>: IsValueContent<'a> {
         Self: Sized,
     {
         Actual::of(self)
+    }
+
+    #[inline]
+    fn into_actual_value(self) -> Actual<'a, ValueType, Self::Form>
+    where
+        Self: Sized,
+        Self::Type: UpcastTo<ValueType, Self::Form>,
+        Self::Form: IsFormOf<ValueType>,
+    {
+        Actual::of(self).into_value()
+    }
+}
+
+// TODO[concepts]: Remove eventually, along with IntoValue impl
+impl<X: IntoValueContent<'static, Form = BeOwned>> IntoValue for X
+where
+    X::Type: UpcastTo<ValueType, BeOwned>,
+    BeOwned: IsFormOf<X::Type>,
+{
+    fn into_value(self) -> Value {
+        self.into_actual_value().0
     }
 }
 

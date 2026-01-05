@@ -1,7 +1,17 @@
 use super::*;
 
+/// A semantic wrapper for floating owned values.
+///
+/// Can be destructured as: `Owned(value): Owned<T>`
+///
+/// If you need span information, wrap with `Spanned<Owned<T>>`. For example, for `x.y[4]`, this would capture both:
+/// * The output owned value
+/// * The lexical span of the tokens `x.y[4]`
 pub(crate) type QqqOwned<T> = Actual<'static, T, BeOwned>;
 
+pub(crate) type QqqOwnedValue = Owned<ValueType>;
+
+#[derive(Copy, Clone)]
 pub(crate) struct BeOwned;
 impl IsForm for BeOwned {}
 

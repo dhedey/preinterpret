@@ -332,6 +332,6 @@ impl ExpressionBlockContent {
                 statement.evaluate_as_statement(interpreter)?;
             }
         }
-        ownership.map_from_owned(Spanned(Owned(Value::None), output_span))
+        ownership.map_from_owned(Spanned(().into_owned_value(), output_span))
     }
 }

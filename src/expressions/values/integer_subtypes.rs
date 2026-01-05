@@ -7,7 +7,6 @@ macro_rules! impl_int_operations {
     ) => {$(
         define_type_features! {
             impl $integer_type_data,
-            parent: IntegerType,
             pub(crate) mod $mod_name {
                 pub(crate) mod methods {
                 }
@@ -156,12 +155,6 @@ macro_rules! impl_int_operations {
                         }
                     }
                 }
-            }
-        }
-
-        impl IntoValue for $integer_type {
-            fn into_value(self) -> Value {
-                Value::Integer(IntegerValue::$integer_enum_variant(self))
             }
         }
 

@@ -286,7 +286,7 @@ impl Spanned<OwnedValue> {
     pub(crate) fn into_statement_result(self) -> ExecutionResult<()> {
         let Spanned(value, span_range) = self;
         match value.0 {
-            Value::None => Ok(()),
+            ValueContent::None(_) => Ok(()),
             _ => span_range.control_flow_err("A non-returning statement must not return a value. If you wish to explicitly discard the expression's result, use `let _ = ...;`. Alternatively, If you wish to output the value into the parent token stream, use `emit ...;`"),
         }
     }

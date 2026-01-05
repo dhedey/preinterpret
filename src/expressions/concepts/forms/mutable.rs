@@ -2,6 +2,7 @@ use super::*;
 
 pub(crate) type QqqMutable<T> = Actual<'static, T, BeMutable>;
 
+#[derive(Copy, Clone)]
 pub(crate) struct BeMutable;
 impl IsForm for BeMutable {}
 

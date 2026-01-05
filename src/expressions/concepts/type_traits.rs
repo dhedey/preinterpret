@@ -194,14 +194,14 @@ macro_rules! impl_ancestor_chain_conversions {
                 fn into_parent<'a, F: IsHierarchicalForm>(
                     content: Self::Content<'a, F>,
                 ) -> <Self::ParentType as IsHierarchicalType>::Content<'a, F> {
-                    $parent_content::$parent_variant(Actual(content))
+                    $parent_content::$parent_variant(content)
                 }
 
                 fn from_parent<'a, F: IsHierarchicalForm>(
                     content: <Self::ParentType as IsHierarchicalType>::Content<'a, F>,
                 ) -> Option<Self::Content<'a, F>> {
                     match content {
-                        $parent_content::$parent_variant(i) => Some(i.0),
+                        $parent_content::$parent_variant(i) => Some(i),
                         _ => None,
                     }
                 }
@@ -316,6 +316,7 @@ macro_rules! define_parent_type {
         type_name: $source_type_name:literal,
         articled_display_name: $articled_display_name:literal,
     ) => {
+        #[derive(Copy, Clone)]
         $type_def_vis struct $type_def;
 
         impl IsType for $type_def {
@@ -356,7 +357,7 @@ macro_rules! define_parent_type {
                 content: Self::Content<'a, F>,
             ) -> Result<Self::Content<'a, M::OutputForm>, M::ShortCircuit<'a>> {
                 Ok(match content {
-                    $( $content::$variant(x) => $content::$variant(x.map_with::<M>()?), )*
+                    $( $content::$variant(x) => $content::$variant(<$variant_type>::map_with::<'a, F, M>(x)?), )*
                 })
             }
 
@@ -364,7 +365,7 @@ macro_rules! define_parent_type {
                 content: &'r Self::Content<'a, F>,
             ) -> Result<Self::Content<'r, M::OutputForm>, M::ShortCircuit<'a>> {
                 Ok(match content {
-                    $( $content::$variant(x) => $content::$variant(x.map_ref_with::<M>()?), )*
+                    $( $content::$variant(x) => $content::$variant(<$variant_type>::map_ref_with::<'r, 'a, F, M>(x)?), )*
                 })
             }
 
@@ -372,7 +373,7 @@ macro_rules! define_parent_type {
                 content: &'r mut Self::Content<'a, F>,
             ) -> Result<Self::Content<'r, M::OutputForm>, M::ShortCircuit<'a>> {
                 Ok(match content {
-                    $( $content::$variant(x) => $content::$variant(x.map_mut_with::<M>()?), )*
+                    $( $content::$variant(x) => $content::$variant(<$variant_type>::map_mut_with::<'r, 'a, F, M>(x)?), )*
                 })
             }
 
@@ -384,7 +385,41 @@ macro_rules! define_parent_type {
         }
 
         $content_vis enum $content<'a, F: IsHierarchicalForm> {
-            $( $variant(Actual<'a, $variant_type, F>), )*
+            $( $variant(<F as IsFormOf<$variant_type>>::Content<'a>), )*
+        }
+
+        impl<'a, F: IsHierarchicalForm> Clone for $content<'a, F>
+        where
+            $( <F as IsFormOf<$variant_type>>::Content<'a>: Clone ),*
+        {
+            fn clone(&self) -> Self {
+                match self {
+                    $( $content::$variant(x) => $content::$variant(x.clone()), )*
+                }
+            }
+        }
+
+
+        impl<'a, F: IsHierarchicalForm> Copy for $content<'a, F>
+        where
+            $( <F as IsFormOf<$variant_type>>::Content<'a>: Copy ),*
+        {}
+
+        impl<'a, F: IsHierarchicalForm> IsValueContent<'a> for $content<'a, F> {
+            type Type = $type_def;
+            type Form = F;
+        }
+
+        impl<'a, F: IsHierarchicalForm> IntoValueContent<'a> for $content<'a, F> {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+
+        impl<'a, F: IsHierarchicalForm> FromValueContent<'a> for $content<'a, F> {
+            fn from_content(content: Self) -> Self {
+                content
+            }
         }
 
         impl<'a, F: IsHierarchicalForm> HasLeafKind for $content<'a, F> {
@@ -393,7 +428,7 @@ macro_rules! define_parent_type {
             fn kind(&self) -> Self::LeafKind {
                 match self {
                     $($content::$variant(x) => $leaf_kind::$variant(
-                        <$variant_type as IsHierarchicalType>::content_to_leaf_kind::<F>(&x.0)
+                        <$variant_type as IsHierarchicalType>::content_to_leaf_kind::<F>(x)
                     ),)*
                 }
             }
@@ -481,6 +516,7 @@ macro_rules! define_leaf_type {
             $($dyn_type:ty: impl $dyn_trait:ident { $($dyn_trait_impl:tt)* })*
         },
     ) => {
+        #[derive(Copy, Clone)]
         $type_def_vis struct $type_def;
 
         impl IsType for $type_def {
@@ -571,17 +607,17 @@ macro_rules! define_leaf_type {
             }
         }
 
-        impl<'a> IsValueContent<'a> for $content_type {
-            type Type = $type_def;
-            type Form = BeOwned;
-        }
-
         impl HasLeafKind for $content_type {
             type LeafKind = $kind;
 
             fn kind(&self) -> Self::LeafKind {
                 $kind
             }
+        }
+
+        impl<'a> IsValueContent<'a> for $content_type {
+            type Type = $type_def;
+            type Form = BeOwned;
         }
 
         impl<'a> IntoValueContent<'a> for $content_type {
@@ -591,6 +627,40 @@ macro_rules! define_leaf_type {
         }
 
         impl<'a> FromValueContent<'a> for $content_type {
+            fn from_content(content: Self) -> Self {
+                content
+            }
+        }
+
+        impl<'a> IsValueContent<'a> for &'a $content_type {
+            type Type = $type_def;
+            type Form = BeRef;
+        }
+
+        impl<'a> IntoValueContent<'a> for &'a $content_type {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+
+        impl<'a> FromValueContent<'a> for &'a $content_type {
+            fn from_content(content: Self) -> Self {
+                content
+            }
+        }
+
+        impl<'a> IsValueContent<'a> for &'a mut $content_type {
+            type Type = $type_def;
+            type Form = BeMut;
+        }
+
+        impl<'a> IntoValueContent<'a> for &'a mut $content_type {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+
+        impl<'a> FromValueContent<'a> for &'a mut $content_type {
             fn from_content(content: Self) -> Self {
                 content
             }
@@ -634,6 +704,7 @@ macro_rules! define_dyn_type {
         type_name: $source_type_name:literal,
         articled_display_name: $articled_display_name:literal,
     ) => {
+        #[derive(Copy, Clone)]
         $type_def_vis struct $type_def;
 
         impl IsType for $type_def {

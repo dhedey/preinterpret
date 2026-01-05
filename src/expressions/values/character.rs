@@ -9,44 +9,9 @@ define_leaf_type! {
     dyn_impls: {},
 }
 
-#[derive(Clone)]
-pub(crate) struct CharValue {
-    pub(super) value: char,
-}
-
-impl IntoValue for CharValue {
-    fn into_value(self) -> Value {
-        Value::Char(self)
-    }
-}
-
-impl Debug for CharValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.value)
-    }
-}
-
-impl CharValue {
-    pub(super) fn for_litchar(lit: &syn::LitChar) -> Owned<Self> {
-        Self { value: lit.value() }.into_owned()
-    }
-
-    pub(super) fn to_literal(&self, span: Span) -> Literal {
-        Literal::character(self.value).with_span(span)
-    }
-}
-
-impl HasLeafKind for CharValue {
-    type LeafKind = CharKind;
-
-    fn kind(&self) -> Self::LeafKind {
-        CharKind
-    }
-}
-
-impl ValuesEqual for CharValue {
+impl ValuesEqual for char {
     fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
-        if self.value == other.value {
+        if self == other {
             ctx.values_equal()
         } else {
             ctx.leaf_values_not_equal(self, other)
@@ -54,15 +19,8 @@ impl ValuesEqual for CharValue {
     }
 }
 
-impl IntoValue for char {
-    fn into_value(self) -> Value {
-        Value::Char(CharValue { value: self })
-    }
-}
-
 define_type_features! {
     impl CharType,
-    parent: ValueType,
     pub(crate) mod char_interface {
         pub(crate) mod methods {
         }
@@ -196,14 +154,10 @@ define_type_features! {
 
 impl_resolvable_argument_for! {
     CharType,
-    (value, context) -> CharValue {
+    (value, context) -> char {
         match value {
-            Value::Char(value) => Ok(value),
+            ValueContent::Char(char) => Ok(char),
             _ => context.err("a char", value),
         }
     }
 }
-
-impl_delegated_resolvable_argument_for!(
-    (value: CharValue) -> char { value.value }
-);

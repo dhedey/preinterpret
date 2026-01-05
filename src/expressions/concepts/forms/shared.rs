@@ -2,6 +2,7 @@ use super::*;
 
 pub(crate) type QqqShared<T> = Actual<'static, T, BeShared>;
 
+#[derive(Copy, Clone)]
 pub(crate) struct BeShared;
 impl IsForm for BeShared {}
 

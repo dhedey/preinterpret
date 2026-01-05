@@ -126,7 +126,7 @@ impl Evaluate for IfExpression {
         }
 
         requested_ownership
-            .map_from_owned(Spanned(Value::None.into_owned(), self.span_range()))
+            .map_from_owned(Spanned(().into_owned_value(), self.span_range()))
             .map(|spanned| spanned.0)
     }
 }

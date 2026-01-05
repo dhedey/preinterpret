@@ -10,12 +10,6 @@ define_leaf_type! {
     dyn_impls: {},
 }
 
-impl IntoValue for () {
-    fn into_value(self) -> Value {
-        Value::None
-    }
-}
-
 impl ResolvableArgumentTarget for () {
     type ValueType = NoneType;
 }
@@ -23,7 +17,7 @@ impl ResolvableArgumentTarget for () {
 impl ResolvableOwned<Value> for () {
     fn resolve_from_value(value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
         match value {
-            Value::None => Ok(()),
+            Value::None(_) => Ok(()),
             other => context.err("None", other),
         }
     }
@@ -37,7 +31,6 @@ define_optional_object! {
 
 define_type_features! {
     impl NoneType,
-    parent: ValueType,
     pub(crate) mod none_interface {
         pub(crate) mod methods {
             [context] fn configure_preinterpret(_none: (), inputs: SettingsInputs) {

@@ -2,6 +2,7 @@ use super::*;
 
 pub(crate) type QqqCopyOnWrite<T> = Actual<'static, T, BeCopyOnWrite>;
 
+#[derive(Copy, Clone)]
 pub(crate) struct BeCopyOnWrite;
 impl IsForm for BeCopyOnWrite {}
 

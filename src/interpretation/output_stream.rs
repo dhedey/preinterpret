@@ -234,13 +234,13 @@ impl OutputStream {
         }
     }
 
-    pub(crate) fn concat_recursive(&self, behaviour: &ConcatBehaviour) -> String {
+    pub(crate) fn concat_content(&self, behaviour: &ConcatBehaviour) -> String {
         let mut output = String::new();
-        self.concat_recursive_into(&mut output, behaviour);
+        self.concat_content_into(&mut output, behaviour);
         output
     }
 
-    pub(crate) fn concat_recursive_into(&self, output: &mut String, behaviour: &ConcatBehaviour) {
+    pub(crate) fn concat_content_into(&self, output: &mut String, behaviour: &ConcatBehaviour) {
         fn concat_recursive_interpreted_stream(
             behaviour: &ConcatBehaviour,
             output: &mut String,

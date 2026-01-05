@@ -7,7 +7,11 @@ use super::*;
 /// - [BeShared] representing [Shared] references
 /// - [BeMutable] representing [Mutable] references
 /// - [BeCopyOnWrite] representing [CopyOnWrite] values
-pub(crate) trait IsForm: Sized {}
+///
+/// NB: The Sized + Clone bounds are just to make certain derive impls easier,
+/// due to e.g. the poor auto-derive of Clone which requires Clone bounds on all
+/// generics.
+pub(crate) trait IsForm: Sized + Clone {}
 
 pub(crate) trait IsFormOf<T: IsType>: IsForm {
     type Content<'a>;

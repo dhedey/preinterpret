@@ -45,12 +45,12 @@ impl ArrayValue {
         Spanned(index, span_range): Spanned<&Value>,
     ) -> ExecutionResult<Value> {
         Ok(match index {
-            Value::Integer(integer) => {
+            ValueContent::Integer(integer) => {
                 let index =
                     self.resolve_valid_index_from_integer(Spanned(integer, span_range), false)?;
-                std::mem::replace(&mut self.items[index], Value::None)
+                std::mem::replace(&mut self.items[index], ().into_value())
             }
-            Value::Range(range) => {
+            ValueContent::Range(range) => {
                 let range = Spanned(range, span_range).resolve_to_index_range(&self)?;
                 let new_items: Vec<_> = self.items.drain(range).collect();
                 new_items.into_value()
@@ -64,12 +64,12 @@ impl ArrayValue {
         Spanned(index, span_range): Spanned<&Value>,
     ) -> ExecutionResult<&mut Value> {
         Ok(match index {
-            Value::Integer(integer) => {
+            ValueContent::Integer(integer) => {
                 let index =
                     self.resolve_valid_index_from_integer(Spanned(integer, span_range), false)?;
                 &mut self.items[index]
             }
-            Value::Range(..) => {
+            ValueContent::Range(..) => {
                 // Temporary until we add slice types - we error here
                 return span_range.ownership_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]");
             }
@@ -82,12 +82,12 @@ impl ArrayValue {
         Spanned(index, span_range): Spanned<&Value>,
     ) -> ExecutionResult<&Value> {
         Ok(match index {
-            Value::Integer(integer) => {
+            ValueContent::Integer(integer) => {
                 let index =
                     self.resolve_valid_index_from_integer(Spanned(integer, span_range), false)?;
                 &self.items[index]
             }
-            Value::Range(..) => {
+            ValueContent::Range(..) => {
                 // Temporary until we add slice types - we error here
                 return span_range.ownership_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]");
             }
@@ -101,7 +101,7 @@ impl ArrayValue {
         is_exclusive: bool,
     ) -> ExecutionResult<usize> {
         match index {
-            Value::Integer(int) => {
+            ValueContent::Integer(int) => {
                 self.resolve_valid_index_from_integer(Spanned(int, span_range), is_exclusive)
             }
             _ => span_range.type_err("The index must be an integer"),
@@ -171,13 +171,7 @@ impl ValuesEqual for ArrayValue {
 
 impl IntoValue for Vec<Value> {
     fn into_value(self) -> Value {
-        Value::Array(ArrayValue { items: self })
-    }
-}
-
-impl IntoValue for ArrayValue {
-    fn into_value(self) -> Value {
-        Value::Array(self)
+        ArrayValue { items: self }.into_value()
     }
 }
 
@@ -185,7 +179,7 @@ impl_resolvable_argument_for! {
     ArrayType,
     (value, context) -> ArrayValue {
         match value {
-            Value::Array(value) => Ok(value),
+            ValueContent::Array(value) => Ok(value),
             _ => context.err("an array", value),
         }
     }
@@ -193,7 +187,6 @@ impl_resolvable_argument_for! {
 
 define_type_features! {
     impl ArrayType,
-    parent: IterableType,
     pub(crate) mod array_interface {
         pub(crate) mod methods {
             fn push(mut this: Mutable<ArrayValue>, item: OwnedValue) -> ExecutionResult<()> {

@@ -24,12 +24,6 @@ pub(crate) struct ObjectValue {
     pub(crate) entries: BTreeMap<String, ObjectEntry>,
 }
 
-impl IntoValue for ObjectValue {
-    fn into_value(self) -> Value {
-        Value::Object(self)
-    }
-}
-
 impl_resolvable_argument_for! {
     ObjectType,
     (value, context) -> ObjectValue {
@@ -61,7 +55,7 @@ impl ObjectValue {
     pub(crate) fn remove_or_none(&mut self, key: &str) -> Value {
         match self.entries.remove(key) {
             Some(entry) => entry.value,
-            None => Value::None,
+            None => ().into_value(),
         }
     }
 
@@ -127,7 +121,7 @@ impl ObjectValue {
                     &mut entry
                         .insert(ObjectEntry {
                             key_span: key_span.join_into_span_else_start(),
-                            value: Value::None,
+                            value: ().into_value(),
                         })
                         .value
                 } else {
@@ -221,7 +215,8 @@ impl Spanned<&ObjectValue> {
             match self.entries.get(field_name) {
                 None
                 | Some(ObjectEntry {
-                    value: Value::None, ..
+                    value: Value::None(_),
+                    ..
                 }) => {
                     missing_fields.push(field_name);
                 }
@@ -268,7 +263,6 @@ impl IntoValue for BTreeMap<String, ObjectEntry> {
 
 define_type_features! {
     impl ObjectType,
-    parent: IterableType,
     pub(crate) mod object_interface {
         pub(crate) mod methods {
             [context] fn zip(this: ObjectValue) -> ExecutionResult<ArrayValue> {

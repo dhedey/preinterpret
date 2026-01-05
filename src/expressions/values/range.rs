@@ -361,7 +361,6 @@ impl_resolvable_argument_for! {
 
 define_type_features! {
     impl RangeType,
-    parent: IterableType,
     pub(crate) mod range_interface {
         pub(crate) mod methods {
         }
@@ -461,7 +460,7 @@ impl IterableRangeOf<Value> {
                     IntegerValue::Isize(start) => resolve_range(start, dots, end),
                 }
             }
-            Value::Char(start) => resolve_range(start.value, dots, end),
+            Value::Char(start) => resolve_range(start, dots, end),
             _ => dots.value_err("The range must be between two integers or two characters"),
         }
     }

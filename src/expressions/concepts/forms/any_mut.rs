@@ -1,5 +1,6 @@
 use super::*;
 
+#[derive(Copy, Clone)]
 pub(crate) struct BeAnyMut;
 impl IsForm for BeAnyMut {}
 impl IsHierarchicalForm for BeAnyMut {

@@ -5,6 +5,7 @@ pub(crate) type QqqRef<'a, T> = Actual<'a, T, BeRef>;
 /// It can't be an argument because arguments must be owned in some way;
 /// so that the drop glue can work properly (because they may come from
 /// e.g. a reference counted Shared handle)
+#[derive(Copy, Clone)]
 pub(crate) struct BeRef;
 impl IsForm for BeRef {}
 

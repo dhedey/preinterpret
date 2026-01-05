@@ -2,6 +2,7 @@ use super::*;
 
 type QqqAssignee<T> = Actual<'static, T, BeAssignee>;
 
+#[derive(Copy, Clone)]
 pub(crate) struct BeAssignee;
 impl IsForm for BeAssignee {}
 

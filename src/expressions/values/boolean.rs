@@ -11,44 +11,9 @@ define_leaf_type! {
     dyn_impls: {},
 }
 
-#[derive(Clone)]
-pub(crate) struct BooleanValue {
-    pub(crate) value: bool,
-}
-
-impl IntoValue for BooleanValue {
-    fn into_value(self) -> Value {
-        Value::Boolean(self)
-    }
-}
-
-impl Debug for BooleanValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.value)
-    }
-}
-
-impl BooleanValue {
-    pub(crate) fn for_litbool(lit: &syn::LitBool) -> Owned<Self> {
-        Self { value: lit.value }.into_owned()
-    }
-
-    pub(super) fn to_ident(&self, span: Span) -> Ident {
-        Ident::new_bool(self.value, span)
-    }
-}
-
-impl HasLeafKind for BooleanValue {
-    type LeafKind = BoolKind;
-
-    fn kind(&self) -> Self::LeafKind {
-        BoolKind
-    }
-}
-
-impl ValuesEqual for BooleanValue {
+impl ValuesEqual for bool {
     fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
-        if self.value == other.value {
+        if self == other {
             ctx.values_equal()
         } else {
             ctx.leaf_values_not_equal(self, other)
@@ -56,15 +21,8 @@ impl ValuesEqual for BooleanValue {
     }
 }
 
-impl IntoValue for bool {
-    fn into_value(self) -> Value {
-        Value::Boolean(BooleanValue { value: self })
-    }
-}
-
 define_type_features! {
     impl BoolType,
-    parent: ValueType,
     pub(crate) mod boolean_interface {
         pub(crate) mod methods {
         }
@@ -227,14 +185,10 @@ define_type_features! {
 
 impl_resolvable_argument_for! {
     BoolType,
-    (value, context) -> BooleanValue {
+    (value, context) -> bool {
         match value {
-            Value::Boolean(value) => Ok(value),
+            ValueContent::Bool(value) => Ok(value),
             other => context.err("a bool", other),
         }
     }
-}
-
-impl_delegated_resolvable_argument_for! {
-    (value: BooleanValue) -> bool { value.value }
 }

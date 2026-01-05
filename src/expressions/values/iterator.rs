@@ -195,14 +195,6 @@ impl IntoValue for Box<dyn ClonableIterator<Item = Value>> {
     }
 }
 
-impl IntoValue for IteratorValue {
-    fn into_value(self) -> Value {
-        Value::Iterator(IteratorValue {
-            iterator: self.iterator,
-        })
-    }
-}
-
 impl_resolvable_argument_for! {
     IteratorType,
     (value, context) -> IteratorValue {
@@ -300,13 +292,12 @@ impl Iterator for Mutable<IteratorValue> {
 
 define_type_features! {
     impl IteratorType,
-    parent: IterableType,
     pub(crate) mod iterator_interface {
         pub(crate) mod methods {
             fn next(mut this: Mutable<IteratorValue>) -> Value {
                 match this.next() {
                     Some(value) => value,
-                    None => Value::None,
+                    None => ().into_value(),
                 }
             }
 

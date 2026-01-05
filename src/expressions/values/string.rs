@@ -21,44 +21,9 @@ define_leaf_type! {
     },
 }
 
-#[derive(Clone)]
-pub(crate) struct StringValue {
-    pub(crate) value: String,
-}
-
-impl Debug for StringValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.value)
-    }
-}
-
-impl IntoValue for StringValue {
-    fn into_value(self) -> Value {
-        Value::String(self)
-    }
-}
-
-impl StringValue {
-    pub(super) fn for_litstr(lit: &syn::LitStr) -> Owned<Self> {
-        Self { value: lit.value() }.into_owned()
-    }
-
-    pub(super) fn to_literal(&self, span: Span) -> Literal {
-        Literal::string(&self.value).with_span(span)
-    }
-}
-
-impl HasLeafKind for StringValue {
-    type LeafKind = StringKind;
-
-    fn kind(&self) -> Self::LeafKind {
-        StringKind
-    }
-}
-
-impl ValuesEqual for StringValue {
+impl ValuesEqual for String {
     fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
-        if self.value == other.value {
+        if self == other {
             ctx.values_equal()
         } else {
             ctx.leaf_values_not_equal(self, other)
@@ -66,17 +31,9 @@ impl ValuesEqual for StringValue {
     }
 }
 
-impl IntoValue for String {
-    fn into_value(self) -> Value {
-        Value::String(StringValue { value: self })
-    }
-}
-
 impl IntoValue for &str {
     fn into_value(self) -> Value {
-        Value::String(StringValue {
-            value: self.to_string(),
-        })
+        self.to_string().into_value()
     }
 }
 
@@ -104,7 +61,6 @@ pub(crate) fn string_to_literal(
 
 define_type_features! {
     impl StringType,
-    parent: IterableType,
     pub(crate) mod string_interface {
         pub(crate) mod methods {
             // ==================
@@ -251,17 +207,13 @@ define_type_features! {
 
 impl_resolvable_argument_for! {
     StringType,
-    (value, context) -> StringValue {
+    (value, context) -> String {
         match value {
-            Value::String(value) => Ok(value),
+            ValueContent::String(value) => Ok(value),
             _ => context.err("a string", value),
         }
     }
 }
-
-impl_delegated_resolvable_argument_for!(
-    (value: StringValue) -> String { value.value }
-);
 
 impl ResolvableArgumentTarget for str {
     type ValueType = StringType;
@@ -273,7 +225,7 @@ impl ResolvableShared<Value> for str {
         context: ResolutionContext,
     ) -> ExecutionResult<&'a Self> {
         match value {
-            Value::String(s) => Ok(s.value.as_str()),
+            ValueContent::String(s) => Ok(s.as_str()),
             _ => context.err("a string", value),
         }
     }

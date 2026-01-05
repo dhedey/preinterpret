@@ -223,10 +223,25 @@ First, read the @./2025-11-vision.md
     - [x] Remove `temp_type_data: $type_data:ident,`
     - [x] Remove `HierarchicalTypeData`
   - [ ] Stage 1 of the form migration:
-    - [ ] Replace `Owned` as type reference to `Actual<..>`
+    - [x] Add temp blanket impl from `IntoValue` for `IntoValueContent`
+    - [x] Get rid of `BooleanValue` wrapper
+    - [x] Get rid of `StreamValue` wrapper
+    - [x] Get rid of `CharValue` wrapper
+    - [x] Replace `IntegerValue` with `type IntegerValue = IntegerContent<'static, BeOwned>`
+    - [x] Replace `FloatValue` with `type FloatValue = FloatContent<'static, BeOwned>`
+    - [x] Replace `Value` with `type Value = ValueContent<'static, BeOwned>`
+    - [x] Get rid of the `Actual` wrapper inside content
+    - [ ] ---
+    - [ ] Replace `type FloatValue = FloatValueContent` with `type FloatValue = QqqOwned<FloatValueType>` / `type FloatValueRef<'a> = QqqRef<FloatValueType>` / `type FloatValueMut = QqqMut<FloatValueType>`
+    - [ ] .. same for int...
+    - [ ] Change `type Value<'a, F> = ValueContent<'a, F>` and `type OwnedValue` with:
+      - [ ] `type OwnedValue = QqqOwned<ValueType>`
+      - [ ] `type ValueRef = QqqRef<ValueType>`
+      - [ ] `type ValueMut = QqqMut<ValueType>`
+      - [ ] ... and move methods
+    - [ ] Replace `Owned` as `QqqOwned`
     - [ ] Replace `Value`, `&Value` and `&mut Value` methods with methods on `Owned<Value>` / `Ref<Value>` / `Mut<Value>`
     - [ ] And similarly for other values...
-    - [ ] Strip wrapper types like `StreamValue` - can just use `OutputStream` as content
   - [ ] Stage 2 of the form migration:
     - [ ] Migrate `Shared`, `Mutable`, `Assignee`
   - [ ] Stage 3

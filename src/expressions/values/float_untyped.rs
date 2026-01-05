@@ -70,15 +70,8 @@ impl UntypedFloat {
     }
 }
 
-impl IntoValue for UntypedFloat {
-    fn into_value(self) -> Value {
-        Value::Float(FloatValue::Untyped(self))
-    }
-}
-
 define_type_features! {
     impl UntypedFloatType,
-    parent: FloatType,
     pub(crate) mod untyped_float_interface {
         pub(crate) mod methods {
         }
@@ -221,7 +214,7 @@ impl_resolvable_argument_for! {
     UntypedFloatType,
     (value, context) -> UntypedFloat {
         match value {
-            Value::Float(FloatValue::Untyped(x)) => Ok(x),
+            ValueContent::Float(FloatValue::Untyped(x)) => Ok(x),
             other => context.err("an untyped float", other),
         }
     }
