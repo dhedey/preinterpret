@@ -158,6 +158,45 @@ macro_rules! impl_resolvable_float_subtype {
             dyn_impls: {},
         }
 
+        impl IsArgument for OptionalSuffix<$type> {
+            type ValueType = FloatType;
+            const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
+
+            fn from_argument(argument: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+                argument.expect_owned().resolve_as("This argument")
+            }
+        }
+
+        impl ResolveAs<OptionalSuffix<$type>> for Spanned<OwnedValue> {
+            fn resolve_as(self, resolution_target: &str) -> ExecutionResult<OptionalSuffix<$type>> {
+                let span = self.span_range();
+                let float_value: OwnedFloatContent = self.resolve_as(resolution_target)?;
+                Spanned(float_value, span).resolve_as(resolution_target)
+            }
+        }
+
+        impl ResolveAs<OptionalSuffix<$type>> for Spanned<OwnedFloat> {
+            fn resolve_as(self, resolution_target: &str) -> ExecutionResult<OptionalSuffix<$type>> {
+                self.map(|float| float.0).resolve_as(resolution_target)
+            }
+        }
+
+        impl ResolveAs<OptionalSuffix<$type>> for Spanned<OwnedFloatContent> {
+            fn resolve_as(self, resolution_target: &str) -> ExecutionResult<OptionalSuffix<$type>> {
+                let Spanned(value, span) = self;
+                match value {
+                    FloatContent::Untyped(v) => Ok(OptionalSuffix(v.into_fallback() as $type)),
+                    FloatContent::$variant(v) => Ok(OptionalSuffix(v)),
+                    v => span.type_err(format!(
+                        "{} is expected to be {}, but it is {}",
+                        resolution_target,
+                        $kind.articled_display_name(),
+                        v.articled_kind(),
+                    )),
+                }
+            }
+        }
+
         impl ResolvableArgumentTarget for $type {
             type ValueType = $type_def;
         }

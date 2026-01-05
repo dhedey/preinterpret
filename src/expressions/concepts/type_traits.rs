@@ -84,8 +84,10 @@ pub(crate) trait UpcastTo<T: IsType, F: IsFormOf<T> + IsFormOf<Self>>: IsType {
     ) -> <F as IsFormOf<T>>::Content<'a>;
 }
 
-pub(crate) trait DowncastFrom<T: IsHierarchicalType, F: IsHierarchicalForm + IsFormOf<T> + IsFormOf<Self>>: IsType
-where 
+pub(crate) trait DowncastFrom<
+    T: IsHierarchicalType,
+    F: IsHierarchicalForm + IsFormOf<T> + IsFormOf<Self>,
+>: IsType where
     for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
 {
     fn downcast_from<'a>(

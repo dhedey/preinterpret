@@ -240,12 +240,9 @@ First, read the @./2025-11-vision.md
     - [ ] Trial getting rid of `Actual` completely?
       * Maybe it's just a type alias?
       * Downcast / Upcast become traits
-      * It might cause issues for e.g. 
     - [ ] Replace `type FloatValue = FloatValueContent` with `type FloatValue = QqqOwned<FloatValueType>` / `type FloatValueRef<'a> = QqqRef<FloatValueType>` / `type FloatValueMut = QqqMut<FloatValueType>`
-      - [ ] Create new branch
-      - [ ] Resolve issue with `2.3` not resolving into `2f32` any more
-        - [ ] Possibly need an explicit `MaybeTyped<..>` which does not implement `FromValueContent` but
-              rather has e.g. `MaybeTyped<f32>` implement directly `IsArgument` and `ResolveAs<MaybeTyped<f32>> for FloatContent` (if it doesn't conflict?)
+      - [x] Create new branch
+      - [x] Resolve issue with `2.3` not resolving into `2f32` any more
     - [ ] .. same for int...
     - [ ] Change `type Value<'a, F> = ValueContent<'a, F>` and `type OwnedValue` with:
       - [ ] `type OwnedValue = QqqOwned<ValueType>`

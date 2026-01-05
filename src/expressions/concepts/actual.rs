@@ -21,9 +21,9 @@ impl<'a, T: IsType, F: IsFormOf<T>> Actual<'a, T, F> {
 
 // Hierarchical implementations
 impl<'a, T: IsType, F: IsFormOf<T>> Actual<'a, T, F>
-    where
-        for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
-        F: IsHierarchicalForm,
+where
+    for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
+    F: IsHierarchicalForm,
 {
     #[inline]
     pub(crate) fn downcast<U: DowncastFrom<T, F>>(self) -> Option<Actual<'a, U, F>>
@@ -56,9 +56,9 @@ impl<'a, T: IsType, F: IsFormOf<T>> Actual<'a, T, F>
 }
 
 impl<'a, T: IsType, F: IsFormOf<T>> Spanned<Actual<'a, T, F>>
-    where
-        for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
-        F: IsHierarchicalForm,
+where
+    for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
+    F: IsHierarchicalForm,
 {
     pub(crate) fn resolve<X: FromValueContent<'a, Form = F>>(
         self,
@@ -69,22 +69,25 @@ impl<'a, T: IsType, F: IsFormOf<T>> Spanned<Actual<'a, T, F>>
         <X as IsValueContent<'a>>::Type: DowncastFrom<T, F>,
     {
         let Spanned(value, span_range) = self;
-        let resolved = <<X as IsValueContent<'a>>::Type>::resolve(value.0, span_range, description)?;
+        let resolved =
+            <<X as IsValueContent<'a>>::Type>::resolve(value.0, span_range, description)?;
         Ok(X::from_content(resolved))
     }
 }
 
 // TODO[concepts]: Remove resolve_as eventually?
-impl<'a, T: IsType, F: IsFormOf<T>, X: FromValueContent<'a, Form = F>> ResolveAs<X> for Spanned<Actual<'a, T, F>>
-    where
-        for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
-        F: IsHierarchicalForm,
-        F: IsFormOf<<X as IsValueContent<'a>>::Type>,
-        <X as IsValueContent<'a>>::Type: DowncastFrom<T, F>,
+impl<'a, T: IsType, F: IsFormOf<T>, X: FromValueContent<'a, Form = F>> ResolveAs<X>
+    for Spanned<Actual<'a, T, F>>
+where
+    for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
+    F: IsHierarchicalForm,
+    F: IsFormOf<<X as IsValueContent<'a>>::Type>,
+    <X as IsValueContent<'a>>::Type: DowncastFrom<T, F>,
 {
     fn resolve_as(self, description: &str) -> ExecutionResult<X> {
         let Spanned(value, span_range) = self;
-        let resolved = <<X as IsValueContent<'a>>::Type>::resolve(value.0, span_range, description)?;
+        let resolved =
+            <<X as IsValueContent<'a>>::Type>::resolve(value.0, span_range, description)?;
         Ok(X::from_content(resolved))
     }
 }

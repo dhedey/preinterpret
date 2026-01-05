@@ -92,12 +92,11 @@ pub(crate) trait MapIntoReturned: IsFormOf<ValueType> {
 // }
 
 // TODO[concepts]: Replace with the above impl when ready
-impl<
-    F: IsFormOf<T> + MapFromArgument,
-    T: TypeData + DowncastFrom<ValueType, F>,
-> IsArgument for Actual<'static, T, F>
+impl<F: IsFormOf<T> + MapFromArgument, T: TypeData + DowncastFrom<ValueType, F>> IsArgument
+    for Actual<'static, T, F>
 where
-    for<'l> ValueType: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<ValueType>>::Content<'l>>,
+    for<'l> ValueType:
+        IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<ValueType>>::Content<'l>>,
     F: IsHierarchicalForm,
 {
     type ValueType = T;
@@ -124,13 +123,11 @@ where
 // }
 
 // TODO[concepts]: Replace with the above impl when ready
-impl<
-    F: IsFormOf<T> + MapIntoReturned,
-    T: UpcastTo<ValueType, F>,
-> IsReturnable for Actual<'static, T, F> {
+impl<F: IsFormOf<T> + MapIntoReturned, T: UpcastTo<ValueType, F>> IsReturnable
+    for Actual<'static, T, F>
+{
     fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
-        let type_mapped = self.into_actual()
-            .upcast::<ValueType>();
+        let type_mapped = self.into_actual().upcast::<ValueType>();
         F::into_returned_value(type_mapped)
     }
 }

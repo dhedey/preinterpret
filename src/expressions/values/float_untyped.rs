@@ -202,7 +202,10 @@ impl ResolvableOwned<Value> for UntypedFloatFallback {
 }
 
 impl ResolvableOwned<OwnedFloatContent> for UntypedFloat {
-    fn resolve_from_value(value: OwnedFloatContent, context: ResolutionContext) -> ExecutionResult<Self> {
+    fn resolve_from_value(
+        value: OwnedFloatContent,
+        context: ResolutionContext,
+    ) -> ExecutionResult<Self> {
         match value {
             FloatContent::Untyped(value) => Ok(value),
             _ => context.err("an untyped float", value),

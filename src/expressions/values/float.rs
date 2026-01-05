@@ -101,7 +101,6 @@ impl OwnedFloatContent {
     }
 }
 
-
 fn assign_op<R>(
     mut left: Assignee<OwnedFloatContent>,
     right: R,
@@ -113,7 +112,6 @@ fn assign_op<R>(
     *left = result;
     Ok(())
 }
-
 
 impl Debug for OwnedFloatContent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -127,7 +125,10 @@ impl Debug for OwnedFloatContent {
 
 /// Aligns types for comparison - converts untyped to match the other's type.
 /// Unlike integers, float conversion never fails (may lose precision).
-fn align_types(mut lhs: OwnedFloatContent, mut rhs: OwnedFloatContent) -> (OwnedFloatContent, OwnedFloatContent) {
+fn align_types(
+    mut lhs: OwnedFloatContent,
+    mut rhs: OwnedFloatContent,
+) -> (OwnedFloatContent, OwnedFloatContent) {
     match (&lhs, &rhs) {
         (FloatContent::Untyped(l), typed) if !matches!(typed, FloatContent::Untyped(_)) => {
             lhs = l.into_kind(typed.kind());
