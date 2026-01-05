@@ -72,6 +72,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
+      - run: ./bench_compilation.sh
       - run: ./bench.sh
 
   book:
