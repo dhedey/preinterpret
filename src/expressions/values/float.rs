@@ -123,10 +123,7 @@ impl Debug for OwnedFloat {
 
 /// Aligns types for comparison - converts untyped to match the other's type.
 /// Unlike integers, float conversion never fails (may lose precision).
-fn align_types(
-    mut lhs: OwnedFloat,
-    mut rhs: OwnedFloat,
-) -> (OwnedFloat, OwnedFloat) {
+fn align_types(mut lhs: OwnedFloat, mut rhs: OwnedFloat) -> (OwnedFloat, OwnedFloat) {
     match (&lhs, &rhs) {
         (FloatContent::Untyped(l), typed) if !matches!(typed, FloatContent::Untyped(_)) => {
             lhs = l.into_kind(typed.kind());

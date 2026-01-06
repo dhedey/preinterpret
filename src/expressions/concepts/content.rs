@@ -31,7 +31,9 @@ pub(crate) trait IntoValueContent<'a>: IsValueContent<'a> {
     where
         Self: Sized,
         Self::Form: IsFormOf<U>,
-        for<'l> Self::Type: IsHierarchicalType<Content<'l, Self::Form> = <Self::Form as form::IsFormOf<Self::Type>>::Content<'l>>,
+        for<'l> Self::Type: IsHierarchicalType<
+            Content<'l, Self::Form> = <Self::Form as form::IsFormOf<Self::Type>>::Content<'l>,
+        >,
         Self::Form: IsHierarchicalForm,
     {
         U::downcast_from(self.into_content())
@@ -52,7 +54,9 @@ pub(crate) trait IntoValueContent<'a>: IsValueContent<'a> {
     ) -> Result<Actual<'a, Self::Type, M::OutputForm>, M::ShortCircuit<'a>>
     where
         Self: Sized,
-        Self::Type: IsHierarchicalType<Content<'a, Self::Form> = <Self::Form as IsFormOf<Self::Type>>::Content<'a>>,
+        Self::Type: IsHierarchicalType<
+            Content<'a, Self::Form> = <Self::Form as IsFormOf<Self::Type>>::Content<'a>,
+        >,
         Self::Form: IsHierarchicalForm,
     {
         <Self::Type>::map_with::<Self::Form, M>(self.into_content())
@@ -61,9 +65,12 @@ pub(crate) trait IntoValueContent<'a>: IsValueContent<'a> {
     fn into_referenceable(self) -> Actual<'a, Self::Type, BeReferenceable>
     where
         Self: Sized,
-        Self::Type: IsHierarchicalType<Content<'a, Self::Form> = <Self::Form as IsFormOf<Self::Type>>::Content<'a>>,
+        Self::Type: IsHierarchicalType<
+            Content<'a, Self::Form> = <Self::Form as IsFormOf<Self::Type>>::Content<'a>,
+        >,
         Self::Form: IsHierarchicalForm,
-        for<'l> OwnedToReferenceableMapper: LeafMapper<Self::Form, OutputForm = BeReferenceable, ShortCircuit<'l> = Infallible>,
+        for<'l> OwnedToReferenceableMapper:
+            LeafMapper<Self::Form, OutputForm = BeReferenceable, ShortCircuit<'l> = Infallible>,
     {
         match self.map_with::<OwnedToReferenceableMapper>() {
             Ok(output) => output,
@@ -75,13 +82,17 @@ pub(crate) trait IntoValueContent<'a>: IsValueContent<'a> {
 impl<'a, C> Spanned<C>
 where
     C: IntoValueContent<'a>,
-    for<'l> C::Type: IsHierarchicalType<Content<'l, C::Form> = <C::Form as IsFormOf<C::Type>>::Content<'l>>,
+    for<'l> C::Type:
+        IsHierarchicalType<Content<'l, C::Form> = <C::Form as IsFormOf<C::Type>>::Content<'l>>,
     C::Form: IsHierarchicalForm,
 {
-    pub(crate) fn downcast_resolve<X: FromValueContent<'a, Form = C::Form>>(self, description: &str) -> ExecutionResult<X>
+    pub(crate) fn downcast_resolve<X: FromValueContent<'a, Form = C::Form>>(
+        self,
+        description: &str,
+    ) -> ExecutionResult<X>
     where
         C::Form: IsFormOf<<X as IsValueContent<'a>>::Type>,
-        <X as IsValueContent<'a>>::Type: DowncastFrom<C::Type, C::Form>
+        <X as IsValueContent<'a>>::Type: DowncastFrom<C::Type, C::Form>,
     {
         let Spanned(value, span_range) = self;
         let content = value.into_content();
@@ -114,7 +125,9 @@ where
     ) -> Result<Actual<'r, Self::Type, M::OutputForm>, M::ShortCircuit<'a>>
     where
         'a: 'r,
-        Self::Type: IsHierarchicalType<Content<'a, Self::Form> = <Self::Form as IsFormOf<Self::Type>>::Content<'a>>,
+        Self::Type: IsHierarchicalType<
+            Content<'a, Self::Form> = <Self::Form as IsFormOf<Self::Type>>::Content<'a>,
+        >,
         Self::Form: IsHierarchicalForm,
     {
         <Self::Type>::map_mut_with::<Self::Form, M>(self)
@@ -125,7 +138,9 @@ where
     ) -> Result<Actual<'r, Self::Type, M::OutputForm>, M::ShortCircuit<'a>>
     where
         'a: 'r,
-        Self::Type: IsHierarchicalType<Content<'a, Self::Form> = <Self::Form as IsFormOf<Self::Type>>::Content<'a>>,
+        Self::Type: IsHierarchicalType<
+            Content<'a, Self::Form> = <Self::Form as IsFormOf<Self::Type>>::Content<'a>,
+        >,
         Self::Form: IsHierarchicalForm,
     {
         <Self::Type>::map_ref_with::<Self::Form, M>(self)
@@ -135,7 +150,9 @@ where
     where
         // Bounds for map_mut_with to work
         'a: 'r,
-        Self::Type: IsHierarchicalType<Content<'a, Self::Form> = <Self::Form as IsFormOf<Self::Type>>::Content<'a>>,
+        Self::Type: IsHierarchicalType<
+            Content<'a, Self::Form> = <Self::Form as IsFormOf<Self::Type>>::Content<'a>,
+        >,
         Self::Form: IsHierarchicalForm,
 
         // Bounds for ToMutMapper to work
@@ -152,7 +169,9 @@ where
     where
         // Bounds for map_mut_with to work
         'a: 'r,
-        Self::Type: IsHierarchicalType<Content<'a, Self::Form> = <Self::Form as IsFormOf<Self::Type>>::Content<'a>>,
+        Self::Type: IsHierarchicalType<
+            Content<'a, Self::Form> = <Self::Form as IsFormOf<Self::Type>>::Content<'a>,
+        >,
         Self::Form: IsHierarchicalForm,
 
         // Bounds for ToMutMapper to work
