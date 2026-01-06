@@ -35,16 +35,3 @@ impl<F: LeafAsRefForm> RefLeafMapper<F> for ToRefMapper {
         Ok(F::leaf_as_ref(leaf))
     }
 }
-
-impl<'a, T: IsHierarchicalType, F: IsFormOf<T>> Actual<'a, T, F>
-where
-    F: LeafAsRefForm,
-    for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
-{
-    pub(crate) fn as_ref<'r>(&'r self) -> Actual<'r, T, BeRef> {
-        match self.map_ref_with::<ToRefMapper>() {
-            Ok(x) => x,
-            Err(infallible) => match infallible {}, // Need to include because of MSRV
-        }
-    }
-}

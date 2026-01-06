@@ -26,7 +26,7 @@ impl UntypedFloat {
 
     /// Converts an untyped float to a specific float kind.
     /// Unlike integers, float conversion never fails (may lose precision).
-    pub(crate) fn into_kind(self, kind: FloatLeafKind) -> OwnedFloatContent {
+    pub(crate) fn into_kind(self, kind: FloatLeafKind) -> OwnedFloat {
         match kind {
             FloatLeafKind::Untyped(_) => FloatContent::Untyped(self),
             FloatLeafKind::F32(_) => FloatContent::F32(self.0 as f32),
@@ -38,9 +38,9 @@ impl UntypedFloat {
         self,
         rhs: Spanned<OwnedFloat>,
         perform_fn: fn(FallbackFloat, FallbackFloat) -> FallbackFloat,
-    ) -> ExecutionResult<OwnedFloatContent> {
+    ) -> ExecutionResult<OwnedFloat> {
         let lhs = self.0;
-        let rhs: UntypedFloat = rhs.resolve("This operand")?;
+        let rhs: UntypedFloat = rhs.downcast_resolve("This operand")?;
         let rhs = rhs.0;
         let output = perform_fn(lhs, rhs);
         Ok(FloatContent::Untyped(UntypedFloat::from_fallback(output)))
@@ -52,7 +52,7 @@ impl UntypedFloat {
         compare_fn: fn(FallbackFloat, FallbackFloat) -> bool,
     ) -> ExecutionResult<bool> {
         let lhs = self.0;
-        let rhs: UntypedFloat = rhs.resolve("This operand")?;
+        let rhs: UntypedFloat = rhs.downcast_resolve("This operand")?;
         let rhs = rhs.0;
         Ok(compare_fn(lhs, rhs))
     }
@@ -201,11 +201,8 @@ impl ResolvableOwned<Value> for UntypedFloatFallback {
     }
 }
 
-impl ResolvableOwned<OwnedFloatContent> for UntypedFloat {
-    fn resolve_from_value(
-        value: OwnedFloatContent,
-        context: ResolutionContext,
-    ) -> ExecutionResult<Self> {
+impl ResolvableOwned<OwnedFloat> for UntypedFloat {
+    fn resolve_from_value(value: OwnedFloat, context: ResolutionContext) -> ExecutionResult<Self> {
         match value {
             FloatContent::Untyped(value) => Ok(value),
             _ => context.err("an untyped float", value),
