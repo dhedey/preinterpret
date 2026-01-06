@@ -223,7 +223,7 @@ impl Value {
     pub(crate) fn for_syn_lit(lit: syn::Lit) -> OwnedValue {
         // https://docs.rs/syn/latest/syn/enum.Lit.html
         let matched = match &lit {
-            Lit::Int(lit) => match IntegerValue::for_litint(lit) {
+            Lit::Int(lit) => match OwnedInteger::for_litint(lit) {
                 Ok(int) => Some(int.into_owned_value()),
                 Err(_) => None,
             },

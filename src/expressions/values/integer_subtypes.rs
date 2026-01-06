@@ -204,17 +204,23 @@ macro_rules! impl_resolvable_integer_subtype {
         impl ResolveAs<OptionalSuffix<$type>> for Spanned<OwnedValue> {
             fn resolve_as(self, resolution_target: &str) -> ExecutionResult<OptionalSuffix<$type>> {
                 let span = self.span_range();
-                let integer_value: Owned<IntegerValue> = self.resolve_as(resolution_target)?;
+                let integer_value: OwnedIntegerContent = self.resolve_as(resolution_target)?;
                 Spanned(integer_value, span).resolve_as(resolution_target)
             }
         }
 
-        impl ResolveAs<OptionalSuffix<$type>> for Spanned<Owned<IntegerValue>> {
+        impl ResolveAs<OptionalSuffix<$type>> for Spanned<OwnedInteger> {
+            fn resolve_as(self, resolution_target: &str) -> ExecutionResult<OptionalSuffix<$type>> {
+                self.map(|integer| integer.0).resolve_as(resolution_target)
+            }
+        }
+
+        impl ResolveAs<OptionalSuffix<$type>> for Spanned<OwnedIntegerContent> {
             fn resolve_as(self, resolution_target: &str) -> ExecutionResult<OptionalSuffix<$type>> {
                 let Spanned(value, span) = self;
-                match value.0 {
-                    IntegerValue::Untyped(v) => Ok(OptionalSuffix(v.into_fallback() as $type)),
-                    IntegerValue::$variant(v) => Ok(OptionalSuffix(v)),
+                match value {
+                    IntegerContent::Untyped(v) => Ok(OptionalSuffix(v.into_fallback() as $type)),
+                    IntegerContent::$variant(v) => Ok(OptionalSuffix(v)),
                     v => span.type_err(format!(
                         "{} is expected to be {}, but it is {}",
                         resolution_target,
@@ -229,20 +235,20 @@ macro_rules! impl_resolvable_integer_subtype {
             type ValueType = $type_def;
         }
 
-        impl From<$type> for IntegerValue {
+        impl From<$type> for OwnedIntegerContent {
             fn from(value: $type) -> Self {
-                IntegerValue::$variant(value)
+                IntegerContent::$variant(value)
             }
         }
 
-        impl ResolvableOwned<IntegerValue> for $type {
+        impl ResolvableOwned<OwnedIntegerContent> for $type {
             fn resolve_from_value(
-                value: IntegerValue,
+                value: OwnedIntegerContent,
                 context: ResolutionContext,
             ) -> ExecutionResult<Self> {
                 match value {
-                    IntegerValue::Untyped(x) => Ok(x.into_fallback() as $type),
-                    IntegerValue::$variant(x) => Ok(x),
+                    IntegerContent::Untyped(x) => Ok(x.into_fallback() as $type),
+                    IntegerContent::$variant(x) => Ok(x),
                     other => context.err($articled_display_name, other),
                 }
             }
@@ -266,7 +272,7 @@ macro_rules! impl_resolvable_integer_subtype {
                 context: ResolutionContext,
             ) -> ExecutionResult<&'a Self> {
                 match value {
-                    Value::Integer(IntegerValue::$variant(x)) => Ok(x),
+                    ValueContent::Integer(IntegerContent::$variant(x)) => Ok(x),
                     other => context.err($articled_display_name, other),
                 }
             }
@@ -278,7 +284,7 @@ macro_rules! impl_resolvable_integer_subtype {
                 context: ResolutionContext,
             ) -> ExecutionResult<&'a mut Self> {
                 match value {
-                    Value::Integer(IntegerValue::$variant(x)) => Ok(x),
+                    ValueContent::Integer(IntegerContent::$variant(x)) => Ok(x),
                     other => context.err($articled_display_name, other),
                 }
             }

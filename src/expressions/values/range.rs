@@ -439,25 +439,22 @@ impl IterableRangeOf<Value> {
         match start {
             Value::Integer(mut start) => {
                 if let Some(end) = &end {
-                    start = IntegerValue::resolve_untyped_to_match_other(
-                        start.into_owned().spanned(dots.span_range()),
-                        end,
-                    )?;
+                    start = start.resolve_untyped_to_match_other(dots.span_range(), end)?;
                 }
                 match start {
-                    IntegerValue::Untyped(start) => resolve_range(start, dots, end),
-                    IntegerValue::U8(start) => resolve_range(start, dots, end),
-                    IntegerValue::U16(start) => resolve_range(start, dots, end),
-                    IntegerValue::U32(start) => resolve_range(start, dots, end),
-                    IntegerValue::U64(start) => resolve_range(start, dots, end),
-                    IntegerValue::U128(start) => resolve_range(start, dots, end),
-                    IntegerValue::Usize(start) => resolve_range(start, dots, end),
-                    IntegerValue::I8(start) => resolve_range(start, dots, end),
-                    IntegerValue::I16(start) => resolve_range(start, dots, end),
-                    IntegerValue::I32(start) => resolve_range(start, dots, end),
-                    IntegerValue::I64(start) => resolve_range(start, dots, end),
-                    IntegerValue::I128(start) => resolve_range(start, dots, end),
-                    IntegerValue::Isize(start) => resolve_range(start, dots, end),
+                    IntegerContent::Untyped(start) => resolve_range(start, dots, end),
+                    IntegerContent::U8(start) => resolve_range(start, dots, end),
+                    IntegerContent::U16(start) => resolve_range(start, dots, end),
+                    IntegerContent::U32(start) => resolve_range(start, dots, end),
+                    IntegerContent::U64(start) => resolve_range(start, dots, end),
+                    IntegerContent::U128(start) => resolve_range(start, dots, end),
+                    IntegerContent::Usize(start) => resolve_range(start, dots, end),
+                    IntegerContent::I8(start) => resolve_range(start, dots, end),
+                    IntegerContent::I16(start) => resolve_range(start, dots, end),
+                    IntegerContent::I32(start) => resolve_range(start, dots, end),
+                    IntegerContent::I64(start) => resolve_range(start, dots, end),
+                    IntegerContent::I128(start) => resolve_range(start, dots, end),
+                    IntegerContent::Isize(start) => resolve_range(start, dots, end),
                 }
             }
             Value::Char(start) => resolve_range(start, dots, end),

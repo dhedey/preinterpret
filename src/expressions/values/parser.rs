@@ -235,9 +235,9 @@ define_type_features! {
                 Ok(OutputStream::new_with(|s| s.push_tokens(integer)))
             }
 
-            [context] fn integer(this: Spanned<Shared<ParserHandle>>) -> ExecutionResult<IntegerValue> {
+            [context] fn integer(this: Spanned<Shared<ParserHandle>>) -> ExecutionResult<OwnedIntegerContent> {
                 let integer: syn::LitInt = parser(this, context)?.parse()?;
-                Ok(IntegerValue::for_litint(&integer)?.into_inner())
+                Ok(OwnedInteger::for_litint(&integer)?.0)
             }
 
             [context] fn is_float(this: Spanned<Shared<ParserHandle>>) -> ExecutionResult<bool> {
