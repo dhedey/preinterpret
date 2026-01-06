@@ -26,18 +26,9 @@ impl MapFromArgument for BeReferenceable {
     }
 }
 
-impl<'a, T: IsHierarchicalType> Actual<'a, T, BeOwned> {
-    pub(crate) fn into_referencable(self) -> Actual<'a, T, BeReferenceable> {
-        match self.map_with::<OwnedToReferencableMapper>() {
-            Ok(output) => output,
-            Err(infallible) => match infallible {}, // Need to include because of MSRV
-        }
-    }
-}
+pub(crate) struct OwnedToReferenceableMapper;
 
-pub(crate) struct OwnedToReferencableMapper;
-
-impl LeafMapper<BeOwned> for OwnedToReferencableMapper {
+impl LeafMapper<BeOwned> for OwnedToReferenceableMapper {
     type OutputForm = BeReferenceable;
     type ShortCircuit<'a> = Infallible;
 
