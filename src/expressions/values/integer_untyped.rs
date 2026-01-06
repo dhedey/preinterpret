@@ -38,31 +38,31 @@ impl UntypedInteger {
         ))
     }
 
-    /// Tries to convert to a specific integer kind, returning an error if the value doesn't fit.
-    pub(crate) fn try_into_kind(self, kind: IntegerLeafKind) -> ExecutionResult<OwnedIntegerContent> {
+    /// Tries to convert to a specific integer kind, returning None if the value doesn't fit.
+    pub(crate) fn try_into_kind(self, kind: IntegerLeafKind) -> Option<OwnedInteger> {
         let value = self.0;
-        let make_err = || {
-            Span::call_site().span_range().value_error(format!(
-                "The integer value {} does not fit into {}",
-                value,
-                kind.articled_display_name()
-            ))
-        };
-        Ok(match kind {
+        Some(match kind {
             IntegerLeafKind::Untyped(_) => IntegerContent::Untyped(UntypedInteger(value)),
-            IntegerLeafKind::I8(_) => IntegerContent::I8(value.try_into().ok().ok_or_else(make_err)?),
-            IntegerLeafKind::I16(_) => IntegerContent::I16(value.try_into().ok().ok_or_else(make_err)?),
-            IntegerLeafKind::I32(_) => IntegerContent::I32(value.try_into().ok().ok_or_else(make_err)?),
-            IntegerLeafKind::I64(_) => IntegerContent::I64(value.try_into().ok().ok_or_else(make_err)?),
+            IntegerLeafKind::I8(_) => IntegerContent::I8(value.try_into().ok()?),
+            IntegerLeafKind::I16(_) => IntegerContent::I16(value.try_into().ok()?),
+            IntegerLeafKind::I32(_) => IntegerContent::I32(value.try_into().ok()?),
+            IntegerLeafKind::I64(_) => IntegerContent::I64(value.try_into().ok()?),
             IntegerLeafKind::I128(_) => IntegerContent::I128(value),
-            IntegerLeafKind::Isize(_) => IntegerContent::Isize(value.try_into().ok().ok_or_else(make_err)?),
-            IntegerLeafKind::U8(_) => IntegerContent::U8(value.try_into().ok().ok_or_else(make_err)?),
-            IntegerLeafKind::U16(_) => IntegerContent::U16(value.try_into().ok().ok_or_else(make_err)?),
-            IntegerLeafKind::U32(_) => IntegerContent::U32(value.try_into().ok().ok_or_else(make_err)?),
-            IntegerLeafKind::U64(_) => IntegerContent::U64(value.try_into().ok().ok_or_else(make_err)?),
-            IntegerLeafKind::U128(_) => IntegerContent::U128(value.try_into().ok().ok_or_else(make_err)?),
-            IntegerLeafKind::Usize(_) => IntegerContent::Usize(value.try_into().ok().ok_or_else(make_err)?),
+            IntegerLeafKind::Isize(_) => IntegerContent::Isize(value.try_into().ok()?),
+            IntegerLeafKind::U8(_) => IntegerContent::U8(value.try_into().ok()?),
+            IntegerLeafKind::U16(_) => IntegerContent::U16(value.try_into().ok()?),
+            IntegerLeafKind::U32(_) => IntegerContent::U32(value.try_into().ok()?),
+            IntegerLeafKind::U64(_) => IntegerContent::U64(value.try_into().ok()?),
+            IntegerLeafKind::U128(_) => IntegerContent::U128(value.try_into().ok()?),
+            IntegerLeafKind::Usize(_) => IntegerContent::Usize(value.try_into().ok()?),
         })
+    }
+
+    /// Converts to a specific integer kind, staying as Untyped if conversion fails.
+    /// Unlike floats, integer conversion can fail, but we don't always have a span for error reporting.
+    pub(crate) fn into_kind(self, kind: IntegerLeafKind) -> OwnedInteger {
+        self.try_into_kind(kind)
+            .unwrap_or(IntegerContent::Untyped(self))
     }
 
     pub(crate) fn paired_operation(
@@ -70,13 +70,15 @@ impl UntypedInteger {
         rhs: Spanned<OwnedInteger>,
         context: BinaryOperationCallContext,
         perform_fn: fn(FallbackInteger, FallbackInteger) -> Option<FallbackInteger>,
-    ) -> ExecutionResult<OwnedIntegerContent> {
+    ) -> ExecutionResult<OwnedInteger> {
         let lhs = self.0;
-        let rhs: UntypedInteger = rhs.resolve_as("This operand")?;
+        let rhs: UntypedInteger = rhs.downcast_resolve("This operand")?;
         let rhs = rhs.0;
         let output = perform_fn(lhs, rhs)
             .ok_or_else(|| UntypedInteger::binary_overflow_error(context, lhs, rhs))?;
-        Ok(IntegerContent::Untyped(UntypedInteger::from_fallback(output)))
+        Ok(IntegerContent::Untyped(UntypedInteger::from_fallback(
+            output,
+        )))
     }
 
     pub(crate) fn paired_comparison(
@@ -85,7 +87,7 @@ impl UntypedInteger {
         compare_fn: fn(FallbackInteger, FallbackInteger) -> bool,
     ) -> ExecutionResult<bool> {
         let lhs = self.0;
-        let rhs: UntypedInteger = rhs.resolve_as("This operand")?;
+        let rhs: UntypedInteger = rhs.downcast_resolve("This operand")?;
         let rhs = rhs.0;
         Ok(compare_fn(lhs, rhs))
     }
@@ -95,11 +97,13 @@ impl UntypedInteger {
         rhs: u32,
         context: BinaryOperationCallContext,
         perform_fn: fn(FallbackInteger, u32) -> Option<FallbackInteger>,
-    ) -> ExecutionResult<OwnedIntegerContent> {
+    ) -> ExecutionResult<OwnedInteger> {
         let lhs = self.0;
         let output = perform_fn(lhs, rhs)
             .ok_or_else(|| UntypedInteger::binary_overflow_error(context, lhs, rhs))?;
-        Ok(IntegerContent::Untyped(UntypedInteger::from_fallback(output)))
+        Ok(IntegerContent::Untyped(UntypedInteger::from_fallback(
+            output,
+        )))
     }
 
     pub(crate) fn from_fallback(value: FallbackInteger) -> Self {
@@ -116,15 +120,15 @@ impl UntypedInteger {
 }
 
 impl Spanned<UntypedInteger> {
-    pub(crate) fn into_kind(self, kind: IntegerLeafKind) -> ExecutionResult<OwnedIntegerContent> {
+    pub(crate) fn into_kind(self, kind: IntegerLeafKind) -> ExecutionResult<OwnedInteger> {
         let Spanned(value, span_range) = self;
-        value
-            .try_into_kind(kind)
-            .map_err(|_| span_range.value_error(format!(
+        value.try_into_kind(kind).ok_or_else(|| {
+            span_range.value_error(format!(
                 "The integer value {} does not fit into {}",
                 value.0,
                 kind.articled_display_name()
-            )))
+            ))
+        })
     }
 }
 
@@ -265,9 +269,9 @@ impl ResolvableOwned<Value> for UntypedIntegerFallback {
     }
 }
 
-impl ResolvableOwned<OwnedIntegerContent> for UntypedInteger {
+impl ResolvableOwned<OwnedInteger> for UntypedInteger {
     fn resolve_from_value(
-        value: OwnedIntegerContent,
+        value: OwnedInteger,
         context: ResolutionContext,
     ) -> ExecutionResult<Self> {
         match value {

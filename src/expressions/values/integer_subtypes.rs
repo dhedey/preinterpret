@@ -204,18 +204,12 @@ macro_rules! impl_resolvable_integer_subtype {
         impl ResolveAs<OptionalSuffix<$type>> for Spanned<OwnedValue> {
             fn resolve_as(self, resolution_target: &str) -> ExecutionResult<OptionalSuffix<$type>> {
                 let span = self.span_range();
-                let integer_value: OwnedIntegerContent = self.resolve_as(resolution_target)?;
+                let integer_value: OwnedInteger = self.resolve_as(resolution_target)?;
                 Spanned(integer_value, span).resolve_as(resolution_target)
             }
         }
 
         impl ResolveAs<OptionalSuffix<$type>> for Spanned<OwnedInteger> {
-            fn resolve_as(self, resolution_target: &str) -> ExecutionResult<OptionalSuffix<$type>> {
-                self.map(|integer| integer.0).resolve_as(resolution_target)
-            }
-        }
-
-        impl ResolveAs<OptionalSuffix<$type>> for Spanned<OwnedIntegerContent> {
             fn resolve_as(self, resolution_target: &str) -> ExecutionResult<OptionalSuffix<$type>> {
                 let Spanned(value, span) = self;
                 match value {
@@ -235,15 +229,15 @@ macro_rules! impl_resolvable_integer_subtype {
             type ValueType = $type_def;
         }
 
-        impl From<$type> for OwnedIntegerContent {
+        impl From<$type> for OwnedInteger {
             fn from(value: $type) -> Self {
                 IntegerContent::$variant(value)
             }
         }
 
-        impl ResolvableOwned<OwnedIntegerContent> for $type {
+        impl ResolvableOwned<OwnedInteger> for $type {
             fn resolve_from_value(
-                value: OwnedIntegerContent,
+                value: OwnedInteger,
                 context: ResolutionContext,
             ) -> ExecutionResult<Self> {
                 match value {

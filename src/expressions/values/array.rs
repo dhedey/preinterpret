@@ -110,7 +110,7 @@ impl ArrayValue {
 
     fn resolve_valid_index_from_integer(
         &self,
-        Spanned(integer, span): Spanned<&IntegerValue>,
+        Spanned(integer, span): Spanned<&OwnedInteger>,
         is_exclusive: bool,
     ) -> ExecutionResult<usize> {
         let index: usize =
