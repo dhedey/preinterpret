@@ -1,16 +1,14 @@
 use super::*;
 
-/// A semantic wrapper for floating owned values.
-///
-/// Can be destructured as: `Owned(value): Owned<T>`
-///
-/// If you need span information, wrap with `Spanned<Owned<T>>`. For example, for `x.y[4]`, this would capture both:
-/// * The output owned value
-/// * The lexical span of the tokens `x.y[4]`
 pub(crate) type QqqOwned<T> = Actual<'static, T, BeOwned>;
 
 pub(crate) type QqqOwnedValue = Owned<ValueType>;
 
+/// Represents floating owned values.
+///
+/// If you need span information, wrap with `Spanned<OwnedValue>`. For example, with `x.y[4]`, this would capture both:
+/// * The output owned value
+/// * The lexical span of the tokens `x.y[4]`
 #[derive(Copy, Clone)]
 pub(crate) struct BeOwned;
 impl IsForm for BeOwned {}
@@ -49,7 +47,7 @@ impl MapFromArgument for BeOwned {
     fn from_argument_value(
         value: ArgumentValue,
     ) -> ExecutionResult<Actual<'static, ValueType, Self>> {
-        Ok(value.expect_owned().0.into_actual())
+        Ok(value.expect_owned().0)
     }
 }
 
@@ -59,25 +57,25 @@ mod test {
 
     #[test]
     fn can_resolve_owned() {
-        let owned_value: QqqOwned<U64Type> = QqqOwned::of(42u64);
+        let owned_value: QqqOwned<U64Type> = 42u64;
         let resolved = owned_value
             .spanned(Span::call_site().span_range())
-            .resolve::<u64>("My value")
+            .downcast_resolve::<u64>("My value")
             .unwrap();
         assert_eq!(resolved, 42u64);
     }
 
     #[test]
     fn can_as_ref_owned() {
-        let owned_value: QqqOwned<U64Type> = QqqOwned::of(42u64);
-        let as_ref: QqqRef<U64Type> = owned_value.as_ref();
-        assert_eq!(**as_ref, 42u64);
+        let owned_value: QqqOwned<U64Type> = 42u64;
+        let as_ref: QqqRef<U64Type> = owned_value.as_ref_value();
+        assert_eq!(*as_ref, 42u64);
     }
 
     #[test]
     fn can_as_mut_owned() {
-        let mut owned_value: QqqOwned<U64Type> = QqqOwned::of(42u64);
-        **owned_value.as_mut() = 41u64;
-        assert_eq!(owned_value.0, 41u64);
+        let mut owned_value: QqqOwned<U64Type> = 42u64;
+        *owned_value.as_mut_value() = 41u64;
+        assert_eq!(owned_value, 41u64);
     }
 }

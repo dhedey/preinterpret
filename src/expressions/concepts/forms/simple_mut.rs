@@ -43,16 +43,3 @@ impl<F: LeafAsMutForm> MutLeafMapper<F> for ToMutMapper {
         Ok(F::leaf_as_mut(leaf))
     }
 }
-
-impl<'a, T: IsHierarchicalType, F: IsFormOf<T>> Actual<'a, T, F>
-where
-    F: LeafAsMutForm,
-    for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
-{
-    pub(crate) fn as_mut<'r>(&'r mut self) -> Actual<'r, T, BeMut> {
-        match self.map_mut_with::<ToMutMapper>() {
-            Ok(x) => x,
-            Err(infallible) => match infallible {}, // Need to include because of MSRV
-        }
-    }
-}

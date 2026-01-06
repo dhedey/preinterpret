@@ -237,9 +237,7 @@ First, read the @./2025-11-vision.md
       - [ ] 6 methods... `map_content`, `map_content_ref`, `map_content_mut`
       - [ ] ... and a `ReduceMapper::<F1, T>::map(content, |x| -> y)`
       - [ ] ... Probably remove e.g. `map_with` etc on actual?
-    - [ ] Trial getting rid of `Actual` completely?
-      * Maybe it's just a type alias?
-      * Downcast / Upcast become traits
+    - [x] Trial getting rid of `Actual` completely?
     - [ ] Replace `type FloatValue = FloatValueContent` with `type FloatValue = QqqOwned<FloatValueType>` / `type FloatValueRef<'a> = QqqRef<FloatValueType>` / `type FloatValueMut = QqqMut<FloatValueType>`
       - [x] Create new branch
       - [x] Resolve issue with `2.3` not resolving into `2f32` any more
@@ -249,6 +247,7 @@ First, read the @./2025-11-vision.md
       - [ ] `type ValueRef = QqqRef<ValueType>`
       - [ ] `type ValueMut = QqqMut<ValueType>`
       - [ ] ... and move methods
+    - [ ] Rename `ValueType` to `AnyType` and `Value` to `AnyValue`
     - [ ] Replace `Owned` as `QqqOwned`
     - [ ] Replace `Value`, `&Value` and `&mut Value` methods with methods on `Owned<Value>` / `Ref<Value>` / `Mut<Value>`
     - [ ] And similarly for other values...
