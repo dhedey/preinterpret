@@ -772,8 +772,21 @@ macro_rules! impl_value_content_traits {
             }
         }
 
-        // Note: BeAssignee uses the same Leaf type as BeMutable (MutableSubRcRefCell<Value, T>),
-        // so we can't have a separate impl for it - the BeMutable impl covers both.
+        // BeAssignee: content is QqqAssignee<X>
+        impl<'a> IsValueContent<'a> for QqqAssignee<$content_type> {
+            type Type = $type_def;
+            type Form = BeAssignee;
+        }
+        impl<'a> IntoValueContent<'a> for QqqAssignee<$content_type> {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+        impl<'a> FromValueContent<'a> for QqqAssignee<$content_type> {
+            fn from_content(content: Self) -> Self {
+                content
+            }
+        }
     };
 
     // For parent types - $content<'a, F> where F: IsHierarchicalForm
@@ -914,7 +927,22 @@ macro_rules! impl_value_content_traits {
             }
         }
 
-        // Note: BeAssignee uses the same DynLeaf type as BeMutable, so covered above.
+        // BeAssignee: content is QqqAssignee<D>
+        impl<'a> IsValueContent<'a> for QqqAssignee<$dyn_type> {
+            type Type = $type_def;
+            type Form = BeAssignee;
+        }
+        impl<'a> IntoValueContent<'a> for QqqAssignee<$dyn_type> {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+        impl<'a> FromValueContent<'a> for QqqAssignee<$dyn_type> {
+            fn from_content(content: Self) -> Self {
+                content
+            }
+        }
+
         // Note: BeReferenceable (Rc<RefCell<D>>) doesn't work for unsized D.
     };
 }
