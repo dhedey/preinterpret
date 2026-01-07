@@ -241,13 +241,13 @@ First, read the @./2025-11-vision.md
     - [x] Replace `type FloatValue = FloatValueContent` with `type FloatValue = QqqOwned<FloatValueType>` / `type FloatValueRef<'a> = QqqRef<FloatValueType>` / `type FloatValueMut = QqqMut<FloatValueType>`
       - [x] Create new branch
       - [x] Resolve issue with `2.3` not resolving into `2f32` any more
-    - [ ] .. same for int...
+    - [x] .. same for int...
     - [ ] Change `type Value<'a, F> = ValueContent<'a, F>` and `type OwnedValue` with:
-      - [ ] `type OwnedValue = QqqOwned<ValueType>`
-      - [ ] `type ValueRef = QqqRef<ValueType>`
-      - [ ] `type ValueMut = QqqMut<ValueType>`
+      - [ ] `ValueType` => `AnyType`
+      - [ ] `type AnyValue = QqqOwned<ValueType>`
+      - [ ] `type AnyValueRef = QqqRef<ValueType>`
+      - [ ] `type AnyValueMut = QqqMut<ValueType>`
       - [ ] ... and move methods
-    - [ ] Rename `ValueType` to `AnyType` and `Value` to `AnyValue`
     - [ ] Replace `Owned` with `QqqOwned`
     - [ ] Replace `Value`, `&Value` and `&mut Value` methods with methods on `Owned<Value>` / `Ref<Value>` / `Mut<Value>`
     - [ ] And similarly for other values...

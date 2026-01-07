@@ -204,15 +204,15 @@ macro_rules! impl_resolvable_integer_subtype {
         impl ResolveAs<OptionalSuffix<$type>> for Spanned<OwnedValue> {
             fn resolve_as(self, resolution_target: &str) -> ExecutionResult<OptionalSuffix<$type>> {
                 let span = self.span_range();
-                let integer_value: Owned<IntegerValue> = self.resolve_as(resolution_target)?;
+                let integer_value: IntegerValue = self.resolve_as(resolution_target)?;
                 Spanned(integer_value, span).resolve_as(resolution_target)
             }
         }
 
-        impl ResolveAs<OptionalSuffix<$type>> for Spanned<Owned<IntegerValue>> {
+        impl ResolveAs<OptionalSuffix<$type>> for Spanned<IntegerValue> {
             fn resolve_as(self, resolution_target: &str) -> ExecutionResult<OptionalSuffix<$type>> {
                 let Spanned(value, span) = self;
-                match value.0 {
+                match value {
                     IntegerValue::Untyped(v) => Ok(OptionalSuffix(v.into_fallback() as $type)),
                     IntegerValue::$variant(v) => Ok(OptionalSuffix(v)),
                     v => span.type_err(format!(

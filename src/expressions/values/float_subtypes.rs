@@ -170,12 +170,12 @@ macro_rules! impl_resolvable_float_subtype {
         impl ResolveAs<OptionalSuffix<$type>> for Spanned<OwnedValue> {
             fn resolve_as(self, resolution_target: &str) -> ExecutionResult<OptionalSuffix<$type>> {
                 let span = self.span_range();
-                let float_value: OwnedFloat = self.resolve_as(resolution_target)?;
+                let float_value: FloatValue = self.resolve_as(resolution_target)?;
                 Spanned(float_value, span).resolve_as(resolution_target)
             }
         }
 
-        impl ResolveAs<OptionalSuffix<$type>> for Spanned<OwnedFloat> {
+        impl ResolveAs<OptionalSuffix<$type>> for Spanned<FloatValue> {
             fn resolve_as(self, resolution_target: &str) -> ExecutionResult<OptionalSuffix<$type>> {
                 let Spanned(value, span) = self;
                 match value {
@@ -195,15 +195,15 @@ macro_rules! impl_resolvable_float_subtype {
             type ValueType = $type_def;
         }
 
-        impl From<$type> for OwnedFloat {
+        impl From<$type> for FloatValue {
             fn from(value: $type) -> Self {
                 FloatContent::$variant(value)
             }
         }
 
-        impl ResolvableOwned<OwnedFloat> for $type {
+        impl ResolvableOwned<FloatValue> for $type {
             fn resolve_from_value(
-                value: OwnedFloat,
+                value: FloatValue,
                 context: ResolutionContext,
             ) -> ExecutionResult<Self> {
                 match value {

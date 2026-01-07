@@ -14,10 +14,10 @@ define_parent_type! {
     articled_display_name: "a float",
 }
 
-pub(crate) type OwnedFloat = FloatContent<'static, BeOwned>;
-pub(crate) type FloatRef<'a> = FloatContent<'a, BeRef>;
+pub(crate) type FloatValue = FloatContent<'static, BeOwned>;
+pub(crate) type FloatValueRef<'a> = FloatContent<'a, BeRef>;
 
-impl OwnedFloat {
+impl FloatValue {
     pub(super) fn for_litfloat(lit: &syn::LitFloat) -> ParseResult<Self> {
         Ok(match lit.suffix() {
             "" => FloatContent::Untyped(UntypedFloat::new_from_lit_float(lit)?),
@@ -31,9 +31,9 @@ impl OwnedFloat {
         })
     }
 
-    pub(crate) fn resolve_untyped_to_match(self, target: FloatRef) -> OwnedFloat {
+    pub(crate) fn resolve_untyped_to_match(self, target: FloatValueRef) -> FloatValue {
         match self {
-            FloatContent::Untyped(this) => this.into_owned().into_kind(target.kind()),
+            FloatContent::Untyped(this) => this.into_kind(target.kind()),
             other => other,
         }
     }
@@ -53,7 +53,7 @@ impl OwnedFloat {
 }
 
 // TODO[concepts]: Move to FloatRef<'a> when we can
-impl OwnedFloat {
+impl FloatValue {
     /// Outputs this float value to a token stream.
     /// For finite values, outputs a literal. For non-finite values (infinity, NaN),
     /// outputs the equivalent constant path like `f32::INFINITY`.
@@ -100,10 +100,10 @@ impl OwnedFloat {
 }
 
 fn assign_op<R>(
-    mut left: Assignee<OwnedFloat>,
+    mut left: Assignee<FloatValue>,
     right: R,
     context: BinaryOperationCallContext,
-    op: fn(BinaryOperationCallContext, OwnedFloat, R) -> ExecutionResult<OwnedFloat>,
+    op: fn(BinaryOperationCallContext, FloatValue, R) -> ExecutionResult<FloatValue>,
 ) -> ExecutionResult<()> {
     let left_value = core::mem::replace(&mut *left, FloatContent::F32(0.0));
     let result = op(context, left_value, right)?;
@@ -111,7 +111,7 @@ fn assign_op<R>(
     Ok(())
 }
 
-impl Debug for OwnedFloat {
+impl Debug for FloatValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             FloatContent::Untyped(v) => write!(f, "{}", v.into_fallback()),
@@ -123,7 +123,7 @@ impl Debug for OwnedFloat {
 
 /// Aligns types for comparison - converts untyped to match the other's type.
 /// Unlike integers, float conversion never fails (may lose precision).
-fn align_types(mut lhs: OwnedFloat, mut rhs: OwnedFloat) -> (OwnedFloat, OwnedFloat) {
+fn align_types(mut lhs: FloatValue, mut rhs: FloatValue) -> (FloatValue, FloatValue) {
     match (&lhs, &rhs) {
         (FloatContent::Untyped(l), typed) if !matches!(typed, FloatContent::Untyped(_)) => {
             lhs = l.into_kind(typed.kind());
@@ -137,7 +137,7 @@ fn align_types(mut lhs: OwnedFloat, mut rhs: OwnedFloat) -> (OwnedFloat, OwnedFl
 }
 
 // TODO[concepts]: Should really be over FloatRef<'a>
-impl ValuesEqual for OwnedFloat {
+impl ValuesEqual for FloatValue {
     /// Handles type coercion between typed and untyped floats.
     /// Uses Rust's float `==`, so `NaN != NaN`.
     fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
@@ -170,7 +170,7 @@ define_type_features! {
     impl FloatType,
     pub(crate) mod float_interface {
         pub(crate) mod methods {
-            fn is_nan(this: OwnedFloat) -> bool {
+            fn is_nan(this: FloatValue) -> bool {
                 match this {
                     FloatContent::Untyped(x) => x.into_fallback().is_nan(),
                     FloatContent::F32(x) => x.is_nan(),
@@ -178,7 +178,7 @@ define_type_features! {
                 }
             }
 
-            fn is_infinite(this: OwnedFloat) -> bool {
+            fn is_infinite(this: FloatValue) -> bool {
                 match this {
                     FloatContent::Untyped(x) => x.into_fallback().is_infinite(),
                     FloatContent::F32(x) => x.is_infinite(),
@@ -186,7 +186,7 @@ define_type_features! {
                 }
             }
 
-            fn is_finite(this: OwnedFloat) -> bool {
+            fn is_finite(this: FloatValue) -> bool {
                 match this {
                     FloatContent::Untyped(x) => x.into_fallback().is_finite(),
                     FloatContent::F32(x) => x.is_finite(),
@@ -194,7 +194,7 @@ define_type_features! {
                 }
             }
 
-            fn is_sign_positive(this: OwnedFloat) -> bool {
+            fn is_sign_positive(this: FloatValue) -> bool {
                 match this {
                     FloatContent::Untyped(x) => x.into_fallback().is_sign_positive(),
                     FloatContent::F32(x) => x.is_sign_positive(),
@@ -202,7 +202,7 @@ define_type_features! {
                 }
             }
 
-            fn is_sign_negative(this: OwnedFloat) -> bool {
+            fn is_sign_negative(this: FloatValue) -> bool {
                 match this {
                     FloatContent::Untyped(x) => x.into_fallback().is_sign_negative(),
                     FloatContent::F32(x) => x.is_sign_negative(),
@@ -213,7 +213,7 @@ define_type_features! {
         pub(crate) mod unary_operations {
         }
         pub(crate) mod binary_operations {
-            fn add(left: OwnedFloat, right: Spanned<OwnedFloat>) -> ExecutionResult<OwnedFloat> {
+            fn add(left: FloatValue, right: Spanned<FloatValue>) -> ExecutionResult<FloatValue> {
                 match left.resolve_untyped_to_match(right.as_ref_value()) {
                     FloatContent::Untyped(left) => left.paired_operation(right, |a, b| a + b),
                     FloatContent::F32(left) => left.paired_operation_no_overflow(right, |a, b| a + b),
@@ -221,11 +221,11 @@ define_type_features! {
                 }
             }
 
-            [context] fn add_assign(left: Assignee<OwnedFloat>, right: Spanned<OwnedFloat>) -> ExecutionResult<()> {
+            [context] fn add_assign(left: Assignee<FloatValue>, right: Spanned<FloatValue>) -> ExecutionResult<()> {
                 assign_op(left, right, context, add)
             }
 
-            fn sub(left: OwnedFloat, right: Spanned<OwnedFloat>) -> ExecutionResult<OwnedFloat> {
+            fn sub(left: FloatValue, right: Spanned<FloatValue>) -> ExecutionResult<FloatValue> {
                 match left.resolve_untyped_to_match(right.as_ref_value()) {
                     FloatContent::Untyped(left) => left.paired_operation(right, |a, b| a - b),
                     FloatContent::F32(left) => left.paired_operation_no_overflow(right, |a, b| a - b),
@@ -233,11 +233,11 @@ define_type_features! {
                 }
             }
 
-            [context] fn sub_assign(left: Assignee<OwnedFloat>, right: Spanned<OwnedFloat>) -> ExecutionResult<()> {
+            [context] fn sub_assign(left: Assignee<FloatValue>, right: Spanned<FloatValue>) -> ExecutionResult<()> {
                 assign_op(left, right, context, sub)
             }
 
-            fn mul(left: OwnedFloat, right: Spanned<OwnedFloat>) -> ExecutionResult<OwnedFloat> {
+            fn mul(left: FloatValue, right: Spanned<FloatValue>) -> ExecutionResult<FloatValue> {
                 match left.resolve_untyped_to_match(right.as_ref_value()) {
                     FloatContent::Untyped(left) => left.paired_operation(right, |a, b| a * b),
                     FloatContent::F32(left) => left.paired_operation_no_overflow(right, |a, b| a * b),
@@ -245,11 +245,11 @@ define_type_features! {
                 }
             }
 
-            [context] fn mul_assign(left: Assignee<OwnedFloat>, right: Spanned<OwnedFloat>) -> ExecutionResult<()> {
+            [context] fn mul_assign(left: Assignee<FloatValue>, right: Spanned<FloatValue>) -> ExecutionResult<()> {
                 assign_op(left, right, context, mul)
             }
 
-            fn div(left: OwnedFloat, right: Spanned<OwnedFloat>) -> ExecutionResult<OwnedFloat> {
+            fn div(left: FloatValue, right: Spanned<FloatValue>) -> ExecutionResult<FloatValue> {
                 match left.resolve_untyped_to_match(right.as_ref_value()) {
                     FloatContent::Untyped(left) => left.paired_operation(right, |a, b| a / b),
                     FloatContent::F32(left) => left.paired_operation_no_overflow(right, |a, b| a / b),
@@ -257,11 +257,11 @@ define_type_features! {
                 }
             }
 
-            [context] fn div_assign(left: Assignee<OwnedFloat>, right: Spanned<OwnedFloat>) -> ExecutionResult<()> {
+            [context] fn div_assign(left: Assignee<FloatValue>, right: Spanned<FloatValue>) -> ExecutionResult<()> {
                 assign_op(left, right, context, div)
             }
 
-            fn rem(left: OwnedFloat, right: Spanned<OwnedFloat>) -> ExecutionResult<OwnedFloat> {
+            fn rem(left: FloatValue, right: Spanned<FloatValue>) -> ExecutionResult<FloatValue> {
                 match left.resolve_untyped_to_match(right.as_ref_value()) {
                     FloatContent::Untyped(left) => left.paired_operation(right, |a, b| a % b),
                     FloatContent::F32(left) => left.paired_operation_no_overflow(right, |a, b| a % b),
@@ -269,11 +269,11 @@ define_type_features! {
                 }
             }
 
-            [context] fn rem_assign(left: Assignee<OwnedFloat>, right: Spanned<OwnedFloat>) -> ExecutionResult<()> {
+            [context] fn rem_assign(left: Assignee<FloatValue>, right: Spanned<FloatValue>) -> ExecutionResult<()> {
                 assign_op(left, right, context, rem)
             }
 
-            fn lt(left: OwnedFloat, right: Spanned<OwnedFloat>) -> ExecutionResult<bool> {
+            fn lt(left: FloatValue, right: Spanned<FloatValue>) -> ExecutionResult<bool> {
                 match left.resolve_untyped_to_match(right.as_ref_value()) {
                     FloatContent::Untyped(left) => left.paired_comparison(right, |a, b| a < b),
                     FloatContent::F32(left) => left.paired_comparison(right, |a, b| a < b),
@@ -281,7 +281,7 @@ define_type_features! {
                 }
             }
 
-            fn le(left: OwnedFloat, right: Spanned<OwnedFloat>) -> ExecutionResult<bool> {
+            fn le(left: FloatValue, right: Spanned<FloatValue>) -> ExecutionResult<bool> {
                 match left.resolve_untyped_to_match(right.as_ref_value()) {
                     FloatContent::Untyped(left) => left.paired_comparison(right, |a, b| a <= b),
                     FloatContent::F32(left) => left.paired_comparison(right, |a, b| a <= b),
@@ -289,7 +289,7 @@ define_type_features! {
                 }
             }
 
-            fn gt(left: OwnedFloat, right: Spanned<OwnedFloat>) -> ExecutionResult<bool> {
+            fn gt(left: FloatValue, right: Spanned<FloatValue>) -> ExecutionResult<bool> {
                 match left.resolve_untyped_to_match(right.as_ref_value()) {
                     FloatContent::Untyped(left) => left.paired_comparison(right, |a, b| a > b),
                     FloatContent::F32(left) => left.paired_comparison(right, |a, b| a > b),
@@ -297,7 +297,7 @@ define_type_features! {
                 }
             }
 
-            fn ge(left: OwnedFloat, right: Spanned<OwnedFloat>) -> ExecutionResult<bool> {
+            fn ge(left: FloatValue, right: Spanned<FloatValue>) -> ExecutionResult<bool> {
                 match left.resolve_untyped_to_match(right.as_ref_value()) {
                     FloatContent::Untyped(left) => left.paired_comparison(right, |a, b| a >= b),
                     FloatContent::F32(left) => left.paired_comparison(right, |a, b| a >= b),
@@ -305,7 +305,7 @@ define_type_features! {
                 }
             }
 
-            fn eq(left: OwnedFloat, right: Spanned<OwnedFloat>) -> ExecutionResult<bool> {
+            fn eq(left: FloatValue, right: Spanned<FloatValue>) -> ExecutionResult<bool> {
                 match left.resolve_untyped_to_match(right.as_ref_value()) {
                     FloatContent::Untyped(left) => left.paired_comparison(right, |a, b| a == b),
                     FloatContent::F32(left) => left.paired_comparison(right, |a, b| a == b),
@@ -313,7 +313,7 @@ define_type_features! {
                 }
             }
 
-            fn ne(left: OwnedFloat, right: Spanned<OwnedFloat>) -> ExecutionResult<bool> {
+            fn ne(left: FloatValue, right: Spanned<FloatValue>) -> ExecutionResult<bool> {
                 match left.resolve_untyped_to_match(right.as_ref_value()) {
                     FloatContent::Untyped(left) => left.paired_comparison(right, |a, b| a != b),
                     FloatContent::F32(left) => left.paired_comparison(right, |a, b| a != b),
@@ -354,7 +354,7 @@ define_type_features! {
 
 impl_resolvable_argument_for! {
     FloatType,
-    (value, context) -> OwnedFloat {
+    (value, context) -> FloatValue {
         match value {
             Value::Float(value) => Ok(value),
             other => context.err("a float", other),
