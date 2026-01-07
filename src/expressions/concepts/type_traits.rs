@@ -411,22 +411,7 @@ macro_rules! define_parent_type {
             $( <F as IsFormOf<$variant_type>>::Content<'a>: Copy ),*
         {}
 
-        impl<'a, F: IsHierarchicalForm> IsValueContent<'a> for $content<'a, F> {
-            type Type = $type_def;
-            type Form = F;
-        }
-
-        impl<'a, F: IsHierarchicalForm> IntoValueContent<'a> for $content<'a, F> {
-            fn into_content(self) -> Self {
-                self
-            }
-        }
-
-        impl<'a, F: IsHierarchicalForm> FromValueContent<'a> for $content<'a, F> {
-            fn from_content(content: Self) -> Self {
-                content
-            }
-        }
+        impl_value_content_traits!(parent: $type_def, $content);
 
         impl<'a, F: IsHierarchicalForm> HasLeafKind for $content<'a, F> {
             type LeafKind = $leaf_kind;
@@ -621,56 +606,7 @@ macro_rules! define_leaf_type {
             }
         }
 
-        impl<'a> IsValueContent<'a> for $content_type {
-            type Type = $type_def;
-            type Form = BeOwned;
-        }
-
-        impl<'a> IntoValueContent<'a> for $content_type {
-            fn into_content(self) -> Self {
-                self
-            }
-        }
-
-        impl<'a> FromValueContent<'a> for $content_type {
-            fn from_content(content: Self) -> Self {
-                content
-            }
-        }
-
-        impl<'a> IsValueContent<'a> for &'a $content_type {
-            type Type = $type_def;
-            type Form = BeRef;
-        }
-
-        impl<'a> IntoValueContent<'a> for &'a $content_type {
-            fn into_content(self) -> Self {
-                self
-            }
-        }
-
-        impl<'a> FromValueContent<'a> for &'a $content_type {
-            fn from_content(content: Self) -> Self {
-                content
-            }
-        }
-
-        impl<'a> IsValueContent<'a> for &'a mut $content_type {
-            type Type = $type_def;
-            type Form = BeMut;
-        }
-
-        impl<'a> IntoValueContent<'a> for &'a mut $content_type {
-            fn into_content(self) -> Self {
-                self
-            }
-        }
-
-        impl<'a> FromValueContent<'a> for &'a mut $content_type {
-            fn from_content(content: Self) -> Self {
-                content
-            }
-        }
+        impl_value_content_traits!(leaf: $type_def, $content_type);
 
         impl IsValueLeaf for $content_type {}
 
@@ -701,6 +637,317 @@ macro_rules! define_leaf_type {
 pub(crate) use define_leaf_type;
 
 pub(crate) struct DynMapper<D: ?Sized>(std::marker::PhantomData<D>);
+
+/// Implements `IsValueContent`, `IntoValueContent`, and `FromValueContent` for various
+/// form wrappers of a content type. This macro deduplicates code across `define_leaf_type`,
+/// `define_parent_type`, and `define_dyn_type`.
+macro_rules! impl_value_content_traits {
+    // For leaf types - implements for all common form wrappers
+    (leaf: $type_def:ty, $content_type:ty) => {
+        // BeOwned: content is X
+        impl<'a> IsValueContent<'a> for $content_type {
+            type Type = $type_def;
+            type Form = BeOwned;
+        }
+        impl<'a> IntoValueContent<'a> for $content_type {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+        impl<'a> FromValueContent<'a> for $content_type {
+            fn from_content(content: Self) -> Self {
+                content
+            }
+        }
+
+        // BeRef: content is &'a X
+        impl<'a> IsValueContent<'a> for &'a $content_type {
+            type Type = $type_def;
+            type Form = BeRef;
+        }
+        impl<'a> IntoValueContent<'a> for &'a $content_type {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+        impl<'a> FromValueContent<'a> for &'a $content_type {
+            fn from_content(content: Self) -> Self {
+                content
+            }
+        }
+
+        // BeMut: content is &'a mut X
+        impl<'a> IsValueContent<'a> for &'a mut $content_type {
+            type Type = $type_def;
+            type Form = BeMut;
+        }
+        impl<'a> IntoValueContent<'a> for &'a mut $content_type {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+        impl<'a> FromValueContent<'a> for &'a mut $content_type {
+            fn from_content(content: Self) -> Self {
+                content
+            }
+        }
+
+        // BeMutable: content is MutableSubRcRefCell<Value, X>
+        impl<'a> IsValueContent<'a> for MutableSubRcRefCell<Value, $content_type> {
+            type Type = $type_def;
+            type Form = BeMutable;
+        }
+        impl<'a> IntoValueContent<'a> for MutableSubRcRefCell<Value, $content_type> {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+        impl<'a> FromValueContent<'a> for MutableSubRcRefCell<Value, $content_type> {
+            fn from_content(content: Self) -> Self {
+                content
+            }
+        }
+
+        // BeShared: content is SharedSubRcRefCell<Value, X>
+        impl<'a> IsValueContent<'a> for SharedSubRcRefCell<Value, $content_type> {
+            type Type = $type_def;
+            type Form = BeShared;
+        }
+        impl<'a> IntoValueContent<'a> for SharedSubRcRefCell<Value, $content_type> {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+        impl<'a> FromValueContent<'a> for SharedSubRcRefCell<Value, $content_type> {
+            fn from_content(content: Self) -> Self {
+                content
+            }
+        }
+
+        // BeAnyRef: content is AnyRef<'a, X>
+        impl<'a> IsValueContent<'a> for AnyRef<'a, $content_type> {
+            type Type = $type_def;
+            type Form = BeAnyRef;
+        }
+        impl<'a> IntoValueContent<'a> for AnyRef<'a, $content_type> {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+        impl<'a> FromValueContent<'a> for AnyRef<'a, $content_type> {
+            fn from_content(content: Self) -> Self {
+                content
+            }
+        }
+
+        // BeAnyMut: content is AnyMut<'a, X>
+        impl<'a> IsValueContent<'a> for AnyMut<'a, $content_type> {
+            type Type = $type_def;
+            type Form = BeAnyMut;
+        }
+        impl<'a> IntoValueContent<'a> for AnyMut<'a, $content_type> {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+        impl<'a> FromValueContent<'a> for AnyMut<'a, $content_type> {
+            fn from_content(content: Self) -> Self {
+                content
+            }
+        }
+
+        // BeReferenceable: content is Rc<RefCell<X>>
+        impl<'a> IsValueContent<'a> for Rc<RefCell<$content_type>> {
+            type Type = $type_def;
+            type Form = BeReferenceable;
+        }
+        impl<'a> IntoValueContent<'a> for Rc<RefCell<$content_type>> {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+        impl<'a> FromValueContent<'a> for Rc<RefCell<$content_type>> {
+            fn from_content(content: Self) -> Self {
+                content
+            }
+        }
+
+        // BeAssignee: content is QqqAssignee<X>
+        impl<'a> IsValueContent<'a> for QqqAssignee<$content_type> {
+            type Type = $type_def;
+            type Form = BeAssignee;
+        }
+        impl<'a> IntoValueContent<'a> for QqqAssignee<$content_type> {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+        impl<'a> FromValueContent<'a> for QqqAssignee<$content_type> {
+            fn from_content(content: Self) -> Self {
+                content
+            }
+        }
+    };
+
+    // For parent types - $content<'a, F> where F: IsHierarchicalForm
+    (parent: $type_def:ty, $content:ident) => {
+        impl<'a, F: IsHierarchicalForm> IsValueContent<'a> for $content<'a, F> {
+            type Type = $type_def;
+            type Form = F;
+        }
+        impl<'a, F: IsHierarchicalForm> IntoValueContent<'a> for $content<'a, F> {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+        impl<'a, F: IsHierarchicalForm> FromValueContent<'a> for $content<'a, F> {
+            fn from_content(content: Self) -> Self {
+                content
+            }
+        }
+    };
+
+    // For dyn types - implements for all dyn-compatible form wrappers
+    (dyn: $type_def:ty, $dyn_type:ty) => {
+        // The unsized dyn type itself needs IsValueContent for IsDynLeaf requirements
+        impl<'a> IsValueContent<'a> for $dyn_type {
+            type Type = $type_def;
+            type Form = BeOwned;
+        }
+
+        // BeOwned: content is Box<D>
+        impl<'a> IsValueContent<'a> for Box<$dyn_type> {
+            type Type = $type_def;
+            type Form = BeOwned;
+        }
+        impl<'a> IntoValueContent<'a> for Box<$dyn_type> {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+        impl<'a> FromValueContent<'a> for Box<$dyn_type> {
+            fn from_content(content: Self) -> Self {
+                content
+            }
+        }
+
+        // BeRef: content is &'a D
+        impl<'a> IsValueContent<'a> for &'a $dyn_type {
+            type Type = $type_def;
+            type Form = BeRef;
+        }
+        impl<'a> IntoValueContent<'a> for &'a $dyn_type {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+        impl<'a> FromValueContent<'a> for &'a $dyn_type {
+            fn from_content(content: Self) -> Self {
+                content
+            }
+        }
+
+        // BeMut: content is &'a mut D
+        impl<'a> IsValueContent<'a> for &'a mut $dyn_type {
+            type Type = $type_def;
+            type Form = BeMut;
+        }
+        impl<'a> IntoValueContent<'a> for &'a mut $dyn_type {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+        impl<'a> FromValueContent<'a> for &'a mut $dyn_type {
+            fn from_content(content: Self) -> Self {
+                content
+            }
+        }
+
+        // BeMutable: content is MutableSubRcRefCell<Value, D>
+        impl<'a> IsValueContent<'a> for MutableSubRcRefCell<Value, $dyn_type> {
+            type Type = $type_def;
+            type Form = BeMutable;
+        }
+        impl<'a> IntoValueContent<'a> for MutableSubRcRefCell<Value, $dyn_type> {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+        impl<'a> FromValueContent<'a> for MutableSubRcRefCell<Value, $dyn_type> {
+            fn from_content(content: Self) -> Self {
+                content
+            }
+        }
+
+        // BeShared: content is SharedSubRcRefCell<Value, D>
+        impl<'a> IsValueContent<'a> for SharedSubRcRefCell<Value, $dyn_type> {
+            type Type = $type_def;
+            type Form = BeShared;
+        }
+        impl<'a> IntoValueContent<'a> for SharedSubRcRefCell<Value, $dyn_type> {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+        impl<'a> FromValueContent<'a> for SharedSubRcRefCell<Value, $dyn_type> {
+            fn from_content(content: Self) -> Self {
+                content
+            }
+        }
+
+        // BeAnyRef: content is AnyRef<'a, D>
+        impl<'a> IsValueContent<'a> for AnyRef<'a, $dyn_type> {
+            type Type = $type_def;
+            type Form = BeAnyRef;
+        }
+        impl<'a> IntoValueContent<'a> for AnyRef<'a, $dyn_type> {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+        impl<'a> FromValueContent<'a> for AnyRef<'a, $dyn_type> {
+            fn from_content(content: Self) -> Self {
+                content
+            }
+        }
+
+        // BeAnyMut: content is AnyMut<'a, D>
+        impl<'a> IsValueContent<'a> for AnyMut<'a, $dyn_type> {
+            type Type = $type_def;
+            type Form = BeAnyMut;
+        }
+        impl<'a> IntoValueContent<'a> for AnyMut<'a, $dyn_type> {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+        impl<'a> FromValueContent<'a> for AnyMut<'a, $dyn_type> {
+            fn from_content(content: Self) -> Self {
+                content
+            }
+        }
+
+        // BeAssignee: content is QqqAssignee<D>
+        impl<'a> IsValueContent<'a> for QqqAssignee<$dyn_type> {
+            type Type = $type_def;
+            type Form = BeAssignee;
+        }
+        impl<'a> IntoValueContent<'a> for QqqAssignee<$dyn_type> {
+            fn into_content(self) -> Self {
+                self
+            }
+        }
+        impl<'a> FromValueContent<'a> for QqqAssignee<$dyn_type> {
+            fn from_content(content: Self) -> Self {
+                content
+            }
+        }
+
+        // Note: BeReferenceable (Rc<RefCell<D>>) doesn't work for unsized D.
+    };
+}
+
+pub(crate) use impl_value_content_traits;
 
 macro_rules! define_dyn_type {
     (
@@ -744,10 +991,7 @@ macro_rules! define_dyn_type {
             impl TypeFeatureResolver for $type_def: [$type_def]
         }
 
-        impl<'a> IsValueContent<'a> for $dyn_type {
-            type Type = $type_def;
-            type Form = BeOwned;
-        }
+        impl_value_content_traits!(dyn: $type_def, $dyn_type);
 
         impl IsDynLeaf for $dyn_type {}
 
