@@ -238,7 +238,7 @@ First, read the @./2025-11-vision.md
       - [ ] ... and a `ReduceMapper::<F1, T>::map(content, |x| -> y)`
       - [ ] ... Probably remove e.g. `map_with` etc on actual?
     - [x] Trial getting rid of `Actual` completely?
-    - [ ] Replace `type FloatValue = FloatValueContent` with `type FloatValue = QqqOwned<FloatValueType>` / `type FloatValueRef<'a> = QqqRef<FloatValueType>` / `type FloatValueMut = QqqMut<FloatValueType>`
+    - [x] Replace `type FloatValue = FloatValueContent` with `type FloatValue = QqqOwned<FloatValueType>` / `type FloatValueRef<'a> = QqqRef<FloatValueType>` / `type FloatValueMut = QqqMut<FloatValueType>`
       - [x] Create new branch
       - [x] Resolve issue with `2.3` not resolving into `2f32` any more
     - [ ] .. same for int...
@@ -248,7 +248,7 @@ First, read the @./2025-11-vision.md
       - [ ] `type ValueMut = QqqMut<ValueType>`
       - [ ] ... and move methods
     - [ ] Rename `ValueType` to `AnyType` and `Value` to `AnyValue`
-    - [ ] Replace `Owned` as `QqqOwned`
+    - [ ] Replace `Owned` with `QqqOwned`
     - [ ] Replace `Value`, `&Value` and `&mut Value` methods with methods on `Owned<Value>` / `Ref<Value>` / `Mut<Value>`
     - [ ] And similarly for other values...
   - [ ] Stage 2 of the form migration:
