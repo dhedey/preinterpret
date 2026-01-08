@@ -6,15 +6,15 @@ use super::*;
 /// It is typically paired with an [`ArgumentOwnership`] (maybe wrapped in a [`RequestedOwnership`])
 /// which indicates what ownership type to resolve to.
 pub(crate) enum ArgumentValue {
-    Owned(Owned<AnyValue>),
+    Owned(AnyValueOwned),
     CopyOnWrite(CopyOnWriteValue),
-    Mutable(Mutable<AnyValue>),
-    Assignee(Assignee<AnyValue>),
-    Shared(Shared<AnyValue>),
+    Mutable(AnyValueMutable),
+    Assignee(AnyValueAssignee),
+    Shared(AnyValueShared),
 }
 
 impl ArgumentValue {
-    pub(crate) fn expect_owned(self) -> Owned<AnyValue> {
+    pub(crate) fn expect_owned(self) -> AnyValueOwned {
         match self {
             ArgumentValue::Owned(value) => value,
             _ => panic!("expect_owned() called on a non-owned ArgumentValue"),
@@ -28,21 +28,21 @@ impl ArgumentValue {
         }
     }
 
-    pub(crate) fn expect_mutable(self) -> Mutable<AnyValue> {
+    pub(crate) fn expect_mutable(self) -> AnyValueMutable {
         match self {
             ArgumentValue::Mutable(value) => value,
             _ => panic!("expect_mutable() called on a non-mutable ArgumentValue"),
         }
     }
 
-    pub(crate) fn expect_assignee(self) -> Assignee<AnyValue> {
+    pub(crate) fn expect_assignee(self) -> AnyValueAssignee {
         match self {
             ArgumentValue::Assignee(value) => value,
             _ => panic!("expect_assignee() called on a non-assignee ArgumentValue"),
         }
     }
 
-    pub(crate) fn expect_shared(self) -> Shared<AnyValue> {
+    pub(crate) fn expect_shared(self) -> AnyValueShared {
         match self {
             ArgumentValue::Shared(value) => value,
             _ => panic!("expect_shared() called on a non-shared ArgumentValue"),
@@ -52,22 +52,22 @@ impl ArgumentValue {
 
 impl Spanned<ArgumentValue> {
     #[inline]
-    pub(crate) fn expect_owned(self) -> Spanned<Owned<AnyValue>> {
+    pub(crate) fn expect_owned(self) -> Spanned<AnyValueOwned> {
         self.map(|value| value.expect_owned())
     }
 
     #[inline]
-    pub(crate) fn expect_mutable(self) -> Spanned<Mutable<AnyValue>> {
+    pub(crate) fn expect_mutable(self) -> Spanned<AnyValueMutable> {
         self.map(|value| value.expect_mutable())
     }
 
     #[inline]
-    pub(crate) fn expect_assignee(self) -> Spanned<Assignee<AnyValue>> {
+    pub(crate) fn expect_assignee(self) -> Spanned<AnyValueAssignee> {
         self.map(|value| value.expect_assignee())
     }
 
     #[inline]
-    pub(crate) fn expect_shared(self) -> Spanned<Shared<AnyValue>> {
+    pub(crate) fn expect_shared(self) -> Spanned<AnyValueShared> {
         self.map(|value| value.expect_shared())
     }
 }
@@ -277,7 +277,7 @@ impl RequestedOwnership {
 
     pub(crate) fn map_from_mutable(
         &self,
-        Spanned(mutable, span): Spanned<Mutable<AnyValue>>,
+        Spanned(mutable, span): Spanned<AnyValueMutable>,
     ) -> ExecutionResult<Spanned<RequestedValue>> {
         Ok(Spanned(
             match self {
@@ -466,7 +466,7 @@ impl ArgumentOwnership {
 
     pub(crate) fn map_from_mutable(
         &self,
-        spanned_mutable: Spanned<Mutable<AnyValue>>,
+        spanned_mutable: Spanned<AnyValueMutable>,
     ) -> ExecutionResult<ArgumentValue> {
         self.map_from_mutable_inner(spanned_mutable, false)
     }
@@ -480,7 +480,7 @@ impl ArgumentOwnership {
 
     fn map_from_mutable_inner(
         &self,
-        Spanned(mutable, span): Spanned<Mutable<AnyValue>>,
+        Spanned(mutable, span): Spanned<AnyValueMutable>,
         is_late_bound: bool,
     ) -> ExecutionResult<ArgumentValue> {
         match self {

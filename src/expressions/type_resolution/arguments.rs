@@ -165,7 +165,7 @@ impl<T: ResolvableOwned<AnyValue>> ResolveAs<T> for Spanned<AnyValue> {
     }
 }
 
-impl<T: ResolvableShared<AnyValue> + ?Sized> ResolveAs<Shared<T>> for Spanned<Shared<AnyValue>> {
+impl<T: ResolvableShared<AnyValue> + ?Sized> ResolveAs<Shared<T>> for Spanned<AnyValueShared> {
     fn resolve_as(self, resolution_target: &str) -> ExecutionResult<Shared<T>> {
         T::resolve_shared(self, resolution_target)
     }
@@ -185,7 +185,7 @@ impl<'a, T: ResolvableShared<AnyValue> + ?Sized> ResolveAs<Spanned<&'a T>>
     }
 }
 
-impl<T: ResolvableMutable<AnyValue> + ?Sized> ResolveAs<Mutable<T>> for Spanned<Mutable<AnyValue>> {
+impl<T: ResolvableMutable<AnyValue> + ?Sized> ResolveAs<Mutable<T>> for Spanned<AnyValueMutable> {
     fn resolve_as(self, resolution_target: &str) -> ExecutionResult<Mutable<T>> {
         T::resolve_mutable(self, resolution_target)
     }

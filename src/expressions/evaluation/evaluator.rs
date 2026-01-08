@@ -146,9 +146,9 @@ impl From<NextActionInner> for NextAction {
 pub(crate) enum RequestedValue {
     // RequestedOwnership::Concrete(_)
     // -------------------------------
-    Owned(Owned<AnyValue>),
-    Shared(Shared<AnyValue>),
-    Mutable(Mutable<AnyValue>),
+    Owned(AnyValueOwned),
+    Shared(AnyValueShared),
+    Mutable(AnyValueMutable),
     CopyOnWrite(CopyOnWriteValue),
     Assignee(AssigneeValue),
 
@@ -162,21 +162,21 @@ pub(crate) enum RequestedValue {
 }
 
 impl RequestedValue {
-    pub(crate) fn expect_owned(self) -> Owned<AnyValue> {
+    pub(crate) fn expect_owned(self) -> AnyValueOwned {
         match self {
             RequestedValue::Owned(value) => value,
             _ => panic!("expect_owned() called on non-owned RequestedValue"),
         }
     }
 
-    pub(crate) fn expect_shared(self) -> Shared<AnyValue> {
+    pub(crate) fn expect_shared(self) -> AnyValueShared {
         match self {
             RequestedValue::Shared(shared) => shared,
             _ => panic!("expect_shared() called on non-shared RequestedValue"),
         }
     }
 
-    pub(super) fn expect_assignee(self) -> Assignee<AnyValue> {
+    pub(super) fn expect_assignee(self) -> AnyValueAssignee {
         match self {
             RequestedValue::Assignee(assignee) => assignee,
             _ => panic!("expect_assignee() called on non-assignee RequestedValue"),
@@ -214,9 +214,9 @@ impl RequestedValue {
 
     pub(crate) fn expect_any_value_and_map(
         self,
-        map_shared: impl FnOnce(Shared<AnyValue>) -> ExecutionResult<Shared<AnyValue>>,
-        map_mutable: impl FnOnce(Mutable<AnyValue>) -> ExecutionResult<Mutable<AnyValue>>,
-        map_owned: impl FnOnce(Owned<AnyValue>) -> ExecutionResult<Owned<AnyValue>>,
+        map_shared: impl FnOnce(AnyValueShared) -> ExecutionResult<AnyValueShared>,
+        map_mutable: impl FnOnce(AnyValueMutable) -> ExecutionResult<AnyValueMutable>,
+        map_owned: impl FnOnce(AnyValueOwned) -> ExecutionResult<AnyValueOwned>,
     ) -> ExecutionResult<RequestedValue> {
         Ok(match self {
             RequestedValue::LateBound(late_bound) => {
@@ -241,17 +241,17 @@ impl RequestedValue {
 #[allow(unused)]
 impl Spanned<RequestedValue> {
     #[inline]
-    pub(crate) fn expect_owned(self) -> Spanned<Owned<AnyValue>> {
+    pub(crate) fn expect_owned(self) -> Spanned<AnyValueOwned> {
         self.map(|v| v.expect_owned())
     }
 
     #[inline]
-    pub(crate) fn expect_shared(self) -> Spanned<Shared<AnyValue>> {
+    pub(crate) fn expect_shared(self) -> Spanned<AnyValueShared> {
         self.map(|v| v.expect_shared())
     }
 
     #[inline]
-    pub(crate) fn expect_assignee(self) -> Spanned<Assignee<AnyValue>> {
+    pub(crate) fn expect_assignee(self) -> Spanned<AnyValueAssignee> {
         self.map(|v| v.expect_assignee())
     }
 

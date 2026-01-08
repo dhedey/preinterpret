@@ -5,10 +5,10 @@ use super::*;
 ///
 /// See also [`RequestedValue`] for values that have been fully evaluated.
 pub(crate) enum ReturnedValue {
-    Owned(Owned<AnyValue>),
+    Owned(AnyValueOwned),
     CopyOnWrite(CopyOnWriteValue),
-    Mutable(Mutable<AnyValue>),
-    Shared(Shared<AnyValue>),
+    Mutable(AnyValueMutable),
+    Shared(AnyValueShared),
 }
 
 // TODO: Find some way to selectively enable only on MSRV (e.g. following the build.rs feature flag pattern)
@@ -26,13 +26,13 @@ impl IsReturnable for ReturnedValue {
     }
 }
 
-impl IsReturnable for Shared<AnyValue> {
+impl IsReturnable for AnyValueShared {
     fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
         Ok(ReturnedValue::Shared(self))
     }
 }
 
-impl IsReturnable for Mutable<AnyValue> {
+impl IsReturnable for AnyValueMutable {
     fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
         Ok(ReturnedValue::Mutable(self))
     }

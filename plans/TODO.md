@@ -246,11 +246,8 @@ First, read the @./2025-11-vision.md
     - [x] Remove `OwnedValue`
     - [x] Get rid of `Owned`
   - [ ] Stage 2 of the form migration:
-    - [ ] Improve mappers:
-      - [ ] Try to replace `ToRefMapper` etc with a `FormMapper::<T, F1, F2>::map_content(content, |x| -> y)`
-      - [ ] 6 methods... `map_content`, `map_content_ref`, `map_content_mut`
-      - [ ] ... and a `ReduceMapper::<F1, T>::map(content, |x| -> y)`
-      - [ ] ... Probably remove e.g. `map_with` etc on actual?
+    - [x] Attempt to improve mappers:
+      - [x] Try to replace `ToRefMapper` etc with a `FormMapper::<T, F1, F2>::map_content(content, |x| -> y)` - 6 methods... `map_content`, `map_content_ref`, `map_content_mut` and `try_x` *3; ... and a `ReduceMapper::<F1, T>::map(content, |x| -> y)`... sadly not possible! The lambda needs to be higher-ordered and work for all `L: IsValueLeaf`.
     - [ ] Migrate `Shared`, `Mutable`, `Assignee`
   - [ ] Stage 3
     - [ ] Migrate `CopyOnWrite` and relevant interconversions

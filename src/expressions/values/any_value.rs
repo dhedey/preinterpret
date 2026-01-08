@@ -1,8 +1,16 @@
 use super::*;
 
 pub(crate) type AnyValue = AnyValueContent<'static, BeOwned>;
+/// For symmetry
+pub(crate) type AnyValueOwned = AnyValue;
 pub(crate) type AnyValueRef<'a> = AnyValueContent<'a, BeRef>;
 pub(crate) type AnyValueMut<'a> = AnyValueContent<'a, BeMut>;
+pub(crate) type AnyValueShared = Shared<AnyValue>;
+pub(crate) type AnyValueMutable = Mutable<AnyValue>;
+pub(crate) type AnyValueAssignee = Assignee<AnyValue>;
+// pub(crate) type AnyValueShared = AnyValueContent<'static, BeShared>;
+// pub(crate) type AnyValueMutable = AnyValueContent<'static, BeMutable>;
+// pub(crate) type AnyValueAssignee = AnyValueContent<'static, BeAssignee>;
 
 define_parent_type! {
     pub(crate) AnyType,
@@ -38,7 +46,7 @@ define_type_features! {
                 this.clone_to_owned_infallible()
             }
 
-            fn as_mut(Spanned(this, span): Spanned<ArgumentValue>) -> ExecutionResult<Mutable<AnyValue>> {
+            fn as_mut(Spanned(this, span): Spanned<ArgumentValue>) -> ExecutionResult<AnyValueMutable> {
                 Ok(match this {
                     ArgumentValue::Owned(owned) => Mutable::new_from_owned(owned),
                     ArgumentValue::CopyOnWrite(copy_on_write) => ArgumentOwnership::Mutable
