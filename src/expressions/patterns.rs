@@ -113,7 +113,7 @@ impl HandleDestructure for ArrayPattern {
         interpreter: &mut Interpreter,
         value: AnyValue,
     ) -> ExecutionResult<()> {
-        let array: ArrayValue = Spanned(value.into_owned(), self.brackets.span_range())
+        let array: ArrayValue = Spanned(value, self.brackets.span_range())
             .resolve_as("The value destructured with an array pattern")?;
         let mut has_seen_dot_dot = false;
         let mut prefix_assignees = Vec::new();
@@ -228,7 +228,7 @@ impl HandleDestructure for ObjectPattern {
         interpreter: &mut Interpreter,
         value: AnyValue,
     ) -> ExecutionResult<()> {
-        let object: ObjectValue = Spanned(value.into_owned(), self.braces.span_range())
+        let object: ObjectValue = Spanned(value, self.braces.span_range())
             .resolve_as("The value destructured with an object pattern")?;
         let mut value_map = object.entries;
         let mut already_used_keys = HashSet::with_capacity(self.entries.len());
@@ -253,7 +253,7 @@ impl HandleDestructure for ObjectPattern {
             let value = value_map
                 .remove(&key)
                 .map(|entry| entry.value)
-                .unwrap_or_else(|| ().into_value());
+                .unwrap_or_else(|| ().into_any_value());
             already_used_keys.insert(key);
             pattern.handle_destructure(interpreter, value)?;
         }

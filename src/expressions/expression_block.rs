@@ -225,7 +225,7 @@ impl ScopedBlock {
     pub(crate) fn evaluate_owned(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Spanned<OwnedValue>> {
+    ) -> ExecutionResult<Spanned<AnyValue>> {
         let span_range = self.span().span_range();
         self.evaluate(interpreter, RequestedOwnership::owned())
             .map(|value| Spanned(value.expect_owned(), span_range))
@@ -271,7 +271,7 @@ impl UnscopedBlock {
     pub(crate) fn evaluate_owned(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Spanned<OwnedValue>> {
+    ) -> ExecutionResult<Spanned<AnyValue>> {
         let span_range = self.span().span_range();
         self.evaluate(interpreter, RequestedOwnership::owned())
             .map(|value| Spanned(value.expect_owned(), span_range))
@@ -332,6 +332,6 @@ impl ExpressionBlockContent {
                 statement.evaluate_as_statement(interpreter)?;
             }
         }
-        ownership.map_from_owned(Spanned(().into_owned_value(), output_span))
+        ownership.map_from_owned(Spanned(().into_any_value(), output_span))
     }
 }

@@ -41,7 +41,7 @@ impl Expression {
     pub(crate) fn evaluate_owned(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Spanned<OwnedValue>> {
+    ) -> ExecutionResult<Spanned<AnyValue>> {
         Ok(self
             .evaluate(interpreter, RequestedOwnership::owned())?
             .expect_owned())

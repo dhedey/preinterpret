@@ -69,7 +69,7 @@ macro_rules! define_typed_object {
 
         impl ResolvableOwned<AnyValue> for $model {
             fn resolve_from_value(value: AnyValue, context: ResolutionContext) -> ExecutionResult<Self> {
-                Self::from_object_value(ObjectValue::resolve_spanned_owned_from_value(value, context)?)
+                Self::from_object_value(ObjectValue::resolve_spanned_from_value(value, context)?)
             }
         }
 
@@ -94,8 +94,7 @@ macro_rules! define_typed_object {
         }
 
         impl $model {
-            fn from_object_value(Spanned(object, span_range): Spanned<Owned<ObjectValue>>) -> ExecutionResult<Self> {
-                let mut object = object.into_inner();
+            fn from_object_value(Spanned(mut object, span_range): Spanned<ObjectValue>) -> ExecutionResult<Self> {
                 (&object).spanned(span_range).validate(&Self::validation())?;
                 Ok($model {
                     $(
@@ -109,14 +108,14 @@ macro_rules! define_typed_object {
                                 {
                                     // Need to return the $optional_field_type
                                     match optional {
-                                        Some(value) => ResolveAs::<$optional_field_type>::resolve_as(Spanned(value.into_owned(), span_range), stringify!($optional_field))?,
+                                        Some(value) => ResolveAs::<$optional_field_type>::resolve_as(Spanned(value, span_range), stringify!($optional_field))?,
                                         None => $($optional_field_default)?,
                                     }
                                 }
                                 {
                                     // Need to return Option<$optional_field_type>
                                     match optional {
-                                        Some(value) => Some(ResolveAs::<$optional_field_type>::resolve_as(Spanned(value.into_owned(), span_range), stringify!($optional_field))?),
+                                        Some(value) => Some(ResolveAs::<$optional_field_type>::resolve_as(Spanned(value, span_range), stringify!($optional_field))?),
                                         None => None,
                                     }
                                 }

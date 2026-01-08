@@ -111,24 +111,12 @@ where
     }
 }
 
-impl<T: ResolvableOwned<AnyValue> + ResolvableArgumentTarget> IsArgument for Owned<T> {
-    type ValueType = T::ValueType;
-    const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
-
-    fn from_argument(argument: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
-        T::resolve_owned(argument.expect_owned(), "This argument")
-    }
-}
-
 impl<T: ResolvableOwned<AnyValue> + ResolvableArgumentTarget> IsArgument for T {
     type ValueType = T::ValueType;
     const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
 
     fn from_argument(argument: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
-        T::resolve_value(
-            argument.expect_owned().map(|owned| owned.0),
-            "This argument",
-        )
+        T::resolve_value(argument.expect_owned(), "This argument")
     }
 }
 
@@ -144,7 +132,7 @@ where
         value.expect_copy_on_write().map(
             |v| T::resolve_shared(v.spanned(span), "This argument"),
             |v| {
-                <T::Owned as ResolvableOwned<AnyValue>>::resolve_owned(
+                <T::Owned as ResolvableOwned<AnyValue>>::resolve_value(
                     v.spanned(span),
                     "This argument",
                 )
@@ -168,18 +156,12 @@ pub(crate) trait ResolveAs<T> {
     fn resolve_as(self, resolution_target: &str) -> ExecutionResult<T>;
 }
 
-impl<T: ResolvableOwned<V>, V> ResolveAs<T> for Spanned<Owned<V>> {
-    fn resolve_as(self, resolution_target: &str) -> ExecutionResult<T> {
-        T::resolve_value(self.map(|owned| owned.0), resolution_target)
-    }
-}
-
 // Sadly this can't be changed Value => V because of spurious issues with
 // https://github.com/rust-lang/rust/issues/48869
 // Instead, we could introduce a different trait ResolveAs2 if needed.
-impl<T: ResolvableOwned<AnyValue>> ResolveAs<Owned<T>> for Spanned<Owned<AnyValue>> {
-    fn resolve_as(self, resolution_target: &str) -> ExecutionResult<Owned<T>> {
-        T::resolve_owned(self, resolution_target)
+impl<T: ResolvableOwned<AnyValue>> ResolveAs<T> for Spanned<AnyValue> {
+    fn resolve_as(self, resolution_target: &str) -> ExecutionResult<T> {
+        T::resolve_value(self, resolution_target)
     }
 }
 
@@ -232,19 +214,12 @@ pub(crate) trait ResolvableArgumentTarget {
 pub(crate) trait ResolvableOwned<T>: Sized {
     fn resolve_from_value(value: T, context: ResolutionContext) -> ExecutionResult<Self>;
 
-    fn resolve_spanned_owned_from_value(
+    fn resolve_spanned_from_value(
         value: T,
         context: ResolutionContext,
     ) -> ExecutionResult<Spanned<Owned<Self>>> {
         let span_range = context.span_range;
-        Self::resolve_from_value(value, context).map(|v| Owned(v).spanned(*span_range))
-    }
-
-    fn resolve_owned_from_value(
-        value: T,
-        context: ResolutionContext,
-    ) -> ExecutionResult<Owned<Self>> {
-        Self::resolve_from_value(value, context).map(Owned::new)
+        Self::resolve_from_value(value, context).map(|x| x.spanned(*span_range))
     }
 
     /// The `resolution_target` should be capitalized, e.g. "This argument" or "The value destructed with an object pattern"
@@ -257,18 +232,6 @@ pub(crate) trait ResolvableOwned<T>: Sized {
             resolution_target,
         };
         Self::resolve_from_value(value, context)
-    }
-
-    /// The `resolution_target` should be capitalized, e.g. "This argument" or "The value destructed with an object pattern"
-    fn resolve_owned(
-        Spanned(value, span): Spanned<Owned<T>>,
-        resolution_target: &str,
-    ) -> ExecutionResult<Owned<Self>> {
-        let context = ResolutionContext {
-            span_range: &span,
-            resolution_target,
-        };
-        Self::resolve_from_value(value.into_inner(), context).map(Owned::new)
     }
 }
 

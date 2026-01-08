@@ -143,8 +143,7 @@ define_type_features! {
 
             // Opens a group with the specified delimiter character ('(', '{', or '[').
             // Must be paired with `close`.
-            [context] fn open(this: Spanned<Shared<ParserHandle>>, Spanned(delimiter_char, char_span): Spanned<Owned<char>>) -> ExecutionResult<()> {
-                let delimiter_char = delimiter_char.into_inner();
+            [context] fn open(this: Spanned<Shared<ParserHandle>>, Spanned(delimiter_char, char_span): Spanned<char>) -> ExecutionResult<()> {
                 let delimiter = delimiter_from_open_char(delimiter_char)
                     .ok_or_else(|| char_span.value_error(format!(
                         "Invalid open delimiter '{}'. Expected '(', '{{', or '['", delimiter_char
@@ -157,8 +156,7 @@ define_type_features! {
 
             // Closes the current group. Must be paired with a prior `open`.
             // The close character must match: ')' for '(', '}' for '{', ']' for '['
-            [context] fn close(this: Spanned<Shared<ParserHandle>>, Spanned(delimiter_char, char_span): Spanned<Owned<char>>) -> ExecutionResult<()> {
-                let delimiter_char = delimiter_char.into_inner();
+            [context] fn close(this: Spanned<Shared<ParserHandle>>, Spanned(delimiter_char, char_span): Spanned<char>) -> ExecutionResult<()> {
                 let expected_delimiter = delimiter_from_close_char(delimiter_char)
                     .ok_or_else(|| char_span.value_error(format!(
                         "Invalid close delimiter '{}'. Expected ')', '}}', or ']'", delimiter_char
@@ -195,7 +193,7 @@ define_type_features! {
 
             [context] fn inferred_literal(this: Spanned<Shared<ParserHandle>>) -> ExecutionResult<AnyValue> {
                 let literal = parser(this, context)?.parse()?;
-                Ok(AnyValue::for_literal(literal).into_value())
+                Ok(AnyValue::for_literal(literal).into_any_value())
             }
 
             [context] fn is_char(this: Spanned<Shared<ParserHandle>>) -> ExecutionResult<bool> {
@@ -237,7 +235,7 @@ define_type_features! {
 
             [context] fn integer(this: Spanned<Shared<ParserHandle>>) -> ExecutionResult<IntegerValue> {
                 let integer: syn::LitInt = parser(this, context)?.parse()?;
-                Ok(IntegerValue::for_litint(&integer)?.into_inner())
+                Ok(IntegerValue::for_litint(&integer)?)
             }
 
             [context] fn is_float(this: Spanned<Shared<ParserHandle>>) -> ExecutionResult<bool> {
@@ -272,27 +270,27 @@ impl_resolvable_argument_for! {
     }
 }
 
-impl IntoValue for TokenTree {
-    fn into_value(self) -> AnyValue {
-        OutputStream::new_with(|s| s.push_raw_token_tree(self)).into_value()
+impl IntoAnyValue for TokenTree {
+    fn into_any_value(self) -> AnyValue {
+        OutputStream::new_with(|s| s.push_raw_token_tree(self)).into_any_value()
     }
 }
 
-impl IntoValue for Ident {
-    fn into_value(self) -> AnyValue {
-        OutputStream::new_with(|s| s.push_ident(self)).into_value()
+impl IntoAnyValue for Ident {
+    fn into_any_value(self) -> AnyValue {
+        OutputStream::new_with(|s| s.push_ident(self)).into_any_value()
     }
 }
 
-impl IntoValue for Punct {
-    fn into_value(self) -> AnyValue {
-        OutputStream::new_with(|s| s.push_punct(self)).into_value()
+impl IntoAnyValue for Punct {
+    fn into_any_value(self) -> AnyValue {
+        OutputStream::new_with(|s| s.push_punct(self)).into_any_value()
     }
 }
 
-impl IntoValue for Literal {
-    fn into_value(self) -> AnyValue {
-        OutputStream::new_with(|s| s.push_literal(self)).into_value()
+impl IntoAnyValue for Literal {
+    fn into_any_value(self) -> AnyValue {
+        OutputStream::new_with(|s| s.push_literal(self)).into_any_value()
     }
 }
 
@@ -343,7 +341,7 @@ impl Evaluate for ParseTemplateLiteral {
         parser.parse_with(interpreter, |interpreter| self.content.consume(interpreter))?;
 
         ownership
-            .map_from_owned(Spanned(().into_owned_value(), self.span_range()))
+            .map_from_owned(Spanned(().into_any_value(), self.span_range()))
             .map(|spanned| spanned.0)
     }
 }

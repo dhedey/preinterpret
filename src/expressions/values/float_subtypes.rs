@@ -123,13 +123,13 @@ macro_rules! impl_float_operations {
                         property_name: &str,
                     ) -> Option<AnyValue> {
                         match property_name {
-                            "MAX" => Some($float_type::MAX.into_value()),
-                            "MIN" => Some($float_type::MIN.into_value()),
-                            "MIN_POSITIVE" => Some($float_type::MIN_POSITIVE.into_value()),
-                            "INFINITY" => Some($float_type::INFINITY.into_value()),
-                            "NEG_INFINITY" => Some($float_type::NEG_INFINITY.into_value()),
-                            "NAN" => Some($float_type::NAN.into_value()),
-                            "EPSILON" => Some($float_type::EPSILON.into_value()),
+                            "MAX" => Some($float_type::MAX.into_any_value()),
+                            "MIN" => Some($float_type::MIN.into_any_value()),
+                            "MIN_POSITIVE" => Some($float_type::MIN_POSITIVE.into_any_value()),
+                            "INFINITY" => Some($float_type::INFINITY.into_any_value()),
+                            "NEG_INFINITY" => Some($float_type::NEG_INFINITY.into_any_value()),
+                            "NAN" => Some($float_type::NAN.into_any_value()),
+                            "EPSILON" => Some($float_type::EPSILON.into_any_value()),
                             _ => None,
                         }
                     }
@@ -167,7 +167,7 @@ macro_rules! impl_resolvable_float_subtype {
             }
         }
 
-        impl ResolveAs<OptionalSuffix<$type>> for Spanned<OwnedValue> {
+        impl ResolveAs<OptionalSuffix<$type>> for Spanned<AnyValue> {
             fn resolve_as(self, resolution_target: &str) -> ExecutionResult<OptionalSuffix<$type>> {
                 let span = self.span_range();
                 let float_value: FloatValue = self.resolve_as(resolution_target)?;

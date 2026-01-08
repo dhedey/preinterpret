@@ -82,11 +82,11 @@ impl UnaryOperation {
         operand_span_range
     }
 
-    pub(super) fn evaluate<T: IntoValue>(
+    pub(super) fn evaluate<T: IntoAnyValue>(
         &self,
-        Spanned(input, input_span): Spanned<Owned<T>>,
+        Spanned(input, input_span): Spanned<T>,
     ) -> ExecutionResult<Spanned<ReturnedValue>> {
-        let input = input.into_owned_value();
+        let input = input.into_any_value();
         let method = input
             .kind()
             .feature_resolver()
@@ -278,12 +278,12 @@ impl BinaryOperation {
     pub(super) fn lazy_evaluate(
         &self,
         left: Spanned<&AnyValue>,
-    ) -> ExecutionResult<Option<OwnedValue>> {
+    ) -> ExecutionResult<Option<AnyValue>> {
         match self {
             BinaryOperation::LogicalAnd { .. } => {
                 let bool: Spanned<&bool> = left.resolve_as("The left operand to &&")?;
                 if !**bool {
-                    Ok(Some((*bool).into_owned_value()))
+                    Ok(Some((*bool).into_any_value()))
                 } else {
                     Ok(None)
                 }
@@ -291,7 +291,7 @@ impl BinaryOperation {
             BinaryOperation::LogicalOr { .. } => {
                 let bool: Spanned<&bool> = left.resolve_as("The left operand to ||")?;
                 if **bool {
-                    Ok(Some((*bool).into_owned_value()))
+                    Ok(Some((*bool).into_any_value()))
                 } else {
                     Ok(None)
                 }
@@ -301,13 +301,13 @@ impl BinaryOperation {
     }
 
     #[allow(unused)]
-    pub(crate) fn evaluate<L: IntoValue, R: IntoValue>(
+    pub(crate) fn evaluate<L: IntoAnyValue, R: IntoAnyValue>(
         &self,
-        Spanned(left, left_span): Spanned<Owned<L>>,
-        Spanned(right, right_span): Spanned<Owned<R>>,
+        Spanned(left, left_span): Spanned<L>,
+        Spanned(right, right_span): Spanned<R>,
     ) -> ExecutionResult<Spanned<ReturnedValue>> {
-        let left = left.into_owned_value();
-        let right = right.into_owned_value();
+        let left = left.into_any_value();
+        let right = right.into_any_value();
         match left
             .kind()
             .feature_resolver()

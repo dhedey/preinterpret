@@ -97,9 +97,9 @@ impl ValuesEqual for OutputStream {
     }
 }
 
-impl IntoValue for TokenStream {
-    fn into_value(self) -> AnyValue {
-        OutputStream::raw(self).into_value()
+impl IntoAnyValue for TokenStream {
+    fn into_any_value(self) -> AnyValue {
+        OutputStream::raw(self).into_any_value()
     }
 }
 
@@ -172,7 +172,7 @@ define_type_features! {
             [context] fn to_literal(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<AnyValue> {
                 let string = this.concat_content(&ConcatBehaviour::literal(this.span_range()));
                 let literal = string_interface::methods::to_literal(context, string.as_str().into_spanned_ref(this.span_range()))?;
-                Ok(AnyValue::for_literal(literal).into_value())
+                Ok(AnyValue::for_literal(literal).into_any_value())
             }
 
             // CORE METHODS
@@ -222,8 +222,8 @@ define_type_features! {
                 }
             }
 
-            [context] fn reinterpret_as_run(Spanned(this, span_range): Spanned<Owned<OutputStream>>) -> ExecutionResult<OwnedValue> {
-                let source = this.into_inner().into_token_stream();
+            [context] fn reinterpret_as_run(Spanned(this, span_range): Spanned<OutputStream>) -> ExecutionResult<AnyValue> {
+                let source = this.into_token_stream();
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(ExpressionBlockContent::parse, ExpressionBlockContent::control_flow_pass)?;
                 let mut inner_interpreter = Interpreter::new(scope_definitions);
                 let return_value = reparsed.evaluate_spanned(&mut inner_interpreter, span_range, RequestedOwnership::owned())?.expect_owned();
@@ -233,8 +233,8 @@ define_type_features! {
                 Ok(return_value.0)
             }
 
-            fn reinterpret_as_stream(Spanned(this, span_range): Spanned<Owned<OutputStream>>) -> ExecutionResult<OutputStream> {
-                let source = this.into_inner().into_token_stream();
+            fn reinterpret_as_stream(Spanned(this, span_range): Spanned<OutputStream>) -> ExecutionResult<OutputStream> {
+                let source = this.into_token_stream();
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(
                     |input| SourceStream::parse_with_span(input, span_range.span_from_join_else_start()),
                     SourceStream::control_flow_pass,
@@ -245,14 +245,13 @@ define_type_features! {
             }
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_coerced_to_value(Spanned(this, span): Spanned<Owned<OutputStream>>) -> ExecutionResult<ReturnedValue> {
-                let this = this.into_inner();
+            [context] fn cast_coerced_to_value(Spanned(this, span): Spanned<OutputStream>) -> ExecutionResult<ReturnedValue> {
                 let coerced = this.coerce_into_value();
                 if let AnyValue::Stream(_) = &coerced {
                     return span.value_err("The stream could not be coerced into a single value");
                 }
                 // Re-run the cast operation on the coerced value
-                Ok(context.operation.evaluate(Spanned(coerced.into_owned(), span))?.0)
+                Ok(context.operation.evaluate(Spanned(coerced, span))?.0)
             }
         }
         pub(crate) mod binary_operations {
@@ -522,26 +521,26 @@ impl Interpret for ConcatenatedStreamLiteral {
             .unwrap_or_else(|| self.span_range())
             .join_into_span_else_start();
         let value = match self.kind {
-            ConcatenatedStreamLiteralKind::String => string.into_value(),
+            ConcatenatedStreamLiteralKind::String => string.into_any_value(),
             ConcatenatedStreamLiteralKind::Ident => {
                 let str = &string;
-                string_to_ident(str, self, ident_span)?.into_value()
+                string_to_ident(str, self, ident_span)?.into_any_value()
             }
             ConcatenatedStreamLiteralKind::IdentCamel => {
                 let str = &string_conversion::to_upper_camel_case(&string);
-                string_to_ident(str, self, ident_span)?.into_value()
+                string_to_ident(str, self, ident_span)?.into_any_value()
             }
             ConcatenatedStreamLiteralKind::IdentSnake => {
                 let str = &string_conversion::to_lower_snake_case(&string);
-                string_to_ident(str, self, ident_span)?.into_value()
+                string_to_ident(str, self, ident_span)?.into_any_value()
             }
             ConcatenatedStreamLiteralKind::IdentUpperSnake => {
                 let str = &string_conversion::to_upper_snake_case(&string);
-                string_to_ident(str, self, ident_span)?.into_value()
+                string_to_ident(str, self, ident_span)?.into_any_value()
             }
             ConcatenatedStreamLiteralKind::Literal => {
                 let str = &string;
-                string_to_literal(str, self, ident_span)?.into_value()
+                string_to_literal(str, self, ident_span)?.into_any_value()
             }
         };
         value.as_ref_value().output_to(

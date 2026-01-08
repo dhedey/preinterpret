@@ -281,7 +281,7 @@ impl std::fmt::Debug for ControlFlowInterrupt {
 impl ControlFlowInterrupt {
     pub(crate) fn new_break(
         target_catch_location: CatchLocationId,
-        value: Option<OwnedValue>,
+        value: Option<AnyValue>,
     ) -> Self {
         ControlFlowInterrupt::Break(BreakInterrupt {
             target_catch_location,
@@ -316,7 +316,7 @@ impl ControlFlowInterrupt {
 
 pub(crate) struct BreakInterrupt {
     target_catch_location: CatchLocationId,
-    value: Option<OwnedValue>,
+    value: Option<AnyValue>,
 }
 
 impl BreakInterrupt {
@@ -327,7 +327,7 @@ impl BreakInterrupt {
     ) -> ExecutionResult<RequestedValue> {
         let value = match self.value {
             Some(value) => value,
-            None => ().into_owned_value(),
+            None => ().into_any_value(),
         };
         ownership
             .map_from_owned(Spanned(value, span_range))

@@ -65,8 +65,8 @@ impl ParseSource for VariableDefinition {
 }
 
 impl VariableDefinition {
-    pub(crate) fn define(&self, interpreter: &mut Interpreter, value_source: impl IntoValue) {
-        interpreter.define_variable(self.id, value_source.into_value());
+    pub(crate) fn define(&self, interpreter: &mut Interpreter, value_source: impl IntoAnyValue) {
+        interpreter.define_variable(self.id, value_source.into_any_value());
     }
 }
 

@@ -127,8 +127,7 @@ define_type_features! {
         pub(crate) mod methods {
         }
         pub(crate) mod unary_operations {
-            fn neg(Spanned(value, span): Spanned<Owned<UntypedInteger>>) -> ExecutionResult<UntypedInteger> {
-                let value = value.into_inner();
+            fn neg(Spanned(value, span): Spanned<UntypedInteger>) -> ExecutionResult<UntypedInteger> {
                 let input = value.into_fallback();
                 match input.checked_neg() {
                     Some(negated) => Ok(UntypedInteger::from_fallback(negated)),

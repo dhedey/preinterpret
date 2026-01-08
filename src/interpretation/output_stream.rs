@@ -123,9 +123,9 @@ impl OutputStream {
     pub(crate) fn coerce_into_value(self) -> AnyValue {
         let parse_result = self.clone().parse_as::<syn::Lit>();
         match parse_result {
-            Ok(syn_lit) => AnyValue::for_syn_lit(syn_lit).into_inner(),
+            Ok(syn_lit) => AnyValue::for_syn_lit(syn_lit),
             // Keep as stream otherwise
-            Err(_) => self.into_value(),
+            Err(_) => self.into_any_value(),
         }
     }
 

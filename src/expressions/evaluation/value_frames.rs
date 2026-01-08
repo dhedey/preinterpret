@@ -6,15 +6,15 @@ use super::*;
 /// It is typically paired with an [`ArgumentOwnership`] (maybe wrapped in a [`RequestedOwnership`])
 /// which indicates what ownership type to resolve to.
 pub(crate) enum ArgumentValue {
-    Owned(OwnedValue),
+    Owned(Owned<AnyValue>),
     CopyOnWrite(CopyOnWriteValue),
-    Mutable(MutableValue),
-    Assignee(AssigneeValue),
-    Shared(SharedValue),
+    Mutable(Mutable<AnyValue>),
+    Assignee(Assignee<AnyValue>),
+    Shared(Shared<AnyValue>),
 }
 
 impl ArgumentValue {
-    pub(crate) fn expect_owned(self) -> OwnedValue {
+    pub(crate) fn expect_owned(self) -> Owned<AnyValue> {
         match self {
             ArgumentValue::Owned(value) => value,
             _ => panic!("expect_owned() called on a non-owned ArgumentValue"),
@@ -28,21 +28,21 @@ impl ArgumentValue {
         }
     }
 
-    pub(crate) fn expect_mutable(self) -> MutableValue {
+    pub(crate) fn expect_mutable(self) -> Mutable<AnyValue> {
         match self {
             ArgumentValue::Mutable(value) => value,
             _ => panic!("expect_mutable() called on a non-mutable ArgumentValue"),
         }
     }
 
-    pub(crate) fn expect_assignee(self) -> AssigneeValue {
+    pub(crate) fn expect_assignee(self) -> Assignee<AnyValue> {
         match self {
             ArgumentValue::Assignee(value) => value,
             _ => panic!("expect_assignee() called on a non-assignee ArgumentValue"),
         }
     }
 
-    pub(crate) fn expect_shared(self) -> SharedValue {
+    pub(crate) fn expect_shared(self) -> Shared<AnyValue> {
         match self {
             ArgumentValue::Shared(value) => value,
             _ => panic!("expect_shared() called on a non-shared ArgumentValue"),
@@ -52,22 +52,22 @@ impl ArgumentValue {
 
 impl Spanned<ArgumentValue> {
     #[inline]
-    pub(crate) fn expect_owned(self) -> Spanned<OwnedValue> {
+    pub(crate) fn expect_owned(self) -> Spanned<Owned<AnyValue>> {
         self.map(|value| value.expect_owned())
     }
 
     #[inline]
-    pub(crate) fn expect_mutable(self) -> Spanned<MutableValue> {
+    pub(crate) fn expect_mutable(self) -> Spanned<Mutable<AnyValue>> {
         self.map(|value| value.expect_mutable())
     }
 
     #[inline]
-    pub(crate) fn expect_assignee(self) -> Spanned<AssigneeValue> {
+    pub(crate) fn expect_assignee(self) -> Spanned<Assignee<AnyValue>> {
         self.map(|value| value.expect_assignee())
     }
 
     #[inline]
-    pub(crate) fn expect_shared(self) -> Spanned<SharedValue> {
+    pub(crate) fn expect_shared(self) -> Spanned<Shared<AnyValue>> {
         self.map(|value| value.expect_shared())
     }
 }
@@ -169,7 +169,7 @@ impl RequestedOwnership {
     }
 
     pub(crate) fn map_none(self, span: SpanRange) -> ExecutionResult<Spanned<RequestedValue>> {
-        self.map_from_owned(Spanned(().into_owned_value(), span))
+        self.map_from_owned(Spanned(().into_any_value(), span))
     }
 
     pub(crate) fn map_from_late_bound(
@@ -240,7 +240,7 @@ impl RequestedOwnership {
 
     pub(crate) fn map_from_owned(
         &self,
-        Spanned(value, span): Spanned<OwnedValue>,
+        Spanned(value, span): Spanned<AnyValue>,
     ) -> ExecutionResult<Spanned<RequestedValue>> {
         Ok(Spanned(
             match self {
@@ -277,7 +277,7 @@ impl RequestedOwnership {
 
     pub(crate) fn map_from_mutable(
         &self,
-        Spanned(mutable, span): Spanned<MutableValue>,
+        Spanned(mutable, span): Spanned<Mutable<AnyValue>>,
     ) -> ExecutionResult<Spanned<RequestedValue>> {
         Ok(Spanned(
             match self {
@@ -466,7 +466,7 @@ impl ArgumentOwnership {
 
     pub(crate) fn map_from_mutable(
         &self,
-        spanned_mutable: Spanned<MutableValue>,
+        spanned_mutable: Spanned<Mutable<AnyValue>>,
     ) -> ExecutionResult<ArgumentValue> {
         self.map_from_mutable_inner(spanned_mutable, false)
     }
@@ -480,7 +480,7 @@ impl ArgumentOwnership {
 
     fn map_from_mutable_inner(
         &self,
-        Spanned(mutable, span): Spanned<MutableValue>,
+        Spanned(mutable, span): Spanned<Mutable<AnyValue>>,
         is_late_bound: bool,
     ) -> ExecutionResult<ArgumentValue> {
         match self {
@@ -506,14 +506,14 @@ impl ArgumentOwnership {
 
     pub(crate) fn map_from_owned(
         &self,
-        owned: Spanned<OwnedValue>,
+        owned: Spanned<AnyValue>,
     ) -> ExecutionResult<ArgumentValue> {
         self.map_from_owned_with_is_last_use(owned, false)
     }
 
     fn map_from_owned_with_is_last_use(
         &self,
-        Spanned(owned, span): Spanned<OwnedValue>,
+        Spanned(owned, span): Spanned<AnyValue>,
         is_from_last_use: bool,
     ) -> ExecutionResult<ArgumentValue> {
         match self {
@@ -655,7 +655,7 @@ impl EvaluationFrame for ArrayBuilder {
         Spanned(value, _span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         let value = value.expect_owned();
-        self.evaluated_items.push(value.into_inner());
+        self.evaluated_items.push(value);
         self.next(context)
     }
 }
@@ -750,7 +750,7 @@ impl EvaluationFrame for Box<ObjectBuilder> {
                 context.request_owned(self, value_node)
             }
             Some(PendingEntryPath::OnValueBranch { key, key_span }) => {
-                let value = value.expect_owned().into_inner();
+                let value = value.expect_owned();
                 let entry = ObjectEntry { key_span, value };
                 self.evaluated_entries.insert(key, entry);
                 self.next(context)?
@@ -965,7 +965,7 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
                 mutable
                     .try_map(|value| value.as_mut_value().property_mut(&self.access, auto_create))
             },
-            |owned| owned.try_map(|value| value.into_property(&self.access)),
+            |owned| owned.into_property(&self.access),
         )?;
         // The result span covers source through property
         let result_span = SpanRange::new_between(source_span, self.access.span_range());
@@ -1044,7 +1044,7 @@ impl EvaluationFrame for ValueIndexAccessBuilder {
                                 .index_mut(self.access, index, auto_create)
                         })
                     },
-                    |owned| owned.try_map(|value| value.into_indexed(self.access, index)),
+                    |owned| owned.into_indexed(self.access, index),
                 )?;
                 let result_span = SpanRange::new_between(source_span, self.access.span_range());
                 context.return_not_necessarily_matching_requested(Spanned(result, result_span))?
@@ -1113,7 +1113,7 @@ impl EvaluationFrame for RangeBuilder {
         Spanned(value, _span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         // TODO[range-refactor]: Change to not always clone the value
-        let value = value.expect_owned().into_inner();
+        let value = value.expect_owned();
         Ok(match (self.state, self.range_limits) {
             (RangePath::OnLeftBranch { right: Some(right) }, _) => {
                 self.state = RangePath::OnRightBranch { left: Some(value) };
@@ -1203,7 +1203,7 @@ impl EvaluationFrame for AssignmentBuilder {
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
             AssignmentPath::OnValueBranch { assignee } => {
-                let value = value.expect_owned().into_inner();
+                let value = value.expect_owned();
                 self.state = AssignmentPath::OnAwaitingAssignment;
                 context.request_assignment(self, assignee, value)
             }

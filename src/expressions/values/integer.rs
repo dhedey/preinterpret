@@ -28,7 +28,7 @@ pub(crate) type IntegerValue = IntegerContent<'static, BeOwned>;
 pub(crate) type IntegerValueRef<'a> = IntegerContent<'a, BeRef>;
 
 impl IntegerValue {
-    pub(super) fn for_litint(lit: &syn::LitInt) -> ParseResult<Owned<Self>> {
+    pub(super) fn for_litint(lit: &syn::LitInt) -> ParseResult<Self> {
         Ok(match lit.suffix() {
             "" => IntegerContent::Untyped(UntypedInteger::new_from_lit_int(lit)?),
             "u8" => IntegerContent::U8(lit.base10_parse()?),
@@ -48,8 +48,7 @@ impl IntegerValue {
                     "The literal suffix {suffix} is not supported in preinterpret expressions"
                 ));
             }
-        }
-        .into_owned())
+        })
     }
 
     pub(super) fn to_literal(self, span: Span) -> Literal {

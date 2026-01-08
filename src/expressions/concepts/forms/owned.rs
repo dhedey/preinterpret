@@ -1,12 +1,11 @@
 use super::*;
 
-pub(crate) type QqqOwned<T> = Actual<'static, T, BeOwned>;
-
-pub(crate) type QqqOwnedValue = Owned<AnyType>;
+/// Just [`T`]! This exists simply to be a name for symmetry with e.g. Shared<T> or Mutable<T>.
+pub(crate) type Owned<T> = T;
 
 /// Represents floating owned values.
 ///
-/// If you need span information, wrap with `Spanned<OwnedValue>`. For example, with `x.y[4]`, this would capture both:
+/// If you need span information, wrap with `Spanned<AnyValue>`. For example, with `x.y[4]`, this would capture both:
 /// * The output owned value
 /// * The lexical span of the tokens `x.y[4]`
 #[derive(Copy, Clone)]
@@ -47,7 +46,7 @@ impl MapFromArgument for BeOwned {
     fn from_argument_value(
         value: ArgumentValue,
     ) -> ExecutionResult<Actual<'static, AnyType, Self>> {
-        Ok(value.expect_owned().0)
+        Ok(value.expect_owned())
     }
 }
 
@@ -84,7 +83,7 @@ mod test {
 
     #[test]
     fn can_resolve_owned() {
-        let owned_value: QqqOwned<U64Type> = 42u64;
+        let owned_value: Owned<_> = 42u64;
         let resolved = owned_value
             .spanned(Span::call_site().span_range())
             .downcast_resolve::<u64>("My value")
@@ -94,14 +93,14 @@ mod test {
 
     #[test]
     fn can_as_ref_owned() {
-        let owned_value: QqqOwned<U64Type> = 42u64;
+        let owned_value = 42u64;
         let as_ref: QqqRef<U64Type> = owned_value.as_ref_value();
         assert_eq!(*as_ref, 42u64);
     }
 
     #[test]
     fn can_as_mut_owned() {
-        let mut owned_value: QqqOwned<U64Type> = 42u64;
+        let mut owned_value = 42u64;
         *owned_value.as_mut_value() = 41u64;
         assert_eq!(owned_value, 41u64);
     }

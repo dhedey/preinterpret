@@ -48,12 +48,12 @@ impl ArrayValue {
             AnyValueContent::Integer(integer) => {
                 let index =
                     self.resolve_valid_index_from_integer(Spanned(integer, span_range), false)?;
-                std::mem::replace(&mut self.items[index], ().into_value())
+                std::mem::replace(&mut self.items[index], ().into_any_value())
             }
             AnyValueContent::Range(range) => {
                 let range = Spanned(range, span_range).resolve_to_index_range(&self)?;
                 let new_items: Vec<_> = self.items.drain(range).collect();
-                new_items.into_value()
+                new_items.into_any_value()
             }
             _ => return span_range.type_err("The index must be an integer or a range"),
         })
@@ -170,9 +170,9 @@ impl ValuesEqual for ArrayValue {
     }
 }
 
-impl IntoValue for Vec<AnyValue> {
-    fn into_value(self) -> AnyValue {
-        ArrayValue { items: self }.into_value()
+impl IntoAnyValue for Vec<AnyValue> {
+    fn into_any_value(self) -> AnyValue {
+        ArrayValue { items: self }.into_any_value()
     }
 }
 
@@ -190,8 +190,8 @@ define_type_features! {
     impl ArrayType,
     pub(crate) mod array_interface {
         pub(crate) mod methods {
-            fn push(mut this: Mutable<ArrayValue>, item: OwnedValue) -> ExecutionResult<()> {
-                this.items.push(item.into());
+            fn push(mut this: Mutable<ArrayValue>, item: AnyValue) -> ExecutionResult<()> {
+                this.items.push(item);
                 Ok(())
             }
 
@@ -201,11 +201,10 @@ define_type_features! {
             }
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_singleton_to_value(Spanned(this, span): Spanned<Owned<ArrayValue>>) -> ExecutionResult<ReturnedValue> {
-                let mut this = this.into_inner();
+            [context] fn cast_singleton_to_value(Spanned(mut this, span): Spanned<ArrayValue>) -> ExecutionResult<ReturnedValue> {
                 let length = this.items.len();
                 if length == 1 {
-                    Ok(context.operation.evaluate(this.items.pop().unwrap().into_owned().spanned(span))?.0)
+                    Ok(context.operation.evaluate(this.items.pop().unwrap().spanned(span))?.0)
                 } else {
                     context.operation.value_err(format!(
                         "Only a singleton array can be cast to this value but the array has {} elements",

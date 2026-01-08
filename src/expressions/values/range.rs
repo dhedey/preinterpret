@@ -372,8 +372,8 @@ impl RangeValueInner {
     }
 }
 
-impl IntoValue for RangeValueInner {
-    fn into_value(self) -> AnyValue {
+impl IntoAnyValue for RangeValueInner {
+    fn into_any_value(self) -> AnyValue {
         AnyValue::Range(RangeValue {
             inner: Box::new(self),
         })
@@ -396,8 +396,8 @@ define_type_features! {
         pub(crate) mod methods {
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_via_iterator(Spanned(this, span): Spanned<Owned<RangeValue>>) -> ExecutionResult<ReturnedValue> {
-                let this_iterator = this.try_map(IteratorValue::new_for_range)?;
+            [context] fn cast_via_iterator(Spanned(this, span): Spanned<RangeValue>) -> ExecutionResult<ReturnedValue> {
+                let this_iterator = IteratorValue::new_for_range(this)?;
                 Ok(context.operation.evaluate(Spanned(this_iterator, span))?.0)
             }
         }
@@ -434,7 +434,7 @@ pub(super) enum IterableRangeOf<T> {
 fn resolve_range<T: ResolvableOwned<AnyValue> + ResolvableRange>(
     start: T,
     dots: syn::RangeLimits,
-    end: Option<Spanned<OwnedValue>>,
+    end: Option<Spanned<AnyValue>>,
 ) -> ExecutionResult<Box<dyn ClonableIterator<Item = AnyValue>>> {
     let definition = match (end, dots) {
         (Some(end), dots) => {
@@ -460,11 +460,9 @@ impl IterableRangeOf<AnyValue> {
         self,
     ) -> ExecutionResult<Box<dyn ClonableIterator<Item = AnyValue>>> {
         let (start, dots, end) = match self {
-            Self::RangeFromTo { start, dots, end } => (
-                start,
-                dots,
-                Some(end.into_owned().spanned(dots.span_range())),
-            ),
+            Self::RangeFromTo { start, dots, end } => {
+                (start, dots, Some(end.spanned(dots.span_range())))
+            }
             Self::RangeFrom { start, dots } => (start, RangeLimits::HalfOpen(dots), None),
         };
         match start {
@@ -507,17 +505,19 @@ impl ResolvableRange for UntypedInteger {
                 let end = end.into_fallback();
                 Ok(match dots {
                     syn::RangeLimits::HalfOpen { .. } => Box::new(
-                        (start..end).map(move |x| UntypedInteger::from_fallback(x).into_value()),
+                        (start..end)
+                            .map(move |x| UntypedInteger::from_fallback(x).into_any_value()),
                     ),
                     syn::RangeLimits::Closed { .. } => Box::new(
-                        (start..=end).map(move |x| UntypedInteger::from_fallback(x).into_value()),
+                        (start..=end)
+                            .map(move |x| UntypedInteger::from_fallback(x).into_any_value()),
                     ),
                 })
             }
             IterableRangeOf::RangeFrom { start, .. } => {
                 let start = start.into_fallback();
                 Ok(Box::new((start..).map(move |x| {
-                    UntypedInteger::from_fallback(x).into_value()
+                    UntypedInteger::from_fallback(x).into_any_value()
                 })))
             }
         }
@@ -534,15 +534,15 @@ macro_rules! define_range_resolvers {
                     IterableRangeOf::RangeFromTo { start, dots, end } => {
                         Ok(match dots {
                             syn::RangeLimits::HalfOpen { .. } => {
-                                Box::new((start..end).map(move |x| x.into_value()))
+                                Box::new((start..end).map(move |x| x.into_any_value()))
                             }
                             syn::RangeLimits::Closed { .. } => {
-                                Box::new((start..=end).map(move |x| x.into_value()))
+                                Box::new((start..=end).map(move |x| x.into_any_value()))
                             }
                         })
                     },
                     IterableRangeOf::RangeFrom { start, .. } => {
-                        Ok(Box::new((start..).map(move |x| x.into_value())))
+                        Ok(Box::new((start..).map(move |x| x.into_any_value())))
                     },
                 }
             }

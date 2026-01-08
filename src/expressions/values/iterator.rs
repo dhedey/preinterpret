@@ -52,7 +52,7 @@ impl IteratorValue {
         let iterator = object
             .entries
             .into_iter()
-            .map(|(k, v)| vec![k.into_value(), v.value].into_value())
+            .map(|(k, v)| vec![k.into_any_value(), v.value].into_any_value())
             .collect::<Vec<_>>()
             .into_iter();
         Self::new_vec(iterator)
@@ -66,7 +66,7 @@ impl IteratorValue {
         // https://internals.rust-lang.org/t/is-there-a-good-reason-why-string-has-no-into-chars/19496/5
         let iterator = string
             .chars()
-            .map(|c| c.into_value())
+            .map(|c| c.into_any_value())
             .collect::<Vec<_>>()
             .into_iter();
         Self::new_vec(iterator)
@@ -184,14 +184,14 @@ impl IteratorValue {
     }
 }
 
-impl IntoValue for IteratorValueInner {
-    fn into_value(self) -> AnyValue {
+impl IntoAnyValue for IteratorValueInner {
+    fn into_any_value(self) -> AnyValue {
         AnyValue::Iterator(IteratorValue::new(self))
     }
 }
 
-impl IntoValue for Box<dyn ClonableIterator<Item = AnyValue>> {
-    fn into_value(self) -> AnyValue {
+impl IntoAnyValue for Box<dyn ClonableIterator<Item = AnyValue>> {
+    fn into_any_value(self) -> AnyValue {
         AnyValue::Iterator(IteratorValue::new_custom(self))
     }
 }
@@ -298,7 +298,7 @@ define_type_features! {
             fn next(mut this: Mutable<IteratorValue>) -> AnyValue {
                 match this.next() {
                     Some(value) => value,
-                    None => ().into_value(),
+                    None => ().into_any_value(),
                 }
             }
 
@@ -321,9 +321,9 @@ define_type_features! {
             }
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_singleton_to_value(Spanned(this, span): Spanned<Owned<IteratorValue>>) -> ExecutionResult<ReturnedValue> {
-                match this.into_inner().singleton_value() {
-                    Some(value) => Ok(context.operation.evaluate(Spanned(Owned::new(value), span))?.0),
+            [context] fn cast_singleton_to_value(Spanned(this, span): Spanned<IteratorValue>) -> ExecutionResult<ReturnedValue> {
+                match this.singleton_value() {
+                    Some(value) => Ok(context.operation.evaluate(Spanned(value, span))?.0),
                     None => span.value_err("Only an iterator with one item can be cast to this value"),
                 }
             }

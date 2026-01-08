@@ -12,9 +12,8 @@ macro_rules! impl_int_operations {
                 }
                 pub(crate) mod unary_operations {
                     $(
-                        fn neg(Spanned(value, span): Spanned<Owned<$integer_type>>) -> ExecutionResult<$integer_type> {
+                        fn neg(Spanned(value, span): Spanned<$integer_type>) -> ExecutionResult<$integer_type> {
                             ignore_all!($signed); // Include only for signed types
-                            let value = value.into_inner();
                             match value.checked_neg() {
                                 Some(negated) => Ok(negated),
                                 None => span.value_err("Negating this value would overflow"),
@@ -149,8 +148,8 @@ macro_rules! impl_int_operations {
                         property_name: &str,
                     ) -> Option<AnyValue> {
                         match property_name {
-                            "MAX" => Some($integer_type::MAX.into_value()),
-                            "MIN" => Some($integer_type::MIN.into_value()),
+                            "MAX" => Some($integer_type::MAX.into_any_value()),
+                            "MIN" => Some($integer_type::MIN.into_any_value()),
                             _ => None,
                         }
                     }
@@ -201,7 +200,7 @@ macro_rules! impl_resolvable_integer_subtype {
             }
         }
 
-        impl ResolveAs<OptionalSuffix<$type>> for Spanned<OwnedValue> {
+        impl ResolveAs<OptionalSuffix<$type>> for Spanned<AnyValue> {
             fn resolve_as(self, resolution_target: &str) -> ExecutionResult<OptionalSuffix<$type>> {
                 let span = self.span_range();
                 let integer_value: IntegerValue = self.resolve_as(resolution_target)?;

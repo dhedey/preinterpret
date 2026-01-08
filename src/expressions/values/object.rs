@@ -55,7 +55,7 @@ impl ObjectValue {
     pub(crate) fn remove_or_none(&mut self, key: &str) -> AnyValue {
         match self.entries.remove(key) {
             Some(entry) => entry.value,
-            None => ().into_value(),
+            None => ().into_any_value(),
         }
     }
 
@@ -121,7 +121,7 @@ impl ObjectValue {
                     &mut entry
                         .insert(ObjectEntry {
                             key_span: key_span.join_into_span_else_start(),
-                            value: ().into_value(),
+                            value: ().into_any_value(),
                         })
                         .value
                 } else {
@@ -258,8 +258,8 @@ impl Spanned<&ObjectValue> {
     }
 }
 
-impl IntoValue for BTreeMap<String, ObjectEntry> {
-    fn into_value(self) -> AnyValue {
+impl IntoAnyValue for BTreeMap<String, ObjectEntry> {
+    fn into_any_value(self) -> AnyValue {
         AnyValue::Object(ObjectValue { entries: self })
     }
 }

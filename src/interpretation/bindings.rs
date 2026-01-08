@@ -50,7 +50,7 @@ impl VariableState {
                         }
                         return Ok(Spanned(
                             LateBoundValue::Owned(LateBoundOwnedValue {
-                                owned: Owned(ref_cell.into_inner()),
+                                owned: ref_cell.into_inner(),
                                 is_from_last_use: true,
                             }),
                             span_range,
@@ -127,18 +127,18 @@ pub(crate) struct VariableBinding {
 impl VariableBinding {
     /// Gets the cloned expression value
     /// This only works if the value can be transparently cloned
-    pub(crate) fn into_transparently_cloned(self) -> ExecutionResult<OwnedValue> {
+    pub(crate) fn into_transparently_cloned(self) -> ExecutionResult<AnyValue> {
         let span_range = self.variable_span.span_range();
         let shared = self.into_shared()?;
         let value = shared.as_ref().try_transparent_clone(span_range)?;
-        Ok(Owned(value))
+        Ok(value)
     }
 
-    fn into_mut(self) -> ExecutionResult<MutableValue> {
+    fn into_mut(self) -> ExecutionResult<Mutable<AnyValue>> {
         MutableValue::new_from_variable(self).map_err(ExecutionInterrupt::ownership_error)
     }
 
-    fn into_shared(self) -> ExecutionResult<SharedValue> {
+    fn into_shared(self) -> ExecutionResult<Shared<AnyValue>> {
         SharedValue::new_from_variable(self).map_err(ExecutionInterrupt::ownership_error)
     }
 
@@ -159,7 +159,7 @@ impl VariableBinding {
 }
 
 pub(crate) struct LateBoundOwnedValue {
-    pub(crate) owned: OwnedValue,
+    pub(crate) owned: Owned<AnyValue>,
     pub(crate) is_from_last_use: bool,
 }
 
@@ -194,7 +194,7 @@ pub(crate) enum LateBoundValue {
     /// A copy-on-write value that can be converted to an owned value
     CopyOnWrite(CopyOnWriteValue),
     /// A mutable reference
-    Mutable(MutableValue),
+    Mutable(Mutable<AnyValue>),
     /// A shared reference where mutable access failed for a specific reason
     Shared(LateBoundSharedValue),
 }
@@ -208,9 +208,9 @@ impl Spanned<LateBoundValue> {
 impl LateBoundValue {
     pub(crate) fn map_any(
         self,
-        map_shared: impl FnOnce(SharedValue) -> ExecutionResult<SharedValue>,
-        map_mutable: impl FnOnce(MutableValue) -> ExecutionResult<MutableValue>,
-        map_owned: impl FnOnce(OwnedValue) -> ExecutionResult<OwnedValue>,
+        map_shared: impl FnOnce(Shared<AnyValue>) -> ExecutionResult<Shared<AnyValue>>,
+        map_mutable: impl FnOnce(Mutable<AnyValue>) -> ExecutionResult<Mutable<AnyValue>>,
+        map_owned: impl FnOnce(Owned<AnyValue>) -> ExecutionResult<Owned<AnyValue>>,
     ) -> ExecutionResult<Self> {
         Ok(match self {
             LateBoundValue::Owned(owned) => LateBoundValue::Owned(LateBoundOwnedValue {
@@ -249,79 +249,6 @@ impl Deref for LateBoundValue {
     }
 }
 
-pub(crate) type OwnedValue = Owned<AnyValue>;
-
-/// A semantic wrapper for floating owned values.
-///
-/// Can be destructured as: `Owned(value): Owned<T>`
-///
-/// If you need span information, wrap with `Spanned<Owned<T>>`. For example, for `x.y[4]`, this would capture both:
-/// * The output owned value
-/// * The lexical span of the tokens `x.y[4]`
-pub(crate) struct Owned<T: 'static>(pub(crate) T);
-
-#[allow(unused)]
-impl<T> Owned<T> {
-    pub(crate) fn new(value: T) -> Self {
-        Owned(value)
-    }
-
-    pub(crate) fn into_inner(self) -> T {
-        self.0
-    }
-
-    pub(crate) fn map<V>(self, value_map: impl FnOnce(T) -> V) -> Owned<V> {
-        Owned(value_map(self.0))
-    }
-
-    pub(crate) fn try_map<V, E>(
-        self,
-        value_map: impl FnOnce(T) -> Result<V, E>,
-    ) -> Result<Owned<V>, E> {
-        Ok(Owned(value_map(self.0)?))
-    }
-}
-
-impl Spanned<OwnedValue> {
-    pub(crate) fn into_statement_result(self) -> ExecutionResult<()> {
-        let Spanned(value, span_range) = self;
-        match value.0 {
-            AnyValueContent::None(_) => Ok(()),
-            _ => span_range.control_flow_err("A non-returning statement must not return a value. If you wish to explicitly discard the expression's result, use `let _ = ...;`. Alternatively, If you wish to output the value into the parent token stream, use `emit ...;`"),
-        }
-    }
-}
-
-impl<T: IntoValue> Owned<T> {
-    pub(crate) fn into_value(self) -> AnyValue {
-        self.0.into_value()
-    }
-
-    pub(crate) fn into_owned_value(self) -> OwnedValue {
-        Owned(self.into_value())
-    }
-}
-
-impl From<OwnedValue> for AnyValue {
-    fn from(value: OwnedValue) -> Self {
-        value.0
-    }
-}
-
-impl<T> Deref for Owned<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T> DerefMut for Owned<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
 pub(crate) type MutableValue = Mutable<AnyValue>;
 pub(crate) type AssigneeValue = Assignee<AnyValue>;
 
@@ -332,8 +259,8 @@ pub(crate) type AssigneeValue = Assignee<AnyValue>;
 pub(crate) struct Assignee<T: 'static + ?Sized>(pub Mutable<T>);
 
 impl AssigneeValue {
-    pub(crate) fn set(&mut self, content: impl IntoValue) {
-        *self.0 .0 = content.into_value();
+    pub(crate) fn set(&mut self, content: impl IntoAnyValue) {
+        *self.0 .0 = content.into_any_value();
     }
 }
 
@@ -403,16 +330,16 @@ impl Spanned<&mut Mutable<AnyValue>> {
 }
 
 impl Spanned<Mutable<AnyValue>> {
-    pub(crate) fn transparent_clone(&self) -> ExecutionResult<OwnedValue> {
+    pub(crate) fn transparent_clone(&self) -> ExecutionResult<AnyValue> {
         let value = self.0.as_ref().try_transparent_clone(self.1)?;
-        Ok(Owned(value))
+        Ok(value)
     }
 }
 
 impl Mutable<AnyValue> {
-    pub(crate) fn new_from_owned(value: OwnedValue) -> Self {
+    pub(crate) fn new_from_owned(value: AnyValue) -> Self {
         // Unwrap is safe because it's a new refcell
-        Mutable(MutableSubRcRefCell::new(Rc::new(RefCell::new(value.0))).unwrap())
+        Mutable(MutableSubRcRefCell::new(Rc::new(RefCell::new(value))).unwrap())
     }
 
     fn new_from_variable(reference: VariableBinding) -> syn::Result<Self> {
@@ -499,20 +426,20 @@ impl Spanned<&mut Shared<AnyValue>> {
 }
 
 impl Spanned<Shared<AnyValue>> {
-    pub(crate) fn transparent_clone(&self) -> ExecutionResult<OwnedValue> {
+    pub(crate) fn transparent_clone(&self) -> ExecutionResult<AnyValue> {
         let value = self.0.as_ref().try_transparent_clone(self.1)?;
-        Ok(Owned(value))
+        Ok(value)
     }
 }
 
 impl Shared<AnyValue> {
-    pub(crate) fn new_from_owned(value: OwnedValue) -> Self {
+    pub(crate) fn new_from_owned(value: AnyValue) -> Self {
         // Unwrap is safe because it's a new refcell
-        Shared(SharedSubRcRefCell::new(Rc::new(RefCell::new(value.0))).unwrap())
+        Shared(SharedSubRcRefCell::new(Rc::new(RefCell::new(value))).unwrap())
     }
 
-    pub(crate) fn infallible_clone(&self) -> OwnedValue {
-        Owned(self.0.clone())
+    pub(crate) fn infallible_clone(&self) -> AnyValue {
+        self.0.clone()
     }
 
     fn new_from_variable(reference: VariableBinding) -> syn::Result<Self> {
@@ -577,10 +504,10 @@ impl<T: 'static + ToOwned + ?Sized> CopyOnWrite<T> {
         map: impl FnOnce(T::Owned) -> Result<U, T::Owned>,
     ) -> Result<U, Self> {
         match self.inner {
-            CopyOnWriteInner::Owned(Owned(value)) => match map(value) {
+            CopyOnWriteInner::Owned(value) => match map(value) {
                 Ok(mapped) => Ok(mapped),
                 Err(other) => Err(Self {
-                    inner: CopyOnWriteInner::Owned(Owned::new(other)),
+                    inner: CopyOnWriteInner::Owned(other),
                 }),
             },
             other => Err(Self { inner: other }),
@@ -669,7 +596,7 @@ impl<T: ?Sized + ToOwned> Deref for CopyOnWrite<T> {
 
     fn deref(&self) -> &T {
         match self.inner {
-            CopyOnWriteInner::Owned(ref owned) => (**owned).borrow(),
+            CopyOnWriteInner::Owned(ref owned) => (*owned).borrow(),
             CopyOnWriteInner::SharedWithInfallibleCloning(ref shared) => shared.as_ref(),
             CopyOnWriteInner::SharedWithTransparentCloning(ref shared) => shared.as_ref(),
         }
@@ -678,7 +605,7 @@ impl<T: ?Sized + ToOwned> Deref for CopyOnWrite<T> {
 
 impl CopyOnWrite<AnyValue> {
     /// Converts to owned, cloning if necessary
-    pub(crate) fn clone_to_owned_infallible(self) -> OwnedValue {
+    pub(crate) fn clone_to_owned_infallible(self) -> Owned<AnyValue> {
         match self.inner {
             CopyOnWriteInner::Owned(owned) => owned,
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => shared.infallible_clone(),
@@ -690,13 +617,13 @@ impl CopyOnWrite<AnyValue> {
     pub(crate) fn clone_to_owned_transparently(
         self,
         span: SpanRange,
-    ) -> ExecutionResult<OwnedValue> {
+    ) -> ExecutionResult<Owned<AnyValue>> {
         match self.inner {
             CopyOnWriteInner::Owned(owned) => Ok(owned),
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => Ok(shared.infallible_clone()),
             CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
                 let value = shared.as_ref().try_transparent_clone(span)?;
-                Ok(Owned(value))
+                Ok(value)
             }
         }
     }

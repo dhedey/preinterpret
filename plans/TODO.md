@@ -243,8 +243,8 @@ First, read the @./2025-11-vision.md
       - [x] `type AnyValueRef = QqqRef<ValueType>`
       - [x] `type AnyValueMut = QqqMut<ValueType>`
       - [x] ... and move methods
-    - [ ] Remove `OwnedValue`
-    - [ ] Get rid of `Owned`
+    - [x] Remove `OwnedValue`
+    - [x] Get rid of `Owned`
   - [ ] Stage 2 of the form migration:
     - [ ] Improve mappers:
       - [ ] Try to replace `ToRefMapper` etc with a `FormMapper::<T, F1, F2>::map_content(content, |x| -> y)`

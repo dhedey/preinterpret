@@ -34,11 +34,11 @@ define_type_features! {
     impl AnyType,
     pub(crate) mod value_interface {
         pub(crate) mod methods {
-            fn clone(this: CopyOnWriteValue) -> OwnedValue {
+            fn clone(this: CopyOnWriteValue) -> AnyValue {
                 this.clone_to_owned_infallible()
             }
 
-            fn as_mut(Spanned(this, span): Spanned<ArgumentValue>) -> ExecutionResult<MutableValue> {
+            fn as_mut(Spanned(this, span): Spanned<ArgumentValue>) -> ExecutionResult<Mutable<AnyValue>> {
                 Ok(match this {
                     ArgumentValue::Owned(owned) => Mutable::new_from_owned(owned),
                     ArgumentValue::CopyOnWrite(copy_on_write) => ArgumentOwnership::Mutable
@@ -78,14 +78,14 @@ define_type_features! {
             fn to_stream(Spanned(input, span_range): Spanned<CopyOnWriteValue>) -> ExecutionResult<OutputStream> {
                 input.map_into(
                     |shared| shared.as_ref_value().output_to_new_stream(Grouping::Flattened, span_range),
-                    |owned| owned.0.into_stream(Grouping::Flattened, span_range),
+                    |owned| owned.into_stream(Grouping::Flattened, span_range),
                 )
             }
 
             fn to_group(Spanned(input, span_range): Spanned<CopyOnWriteValue>) -> ExecutionResult<OutputStream> {
                 input.map_into(
                     |shared| shared.as_ref_value().output_to_new_stream(Grouping::Grouped, span_range),
-                    |owned| owned.0.into_stream(Grouping::Grouped, span_range),
+                    |owned| owned.into_stream(Grouping::Grouped, span_range),
                 )
             }
 
@@ -193,14 +193,8 @@ define_type_features! {
     }
 }
 
-pub(crate) trait IntoValue: Sized {
-    fn into_value(self) -> AnyValue;
-    fn into_owned(self) -> Owned<Self> {
-        Owned::new(self)
-    }
-    fn into_owned_value(self) -> OwnedValue {
-        Owned(self.into_value())
-    }
+pub(crate) trait IntoAnyValue: Sized {
+    fn into_any_value(self) -> AnyValue;
 }
 
 impl<'a, F: IsHierarchicalForm> AnyValueContent<'a, F> {
@@ -210,7 +204,7 @@ impl<'a, F: IsHierarchicalForm> AnyValueContent<'a, F> {
 }
 
 impl AnyValue {
-    pub(crate) fn for_literal(literal: Literal) -> OwnedValue {
+    pub(crate) fn for_literal(literal: Literal) -> AnyValue {
         // The unwrap should be safe because all Literal should be parsable
         // as syn::Lit; falling back to syn::Lit::Verbatim if necessary.
         Self::for_syn_lit(
@@ -221,25 +215,25 @@ impl AnyValue {
         )
     }
 
-    pub(crate) fn for_syn_lit(lit: syn::Lit) -> OwnedValue {
+    pub(crate) fn for_syn_lit(lit: syn::Lit) -> AnyValue {
         // https://docs.rs/syn/latest/syn/enum.Lit.html
         let matched = match &lit {
             Lit::Int(lit) => match IntegerValue::for_litint(lit) {
-                Ok(int) => Some(int.into_owned_value()),
+                Ok(int) => Some(int.into_any_value()),
                 Err(_) => None,
             },
             Lit::Float(lit) => match FloatValue::for_litfloat(lit) {
-                Ok(float) => Some(float.into_owned_value()),
+                Ok(float) => Some(float.into_any_value()),
                 Err(_) => None,
             },
-            Lit::Bool(lit) => Some(lit.value.into_owned_value()),
-            Lit::Str(lit) => Some(lit.value().into_owned_value()),
-            Lit::Char(lit) => Some(lit.value().into_owned_value()),
+            Lit::Bool(lit) => Some(lit.value.into_any_value()),
+            Lit::Str(lit) => Some(lit.value().into_any_value()),
+            Lit::Char(lit) => Some(lit.value().into_any_value()),
             _ => None,
         };
         match matched {
             Some(value) => value,
-            None => UnsupportedLiteral(lit).into_owned_value(),
+            None => UnsupportedLiteral(lit).into_any_value(),
         }
     }
 
@@ -586,6 +580,14 @@ impl HasSpanRange for ToStreamContext<'_> {
 }
 
 impl Spanned<AnyValue> {
+    pub(crate) fn into_statement_result(self) -> ExecutionResult<()> {
+        let Spanned(value, span_range) = self;
+        match value {
+            AnyValueContent::None(_) => Ok(()),
+            _ => span_range.control_flow_err("A non-returning statement must not return a value. If you wish to explicitly discard the expression's result, use `let _ = ...;`. Alternatively, If you wish to output the value into the parent token stream, use `emit ...;`"),
+        }
+    }
+
     pub(crate) fn into_stream(self) -> ExecutionResult<OutputStream> {
         let Spanned(value, span_range) = self;
         value.into_stream(Grouping::Flattened, span_range)

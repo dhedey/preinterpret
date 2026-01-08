@@ -42,9 +42,9 @@ impl ValuesEqual for String {
     }
 }
 
-impl IntoValue for &str {
-    fn into_value(self) -> AnyValue {
-        self.to_string().into_value()
+impl IntoAnyValue for &str {
+    fn into_any_value(self) -> AnyValue {
+        self.to_string().into_any_value()
     }
 }
 

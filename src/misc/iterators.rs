@@ -165,7 +165,7 @@ impl ZipIterators {
                     for iter in iterators.iter_mut() {
                         inner.push(iter.next().unwrap());
                     }
-                    output.push(inner.into_value());
+                    output.push(inner.into_any_value());
                 }
             }
             ZipIterators::Object(iterators, _) => {
@@ -181,7 +181,7 @@ impl ZipIterators {
                             },
                         );
                     }
-                    output.push(inner.into_value());
+                    output.push(inner.into_any_value());
                 }
             }
         }
@@ -318,7 +318,7 @@ pub(crate) fn handle_split(
             while !input.is_empty() {
                 current_item.push_raw_token_tree(input.parse()?);
                 let complete_item = core::mem::replace(&mut current_item, OutputStream::new());
-                output.push(complete_item.into_value());
+                output.push(complete_item.into_any_value());
             }
             return Ok(ArrayValue::new(output));
         }
@@ -338,12 +338,12 @@ pub(crate) fn handle_split(
             input.advance_to(&separator_fork);
             if !current_item.is_empty() || !drop_empty_next {
                 let complete_item = core::mem::replace(&mut current_item, OutputStream::new());
-                output.push(complete_item.into_value());
+                output.push(complete_item.into_any_value());
             }
             drop_empty_next = settings.drop_empty_middle;
         }
         if !current_item.is_empty() || !settings.drop_empty_end {
-            output.push(current_item.into_value());
+            output.push(current_item.into_any_value());
         }
         Ok(ArrayValue::new(output))
     })

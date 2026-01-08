@@ -121,12 +121,12 @@ where
 }
 
 // TODO[concepts]: Remove eventually, along with IntoValue impl
-impl<X: IntoValueContent<'static, Form = BeOwned>> IntoValue for X
+impl<X: IntoValueContent<'static, Form = BeOwned>> IntoAnyValue for X
 where
     X::Type: UpcastTo<AnyType, BeOwned>,
     BeOwned: IsFormOf<X::Type>,
 {
-    fn into_value(self) -> AnyValue {
+    fn into_any_value(self) -> AnyValue {
         self.into_any()
     }
 }
