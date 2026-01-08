@@ -39,7 +39,7 @@ pub(crate) enum LateBoundContent<T: 'static + ?Sized, O: 'static> {
     /// A copy-on-write value that can be converted to an owned value
     CopyOnWrite(CopyOnWriteContent<T, O>),
     /// A mutable reference
-    Mutable(MutableSubRcRefCell<Value, T>),
+    Mutable(MutableSubRcRefCell<AnyValue, T>),
     /// A shared reference where mutable access failed for a specific reason
     Shared(LateBoundShared<T>),
 }
@@ -51,6 +51,6 @@ pub(crate) struct LateBoundOwned<O: 'static> {
 
 /// A shared value where mutable access failed for a specific reason
 pub(crate) struct LateBoundShared<T: 'static + ?Sized> {
-    pub(crate) shared: SharedSubRcRefCell<Value, T>,
+    pub(crate) shared: SharedSubRcRefCell<AnyValue, T>,
     pub(crate) reason_not_mutable: syn::Error,
 }

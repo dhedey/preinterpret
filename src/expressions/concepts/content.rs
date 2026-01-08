@@ -1,3 +1,5 @@
+use std::mem::transmute;
+
 use super::*;
 
 /// Shorthand for representing the form F of a type T with a particular lifetime 'a.
@@ -40,17 +42,18 @@ pub(crate) trait IntoValueContent<'a>: IsValueContent<'a> {
     }
 
     #[inline]
-    fn into_any(self) -> Actual<'a, ValueType, Self::Form>
+    fn into_any(self) -> Actual<'a, AnyType, Self::Form>
     where
         Self: Sized,
-        Self::Type: UpcastTo<ValueType, Self::Form>,
-        Self::Form: IsFormOf<ValueType>,
+        Self::Type: UpcastTo<AnyType, Self::Form>,
+        Self::Form: IsFormOf<AnyType>,
     {
         self.upcast()
     }
 
     fn map_with<M: LeafMapper<Self::Form>>(
         self,
+        mapper: M,
     ) -> Result<Actual<'a, Self::Type, M::OutputForm>, M::ShortCircuit<'a>>
     where
         Self: Sized,
@@ -59,7 +62,7 @@ pub(crate) trait IntoValueContent<'a>: IsValueContent<'a> {
         >,
         Self::Form: IsHierarchicalForm,
     {
-        <Self::Type>::map_with::<Self::Form, M>(self.into_content())
+        <Self::Type>::map_with::<Self::Form, _>(mapper, self.into_content())
     }
 
     fn into_referenceable(self) -> Actual<'a, Self::Type, BeReferenceable>
@@ -72,7 +75,7 @@ pub(crate) trait IntoValueContent<'a>: IsValueContent<'a> {
         for<'l> OwnedToReferenceableMapper:
             LeafMapper<Self::Form, OutputForm = BeReferenceable, ShortCircuit<'l> = Infallible>,
     {
-        match self.map_with::<OwnedToReferenceableMapper>() {
+        match self.map_with(OwnedToReferenceableMapper) {
             Ok(output) => output,
             Err(infallible) => match infallible {}, // Need to include because of MSRV
         }
@@ -100,15 +103,30 @@ where
             <<X as IsValueContent<'a>>::Type>::resolve(content, span_range, description)?;
         Ok(X::from_content(resolved))
     }
+
+    pub(crate) fn downcast_resolve_spanned<X: FromValueContent<'a, Form = C::Form>>(
+        self,
+        description: &str,
+    ) -> ExecutionResult<Spanned<X>>
+    where
+        C::Form: IsFormOf<<X as IsValueContent<'a>>::Type>,
+        <X as IsValueContent<'a>>::Type: DowncastFrom<C::Type, C::Form>,
+    {
+        let span_range = self.1;
+        Ok(Spanned(
+            self.downcast_resolve::<X>(description)?,
+            span_range,
+        ))
+    }
 }
 
 // TODO[concepts]: Remove eventually, along with IntoValue impl
 impl<X: IntoValueContent<'static, Form = BeOwned>> IntoValue for X
 where
-    X::Type: UpcastTo<ValueType, BeOwned>,
+    X::Type: UpcastTo<AnyType, BeOwned>,
     BeOwned: IsFormOf<X::Type>,
 {
-    fn into_value(self) -> Value {
+    fn into_value(self) -> AnyValue {
         self.into_any()
     }
 }
@@ -122,6 +140,7 @@ where
 {
     fn map_mut_with<'r, M: MutLeafMapper<Self::Form>>(
         &'r mut self,
+        mapper: M,
     ) -> Result<Actual<'r, Self::Type, M::OutputForm>, M::ShortCircuit<'a>>
     where
         'a: 'r,
@@ -130,11 +149,12 @@ where
         >,
         Self::Form: IsHierarchicalForm,
     {
-        <Self::Type>::map_mut_with::<Self::Form, M>(self)
+        <Self::Type>::map_mut_with::<Self::Form, _>(mapper, self)
     }
 
     fn map_ref_with<'r, M: RefLeafMapper<Self::Form>>(
         &'r self,
+        mapper: M,
     ) -> Result<Actual<'r, Self::Type, M::OutputForm>, M::ShortCircuit<'a>>
     where
         'a: 'r,
@@ -143,7 +163,7 @@ where
         >,
         Self::Form: IsHierarchicalForm,
     {
-        <Self::Type>::map_ref_with::<Self::Form, M>(self)
+        <Self::Type>::map_ref_with::<Self::Form, _>(mapper, self)
     }
 
     fn as_mut_value<'r>(&'r mut self) -> Actual<'r, Self::Type, BeMut>
@@ -159,13 +179,34 @@ where
         Self::Form: LeafAsMutForm,
         BeMut: IsFormOf<Self::Type>,
     {
-        match Self::map_mut_with::<ToMutMapper>(self) {
+        match self.map_mut_with(ToMutMapper) {
             Ok(x) => x,
             Err(infallible) => match infallible {}, // Need to include because of MSRV
         }
     }
 
     fn as_ref_value<'r>(&'r self) -> Actual<'r, Self::Type, BeRef>
+    where
+        // Bounds for map_ref_with to work
+        'a: 'r,
+        Self::Type: IsHierarchicalType<
+            Content<'a, Self::Form> = <Self::Form as IsFormOf<Self::Type>>::Content<'a>,
+        >,
+        Self::Form: IsHierarchicalForm,
+
+        // Bounds for ToRefMapper to work
+        Self::Form: LeafAsRefForm,
+    {
+        match self.map_ref_with(ToRefMapper) {
+            Ok(x) => x,
+            Err(infallible) => match infallible {}, // Need to include because of MSRV
+        }
+    }
+
+    /// This method should only be used when you are certain that the value should be cloned.
+    /// In most situations, you may wish to use [IsSelfValueContent::clone_to_owned_transparently]
+    /// instead.
+    fn clone_to_owned_infallible<'r>(&'r self) -> Actual<'static, Self::Type, BeOwned>
     where
         // Bounds for map_mut_with to work
         'a: 'r,
@@ -174,13 +215,63 @@ where
         >,
         Self::Form: IsHierarchicalForm,
 
-        // Bounds for ToMutMapper to work
+        // Bounds for LeafAsRefForm to work
         Self::Form: LeafAsRefForm,
-        BeMut: IsFormOf<Self::Type>,
+
+        // Bounds for cloning to work
+        Self: Sized,
     {
-        match Self::map_ref_with::<ToRefMapper>(self) {
+        let mapped = match self.map_ref_with(ToOwnedInfallibleMapper) {
             Ok(x) => x,
             Err(infallible) => match infallible {}, // Need to include because of MSRV
+        };
+        // SAFETY: All owned values don't make use of the lifetime parameter,
+        // so we can safely transmute to 'static here.
+        // I'd have liked to make this a where bound, but type resolution gets stuck in
+        // an infinite loop in that case.
+        unsafe {
+            transmute::<Actual<'r, Self::Type, BeOwned>, Actual<'static, Self::Type, BeOwned>>(
+                mapped,
+            )
+        }
+    }
+
+    /// A transparent clone is allowed for some types when doing method resolution.
+    /// * For these types, a &a can be transparently cloned into an owned a.
+    /// * For other types, an error is raised suggesting to use .clone() explicitly.
+    ///
+    /// See [TypeKind::supports_transparent_cloning] for more details.
+    fn clone_to_owned_transparently<'r>(
+        &'r self,
+        span_range: SpanRange,
+    ) -> ExecutionResult<Actual<'static, Self::Type, BeOwned>>
+    where
+        // Bounds for map_mut_with to work
+        'a: 'r,
+        Self::Type: IsHierarchicalType<
+            Content<'a, Self::Form> = <Self::Form as IsFormOf<Self::Type>>::Content<'a>,
+        >,
+        Self::Form: IsHierarchicalForm,
+
+        // Bounds for LeafAsRefForm to work
+        Self::Form: LeafAsRefForm,
+
+        // Bounds for cloning to work
+        Self: Sized,
+        BeOwned: for<'l> IsFormOf<Self::Type, Content<'l> = Self>,
+    {
+        let mapped = self.map_ref_with(ToOwnedTransparentlyMapper { span_range });
+        // SAFETY: All owned values don't make use of the lifetime parameter,
+        // so we can safely transmute to 'static here.
+        // I'd have liked to make this a where bound, but type resolution gets stuck in
+        // an infinite loop in that case.
+        unsafe {
+            #[allow(clippy::useless_transmute)]
+            // Clippy thinks these types are identical but is wrong here
+            transmute::<
+                ExecutionResult<Actual<'r, Self::Type, BeOwned>>,
+                ExecutionResult<Actual<'static, Self::Type, BeOwned>>,
+            >(mapped)
         }
     }
 }

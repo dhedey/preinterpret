@@ -2,13 +2,13 @@ use super::*;
 
 /// A trait for specific value kinds that can provide a display name.
 /// This is implemented by `ValueLeafKind`, `IntegerKind`, `FloatKind`, etc.
-pub(crate) trait IsSpecificLeafKind: Copy + Into<ValueLeafKind> {
+pub(crate) trait IsLeafKind: Copy + Into<AnyValueLeafKind> {
     fn source_type_name(&self) -> &'static str;
     fn articled_display_name(&self) -> &'static str;
     fn feature_resolver(&self) -> &'static dyn TypeFeatureResolver;
 }
 
-impl ValueLeafKind {
+impl AnyValueLeafKind {
     /// This should be true for types which users expect to have value
     /// semantics, but false for types which are expensive to clone or
     /// are expected to have reference semantics.
@@ -17,38 +17,60 @@ impl ValueLeafKind {
     /// when doing method resolution.
     pub(crate) fn supports_transparent_cloning(&self) -> bool {
         match self {
-            ValueLeafKind::None(_) => true,
-            ValueLeafKind::Integer(_) => true,
-            ValueLeafKind::Float(_) => true,
-            ValueLeafKind::Bool(_) => true,
+            AnyValueLeafKind::None(_) => true,
+            AnyValueLeafKind::Integer(_) => true,
+            AnyValueLeafKind::Float(_) => true,
+            AnyValueLeafKind::Bool(_) => true,
             // Strings are value-like, so it makes sense to transparently clone them
-            ValueLeafKind::String(_) => true,
-            ValueLeafKind::Char(_) => true,
-            ValueLeafKind::UnsupportedLiteral(_) => false,
-            ValueLeafKind::Array(_) => false,
-            ValueLeafKind::Object(_) => false,
-            ValueLeafKind::Stream(_) => false,
-            ValueLeafKind::Range(_) => true,
-            ValueLeafKind::Iterator(_) => false,
+            AnyValueLeafKind::String(_) => true,
+            AnyValueLeafKind::Char(_) => true,
+            AnyValueLeafKind::UnsupportedLiteral(_) => false,
+            AnyValueLeafKind::Array(_) => false,
+            AnyValueLeafKind::Object(_) => false,
+            AnyValueLeafKind::Stream(_) => false,
+            AnyValueLeafKind::Range(_) => true,
+            AnyValueLeafKind::Iterator(_) => false,
             // A parser is a handle, so can be cloned transparently.
             // It may fail to be able to be used to parse if the underlying stream is out of scope of course.
-            ValueLeafKind::Parser(_) => true,
+            AnyValueLeafKind::Parser(_) => true,
         }
     }
 }
 
-// A ValueLeafKind represents a kind of leaf value.
+// A AnyValueLeafKind represents a kind of leaf value.
 // But a TypeKind represents a type in the hierarchy, which points at a type data.
 pub(crate) enum TypeKind {
-    Leaf(ValueLeafKind),
+    Leaf(AnyValueLeafKind),
     Parent(ParentTypeKind),
     Dyn(DynTypeKind),
 }
 
 impl TypeKind {
+    /// This should be true for types which users expect to have value
+    /// semantics, but false for types which are expensive to clone or
+    /// are expected to have reference semantics.
+    ///
+    /// This indicates if an &x can be converted to an x via cloning
+    /// when doing method resolution.
+    pub(crate) fn supports_transparent_cloning(&self) -> bool {
+        match self {
+            TypeKind::Leaf(leaf_kind) => leaf_kind.supports_transparent_cloning(),
+            TypeKind::Parent(_) => false,
+            TypeKind::Dyn(_) => false,
+        }
+    }
+
+    pub(crate) fn articled_display_name(&self) -> &'static str {
+        match self {
+            TypeKind::Leaf(leaf_kind) => leaf_kind.articled_display_name(),
+            TypeKind::Parent(parent_kind) => parent_kind.articled_display_name(),
+            TypeKind::Dyn(dyn_kind) => dyn_kind.articled_display_name(),
+        }
+    }
+
     pub(crate) fn from_source_name(name: &str) -> Option<Self> {
         // Parse Leaf and Parent TypeKinds
-        if let Some(tk) = <ValueType as IsType>::type_kind_from_source_name(name) {
+        if let Some(tk) = <AnyType as IsType>::type_kind_from_source_name(name) {
             return Some(tk);
         }
         // Parse Dyn TypeKinds
@@ -68,12 +90,20 @@ impl TypeKind {
 }
 
 pub(crate) enum ParentTypeKind {
-    Value(ValueTypeKind),
+    Value(AnyValueTypeKind),
     Integer(IntegerTypeKind),
     Float(FloatTypeKind),
 }
 
 impl ParentTypeKind {
+    pub(crate) fn articled_display_name(&self) -> &'static str {
+        match self {
+            ParentTypeKind::Value(x) => x.articled_display_name(),
+            ParentTypeKind::Integer(x) => x.articled_display_name(),
+            ParentTypeKind::Float(x) => x.articled_display_name(),
+        }
+    }
+
     pub(crate) fn source_name(&self) -> &'static str {
         match self {
             ParentTypeKind::Value(x) => x.source_type_name(),
@@ -96,6 +126,12 @@ pub(crate) enum DynTypeKind {
 }
 
 impl DynTypeKind {
+    pub(crate) fn articled_display_name(&self) -> &'static str {
+        match self {
+            DynTypeKind::Iterable => IterableType::ARTICLED_DISPLAY_NAME,
+        }
+    }
+
     pub(crate) fn from_source_name(name: &str) -> Option<Self> {
         match name {
             IterableType::SOURCE_TYPE_NAME => Some(DynTypeKind::Iterable),

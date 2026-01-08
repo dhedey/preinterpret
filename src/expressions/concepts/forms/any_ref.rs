@@ -33,7 +33,7 @@ impl MapFromArgument for BeAnyRef {
 
     fn from_argument_value(
         _value: ArgumentValue,
-    ) -> ExecutionResult<Actual<'static, ValueType, Self>> {
+    ) -> ExecutionResult<Actual<'static, AnyType, Self>> {
         todo!()
         // value.expect_shared().as_any_ref()
     }

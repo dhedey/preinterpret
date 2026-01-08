@@ -2,7 +2,7 @@ use super::*;
 
 pub(crate) type QqqOwned<T> = Actual<'static, T, BeOwned>;
 
-pub(crate) type QqqOwnedValue = Owned<ValueType>;
+pub(crate) type QqqOwnedValue = Owned<AnyType>;
 
 /// Represents floating owned values.
 ///
@@ -46,8 +46,35 @@ impl MapFromArgument for BeOwned {
 
     fn from_argument_value(
         value: ArgumentValue,
-    ) -> ExecutionResult<Actual<'static, ValueType, Self>> {
+    ) -> ExecutionResult<Actual<'static, AnyType, Self>> {
         Ok(value.expect_owned().0)
+    }
+}
+
+pub(crate) struct ToOwnedInfallibleMapper;
+
+impl<F: LeafAsRefForm> RefLeafMapper<F> for ToOwnedInfallibleMapper {
+    type OutputForm = BeOwned;
+    type ShortCircuit<'a> = Infallible;
+
+    fn map_leaf<'r, 'a: 'r, L: IsValueLeaf>(
+        self,
+        leaf: &'r F::Leaf<'a, L>,
+    ) -> Result<L, Infallible> {
+        Ok(F::leaf_clone_to_owned_infallible(leaf))
+    }
+}
+
+pub(crate) struct ToOwnedTransparentlyMapper {
+    pub(crate) span_range: SpanRange,
+}
+
+impl<F: LeafAsRefForm> RefLeafMapper<F> for ToOwnedTransparentlyMapper {
+    type OutputForm = BeOwned;
+    type ShortCircuit<'a> = ExecutionInterrupt;
+
+    fn map_leaf<'r, 'a: 'r, L: IsValueLeaf>(self, leaf: &'r F::Leaf<'a, L>) -> ExecutionResult<L> {
+        F::leaf_clone_to_owned_transparently(leaf, self.span_range)
     }
 }
 

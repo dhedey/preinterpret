@@ -26,13 +26,13 @@ impl IsReturnable for ReturnedValue {
     }
 }
 
-impl IsReturnable for Shared<Value> {
+impl IsReturnable for Shared<AnyValue> {
     fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
         Ok(ReturnedValue::Shared(self))
     }
 }
 
-impl IsReturnable for Mutable<Value> {
+impl IsReturnable for Mutable<AnyValue> {
     fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
         Ok(ReturnedValue::Mutable(self))
     }

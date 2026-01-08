@@ -302,8 +302,8 @@ pub(crate) enum DebugInequalityReason {
     },
     /// Values have incompatible value kinds.
     ValueLeafKindMismatch {
-        lhs_kind: ValueLeafKind,
-        rhs_kind: ValueLeafKind,
+        lhs_kind: AnyValueLeafKind,
+        rhs_kind: AnyValueLeafKind,
     },
     /// Ranges have incompatible structures.
     RangeStructureMismatch {

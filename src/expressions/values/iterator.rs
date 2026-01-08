@@ -1,7 +1,7 @@
 use super::*;
 
 define_leaf_type! {
-    pub(crate) IteratorType => ValueType(ValueContent::Iterator),
+    pub(crate) IteratorType => AnyType(AnyValueContent::Iterator),
     content: IteratorValue,
     kind: pub(crate) IteratorKind,
     type_name: "iterator",
@@ -30,7 +30,7 @@ impl IteratorValue {
     }
 
     #[allow(unused)]
-    pub(crate) fn new_any(iterator: impl Iterator<Item = Value> + 'static + Clone) -> Self {
+    pub(crate) fn new_any(iterator: impl Iterator<Item = AnyValue> + 'static + Clone) -> Self {
         Self::new_custom(Box::new(iterator))
     }
 
@@ -72,11 +72,11 @@ impl IteratorValue {
         Self::new_vec(iterator)
     }
 
-    fn new_vec(iterator: std::vec::IntoIter<Value>) -> Self {
+    fn new_vec(iterator: std::vec::IntoIter<AnyValue>) -> Self {
         Self::new(IteratorValueInner::Vec(Box::new(iterator)))
     }
 
-    pub(crate) fn new_custom(iterator: Box<dyn ClonableIterator<Item = Value>>) -> Self {
+    pub(crate) fn new_custom(iterator: Box<dyn ClonableIterator<Item = AnyValue>>) -> Self {
         Self::new(IteratorValueInner::Other(iterator))
     }
 
@@ -89,7 +89,7 @@ impl IteratorValue {
         }
     }
 
-    pub(crate) fn singleton_value(mut self) -> Option<Value> {
+    pub(crate) fn singleton_value(mut self) -> Option<AnyValue> {
         let first = self.next()?;
         if self.next().is_none() {
             Some(first)
@@ -108,7 +108,7 @@ impl IteratorValue {
             if i > LIMIT {
                 return output.debug_err(format!("Only a maximum of {} items can be output to a stream from an iterator, to protect you from infinite loops. This can't currently be reconfigured with the iteration limit.", LIMIT));
             }
-            item.output_to(grouping, output)?;
+            item.as_ref_value().output_to(grouping, output)?;
         }
         Ok(())
     }
@@ -129,7 +129,7 @@ impl IteratorValue {
         )
     }
 
-    pub(crate) fn any_iterator_to_string<T: Borrow<Value>>(
+    pub(crate) fn any_iterator_to_string<T: Borrow<AnyValue>>(
         iterator: impl Iterator<Item = T>,
         output: &mut String,
         behaviour: &ConcatBehaviour,
@@ -170,7 +170,8 @@ impl IteratorValue {
             if i != 0 && behaviour.add_space_between_token_trees {
                 output.push(' ');
             }
-            item.concat_recursive_into(output, behaviour)?;
+            item.as_ref_value()
+                .concat_recursive_into(output, behaviour)?;
         }
         if behaviour.output_literal_structure {
             if is_empty {
@@ -184,14 +185,14 @@ impl IteratorValue {
 }
 
 impl IntoValue for IteratorValueInner {
-    fn into_value(self) -> Value {
-        Value::Iterator(IteratorValue::new(self))
+    fn into_value(self) -> AnyValue {
+        AnyValue::Iterator(IteratorValue::new(self))
     }
 }
 
-impl IntoValue for Box<dyn ClonableIterator<Item = Value>> {
-    fn into_value(self) -> Value {
-        Value::Iterator(IteratorValue::new_custom(self))
+impl IntoValue for Box<dyn ClonableIterator<Item = AnyValue>> {
+    fn into_value(self) -> AnyValue {
+        AnyValue::Iterator(IteratorValue::new_custom(self))
     }
 }
 
@@ -199,7 +200,7 @@ impl_resolvable_argument_for! {
     IteratorType,
     (value, context) -> IteratorValue {
         match value {
-            Value::Iterator(value) => Ok(value),
+            AnyValue::Iterator(value) => Ok(value),
             _ => context.err("an iterator", value),
         }
     }
@@ -247,13 +248,13 @@ impl ValuesEqual for IteratorValue {
 #[derive(Clone)]
 enum IteratorValueInner {
     // We Box these so that Value is smaller on the stack
-    Vec(Box<<Vec<Value> as IntoIterator>::IntoIter>),
+    Vec(Box<<Vec<AnyValue> as IntoIterator>::IntoIter>),
     Stream(Box<<OutputStream as IntoIterator>::IntoIter>),
-    Other(Box<dyn ClonableIterator<Item = Value>>),
+    Other(Box<dyn ClonableIterator<Item = AnyValue>>),
 }
 
 impl Iterator for IteratorValue {
-    type Item = Value;
+    type Item = AnyValue;
 
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.iterator {
@@ -277,7 +278,7 @@ impl Iterator for IteratorValue {
 }
 
 impl Iterator for Mutable<IteratorValue> {
-    type Item = Value;
+    type Item = AnyValue;
 
     fn next(&mut self) -> Option<Self::Item> {
         let this: &mut IteratorValue = &mut *self;
@@ -294,7 +295,7 @@ define_type_features! {
     impl IteratorType,
     pub(crate) mod iterator_interface {
         pub(crate) mod methods {
-            fn next(mut this: Mutable<IteratorValue>) -> Value {
+            fn next(mut this: Mutable<IteratorValue>) -> AnyValue {
                 match this.next() {
                     Some(value) => value,
                     None => ().into_value(),

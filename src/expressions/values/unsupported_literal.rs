@@ -1,7 +1,7 @@
 use super::*;
 
 define_leaf_type! {
-    pub(crate) UnsupportedLiteralType => ValueType(ValueContent::UnsupportedLiteral),
+    pub(crate) UnsupportedLiteralType => AnyType(AnyValueContent::UnsupportedLiteral),
     content: UnsupportedLiteral,
     kind: pub(crate) UnsupportedLiteralKind,
     type_name: "unsupported_literal",

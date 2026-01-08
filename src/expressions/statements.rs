@@ -369,7 +369,7 @@ impl EmitStatement {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         let Spanned(value, span) = self.expression.evaluate_owned(interpreter)?;
-        value.output_to(
+        value.as_ref_value().output_to(
             Grouping::Flattened,
             &mut ToStreamContext::new(interpreter.output(&self.emit)?, span),
         )

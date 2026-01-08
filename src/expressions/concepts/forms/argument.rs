@@ -15,7 +15,7 @@ impl MapFromArgument for BeArgument {
 
     fn from_argument_value(
         value: ArgumentValue,
-    ) -> ExecutionResult<Actual<'static, ValueType, Self>> {
+    ) -> ExecutionResult<Actual<'static, AnyType, Self>> {
         todo!()
         // Ok(value)
     }
@@ -24,7 +24,7 @@ impl MapFromArgument for BeArgument {
 pub(crate) enum ArgumentContent<T: IsValueLeaf> {
     Owned(T),
     CopyOnWrite(CopyOnWriteContent<T, T>),
-    Mutable(MutableSubRcRefCell<Value, T>),
-    Assignee(MutableSubRcRefCell<Value, T>),
-    Shared(SharedSubRcRefCell<Value, T>),
+    Mutable(MutableSubRcRefCell<AnyValue, T>),
+    Assignee(MutableSubRcRefCell<AnyValue, T>),
+    Shared(SharedSubRcRefCell<AnyValue, T>),
 }

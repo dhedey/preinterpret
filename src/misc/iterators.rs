@@ -56,10 +56,8 @@ impl ZipIterators {
                     k,
                     v.key_span,
                     v.value
-                        .into_owned()
                         .spanned(span_range)
-                        .resolve_any_iterator("Each zip input")?
-                        .into_inner(),
+                        .resolve_any_iterator("Each zip input")?,
                 ))
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -75,12 +73,7 @@ impl ZipIterators {
     ) -> ExecutionResult<Self> {
         let vec = iterator
             .take(101)
-            .map(|x| {
-                x.into_owned()
-                    .spanned(span_range)
-                    .resolve_any_iterator("Each zip input")
-                    .map(|x| x.into_inner())
-            })
+            .map(|x| x.spanned(span_range).resolve_any_iterator("Each zip input"))
             .collect::<Result<Vec<_>, _>>()?;
         if vec.len() == 101 {
             return span_range.value_err("A maximum of 100 iterators are allowed");
@@ -160,7 +153,7 @@ impl ZipIterators {
         count: usize,
         interpreter: &mut Interpreter,
         error_span_range: SpanRange,
-        output: &mut Vec<Value>,
+        output: &mut Vec<AnyValue>,
     ) -> ExecutionResult<()> {
         let mut counter = interpreter.start_iteration_counter(&error_span_range);
 
@@ -200,13 +193,13 @@ impl ZipIterators {
 define_optional_object! {
     pub(crate) struct IntersperseSettings {
         add_trailing: bool = false => ("false", "Whether to add the separator after the last item (default: false)"),
-        final_separator: Value => ("%[or]", "Define a different final separator (default: same as normal separator)"),
+        final_separator: AnyValue => ("%[or]", "Define a different final separator (default: same as normal separator)"),
     }
 }
 
 pub(crate) fn run_intersperse(
     items: IterableValue,
-    separator: Value,
+    separator: AnyValue,
     settings: IntersperseSettings,
 ) -> ExecutionResult<ArrayValue> {
     let mut output = Vec::new();
@@ -248,8 +241,8 @@ pub(crate) fn run_intersperse(
 }
 
 struct SeparatorAppender {
-    separator: Value,
-    final_separator: Option<Value>,
+    separator: AnyValue,
+    final_separator: Option<AnyValue>,
     add_trailing: bool,
 }
 
@@ -257,7 +250,7 @@ impl SeparatorAppender {
     fn add_separator(
         &mut self,
         remaining: RemainingItemCount,
-        output: &mut Vec<Value>,
+        output: &mut Vec<AnyValue>,
     ) -> ExecutionResult<()> {
         match self.separator(remaining) {
             TrailingSeparator::Normal => output.push(self.separator.clone()),

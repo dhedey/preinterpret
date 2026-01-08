@@ -1,6 +1,6 @@
 use super::*;
 
-pub(crate) struct QqqAssignee<T: 'static + ?Sized>(pub(crate) MutableSubRcRefCell<Value, T>);
+pub(crate) struct QqqAssignee<T: 'static + ?Sized>(pub(crate) MutableSubRcRefCell<AnyValue, T>);
 
 #[derive(Copy, Clone)]
 pub(crate) struct BeAssignee;
@@ -40,7 +40,7 @@ impl MapFromArgument for BeAssignee {
 
     fn from_argument_value(
         value: ArgumentValue,
-    ) -> ExecutionResult<Actual<'static, ValueType, Self>> {
+    ) -> ExecutionResult<Actual<'static, AnyType, Self>> {
         todo!()
         // value.expect_assignee()
     }

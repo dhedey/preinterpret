@@ -28,7 +28,7 @@ impl MapFromArgument for BeCopyOnWrite {
 
     fn from_argument_value(
         _value: ArgumentValue,
-    ) -> ExecutionResult<Actual<'static, ValueType, Self>> {
+    ) -> ExecutionResult<Actual<'static, AnyType, Self>> {
         todo!()
         // value.expect_copy_on_write()
     }

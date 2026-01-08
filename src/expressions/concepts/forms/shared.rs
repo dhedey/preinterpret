@@ -1,17 +1,17 @@
 use super::*;
 
-pub(crate) type QqqShared<T> = Actual<'static, T, BeShared>;
+pub(crate) type QqqShared<T> = SharedSubRcRefCell<AnyValue, T>;
 
 #[derive(Copy, Clone)]
 pub(crate) struct BeShared;
 impl IsForm for BeShared {}
 
 impl IsHierarchicalForm for BeShared {
-    type Leaf<'a, T: IsValueLeaf> = SharedSubRcRefCell<Value, T>;
+    type Leaf<'a, T: IsValueLeaf> = QqqShared<T>;
 }
 
 impl IsDynCompatibleForm for BeShared {
-    type DynLeaf<'a, T: 'static + ?Sized> = SharedSubRcRefCell<Value, T>;
+    type DynLeaf<'a, T: 'static + ?Sized> = QqqShared<T>;
 }
 
 impl IsDynMappableForm for BeShared {
@@ -33,7 +33,7 @@ impl MapFromArgument for BeShared {
 
     fn from_argument_value(
         _value: ArgumentValue,
-    ) -> ExecutionResult<Actual<'static, ValueType, Self>> {
+    ) -> ExecutionResult<Actual<'static, AnyType, Self>> {
         // value.expect_shared()
         todo!()
     }

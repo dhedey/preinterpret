@@ -1,7 +1,7 @@
 use super::*;
 
 define_leaf_type! {
-    pub(crate) ParserType => ValueType(ValueContent::Parser),
+    pub(crate) ParserType => AnyType(AnyValueContent::Parser),
     content: ParserHandle,
     kind: pub(crate) ParserKind,
     type_name: "parser",
@@ -193,9 +193,9 @@ define_type_features! {
                 Ok(OutputStream::new_with(|s| s.push_literal(literal)))
             }
 
-            [context] fn inferred_literal(this: Spanned<Shared<ParserHandle>>) -> ExecutionResult<Value> {
+            [context] fn inferred_literal(this: Spanned<Shared<ParserHandle>>) -> ExecutionResult<AnyValue> {
                 let literal = parser(this, context)?.parse()?;
-                Ok(Value::for_literal(literal).into_value())
+                Ok(AnyValue::for_literal(literal).into_value())
             }
 
             [context] fn is_char(this: Spanned<Shared<ParserHandle>>) -> ExecutionResult<bool> {
@@ -266,32 +266,32 @@ impl_resolvable_argument_for! {
     ParserType,
     (value, context) -> ParserHandle {
         match value {
-            Value::Parser(value) => Ok(value),
+            AnyValue::Parser(value) => Ok(value),
             other => context.err("a parser", other),
         }
     }
 }
 
 impl IntoValue for TokenTree {
-    fn into_value(self) -> Value {
+    fn into_value(self) -> AnyValue {
         OutputStream::new_with(|s| s.push_raw_token_tree(self)).into_value()
     }
 }
 
 impl IntoValue for Ident {
-    fn into_value(self) -> Value {
+    fn into_value(self) -> AnyValue {
         OutputStream::new_with(|s| s.push_ident(self)).into_value()
     }
 }
 
 impl IntoValue for Punct {
-    fn into_value(self) -> Value {
+    fn into_value(self) -> AnyValue {
         OutputStream::new_with(|s| s.push_punct(self)).into_value()
     }
 }
 
 impl IntoValue for Literal {
-    fn into_value(self) -> Value {
+    fn into_value(self) -> AnyValue {
         OutputStream::new_with(|s| s.push_literal(self)).into_value()
     }
 }

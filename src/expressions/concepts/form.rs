@@ -38,6 +38,27 @@ impl<T: IsHierarchicalType, F: IsHierarchicalForm> IsFormOfForKind<T, Hierarchic
 
 pub(crate) trait LeafAsRefForm: IsHierarchicalForm {
     fn leaf_as_ref<'r, 'a: 'r, T: IsValueLeaf>(leaf: &'r Self::Leaf<'a, T>) -> &'r T;
+
+    fn leaf_clone_to_owned_infallible<'r, 'a: 'r, T: IsValueLeaf>(
+        leaf: &'r Self::Leaf<'a, T>,
+    ) -> T {
+        Self::leaf_as_ref(leaf).clone()
+    }
+
+    fn leaf_clone_to_owned_transparently<'r, 'a: 'r, T: IsValueLeaf>(
+        leaf: &'r Self::Leaf<'a, T>,
+        error_span: SpanRange,
+    ) -> ExecutionResult<T> {
+        let type_kind = <T as IsValueContent>::Type::type_kind();
+        if type_kind.supports_transparent_cloning() {
+            Ok(Self::leaf_clone_to_owned_infallible(leaf))
+        } else {
+            error_span.ownership_err(format!(
+                "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .clone() explicitly.",
+                type_kind.articled_display_name()
+            ))
+        }
+    }
 }
 
 pub(crate) trait LeafAsMutForm: IsHierarchicalForm {
@@ -61,16 +82,14 @@ pub(crate) trait IsDynMappableForm: IsHierarchicalForm + IsDynCompatibleForm {
     ) -> Option<Self::DynLeaf<'a, D>>;
 }
 
-pub(crate) trait MapFromArgument: IsFormOf<ValueType> {
+pub(crate) trait MapFromArgument: IsFormOf<AnyType> {
     const ARGUMENT_OWNERSHIP: ArgumentOwnership;
 
-    fn from_argument_value(
-        value: ArgumentValue,
-    ) -> ExecutionResult<Actual<'static, ValueType, Self>>;
+    fn from_argument_value(value: ArgumentValue)
+        -> ExecutionResult<Actual<'static, AnyType, Self>>;
 }
 
-pub(crate) trait MapIntoReturned: IsFormOf<ValueType> {
-    fn into_returned_value(
-        value: Actual<'static, ValueType, Self>,
-    ) -> ExecutionResult<ReturnedValue>;
+pub(crate) trait MapIntoReturned: IsFormOf<AnyType> {
+    fn into_returned_value(value: Actual<'static, AnyType, Self>)
+        -> ExecutionResult<ReturnedValue>;
 }

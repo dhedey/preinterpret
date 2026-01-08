@@ -28,14 +28,14 @@ impl AnyAssignmentFrame {
 struct PrivateUnit;
 
 pub(super) struct AssigneeAssigner {
-    value: Value,
+    value: AnyValue,
 }
 
 impl AssigneeAssigner {
     pub(super) fn start(
         context: AssignmentContext,
         assignee: ExpressionNodeId,
-        value: Value,
+        value: AnyValue,
     ) -> NextAction {
         let frame = Self { value };
         context.request_assignee(frame, assignee, true)
@@ -67,7 +67,7 @@ impl GroupedAssigner {
     pub(super) fn start(
         context: AssignmentContext,
         inner: ExpressionNodeId,
-        value: Value,
+        value: AnyValue,
     ) -> NextAction {
         let frame = Self(PrivateUnit);
         context.request_assignment(frame, inner, value)
@@ -93,7 +93,7 @@ impl EvaluationFrame for GroupedAssigner {
 
 pub(super) struct ArrayBasedAssigner {
     span_range: SpanRange,
-    assignee_stack: Vec<(ExpressionNodeId, Value)>,
+    assignee_stack: Vec<(ExpressionNodeId, AnyValue)>,
 }
 
 impl ArrayBasedAssigner {
@@ -102,7 +102,7 @@ impl ArrayBasedAssigner {
         nodes: &Arena<ExpressionNodeId, ExpressionNode>,
         brackets: &Brackets,
         assignee_item_node_ids: &[ExpressionNodeId],
-        value: Value,
+        value: AnyValue,
     ) -> ExecutionResult<NextAction> {
         let frame = Self::new(nodes, brackets.join(), assignee_item_node_ids, value)?;
         Ok(frame.handle_next_subassignment(context))
@@ -113,7 +113,7 @@ impl ArrayBasedAssigner {
         nodes: &Arena<ExpressionNodeId, ExpressionNode>,
         assignee_span: Span,
         assignee_item_node_ids: &[ExpressionNodeId],
-        value: Value,
+        value: AnyValue,
     ) -> ExecutionResult<Self> {
         let span_range = assignee_span.span_range();
         let array: ArrayValue = Spanned(value.into_owned(), span_range)
@@ -231,7 +231,7 @@ impl ObjectBasedAssigner {
         context: AssignmentContext,
         braces: &Braces,
         assignee_pairs: &[(ObjectKey, ExpressionNodeId)],
-        value: Value,
+        value: AnyValue,
     ) -> ExecutionResult<NextAction> {
         let frame = Box::new(Self::new(braces.join(), assignee_pairs, value)?);
         frame.handle_next_subassignment(context)
@@ -240,7 +240,7 @@ impl ObjectBasedAssigner {
     fn new(
         assignee_span: Span,
         assignee_pairs: &[(ObjectKey, ExpressionNodeId)],
-        value: Value,
+        value: AnyValue,
     ) -> ExecutionResult<Self> {
         let span_range = assignee_span.span_range();
         let object: ObjectValue = Spanned(value.into_owned(), span_range)
@@ -259,7 +259,7 @@ impl ObjectBasedAssigner {
         mut self: Box<Self>,
         context: AssignmentContext,
         access: IndexAccess,
-        index: &Value,
+        index: &AnyValue,
         assignee_node: ExpressionNodeId,
     ) -> ExecutionResult<NextAction> {
         let key: &str = index
@@ -292,7 +292,7 @@ impl ObjectBasedAssigner {
         })
     }
 
-    fn resolve_value(&mut self, key: String, key_span: Span) -> ExecutionResult<Value> {
+    fn resolve_value(&mut self, key: String, key_span: Span) -> ExecutionResult<AnyValue> {
         if self.already_used_keys.contains(&key) {
             return key_span.syntax_err(format!("The key `{}` has already used", key));
         }

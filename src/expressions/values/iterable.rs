@@ -30,15 +30,15 @@ impl ResolvableArgumentTarget for IterableValue {
     type ValueType = IterableType;
 }
 
-impl ResolvableOwned<Value> for IterableValue {
-    fn resolve_from_value(value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
+impl ResolvableOwned<AnyValue> for IterableValue {
+    fn resolve_from_value(value: AnyValue, context: ResolutionContext) -> ExecutionResult<Self> {
         Ok(match value {
-            Value::Array(x) => Self::Array(x),
-            Value::Object(x) => Self::Object(x),
-            Value::Stream(x) => Self::Stream(x),
-            Value::Range(x) => Self::Range(x),
-            Value::Iterator(x) => Self::Iterator(x),
-            Value::String(x) => Self::String(x),
+            AnyValue::Array(x) => Self::Array(x),
+            AnyValue::Object(x) => Self::Object(x),
+            AnyValue::Stream(x) => Self::Stream(x),
+            AnyValue::Range(x) => Self::Range(x),
+            AnyValue::Iterator(x) => Self::Iterator(x),
+            AnyValue::String(x) => Self::String(x),
             _ => {
                 return context.err(
                     "an iterable (iterator, array, object, stream, range or string)",
@@ -75,11 +75,11 @@ define_type_features! {
                 ZipIterators::new_from_iterator(iterator, context.span_range())?.run_zip(context.interpreter, false)
             }
 
-            fn intersperse(this: IterableValue, separator: Value, settings: Option<IntersperseSettings>) -> ExecutionResult<ArrayValue> {
+            fn intersperse(this: IterableValue, separator: AnyValue, settings: Option<IntersperseSettings>) -> ExecutionResult<ArrayValue> {
                 run_intersperse(this, separator, settings.unwrap_or_default())
             }
 
-            [context] fn to_vec(this: IterableValue) -> ExecutionResult<Vec<Value>> {
+            [context] fn to_vec(this: IterableValue) -> ExecutionResult<Vec<AnyValue>> {
                 let error_span_range = context.span_range();
                 let mut counter = context.interpreter.start_iteration_counter(&error_span_range);
                 let iterator = this.into_iterator()?;
@@ -105,7 +105,7 @@ define_type_features! {
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
-                    UnaryOperation::Cast { target: CastTarget(ValueLeafKind::Iterator(_)), .. } =>{
+                    UnaryOperation::Cast { target: CastTarget(AnyValueLeafKind::Iterator(_)), .. } =>{
                         unary_definitions::cast_into_iterator()
                     }
                     _ => return None,
@@ -143,14 +143,20 @@ impl IsArgument for IterableRef<'static> {
 
     fn from_argument(argument: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
         Ok(match argument.kind() {
-            ValueLeafKind::Iterator(_) => {
+            AnyValueLeafKind::Iterator(_) => {
                 IterableRef::Iterator(IsArgument::from_argument(argument)?)
             }
-            ValueLeafKind::Array(_) => IterableRef::Array(IsArgument::from_argument(argument)?),
-            ValueLeafKind::Stream(_) => IterableRef::Stream(IsArgument::from_argument(argument)?),
-            ValueLeafKind::Range(_) => IterableRef::Range(IsArgument::from_argument(argument)?),
-            ValueLeafKind::Object(_) => IterableRef::Object(IsArgument::from_argument(argument)?),
-            ValueLeafKind::String(_) => IterableRef::String(IsArgument::from_argument(argument)?),
+            AnyValueLeafKind::Array(_) => IterableRef::Array(IsArgument::from_argument(argument)?),
+            AnyValueLeafKind::Stream(_) => {
+                IterableRef::Stream(IsArgument::from_argument(argument)?)
+            }
+            AnyValueLeafKind::Range(_) => IterableRef::Range(IsArgument::from_argument(argument)?),
+            AnyValueLeafKind::Object(_) => {
+                IterableRef::Object(IsArgument::from_argument(argument)?)
+            }
+            AnyValueLeafKind::String(_) => {
+                IterableRef::String(IsArgument::from_argument(argument)?)
+            }
             _ => {
                 return argument.type_err(
                     "Expected iterable (iterator, array, object, stream, range or string)",

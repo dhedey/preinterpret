@@ -4,7 +4,7 @@ pub(crate) trait HandleDestructure {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,
-        value: Value,
+        value: AnyValue,
     ) -> ExecutionResult<()>;
 }
 
@@ -68,7 +68,7 @@ impl HandleDestructure for Pattern {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,
-        value: Value,
+        value: AnyValue,
     ) -> ExecutionResult<()> {
         match self {
             Pattern::Variable(variable) => variable.handle_destructure(interpreter, value),
@@ -111,7 +111,7 @@ impl HandleDestructure for ArrayPattern {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,
-        value: Value,
+        value: AnyValue,
     ) -> ExecutionResult<()> {
         let array: ArrayValue = Spanned(value.into_owned(), self.brackets.span_range())
             .resolve_as("The value destructured with an array pattern")?;
@@ -226,7 +226,7 @@ impl HandleDestructure for ObjectPattern {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,
-        value: Value,
+        value: AnyValue,
     ) -> ExecutionResult<()> {
         let object: ObjectValue = Spanned(value.into_owned(), self.braces.span_range())
             .resolve_as("The value destructured with an object pattern")?;
@@ -352,7 +352,7 @@ impl HandleDestructure for StreamPattern {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,
-        value: Value,
+        value: AnyValue,
     ) -> ExecutionResult<()> {
         let stream = Spanned(value, self.brackets.span_range())
             .downcast_resolve("The value destructured with a stream pattern")?;
@@ -394,7 +394,7 @@ impl HandleDestructure for ParseTemplatePattern {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,
-        value: Value,
+        value: AnyValue,
     ) -> ExecutionResult<()> {
         let stream = Spanned(value, self.brackets.span_range())
             .downcast_resolve("The value destructured with a parse template pattern")?;

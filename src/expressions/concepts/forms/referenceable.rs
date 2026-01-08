@@ -20,7 +20,7 @@ impl MapFromArgument for BeReferenceable {
 
     fn from_argument_value(
         _value: ArgumentValue,
-    ) -> ExecutionResult<Actual<'static, ValueType, Self>> {
+    ) -> ExecutionResult<Actual<'static, AnyType, Self>> {
         // Rc::new(RefCell::new(value.expect_owned()))
         todo!()
     }
@@ -32,7 +32,10 @@ impl LeafMapper<BeOwned> for OwnedToReferenceableMapper {
     type OutputForm = BeReferenceable;
     type ShortCircuit<'a> = Infallible;
 
-    fn map_leaf<'a, L: IsValueLeaf>(leaf: L) -> Result<Rc<RefCell<L>>, Self::ShortCircuit<'a>> {
+    fn map_leaf<'a, L: IsValueLeaf>(
+        self,
+        leaf: L,
+    ) -> Result<Rc<RefCell<L>>, Self::ShortCircuit<'a>> {
         Ok(Rc::new(RefCell::new(leaf)))
     }
 }

@@ -25,13 +25,22 @@ impl IsDynMappableForm for BeRef {
     }
 }
 
+impl LeafAsRefForm for BeRef {
+    fn leaf_as_ref<'r, 'a: 'r, T: IsValueLeaf>(leaf: &'r Self::Leaf<'a, T>) -> &'r T {
+        leaf
+    }
+}
+
 pub(crate) struct ToRefMapper;
 
 impl<F: LeafAsRefForm> RefLeafMapper<F> for ToRefMapper {
     type OutputForm = BeRef;
     type ShortCircuit<'a> = Infallible;
 
-    fn map_leaf<'r, 'a: 'r, L: IsValueLeaf>(leaf: &'r F::Leaf<'a, L>) -> Result<&'r L, Infallible> {
+    fn map_leaf<'r, 'a: 'r, L: IsValueLeaf>(
+        self,
+        leaf: &'r F::Leaf<'a, L>,
+    ) -> Result<&'r L, Infallible> {
         Ok(F::leaf_as_ref(leaf))
     }
 }

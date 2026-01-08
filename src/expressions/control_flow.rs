@@ -203,7 +203,8 @@ impl Evaluate for WhileExpression {
                 ExecutionOutcome::ControlFlow(control_flow_interrupt) => {
                     match control_flow_interrupt {
                         ControlFlowInterrupt::Break(break_interrupt) => {
-                            return break_interrupt.into_value(self.span_range(), ownership);
+                            return break_interrupt
+                                .into_requested_value(self.span_range(), ownership);
                         }
                         ControlFlowInterrupt::Continue { .. } => {
                             continue;
@@ -285,7 +286,8 @@ impl Evaluate for LoopExpression {
                 ExecutionOutcome::ControlFlow(control_flow_interrupt) => {
                     match control_flow_interrupt {
                         ControlFlowInterrupt::Break(break_interrupt) => {
-                            return break_interrupt.into_value(self.span_range(), ownership);
+                            return break_interrupt
+                                .into_requested_value(self.span_range(), ownership);
                         }
                         ControlFlowInterrupt::Continue { .. } => {
                             continue;
@@ -391,7 +393,8 @@ impl Evaluate for ForExpression {
                 ExecutionOutcome::ControlFlow(control_flow_interrupt) => {
                     match control_flow_interrupt {
                         ControlFlowInterrupt::Break(break_interrupt) => {
-                            return break_interrupt.into_value(self.span_range(), ownership);
+                            return break_interrupt
+                                .into_requested_value(self.span_range(), ownership);
                         }
                         ControlFlowInterrupt::Continue { .. } => {
                             continue;

@@ -78,7 +78,7 @@ impl<T: ?Sized> ToSpannedRef<'static> for Shared<T> {
 
 enum AnyRefInner<'a, T: 'static + ?Sized> {
     Direct(&'a T),
-    Encapsulated(SharedSubRcRefCell<Value, T>),
+    Encapsulated(SharedSubRcRefCell<AnyValue, T>),
 }
 
 impl<'a, T: 'static + ?Sized> Deref for AnyRef<'a, T> {
@@ -161,7 +161,7 @@ impl<'a, T: ?Sized> From<Mutable<T>> for AnyMut<'a, T> {
 
 enum AnyMutInner<'a, T: 'static + ?Sized> {
     Direct(&'a mut T),
-    Encapsulated(MutableSubRcRefCell<Value, T>),
+    Encapsulated(MutableSubRcRefCell<AnyValue, T>),
 }
 
 impl<'a, T: 'static + ?Sized> Deref for AnyMut<'a, T> {

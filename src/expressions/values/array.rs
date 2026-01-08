@@ -1,7 +1,7 @@
 use super::*;
 
 define_leaf_type! {
-    pub(crate) ArrayType => ValueType(ValueContent::Array),
+    pub(crate) ArrayType => AnyType(AnyValueContent::Array),
     content: ArrayValue,
     kind: pub(crate) ArrayKind,
     type_name: "array",
@@ -21,11 +21,11 @@ define_leaf_type! {
 
 #[derive(Clone)]
 pub(crate) struct ArrayValue {
-    pub(crate) items: Vec<Value>,
+    pub(crate) items: Vec<AnyValue>,
 }
 
 impl ArrayValue {
-    pub(crate) fn new(items: Vec<Value>) -> Self {
+    pub(crate) fn new(items: Vec<AnyValue>) -> Self {
         Self { items }
     }
 
@@ -35,22 +35,22 @@ impl ArrayValue {
         grouping: Grouping,
     ) -> ExecutionResult<()> {
         for item in &self.items {
-            item.output_to(grouping, output)?;
+            item.as_ref_value().output_to(grouping, output)?;
         }
         Ok(())
     }
 
     pub(super) fn into_indexed(
         mut self,
-        Spanned(index, span_range): Spanned<&Value>,
-    ) -> ExecutionResult<Value> {
+        Spanned(index, span_range): Spanned<AnyValueRef>,
+    ) -> ExecutionResult<AnyValue> {
         Ok(match index {
-            ValueContent::Integer(integer) => {
+            AnyValueContent::Integer(integer) => {
                 let index =
                     self.resolve_valid_index_from_integer(Spanned(integer, span_range), false)?;
                 std::mem::replace(&mut self.items[index], ().into_value())
             }
-            ValueContent::Range(range) => {
+            AnyValueContent::Range(range) => {
                 let range = Spanned(range, span_range).resolve_to_index_range(&self)?;
                 let new_items: Vec<_> = self.items.drain(range).collect();
                 new_items.into_value()
@@ -61,15 +61,15 @@ impl ArrayValue {
 
     pub(super) fn index_mut(
         &mut self,
-        Spanned(index, span_range): Spanned<&Value>,
-    ) -> ExecutionResult<&mut Value> {
+        Spanned(index, span_range): Spanned<AnyValueRef>,
+    ) -> ExecutionResult<&mut AnyValue> {
         Ok(match index {
-            ValueContent::Integer(integer) => {
+            AnyValueContent::Integer(integer) => {
                 let index =
                     self.resolve_valid_index_from_integer(Spanned(integer, span_range), false)?;
                 &mut self.items[index]
             }
-            ValueContent::Range(..) => {
+            AnyValueContent::Range(..) => {
                 // Temporary until we add slice types - we error here
                 return span_range.ownership_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]");
             }
@@ -79,15 +79,15 @@ impl ArrayValue {
 
     pub(super) fn index_ref(
         &self,
-        Spanned(index, span_range): Spanned<&Value>,
-    ) -> ExecutionResult<&Value> {
+        Spanned(index, span_range): Spanned<AnyValueRef>,
+    ) -> ExecutionResult<&AnyValue> {
         Ok(match index {
-            ValueContent::Integer(integer) => {
+            AnyValueContent::Integer(integer) => {
                 let index =
                     self.resolve_valid_index_from_integer(Spanned(integer, span_range), false)?;
                 &self.items[index]
             }
-            ValueContent::Range(..) => {
+            AnyValueContent::Range(..) => {
                 // Temporary until we add slice types - we error here
                 return span_range.ownership_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]");
             }
@@ -97,11 +97,11 @@ impl ArrayValue {
 
     pub(super) fn resolve_valid_index(
         &self,
-        Spanned(index, span_range): Spanned<&Value>,
+        Spanned(index, span_range): Spanned<AnyValueRef>,
         is_exclusive: bool,
     ) -> ExecutionResult<usize> {
         match index {
-            ValueContent::Integer(int) => {
+            AnyValueContent::Integer(int) => {
                 self.resolve_valid_index_from_integer(Spanned(int, span_range), is_exclusive)
             }
             _ => span_range.type_err("The index must be an integer"),
@@ -110,11 +110,12 @@ impl ArrayValue {
 
     fn resolve_valid_index_from_integer(
         &self,
-        Spanned(integer, span): Spanned<&IntegerValue>,
+        Spanned(integer, span): Spanned<IntegerValueRef>,
         is_exclusive: bool,
     ) -> ExecutionResult<usize> {
-        let index: usize =
-            Spanned((*integer).into_owned_value(), span).resolve_as("An array index")?;
+        let index: OptionalSuffix<usize> =
+            Spanned(integer.clone_to_owned_infallible(), span).resolve_as("An array index")?;
+        let index = index.0;
         if is_exclusive {
             if index <= self.items.len() {
                 Ok(index)
@@ -169,8 +170,8 @@ impl ValuesEqual for ArrayValue {
     }
 }
 
-impl IntoValue for Vec<Value> {
-    fn into_value(self) -> Value {
+impl IntoValue for Vec<AnyValue> {
+    fn into_value(self) -> AnyValue {
         ArrayValue { items: self }.into_value()
     }
 }
@@ -179,7 +180,7 @@ impl_resolvable_argument_for! {
     ArrayType,
     (value, context) -> ArrayValue {
         match value {
-            ValueContent::Array(value) => Ok(value),
+            AnyValueContent::Array(value) => Ok(value),
             _ => context.err("an array", value),
         }
     }

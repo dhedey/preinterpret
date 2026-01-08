@@ -24,17 +24,20 @@ pub(crate) trait IsHierarchicalType: IsType<Variant = HierarchicalTypeVariant> {
     // So the following where clause can be added where needed to make types line up:
     //   for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
     type Content<'a, F: IsHierarchicalForm>;
-    type LeafKind: IsSpecificLeafKind;
+    type LeafKind: IsLeafKind;
 
     fn map_with<'a, F: IsHierarchicalForm, M: LeafMapper<F>>(
+        mapper: M,
         structure: Self::Content<'a, F>,
     ) -> Result<Self::Content<'a, M::OutputForm>, M::ShortCircuit<'a>>;
 
     fn map_ref_with<'r, 'a: 'r, F: IsHierarchicalForm, M: RefLeafMapper<F>>(
+        mapper: M,
         structure: &'r Self::Content<'a, F>,
     ) -> Result<Self::Content<'r, M::OutputForm>, M::ShortCircuit<'a>>;
 
     fn map_mut_with<'r, 'a: 'r, F: IsHierarchicalForm, M: MutLeafMapper<F>>(
+        mapper: M,
         structure: &'r mut Self::Content<'a, F>,
     ) -> Result<Self::Content<'r, M::OutputForm>, M::ShortCircuit<'a>>;
 
@@ -56,6 +59,7 @@ pub(crate) trait LeafMapper<F: IsHierarchicalForm> {
     type ShortCircuit<'a>;
 
     fn map_leaf<'a, L: IsValueLeaf>(
+        self,
         leaf: F::Leaf<'a, L>,
     ) -> Result<<Self::OutputForm as IsHierarchicalForm>::Leaf<'a, L>, Self::ShortCircuit<'a>>;
 }
@@ -65,6 +69,7 @@ pub(crate) trait RefLeafMapper<F: IsHierarchicalForm> {
     type ShortCircuit<'a>;
 
     fn map_leaf<'r, 'a: 'r, L: IsValueLeaf>(
+        self,
         leaf: &'r F::Leaf<'a, L>,
     ) -> Result<<Self::OutputForm as IsHierarchicalForm>::Leaf<'r, L>, Self::ShortCircuit<'a>>;
 }
@@ -74,6 +79,7 @@ pub(crate) trait MutLeafMapper<F: IsHierarchicalForm> {
     type ShortCircuit<'a>;
 
     fn map_leaf<'r, 'a: 'r, L: IsValueLeaf>(
+        self,
         leaf: &'r mut F::Leaf<'a, L>,
     ) -> Result<<Self::OutputForm as IsHierarchicalForm>::Leaf<'r, L>, Self::ShortCircuit<'a>>;
 }
@@ -163,7 +169,7 @@ macro_rules! impl_type_feature_resolver {
                 None
             }
 
-            fn resolve_type_property(&self, property_name: &str) -> Option<Value> {
+            fn resolve_type_property(&self, property_name: &str) -> Option<AnyValue> {
                 // Purposefully doesn't resolve parents, but TBC if this is right
                 <$type_def as TypeData>::resolve_type_property(property_name)
             }
@@ -255,7 +261,7 @@ macro_rules! impl_ancestor_chain_conversions {
 pub(crate) use impl_ancestor_chain_conversions;
 
 pub(crate) trait IsValueLeaf:
-    'static + IntoValueContent<'static, Form = BeOwned> + CastDyn<dyn IsIterable>
+    'static + IntoValueContent<'static, Form = BeOwned> + CastDyn<dyn IsIterable> + Clone
 {
 }
 
@@ -279,11 +285,11 @@ pub(crate) trait CastDyn<T: ?Sized> {
 }
 
 pub(crate) trait HasLeafKind {
-    type LeafKind: IsSpecificLeafKind;
+    type LeafKind: IsLeafKind;
 
     fn kind(&self) -> Self::LeafKind;
 
-    fn value_kind(&self) -> ValueLeafKind {
+    fn value_kind(&self) -> AnyValueLeafKind {
         self.kind().into()
     }
 
@@ -360,26 +366,29 @@ macro_rules! define_parent_type {
             type LeafKind = $leaf_kind;
 
             fn map_with<'a, F: IsHierarchicalForm, M: LeafMapper<F>>(
+                mapper: M,
                 content: Self::Content<'a, F>,
             ) -> Result<Self::Content<'a, M::OutputForm>, M::ShortCircuit<'a>> {
                 Ok(match content {
-                    $( $content::$variant(x) => $content::$variant(<$variant_type>::map_with::<'a, F, M>(x)?), )*
+                    $( $content::$variant(x) => $content::$variant(<$variant_type>::map_with::<'a, F, M>(mapper, x)?), )*
                 })
             }
 
             fn map_ref_with<'r, 'a: 'r, F: IsHierarchicalForm, M: RefLeafMapper<F>>(
+                mapper: M,
                 content: &'r Self::Content<'a, F>,
             ) -> Result<Self::Content<'r, M::OutputForm>, M::ShortCircuit<'a>> {
                 Ok(match content {
-                    $( $content::$variant(x) => $content::$variant(<$variant_type>::map_ref_with::<'r, 'a, F, M>(x)?), )*
+                    $( $content::$variant(x) => $content::$variant(<$variant_type>::map_ref_with::<'r, 'a, F, M>(mapper, x)?), )*
                 })
             }
 
             fn map_mut_with<'r, 'a: 'r, F: IsHierarchicalForm, M: MutLeafMapper<F>>(
+                mapper: M,
                 content: &'r mut Self::Content<'a, F>,
             ) -> Result<Self::Content<'r, M::OutputForm>, M::ShortCircuit<'a>> {
                 Ok(match content {
-                    $( $content::$variant(x) => $content::$variant(<$variant_type>::map_mut_with::<'r, 'a, F, M>(x)?), )*
+                    $( $content::$variant(x) => $content::$variant(<$variant_type>::map_mut_with::<'r, 'a, F, M>(mapper, x)?), )*
                 })
             }
 
@@ -429,6 +438,10 @@ macro_rules! define_parent_type {
         $type_kind_vis struct $type_kind;
 
         impl $type_kind {
+            pub(crate) fn articled_display_name(&self) -> &'static str {
+                $articled_display_name
+            }
+
             pub(crate) fn source_type_name(&self) -> &'static str {
                 $source_type_name
             }
@@ -444,15 +457,15 @@ macro_rules! define_parent_type {
         }
 
         $(
-            impl From<$leaf_kind> for ValueLeafKind {
+            impl From<$leaf_kind> for AnyValueLeafKind {
                 fn from(kind: $leaf_kind) -> Self {
                     let as_parent_kind = <$parent as IsHierarchicalType>::LeafKind::$parent_variant(kind);
-                    ValueLeafKind::from(as_parent_kind)
+                    AnyValueLeafKind::from(as_parent_kind)
                 }
             }
         )?
 
-        impl IsSpecificLeafKind for $leaf_kind {
+        impl IsLeafKind for $leaf_kind {
             fn source_type_name(&self) -> &'static str {
                 match self {
                     $( Self::$variant(x) => x.source_type_name(), )*
@@ -517,7 +530,7 @@ macro_rules! define_leaf_type {
             const ARTICLED_DISPLAY_NAME: &'static str = $articled_display_name;
 
             fn type_kind() -> TypeKind {
-                TypeKind::Leaf(ValueLeafKind::from($kind))
+                TypeKind::Leaf(AnyValueLeafKind::from($kind))
             }
 
             // This is called for every leaf in a row as part of parsing
@@ -538,21 +551,24 @@ macro_rules! define_leaf_type {
             type LeafKind = $kind;
 
             fn map_with<'a, F: IsHierarchicalForm, M: LeafMapper<F>>(
+                mapper: M,
                 content: Self::Content<'a, F>,
             ) -> Result<Self::Content<'a, M::OutputForm>, M::ShortCircuit<'a>> {
-                M::map_leaf::<$content_type>(content)
+                mapper.map_leaf::<$content_type>(content)
             }
 
             fn map_ref_with<'r, 'a: 'r, F: IsHierarchicalForm, M: RefLeafMapper<F>>(
+                mapper: M,
                 content: &'r Self::Content<'a, F>,
             ) -> Result<Self::Content<'r, M::OutputForm>, M::ShortCircuit<'a>> {
-                M::map_leaf::<$content_type>(content)
+                mapper.map_leaf::<$content_type>(content)
             }
 
             fn map_mut_with<'r, 'a: 'r, F: IsHierarchicalForm, M: MutLeafMapper<F>>(
+                mapper: M,
                 content: &'r mut Self::Content<'a, F>,
             ) -> Result<Self::Content<'r, M::OutputForm>, M::ShortCircuit<'a>> {
-                M::map_leaf::<$content_type>(content)
+                mapper.map_leaf::<$content_type>(content)
             }
 
             fn content_to_leaf_kind<F: IsHierarchicalForm>(
@@ -577,14 +593,14 @@ macro_rules! define_leaf_type {
         #[derive(Clone, Copy, PartialEq, Eq)]
         $kind_vis struct $kind;
 
-        impl From<$kind> for ValueLeafKind {
+        impl From<$kind> for AnyValueLeafKind {
             fn from(kind: $kind) -> Self {
                 let as_parent_kind = <$parent as IsHierarchicalType>::LeafKind::$parent_variant(kind);
-                ValueLeafKind::from(as_parent_kind)
+                AnyValueLeafKind::from(as_parent_kind)
             }
         }
 
-        impl IsSpecificLeafKind for $kind {
+        impl IsLeafKind for $kind {
             fn source_type_name(&self) -> &'static str {
                 $source_type_name
             }
@@ -637,6 +653,12 @@ macro_rules! define_leaf_type {
 pub(crate) use define_leaf_type;
 
 pub(crate) struct DynMapper<D: ?Sized>(std::marker::PhantomData<D>);
+
+impl<D: ?Sized> DynMapper<D> {
+    pub(crate) const fn new() -> Self {
+        Self(std::marker::PhantomData)
+    }
+}
 
 /// Implements `IsValueContent`, `IntoValueContent`, and `FromValueContent` for various
 /// form wrappers of a content type. This macro deduplicates code across `define_leaf_type`,
@@ -692,33 +714,33 @@ macro_rules! impl_value_content_traits {
             }
         }
 
-        // BeMutable: content is MutableSubRcRefCell<Value, X>
-        impl<'a> IsValueContent<'a> for MutableSubRcRefCell<Value, $content_type> {
+        // BeMutable: content is QqqMutable<X>
+        impl<'a> IsValueContent<'a> for QqqMutable<$content_type> {
             type Type = $type_def;
             type Form = BeMutable;
         }
-        impl<'a> IntoValueContent<'a> for MutableSubRcRefCell<Value, $content_type> {
+        impl<'a> IntoValueContent<'a> for QqqMutable<$content_type> {
             fn into_content(self) -> Self {
                 self
             }
         }
-        impl<'a> FromValueContent<'a> for MutableSubRcRefCell<Value, $content_type> {
+        impl<'a> FromValueContent<'a> for QqqMutable<$content_type> {
             fn from_content(content: Self) -> Self {
                 content
             }
         }
 
-        // BeShared: content is SharedSubRcRefCell<Value, X>
-        impl<'a> IsValueContent<'a> for SharedSubRcRefCell<Value, $content_type> {
+        // BeShared: content is QqqShared<X>
+        impl<'a> IsValueContent<'a> for QqqShared<$content_type> {
             type Type = $type_def;
             type Form = BeShared;
         }
-        impl<'a> IntoValueContent<'a> for SharedSubRcRefCell<Value, $content_type> {
+        impl<'a> IntoValueContent<'a> for QqqShared<$content_type> {
             fn into_content(self) -> Self {
                 self
             }
         }
-        impl<'a> FromValueContent<'a> for SharedSubRcRefCell<Value, $content_type> {
+        impl<'a> FromValueContent<'a> for QqqShared<$content_type> {
             fn from_content(content: Self) -> Self {
                 content
             }
@@ -863,33 +885,33 @@ macro_rules! impl_value_content_traits {
             }
         }
 
-        // BeMutable: content is MutableSubRcRefCell<Value, D>
-        impl<'a> IsValueContent<'a> for MutableSubRcRefCell<Value, $dyn_type> {
+        // BeMutable: content is QqqMutable<D>
+        impl<'a> IsValueContent<'a> for QqqMutable<$dyn_type> {
             type Type = $type_def;
             type Form = BeMutable;
         }
-        impl<'a> IntoValueContent<'a> for MutableSubRcRefCell<Value, $dyn_type> {
+        impl<'a> IntoValueContent<'a> for QqqMutable<$dyn_type> {
             fn into_content(self) -> Self {
                 self
             }
         }
-        impl<'a> FromValueContent<'a> for MutableSubRcRefCell<Value, $dyn_type> {
+        impl<'a> FromValueContent<'a> for QqqMutable<$dyn_type> {
             fn from_content(content: Self) -> Self {
                 content
             }
         }
 
-        // BeShared: content is SharedSubRcRefCell<Value, D>
-        impl<'a> IsValueContent<'a> for SharedSubRcRefCell<Value, $dyn_type> {
+        // BeShared: content is QqqShared<D>
+        impl<'a> IsValueContent<'a> for QqqShared<$dyn_type> {
             type Type = $type_def;
             type Form = BeShared;
         }
-        impl<'a> IntoValueContent<'a> for SharedSubRcRefCell<Value, $dyn_type> {
+        impl<'a> IntoValueContent<'a> for QqqShared<$dyn_type> {
             fn into_content(self) -> Self {
                 self
             }
         }
-        impl<'a> FromValueContent<'a> for SharedSubRcRefCell<Value, $dyn_type> {
+        impl<'a> FromValueContent<'a> for QqqShared<$dyn_type> {
             fn from_content(content: Self) -> Self {
                 content
             }
@@ -1001,7 +1023,7 @@ macro_rules! define_dyn_type {
                 for<'a> F: IsDynCompatibleForm<DynLeaf<'a, $dyn_type> = <F as IsFormOf<Self>>::Content<'a>>,
         {
             fn downcast_from<'a>(content: <F as IsFormOf<T>>::Content<'a>) -> Option<<F as IsFormOf<Self>>::Content<'a>> {
-                match T::map_with::<'a, F, DynMapper<$dyn_type>>(content) {
+                match T::map_with::<'a, F, _>(DynMapper::<$dyn_type>::new(), content) {
                     Ok(_) => panic!("DynMapper is expected to always short-circuit"),
                     Err(dyn_leaf) => dyn_leaf,
                 }
@@ -1013,6 +1035,7 @@ macro_rules! define_dyn_type {
             type ShortCircuit<'a> = Option<F::DynLeaf<'a, $dyn_type>>;
 
             fn map_leaf<'a, L: IsValueLeaf>(
+                self,
                 leaf: F::Leaf<'a, L>,
             ) -> Result<<Self::OutputForm as IsHierarchicalForm>::Leaf<'a, L>, Self::ShortCircuit<'a>>
             {

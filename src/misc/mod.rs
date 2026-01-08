@@ -39,7 +39,7 @@ pub(crate) fn print_if_slow<T>(
 pub(crate) enum Never {}
 
 impl IntoValue for Never {
-    fn into_value(self) -> Value {
+    fn into_value(self) -> AnyValue {
         match self {}
     }
 }

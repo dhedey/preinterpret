@@ -1,7 +1,7 @@
 use super::*;
 
 define_leaf_type! {
-    pub(crate) UntypedFloatType => FloatType(FloatContent::Untyped) => ValueType,
+    pub(crate) UntypedFloatType => FloatType(FloatContent::Untyped) => AnyType,
     content: UntypedFloat,
     kind: pub(crate) UntypedFloatKind,
     type_name: "untyped_float",
@@ -155,23 +155,23 @@ define_type_features! {
                 Some(match operation {
                     UnaryOperation::Neg { .. } => unary_definitions::neg(),
                     UnaryOperation::Cast { target: CastTarget(kind), .. } => match kind {
-                        ValueLeafKind::Integer(IntegerLeafKind::Untyped(_)) => unary_definitions::cast_to_untyped_integer(),
-                        ValueLeafKind::Integer(IntegerLeafKind::I8(_)) => unary_definitions::cast_to_i8(),
-                        ValueLeafKind::Integer(IntegerLeafKind::I16(_)) => unary_definitions::cast_to_i16(),
-                        ValueLeafKind::Integer(IntegerLeafKind::I32(_)) => unary_definitions::cast_to_i32(),
-                        ValueLeafKind::Integer(IntegerLeafKind::I64(_)) => unary_definitions::cast_to_i64(),
-                        ValueLeafKind::Integer(IntegerLeafKind::I128(_)) => unary_definitions::cast_to_i128(),
-                        ValueLeafKind::Integer(IntegerLeafKind::Isize(_)) => unary_definitions::cast_to_isize(),
-                        ValueLeafKind::Integer(IntegerLeafKind::U8(_)) => unary_definitions::cast_to_u8(),
-                        ValueLeafKind::Integer(IntegerLeafKind::U16(_)) => unary_definitions::cast_to_u16(),
-                        ValueLeafKind::Integer(IntegerLeafKind::U32(_)) => unary_definitions::cast_to_u32(),
-                        ValueLeafKind::Integer(IntegerLeafKind::U64(_)) => unary_definitions::cast_to_u64(),
-                        ValueLeafKind::Integer(IntegerLeafKind::U128(_)) => unary_definitions::cast_to_u128(),
-                        ValueLeafKind::Integer(IntegerLeafKind::Usize(_)) => unary_definitions::cast_to_usize(),
-                        ValueLeafKind::Float(FloatLeafKind::Untyped(_)) => unary_definitions::cast_to_untyped_float(),
-                        ValueLeafKind::Float(FloatLeafKind::F32(_)) => unary_definitions::cast_to_f32(),
-                        ValueLeafKind::Float(FloatLeafKind::F64(_)) => unary_definitions::cast_to_f64(),
-                        ValueLeafKind::String(_) => unary_definitions::cast_to_string(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::Untyped(_)) => unary_definitions::cast_to_untyped_integer(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::I8(_)) => unary_definitions::cast_to_i8(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::I16(_)) => unary_definitions::cast_to_i16(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::I32(_)) => unary_definitions::cast_to_i32(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::I64(_)) => unary_definitions::cast_to_i64(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::I128(_)) => unary_definitions::cast_to_i128(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::Isize(_)) => unary_definitions::cast_to_isize(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::U8(_)) => unary_definitions::cast_to_u8(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::U16(_)) => unary_definitions::cast_to_u16(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::U32(_)) => unary_definitions::cast_to_u32(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::U64(_)) => unary_definitions::cast_to_u64(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::U128(_)) => unary_definitions::cast_to_u128(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::Usize(_)) => unary_definitions::cast_to_usize(),
+                        AnyValueLeafKind::Float(FloatLeafKind::Untyped(_)) => unary_definitions::cast_to_untyped_float(),
+                        AnyValueLeafKind::Float(FloatLeafKind::F32(_)) => unary_definitions::cast_to_f32(),
+                        AnyValueLeafKind::Float(FloatLeafKind::F64(_)) => unary_definitions::cast_to_f64(),
+                        AnyValueLeafKind::String(_) => unary_definitions::cast_to_string(),
                         _ => return None,
                     },
                     _ => return None,
@@ -194,8 +194,11 @@ impl ResolvableArgumentTarget for UntypedFloatFallback {
     type ValueType = UntypedFloatType;
 }
 
-impl ResolvableOwned<Value> for UntypedFloatFallback {
-    fn resolve_from_value(input_value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
+impl ResolvableOwned<AnyValue> for UntypedFloatFallback {
+    fn resolve_from_value(
+        input_value: AnyValue,
+        context: ResolutionContext,
+    ) -> ExecutionResult<Self> {
         let value = UntypedFloat::resolve_from_value(input_value, context)?;
         Ok(UntypedFloatFallback(value.0))
     }
@@ -214,7 +217,7 @@ impl_resolvable_argument_for! {
     UntypedFloatType,
     (value, context) -> UntypedFloat {
         match value {
-            ValueContent::Float(FloatContent::Untyped(x)) => Ok(x),
+            AnyValueContent::Float(FloatContent::Untyped(x)) => Ok(x),
             other => context.err("an untyped float", other),
         }
     }

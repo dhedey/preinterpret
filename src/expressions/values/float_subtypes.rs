@@ -89,23 +89,23 @@ macro_rules! impl_float_operations {
                         Some(match operation {
                             UnaryOperation::Neg { .. } => unary_definitions::neg(),
                             UnaryOperation::Cast { target: CastTarget(kind), .. } => match kind {
-                                ValueLeafKind::Integer(IntegerLeafKind::Untyped(_)) => unary_definitions::cast_to_untyped_integer(),
-                                ValueLeafKind::Integer(IntegerLeafKind::I8(_)) => unary_definitions::cast_to_i8(),
-                                ValueLeafKind::Integer(IntegerLeafKind::I16(_)) => unary_definitions::cast_to_i16(),
-                                ValueLeafKind::Integer(IntegerLeafKind::I32(_)) => unary_definitions::cast_to_i32(),
-                                ValueLeafKind::Integer(IntegerLeafKind::I64(_)) => unary_definitions::cast_to_i64(),
-                                ValueLeafKind::Integer(IntegerLeafKind::I128(_)) => unary_definitions::cast_to_i128(),
-                                ValueLeafKind::Integer(IntegerLeafKind::Isize(_)) => unary_definitions::cast_to_isize(),
-                                ValueLeafKind::Integer(IntegerLeafKind::U8(_)) => unary_definitions::cast_to_u8(),
-                                ValueLeafKind::Integer(IntegerLeafKind::U16(_)) => unary_definitions::cast_to_u16(),
-                                ValueLeafKind::Integer(IntegerLeafKind::U32(_)) => unary_definitions::cast_to_u32(),
-                                ValueLeafKind::Integer(IntegerLeafKind::U64(_)) => unary_definitions::cast_to_u64(),
-                                ValueLeafKind::Integer(IntegerLeafKind::U128(_)) => unary_definitions::cast_to_u128(),
-                                ValueLeafKind::Integer(IntegerLeafKind::Usize(_)) => unary_definitions::cast_to_usize(),
-                                ValueLeafKind::Float(FloatLeafKind::Untyped(_)) => unary_definitions::cast_to_untyped_float(),
-                                ValueLeafKind::Float(FloatLeafKind::F32(_)) => unary_definitions::cast_to_f32(),
-                                ValueLeafKind::Float(FloatLeafKind::F64(_)) => unary_definitions::cast_to_f64(),
-                                ValueLeafKind::String(_) => unary_definitions::cast_to_string(),
+                                AnyValueLeafKind::Integer(IntegerLeafKind::Untyped(_)) => unary_definitions::cast_to_untyped_integer(),
+                                AnyValueLeafKind::Integer(IntegerLeafKind::I8(_)) => unary_definitions::cast_to_i8(),
+                                AnyValueLeafKind::Integer(IntegerLeafKind::I16(_)) => unary_definitions::cast_to_i16(),
+                                AnyValueLeafKind::Integer(IntegerLeafKind::I32(_)) => unary_definitions::cast_to_i32(),
+                                AnyValueLeafKind::Integer(IntegerLeafKind::I64(_)) => unary_definitions::cast_to_i64(),
+                                AnyValueLeafKind::Integer(IntegerLeafKind::I128(_)) => unary_definitions::cast_to_i128(),
+                                AnyValueLeafKind::Integer(IntegerLeafKind::Isize(_)) => unary_definitions::cast_to_isize(),
+                                AnyValueLeafKind::Integer(IntegerLeafKind::U8(_)) => unary_definitions::cast_to_u8(),
+                                AnyValueLeafKind::Integer(IntegerLeafKind::U16(_)) => unary_definitions::cast_to_u16(),
+                                AnyValueLeafKind::Integer(IntegerLeafKind::U32(_)) => unary_definitions::cast_to_u32(),
+                                AnyValueLeafKind::Integer(IntegerLeafKind::U64(_)) => unary_definitions::cast_to_u64(),
+                                AnyValueLeafKind::Integer(IntegerLeafKind::U128(_)) => unary_definitions::cast_to_u128(),
+                                AnyValueLeafKind::Integer(IntegerLeafKind::Usize(_)) => unary_definitions::cast_to_usize(),
+                                AnyValueLeafKind::Float(FloatLeafKind::Untyped(_)) => unary_definitions::cast_to_untyped_float(),
+                                AnyValueLeafKind::Float(FloatLeafKind::F32(_)) => unary_definitions::cast_to_f32(),
+                                AnyValueLeafKind::Float(FloatLeafKind::F64(_)) => unary_definitions::cast_to_f64(),
+                                AnyValueLeafKind::String(_) => unary_definitions::cast_to_string(),
                                 _ => return None,
                             }
                             _ => return None,
@@ -121,7 +121,7 @@ macro_rules! impl_float_operations {
 
                     fn resolve_type_property(
                         property_name: &str,
-                    ) -> Option<Value> {
+                    ) -> Option<AnyValue> {
                         match property_name {
                             "MAX" => Some($float_type::MAX.into_value()),
                             "MIN" => Some($float_type::MIN.into_value()),
@@ -150,7 +150,7 @@ impl_float_operations!(F32Type mod f32_interface: F32(f32), F64Type mod f64_inte
 macro_rules! impl_resolvable_float_subtype {
     ($type_def:ident, $kind:ident, $type:ty, $variant:ident, $type_name:literal, $articled_display_name:expr) => {
         define_leaf_type! {
-            pub(crate) $type_def => FloatType(FloatContent::$variant) => ValueType,
+            pub(crate) $type_def => FloatType(FloatContent::$variant) => AnyType,
             content: $type,
             kind: pub(crate) $kind,
             type_name: $type_name,
@@ -214,37 +214,37 @@ macro_rules! impl_resolvable_float_subtype {
             }
         }
 
-        impl ResolvableOwned<Value> for $type {
+        impl ResolvableOwned<AnyValue> for $type {
             fn resolve_from_value(
-                value: Value,
+                value: AnyValue,
                 context: ResolutionContext,
             ) -> ExecutionResult<Self> {
                 match value {
-                    Value::Float(x) => <$type>::resolve_from_value(x, context),
+                    AnyValue::Float(x) => <$type>::resolve_from_value(x, context),
                     other => context.err($articled_display_name, other),
                 }
             }
         }
 
-        impl ResolvableShared<Value> for $type {
+        impl ResolvableShared<AnyValue> for $type {
             fn resolve_from_ref<'a>(
-                value: &'a Value,
+                value: &'a AnyValue,
                 context: ResolutionContext,
             ) -> ExecutionResult<&'a Self> {
                 match value {
-                    ValueContent::Float(FloatContent::$variant(x)) => Ok(x),
+                    AnyValueContent::Float(FloatContent::$variant(x)) => Ok(x),
                     other => context.err($articled_display_name, other),
                 }
             }
         }
 
-        impl ResolvableMutable<Value> for $type {
+        impl ResolvableMutable<AnyValue> for $type {
             fn resolve_from_mut<'a>(
-                value: &'a mut Value,
+                value: &'a mut AnyValue,
                 context: ResolutionContext,
             ) -> ExecutionResult<&'a mut Self> {
                 match value {
-                    ValueContent::Float(FloatContent::$variant(x)) => Ok(x),
+                    AnyValueContent::Float(FloatContent::$variant(x)) => Ok(x),
                     other => context.err($articled_display_name, other),
                 }
             }

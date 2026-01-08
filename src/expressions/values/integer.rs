@@ -1,7 +1,7 @@
 use super::*;
 
 define_parent_type! {
-    pub(crate) IntegerType => ValueType(ValueContent::Integer),
+    pub(crate) IntegerType => AnyType(AnyValueContent::Integer),
     content: pub(crate) IntegerContent,
     leaf_kind: pub(crate) IntegerLeafKind,
     type_kind: ParentTypeKind::Integer(pub(crate) IntegerTypeKind),
@@ -25,6 +25,7 @@ define_parent_type! {
 }
 
 pub(crate) type IntegerValue = IntegerContent<'static, BeOwned>;
+pub(crate) type IntegerValueRef<'a> = IntegerContent<'a, BeRef>;
 
 impl IntegerValue {
     pub(super) fn for_litint(lit: &syn::LitInt) -> ParseResult<Owned<Self>> {
@@ -57,10 +58,10 @@ impl IntegerValue {
 
     pub(crate) fn resolve_untyped_to_match_other(
         Spanned(value, span): Spanned<IntegerValue>,
-        other: &Value,
+        other: &AnyValue,
     ) -> ExecutionResult<Self> {
         match (value, other) {
-            (IntegerValue::Untyped(this), Value::Integer(other)) => {
+            (IntegerValue::Untyped(this), AnyValue::Integer(other)) => {
                 this.spanned(span).into_kind(other.kind())
             }
             (value, _) => Ok(value),
@@ -112,7 +113,7 @@ impl IntegerValue {
     }
 }
 
-impl Debug for IntegerValue {
+impl Debug for IntegerValueRef<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Untyped(v) => write!(f, "{}", v.into_fallback()),
@@ -132,29 +133,32 @@ impl Debug for IntegerValue {
     }
 }
 
-impl IntegerValue {
-    /// Aligns types for comparison - converts untyped to match the other's type.
-    /// Returns `None` if the untyped value doesn't fit in the target type.
-    fn align_types(mut lhs: Self, mut rhs: Self) -> Option<(Self, Self)> {
-        match (&lhs, &rhs) {
-            (IntegerValue::Untyped(l), typed) if !matches!(typed, IntegerValue::Untyped(_)) => {
-                lhs = l.try_into_kind(typed.kind())?;
-            }
-            (typed, IntegerValue::Untyped(r)) if !matches!(typed, IntegerValue::Untyped(_)) => {
-                rhs = r.try_into_kind(lhs.kind())?;
-            }
-            _ => {} // Both same type or both untyped - no conversion needed
+/// Aligns types for comparison - converts untyped to match the other's type.
+/// Returns `None` if the untyped value doesn't fit in the target type.
+fn align_types(
+    mut lhs: IntegerValue,
+    mut rhs: IntegerValue,
+) -> Option<(IntegerValue, IntegerValue)> {
+    match (&lhs, &rhs) {
+        (IntegerValue::Untyped(l), typed) if !matches!(typed, IntegerValue::Untyped(_)) => {
+            lhs = l.try_into_kind(typed.kind())?;
         }
-        Some((lhs, rhs))
+        (typed, IntegerValue::Untyped(r)) if !matches!(typed, IntegerValue::Untyped(_)) => {
+            rhs = r.try_into_kind(lhs.kind())?;
+        }
+        _ => {} // Both same type or both untyped - no conversion needed
     }
+    Some((lhs, rhs))
 }
 
-impl ValuesEqual for IntegerValue {
+impl<'a> ValuesEqual for IntegerValueRef<'a> {
     /// Handles type coercion between typed and untyped integers.
     /// E.g., `5 == 5u32` returns true.
     fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
         // Align types (untyped -> typed conversion)
-        let Some((lhs, rhs)) = Self::align_types(*self, *other) else {
+        let lhs = self.clone_to_owned_infallible();
+        let rhs = other.clone_to_owned_infallible();
+        let Some((lhs, rhs)) = align_types(lhs, rhs) else {
             return ctx.leaf_values_not_equal(self, other);
         };
 
@@ -582,7 +586,7 @@ impl_resolvable_argument_for! {
     IntegerType,
     (value, context) -> IntegerValue {
         match value {
-            Value::Integer(value) => Ok(value),
+            AnyValue::Integer(value) => Ok(value),
             other => context.err("an integer", other),
         }
     }
@@ -594,10 +598,13 @@ impl ResolvableArgumentTarget for CoercedToU32 {
     type ValueType = IntegerType;
 }
 
-impl ResolvableOwned<Value> for CoercedToU32 {
-    fn resolve_from_value(input_value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
+impl ResolvableOwned<AnyValue> for CoercedToU32 {
+    fn resolve_from_value(
+        input_value: AnyValue,
+        context: ResolutionContext,
+    ) -> ExecutionResult<Self> {
         let integer = match input_value {
-            Value::Integer(value) => value,
+            AnyValue::Integer(value) => value,
             other => return context.err("an integer", other),
         };
         let coerced = match integer {
@@ -617,7 +624,7 @@ impl ResolvableOwned<Value> for CoercedToU32 {
         };
         match coerced {
             Some(value) => Ok(CoercedToU32(value)),
-            None => context.err("a u32-compatible integer", Value::Integer(integer)),
+            None => context.err("a u32-compatible integer", AnyValue::Integer(integer)),
         }
     }
 }

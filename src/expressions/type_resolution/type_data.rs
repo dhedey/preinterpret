@@ -18,7 +18,7 @@ pub(crate) trait TypeFeatureResolver {
     ) -> Option<BinaryOperationInterface>;
 
     /// Resolves a property of this type.
-    fn resolve_type_property(&self, _property_name: &str) -> Option<Value>;
+    fn resolve_type_property(&self, _property_name: &str) -> Option<AnyValue>;
 }
 
 pub(crate) trait TypeData {
@@ -45,7 +45,7 @@ pub(crate) trait TypeData {
     /// Returns a property on the type.
     /// Properties are *not* currently resolved up the resolution chain... but maybe they should be?
     /// ... similarly, maybe functions should be too, when they are added?
-    fn resolve_type_property(_property_name: &str) -> Option<Value> {
+    fn resolve_type_property(_property_name: &str) -> Option<AnyValue> {
         None
     }
 }

@@ -210,7 +210,7 @@ First, read the @./2025-11-vision.md
   - [x] Generate value kinds from the macros
     - [x] Add (temporary) ability to link to TypeData and resolve methods from there
     - [x] Then implement all the macros
-    - [x] And use that to generate ValueLeafKind from the new macros
+    - [x] And use that to generate AnyValueLeafKind from the new macros
     - [x] Find a way to generate `from_source_name` - ideally efficiently
   - [x] Add ability to implement IsIterable
   - [x] `CastTarget` simply wraps `TypeKind`
@@ -231,27 +231,26 @@ First, read the @./2025-11-vision.md
     - [x] Replace `FloatValue` with `type FloatValue = FloatContent<'static, BeOwned>`
     - [x] Replace `Value` with `type Value = ValueContent<'static, BeOwned>`
     - [x] Get rid of the `Actual` wrapper inside content
-    - [ ] ---
-    - [ ] Improve mappers:
-      - [ ] Try to replace `ToRefMapper` etc with a `FormMapper::<T, F1, F2>::map_content(content, |x| -> y)`
-      - [ ] 6 methods... `map_content`, `map_content_ref`, `map_content_mut`
-      - [ ] ... and a `ReduceMapper::<F1, T>::map(content, |x| -> y)`
-      - [ ] ... Probably remove e.g. `map_with` etc on actual?
+    // ---
     - [x] Trial getting rid of `Actual` completely?
     - [x] Replace `type FloatValue = FloatValueContent` with `type FloatValue = QqqOwned<FloatValueType>` / `type FloatValueRef<'a> = QqqRef<FloatValueType>` / `type FloatValueMut = QqqMut<FloatValueType>`
       - [x] Create new branch
       - [x] Resolve issue with `2.3` not resolving into `2f32` any more
     - [x] .. same for int...
-    - [ ] Change `type Value<'a, F> = ValueContent<'a, F>` and `type OwnedValue` with:
-      - [ ] `ValueType` => `AnyType`
-      - [ ] `type AnyValue = QqqOwned<ValueType>`
-      - [ ] `type AnyValueRef = QqqRef<ValueType>`
-      - [ ] `type AnyValueMut = QqqMut<ValueType>`
-      - [ ] ... and move methods
-    - [ ] Replace `Owned` with `QqqOwned`
-    - [ ] Replace `Value`, `&Value` and `&mut Value` methods with methods on `Owned<Value>` / `Ref<Value>` / `Mut<Value>`
-    - [ ] And similarly for other values...
+    - [x] Update Value:
+      - [x] `ValueType` => `AnyType`
+      - [x] `type AnyValue = QqqOwned<ValueType>`
+      - [x] `type AnyValueRef = QqqRef<ValueType>`
+      - [x] `type AnyValueMut = QqqMut<ValueType>`
+      - [x] ... and move methods
+    - [ ] Remove `OwnedValue`
+    - [ ] Get rid of `Owned`
   - [ ] Stage 2 of the form migration:
+    - [ ] Improve mappers:
+      - [ ] Try to replace `ToRefMapper` etc with a `FormMapper::<T, F1, F2>::map_content(content, |x| -> y)`
+      - [ ] 6 methods... `map_content`, `map_content_ref`, `map_content_mut`
+      - [ ] ... and a `ReduceMapper::<F1, T>::map(content, |x| -> y)`
+      - [ ] ... Probably remove e.g. `map_with` etc on actual?
     - [ ] Migrate `Shared`, `Mutable`, `Assignee`
   - [ ] Stage 3
     - [ ] Migrate `CopyOnWrite` and relevant interconversions
@@ -519,6 +518,9 @@ preinterpret::run! {
   - [ ] References store on them cached information - either up-front, via an `Rc<Cell<ReferenceContent::Resolved(ResolvedReference)>>` or via a "resolve on first execute"
     - Value's relative offset from the top of the stack
     - An is last use flag
+- [ ] Change the storage model for `OutputStream`
+  - [ ] Either just use `TokenStream` directly(!) (...and ignore Rust analyzer's poor handling of none groups)
+  - [ ] Or use an `Rc<Vec>` model like https://github.com/dtolnay/proc-macro2/pull/341/files and Rust itself
 - Address `TODO[performance]`
 
 ## Deferred

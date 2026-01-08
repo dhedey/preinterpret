@@ -1,7 +1,7 @@
 use super::*;
 
 define_leaf_type! {
-    pub(crate) StringType => ValueType(ValueContent::String),
+    pub(crate) StringType => AnyType(AnyValueContent::String),
     content: String,
     kind: pub(crate) StringKind,
     type_name: "string",
@@ -21,6 +21,17 @@ define_leaf_type! {
     },
 }
 
+impl<'a> IsValueContent<'a> for &'a str {
+    type Type = StringType;
+    type Form = BeRef;
+}
+
+impl<'a> FromValueContent<'a> for &'a str {
+    fn from_content(value: &'a String) -> Self {
+        value.as_str()
+    }
+}
+
 impl ValuesEqual for String {
     fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
         if self == other {
@@ -32,7 +43,7 @@ impl ValuesEqual for String {
 }
 
 impl IntoValue for &str {
-    fn into_value(self) -> Value {
+    fn into_value(self) -> AnyValue {
         self.to_string().into_value()
     }
 }
@@ -180,7 +191,7 @@ define_type_features! {
                 Some(match operation {
                     UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => return None,
                     UnaryOperation::Cast { target: CastTarget(kind), .. } => match kind {
-                        ValueLeafKind::String(_) => unary_definitions::cast_to_string(),
+                        AnyValueLeafKind::String(_) => unary_definitions::cast_to_string(),
                         _ => return None,
                     },
                 })
@@ -209,7 +220,7 @@ impl_resolvable_argument_for! {
     StringType,
     (value, context) -> String {
         match value {
-            ValueContent::String(value) => Ok(value),
+            AnyValueContent::String(value) => Ok(value),
             _ => context.err("a string", value),
         }
     }
@@ -219,13 +230,13 @@ impl ResolvableArgumentTarget for str {
     type ValueType = StringType;
 }
 
-impl ResolvableShared<Value> for str {
+impl ResolvableShared<AnyValue> for str {
     fn resolve_from_ref<'a>(
-        value: &'a Value,
+        value: &'a AnyValue,
         context: ResolutionContext,
     ) -> ExecutionResult<&'a Self> {
         match value {
-            ValueContent::String(s) => Ok(s.as_str()),
+            AnyValueContent::String(s) => Ok(s.as_str()),
             _ => context.err("a string", value),
         }
     }

@@ -1,7 +1,7 @@
 use super::*;
 
 define_leaf_type! {
-    pub(crate) NoneType => ValueType(ValueContent::None),
+    pub(crate) NoneType => AnyType(AnyValueContent::None),
     content: (),
     kind: pub(crate) NoneKind,
     type_name: "none",
@@ -14,10 +14,10 @@ impl ResolvableArgumentTarget for () {
     type ValueType = NoneType;
 }
 
-impl ResolvableOwned<Value> for () {
-    fn resolve_from_value(value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
+impl ResolvableOwned<AnyValue> for () {
+    fn resolve_from_value(value: AnyValue, context: ResolutionContext) -> ExecutionResult<Self> {
         match value {
-            Value::None(_) => Ok(()),
+            AnyValue::None(_) => Ok(()),
             other => context.err("None", other),
         }
     }

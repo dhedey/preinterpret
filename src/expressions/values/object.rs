@@ -1,7 +1,7 @@
 use super::*;
 
 define_leaf_type! {
-    pub(crate) ObjectType => ValueType(ValueContent::Object),
+    pub(crate) ObjectType => AnyType(AnyValueContent::Object),
     content: ObjectValue,
     kind: pub(crate) ObjectKind,
     type_name: "object",
@@ -28,7 +28,7 @@ impl_resolvable_argument_for! {
     ObjectType,
     (value, context) -> ObjectValue {
         match value {
-            Value::Object(value) => Ok(value),
+            AnyValue::Object(value) => Ok(value),
             _ => context.err("an object", value),
         }
     }
@@ -38,28 +38,28 @@ impl_resolvable_argument_for! {
 pub(crate) struct ObjectEntry {
     #[allow(unused)]
     pub(crate) key_span: Span,
-    pub(crate) value: Value,
+    pub(crate) value: AnyValue,
 }
 
 impl ObjectValue {
-    pub(super) fn into_indexed(mut self, index: Spanned<&Value>) -> ExecutionResult<Value> {
-        let key = index.resolve_as("An object key")?;
+    pub(super) fn into_indexed(mut self, index: Spanned<AnyValueRef>) -> ExecutionResult<AnyValue> {
+        let key = index.downcast_resolve("An object key")?;
         Ok(self.remove_or_none(key))
     }
 
-    pub(super) fn into_property(mut self, access: &PropertyAccess) -> ExecutionResult<Value> {
+    pub(super) fn into_property(mut self, access: &PropertyAccess) -> ExecutionResult<AnyValue> {
         let key = access.property.to_string();
         Ok(self.remove_or_none(&key))
     }
 
-    pub(crate) fn remove_or_none(&mut self, key: &str) -> Value {
+    pub(crate) fn remove_or_none(&mut self, key: &str) -> AnyValue {
         match self.entries.remove(key) {
             Some(entry) => entry.value,
             None => ().into_value(),
         }
     }
 
-    pub(crate) fn remove_no_none(&mut self, key: &str) -> Option<Value> {
+    pub(crate) fn remove_no_none(&mut self, key: &str) -> Option<AnyValue> {
         match self.entries.remove(key) {
             Some(entry) => {
                 if entry.value.is_none() {
@@ -74,15 +74,15 @@ impl ObjectValue {
 
     pub(super) fn index_mut(
         &mut self,
-        index: Spanned<&Value>,
+        index: Spanned<AnyValueRef>,
         auto_create: bool,
-    ) -> ExecutionResult<&mut Value> {
-        let index: Spanned<&str> = index.resolve_as("An object key")?;
+    ) -> ExecutionResult<&mut AnyValue> {
+        let index: Spanned<&str> = index.downcast_resolve_spanned("An object key")?;
         self.mut_entry(index.map(|s| s.to_string()), auto_create)
     }
 
-    pub(super) fn index_ref(&self, index: Spanned<&Value>) -> ExecutionResult<&Value> {
-        let key: Spanned<&str> = index.resolve_as("An object key")?;
+    pub(super) fn index_ref(&self, index: Spanned<AnyValueRef>) -> ExecutionResult<&AnyValue> {
+        let key: Spanned<&str> = index.downcast_resolve_spanned("An object key")?;
         let entry = self.entries.get(*key).ok_or_else(|| {
             key.value_error(format!("The object does not have a field named `{}`", *key))
         })?;
@@ -93,14 +93,14 @@ impl ObjectValue {
         &mut self,
         access: &PropertyAccess,
         auto_create: bool,
-    ) -> ExecutionResult<&mut Value> {
+    ) -> ExecutionResult<&mut AnyValue> {
         self.mut_entry(
             access.property.to_string().spanned(access.property.span()),
             auto_create,
         )
     }
 
-    pub(super) fn property_ref(&self, access: &PropertyAccess) -> ExecutionResult<&Value> {
+    pub(super) fn property_ref(&self, access: &PropertyAccess) -> ExecutionResult<&AnyValue> {
         let key = access.property.to_string();
         let entry = self.entries.get(&key).ok_or_else(|| {
             access.value_error(format!("The object does not have a field named `{}`", key))
@@ -112,7 +112,7 @@ impl ObjectValue {
         &mut self,
         Spanned(key, key_span): Spanned<String>,
         auto_create: bool,
-    ) -> ExecutionResult<&mut Value> {
+    ) -> ExecutionResult<&mut AnyValue> {
         use std::collections::btree_map::*;
         Ok(match self.entries.entry(key) {
             Entry::Occupied(entry) => &mut entry.into_mut().value,
@@ -171,7 +171,10 @@ impl ObjectValue {
             if behaviour.add_space_between_token_trees {
                 output.push(' ');
             }
-            entry.value.concat_recursive_into(output, behaviour)?;
+            entry
+                .value
+                .as_ref_value()
+                .concat_recursive_into(output, behaviour)?;
             is_first = false;
         }
         if behaviour.output_literal_structure {
@@ -215,7 +218,7 @@ impl Spanned<&ObjectValue> {
             match self.entries.get(field_name) {
                 None
                 | Some(ObjectEntry {
-                    value: Value::None(_),
+                    value: AnyValue::None(_),
                     ..
                 }) => {
                     missing_fields.push(field_name);
@@ -256,8 +259,8 @@ impl Spanned<&ObjectValue> {
 }
 
 impl IntoValue for BTreeMap<String, ObjectEntry> {
-    fn into_value(self) -> Value {
-        Value::Object(ObjectValue { entries: self })
+    fn into_value(self) -> AnyValue {
+        AnyValue::Object(ObjectValue { entries: self })
     }
 }
 

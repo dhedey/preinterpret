@@ -38,6 +38,7 @@ impl<F: LeafAsMutForm> MutLeafMapper<F> for ToMutMapper {
     type ShortCircuit<'a> = Infallible;
 
     fn map_leaf<'r, 'a: 'r, L: IsValueLeaf>(
+        self,
         leaf: &'r mut F::Leaf<'a, L>,
     ) -> Result<&'r mut L, Infallible> {
         Ok(F::leaf_as_mut(leaf))

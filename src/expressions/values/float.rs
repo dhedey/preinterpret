@@ -1,7 +1,7 @@
 use super::*;
 
 define_parent_type! {
-    pub(crate) FloatType => ValueType(ValueContent::Float),
+    pub(crate) FloatType => AnyType(AnyValueContent::Float),
     content: pub(crate) FloatContent,
     leaf_kind: pub(crate) FloatLeafKind,
     type_kind: ParentTypeKind::Float(pub(crate) FloatTypeKind),
@@ -111,7 +111,7 @@ fn assign_op<R>(
     Ok(())
 }
 
-impl Debug for FloatValue {
+impl Debug for FloatValueRef<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             FloatContent::Untyped(v) => write!(f, "{}", v.into_fallback()),
@@ -136,13 +136,14 @@ fn align_types(mut lhs: FloatValue, mut rhs: FloatValue) -> (FloatValue, FloatVa
     (lhs, rhs)
 }
 
-// TODO[concepts]: Should really be over FloatRef<'a>
-impl ValuesEqual for FloatValue {
+impl<'a> ValuesEqual for FloatValueRef<'a> {
     /// Handles type coercion between typed and untyped floats.
     /// Uses Rust's float `==`, so `NaN != NaN`.
     fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
         // Align types (untyped -> typed conversion)
-        let (lhs, rhs) = align_types(*self, *other);
+        let lhs = self.clone_to_owned_infallible();
+        let rhs = other.clone_to_owned_infallible();
+        let (lhs, rhs) = align_types(lhs, rhs);
 
         // After alignment, compare directly.
         // Each variant has two lines: same-type comparison, then type-mismatch fallback.
@@ -356,7 +357,7 @@ impl_resolvable_argument_for! {
     FloatType,
     (value, context) -> FloatValue {
         match value {
-            Value::Float(value) => Ok(value),
+            AnyValue::Float(value) => Ok(value),
             other => context.err("a float", other),
         }
     }

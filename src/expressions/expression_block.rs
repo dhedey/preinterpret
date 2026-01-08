@@ -32,7 +32,7 @@ impl HasSpanRange for EmbeddedExpression {
 impl Interpret for EmbeddedExpression {
     fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         let value = self.content.evaluate_shared(interpreter)?;
-        value.output_to(
+        value.as_ref_value().output_to(
             Grouping::Flattened,
             &mut ToStreamContext::new(interpreter.output(self)?, self.span_range()),
         )
@@ -75,7 +75,7 @@ impl Interpret for EmbeddedStatements {
             .evaluate_spanned(interpreter, self.span_range(), RequestedOwnership::shared())?
             .0
             .expect_shared();
-        value.output_to(
+        value.as_ref_value().output_to(
             Grouping::Flattened,
             &mut ToStreamContext::new(interpreter.output(self)?, self.span_range()),
         )
@@ -160,7 +160,7 @@ impl Evaluate for ExpressionBlock {
             match interpreter.catch_control_flow(output_result, *catch_location, scope)? {
                 ExecutionOutcome::Value(Spanned(value, _)) => value,
                 ExecutionOutcome::ControlFlow(ControlFlowInterrupt::Break(break_interrupt)) => {
-                    break_interrupt.into_value(self.span_range(), ownership)?
+                    break_interrupt.into_requested_value(self.span_range(), ownership)?
                 }
                 ExecutionOutcome::ControlFlow(_) => {
                     unreachable!("Only break control flow should be catchable by labeled blocks")

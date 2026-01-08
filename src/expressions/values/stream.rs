@@ -1,7 +1,7 @@
 use super::*;
 
 define_leaf_type! {
-    pub(crate) StreamType => ValueType(ValueContent::Stream),
+    pub(crate) StreamType => AnyType(AnyValueContent::Stream),
     content: OutputStream,
     kind: pub(crate) StreamKind,
     type_name: "stream",
@@ -98,7 +98,7 @@ impl ValuesEqual for OutputStream {
 }
 
 impl IntoValue for TokenStream {
-    fn into_value(self) -> Value {
+    fn into_value(self) -> AnyValue {
         OutputStream::raw(self).into_value()
     }
 }
@@ -107,7 +107,7 @@ impl_resolvable_argument_for! {
     StreamType,
     (value, context) -> OutputStream {
         match value {
-            ValueContent::Stream(value) => Ok(value),
+            AnyValueContent::Stream(value) => Ok(value),
             _ => context.err("a stream", value),
         }
     }
@@ -137,7 +137,7 @@ define_type_features! {
                 OutputStream::raw(this.to_token_stream_removing_any_transparent_groups())
             }
 
-            fn infer(this: OutputStream) -> ExecutionResult<Value> {
+            fn infer(this: OutputStream) -> ExecutionResult<AnyValue> {
                 Ok(this.coerce_into_value())
             }
 
@@ -169,10 +169,10 @@ define_type_features! {
             }
 
             // Some literals become Value::UnsupportedLiteral but can still be round-tripped back to a stream
-            [context] fn to_literal(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Value> {
+            [context] fn to_literal(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<AnyValue> {
                 let string = this.concat_content(&ConcatBehaviour::literal(this.span_range()));
                 let literal = string_interface::methods::to_literal(context, string.as_str().into_spanned_ref(this.span_range()))?;
-                Ok(Value::for_literal(literal).into_value())
+                Ok(AnyValue::for_literal(literal).into_value())
             }
 
             // CORE METHODS
@@ -203,10 +203,8 @@ define_type_features! {
                 }
             }
 
-            fn assert_eq(this: Shared<OutputStream>, lhs: Spanned<AnyRef<Value>>, rhs: Spanned<AnyRef<Value>>, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
-                let lhs_value: &Value = &lhs;
-                let rhs_value: &Value = &rhs;
-                match Value::debug_eq(lhs_value, rhs_value) {
+            fn assert_eq(this: Shared<OutputStream>, lhs: Spanned<AnyRef<AnyValue>>, rhs: Spanned<AnyRef<AnyValue>>, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
+                match AnyValueRef::debug_eq(&lhs.as_ref_value(), &rhs.as_ref_value()) {
                     Ok(()) => Ok(()),
                     Err(debug_error) => {
                         let error_span_range = this.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
@@ -215,8 +213,8 @@ define_type_features! {
                             None => format!(
                                 "Assertion failed: {}\n  lhs = {}\n  rhs = {}",
                                 debug_error.format_message(),
-                                lhs.concat_recursive(&ConcatBehaviour::debug(lhs.span_range()))?,
-                                rhs.concat_recursive(&ConcatBehaviour::debug(rhs.span_range()))?,
+                                lhs.as_ref_value().concat_recursive(&ConcatBehaviour::debug(lhs.span_range()))?,
+                                rhs.as_ref_value().concat_recursive(&ConcatBehaviour::debug(rhs.span_range()))?,
                             ),
                         };
                         error_span_range.assertion_err(message)
@@ -250,7 +248,7 @@ define_type_features! {
             [context] fn cast_coerced_to_value(Spanned(this, span): Spanned<Owned<OutputStream>>) -> ExecutionResult<ReturnedValue> {
                 let this = this.into_inner();
                 let coerced = this.coerce_into_value();
-                if let Value::Stream(_) = &coerced {
+                if let AnyValue::Stream(_) = &coerced {
                     return span.value_err("The stream could not be coerced into a single value");
                 }
                 // Re-run the cast operation on the coerced value
@@ -546,7 +544,7 @@ impl Interpret for ConcatenatedStreamLiteral {
                 string_to_literal(str, self, ident_span)?.into_value()
             }
         };
-        value.output_to(
+        value.as_ref_value().output_to(
             Grouping::Flattened,
             &mut ToStreamContext::new(interpreter.output(self)?, self.span_range()),
         )

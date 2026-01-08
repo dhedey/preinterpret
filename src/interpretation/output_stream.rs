@@ -120,10 +120,10 @@ impl OutputStream {
         self.token_length == 0
     }
 
-    pub(crate) fn coerce_into_value(self) -> Value {
+    pub(crate) fn coerce_into_value(self) -> AnyValue {
         let parse_result = self.clone().parse_as::<syn::Lit>();
         match parse_result {
-            Ok(syn_lit) => Value::for_syn_lit(syn_lit).into_inner(),
+            Ok(syn_lit) => AnyValue::for_syn_lit(syn_lit).into_inner(),
             // Keep as stream otherwise
             Err(_) => self.into_value(),
         }

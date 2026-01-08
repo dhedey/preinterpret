@@ -153,7 +153,7 @@ impl<'a> ExpressionParser<'a> {
                 let lit: syn::Lit = input.parse()?;
                 let span_range = lit.span().span_range();
                 UnaryAtom::Leaf(Leaf::Value(Spanned(
-                    SharedValue::new_from_owned(Value::for_syn_lit(lit)),
+                    SharedValue::new_from_owned(AnyValue::for_syn_lit(lit)),
                     span_range,
                 )))
             },

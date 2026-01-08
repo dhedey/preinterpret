@@ -67,8 +67,8 @@ macro_rules! define_typed_object {
             type ValueType = ObjectType;
         }
 
-        impl ResolvableOwned<Value> for $model {
-            fn resolve_from_value(value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
+        impl ResolvableOwned<AnyValue> for $model {
+            fn resolve_from_value(value: AnyValue, context: ResolutionContext) -> ExecutionResult<Self> {
                 Self::from_object_value(ObjectValue::resolve_spanned_owned_from_value(value, context)?)
             }
         }

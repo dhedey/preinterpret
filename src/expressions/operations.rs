@@ -106,7 +106,7 @@ impl UnaryOperation {
 }
 
 #[derive(Copy, Clone)]
-pub(crate) struct CastTarget(pub(crate) ValueLeafKind);
+pub(crate) struct CastTarget(pub(crate) AnyValueLeafKind);
 
 impl CastTarget {
     fn from_source_type(s: TypeIdent) -> ParseResult<Self> {
@@ -129,10 +129,10 @@ impl CastTarget {
     pub(crate) fn is_singleton_target(&self) -> bool {
         matches!(
             self.0,
-            ValueLeafKind::Bool(_)
-                | ValueLeafKind::Char(_)
-                | ValueLeafKind::Integer(_)
-                | ValueLeafKind::Float(_)
+            AnyValueLeafKind::Bool(_)
+                | AnyValueLeafKind::Char(_)
+                | AnyValueLeafKind::Integer(_)
+                | AnyValueLeafKind::Float(_)
         )
     }
 }
@@ -277,7 +277,7 @@ impl SynParse for BinaryOperation {
 impl BinaryOperation {
     pub(super) fn lazy_evaluate(
         &self,
-        left: Spanned<&Value>,
+        left: Spanned<&AnyValue>,
     ) -> ExecutionResult<Option<OwnedValue>> {
         match self {
             BinaryOperation::LogicalAnd { .. } => {

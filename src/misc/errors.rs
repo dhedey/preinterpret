@@ -320,7 +320,7 @@ pub(crate) struct BreakInterrupt {
 }
 
 impl BreakInterrupt {
-    pub(crate) fn into_value(
+    pub(crate) fn into_requested_value(
         self,
         span_range: SpanRange,
         ownership: RequestedOwnership,

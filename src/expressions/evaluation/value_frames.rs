@@ -106,7 +106,7 @@ impl Spanned<&mut ArgumentValue> {
 }
 
 impl Deref for ArgumentValue {
-    type Target = Value;
+    type Target = AnyValue;
 
     fn deref(&self) -> &Self::Target {
         self.as_ref()
@@ -119,8 +119,8 @@ impl AsMut<Self> for ArgumentValue {
     }
 }
 
-impl AsRef<Value> for ArgumentValue {
-    fn as_ref(&self) -> &Value {
+impl AsRef<AnyValue> for ArgumentValue {
+    fn as_ref(&self) -> &AnyValue {
         match self {
             ArgumentValue::Owned(owned) => owned,
             ArgumentValue::Mutable(mutable) => mutable,
@@ -409,7 +409,7 @@ impl ArgumentOwnership {
     ) -> ExecutionResult<ArgumentValue> {
         match self {
             ArgumentOwnership::Owned => Ok(ArgumentValue::Owned(
-                copy_on_write.into_owned_transparently(span)?,
+                copy_on_write.clone_to_owned_transparently(span)?,
             )),
             ArgumentOwnership::Shared => Ok(ArgumentValue::Shared(copy_on_write.into_shared())),
             ArgumentOwnership::Mutable => {
@@ -417,7 +417,7 @@ impl ArgumentOwnership {
                     span.ownership_err("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone()` to get a mutable reference to a cloned value.")
                 } else {
                     Ok(ArgumentValue::Mutable(Mutable::new_from_owned(
-                        copy_on_write.into_owned_transparently(span)?,
+                        copy_on_write.clone_to_owned_transparently(span)?,
                     )))
                 }
             }
@@ -609,7 +609,7 @@ impl EvaluationFrame for GroupBuilder {
 pub(super) struct ArrayBuilder {
     span: Span,
     unevaluated_items: Vec<ExpressionNodeId>,
-    evaluated_items: Vec<Value>,
+    evaluated_items: Vec<AnyValue>,
 }
 
 impl ArrayBuilder {
@@ -960,8 +960,11 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
     ) -> ExecutionResult<NextAction> {
         let auto_create = context.requested_ownership().requests_auto_create();
         let mapped = value.expect_any_value_and_map(
-            |shared| shared.try_map(|value| value.property_ref(&self.access)),
-            |mutable| mutable.try_map(|value| value.property_mut(&self.access, auto_create)),
+            |shared| shared.try_map(|value| value.as_ref_value().property_ref(&self.access)),
+            |mutable| {
+                mutable
+                    .try_map(|value| value.as_mut_value().property_mut(&self.access, auto_create))
+            },
             |owned| owned.try_map(|value| value.into_property(&self.access)),
         )?;
         // The result span covers source through property
@@ -1027,13 +1030,19 @@ impl EvaluationFrame for ValueIndexAccessBuilder {
                 source: Spanned(source, source_span),
             } => {
                 let index = value.expect_shared();
-                let index = index.as_ref().spanned(span);
+                let index = index.as_ref_value().spanned(span);
 
                 let auto_create = context.requested_ownership().requests_auto_create();
                 let result = source.expect_any_value_and_map(
-                    |shared| shared.try_map(|value| value.index_ref(self.access, index)),
+                    |shared| {
+                        shared.try_map(|value| value.as_ref_value().index_ref(self.access, index))
+                    },
                     |mutable| {
-                        mutable.try_map(|value| value.index_mut(self.access, index, auto_create))
+                        mutable.try_map(|value| {
+                            value
+                                .as_mut_value()
+                                .index_mut(self.access, index, auto_create)
+                        })
                     },
                     |owned| owned.try_map(|value| value.into_indexed(self.access, index)),
                 )?;
@@ -1051,7 +1060,7 @@ pub(super) struct RangeBuilder {
 
 enum RangePath {
     OnLeftBranch { right: Option<ExpressionNodeId> },
-    OnRightBranch { left: Option<Value> },
+    OnRightBranch { left: Option<AnyValue> },
 }
 
 impl RangeBuilder {
