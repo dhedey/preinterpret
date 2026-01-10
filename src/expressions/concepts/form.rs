@@ -25,9 +25,29 @@ impl<T: IsType, F: IsFormOfForKind<T, T::Variant>> IsFormOf<T> for F {
     type Content<'a> = F::KindedContent<'a>;
 }
 
+trait LeafLifetimeSpecifier {}
+#[allow(non_camel_case_types)]
+pub(crate) struct UNSAFE_DECLARTION_LeafDoesNotCaptureLifetime;
+impl LeafLifetimeSpecifier for UNSAFE_DECLARTION_LeafDoesNotCaptureLifetime {}
+pub(crate) struct LeafCapturesLifetime;
+impl LeafLifetimeSpecifier for LeafCapturesLifetime {}
+
 pub(crate) trait IsHierarchicalForm: IsForm {
     /// The standard leaf for a hierachical type
     type Leaf<'a, T: IsValueLeaf>;
+
+    /// Asserts that the form has a 'static leaf type, independent of `'a`.
+    type LeafLifetimeCapture: LeafLifetimeSpecifier;
+
+    fn leaf_to_static<'a, T: IsValueLeaf>(
+        leaf: Self::Leaf<'a, T>,
+    ) -> Self::Leaf<'static, T>
+        where Self : IsHierarchicalForm<LeafLifetimeCapture = UNSAFE_DECLARTION_LeafDoesNotCaptureLifetime>
+    {
+        // SAFETY: By defining LeafLifetimeCapture = UNSAFE_DECLARTION_LeafDoesNotCaptureLifetime,
+        // The implementor has asserted that the leaf type does not actually depend on the lifetime 'a.
+        unsafe { std::mem::transmute::<Self::Leaf<'a, T>, Self::Leaf<'static, T>>(leaf) }
+    }
 }
 
 impl<T: IsHierarchicalType, F: IsHierarchicalForm> IsFormOfForKind<T, HierarchicalTypeVariant>
@@ -37,19 +57,19 @@ impl<T: IsHierarchicalType, F: IsHierarchicalForm> IsFormOfForKind<T, Hierarchic
 }
 
 pub(crate) trait LeafAsRefForm: IsHierarchicalForm {
-    fn leaf_as_ref<'r, 'a: 'r, T: IsValueLeaf>(leaf: &'r Self::Leaf<'a, T>) -> &'r T;
+    fn leaf_as_ref<'r, 'a: 'r, L: IsValueLeaf>(leaf: &'r Self::Leaf<'a, L>) -> &'r L;
 
-    fn leaf_clone_to_owned_infallible<'r, 'a: 'r, T: IsValueLeaf>(
-        leaf: &'r Self::Leaf<'a, T>,
-    ) -> T {
+    fn leaf_clone_to_owned_infallible<'r, 'a: 'r, L: IsValueLeaf>(
+        leaf: &'r Self::Leaf<'a, L>,
+    ) -> L {
         Self::leaf_as_ref(leaf).clone()
     }
 
-    fn leaf_clone_to_owned_transparently<'r, 'a: 'r, T: IsValueLeaf>(
-        leaf: &'r Self::Leaf<'a, T>,
+    fn leaf_clone_to_owned_transparently<'r, 'a: 'r, L: IsValueLeaf>(
+        leaf: &'r Self::Leaf<'a, L>,
         error_span: SpanRange,
-    ) -> ExecutionResult<T> {
-        let type_kind = <T as IsValueContent>::Type::type_kind();
+    ) -> ExecutionResult<L> {
+        let type_kind = <L as IsValueContent>::Type::type_kind();
         if type_kind.supports_transparent_cloning() {
             Ok(Self::leaf_clone_to_owned_infallible(leaf))
         } else {

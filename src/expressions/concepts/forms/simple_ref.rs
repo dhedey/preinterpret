@@ -11,6 +11,7 @@ impl IsForm for BeRef {}
 
 impl IsHierarchicalForm for BeRef {
     type Leaf<'a, T: IsValueLeaf> = &'a T;
+    type LeafLifetimeCapture = LeafCapturesLifetime;
 }
 
 impl IsDynCompatibleForm for BeRef {

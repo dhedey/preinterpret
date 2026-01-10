@@ -14,6 +14,7 @@ impl IsForm for BeOwned {}
 
 impl IsHierarchicalForm for BeOwned {
     type Leaf<'a, T: IsValueLeaf> = T;
+    type LeafLifetimeCapture = UNSAFE_DECLARTION_LeafDoesNotCaptureLifetime;
 }
 
 impl IsDynCompatibleForm for BeOwned {

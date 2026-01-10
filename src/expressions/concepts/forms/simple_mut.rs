@@ -11,6 +11,7 @@ impl IsForm for BeMut {}
 
 impl IsHierarchicalForm for BeMut {
     type Leaf<'a, T: IsValueLeaf> = &'a mut T;
+    type LeafLifetimeCapture = LeafCapturesLifetime;
 }
 
 impl IsDynCompatibleForm for BeMut {

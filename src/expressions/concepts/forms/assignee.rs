@@ -8,6 +8,7 @@ impl IsForm for BeAssignee {}
 
 impl IsHierarchicalForm for BeAssignee {
     type Leaf<'a, T: IsValueLeaf> = QqqAssignee<T>;
+    type LeafLifetimeCapture = UNSAFE_DECLARTION_LeafDoesNotCaptureLifetime;
 }
 
 impl IsDynCompatibleForm for BeAssignee {

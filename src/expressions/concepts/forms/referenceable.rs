@@ -13,6 +13,7 @@ impl IsForm for BeReferenceable {}
 
 impl IsHierarchicalForm for BeReferenceable {
     type Leaf<'a, T: IsValueLeaf> = Rc<RefCell<T>>;
+    type LeafLifetimeCapture = UNSAFE_DECLARTION_LeafDoesNotCaptureLifetime;
 }
 
 impl MapFromArgument for BeReferenceable {

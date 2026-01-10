@@ -259,12 +259,12 @@ impl ObjectBasedAssigner {
         mut self: Box<Self>,
         context: AssignmentContext,
         access: IndexAccess,
-        index: &AnyValue,
+        index: AnyValueRef,
         assignee_node: ExpressionNodeId,
     ) -> ExecutionResult<NextAction> {
         let key: &str = index
             .spanned(access.span_range())
-            .resolve_as("An object key")?;
+            .downcast_resolve("An object key")?;
         let value = self.resolve_value(key.to_string(), access.span())?;
         Ok(context.request_assignment(self, assignee_node, value))
     }
@@ -324,7 +324,7 @@ impl EvaluationFrame for Box<ObjectBasedAssigner> {
                 access,
             } => {
                 let index_place = value.expect_shared();
-                self.handle_index_value(context, access, index_place.as_ref(), assignee_node)
+                self.handle_index_value(context, access, index_place.as_ref_value(), assignee_node)
             }
             ObjectAssignmentState::WaitingForSubassignment => {
                 let AssignmentCompletion = value.expect_assignment_completion();

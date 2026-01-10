@@ -5,6 +5,7 @@ pub(crate) struct BeAnyMut;
 impl IsForm for BeAnyMut {}
 impl IsHierarchicalForm for BeAnyMut {
     type Leaf<'a, T: IsValueLeaf> = crate::internal_prelude::AnyMut<'a, T>;
+    type LeafLifetimeCapture = LeafCapturesLifetime;
 }
 
 impl IsDynCompatibleForm for BeAnyMut {

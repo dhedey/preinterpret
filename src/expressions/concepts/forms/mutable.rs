@@ -8,6 +8,7 @@ impl IsForm for BeMutable {}
 
 impl IsHierarchicalForm for BeMutable {
     type Leaf<'a, T: IsValueLeaf> = QqqMutable<T>;
+    type LeafLifetimeCapture = UNSAFE_DECLARTION_LeafDoesNotCaptureLifetime;
 }
 
 impl IsDynCompatibleForm for BeMutable {

@@ -8,6 +8,7 @@ impl IsForm for BeCopyOnWrite {}
 
 impl IsHierarchicalForm for BeCopyOnWrite {
     type Leaf<'a, T: IsValueLeaf> = CopyOnWriteContent<T, T>;
+    type LeafLifetimeCapture = UNSAFE_DECLARTION_LeafDoesNotCaptureLifetime;
 }
 
 impl IsDynCompatibleForm for BeCopyOnWrite {
@@ -45,3 +46,20 @@ pub(crate) enum CopyOnWriteContent<T: 'static + ?Sized, O: 'static> {
     /// A transparent clone may fail in this case at use time.
     SharedWithTransparentCloning(Shared<T>),
 }
+
+// pub(crate) trait IsSelfCopyOnWriteContent<'a>: IsSelfValueContent<'a>
+// where
+//     Self: IsValueContent<'a, Form = BeCopyOnWrite>,
+//     BeCopyOnWrite: IsFormOf<<Self as IsValueContent<'a>>::Type, Content<'a> = Self>,
+// {
+//     fn acts_as_shared_reference(&self) -> bool {
+//         struct ThisMapper;
+//         impl 
+//         self.map_ref_with(mapper)
+//     }
+// }
+
+// impl<'a, C: IsSelfValueContent<'a>> IsSelfCopyOnWriteContent<'a> for A
+// where
+//     Self: IsValueContent<'a, Form = BeCopyOnWrite>,
+// {}

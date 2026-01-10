@@ -248,7 +248,25 @@ First, read the @./2025-11-vision.md
   - [ ] Stage 2 of the form migration:
     - [x] Attempt to improve mappers:
       - [x] Try to replace `ToRefMapper` etc with a `FormMapper::<T, F1, F2>::map_content(content, |x| -> y)` - 6 methods... `map_content`, `map_content_ref`, `map_content_mut` and `try_x` *3; ... and a `ReduceMapper::<F1, T>::map(content, |x| -> y)`... sadly not possible! The lambda needs to be higher-ordered and work for all `L: IsValueLeaf`.
+    - [ ] Create macro to define all 15 variants of mapper:
+      - [ ] Optional state
+      - [ ] Optional bounds on Form or Type
+      - [ ] Input: `(self, &self, &mut self)`
+      - [ ] Output: (`Leaf`, `TryLeaf`) x (`'r` bound / `'static` bound) or `Reduce`
+      - [ ] ... Can we make this simpler somehow; to reduce the number of implementations on each leaf and improve compile time?
+        - [ ] Combining lifetimes ==> Tried adding a `<'o>`
+        - [ ] Combining `self` / `&self` / `&mut self`
+        - [ ] Combining output kinds?
+    - [ ] Create some macros to help build `self` / `&self` / `&mut self` methods across all contents
+    of a form. Use `IsSelfCopyOnWriteContent` as an example to try implementing this
+    - [ ] Get rid of `CopyOnWrite<T>`, have only CopyOnWriteValue
+    - [ ] Get rid of `Shared<T>`, `Mutable<T>` and `Assignee<T>`, have only `AnyValueMutable` or other named kinds
     - [ ] Migrate `Shared`, `Mutable`, `Assignee`
+      - [ ] `Shared<X>` only works for leaves
+      - [ ] For specific parents, use e.g. `AnyValueShared`
+      - [ ] If you need something to apply across all leaves, implement it on some trait
+      `IsSelfSharedContent` depending/auto-implemented on `IsSelfValueContent<Form = BeShared>`
+      - [ ] Same for `Mutable` and `Assignee`
   - [ ] Stage 3
     - [ ] Migrate `CopyOnWrite` and relevant interconversions
     - [ ] Finish migrating to new Argument/Returned resolution and delete old code
