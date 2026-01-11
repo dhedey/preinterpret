@@ -15,6 +15,30 @@ pub(crate) trait FromValueContent<'a>: IsValueContent<'a> {
     fn from_content(content: Content<'a, Self::Type, Self::Form>) -> Self;
 }
 
+pub(crate) trait FromSpannedValueContent<'a>: IsValueContent<'a> {
+    fn from_spanned_content(content: Spanned<Content<'a, Self::Type, Self::Form>>) -> Self;
+}
+
+impl<'a, C: FromValueContent<'a>> FromSpannedValueContent<'a> for C {
+    fn from_spanned_content(content: Spanned<Content<'a, Self::Type, Self::Form>>) -> Self {
+        let Spanned(inner, _span_range) = content;
+        C::from_content(inner)
+    }
+}
+
+impl<'a, C: IsValueContent<'a>> IsValueContent<'a> for Spanned<C> {
+    type Type = C::Type;
+    type Form = C::Form;
+}
+
+impl<'a, C: FromValueContent<'a>> FromSpannedValueContent<'a> for Spanned<C> {
+    fn from_spanned_content(
+        Spanned(content, span_range): Spanned<Content<'a, Self::Type, Self::Form>>,
+    ) -> Self {
+        Spanned(C::from_content(content), span_range)
+    }
+}
+
 pub(crate) trait IntoValueContent<'a>: IsValueContent<'a>
 where
     Self: Sized,
@@ -66,7 +90,7 @@ where
     C::Type: IsHierarchicalType,
     C::Form: IsHierarchicalForm,
 {
-    pub(crate) fn downcast_resolve<X: FromValueContent<'a, Form = C::Form>>(
+    pub(crate) fn downcast_resolve<X: FromSpannedValueContent<'a, Form = C::Form>>(
         self,
         description: &str,
     ) -> ExecutionResult<X>
@@ -77,21 +101,7 @@ where
         let content = value.into_content();
         let resolved =
             <<X as IsValueContent<'a>>::Type>::resolve(content, span_range, description)?;
-        Ok(X::from_content(resolved))
-    }
-
-    pub(crate) fn downcast_resolve_spanned<X: FromValueContent<'a, Form = C::Form>>(
-        self,
-        description: &str,
-    ) -> ExecutionResult<Spanned<X>>
-    where
-        <X as IsValueContent<'a>>::Type: DowncastFrom<C::Type, C::Form>,
-    {
-        let span_range = self.1;
-        Ok(Spanned(
-            self.downcast_resolve::<X>(description)?,
-            span_range,
-        ))
+        Ok(X::from_spanned_content(Spanned(resolved, span_range)))
     }
 }
 

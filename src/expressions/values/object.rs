@@ -77,12 +77,12 @@ impl ObjectValue {
         index: Spanned<AnyValueRef>,
         auto_create: bool,
     ) -> ExecutionResult<&mut AnyValue> {
-        let index: Spanned<&str> = index.downcast_resolve_spanned("An object key")?;
+        let index: Spanned<&str> = index.downcast_resolve("An object key")?;
         self.mut_entry(index.map(|s| s.to_string()), auto_create)
     }
 
     pub(super) fn index_ref(&self, index: Spanned<AnyValueRef>) -> ExecutionResult<&AnyValue> {
-        let key: Spanned<&str> = index.downcast_resolve_spanned("An object key")?;
+        let key: Spanned<&str> = index.downcast_resolve("An object key")?;
         let entry = self.entries.get(*key).ok_or_else(|| {
             key.value_error(format!("The object does not have a field named `{}`", *key))
         })?;
