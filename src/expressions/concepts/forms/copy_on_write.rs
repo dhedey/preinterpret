@@ -1,6 +1,6 @@
 use super::*;
 
-pub(crate) type QqqCopyOnWrite<T> = Actual<'static, T, BeCopyOnWrite>;
+pub(crate) type QqqCopyOnWrite<T> = Content<'static, T, BeCopyOnWrite>;
 
 #[derive(Copy, Clone)]
 pub(crate) struct BeCopyOnWrite;
@@ -28,7 +28,7 @@ impl MapFromArgument for BeCopyOnWrite {
 
     fn from_argument_value(
         _value: ArgumentValue,
-    ) -> ExecutionResult<Actual<'static, AnyType, Self>> {
+    ) -> ExecutionResult<Content<'static, AnyType, Self>> {
         todo!()
         // value.expect_copy_on_write()
     }

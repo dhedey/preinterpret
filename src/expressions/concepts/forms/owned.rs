@@ -45,7 +45,7 @@ impl MapFromArgument for BeOwned {
 
     fn from_argument_value(
         value: ArgumentValue,
-    ) -> ExecutionResult<Actual<'static, AnyType, Self>> {
+    ) -> ExecutionResult<Content<'static, AnyType, Self>> {
         Ok(value.expect_owned())
     }
 }

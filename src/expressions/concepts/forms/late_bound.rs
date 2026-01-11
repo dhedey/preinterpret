@@ -10,7 +10,7 @@ use super::*;
 /// whether the method needs `x[a]` to be a shared reference, mutable reference or an owned value.
 ///
 /// So instead, we take the most powerful access we can have for `x[a]`, and convert it later.
-pub(crate) type QqqLateBound<T> = Actual<'static, T, BeLateBound>;
+pub(crate) type QqqLateBound<T> = Content<'static, T, BeLateBound>;
 
 #[derive(Copy, Clone)]
 pub(crate) struct BeLateBound;

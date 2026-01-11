@@ -1,6 +1,6 @@
 use super::*;
 
-type QqqReferenceable<T> = Actual<'static, T, BeReferenceable>;
+type QqqReferenceable<T> = Content<'static, T, BeReferenceable>;
 
 /// Roughly equivalent to an owned, but wrapped so that it can be turned into a Shared/Mutable easily.
 /// This is useful for the content of variables.
@@ -20,7 +20,7 @@ impl MapFromArgument for BeReferenceable {
 
     fn from_argument_value(
         _value: ArgumentValue,
-    ) -> ExecutionResult<Actual<'static, AnyType, Self>> {
+    ) -> ExecutionResult<Content<'static, AnyType, Self>> {
         // Rc::new(RefCell::new(value.expect_owned()))
         todo!()
     }

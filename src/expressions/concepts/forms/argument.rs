@@ -1,6 +1,6 @@
 use super::*;
 
-pub(crate) type QqqArgumentValue<T> = Actual<'static, T, BeArgument>;
+pub(crate) type QqqArgumentValue<T> = Content<'static, T, BeArgument>;
 
 #[derive(Copy, Clone)]
 pub(crate) struct BeArgument;
@@ -15,7 +15,7 @@ impl MapFromArgument for BeArgument {
 
     fn from_argument_value(
         value: ArgumentValue,
-    ) -> ExecutionResult<Actual<'static, AnyType, Self>> {
+    ) -> ExecutionResult<Content<'static, AnyType, Self>> {
         todo!()
         // Ok(value)
     }

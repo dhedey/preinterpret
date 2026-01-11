@@ -1,6 +1,6 @@
 use super::*;
 
-pub(crate) type QqqMut<'a, T> = Actual<'a, T, BeMut>;
+pub(crate) type QqqMut<'a, T> = Content<'a, T, BeMut>;
 
 /// It can't be an argument because arguments must be owned in some way;
 /// so that the drop glue can work properly (because they may come from

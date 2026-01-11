@@ -1,6 +1,6 @@
 use super::*;
 
-type QqqAnyRef<'a, T> = Actual<'a, T, BeAnyRef>;
+type QqqAnyRef<'a, T> = Content<'a, T, BeAnyRef>;
 
 #[derive(Copy, Clone)]
 pub(crate) struct BeAnyRef;
@@ -33,7 +33,7 @@ impl MapFromArgument for BeAnyRef {
 
     fn from_argument_value(
         _value: ArgumentValue,
-    ) -> ExecutionResult<Actual<'static, AnyType, Self>> {
+    ) -> ExecutionResult<Content<'static, AnyType, Self>> {
         todo!()
         // value.expect_shared().as_any_ref()
     }

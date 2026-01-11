@@ -13,27 +13,9 @@ use super::*;
 /// generics.
 pub(crate) trait IsForm: Sized + Clone {}
 
-pub(crate) trait IsFormOf<T: IsType>: IsForm {
-    type Content<'a>;
-}
-
-pub(crate) trait IsFormOfForKind<T: IsType, X: TypeVariant>: IsForm {
-    type KindedContent<'a>;
-}
-
-impl<T: IsType, F: IsFormOfForKind<T, T::Variant>> IsFormOf<T> for F {
-    type Content<'a> = F::KindedContent<'a>;
-}
-
 pub(crate) trait IsHierarchicalForm: IsForm {
     /// The standard leaf for a hierachical type
     type Leaf<'a, T: IsValueLeaf>;
-}
-
-impl<T: IsHierarchicalType, F: IsHierarchicalForm> IsFormOfForKind<T, HierarchicalTypeVariant>
-    for F
-{
-    type KindedContent<'a> = T::Content<'a, F>;
 }
 
 pub(crate) trait LeafAsRefForm: IsHierarchicalForm {
@@ -72,24 +54,22 @@ pub(crate) trait IsDynCompatibleForm: IsForm {
     type DynLeaf<'a, D: 'static + ?Sized>;
 }
 
-impl<T: IsDynType, F: IsDynCompatibleForm> IsFormOfForKind<T, DynTypeVariant> for F {
-    type KindedContent<'a> = F::DynLeaf<'a, T::DynContent>;
-}
-
 pub(crate) trait IsDynMappableForm: IsHierarchicalForm + IsDynCompatibleForm {
     fn leaf_to_dyn<'a, L: IsValueLeaf + CastDyn<D>, D: ?Sized + 'static>(
         leaf: Self::Leaf<'a, L>,
     ) -> Option<Self::DynLeaf<'a, D>>;
 }
 
-pub(crate) trait MapFromArgument: IsFormOf<AnyType> {
+pub(crate) trait MapFromArgument: IsHierarchicalForm {
     const ARGUMENT_OWNERSHIP: ArgumentOwnership;
 
-    fn from_argument_value(value: ArgumentValue)
-        -> ExecutionResult<Actual<'static, AnyType, Self>>;
+    fn from_argument_value(
+        value: ArgumentValue,
+    ) -> ExecutionResult<Content<'static, AnyType, Self>>;
 }
 
-pub(crate) trait MapIntoReturned: IsFormOf<AnyType> {
-    fn into_returned_value(value: Actual<'static, AnyType, Self>)
-        -> ExecutionResult<ReturnedValue>;
+pub(crate) trait MapIntoReturned: IsHierarchicalForm {
+    fn into_returned_value(
+        value: Content<'static, AnyType, Self>,
+    ) -> ExecutionResult<ReturnedValue>;
 }

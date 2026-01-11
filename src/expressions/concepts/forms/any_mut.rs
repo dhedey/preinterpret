@@ -36,7 +36,7 @@ impl MapFromArgument for BeAnyMut {
 
     fn from_argument_value(
         _value: ArgumentValue,
-    ) -> ExecutionResult<Actual<'static, AnyType, Self>> {
+    ) -> ExecutionResult<Content<'static, AnyType, Self>> {
         todo!()
         // value.expect_mutable().as_any_mut()
     }

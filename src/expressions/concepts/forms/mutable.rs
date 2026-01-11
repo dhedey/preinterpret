@@ -39,7 +39,7 @@ impl MapFromArgument for BeMutable {
 
     fn from_argument_value(
         _value: ArgumentValue,
-    ) -> ExecutionResult<Actual<'static, AnyType, Self>> {
+    ) -> ExecutionResult<Content<'static, AnyType, Self>> {
         // value.expect_mutable()
         todo!()
     }

@@ -19,10 +19,6 @@ pub(crate) trait IsType: Sized {
 }
 
 pub(crate) trait IsHierarchicalType: IsType<Variant = HierarchicalTypeVariant> {
-    // The following is always true, courtesy of the definition of IsFormOf:
-    //   <F as form::IsFormOf<Self>>::Content<'a>> := Self::Content<'a, F>
-    // So the following where clause can be added where needed to make types line up:
-    //   for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
     type Content<'a, F: IsHierarchicalForm>;
     type LeafKind: IsLeafKind;
 
@@ -54,27 +50,48 @@ pub(crate) trait IsDynType: IsType<Variant = DynTypeVariant> {
     type DynContent: ?Sized + 'static;
 }
 
-pub(crate) trait UpcastTo<T: IsType, F: IsFormOf<T> + IsFormOf<Self>>: IsType {
-    fn upcast_to<'a>(
-        content: <F as IsFormOf<Self>>::Content<'a>,
-    ) -> <F as IsFormOf<T>>::Content<'a>;
+pub(crate) trait UpcastTo<T: IsHierarchicalType, F: IsHierarchicalForm>:
+    IsHierarchicalType
+{
+    fn upcast_to<'a>(content: Content<'a, Self, F>) -> Content<'a, T, F>;
 }
 
-pub(crate) trait DowncastFrom<
-    T: IsHierarchicalType,
-    F: IsHierarchicalForm + IsFormOf<T> + IsFormOf<Self>,
->: IsType where
-    for<'l> T: IsHierarchicalType<Content<'l, F> = <F as form::IsFormOf<T>>::Content<'l>>,
+pub(crate) trait DowncastFrom<T: IsHierarchicalType, F: IsHierarchicalForm>:
+    IsHierarchicalType
 {
-    fn downcast_from<'a>(
-        content: <F as IsFormOf<T>>::Content<'a>,
-    ) -> Option<<F as IsFormOf<Self>>::Content<'a>>;
+    fn downcast_from<'a>(content: Content<'a, T, F>) -> Option<Content<'a, Self, F>>;
 
     fn resolve<'a>(
-        content: <F as IsFormOf<T>>::Content<'a>,
+        content: Content<'a, T, F>,
         span_range: SpanRange,
         resolution_target: &str,
-    ) -> ExecutionResult<<F as IsFormOf<Self>>::Content<'a>> {
+    ) -> ExecutionResult<Content<'a, Self, F>> {
+        let leaf_kind = T::content_to_leaf_kind::<F>(&content);
+        let content = match Self::downcast_from(content) {
+            Some(c) => c,
+            None => {
+                return span_range.value_err(format!(
+                    "{} is expected to be {}, but it is {}",
+                    resolution_target,
+                    Self::ARTICLED_DISPLAY_NAME,
+                    leaf_kind.articled_display_name(),
+                ))
+            }
+        };
+        Ok(content)
+    }
+}
+
+pub(crate) trait DynResolveFrom<T: IsHierarchicalType, F: IsHierarchicalForm + IsDynCompatibleForm>:
+    IsDynType
+{
+    fn downcast_from<'a>(content: Content<'a, T, F>) -> Option<DynContent<'a, Self, F>>;
+
+    fn resolve<'a>(
+        content: Content<'a, T, F>,
+        span_range: SpanRange,
+        resolution_target: &str,
+    ) -> ExecutionResult<DynContent<'a, Self, F>> {
         let leaf_kind = T::content_to_leaf_kind::<F>(&content);
         let content = match Self::downcast_from(content) {
             Some(c) => c,
@@ -154,8 +171,8 @@ macro_rules! impl_ancestor_chain_conversions {
         impl<F: IsHierarchicalForm> DowncastFrom<$child, F> for $child
         {
             fn downcast_from<'a>(
-                content: <F as IsFormOf<Self>>::Content<'a>,
-            ) -> Option<<F as IsFormOf<Self>>::Content<'a>> {
+                content: Content<'a, Self, F>,
+            ) -> Option<Content<'a, Self, F>> {
                 Some(content)
             }
         }
@@ -163,8 +180,8 @@ macro_rules! impl_ancestor_chain_conversions {
         impl<F: IsHierarchicalForm> UpcastTo<$child, F> for $child
         {
             fn upcast_to<'a>(
-                content: <F as IsFormOf<Self>>::Content<'a>,
-            ) -> <F as IsFormOf<Self>>::Content<'a> {
+                content: Content<'a, Self, F>,
+            ) -> Content<'a, Self, F> {
                 content
             }
         }
@@ -192,8 +209,8 @@ macro_rules! impl_ancestor_chain_conversions {
             impl<F: IsHierarchicalForm> DowncastFrom<$parent, F> for $child
             {
                 fn downcast_from<'a>(
-                    content: <F as IsFormOf<$parent>>::Content<'a>,
-                ) -> Option<<F as IsFormOf<Self>>::Content<'a>> {
+                    content: Content<'a, $parent, F>,
+                ) -> Option<Content<'a, Self, F>> {
                     <$child as IsChildType>::from_parent(content)
                 }
             }
@@ -201,8 +218,8 @@ macro_rules! impl_ancestor_chain_conversions {
             impl<F: IsHierarchicalForm> UpcastTo<$parent, F> for $child
             {
                 fn upcast_to<'a>(
-                    content: <F as IsFormOf<$child>>::Content<'a>,
-                ) -> <F as IsFormOf<$parent>>::Content<'a> {
+                    content: Content<'a, $child, F>,
+                ) -> Content<'a, $parent, F> {
                     <$child as IsChildType>::into_parent(content)
                 }
             }
@@ -210,16 +227,16 @@ macro_rules! impl_ancestor_chain_conversions {
             $(
                 impl<F: IsHierarchicalForm> DowncastFrom<$ancestor, F> for $child {
                     fn downcast_from<'a>(
-                        content: <F as IsFormOf<$ancestor>>::Content<'a>,
-                    ) -> Option<<F as IsFormOf<$child>>::Content<'a>> {
+                        content: Content<'a, $ancestor, F>,
+                    ) -> Option<Content<'a, $child, F>> {
                         <$child as DowncastFrom<$parent, F>>::downcast_from(<$parent as DowncastFrom<$ancestor, F>>::downcast_from(content)?)
                     }
                 }
 
                 impl<F: IsHierarchicalForm> UpcastTo<$ancestor, F> for $child {
                     fn upcast_to<'a>(
-                        content: <F as IsFormOf<$child>>::Content<'a>,
-                    ) -> <F as IsFormOf<$ancestor>>::Content<'a> {
+                        content: Content<'a, $child, F>,
+                    ) -> Content<'a, $ancestor, F> {
                         <$parent as UpcastTo<$ancestor, F>>::upcast_to(<$child as UpcastTo<$parent, F>>::upcast_to(content))
                     }
                 }
@@ -235,11 +252,11 @@ pub(crate) trait IsValueLeaf:
 {
 }
 
-pub(crate) trait IsDynLeaf: 'static + IsValueContent<'static>
+pub(crate) trait IsDynLeaf: 'static
 where
     DynMapper<Self>: LeafMapper<BeOwned>,
-    Self::Type: IsDynType<DynContent = Self>,
 {
+    type Type: IsDynType<DynContent = Self>;
 }
 
 pub(crate) trait CastDyn<T: ?Sized> {
@@ -370,12 +387,12 @@ macro_rules! define_parent_type {
         }
 
         $content_vis enum $content<'a, F: IsHierarchicalForm> {
-            $( $variant(<F as IsFormOf<$variant_type>>::Content<'a>), )*
+            $( $variant(Content<'a, $variant_type, F>), )*
         }
 
         impl<'a, F: IsHierarchicalForm> Clone for $content<'a, F>
         where
-            $( <F as IsFormOf<$variant_type>>::Content<'a>: Clone ),*
+            $( Content<'a, $variant_type, F>: Clone ),*
         {
             fn clone(&self) -> Self {
                 match self {
@@ -387,7 +404,7 @@ macro_rules! define_parent_type {
 
         impl<'a, F: IsHierarchicalForm> Copy for $content<'a, F>
         where
-            $( <F as IsFormOf<$variant_type>>::Content<'a>: Copy ),*
+            $( Content<'a, $variant_type, F>: Copy ),*
         {}
 
         impl_value_content_traits!(parent: $type_def, $content);
@@ -798,145 +815,6 @@ macro_rules! impl_value_content_traits {
             }
         }
     };
-
-    // For dyn types - implements for all dyn-compatible form wrappers
-    (dyn: $type_def:ty, $dyn_type:ty) => {
-        // The unsized dyn type itself needs IsValueContent for IsDynLeaf requirements
-        impl<'a> IsValueContent<'a> for $dyn_type {
-            type Type = $type_def;
-            type Form = BeOwned;
-        }
-
-        // BeOwned: content is Box<D>
-        impl<'a> IsValueContent<'a> for Box<$dyn_type> {
-            type Type = $type_def;
-            type Form = BeOwned;
-        }
-        impl<'a> IntoValueContent<'a> for Box<$dyn_type> {
-            fn into_content(self) -> Self {
-                self
-            }
-        }
-        impl<'a> FromValueContent<'a> for Box<$dyn_type> {
-            fn from_content(content: Self) -> Self {
-                content
-            }
-        }
-
-        // BeRef: content is &'a D
-        impl<'a> IsValueContent<'a> for &'a $dyn_type {
-            type Type = $type_def;
-            type Form = BeRef;
-        }
-        impl<'a> IntoValueContent<'a> for &'a $dyn_type {
-            fn into_content(self) -> Self {
-                self
-            }
-        }
-        impl<'a> FromValueContent<'a> for &'a $dyn_type {
-            fn from_content(content: Self) -> Self {
-                content
-            }
-        }
-
-        // BeMut: content is &'a mut D
-        impl<'a> IsValueContent<'a> for &'a mut $dyn_type {
-            type Type = $type_def;
-            type Form = BeMut;
-        }
-        impl<'a> IntoValueContent<'a> for &'a mut $dyn_type {
-            fn into_content(self) -> Self {
-                self
-            }
-        }
-        impl<'a> FromValueContent<'a> for &'a mut $dyn_type {
-            fn from_content(content: Self) -> Self {
-                content
-            }
-        }
-
-        // BeMutable: content is QqqMutable<D>
-        impl<'a> IsValueContent<'a> for QqqMutable<$dyn_type> {
-            type Type = $type_def;
-            type Form = BeMutable;
-        }
-        impl<'a> IntoValueContent<'a> for QqqMutable<$dyn_type> {
-            fn into_content(self) -> Self {
-                self
-            }
-        }
-        impl<'a> FromValueContent<'a> for QqqMutable<$dyn_type> {
-            fn from_content(content: Self) -> Self {
-                content
-            }
-        }
-
-        // BeShared: content is QqqShared<D>
-        impl<'a> IsValueContent<'a> for QqqShared<$dyn_type> {
-            type Type = $type_def;
-            type Form = BeShared;
-        }
-        impl<'a> IntoValueContent<'a> for QqqShared<$dyn_type> {
-            fn into_content(self) -> Self {
-                self
-            }
-        }
-        impl<'a> FromValueContent<'a> for QqqShared<$dyn_type> {
-            fn from_content(content: Self) -> Self {
-                content
-            }
-        }
-
-        // BeAnyRef: content is AnyRef<'a, D>
-        impl<'a> IsValueContent<'a> for AnyRef<'a, $dyn_type> {
-            type Type = $type_def;
-            type Form = BeAnyRef;
-        }
-        impl<'a> IntoValueContent<'a> for AnyRef<'a, $dyn_type> {
-            fn into_content(self) -> Self {
-                self
-            }
-        }
-        impl<'a> FromValueContent<'a> for AnyRef<'a, $dyn_type> {
-            fn from_content(content: Self) -> Self {
-                content
-            }
-        }
-
-        // BeAnyMut: content is AnyMut<'a, D>
-        impl<'a> IsValueContent<'a> for AnyMut<'a, $dyn_type> {
-            type Type = $type_def;
-            type Form = BeAnyMut;
-        }
-        impl<'a> IntoValueContent<'a> for AnyMut<'a, $dyn_type> {
-            fn into_content(self) -> Self {
-                self
-            }
-        }
-        impl<'a> FromValueContent<'a> for AnyMut<'a, $dyn_type> {
-            fn from_content(content: Self) -> Self {
-                content
-            }
-        }
-
-        // BeAssignee: content is QqqAssignee<D>
-        impl<'a> IsValueContent<'a> for QqqAssignee<$dyn_type> {
-            type Type = $type_def;
-            type Form = BeAssignee;
-        }
-        impl<'a> IntoValueContent<'a> for QqqAssignee<$dyn_type> {
-            fn into_content(self) -> Self {
-                self
-            }
-        }
-        impl<'a> FromValueContent<'a> for QqqAssignee<$dyn_type> {
-            fn from_content(content: Self) -> Self {
-                content
-            }
-        }
-
-        // Note: BeReferenceable (Rc<RefCell<D>>) doesn't work for unsized D.
-    };
 }
 
 pub(crate) use impl_value_content_traits;
@@ -983,16 +861,13 @@ macro_rules! define_dyn_type {
             impl TypeFeatureResolver for $type_def: [$type_def]
         }
 
-        impl_value_content_traits!(dyn: $type_def, $dyn_type);
+        impl IsDynLeaf for $dyn_type {
+            type Type = $type_def;
+        }
 
-        impl IsDynLeaf for $dyn_type {}
-
-        impl<T: IsHierarchicalType, F: IsFormOf<T> + IsFormOf<$type_def> + IsDynMappableForm> DowncastFrom<T, F> for $type_def
-            where
-                for<'a> T: IsHierarchicalType<Content<'a, F> = <F as IsFormOf<T>>::Content<'a>>,
-                for<'a> F: IsDynCompatibleForm<DynLeaf<'a, $dyn_type> = <F as IsFormOf<Self>>::Content<'a>>,
+        impl<T: IsHierarchicalType, F: IsHierarchicalForm + IsDynCompatibleForm + IsDynMappableForm> DynResolveFrom<T, F> for $type_def
         {
-            fn downcast_from<'a>(content: <F as IsFormOf<T>>::Content<'a>) -> Option<<F as IsFormOf<Self>>::Content<'a>> {
+            fn downcast_from<'a>(content: Content<'a, T, F>) -> Option<DynContent<'a, Self, F>> {
                 match T::map_with::<'a, F, _>(DynMapper::<$dyn_type>::new(), content) {
                     Ok(_) => panic!("DynMapper is expected to always short-circuit"),
                     Err(dyn_leaf) => dyn_leaf,

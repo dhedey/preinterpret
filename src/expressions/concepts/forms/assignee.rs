@@ -40,7 +40,7 @@ impl MapFromArgument for BeAssignee {
 
     fn from_argument_value(
         value: ArgumentValue,
-    ) -> ExecutionResult<Actual<'static, AnyType, Self>> {
+    ) -> ExecutionResult<Content<'static, AnyType, Self>> {
         todo!()
         // value.expect_assignee()
     }
