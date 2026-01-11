@@ -26,7 +26,7 @@ where
     where
         Self::Type: UpcastTo<S, Self::Form>,
     {
-        <Self::Type as UpcastTo<S, Self::Form>>::upcast_to(self.into_content())
+        <Self::Type>::upcast_to(self.into_content())
     }
 
     #[inline]
@@ -46,7 +46,7 @@ where
     }
 
     fn map_with<M: LeafMapper<Self::Form>>(self, mapper: M) -> M::Output<'a, Self::Type> {
-        <Self::Type>::map_with::<Self::Form, _>(mapper, self.into_content())
+        <Self::Type>::map_with::<Self::Form, M>(mapper, self.into_content())
     }
 
     fn into_referenceable(self) -> Content<'a, Self::Type, BeReferenceable>

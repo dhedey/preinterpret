@@ -7,23 +7,26 @@ pub(crate) struct BeShared;
 impl IsForm for BeShared {}
 
 impl IsHierarchicalForm for BeShared {
-    type Leaf<'a, T: IsValueLeaf> = QqqShared<T>;
+    type Leaf<'a, T: IsLeafType> = QqqShared<T::Leaf>;
 }
 
 impl IsDynCompatibleForm for BeShared {
-    type DynLeaf<'a, T: 'static + ?Sized> = QqqShared<T>;
+    type DynLeaf<'a, D: 'static + ?Sized> = QqqShared<D>;
 }
 
 impl IsDynMappableForm for BeShared {
-    fn leaf_to_dyn<'a, T: IsValueLeaf + CastDyn<D>, D: ?Sized + 'static>(
+    fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
         leaf: Self::Leaf<'a, T>,
-    ) -> Option<Self::DynLeaf<'a, D>> {
-        leaf.map_optional(T::map_ref)
+    ) -> Option<Self::DynLeaf<'a, D>>
+    where
+        T::Leaf: CastDyn<D>,
+    {
+        leaf.map_optional(<T::Leaf>::map_ref)
     }
 }
 
 impl LeafAsRefForm for BeShared {
-    fn leaf_as_ref<'r, 'a: 'r, T: IsValueLeaf>(leaf: &'r Self::Leaf<'a, T>) -> &'r T {
+    fn leaf_as_ref<'r, 'a: 'r, T: IsLeafType>(leaf: &'r Self::Leaf<'a, T>) -> &'r T::Leaf {
         leaf
     }
 }

@@ -13,29 +13,32 @@ pub(crate) struct BeOwned;
 impl IsForm for BeOwned {}
 
 impl IsHierarchicalForm for BeOwned {
-    type Leaf<'a, T: IsValueLeaf> = T;
+    type Leaf<'a, T: IsLeafType> = T::Leaf;
 }
 
 impl IsDynCompatibleForm for BeOwned {
-    type DynLeaf<'a, T: 'static + ?Sized> = Box<T>;
+    type DynLeaf<'a, D: 'static + ?Sized> = Box<D>;
 }
 
 impl IsDynMappableForm for BeOwned {
-    fn leaf_to_dyn<'a, T: IsValueLeaf + CastDyn<D>, D: ?Sized + 'static>(
+    fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
         leaf: Self::Leaf<'a, T>,
-    ) -> Option<Self::DynLeaf<'a, D>> {
-        T::map_boxed(Box::new(leaf))
+    ) -> Option<Self::DynLeaf<'a, D>>
+    where
+        T::Leaf: CastDyn<D>,
+    {
+        <T::Leaf>::map_boxed(Box::new(leaf))
     }
 }
 
 impl LeafAsRefForm for BeOwned {
-    fn leaf_as_ref<'r, 'a: 'r, T: IsValueLeaf>(leaf: &'r Self::Leaf<'a, T>) -> &'r T {
+    fn leaf_as_ref<'r, 'a: 'r, T: IsLeafType>(leaf: &'r Self::Leaf<'a, T>) -> &'r T::Leaf {
         leaf
     }
 }
 
 impl LeafAsMutForm for BeOwned {
-    fn leaf_as_mut<'r, 'a: 'r, T: IsValueLeaf>(leaf: &'r mut Self::Leaf<'a, T>) -> &'r mut T {
+    fn leaf_as_mut<'r, 'a: 'r, T: IsLeafType>(leaf: &'r mut Self::Leaf<'a, T>) -> &'r mut T::Leaf {
         leaf
     }
 }
@@ -63,7 +66,7 @@ impl<F: LeafAsRefForm> RefLeafMapper<F> for ToOwnedInfallibleMapper {
 
     fn map_leaf<'r, 'a: 'r, T: IsLeafType>(
         self,
-        leaf: &'r <F as IsHierarchicalForm>::Leaf<'a, T::Leaf>,
+        leaf: &'r F::Leaf<'a, T>,
     ) -> Self::Output<'r, 'a, T> {
         T::leaf_to_content(F::leaf_clone_to_owned_infallible(leaf))
     }
@@ -84,7 +87,7 @@ impl<F: LeafAsRefForm> RefLeafMapper<F> for ToOwnedTransparentlyMapper {
 
     fn map_leaf<'r, 'a: 'r, T: IsLeafType>(
         self,
-        leaf: &'r <F as IsHierarchicalForm>::Leaf<'a, T::Leaf>,
+        leaf: &'r <F as IsHierarchicalForm>::Leaf<'a, T>,
     ) -> Self::Output<'r, 'a, T> {
         Ok(T::leaf_to_content(F::leaf_clone_to_owned_transparently(
             leaf,

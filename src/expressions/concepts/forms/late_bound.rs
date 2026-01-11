@@ -17,17 +17,20 @@ pub(crate) struct BeLateBound;
 impl IsForm for BeLateBound {}
 
 impl IsHierarchicalForm for BeLateBound {
-    type Leaf<'a, T: IsValueLeaf> = LateBoundContent<T, T>;
+    type Leaf<'a, T: IsLeafType> = LateBoundContent<T::Leaf, T::Leaf>;
 }
 
 impl IsDynCompatibleForm for BeLateBound {
-    type DynLeaf<'a, T: 'static + ?Sized> = LateBoundContent<T, Box<T>>;
+    type DynLeaf<'a, D: 'static + ?Sized> = LateBoundContent<D, Box<D>>;
 }
 
 impl IsDynMappableForm for BeLateBound {
-    fn leaf_to_dyn<'a, T: IsValueLeaf + CastDyn<D>, D: ?Sized + 'static>(
-        _leaf: Self::Leaf<'a, T>,
-    ) -> Option<Self::DynLeaf<'a, D>> {
+    fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
+        leaf: Self::Leaf<'a, T>,
+    ) -> Option<Self::DynLeaf<'a, D>>
+    where
+        T::Leaf: CastDyn<D>,
+    {
         // TODO: Add back once we add a map to LateBoundContent
         todo!()
     }

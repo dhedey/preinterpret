@@ -7,17 +7,20 @@ pub(crate) struct BeCopyOnWrite;
 impl IsForm for BeCopyOnWrite {}
 
 impl IsHierarchicalForm for BeCopyOnWrite {
-    type Leaf<'a, T: IsValueLeaf> = CopyOnWriteContent<T, T>;
+    type Leaf<'a, T: IsLeafType> = CopyOnWriteContent<T::Leaf, T::Leaf>;
 }
 
 impl IsDynCompatibleForm for BeCopyOnWrite {
-    type DynLeaf<'a, T: 'static + ?Sized> = CopyOnWriteContent<T, Box<T>>;
+    type DynLeaf<'a, D: 'static + ?Sized> = CopyOnWriteContent<D, Box<D>>;
 }
 
 impl IsDynMappableForm for BeCopyOnWrite {
-    fn leaf_to_dyn<'a, T: IsValueLeaf + CastDyn<D>, D: ?Sized + 'static>(
-        _leaf: Self::Leaf<'a, T>,
-    ) -> Option<Self::DynLeaf<'a, D>> {
+    fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
+        leaf: Self::Leaf<'a, T>,
+    ) -> Option<Self::DynLeaf<'a, D>>
+    where
+        T::Leaf: CastDyn<D>,
+    {
         // TODO: Add back once we add a map to CopyOnWriteContent
         todo!()
     }

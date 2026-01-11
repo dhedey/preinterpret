@@ -19,6 +19,7 @@ pub(crate) trait IsType: Sized {
 }
 
 pub(crate) trait IsHierarchicalType: IsType<Variant = HierarchicalTypeVariant> {
+    /// Typically this will implement `IsValueContent<'a, Type = Self, Form = F>`
     type Content<'a, F: IsHierarchicalForm>;
     type LeafKind: IsLeafKind;
 
@@ -45,9 +46,7 @@ pub(crate) trait IsHierarchicalType: IsType<Variant = HierarchicalTypeVariant> {
 pub(crate) trait IsLeafType: IsHierarchicalType {
     type Leaf: IsValueLeaf;
 
-    fn leaf_to_content<'a, F: IsHierarchicalForm>(
-        leaf: F::Leaf<'a, Self::Leaf>,
-    ) -> Self::Content<'a, F>;
+    fn leaf_to_content<'a, F: IsHierarchicalForm>(leaf: F::Leaf<'a, Self>) -> Self::Content<'a, F>;
 
     fn leaf_kind() -> Self::LeafKind;
 }
@@ -546,7 +545,7 @@ macro_rules! define_leaf_type {
         }
 
         impl IsHierarchicalType for $type_def {
-            type Content<'a, F: IsHierarchicalForm> = F::Leaf<'a, $content_type>;
+            type Content<'a, F: IsHierarchicalForm> = F::Leaf<'a, Self>;
             type LeafKind = $kind;
 
             fn map_with<'a, F: IsHierarchicalForm, M: LeafMapper<F>>(
@@ -581,7 +580,7 @@ macro_rules! define_leaf_type {
             type Leaf = $content_type;
 
             fn leaf_to_content<'a, F: IsHierarchicalForm>(
-                leaf: F::Leaf<'a, Self::Leaf>,
+                leaf: F::Leaf<'a, Self>,
             ) -> Self::Content<'a, F> {
                 leaf
             }
@@ -903,7 +902,7 @@ macro_rules! define_dyn_type {
 
             fn map_leaf<'a, T: IsLeafType>(
                 self,
-                leaf: F::Leaf<'a, T::Leaf>,
+                leaf: F::Leaf<'a, T>,
             ) -> Self::Output<'a, T> {
                 F::leaf_to_dyn(leaf)
             }

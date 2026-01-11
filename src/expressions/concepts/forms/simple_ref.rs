@@ -10,23 +10,26 @@ pub(crate) struct BeRef;
 impl IsForm for BeRef {}
 
 impl IsHierarchicalForm for BeRef {
-    type Leaf<'a, T: IsValueLeaf> = &'a T;
+    type Leaf<'a, T: IsLeafType> = &'a T::Leaf;
 }
 
 impl IsDynCompatibleForm for BeRef {
-    type DynLeaf<'a, T: 'static + ?Sized> = &'a T;
+    type DynLeaf<'a, D: 'static + ?Sized> = &'a D;
 }
 
 impl IsDynMappableForm for BeRef {
-    fn leaf_to_dyn<'a, T: IsValueLeaf + CastDyn<D>, D: ?Sized + 'static>(
+    fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
         leaf: Self::Leaf<'a, T>,
-    ) -> Option<Self::DynLeaf<'a, D>> {
-        T::map_ref(leaf)
+    ) -> Option<Self::DynLeaf<'a, D>>
+    where
+        T::Leaf: CastDyn<D>,
+    {
+        <T::Leaf>::map_ref(leaf)
     }
 }
 
 impl LeafAsRefForm for BeRef {
-    fn leaf_as_ref<'r, 'a: 'r, T: IsValueLeaf>(leaf: &'r Self::Leaf<'a, T>) -> &'r T {
+    fn leaf_as_ref<'r, 'a: 'r, T: IsLeafType>(leaf: &'r Self::Leaf<'a, T>) -> &'r T::Leaf {
         leaf
     }
 }
@@ -44,7 +47,7 @@ impl<F: LeafAsRefForm> RefLeafMapper<F> for ToRefMapper {
 
     fn map_leaf<'r, 'a: 'r, T: IsLeafType>(
         self,
-        leaf: &'r <F as IsHierarchicalForm>::Leaf<'a, T::Leaf>,
+        leaf: &'r <F as IsHierarchicalForm>::Leaf<'a, T>,
     ) -> Self::Output<'r, 'a, T> {
         T::leaf_to_content(F::leaf_as_ref(leaf))
     }

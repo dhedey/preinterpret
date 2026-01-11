@@ -12,7 +12,7 @@ pub(crate) struct BeReferenceable;
 impl IsForm for BeReferenceable {}
 
 impl IsHierarchicalForm for BeReferenceable {
-    type Leaf<'a, T: IsValueLeaf> = Rc<RefCell<T>>;
+    type Leaf<'a, T: IsLeafType> = Rc<RefCell<T::Leaf>>;
 }
 
 impl MapFromArgument for BeReferenceable {

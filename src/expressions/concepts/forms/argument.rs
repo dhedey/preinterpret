@@ -7,7 +7,7 @@ pub(crate) struct BeArgument;
 impl IsForm for BeArgument {}
 
 impl IsHierarchicalForm for BeArgument {
-    type Leaf<'a, T: IsValueLeaf> = ArgumentContent<T>;
+    type Leaf<'a, T: IsLeafType> = ArgumentContent<T::Leaf>;
 }
 
 impl MapFromArgument for BeArgument {

@@ -10,23 +10,26 @@ pub(crate) struct BeMut;
 impl IsForm for BeMut {}
 
 impl IsHierarchicalForm for BeMut {
-    type Leaf<'a, T: IsValueLeaf> = &'a mut T;
+    type Leaf<'a, T: IsLeafType> = &'a mut T::Leaf;
 }
 
 impl IsDynCompatibleForm for BeMut {
-    type DynLeaf<'a, T: 'static + ?Sized> = &'a mut T;
+    type DynLeaf<'a, D: 'static + ?Sized> = &'a mut D;
 }
 
 impl IsDynMappableForm for BeMut {
-    fn leaf_to_dyn<'a, T: IsValueLeaf + CastDyn<D>, D: ?Sized + 'static>(
+    fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
         leaf: Self::Leaf<'a, T>,
-    ) -> Option<Self::DynLeaf<'a, D>> {
-        T::map_mut(leaf)
+    ) -> Option<Self::DynLeaf<'a, D>>
+    where
+        T::Leaf: CastDyn<D>,
+    {
+        <T::Leaf>::map_mut(leaf)
     }
 }
 
 impl LeafAsRefForm for BeMut {
-    fn leaf_as_ref<'r, 'a: 'r, T: IsValueLeaf>(leaf: &'r Self::Leaf<'a, T>) -> &'r T {
+    fn leaf_as_ref<'r, 'a: 'r, T: IsLeafType>(leaf: &'r Self::Leaf<'a, T>) -> &'r T::Leaf {
         leaf
     }
 }
@@ -44,7 +47,7 @@ impl<F: LeafAsMutForm> MutLeafMapper<F> for ToMutMapper {
 
     fn map_leaf<'r, 'a: 'r, T: IsLeafType>(
         self,
-        leaf: &'r mut F::Leaf<'a, T::Leaf>,
+        leaf: &'r mut F::Leaf<'a, T>,
     ) -> Self::Output<'r, 'a, T> {
         T::leaf_to_content(F::leaf_as_mut(leaf))
     }

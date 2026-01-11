@@ -15,23 +15,24 @@ pub(crate) trait IsForm: Sized + Clone {}
 
 pub(crate) trait IsHierarchicalForm: IsForm {
     /// The standard leaf for a hierachical type
-    type Leaf<'a, T: IsValueLeaf>;
+    /// Usually this will implement IsValueContent<'a, Type = T, Form = Self>
+    type Leaf<'a, T: IsLeafType>;
 }
 
 pub(crate) trait LeafAsRefForm: IsHierarchicalForm {
-    fn leaf_as_ref<'r, 'a: 'r, L: IsValueLeaf>(leaf: &'r Self::Leaf<'a, L>) -> &'r L;
+    fn leaf_as_ref<'r, 'a: 'r, T: IsLeafType>(leaf: &'r Self::Leaf<'a, T>) -> &'r T::Leaf;
 
-    fn leaf_clone_to_owned_infallible<'r, 'a: 'r, L: IsValueLeaf>(
-        leaf: &'r Self::Leaf<'a, L>,
-    ) -> L {
+    fn leaf_clone_to_owned_infallible<'r, 'a: 'r, T: IsLeafType>(
+        leaf: &'r Self::Leaf<'a, T>,
+    ) -> T::Leaf {
         Self::leaf_as_ref(leaf).clone()
     }
 
-    fn leaf_clone_to_owned_transparently<'r, 'a: 'r, L: IsValueLeaf>(
-        leaf: &'r Self::Leaf<'a, L>,
+    fn leaf_clone_to_owned_transparently<'r, 'a: 'r, T: IsLeafType>(
+        leaf: &'r Self::Leaf<'a, T>,
         error_span: SpanRange,
-    ) -> ExecutionResult<L> {
-        let type_kind = <L as IsValueContent>::Type::type_kind();
+    ) -> ExecutionResult<T::Leaf> {
+        let type_kind = T::type_kind();
         if type_kind.supports_transparent_cloning() {
             Ok(Self::leaf_clone_to_owned_infallible(leaf))
         } else {
@@ -44,7 +45,7 @@ pub(crate) trait LeafAsRefForm: IsHierarchicalForm {
 }
 
 pub(crate) trait LeafAsMutForm: IsHierarchicalForm {
-    fn leaf_as_mut<'r, 'a: 'r, L: IsValueLeaf>(leaf: &'r mut Self::Leaf<'a, L>) -> &'r mut L;
+    fn leaf_as_mut<'r, 'a: 'r, T: IsLeafType>(leaf: &'r mut Self::Leaf<'a, T>) -> &'r mut T::Leaf;
 }
 
 pub(crate) trait IsDynCompatibleForm: IsForm {
@@ -55,9 +56,11 @@ pub(crate) trait IsDynCompatibleForm: IsForm {
 }
 
 pub(crate) trait IsDynMappableForm: IsHierarchicalForm + IsDynCompatibleForm {
-    fn leaf_to_dyn<'a, L: IsValueLeaf + CastDyn<D>, D: ?Sized + 'static>(
-        leaf: Self::Leaf<'a, L>,
-    ) -> Option<Self::DynLeaf<'a, D>>;
+    fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
+        leaf: Self::Leaf<'a, T>,
+    ) -> Option<Self::DynLeaf<'a, D>>
+    where
+        T::Leaf: CastDyn<D>;
 }
 
 pub(crate) trait MapFromArgument: IsHierarchicalForm {
