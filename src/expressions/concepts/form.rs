@@ -25,29 +25,9 @@ impl<T: IsType, F: IsFormOfForKind<T, T::Variant>> IsFormOf<T> for F {
     type Content<'a> = F::KindedContent<'a>;
 }
 
-trait LeafLifetimeSpecifier {}
-#[allow(non_camel_case_types)]
-pub(crate) struct UNSAFE_DECLARTION_LeafDoesNotCaptureLifetime;
-impl LeafLifetimeSpecifier for UNSAFE_DECLARTION_LeafDoesNotCaptureLifetime {}
-pub(crate) struct LeafCapturesLifetime;
-impl LeafLifetimeSpecifier for LeafCapturesLifetime {}
-
 pub(crate) trait IsHierarchicalForm: IsForm {
     /// The standard leaf for a hierachical type
     type Leaf<'a, T: IsValueLeaf>;
-
-    /// Asserts that the form has a 'static leaf type, independent of `'a`.
-    type LeafLifetimeCapture: LeafLifetimeSpecifier;
-
-    fn leaf_to_static<'a, T: IsValueLeaf>(
-        leaf: Self::Leaf<'a, T>,
-    ) -> Self::Leaf<'static, T>
-        where Self : IsHierarchicalForm<LeafLifetimeCapture = UNSAFE_DECLARTION_LeafDoesNotCaptureLifetime>
-    {
-        // SAFETY: By defining LeafLifetimeCapture = UNSAFE_DECLARTION_LeafDoesNotCaptureLifetime,
-        // The implementor has asserted that the leaf type does not actually depend on the lifetime 'a.
-        unsafe { std::mem::transmute::<Self::Leaf<'a, T>, Self::Leaf<'static, T>>(leaf) }
-    }
 }
 
 impl<T: IsHierarchicalType, F: IsHierarchicalForm> IsFormOfForKind<T, HierarchicalTypeVariant>
@@ -82,7 +62,7 @@ pub(crate) trait LeafAsRefForm: IsHierarchicalForm {
 }
 
 pub(crate) trait LeafAsMutForm: IsHierarchicalForm {
-    fn leaf_as_mut<'r, 'a: 'r, T: IsValueLeaf>(leaf: &'r mut Self::Leaf<'a, T>) -> &'r mut T;
+    fn leaf_as_mut<'r, 'a: 'r, L: IsValueLeaf>(leaf: &'r mut Self::Leaf<'a, L>) -> &'r mut L;
 }
 
 pub(crate) trait IsDynCompatibleForm: IsForm {
@@ -97,8 +77,8 @@ impl<T: IsDynType, F: IsDynCompatibleForm> IsFormOfForKind<T, DynTypeVariant> fo
 }
 
 pub(crate) trait IsDynMappableForm: IsHierarchicalForm + IsDynCompatibleForm {
-    fn leaf_to_dyn<'a, T: IsValueLeaf + CastDyn<D>, D: ?Sized + 'static>(
-        leaf: Self::Leaf<'a, T>,
+    fn leaf_to_dyn<'a, L: IsValueLeaf + CastDyn<D>, D: ?Sized + 'static>(
+        leaf: Self::Leaf<'a, L>,
     ) -> Option<Self::DynLeaf<'a, D>>;
 }
 

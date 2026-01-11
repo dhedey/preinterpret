@@ -8,7 +8,6 @@ impl IsForm for BeArgument {}
 
 impl IsHierarchicalForm for BeArgument {
     type Leaf<'a, T: IsValueLeaf> = ArgumentContent<T>;
-    type LeafLifetimeCapture = UNSAFE_DECLARTION_LeafDoesNotCaptureLifetime;
 }
 
 impl MapFromArgument for BeArgument {

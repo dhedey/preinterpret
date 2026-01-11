@@ -8,7 +8,6 @@ impl IsForm for BeCopyOnWrite {}
 
 impl IsHierarchicalForm for BeCopyOnWrite {
     type Leaf<'a, T: IsValueLeaf> = CopyOnWriteContent<T, T>;
-    type LeafLifetimeCapture = UNSAFE_DECLARTION_LeafDoesNotCaptureLifetime;
 }
 
 impl IsDynCompatibleForm for BeCopyOnWrite {
@@ -54,7 +53,7 @@ pub(crate) enum CopyOnWriteContent<T: 'static + ?Sized, O: 'static> {
 // {
 //     fn acts_as_shared_reference(&self) -> bool {
 //         struct ThisMapper;
-//         impl 
+//         impl
 //         self.map_ref_with(mapper)
 //     }
 // }

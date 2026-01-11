@@ -31,6 +31,28 @@ pub(crate) trait MutLeafMapper<F: IsHierarchicalForm> {
 }
 
 // pub(crate) trait MutLeafMapper<F: IsHierarchicalForm> {
+//     type Output<'r, 'a: 'r>;
+
+//     fn map_leaf<'r, 'a: 'r, T: IsType, L: IsValueLeaf>(
+//         self,
+//         leaf: &'r mut F::Leaf<'a, L>,
+//     ) -> Self::Output<'r, 'a>
+//     where
+//         for<'x> &'x mut L: IsValueContent<'x, Form = BeMut, Type = T>,
+//         T: UpcastTo<AnyType, BeMut>,
+//         BeMut: IsFormOf<T, Content<'r> = &'r mut L>,
+//     ;
+// }
+
+// impl<L: IsValueLeaf> IsMutValueLeaf for L
+// where
+//     for<'x> &'x mut L: IsValueContent<'x, Form = BeMut>,
+//     for<'x> <&'x mut L as IsValueContent<'x>>::Type: UpcastTo<AnyType, BeMut>,
+// {
+//     type MutType<'a> = <&'a mut L as IsValueContent<'a>>::Type;
+// }
+
+// pub(crate) trait MutLeafMapper<F: IsHierarchicalForm> {
 //     type Output<'r, 'a: 'r, T>: MapperOutput;
 
 //     fn map_leaf<'r, 'a: 'r, T: IsType, L: IsValueLeaf>(

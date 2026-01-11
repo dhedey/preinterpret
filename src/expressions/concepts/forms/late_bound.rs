@@ -18,7 +18,6 @@ impl IsForm for BeLateBound {}
 
 impl IsHierarchicalForm for BeLateBound {
     type Leaf<'a, T: IsValueLeaf> = LateBoundContent<T, T>;
-    type LeafLifetimeCapture = UNSAFE_DECLARTION_LeafDoesNotCaptureLifetime;
 }
 
 impl IsDynCompatibleForm for BeLateBound {

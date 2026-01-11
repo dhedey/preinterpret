@@ -8,7 +8,6 @@ impl IsForm for BeAnyRef {}
 
 impl IsHierarchicalForm for BeAnyRef {
     type Leaf<'a, T: IsValueLeaf> = crate::internal_prelude::AnyRef<'a, T>;
-    type LeafLifetimeCapture = LeafCapturesLifetime;
 }
 
 impl IsDynCompatibleForm for BeAnyRef {

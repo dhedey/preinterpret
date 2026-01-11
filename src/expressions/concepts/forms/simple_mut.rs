@@ -11,7 +11,6 @@ impl IsForm for BeMut {}
 
 impl IsHierarchicalForm for BeMut {
     type Leaf<'a, T: IsValueLeaf> = &'a mut T;
-    type LeafLifetimeCapture = LeafCapturesLifetime;
 }
 
 impl IsDynCompatibleForm for BeMut {
@@ -45,3 +44,37 @@ impl<F: LeafAsMutForm> MutLeafMapper<F> for ToMutMapper {
         Ok(F::leaf_as_mut(leaf))
     }
 }
+
+// impl<F: LeafAsMutForm + IsFormOf<AnyType>> MutLeafMapper<F> for ToMutMapper {
+//     type Output<'r, 'a: 'r> = AnyValueContent<'r, BeMut>;
+
+//     fn map_leaf<'r, 'a: 'r, L: IsValueLeaf>(
+//         self,
+//         leaf: &'r mut F::Leaf<'a, L>,
+//     ) -> Self::Output<'r, 'a>
+//     where
+//         for<'x> &'x mut L: IsValueContent<'x, Form = BeMut>,
+//         for<'x> <&'x mut L as IsValueContent<'x>>::Type: UpcastTo<AnyType, BeMut>,
+//         BeMut: for<'x> IsFormOf<<&'x mut L as IsValueContent<'x>>::Type, Content<'r> = &'r mut L>,
+//     {
+//         let my_mut = F::leaf_as_mut(leaf);
+//         <<&'r mut L as IsValueContent<'r>>::Type as UpcastTo<AnyType, BeMut>>::upcast_to(my_mut)
+//     }
+// }
+
+// impl<F: LeafAsMutForm + IsFormOf<AnyType>> MutLeafMapper<F> for ToMutMapper {
+//     type Output<'r, 'a: 'r> = AnyValueContent<'r, BeMut>;
+
+//     fn map_leaf<'r, 'a: 'r, T: IsType, L: IsValueLeaf>(
+//         self,
+//         leaf: &'r mut F::Leaf<'a, L>,
+//     ) -> Self::Output<'r, 'a>
+//     where
+//         for<'x> &'x mut L: IsValueContent<'x, Form = BeMut, Type = T>,
+//         T: UpcastTo<AnyType, BeMut>,
+//         BeMut: IsFormOf<T, Content<'r> = &'r mut L>,
+//     {
+//         let my_mut = F::leaf_as_mut(leaf);
+//         <<&'r mut L as IsValueContent<'r>>::Type as UpcastTo<AnyType, BeMut>>::upcast_to(my_mut)
+//     }
+// }

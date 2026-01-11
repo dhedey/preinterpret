@@ -8,7 +8,6 @@ impl IsForm for BeShared {}
 
 impl IsHierarchicalForm for BeShared {
     type Leaf<'a, T: IsValueLeaf> = QqqShared<T>;
-    type LeafLifetimeCapture = UNSAFE_DECLARTION_LeafDoesNotCaptureLifetime;
 }
 
 impl IsDynCompatibleForm for BeShared {
