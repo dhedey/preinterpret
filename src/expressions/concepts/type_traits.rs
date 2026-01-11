@@ -64,23 +64,25 @@ pub(crate) trait UpcastTo<T: IsHierarchicalType, F: IsHierarchicalForm>:
 pub(crate) trait DowncastFrom<T: IsHierarchicalType, F: IsHierarchicalForm>:
     IsHierarchicalType
 {
-    fn downcast_from<'a>(content: Content<'a, T, F>) -> Option<Content<'a, Self, F>>;
+    fn downcast_from<'a>(
+        content: Content<'a, T, F>,
+    ) -> Result<Content<'a, Self, F>, Content<'a, T, F>>;
 
     fn resolve<'a>(
         content: Content<'a, T, F>,
         span_range: SpanRange,
         resolution_target: &str,
     ) -> ExecutionResult<Content<'a, Self, F>> {
-        let leaf_kind = T::content_to_leaf_kind::<F>(&content);
         let content = match Self::downcast_from(content) {
-            Some(c) => c,
-            None => {
+            Ok(c) => c,
+            Err(existing) => {
+                let leaf_kind = T::content_to_leaf_kind::<F>(&existing);
                 return span_range.value_err(format!(
                     "{} is expected to be {}, but it is {}",
                     resolution_target,
                     Self::ARTICLED_DISPLAY_NAME,
                     leaf_kind.articled_display_name(),
-                ))
+                ));
             }
         };
         Ok(content)
@@ -118,11 +120,11 @@ pub(crate) trait IsChildType: IsHierarchicalType {
 
     fn into_parent<'a, F: IsHierarchicalForm>(
         content: Self::Content<'a, F>,
-    ) -> <Self::ParentType as IsHierarchicalType>::Content<'a, F>;
+    ) -> Content<'a, Self::ParentType, F>;
 
     fn from_parent<'a, F: IsHierarchicalForm>(
         content: <Self::ParentType as IsHierarchicalType>::Content<'a, F>,
-    ) -> Option<Self::Content<'a, F>>;
+    ) -> Result<Content<'a, Self, F>, Content<'a, Self::ParentType, F>>;
 }
 
 macro_rules! impl_type_feature_resolver {
@@ -177,8 +179,8 @@ macro_rules! impl_ancestor_chain_conversions {
         {
             fn downcast_from<'a>(
                 content: Content<'a, Self, F>,
-            ) -> Option<Content<'a, Self, F>> {
-                Some(content)
+            ) -> Result<Content<'a, Self, F>, Content<'a, Self, F>> {
+                Ok(content)
             }
         }
 
@@ -203,10 +205,10 @@ macro_rules! impl_ancestor_chain_conversions {
 
                 fn from_parent<'a, F: IsHierarchicalForm>(
                     content: <Self::ParentType as IsHierarchicalType>::Content<'a, F>,
-                ) -> Option<Self::Content<'a, F>> {
+                ) -> Result<Content<'a, Self, F>, Content<'a, Self::ParentType, F>> {
                     match content {
-                        $parent_content::$parent_variant(i) => Some(i),
-                        _ => None,
+                        $parent_content::$parent_variant(i) => Ok(i),
+                        other => Err(other),
                     }
                 }
             }
@@ -215,7 +217,7 @@ macro_rules! impl_ancestor_chain_conversions {
             {
                 fn downcast_from<'a>(
                     content: Content<'a, $parent, F>,
-                ) -> Option<Content<'a, Self, F>> {
+                ) -> Result<Content<'a, Self, F>, Content<'a, $parent, F>> {
                     <$child as IsChildType>::from_parent(content)
                 }
             }
@@ -233,8 +235,12 @@ macro_rules! impl_ancestor_chain_conversions {
                 impl<F: IsHierarchicalForm> DowncastFrom<$ancestor, F> for $child {
                     fn downcast_from<'a>(
                         content: Content<'a, $ancestor, F>,
-                    ) -> Option<Content<'a, $child, F>> {
-                        <$child as DowncastFrom<$parent, F>>::downcast_from(<$parent as DowncastFrom<$ancestor, F>>::downcast_from(content)?)
+                    ) -> Result<Content<'a, $child, F>, Content<'a, $ancestor, F>> {
+                        let inner = <$parent as DowncastFrom<$ancestor, F>>::downcast_from(content)?;
+                        match <$child as DowncastFrom<$parent, F>>::downcast_from(inner) {
+                            Ok(c) => Ok(c),
+                            Err(existing) => Err(<$parent as UpcastTo<$ancestor, F>>::upcast_to(existing)),
+                        }
                     }
                 }
 

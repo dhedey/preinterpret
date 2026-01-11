@@ -34,7 +34,7 @@ where
     where
         U: DowncastFrom<Self::Type, Self::Form>,
     {
-        U::downcast_from(self.into_content())
+        U::downcast_from(self.into_content()).ok()
     }
 
     #[inline]
