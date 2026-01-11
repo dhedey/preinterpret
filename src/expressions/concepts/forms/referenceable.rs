@@ -29,13 +29,15 @@ impl MapFromArgument for BeReferenceable {
 pub(crate) struct OwnedToReferenceableMapper;
 
 impl LeafMapper<BeOwned> for OwnedToReferenceableMapper {
-    type OutputForm = BeReferenceable;
-    type ShortCircuit<'a> = Infallible;
+    type Output<'a, T: IsHierarchicalType> = MapperOutputContent<'a, T, BeReferenceable>;
 
-    fn map_leaf<'a, L: IsValueLeaf>(
-        self,
-        leaf: L,
-    ) -> Result<Rc<RefCell<L>>, Self::ShortCircuit<'a>> {
-        Ok(Rc::new(RefCell::new(leaf)))
+    fn to_parent_output<'a, T: IsChildType>(
+        output: Self::Output<'a, T>,
+    ) -> Self::Output<'a, T::ParentType> {
+        output.to_parent_output()
+    }
+
+    fn map_leaf<'a, T: IsLeafType>(self, leaf: T::Leaf) -> Self::Output<'a, T> {
+        MapperOutputContent::from_leaf(Rc::new(RefCell::new(leaf)))
     }
 }

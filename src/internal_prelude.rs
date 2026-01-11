@@ -5,7 +5,6 @@ pub(crate) use std::{
     borrow::Cow,
     cell::{Ref, RefCell, RefMut},
     collections::{BTreeMap, HashMap, HashSet},
-    convert::Infallible,
     fmt::Debug,
     iter,
     marker::PhantomData,

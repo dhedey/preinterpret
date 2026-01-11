@@ -25,7 +25,7 @@ pub(crate) trait IsHierarchicalType: IsType<Variant = HierarchicalTypeVariant> {
     fn map_with<'a, F: IsHierarchicalForm, M: LeafMapper<F>>(
         mapper: M,
         content: Self::Content<'a, F>,
-    ) -> Result<Self::Content<'a, M::OutputForm>, M::ShortCircuit<'a>>;
+    ) -> M::Output<'a, Self>;
 
     fn map_ref_with<'r, 'a: 'r, F: IsHierarchicalForm, M: RefLeafMapper<F>>(
         mapper: M,
@@ -361,10 +361,12 @@ macro_rules! define_parent_type {
             fn map_with<'a, F: IsHierarchicalForm, M: LeafMapper<F>>(
                 mapper: M,
                 content: Self::Content<'a, F>,
-            ) -> Result<Self::Content<'a, M::OutputForm>, M::ShortCircuit<'a>> {
-                Ok(match content {
-                    $( $content::$variant(x) => $content::$variant(<$variant_type>::map_with::<'a, F, M>(mapper, x)?), )*
-                })
+            ) -> M::Output<'a, Self> {
+                match content {
+                    $( $content::$variant(x) => M::to_parent_output::<'a, $variant_type>(
+                        <$variant_type>::map_with::<'a, F, M>(mapper, x)
+                    ), )*
+                }
             }
 
             fn map_ref_with<'r, 'a: 'r, F: IsHierarchicalForm, M: RefLeafMapper<F>>(
@@ -550,8 +552,8 @@ macro_rules! define_leaf_type {
             fn map_with<'a, F: IsHierarchicalForm, M: LeafMapper<F>>(
                 mapper: M,
                 content: Self::Content<'a, F>,
-            ) -> Result<Self::Content<'a, M::OutputForm>, M::ShortCircuit<'a>> {
-                mapper.map_leaf::<$content_type>(content)
+            ) -> M::Output<'a, Self> {
+                mapper.map_leaf::<Self>(content)
             }
 
             fn map_ref_with<'r, 'a: 'r, F: IsHierarchicalForm, M: RefLeafMapper<F>>(
@@ -886,23 +888,24 @@ macro_rules! define_dyn_type {
         impl<T: IsHierarchicalType, F: IsHierarchicalForm + IsDynCompatibleForm + IsDynMappableForm> DynResolveFrom<T, F> for $type_def
         {
             fn downcast_from<'a>(content: Content<'a, T, F>) -> Option<DynContent<'a, Self, F>> {
-                match T::map_with::<'a, F, _>(DynMapper::<$dyn_type>::new(), content) {
-                    Ok(_) => panic!("DynMapper is expected to always short-circuit"),
-                    Err(dyn_leaf) => dyn_leaf,
-                }
+                T::map_with::<'a, F, _>(DynMapper::<$dyn_type>::new(), content).0
             }
         }
 
         impl<F: IsDynMappableForm> LeafMapper<F> for DynMapper<$dyn_type> {
-            type OutputForm = BeOwned; // Unused
-            type ShortCircuit<'a> = Option<F::DynLeaf<'a, $dyn_type>>;
+            type Output<'a, T: IsHierarchicalType> =  MapperOutputValue<Option<F::DynLeaf<'a, $dyn_type>>>;
 
-            fn map_leaf<'a, L: IsValueLeaf>(
+            fn to_parent_output<'a, T: IsChildType>(
+                output: Self::Output<'a, T>,
+            ) -> Self::Output<'a, T::ParentType> {
+                output
+            }
+
+            fn map_leaf<'a, T: IsLeafType>(
                 self,
-                leaf: F::Leaf<'a, L>,
-            ) -> Result<<Self::OutputForm as IsHierarchicalForm>::Leaf<'a, L>, Self::ShortCircuit<'a>>
-            {
-                Err(F::leaf_to_dyn(leaf))
+                leaf: F::Leaf<'a, T::Leaf>,
+            ) -> Self::Output<'a, T> {
+                MapperOutputValue(F::leaf_to_dyn(leaf))
             }
         }
     };

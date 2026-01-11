@@ -1,13 +1,13 @@
 use super::*;
 
 pub(crate) trait LeafMapper<F: IsHierarchicalForm> {
-    type OutputForm: IsHierarchicalForm;
-    type ShortCircuit<'a>;
+    type Output<'a, T: IsHierarchicalType>: MapperOutput<T>;
 
-    fn map_leaf<'a, L: IsValueLeaf>(
-        self,
-        leaf: F::Leaf<'a, L>,
-    ) -> Result<<Self::OutputForm as IsHierarchicalForm>::Leaf<'a, L>, Self::ShortCircuit<'a>>;
+    fn to_parent_output<'a, T: IsChildType>(
+        output: Self::Output<'a, T>,
+    ) -> Self::Output<'a, T::ParentType>;
+
+    fn map_leaf<'a, T: IsLeafType>(self, leaf: F::Leaf<'a, T::Leaf>) -> Self::Output<'a, T>;
 }
 
 pub(crate) trait RefLeafMapper<F: IsHierarchicalForm> {

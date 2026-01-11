@@ -45,22 +45,18 @@ where
         self.upcast()
     }
 
-    fn map_with<M: LeafMapper<Self::Form>>(
-        self,
-        mapper: M,
-    ) -> Result<Content<'a, Self::Type, M::OutputForm>, M::ShortCircuit<'a>> {
+    fn map_with<M: LeafMapper<Self::Form>>(self, mapper: M) -> M::Output<'a, Self::Type> {
         <Self::Type>::map_with::<Self::Form, _>(mapper, self.into_content())
     }
 
     fn into_referenceable(self) -> Content<'a, Self::Type, BeReferenceable>
     where
-        for<'l> OwnedToReferenceableMapper:
-            LeafMapper<Self::Form, OutputForm = BeReferenceable, ShortCircuit<'l> = Infallible>,
+        for<'l> OwnedToReferenceableMapper: LeafMapper<
+            Self::Form,
+            Output<'l, Self::Type> = MapperOutputContent<'l, Self::Type, BeReferenceable>,
+        >,
     {
-        match self.map_with(OwnedToReferenceableMapper) {
-            Ok(output) => output,
-            Err(infallible) => match infallible {}, // Need to include because of MSRV
-        }
+        self.map_with(OwnedToReferenceableMapper).0
     }
 }
 
