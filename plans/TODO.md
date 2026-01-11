@@ -250,7 +250,7 @@ First, read the @./2025-11-vision.md
       - [x] Try to replace `ToRefMapper` etc with a `FormMapper::<T, F1, F2>::map_content(content, |x| -> y)` - 6 methods... `map_content`, `map_content_ref`, `map_content_mut` and `try_x` *3; ... and a `ReduceMapper::<F1, T>::map(content, |x| -> y)`... sadly not possible! The lambda needs to be higher-ordered and work for all `L: IsValueLeaf`.
     - [ ] Finish mapper improvements
       - [x] Migrate `self`
-      - [ ] Consider if we even need `MapperOutput` or just some helper functions
+      - [x] Consider if we even need `MapperOutput` or just some helper functions
       - [ ] Add a `Result<NewForm, OldForm>` variant which will allow us to delay resolving the type kind into the error case when downcasting
     - [ ] Create macro to define inline mappers in various forms
     - [ ] Create some macros to help build `self` / `&self` / `&mut self` methods across all contents of a form. Use `IsSelfCopyOnWriteContent` as an example to try implementing this

@@ -53,19 +53,19 @@ impl MapFromArgument for BeOwned {
 pub(crate) struct ToOwnedInfallibleMapper;
 
 impl<F: LeafAsRefForm> RefLeafMapper<F> for ToOwnedInfallibleMapper {
-    type Output<'r, 'a: 'r, T: IsHierarchicalType> = MapperOutputContent<'static, T, BeOwned>;
+    type Output<'r, 'a: 'r, T: IsHierarchicalType> = Content<'static, T, BeOwned>;
 
     fn to_parent_output<'r, 'a: 'r, T: IsChildType>(
         output: Self::Output<'r, 'a, T>,
     ) -> Self::Output<'r, 'a, T::ParentType> {
-        output.to_parent_output()
+        T::into_parent(output)
     }
 
     fn map_leaf<'r, 'a: 'r, T: IsLeafType>(
         self,
         leaf: &'r <F as IsHierarchicalForm>::Leaf<'a, T::Leaf>,
     ) -> Self::Output<'r, 'a, T> {
-        MapperOutputContent::from_leaf(F::leaf_clone_to_owned_infallible(leaf))
+        T::leaf_to_content(F::leaf_clone_to_owned_infallible(leaf))
     }
 }
 
@@ -74,22 +74,22 @@ pub(crate) struct ToOwnedTransparentlyMapper {
 }
 
 impl<F: LeafAsRefForm> RefLeafMapper<F> for ToOwnedTransparentlyMapper {
-    type Output<'r, 'a: 'r, T: IsHierarchicalType> =
-        ExecutionResult<MapperOutputContent<'static, T, BeOwned>>;
+    type Output<'r, 'a: 'r, T: IsHierarchicalType> = ExecutionResult<Content<'static, T, BeOwned>>;
 
     fn to_parent_output<'r, 'a: 'r, T: IsChildType>(
         output: Self::Output<'r, 'a, T>,
     ) -> Self::Output<'r, 'a, T::ParentType> {
-        output.to_parent_output()
+        Ok(T::into_parent(output?))
     }
 
     fn map_leaf<'r, 'a: 'r, T: IsLeafType>(
         self,
         leaf: &'r <F as IsHierarchicalForm>::Leaf<'a, T::Leaf>,
     ) -> Self::Output<'r, 'a, T> {
-        Ok(MapperOutputContent::from_leaf(
-            F::leaf_clone_to_owned_transparently(leaf, self.span_range)?,
-        ))
+        Ok(T::leaf_to_content(F::leaf_clone_to_owned_transparently(
+            leaf,
+            self.span_range,
+        )?))
     }
 }
 

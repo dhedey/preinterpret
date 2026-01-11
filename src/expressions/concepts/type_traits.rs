@@ -888,12 +888,12 @@ macro_rules! define_dyn_type {
         impl<T: IsHierarchicalType, F: IsHierarchicalForm + IsDynCompatibleForm + IsDynMappableForm> DynResolveFrom<T, F> for $type_def
         {
             fn downcast_from<'a>(content: Content<'a, T, F>) -> Option<DynContent<'a, Self, F>> {
-                T::map_with::<'a, F, _>(DynMapper::<$dyn_type>::new(), content).0
+                T::map_with::<'a, F, _>(DynMapper::<$dyn_type>::new(), content)
             }
         }
 
         impl<F: IsDynMappableForm> LeafMapper<F> for DynMapper<$dyn_type> {
-            type Output<'a, T: IsHierarchicalType> =  MapperOutputValue<Option<F::DynLeaf<'a, $dyn_type>>>;
+            type Output<'a, T: IsHierarchicalType> =  Option<F::DynLeaf<'a, $dyn_type>>;
 
             fn to_parent_output<'a, T: IsChildType>(
                 output: Self::Output<'a, T>,
@@ -905,7 +905,7 @@ macro_rules! define_dyn_type {
                 self,
                 leaf: F::Leaf<'a, T::Leaf>,
             ) -> Self::Output<'a, T> {
-                MapperOutputValue(F::leaf_to_dyn(leaf))
+                F::leaf_to_dyn(leaf)
             }
         }
     };

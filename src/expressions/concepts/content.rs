@@ -53,10 +53,10 @@ where
     where
         for<'l> OwnedToReferenceableMapper: LeafMapper<
             Self::Form,
-            Output<'l, Self::Type> = MapperOutputContent<'l, Self::Type, BeReferenceable>,
+            Output<'l, Self::Type> = Content<'l, Self::Type, BeReferenceable>,
         >,
     {
-        self.map_with(OwnedToReferenceableMapper).0
+        self.map_with(OwnedToReferenceableMapper)
     }
 }
 
@@ -138,7 +138,7 @@ where
         'a: 'r,
         Self::Form: LeafAsMutForm,
     {
-        self.map_mut_with(ToMutMapper).0
+        self.map_mut_with(ToMutMapper)
     }
 
     fn as_ref_value<'r>(&'r self) -> Content<'r, Self::Type, BeRef>
@@ -146,7 +146,7 @@ where
         'a: 'r,
         Self::Form: LeafAsRefForm,
     {
-        self.map_ref_with(ToRefMapper).0
+        self.map_ref_with(ToRefMapper)
     }
 
     /// This method should only be used when you are certain that the value should be cloned.
@@ -158,7 +158,7 @@ where
         Self::Form: LeafAsRefForm,
         Self: Sized,
     {
-        self.map_ref_with(ToOwnedInfallibleMapper).0
+        self.map_ref_with(ToOwnedInfallibleMapper)
     }
 
     /// A transparent clone is allowed for some types when doing method resolution.
@@ -176,7 +176,6 @@ where
         Self: Sized,
     {
         self.map_ref_with(ToOwnedTransparentlyMapper { span_range })
-            .map(|x| x.0)
     }
 }
 
