@@ -11,89 +11,93 @@ pub(crate) trait LeafMapper<F: IsHierarchicalForm> {
 }
 
 pub(crate) trait RefLeafMapper<F: IsHierarchicalForm> {
-    type OutputForm: IsHierarchicalForm;
-    type ShortCircuit<'a>;
+    type Output<'r, 'a: 'r, T: IsHierarchicalType>: MapperOutput<T>;
 
-    fn map_leaf<'r, 'a: 'r, L: IsValueLeaf>(
+    fn to_parent_output<'r, 'a: 'r, T: IsChildType>(
+        output: Self::Output<'r, 'a, T>,
+    ) -> Self::Output<'r, 'a, T::ParentType>;
+
+    fn map_leaf<'r, 'a: 'r, T: IsLeafType>(
         self,
-        leaf: &'r F::Leaf<'a, L>,
-    ) -> Result<<Self::OutputForm as IsHierarchicalForm>::Leaf<'r, L>, Self::ShortCircuit<'a>>;
+        leaf: &'r F::Leaf<'a, T::Leaf>,
+    ) -> Self::Output<'r, 'a, T>;
 }
 
 pub(crate) trait MutLeafMapper<F: IsHierarchicalForm> {
-    type OutputForm: IsHierarchicalForm;
-    type ShortCircuit<'a>;
+    type Output<'r, 'a: 'r, T: IsHierarchicalType>: MapperOutput<T>;
 
-    fn map_leaf<'r, 'a: 'r, L: IsValueLeaf>(
+    fn to_parent_output<'r, 'a: 'r, T: IsChildType>(
+        output: Self::Output<'r, 'a, T>,
+    ) -> Self::Output<'r, 'a, T::ParentType>;
+
+    fn map_leaf<'r, 'a: 'r, T: IsLeafType>(
         self,
-        leaf: &'r mut F::Leaf<'a, L>,
-    ) -> Result<<Self::OutputForm as IsHierarchicalForm>::Leaf<'r, L>, Self::ShortCircuit<'a>>;
+        leaf: &'r mut F::Leaf<'a, T::Leaf>,
+    ) -> Self::Output<'r, 'a, T>;
 }
 
-// pub(crate) trait MutLeafMapper<F: IsHierarchicalForm> {
-//     type Output<'r, 'a: 'r>;
+pub(crate) trait MapperOutput<T: IsHierarchicalType> {
+    type ParentOutput: MapperOutput<<T as IsChildType>::ParentType>
+    where
+        T: IsChildType;
 
-//     fn map_leaf<'r, 'a: 'r, T: IsType, L: IsValueLeaf>(
-//         self,
-//         leaf: &'r mut F::Leaf<'a, L>,
-//     ) -> Self::Output<'r, 'a>
-//     where
-//         for<'x> &'x mut L: IsValueContent<'x, Form = BeMut, Type = T>,
-//         T: UpcastTo<AnyType, BeMut>,
-//         BeMut: IsFormOf<T, Content<'r> = &'r mut L>,
-//     ;
-// }
+    fn to_parent_output(self) -> Self::ParentOutput
+    where
+        T: IsChildType;
+}
 
-// impl<L: IsValueLeaf> IsMutValueLeaf for L
-// where
-//     for<'x> &'x mut L: IsValueContent<'x, Form = BeMut>,
-//     for<'x> <&'x mut L as IsValueContent<'x>>::Type: UpcastTo<AnyType, BeMut>,
-// {
-//     type MutType<'a> = <&'a mut L as IsValueContent<'a>>::Type;
-// }
+pub(crate) struct MapperOutputValue<O>(pub(crate) O);
 
-// pub(crate) trait MutLeafMapper<F: IsHierarchicalForm> {
-//     type Output<'r, 'a: 'r, T>: MapperOutput;
+impl<T: IsHierarchicalType, O> MapperOutput<T> for MapperOutputValue<O> {
+    type ParentOutput
+        = Self
+    where
+        T: IsChildType;
 
-//     fn map_leaf<'r, 'a: 'r, T: IsType, L: IsValueLeaf>(
-//         self,
-//         leaf: &'r mut F::Leaf<'a, L>,
-//     ) -> Self::Output<'r, 'a, T>;
-// }
+    fn to_parent_output(self) -> Self::ParentOutput
+    where
+        T: IsChildType,
+    {
+        self
+    }
+}
 
-// pub(crate) trait MapperOutput {}
+pub(crate) struct MapperOutputContent<'a, T: IsHierarchicalType, F: IsHierarchicalForm>(
+    pub(crate) Content<'a, T, F>,
+);
 
-// pub(crate) trait MapperOutputToParent<P: IsHierarchicalType>: MapperOutput {
-//     type ParentOutput: MapperOutput;
+impl<'a, T: IsLeafType, F: IsHierarchicalForm> MapperOutputContent<'a, T, F> {
+    pub(crate) fn from_leaf(leaf: F::Leaf<'a, T::Leaf>) -> Self {
+        Self(T::leaf_to_content(leaf))
+    }
+}
 
-//     fn to_parent_output(self) -> Self::ParentOutput;
-// }
+impl<'a, T: IsHierarchicalType, F: IsHierarchicalForm> MapperOutput<T>
+    for MapperOutputContent<'a, T, F>
+{
+    type ParentOutput
+        = MapperOutputContent<'a, T::ParentType, F>
+    where
+        T: IsChildType;
 
-// pub(crate) struct MapperOutputValue<O>(pub(crate) O);
+    fn to_parent_output(self) -> Self::ParentOutput
+    where
+        T: IsChildType,
+    {
+        MapperOutputContent::<'a, T::ParentType, F>(T::into_parent::<F>(self.0))
+    }
+}
 
-// impl<O> MapperOutput for MapperOutputValue<O> {}
+impl<T: IsHierarchicalType, X: MapperOutput<T>> MapperOutput<T> for ExecutionResult<X> {
+    type ParentOutput
+        = ExecutionResult<X::ParentOutput>
+    where
+        T: IsChildType;
 
-// impl<P: IsHierarchicalType, O> MapperOutputToParent<P> for MapperOutputValue<O> {
-//     type ParentOutput = Self;
-
-//     fn to_parent_output(self) -> Self::ParentOutput {
-//         self
-//     }
-// }
-
-// pub(crate) struct MapperOutputContent<'a, T: IsType, F: IsFormOf<T>>(pub(crate) F::Content<'a>);
-
-// impl<'a, T: IsType, F: IsFormOf<T>> MapperOutput for MapperOutputContent<'a, T, F> {}
-
-// impl<'a, P: IsHierarchicalType, C: IsChildType<ParentType = P>, F: IsHierarchicalForm + IsFormOf<C> + IsFormOf<P>>
-//     MapperOutputToParent<P> for MapperOutputContent<'a, C, F>
-// where
-//     for<'l> C: IsHierarchicalType<Content<'l, F> = <F as IsFormOf<C>>::Content<'l>>,
-//     for<'l> P: IsHierarchicalType<Content<'l, F> = <F as IsFormOf<P>>::Content<'l>>,
-// {
-//     type ParentOutput = MapperOutputContent<'a, P, F>;
-
-//     fn to_parent_output(self) -> Self::ParentOutput {
-//         MapperOutputContent::<'a, P, F>(C::into_parent::<F>(self.0))
-//     }
-// }
+    fn to_parent_output(self) -> Self::ParentOutput
+    where
+        T: IsChildType,
+    {
+        self.map(|x| x.to_parent_output())
+    }
+}

@@ -1,5 +1,3 @@
-use std::mem::transmute;
-
 use super::*;
 
 /// Shorthand for representing the form F of a type T with a particular lifetime 'a.
@@ -122,21 +120,21 @@ where
     fn map_mut_with<'r, M: MutLeafMapper<Self::Form>>(
         &'r mut self,
         mapper: M,
-    ) -> Result<Content<'r, Self::Type, M::OutputForm>, M::ShortCircuit<'a>>
+    ) -> M::Output<'r, 'a, Self::Type>
     where
         'a: 'r,
     {
-        <Self::Type>::map_mut_with::<Self::Form, _>(mapper, self)
+        <Self::Type>::map_mut_with::<Self::Form, M>(mapper, self)
     }
 
     fn map_ref_with<'r, M: RefLeafMapper<Self::Form>>(
         &'r self,
         mapper: M,
-    ) -> Result<Content<'r, Self::Type, M::OutputForm>, M::ShortCircuit<'a>>
+    ) -> M::Output<'r, 'a, Self::Type>
     where
         'a: 'r,
     {
-        <Self::Type>::map_ref_with::<Self::Form, _>(mapper, self)
+        <Self::Type>::map_ref_with::<Self::Form, M>(mapper, self)
     }
 
     fn as_mut_value<'r>(&'r mut self) -> Content<'r, Self::Type, BeMut>
@@ -144,10 +142,7 @@ where
         'a: 'r,
         Self::Form: LeafAsMutForm,
     {
-        match self.map_mut_with(ToMutMapper) {
-            Ok(x) => x,
-            Err(infallible) => match infallible {}, // Need to include because of MSRV
-        }
+        self.map_mut_with(ToMutMapper).0
     }
 
     fn as_ref_value<'r>(&'r self) -> Content<'r, Self::Type, BeRef>
@@ -155,10 +150,7 @@ where
         'a: 'r,
         Self::Form: LeafAsRefForm,
     {
-        match self.map_ref_with(ToRefMapper) {
-            Ok(x) => x,
-            Err(infallible) => match infallible {}, // Need to include because of MSRV
-        }
+        self.map_ref_with(ToRefMapper).0
     }
 
     /// This method should only be used when you are certain that the value should be cloned.
@@ -170,19 +162,7 @@ where
         Self::Form: LeafAsRefForm,
         Self: Sized,
     {
-        let mapped = match self.map_ref_with(ToOwnedInfallibleMapper) {
-            Ok(x) => x,
-            Err(infallible) => match infallible {}, // Need to include because of MSRV
-        };
-        // SAFETY: All owned values don't make use of the lifetime parameter,
-        // so we can safely transmute to 'static here.
-        // I'd have liked to make this a where bound, but type resolution gets stuck in
-        // an infinite loop in that case.
-        unsafe {
-            transmute::<Content<'r, Self::Type, BeOwned>, Content<'static, Self::Type, BeOwned>>(
-                mapped,
-            )
-        }
+        self.map_ref_with(ToOwnedInfallibleMapper).0
     }
 
     /// A transparent clone is allowed for some types when doing method resolution.
@@ -199,19 +179,8 @@ where
         Self::Form: LeafAsRefForm,
         Self: Sized,
     {
-        let mapped = self.map_ref_with(ToOwnedTransparentlyMapper { span_range });
-        // SAFETY: All owned values don't make use of the lifetime parameter,
-        // so we can safely transmute to 'static here.
-        // I'd have liked to make this a where bound, but type resolution gets stuck in
-        // an infinite loop in that case.
-        unsafe {
-            #[allow(clippy::useless_transmute)]
-            // Clippy thinks these types are identical but is wrong here
-            transmute::<
-                ExecutionResult<Content<'r, Self::Type, BeOwned>>,
-                ExecutionResult<Content<'static, Self::Type, BeOwned>>,
-            >(mapped)
-        }
+        self.map_ref_with(ToOwnedTransparentlyMapper { span_range })
+            .map(|x| x.0)
     }
 }
 

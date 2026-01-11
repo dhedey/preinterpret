@@ -30,12 +30,12 @@ pub(crate) trait IsHierarchicalType: IsType<Variant = HierarchicalTypeVariant> {
     fn map_ref_with<'r, 'a: 'r, F: IsHierarchicalForm, M: RefLeafMapper<F>>(
         mapper: M,
         content: &'r Self::Content<'a, F>,
-    ) -> Result<Self::Content<'r, M::OutputForm>, M::ShortCircuit<'a>>;
+    ) -> M::Output<'r, 'a, Self>;
 
     fn map_mut_with<'r, 'a: 'r, F: IsHierarchicalForm, M: MutLeafMapper<F>>(
         mapper: M,
         content: &'r mut Self::Content<'a, F>,
-    ) -> Result<Self::Content<'r, M::OutputForm>, M::ShortCircuit<'a>>;
+    ) -> M::Output<'r, 'a, Self>;
 
     fn content_to_leaf_kind<F: IsHierarchicalForm>(
         content: &Self::Content<'_, F>,
@@ -43,6 +43,12 @@ pub(crate) trait IsHierarchicalType: IsType<Variant = HierarchicalTypeVariant> {
 }
 
 pub(crate) trait IsLeafType: IsHierarchicalType {
+    type Leaf: IsValueLeaf;
+
+    fn leaf_to_content<'a, F: IsHierarchicalForm>(
+        leaf: F::Leaf<'a, Self::Leaf>,
+    ) -> Self::Content<'a, F>;
+
     fn leaf_kind() -> Self::LeafKind;
 }
 
@@ -364,19 +370,23 @@ macro_rules! define_parent_type {
             fn map_ref_with<'r, 'a: 'r, F: IsHierarchicalForm, M: RefLeafMapper<F>>(
                 mapper: M,
                 content: &'r Self::Content<'a, F>,
-            ) -> Result<Self::Content<'r, M::OutputForm>, M::ShortCircuit<'a>> {
-                Ok(match content {
-                    $( $content::$variant(x) => $content::$variant(<$variant_type>::map_ref_with::<'r, 'a, F, M>(mapper, x)?), )*
-                })
+            ) -> M::Output<'r, 'a, Self> {
+                match content {
+                    $( $content::$variant(x) => M::to_parent_output::<'r, 'a, $variant_type>(
+                        <$variant_type>::map_ref_with::<'r, 'a, F, M>(mapper, x)
+                    ), )*
+                }
             }
 
             fn map_mut_with<'r, 'a: 'r, F: IsHierarchicalForm, M: MutLeafMapper<F>>(
                 mapper: M,
                 content: &'r mut Self::Content<'a, F>,
-            ) -> Result<Self::Content<'r, M::OutputForm>, M::ShortCircuit<'a>> {
-                Ok(match content {
-                    $( $content::$variant(x) => $content::$variant(<$variant_type>::map_mut_with::<'r, 'a, F, M>(mapper, x)?), )*
-                })
+            ) -> M::Output<'r, 'a, Self> {
+                match content {
+                    $( $content::$variant(x) => M::to_parent_output::<'r, 'a, $variant_type>(
+                        <$variant_type>::map_mut_with::<'r, 'a, F, M>(mapper, x)
+                    ), )*
+                }
             }
 
             fn content_to_leaf_kind<F: IsHierarchicalForm>(
@@ -547,15 +557,15 @@ macro_rules! define_leaf_type {
             fn map_ref_with<'r, 'a: 'r, F: IsHierarchicalForm, M: RefLeafMapper<F>>(
                 mapper: M,
                 content: &'r Self::Content<'a, F>,
-            ) -> Result<Self::Content<'r, M::OutputForm>, M::ShortCircuit<'a>> {
-                mapper.map_leaf::<$content_type>(content)
+            ) -> M::Output<'r, 'a, Self> {
+                mapper.map_leaf::<Self>(content)
             }
 
             fn map_mut_with<'r, 'a: 'r, F: IsHierarchicalForm, M: MutLeafMapper<F>>(
                 mapper: M,
                 content: &'r mut Self::Content<'a, F>,
-            ) -> Result<Self::Content<'r, M::OutputForm>, M::ShortCircuit<'a>> {
-                mapper.map_leaf::<$content_type>(content)
+            ) -> M::Output<'r, 'a, Self> {
+                mapper.map_leaf::<Self>(content)
             }
 
             fn content_to_leaf_kind<F: IsHierarchicalForm>(
@@ -566,6 +576,14 @@ macro_rules! define_leaf_type {
         }
 
         impl IsLeafType for $type_def {
+            type Leaf = $content_type;
+
+            fn leaf_to_content<'a, F: IsHierarchicalForm>(
+                leaf: F::Leaf<'a, Self::Leaf>,
+            ) -> Self::Content<'a, F> {
+                leaf
+            }
+
             fn leaf_kind() -> $kind {
                 $kind
             }

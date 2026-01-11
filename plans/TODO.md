@@ -248,38 +248,12 @@ First, read the @./2025-11-vision.md
   - [ ] Stage 2 of the form migration:
     - [x] Attempt to improve mappers:
       - [x] Try to replace `ToRefMapper` etc with a `FormMapper::<T, F1, F2>::map_content(content, |x| -> y)` - 6 methods... `map_content`, `map_content_ref`, `map_content_mut` and `try_x` *3; ... and a `ReduceMapper::<F1, T>::map(content, |x| -> y)`... sadly not possible! The lambda needs to be higher-ordered and work for all `L: IsValueLeaf`.
-    - [ ] Create macro to define all 15 variants of mapper:
-      - [ ] Optional state
-      - [ ] Optional bounds on Form or Type
-      - [ ] Input: `(self, &self, &mut self)`
-      - [ ] Output: (`Leaf`, `TryLeaf`) x (`'r` bound / `'static` bound) or `Reduce`
-        - [ ] Content<F, 'r>
-        - [ ] Content<F, 'static>
-        - [ ] Result<Infallible, Fixed>
-        - [ ] Result<Result<Content<F, 'r>, OldContent<FOld, 'r>>, Infallible>
-      - [ ] Remove `LeafLifetimeCapture: LeafLifetimeSpecifier` if it's not useful
-      - [ ] ONE POSSIBLE SOLUTION:
-        - See commented out code in mapping.rs - doesn't work well because
-          in a parent, it's hard / impossible to come up with the where constraints needed to allow the compiler to find and type check the `to_parent_output` call... and constrains the type to the leaf
-        - [ ] Introduce on Mapper: `type Output<'a, 'r, FIn, T>: MapperOutput<T>`
-        - [ ] `trait MapperOutput<T: Type>` has a method `to_parent() where T: IsChildType`
-        - [ ] Example outputs include:
-          - [ ] `MapperOutputValue<O>(O)` which is valid for all `T`
-          - [ ] `MapperOutputContent<'r, F, T>(<'r Content>)`
-          - [ ] `MapperOutputStaticContent<F, T>(<'static Content>)` (if needed? Can probably just use `MapperOutputContent<'static, F, T>`)
-          - [ ] `MapperOutputTryContent<'i, Fin,'o Fout>(Result<'o 'Fout Content, 'i Fin Content>)`
-      - [ ] SECOND POSSIBLE SOLUTION - no go.
-        - Just use `upcast()` so that the mapper can return a fixed value.
-        - The issue is that the leaf mapper works on *any leaf*, but e.g. an `as_mut_value()` might be expected to return an `IntegerValueMutable<'a>`, and I can't express a generic trait across all L such that it works.
-      - [ ] CURRENT SUGGESTED APPROACH:
-        - Remove `FormOf<T>`
-        - Try SOLUTION ONE again 
-      - [ ] ... Can we make this simpler somehow; to reduce the number of implementations on each type (or at least each leaf) and improve compile time?
-        - [ ] Combining lifetimes ==> Tried adding a `<'o>` - FAILED. Couldn't find a way to determine an 'o which worked for all `L`, as `for<L>` isn't a thing.
-        - [ ] Combining `self` / `&self` / `&mut self`
-        - [ ] Combining output kinds?
-    - [ ] Create some macros to help build `self` / `&self` / `&mut self` methods across all contents
-    of a form. Use `IsSelfCopyOnWriteContent` as an example to try implementing this
+    - [ ] Finish mapper improvements
+      - [ ] Migrate `self`
+      - [ ] Consider if we even need `MapperOutput` or just some helper functions
+      - [ ] Add a `Result<NewForm, OldForm>` variant which will allow us to delay resolving the type kind into the error case when downcasting
+    - [ ] Create macro to define inline mappers in various forms
+    - [ ] Create some macros to help build `self` / `&self` / `&mut self` methods across all contents of a form. Use `IsSelfCopyOnWriteContent` as an example to try implementing this
     - [ ] Get rid of `CopyOnWrite<T>`, have only CopyOnWriteValue
     - [ ] Get rid of `Shared<T>`, `Mutable<T>` and `Assignee<T>`, have only `AnyValueMutable` or other named kinds
     - [ ] Migrate `Shared`, `Mutable`, `Assignee`

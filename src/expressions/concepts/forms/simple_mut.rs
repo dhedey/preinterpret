@@ -34,47 +34,18 @@ impl LeafAsRefForm for BeMut {
 pub(crate) struct ToMutMapper;
 
 impl<F: LeafAsMutForm> MutLeafMapper<F> for ToMutMapper {
-    type OutputForm = BeMut;
-    type ShortCircuit<'a> = Infallible;
+    type Output<'r, 'a: 'r, T: IsHierarchicalType> = MapperOutputContent<'r, T, BeMut>;
 
-    fn map_leaf<'r, 'a: 'r, L: IsValueLeaf>(
+    fn to_parent_output<'r, 'a: 'r, T: IsChildType>(
+        output: Self::Output<'r, 'a, T>,
+    ) -> Self::Output<'r, 'a, T::ParentType> {
+        output.to_parent_output()
+    }
+
+    fn map_leaf<'r, 'a: 'r, T: IsLeafType>(
         self,
-        leaf: &'r mut F::Leaf<'a, L>,
-    ) -> Result<&'r mut L, Infallible> {
-        Ok(F::leaf_as_mut(leaf))
+        leaf: &'r mut F::Leaf<'a, T::Leaf>,
+    ) -> Self::Output<'r, 'a, T> {
+        MapperOutputContent::from_leaf(F::leaf_as_mut(leaf))
     }
 }
-
-// impl<F: LeafAsMutForm + IsFormOf<AnyType>> MutLeafMapper<F> for ToMutMapper {
-//     type Output<'r, 'a: 'r> = AnyValueContent<'r, BeMut>;
-
-//     fn map_leaf<'r, 'a: 'r, L: IsValueLeaf>(
-//         self,
-//         leaf: &'r mut F::Leaf<'a, L>,
-//     ) -> Self::Output<'r, 'a>
-//     where
-//         for<'x> &'x mut L: IsValueContent<'x, Form = BeMut>,
-//         for<'x> <&'x mut L as IsValueContent<'x>>::Type: UpcastTo<AnyType, BeMut>,
-//         BeMut: for<'x> IsFormOf<<&'x mut L as IsValueContent<'x>>::Type, Content<'r> = &'r mut L>,
-//     {
-//         let my_mut = F::leaf_as_mut(leaf);
-//         <<&'r mut L as IsValueContent<'r>>::Type as UpcastTo<AnyType, BeMut>>::upcast_to(my_mut)
-//     }
-// }
-
-// impl<F: LeafAsMutForm + IsFormOf<AnyType>> MutLeafMapper<F> for ToMutMapper {
-//     type Output<'r, 'a: 'r> = AnyValueContent<'r, BeMut>;
-
-//     fn map_leaf<'r, 'a: 'r, T: IsType, L: IsValueLeaf>(
-//         self,
-//         leaf: &'r mut F::Leaf<'a, L>,
-//     ) -> Self::Output<'r, 'a>
-//     where
-//         for<'x> &'x mut L: IsValueContent<'x, Form = BeMut, Type = T>,
-//         T: UpcastTo<AnyType, BeMut>,
-//         BeMut: IsFormOf<T, Content<'r> = &'r mut L>,
-//     {
-//         let my_mut = F::leaf_as_mut(leaf);
-//         <<&'r mut L as IsValueContent<'r>>::Type as UpcastTo<AnyType, BeMut>>::upcast_to(my_mut)
-//     }
-// }

@@ -34,13 +34,18 @@ impl LeafAsRefForm for BeRef {
 pub(crate) struct ToRefMapper;
 
 impl<F: LeafAsRefForm> RefLeafMapper<F> for ToRefMapper {
-    type OutputForm = BeRef;
-    type ShortCircuit<'a> = Infallible;
+    type Output<'r, 'a: 'r, T: IsHierarchicalType> = MapperOutputContent<'r, T, BeRef>;
 
-    fn map_leaf<'r, 'a: 'r, L: IsValueLeaf>(
+    fn to_parent_output<'r, 'a: 'r, T: IsChildType>(
+        output: Self::Output<'r, 'a, T>,
+    ) -> Self::Output<'r, 'a, T::ParentType> {
+        output.to_parent_output()
+    }
+
+    fn map_leaf<'r, 'a: 'r, T: IsLeafType>(
         self,
-        leaf: &'r F::Leaf<'a, L>,
-    ) -> Result<&'r L, Infallible> {
-        Ok(F::leaf_as_ref(leaf))
+        leaf: &'r <F as IsHierarchicalForm>::Leaf<'a, T::Leaf>,
+    ) -> Self::Output<'r, 'a, T> {
+        MapperOutputContent::from_leaf(F::leaf_as_ref(leaf))
     }
 }
