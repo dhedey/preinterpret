@@ -54,11 +54,12 @@ where
     }
 
     #[inline]
-    fn downcast<U>(self) -> Option<Content<'a, U, Self::Form>>
+    #[allow(clippy::type_complexity)] // It's actually pretty readable
+    fn downcast<U>(self) -> Result<Content<'a, U, Self::Form>, Content<'a, Self::Type, Self::Form>>
     where
         U: DowncastFrom<Self::Type, Self::Form>,
     {
-        U::downcast_from(self.into_content()).ok()
+        U::downcast_from(self.into_content())
     }
 
     #[inline]
