@@ -70,18 +70,16 @@ where
         self.upcast()
     }
 
-    fn map_with<M: LeafMapper<Self::Form>>(self, mapper: M) -> M::Output<'a, Self::Type> {
-        <Self::Type>::map_with::<Self::Form, M>(mapper, self.into_content())
-    }
-
     fn into_referenceable(self) -> Content<'a, Self::Type, BeReferenceable>
     where
-        for<'l> OwnedToReferenceableMapper: LeafMapper<
-            Self::Form,
-            Output<'l, Self::Type> = Content<'l, Self::Type, BeReferenceable>,
-        >,
+        Self: IsValueContent<'a, Form = BeOwned>,
     {
-        self.map_with(OwnedToReferenceableMapper)
+        map_via_leaf! {
+            input: (Content<'a, Self::Type, Self::Form>) = self.into_content(),
+            fn map_leaf<F = BeOwned, T>(leaf) -> (Content<'a, T, BeReferenceable>) {
+                T::leaf_to_content(Rc::new(RefCell::new(leaf)))
+            }
+        }
     }
 }
 
@@ -124,32 +122,17 @@ where
     Self::Type: IsHierarchicalType<Content<'a, Self::Form> = Self>,
     Self::Form: IsHierarchicalForm,
 {
-    fn map_mut_with<'r, M: MutLeafMapper<Self::Form>>(
-        &'r mut self,
-        mapper: M,
-    ) -> M::Output<'r, 'a, Self::Type>
-    where
-        'a: 'r,
-    {
-        <Self::Type>::map_mut_with::<Self::Form, M>(mapper, self)
-    }
-
-    fn map_ref_with<'r, M: RefLeafMapper<Self::Form>>(
-        &'r self,
-        mapper: M,
-    ) -> M::Output<'r, 'a, Self::Type>
-    where
-        'a: 'r,
-    {
-        <Self::Type>::map_ref_with::<Self::Form, M>(mapper, self)
-    }
-
     fn as_mut_value<'r>(&'r mut self) -> Content<'r, Self::Type, BeMut>
     where
         'a: 'r,
         Self::Form: LeafAsMutForm,
     {
-        self.map_mut_with(ToMutMapper)
+        map_via_leaf! {
+            input: &'r mut (Content<'a, Self::Type, Self::Form>) = self,
+            fn map_leaf<F: LeafAsMutForm, T>(leaf) -> (Content<'r, T, BeMut>) {
+                T::leaf_to_content(F::leaf_as_mut(leaf))
+            }
+        }
     }
 
     fn as_ref_value<'r>(&'r self) -> Content<'r, Self::Type, BeRef>
@@ -157,7 +140,12 @@ where
         'a: 'r,
         Self::Form: LeafAsRefForm,
     {
-        self.map_ref_with(ToRefMapper)
+        map_via_leaf! {
+            input: &'r (Content<'a, Self::Type, Self::Form>) = self,
+            fn map_leaf<F: LeafAsRefForm, T>(leaf) -> (Content<'r, T, BeRef>) {
+                T::leaf_to_content(F::leaf_as_ref(leaf))
+            }
+        }
     }
 
     /// This method should only be used when you are certain that the value should be cloned.
@@ -169,7 +157,12 @@ where
         Self::Form: LeafAsRefForm,
         Self: Sized,
     {
-        self.map_ref_with(ToOwnedInfallibleMapper)
+        map_via_leaf! {
+            input: &'r (Content<'a, Self::Type, Self::Form>) = self,
+            fn map_leaf<F: LeafAsRefForm, T>(leaf) -> (Content<'static, T, BeOwned>) {
+                T::leaf_to_content(F::leaf_clone_to_owned_infallible(leaf))
+            }
+        }
     }
 
     /// A transparent clone is allowed for some types when doing method resolution.
@@ -186,7 +179,13 @@ where
         Self::Form: LeafAsRefForm,
         Self: Sized,
     {
-        self.map_ref_with(ToOwnedTransparentlyMapper { span_range })
+        map_via_leaf! {
+            input: &'r (Content<'a, Self::Type, Self::Form>) = self,
+            state: SpanRange | let span_range = span_range,
+            fn map_leaf<F: LeafAsRefForm, T>(leaf) -> (ExecutionResult<Content<'static, T, BeOwned>>) {
+                Ok(T::leaf_to_content(F::leaf_clone_to_owned_transparently(leaf, span_range)?))
+            }
+        }
     }
 }
 

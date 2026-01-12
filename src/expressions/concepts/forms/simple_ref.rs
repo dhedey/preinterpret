@@ -33,22 +33,3 @@ impl LeafAsRefForm for BeRef {
         leaf
     }
 }
-
-pub(crate) struct ToRefMapper;
-
-impl<F: LeafAsRefForm> RefLeafMapper<F> for ToRefMapper {
-    type Output<'r, 'a: 'r, T: IsHierarchicalType> = Content<'r, T, BeRef>;
-
-    fn to_parent_output<'r, 'a: 'r, T: IsChildType>(
-        output: Self::Output<'r, 'a, T>,
-    ) -> Self::Output<'r, 'a, T::ParentType> {
-        T::into_parent(output)
-    }
-
-    fn map_leaf<'r, 'a: 'r, T: IsLeafType>(
-        self,
-        leaf: &'r <F as IsHierarchicalForm>::Leaf<'a, T>,
-    ) -> Self::Output<'r, 'a, T> {
-        T::leaf_to_content(F::leaf_as_ref(leaf))
-    }
-}

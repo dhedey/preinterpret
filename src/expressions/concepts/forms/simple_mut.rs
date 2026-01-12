@@ -33,22 +33,3 @@ impl LeafAsRefForm for BeMut {
         leaf
     }
 }
-
-pub(crate) struct ToMutMapper;
-
-impl<F: LeafAsMutForm> MutLeafMapper<F> for ToMutMapper {
-    type Output<'r, 'a: 'r, T: IsHierarchicalType> = Content<'r, T, BeMut>;
-
-    fn to_parent_output<'r, 'a: 'r, T: IsChildType>(
-        output: Self::Output<'r, 'a, T>,
-    ) -> Self::Output<'r, 'a, T::ParentType> {
-        T::into_parent(output)
-    }
-
-    fn map_leaf<'r, 'a: 'r, T: IsLeafType>(
-        self,
-        leaf: &'r mut F::Leaf<'a, T>,
-    ) -> Self::Output<'r, 'a, T> {
-        T::leaf_to_content(F::leaf_as_mut(leaf))
-    }
-}

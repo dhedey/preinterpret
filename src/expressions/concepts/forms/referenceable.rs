@@ -25,19 +25,3 @@ impl MapFromArgument for BeReferenceable {
         todo!()
     }
 }
-
-pub(crate) struct OwnedToReferenceableMapper;
-
-impl LeafMapper<BeOwned> for OwnedToReferenceableMapper {
-    type Output<'a, T: IsHierarchicalType> = Content<'a, T, BeReferenceable>;
-
-    fn to_parent_output<'a, T: IsChildType>(
-        output: Self::Output<'a, T>,
-    ) -> Self::Output<'a, T::ParentType> {
-        T::into_parent(output)
-    }
-
-    fn map_leaf<'a, T: IsLeafType>(self, leaf: T::Leaf) -> Self::Output<'a, T> {
-        T::leaf_to_content(Rc::new(RefCell::new(leaf)))
-    }
-}

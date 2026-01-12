@@ -1,7 +1,5 @@
 use super::*;
 
-pub(crate) type QqqCopyOnWrite<T> = Content<'static, T, BeCopyOnWrite>;
-
 #[derive(Copy, Clone)]
 pub(crate) struct BeCopyOnWrite;
 impl IsForm for BeCopyOnWrite {}
@@ -37,6 +35,29 @@ impl MapFromArgument for BeCopyOnWrite {
     }
 }
 
+impl LeafAsRefForm for BeCopyOnWrite {
+    fn leaf_as_ref<'r, 'a: 'r, T: IsLeafType>(leaf: &'r Self::Leaf<'a, T>) -> &'r T::Leaf {
+        match leaf {
+            CopyOnWriteContent::Owned(owned) => owned,
+            CopyOnWriteContent::SharedWithInfallibleCloning(shared) => shared,
+            CopyOnWriteContent::SharedWithTransparentCloning(shared) => shared,
+        }
+    }
+
+    fn leaf_clone_to_owned_infallible<'r, 'a: 'r, T: IsLeafType>(
+        leaf: &'r Self::Leaf<'a, T>,
+    ) -> T::Leaf {
+        todo!("Need to copy the custom implementation")
+    }
+
+    fn leaf_clone_to_owned_transparently<'r, 'a: 'r, T: IsLeafType>(
+        leaf: &'r Self::Leaf<'a, T>,
+        error_span: SpanRange,
+    ) -> ExecutionResult<T::Leaf> {
+        todo!("Need to copy the custom implementation")
+    }
+}
+
 /// Typically O == T or more specifically, <T as ToOwned>::Owned
 pub(crate) enum CopyOnWriteContent<T: 'static + ?Sized, O: 'static> {
     /// An owned value that can be used directly
@@ -49,19 +70,28 @@ pub(crate) enum CopyOnWriteContent<T: 'static + ?Sized, O: 'static> {
     SharedWithTransparentCloning(Shared<T>),
 }
 
-// pub(crate) trait IsSelfCopyOnWriteContent<'a>: IsSelfValueContent<'a>
-// where
-//     Self: IsValueContent<'a, Form = BeCopyOnWrite>,
-//     BeCopyOnWrite: IsFormOf<<Self as IsValueContent<'a>>::Type, Content<'a> = Self>,
-// {
-//     fn acts_as_shared_reference(&self) -> bool {
-//         struct ThisMapper;
-//         impl
-//         self.map_ref_with(mapper)
-//     }
-// }
+pub(crate) trait IsSelfCopyOnWriteContent<'a>: IsSelfValueContent<'a>
+where
+    Self: IsValueContent<'a, Form = BeCopyOnWrite>,
+    Self::Type: IsHierarchicalType<Content<'a, Self::Form> = Self>,
+{
+    fn acts_as_shared_reference(&self) -> bool {
+        map_via_leaf! {
+            input: &'r (Content<'a, Self::Type, Self::Form>) = self,
+            fn map_leaf<F = BeCopyOnWrite, T>(leaf) -> (bool) {
+                match leaf {
+                    CopyOnWriteContent::Owned(_) => false,
+                    CopyOnWriteContent::SharedWithInfallibleCloning(_) => false,
+                    CopyOnWriteContent::SharedWithTransparentCloning(_) => true,
+                }
+            }
+        }
+    }
+}
 
-// impl<'a, C: IsSelfValueContent<'a>> IsSelfCopyOnWriteContent<'a> for A
-// where
-//     Self: IsValueContent<'a, Form = BeCopyOnWrite>,
-// {}
+impl<'a, C: IsSelfValueContent<'a>> IsSelfCopyOnWriteContent<'a> for C
+where
+    Self: IsValueContent<'a, Form = BeCopyOnWrite>,
+    Self::Type: IsHierarchicalType<Content<'a, Self::Form> = Self>,
+{
+}
