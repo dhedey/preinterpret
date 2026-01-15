@@ -9,13 +9,13 @@ impl<L: IsValueLeaf> IsValueContent for QqqMutable<L> {
 
 impl<'a, L: IsValueLeaf> IntoValueContent<'a> for QqqMutable<L> {
     fn into_content(self) -> Content<'a, Self::Type, Self::Form> {
-        <L::LeafType as IsLeafType>::leaf_to_content(self)
+        self
     }
 }
 
 impl<'a, L: IsValueLeaf> FromValueContent<'a> for QqqMutable<L> {
     fn from_content(content: Content<'a, Self::Type, Self::Form>) -> Self {
-        <L::LeafType as IsLeafType>::content_to_leaf(content)
+        content
     }
 }
 

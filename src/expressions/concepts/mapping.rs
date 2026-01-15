@@ -180,7 +180,7 @@ mod test_macro {
         let owned = map_via_leaf! {
             input: &'r mut (Content<'a, U8Type, BeOwned>) = &mut x,
             fn map_leaf<F: LeafAsRefForm, T>(leaf) -> (Content<'static, T, BeOwned>) {
-                T::leaf_to_content(F::leaf_clone_to_owned_infallible(leaf))
+                F::leaf_clone_to_owned_infallible(leaf)
             }
         };
         assert_eq!(owned, 4);

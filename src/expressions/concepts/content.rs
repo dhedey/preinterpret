@@ -77,7 +77,7 @@ where
         map_via_leaf! {
             input: (Content<'a, Self::Type, Self::Form>) = self.into_content(),
             fn map_leaf<F = BeOwned, T>(leaf) -> (Content<'a, T, BeReferenceable>) {
-                T::leaf_to_content(Rc::new(RefCell::new(leaf)))
+                Rc::new(RefCell::new(leaf))
             }
         }
     }
@@ -129,7 +129,7 @@ where
         map_via_leaf! {
             input: &'r mut (Content<'a, Self::Type, Self::Form>) = self,
             fn map_leaf<F: LeafAsMutForm, T>(leaf) -> (Content<'r, T, BeMut>) {
-                T::leaf_to_content(F::leaf_as_mut(leaf))
+                F::leaf_as_mut(leaf)
             }
         }
     }
@@ -142,7 +142,7 @@ where
         map_via_leaf! {
             input: &'r (Content<'a, Self::Type, Self::Form>) = self,
             fn map_leaf<F: LeafAsRefForm, T>(leaf) -> (Content<'r, T, BeRef>) {
-                T::leaf_to_content(F::leaf_as_ref(leaf))
+                F::leaf_as_ref(leaf)
             }
         }
     }
@@ -159,7 +159,7 @@ where
         map_via_leaf! {
             input: &'r (Content<'a, Self::Type, Self::Form>) = self,
             fn map_leaf<F: LeafAsRefForm, T>(leaf) -> (Content<'static, T, BeOwned>) {
-                T::leaf_to_content(F::leaf_clone_to_owned_infallible(leaf))
+                F::leaf_clone_to_owned_infallible(leaf)
             }
         }
     }
@@ -182,7 +182,7 @@ where
             input: &'r (Content<'a, Self::Type, Self::Form>) = self,
             state: SpanRange | let span_range = span_range,
             fn map_leaf<F: LeafAsRefForm, T>(leaf) -> (ExecutionResult<Content<'static, T, BeOwned>>) {
-                Ok(T::leaf_to_content(F::leaf_clone_to_owned_transparently(leaf, span_range)?))
+                F::leaf_clone_to_owned_transparently(leaf, span_range)
             }
         }
     }

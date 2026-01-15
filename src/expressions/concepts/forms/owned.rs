@@ -3,22 +3,9 @@ use super::*;
 /// Just [`T`]! This exists simply to be a name for symmetry with e.g. Shared<T> or Mutable<T>.
 pub(crate) type Owned<T> = T;
 
-// impl<L: IsValueLeaf> IsValueContent for L {
-//     type Type = L::Type;
-//     type Form = BeOwned;
-// }
-
-// impl<'a, L: IsValueLeaf> IntoValueContent<'a> for L  {
-//     fn into_content(self) -> Content<'a, Self::Type, Self::Form> {
-//         <L::LeafType as IsLeafType>::leaf_to_content(self)
-//     }
-// }
-
-// impl<'a, L: IsValueLeaf> FromValueContent<'a> for L {
-//     fn from_content(content: Content<'a, Self::Type, Self::Form>) -> Self {
-//         <L::LeafType as IsLeafType>::content_to_leaf(content)
-//     }
-// }
+// NOTE: Attempting to blanket implement IsValueContent etc for all T: IsValueLeaf causes
+// a clash (inlike the other forms) - so instead we work around this with (a) manual impls
+// in impl_value_content_traits for each L, and (b) bounds on L: IsValueLeaf.
 
 /// Represents floating owned values.
 ///

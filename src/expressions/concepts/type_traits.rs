@@ -44,18 +44,26 @@ pub(crate) trait IsHierarchicalType: IsType<Variant = HierarchicalTypeVariant> {
     ) -> Self::LeafKind;
 }
 
-pub(crate) trait IsLeafType: IsHierarchicalType {
+pub(crate) trait IsLeafType:
+    IsHierarchicalType
+    // NOTE: We can't create a universal bound over F: IsHierarchicalForm in rust
+    // If you need a generic interconversion over all such F, we'll need to reintroduce
+    // e.g. a fn content_to_leaf(content) method, with body { self } in each impl.
+    // For now though, listing out all the forms here is sufficient.
+    + for<'a> IsHierarchicalType<Content<'a, BeOwned> = <BeOwned as IsHierarchicalForm>::Leaf<'a, Self>>
+    + for<'a> IsHierarchicalType<Content<'a, BeShared> = <BeShared as IsHierarchicalForm>::Leaf<'a, Self>>
+    + for<'a> IsHierarchicalType<Content<'a, BeMutable> = <BeMutable as IsHierarchicalForm>::Leaf<'a, Self>>
+    + for<'a> IsHierarchicalType<Content<'a, BeRef> = <BeRef as IsHierarchicalForm>::Leaf<'a, Self>>
+    + for<'a> IsHierarchicalType<Content<'a, BeMut> = <BeMut as IsHierarchicalForm>::Leaf<'a, Self>>
+    + for<'a> IsHierarchicalType<Content<'a, BeAnyRef> = <BeAnyRef as IsHierarchicalForm>::Leaf<'a, Self>>
+    + for<'a> IsHierarchicalType<Content<'a, BeAnyMut> = <BeAnyMut as IsHierarchicalForm>::Leaf<'a, Self>>
+    + for<'a> IsHierarchicalType<Content<'a, BeReferenceable> = <BeReferenceable as IsHierarchicalForm>::Leaf<'a, Self>>
+    + for<'a> IsHierarchicalType<Content<'a, BeAssignee> = <BeAssignee as IsHierarchicalForm>::Leaf<'a, Self>>
+    + for<'a> IsHierarchicalType<Content<'a, BeCopyOnWrite> = <BeCopyOnWrite as IsHierarchicalForm>::Leaf<'a, Self>>
+    + for<'a> IsHierarchicalType<Content<'a, BeArgument> = <BeArgument as IsHierarchicalForm>::Leaf<'a, Self>>
+    + for<'a> IsHierarchicalType<Content<'a, BeLateBound> = <BeLateBound as IsHierarchicalForm>::Leaf<'a, Self>>
+{
     type Leaf: IsValueLeaf<LeafType = Self>;
-
-    /// It's expected that leaf === content, but it's hard to make the type system express that
-    /// bound automatically, so two way conversion functions are a reasonable workaround.
-    fn leaf_to_content<'a, F: IsHierarchicalForm>(leaf: F::Leaf<'a, Self>) -> Self::Content<'a, F>;
-
-    /// It's expected that leaf === content, but it's hard to make the type system express that
-    /// bound automatically, so two way conversion functions are a reasonable workaround.
-    fn content_to_leaf<'a, F: IsHierarchicalForm>(
-        content: Self::Content<'a, F>,
-    ) -> F::Leaf<'a, Self>;
 
     fn leaf_kind() -> Self::LeafKind;
 }
@@ -269,6 +277,13 @@ pub(crate) use impl_ancestor_chain_conversions;
 
 pub(crate) trait IsValueLeaf:
     'static
+    // This whole creation of IsLeafValueContent and the LeafType bound is a workaround to
+    // add an implied bound to IsValueLeaf that Self::Type: IsLeafType<Leaf = Self>
+    // - This "use an associated type equality constraint" workaround came from a rust thread
+    // related to implied bounds, which of course I can't find now.
+    // - The main caveat is that order matters (i.e. I had to set Type == LeafType) and bound the
+    // correct one of Type or LeafType in other places to avoid circularity and ensure the one way
+    // resolution logic works correctly.
     + IsValueContent<Type = <Self as IsLeafValueContent>::LeafType, Form = BeOwned>
     + for<'a> IntoValueContent<'a>
     + for<'a> FromValueContent<'a>
@@ -610,18 +625,6 @@ macro_rules! define_leaf_type {
 
         impl IsLeafType for $type_def {
             type Leaf = $content_type;
-
-            fn leaf_to_content<'a, F: IsHierarchicalForm>(
-                leaf: F::Leaf<'a, Self>,
-            ) -> Self::Content<'a, F> {
-                leaf
-            }
-
-            fn content_to_leaf<'a, F: IsHierarchicalForm>(
-                leaf: Self::Content<'a, F>,
-            ) -> F::Leaf<'a, Self> {
-                leaf
-            }
 
             fn leaf_kind() -> $kind {
                 $kind

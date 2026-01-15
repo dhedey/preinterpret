@@ -18,13 +18,13 @@ impl<L: IsValueLeaf> IsValueContent for QqqCopyOnWrite<L> {
 
 impl<'a, L: IsValueLeaf> IntoValueContent<'a> for QqqCopyOnWrite<L> {
     fn into_content(self) -> Content<'a, Self::Type, Self::Form> {
-        <L::LeafType as IsLeafType>::leaf_to_content(self)
+        self
     }
 }
 
 impl<'a, L: IsValueLeaf> FromValueContent<'a> for QqqCopyOnWrite<L> {
     fn from_content(content: Content<'a, Self::Type, Self::Form>) -> Self {
-        <L::LeafType as IsLeafType>::content_to_leaf(content)
+        content
     }
 }
 
@@ -43,7 +43,7 @@ impl BeCopyOnWrite {
         map_via_leaf! {
             input: (Content<'a, T, BeOwned>) = owned,
             fn map_leaf<F = BeOwned, T>(leaf) -> (Content<'a, T, BeCopyOnWrite>) {
-                T::leaf_to_content(QqqCopyOnWrite::Owned(leaf))
+                QqqCopyOnWrite::Owned(leaf)
             }
         }
     }
@@ -54,7 +54,7 @@ impl BeCopyOnWrite {
         map_via_leaf! {
             input: (Content<'a, T, BeShared>) = shared,
             fn map_leaf<F = BeShared, T>(leaf) -> (Content<'a, T, BeCopyOnWrite>) {
-                T::leaf_to_content(QqqCopyOnWrite::SharedWithInfallibleCloning(leaf))
+                QqqCopyOnWrite::SharedWithInfallibleCloning(leaf)
             }
         }
     }
@@ -65,7 +65,7 @@ impl BeCopyOnWrite {
         map_via_leaf! {
             input: (Content<'a, T, BeShared>) = shared,
             fn map_leaf<F = BeShared, T>(leaf) -> (Content<'a, T, BeCopyOnWrite>) {
-                T::leaf_to_content(QqqCopyOnWrite::SharedWithTransparentCloning(leaf))
+                QqqCopyOnWrite::SharedWithTransparentCloning(leaf)
             }
         }
     }
@@ -134,9 +134,9 @@ where
             input: (Content<'a, Self::Type, Self::Form>) = self,
             fn map_leaf<F = BeCopyOnWrite, T>(leaf) -> (AnyLevelCopyOnWrite<'a, T>) {
                 match leaf {
-                    QqqCopyOnWrite::Owned(owned) => AnyLevelCopyOnWrite::Owned(T::leaf_to_content(owned)),
-                    QqqCopyOnWrite::SharedWithInfallibleCloning(shared) => AnyLevelCopyOnWrite::SharedWithInfallibleCloning(T::leaf_to_content(shared)),
-                    QqqCopyOnWrite::SharedWithTransparentCloning(shared) => AnyLevelCopyOnWrite::SharedWithTransparentCloning(T::leaf_to_content(shared)),
+                    QqqCopyOnWrite::Owned(owned) => AnyLevelCopyOnWrite::Owned(owned),
+                    QqqCopyOnWrite::SharedWithInfallibleCloning(shared) => AnyLevelCopyOnWrite::SharedWithInfallibleCloning(shared),
+                    QqqCopyOnWrite::SharedWithTransparentCloning(shared) => AnyLevelCopyOnWrite::SharedWithTransparentCloning(shared),
                 }
             }
         }
@@ -149,11 +149,11 @@ where
         map_via_leaf! {
             input: (Content<'a, Self::Type, Self::Form>) = self,
             fn map_leaf<F = BeCopyOnWrite, T>(leaf) -> (Content<'static, T, BeOwned>) {
-                T::leaf_to_content(match leaf {
+                match leaf {
                     QqqCopyOnWrite::Owned(owned) => owned,
                     QqqCopyOnWrite::SharedWithInfallibleCloning(shared) => BeShared::leaf_clone_to_owned_infallible::<T>(&shared),
                     QqqCopyOnWrite::SharedWithTransparentCloning(shared) => BeShared::leaf_clone_to_owned_infallible::<T>(&shared),
-                })
+                }
             }
         }
     }
@@ -169,11 +169,11 @@ where
             input: (Content<'a, Self::Type, Self::Form>) = self,
             state: SpanRange | let error_span = error_span,
             fn map_leaf<F = BeCopyOnWrite, T>(leaf) -> (ExecutionResult<Content<'static, T, BeOwned>>) {
-                Ok(T::leaf_to_content(match leaf {
+                Ok(match leaf {
                     QqqCopyOnWrite::Owned(owned) => owned,
                     QqqCopyOnWrite::SharedWithInfallibleCloning(shared) => BeShared::leaf_clone_to_owned_infallible::<T>(&shared),
                     QqqCopyOnWrite::SharedWithTransparentCloning(shared) => BeShared::leaf_clone_to_owned_transparently::<T>(&shared, error_span)?,
-                }))
+                })
             }
         }
     }
