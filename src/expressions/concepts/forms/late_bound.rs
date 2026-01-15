@@ -1,5 +1,33 @@
 use super::*;
 
+pub(crate) enum QqqLateBound<T: 'static> {
+    /// An owned value that can be converted to any ownership type
+    Owned(QqqLateBoundOwned<T>),
+    /// A copy-on-write value that can be converted to an owned value
+    CopyOnWrite(QqqCopyOnWrite<T>),
+    /// A mutable reference
+    Mutable(QqqMutable<T>),
+    /// A shared reference where mutable access failed for a specific reason
+    Shared(QqqLateBoundShared<T>),
+}
+
+impl<L: IsValueLeaf> IsValueContent for QqqLateBound<L> {
+    type Type = L::Type;
+    type Form = BeLateBound;
+}
+
+impl<'a, L: IsValueLeaf> IntoValueContent<'a> for QqqLateBound<L> {
+    fn into_content(self) -> Content<'a, Self::Type, Self::Form> {
+        <L::LeafType as IsLeafType>::leaf_to_content(self)
+    }
+}
+
+impl<'a, L: IsValueLeaf> FromValueContent<'a> for QqqLateBound<L> {
+    fn from_content(content: Content<'a, Self::Type, Self::Form>) -> Self {
+        <L::LeafType as IsLeafType>::content_to_leaf(content)
+    }
+}
+
 /// Universal value type that can resolve to any concrete ownership type.
 ///
 /// Sometimes, a value can be accessed, but we don't yet know *how* we need to access it.
@@ -16,17 +44,6 @@ impl IsForm for BeLateBound {}
 
 impl IsHierarchicalForm for BeLateBound {
     type Leaf<'a, T: IsLeafType> = QqqLateBound<T::Leaf>;
-}
-
-pub(crate) enum QqqLateBound<T: 'static> {
-    /// An owned value that can be converted to any ownership type
-    Owned(QqqLateBoundOwned<T>),
-    /// A copy-on-write value that can be converted to an owned value
-    CopyOnWrite(QqqCopyOnWrite<T>),
-    /// A mutable reference
-    Mutable(QqqMutable<T>),
-    /// A shared reference where mutable access failed for a specific reason
-    Shared(QqqLateBoundShared<T>),
 }
 
 pub(crate) struct QqqLateBoundOwned<O: 'static> {

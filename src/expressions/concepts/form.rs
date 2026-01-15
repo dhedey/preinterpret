@@ -15,8 +15,9 @@ pub(crate) trait IsForm: Sized + Clone {}
 
 pub(crate) trait IsHierarchicalForm: IsForm {
     /// The standard leaf for a hierachical type
-    /// Usually this will implement IsValueContent<'a, Type = T, Form = Self>
-    type Leaf<'a, T: IsLeafType>;
+    type Leaf<'a, T: IsLeafType>: IsValueContent<Type = T, Form = Self>
+        + IntoValueContent<'a>
+        + FromValueContent<'a>;
 }
 
 pub(crate) trait LeafAsRefForm: IsHierarchicalForm {

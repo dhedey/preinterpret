@@ -19,8 +19,9 @@ pub(crate) trait IsType: Sized {
 }
 
 pub(crate) trait IsHierarchicalType: IsType<Variant = HierarchicalTypeVariant> {
-    /// Typically this will implement `IsValueContent<'a, Type = Self, Form = F>`
-    type Content<'a, F: IsHierarchicalForm>;
+    type Content<'a, F: IsHierarchicalForm>: IsValueContent<Type = Self, Form = F>
+        + IntoValueContent<'a>
+        + FromValueContent<'a>;
     type LeafKind: IsLeafKind;
 
     fn map_with<'a, F: IsHierarchicalForm, M: LeafMapper<F>>(
@@ -268,8 +269,9 @@ pub(crate) use impl_ancestor_chain_conversions;
 
 pub(crate) trait IsValueLeaf:
     'static
-    + for<'a> IntoValueContent<'a, Form = BeOwned>
-    + IsValueContent<Type = <Self as IsLeafValueContent>::LeafType>
+    + IsValueContent<Type = <Self as IsLeafValueContent>::LeafType, Form = BeOwned>
+    + for<'a> IntoValueContent<'a>
+    + for<'a> FromValueContent<'a>
     + IsLeafValueContent
     + CastDyn<dyn IsIterable>
     + Clone

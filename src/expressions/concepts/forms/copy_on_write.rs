@@ -1,5 +1,33 @@
 use super::*;
 
+pub(crate) enum QqqCopyOnWrite<T: 'static> {
+    /// An owned value that can be used directly
+    Owned(Owned<T>),
+    /// For use when the CopyOnWrite value effectively represents the owned value (post-clone).
+    /// In this case, returning a Cow is just an optimization and we can always clone infallibly.
+    SharedWithInfallibleCloning(QqqShared<T>),
+    /// For use when the CopyOnWrite value represents a pre-cloned read-only value.
+    /// A transparent clone may fail in this case at use time.
+    SharedWithTransparentCloning(QqqShared<T>),
+}
+
+impl<L: IsValueLeaf> IsValueContent for QqqCopyOnWrite<L> {
+    type Type = L::Type;
+    type Form = BeCopyOnWrite;
+}
+
+impl<'a, L: IsValueLeaf> IntoValueContent<'a> for QqqCopyOnWrite<L> {
+    fn into_content(self) -> Content<'a, Self::Type, Self::Form> {
+        <L::LeafType as IsLeafType>::leaf_to_content(self)
+    }
+}
+
+impl<'a, L: IsValueLeaf> FromValueContent<'a> for QqqCopyOnWrite<L> {
+    fn from_content(content: Content<'a, Self::Type, Self::Form>) -> Self {
+        <L::LeafType as IsLeafType>::content_to_leaf(content)
+    }
+}
+
 #[derive(Copy, Clone)]
 pub(crate) struct BeCopyOnWrite;
 impl IsForm for BeCopyOnWrite {}
@@ -41,17 +69,6 @@ impl BeCopyOnWrite {
             }
         }
     }
-}
-
-pub(crate) enum QqqCopyOnWrite<T: 'static> {
-    /// An owned value that can be used directly
-    Owned(Owned<T>),
-    /// For use when the CopyOnWrite value effectively represents the owned value (post-clone).
-    /// In this case, returning a Cow is just an optimization and we can always clone infallibly.
-    SharedWithInfallibleCloning(QqqShared<T>),
-    /// For use when the CopyOnWrite value represents a pre-cloned read-only value.
-    /// A transparent clone may fail in this case at use time.
-    SharedWithTransparentCloning(QqqShared<T>),
 }
 
 impl MapFromArgument for BeCopyOnWrite {
@@ -200,6 +217,7 @@ where
     //         }
     //         AnyLevelCopyOnWrite::SharedWithTransparentCloning(shared) => {
     //             BeCopyOnWrite::new_shared_in_place_of_shared::<M::TTo>(mapper.map_ref(shared)?)
+    //             todo!()
     //         }
     //     })
     // }
@@ -207,7 +225,7 @@ where
 
 /// Using the leaf-based type [`Content<'a, T, BeCopyOnWrite>`] is usually preferred,
 /// but in some instances (particularly around supporting old code), we may want the
-/// partitoning to be at a higher level (e.g. an `Owned(OwnedValue)` or `Shared(SharedValue)`).
+/// partitioning to be at a higher level (e.g. an `Owned(OwnedValue)` or `Shared(SharedValue)`).
 ///
 /// That is what this type represents.
 pub(crate) enum AnyLevelCopyOnWrite<'a, T: IsHierarchicalType> {
@@ -239,25 +257,25 @@ impl<'a, T: IsHierarchicalType> AnyLevelCopyOnWrite<'a, T> {
 // - Then map the inner Content via TFrom::map_to::<TTo, Form>()
 // - Then convert AnyLevelCopyOnWrite<'a, TTo> back to Content<'a, TTo, BeCopyOnWrite> via leaf mapping `Owned` / `Shared` *to* copy on write (see e.g. as_referencable)
 // - Create an AnyValuePropertyAccessor and an AnyValueIndexer
-trait TypeMapper {
+pub(crate) trait TypeMapper {
     type TFrom: IsHierarchicalType;
     type TTo: IsHierarchicalType;
 }
-trait OwnedTypeMapper: TypeMapper {
-    fn map_owned(
+pub(crate) trait OwnedTypeMapper: TypeMapper {
+    fn map_owned<'a>(
         self,
-        owned_value: Content<'static, Self::TFrom, BeOwned>,
-    ) -> ExecutionResult<Content<'static, Self::TTo, BeOwned>>;
+        owned_value: Content<'a, Self::TFrom, BeOwned>,
+    ) -> ExecutionResult<Content<'a, Self::TTo, BeOwned>>;
 }
 
-trait RefTypeMapper: TypeMapper {
+pub(crate) trait RefTypeMapper: TypeMapper {
     fn map_ref<'a>(
         self,
         ref_value: Content<'a, Self::TFrom, BeRef>,
     ) -> ExecutionResult<Content<'a, Self::TTo, BeRef>>;
 }
 
-trait MutTypeMapper: TypeMapper {
+pub(crate) trait MutTypeMapper: TypeMapper {
     fn map_mut<'a>(
         self,
         mut_value: Content<'a, Self::TFrom, BeMut>,
