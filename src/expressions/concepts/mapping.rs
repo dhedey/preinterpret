@@ -149,6 +149,17 @@ macro_rules! __map_via_leaf_to_parent {
     ($output:ident -> Result<Content<$lt:lifetime, $t:ident, $form:ty>, $err:ty>) => {
         Ok($t::into_parent($output?))
     };
+    ($output:ident -> AnyLevelCopyOnWrite<$lt:lifetime, $t:ident>) => {
+        match $output {
+            AnyLevelCopyOnWrite::Owned(owned) => AnyLevelCopyOnWrite::Owned($t::into_parent(owned)),
+            AnyLevelCopyOnWrite::SharedWithInfallibleCloning(shared) => {
+                AnyLevelCopyOnWrite::SharedWithInfallibleCloning($t::into_parent(shared))
+            }
+            AnyLevelCopyOnWrite::SharedWithTransparentCloning(shared) => {
+                AnyLevelCopyOnWrite::SharedWithTransparentCloning($t::into_parent(shared))
+            }
+        }
+    };
     ($output:ident -> $ty:ty) => {
         $output
     };

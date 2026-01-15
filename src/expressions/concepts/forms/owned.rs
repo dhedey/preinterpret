@@ -3,6 +3,23 @@ use super::*;
 /// Just [`T`]! This exists simply to be a name for symmetry with e.g. Shared<T> or Mutable<T>.
 pub(crate) type Owned<T> = T;
 
+// impl<L: IsValueLeaf> IsValueContent for L {
+//     type Type = L::Type;
+//     type Form = BeOwned;
+// }
+
+// impl<'a, L: IsValueLeaf> IntoValueContent<'a> for L  {
+//     fn into_content(self) -> Content<'a, Self::Type, Self::Form> {
+//         <L::LeafType as IsLeafType>::leaf_to_content(self)
+//     }
+// }
+
+// impl<'a, L: IsValueLeaf> FromValueContent<'a> for L {
+//     fn from_content(content: Content<'a, Self::Type, Self::Form>) -> Self {
+//         <L::LeafType as IsLeafType>::content_to_leaf(content)
+//     }
+// }
+
 /// Represents floating owned values.
 ///
 /// If you need span information, wrap with `Spanned<AnyValue>`. For example, with `x.y[4]`, this would capture both:
@@ -70,7 +87,7 @@ mod test {
     #[test]
     fn can_as_ref_owned() {
         let owned_value = 42u64;
-        let as_ref: QqqRef<U64Type> = owned_value.as_ref_value();
+        let as_ref: Content<U64Type, BeRef> = owned_value.as_ref_value();
         assert_eq!(*as_ref, 42u64);
     }
 

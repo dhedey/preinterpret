@@ -2,6 +2,23 @@ use super::*;
 
 pub(crate) type QqqShared<T> = SharedSubRcRefCell<AnyValue, T>;
 
+impl<L: IsValueLeaf> IsValueContent for QqqShared<L> {
+    type Type = L::Type;
+    type Form = BeShared;
+}
+
+impl<'a, L: IsValueLeaf> IntoValueContent<'a> for QqqShared<L> {
+    fn into_content(self) -> Content<'a, Self::Type, Self::Form> {
+        <L::LeafType as IsLeafType>::leaf_to_content(self)
+    }
+}
+
+impl<'a, L: IsValueLeaf> FromValueContent<'a> for QqqShared<L> {
+    fn from_content(content: Content<'a, Self::Type, Self::Form>) -> Self {
+        <L::LeafType as IsLeafType>::content_to_leaf(content)
+    }
+}
+
 #[derive(Copy, Clone)]
 pub(crate) struct BeShared;
 impl IsForm for BeShared {}

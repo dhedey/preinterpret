@@ -1,6 +1,21 @@
 use super::*;
 
-pub(crate) type QqqRef<'a, T> = Content<'a, T, BeRef>;
+impl<L: IsValueLeaf> IsValueContent for &L {
+    type Type = L::Type;
+    type Form = BeRef;
+}
+
+impl<'a, L: IsValueLeaf> IntoValueContent<'a> for &'a L {
+    fn into_content(self) -> Content<'a, Self::Type, Self::Form> {
+        <L::LeafType as IsLeafType>::leaf_to_content(self)
+    }
+}
+
+impl<'a, L: IsValueLeaf> FromValueContent<'a> for &'a L {
+    fn from_content(content: Content<'a, Self::Type, Self::Form>) -> Self {
+        <L::LeafType as IsLeafType>::content_to_leaf(content)
+    }
+}
 
 /// It can't be an argument because arguments must be owned in some way;
 /// so that the drop glue can work properly (because they may come from

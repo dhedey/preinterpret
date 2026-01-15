@@ -10,50 +10,32 @@ use super::*;
 /// whether the method needs `x[a]` to be a shared reference, mutable reference or an owned value.
 ///
 /// So instead, we take the most powerful access we can have for `x[a]`, and convert it later.
-pub(crate) type QqqLateBound<T> = Content<'static, T, BeLateBound>;
-
 #[derive(Copy, Clone)]
 pub(crate) struct BeLateBound;
 impl IsForm for BeLateBound {}
 
 impl IsHierarchicalForm for BeLateBound {
-    type Leaf<'a, T: IsLeafType> = LateBoundContent<T::Leaf, T::Leaf>;
+    type Leaf<'a, T: IsLeafType> = QqqLateBound<T::Leaf>;
 }
 
-impl IsDynCompatibleForm for BeLateBound {
-    type DynLeaf<'a, D: 'static + ?Sized> = LateBoundContent<D, Box<D>>;
-}
-
-impl IsDynMappableForm for BeLateBound {
-    fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
-        leaf: Self::Leaf<'a, T>,
-    ) -> Option<Self::DynLeaf<'a, D>>
-    where
-        T::Leaf: CastDyn<D>,
-    {
-        // TODO: Add back once we add a map to LateBoundContent
-        todo!()
-    }
-}
-
-pub(crate) enum LateBoundContent<T: 'static + ?Sized, O: 'static> {
+pub(crate) enum QqqLateBound<T: 'static> {
     /// An owned value that can be converted to any ownership type
-    Owned(LateBoundOwned<O>),
+    Owned(QqqLateBoundOwned<T>),
     /// A copy-on-write value that can be converted to an owned value
-    CopyOnWrite(CopyOnWriteContent<T, O>),
+    CopyOnWrite(QqqCopyOnWrite<T>),
     /// A mutable reference
-    Mutable(MutableSubRcRefCell<AnyValue, T>),
+    Mutable(QqqMutable<T>),
     /// A shared reference where mutable access failed for a specific reason
-    Shared(LateBoundShared<T>),
+    Shared(QqqLateBoundShared<T>),
 }
 
-pub(crate) struct LateBoundOwned<O: 'static> {
+pub(crate) struct QqqLateBoundOwned<O: 'static> {
     pub(crate) owned: O,
     pub(crate) is_from_last_use: bool,
 }
 
 /// A shared value where mutable access failed for a specific reason
-pub(crate) struct LateBoundShared<T: 'static + ?Sized> {
-    pub(crate) shared: SharedSubRcRefCell<AnyValue, T>,
+pub(crate) struct QqqLateBoundShared<T: 'static> {
+    pub(crate) shared: QqqShared<T>,
     pub(crate) reason_not_mutable: syn::Error,
 }

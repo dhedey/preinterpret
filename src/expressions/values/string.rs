@@ -21,7 +21,7 @@ define_leaf_type! {
     },
 }
 
-impl<'a> IsValueContent<'a> for &'a str {
+impl IsValueContent for &str {
     type Type = StringType;
     type Form = BeRef;
 }

@@ -1,6 +1,21 @@
 use super::*;
 
-type QqqAnyRef<'a, T> = Content<'a, T, BeAnyRef>;
+impl<'a, L: IsValueLeaf> IsValueContent for AnyRef<'a, L> {
+    type Type = L::Type;
+    type Form = BeAnyRef;
+}
+
+impl<'a, L: IsValueLeaf> IntoValueContent<'a> for AnyRef<'a, L> {
+    fn into_content(self) -> Content<'a, Self::Type, Self::Form> {
+        <L::LeafType as IsLeafType>::leaf_to_content(self)
+    }
+}
+
+impl<'a, L: IsValueLeaf> FromValueContent<'a> for AnyRef<'a, L> {
+    fn from_content(content: Content<'a, Self::Type, Self::Form>) -> Self {
+        <L::LeafType as IsLeafType>::content_to_leaf(content)
+    }
+}
 
 #[derive(Copy, Clone)]
 pub(crate) struct BeAnyRef;

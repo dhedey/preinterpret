@@ -6,16 +6,16 @@ pub(crate) type DynContent<'a, D, F> =
     <F as IsDynCompatibleForm>::DynLeaf<'a, <D as IsDynType>::DynContent>;
 
 /// For types which have an associated value (type and form)
-pub(crate) trait IsValueContent<'a> {
+pub(crate) trait IsValueContent {
     type Type: IsHierarchicalType;
     type Form: IsHierarchicalForm;
 }
 
-pub(crate) trait FromValueContent<'a>: IsValueContent<'a> {
+pub(crate) trait FromValueContent<'a>: IsValueContent {
     fn from_content(content: Content<'a, Self::Type, Self::Form>) -> Self;
 }
 
-pub(crate) trait FromSpannedValueContent<'a>: IsValueContent<'a> {
+pub(crate) trait FromSpannedValueContent<'a>: IsValueContent {
     fn from_spanned_content(content: Spanned<Content<'a, Self::Type, Self::Form>>) -> Self;
 }
 
@@ -26,7 +26,7 @@ impl<'a, C: FromValueContent<'a>> FromSpannedValueContent<'a> for C {
     }
 }
 
-impl<'a, C: IsValueContent<'a>> IsValueContent<'a> for Spanned<C> {
+impl<C: IsValueContent> IsValueContent for Spanned<C> {
     type Type = C::Type;
     type Form = C::Form;
 }
@@ -39,7 +39,7 @@ impl<'a, C: FromValueContent<'a>> FromSpannedValueContent<'a> for Spanned<C> {
     }
 }
 
-pub(crate) trait IntoValueContent<'a>: IsValueContent<'a>
+pub(crate) trait IntoValueContent<'a>: IsValueContent
 where
     Self: Sized,
 {
@@ -72,7 +72,7 @@ where
 
     fn into_referenceable(self) -> Content<'a, Self::Type, BeReferenceable>
     where
-        Self: IsValueContent<'a, Form = BeOwned>,
+        Self: IsValueContent<Form = BeOwned>,
     {
         map_via_leaf! {
             input: (Content<'a, Self::Type, Self::Form>) = self.into_content(),
@@ -94,12 +94,11 @@ where
         description: &str,
     ) -> ExecutionResult<X>
     where
-        <X as IsValueContent<'a>>::Type: DowncastFrom<C::Type, C::Form>,
+        <X as IsValueContent>::Type: DowncastFrom<C::Type, C::Form>,
     {
         let Spanned(value, span_range) = self;
         let content = value.into_content();
-        let resolved =
-            <<X as IsValueContent<'a>>::Type>::resolve(content, span_range, description)?;
+        let resolved = <<X as IsValueContent>::Type>::resolve(content, span_range, description)?;
         Ok(X::from_spanned_content(Spanned(resolved, span_range)))
     }
 }
@@ -117,7 +116,7 @@ where
 /// Implementations on the value contents *themselves*.
 /// Typically this is reserved for things operating on references - otherwise we can
 /// implement on IntoValueContent / FromValueContent.
-pub(crate) trait IsSelfValueContent<'a>: IsValueContent<'a>
+pub(crate) trait IsSelfValueContent<'a>: IsValueContent
 where
     Self::Type: IsHierarchicalType<Content<'a, Self::Form> = Self>,
     Self::Form: IsHierarchicalForm,
@@ -191,7 +190,7 @@ where
 
 impl<'a, X> IsSelfValueContent<'a> for X
 where
-    X: IsValueContent<'a>,
+    X: IsValueContent,
     X::Type: IsHierarchicalType<Content<'a, X::Form> = X>,
     X::Form: IsHierarchicalForm,
 {

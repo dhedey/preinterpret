@@ -253,11 +253,15 @@ First, read the @./2025-11-vision.md
       - [x] Consider if we even need `MapperOutput` or just some helper functions
       - [x] Delay resolving the type kind into the error case when downcasting
     - [x] Create macro to define inline mappers in various forms
+    - [ ] Attempt to see if I can get rid of needing `leaf_to_content` and maybe `content_to_leaf` by exploiting a trick to bind associated types via a sub-trait (e.g. as I did with `IsValueContent<Type = <Self as IsLeafValueContent>::LeafType> + IsLeafValueContent`)
     - [ ] Reproduce `CopyOnWrite`
-    - [ ] Create some macros to help build `self` / `&self` / `&mut self` methods across all contents of a form. Use `IsSelfCopyOnWriteContent` as an example to try implementing this
-    - [ ] Get rid of `CopyOnWrite<T>`, have only CopyOnWriteValue
-    - [ ] Get rid of `Shared<T>`, `Mutable<T>` and `Assignee<T>`, have only `AnyValueMutable` or other named kinds
-    - [ ] Migrate `Shared`, `Mutable`, `Assignee`
+      - [ ] Implement `TODO[concepts]: COPY ON WRITE MAPPING`
+      - [ ] `BeCopyOnWrite::owned()` / `shared_as_..` can go via `AnyLevelCopyOnWrite => into_copy_on_write`
+    - [ ] Reproduce `Shared` methods etc
+    - [ ] Reproduce `Mutable` methods etc
+    - [ ] Reproduce `Assignee` methods etc
+    - [ ] Change `CopyOnWrite<AnyValue>` => `CopyOnWriteAnyValue` similarly with `Shared`, `Mutable` and `Assignee`
+    - [ ] Migrate `CopyOnWrite`, `Shared`, `Mutable`, `Assignee`
       - [ ] `Shared<X>` only works for leaves
       - [ ] For specific parents, use e.g. `AnyValueShared`
       - [ ] If you need something to apply across all leaves, implement it on some trait
@@ -279,6 +283,10 @@ First, read the @./2025-11-vision.md
   - [ ] Have variables store a `Referenceable`
   - [ ] Separate methods and functions
   - [ ] Add ability to add comments to types, methods/functions and operations, and generate docs from them
+  - [ ] Clean-up:
+    - [ ] Move indexing and property access (see e.g.`into_indexed`) etc to the type resolution system - this map allow us to remove
+    things like `AnyLevelCopyOnWrite` and the `TypeMapper`
+    - [ ] Most matching methods on `AnyValue` would be better as leaf methods
 
 ## Methods and closures
 

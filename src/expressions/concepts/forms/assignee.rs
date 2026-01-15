@@ -2,6 +2,23 @@ use super::*;
 
 pub(crate) struct QqqAssignee<T: 'static + ?Sized>(pub(crate) MutableSubRcRefCell<AnyValue, T>);
 
+impl<L: IsValueLeaf> IsValueContent for QqqAssignee<L> {
+    type Type = L::Type;
+    type Form = BeAssignee;
+}
+
+impl<'a, L: IsValueLeaf> IntoValueContent<'a> for QqqAssignee<L> {
+    fn into_content(self) -> Content<'a, Self::Type, Self::Form> {
+        <L::LeafType as IsLeafType>::leaf_to_content(self)
+    }
+}
+
+impl<'a, L: IsValueLeaf> FromValueContent<'a> for QqqAssignee<L> {
+    fn from_content(content: Content<'a, Self::Type, Self::Form>) -> Self {
+        <L::LeafType as IsLeafType>::content_to_leaf(content)
+    }
+}
+
 #[derive(Copy, Clone)]
 pub(crate) struct BeAssignee;
 impl IsForm for BeAssignee {}

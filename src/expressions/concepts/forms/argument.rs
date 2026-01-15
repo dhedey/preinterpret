@@ -1,13 +1,19 @@
 use super::*;
 
-pub(crate) type QqqArgumentValue<T> = Content<'static, T, BeArgument>;
-
 #[derive(Copy, Clone)]
 pub(crate) struct BeArgument;
 impl IsForm for BeArgument {}
 
 impl IsHierarchicalForm for BeArgument {
-    type Leaf<'a, T: IsLeafType> = ArgumentContent<T::Leaf>;
+    type Leaf<'a, T: IsLeafType> = Argument<T::Leaf>;
+}
+
+pub(crate) enum Argument<T: IsValueLeaf> {
+    Owned(T),
+    CopyOnWrite(QqqCopyOnWrite<T>),
+    Mutable(QqqMutable<T>),
+    Assignee(QqqAssignee<T>),
+    Shared(QqqShared<T>),
 }
 
 impl MapFromArgument for BeArgument {
@@ -19,12 +25,4 @@ impl MapFromArgument for BeArgument {
         todo!()
         // Ok(value)
     }
-}
-
-pub(crate) enum ArgumentContent<T: IsValueLeaf> {
-    Owned(T),
-    CopyOnWrite(CopyOnWriteContent<T, T>),
-    Mutable(MutableSubRcRefCell<AnyValue, T>),
-    Assignee(MutableSubRcRefCell<AnyValue, T>),
-    Shared(SharedSubRcRefCell<AnyValue, T>),
 }

@@ -1,14 +1,31 @@
 use super::*;
 
+impl<'a, L: IsValueLeaf> IsValueContent for AnyMut<'a, L> {
+    type Type = L::Type;
+    type Form = BeAnyMut;
+}
+
+impl<'a, L: IsValueLeaf> IntoValueContent<'a> for AnyMut<'a, L> {
+    fn into_content(self) -> Content<'a, Self::Type, Self::Form> {
+        <L::LeafType as IsLeafType>::leaf_to_content(self)
+    }
+}
+
+impl<'a, L: IsValueLeaf> FromValueContent<'a> for AnyMut<'a, L> {
+    fn from_content(content: Content<'a, Self::Type, Self::Form>) -> Self {
+        <L::LeafType as IsLeafType>::content_to_leaf(content)
+    }
+}
+
 #[derive(Copy, Clone)]
 pub(crate) struct BeAnyMut;
 impl IsForm for BeAnyMut {}
 impl IsHierarchicalForm for BeAnyMut {
-    type Leaf<'a, T: IsLeafType> = crate::internal_prelude::AnyMut<'a, T::Leaf>;
+    type Leaf<'a, T: IsLeafType> = AnyMut<'a, T::Leaf>;
 }
 
 impl IsDynCompatibleForm for BeAnyMut {
-    type DynLeaf<'a, D: 'static + ?Sized> = crate::internal_prelude::AnyMut<'a, D>;
+    type DynLeaf<'a, D: 'static + ?Sized> = AnyMut<'a, D>;
 }
 
 impl IsDynMappableForm for BeAnyMut {
