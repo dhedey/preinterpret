@@ -205,27 +205,30 @@ where
                 BeCopyOnWrite::new_owned::<M::TTo>(mapper.map_owned(owned)?)
             }
             AnyLevelCopyOnWrite::SharedWithInfallibleCloning(shared) => {
+                // Apply map, get Shared<Content<'a, M::TTo, BeOwned>>
                 let shared = map_via_leaf! {
                     input: (Content<'a, Self::Type, BeShared>) = shared,
                     fn map_leaf<F = BeShared, T>(leaf) -> (ExecutionResult<QqqShared<Content<'static, AnyType, BeOwned>>>) {
                         leaf.try_map(|value_ref| {
                             let from_ref = value_ref.into_any();
-                            inner_map_ref(from_ref) // &Content<TOut, BeOwned>
+                            inner_map_ref(from_ref) // &Content<M::TTo, BeOwned>
+
+                            // If inner_map_ref returned a Content<'a, M::TTo, BeRef>
+                            // then we'd need to move the leaf map inside here, but it'd work the same
                         })
                     }
                 }?;
-                struct AsIs<T>(T);
-                shared.replace(|content, encapsulator| {
+                // Migrate Shared into leaf
+                let shared_content = shared.replace(|content, encapsulator| {
                     map_via_leaf! {
                         input: &'r (Content<'a, AnyType, BeOwned>) = content,
                         state: | <'r2> Encapsulator<'r2, AnyValue, AnyValue> | let encapsulator = encapsulator,
-                        fn map_leaf<F = BeOwned, T>(leaf) -> (AsIs<Content<'static, AnyType, BeCopyOnWrite>>) {
-                            let shared_leaf = encapsulator.encapsulate(leaf);
-                            let new_leaf = QqqCopyOnWrite::SharedWithInfallibleCloning(shared_leaf);
-                            AsIs(new_leaf.into_any())
+                        fn map_leaf<F = BeOwned, T>(leaf) -> (Content<'static, T, BeShared>) {
+                            encapsulator.encapsulate(leaf)
                         }
                     }
-                }).0
+                });
+                BeCopyOnWrite::new_shared_in_place_of_owned::<M::TTo>(shared_content)
             }
             AnyLevelCopyOnWrite::SharedWithTransparentCloning(shared) => {
                 todo!()
