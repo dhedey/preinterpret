@@ -181,6 +181,24 @@ macro_rules! impl_type_feature_resolver {
                 // Purposefully doesn't resolve parents, but TBC if this is right
                 <$type_def as TypeData>::resolve_type_property(property_name)
             }
+
+            fn resolve_property_access(&self) -> Option<PropertyAccessInterface> {
+                $(
+                    if let Some(interface) = <$type_defs as TypeData>::resolve_own_property_access() {
+                        return Some(interface);
+                    };
+                )+
+                None
+            }
+
+            fn resolve_index_access(&self) -> Option<IndexAccessInterface> {
+                $(
+                    if let Some(interface) = <$type_defs as TypeData>::resolve_own_index_access() {
+                        return Some(interface);
+                    };
+                )+
+                None
+            }
         }
     };
 }

@@ -212,6 +212,21 @@ impl RequestedValue {
         }
     }
 
+    /// Returns the leaf kind of the underlying value, for type resolution purposes.
+    pub(crate) fn value_kind(&self) -> AnyValueLeafKind {
+        match self {
+            RequestedValue::Owned(value) => value.value_kind(),
+            RequestedValue::Shared(shared) => shared.value_kind(),
+            RequestedValue::Mutable(mutable) => mutable.value_kind(),
+            RequestedValue::CopyOnWrite(cow) => cow.value_kind(),
+            RequestedValue::Assignee(assignee) => assignee.value_kind(),
+            RequestedValue::LateBound(late_bound) => late_bound.value_kind(),
+            RequestedValue::AssignmentCompletion(_) => {
+                panic!("value_kind() called on AssignmentCompletion")
+            }
+        }
+    }
+
     pub(crate) fn expect_any_value_and_map(
         self,
         map_shared: impl FnOnce(AnyValueShared) -> ExecutionResult<AnyValueShared>,

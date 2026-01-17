@@ -279,6 +279,28 @@ define_type_features! {
         pub(crate) mod unary_operations {
         }
         pub(crate) mod binary_operations {}
+        property_access(ObjectValue) {
+            [ctx] fn shared(source: &'a ObjectValue) {
+                source.property_ref(ctx.property)
+            }
+            [ctx] fn mutable(source: &'a mut ObjectValue, auto_create: bool) {
+                source.property_mut(ctx.property, auto_create)
+            }
+            [ctx] fn owned(source: ObjectValue) {
+                source.into_property(ctx.property)
+            }
+        }
+        index_access(ObjectValue) {
+            fn shared(source: &'a ObjectValue, index: Spanned<AnyValueRef>) {
+                source.index_ref(index)
+            }
+            fn mutable(source: &'a mut ObjectValue, index: Spanned<AnyValueRef>, auto_create: bool) {
+                source.index_mut(index, auto_create)
+            }
+            fn owned(source: ObjectValue, index: Spanned<AnyValueRef>) {
+                source.into_indexed(index)
+            }
+        }
         interface_items {
         }
     }

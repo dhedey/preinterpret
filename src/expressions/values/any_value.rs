@@ -4,7 +4,6 @@ pub(crate) type AnyValue = AnyValueContent<'static, BeOwned>;
 /// For symmetry
 pub(crate) type AnyValueOwned = AnyValue;
 pub(crate) type AnyValueRef<'a> = AnyValueContent<'a, BeRef>;
-pub(crate) type AnyValueMut<'a> = AnyValueContent<'a, BeMut>;
 pub(crate) type AnyValueShared = Shared<AnyValue>;
 pub(crate) type AnyValueMutable = Mutable<AnyValue>;
 pub(crate) type AnyValueAssignee = Assignee<AnyValue>;
@@ -308,28 +307,6 @@ impl<'a> ValuesEqual for AnyValueRef<'a> {
 }
 
 impl AnyValue {
-    pub(crate) fn into_indexed(
-        self,
-        access: IndexAccess,
-        index: Spanned<AnyValueRef>,
-    ) -> ExecutionResult<Self> {
-        match self {
-            AnyValueContent::Array(array) => array.into_indexed(index),
-            AnyValueContent::Object(object) => object.into_indexed(index),
-            other => access.type_err(format!("Cannot index into {}", other.articled_kind())),
-        }
-    }
-
-    pub(crate) fn into_property(self, access: &PropertyAccess) -> ExecutionResult<Self> {
-        match self {
-            AnyValueContent::Object(object) => object.into_property(access),
-            other => access.type_err(format!(
-                "Cannot access properties on {}",
-                other.articled_kind()
-            )),
-        }
-    }
-
     pub(crate) fn into_stream(
         self,
         grouping: Grouping,
@@ -481,57 +458,6 @@ impl<'a> AnyValueRef<'a> {
             }
         }
         Ok(())
-    }
-
-    pub(crate) fn index_ref(
-        self,
-        access: IndexAccess,
-        index: Spanned<AnyValueRef<'_>>,
-    ) -> ExecutionResult<&'a AnyValue> {
-        match self {
-            AnyValueContent::Array(array) => array.index_ref(index),
-            AnyValueContent::Object(object) => object.index_ref(index),
-            other => access.type_err(format!("Cannot index into {}", other.articled_kind())),
-        }
-    }
-
-    pub(crate) fn property_ref(self, access: &PropertyAccess) -> ExecutionResult<&'a AnyValue> {
-        match self {
-            AnyValueContent::Object(object) => object.property_ref(access),
-            other => access.type_err(format!(
-                "Cannot access properties on {}",
-                other.articled_kind()
-            )),
-        }
-    }
-}
-
-impl<'a> AnyValueMut<'a> {
-    pub(crate) fn index_mut(
-        self,
-        access: IndexAccess,
-        index: Spanned<AnyValueRef>,
-        auto_create: bool,
-    ) -> ExecutionResult<&'a mut AnyValue> {
-        match self {
-            AnyValueContent::Array(array) => array.index_mut(index),
-            AnyValueContent::Object(object) => object.index_mut(index, auto_create),
-            other => access.type_err(format!("Cannot index into {}", other.articled_kind())),
-        }
-    }
-
-    pub(crate) fn property_mut(
-        self,
-        access: &PropertyAccess,
-        auto_create: bool,
-    ) -> ExecutionResult<&'a mut AnyValue> {
-        match self {
-            AnyValueContent::Object(object) => object.property_mut(access, auto_create),
-            other => access.type_err(format!(
-                "Cannot access properties on {}",
-                other.articled_kind()
-            )),
-        }
     }
 }
 

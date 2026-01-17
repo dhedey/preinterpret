@@ -19,6 +19,18 @@ pub(crate) trait TypeFeatureResolver {
 
     /// Resolves a property of this type.
     fn resolve_type_property(&self, _property_name: &str) -> Option<AnyValue>;
+
+    /// Resolves property access capability for this type (e.g., `obj.field`).
+    /// Returns Some if this type supports property access, None otherwise.
+    fn resolve_property_access(&self) -> Option<PropertyAccessInterface> {
+        None
+    }
+
+    /// Resolves index access capability for this type (e.g., `arr[0]`).
+    /// Returns Some if this type supports indexing, None otherwise.
+    fn resolve_index_access(&self) -> Option<IndexAccessInterface> {
+        None
+    }
 }
 
 pub(crate) trait TypeData {
@@ -46,6 +58,16 @@ pub(crate) trait TypeData {
     /// Properties are *not* currently resolved up the resolution chain... but maybe they should be?
     /// ... similarly, maybe functions should be too, when they are added?
     fn resolve_type_property(_property_name: &str) -> Option<AnyValue> {
+        None
+    }
+
+    /// Returns the property access interface for this type, if supported.
+    fn resolve_own_property_access() -> Option<PropertyAccessInterface> {
+        None
+    }
+
+    /// Returns the index access interface for this type, if supported.
+    fn resolve_own_index_access() -> Option<IndexAccessInterface> {
         None
     }
 }
@@ -291,4 +313,68 @@ impl BinaryOperationInterface {
     pub(crate) fn rhs_ownership(&self) -> ArgumentOwnership {
         self.rhs_ownership
     }
+}
+
+// ============================================================================
+// Property Access Interface
+// ============================================================================
+
+/// Context provided to property access methods.
+#[derive(Clone, Copy)]
+pub(crate) struct PropertyAccessCallContext<'a> {
+    pub property: &'a PropertyAccess,
+}
+
+/// Interface for property access on a type (e.g., `obj.field`).
+///
+/// Unlike unary/binary operations which return owned values, property access
+/// returns references into the source value. This requires three separate
+/// access methods for shared, mutable, and owned access patterns.
+pub(crate) struct PropertyAccessInterface {
+    /// Access a property by shared reference.
+    pub shared_access:
+        for<'a> fn(PropertyAccessCallContext, &'a AnyValue) -> ExecutionResult<&'a AnyValue>,
+    /// Access a property by mutable reference, optionally auto-creating if missing.
+    pub mutable_access: for<'a> fn(
+        PropertyAccessCallContext,
+        &'a mut AnyValue,
+        bool,
+    ) -> ExecutionResult<&'a mut AnyValue>,
+    /// Extract a property from an owned value.
+    pub owned_access: fn(PropertyAccessCallContext, AnyValue) -> ExecutionResult<AnyValue>,
+}
+
+// ============================================================================
+// Index Access Interface
+// ============================================================================
+
+/// Context provided to index access methods.
+#[derive(Clone, Copy)]
+pub(crate) struct IndexAccessCallContext<'a> {
+    pub access: &'a IndexAccess,
+}
+
+/// Interface for index access on a type (e.g., `arr[0]` or `obj["key"]`).
+///
+/// Similar to property access, but the index is an evaluated expression
+/// rather than a static identifier.
+pub(crate) struct IndexAccessInterface {
+    /// The ownership requirement for the index value.
+    pub index_ownership: ArgumentOwnership,
+    /// Access an element by shared reference.
+    pub shared_access: for<'a> fn(
+        IndexAccessCallContext,
+        &'a AnyValue,
+        Spanned<AnyValueRef>,
+    ) -> ExecutionResult<&'a AnyValue>,
+    /// Access an element by mutable reference, optionally auto-creating if missing.
+    pub mutable_access: for<'a> fn(
+        IndexAccessCallContext,
+        &'a mut AnyValue,
+        Spanned<AnyValueRef>,
+        bool,
+    ) -> ExecutionResult<&'a mut AnyValue>,
+    /// Extract an element from an owned value.
+    pub owned_access:
+        fn(IndexAccessCallContext, AnyValue, Spanned<AnyValueRef>) -> ExecutionResult<AnyValue>,
 }

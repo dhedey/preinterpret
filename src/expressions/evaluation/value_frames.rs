@@ -958,15 +958,29 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
         context: ValueContext,
         Spanned(value, source_span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
+        // Get the source kind to check if property access is supported
+        let source_kind = value.value_kind();
+
+        // Query type resolution for property access capability
+        let Some(interface) = source_kind.feature_resolver().resolve_property_access() else {
+            return self.access.type_err(format!(
+                "Cannot access properties on {}",
+                source_kind.articled_display_name()
+            ));
+        };
+
+        let ctx = PropertyAccessCallContext {
+            property: &self.access,
+        };
         let auto_create = context.requested_ownership().requests_auto_create();
+
+        // Execute the access via the interface
         let mapped = value.expect_any_value_and_map(
-            |shared| shared.try_map(|value| value.as_ref_value().property_ref(&self.access)),
-            |mutable| {
-                mutable
-                    .try_map(|value| value.as_mut_value().property_mut(&self.access, auto_create))
-            },
-            |owned| owned.into_property(&self.access),
+            |shared| shared.try_map(|value| (interface.shared_access)(ctx, value)),
+            |mutable| mutable.try_map(|value| (interface.mutable_access)(ctx, value, auto_create)),
+            |owned| (interface.owned_access)(ctx, owned),
         )?;
+
         // The result span covers source through property
         let result_span = SpanRange::new_between(source_span, self.access.span_range());
         context.return_not_necessarily_matching_requested(Spanned(mapped, result_span))
@@ -979,8 +993,13 @@ pub(super) struct ValueIndexAccessBuilder {
 }
 
 enum IndexPath {
-    OnSourceBranch { index: ExpressionNodeId },
-    OnIndexBranch { source: Spanned<RequestedValue> },
+    OnSourceBranch {
+        index: ExpressionNodeId,
+    },
+    OnIndexBranch {
+        source: Spanned<RequestedValue>,
+        interface: IndexAccessInterface,
+    },
 }
 
 impl ValueIndexAccessBuilder {
@@ -1018,33 +1037,48 @@ impl EvaluationFrame for ValueIndexAccessBuilder {
     ) -> ExecutionResult<NextAction> {
         Ok(match self.state {
             IndexPath::OnSourceBranch { index } => {
+                // Get the source kind to check if index access is supported
+                let source_kind = value.value_kind();
+
+                // Query type resolution for index access capability
+                let Some(interface) = source_kind.feature_resolver().resolve_index_access() else {
+                    return self.access.type_err(format!(
+                        "Cannot index into {}",
+                        source_kind.articled_display_name()
+                    ));
+                };
+
+                // Store the interface for the next phase
+                let index_ownership = interface.index_ownership;
                 self.state = IndexPath::OnIndexBranch {
                     source: Spanned(value, span),
+                    interface,
                 };
-                // This is a value, so we are _accessing it_ and can't create values
-                // (that's only possible in a place!) - therefore we don't need an owned key,
-                // and can use &index for reading values from our array
-                context.request_shared(self, index)
+
+                // Request the index with ownership specified by the interface
+                context.request_argument_value(self, index, index_ownership)
             }
             IndexPath::OnIndexBranch {
                 source: Spanned(source, source_span),
+                interface,
             } => {
                 let index = value.expect_shared();
                 let index = index.as_ref_value().spanned(span);
 
+                let ctx = IndexAccessCallContext {
+                    access: &self.access,
+                };
                 let auto_create = context.requested_ownership().requests_auto_create();
+
+                // Execute the access via the interface
                 let result = source.expect_any_value_and_map(
-                    |shared| {
-                        shared.try_map(|value| value.as_ref_value().index_ref(self.access, index))
-                    },
+                    |shared| shared.try_map(|value| (interface.shared_access)(ctx, value, index)),
                     |mutable| {
                         mutable.try_map(|value| {
-                            value
-                                .as_mut_value()
-                                .index_mut(self.access, index, auto_create)
+                            (interface.mutable_access)(ctx, value, index, auto_create)
                         })
                     },
-                    |owned| owned.into_indexed(self.access, index),
+                    |owned| (interface.owned_access)(ctx, owned, index),
                 )?;
                 let result_span = SpanRange::new_between(source_span, self.access.span_range());
                 context.return_not_necessarily_matching_requested(Spanned(result, result_span))?

@@ -223,6 +223,17 @@ define_type_features! {
                 lhs.items.extend(rhs.items);
             }
         }
+        index_access(ArrayValue) {
+            fn shared(source: &'a ArrayValue, index: Spanned<AnyValueRef>) {
+                source.index_ref(index)
+            }
+            fn mutable(source: &'a mut ArrayValue, index: Spanned<AnyValueRef>, _auto_create: bool) {
+                source.index_mut(index)
+            }
+            fn owned(source: ArrayValue, index: Spanned<AnyValueRef>) {
+                source.into_indexed(index)
+            }
+        }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
