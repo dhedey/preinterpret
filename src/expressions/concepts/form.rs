@@ -49,14 +49,12 @@ pub(crate) trait LeafAsMutForm: IsHierarchicalForm {
     fn leaf_as_mut<'r, 'a: 'r, T: IsLeafType>(leaf: &'r mut Self::Leaf<'a, T>) -> &'r mut T::Leaf;
 }
 
-pub(crate) trait IsDynCompatibleForm: IsForm {
+pub(crate) trait IsDynCompatibleForm: IsHierarchicalForm {
     /// The container for a dyn Trait based type.
     /// The DynLeaf can be similar to the standard leaf, but must be
     /// able to support an unsized D.
     type DynLeaf<'a, D: 'static + ?Sized>;
-}
 
-pub(crate) trait IsDynMappableForm: IsHierarchicalForm + IsDynCompatibleForm {
     fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
         leaf: Self::Leaf<'a, T>,
     ) -> Option<Self::DynLeaf<'a, D>>

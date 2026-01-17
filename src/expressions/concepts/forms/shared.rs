@@ -29,9 +29,7 @@ impl IsHierarchicalForm for BeShared {
 
 impl IsDynCompatibleForm for BeShared {
     type DynLeaf<'a, D: 'static + ?Sized> = QqqShared<D>;
-}
 
-impl IsDynMappableForm for BeShared {
     fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
         leaf: Self::Leaf<'a, T>,
     ) -> Option<Self::DynLeaf<'a, D>>

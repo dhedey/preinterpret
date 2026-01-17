@@ -26,9 +26,7 @@ impl IsHierarchicalForm for BeAnyMut {
 
 impl IsDynCompatibleForm for BeAnyMut {
     type DynLeaf<'a, D: 'static + ?Sized> = AnyMut<'a, D>;
-}
 
-impl IsDynMappableForm for BeAnyMut {
     fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
         leaf: Self::Leaf<'a, T>,
     ) -> Option<Self::DynLeaf<'a, D>>

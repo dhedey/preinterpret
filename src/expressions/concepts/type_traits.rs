@@ -62,10 +62,7 @@ pub(crate) trait IsLeafType:
     + for<'a> IsHierarchicalType<Content<'a, BeCopyOnWrite> = <BeCopyOnWrite as IsHierarchicalForm>::Leaf<'a, Self>>
     + for<'a> IsHierarchicalType<Content<'a, BeArgument> = <BeArgument as IsHierarchicalForm>::Leaf<'a, Self>>
     + for<'a> IsHierarchicalType<Content<'a, BeLateBound> = <BeLateBound as IsHierarchicalForm>::Leaf<'a, Self>>
-    + UpcastTo<AnyType, BeOwned>
-    + UpcastTo<AnyType, BeRef>
-    + UpcastTo<AnyType, BeMut>
-    + UpcastTo<AnyType, BeCopyOnWrite>
+    + UpcastTo<AnyType>
 {
     type Leaf: IsValueLeaf<LeafType = Self>;
 
@@ -76,20 +73,18 @@ pub(crate) trait IsDynType: IsType<Variant = DynTypeVariant> {
     type DynContent: ?Sized + 'static;
 }
 
-pub(crate) trait UpcastTo<T: IsHierarchicalType, F: IsHierarchicalForm>:
-    IsHierarchicalType
+pub(crate) trait UpcastTo<T: IsHierarchicalType>: IsHierarchicalType
 {
-    fn upcast_to<'a>(content: Content<'a, Self, F>) -> Content<'a, T, F>;
+    fn upcast_to<'a, F: IsHierarchicalForm>(content: Content<'a, Self, F>) -> Content<'a, T, F>;
 }
 
-pub(crate) trait DowncastFrom<T: IsHierarchicalType, F: IsHierarchicalForm>:
-    IsHierarchicalType
+pub(crate) trait DowncastFrom<T: IsHierarchicalType>: IsHierarchicalType
 {
-    fn downcast_from<'a>(
+    fn downcast_from<'a, F: IsHierarchicalForm>(
         content: Content<'a, T, F>,
     ) -> Result<Content<'a, Self, F>, Content<'a, T, F>>;
 
-    fn resolve<'a>(
+    fn resolve<'a, F: IsHierarchicalForm>(
         content: Content<'a, T, F>,
         span_range: SpanRange,
         resolution_target: &str,
@@ -110,12 +105,11 @@ pub(crate) trait DowncastFrom<T: IsHierarchicalType, F: IsHierarchicalForm>:
     }
 }
 
-pub(crate) trait DynResolveFrom<T: IsHierarchicalType, F: IsHierarchicalForm + IsDynCompatibleForm>:
-    IsDynType
+pub(crate) trait DynResolveFrom<T: IsHierarchicalType>: IsDynType
 {
-    fn downcast_from<'a>(content: Content<'a, T, F>) -> Option<DynContent<'a, Self, F>>;
+    fn downcast_from<'a, F: IsHierarchicalForm + IsDynCompatibleForm>(content: Content<'a, T, F>) -> Option<DynContent<'a, Self, F>>;
 
-    fn resolve<'a>(
+    fn resolve<'a, F: IsHierarchicalForm + IsDynCompatibleForm>(
         content: Content<'a, T, F>,
         span_range: SpanRange,
         resolution_target: &str,
@@ -196,18 +190,18 @@ pub(crate) use impl_type_feature_resolver;
 
 macro_rules! impl_ancestor_chain_conversions {
     ($child:ty $(=> $parent:ident ($parent_content:ident :: $parent_variant:ident) $(=> $ancestor:ty)*)?) => {
-        impl<F: IsHierarchicalForm> DowncastFrom<$child, F> for $child
+        impl DowncastFrom<$child> for $child
         {
-            fn downcast_from<'a>(
+            fn downcast_from<'a, F: IsHierarchicalForm>(
                 content: Content<'a, Self, F>,
             ) -> Result<Content<'a, Self, F>, Content<'a, Self, F>> {
                 Ok(content)
             }
         }
 
-        impl<F: IsHierarchicalForm> UpcastTo<$child, F> for $child
+        impl UpcastTo<$child> for $child
         {
-            fn upcast_to<'a>(
+            fn upcast_to<'a, F: IsHierarchicalForm>(
                 content: Content<'a, Self, F>,
             ) -> Content<'a, Self, F> {
                 content
@@ -234,18 +228,18 @@ macro_rules! impl_ancestor_chain_conversions {
                 }
             }
 
-            impl<F: IsHierarchicalForm> DowncastFrom<$parent, F> for $child
+            impl DowncastFrom<$parent> for $child
             {
-                fn downcast_from<'a>(
+                fn downcast_from<'a, F: IsHierarchicalForm>(
                     content: Content<'a, $parent, F>,
                 ) -> Result<Content<'a, Self, F>, Content<'a, $parent, F>> {
                     <$child as IsChildType>::from_parent(content)
                 }
             }
 
-            impl<F: IsHierarchicalForm> UpcastTo<$parent, F> for $child
+            impl UpcastTo<$parent> for $child
             {
-                fn upcast_to<'a>(
+                fn upcast_to<'a, F: IsHierarchicalForm>(
                     content: Content<'a, $child, F>,
                 ) -> Content<'a, $parent, F> {
                     <$child as IsChildType>::into_parent(content)
@@ -253,23 +247,23 @@ macro_rules! impl_ancestor_chain_conversions {
             }
 
             $(
-                impl<F: IsHierarchicalForm> DowncastFrom<$ancestor, F> for $child {
-                    fn downcast_from<'a>(
+                impl DowncastFrom<$ancestor> for $child {
+                    fn downcast_from<'a, F: IsHierarchicalForm>(
                         content: Content<'a, $ancestor, F>,
                     ) -> Result<Content<'a, $child, F>, Content<'a, $ancestor, F>> {
-                        let inner = <$parent as DowncastFrom<$ancestor, F>>::downcast_from(content)?;
-                        match <$child as DowncastFrom<$parent, F>>::downcast_from(inner) {
+                        let inner = <$parent as DowncastFrom<$ancestor>>::downcast_from::<F>(content)?;
+                        match <$child as DowncastFrom<$parent>>::downcast_from::<F>(inner) {
                             Ok(c) => Ok(c),
-                            Err(existing) => Err(<$parent as UpcastTo<$ancestor, F>>::upcast_to(existing)),
+                            Err(existing) => Err(<$parent as UpcastTo<$ancestor>>::upcast_to::<F>(existing)),
                         }
                     }
                 }
 
-                impl<F: IsHierarchicalForm> UpcastTo<$ancestor, F> for $child {
-                    fn upcast_to<'a>(
+                impl UpcastTo<$ancestor> for $child {
+                    fn upcast_to<'a, F: IsHierarchicalForm>(
                         content: Content<'a, $child, F>,
                     ) -> Content<'a, $ancestor, F> {
-                        <$parent as UpcastTo<$ancestor, F>>::upcast_to(<$child as UpcastTo<$parent, F>>::upcast_to(content))
+                        <$parent as UpcastTo<$ancestor>>::upcast_to::<F>(<$child as UpcastTo<$parent>>::upcast_to::<F>(content))
                     }
                 }
             )*
@@ -804,14 +798,14 @@ macro_rules! define_dyn_type {
             type Type = $type_def;
         }
 
-        impl<T: IsHierarchicalType, F: IsHierarchicalForm + IsDynCompatibleForm + IsDynMappableForm> DynResolveFrom<T, F> for $type_def
+        impl<T: IsHierarchicalType> DynResolveFrom<T> for $type_def
         {
-            fn downcast_from<'a>(content: Content<'a, T, F>) -> Option<DynContent<'a, Self, F>> {
+            fn downcast_from<'a, F: IsHierarchicalForm + IsDynCompatibleForm>(content: Content<'a, T, F>) -> Option<DynContent<'a, Self, F>> {
                 T::map_with::<'a, F, _>(DynMapper::<$dyn_type>::new(), content)
             }
         }
 
-        impl<F: IsDynMappableForm> LeafMapper<F> for DynMapper<$dyn_type> {
+        impl<F: IsDynCompatibleForm> LeafMapper<F> for DynMapper<$dyn_type> {
             type Output<'a, T: IsHierarchicalType> =  Option<F::DynLeaf<'a, $dyn_type>>;
 
             fn to_parent_output<'a, T: IsChildType>(

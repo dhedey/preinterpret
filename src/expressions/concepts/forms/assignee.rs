@@ -29,9 +29,7 @@ impl IsHierarchicalForm for BeAssignee {
 
 impl IsDynCompatibleForm for BeAssignee {
     type DynLeaf<'a, D: 'static + ?Sized> = QqqAssignee<D>;
-}
 
-impl IsDynMappableForm for BeAssignee {
     fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
         leaf: Self::Leaf<'a, T>,
     ) -> Option<Self::DynLeaf<'a, D>>

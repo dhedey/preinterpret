@@ -48,24 +48,24 @@ where
     #[inline]
     fn upcast<S: IsHierarchicalType>(self) -> Content<'a, S, Self::Form>
     where
-        Self::Type: UpcastTo<S, Self::Form>,
+        Self::Type: UpcastTo<S>,
     {
-        <Self::Type>::upcast_to(self.into_content())
+        <Self::Type>::upcast_to::<Self::Form>(self.into_content())
     }
 
     #[inline]
     #[allow(clippy::type_complexity)] // It's actually pretty readable
     fn downcast<U>(self) -> Result<Content<'a, U, Self::Form>, Content<'a, Self::Type, Self::Form>>
     where
-        U: DowncastFrom<Self::Type, Self::Form>,
+        U: DowncastFrom<Self::Type>,
     {
-        U::downcast_from(self.into_content())
+        U::downcast_from::<Self::Form>(self.into_content())
     }
 
     #[inline]
     fn into_any(self) -> Content<'a, AnyType, Self::Form>
     where
-        Self::Type: UpcastTo<AnyType, Self::Form>,
+        Self::Type: UpcastTo<AnyType>,
     {
         self.upcast()
     }
@@ -94,11 +94,11 @@ where
         description: &str,
     ) -> ExecutionResult<X>
     where
-        <X as IsValueContent>::Type: DowncastFrom<C::Type, C::Form>,
+        <X as IsValueContent>::Type: DowncastFrom<C::Type>,
     {
         let Spanned(value, span_range) = self;
         let content = value.into_content();
-        let resolved = <<X as IsValueContent>::Type>::resolve(content, span_range, description)?;
+        let resolved = <<X as IsValueContent>::Type>::resolve::<C::Form>(content, span_range, description)?;
         Ok(X::from_spanned_content(Spanned(resolved, span_range)))
     }
 }
@@ -106,7 +106,7 @@ where
 // TODO[concepts]: Remove eventually, along with IntoValue impl
 impl<X: IntoValueContent<'static, Form = BeOwned>> IntoAnyValue for X
 where
-    X::Type: UpcastTo<AnyType, BeOwned>,
+    X::Type: UpcastTo<AnyType>,
 {
     fn into_any_value(self) -> AnyValue {
         self.into_any()

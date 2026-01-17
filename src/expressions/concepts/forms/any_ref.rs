@@ -27,9 +27,7 @@ impl IsHierarchicalForm for BeAnyRef {
 
 impl IsDynCompatibleForm for BeAnyRef {
     type DynLeaf<'a, D: 'static + ?Sized> = crate::internal_prelude::AnyRef<'a, D>;
-}
 
-impl IsDynMappableForm for BeAnyRef {
     fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
         leaf: Self::Leaf<'a, T>,
     ) -> Option<Self::DynLeaf<'a, D>>

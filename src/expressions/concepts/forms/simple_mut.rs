@@ -30,9 +30,7 @@ impl IsHierarchicalForm for BeMut {
 
 impl IsDynCompatibleForm for BeMut {
     type DynLeaf<'a, D: 'static + ?Sized> = &'a mut D;
-}
 
-impl IsDynMappableForm for BeMut {
     fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
         leaf: Self::Leaf<'a, T>,
     ) -> Option<Self::DynLeaf<'a, D>>
