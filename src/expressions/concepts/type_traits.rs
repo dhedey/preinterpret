@@ -62,6 +62,10 @@ pub(crate) trait IsLeafType:
     + for<'a> IsHierarchicalType<Content<'a, BeCopyOnWrite> = <BeCopyOnWrite as IsHierarchicalForm>::Leaf<'a, Self>>
     + for<'a> IsHierarchicalType<Content<'a, BeArgument> = <BeArgument as IsHierarchicalForm>::Leaf<'a, Self>>
     + for<'a> IsHierarchicalType<Content<'a, BeLateBound> = <BeLateBound as IsHierarchicalForm>::Leaf<'a, Self>>
+    + UpcastTo<AnyType, BeOwned>
+    + UpcastTo<AnyType, BeRef>
+    + UpcastTo<AnyType, BeMut>
+    + UpcastTo<AnyType, BeCopyOnWrite>
 {
     type Leaf: IsValueLeaf<LeafType = Self>;
 

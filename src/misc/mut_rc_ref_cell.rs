@@ -162,7 +162,7 @@ impl<T: ?Sized, U: 'static + ?Sized> SharedSubRcRefCell<T, U> {
         }
     }
 
-    pub(crate) fn map<V: ?Sized>(self, f: impl FnOnce(&U) -> &V) -> SharedSubRcRefCell<T, V> {
+    pub(crate) fn map<V: ?Sized>(self, f: impl for<'a> FnOnce(&'a U) -> &'a V) -> SharedSubRcRefCell<T, V> {
         SharedSubRcRefCell {
             shared_ref: Ref::map(self.shared_ref, f),
             pointed_at: self.pointed_at,
@@ -200,6 +200,19 @@ impl<T: ?Sized, U: 'static + ?Sized> SharedSubRcRefCell<T, U> {
         }
     }
 
+    pub(crate) fn replace<O>(
+        self,
+        f: impl for<'a> FnOnce(&'a U, Encapsulator<'a, T, U>) -> O,
+    ) -> O {
+        f(
+            &*Ref::clone(&self.shared_ref),
+            Encapsulator {
+                inner: self,
+                encapsulation_lifetime: std::marker::PhantomData,
+            }
+        )
+    }
+
     /// SAFETY:
     /// * Must be paired with a call to `enable()` before any further use of the value.
     /// * Must not use the value while disabled.
@@ -223,6 +236,25 @@ impl<T: ?Sized, U: 'static + ?Sized> SharedSubRcRefCell<T, U> {
             }
             Err(e) => Err(e),
         }
+    }
+}
+
+
+pub(crate) struct Encapsulator<'a, T: ?Sized, U: 'static + ?Sized> {
+    inner: SharedSubRcRefCell<T, U>,
+    encapsulation_lifetime: std::marker::PhantomData<&'a ()>,
+}
+
+impl <'a, T: 'static + ?Sized, U: 'static + ?Sized> Encapsulator<'a, T, U> {
+    pub(crate) fn encapsulate<V: 'static + ?Sized>(
+        self,
+        value: &'a V,
+    ) -> SharedSubRcRefCell<T, V> {
+        self.inner.map(|_|
+            // SAFETY: The lifetime 'a is equal to the &'a content argument in replace
+            // So this guarantees that the returned reference is valid as long as the SharedSubRcRefCell exists 
+            unsafe { less_buggy_transmute::<&'a V, &'static V>(value) }
+        )
     }
 }
 

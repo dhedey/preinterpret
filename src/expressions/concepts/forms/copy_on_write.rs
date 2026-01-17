@@ -1,14 +1,14 @@
 use super::*;
 
-pub(crate) enum QqqCopyOnWrite<T: 'static> {
+pub(crate) enum QqqCopyOnWrite<L: 'static> {
     /// An owned value that can be used directly
-    Owned(Owned<T>),
+    Owned(Owned<L>),
     /// For use when the CopyOnWrite value effectively represents the owned value (post-clone).
     /// In this case, returning a Cow is just an optimization and we can always clone infallibly.
-    SharedWithInfallibleCloning(QqqShared<T>),
+    SharedWithInfallibleCloning(QqqShared<L>),
     /// For use when the CopyOnWrite value represents a pre-cloned read-only value.
     /// A transparent clone may fail in this case at use time.
-    SharedWithTransparentCloning(QqqShared<T>),
+    SharedWithTransparentCloning(QqqShared<L>),
 }
 
 impl<L: IsValueLeaf> IsValueContent for QqqCopyOnWrite<L> {
@@ -192,35 +192,53 @@ where
     }
 
     // TODO - Find alternative implementation or replace
-    // fn map<M: OwnedTypeMapper + RefTypeMapper>(self, mapper: M) -> ExecutionResult<Content<'a, M::TTo, BeCopyOnWrite>>
-    //     where
-    //         M: TypeMapper<TFrom = Self::Type>,
-    //         Self: Sized,
-    // {
-    //     Ok(match self.into_any_level_copy_on_write() {
-    //         AnyLevelCopyOnWrite::Owned(owned) => {
-    //             BeCopyOnWrite::new_owned::<M::TTo>(mapper.map_owned(owned)?)
-    //         }
-    //         AnyLevelCopyOnWrite::SharedWithInfallibleCloning(shared) => {
-    //             let shared_old = shared.clone();
-    //             let ref_value = shared.as_ref_value();
-    //             map_via_leaf! {
-    //                 input: (Content<'a, Self::Type, BeRef>) = ref_value,
-    //                 state: QqqShared<M::Type> | let ref_value = ref_value,
-    //                 fn map_leaf<F = BeRef, T>(leaf) -> (Content<'a, M::TTo, BeCopyOnWrite>) {
-    //                     QqqCopyOnWrite::SharedWithInfallibleCloning(leaf.try_map(|_ignored| {
-    //                         QqqCopyOnWrite::SharedWithInfallibleCloning(ref_value)
-    //                     }))
-    //                 }
-    //             }
-    //             BeCopyOnWrite::new_shared_in_place_of_owned::<M::TTo>(mapper.map_ref(shared)?)
-    //         }
-    //         AnyLevelCopyOnWrite::SharedWithTransparentCloning(shared) => {
-    //             BeCopyOnWrite::new_shared_in_place_of_shared::<M::TTo>(mapper.map_ref(shared)?)
-    //             todo!()
-    //         }
-    //     })
-    // }
+    fn map<M: OwnedTypeMapper + RefTypeMapper>(self, mapper: M) -> ExecutionResult<Content<'static, M::TTo, BeCopyOnWrite>>
+        where
+            'a: 'static,
+            M: TypeMapper<TFrom = Self::Type, TTo = AnyType>, // u32 is temporary to see if we can make it work without adding generics to `map_via_leaf!`
+            Self: Sized,
+            Self: IsValueContent<Type = AnyType>, // Temporary to see if we can make it work without adding generics to `map_via_leaf!`
+    {
+
+        Ok(match self.into_any_level_copy_on_write() {
+            AnyLevelCopyOnWrite::Owned(owned) => {
+                BeCopyOnWrite::new_owned::<M::TTo>(mapper.map_owned(owned)?)
+            }
+            AnyLevelCopyOnWrite::SharedWithInfallibleCloning(shared) => {
+                let shared = map_via_leaf! {
+                    input: (Content<'a, Self::Type, BeShared>) = shared,
+                    fn map_leaf<F = BeShared, T>(leaf) -> (ExecutionResult<QqqShared<Content<'static, AnyType, BeOwned>>>) {
+                        leaf.try_map(|value_ref| {
+                            let from_ref = value_ref.into_any();
+                            inner_map_ref(from_ref) // &Content<TOut, BeOwned>
+                        })
+                    }
+                }?;
+                struct AsIs<T>(T);
+                shared.replace(|content, encapsulator| {
+                    map_via_leaf! {
+                        input: &'r (Content<'a, AnyType, BeOwned>) = content,
+                        state: | <'r2> Encapsulator<'r2, AnyValue, AnyValue> | let encapsulator = encapsulator,
+                        fn map_leaf<F = BeOwned, T>(leaf) -> (AsIs<Content<'static, AnyType, BeCopyOnWrite>>) {
+                            let shared_leaf = encapsulator.encapsulate(leaf);
+                            let new_leaf = QqqCopyOnWrite::SharedWithInfallibleCloning(shared_leaf);
+                            AsIs(new_leaf.into_any())
+                        }
+                    }
+                }).0
+            }
+            AnyLevelCopyOnWrite::SharedWithTransparentCloning(shared) => {
+                todo!()
+            }
+        })
+    }
+}
+
+
+fn inner_map_ref<'a>(
+    ref_value: Content<'a, AnyType, BeRef>,
+) -> ExecutionResult<&'a Content<'static, AnyType, BeOwned>> {
+    unimplemented!()
 }
 
 /// Using the leaf-based type [`Content<'a, T, BeCopyOnWrite>`] is usually preferred,
@@ -272,14 +290,14 @@ pub(crate) trait RefTypeMapper: TypeMapper {
     fn map_ref<'a>(
         self,
         ref_value: Content<'a, Self::TFrom, BeRef>,
-    ) -> ExecutionResult<Content<'a, Self::TTo, BeRef>>;
+    ) -> ExecutionResult<&'a Content<'a, Self::TTo, BeOwned>>;
 }
 
 pub(crate) trait MutTypeMapper: TypeMapper {
     fn map_mut<'a>(
         self,
         mut_value: Content<'a, Self::TFrom, BeMut>,
-    ) -> ExecutionResult<Content<'a, Self::TTo, BeMut>>;
+    ) -> ExecutionResult<&'a mut Content<'a, Self::TTo, BeOwned>>;
 }
 
 impl<'a, C: IsSelfValueContent<'a>> IsSelfCopyOnWriteContent<'a> for C
