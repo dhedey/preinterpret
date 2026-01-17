@@ -192,14 +192,14 @@ where
     }
 
     // TODO - Find alternative implementation or replace
-    fn map<M: OwnedTypeMapper + RefTypeMapper>(self, mapper: M) -> ExecutionResult<Content<'static, M::TTo, BeCopyOnWrite>>
-        where
-            'a: 'static,
-            M: TypeMapper<TFrom = Self::Type, TTo = AnyType>, // u32 is temporary to see if we can make it work without adding generics to `map_via_leaf!`
-            Self: Sized,
-            Self: IsValueContent<Type = AnyType>, // Temporary to see if we can make it work without adding generics to `map_via_leaf!`
+    fn map<M>(self, mapper: M) -> ExecutionResult<Content<'static, M::TTo, BeCopyOnWrite>>
+    where
+        'a: 'static,
+        M: OwnedTypeMapper + RefTypeMapper,
+        M: TypeMapper<TFrom = Self::Type, TTo = AnyType>, // u32 is temporary to see if we can make it work without adding generics to `map_via_leaf!`
+        Self: Sized,
+        Self: IsValueContent<Type = AnyType>, // Temporary to see if we can make it work without adding generics to `map_via_leaf!`
     {
-
         Ok(match self.into_any_level_copy_on_write() {
             AnyLevelCopyOnWrite::Owned(owned) => {
                 BeCopyOnWrite::new_owned::<M::TTo>(mapper.map_owned(owned)?)
@@ -236,7 +236,6 @@ where
         })
     }
 }
-
 
 fn inner_map_ref<'a>(
     ref_value: Content<'a, AnyType, BeRef>,

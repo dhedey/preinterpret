@@ -98,7 +98,8 @@ where
     {
         let Spanned(value, span_range) = self;
         let content = value.into_content();
-        let resolved = <<X as IsValueContent>::Type>::resolve::<C::Form>(content, span_range, description)?;
+        let resolved =
+            <<X as IsValueContent>::Type>::resolve::<C::Form>(content, span_range, description)?;
         Ok(X::from_spanned_content(Spanned(resolved, span_range)))
     }
 }

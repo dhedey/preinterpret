@@ -73,13 +73,11 @@ pub(crate) trait IsDynType: IsType<Variant = DynTypeVariant> {
     type DynContent: ?Sized + 'static;
 }
 
-pub(crate) trait UpcastTo<T: IsHierarchicalType>: IsHierarchicalType
-{
+pub(crate) trait UpcastTo<T: IsHierarchicalType>: IsHierarchicalType {
     fn upcast_to<'a, F: IsHierarchicalForm>(content: Content<'a, Self, F>) -> Content<'a, T, F>;
 }
 
-pub(crate) trait DowncastFrom<T: IsHierarchicalType>: IsHierarchicalType
-{
+pub(crate) trait DowncastFrom<T: IsHierarchicalType>: IsHierarchicalType {
     fn downcast_from<'a, F: IsHierarchicalForm>(
         content: Content<'a, T, F>,
     ) -> Result<Content<'a, Self, F>, Content<'a, T, F>>;
@@ -105,9 +103,10 @@ pub(crate) trait DowncastFrom<T: IsHierarchicalType>: IsHierarchicalType
     }
 }
 
-pub(crate) trait DynResolveFrom<T: IsHierarchicalType>: IsDynType
-{
-    fn downcast_from<'a, F: IsHierarchicalForm + IsDynCompatibleForm>(content: Content<'a, T, F>) -> Option<DynContent<'a, Self, F>>;
+pub(crate) trait DynResolveFrom<T: IsHierarchicalType>: IsDynType {
+    fn downcast_from<'a, F: IsHierarchicalForm + IsDynCompatibleForm>(
+        content: Content<'a, T, F>,
+    ) -> Option<DynContent<'a, Self, F>>;
 
     fn resolve<'a, F: IsHierarchicalForm + IsDynCompatibleForm>(
         content: Content<'a, T, F>,
