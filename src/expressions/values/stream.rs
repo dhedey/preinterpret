@@ -97,9 +97,14 @@ impl ValuesEqual for OutputStream {
     }
 }
 
-impl IntoAnyValue for TokenStream {
-    fn into_any_value(self) -> AnyValue {
-        OutputStream::raw(self).into_any_value()
+impl IsValueContent for TokenStream {
+    type Type = StreamType;
+    type Form = BeOwned;
+}
+
+impl IntoValueContent<'static> for TokenStream {
+    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
+        OutputStream::raw(self)
     }
 }
 
@@ -179,18 +184,18 @@ define_type_features! {
             // ============
 
             // NOTE: with_span() exists on all values, this is just a specialized mutable version for streams
-            fn set_span(mut this: Mutable<OutputStream>, span_source: Shared<OutputStream>) -> ExecutionResult<()> {
+            fn set_span(mut this: Mutable<OutputStream>, span_source: AnyRef<OutputStream>) -> ExecutionResult<()> {
                 let span_range = span_source.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
                 this.replace_first_level_spans(span_range.join_into_span_else_start());
                 Ok(())
             }
 
-            fn error(this: Shared<OutputStream>, message: Shared<String>) -> ExecutionResult<Never> {
+            fn error(this: AnyRef<OutputStream>, message: AnyRef<String>) -> ExecutionResult<Never> {
                 let error_span_range = this.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
                 error_span_range.assertion_err(message.as_str())
             }
 
-            fn assert(this: Shared<OutputStream>, condition: bool, message: Option<AnyRef<String>>) -> ExecutionResult<()> {
+            fn assert(this: AnyRef<OutputStream>, condition: bool, message: Option<AnyRef<String>>) -> ExecutionResult<()> {
                 if condition {
                     Ok(())
                 } else {
@@ -203,7 +208,7 @@ define_type_features! {
                 }
             }
 
-            fn assert_eq(this: Shared<OutputStream>, lhs: Spanned<AnyValueAnyRef>, rhs: Spanned<AnyValueAnyRef>, message: Option<AnyRef<String>>) -> ExecutionResult<()> {
+            fn assert_eq(this: AnyRef<OutputStream>, lhs: Spanned<AnyValueAnyRef>, rhs: Spanned<AnyValueAnyRef>, message: Option<AnyRef<String>>) -> ExecutionResult<()> {
                 match AnyValueRef::debug_eq(&lhs.as_ref_value(), &rhs.as_ref_value()) {
                     Ok(()) => Ok(()),
                     Err(debug_error) => {

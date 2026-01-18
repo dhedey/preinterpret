@@ -258,9 +258,14 @@ impl Spanned<&ObjectValue> {
     }
 }
 
-impl IntoAnyValue for BTreeMap<String, ObjectEntry> {
-    fn into_any_value(self) -> AnyValue {
-        AnyValue::Object(ObjectValue { entries: self })
+impl IsValueContent for BTreeMap<String, ObjectEntry> {
+    type Type = ObjectType;
+    type Form = BeOwned;
+}
+
+impl IntoValueContent<'static> for BTreeMap<String, ObjectEntry> {
+    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
+        ObjectValue { entries: self }
     }
 }
 

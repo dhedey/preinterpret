@@ -58,3 +58,11 @@ impl MapFromArgument for BeShared {
         Ok(value.expect_shared().into_content())
     }
 }
+
+// impl MapIntoReturned for BeShared {
+//     fn into_returned_value(
+//         content: Content<'static, AnyType, Self>,
+//     ) -> ExecutionResult<ReturnedValue> {
+//         todo!("Return shared")
+//     }
+// }

@@ -270,27 +270,47 @@ impl_resolvable_argument_for! {
     }
 }
 
-impl IntoAnyValue for TokenTree {
-    fn into_any_value(self) -> AnyValue {
-        OutputStream::new_with(|s| s.push_raw_token_tree(self)).into_any_value()
+impl IsValueContent for TokenTree {
+    type Type = StreamType;
+    type Form = BeOwned;
+}
+
+impl IntoValueContent<'static> for TokenTree {
+    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
+        OutputStream::new_with(|s| s.push_raw_token_tree(self))
     }
 }
 
-impl IntoAnyValue for Ident {
-    fn into_any_value(self) -> AnyValue {
-        OutputStream::new_with(|s| s.push_ident(self)).into_any_value()
+impl IsValueContent for Ident {
+    type Type = StreamType;
+    type Form = BeOwned;
+}
+
+impl IntoValueContent<'static> for Ident {
+    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
+        OutputStream::new_with(|s| s.push_ident(self))
     }
 }
 
-impl IntoAnyValue for Punct {
-    fn into_any_value(self) -> AnyValue {
-        OutputStream::new_with(|s| s.push_punct(self)).into_any_value()
+impl IsValueContent for Punct {
+    type Type = StreamType;
+    type Form = BeOwned;
+}
+
+impl IntoValueContent<'static> for Punct {
+    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
+        OutputStream::new_with(|s| s.push_punct(self))
     }
 }
 
-impl IntoAnyValue for Literal {
-    fn into_any_value(self) -> AnyValue {
-        OutputStream::new_with(|s| s.push_literal(self)).into_any_value()
+impl IsValueContent for Literal {
+    type Type = StreamType;
+    type Form = BeOwned;
+}
+
+impl IntoValueContent<'static> for Literal {
+    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
+        OutputStream::new_with(|s| s.push_literal(self))
     }
 }
 

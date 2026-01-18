@@ -38,8 +38,13 @@ pub(crate) fn print_if_slow<T>(
 // Equivalent to `!` but stable in our MSRV
 pub(crate) enum Never {}
 
-impl IntoAnyValue for Never {
-    fn into_any_value(self) -> AnyValue {
+impl IsValueContent for Never {
+    type Type = NoneType;
+    type Form = BeOwned;
+}
+
+impl IntoValueContent<'static> for Never {
+    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
         match self {}
     }
 }

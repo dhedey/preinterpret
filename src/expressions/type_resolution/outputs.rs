@@ -38,12 +38,6 @@ impl IsReturnable for AnyValueMutable {
     }
 }
 
-impl<T: IntoAnyValue> IsReturnable for T {
-    fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
-        Ok(ReturnedValue::Owned(self.into_any_value()))
-    }
-}
-
 impl<T: IsReturnable> IsReturnable for ExecutionResult<T> {
     fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
         self?.to_returned_value()

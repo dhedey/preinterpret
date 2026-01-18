@@ -170,9 +170,14 @@ impl ValuesEqual for ArrayValue {
     }
 }
 
-impl IntoAnyValue for Vec<AnyValue> {
-    fn into_any_value(self) -> AnyValue {
-        ArrayValue { items: self }.into_any_value()
+impl IsValueContent for Vec<AnyValue> {
+    type Type = ArrayType;
+    type Form = BeOwned;
+}
+
+impl IntoValueContent<'static> for Vec<AnyValue> {
+    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
+        ArrayValue { items: self }
     }
 }
 

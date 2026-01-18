@@ -42,12 +42,6 @@ impl ValuesEqual for String {
     }
 }
 
-impl IntoAnyValue for &str {
-    fn into_any_value(self) -> AnyValue {
-        self.to_string().into_any_value()
-    }
-}
-
 pub(crate) fn string_to_ident(
     str: &str,
     error_source: &impl HasSpanRange,
@@ -153,36 +147,36 @@ define_type_features! {
             }
         }
         pub(crate) mod binary_operations {
-            fn add(mut lhs: String, rhs: Shared<str>) -> String {
+            fn add(mut lhs: String, rhs: AnyRef<String>) -> String {
                 lhs.push_str(rhs.deref());
                 lhs
             }
 
-            fn add_assign(mut lhs: Assignee<String>, rhs: Shared<str>) {
+            fn add_assign(mut lhs: Assignee<String>, rhs: AnyRef<String>) {
                 lhs.push_str(rhs.deref());
             }
 
-            fn eq(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+            fn eq(lhs: AnyRef<String>, rhs: AnyRef<String>) -> bool {
                 lhs.deref() == rhs.deref()
             }
 
-            fn ne(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+            fn ne(lhs: AnyRef<String>, rhs: AnyRef<String>) -> bool {
                 lhs.deref() != rhs.deref()
             }
 
-            fn lt(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+            fn lt(lhs: AnyRef<String>, rhs: AnyRef<String>) -> bool {
                 lhs.deref() < rhs.deref()
             }
 
-            fn le(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+            fn le(lhs: AnyRef<String>, rhs: AnyRef<String>) -> bool {
                 lhs.deref() <= rhs.deref()
             }
 
-            fn ge(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+            fn ge(lhs: AnyRef<String>, rhs: AnyRef<String>) -> bool {
                 lhs.deref() >= rhs.deref()
             }
 
-            fn gt(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+            fn gt(lhs: AnyRef<String>, rhs: AnyRef<String>) -> bool {
                 lhs.deref() > rhs.deref()
             }
         }

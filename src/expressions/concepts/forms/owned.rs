@@ -55,6 +55,14 @@ impl MapFromArgument for BeOwned {
     }
 }
 
+impl MapIntoReturned for BeOwned {
+    fn into_returned_value(
+        content: Content<'static, AnyType, Self>,
+    ) -> ExecutionResult<ReturnedValue> {
+        Ok(ReturnedValue::Owned(content))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

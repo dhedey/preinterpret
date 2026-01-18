@@ -64,3 +64,11 @@ impl MapFromArgument for BeMutable {
         Ok(value.expect_mutable().into_content())
     }
 }
+
+// impl MapIntoReturned for BeMutable {
+//     fn into_returned_value(
+//         content: Content<'static, AnyType, Self>,
+//     ) -> ExecutionResult<ReturnedValue> {
+//         todo!("Return mutable")
+//     }
+// }

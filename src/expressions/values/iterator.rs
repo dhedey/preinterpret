@@ -184,15 +184,25 @@ impl IteratorValue {
     }
 }
 
-impl IntoAnyValue for IteratorValueInner {
-    fn into_any_value(self) -> AnyValue {
-        AnyValue::Iterator(IteratorValue::new(self))
+impl IsValueContent for IteratorValueInner {
+    type Type = IteratorType;
+    type Form = BeOwned;
+}
+
+impl IntoValueContent<'static> for IteratorValueInner {
+    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
+        IteratorValue::new(self)
     }
 }
 
-impl IntoAnyValue for Box<dyn ClonableIterator<Item = AnyValue>> {
-    fn into_any_value(self) -> AnyValue {
-        AnyValue::Iterator(IteratorValue::new_custom(self))
+impl IsValueContent for Box<dyn ClonableIterator<Item = AnyValue>> {
+    type Type = IteratorType;
+    type Form = BeOwned;
+}
+
+impl IntoValueContent<'static> for Box<dyn ClonableIterator<Item = AnyValue>> {
+    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
+        IteratorValue::new_custom(self)
     }
 }
 

@@ -372,11 +372,16 @@ impl RangeValueInner {
     }
 }
 
-impl IntoAnyValue for RangeValueInner {
-    fn into_any_value(self) -> AnyValue {
-        AnyValue::Range(RangeValue {
+impl IsValueContent for RangeValueInner {
+    type Type = RangeType;
+    type Form = BeOwned;
+}
+
+impl IntoValueContent<'static> for RangeValueInner {
+    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
+        RangeValue {
             inner: Box::new(self),
-        })
+        }
     }
 }
 

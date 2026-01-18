@@ -234,16 +234,14 @@ impl<
     }
 }
 
-// Clashes with other blanket impl it will replace!
-//
-// impl<
-//     X: IntoValueContent<'static, Type = T, Form = F>,
-//     F: IsForm + MapIntoReturned,
-//     T: UpcastTo<ValueType, F>,
-// > IsReturnable for X {
-//     fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
-//         let type_mapped = self.into_actual()
-//             .upcast::<ValueType>();
-//         F::into_returned_value(type_mapped)
-//     }
-// }
+impl<
+        X: IntoValueContent<'static, Type = T, Form = F>,
+        F: IsForm + MapIntoReturned,
+        T: UpcastTo<AnyType>,
+    > IsReturnable for X
+{
+    fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
+        let type_mapped = self.into_content().upcast::<AnyType>();
+        F::into_returned_value(type_mapped)
+    }
+}
