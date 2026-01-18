@@ -217,12 +217,10 @@ where
 {
 }
 
-// Clashes with other blanket impl it will replace!
-//
 impl<
         X: FromValueContent<'static, Type = T, Form = F>,
-        F: IsForm + MapFromArgument,
-        T: TypeData + DowncastFrom<AnyType>,
+        F: MapFromArgument,
+        T: DowncastFrom<AnyType>,
     > IsArgument for X
 {
     type ValueType = T;
@@ -235,13 +233,15 @@ impl<
 }
 
 impl<
-        X: IntoValueContent<'static, Type = T, Form = F>,
-        F: IsForm + MapIntoReturned,
+        X: IntoValueContent<'static, Type = T, Form = BeOwned>,
+        // TODO[concepts]: Migrate to BeOwned => F when it doesn't break MSRV
+        // due to clashes with `IntoValueContent` on Shared<AnyValue> / Mutable<AnyValue>
+        // F: MapIntoReturned,
         T: UpcastTo<AnyType>,
     > IsReturnable for X
 {
     fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
         let type_mapped = self.into_content().upcast::<AnyType>();
-        F::into_returned_value(type_mapped)
+        BeOwned::into_returned_value(type_mapped)
     }
 }

@@ -8,7 +8,7 @@ impl TypeVariant for HierarchicalTypeVariant {}
 pub(crate) struct DynTypeVariant;
 impl TypeVariant for DynTypeVariant {}
 
-pub(crate) trait IsType: Sized {
+pub(crate) trait IsType: Sized + TypeData {
     type Variant: TypeVariant;
 
     const SOURCE_TYPE_NAME: &'static str;
