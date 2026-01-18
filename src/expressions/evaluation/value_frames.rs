@@ -1146,7 +1146,6 @@ impl EvaluationFrame for RangeBuilder {
         context: ValueContext,
         Spanned(value, _span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
-        // TODO[range-refactor]: Change to not always clone the value
         let value = value.expect_owned();
         Ok(match (self.state, self.range_limits) {
             (RangePath::OnLeftBranch { right: Some(right) }, _) => {

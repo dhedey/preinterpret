@@ -200,136 +200,27 @@ First, read the @./2025-11-vision.md
 
 ## Better handling of value sub-references
 
-- [x] Migrate from `Owned` having a span to a `Spanned<Owned>`
-- [ ] Implement and roll-out GATs
-  - [x] Initial shell implementation in `concepts` folder
-  - [x] Improved error handling in the macro (e.g. required arg after optional; no matching strongly-typed signature)
-  - [x] Separate Hierarchical and DynCompatible Forms
-  - [x] Improved macro support
-  - [x] Add source type name to type macro/s
-  - [x] Generate value kinds from the macros
-    - [x] Add (temporary) ability to link to TypeData and resolve methods from there
-    - [x] Then implement all the macros
-    - [x] And use that to generate AnyValueLeafKind from the new macros
-    - [x] Find a way to generate `from_source_name` - ideally efficiently
-  - [x] Add ability to implement IsIterable
-  - [x] `CastTarget` simply wraps `TypeKind`
-  - [x] Create a `Ref` and a `Mut` form
-    - [x] They won't implement `IsArgumentForm`
-    - [x] Create mappers and suitably generic `as_ref()` and `as_mut()` methods on `Actual<F>`
-  - [x] Migrate method resolution to the trait macro properly
-    - [x] And property resolution `dyn TypeFeatureResolver`
-    - [x] Replace `impl TypeFeatureResolver for $type_def`
-    - [x] Remove `temp_type_data: $type_data:ident,`
-    - [x] Remove `HierarchicalTypeData`
-  - [ ] Stage 1 of the form migration:
-    - [x] Add temp blanket impl from `IntoValue` for `IntoValueContent`
-    - [x] Get rid of `BooleanValue` wrapper
-    - [x] Get rid of `StreamValue` wrapper
-    - [x] Get rid of `CharValue` wrapper
-    - [x] Replace `IntegerValue` with `type IntegerValue = IntegerContent<'static, BeOwned>`
-    - [x] Replace `FloatValue` with `type FloatValue = FloatContent<'static, BeOwned>`
-    - [x] Replace `Value` with `type Value = ValueContent<'static, BeOwned>`
-    - [x] Get rid of the `Actual` wrapper inside content
-    // ---
-    - [x] Trial getting rid of `Actual` completely?
-    - [x] Replace `type FloatValue = FloatValueContent` with `type FloatValue = QqqOwned<FloatValueType>` / `type FloatValueRef<'a> = QqqRef<FloatValueType>` / `type FloatValueMut = QqqMut<FloatValueType>`
-      - [x] Create new branch
-      - [x] Resolve issue with `2.3` not resolving into `2f32` any more
-    - [x] .. same for int...
-    - [x] Update Value:
-      - [x] `ValueType` => `AnyType`
-      - [x] `type AnyValue = QqqOwned<ValueType>`
-      - [x] `type AnyValueRef = QqqRef<ValueType>`
-      - [x] `type AnyValueMut = QqqMut<ValueType>`
-      - [x] ... and move methods
-    - [x] Remove `OwnedValue`
-    - [x] Get rid of `Owned`
-  - [ ] Stage 2 of the form migration:
-    - [x] Attempt to improve mappers:
-      - [x] Try to replace `ToRefMapper` etc with a `FormMapper::<T, F1, F2>::map_content(content, |x| -> y)` - 6 methods... `map_content`, `map_content_ref`, `map_content_mut` and `try_x` *3; ... and a `ReduceMapper::<F1, T>::map(content, |x| -> y)`... sadly not possible! The lambda needs to be higher-ordered and work for all `L: IsValueLeaf`.
-    - [x] Finish mapper improvements
-      - [x] Migrate `self`
-      - [x] Consider if we even need `MapperOutput` or just some helper functions
-      - [x] Delay resolving the type kind into the error case when downcasting
-    - [x] Create macro to define inline mappers in various forms
-    - [x] Attempt to see if I can get rid of needing `leaf_to_content` and maybe `content_to_leaf` by exploiting a trick to bind associated types via a sub-trait (e.g. as I did with `IsValueContent<Type = <Self as IsLeafValueContent>::LeafType> + IsLeafValueContent`)
-    - [x] Pivot the argument resolution to work with either old or new values
-    - [ ] Remove as much from arguments.rs as possible
-    - [ ] Fix `todo!("Argument")`
-    - [ ] Pivot the return resolution to work with either old or new values
-    - [ ] Remove `ResolveAs`
-    - [ ] Look at better implementations of `FromArgument`
-          .. potentially via some new selector trait `IsResolvable` with a resolution strategy of `Hierarchichal` | `Dyn` | `Custom`
-          This will let us implement a more general resolution logic, and amalgamate argument parsing and downcast_resolve/dyn_resolve
-    - [ ] Reproduce `CopyOnWrite`
-      - [ ] Implement `TODO[concepts]: COPY ON WRITE MAPPING`
-      - [ ] `BeCopyOnWrite::owned()` / `shared_as_..` can go via `AnyLevelCopyOnWrite => into_copy_on_write`
-    - [ ] Reproduce `Shared` methods etc
-    - [ ] Reproduce `Mutable` methods etc
-    - [ ] Reproduce `Assignee` methods etc
-    - [ ] Change `CopyOnWrite<AnyValue>` => `CopyOnWriteAnyValue` similarly with `Shared`, `Mutable` and `Assignee`
-    - [ ] Migrate `CopyOnWrite`, `Shared`, `Mutable`, `Assignee`
-      - [ ] `Shared<X>` only works for leaves
-      - [ ] For specific parents, use e.g. `AnyValueShared`
-      - [ ] If you need something to apply across all leaves, implement it on some trait
-      `IsSelfSharedContent` depending/auto-implemented on `IsSelfValueContent<Form = BeShared>`
-      - [ ] Same for `Mutable` and `Assignee`
-  - [ ] Stage 3
-    - [ ] Migrate `CopyOnWrite` and relevant interconversions
-    - [ ] Finish migrating to new Argument/Returned resolution and delete old code
-    - [ ] Remove `impl_resolvable_argument_for` and `TODO[concepts]: Remove when we get rid of impl_resolvable_argument_for`
-  - [ ] Complete ownership definitions and inter-conversions, including maybe-erroring inter-conversions (possibly with `Result<X, Mapper::Error>` which we can map out of):
-    - [ ] Consider migrating LateBound and interconversions
-    - [ ] Argument, and `ArgumentOwnership` driven conversions into it
-  - [ ] Generate test over all value kinds which checks for:
-    - [ ] Maybe over TypeKinds with https://docs.rs/inventory/latest/inventory/ registered as a dev dependency
-    - [ ] Check for duplicate TypeKind registrations
-    - [ ] Source type has no spaces and is lower case, and is invertible
-    - [ ] Ancestor types agree with type kinds
-  - [ ] Clear up all `TODO[concepts]`
-  - [ ] Have variables store a `Referenceable`
-  - [ ] Separate methods and functions
-  - [ ] Add ability to add comments to types, methods/functions and operations, and generate docs from them
-  - [ ] Clean-up:
-    - [ ] Move indexing and property access (see e.g.`into_indexed`) etc to the type resolution system - this map allow us to remove
-    things like `AnyLevelCopyOnWrite` and the `TypeMapper`
-    - [ ] Most matching methods on `AnyValue` would be better as leaf methods
+Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
 
 ## Methods and closures
 
-- [ ] Improved Shared/Mutable handling - See the `Better handling of value sub-references` section. The key requirement is we need to allow a `Shared<X>` to map back to a `Shared<Value>`. Moving the "sharedness" to the leaves permits this.
-  * A function specifies the bindings of its variables
-  * If we have `my_len = |x: &array| x.len()` and invoke it as `my_len(a.b)` then
-    when I invoke it, I need to end up with the variable `x := &a.b`
-  * This is a problem - if we imagine changing what can be stored in a variable to
-    the following, then it's clear that we need some way to have a `SharedValue` which
-    has an outer-enum instead of an inner-enum.
-  * We also need to think about how things like `IterableValue` works. Perhaps it's like an interface,
-    and so defined via `Box<dyn Iterable>` / `Ref<dyn Iterable>` etc?
+- [ ] Consider pre-requisite work on [2026-01-types-and-forms.md](./2026-01-types-and-forms.md) for type annotations. Instead, let's move forward without support for specific types for now. To start, let's just support: `x` or `x: any`; `x: &any` and `x: &mut any`.
+- [ ] Change bindings (currently just variables) to be able to store any of the following: (nb we still restrict variables to be owned for now).
 ```rust
-// Before
 enum VariableContent {
-    Owned(Rc<RefCell<Value>>),
-    Shared(SharedSubRcRefCell<Value, T>),
-    Mutable(MutableSubRcRefCell<Value, T>),
-}
-// After
-enum VariableContent {
-    Owned(ValueReferencable),
-    Shared(ValueRef<'static>),      // 'static => only SharedSubRcRefCell, no actual refs
-    Mutable(ValueMut<'static>),     // 'static => only MutableSubRcRefCell, no refs
+    Owned(Referenceable<AnyValue>),
+    Shared(Shared<AnyValue>),
+    Mutable(Mutable<AnyValue>),
 }
 ``` 
 - [ ] Introduce basic function values
   * Value type function `let my_func = |x, y, z| { ... };`
-  * Parameters can be `x` (Owned), `&x` (Shared) or `&mut x` (Mutable), shorthand for
-    e.g. `x: &value`
+  * Parameters can be `x` / `x: any` (Owned), `x: &any` (Shared) or `x: &mut any` (Mutable).
   * To start with, they are not closures (i.e. they can't capture any outer variables)
-  - [ ] Break/continue label resolution in functions/closures
-    * Functions and closures must resolve break/continue labels statically
-    * Break and continue statements should not leak out of function boundaries
-    * This needs to be validated during the control flow pass
+- [ ] Break/continue label resolution in functions/closures
+  * Functions and closures must resolve break/continue labels statically
+  * Break and continue statements should not leak out of function boundaries
+  * This needs to be validated during the control flow pass
 - [ ] New node extension in the expression parser: invocation `(...)`
 - [ ] Closures
   * A function may capture variable bindings from the parent scope, these are converted into a `VariableBinding::Closure(<closed_variable_id>)`
@@ -616,98 +507,6 @@ Also:
 - [ ] Check all `#[allow(unused)]` and remove any which aren't needed
   We can use `_xyz: Unused<T>` in some places to reduce the size of types.
 
-## Better handling of value sub-references
-
-### OPTION 1 - Enums with GATs
-
-> [!NOTE]
-> See `sandbox/gat_value.rs` for playing around with this idea
-
-Returning/passing refs of sub-values requires taking the enum outside of the reference,
-i.e. some `ValueRef<'a>`, perhaps similar to `IterableRef`?
-
-```rust
-enum ValueRef<'a> {
-   Integer(IntegerRef<'a>),
-   Object(AnyRef<'a, ObjectValue>),
-   // ... 
-}
-```
-
-We could even consider abusing GATs further, to define the structures only once:
-```rust
-trait OwnershipSelector {
-  type Leaf<T>;
-}
-struct IsOwned;
-impl OwnershipSelector for IsOwned {
-  type Leaf<T> = T;
-}
-// Roughly equivalent to an owned, but wrapped so that it can be turned into a Shared/Mutable easily.
-struct IsReferencable;
-impl OwnershipSelector for IsReferencable {
-  type Leaf<T> = Rc<RefCell<T>>;
-}
-struct IsRef<'a>;
-impl<'a> OwnershipSelector for IsRef<'a> {
-  type Leaf<T> = AnyRef<'a, T>;
-}
-struct IsMut<'a>;
-impl<'a> OwnershipSelector for IsMut<'a> {
-  type Leaf<T> = AnyMutRef<'a, T>;
-}
-
-enum ValueWhich<H: OwnershipSelector> {
-  Integer(IntegerStructure<H>),
-  Object(H::Leaf::<ObjectValue>),
-// ...
-}
-
-type Value = ValueWhich<IsOwned>;
-type ValueReferencable = ValueWhich<IsReferencable>;
-type ValueRef<'a> = ValueWhich<IsRef<'a>>;
-type ValueMut<'a> = ValueWhich<IsMut<'a>>;
-```
-
-- [ ] Trial if `Shared<Value>` can actually store an `ValueRef<'a>` (which just stores `&'a`, not the `Ref` variable)...
-  * This could be done by adding GATs (raising MSRV to 1.65) so that TypeData can have a `Ref<'T>`,
-    with `Value::Ref<'T> = ValueRef<'T>`... although we only really need GATs for allowing arbitrary
-    references, not just static `SharedSubRcRefCell<Value, T>` from Shared
-  * And then `Shared<'t, T>` can wrap a `<T as ..Target>::Type::Ref<'t, T>` (in the file, this can be emplaced as a `HasRefType` trait, which can be blanket implemeted for types implementing `..Target`).
-  * This would mean e.g. `Shared<String>` could wrap a `&str`.
-  * 6 months later I'm not sure what this means:
-    * And then have a `AdvancedCellRef<T>` store a `<T as ..Target>::Type::Ref<'T>` which can be owned and we can manually call increase strong count etc on the `RefCell`.
-    * To implement `AdvancedCellRef::map`, we'll need `TypeData::Ref<'T>` to implement Target in a self-fulfilling way. (i.e. `HasRefType { type Ref<'a>: HasRefParent<Parent = Self> }`, `HasRefParent { type Parent: HasRefType })`)
-    * If this works, we can replace our `Ref<T>` with `T: HasRefType`
-  * Migrate `IterableRef`
-
-### OPTION 2 - Box + Dyn
-
-> [!NOTE]
-> See `sandbox/dyn_value.rs` for playing around with this idea
-
-If we can make this work, it's perhaps slightly less performant (I wonder how much?) but would probably compile faster, and be less tied to structure; so support.
-
-See below for some rough ideas.
-
-For owned values:
-* `Box<dyn IsValue>` with `IsValue: Any` (maybe using https://docs.rs/downcast-rs/latest/downcast_rs/ to avoid `Any`)
-* From that, `IsValue` allows resolving `&'static TypeData`
-* Which can expose methods such as `as_integer(Box<dyn IsValue>) -> Option<Box<dyn IsInteger>>`
-  * Which can downcast `Box<dyn IsValue>` to specific value, e.g. `Box<u32>`
-  * Then can upcast that to a specific trait such as `Box<dyn IsInteger>` or `Box<dyn IsIterable>`
-
-For reference values:
-* `AnyRef<dyn IsValue>`
-* `TypeData` can expose methods such as `as_integer_ref(AnyRef<dyn IsValue>) -> Option<AnyRef<dyn IsInteger>>`
-  .. using `downcast_ref` and then upcasting...
-  ... I wonder if this can be automatic. `if Self::Value : IsInteger` then we implement with a cast, if not?
-
-For mutable values:
-* `AnyRefMut<dyn IsValue>`
-* `TypeData` can expose methods such as `as_integer_mut(AnyRefMut<dyn IsValue>) -> Option<AnyRefMut<dyn IsInteger>>`
-  .. using `downcast_mut` and then upcasting.
-
 ## Cloning
 
 * Consider making Iterator non-clonable (which will unlock many more easy lazy implementations, of e.g. `take` using the non-clonable `Take`, and similar for other mapped iterators), i.e. `ExpressionValue` has a manual `clone() -> ExecutionResult<Self>` - this will simplify some things. But then, `to_string()` would want to take a `CopyOnWrite` so that where we clone, the iterator can potentially take owned, attempt clone, else error.
@@ -789,23 +588,23 @@ This means that this is low-clone:
 
 ## Value expansions [OPTIONAL]
 
-Consider:
-* Do we want some kind of slice object? (see `TODO[range-refactor]`)
-    * We can make `ExpressionValue` deref into `ExpressionRef`, e.g. `ExpressionRef::Array(<slice>)`
-    * Then we can make `SharedValue(Ref<ExpressionRef>)`, which can be constructed from a `Ref<ExpressionValue>` with a map!
-    * And similarly `MutableValue(RefMut<ExpressionRefMut>)`
-* Using ArgumentValue in place of ExpressionValue e.g. inside arrays / objects, so that we can destructure `let (x, y) = (a, b)` without clone/take
-    * But then we end up with nested references which can be confusing!
-    * CONCLUSION: Maybe we don't want this - to destructure it needs to be owned anyway?
+* Consider somehow adding some kind of slice object? (see `TODO[slice-supprt]`)
+  * To do this, we basically need to have a leaf-kind of `Mutable`, so we can map an
+    `arr[0..2]` to a `Mutable<[AnyValue]>` - but this then can't be converted back to
+    a `Mutable<AnyValue>`. This is then a binding structurally of type `&mut slice`.
+  * Supporting structurally type-restricted bindings is ... complicated ...
+    And whilst the machinery for leaf-restricted bindings is in place, their exposure and 
+    inter-op with any-bindings is very much not (as of Jan 26).
+  * See [2026-01-types-and-forms.md](./2026-01-types-and-forms.md) for more details.
 * Consider whether to expand to storing `ArgumentValue` or `CopyOnWriteValue` in variables instead of `OwnedValue`?
-    => The main issue is if it interferes with taking mutable references, but it's possibly OK, would need to see if it's a confusing problem in practice... (e.g. `let b = a[0]; a.push(1)` if `b` is a reference to `a[0]` then this is a problem when we push to `a`)
-    => If a mutable reference is created and there are pending references, the variable data RefCell could be replaced with a cloned value and then mutated... But this can be more expensive, because e.g. `let b = a[0]; a.push(1)` results in the whole array `a` being copied in the `CoW` case; but only the `a[0]` being cloned in the "clone on assign" case.
-    => Maybe we just stick to assignments being Owned/Cloned as currently
+  - The main issue is if it interferes with taking mutable references, but it's possibly OK, would need to see if it's a confusing problem in practice... (e.g. `let b = a[0]; a.push(1)` if `b` is a reference to `a[0]` then this is a problem when we push to `a`)
+  - If a mutable reference is created and there are pending references, the variable data RefCell could be replaced with a cloned value and then mutated... But this can be more expensive, because e.g. `let b = a[0]; a.push(1)` results in the whole array `a` being copied in the `CoW` case; but only the `a[0]` being cloned in the "clone on assign" case.
+  - Maybe we just stick to assignments being Owned/Cloned as currently
 
 * Support `#(x[..])` syntax for indexing streams, like with arrays
-    * `#(x[0])` returns the value at that position of the stream (using `INFER_TOKEN_TREE`)
-    * `#(x[0..3])` returns a TokenStream
-    * `#(x[0..=3])` returns a TokenStream
+  * `#(x[0])` returns the value at that position of the stream (using `INFER_TOKEN_TREE`)
+  * `#(x[0..3])` returns a TokenStream
+  * `#(x[0..=3])` returns a TokenStream
 
 --------------------------------------------------------------------------------
 

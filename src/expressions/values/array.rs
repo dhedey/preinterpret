@@ -70,7 +70,7 @@ impl ArrayValue {
                 &mut self.items[index]
             }
             AnyValueContent::Range(..) => {
-                // Temporary until we add slice types - we error here
+                // TODO[slice-support] Temporary until we add slice types - we error here
                 return span_range.ownership_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]");
             }
             _ => return span_range.type_err("The index must be an integer or a range"),
@@ -88,7 +88,7 @@ impl ArrayValue {
                 &self.items[index]
             }
             AnyValueContent::Range(..) => {
-                // Temporary until we add slice types - we error here
+                // TODO[slice-support] Temporary until we add slice types - we error here
                 return span_range.ownership_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]");
             }
             _ => return span_range.type_err("The index must be an integer or a range"),
