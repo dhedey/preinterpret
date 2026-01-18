@@ -198,7 +198,7 @@ define_optional_object! {
 }
 
 pub(crate) fn run_intersperse(
-    items: IterableValue,
+    items: Box<dyn IsIterable>,
     separator: AnyValue,
     settings: IntersperseSettings,
 ) -> ExecutionResult<ArrayValue> {

@@ -77,73 +77,73 @@ define_type_features! {
             // ==================
             // CONVERSION METHODS
             // ==================
-            [context] fn to_ident(this: Spanned<AnyRef<str>>) -> ExecutionResult<Ident> {
+            [context] fn to_ident(this: Spanned<AnyRef<String>>) -> ExecutionResult<Ident> {
                 string_to_ident(&this, &this, context.span_from_join_else_start())
             }
 
-            [context] fn to_ident_camel(this: Spanned<AnyRef<str>>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_camel(this: Spanned<AnyRef<String>>) -> ExecutionResult<Ident> {
                 let str = string_conversion::to_upper_camel_case(&this);
                 string_to_ident(&str, &this, context.span_from_join_else_start())
             }
 
-            [context] fn to_ident_snake(this: Spanned<AnyRef<str>>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_snake(this: Spanned<AnyRef<String>>) -> ExecutionResult<Ident> {
                 let str = string_conversion::to_lower_snake_case(&this);
                 string_to_ident(&str, &this, context.span_from_join_else_start())
             }
 
-            [context] fn to_ident_upper_snake(this: Spanned<AnyRef<str>>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_upper_snake(this: Spanned<AnyRef<String>>) -> ExecutionResult<Ident> {
                 let str = string_conversion::to_upper_snake_case(&this);
                 string_to_ident(&str, &this, context.span_from_join_else_start())
             }
 
-            [context] fn to_literal(this: Spanned<AnyRef<str>>) -> ExecutionResult<Literal> {
+            [context] fn to_literal(this: Spanned<AnyRef<String>>) -> ExecutionResult<Literal> {
                 string_to_literal(&this, &this, context.span_from_join_else_start())
             }
 
             // ======================
             // STRING RESHAPE METHODS
             // ======================
-            fn to_uppercase(this: AnyRef<str>) -> String {
+            fn to_uppercase(this: AnyRef<String>) -> String {
                 string_conversion::to_uppercase(&this)
             }
 
-            fn to_lowercase(this: AnyRef<str>) -> String {
+            fn to_lowercase(this: AnyRef<String>) -> String {
                 string_conversion::to_lowercase(&this)
             }
 
-            fn to_lower_snake_case(this: AnyRef<str>) -> String {
+            fn to_lower_snake_case(this: AnyRef<String>) -> String {
                 string_conversion::to_lower_snake_case(&this)
             }
 
-            fn to_upper_snake_case(this: AnyRef<str>) -> String {
+            fn to_upper_snake_case(this: AnyRef<String>) -> String {
                 string_conversion::to_upper_snake_case(&this)
             }
 
-            fn to_kebab_case(this: AnyRef<str>) -> String {
+            fn to_kebab_case(this: AnyRef<String>) -> String {
                 string_conversion::to_lower_kebab_case(&this)
             }
 
-            fn to_lower_camel_case(this: AnyRef<str>) -> String {
+            fn to_lower_camel_case(this: AnyRef<String>) -> String {
                 string_conversion::to_lower_camel_case(&this)
             }
 
-            fn to_upper_camel_case(this: AnyRef<str>) -> String {
+            fn to_upper_camel_case(this: AnyRef<String>) -> String {
                 string_conversion::to_upper_camel_case(&this)
             }
 
-            fn capitalize(this: AnyRef<str>) -> String {
+            fn capitalize(this: AnyRef<String>) -> String {
                 string_conversion::capitalize(&this)
             }
 
-            fn decapitalize(this: AnyRef<str>) -> String {
+            fn decapitalize(this: AnyRef<String>) -> String {
                 string_conversion::decapitalize(&this)
             }
 
-            fn to_title_case(this: AnyRef<str>) -> String {
+            fn to_title_case(this: AnyRef<String>) -> String {
                 string_conversion::title_case(&this)
             }
 
-            fn insert_spaces(this: AnyRef<str>) -> String {
+            fn insert_spaces(this: AnyRef<String>) -> String {
                 string_conversion::insert_spaces_between_words(&this)
             }
         }

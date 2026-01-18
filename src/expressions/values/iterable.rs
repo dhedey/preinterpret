@@ -13,41 +13,8 @@ define_dyn_type!(
     articled_display_name: "an iterable (e.g. array, list, etc.)",
 );
 
-// If you add a new variant, also update:
-// * ResolvableOwned<Value> for IterableValue
-// * IsArgument for IterableRef
-// * The parent of the value's TypeData to be IterableType
-pub(crate) enum IterableValue {
-    Iterator(IteratorValue),
-    Array(ArrayValue),
-    Stream(OutputStream),
-    Object(ObjectValue),
-    Range(RangeValue),
-    String(String),
-}
-
-impl ResolvableArgumentTarget for IterableValue {
-    type ValueType = IterableType;
-}
-
-impl ResolvableOwned<AnyValue> for IterableValue {
-    fn resolve_from_value(value: AnyValue, context: ResolutionContext) -> ExecutionResult<Self> {
-        Ok(match value {
-            AnyValue::Array(x) => Self::Array(x),
-            AnyValue::Object(x) => Self::Object(x),
-            AnyValue::Stream(x) => Self::Stream(x),
-            AnyValue::Range(x) => Self::Range(x),
-            AnyValue::Iterator(x) => Self::Iterator(x),
-            AnyValue::String(x) => Self::String(x),
-            _ => {
-                return context.err(
-                    "an iterable (iterator, array, object, stream, range or string)",
-                    value,
-                );
-            }
-        })
-    }
-}
+pub(crate) type IterableValue = Box<dyn IsIterable>;
+pub(crate) type IterableAnyRef<'a> = AnyRef<'a, dyn IsIterable>;
 
 define_type_features! {
     impl IterableType,
@@ -57,12 +24,12 @@ define_type_features! {
                 this.into_iterator()
             }
 
-            fn len(this: Spanned<IterableRef>) -> ExecutionResult<usize> {
-                this.len()
+            fn len(Spanned(this, span_range): Spanned<IterableAnyRef>) -> ExecutionResult<usize> {
+                this.len(span_range)
             }
 
-            fn is_empty(this: Spanned<IterableRef>) -> ExecutionResult<bool> {
-                Ok(this.len()? == 0)
+            fn is_empty(Spanned(this, span_range): Spanned<IterableAnyRef>) -> ExecutionResult<bool> {
+                Ok(this.len(span_range)? == 0)
             }
 
             [context] fn zip(this: IterableValue) -> ExecutionResult<ArrayValue> {
@@ -111,72 +78,6 @@ define_type_features! {
                     _ => return None,
                 })
             }
-        }
-    }
-}
-
-impl IterableValue {
-    pub(crate) fn into_iterator(self) -> ExecutionResult<IteratorValue> {
-        match self {
-            IterableValue::Array(value) => Box::new(value).into_iterator(),
-            IterableValue::Stream(value) => Box::new(value).into_iterator(),
-            IterableValue::Iterator(value) => Box::new(value).into_iterator(),
-            IterableValue::Range(value) => Box::new(value).into_iterator(),
-            IterableValue::Object(value) => Box::new(value).into_iterator(),
-            IterableValue::String(value) => Box::new(value).into_iterator(),
-        }
-    }
-}
-
-pub(crate) enum IterableRef<'a> {
-    Iterator(AnyRef<'a, IteratorValue>),
-    Array(AnyRef<'a, ArrayValue>),
-    Stream(AnyRef<'a, OutputStream>),
-    Range(AnyRef<'a, RangeValue>),
-    Object(AnyRef<'a, ObjectValue>),
-    String(AnyRef<'a, String>),
-}
-
-impl IsArgument for IterableRef<'static> {
-    type ValueType = IterableType;
-    const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Shared;
-
-    fn from_argument(argument: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
-        Ok(match argument.kind() {
-            AnyValueLeafKind::Iterator(_) => {
-                IterableRef::Iterator(IsArgument::from_argument(argument)?)
-            }
-            AnyValueLeafKind::Array(_) => IterableRef::Array(IsArgument::from_argument(argument)?),
-            AnyValueLeafKind::Stream(_) => {
-                IterableRef::Stream(IsArgument::from_argument(argument)?)
-            }
-            AnyValueLeafKind::Range(_) => IterableRef::Range(IsArgument::from_argument(argument)?),
-            AnyValueLeafKind::Object(_) => {
-                IterableRef::Object(IsArgument::from_argument(argument)?)
-            }
-            AnyValueLeafKind::String(_) => {
-                IterableRef::String(IsArgument::from_argument(argument)?)
-            }
-            _ => {
-                return argument.type_err(
-                    "Expected iterable (iterator, array, object, stream, range or string)",
-                );
-            }
-        })
-    }
-}
-
-impl Spanned<IterableRef<'_>> {
-    pub(crate) fn len(&self) -> ExecutionResult<usize> {
-        let Spanned(value, span) = self;
-        let span = *span;
-        match value {
-            IterableRef::Iterator(iterator) => iterator.len(span),
-            IterableRef::Array(value) => value.len(span),
-            IterableRef::Stream(value) => <OutputStream as IsIterable>::len(value, span),
-            IterableRef::Range(value) => value.len(span),
-            IterableRef::Object(value) => value.len(span),
-            IterableRef::String(value) => <String as IsIterable>::len(value, span),
         }
     }
 }

@@ -245,6 +245,19 @@ define_type_features! {
 
 pub(crate) struct UntypedIntegerFallback(pub(crate) FallbackInteger);
 
+impl IsValueContent for UntypedIntegerFallback {
+    type Type = IntegerType;
+    type Form = BeOwned;
+}
+
+impl IsArgument for UntypedIntegerFallback {
+    type ValueType = UntypedIntegerType;
+    const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
+    fn from_argument(value: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+        Self::resolve_value(value.expect_owned(), "This argument")
+    }
+}
+
 impl ResolvableArgumentTarget for UntypedIntegerFallback {
     type ValueType = UntypedIntegerType;
 }

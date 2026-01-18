@@ -33,7 +33,7 @@ impl IsDynCompatibleForm for BeRef {
 
     fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
         leaf: Self::Leaf<'a, T>,
-    ) -> Option<Self::DynLeaf<'a, D>>
+    ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
         T::Leaf: CastDyn<D>,
     {
@@ -45,4 +45,79 @@ impl LeafAsRefForm for BeRef {
     fn leaf_as_ref<'r, 'a: 'r, T: IsLeafType>(leaf: &'r Self::Leaf<'a, T>) -> &'r T::Leaf {
         leaf
     }
+}
+
+pub(crate) trait IsSelfRefContent<'a>: IsSelfValueContent<'a>
+where
+    Self: IsValueContent<Form = BeRef>,
+    Self::Type: IsHierarchicalType<Content<'a, Self::Form> = Self>,
+{
+    fn into_shared<'b, T: 'static>(
+        self,
+        emplacer: &'b mut SharedEmplacer<'a, T>,
+    ) -> Content<'static, Self::Type, BeShared>
+    where
+        Self: Sized,
+    {
+        struct __InlineMapper<'b, 'e2, X: 'static> {
+            emplacer: &'b mut SharedEmplacer<'e2, X>,
+        }
+        impl<'b, 'e2, X> LeafMapper<BeRef> for __InlineMapper<'b, 'e2, X> {
+            type Output<'a, T: IsHierarchicalType> = Content<'static, T, BeShared>;
+
+            fn to_parent_output<'a, T: IsChildType>(
+                output: Self::Output<'a, T>,
+            ) -> Self::Output<'a, T::ParentType> {
+                T::into_parent(output)
+            }
+
+            fn map_leaf<'l, T: IsLeafType>(
+                self,
+                leaf: <BeRef as IsHierarchicalForm>::Leaf<'l, T>,
+            ) -> Self::Output<'l, T> {
+                // SAFETY: 'l = 'a = 'e so this is valid
+                unsafe { self.emplacer.emplace_unchecked(leaf) }
+            }
+        };
+        let __mapper = __InlineMapper { emplacer };
+        <Self::Type>::map_with::<BeRef, _>(__mapper, self)
+    }
+
+    fn into_shared_any_ref<'b, T: 'static>(
+        self,
+        emplacer: &'b mut SharedEmplacer<'a, T>,
+    ) -> Content<'static, Self::Type, BeAnyRef>
+    where
+        Self: Sized,
+    {
+        struct __InlineMapper<'b, 'e2, X: 'static> {
+            emplacer: &'b mut SharedEmplacer<'e2, X>,
+        }
+        impl<'b, 'e2, X> LeafMapper<BeRef> for __InlineMapper<'b, 'e2, X> {
+            type Output<'a, T: IsHierarchicalType> = Content<'static, T, BeAnyRef>;
+
+            fn to_parent_output<'a, T: IsChildType>(
+                output: Self::Output<'a, T>,
+            ) -> Self::Output<'a, T::ParentType> {
+                T::into_parent(output)
+            }
+
+            fn map_leaf<'l, T: IsLeafType>(
+                self,
+                leaf: <BeRef as IsHierarchicalForm>::Leaf<'l, T>,
+            ) -> Self::Output<'l, T> {
+                // SAFETY: 'l = 'a = 'e so this is valid
+                unsafe { Shared(self.emplacer.emplace_unchecked(leaf)).into() }
+            }
+        };
+        let __mapper = __InlineMapper { emplacer };
+        <Self::Type>::map_with::<BeRef, _>(__mapper, self)
+    }
+}
+
+impl<'a, C: IsSelfValueContent<'a>> IsSelfRefContent<'a> for C
+where
+    Self: IsValueContent<Form = BeRef>,
+    Self::Type: IsHierarchicalType<Content<'a, Self::Form> = Self>,
+{
 }

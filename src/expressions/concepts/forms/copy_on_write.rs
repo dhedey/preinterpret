@@ -37,33 +37,33 @@ impl IsHierarchicalForm for BeCopyOnWrite {
 }
 
 impl BeCopyOnWrite {
-    pub(crate) fn new_owned<'a, T: IsHierarchicalType>(
-        owned: Content<'a, T, BeOwned>,
-    ) -> Content<'a, T, BeCopyOnWrite> {
+    pub(crate) fn new_owned<'a, C: IntoValueContent<'a, Form = BeOwned>>(
+        owned: C,
+    ) -> Content<'a, C::Type, BeCopyOnWrite> {
         map_via_leaf! {
-            input: (Content<'a, T, BeOwned>) = owned,
+            input: (Content<'a, C::Type, BeOwned>) = owned.into_content(),
             fn map_leaf<F = BeOwned, T>(leaf) -> (Content<'a, T, BeCopyOnWrite>) {
                 QqqCopyOnWrite::Owned(leaf)
             }
         }
     }
 
-    pub(crate) fn new_shared_in_place_of_owned<'a, T: IsHierarchicalType>(
-        shared: Content<'a, T, BeShared>,
-    ) -> Content<'a, T, BeCopyOnWrite> {
+    pub(crate) fn new_shared_in_place_of_owned<'a, C: IntoValueContent<'a, Form = BeShared>>(
+        shared: C,
+    ) -> Content<'a, C::Type, BeCopyOnWrite> {
         map_via_leaf! {
-            input: (Content<'a, T, BeShared>) = shared,
+            input: (Content<'a, C::Type, BeShared>) = shared.into_content(),
             fn map_leaf<F = BeShared, T>(leaf) -> (Content<'a, T, BeCopyOnWrite>) {
                 QqqCopyOnWrite::SharedWithInfallibleCloning(leaf)
             }
         }
     }
 
-    pub(crate) fn new_shared_in_place_of_shared<'a, T: IsHierarchicalType>(
-        shared: Content<'a, T, BeShared>,
-    ) -> Content<'a, T, BeCopyOnWrite> {
+    pub(crate) fn new_shared_in_place_of_shared<'a, C: IntoValueContent<'a, Form = BeShared>>(
+        shared: C,
+    ) -> Content<'a, C::Type, BeCopyOnWrite> {
         map_via_leaf! {
-            input: (Content<'a, T, BeShared>) = shared,
+            input: (Content<'a, C::Type, BeShared>) = shared.into_content(),
             fn map_leaf<F = BeShared, T>(leaf) -> (Content<'a, T, BeCopyOnWrite>) {
                 QqqCopyOnWrite::SharedWithTransparentCloning(leaf)
             }
@@ -75,10 +75,17 @@ impl MapFromArgument for BeCopyOnWrite {
     const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::CopyOnWrite;
 
     fn from_argument_value(
-        _value: ArgumentValue,
+        value: ArgumentValue,
     ) -> ExecutionResult<Content<'static, AnyType, Self>> {
-        // value.expect_copy_on_write()
-        todo!()
+        match value.expect_copy_on_write().inner {
+            CopyOnWriteInner::Owned(owned) => Ok(BeCopyOnWrite::new_owned(owned)),
+            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
+                Ok(BeCopyOnWrite::new_shared_in_place_of_owned(shared))
+            }
+            CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
+                Ok(BeCopyOnWrite::new_shared_in_place_of_shared(shared))
+            }
+        }
     }
 }
 
@@ -201,34 +208,35 @@ where
         Self: IsValueContent<Type = AnyType>, // Temporary to see if we can make it work without adding generics to `map_via_leaf!`
     {
         Ok(match self.into_any_level_copy_on_write() {
-            AnyLevelCopyOnWrite::Owned(owned) => {
-                BeCopyOnWrite::new_owned::<M::TTo>(mapper.map_owned(owned)?)
-            }
+            AnyLevelCopyOnWrite::Owned(owned) => BeCopyOnWrite::new_owned(mapper.map_owned(owned)?),
             AnyLevelCopyOnWrite::SharedWithInfallibleCloning(shared) => {
-                // Apply map, get Shared<Content<'a, M::TTo, BeOwned>>
-                let shared = map_via_leaf! {
-                    input: (Content<'a, Self::Type, BeShared>) = shared,
-                    fn map_leaf<F = BeShared, T>(leaf) -> (ExecutionResult<QqqShared<Content<'static, AnyType, BeOwned>>>) {
-                        leaf.try_map(|value_ref| {
-                            let from_ref = value_ref.into_any();
-                            inner_map_ref(from_ref) // &Content<M::TTo, BeOwned>
+                // // Apply map, get Shared<Content<'a, M::TTo, BeOwned>>
+                // let shared = map_via_leaf! {
+                //     input: (Content<'a, Self::Type, BeShared>) = shared,
+                //     fn map_leaf<F = BeShared, T>(leaf) -> (ExecutionResult<QqqShared<Content<'static, AnyType, BeOwned>>>) {
+                //         leaf.try_map(|value_ref| {
+                //             let from_ref = value_ref.into_any();
+                //             inner_map_ref(from_ref) // &Content<M::TTo, BeOwned>
 
-                            // If inner_map_ref returned a Content<'a, M::TTo, BeRef>
-                            // then we'd need to move the leaf map inside here, but it'd work the same
-                        })
-                    }
-                }?;
-                // Migrate Shared into leaf
-                let shared_content = shared.replace(|content, encapsulator| {
-                    map_via_leaf! {
-                        input: &'r (Content<'a, AnyType, BeOwned>) = content,
-                        state: | <'r2> Encapsulator<'r2, AnyValue, AnyValue> | let encapsulator = encapsulator,
-                        fn map_leaf<F = BeOwned, T>(leaf) -> (Content<'static, T, BeShared>) {
-                            encapsulator.encapsulate(leaf)
-                        }
-                    }
-                });
-                BeCopyOnWrite::new_shared_in_place_of_owned::<M::TTo>(shared_content)
+                //             // If inner_map_ref returned a Content<'a, M::TTo, BeRef>
+                //             // then we'd need to move the leaf map inside here, but it'd work the same
+                //         })
+                //     }
+                // }?;
+                // // Migrate Shared into leaf
+                // let shared_content = shared.replace(|content, emplacer| {
+                //     // TODO - use two lifetimes here
+                //     // ----
+                //     map_via_leaf! {
+                //         input: &'r (Content<'a, AnyType, BeOwned>) = content,
+                //         state: | <'e> SharedEmplacer<'e, AnyValue, AnyValue> | let emplacer = emplacer,
+                //         fn map_leaf<F = BeOwned, T>(leaf) -> (Content<'static, T, BeShared>) {
+                //             emplacer.emplace(leaf)
+                //         }
+                //     }
+                // });
+                // BeCopyOnWrite::new_shared_in_place_of_owned::<M::TTo>(shared_content)
+                todo!()
             }
             AnyLevelCopyOnWrite::SharedWithTransparentCloning(shared) => {
                 todo!()
@@ -257,12 +265,12 @@ pub(crate) enum AnyLevelCopyOnWrite<'a, T: IsHierarchicalType> {
 impl<'a, T: IsHierarchicalType> AnyLevelCopyOnWrite<'a, T> {
     pub fn into_copy_on_write(self) -> Content<'a, T, BeCopyOnWrite> {
         match self {
-            AnyLevelCopyOnWrite::Owned(owned) => BeCopyOnWrite::new_owned::<T>(owned),
+            AnyLevelCopyOnWrite::Owned(owned) => BeCopyOnWrite::new_owned(owned),
             AnyLevelCopyOnWrite::SharedWithInfallibleCloning(shared) => {
-                BeCopyOnWrite::new_shared_in_place_of_owned::<T>(shared)
+                BeCopyOnWrite::new_shared_in_place_of_owned(shared)
             }
             AnyLevelCopyOnWrite::SharedWithTransparentCloning(shared) => {
-                BeCopyOnWrite::new_shared_in_place_of_shared::<T>(shared)
+                BeCopyOnWrite::new_shared_in_place_of_shared(shared)
             }
         }
     }

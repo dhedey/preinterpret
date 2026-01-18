@@ -67,17 +67,17 @@ impl<T: ResolvableShared<AnyValue> + ResolvableArgumentTarget + ?Sized> IsArgume
     }
 }
 
-impl<T: 'static + ?Sized> IsArgument for AnyRef<'static, T>
-where
-    Shared<T>: IsArgument,
-{
-    type ValueType = <Shared<T> as IsArgument>::ValueType;
-    const OWNERSHIP: ArgumentOwnership = <Shared<T> as IsArgument>::OWNERSHIP;
+// impl<T: 'static + ?Sized> IsArgument for AnyRef<'static, T>
+// where
+//     Shared<T>: IsArgument,
+// {
+//     type ValueType = <Shared<T> as IsArgument>::ValueType;
+//     const OWNERSHIP: ArgumentOwnership = <Shared<T> as IsArgument>::OWNERSHIP;
 
-    fn from_argument(argument: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
-        Ok(Shared::<T>::from_argument(argument)?.into())
-    }
-}
+//     fn from_argument(argument: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+//         Ok(Shared::<T>::from_argument(argument)?.into())
+//     }
+// }
 
 impl<T: ResolvableMutable<AnyValue> + ResolvableArgumentTarget + ?Sized> IsArgument
     for Assignee<T>
@@ -99,26 +99,26 @@ impl<T: ResolvableMutable<AnyValue> + ResolvableArgumentTarget + ?Sized> IsArgum
     }
 }
 
-impl<T: 'static + ?Sized> IsArgument for AnyMut<'static, T>
-where
-    Mutable<T>: IsArgument,
-{
-    type ValueType = <Mutable<T> as IsArgument>::ValueType;
-    const OWNERSHIP: ArgumentOwnership = <Mutable<T> as IsArgument>::OWNERSHIP;
+// impl<T: 'static + ?Sized> IsArgument for AnyMut<'static, T>
+// where
+//     Mutable<T>: IsArgument,
+// {
+//     type ValueType = <Mutable<T> as IsArgument>::ValueType;
+//     const OWNERSHIP: ArgumentOwnership = <Mutable<T> as IsArgument>::OWNERSHIP;
 
-    fn from_argument(argument: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
-        Ok(Mutable::<T>::from_argument(argument)?.into())
-    }
-}
+//     fn from_argument(argument: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+//         Ok(Mutable::<T>::from_argument(argument)?.into())
+//     }
+// }
 
-impl<T: ResolvableOwned<AnyValue> + ResolvableArgumentTarget> IsArgument for T {
-    type ValueType = T::ValueType;
-    const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
+// impl<T: ResolvableOwned<AnyValue> + ResolvableArgumentTarget> IsArgument for T {
+//     type ValueType = T::ValueType;
+//     const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
 
-    fn from_argument(argument: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
-        T::resolve_value(argument.expect_owned(), "This argument")
-    }
-}
+//     fn from_argument(argument: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+//         T::resolve_value(argument.expect_owned(), "This argument")
+//     }
+// }
 
 impl<T: ResolvableShared<AnyValue> + ResolvableArgumentTarget + ToOwned> IsArgument
     for CopyOnWrite<T>

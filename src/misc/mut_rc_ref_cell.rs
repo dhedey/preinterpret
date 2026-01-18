@@ -112,6 +112,59 @@ impl<T: 'static + ?Sized, U: 'static + ?Sized> MutableSubRcRefCell<T, U> {
             Err(_) => Err(error.unwrap()),
         }
     }
+
+    pub(crate) fn replace<O>(
+        mut self,
+        f: impl for<'a> FnOnce(&'a mut U, &mut MutableSubEmplacer<'a, T, U>) -> O,
+    ) -> O {
+        let ref_mut = self.ref_mut.deref_mut() as *mut U;
+        let mut emplacer = MutableSubEmplacer {
+            inner: Some(self),
+            encapsulation_lifetime: std::marker::PhantomData,
+        };
+        f(
+            // SAFETY: We are cloning a mutable reference here, but it is safe because:
+            // - What it's pointing at still lives, as RefMut still lives inside emplacer.inner
+            // - No other "mutable reference" is created from the RefMut except at encapsulation time
+            unsafe { &mut *ref_mut },
+            &mut emplacer,
+        )
+    }
+}
+
+#[allow(unused)]
+pub(crate) type MutableEmplacer<'e, U> = MutableSubEmplacer<'e, AnyValue, U>;
+
+pub(crate) struct MutableSubEmplacer<'e, T: 'static + ?Sized, U: 'static + ?Sized> {
+    inner: Option<MutableSubRcRefCell<T, U>>,
+    encapsulation_lifetime: std::marker::PhantomData<&'e ()>,
+}
+
+impl<'e, T: 'static + ?Sized, U: 'static + ?Sized> MutableSubEmplacer<'e, T, U> {
+    pub(crate) fn emplace<V: 'static + ?Sized>(
+        &mut self,
+        value: &'e mut V,
+    ) -> MutableSubRcRefCell<T, V> {
+        unsafe {
+            // SAFETY: The lifetime 'e is equal to the &'e content argument in replace
+            // So this guarantees that the returned reference is valid as long as the MutableSubRcRefCell exists
+            self.emplace_unchecked(value)
+        }
+    }
+
+    // SAFETY:
+    // * The caller must ensure that the value's lifetime is derived from the original content
+    pub(crate) unsafe fn emplace_unchecked<V: 'static + ?Sized>(
+        &mut self,
+        value: &mut V,
+    ) -> MutableSubRcRefCell<T, V> {
+        self.inner
+            .take()
+            .expect("You can only emplace to create a new Mutable value once")
+            .map(|_|
+                // SAFETY: As defined in the rustdoc above
+                unsafe { less_buggy_transmute::<&mut V, &'static mut V>(value) })
+    }
 }
 
 impl<T: 'static + ?Sized, U: 'static + ?Sized> DerefMut for MutableSubRcRefCell<T, U> {
@@ -205,15 +258,14 @@ impl<T: ?Sized, U: 'static + ?Sized> SharedSubRcRefCell<T, U> {
 
     pub(crate) fn replace<O>(
         self,
-        f: impl for<'a> FnOnce(&'a U, Encapsulator<'a, T, U>) -> O,
+        f: impl for<'e> FnOnce(&'e U, &mut SharedSubEmplacer<'e, T, U>) -> O,
     ) -> O {
-        f(
-            &*Ref::clone(&self.shared_ref),
-            Encapsulator {
-                inner: self,
-                encapsulation_lifetime: std::marker::PhantomData,
-            },
-        )
+        let copied_ref = Ref::clone(&self.shared_ref);
+        let mut emplacer = SharedSubEmplacer {
+            inner: Some(self),
+            encapsulation_lifetime: std::marker::PhantomData,
+        };
+        f(&*copied_ref, &mut emplacer)
     }
 
     /// SAFETY:
@@ -242,17 +294,37 @@ impl<T: ?Sized, U: 'static + ?Sized> SharedSubRcRefCell<T, U> {
     }
 }
 
-pub(crate) struct Encapsulator<'a, T: ?Sized, U: 'static + ?Sized> {
-    inner: SharedSubRcRefCell<T, U>,
-    encapsulation_lifetime: std::marker::PhantomData<&'a ()>,
+pub(crate) type SharedEmplacer<'e, U> = SharedSubEmplacer<'e, AnyValue, U>;
+
+pub(crate) struct SharedSubEmplacer<'e, T: ?Sized, U: 'static + ?Sized> {
+    inner: Option<SharedSubRcRefCell<T, U>>,
+    encapsulation_lifetime: std::marker::PhantomData<&'e ()>,
 }
 
-impl<'a, T: 'static + ?Sized, U: 'static + ?Sized> Encapsulator<'a, T, U> {
-    pub(crate) fn encapsulate<V: 'static + ?Sized>(self, value: &'a V) -> SharedSubRcRefCell<T, V> {
-        self.inner.map(|_|
-            // SAFETY: The lifetime 'a is equal to the &'a content argument in replace
-            // So this guarantees that the returned reference is valid as long as the SharedSubRcRefCell exists 
-            unsafe { less_buggy_transmute::<&'a V, &'static V>(value) })
+impl<'e, T: 'static + ?Sized, U: 'static + ?Sized> SharedSubEmplacer<'e, T, U> {
+    pub(crate) fn emplace<V: 'static + ?Sized>(
+        &mut self,
+        value: &'e V,
+    ) -> SharedSubRcRefCell<T, V> {
+        unsafe {
+            // SAFETY: The lifetime 'e is equal to the &'e content argument in replace
+            // So this guarantees that the returned reference is valid as long as the SharedSubRcRefCell exists
+            self.emplace_unchecked(value)
+        }
+    }
+
+    // SAFETY:
+    // * The caller must ensure that the value's lifetime is derived from the original content
+    pub(crate) unsafe fn emplace_unchecked<V: 'static + ?Sized>(
+        &mut self,
+        value: &V,
+    ) -> SharedSubRcRefCell<T, V> {
+        self.inner
+            .take()
+            .expect("You can only emplace to create a new shared value once")
+            .map(|_|
+                // SAFETY: As defined in the rustdoc above
+                unsafe { less_buggy_transmute::<&V, &'static V>(value) })
     }
 }
 

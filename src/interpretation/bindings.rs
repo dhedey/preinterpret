@@ -264,6 +264,19 @@ impl AssigneeValue {
     }
 }
 
+impl IsValueContent for Assignee<AnyValue> {
+    type Type = AnyType;
+    type Form = BeAssignee;
+}
+
+impl IntoValueContent<'static> for Assignee<AnyValue> {
+    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
+        self.0
+             .0
+            .replace(|inner, emplacer| inner.as_mut_value().into_assignee(emplacer))
+    }
+}
+
 impl<T: 'static + ?Sized> Deref for Assignee<T> {
     type Target = T;
 
@@ -346,6 +359,18 @@ impl AnyValueMutable {
         Ok(Mutable(MutableSubRcRefCell::new(reference.data).map_err(
             |_| reference.variable_span.syn_error(MUTABLE_ERROR_MESSAGE),
         )?))
+    }
+}
+
+impl IsValueContent for Mutable<AnyValue> {
+    type Type = AnyType;
+    type Form = BeMutable;
+}
+
+impl IntoValueContent<'static> for Mutable<AnyValue> {
+    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
+        self.0
+            .replace(|inner, emplacer| inner.as_mut_value().into_mutable(emplacer))
     }
 }
 
@@ -449,6 +474,18 @@ impl AnyValueShared {
     }
 }
 
+impl IsValueContent for Shared<AnyValue> {
+    type Type = AnyType;
+    type Form = BeShared;
+}
+
+impl IntoValueContent<'static> for Shared<AnyValue> {
+    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
+        self.0
+            .replace(|inner, emplacer| inner.as_ref_value().into_shared(emplacer))
+    }
+}
+
 impl<T: ?Sized> AsRef<T> for Shared<T> {
     fn as_ref(&self) -> &T {
         &self.0
@@ -465,10 +502,10 @@ impl<T: ?Sized> Deref for Shared<T> {
 
 /// Copy-on-write value that can be either owned or shared
 pub(crate) struct CopyOnWrite<T: 'static + ToOwned + ?Sized> {
-    inner: CopyOnWriteInner<T>,
+    pub(crate) inner: CopyOnWriteInner<T>,
 }
 
-enum CopyOnWriteInner<T: 'static + ToOwned + ?Sized> {
+pub(crate) enum CopyOnWriteInner<T: 'static + ToOwned + ?Sized> {
     /// An owned value that can be used directly
     Owned(Owned<T::Owned>),
     /// For use when the CopyOnWrite value effectively represents the owned value (post-clone).

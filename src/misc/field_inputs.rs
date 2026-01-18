@@ -63,6 +63,17 @@ macro_rules! define_typed_object {
             )*
         }
 
+        impl IsArgument for $model {
+            type ValueType = ObjectType;
+            const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
+            fn from_argument(value: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+                Self::resolve_value(
+                    value.expect_owned(),
+                    "This argument",
+                )
+            }
+        }
+
         impl ResolvableArgumentTarget for $model {
             type ValueType = ObjectType;
         }

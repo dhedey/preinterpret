@@ -91,16 +91,36 @@ where
 {
     pub(crate) fn downcast_resolve<X: FromSpannedValueContent<'a, Form = C::Form>>(
         self,
-        description: &str,
+        resolution_target: &str,
     ) -> ExecutionResult<X>
     where
         <X as IsValueContent>::Type: DowncastFrom<C::Type>,
     {
         let Spanned(value, span_range) = self;
         let content = value.into_content();
-        let resolved =
-            <<X as IsValueContent>::Type>::resolve::<C::Form>(content, span_range, description)?;
+        let resolved = <<X as IsValueContent>::Type>::resolve::<C::Form>(
+            content,
+            span_range,
+            resolution_target,
+        )?;
         Ok(X::from_spanned_content(Spanned(resolved, span_range)))
+    }
+
+    // TODO[concepts]: Change to use a FromSpannedDynContent trait,
+    // so that it can return a ExecutionResult<X> and avoid needing to specify D.
+    pub(crate) fn dyn_resolve<D: IsDynLeaf + ?Sized>(
+        self,
+        resolution_target: &str,
+    ) -> ExecutionResult<DynContent<'a, D::Type, C::Form>>
+    where
+        <D as IsDynLeaf>::Type: DynResolveFrom<C::Type>,
+        C::Form: IsDynCompatibleForm,
+    {
+        let Spanned(value, span_range) = self;
+        let content = value.into_content();
+        let resolved =
+            <<D as IsDynLeaf>::Type>::resolve::<C::Form>(content, span_range, resolution_target)?;
+        Ok(resolved)
     }
 }
 
@@ -199,19 +219,20 @@ where
 
 // Clashes with other blanket impl it will replace!
 //
-// impl<
-//     X: FromValueContent<'static, Type = T, Form = F>,
-//     F: IsForm + MapFromArgument,
-//     T: TypeData + DowncastFrom<ValueType, F>,
-// > IsArgument for X {
-//     type ValueType = T;
-//     const OWNERSHIP: ArgumentOwnership = F::ARGUMENT_OWNERSHIP;
-//     fn from_argument(Spanned(value, span_range): Spanned<ArgumentValue>) -> ExecutionResult<Self> {
-//         let ownership_mapped = F::from_argument_value(value)?;
-//         let type_mapped = T::resolve(ownership_mapped, span_range, "This argument")?;
-//         Ok(X::from_actual(type_mapped))
-//     }
-// }
+impl<
+        X: FromValueContent<'static, Type = T, Form = F>,
+        F: IsForm + MapFromArgument,
+        T: TypeData + DowncastFrom<AnyType>,
+    > IsArgument for X
+{
+    type ValueType = T;
+    const OWNERSHIP: ArgumentOwnership = F::ARGUMENT_OWNERSHIP;
+    fn from_argument(Spanned(value, span_range): Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+        let ownership_mapped = F::from_argument_value(value)?;
+        let type_mapped = T::resolve(ownership_mapped, span_range, "This argument")?;
+        Ok(X::from_content(type_mapped))
+    }
+}
 
 // Clashes with other blanket impl it will replace!
 //

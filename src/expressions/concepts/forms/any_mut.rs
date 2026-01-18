@@ -29,11 +29,14 @@ impl IsDynCompatibleForm for BeAnyMut {
 
     fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
         leaf: Self::Leaf<'a, T>,
-    ) -> Option<Self::DynLeaf<'a, D>>
+    ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
         T::Leaf: CastDyn<D>,
     {
-        leaf.map_optional(<T::Leaf>::map_mut)
+        leaf.replace(|content, emplacer| match <T::Leaf>::map_mut(content) {
+            Ok(mapped) => Ok(emplacer.emplace(mapped)),
+            Err(this) => Err(emplacer.emplace(this)),
+        })
     }
 }
 
@@ -53,9 +56,11 @@ impl MapFromArgument for BeAnyMut {
     const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Mutable;
 
     fn from_argument_value(
-        _value: ArgumentValue,
+        value: ArgumentValue,
     ) -> ExecutionResult<Content<'static, AnyType, Self>> {
-        todo!()
-        // value.expect_mutable().as_any_mut()
+        Ok(value
+            .expect_mutable()
+            .0
+            .replace(|inner, emplacer| inner.as_mut_value().into_mutable_any_mut(emplacer)))
     }
 }

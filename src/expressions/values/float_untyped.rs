@@ -190,6 +190,14 @@ define_type_features! {
 
 pub(crate) struct UntypedFloatFallback(pub FallbackFloat);
 
+impl IsArgument for UntypedFloatFallback {
+    type ValueType = UntypedFloatType;
+    const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
+    fn from_argument(value: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+        Self::resolve_value(value.expect_owned(), "This argument")
+    }
+}
+
 impl ResolvableArgumentTarget for UntypedFloatFallback {
     type ValueType = UntypedFloatType;
 }

@@ -373,7 +373,7 @@ impl Evaluate for ForExpression {
         let iterable: IterableValue = self
             .iterable
             .evaluate_owned(interpreter)?
-            .resolve_as("A for loop iterable")?;
+            .dyn_resolve::<dyn IsIterable>("A for loop iterable")?;
 
         let span = self.body.span();
         let scope = interpreter.current_scope_id();

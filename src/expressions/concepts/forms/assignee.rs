@@ -32,11 +32,15 @@ impl IsDynCompatibleForm for BeAssignee {
 
     fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
         leaf: Self::Leaf<'a, T>,
-    ) -> Option<Self::DynLeaf<'a, D>>
+    ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
         T::Leaf: CastDyn<D>,
     {
-        leaf.0.map_optional(<T::Leaf>::map_mut).map(QqqAssignee)
+        leaf.0
+            .replace(|content, emplacer| match <T::Leaf>::map_mut(content) {
+                Ok(mapped) => Ok(QqqAssignee(emplacer.emplace(mapped))),
+                Err(this) => Err(QqqAssignee(emplacer.emplace(this))),
+            })
     }
 }
 
@@ -59,7 +63,6 @@ impl MapFromArgument for BeAssignee {
     fn from_argument_value(
         value: ArgumentValue,
     ) -> ExecutionResult<Content<'static, AnyType, Self>> {
-        todo!()
-        // value.expect_assignee()
+        Ok(value.expect_assignee().into_content())
     }
 }

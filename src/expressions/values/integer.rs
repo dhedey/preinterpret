@@ -593,6 +593,14 @@ impl_resolvable_argument_for! {
 
 pub(crate) struct CoercedToU32(pub(crate) u32);
 
+impl IsArgument for CoercedToU32 {
+    type ValueType = IntegerType;
+    const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
+    fn from_argument(value: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+        Self::resolve_value(value.expect_owned(), "This argument")
+    }
+}
+
 impl ResolvableArgumentTarget for CoercedToU32 {
     type ValueType = IntegerType;
 }

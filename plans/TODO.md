@@ -253,7 +253,15 @@ First, read the @./2025-11-vision.md
       - [x] Consider if we even need `MapperOutput` or just some helper functions
       - [x] Delay resolving the type kind into the error case when downcasting
     - [x] Create macro to define inline mappers in various forms
-    - [ ] Attempt to see if I can get rid of needing `leaf_to_content` and maybe `content_to_leaf` by exploiting a trick to bind associated types via a sub-trait (e.g. as I did with `IsValueContent<Type = <Self as IsLeafValueContent>::LeafType> + IsLeafValueContent`)
+    - [x] Attempt to see if I can get rid of needing `leaf_to_content` and maybe `content_to_leaf` by exploiting a trick to bind associated types via a sub-trait (e.g. as I did with `IsValueContent<Type = <Self as IsLeafValueContent>::LeafType> + IsLeafValueContent`)
+    - [x] Pivot the argument resolution to work with either old or new values
+    - [ ] Remove as much from arguments.rs as possible
+    - [ ] Fix `todo!("Argument")`
+    - [ ] Pivot the return resolution to work with either old or new values
+    - [ ] Remove `ResolveAs`
+    - [ ] Look at better implementations of `FromArgument`
+          .. potentially via some new selector trait `IsResolvable` with a resolution strategy of `Hierarchichal` | `Dyn` | `Custom`
+          This will let us implement a more general resolution logic, and amalgamate argument parsing and downcast_resolve/dyn_resolve
     - [ ] Reproduce `CopyOnWrite`
       - [ ] Implement `TODO[concepts]: COPY ON WRITE MAPPING`
       - [ ] `BeCopyOnWrite::owned()` / `shared_as_..` can go via `AnyLevelCopyOnWrite => into_copy_on_write`
@@ -665,7 +673,7 @@ type ValueMut<'a> = ValueWhich<IsMut<'a>>;
   * This could be done by adding GATs (raising MSRV to 1.65) so that TypeData can have a `Ref<'T>`,
     with `Value::Ref<'T> = ValueRef<'T>`... although we only really need GATs for allowing arbitrary
     references, not just static `SharedSubRcRefCell<Value, T>` from Shared
-  * And then `Shared<'t, T>` can wrap a `<T as ..Target>::Type::Ref<'t, T>` (in the file, this can be encapsulated as a `HasRefType` trait, which can be blanket implemeted for types implementing `..Target`).
+  * And then `Shared<'t, T>` can wrap a `<T as ..Target>::Type::Ref<'t, T>` (in the file, this can be emplaced as a `HasRefType` trait, which can be blanket implemeted for types implementing `..Target`).
   * This would mean e.g. `Shared<String>` could wrap a `&str`.
   * 6 months later I'm not sure what this means:
     * And then have a `AdvancedCellRef<T>` store a `<T as ..Target>::Type::Ref<'T>` which can be owned and we can manually call increase strong count etc on the `RefCell`.

@@ -106,23 +106,23 @@ pub(crate) trait DowncastFrom<T: IsHierarchicalType>: IsHierarchicalType {
 pub(crate) trait DynResolveFrom<T: IsHierarchicalType>: IsDynType {
     fn downcast_from<'a, F: IsHierarchicalForm + IsDynCompatibleForm>(
         content: Content<'a, T, F>,
-    ) -> Option<DynContent<'a, Self, F>>;
+    ) -> Result<DynContent<'a, Self, F>, Content<'a, T, F>>;
 
     fn resolve<'a, F: IsHierarchicalForm + IsDynCompatibleForm>(
         content: Content<'a, T, F>,
         span_range: SpanRange,
         resolution_target: &str,
     ) -> ExecutionResult<DynContent<'a, Self, F>> {
-        let leaf_kind = T::content_to_leaf_kind::<F>(&content);
         let content = match Self::downcast_from(content) {
-            Some(c) => c,
-            None => {
+            Ok(c) => c,
+            Err(existing) => {
+                let leaf_kind = T::content_to_leaf_kind::<F>(&existing);
                 return span_range.value_err(format!(
                     "{} is expected to be {}, but it is {}",
                     resolution_target,
                     Self::ARTICLED_DISPLAY_NAME,
                     leaf_kind.articled_display_name(),
-                ))
+                ));
             }
         };
         Ok(content)
@@ -319,22 +319,19 @@ where
     type LeafType = L::Type;
 }
 
-pub(crate) trait IsDynLeaf: 'static
-where
-    DynMapper<Self>: LeafMapper<BeOwned>,
-{
+pub(crate) trait IsDynLeaf: 'static {
     type Type: IsDynType<DynContent = Self>;
 }
 
 pub(crate) trait CastDyn<T: ?Sized> {
-    fn map_boxed(self: Box<Self>) -> Option<Box<T>> {
-        None
+    fn map_boxed(self: Box<Self>) -> Result<Box<T>, Box<Self>> {
+        Err(self)
     }
-    fn map_ref(&self) -> Option<&T> {
-        None
+    fn map_ref(&self) -> Result<&T, &Self> {
+        Err(self)
     }
-    fn map_mut(&mut self) -> Option<&mut T> {
-        None
+    fn map_mut(&mut self) -> Result<&mut T, &mut Self> {
+        Err(self)
     }
 }
 
@@ -693,14 +690,14 @@ macro_rules! define_leaf_type {
                 $($dyn_trait_impl)*
             }
             impl CastDyn<dyn $dyn_trait> for $content_type {
-                fn map_boxed(self: Box<Self>) -> Option<Box<dyn $dyn_trait>> {
-                    Some(self)
+                fn map_boxed(self: Box<Self>) -> Result<Box<dyn $dyn_trait>, Box<Self>> {
+                    Ok(self)
                 }
-                fn map_ref(&self) -> Option<&dyn $dyn_trait> {
-                    Some(self)
+                fn map_ref(&self) -> Result<&dyn $dyn_trait, &Self> {
+                    Ok(self)
                 }
-                fn map_mut(&mut self) -> Option<&mut dyn $dyn_trait> {
-                    Some(self)
+                fn map_mut(&mut self) -> Result<&mut dyn $dyn_trait, &mut Self> {
+                    Ok(self)
                 }
             }
         )*
@@ -815,20 +812,50 @@ macro_rules! define_dyn_type {
             type Type = $type_def;
         }
 
+        impl IsArgument for Box<$dyn_type> {
+            type ValueType = $type_def;
+            const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
+            fn from_argument(Spanned(value, span_range): Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+                let form_mapped = BeOwned::from_argument_value(value)?;
+                <$type_def as DynResolveFrom<AnyType>>::resolve(form_mapped, span_range, "This argument")
+            }
+        }
+
+        impl<'a> IsArgument for AnyRef<'a, $dyn_type> {
+            type ValueType = $type_def;
+            const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Shared;
+            fn from_argument(Spanned(value, span_range): Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+                let form_mapped = BeAnyRef::from_argument_value(value)?;
+                <$type_def as DynResolveFrom<AnyType>>::resolve(form_mapped, span_range, "This argument")
+            }
+        }
+
+        impl<'a> IsArgument for AnyMut<'a, $dyn_type> {
+            type ValueType = $type_def;
+            const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Mutable;
+            fn from_argument(Spanned(value, span_range): Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+                let form_mapped = BeAnyMut::from_argument_value(value)?;
+                <$type_def as DynResolveFrom<AnyType>>::resolve(form_mapped, span_range, "This argument")
+            }
+        }
+
         impl<T: IsHierarchicalType> DynResolveFrom<T> for $type_def
         {
-            fn downcast_from<'a, F: IsHierarchicalForm + IsDynCompatibleForm>(content: Content<'a, T, F>) -> Option<DynContent<'a, Self, F>> {
+            fn downcast_from<'a, F: IsHierarchicalForm + IsDynCompatibleForm>(content: Content<'a, T, F>) -> Result<DynContent<'a, Self, F>, Content<'a, T, F>> {
                 T::map_with::<'a, F, _>(DynMapper::<$dyn_type>::new(), content)
             }
         }
 
         impl<F: IsDynCompatibleForm> LeafMapper<F> for DynMapper<$dyn_type> {
-            type Output<'a, T: IsHierarchicalType> =  Option<F::DynLeaf<'a, $dyn_type>>;
+            type Output<'a, T: IsHierarchicalType> =  Result<F::DynLeaf<'a, $dyn_type>, Content<'a, T, F>>;
 
             fn to_parent_output<'a, T: IsChildType>(
                 output: Self::Output<'a, T>,
             ) -> Self::Output<'a, T::ParentType> {
-                output
+                match output {
+                    Ok(dyn_content) => Ok(dyn_content),
+                    Err(content) => Err(T::into_parent(content)),
+                }
             }
 
             fn map_leaf<'a, T: IsLeafType>(

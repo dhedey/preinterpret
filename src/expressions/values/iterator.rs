@@ -302,10 +302,10 @@ define_type_features! {
                 }
             }
 
-            fn skip(mut this: IteratorValue, n: usize) -> IteratorValue {
+            fn skip(mut this: IteratorValue, n: OptionalSuffix<usize>) -> IteratorValue {
                 // We make this greedy instead of lazy because the Skip iterator is not clonable.
                 // We return an iterator for forwards compatibility in case we change it.
-                for _ in 0..n {
+                for _ in 0..n.0 {
                     if this.next().is_none() {
                         break;
                     }
@@ -313,10 +313,10 @@ define_type_features! {
                 this
             }
 
-            fn take(this: IteratorValue, n: usize) -> IteratorValue {
+            fn take(this: IteratorValue, n: OptionalSuffix<usize>) -> IteratorValue {
                 // We collect to a vec to satisfy the clonability requirement,
                 // but only return an iterator for forwards compatibility in case we change it.
-                let taken = this.take(n).collect::<Vec<_>>();
+                let taken = this.take(n.0).collect::<Vec<_>>();
                 IteratorValue::new_for_array(ArrayValue::new(taken))
             }
         }

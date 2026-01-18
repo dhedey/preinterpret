@@ -150,28 +150,28 @@ define_type_features! {
 
             [context] fn to_ident(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Ident> {
                 let string = this.concat_content(&ConcatBehaviour::standard(this.span_range()));
-                string_interface::methods::to_ident(context, string.as_str().into_spanned_ref(this.span_range()))
+                string_interface::methods::to_ident(context, string.into_spanned_ref(this.span_range()))
             }
 
             [context] fn to_ident_camel(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Ident> {
                 let string = this.concat_content(&ConcatBehaviour::standard(this.span_range()));
-                string_interface::methods::to_ident_camel(context, string.as_str().into_spanned_ref(this.span_range()))
+                string_interface::methods::to_ident_camel(context, string.into_spanned_ref(this.span_range()))
             }
 
             [context] fn to_ident_snake(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Ident> {
                 let string = this.concat_content(&ConcatBehaviour::standard(this.span_range()));
-                string_interface::methods::to_ident_snake(context, string.as_str().into_spanned_ref(this.span_range()))
+                string_interface::methods::to_ident_snake(context, string.into_spanned_ref(this.span_range()))
             }
 
             [context] fn to_ident_upper_snake(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Ident> {
                 let string = this.concat_content(&ConcatBehaviour::standard(this.span_range()));
-                string_interface::methods::to_ident_upper_snake(context, string.as_str().into_spanned_ref(this.span_range()))
+                string_interface::methods::to_ident_upper_snake(context, string.into_spanned_ref(this.span_range()))
             }
 
             // Some literals become Value::UnsupportedLiteral but can still be round-tripped back to a stream
             [context] fn to_literal(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<AnyValue> {
                 let string = this.concat_content(&ConcatBehaviour::literal(this.span_range()));
-                let literal = string_interface::methods::to_literal(context, string.as_str().into_spanned_ref(this.span_range()))?;
+                let literal = string_interface::methods::to_literal(context, string.into_spanned_ref(this.span_range()))?;
                 Ok(AnyValue::for_literal(literal).into_any_value())
             }
 
@@ -190,7 +190,7 @@ define_type_features! {
                 error_span_range.assertion_err(message.as_str())
             }
 
-            fn assert(this: Shared<OutputStream>, condition: bool, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
+            fn assert(this: Shared<OutputStream>, condition: bool, message: Option<AnyRef<String>>) -> ExecutionResult<()> {
                 if condition {
                     Ok(())
                 } else {
@@ -203,7 +203,7 @@ define_type_features! {
                 }
             }
 
-            fn assert_eq(this: Shared<OutputStream>, lhs: Spanned<AnyRef<AnyValue>>, rhs: Spanned<AnyRef<AnyValue>>, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
+            fn assert_eq(this: Shared<OutputStream>, lhs: Spanned<AnyValueAnyRef>, rhs: Spanned<AnyValueAnyRef>, message: Option<AnyRef<String>>) -> ExecutionResult<()> {
                 match AnyValueRef::debug_eq(&lhs.as_ref_value(), &rhs.as_ref_value()) {
                     Ok(()) => Ok(()),
                     Err(debug_error) => {

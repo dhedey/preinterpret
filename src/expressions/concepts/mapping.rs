@@ -62,17 +62,17 @@ pub(crate) trait MutLeafMapper<F: IsHierarchicalForm> {
 macro_rules! map_via_leaf {
     (
         input: $(&$r:lifetime $($mut:ident)?)? (Content<$a:lifetime, $input_type:ty, $input_form:ty>) = $input_value:expr,
-        $(state: $(| <$state_l:lifetime>)? $state_type:ty | let $state_pat:pat = $state_init:expr,)?
+        $(state: $(| <$($state_l:lifetime,)* $($state_t:ident = $state_t_ty:ty,)*>)? $state_type:ty | let $state_pat:pat = $state_init:expr,)?
         fn map_leaf <$f:ident $(: $fb:ident $(+ $fbe:ident )*)? $(= $fixed_form:ty)?, $t:ident> ($leaf:ident) -> ($($output_type:tt)+)
         $(where $($where_clause:tt)*)?
         $body:block
     ) => {{
-        struct __InlineMapper $($(<$state_l>)?)? {
+        struct __InlineMapper $($(<$($state_l,)* $($state_t,)*>)?)? {
             state: $crate::if_exists!{ {$($state_type)?} {$($state_type)?} {()} },
         }
 
         $crate::__map_via_leaf_trait_impl!{
-            $(@fixed_form $fixed_form |)? impl<$f $(: $fb $(+ $fbe)*)?> @mutability $(&$r $($mut)?)? for __InlineMapper $($(<$state_l>)?)? $(where $($where_clause)*)?
+            $(@fixed_form $fixed_form |)? impl<$f $(: $fb $(+ $fbe)*)?> @mutability $(&$r $($mut)?)? for __InlineMapper $($(<$($state_l,)* $($state_t,)*>)?)? $(where $($where_clause)*)?
             {
                 type Output<$($r,)? $a $(: $r)?, $t: $crate::expressions::concepts::IsHierarchicalType> = $($output_type)+;
 
@@ -107,12 +107,12 @@ macro_rules! map_via_leaf {
 
 #[doc(hidden)]
 macro_rules! __map_via_leaf_trait_impl {
-    (impl<$f:ident $(: $fb:ident $(+ $fbe:ident )*)?> @mutability &$r:lifetime mut for $mapper:ident $(<$state_l:lifetime>)? $(where $($where_clause:tt)*)? { $($body:tt)* } ) => { impl$(<$state_l>)? <$f $(: $fb $(+ $fbe)*)?> MutLeafMapper<$f> for $mapper $(<$state_l>)? $(where $($where_clause)*)? { $($body)* } };
-    (impl<$f:ident $(: $fb:ident $(+ $fbe:ident )*)?> @mutability &$r:lifetime for $mapper:ident $(<$state_l:lifetime>)? $(where $($where_clause:tt)*)? { $($body:tt)* } ) => { impl$(<$state_l>)? <$f $(: $fb $(+ $fbe)*)?> RefLeafMapper<$f> for $mapper $(<$state_l>)? $(where $($where_clause)*)? { $($body)* } };
-    (impl<$f:ident $(: $fb:ident $(+ $fbe:ident )*)?> @mutability for $mapper:ident $(<$state_l:lifetime>)? $(where $($where_clause:tt)*)? { $($body:tt)* } ) => { impl$(<$state_l>)? <$f $(: $fb $(+ $fbe)*)?> LeafMapper<$f> for $mapper $(<$state_l>)? $(where $($where_clause)*)? { $($body)* } };
-    (@fixed_form $fixed_form:ty | impl<$f:ident> @mutability &$r:lifetime mut for $mapper:ident $(<$state_l:lifetime>)? $(where $($where_clause:tt)*)? { $($body:tt)* } ) => { impl$(<$state_l>)? MutLeafMapper<$fixed_form> for $mapper $(<$state_l>)? $(where $($where_clause)*)? { $($body)* } };
-    (@fixed_form $fixed_form:ty | impl<$f:ident> @mutability &$r:lifetime for $mapper:ident $(<$state_l:lifetime>)? $(where $($where_clause:tt)*)? { $($body:tt)* } ) => { impl$(<$state_l>)? RefLeafMapper<$fixed_form> for $mapper $(<$state_l>)? $(where $($where_clause)*)? { $($body)* } };
-    (@fixed_form $fixed_form:ty | impl<$f:ident> @mutability for $mapper:ident $(<$state_l:lifetime>)? $(where $($where_clause:tt)*)? { $($body:tt)* } ) => { impl$(<$state_l>)? LeafMapper<$fixed_form> for $mapper $(<$state_l>)? $(where $($where_clause)*)? { $($body)* } };
+    (impl<$f:ident $(: $fb:ident $(+ $fbe:ident )*)?> @mutability &$r:lifetime mut for $mapper:ident $(<$($state_l:lifetime,)* $($state_t:ident,)*>)? $(where $($where_clause:tt)*)? { $($body:tt)* } ) => { impl$(<$($state_l,)* $($state_t,)*>)? <$f $(: $fb $(+ $fbe)*)?> MutLeafMapper<$f> for $mapper $(<$($state_l,)* $($state_t,)*>)? $(where $($where_clause)*)? { $($body)* } };
+    (impl<$f:ident $(: $fb:ident $(+ $fbe:ident )*)?> @mutability &$r:lifetime for $mapper:ident $(<$($state_l:lifetime,)* $($state_t:ident,)*>)? $(where $($where_clause:tt)*)? { $($body:tt)* } ) => { impl$(<$($state_l,)* $($state_t,)*>)? <$f $(: $fb $(+ $fbe)*)?> RefLeafMapper<$f> for $mapper $(<$($state_l,)* $($state_t,)*>)? $(where $($where_clause)*)? { $($body)* } };
+    (impl<$f:ident $(: $fb:ident $(+ $fbe:ident )*)?> @mutability for $mapper:ident $(<$($state_l:lifetime,)* $($state_t:ident,)*>)? $(where $($where_clause:tt)*)? { $($body:tt)* } ) => { impl$(<$($state_l,)* $($state_t,)*>)? <$f $(: $fb $(+ $fbe)*)?> LeafMapper<$f> for $mapper $(<$($state_l,)* $($state_t,)*>)? $(where $($where_clause)*)? { $($body)* } };
+    (@fixed_form $fixed_form:ty | impl<$f:ident> @mutability &$r:lifetime mut for $mapper:ident $(<$($state_l:lifetime,)* $($state_t:ident,)*>)? $(where $($where_clause:tt)*)? { $($body:tt)* } ) => { impl$(<$($state_l,)* $($state_t,)*>)? MutLeafMapper<$fixed_form> for $mapper $(<$($state_l,)* $($state_t,)*>)? $(where $($where_clause)*)? { $($body)* } };
+    (@fixed_form $fixed_form:ty | impl<$f:ident> @mutability &$r:lifetime for $mapper:ident $(<$($state_l:lifetime,)* $($state_t:ident,)*>)? $(where $($where_clause:tt)*)? { $($body:tt)* } ) => { impl$(<$($state_l,)* $($state_t,)*>)? RefLeafMapper<$fixed_form> for $mapper $(<$($state_l,)* $($state_t,)*>)? $(where $($where_clause)*)? { $($body)* } };
+    (@fixed_form $fixed_form:ty | impl<$f:ident> @mutability for $mapper:ident $(<$($state_l:lifetime,)* $($state_t:ident,)*>)? $(where $($where_clause:tt)*)? { $($body:tt)* } ) => { impl$(<$($state_l,)* $($state_t,)*>)? LeafMapper<$fixed_form> for $mapper $(<$($state_l,)* $($state_t,)*>)? $(where $($where_clause)*)? { $($body)* } };
 }
 
 #[doc(hidden)]

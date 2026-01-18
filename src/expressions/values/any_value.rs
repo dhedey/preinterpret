@@ -4,6 +4,7 @@ pub(crate) type AnyValue = AnyValueContent<'static, BeOwned>;
 /// For symmetry
 pub(crate) type AnyValueOwned = AnyValue;
 pub(crate) type AnyValueRef<'a> = AnyValueContent<'a, BeRef>;
+pub(crate) type AnyValueAnyRef<'a> = AnyValueContent<'a, BeAnyRef>;
 pub(crate) type AnyValueShared = Shared<AnyValue>;
 pub(crate) type AnyValueMutable = Mutable<AnyValue>;
 pub(crate) type AnyValueAssignee = Assignee<AnyValue>;
@@ -119,7 +120,7 @@ define_type_features! {
             // EQUALITY METHODS
             // ===============================
             // Compare values with strict type checking - errors on value kind mismatch.
-            [context] fn typed_eq(this: AnyRef<AnyValue>, other: AnyRef<AnyValue>) -> ExecutionResult<bool> {
+            [context] fn typed_eq(this: AnyValueAnyRef, other: AnyValueAnyRef) -> ExecutionResult<bool> {
                 this.as_ref_value().typed_eq(&other.as_ref_value(), context.span_range())
             }
 
@@ -167,11 +168,11 @@ define_type_features! {
             }
         }
         pub(crate) mod binary_operations {
-            fn eq(lhs: AnyRef<AnyValue>, rhs: AnyRef<AnyValue>) -> bool {
+            fn eq(lhs: AnyValueAnyRef, rhs: AnyValueAnyRef) -> bool {
                 AnyValue::values_equal(lhs.as_ref_value(), rhs.as_ref_value())
             }
 
-            fn ne(lhs: AnyRef<AnyValue>, rhs: AnyRef<AnyValue>) -> bool {
+            fn ne(lhs: AnyValueAnyRef, rhs: AnyValueAnyRef) -> bool {
                 !AnyValue::values_equal(lhs.as_ref_value(), rhs.as_ref_value())
             }
         }
@@ -531,7 +532,8 @@ impl Spanned<AnyValue> {
         self,
         resolution_target: &str,
     ) -> ExecutionResult<IteratorValue> {
-        IterableValue::resolve_value(self, resolution_target)?.into_iterator()
+        self.dyn_resolve::<dyn IsIterable>(resolution_target)?
+            .into_iterator()
     }
 }
 
