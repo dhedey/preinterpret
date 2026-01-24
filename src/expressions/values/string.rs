@@ -1,61 +1,44 @@
 use super::*;
 
-#[derive(Clone)]
-pub(crate) struct StringValue {
-    pub(crate) value: String,
+define_leaf_type! {
+    pub(crate) StringType => AnyType(AnyValueContent::String),
+    content: String,
+    kind: pub(crate) StringKind,
+    type_name: "string",
+    articled_display_name: "a string",
+    dyn_impls: {
+        IterableType: impl IsIterable {
+            fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
+                Ok(IteratorValue::new_for_string_over_chars(*self))
+            }
+
+            fn len(&self, _error_span_range: SpanRange) -> ExecutionResult<usize> {
+                // The iterator is over chars, so this must count chars.
+                // But contrast, string.len() counts bytes
+                Ok(self.chars().count())
+            }
+        }
+    },
 }
 
-impl Debug for StringValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.value)
+impl IsValueContent for &str {
+    type Type = StringType;
+    type Form = BeRef;
+}
+
+impl<'a> FromValueContent<'a> for &'a str {
+    fn from_content(value: &'a String) -> Self {
+        value.as_str()
     }
 }
 
-impl IntoValue for StringValue {
-    fn into_value(self) -> Value {
-        Value::String(self)
-    }
-}
-
-impl StringValue {
-    pub(super) fn for_litstr(lit: &syn::LitStr) -> Owned<Self> {
-        Self { value: lit.value() }.into_owned()
-    }
-
-    pub(super) fn to_literal(&self, span: Span) -> Literal {
-        Literal::string(&self.value).with_span(span)
-    }
-}
-
-impl HasValueKind for StringValue {
-    type SpecificKind = ValueKind;
-
-    fn kind(&self) -> ValueKind {
-        ValueKind::String
-    }
-}
-
-impl ValuesEqual for StringValue {
+impl ValuesEqual for String {
     fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
-        if self.value == other.value {
+        if self == other {
             ctx.values_equal()
         } else {
             ctx.leaf_values_not_equal(self, other)
         }
-    }
-}
-
-impl IntoValue for String {
-    fn into_value(self) -> Value {
-        Value::String(StringValue { value: self })
-    }
-}
-
-impl IntoValue for &str {
-    fn into_value(self) -> Value {
-        Value::String(StringValue {
-            value: self.to_string(),
-        })
     }
 }
 
@@ -81,81 +64,80 @@ pub(crate) fn string_to_literal(
     Ok(literal.with_span(span))
 }
 
-define_interface! {
-    struct StringTypeData,
-    parent: IterableTypeData,
+define_type_features! {
+    impl StringType,
     pub(crate) mod string_interface {
         pub(crate) mod methods {
             // ==================
             // CONVERSION METHODS
             // ==================
-            [context] fn to_ident(this: Spanned<AnyRef<str>>) -> ExecutionResult<Ident> {
+            [context] fn to_ident(this: Spanned<AnyRef<String>>) -> ExecutionResult<Ident> {
                 string_to_ident(&this, &this, context.span_from_join_else_start())
             }
 
-            [context] fn to_ident_camel(this: Spanned<AnyRef<str>>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_camel(this: Spanned<AnyRef<String>>) -> ExecutionResult<Ident> {
                 let str = string_conversion::to_upper_camel_case(&this);
                 string_to_ident(&str, &this, context.span_from_join_else_start())
             }
 
-            [context] fn to_ident_snake(this: Spanned<AnyRef<str>>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_snake(this: Spanned<AnyRef<String>>) -> ExecutionResult<Ident> {
                 let str = string_conversion::to_lower_snake_case(&this);
                 string_to_ident(&str, &this, context.span_from_join_else_start())
             }
 
-            [context] fn to_ident_upper_snake(this: Spanned<AnyRef<str>>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_upper_snake(this: Spanned<AnyRef<String>>) -> ExecutionResult<Ident> {
                 let str = string_conversion::to_upper_snake_case(&this);
                 string_to_ident(&str, &this, context.span_from_join_else_start())
             }
 
-            [context] fn to_literal(this: Spanned<AnyRef<str>>) -> ExecutionResult<Literal> {
+            [context] fn to_literal(this: Spanned<AnyRef<String>>) -> ExecutionResult<Literal> {
                 string_to_literal(&this, &this, context.span_from_join_else_start())
             }
 
             // ======================
             // STRING RESHAPE METHODS
             // ======================
-            fn to_uppercase(this: AnyRef<str>) -> String {
+            fn to_uppercase(this: AnyRef<String>) -> String {
                 string_conversion::to_uppercase(&this)
             }
 
-            fn to_lowercase(this: AnyRef<str>) -> String {
+            fn to_lowercase(this: AnyRef<String>) -> String {
                 string_conversion::to_lowercase(&this)
             }
 
-            fn to_lower_snake_case(this: AnyRef<str>) -> String {
+            fn to_lower_snake_case(this: AnyRef<String>) -> String {
                 string_conversion::to_lower_snake_case(&this)
             }
 
-            fn to_upper_snake_case(this: AnyRef<str>) -> String {
+            fn to_upper_snake_case(this: AnyRef<String>) -> String {
                 string_conversion::to_upper_snake_case(&this)
             }
 
-            fn to_kebab_case(this: AnyRef<str>) -> String {
+            fn to_kebab_case(this: AnyRef<String>) -> String {
                 string_conversion::to_lower_kebab_case(&this)
             }
 
-            fn to_lower_camel_case(this: AnyRef<str>) -> String {
+            fn to_lower_camel_case(this: AnyRef<String>) -> String {
                 string_conversion::to_lower_camel_case(&this)
             }
 
-            fn to_upper_camel_case(this: AnyRef<str>) -> String {
+            fn to_upper_camel_case(this: AnyRef<String>) -> String {
                 string_conversion::to_upper_camel_case(&this)
             }
 
-            fn capitalize(this: AnyRef<str>) -> String {
+            fn capitalize(this: AnyRef<String>) -> String {
                 string_conversion::capitalize(&this)
             }
 
-            fn decapitalize(this: AnyRef<str>) -> String {
+            fn decapitalize(this: AnyRef<String>) -> String {
                 string_conversion::decapitalize(&this)
             }
 
-            fn to_title_case(this: AnyRef<str>) -> String {
+            fn to_title_case(this: AnyRef<String>) -> String {
                 string_conversion::title_case(&this)
             }
 
-            fn insert_spaces(this: AnyRef<str>) -> String {
+            fn insert_spaces(this: AnyRef<String>) -> String {
                 string_conversion::insert_spaces_between_words(&this)
             }
         }
@@ -165,36 +147,36 @@ define_interface! {
             }
         }
         pub(crate) mod binary_operations {
-            fn add(mut lhs: String, rhs: Shared<str>) -> String {
+            fn add(mut lhs: String, rhs: AnyRef<String>) -> String {
                 lhs.push_str(rhs.deref());
                 lhs
             }
 
-            fn add_assign(mut lhs: Assignee<String>, rhs: Shared<str>) {
+            fn add_assign(mut lhs: Assignee<String>, rhs: AnyRef<String>) {
                 lhs.push_str(rhs.deref());
             }
 
-            fn eq(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+            fn eq(lhs: AnyRef<String>, rhs: AnyRef<String>) -> bool {
                 lhs.deref() == rhs.deref()
             }
 
-            fn ne(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+            fn ne(lhs: AnyRef<String>, rhs: AnyRef<String>) -> bool {
                 lhs.deref() != rhs.deref()
             }
 
-            fn lt(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+            fn lt(lhs: AnyRef<String>, rhs: AnyRef<String>) -> bool {
                 lhs.deref() < rhs.deref()
             }
 
-            fn le(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+            fn le(lhs: AnyRef<String>, rhs: AnyRef<String>) -> bool {
                 lhs.deref() <= rhs.deref()
             }
 
-            fn ge(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+            fn ge(lhs: AnyRef<String>, rhs: AnyRef<String>) -> bool {
                 lhs.deref() >= rhs.deref()
             }
 
-            fn gt(lhs: Shared<str>, rhs: Shared<str>) -> bool {
+            fn gt(lhs: AnyRef<String>, rhs: AnyRef<String>) -> bool {
                 lhs.deref() > rhs.deref()
             }
         }
@@ -202,8 +184,8 @@ define_interface! {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
                     UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => return None,
-                    UnaryOperation::Cast { target, .. } => match target {
-                        CastTarget::String => unary_definitions::cast_to_string(),
+                    UnaryOperation::Cast { target: CastTarget(kind), .. } => match kind {
+                        AnyValueLeafKind::String(_) => unary_definitions::cast_to_string(),
                         _ => return None,
                     },
                 })
@@ -229,30 +211,26 @@ define_interface! {
 }
 
 impl_resolvable_argument_for! {
-    StringTypeData,
-    (value, context) -> StringValue {
+    StringType,
+    (value, context) -> String {
         match value {
-            Value::String(value) => Ok(value),
+            AnyValueContent::String(value) => Ok(value),
             _ => context.err("a string", value),
         }
     }
 }
 
-impl_delegated_resolvable_argument_for!(
-    (value: StringValue) -> String { value.value }
-);
-
 impl ResolvableArgumentTarget for str {
-    type ValueType = StringTypeData;
+    type ValueType = StringType;
 }
 
-impl ResolvableShared<Value> for str {
+impl ResolvableShared<AnyValue> for str {
     fn resolve_from_ref<'a>(
-        value: &'a Value,
+        value: &'a AnyValue,
         context: ResolutionContext,
     ) -> ExecutionResult<&'a Self> {
         match value {
-            Value::String(s) => Ok(s.value.as_str()),
+            AnyValueContent::String(s) => Ok(s.as_str()),
             _ => context.err("a string", value),
         }
     }

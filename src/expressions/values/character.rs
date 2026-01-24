@@ -1,43 +1,17 @@
 use super::*;
 
-#[derive(Clone)]
-pub(crate) struct CharValue {
-    pub(super) value: char,
+define_leaf_type! {
+    pub(crate) CharType => AnyType(AnyValueContent::Char),
+    content: char,
+    kind: pub(crate) CharKind,
+    type_name: "char",
+    articled_display_name: "a char",
+    dyn_impls: {},
 }
 
-impl IntoValue for CharValue {
-    fn into_value(self) -> Value {
-        Value::Char(self)
-    }
-}
-
-impl Debug for CharValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.value)
-    }
-}
-
-impl CharValue {
-    pub(super) fn for_litchar(lit: &syn::LitChar) -> Owned<Self> {
-        Self { value: lit.value() }.into_owned()
-    }
-
-    pub(super) fn to_literal(&self, span: Span) -> Literal {
-        Literal::character(self.value).with_span(span)
-    }
-}
-
-impl HasValueKind for CharValue {
-    type SpecificKind = ValueKind;
-
-    fn kind(&self) -> ValueKind {
-        ValueKind::Char
-    }
-}
-
-impl ValuesEqual for CharValue {
+impl ValuesEqual for char {
     fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
-        if self.value == other.value {
+        if self == other {
             ctx.values_equal()
         } else {
             ctx.leaf_values_not_equal(self, other)
@@ -45,15 +19,8 @@ impl ValuesEqual for CharValue {
     }
 }
 
-impl IntoValue for char {
-    fn into_value(self) -> Value {
-        Value::Char(CharValue { value: self })
-    }
-}
-
-define_interface! {
-    struct CharTypeData,
-    parent: ValueTypeData,
+define_type_features! {
+    impl CharType,
     pub(crate) mod char_interface {
         pub(crate) mod methods {
         }
@@ -160,22 +127,22 @@ define_interface! {
 
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
-                    UnaryOperation::Cast { target, .. } => match target {
-                        CastTarget::Integer(IntegerKind::Untyped) => unary_definitions::cast_to_untyped_integer(),
-                        CastTarget::Integer(IntegerKind::I8) => unary_definitions::cast_to_i8(),
-                        CastTarget::Integer(IntegerKind::I16) => unary_definitions::cast_to_i16(),
-                        CastTarget::Integer(IntegerKind::I32) => unary_definitions::cast_to_i32(),
-                        CastTarget::Integer(IntegerKind::I64) => unary_definitions::cast_to_i64(),
-                        CastTarget::Integer(IntegerKind::I128) => unary_definitions::cast_to_i128(),
-                        CastTarget::Integer(IntegerKind::Isize) => unary_definitions::cast_to_isize(),
-                        CastTarget::Integer(IntegerKind::U8) => unary_definitions::cast_to_u8(),
-                        CastTarget::Integer(IntegerKind::U16) => unary_definitions::cast_to_u16(),
-                        CastTarget::Integer(IntegerKind::U32) => unary_definitions::cast_to_u32(),
-                        CastTarget::Integer(IntegerKind::U64) => unary_definitions::cast_to_u64(),
-                        CastTarget::Integer(IntegerKind::U128) => unary_definitions::cast_to_u128(),
-                        CastTarget::Integer(IntegerKind::Usize) => unary_definitions::cast_to_usize(),
-                        CastTarget::Char => unary_definitions::cast_to_char(),
-                        CastTarget::String => unary_definitions::cast_to_string(),
+                    UnaryOperation::Cast { target: CastTarget(kind), .. } => match kind {
+                        AnyValueLeafKind::Integer(IntegerLeafKind::Untyped(_)) => unary_definitions::cast_to_untyped_integer(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::I8(_)) => unary_definitions::cast_to_i8(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::I16(_)) => unary_definitions::cast_to_i16(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::I32(_)) => unary_definitions::cast_to_i32(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::I64(_)) => unary_definitions::cast_to_i64(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::I128(_)) => unary_definitions::cast_to_i128(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::Isize(_)) => unary_definitions::cast_to_isize(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::U8(_)) => unary_definitions::cast_to_u8(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::U16(_)) => unary_definitions::cast_to_u16(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::U32(_)) => unary_definitions::cast_to_u32(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::U64(_)) => unary_definitions::cast_to_u64(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::U128(_)) => unary_definitions::cast_to_u128(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::Usize(_)) => unary_definitions::cast_to_usize(),
+                        AnyValueLeafKind::Char(_) => unary_definitions::cast_to_char(),
+                        AnyValueLeafKind::String(_) => unary_definitions::cast_to_string(),
                         _ => return None,
                     },
                     _ => return None,
@@ -186,15 +153,11 @@ define_interface! {
 }
 
 impl_resolvable_argument_for! {
-    CharTypeData,
-    (value, context) -> CharValue {
+    CharType,
+    (value, context) -> char {
         match value {
-            Value::Char(value) => Ok(value),
+            AnyValueContent::Char(char) => Ok(char),
             _ => context.err("a char", value),
         }
     }
 }
-
-impl_delegated_resolvable_argument_for!(
-    (value: CharValue) -> char { value.value }
-);

@@ -1,3 +1,4 @@
+mod any_value;
 mod array;
 mod boolean;
 mod character;
@@ -16,8 +17,8 @@ mod range;
 mod stream;
 mod string;
 mod unsupported_literal;
-mod value;
 
+pub(crate) use any_value::*;
 pub(crate) use array::*;
 pub(crate) use boolean::*;
 pub(crate) use character::*;
@@ -36,7 +37,6 @@ pub(crate) use range::*;
 pub(crate) use stream::*;
 pub(crate) use string::*;
 pub(crate) use unsupported_literal::*;
-pub(crate) use value::*;
 
 // Marked as use for sub-modules to use with a `use super::*` statement
 use super::*;

@@ -125,7 +125,7 @@ enum NextActionInner {
     // This covers atomic assignments and composite assignments
     // (similar to patterns but for existing values/reassignments)
     // let a = ["x", "y"]; let b; [a[1], .. b] = [1, 2, 3, 4]
-    ReadNodeAsAssignmentTarget(ExpressionNodeId, Value),
+    ReadNodeAsAssignmentTarget(ExpressionNodeId, AnyValue),
     HandleReturnedValue(Spanned<RequestedValue>),
 }
 
@@ -146,9 +146,9 @@ impl From<NextActionInner> for NextAction {
 pub(crate) enum RequestedValue {
     // RequestedOwnership::Concrete(_)
     // -------------------------------
-    Owned(OwnedValue),
-    Shared(SharedValue),
-    Mutable(MutableValue),
+    Owned(AnyValueOwned),
+    Shared(AnyValueShared),
+    Mutable(AnyValueMutable),
     CopyOnWrite(CopyOnWriteValue),
     Assignee(AssigneeValue),
 
@@ -162,21 +162,21 @@ pub(crate) enum RequestedValue {
 }
 
 impl RequestedValue {
-    pub(crate) fn expect_owned(self) -> OwnedValue {
+    pub(crate) fn expect_owned(self) -> AnyValueOwned {
         match self {
             RequestedValue::Owned(value) => value,
             _ => panic!("expect_owned() called on non-owned RequestedValue"),
         }
     }
 
-    pub(crate) fn expect_shared(self) -> SharedValue {
+    pub(crate) fn expect_shared(self) -> AnyValueShared {
         match self {
             RequestedValue::Shared(shared) => shared,
             _ => panic!("expect_shared() called on non-shared RequestedValue"),
         }
     }
 
-    pub(super) fn expect_assignee(self) -> AssigneeValue {
+    pub(super) fn expect_assignee(self) -> AnyValueAssignee {
         match self {
             RequestedValue::Assignee(assignee) => assignee,
             _ => panic!("expect_assignee() called on non-assignee RequestedValue"),
@@ -212,11 +212,26 @@ impl RequestedValue {
         }
     }
 
+    /// Returns the leaf kind of the underlying value, for type resolution purposes.
+    pub(crate) fn value_kind(&self) -> AnyValueLeafKind {
+        match self {
+            RequestedValue::Owned(value) => value.value_kind(),
+            RequestedValue::Shared(shared) => shared.value_kind(),
+            RequestedValue::Mutable(mutable) => mutable.value_kind(),
+            RequestedValue::CopyOnWrite(cow) => cow.value_kind(),
+            RequestedValue::Assignee(assignee) => assignee.value_kind(),
+            RequestedValue::LateBound(late_bound) => late_bound.value_kind(),
+            RequestedValue::AssignmentCompletion(_) => {
+                panic!("value_kind() called on AssignmentCompletion")
+            }
+        }
+    }
+
     pub(crate) fn expect_any_value_and_map(
         self,
-        map_shared: impl FnOnce(SharedValue) -> ExecutionResult<SharedValue>,
-        map_mutable: impl FnOnce(MutableValue) -> ExecutionResult<MutableValue>,
-        map_owned: impl FnOnce(OwnedValue) -> ExecutionResult<OwnedValue>,
+        map_shared: impl FnOnce(AnyValueShared) -> ExecutionResult<AnyValueShared>,
+        map_mutable: impl FnOnce(AnyValueMutable) -> ExecutionResult<AnyValueMutable>,
+        map_owned: impl FnOnce(AnyValueOwned) -> ExecutionResult<AnyValueOwned>,
     ) -> ExecutionResult<RequestedValue> {
         Ok(match self {
             RequestedValue::LateBound(late_bound) => {
@@ -241,17 +256,17 @@ impl RequestedValue {
 #[allow(unused)]
 impl Spanned<RequestedValue> {
     #[inline]
-    pub(crate) fn expect_owned(self) -> Spanned<OwnedValue> {
+    pub(crate) fn expect_owned(self) -> Spanned<AnyValueOwned> {
         self.map(|v| v.expect_owned())
     }
 
     #[inline]
-    pub(crate) fn expect_shared(self) -> Spanned<SharedValue> {
+    pub(crate) fn expect_shared(self) -> Spanned<AnyValueShared> {
         self.map(|v| v.expect_shared())
     }
 
     #[inline]
-    pub(crate) fn expect_assignee(self) -> Spanned<AssigneeValue> {
+    pub(crate) fn expect_assignee(self) -> Spanned<AnyValueAssignee> {
         self.map(|v| v.expect_assignee())
     }
 
@@ -372,7 +387,7 @@ impl<'a, T: RequestedValueType> Context<'a, T> {
         self,
         handler: H,
         node: ExpressionNodeId,
-        value: Value,
+        value: AnyValue,
     ) -> NextAction {
         self.stack
             .handlers

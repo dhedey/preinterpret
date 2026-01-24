@@ -2,6 +2,25 @@ use syn::RangeLimits;
 
 use super::*;
 
+define_leaf_type! {
+    pub(crate) RangeType => AnyType(AnyValueContent::Range),
+    content: RangeValue,
+    kind: pub(crate) RangeKind,
+    type_name: "range",
+    articled_display_name: "a range",
+    dyn_impls: {
+        IterableType: impl IsIterable {
+            fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
+                IteratorValue::new_for_range(*self)
+            }
+
+            fn len(&self, error_span_range: SpanRange) -> ExecutionResult<usize> {
+                self.len(error_span_range)
+            }
+        }
+    },
+}
+
 #[derive(Clone)]
 pub(crate) struct RangeValue {
     pub(crate) inner: Box<RangeValueInner>,
@@ -34,19 +53,27 @@ impl RangeValue {
                 end_exclusive,
                 ..
             } => {
-                start_inclusive.concat_recursive_into(output, behaviour)?;
+                start_inclusive
+                    .as_ref_value()
+                    .concat_recursive_into(output, behaviour)?;
                 output.push_str("..");
-                end_exclusive.concat_recursive_into(output, behaviour)?;
+                end_exclusive
+                    .as_ref_value()
+                    .concat_recursive_into(output, behaviour)?;
             }
             RangeValueInner::RangeFrom {
                 start_inclusive, ..
             } => {
-                start_inclusive.concat_recursive_into(output, behaviour)?;
+                start_inclusive
+                    .as_ref_value()
+                    .concat_recursive_into(output, behaviour)?;
                 output.push_str("..");
             }
             RangeValueInner::RangeTo { end_exclusive, .. } => {
                 output.push_str("..");
-                end_exclusive.concat_recursive_into(output, behaviour)?;
+                end_exclusive
+                    .as_ref_value()
+                    .concat_recursive_into(output, behaviour)?;
             }
             RangeValueInner::RangeFull { .. } => {
                 output.push_str("..");
@@ -56,13 +83,19 @@ impl RangeValue {
                 end_inclusive,
                 ..
             } => {
-                start_inclusive.concat_recursive_into(output, behaviour)?;
+                start_inclusive
+                    .as_ref_value()
+                    .concat_recursive_into(output, behaviour)?;
                 output.push_str("..=");
-                end_inclusive.concat_recursive_into(output, behaviour)?;
+                end_inclusive
+                    .as_ref_value()
+                    .concat_recursive_into(output, behaviour)?;
             }
             RangeValueInner::RangeToInclusive { end_inclusive, .. } => {
                 output.push_str("..=");
-                end_inclusive.concat_recursive_into(output, behaviour)?;
+                end_inclusive
+                    .as_ref_value()
+                    .concat_recursive_into(output, behaviour)?;
             }
         }
         Ok(())
@@ -83,18 +116,26 @@ impl Spanned<&RangeValue> {
                 end_exclusive,
                 ..
             } => {
-                start = array.resolve_valid_index(Spanned(start_inclusive, span_range), false)?;
-                end = array.resolve_valid_index(Spanned(end_exclusive, span_range), true)?;
+                start = array.resolve_valid_index(
+                    Spanned(start_inclusive.as_ref_value(), span_range),
+                    false,
+                )?;
+                end = array
+                    .resolve_valid_index(Spanned(end_exclusive.as_ref_value(), span_range), true)?;
                 start..end
             }
             RangeValueInner::RangeFrom {
                 start_inclusive, ..
             } => {
-                start = array.resolve_valid_index(Spanned(start_inclusive, span_range), false)?;
+                start = array.resolve_valid_index(
+                    Spanned(start_inclusive.as_ref_value(), span_range),
+                    false,
+                )?;
                 start..array.items.len()
             }
             RangeValueInner::RangeTo { end_exclusive, .. } => {
-                end = array.resolve_valid_index(Spanned(end_exclusive, span_range), true)?;
+                end = array
+                    .resolve_valid_index(Spanned(end_exclusive.as_ref_value(), span_range), true)?;
                 start..end
             }
             RangeValueInner::RangeFull { .. } => start..end,
@@ -103,14 +144,23 @@ impl Spanned<&RangeValue> {
                 end_inclusive,
                 ..
             } => {
-                start = array.resolve_valid_index(Spanned(start_inclusive, span_range), false)?;
+                start = array.resolve_valid_index(
+                    Spanned(start_inclusive.as_ref_value(), span_range),
+                    false,
+                )?;
                 // +1 is safe because it must be < array length.
-                end = array.resolve_valid_index(Spanned(end_inclusive, span_range), false)? + 1;
+                end = array.resolve_valid_index(
+                    Spanned(end_inclusive.as_ref_value(), span_range),
+                    false,
+                )? + 1;
                 start..end
             }
             RangeValueInner::RangeToInclusive { end_inclusive, .. } => {
                 // +1 is safe because it must be < array length.
-                end = array.resolve_valid_index(Spanned(end_inclusive, span_range), false)? + 1;
+                end = array.resolve_valid_index(
+                    Spanned(end_inclusive.as_ref_value(), span_range),
+                    false,
+                )? + 1;
                 start..end
             }
         })
@@ -118,56 +168,31 @@ impl Spanned<&RangeValue> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum RangeKind {
+pub(crate) enum RangeStructure {
     /// `start .. end`
-    Range,
+    FromTo,
     /// `start ..`
-    RangeFrom,
+    From,
     /// `.. end`
-    RangeTo,
+    To,
     /// `..`
-    RangeFull,
+    Full,
     /// `start ..= end`
-    RangeInclusive,
+    FromToInclusive,
     /// `..= end`
-    RangeToInclusive,
+    ToInclusive,
 }
 
-impl IsSpecificValueKind for RangeKind {
-    fn display_name(&self) -> &'static str {
+impl RangeStructure {
+    pub(crate) fn articled_display_name(&self) -> &'static str {
         match self {
-            RangeKind::Range => "range start..end",
-            RangeKind::RangeFrom => "range start..",
-            RangeKind::RangeTo => "range ..end",
-            RangeKind::RangeFull => "range ..",
-            RangeKind::RangeInclusive => "range start..=end",
-            RangeKind::RangeToInclusive => "range ..=end",
+            RangeStructure::FromTo => "a range start..end",
+            RangeStructure::From => "a range start..",
+            RangeStructure::To => "a range ..end",
+            RangeStructure::Full => "a range ..",
+            RangeStructure::FromToInclusive => "a range start..=end",
+            RangeStructure::ToInclusive => "a range ..=end",
         }
-    }
-
-    fn articled_display_name(&self) -> &'static str {
-        match self {
-            RangeKind::Range => "a range start..end",
-            RangeKind::RangeFrom => "a range start..",
-            RangeKind::RangeTo => "a range ..end",
-            RangeKind::RangeFull => "a range ..",
-            RangeKind::RangeInclusive => "a range start..=end",
-            RangeKind::RangeToInclusive => "a range ..=end",
-        }
-    }
-}
-
-impl From<RangeKind> for ValueKind {
-    fn from(kind: RangeKind) -> Self {
-        ValueKind::Range(kind)
-    }
-}
-
-impl HasValueKind for RangeValue {
-    type SpecificKind = RangeKind;
-
-    fn kind(&self) -> RangeKind {
-        self.inner.kind()
     }
 }
 
@@ -244,7 +269,10 @@ impl ValuesEqual for RangeValue {
                     ..
                 },
             ) => ctx.with_range_end(|ctx| l_end.test_equality(r_end, ctx)),
-            _ => ctx.kind_mismatch(self, other),
+            _ => ctx.range_structure_mismatch(
+                self.inner.structure_kind(),
+                other.inner.structure_kind(),
+            ),
         }
     }
 }
@@ -256,48 +284,48 @@ impl ValuesEqual for RangeValue {
 pub(crate) enum RangeValueInner {
     /// `start .. end`
     Range {
-        start_inclusive: Value,
+        start_inclusive: AnyValue,
         token: Token![..],
-        end_exclusive: Value,
+        end_exclusive: AnyValue,
     },
     /// `start ..`
     RangeFrom {
-        start_inclusive: Value,
+        start_inclusive: AnyValue,
         token: Token![..],
     },
     /// `.. end`
     RangeTo {
         token: Token![..],
-        end_exclusive: Value,
+        end_exclusive: AnyValue,
     },
     /// `..` (used inside arrays)
     RangeFull { token: Token![..] },
     /// `start ..= end`
     RangeInclusive {
-        start_inclusive: Value,
+        start_inclusive: AnyValue,
         token: Token![..=],
-        end_inclusive: Value,
+        end_inclusive: AnyValue,
     },
     /// `..= end`
     RangeToInclusive {
         token: Token![..=],
-        end_inclusive: Value,
+        end_inclusive: AnyValue,
     },
 }
 
 impl RangeValueInner {
-    fn kind(&self) -> RangeKind {
+    fn structure_kind(&self) -> RangeStructure {
         match self {
-            Self::Range { .. } => RangeKind::Range,
-            Self::RangeFrom { .. } => RangeKind::RangeFrom,
-            Self::RangeTo { .. } => RangeKind::RangeTo,
-            Self::RangeFull { .. } => RangeKind::RangeFull,
-            Self::RangeInclusive { .. } => RangeKind::RangeInclusive,
-            Self::RangeToInclusive { .. } => RangeKind::RangeToInclusive,
+            Self::Range { .. } => RangeStructure::FromTo,
+            Self::RangeFrom { .. } => RangeStructure::From,
+            Self::RangeTo { .. } => RangeStructure::To,
+            Self::RangeFull { .. } => RangeStructure::Full,
+            Self::RangeInclusive { .. } => RangeStructure::FromToInclusive,
+            Self::RangeToInclusive { .. } => RangeStructure::ToInclusive,
         }
     }
 
-    pub(super) fn into_iterable(self) -> ExecutionResult<IterableRangeOf<Value>> {
+    pub(super) fn into_iterable(self) -> ExecutionResult<IterableRangeOf<AnyValue>> {
         Ok(match self {
             Self::Range {
                 start_inclusive,
@@ -344,33 +372,37 @@ impl RangeValueInner {
     }
 }
 
-impl IntoValue for RangeValueInner {
-    fn into_value(self) -> Value {
-        Value::Range(RangeValue {
+impl IsValueContent for RangeValueInner {
+    type Type = RangeType;
+    type Form = BeOwned;
+}
+
+impl IntoValueContent<'static> for RangeValueInner {
+    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
+        RangeValue {
             inner: Box::new(self),
-        })
+        }
     }
 }
 
 impl_resolvable_argument_for! {
-    RangeTypeData,
+    RangeType,
     (value, context) -> RangeValue {
         match value {
-            Value::Range(value) => Ok(value),
+            AnyValue::Range(value) => Ok(value),
             _ => context.err("a range", value),
         }
     }
 }
 
-define_interface! {
-    struct RangeTypeData,
-    parent: IterableTypeData,
+define_type_features! {
+    impl RangeType,
     pub(crate) mod range_interface {
         pub(crate) mod methods {
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_via_iterator(Spanned(this, span): Spanned<Owned<RangeValue>>) -> ExecutionResult<ReturnedValue> {
-                let this_iterator = this.try_map(IteratorValue::new_for_range)?;
+            [context] fn cast_via_iterator(Spanned(this, span): Spanned<RangeValue>) -> ExecutionResult<ReturnedValue> {
+                let this_iterator = IteratorValue::new_for_range(this)?;
                 Ok(context.operation.evaluate(Spanned(this_iterator, span))?.0)
             }
         }
@@ -379,7 +411,7 @@ define_interface! {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
                     UnaryOperation::Cast { .. }
-                        if IteratorTypeData::resolve_own_unary_operation(operation).is_some() =>
+                        if IteratorType::resolve_own_unary_operation(operation).is_some() =>
                     {
                         unary_definitions::cast_via_iterator()
                     }
@@ -404,11 +436,11 @@ pub(super) enum IterableRangeOf<T> {
     },
 }
 
-fn resolve_range<T: ResolvableOwned<Value> + ResolvableRange>(
+fn resolve_range<T: ResolvableOwned<AnyValue> + ResolvableRange>(
     start: T,
     dots: syn::RangeLimits,
-    end: Option<Spanned<OwnedValue>>,
-) -> ExecutionResult<Box<dyn ClonableIterator<Item = Value>>> {
+    end: Option<Spanned<AnyValue>>,
+) -> ExecutionResult<Box<dyn ClonableIterator<Item = AnyValue>>> {
     let definition = match (end, dots) {
         (Some(end), dots) => {
             let end = end.resolve_as("The end of this range bound")?;
@@ -425,26 +457,24 @@ fn resolve_range<T: ResolvableOwned<Value> + ResolvableRange>(
 trait ResolvableRange: Sized {
     fn resolve(
         definition: IterableRangeOf<Self>,
-    ) -> ExecutionResult<Box<dyn ClonableIterator<Item = Value>>>;
+    ) -> ExecutionResult<Box<dyn ClonableIterator<Item = AnyValue>>>;
 }
 
-impl IterableRangeOf<Value> {
+impl IterableRangeOf<AnyValue> {
     pub(super) fn resolve_iterator(
         self,
-    ) -> ExecutionResult<Box<dyn ClonableIterator<Item = Value>>> {
+    ) -> ExecutionResult<Box<dyn ClonableIterator<Item = AnyValue>>> {
         let (start, dots, end) = match self {
-            Self::RangeFromTo { start, dots, end } => (
-                start,
-                dots,
-                Some(end.into_owned().spanned(dots.span_range())),
-            ),
+            Self::RangeFromTo { start, dots, end } => {
+                (start, dots, Some(end.spanned(dots.span_range())))
+            }
             Self::RangeFrom { start, dots } => (start, RangeLimits::HalfOpen(dots), None),
         };
         match start {
-            Value::Integer(mut start) => {
+            AnyValue::Integer(mut start) => {
                 if let Some(end) = &end {
                     start = IntegerValue::resolve_untyped_to_match_other(
-                        start.into_owned().spanned(dots.span_range()),
+                        start.spanned(dots.span_range()),
                         end,
                     )?;
                 }
@@ -464,7 +494,7 @@ impl IterableRangeOf<Value> {
                     IntegerValue::Isize(start) => resolve_range(start, dots, end),
                 }
             }
-            Value::Char(start) => resolve_range(start.value, dots, end),
+            AnyValue::Char(start) => resolve_range(start, dots, end),
             _ => dots.value_err("The range must be between two integers or two characters"),
         }
     }
@@ -473,24 +503,26 @@ impl IterableRangeOf<Value> {
 impl ResolvableRange for UntypedInteger {
     fn resolve(
         definition: IterableRangeOf<UntypedInteger>,
-    ) -> ExecutionResult<Box<dyn ClonableIterator<Item = Value>>> {
+    ) -> ExecutionResult<Box<dyn ClonableIterator<Item = AnyValue>>> {
         match definition {
             IterableRangeOf::RangeFromTo { start, dots, end } => {
                 let start = start.into_fallback();
                 let end = end.into_fallback();
                 Ok(match dots {
                     syn::RangeLimits::HalfOpen { .. } => Box::new(
-                        (start..end).map(move |x| UntypedInteger::from_fallback(x).into_value()),
+                        (start..end)
+                            .map(move |x| UntypedInteger::from_fallback(x).into_any_value()),
                     ),
                     syn::RangeLimits::Closed { .. } => Box::new(
-                        (start..=end).map(move |x| UntypedInteger::from_fallback(x).into_value()),
+                        (start..=end)
+                            .map(move |x| UntypedInteger::from_fallback(x).into_any_value()),
                     ),
                 })
             }
             IterableRangeOf::RangeFrom { start, .. } => {
                 let start = start.into_fallback();
                 Ok(Box::new((start..).map(move |x| {
-                    UntypedInteger::from_fallback(x).into_value()
+                    UntypedInteger::from_fallback(x).into_any_value()
                 })))
             }
         }
@@ -502,20 +534,20 @@ macro_rules! define_range_resolvers {
         $($the_type:ident),* $(,)?
     ) => {$(
         impl ResolvableRange for $the_type {
-            fn resolve(definition: IterableRangeOf<Self>) -> ExecutionResult<Box<dyn ClonableIterator<Item = Value>>> {
+            fn resolve(definition: IterableRangeOf<Self>) -> ExecutionResult<Box<dyn ClonableIterator<Item = AnyValue>>> {
                 match definition {
                     IterableRangeOf::RangeFromTo { start, dots, end } => {
                         Ok(match dots {
                             syn::RangeLimits::HalfOpen { .. } => {
-                                Box::new((start..end).map(move |x| x.into_value()))
+                                Box::new((start..end).map(move |x| x.into_any_value()))
                             }
                             syn::RangeLimits::Closed { .. } => {
-                                Box::new((start..=end).map(move |x| x.into_value()))
+                                Box::new((start..=end).map(move |x| x.into_any_value()))
                             }
                         })
                     },
                     IterableRangeOf::RangeFrom { start, .. } => {
-                        Ok(Box::new((start..).map(move |x| x.into_value())))
+                        Ok(Box::new((start..).map(move |x| x.into_any_value())))
                     },
                 }
             }

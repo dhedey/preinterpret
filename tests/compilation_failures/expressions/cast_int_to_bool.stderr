@@ -1,4 +1,4 @@
-error: The as bool operator is not supported for untyped integer values
+error: The as bool operator is not supported for an untyped integer
  --> tests/compilation_failures/expressions/cast_int_to_bool.rs:5:13
   |
 5 |         #(1 as bool)

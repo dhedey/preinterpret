@@ -4,7 +4,7 @@ pub(crate) trait HandleDestructure {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,
-        value: Value,
+        value: AnyValue,
     ) -> ExecutionResult<()>;
 }
 
@@ -68,7 +68,7 @@ impl HandleDestructure for Pattern {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,
-        value: Value,
+        value: AnyValue,
     ) -> ExecutionResult<()> {
         match self {
             Pattern::Variable(variable) => variable.handle_destructure(interpreter, value),
@@ -111,9 +111,9 @@ impl HandleDestructure for ArrayPattern {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,
-        value: Value,
+        value: AnyValue,
     ) -> ExecutionResult<()> {
-        let array: ArrayValue = Spanned(value.into_owned(), self.brackets.span_range())
+        let array: ArrayValue = Spanned(value, self.brackets.span_range())
             .resolve_as("The value destructured with an array pattern")?;
         let mut has_seen_dot_dot = false;
         let mut prefix_assignees = Vec::new();
@@ -226,9 +226,9 @@ impl HandleDestructure for ObjectPattern {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,
-        value: Value,
+        value: AnyValue,
     ) -> ExecutionResult<()> {
-        let object: ObjectValue = Spanned(value.into_owned(), self.braces.span_range())
+        let object: ObjectValue = Spanned(value, self.braces.span_range())
             .resolve_as("The value destructured with an object pattern")?;
         let mut value_map = object.entries;
         let mut already_used_keys = HashSet::with_capacity(self.entries.len());
@@ -253,7 +253,7 @@ impl HandleDestructure for ObjectPattern {
             let value = value_map
                 .remove(&key)
                 .map(|entry| entry.value)
-                .unwrap_or_else(|| Value::None);
+                .unwrap_or_else(|| ().into_any_value());
             already_used_keys.insert(key);
             pattern.handle_destructure(interpreter, value)?;
         }
@@ -352,13 +352,11 @@ impl HandleDestructure for StreamPattern {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,
-        value: Value,
+        value: AnyValue,
     ) -> ExecutionResult<()> {
-        let stream: StreamValue = Spanned(value.into_owned(), self.brackets.span_range())
-            .resolve_as("The value destructured with a stream pattern")?;
-        interpreter.start_parse(stream.value, |interpreter, _| {
-            self.content.consume(interpreter)
-        })
+        let stream = Spanned(value, self.brackets.span_range())
+            .downcast_resolve("The value destructured with a stream pattern")?;
+        interpreter.start_parse(stream, |interpreter, _| self.content.consume(interpreter))
     }
 }
 
@@ -396,11 +394,11 @@ impl HandleDestructure for ParseTemplatePattern {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,
-        value: Value,
+        value: AnyValue,
     ) -> ExecutionResult<()> {
-        let stream: StreamValue = Spanned(value.into_owned(), self.brackets.span_range())
-            .resolve_as("The value destructured with a parse template pattern")?;
-        interpreter.start_parse(stream.value, |interpreter, handle| {
+        let stream = Spanned(value, self.brackets.span_range())
+            .downcast_resolve("The value destructured with a parse template pattern")?;
+        interpreter.start_parse(stream, |interpreter, handle| {
             self.parser_definition.define(interpreter, handle);
             self.content.consume(interpreter)
         })

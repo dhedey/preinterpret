@@ -198,40 +198,29 @@ First, read the @./2025-11-vision.md
 - [x] `%literal[ .. ]`
 - [x] Update README.md for these
 
+## Better handling of value sub-references
+
+Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
+
 ## Methods and closures
 
-- [ ] Improved Shared/Mutable handling - See the `Better handling of value sub-references` section
-  * A function specifies the bindings of its variables
-  * If we have `my_len = |x: &array| x.len()` and invoke it as `my_len(a.b)` then
-    when I invoke it, I need to end up with the variable `x := &a.b`
-  * This is a problem - if we imagine changing what can be stored in a variable to
-    the following, then it's clear that we need some way to have a `SharedValue` which
-    has an outer-enum instead of an inner-enum.
-  * We also need to think about how things like `IterableValue` works. Perhaps it's like an interface,
-    and so defined via `Box<dyn Iterable>` / `Ref<dyn Iterable>` etc?
+- [ ] Consider pre-requisite work on [2026-01-types-and-forms.md](./2026-01-types-and-forms.md) for type annotations. Instead, let's move forward without support for specific types for now. To start, let's just support: `x` or `x: any`; `x: &any` and `x: &mut any`.
+- [ ] Change bindings (currently just variables) to be able to store any of the following: (nb we still restrict variables to be owned for now).
 ```rust
-// Before
 enum VariableContent {
-    Owned(Rc<RefCell<Value>>),
-    Shared(SharedSubRcRefCell<Value, T>),
-    Mutable(MutSubRcRefCell<Value, T>),
-}
-// After
-enum VariableContent {
-    Owned(ValueReferencable),
-    Shared(ValueRef<'static>),      // 'static => only SharedSubRcRefCell, no actual refs
-    Mutable(ValueMut<'static>),     // 'static => only MutSubRcRefCell, no refs
+    Owned(Referenceable<AnyValue>),
+    Shared(Shared<AnyValue>),
+    Mutable(Mutable<AnyValue>),
 }
 ``` 
 - [ ] Introduce basic function values
   * Value type function `let my_func = |x, y, z| { ... };`
-  * Parameters can be `x` (Owned), `&x` (Shared) or `&mut x` (Mutable), shorthand for
-    e.g. `x: &value`
+  * Parameters can be `x` / `x: any` (Owned), `x: &any` (Shared) or `x: &mut any` (Mutable).
   * To start with, they are not closures (i.e. they can't capture any outer variables)
-  - [ ] Break/continue label resolution in functions/closures
-    * Functions and closures must resolve break/continue labels statically
-    * Break and continue statements should not leak out of function boundaries
-    * This needs to be validated during the control flow pass
+- [ ] Break/continue label resolution in functions/closures
+  * Functions and closures must resolve break/continue labels statically
+  * Break and continue statements should not leak out of function boundaries
+  * This needs to be validated during the control flow pass
 - [ ] New node extension in the expression parser: invocation `(...)`
 - [ ] Closures
   * A function may capture variable bindings from the parent scope, these are converted into a `VariableBinding::Closure(<closed_variable_id>)`
@@ -447,6 +436,9 @@ preinterpret::run! {
   - [ ] References store on them cached information - either up-front, via an `Rc<Cell<ReferenceContent::Resolved(ResolvedReference)>>` or via a "resolve on first execute"
     - Value's relative offset from the top of the stack
     - An is last use flag
+- [ ] Change the storage model for `OutputStream`
+  - [ ] Either just use `TokenStream` directly(!) (...and ignore Rust analyzer's poor handling of none groups)
+  - [ ] Or use an `Rc<Vec>` model like https://github.com/dtolnay/proc-macro2/pull/341/files and Rust itself
 - Address `TODO[performance]`
 
 ## Deferred
@@ -493,7 +485,7 @@ Also:
 
 - [x] Merge `assignee_frames` into `value_frames` as per comment as the top of `assignee_frames`
 - [x] Rename `EvaluationItem` to `RequestedValue` and consider making `RequestedValue::AssignmentCompletion` wrap an `Owned<()>` so that it becomes truly a value.
-- [x] Merge `HasValueType` with `ValueKind`
+- [x] Merge `HasValueType` with `ValueLeafKind`
 - [ ] Add `preinterpret::macro` - can this be a declarative macro? Would be slightly more efficient, as it just needs to wrap a call to `preinterpret::stream` or `preinterpret::run`...
   - [ ] When we create `input = %raw[..]` we will need to set its `end_of_stream` span to the end of the
   macro_rules! macro somehow... I'm not sure how to get that span though.
@@ -507,105 +499,13 @@ Also:
 - [ ] Better handling of `configure_preinterpret`:
   * Move `None.configure_preinterpret` to `preinterpret::set_iteration_limit(..)`
 - [ ] CastTarget revision:
-  * The `as int` operator is not supported for string values
+  * The `as untyped_int` operator is not supported for string values
   * The `as char` operator is not supported for untyped integer values
   * Add casts of any integer to char, via `char::from_u32(u32::try_from(x))`
   * Should we remove/replace any CastTargets?
 - [ ] TODO check
 - [ ] Check all `#[allow(unused)]` and remove any which aren't needed
   We can use `_xyz: Unused<T>` in some places to reduce the size of types.
-
-## Better handling of value sub-references
-
-### OPTION 1 - Enums with GATs
-
-> [!NOTE]
-> See `sandbox/gat_value.rs` for playing around with this idea
-
-Returning/passing refs of sub-values requires taking the enum outside of the reference,
-i.e. some `ValueRef<'a>`, perhaps similar to `IterableRef`?
-
-```rust
-enum ValueRef<'a> {
-   Integer(IntegerRef<'a>),
-   Object(AnyRef<'a, ObjectValue>),
-   // ... 
-}
-```
-
-We could even consider abusing GATs further, to define the structures only once:
-```rust
-trait OwnershipSelector {
-  type Leaf<T>;
-}
-struct IsOwned;
-impl OwnershipSelector for IsOwned {
-  type Leaf<T> = T;
-}
-// Roughly equivalent to an owned, but wrapped so that it can be turned into a Shared/Mutable easily.
-struct IsReferencable;
-impl OwnershipSelector for IsReferencable {
-  type Leaf<T> = Rc<RefCell<T>>;
-}
-struct IsRef<'a>;
-impl<'a> OwnershipSelector for IsRef<'a> {
-  type Leaf<T> = AnyRef<'a, T>;
-}
-struct IsMut<'a>;
-impl<'a> OwnershipSelector for IsMut<'a> {
-  type Leaf<T> = AnyMutRef<'a, T>;
-}
-
-enum ValueWhich<H: OwnershipSelector> {
-  Integer(IntegerStructure<H>),
-  Object(H::Leaf::<ObjectValue>),
-// ...
-}
-
-type Value = ValueWhich<IsOwned>;
-type ValueReferencable = ValueWhich<IsReferencable>;
-type ValueRef<'a> = ValueWhich<IsRef<'a>>;
-type ValueMut<'a> = ValueWhich<IsMut<'a>>;
-```
-
-- [ ] Trial if `Shared<Value>` can actually store an `ValueRef<'a>` (which just stores `&'a`, not the `Ref` variable)...
-  * This could be done by adding GATs (raising MSRV to 1.65) so that TypeData can have a `Ref<'T>`,
-    with `Value::Ref<'T> = ValueRef<'T>`... although we only really need GATs for allowing arbitrary
-    references, not just static `SharedSubRcRefCell<Value, T>` from Shared
-  * And then `Shared<'t, T>` can wrap a `<T as ..Target>::Type::Ref<'t, T>` (in the file, this can be encapsulated as a `HasRefType` trait, which can be blanket implemeted for types implementing `..Target`).
-  * This would mean e.g. `Shared<String>` could wrap a `&str`.
-  * 6 months later I'm not sure what this means:
-    * And then have a `AdvancedCellRef<T>` store a `<T as ..Target>::Type::Ref<'T>` which can be owned and we can manually call increase strong count etc on the `RefCell`.
-    * To implement `AdvancedCellRef::map`, we'll need `TypeData::Ref<'T>` to implement Target in a self-fulfilling way. (i.e. `HasRefType { type Ref<'a>: HasRefParent<Parent = Self> }`, `HasRefParent { type Parent: HasRefType })`)
-    * If this works, we can replace our `Ref<T>` with `T: HasRefType`
-  * Migrate `IterableRef`
-
-### OPTION 2 - Box + Dyn
-
-> [!NOTE]
-> See `sandbox/dyn_value.rs` for playing around with this idea
-
-If we can make this work, it's perhaps slightly less performant (I wonder how much?) but would probably compile faster, and be less tied to structure; so support.
-
-See below for some rough ideas.
-
-For owned values:
-* `Box<dyn IsValue>` with `IsValue: Any` (maybe using https://docs.rs/downcast-rs/latest/downcast_rs/ to avoid `Any`)
-* From that, `IsValue` allows resolving `&'static TypeData`
-* Which can expose methods such as `as_integer(Box<dyn IsValue>) -> Option<Box<dyn IsInteger>>`
-  * Which can downcast `Box<dyn IsValue>` to specific value, e.g. `Box<u32>`
-  * Then can upcast that to a specific trait such as `Box<dyn IsInteger>` or `Box<dyn IsIterable>`
-
-For reference values:
-* `AnyRef<dyn IsValue>`
-* `TypeData` can expose methods such as `as_integer_ref(AnyRef<dyn IsValue>) -> Option<AnyRef<dyn IsInteger>>`
-  .. using `downcast_ref` and then upcasting...
-  ... I wonder if this can be automatic. `if Self::Value : IsInteger` then we implement with a cast, if not?
-
-For mutable values:
-* `AnyRefMut<dyn IsValue>`
-* `TypeData` can expose methods such as `as_integer_mut(AnyRefMut<dyn IsValue>) -> Option<AnyRefMut<dyn IsInteger>>`
-  .. using `downcast_mut` and then upcasting.
 
 ## Cloning
 
@@ -688,23 +588,23 @@ This means that this is low-clone:
 
 ## Value expansions [OPTIONAL]
 
-Consider:
-* Do we want some kind of slice object? (see `TODO[range-refactor]`)
-    * We can make `ExpressionValue` deref into `ExpressionRef`, e.g. `ExpressionRef::Array(<slice>)`
-    * Then we can make `SharedValue(Ref<ExpressionRef>)`, which can be constructed from a `Ref<ExpressionValue>` with a map!
-    * And similarly `MutableValue(RefMut<ExpressionRefMut>)`
-* Using ArgumentValue in place of ExpressionValue e.g. inside arrays / objects, so that we can destructure `let (x, y) = (a, b)` without clone/take
-    * But then we end up with nested references which can be confusing!
-    * CONCLUSION: Maybe we don't want this - to destructure it needs to be owned anyway?
+* Consider somehow adding some kind of slice object? (see `TODO[slice-supprt]`)
+  * To do this, we basically need to have a leaf-kind of `Mutable`, so we can map an
+    `arr[0..2]` to a `Mutable<[AnyValue]>` - but this then can't be converted back to
+    a `Mutable<AnyValue>`. This is then a binding structurally of type `&mut slice`.
+  * Supporting structurally type-restricted bindings is ... complicated ...
+    And whilst the machinery for leaf-restricted bindings is in place, their exposure and 
+    inter-op with any-bindings is very much not (as of Jan 26).
+  * See [2026-01-types-and-forms.md](./2026-01-types-and-forms.md) for more details.
 * Consider whether to expand to storing `ArgumentValue` or `CopyOnWriteValue` in variables instead of `OwnedValue`?
-    => The main issue is if it interferes with taking mutable references, but it's possibly OK, would need to see if it's a confusing problem in practice... (e.g. `let b = a[0]; a.push(1)` if `b` is a reference to `a[0]` then this is a problem when we push to `a`)
-    => If a mutable reference is created and there are pending references, the variable data RefCell could be replaced with a cloned value and then mutated... But this can be more expensive, because e.g. `let b = a[0]; a.push(1)` results in the whole array `a` being copied in the `CoW` case; but only the `a[0]` being cloned in the "clone on assign" case.
-    => Maybe we just stick to assignments being Owned/Cloned as currently
+  - The main issue is if it interferes with taking mutable references, but it's possibly OK, would need to see if it's a confusing problem in practice... (e.g. `let b = a[0]; a.push(1)` if `b` is a reference to `a[0]` then this is a problem when we push to `a`)
+  - If a mutable reference is created and there are pending references, the variable data RefCell could be replaced with a cloned value and then mutated... But this can be more expensive, because e.g. `let b = a[0]; a.push(1)` results in the whole array `a` being copied in the `CoW` case; but only the `a[0]` being cloned in the "clone on assign" case.
+  - Maybe we just stick to assignments being Owned/Cloned as currently
 
 * Support `#(x[..])` syntax for indexing streams, like with arrays
-    * `#(x[0])` returns the value at that position of the stream (using `INFER_TOKEN_TREE`)
-    * `#(x[0..3])` returns a TokenStream
-    * `#(x[0..=3])` returns a TokenStream
+  * `#(x[0])` returns the value at that position of the stream (using `INFER_TOKEN_TREE`)
+  * `#(x[0..3])` returns a TokenStream
+  * `#(x[0..=3])` returns a TokenStream
 
 --------------------------------------------------------------------------------
 

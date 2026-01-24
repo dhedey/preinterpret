@@ -1,12 +1,31 @@
 use super::*;
 
+define_leaf_type! {
+    pub(crate) ArrayType => AnyType(AnyValueContent::Array),
+    content: ArrayValue,
+    kind: pub(crate) ArrayKind,
+    type_name: "array",
+    articled_display_name: "an array",
+    dyn_impls: {
+        IterableType: impl IsIterable {
+            fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
+                Ok(IteratorValue::new_for_array(*self))
+            }
+
+            fn len(&self, _error_span_range: SpanRange) -> ExecutionResult<usize> {
+                Ok(self.items.len())
+            }
+        }
+    },
+}
+
 #[derive(Clone)]
 pub(crate) struct ArrayValue {
-    pub(crate) items: Vec<Value>,
+    pub(crate) items: Vec<AnyValue>,
 }
 
 impl ArrayValue {
-    pub(crate) fn new(items: Vec<Value>) -> Self {
+    pub(crate) fn new(items: Vec<AnyValue>) -> Self {
         Self { items }
     }
 
@@ -16,25 +35,25 @@ impl ArrayValue {
         grouping: Grouping,
     ) -> ExecutionResult<()> {
         for item in &self.items {
-            item.output_to(grouping, output)?;
+            item.as_ref_value().output_to(grouping, output)?;
         }
         Ok(())
     }
 
     pub(super) fn into_indexed(
         mut self,
-        Spanned(index, span_range): Spanned<&Value>,
-    ) -> ExecutionResult<Value> {
+        Spanned(index, span_range): Spanned<AnyValueRef>,
+    ) -> ExecutionResult<AnyValue> {
         Ok(match index {
-            Value::Integer(integer) => {
+            AnyValueContent::Integer(integer) => {
                 let index =
                     self.resolve_valid_index_from_integer(Spanned(integer, span_range), false)?;
-                std::mem::replace(&mut self.items[index], Value::None)
+                std::mem::replace(&mut self.items[index], ().into_any_value())
             }
-            Value::Range(range) => {
+            AnyValueContent::Range(range) => {
                 let range = Spanned(range, span_range).resolve_to_index_range(&self)?;
                 let new_items: Vec<_> = self.items.drain(range).collect();
-                new_items.into_value()
+                new_items.into_any_value()
             }
             _ => return span_range.type_err("The index must be an integer or a range"),
         })
@@ -42,16 +61,16 @@ impl ArrayValue {
 
     pub(super) fn index_mut(
         &mut self,
-        Spanned(index, span_range): Spanned<&Value>,
-    ) -> ExecutionResult<&mut Value> {
+        Spanned(index, span_range): Spanned<AnyValueRef>,
+    ) -> ExecutionResult<&mut AnyValue> {
         Ok(match index {
-            Value::Integer(integer) => {
+            AnyValueContent::Integer(integer) => {
                 let index =
                     self.resolve_valid_index_from_integer(Spanned(integer, span_range), false)?;
                 &mut self.items[index]
             }
-            Value::Range(..) => {
-                // Temporary until we add slice types - we error here
+            AnyValueContent::Range(..) => {
+                // TODO[slice-support] Temporary until we add slice types - we error here
                 return span_range.ownership_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]");
             }
             _ => return span_range.type_err("The index must be an integer or a range"),
@@ -60,16 +79,16 @@ impl ArrayValue {
 
     pub(super) fn index_ref(
         &self,
-        Spanned(index, span_range): Spanned<&Value>,
-    ) -> ExecutionResult<&Value> {
+        Spanned(index, span_range): Spanned<AnyValueRef>,
+    ) -> ExecutionResult<&AnyValue> {
         Ok(match index {
-            Value::Integer(integer) => {
+            AnyValueContent::Integer(integer) => {
                 let index =
                     self.resolve_valid_index_from_integer(Spanned(integer, span_range), false)?;
                 &self.items[index]
             }
-            Value::Range(..) => {
-                // Temporary until we add slice types - we error here
+            AnyValueContent::Range(..) => {
+                // TODO[slice-support] Temporary until we add slice types - we error here
                 return span_range.ownership_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]");
             }
             _ => return span_range.type_err("The index must be an integer or a range"),
@@ -78,11 +97,11 @@ impl ArrayValue {
 
     pub(super) fn resolve_valid_index(
         &self,
-        Spanned(index, span_range): Spanned<&Value>,
+        Spanned(index, span_range): Spanned<AnyValueRef>,
         is_exclusive: bool,
     ) -> ExecutionResult<usize> {
         match index {
-            Value::Integer(int) => {
+            AnyValueContent::Integer(int) => {
                 self.resolve_valid_index_from_integer(Spanned(int, span_range), is_exclusive)
             }
             _ => span_range.type_err("The index must be an integer"),
@@ -91,11 +110,12 @@ impl ArrayValue {
 
     fn resolve_valid_index_from_integer(
         &self,
-        Spanned(integer, span): Spanned<&IntegerValue>,
+        Spanned(integer, span): Spanned<IntegerValueRef>,
         is_exclusive: bool,
     ) -> ExecutionResult<usize> {
-        let index: usize =
-            Spanned((*integer).into_owned_value(), span).resolve_as("An array index")?;
+        let index: OptionalSuffix<usize> =
+            Spanned(integer.clone_to_owned_infallible(), span).resolve_as("An array index")?;
+        let index = index.0;
         if is_exclusive {
             if index <= self.items.len() {
                 Ok(index)
@@ -134,14 +154,6 @@ impl ArrayValue {
     }
 }
 
-impl HasValueKind for ArrayValue {
-    type SpecificKind = ValueKind;
-
-    fn kind(&self) -> ValueKind {
-        ValueKind::Array
-    }
-}
-
 impl ValuesEqual for ArrayValue {
     /// Recursively compares two arrays element-by-element.
     fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
@@ -158,35 +170,33 @@ impl ValuesEqual for ArrayValue {
     }
 }
 
-impl IntoValue for Vec<Value> {
-    fn into_value(self) -> Value {
-        Value::Array(ArrayValue { items: self })
-    }
+impl IsValueContent for Vec<AnyValue> {
+    type Type = ArrayType;
+    type Form = BeOwned;
 }
 
-impl IntoValue for ArrayValue {
-    fn into_value(self) -> Value {
-        Value::Array(self)
+impl IntoValueContent<'static> for Vec<AnyValue> {
+    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
+        ArrayValue { items: self }
     }
 }
 
 impl_resolvable_argument_for! {
-    ArrayTypeData,
+    ArrayType,
     (value, context) -> ArrayValue {
         match value {
-            Value::Array(value) => Ok(value),
+            AnyValueContent::Array(value) => Ok(value),
             _ => context.err("an array", value),
         }
     }
 }
 
-define_interface! {
-    struct ArrayTypeData,
-    parent: IterableTypeData,
+define_type_features! {
+    impl ArrayType,
     pub(crate) mod array_interface {
         pub(crate) mod methods {
-            fn push(mut this: Mutable<ArrayValue>, item: OwnedValue) -> ExecutionResult<()> {
-                this.items.push(item.into());
+            fn push(mut this: Mutable<ArrayValue>, item: AnyValue) -> ExecutionResult<()> {
+                this.items.push(item);
                 Ok(())
             }
 
@@ -196,11 +206,10 @@ define_interface! {
             }
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_to_numeric(Spanned(this, span): Spanned<Owned<ArrayValue>>) -> ExecutionResult<ReturnedValue> {
-                let mut this = this.into_inner();
+            [context] fn cast_singleton_to_value(Spanned(mut this, span): Spanned<ArrayValue>) -> ExecutionResult<ReturnedValue> {
                 let length = this.items.len();
                 if length == 1 {
-                    Ok(context.operation.evaluate(this.items.pop().unwrap().into_owned().spanned(span))?.0)
+                    Ok(context.operation.evaluate(this.items.pop().unwrap().spanned(span))?.0)
                 } else {
                     context.operation.value_err(format!(
                         "Only a singleton array can be cast to this value but the array has {} elements",
@@ -219,17 +228,26 @@ define_interface! {
                 lhs.items.extend(rhs.items);
             }
         }
+        index_access(ArrayValue) {
+            fn shared(source: &'a ArrayValue, index: Spanned<AnyValueRef>) {
+                source.index_ref(index)
+            }
+            fn mutable(source: &'a mut ArrayValue, index: Spanned<AnyValueRef>, _auto_create: bool) {
+                source.index_mut(index)
+            }
+            fn owned(source: ArrayValue, index: Spanned<AnyValueRef>) {
+                source.into_indexed(index)
+            }
+        }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
                     UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => return None,
-                    UnaryOperation::Cast { target, .. } => match target {
-                        CastTarget::Boolean
-                        | CastTarget::Char
-                        | CastTarget::Integer(_)
-                        | CastTarget::Float(_) => unary_definitions::cast_to_numeric(),
-                        _ => return None,
-                    },
+                    UnaryOperation::Cast { target, .. } => if target.is_singleton_target() {
+                        unary_definitions::cast_singleton_to_value()
+                    } else {
+                        return None;
+                    }
                 })
             }
 

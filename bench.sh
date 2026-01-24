@@ -12,8 +12,23 @@ cd "$(dirname "$0")"
 #     - Overhead invoking the macro
 #     - The measured Parsing + Evaluation + Output time in the benchmark
 # - So the benchmark is useful, but should be considered alongside the compile time
-#   of preinterpret itself...
+#   of preinterpret itself - see `bench_compilation.sh` for that.
 
-cargo bench --features benchmark --profile=dev;
+echo Preparing benchmark builds...
+cargo build --bench basic --features benchmark --profile=dev
+cargo build --bench basic --features benchmark --profile=release
 
-cargo bench --features benchmark;
+# Note - the benchmarks themselves actually run *during* build time
+# So at this point (courtesy of the build cache) we already have the benchmark results.
+# But we print them in a block to make it easier to copy-paste them
+
+echo
+echo "Executing pre-run benchmark (dev profile)..."
+cargo bench --bench basic --features benchmark --profile=dev
+
+echo
+echo "Executing pre-run benchmark (release profile)..."
+cargo bench --bench basic --features benchmark --profile=release
+
+echo
+echo "If you want to get fresh results, run 'cargo clean' and re-run this script"

@@ -1,5 +1,14 @@
 use super::*;
 
+define_leaf_type! {
+    pub(crate) UntypedFloatType => FloatType(FloatContent::Untyped) => AnyType,
+    content: UntypedFloat,
+    kind: pub(crate) UntypedFloatKind,
+    type_name: "untyped_float",
+    articled_display_name: "an untyped float",
+    dyn_impls: {},
+}
+
 #[derive(Copy, Clone)]
 pub(crate) struct UntypedFloat(FallbackFloat);
 pub(crate) type FallbackFloat = f64;
@@ -17,42 +26,42 @@ impl UntypedFloat {
 
     /// Converts an untyped float to a specific float kind.
     /// Unlike integers, float conversion never fails (may lose precision).
-    pub(crate) fn into_kind(self, kind: FloatKind) -> FloatValue {
+    pub(crate) fn into_kind(self, kind: FloatLeafKind) -> FloatValue {
         match kind {
-            FloatKind::Untyped => FloatValue::Untyped(self),
-            FloatKind::F32 => FloatValue::F32(self.0 as f32),
-            FloatKind::F64 => FloatValue::F64(self.0),
+            FloatLeafKind::Untyped(_) => FloatContent::Untyped(self),
+            FloatLeafKind::F32(_) => FloatContent::F32(self.0 as f32),
+            FloatLeafKind::F64(_) => FloatContent::F64(self.0),
         }
     }
 
     pub(crate) fn paired_operation(
         self,
-        rhs: Spanned<Owned<FloatValue>>,
+        rhs: Spanned<FloatValue>,
         perform_fn: fn(FallbackFloat, FallbackFloat) -> FallbackFloat,
     ) -> ExecutionResult<FloatValue> {
         let lhs = self.0;
-        let rhs: UntypedFloat = rhs.resolve_as("This operand")?;
+        let rhs: UntypedFloat = rhs.downcast_resolve("This operand")?;
         let rhs = rhs.0;
         let output = perform_fn(lhs, rhs);
-        Ok(FloatValue::Untyped(UntypedFloat::from_fallback(output)))
+        Ok(FloatContent::Untyped(UntypedFloat::from_fallback(output)))
     }
 
     pub(crate) fn paired_comparison(
         self,
-        rhs: Spanned<Owned<FloatValue>>,
+        rhs: Spanned<FloatValue>,
         compare_fn: fn(FallbackFloat, FallbackFloat) -> bool,
     ) -> ExecutionResult<bool> {
         let lhs = self.0;
-        let rhs: UntypedFloat = rhs.resolve_as("This operand")?;
+        let rhs: UntypedFloat = rhs.downcast_resolve("This operand")?;
         let rhs = rhs.0;
         Ok(compare_fn(lhs, rhs))
     }
 
-    pub(super) fn into_fallback(self) -> FallbackFloat {
+    pub(crate) fn into_fallback(self) -> FallbackFloat {
         self.0
     }
 
-    pub(super) fn from_fallback(value: FallbackFloat) -> Self {
+    pub(crate) fn from_fallback(value: FallbackFloat) -> Self {
         Self(value)
     }
 
@@ -61,23 +70,8 @@ impl UntypedFloat {
     }
 }
 
-impl HasValueKind for UntypedFloat {
-    type SpecificKind = FloatKind;
-
-    fn kind(&self) -> FloatKind {
-        FloatKind::Untyped
-    }
-}
-
-impl IntoValue for UntypedFloat {
-    fn into_value(self) -> Value {
-        Value::Float(FloatValue::Untyped(self))
-    }
-}
-
-define_interface! {
-    struct UntypedFloatTypeData,
-    parent: FloatTypeData,
+define_type_features! {
+    impl UntypedFloatType,
     pub(crate) mod untyped_float_interface {
         pub(crate) mod methods {
         }
@@ -160,24 +154,24 @@ define_interface! {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
                     UnaryOperation::Neg { .. } => unary_definitions::neg(),
-                    UnaryOperation::Cast { target, .. } => match target {
-                        CastTarget::Integer(IntegerKind::Untyped) => unary_definitions::cast_to_untyped_integer(),
-                        CastTarget::Integer(IntegerKind::I8) => unary_definitions::cast_to_i8(),
-                        CastTarget::Integer(IntegerKind::I16) => unary_definitions::cast_to_i16(),
-                        CastTarget::Integer(IntegerKind::I32) => unary_definitions::cast_to_i32(),
-                        CastTarget::Integer(IntegerKind::I64) => unary_definitions::cast_to_i64(),
-                        CastTarget::Integer(IntegerKind::I128) => unary_definitions::cast_to_i128(),
-                        CastTarget::Integer(IntegerKind::Isize) => unary_definitions::cast_to_isize(),
-                        CastTarget::Integer(IntegerKind::U8) => unary_definitions::cast_to_u8(),
-                        CastTarget::Integer(IntegerKind::U16) => unary_definitions::cast_to_u16(),
-                        CastTarget::Integer(IntegerKind::U32) => unary_definitions::cast_to_u32(),
-                        CastTarget::Integer(IntegerKind::U64) => unary_definitions::cast_to_u64(),
-                        CastTarget::Integer(IntegerKind::U128) => unary_definitions::cast_to_u128(),
-                        CastTarget::Integer(IntegerKind::Usize) => unary_definitions::cast_to_usize(),
-                        CastTarget::Float(FloatKind::Untyped) => unary_definitions::cast_to_untyped_float(),
-                        CastTarget::Float(FloatKind::F32) => unary_definitions::cast_to_f32(),
-                        CastTarget::Float(FloatKind::F64) => unary_definitions::cast_to_f64(),
-                        CastTarget::String => unary_definitions::cast_to_string(),
+                    UnaryOperation::Cast { target: CastTarget(kind), .. } => match kind {
+                        AnyValueLeafKind::Integer(IntegerLeafKind::Untyped(_)) => unary_definitions::cast_to_untyped_integer(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::I8(_)) => unary_definitions::cast_to_i8(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::I16(_)) => unary_definitions::cast_to_i16(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::I32(_)) => unary_definitions::cast_to_i32(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::I64(_)) => unary_definitions::cast_to_i64(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::I128(_)) => unary_definitions::cast_to_i128(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::Isize(_)) => unary_definitions::cast_to_isize(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::U8(_)) => unary_definitions::cast_to_u8(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::U16(_)) => unary_definitions::cast_to_u16(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::U32(_)) => unary_definitions::cast_to_u32(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::U64(_)) => unary_definitions::cast_to_u64(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::U128(_)) => unary_definitions::cast_to_u128(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::Usize(_)) => unary_definitions::cast_to_usize(),
+                        AnyValueLeafKind::Float(FloatLeafKind::Untyped(_)) => unary_definitions::cast_to_untyped_float(),
+                        AnyValueLeafKind::Float(FloatLeafKind::F32(_)) => unary_definitions::cast_to_f32(),
+                        AnyValueLeafKind::Float(FloatLeafKind::F64(_)) => unary_definitions::cast_to_f64(),
+                        AnyValueLeafKind::String(_) => unary_definitions::cast_to_string(),
                         _ => return None,
                     },
                     _ => return None,
@@ -196,12 +190,23 @@ define_interface! {
 
 pub(crate) struct UntypedFloatFallback(pub FallbackFloat);
 
-impl ResolvableArgumentTarget for UntypedFloatFallback {
-    type ValueType = UntypedFloatTypeData;
+impl IsArgument for UntypedFloatFallback {
+    type ValueType = UntypedFloatType;
+    const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
+    fn from_argument(value: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+        Self::resolve_value(value.expect_owned(), "This argument")
+    }
 }
 
-impl ResolvableOwned<Value> for UntypedFloatFallback {
-    fn resolve_from_value(input_value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
+impl ResolvableArgumentTarget for UntypedFloatFallback {
+    type ValueType = UntypedFloatType;
+}
+
+impl ResolvableOwned<AnyValue> for UntypedFloatFallback {
+    fn resolve_from_value(
+        input_value: AnyValue,
+        context: ResolutionContext,
+    ) -> ExecutionResult<Self> {
         let value = UntypedFloat::resolve_from_value(input_value, context)?;
         Ok(UntypedFloatFallback(value.0))
     }
@@ -210,17 +215,17 @@ impl ResolvableOwned<Value> for UntypedFloatFallback {
 impl ResolvableOwned<FloatValue> for UntypedFloat {
     fn resolve_from_value(value: FloatValue, context: ResolutionContext) -> ExecutionResult<Self> {
         match value {
-            FloatValue::Untyped(value) => Ok(value),
+            FloatContent::Untyped(value) => Ok(value),
             _ => context.err("an untyped float", value),
         }
     }
 }
 
 impl_resolvable_argument_for! {
-    UntypedFloatTypeData,
+    UntypedFloatType,
     (value, context) -> UntypedFloat {
         match value {
-            Value::Float(FloatValue::Untyped(x)) => Ok(x),
+            AnyValueContent::Float(FloatContent::Untyped(x)) => Ok(x),
             other => context.err("an untyped float", other),
         }
     }

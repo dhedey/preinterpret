@@ -126,7 +126,7 @@ impl Evaluate for IfExpression {
         }
 
         requested_ownership
-            .map_from_owned(Spanned(Value::None.into_owned(), self.span_range()))
+            .map_from_owned(Spanned(().into_any_value(), self.span_range()))
             .map(|spanned| spanned.0)
     }
 }
@@ -203,7 +203,8 @@ impl Evaluate for WhileExpression {
                 ExecutionOutcome::ControlFlow(control_flow_interrupt) => {
                     match control_flow_interrupt {
                         ControlFlowInterrupt::Break(break_interrupt) => {
-                            return break_interrupt.into_value(self.span_range(), ownership);
+                            return break_interrupt
+                                .into_requested_value(self.span_range(), ownership);
                         }
                         ControlFlowInterrupt::Continue { .. } => {
                             continue;
@@ -285,7 +286,8 @@ impl Evaluate for LoopExpression {
                 ExecutionOutcome::ControlFlow(control_flow_interrupt) => {
                     match control_flow_interrupt {
                         ControlFlowInterrupt::Break(break_interrupt) => {
-                            return break_interrupt.into_value(self.span_range(), ownership);
+                            return break_interrupt
+                                .into_requested_value(self.span_range(), ownership);
                         }
                         ControlFlowInterrupt::Continue { .. } => {
                             continue;
@@ -371,7 +373,7 @@ impl Evaluate for ForExpression {
         let iterable: IterableValue = self
             .iterable
             .evaluate_owned(interpreter)?
-            .resolve_as("A for loop iterable")?;
+            .dyn_resolve::<dyn IsIterable>("A for loop iterable")?;
 
         let span = self.body.span();
         let scope = interpreter.current_scope_id();
@@ -391,7 +393,8 @@ impl Evaluate for ForExpression {
                 ExecutionOutcome::ControlFlow(control_flow_interrupt) => {
                     match control_flow_interrupt {
                         ControlFlowInterrupt::Break(break_interrupt) => {
-                            return break_interrupt.into_value(self.span_range(), ownership);
+                            return break_interrupt
+                                .into_requested_value(self.span_range(), ownership);
                         }
                         ControlFlowInterrupt::Continue { .. } => {
                             continue;

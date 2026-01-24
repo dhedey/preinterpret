@@ -1,19 +1,23 @@
 use super::*;
 
-impl IntoValue for () {
-    fn into_value(self) -> Value {
-        Value::None
-    }
+define_leaf_type! {
+    pub(crate) NoneType => AnyType(AnyValueContent::None),
+    content: (),
+    kind: pub(crate) NoneKind,
+    type_name: "none",
+    // Instead of saying "expected a none value", we can say "expected None"
+    articled_display_name: "None",
+    dyn_impls: {},
 }
 
 impl ResolvableArgumentTarget for () {
-    type ValueType = NoneTypeData;
+    type ValueType = NoneType;
 }
 
-impl ResolvableOwned<Value> for () {
-    fn resolve_from_value(value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
+impl ResolvableOwned<AnyValue> for () {
+    fn resolve_from_value(value: AnyValue, context: ResolutionContext) -> ExecutionResult<Self> {
         match value {
-            Value::None => Ok(()),
+            AnyValue::None(_) => Ok(()),
             other => context.err("None", other),
         }
     }
@@ -25,9 +29,8 @@ define_optional_object! {
     }
 }
 
-define_interface! {
-    struct NoneTypeData,
-    parent: ValueTypeData,
+define_type_features! {
+    impl NoneType,
     pub(crate) mod none_interface {
         pub(crate) mod methods {
             [context] fn configure_preinterpret(_none: (), inputs: SettingsInputs) {

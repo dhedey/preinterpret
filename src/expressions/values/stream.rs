@@ -1,22 +1,36 @@
 use super::*;
 
-#[derive(Clone)]
-pub(crate) struct StreamValue {
-    pub(crate) value: OutputStream,
+define_leaf_type! {
+    pub(crate) StreamType => AnyType(AnyValueContent::Stream),
+    content: OutputStream,
+    kind: pub(crate) StreamKind,
+    type_name: "stream",
+    articled_display_name: "a stream",
+    dyn_impls: {
+        IterableType: impl IsIterable {
+            fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
+                Ok(IteratorValue::new_for_stream(*self))
+            }
+
+            fn len(&self, _error_span_range: SpanRange) -> ExecutionResult<usize> {
+                Ok(self.len())
+            }
+        }
+    },
 }
 
-impl StreamValue {
-    pub(crate) fn concat_recursive_into(&self, output: &mut String, behaviour: &ConcatBehaviour) {
+impl OutputStream {
+    pub(crate) fn concat_as_literal_into(&self, output: &mut String, behaviour: &ConcatBehaviour) {
         if behaviour.use_stream_literal_syntax {
-            if self.value.is_empty() {
+            if self.is_empty() {
                 output.push_str("%[]");
             } else {
                 output.push_str("%[");
-                self.value.concat_recursive_into(output, behaviour);
+                self.concat_content_into(output, behaviour);
                 output.push(']');
             }
         } else {
-            self.value.concat_recursive_into(output, behaviour);
+            self.concat_content_into(output, behaviour);
         }
     }
 
@@ -47,7 +61,7 @@ impl StreamValue {
         // transparent groups (as of Jan 2025), so gets it right without this flattening:
         // https://github.com/rust-lang/rust-analyzer/issues/18211
 
-        let error_span_stream = self.value.to_token_stream_removing_any_transparent_groups();
+        let error_span_stream = self.to_token_stream_removing_any_transparent_groups();
         if error_span_stream.is_empty() {
             None
         } else {
@@ -56,18 +70,10 @@ impl StreamValue {
     }
 }
 
-impl HasValueKind for StreamValue {
-    type SpecificKind = ValueKind;
-
-    fn kind(&self) -> ValueKind {
-        ValueKind::Stream
-    }
-}
-
-impl Debug for StreamValue {
+impl Debug for OutputStream {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut debug_string = String::new();
-        self.concat_recursive_into(
+        self.concat_as_literal_into(
             &mut debug_string,
             &ConcatBehaviour::debug(Span::call_site().span_range()),
         );
@@ -75,18 +81,14 @@ impl Debug for StreamValue {
     }
 }
 
-impl ValuesEqual for StreamValue {
+impl ValuesEqual for OutputStream {
     /// Compares two streams by their debug string representation, ignoring spans.
     /// Transparent groups (none-delimited groups) are preserved in comparison.
     /// Use `remove_transparent_groups()` before comparison if you want to ignore them.
     fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
         // Use debug concat_recursive which preserves transparent group structure
-        let lhs = self
-            .value
-            .concat_recursive(&ConcatBehaviour::debug(Span::call_site().span_range()));
-        let rhs = other
-            .value
-            .concat_recursive(&ConcatBehaviour::debug(Span::call_site().span_range()));
+        let lhs = self.concat_content(&ConcatBehaviour::debug(Span::call_site().span_range()));
+        let rhs = other.concat_content(&ConcatBehaviour::debug(Span::call_site().span_range()));
         if lhs == rhs {
             ctx.values_equal()
         } else {
@@ -95,41 +97,29 @@ impl ValuesEqual for StreamValue {
     }
 }
 
-impl IntoValue for StreamValue {
-    fn into_value(self) -> Value {
-        Value::Stream(self)
-    }
+impl IsValueContent for TokenStream {
+    type Type = StreamType;
+    type Form = BeOwned;
 }
 
-impl IntoValue for OutputStream {
-    fn into_value(self) -> Value {
-        StreamValue { value: self }.into_value()
-    }
-}
-
-impl IntoValue for TokenStream {
-    fn into_value(self) -> Value {
-        OutputStream::raw(self).into_value()
+impl IntoValueContent<'static> for TokenStream {
+    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
+        OutputStream::raw(self)
     }
 }
 
 impl_resolvable_argument_for! {
-    StreamTypeData,
-    (value, context) -> StreamValue {
+    StreamType,
+    (value, context) -> OutputStream {
         match value {
-            Value::Stream(value) => Ok(value),
+            AnyValueContent::Stream(value) => Ok(value),
             _ => context.err("a stream", value),
         }
     }
 }
 
-impl_delegated_resolvable_argument_for!(
-    (value: StreamValue) -> OutputStream { value.value }
-);
-
-define_interface! {
-    struct StreamTypeData,
-    parent: IterableTypeData,
+define_type_features! {
+    impl StreamType,
     pub(crate) mod stream_interface {
         pub(crate) mod methods {
             // This is also on iterable, but is specialized here for performance
@@ -152,7 +142,7 @@ define_interface! {
                 OutputStream::raw(this.to_token_stream_removing_any_transparent_groups())
             }
 
-            fn infer(this: OutputStream) -> ExecutionResult<Value> {
+            fn infer(this: OutputStream) -> ExecutionResult<AnyValue> {
                 Ok(this.coerce_into_value())
             }
 
@@ -164,48 +154,48 @@ define_interface! {
             // ===============================
 
             [context] fn to_ident(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Ident> {
-                let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
-                string_interface::methods::to_ident(context, string.as_str().into_spanned_ref(this.span_range()))
+                let string = this.concat_content(&ConcatBehaviour::standard(this.span_range()));
+                string_interface::methods::to_ident(context, string.into_spanned_ref(this.span_range()))
             }
 
             [context] fn to_ident_camel(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Ident> {
-                let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
-                string_interface::methods::to_ident_camel(context, string.as_str().into_spanned_ref(this.span_range()))
+                let string = this.concat_content(&ConcatBehaviour::standard(this.span_range()));
+                string_interface::methods::to_ident_camel(context, string.into_spanned_ref(this.span_range()))
             }
 
             [context] fn to_ident_snake(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Ident> {
-                let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
-                string_interface::methods::to_ident_snake(context, string.as_str().into_spanned_ref(this.span_range()))
+                let string = this.concat_content(&ConcatBehaviour::standard(this.span_range()));
+                string_interface::methods::to_ident_snake(context, string.into_spanned_ref(this.span_range()))
             }
 
             [context] fn to_ident_upper_snake(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Ident> {
-                let string = this.concat_recursive(&ConcatBehaviour::standard(this.span_range()));
-                string_interface::methods::to_ident_upper_snake(context, string.as_str().into_spanned_ref(this.span_range()))
+                let string = this.concat_content(&ConcatBehaviour::standard(this.span_range()));
+                string_interface::methods::to_ident_upper_snake(context, string.into_spanned_ref(this.span_range()))
             }
 
             // Some literals become Value::UnsupportedLiteral but can still be round-tripped back to a stream
-            [context] fn to_literal(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Value> {
-                let string = this.concat_recursive(&ConcatBehaviour::literal(this.span_range()));
-                let literal = string_interface::methods::to_literal(context, string.as_str().into_spanned_ref(this.span_range()))?;
-                Ok(Value::for_literal(literal).into_value())
+            [context] fn to_literal(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<AnyValue> {
+                let string = this.concat_content(&ConcatBehaviour::literal(this.span_range()));
+                let literal = string_interface::methods::to_literal(context, string.into_spanned_ref(this.span_range()))?;
+                Ok(AnyValue::for_literal(literal).into_any_value())
             }
 
             // CORE METHODS
             // ============
 
             // NOTE: with_span() exists on all values, this is just a specialized mutable version for streams
-            fn set_span(mut this: Mutable<StreamValue>, span_source: Shared<StreamValue>) -> ExecutionResult<()> {
+            fn set_span(mut this: Mutable<OutputStream>, span_source: AnyRef<OutputStream>) -> ExecutionResult<()> {
                 let span_range = span_source.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
-                this.value.replace_first_level_spans(span_range.join_into_span_else_start());
+                this.replace_first_level_spans(span_range.join_into_span_else_start());
                 Ok(())
             }
 
-            fn error(this: Shared<StreamValue>, message: Shared<String>) -> ExecutionResult<Never> {
+            fn error(this: AnyRef<OutputStream>, message: AnyRef<String>) -> ExecutionResult<Never> {
                 let error_span_range = this.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
                 error_span_range.assertion_err(message.as_str())
             }
 
-            fn assert(this: Shared<StreamValue>, condition: bool, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
+            fn assert(this: AnyRef<OutputStream>, condition: bool, message: Option<AnyRef<String>>) -> ExecutionResult<()> {
                 if condition {
                     Ok(())
                 } else {
@@ -218,10 +208,8 @@ define_interface! {
                 }
             }
 
-            fn assert_eq(this: Shared<StreamValue>, lhs: Spanned<AnyRef<Value>>, rhs: Spanned<AnyRef<Value>>, message: Option<AnyRef<str>>) -> ExecutionResult<()> {
-                let lhs_value: &Value = &lhs;
-                let rhs_value: &Value = &rhs;
-                match Value::debug_eq(lhs_value, rhs_value) {
+            fn assert_eq(this: AnyRef<OutputStream>, lhs: Spanned<AnyValueAnyRef>, rhs: Spanned<AnyValueAnyRef>, message: Option<AnyRef<String>>) -> ExecutionResult<()> {
+                match AnyValueRef::debug_eq(&lhs.as_ref_value(), &rhs.as_ref_value()) {
                     Ok(()) => Ok(()),
                     Err(debug_error) => {
                         let error_span_range = this.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
@@ -230,8 +218,8 @@ define_interface! {
                             None => format!(
                                 "Assertion failed: {}\n  lhs = {}\n  rhs = {}",
                                 debug_error.format_message(),
-                                lhs.concat_recursive(&ConcatBehaviour::debug(lhs.span_range()))?,
-                                rhs.concat_recursive(&ConcatBehaviour::debug(rhs.span_range()))?,
+                                lhs.as_ref_value().concat_recursive(&ConcatBehaviour::debug(lhs.span_range()))?,
+                                rhs.as_ref_value().concat_recursive(&ConcatBehaviour::debug(rhs.span_range()))?,
                             ),
                         };
                         error_span_range.assertion_err(message)
@@ -239,8 +227,8 @@ define_interface! {
                 }
             }
 
-            [context] fn reinterpret_as_run(Spanned(this, span_range): Spanned<Owned<StreamValue>>) -> ExecutionResult<OwnedValue> {
-                let source = this.into_inner().value.into_token_stream();
+            [context] fn reinterpret_as_run(Spanned(this, span_range): Spanned<OutputStream>) -> ExecutionResult<AnyValue> {
+                let source = this.into_token_stream();
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(ExpressionBlockContent::parse, ExpressionBlockContent::control_flow_pass)?;
                 let mut inner_interpreter = Interpreter::new(scope_definitions);
                 let return_value = reparsed.evaluate_spanned(&mut inner_interpreter, span_range, RequestedOwnership::owned())?.expect_owned();
@@ -250,8 +238,8 @@ define_interface! {
                 Ok(return_value.0)
             }
 
-            fn reinterpret_as_stream(Spanned(this, span_range): Spanned<Owned<StreamValue>>) -> ExecutionResult<OutputStream> {
-                let source = this.into_inner().value.into_token_stream();
+            fn reinterpret_as_stream(Spanned(this, span_range): Spanned<OutputStream>) -> ExecutionResult<OutputStream> {
+                let source = this.into_token_stream();
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(
                     |input| SourceStream::parse_with_span(input, span_range.span_from_join_else_start()),
                     SourceStream::control_flow_pass,
@@ -262,14 +250,13 @@ define_interface! {
             }
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_to_value(Spanned(this, span): Spanned<Owned<StreamValue>>) -> ExecutionResult<ReturnedValue> {
-                let this = this.into_inner();
-                let coerced = this.value.coerce_into_value();
-                if let Value::Stream(_) = &coerced {
+            [context] fn cast_coerced_to_value(Spanned(this, span): Spanned<OutputStream>) -> ExecutionResult<ReturnedValue> {
+                let coerced = this.coerce_into_value();
+                if let AnyValue::Stream(_) = &coerced {
                     return span.value_err("The stream could not be coerced into a single value");
                 }
                 // Re-run the cast operation on the coerced value
-                Ok(context.operation.evaluate(Spanned(coerced.into_owned(), span))?.0)
+                Ok(context.operation.evaluate(Spanned(coerced, span))?.0)
             }
         }
         pub(crate) mod binary_operations {
@@ -285,14 +272,7 @@ define_interface! {
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
-                    UnaryOperation::Cast {
-                        target:
-                            CastTarget::Boolean
-                            | CastTarget::Char
-                            | CastTarget::Integer(_)
-                            | CastTarget::Float(_),
-                        ..
-                    } => unary_definitions::cast_to_value(),
+                    UnaryOperation::Cast { target, .. } if target.is_singleton_target() => unary_definitions::cast_coerced_to_value(),
                     _ => return None,
                 })
             }
@@ -540,35 +520,35 @@ impl Interpret for ConcatenatedStreamLiteral {
     fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
         let stream =
             interpreter.capture_output(|interpreter| self.content.interpret(interpreter))?;
-        let string = stream.concat_recursive(&ConcatBehaviour::standard(self.span_range()));
-        let ident_span = StreamValue { value: stream }
+        let string = stream.concat_content(&ConcatBehaviour::standard(self.span_range()));
+        let ident_span = stream
             .resolve_content_span_range()
             .unwrap_or_else(|| self.span_range())
             .join_into_span_else_start();
         let value = match self.kind {
-            ConcatenatedStreamLiteralKind::String => string.into_value(),
+            ConcatenatedStreamLiteralKind::String => string.into_any_value(),
             ConcatenatedStreamLiteralKind::Ident => {
                 let str = &string;
-                string_to_ident(str, self, ident_span)?.into_value()
+                string_to_ident(str, self, ident_span)?.into_any_value()
             }
             ConcatenatedStreamLiteralKind::IdentCamel => {
                 let str = &string_conversion::to_upper_camel_case(&string);
-                string_to_ident(str, self, ident_span)?.into_value()
+                string_to_ident(str, self, ident_span)?.into_any_value()
             }
             ConcatenatedStreamLiteralKind::IdentSnake => {
                 let str = &string_conversion::to_lower_snake_case(&string);
-                string_to_ident(str, self, ident_span)?.into_value()
+                string_to_ident(str, self, ident_span)?.into_any_value()
             }
             ConcatenatedStreamLiteralKind::IdentUpperSnake => {
                 let str = &string_conversion::to_upper_snake_case(&string);
-                string_to_ident(str, self, ident_span)?.into_value()
+                string_to_ident(str, self, ident_span)?.into_any_value()
             }
             ConcatenatedStreamLiteralKind::Literal => {
                 let str = &string;
-                string_to_literal(str, self, ident_span)?.into_value()
+                string_to_literal(str, self, ident_span)?.into_any_value()
             }
         };
-        value.output_to(
+        value.as_ref_value().output_to(
             Grouping::Flattened,
             &mut ToStreamContext::new(interpreter.output(self)?, self.span_range()),
         )

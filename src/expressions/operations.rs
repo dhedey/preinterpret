@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter};
+
 use super::*;
 
 pub(crate) trait Operation: HasSpanRange {
@@ -59,10 +61,8 @@ impl UnaryOperation {
         as_token: Token![as],
         target_ident: Ident,
     ) -> ParseResult<Self> {
-        let target = Type::from_ident(&target_ident)?;
-        let target = CastTarget::from_source_type(target).ok_or_else(|| {
-            target_ident.parse_error("This type is not supported in cast expressions")
-        })?;
+        let target = TypeIdent::from_ident(&target_ident)?;
+        let target = CastTarget::from_source_type(target)?;
 
         Ok(Self::Cast {
             as_token,
@@ -82,18 +82,22 @@ impl UnaryOperation {
         operand_span_range
     }
 
-    pub(super) fn evaluate<T: IntoValue>(
+    pub(super) fn evaluate<T: IntoAnyValue>(
         &self,
-        Spanned(input, input_span): Spanned<Owned<T>>,
+        Spanned(input, input_span): Spanned<T>,
     ) -> ExecutionResult<Spanned<ReturnedValue>> {
-        let input = input.into_owned_value();
-        let method = input.kind().resolve_unary_operation(self).ok_or_else(|| {
-            self.type_error(format!(
-                "The {} operator is not supported for {} operand",
-                self.symbolic_description(),
-                input.articled_value_type(),
-            ))
-        })?;
+        let input = input.into_any_value();
+        let method = input
+            .kind()
+            .feature_resolver()
+            .resolve_unary_operation(self)
+            .ok_or_else(|| {
+                self.type_error(format!(
+                    "The {} operator is not supported for {} operand",
+                    self,
+                    input.articled_kind(),
+                ))
+            })?;
         let input = method
             .argument_ownership
             .map_from_owned(Spanned(input, input_span))?;
@@ -102,62 +106,43 @@ impl UnaryOperation {
 }
 
 #[derive(Copy, Clone)]
-pub(crate) enum CastTarget {
-    Integer(IntegerKind),
-    Float(FloatKind),
-    Boolean,
-    String,
-    Char,
-    Stream,
-}
+pub(crate) struct CastTarget(pub(crate) AnyValueLeafKind);
 
 impl CastTarget {
-    fn from_source_type(s: Type) -> Option<Self> {
-        Some(match s.kind {
-            TypeKind::Integer => CastTarget::Integer(IntegerKind::Untyped),
-            TypeKind::SpecificInteger(kind) => CastTarget::Integer(kind),
-            TypeKind::Float => CastTarget::Float(FloatKind::Untyped),
-            TypeKind::SpecificFloat(kind) => CastTarget::Float(kind),
-            TypeKind::Boolean => CastTarget::Boolean,
-            TypeKind::String => CastTarget::String,
-            TypeKind::Char => CastTarget::Char,
-            TypeKind::Stream => CastTarget::Stream,
-            _ => return None,
-        })
+    fn from_source_type(s: TypeIdent) -> ParseResult<Self> {
+        match s.kind {
+            TypeKind::Parent(ParentTypeKind::Integer(_)) => s.parse_err(format!(
+                "This type is not supported in cast expressions. Perhaps you want 'as {}'?",
+                UntypedIntegerKind.source_type_name()
+            )),
+            TypeKind::Parent(ParentTypeKind::Float(_)) => s.parse_err(format!(
+                "This type is not supported in cast expressions. Perhaps you want 'as {}'?",
+                UntypedFloatKind.source_type_name()
+            )),
+            TypeKind::Leaf(leaf_kind) => Ok(CastTarget(leaf_kind)),
+            _ => s.parse_err("This type is not supported in cast expressions"),
+        }
     }
 
-    fn symbolic_description(&self) -> &'static str {
-        match self {
-            CastTarget::Integer(IntegerKind::Untyped) => "as int",
-            CastTarget::Integer(IntegerKind::U8) => "as u8",
-            CastTarget::Integer(IntegerKind::U16) => "as u16",
-            CastTarget::Integer(IntegerKind::U32) => "as u32",
-            CastTarget::Integer(IntegerKind::U64) => "as u64",
-            CastTarget::Integer(IntegerKind::U128) => "as u128",
-            CastTarget::Integer(IntegerKind::Usize) => "as usize",
-            CastTarget::Integer(IntegerKind::I8) => "as i8",
-            CastTarget::Integer(IntegerKind::I16) => "as i16",
-            CastTarget::Integer(IntegerKind::I32) => "as i32",
-            CastTarget::Integer(IntegerKind::I64) => "as i64",
-            CastTarget::Integer(IntegerKind::I128) => "as i128",
-            CastTarget::Integer(IntegerKind::Isize) => "as isize",
-            CastTarget::Float(FloatKind::Untyped) => "as float",
-            CastTarget::Float(FloatKind::F32) => "as f32",
-            CastTarget::Float(FloatKind::F64) => "as f64",
-            CastTarget::Boolean => "as bool",
-            CastTarget::String => "as string",
-            CastTarget::Char => "as char",
-            CastTarget::Stream => "as stream",
-        }
+    /// Denotes that this cast target for a singleton iterable
+    /// (e.g. array or stream)
+    pub(crate) fn is_singleton_target(&self) -> bool {
+        matches!(
+            self.0,
+            AnyValueLeafKind::Bool(_)
+                | AnyValueLeafKind::Char(_)
+                | AnyValueLeafKind::Integer(_)
+                | AnyValueLeafKind::Float(_)
+        )
     }
 }
 
-impl Operation for UnaryOperation {
-    fn symbolic_description(&self) -> &'static str {
+impl Display for UnaryOperation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            UnaryOperation::Neg { .. } => "-",
-            UnaryOperation::Not { .. } => "!",
-            UnaryOperation::Cast { target, .. } => target.symbolic_description(),
+            UnaryOperation::Neg { .. } => write!(f, "-"),
+            UnaryOperation::Not { .. } => write!(f, "!"),
+            UnaryOperation::Cast { target, .. } => write!(f, "as {}", target.0.source_type_name()),
         }
     }
 }
@@ -292,13 +277,13 @@ impl SynParse for BinaryOperation {
 impl BinaryOperation {
     pub(super) fn lazy_evaluate(
         &self,
-        left: Spanned<&Value>,
-    ) -> ExecutionResult<Option<OwnedValue>> {
+        left: Spanned<&AnyValue>,
+    ) -> ExecutionResult<Option<AnyValue>> {
         match self {
             BinaryOperation::LogicalAnd { .. } => {
                 let bool: Spanned<&bool> = left.resolve_as("The left operand to &&")?;
                 if !**bool {
-                    Ok(Some((*bool).into_owned_value()))
+                    Ok(Some((*bool).into_any_value()))
                 } else {
                     Ok(None)
                 }
@@ -306,7 +291,7 @@ impl BinaryOperation {
             BinaryOperation::LogicalOr { .. } => {
                 let bool: Spanned<&bool> = left.resolve_as("The left operand to ||")?;
                 if **bool {
-                    Ok(Some((*bool).into_owned_value()))
+                    Ok(Some((*bool).into_any_value()))
                 } else {
                     Ok(None)
                 }
@@ -316,14 +301,18 @@ impl BinaryOperation {
     }
 
     #[allow(unused)]
-    pub(crate) fn evaluate<L: IntoValue, R: IntoValue>(
+    pub(crate) fn evaluate<L: IntoAnyValue, R: IntoAnyValue>(
         &self,
-        Spanned(left, left_span): Spanned<Owned<L>>,
-        Spanned(right, right_span): Spanned<Owned<R>>,
+        Spanned(left, left_span): Spanned<L>,
+        Spanned(right, right_span): Spanned<R>,
     ) -> ExecutionResult<Spanned<ReturnedValue>> {
-        let left = left.into_owned_value();
-        let right = right.into_owned_value();
-        match left.kind().resolve_binary_operation(self) {
+        let left = left.into_any_value();
+        let right = right.into_any_value();
+        match left
+            .kind()
+            .feature_resolver()
+            .resolve_binary_operation(self)
+        {
             Some(interface) => {
                 let left = interface
                     .lhs_ownership
@@ -336,7 +325,7 @@ impl BinaryOperation {
             None => self.type_err(format!(
                 "The {} operator is not supported for {} operand",
                 self.symbolic_description(),
-                left.articled_value_type(),
+                left.articled_kind(),
             )),
         }
     }
@@ -441,35 +430,35 @@ pub(super) trait HandleBinaryOperation: Sized + std::fmt::Display + Copy {
 
     fn paired_operation<T: From<Self>>(
         self,
-        rhs: impl ResolveAs<Self>,
+        rhs: impl ResolveAs<OptionalSuffix<Self>>,
         context: BinaryOperationCallContext,
         perform_fn: fn(Self, Self) -> Option<Self>,
     ) -> ExecutionResult<T> {
         let lhs = self;
         let rhs = rhs.resolve_as("This operand")?;
-        perform_fn(lhs, rhs)
+        perform_fn(lhs, rhs.0)
             .map(|r| r.into())
-            .ok_or_else(|| Self::binary_overflow_error(context, lhs, rhs))
+            .ok_or_else(|| Self::binary_overflow_error(context, lhs, rhs.0))
     }
 
     fn paired_operation_no_overflow<T: From<Self>>(
         self,
-        rhs: impl ResolveAs<Self>,
+        rhs: impl ResolveAs<OptionalSuffix<Self>>,
         perform_fn: fn(Self, Self) -> Self,
     ) -> ExecutionResult<T> {
         let lhs = self;
         let rhs = rhs.resolve_as("This operand")?;
-        Ok(perform_fn(lhs, rhs).into())
+        Ok(perform_fn(lhs, rhs.0).into())
     }
 
     fn paired_comparison(
         self,
-        rhs: impl ResolveAs<Self>,
+        rhs: impl ResolveAs<OptionalSuffix<Self>>,
         compare_fn: fn(Self, Self) -> bool,
     ) -> ExecutionResult<bool> {
         let lhs = self;
         let rhs = rhs.resolve_as("This operand")?;
-        Ok(compare_fn(lhs, rhs))
+        Ok(compare_fn(lhs, rhs.0))
     }
 
     fn shift_operation<O, T: From<O>>(

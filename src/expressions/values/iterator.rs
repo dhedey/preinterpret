@@ -1,5 +1,24 @@
 use super::*;
 
+define_leaf_type! {
+    pub(crate) IteratorType => AnyType(AnyValueContent::Iterator),
+    content: IteratorValue,
+    kind: pub(crate) IteratorKind,
+    type_name: "iterator",
+    articled_display_name: "an iterator",
+    dyn_impls: {
+        IterableType: impl IsIterable {
+            fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
+                Ok(*self)
+            }
+
+            fn len(&self, error_span_range: SpanRange) -> ExecutionResult<usize> {
+                self.len(error_span_range)
+            }
+        }
+    },
+}
+
 #[derive(Clone)]
 pub(crate) struct IteratorValue {
     iterator: IteratorValueInner,
@@ -11,7 +30,7 @@ impl IteratorValue {
     }
 
     #[allow(unused)]
-    pub(crate) fn new_any(iterator: impl Iterator<Item = Value> + 'static + Clone) -> Self {
+    pub(crate) fn new_any(iterator: impl Iterator<Item = AnyValue> + 'static + Clone) -> Self {
         Self::new_custom(Box::new(iterator))
     }
 
@@ -19,10 +38,8 @@ impl IteratorValue {
         Self::new_vec(array.items.into_iter())
     }
 
-    pub(crate) fn new_for_stream(stream: StreamValue) -> Self {
-        Self::new(IteratorValueInner::Stream(Box::new(
-            stream.value.into_iter(),
-        )))
+    pub(crate) fn new_for_stream(stream: OutputStream) -> Self {
+        Self::new(IteratorValueInner::Stream(Box::new(stream.into_iter())))
     }
 
     pub(crate) fn new_for_range(range: RangeValue) -> ExecutionResult<Self> {
@@ -35,30 +52,31 @@ impl IteratorValue {
         let iterator = object
             .entries
             .into_iter()
-            .map(|(k, v)| vec![k.into_value(), v.value].into_value())
+            .map(|(k, v)| vec![k.into_any_value(), v.value].into_any_value())
             .collect::<Vec<_>>()
             .into_iter();
         Self::new_vec(iterator)
     }
 
-    pub(crate) fn new_for_string(string: StringValue) -> Self {
+    pub(crate) fn new_for_string_over_chars(string: String) -> Self {
         // We have to collect to vec and back to make the iterator owned
         // That's because value.chars() creates a `Chars<'_>` iterator which
         // borrows from the string, which we don't allow in a Boxed iterator
+        // TODO: Replace with the owned iterator here to avoid this clone:
+        // https://internals.rust-lang.org/t/is-there-a-good-reason-why-string-has-no-into-chars/19496/5
         let iterator = string
-            .value
             .chars()
-            .map(|c| c.into_value())
+            .map(|c| c.into_any_value())
             .collect::<Vec<_>>()
             .into_iter();
         Self::new_vec(iterator)
     }
 
-    fn new_vec(iterator: std::vec::IntoIter<Value>) -> Self {
+    fn new_vec(iterator: std::vec::IntoIter<AnyValue>) -> Self {
         Self::new(IteratorValueInner::Vec(Box::new(iterator)))
     }
 
-    pub(crate) fn new_custom(iterator: Box<dyn ClonableIterator<Item = Value>>) -> Self {
+    pub(crate) fn new_custom(iterator: Box<dyn ClonableIterator<Item = AnyValue>>) -> Self {
         Self::new(IteratorValueInner::Other(iterator))
     }
 
@@ -71,7 +89,7 @@ impl IteratorValue {
         }
     }
 
-    pub(crate) fn singleton_value(mut self) -> Option<Value> {
+    pub(crate) fn singleton_value(mut self) -> Option<AnyValue> {
         let first = self.next()?;
         if self.next().is_none() {
             Some(first)
@@ -90,7 +108,7 @@ impl IteratorValue {
             if i > LIMIT {
                 return output.debug_err(format!("Only a maximum of {} items can be output to a stream from an iterator, to protect you from infinite loops. This can't currently be reconfigured with the iteration limit.", LIMIT));
             }
-            item.output_to(grouping, output)?;
+            item.as_ref_value().output_to(grouping, output)?;
         }
         Ok(())
     }
@@ -111,7 +129,7 @@ impl IteratorValue {
         )
     }
 
-    pub(crate) fn any_iterator_to_string<T: Borrow<Value>>(
+    pub(crate) fn any_iterator_to_string<T: Borrow<AnyValue>>(
         iterator: impl Iterator<Item = T>,
         output: &mut String,
         behaviour: &ConcatBehaviour,
@@ -152,7 +170,8 @@ impl IteratorValue {
             if i != 0 && behaviour.add_space_between_token_trees {
                 output.push(' ');
             }
-            item.concat_recursive_into(output, behaviour)?;
+            item.as_ref_value()
+                .concat_recursive_into(output, behaviour)?;
         }
         if behaviour.output_literal_structure {
             if is_empty {
@@ -165,41 +184,35 @@ impl IteratorValue {
     }
 }
 
-impl IntoValue for IteratorValueInner {
-    fn into_value(self) -> Value {
-        Value::Iterator(IteratorValue::new(self))
+impl IsValueContent for IteratorValueInner {
+    type Type = IteratorType;
+    type Form = BeOwned;
+}
+
+impl IntoValueContent<'static> for IteratorValueInner {
+    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
+        IteratorValue::new(self)
     }
 }
 
-impl IntoValue for Box<dyn ClonableIterator<Item = Value>> {
-    fn into_value(self) -> Value {
-        Value::Iterator(IteratorValue::new_custom(self))
-    }
+impl IsValueContent for Box<dyn ClonableIterator<Item = AnyValue>> {
+    type Type = IteratorType;
+    type Form = BeOwned;
 }
 
-impl IntoValue for IteratorValue {
-    fn into_value(self) -> Value {
-        Value::Iterator(IteratorValue {
-            iterator: self.iterator,
-        })
+impl IntoValueContent<'static> for Box<dyn ClonableIterator<Item = AnyValue>> {
+    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
+        IteratorValue::new_custom(self)
     }
 }
 
 impl_resolvable_argument_for! {
-    IteratorTypeData,
+    IteratorType,
     (value, context) -> IteratorValue {
         match value {
-            Value::Iterator(value) => Ok(value),
+            AnyValue::Iterator(value) => Ok(value),
             _ => context.err("an iterator", value),
         }
-    }
-}
-
-impl HasValueKind for IteratorValue {
-    type SpecificKind = ValueKind;
-
-    fn kind(&self) -> ValueKind {
-        ValueKind::Iterator
     }
 }
 
@@ -245,13 +258,13 @@ impl ValuesEqual for IteratorValue {
 #[derive(Clone)]
 enum IteratorValueInner {
     // We Box these so that Value is smaller on the stack
-    Vec(Box<<Vec<Value> as IntoIterator>::IntoIter>),
+    Vec(Box<<Vec<AnyValue> as IntoIterator>::IntoIter>),
     Stream(Box<<OutputStream as IntoIterator>::IntoIter>),
-    Other(Box<dyn ClonableIterator<Item = Value>>),
+    Other(Box<dyn ClonableIterator<Item = AnyValue>>),
 }
 
 impl Iterator for IteratorValue {
-    type Item = Value;
+    type Item = AnyValue;
 
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.iterator {
@@ -275,7 +288,7 @@ impl Iterator for IteratorValue {
 }
 
 impl Iterator for Mutable<IteratorValue> {
-    type Item = Value;
+    type Item = AnyValue;
 
     fn next(&mut self) -> Option<Self::Item> {
         let this: &mut IteratorValue = &mut *self;
@@ -288,22 +301,21 @@ impl Iterator for Mutable<IteratorValue> {
     }
 }
 
-define_interface! {
-    struct IteratorTypeData,
-    parent: IterableTypeData,
+define_type_features! {
+    impl IteratorType,
     pub(crate) mod iterator_interface {
         pub(crate) mod methods {
-            fn next(mut this: Mutable<IteratorValue>) -> Value {
+            fn next(mut this: Mutable<IteratorValue>) -> AnyValue {
                 match this.next() {
                     Some(value) => value,
-                    None => Value::None,
+                    None => ().into_any_value(),
                 }
             }
 
-            fn skip(mut this: IteratorValue, n: usize) -> IteratorValue {
+            fn skip(mut this: IteratorValue, n: OptionalSuffix<usize>) -> IteratorValue {
                 // We make this greedy instead of lazy because the Skip iterator is not clonable.
                 // We return an iterator for forwards compatibility in case we change it.
-                for _ in 0..n {
+                for _ in 0..n.0 {
                     if this.next().is_none() {
                         break;
                     }
@@ -311,17 +323,17 @@ define_interface! {
                 this
             }
 
-            fn take(this: IteratorValue, n: usize) -> IteratorValue {
+            fn take(this: IteratorValue, n: OptionalSuffix<usize>) -> IteratorValue {
                 // We collect to a vec to satisfy the clonability requirement,
                 // but only return an iterator for forwards compatibility in case we change it.
-                let taken = this.take(n).collect::<Vec<_>>();
+                let taken = this.take(n.0).collect::<Vec<_>>();
                 IteratorValue::new_for_array(ArrayValue::new(taken))
             }
         }
         pub(crate) mod unary_operations {
-            [context] fn cast_singleton_to_value(Spanned(this, span): Spanned<Owned<IteratorValue>>) -> ExecutionResult<ReturnedValue> {
-                match this.into_inner().singleton_value() {
-                    Some(value) => Ok(context.operation.evaluate(Spanned(Owned::new(value), span))?.0),
+            [context] fn cast_singleton_to_value(Spanned(this, span): Spanned<IteratorValue>) -> ExecutionResult<ReturnedValue> {
+                match this.singleton_value() {
+                    Some(value) => Ok(context.operation.evaluate(Spanned(value, span))?.0),
                     None => span.value_err("Only an iterator with one item can be cast to this value"),
                 }
             }
@@ -331,13 +343,11 @@ define_interface! {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
                     UnaryOperation::Neg { .. } | UnaryOperation::Not { .. } => return None,
-                    UnaryOperation::Cast { target, .. } => match target {
-                        CastTarget::Boolean
-                        | CastTarget::Char
-                        | CastTarget::Integer(_)
-                        | CastTarget::Float(_) => unary_definitions::cast_singleton_to_value(),
-                        _ => return None,
-                    },
+                    UnaryOperation::Cast { target, .. } => if target.is_singleton_target() {
+                        unary_definitions::cast_singleton_to_value()
+                    } else {
+                        return None;
+                    }
                 })
             }
         }

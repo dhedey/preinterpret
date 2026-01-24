@@ -1,5 +1,14 @@
 use super::*;
 
+define_leaf_type! {
+    pub(crate) UntypedIntegerType => IntegerType(IntegerContent::Untyped) => AnyType,
+    content: UntypedInteger,
+    kind: pub(crate) UntypedIntegerKind,
+    type_name: "untyped_int",
+    articled_display_name: "an untyped integer",
+    dyn_impls: {},
+}
+
 #[derive(Copy, Clone)]
 pub(crate) struct UntypedInteger(FallbackInteger);
 pub(crate) type FallbackInteger = i128;
@@ -30,33 +39,33 @@ impl UntypedInteger {
     }
 
     /// Tries to convert to a specific integer kind, returning None if the value doesn't fit.
-    pub(crate) fn try_into_kind(self, kind: IntegerKind) -> Option<IntegerValue> {
+    pub(crate) fn try_into_kind(self, kind: IntegerLeafKind) -> Option<IntegerValue> {
         let value = self.0;
         Some(match kind {
-            IntegerKind::Untyped => IntegerValue::Untyped(UntypedInteger(value)),
-            IntegerKind::I8 => IntegerValue::I8(value.try_into().ok()?),
-            IntegerKind::I16 => IntegerValue::I16(value.try_into().ok()?),
-            IntegerKind::I32 => IntegerValue::I32(value.try_into().ok()?),
-            IntegerKind::I64 => IntegerValue::I64(value.try_into().ok()?),
-            IntegerKind::I128 => IntegerValue::I128(value),
-            IntegerKind::Isize => IntegerValue::Isize(value.try_into().ok()?),
-            IntegerKind::U8 => IntegerValue::U8(value.try_into().ok()?),
-            IntegerKind::U16 => IntegerValue::U16(value.try_into().ok()?),
-            IntegerKind::U32 => IntegerValue::U32(value.try_into().ok()?),
-            IntegerKind::U64 => IntegerValue::U64(value.try_into().ok()?),
-            IntegerKind::U128 => IntegerValue::U128(value.try_into().ok()?),
-            IntegerKind::Usize => IntegerValue::Usize(value.try_into().ok()?),
+            IntegerLeafKind::Untyped(_) => IntegerValue::Untyped(UntypedInteger(value)),
+            IntegerLeafKind::I8(_) => IntegerValue::I8(value.try_into().ok()?),
+            IntegerLeafKind::I16(_) => IntegerValue::I16(value.try_into().ok()?),
+            IntegerLeafKind::I32(_) => IntegerValue::I32(value.try_into().ok()?),
+            IntegerLeafKind::I64(_) => IntegerValue::I64(value.try_into().ok()?),
+            IntegerLeafKind::I128(_) => IntegerValue::I128(value),
+            IntegerLeafKind::Isize(_) => IntegerValue::Isize(value.try_into().ok()?),
+            IntegerLeafKind::U8(_) => IntegerValue::U8(value.try_into().ok()?),
+            IntegerLeafKind::U16(_) => IntegerValue::U16(value.try_into().ok()?),
+            IntegerLeafKind::U32(_) => IntegerValue::U32(value.try_into().ok()?),
+            IntegerLeafKind::U64(_) => IntegerValue::U64(value.try_into().ok()?),
+            IntegerLeafKind::U128(_) => IntegerValue::U128(value.try_into().ok()?),
+            IntegerLeafKind::Usize(_) => IntegerValue::Usize(value.try_into().ok()?),
         })
     }
 
     pub(crate) fn paired_operation(
         self,
-        rhs: Spanned<Owned<IntegerValue>>,
+        rhs: Spanned<IntegerValue>,
         context: BinaryOperationCallContext,
         perform_fn: fn(FallbackInteger, FallbackInteger) -> Option<FallbackInteger>,
     ) -> ExecutionResult<IntegerValue> {
         let lhs = self.0;
-        let rhs: UntypedInteger = rhs.resolve_as("This operand")?;
+        let rhs: UntypedInteger = rhs.downcast_resolve("This operand")?;
         let rhs = rhs.0;
         let output = perform_fn(lhs, rhs)
             .ok_or_else(|| UntypedInteger::binary_overflow_error(context, lhs, rhs))?;
@@ -65,11 +74,11 @@ impl UntypedInteger {
 
     pub(crate) fn paired_comparison(
         self,
-        rhs: Spanned<Owned<IntegerValue>>,
+        rhs: Spanned<IntegerValue>,
         compare_fn: fn(FallbackInteger, FallbackInteger) -> bool,
     ) -> ExecutionResult<bool> {
         let lhs = self.0;
-        let rhs: UntypedInteger = rhs.resolve_as("This operand")?;
+        let rhs: UntypedInteger = rhs.downcast_resolve("This operand")?;
         let rhs = rhs.0;
         Ok(compare_fn(lhs, rhs))
     }
@@ -100,7 +109,7 @@ impl UntypedInteger {
 }
 
 impl Spanned<UntypedInteger> {
-    pub(crate) fn into_kind(self, kind: IntegerKind) -> ExecutionResult<IntegerValue> {
+    pub(crate) fn into_kind(self, kind: IntegerLeafKind) -> ExecutionResult<IntegerValue> {
         let Spanned(value, span_range) = self;
         value.try_into_kind(kind).ok_or_else(|| {
             span_range.value_error(format!(
@@ -112,29 +121,13 @@ impl Spanned<UntypedInteger> {
     }
 }
 
-impl HasValueKind for UntypedInteger {
-    type SpecificKind = IntegerKind;
-
-    fn kind(&self) -> IntegerKind {
-        IntegerKind::Untyped
-    }
-}
-
-impl IntoValue for UntypedInteger {
-    fn into_value(self) -> Value {
-        Value::Integer(IntegerValue::Untyped(self))
-    }
-}
-
-define_interface! {
-    struct UntypedIntegerTypeData,
-    parent: IntegerTypeData,
+define_type_features! {
+    impl UntypedIntegerType,
     pub(crate) mod untyped_integer_interface {
         pub(crate) mod methods {
         }
         pub(crate) mod unary_operations {
-            fn neg(Spanned(value, span): Spanned<Owned<UntypedInteger>>) -> ExecutionResult<UntypedInteger> {
-                let value = value.into_inner();
+            fn neg(Spanned(value, span): Spanned<UntypedInteger>) -> ExecutionResult<UntypedInteger> {
                 let input = value.into_fallback();
                 match input.checked_neg() {
                     Some(negated) => Ok(UntypedInteger::from_fallback(negated)),
@@ -216,24 +209,24 @@ define_interface! {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
                     UnaryOperation::Neg { .. } => unary_definitions::neg(),
-                    UnaryOperation::Cast { target, .. } => match target {
-                        CastTarget::Integer(IntegerKind::Untyped) => unary_definitions::cast_to_untyped_integer(),
-                        CastTarget::Integer(IntegerKind::I8) => unary_definitions::cast_to_i8(),
-                        CastTarget::Integer(IntegerKind::I16) => unary_definitions::cast_to_i16(),
-                        CastTarget::Integer(IntegerKind::I32) => unary_definitions::cast_to_i32(),
-                        CastTarget::Integer(IntegerKind::I64) => unary_definitions::cast_to_i64(),
-                        CastTarget::Integer(IntegerKind::I128) => unary_definitions::cast_to_i128(),
-                        CastTarget::Integer(IntegerKind::Isize) => unary_definitions::cast_to_isize(),
-                        CastTarget::Integer(IntegerKind::U8) => unary_definitions::cast_to_u8(),
-                        CastTarget::Integer(IntegerKind::U16) => unary_definitions::cast_to_u16(),
-                        CastTarget::Integer(IntegerKind::U32) => unary_definitions::cast_to_u32(),
-                        CastTarget::Integer(IntegerKind::U64) => unary_definitions::cast_to_u64(),
-                        CastTarget::Integer(IntegerKind::U128) => unary_definitions::cast_to_u128(),
-                        CastTarget::Integer(IntegerKind::Usize) => unary_definitions::cast_to_usize(),
-                        CastTarget::Float(FloatKind::Untyped) => unary_definitions::cast_to_untyped_float(),
-                        CastTarget::Float(FloatKind::F32) => unary_definitions::cast_to_f32(),
-                        CastTarget::Float(FloatKind::F64) => unary_definitions::cast_to_f64(),
-                        CastTarget::String => unary_definitions::cast_to_string(),
+                    UnaryOperation::Cast { target: CastTarget(kind), .. } => match kind {
+                        AnyValueLeafKind::Integer(IntegerLeafKind::Untyped(_)) => unary_definitions::cast_to_untyped_integer(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::I8(_)) => unary_definitions::cast_to_i8(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::I16(_)) => unary_definitions::cast_to_i16(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::I32(_)) => unary_definitions::cast_to_i32(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::I64(_)) => unary_definitions::cast_to_i64(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::I128(_)) => unary_definitions::cast_to_i128(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::Isize(_)) => unary_definitions::cast_to_isize(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::U8(_)) => unary_definitions::cast_to_u8(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::U16(_)) => unary_definitions::cast_to_u16(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::U32(_)) => unary_definitions::cast_to_u32(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::U64(_)) => unary_definitions::cast_to_u64(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::U128(_)) => unary_definitions::cast_to_u128(),
+                        AnyValueLeafKind::Integer(IntegerLeafKind::Usize(_)) => unary_definitions::cast_to_usize(),
+                        AnyValueLeafKind::Float(FloatLeafKind::Untyped(_)) => unary_definitions::cast_to_untyped_float(),
+                        AnyValueLeafKind::Float(FloatLeafKind::F32(_)) => unary_definitions::cast_to_f32(),
+                        AnyValueLeafKind::Float(FloatLeafKind::F64(_)) => unary_definitions::cast_to_f64(),
+                        AnyValueLeafKind::String(_) => unary_definitions::cast_to_string(),
                         _ => return None,
                     },
                     _ => return None,
@@ -252,14 +245,30 @@ define_interface! {
 
 pub(crate) struct UntypedIntegerFallback(pub(crate) FallbackInteger);
 
-impl ResolvableArgumentTarget for UntypedIntegerFallback {
-    type ValueType = UntypedIntegerTypeData;
+impl IsValueContent for UntypedIntegerFallback {
+    type Type = IntegerType;
+    type Form = BeOwned;
 }
 
-impl ResolvableOwned<Value> for UntypedIntegerFallback {
-    fn resolve_from_value(input_value: Value, context: ResolutionContext) -> ExecutionResult<Self> {
+impl IsArgument for UntypedIntegerFallback {
+    type ValueType = UntypedIntegerType;
+    const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
+    fn from_argument(value: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+        Self::resolve_value(value.expect_owned(), "This argument")
+    }
+}
+
+impl ResolvableArgumentTarget for UntypedIntegerFallback {
+    type ValueType = UntypedIntegerType;
+}
+
+impl ResolvableOwned<AnyValue> for UntypedIntegerFallback {
+    fn resolve_from_value(
+        input_value: AnyValue,
+        context: ResolutionContext,
+    ) -> ExecutionResult<Self> {
         let value: UntypedInteger =
-            ResolvableOwned::<Value>::resolve_from_value(input_value, context)?;
+            ResolvableOwned::<AnyValue>::resolve_from_value(input_value, context)?;
         Ok(UntypedIntegerFallback(value.into_fallback()))
     }
 }
@@ -277,10 +286,10 @@ impl ResolvableOwned<IntegerValue> for UntypedInteger {
 }
 
 impl_resolvable_argument_for! {
-    UntypedIntegerTypeData,
+    UntypedIntegerType,
     (value, context) -> UntypedInteger {
         match value {
-            Value::Integer(IntegerValue::Untyped(x)) => Ok(x),
+            AnyValue::Integer(IntegerValue::Untyped(x)) => Ok(x),
             _ => context.err("an untyped integer", value),
         }
     }

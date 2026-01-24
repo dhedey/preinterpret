@@ -1,21 +1,34 @@
 use super::*;
 
+define_leaf_type! {
+    pub(crate) ObjectType => AnyType(AnyValueContent::Object),
+    content: ObjectValue,
+    kind: pub(crate) ObjectKind,
+    type_name: "object",
+    articled_display_name: "an object",
+    dyn_impls: {
+        IterableType: impl IsIterable {
+            fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
+                Ok(IteratorValue::new_for_object(*self))
+            }
+
+            fn len(&self, _error_span_range: SpanRange) -> ExecutionResult<usize> {
+                Ok(self.entries.len())
+            }
+        }
+    },
+}
+
 #[derive(Clone)]
 pub(crate) struct ObjectValue {
     pub(crate) entries: BTreeMap<String, ObjectEntry>,
 }
 
-impl IntoValue for ObjectValue {
-    fn into_value(self) -> Value {
-        Value::Object(self)
-    }
-}
-
 impl_resolvable_argument_for! {
-    ObjectTypeData,
+    ObjectType,
     (value, context) -> ObjectValue {
         match value {
-            Value::Object(value) => Ok(value),
+            AnyValue::Object(value) => Ok(value),
             _ => context.err("an object", value),
         }
     }
@@ -25,28 +38,28 @@ impl_resolvable_argument_for! {
 pub(crate) struct ObjectEntry {
     #[allow(unused)]
     pub(crate) key_span: Span,
-    pub(crate) value: Value,
+    pub(crate) value: AnyValue,
 }
 
 impl ObjectValue {
-    pub(super) fn into_indexed(mut self, index: Spanned<&Value>) -> ExecutionResult<Value> {
-        let key = index.resolve_as("An object key")?;
+    pub(super) fn into_indexed(mut self, index: Spanned<AnyValueRef>) -> ExecutionResult<AnyValue> {
+        let key = index.downcast_resolve("An object key")?;
         Ok(self.remove_or_none(key))
     }
 
-    pub(super) fn into_property(mut self, access: &PropertyAccess) -> ExecutionResult<Value> {
+    pub(super) fn into_property(mut self, access: &PropertyAccess) -> ExecutionResult<AnyValue> {
         let key = access.property.to_string();
         Ok(self.remove_or_none(&key))
     }
 
-    pub(crate) fn remove_or_none(&mut self, key: &str) -> Value {
+    pub(crate) fn remove_or_none(&mut self, key: &str) -> AnyValue {
         match self.entries.remove(key) {
             Some(entry) => entry.value,
-            None => Value::None,
+            None => ().into_any_value(),
         }
     }
 
-    pub(crate) fn remove_no_none(&mut self, key: &str) -> Option<Value> {
+    pub(crate) fn remove_no_none(&mut self, key: &str) -> Option<AnyValue> {
         match self.entries.remove(key) {
             Some(entry) => {
                 if entry.value.is_none() {
@@ -61,15 +74,15 @@ impl ObjectValue {
 
     pub(super) fn index_mut(
         &mut self,
-        index: Spanned<&Value>,
+        index: Spanned<AnyValueRef>,
         auto_create: bool,
-    ) -> ExecutionResult<&mut Value> {
-        let index: Spanned<&str> = index.resolve_as("An object key")?;
+    ) -> ExecutionResult<&mut AnyValue> {
+        let index: Spanned<&str> = index.downcast_resolve("An object key")?;
         self.mut_entry(index.map(|s| s.to_string()), auto_create)
     }
 
-    pub(super) fn index_ref(&self, index: Spanned<&Value>) -> ExecutionResult<&Value> {
-        let key: Spanned<&str> = index.resolve_as("An object key")?;
+    pub(super) fn index_ref(&self, index: Spanned<AnyValueRef>) -> ExecutionResult<&AnyValue> {
+        let key: Spanned<&str> = index.downcast_resolve("An object key")?;
         let entry = self.entries.get(*key).ok_or_else(|| {
             key.value_error(format!("The object does not have a field named `{}`", *key))
         })?;
@@ -80,14 +93,14 @@ impl ObjectValue {
         &mut self,
         access: &PropertyAccess,
         auto_create: bool,
-    ) -> ExecutionResult<&mut Value> {
+    ) -> ExecutionResult<&mut AnyValue> {
         self.mut_entry(
             access.property.to_string().spanned(access.property.span()),
             auto_create,
         )
     }
 
-    pub(super) fn property_ref(&self, access: &PropertyAccess) -> ExecutionResult<&Value> {
+    pub(super) fn property_ref(&self, access: &PropertyAccess) -> ExecutionResult<&AnyValue> {
         let key = access.property.to_string();
         let entry = self.entries.get(&key).ok_or_else(|| {
             access.value_error(format!("The object does not have a field named `{}`", key))
@@ -99,7 +112,7 @@ impl ObjectValue {
         &mut self,
         Spanned(key, key_span): Spanned<String>,
         auto_create: bool,
-    ) -> ExecutionResult<&mut Value> {
+    ) -> ExecutionResult<&mut AnyValue> {
         use std::collections::btree_map::*;
         Ok(match self.entries.entry(key) {
             Entry::Occupied(entry) => &mut entry.into_mut().value,
@@ -108,7 +121,7 @@ impl ObjectValue {
                     &mut entry
                         .insert(ObjectEntry {
                             key_span: key_span.join_into_span_else_start(),
-                            value: Value::None,
+                            value: ().into_any_value(),
                         })
                         .value
                 } else {
@@ -158,7 +171,10 @@ impl ObjectValue {
             if behaviour.add_space_between_token_trees {
                 output.push(' ');
             }
-            entry.value.concat_recursive_into(output, behaviour)?;
+            entry
+                .value
+                .as_ref_value()
+                .concat_recursive_into(output, behaviour)?;
             is_first = false;
         }
         if behaviour.output_literal_structure {
@@ -202,7 +218,8 @@ impl Spanned<&ObjectValue> {
             match self.entries.get(field_name) {
                 None
                 | Some(ObjectEntry {
-                    value: Value::None, ..
+                    value: AnyValue::None(_),
+                    ..
                 }) => {
                     missing_fields.push(field_name);
                 }
@@ -241,23 +258,19 @@ impl Spanned<&ObjectValue> {
     }
 }
 
-impl HasValueKind for ObjectValue {
-    type SpecificKind = ValueKind;
+impl IsValueContent for BTreeMap<String, ObjectEntry> {
+    type Type = ObjectType;
+    type Form = BeOwned;
+}
 
-    fn kind(&self) -> ValueKind {
-        ValueKind::Object
+impl IntoValueContent<'static> for BTreeMap<String, ObjectEntry> {
+    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
+        ObjectValue { entries: self }
     }
 }
 
-impl IntoValue for BTreeMap<String, ObjectEntry> {
-    fn into_value(self) -> Value {
-        Value::Object(ObjectValue { entries: self })
-    }
-}
-
-define_interface! {
-    struct ObjectTypeData,
-    parent: IterableTypeData,
+define_type_features! {
+    impl ObjectType,
     pub(crate) mod object_interface {
         pub(crate) mod methods {
             [context] fn zip(this: ObjectValue) -> ExecutionResult<ArrayValue> {
@@ -271,6 +284,28 @@ define_interface! {
         pub(crate) mod unary_operations {
         }
         pub(crate) mod binary_operations {}
+        property_access(ObjectValue) {
+            [ctx] fn shared(source: &'a ObjectValue) {
+                source.property_ref(ctx.property)
+            }
+            [ctx] fn mutable(source: &'a mut ObjectValue, auto_create: bool) {
+                source.property_mut(ctx.property, auto_create)
+            }
+            [ctx] fn owned(source: ObjectValue) {
+                source.into_property(ctx.property)
+            }
+        }
+        index_access(ObjectValue) {
+            fn shared(source: &'a ObjectValue, index: Spanned<AnyValueRef>) {
+                source.index_ref(index)
+            }
+            fn mutable(source: &'a mut ObjectValue, index: Spanned<AnyValueRef>, auto_create: bool) {
+                source.index_mut(index, auto_create)
+            }
+            fn owned(source: ObjectValue, index: Spanned<AnyValueRef>) {
+                source.into_indexed(index)
+            }
+        }
         interface_items {
         }
     }

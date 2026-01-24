@@ -13,6 +13,7 @@ macro_rules! if_empty {
     };
 }
 
+#[cfg(test)]
 macro_rules! handle_first_arg_type {
     ([NEXT] : $type:ty) => {
         $type
@@ -110,6 +111,9 @@ macro_rules! generate_method_interface {
             ],
         }
     };
+    (REQUIRED $req:tt OPTIONAL $opt:tt ARGS[$($arg:tt)*]) => {
+        compile_error!(stringify!("This method arity is currently unsupported - add support in `MethodInterface` and `generate_method_interface`: ", $($arg)*));
+    };
 }
 
 macro_rules! parse_arg_types {
@@ -123,12 +127,18 @@ macro_rules! parse_arg_types {
         parse_arg_types!([REQUIRED $req OPTIONAL[$($opt)* $type,] => $callback! $callback_args] $($rest)*)
     };
     // Next tokens are `: X)` - we have a required argument (variant 1)
+    ([REQUIRED [$($req:tt)*] OPTIONAL [] => $callback:ident! $callback_args:tt] : $type:ty) => {
+        parse_arg_types!([REQUIRED[$($req)* $type,] OPTIONAL [] => $callback! $callback_args])
+    };
     ([REQUIRED [$($req:tt)*] OPTIONAL $opt:tt => $callback:ident! $callback_args:tt] : $type:ty) => {
-        parse_arg_types!([REQUIRED[$($req)* $type,] OPTIONAL $opt => $callback! $callback_args])
+        compile_error!(stringify!("Required arguments must come before optional arguments:" $type));
     };
     // Next tokens are `: X, ...` - we have a required argument (variant 2)
+    ([REQUIRED [$($req:tt)*] OPTIONAL [] => $callback:ident! $callback_args:tt] : $type:ty, $($rest:tt)*) => {
+        parse_arg_types!([REQUIRED[$($req)* $type,] OPTIONAL [] => $callback! $callback_args] $($rest)*)
+    };
     ([REQUIRED [$($req:tt)*] OPTIONAL $opt:tt => $callback:ident! $callback_args:tt] : $type:ty, $($rest:tt)*) => {
-        parse_arg_types!([REQUIRED[$($req)* $type,] OPTIONAL $opt => $callback! $callback_args] $($rest)*)
+        compile_error!(stringify!("Required arguments must come before optional arguments:" $type));
     };
     // Next tokens are something else - ignore it and look at next
     ([REQUIRED $req:tt OPTIONAL $opt:tt => $callback:ident! $callback_args:tt] $consumed:tt $($rest:tt)*) => {
@@ -298,6 +308,100 @@ where
     f(context, A::from_argument(lhs)?, B::from_argument(rhs)?).to_returned_value()
 }
 
+// ============================================================================
+// Property Access Wrapper Functions
+// ============================================================================
+
+pub(crate) fn apply_property_shared<'a, S: ResolvableShared<AnyValue> + ?Sized + 'a>(
+    f: for<'b> fn(PropertyAccessCallContext, &'b S) -> ExecutionResult<&'b AnyValue>,
+    ctx: PropertyAccessCallContext,
+    source: &'a AnyValue,
+) -> ExecutionResult<&'a AnyValue> {
+    let source = S::resolve_from_ref(
+        source,
+        ResolutionContext::new(&ctx.property.span_range(), "The property access source"),
+    )?;
+    f(ctx, source)
+}
+
+pub(crate) fn apply_property_mutable<'a, S: ResolvableMutable<AnyValue> + ?Sized + 'a>(
+    f: for<'b> fn(PropertyAccessCallContext, &'b mut S, bool) -> ExecutionResult<&'b mut AnyValue>,
+    ctx: PropertyAccessCallContext,
+    source: &'a mut AnyValue,
+    auto_create: bool,
+) -> ExecutionResult<&'a mut AnyValue> {
+    let source = S::resolve_from_mut(
+        source,
+        ResolutionContext::new(&ctx.property.span_range(), "The property access source"),
+    )?;
+    f(ctx, source, auto_create)
+}
+
+pub(crate) fn apply_property_owned<S: ResolvableOwned<AnyValue>>(
+    f: fn(PropertyAccessCallContext, S) -> ExecutionResult<AnyValue>,
+    ctx: PropertyAccessCallContext,
+    source: AnyValue,
+) -> ExecutionResult<AnyValue> {
+    let source = S::resolve_from_value(
+        source,
+        ResolutionContext::new(&ctx.property.span_range(), "The property access source"),
+    )?;
+    f(ctx, source)
+}
+
+// ============================================================================
+// Index Access Wrapper Functions
+// ============================================================================
+
+pub(crate) fn apply_index_shared<'a, S: ResolvableShared<AnyValue> + ?Sized + 'a>(
+    f: for<'b> fn(
+        IndexAccessCallContext,
+        &'b S,
+        Spanned<AnyValueRef>,
+    ) -> ExecutionResult<&'b AnyValue>,
+    ctx: IndexAccessCallContext,
+    source: &'a AnyValue,
+    index: Spanned<AnyValueRef>,
+) -> ExecutionResult<&'a AnyValue> {
+    let source = S::resolve_from_ref(
+        source,
+        ResolutionContext::new(&ctx.access.span_range(), "The index access source"),
+    )?;
+    f(ctx, source, index)
+}
+
+pub(crate) fn apply_index_mutable<'a, S: ResolvableMutable<AnyValue> + ?Sized + 'a>(
+    f: for<'b> fn(
+        IndexAccessCallContext,
+        &'b mut S,
+        Spanned<AnyValueRef>,
+        bool,
+    ) -> ExecutionResult<&'b mut AnyValue>,
+    ctx: IndexAccessCallContext,
+    source: &'a mut AnyValue,
+    index: Spanned<AnyValueRef>,
+    auto_create: bool,
+) -> ExecutionResult<&'a mut AnyValue> {
+    let source = S::resolve_from_mut(
+        source,
+        ResolutionContext::new(&ctx.access.span_range(), "The index access source"),
+    )?;
+    f(ctx, source, index, auto_create)
+}
+
+pub(crate) fn apply_index_owned<S: ResolvableOwned<AnyValue>>(
+    f: fn(IndexAccessCallContext, S, Spanned<AnyValueRef>) -> ExecutionResult<AnyValue>,
+    ctx: IndexAccessCallContext,
+    source: AnyValue,
+    index: Spanned<AnyValueRef>,
+) -> ExecutionResult<AnyValue> {
+    let source = S::resolve_from_value(
+        source,
+        ResolutionContext::new(&ctx.access.span_range(), "The index access source"),
+    )?;
+    f(ctx, source, index)
+}
+
 pub(crate) struct MethodCallContext<'a> {
     pub interpreter: &'a mut Interpreter,
     pub output_span_range: SpanRange,
@@ -330,10 +434,9 @@ impl<'a> BinaryOperationCallContext<'a> {
     }
 }
 
-macro_rules! define_interface {
+macro_rules! define_type_features {
     (
-        struct $type_data:ident,
-        parent: $parent_type_data:ident,
+        impl $type_def:ident,
         $mod_vis:vis mod $mod_name:ident {
             $mod_methods_vis:vis mod methods {
                 $(
@@ -350,54 +453,55 @@ macro_rules! define_interface {
                     $([$binary_context:ident])? fn $binary_name:ident($($binary_args:tt)*) $(-> $binary_output_ty:ty)? $([ignore_type_assertion $binary_ignore_type_assertion:tt])? $binary_body:block
                 )*
             }
+            $(property_access($property_source_ty:ty) {
+                $([$property_shared_context:ident])? fn shared($($property_shared_args:tt)*) $property_shared_body:block
+                $([$property_mutable_context:ident])? fn mutable($($property_mutable_args:tt)*) $property_mutable_body:block
+                $([$property_owned_context:ident])? fn owned($($property_owned_args:tt)*) $property_owned_body:block
+            })?
+            $(index_access($index_source_ty:ty) {
+                $([$index_shared_context:ident])? fn shared($($index_shared_args:tt)*) $index_shared_body:block
+                $([$index_mutable_context:ident])? fn mutable($($index_mutable_args:tt)*) $index_mutable_body:block
+                $([$index_owned_context:ident])? fn owned($($index_owned_args:tt)*) $index_owned_body:block
+            })?
             interface_items {
                 $($items:item)*
             }
         }
     ) => {
-        #[derive(Clone, Copy)]
-        pub(crate) struct $type_data;
-
         $mod_vis mod $mod_name {
             use super::*;
 
-            $mod_vis const fn parent() -> Option<$parent_type_data> {
-                // Type ids aren't const, and strings aren't const-comparable, but I can use this work-around:
-                // https://internals.rust-lang.org/t/why-i-cannot-compare-two-static-str-s-in-a-const-context/17726/2
-                const OWN_TYPE_NAME: &'static [u8] = stringify!($type_data).as_bytes();
-                const PARENT_TYPE_NAME: &'static [u8] = stringify!($parent_type_data).as_bytes();
-                match PARENT_TYPE_NAME {
-                    OWN_TYPE_NAME => None,
-                    _ => Some($parent_type_data),
-                }
-            }
-
             #[allow(unused)]
+            #[cfg(test)]
             fn asserts() {
+                fn assert_first_argument<T: IsArgument<ValueType = $type_def>>() {}
+                fn assert_output_type<T: IsReturnable>() {}
                 $(
-                    $type_data::assert_first_argument::<handle_first_arg_type!($($method_args)*,)>();
+                    assert_first_argument::<handle_first_arg_type!($($method_args)*,)>();
                     if_exists! {
                         {$($method_ignore_type_assertion)?}
                         {}
-                        {$($type_data::assert_output_type::<$method_output_ty>();)?}
+                        {$(assert_output_type::<$method_output_ty>();)?}
                     }
                 )*
                 $(
-                    $type_data::assert_first_argument::<handle_first_arg_type!($($unary_args)*,)>();
+                    assert_first_argument::<handle_first_arg_type!($($unary_args)*,)>();
                     if_exists! {
                         {$($unary_ignore_type_assertion)?}
                         {}
-                        {$($type_data::assert_output_type::<$unary_output_ty>();)?}
+                        {$(assert_output_type::<$unary_output_ty>();)?}
                     }
                 )*
                 $(
-                    $type_data::assert_first_argument::<handle_first_arg_type!($($binary_args)*,)>();
+                    assert_first_argument::<handle_first_arg_type!($($binary_args)*,)>();
                     if_exists! {
                         {$($binary_ignore_type_assertion)?}
                         {}
-                        {$($type_data::assert_output_type::<$binary_output_ty>();)?}
+                        {$(assert_output_type::<$binary_output_ty>();)?}
                     }
                 )*
+                // Note: property_access and index_access source types are verified
+                // at compile time through the apply_* wrapper functions
             }
 
             $mod_methods_vis mod methods {
@@ -460,10 +564,50 @@ macro_rules! define_interface {
                 )*
             }
 
-            impl HierarchicalTypeData for $type_data {
-                type Parent = $parent_type_data;
-                const PARENT: Option<Self::Parent> = $mod_name::parent();
+            $(
+                pub(crate) mod property_access {
+                    #[allow(unused)]
+                    use super::*;
 
+                    pub(crate) fn shared<'a>(if_empty!([$($property_shared_context)?][_ctx]): PropertyAccessCallContext, $($property_shared_args)*) -> ExecutionResult<&'a AnyValue> $property_shared_body
+
+                    pub(crate) fn mutable<'a>(if_empty!([$($property_mutable_context)?][_ctx]): PropertyAccessCallContext, $($property_mutable_args)*) -> ExecutionResult<&'a mut AnyValue> $property_mutable_body
+
+                    pub(crate) fn owned(if_empty!([$($property_owned_context)?][_ctx]): PropertyAccessCallContext, $($property_owned_args)*) -> ExecutionResult<AnyValue> $property_owned_body
+                }
+
+                pub(crate) fn property_access_interface() -> PropertyAccessInterface {
+                    PropertyAccessInterface {
+                        shared_access: |ctx, source| apply_property_shared::<$property_source_ty>(property_access::shared, ctx, source),
+                        mutable_access: |ctx, source, auto_create| apply_property_mutable::<$property_source_ty>(property_access::mutable, ctx, source, auto_create),
+                        owned_access: |ctx, source| apply_property_owned::<$property_source_ty>(property_access::owned, ctx, source),
+                    }
+                }
+            )?
+
+            $(
+                pub(crate) mod index_access {
+                    #[allow(unused)]
+                    use super::*;
+
+                    pub(crate) fn shared<'a>(if_empty!([$($index_shared_context)?][_ctx]): IndexAccessCallContext, $($index_shared_args)*) -> ExecutionResult<&'a AnyValue> $index_shared_body
+
+                    pub(crate) fn mutable<'a>(if_empty!([$($index_mutable_context)?][_ctx]): IndexAccessCallContext, $($index_mutable_args)*) -> ExecutionResult<&'a mut AnyValue> $index_mutable_body
+
+                    pub(crate) fn owned(if_empty!([$($index_owned_context)?][_ctx]): IndexAccessCallContext, $($index_owned_args)*) -> ExecutionResult<AnyValue> $index_owned_body
+                }
+
+                pub(crate) fn index_access_interface() -> IndexAccessInterface {
+                    IndexAccessInterface {
+                        index_ownership: ArgumentOwnership::Shared,
+                        shared_access: |ctx, source, index| apply_index_shared::<$index_source_ty>(index_access::shared, ctx, source, index),
+                        mutable_access: |ctx, source, index, auto_create| apply_index_mutable::<$index_source_ty>(index_access::mutable, ctx, source, index, auto_create),
+                        owned_access: |ctx, source, index| apply_index_owned::<$index_source_ty>(index_access::owned, ctx, source, index),
+                    }
+                }
+            )?
+
+            impl TypeData for $type_def {
                 #[allow(unreachable_code)]
                 fn resolve_own_method(method_name: &str) -> Option<MethodInterface> {
                     Some(match method_name {
@@ -474,15 +618,36 @@ macro_rules! define_interface {
                     })
                 }
 
+                define_type_features!(@property_access_impl $($property_source_ty)?);
+                define_type_features!(@index_access_impl $($index_source_ty)?);
+
                 // Pass through resolve_own_unary_operation and resolve_own_binary_operation
                 // until there's a better way to define them
                 $($items)*
             }
         }
-    }
+    };
+
+    // Helper rules for generating resolve_own_property_access when property_access is defined
+    (@property_access_impl $source_ty:ty) => {
+        fn resolve_own_property_access() -> Option<PropertyAccessInterface> {
+            Some(property_access_interface())
+        }
+    };
+    (@property_access_impl) => {};
+
+    // Helper rules for generating resolve_own_index_access when index_access is defined
+    (@index_access_impl $source_ty:ty) => {
+        fn resolve_own_index_access() -> Option<IndexAccessInterface> {
+            Some(index_access_interface())
+        }
+    };
+    (@index_access_impl) => {};
 }
 
+#[cfg(test)]
+pub(crate) use handle_first_arg_type;
 pub(crate) use {
-    define_interface, generate_binary_interface, generate_method_interface,
-    generate_unary_interface, handle_first_arg_type, if_empty, ignore_all, parse_arg_types,
+    define_type_features, generate_binary_interface, generate_method_interface,
+    generate_unary_interface, if_empty, ignore_all, parse_arg_types,
 };

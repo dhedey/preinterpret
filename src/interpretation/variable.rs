@@ -65,8 +65,8 @@ impl ParseSource for VariableDefinition {
 }
 
 impl VariableDefinition {
-    pub(crate) fn define(&self, interpreter: &mut Interpreter, value_source: impl IntoValue) {
-        interpreter.define_variable(self.id, value_source.into_value());
+    pub(crate) fn define(&self, interpreter: &mut Interpreter, value_source: impl IntoAnyValue) {
+        interpreter.define_variable(self.id, value_source.into_any_value());
     }
 }
 
@@ -125,7 +125,7 @@ impl VariableReference {
         grouping: Grouping,
     ) -> ExecutionResult<()> {
         let value = self.resolve_shared(interpreter)?;
-        value.output_to(
+        value.as_ref_value().output_to(
             grouping,
             &mut ToStreamContext::new(interpreter.output(self)?, self.span_range()),
         )
@@ -185,7 +185,7 @@ impl HandleDestructure for VariablePattern {
     fn handle_destructure(
         &self,
         interpreter: &mut Interpreter,
-        value: Value,
+        value: AnyValue,
     ) -> ExecutionResult<()> {
         self.definition.define(interpreter, value);
         Ok(())

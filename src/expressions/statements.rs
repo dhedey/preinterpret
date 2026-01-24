@@ -144,8 +144,8 @@ impl LetStatement {
             assignment,
         } = self;
         let value = match assignment {
-            Some(assignment) => assignment.expression.evaluate_owned(interpreter)?.0 .0,
-            None => Value::None,
+            Some(assignment) => assignment.expression.evaluate_owned(interpreter)?.0,
+            None => ().into_any_value(),
         };
         pattern.handle_destructure(interpreter, value)?;
         Ok(())
@@ -369,7 +369,7 @@ impl EmitStatement {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         let Spanned(value, span) = self.expression.evaluate_owned(interpreter)?;
-        value.output_to(
+        value.as_ref_value().output_to(
             Grouping::Flattened,
             &mut ToStreamContext::new(interpreter.output(&self.emit)?, span),
         )
