@@ -49,7 +49,7 @@ macro_rules! generate_binary_interface {
     };
 }
 
-macro_rules! generate_method_interface {
+macro_rules! generate_function_interface {
     (REQUIRED [] OPTIONAL [] ARGS[$method:path]) => {
         FunctionInterface::Arity0 {
             method: |context| apply_fn0($method, context),
@@ -112,7 +112,7 @@ macro_rules! generate_method_interface {
         }
     };
     (REQUIRED $req:tt OPTIONAL $opt:tt ARGS[$($arg:tt)*]) => {
-        compile_error!(stringify!("This method arity is currently unsupported - add support in `FunctionInterface` and `generate_method_interface`: ", $($arg)*));
+        compile_error!(stringify!("This method arity is currently unsupported - add support in `FunctionInterface` and `generate_function_interface`: ", $($arg)*));
     };
 }
 
@@ -524,8 +524,8 @@ macro_rules! define_type_features {
                     #[allow(unused)]
                     use super::*;
                     $(
-                        pub(crate) fn $function_name() -> FunctionInterface {
-                            parse_arg_types!([CALLBACK: generate_method_interface![functions::$function_name]] $($function_args)*)
+                        pub(crate) fn $function_name() -> &'static FunctionInterface {
+                            &parse_arg_types!([CALLBACK: generate_function_interface![functions::$function_name]] $($function_args)*)
                         }
                     )*
                 }
@@ -541,13 +541,13 @@ macro_rules! define_type_features {
                         }
                     )*
                 }
-                
+
                 pub(crate) mod method_definitions {
                     #[allow(unused)]
                     use super::*;
                     $(
-                        pub(crate) fn $method_name() -> FunctionInterface {
-                            parse_arg_types!([CALLBACK: generate_method_interface![methods::$method_name]] $($method_args)*)
+                        pub(crate) fn $method_name() -> &'static FunctionInterface {
+                            &parse_arg_types!([CALLBACK: generate_function_interface![methods::$method_name]] $($method_args)*)
                         }
                     )*
                 }
@@ -642,7 +642,7 @@ macro_rules! define_type_features {
             impl TypeData for $type_def {
                 $(
                     #[allow(unreachable_code)]
-                    fn resolve_own_method(method_name: &str) -> Option<FunctionInterface> {
+                    fn resolve_own_method(method_name: &str) -> Option<&'static FunctionInterface> {
                         Some(match method_name {
                             $(
                                 stringify!($method_name) => method_definitions::$method_name(),
@@ -654,7 +654,7 @@ macro_rules! define_type_features {
 
                 $(
                     #[allow(unreachable_code)]
-                    fn resolve_type_function(function_name: &str) -> Option<FunctionInterface> {
+                    fn resolve_type_function(function_name: &str) -> Option<&'static FunctionInterface> {
                         Some(match function_name {
                             $(
                                 stringify!($function_name) => function_definitions::$function_name(),
@@ -694,6 +694,6 @@ macro_rules! define_type_features {
 #[cfg(test)]
 pub(crate) use handle_first_arg_type;
 pub(crate) use {
-    define_type_features, generate_binary_interface, generate_method_interface,
+    define_type_features, generate_binary_interface, generate_function_interface,
     generate_unary_interface, if_empty, ignore_all, parse_arg_types,
 };

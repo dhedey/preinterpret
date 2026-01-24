@@ -16,7 +16,7 @@ fn test_expression_compilation_failures() {
 
 #[test]
 fn test_type_function_works() {
-    run!{
+    run! {
         let arr = [1, 2, 3];
         array::push(arr, 4);
         %[_].assert_eq(arr.to_debug_string(), "[1, 2, 3, 4]");
@@ -26,7 +26,7 @@ fn test_type_function_works() {
 #[test]
 fn test_preinterpret_api() {
     // This should complete OK
-    run!{
+    run! {
         preinterpret::set_iteration_limit(15);
         for i in 0..15 {}
     }

@@ -305,9 +305,7 @@ impl<'a> ValuesEqual for AnyValueRef<'a> {
             (AnyValueContent::Parser(_), _) => ctx.kind_mismatch(self, other),
             (AnyValueContent::Iterator(l), AnyValueContent::Iterator(r)) => l.test_equality(r, ctx),
             (AnyValueContent::Iterator(_), _) => ctx.kind_mismatch(self, other),
-            (AnyValueContent::Function(l), AnyValueContent::Function(r)) => {
-                l.test_equality(r, ctx)
-            }
+            (AnyValueContent::Function(l), AnyValueContent::Function(r)) => l.test_equality(r, ctx),
             (AnyValueContent::Function(_), _) => ctx.kind_mismatch(self, other),
             (AnyValueContent::PreinterpretApi(not_a_value), _) => match **not_a_value {},
         }
@@ -473,7 +471,7 @@ impl<'a> AnyValueRef<'a> {
                     .expect("Non-composite values should all be able to be outputted to a stream");
                 stream.concat_content_into(output, behaviour);
             }
-            AnyValueContent::PreinterpretApi(not_a_value) => match *not_a_value {}
+            AnyValueContent::PreinterpretApi(not_a_value) => match *not_a_value {},
         }
         Ok(())
     }

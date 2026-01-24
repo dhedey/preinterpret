@@ -185,7 +185,11 @@ impl EqualityContext for TypedEquality {
     }
 
     #[inline]
-    fn leaf_values_not_equal<T: Debug + ?Sized>(&mut self, _lhs: &T, _rhs: &T) -> ExecutionResult<bool> {
+    fn leaf_values_not_equal<T: Debug + ?Sized>(
+        &mut self,
+        _lhs: &T,
+        _rhs: &T,
+    ) -> ExecutionResult<bool> {
         Ok(false)
     }
 

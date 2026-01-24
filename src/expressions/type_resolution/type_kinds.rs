@@ -259,11 +259,11 @@ impl TypeProperty {
                 self.span_range(),
             ));
         }
-        return self.type_err(format!(
+        self.type_err(format!(
             "Type '{}' has no property, function or method named '{}'",
             self.source_type.kind.source_name(),
             self.property,
-        ));
+        ))
     }
 }
 

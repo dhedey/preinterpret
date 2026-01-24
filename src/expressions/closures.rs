@@ -22,9 +22,7 @@ impl ClosureExpression {
         ownership: RequestedOwnership,
     ) -> ExecutionResult<Spanned<RequestedValue>> {
         let span_range = self.0.span_range;
-        ownership.map_from_owned(
-            self.clone().into_any_value().spanned(span_range)
-        )
+        ownership.map_from_owned(self.clone().into_any_value().spanned(span_range))
     }
 }
 
@@ -73,10 +71,7 @@ impl ParseSource for ClosureExpressionInner {
             arguments,
             _right_bar,
             body,
-            span_range: SpanRange::new_between(
-                start_span,
-                end_span,
-            ),
+            span_range: SpanRange::new_between(start_span, end_span),
         })
     }
 
@@ -119,6 +114,8 @@ struct FunctionArgumentAnnotation {
     _argument_specifier: ArgumentSpecifier,
 }
 
+// They're clearer with a common prefix By
+#[allow(clippy::enum_variant_names)]
 enum ArgumentSpecifier {
     ByValue {
         _argument_type: ArgumentType,
@@ -176,7 +173,9 @@ struct ArgumentType {
 impl ParseSource for ArgumentType {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         if !input.peek_ident_matching("any") {
-            return input.parse_err("Only the type `any` is currently supported as an argument type annotation")
+            return input.parse_err(
+                "Only the type `any` is currently supported as an argument type annotation",
+            );
         }
         Ok(Self {
             _type_ident: input.parse()?,

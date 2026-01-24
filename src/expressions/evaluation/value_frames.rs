@@ -1260,7 +1260,7 @@ pub(super) struct MethodCallBuilder {
 enum MethodCallPath {
     CallerPath,
     ArgumentsPath {
-        method: FunctionInterface,
+        method: &'static FunctionInterface,
         disabled_evaluated_arguments_including_caller: Vec<Spanned<ArgumentValue>>,
     },
 }
@@ -1274,7 +1274,7 @@ impl MethodCallBuilder {
     ) -> NextAction {
         let frame = Self {
             method: method.clone(),
-            parentheses: invocation.parentheses.clone(),
+            parentheses: invocation.parentheses,
             unevaluated_parameters_stack: invocation
                 .parameters
                 .iter()
@@ -1309,10 +1309,7 @@ impl EvaluationFrame for MethodCallBuilder {
                 let caller = value.expect_late_bound();
                 let method_name = self.method.property.to_string();
                 let method_name = method_name.as_str();
-                let method = caller
-                    .kind()
-                    .feature_resolver()
-                    .resolve_method(method_name);
+                let method = caller.kind().feature_resolver().resolve_method(method_name);
                 let method = match method {
                     Some(m) => m,
                     None => {
@@ -1422,7 +1419,10 @@ impl EvaluationFrame for MethodCallBuilder {
                     }
                 };
                 let mut call_context = FunctionCallContext {
-                    output_span_range: SpanRange::new_between(self.method.property, self.parentheses.close()),
+                    output_span_range: SpanRange::new_between(
+                        self.method.property,
+                        self.parentheses.close(),
+                    ),
                     interpreter: context.interpreter(),
                 };
                 let output = method.execute(arguments, &mut call_context)?;
@@ -1442,7 +1442,7 @@ enum InvocationPath {
     InvokablePath,
     ArgumentsPath {
         function_span: SpanRange,
-        interface: FunctionInterface,
+        interface: &'static FunctionInterface,
         disabled_evaluated_arguments: Vec<Spanned<ArgumentValue>>,
     },
 }
@@ -1454,7 +1454,7 @@ impl InvocationBuilder {
         invocation: &Invocation,
     ) -> NextAction {
         let frame = Self {
-            parentheses: invocation.parentheses.clone(),
+            parentheses: invocation.parentheses,
             unevaluated_parameters_stack: invocation
                 .parameters
                 .iter()
@@ -1487,15 +1487,16 @@ impl EvaluationFrame for InvocationBuilder {
                 let function_span = span;
                 let function = value.expect_copy_on_write();
 
-                let function = function.into_content()
+                let function = function
+                    .into_content()
                     .spanned(function_span)
                     .downcast_resolve::<QqqCopyOnWrite<FunctionValue>>("An invoked value")?;
-            
+
                 // I need to extract
                 // (A): Function interface
                 // (B): Already bound disabled arguments -> assumed empty
                 let interface = match &function.as_ref_value().definition {
-                    FunctionDefinition::Native(interface) => interface.clone(),
+                    FunctionDefinition::Native(interface) => *interface,
                     FunctionDefinition::Closure(_) => todo!(),
                 };
                 // Placeholder for already bound arguments. We can assume they're already disabled, and of the correct ownership/s.
@@ -1540,15 +1541,16 @@ impl EvaluationFrame for InvocationBuilder {
                     };
                     return function_span.type_err(format!(
                         "This function expects {}, but {}",
-                        expected_arguments,
-                        actual_arguments,
+                        expected_arguments, actual_arguments,
                     ));
                 }
 
                 // We skip 1 to ignore the caller
                 let unbound_argument_ownerships: iter::Skip<
                     std::slice::Iter<'_, ArgumentOwnership>,
-                > = argument_ownerships.iter().skip(disabled_bound_arguments.len());
+                > = argument_ownerships
+                    .iter()
+                    .skip(disabled_bound_arguments.len());
                 for ((_, requested_ownership), ownership) in self
                     .unevaluated_parameters_stack
                     .iter_mut()
@@ -1605,7 +1607,10 @@ impl EvaluationFrame for InvocationBuilder {
                     }
                 };
                 let mut call_context = FunctionCallContext {
-                    output_span_range: SpanRange::new_between(function_span, self.parentheses.close()),
+                    output_span_range: SpanRange::new_between(
+                        function_span,
+                        self.parentheses.close(),
+                    ),
                     interpreter: context.interpreter(),
                 };
                 let output = interface.execute(arguments, &mut call_context)?;

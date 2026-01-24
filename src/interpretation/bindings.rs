@@ -653,15 +653,16 @@ where
                 AnyLevelCopyOnWrite::<X::Type>::Owned(owned).into_copy_on_write()
             }
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
-                AnyLevelCopyOnWrite::<X::Type>::SharedWithInfallibleCloning(shared.into_content()).into_copy_on_write()
+                AnyLevelCopyOnWrite::<X::Type>::SharedWithInfallibleCloning(shared.into_content())
+                    .into_copy_on_write()
             }
             CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
-                AnyLevelCopyOnWrite::<X::Type>::SharedWithTransparentCloning(shared.into_content()).into_copy_on_write()
+                AnyLevelCopyOnWrite::<X::Type>::SharedWithTransparentCloning(shared.into_content())
+                    .into_copy_on_write()
             }
         }
     }
 }
-
 
 impl<T: ?Sized + ToOwned> AsRef<T> for CopyOnWrite<T> {
     fn as_ref(&self) -> &T {

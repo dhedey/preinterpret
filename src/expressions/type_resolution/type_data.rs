@@ -5,7 +5,7 @@ pub(crate) trait TypeFeatureResolver {
     /// Resolves a method with the given name defined on this type.
     /// A method is like a function, but guaranteed to have a first argument
     /// (the receiver) which is assignable from the type.
-    fn resolve_method(&self, method_name: &str) -> Option<FunctionInterface>;
+    fn resolve_method(&self, method_name: &str) -> Option<&'static FunctionInterface>;
 
     /// Resolves a unary operation as a method interface for this type.
     fn resolve_unary_operation(
@@ -20,7 +20,7 @@ pub(crate) trait TypeFeatureResolver {
     ) -> Option<BinaryOperationInterface>;
 
     /// Resolves a function with the given name defined on this type.
-    fn resolve_type_function(&self, function_name: &str) -> Option<FunctionInterface>;
+    fn resolve_type_function(&self, function_name: &str) -> Option<&'static FunctionInterface>;
 
     /// Resolves a property of this type.
     fn resolve_type_property(&self, _property_name: &str) -> Option<AnyValue>;
@@ -41,7 +41,7 @@ pub(crate) trait TypeFeatureResolver {
 pub(crate) trait TypeData {
     /// Returns None if the method is not supported on this type itself.
     /// The method may still be supported on a type further up the resolution chain.
-    fn resolve_own_method(_method_name: &str) -> Option<FunctionInterface> {
+    fn resolve_own_method(_method_name: &str) -> Option<&'static FunctionInterface> {
         None
     }
 
@@ -67,7 +67,7 @@ pub(crate) trait TypeData {
     }
 
     /// Returns None if the function is not supported on this type itself.
-    fn resolve_type_function(_function_name: &str) -> Option<FunctionInterface> {
+    fn resolve_type_function(_function_name: &str) -> Option<&'static FunctionInterface> {
         None
     }
 
@@ -83,9 +83,7 @@ pub(crate) trait TypeData {
 }
 
 #[allow(unused)]
-// It's good enough for our needs for now
-#[allow(unpredictable_function_pointer_comparisons)]
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub(crate) enum FunctionInterface {
     Arity0 {
         method: fn(&mut FunctionCallContext) -> ExecutionResult<ReturnedValue>,

@@ -385,8 +385,14 @@ impl<'a> ExpressionParser<'a> {
                         .add_node(ExpressionNode::Property { node, access }),
                 },
                 NodeExtension::MethodCall(method) => {
-                    let property: PropertyAccess = PropertyAccess { dot: method.dot, property: method.method };
-                    let invocation = Invocation { parentheses: method.parentheses, parameters: Vec::new() };
+                    let property: PropertyAccess = PropertyAccess {
+                        dot: method.dot,
+                        property: method.method,
+                    };
+                    let invocation = Invocation {
+                        parentheses: method.parentheses,
+                        parameters: Vec::new(),
+                    };
                     if self.streams.is_current_empty() {
                         self.streams.exit_group(None)?;
                         let node = self.nodes.add_node(ExpressionNode::MethodCall {
@@ -486,19 +492,15 @@ impl<'a> ExpressionParser<'a> {
                     invocation.parameters.push(node);
                     self.streams.exit_group(None)?;
                     let node = match method {
-                        Some(method) => {
-                            self.nodes.add_node(ExpressionNode::MethodCall {
-                                receiver: source,
-                                method,
-                                invocation,
-                            })
-                        }
-                        None => {
-                            self.nodes.add_node(ExpressionNode::Invocation {
-                                invokable: source,
-                                invocation,
-                            })
-                        }
+                        Some(method) => self.nodes.add_node(ExpressionNode::MethodCall {
+                            receiver: source,
+                            method,
+                            invocation,
+                        }),
+                        None => self.nodes.add_node(ExpressionNode::Invocation {
+                            invokable: source,
+                            invocation,
+                        }),
                     };
                     WorkItem::TryParseAndApplyExtension { node }
                 }
