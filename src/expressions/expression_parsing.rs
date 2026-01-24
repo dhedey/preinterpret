@@ -216,20 +216,9 @@ impl<'a> ExpressionParser<'a> {
                 // TODO[performance]: Get rid of the try_parse_or_revert and convert this into
                 // a parse tree
                 if punct.as_char() == '.' && input.peek2(syn::Ident) {
-                    let dot = input.parse()?;
-                    let ident = input.parse()?;
-                    // TODO[functions]: Disable me
-                    if input.peek(token::Paren) {
-                        let (_, delim_span) = input.parse_and_enter_group(None)?;
-                        return Ok(NodeExtension::MethodCall(MethodAccess {
-                            dot,
-                            method: ident,
-                            parentheses: Parentheses { delim_span },
-                        }));
-                    }
                     return Ok(NodeExtension::Property(PropertyAccess {
-                        dot,
-                        property: ident,
+                        dot: input.parse()?,
+                        property: input.parse()?,
                     }));
                 }
                 if let Some((punct, _)) = input.cursor().punct_matching('=') {
@@ -385,33 +374,6 @@ impl<'a> ExpressionParser<'a> {
                         .nodes
                         .add_node(ExpressionNode::Property { node, access }),
                 },
-                NodeExtension::MethodCall(method) => {
-                    let property: PropertyAccess = PropertyAccess {
-                        dot: method.dot,
-                        property: method.method,
-                    };
-                    let invocation = Invocation {
-                        parentheses: method.parentheses,
-                        parameters: Vec::new(),
-                    };
-                    if self.streams.is_current_empty() {
-                        self.streams.exit_group(None)?;
-                        let node = self.nodes.add_node(ExpressionNode::MethodCall {
-                            receiver: node,
-                            method: property,
-                            invocation,
-                        });
-                        WorkItem::TryParseAndApplyExtension { node }
-                    } else {
-                        self.push_stack_frame(
-                            ExpressionStackFrame::NonEmptyInvocationParametersList {
-                                node,
-                                method: Some(property),
-                                invocation,
-                            },
-                        )
-                    }
-                }
                 NodeExtension::Invocation(invocation) => {
                     if self.streams.is_current_empty() {
                         self.streams.exit_group(None)?;
@@ -424,7 +386,6 @@ impl<'a> ExpressionParser<'a> {
                         self.push_stack_frame(
                             ExpressionStackFrame::NonEmptyInvocationParametersList {
                                 node,
-                                method: None,
                                 invocation,
                             },
                         )
@@ -486,23 +447,15 @@ impl<'a> ExpressionParser<'a> {
                 }
                 ExpressionStackFrame::NonEmptyInvocationParametersList {
                     node: source,
-                    method,
                     mut invocation,
                 } => {
                     assert!(matches!(extension, NodeExtension::EndOfStreamOrGroup));
                     invocation.parameters.push(node);
                     self.streams.exit_group(None)?;
-                    let node = match method {
-                        Some(method) => self.nodes.add_node(ExpressionNode::MethodCall {
-                            receiver: source,
-                            method,
-                            invocation,
-                        }),
-                        None => self.nodes.add_node(ExpressionNode::Invocation {
-                            invokable: source,
-                            invocation,
-                        }),
-                    };
+                    let node = self.nodes.add_node(ExpressionNode::Invocation {
+                        invokable: source,
+                        invocation,
+                    });
                     WorkItem::TryParseAndApplyExtension { node }
                 }
                 ExpressionStackFrame::NonEmptyObject {
@@ -966,7 +919,6 @@ pub(super) enum ExpressionStackFrame {
     /// * When the invocation parameters list is closed, we pop it from the parse stream stack
     NonEmptyInvocationParametersList {
         node: ExpressionNodeId,
-        method: Option<PropertyAccess>,
         invocation: Invocation,
     },
     /// An incomplete unary prefix operation
@@ -1080,7 +1032,6 @@ pub(super) enum NodeExtension {
     /// Used under Arrays, Objects, and Method Parameter List parents
     NonTerminalComma,
     Property(PropertyAccess),
-    MethodCall(MethodAccess),
     Index(IndexAccess),
     Invocation(Invocation),
     Range(syn::RangeLimits),
@@ -1096,7 +1047,6 @@ impl NodeExtension {
             NodeExtension::BinaryOperation(op) => OperatorPrecendence::of_binary_operation(op),
             NodeExtension::NonTerminalComma => OperatorPrecendence::NonTerminalComma,
             NodeExtension::Property { .. } => OperatorPrecendence::Unambiguous,
-            NodeExtension::MethodCall { .. } => OperatorPrecendence::Unambiguous,
             NodeExtension::Index { .. } => OperatorPrecendence::Unambiguous,
             NodeExtension::Invocation { .. } => OperatorPrecendence::Unambiguous,
             NodeExtension::Range(_) => OperatorPrecendence::Range,
@@ -1113,7 +1063,6 @@ impl NodeExtension {
             extension @ (NodeExtension::PostfixOperation { .. }
             | NodeExtension::BinaryOperation { .. }
             | NodeExtension::Property { .. }
-            | NodeExtension::MethodCall { .. }
             | NodeExtension::Index { .. }
             | NodeExtension::Invocation { .. }
             | NodeExtension::Range { .. }

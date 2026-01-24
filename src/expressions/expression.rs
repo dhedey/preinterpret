@@ -122,12 +122,6 @@ pub(super) enum ExpressionNode {
         node: ExpressionNodeId,
         access: PropertyAccess,
     },
-    // This could be merged into Invocation, once Invocation is feature complete
-    MethodCall {
-        receiver: ExpressionNodeId,
-        method: PropertyAccess,
-        invocation: Invocation,
-    },
     Invocation {
         invokable: ExpressionNodeId,
         invocation: Invocation,

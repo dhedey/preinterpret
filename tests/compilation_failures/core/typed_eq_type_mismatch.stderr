@@ -1,5 +1,5 @@
 error: lhs is an untyped integer, but rhs is a string
- --> tests/compilation_failures/core/typed_eq_type_mismatch.rs:5:24
+ --> tests/compilation_failures/core/typed_eq_type_mismatch.rs:5:22
   |
 5 |     run!(%[_].assert(1.typed_eq("hello")));
-  |                        ^^^^^^^^^^^^^^^^^
+  |                      ^^^^^^^^^^^^^^^^^^^

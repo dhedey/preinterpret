@@ -577,7 +577,6 @@ pub(super) enum AnyValueFrame {
     IndexAccess(ValueIndexAccessBuilder),
     Range(RangeBuilder),
     Assignment(AssignmentBuilder),
-    MethodCall(MethodCallBuilder),
     Invocation(InvocationBuilder),
 }
 
@@ -597,7 +596,6 @@ impl AnyValueFrame {
             AnyValueFrame::IndexAccess(frame) => frame.handle_next(context, value),
             AnyValueFrame::Range(frame) => frame.handle_next(context, value),
             AnyValueFrame::Assignment(frame) => frame.handle_next(context, value),
-            AnyValueFrame::MethodCall(frame) => frame.handle_next(context, value),
             AnyValueFrame::Invocation(frame) => frame.handle_next(context, value),
         }
     }
@@ -1286,184 +1284,6 @@ impl EvaluationFrame for AssignmentBuilder {
             AssignmentPath::OnAwaitingAssignment => {
                 let AssignmentCompletion = value.expect_assignment_completion();
                 context.return_value(Spanned((), span))?
-            }
-        })
-    }
-}
-
-pub(super) struct MethodCallBuilder {
-    method: PropertyAccess,
-    parentheses: Parentheses,
-    unevaluated_parameters_stack: Vec<(ExpressionNodeId, ArgumentOwnership)>,
-    state: MethodCallPath,
-}
-
-enum MethodCallPath {
-    CallerPath,
-    ArgumentsPath {
-        method: &'static FunctionInterface,
-        disabled_evaluated_arguments_including_caller: Vec<Spanned<DisabledArgumentValue>>,
-    },
-}
-
-impl MethodCallBuilder {
-    pub(super) fn start(
-        context: ValueContext,
-        receiver: ExpressionNodeId,
-        method: &PropertyAccess,
-        invocation: &Invocation,
-    ) -> NextAction {
-        let frame = Self {
-            method: method.clone(),
-            parentheses: invocation.parentheses,
-            unevaluated_parameters_stack: invocation
-                .parameters
-                .iter()
-                .rev()
-                .map(|x| {
-                    // This is just a placeholder - we'll fix it up shortly
-                    (*x, ArgumentOwnership::Owned)
-                })
-                .collect(),
-            state: MethodCallPath::CallerPath,
-        };
-        context.request_late_bound(frame, receiver)
-    }
-}
-
-impl EvaluationFrame for MethodCallBuilder {
-    type ReturnType = ReturnsValue;
-
-    fn into_any(self) -> AnyValueFrame {
-        AnyValueFrame::MethodCall(self)
-    }
-
-    fn handle_next(
-        mut self,
-        mut context: ValueContext,
-        Spanned(value, span): Spanned<RequestedValue>,
-    ) -> ExecutionResult<NextAction> {
-        // Handle expected item based on current state
-        match self.state {
-            MethodCallPath::CallerPath => {
-                let caller_span = span;
-                let caller = value.expect_late_bound();
-                let method_name = self.method.property.to_string();
-                let method_name = method_name.as_str();
-                let method = caller.kind().feature_resolver().resolve_method(method_name);
-                let method = match method {
-                    Some(m) => m,
-                    None => {
-                        return self.method.property.type_err(format!(
-                            "The method {} does not exist on {}",
-                            method_name,
-                            caller.articled_kind(),
-                        ))
-                    }
-                };
-                let non_caller_arguments = self.unevaluated_parameters_stack.len();
-                let (argument_ownerships, min_arguments) = method.argument_ownerships();
-                let max_arguments = argument_ownerships.len();
-                assert!(
-                    max_arguments >= 1 && min_arguments >= 1,
-                    "Method calls must have at least one argument (the caller)"
-                );
-                let non_caller_min_arguments = min_arguments - 1;
-                let non_caller_max_arguments = max_arguments - 1;
-
-                if non_caller_arguments < non_caller_min_arguments
-                    || non_caller_arguments > non_caller_max_arguments
-                {
-                    return self.method.property.type_err(format!(
-                        "The method {} expects {} non-self argument/s, but {} were provided",
-                        method_name,
-                        if non_caller_min_arguments == non_caller_max_arguments {
-                            (non_caller_min_arguments).to_string()
-                        } else {
-                            format!(
-                                "{} to {}",
-                                (non_caller_min_arguments),
-                                (non_caller_max_arguments)
-                            )
-                        },
-                        non_caller_arguments,
-                    ));
-                }
-                let caller =
-                    argument_ownerships[0].map_from_late_bound(Spanned(caller, caller_span))?;
-                let caller = Spanned(caller, caller_span);
-
-                // We skip 1 to ignore the caller
-                let non_self_argument_ownerships: iter::Skip<
-                    std::slice::Iter<'_, ArgumentOwnership>,
-                > = argument_ownerships.iter().skip(1);
-                for ((_, requested_ownership), ownership) in self
-                    .unevaluated_parameters_stack
-                    .iter_mut()
-                    .rev() // Swap the stack back to the normal order
-                    .zip(non_self_argument_ownerships)
-                {
-                    *requested_ownership = *ownership;
-                }
-
-                self.state = MethodCallPath::ArgumentsPath {
-                    disabled_evaluated_arguments_including_caller: {
-                        let mut params =
-                            Vec::with_capacity(1 + self.unevaluated_parameters_stack.len());
-                        // Disable caller so we can evaluate remaining arguments without borrow conflicts
-                        let caller = caller.map(|v| v.disable());
-                        params.push(caller);
-                        params
-                    },
-                    method,
-                };
-            }
-            MethodCallPath::ArgumentsPath {
-                ref mut disabled_evaluated_arguments_including_caller,
-                ..
-            } => {
-                let argument = value.expect_argument_value();
-                let argument = Spanned(argument, span);
-                // Disable argument so we can evaluate remaining arguments without borrow conflicts
-                let argument = argument.map(|v| v.disable());
-                disabled_evaluated_arguments_including_caller.push(argument);
-            }
-        };
-        // Now plan the next action
-        Ok(match self.unevaluated_parameters_stack.pop() {
-            Some((parameter, ownership)) => {
-                context.request_any_value(self, parameter, RequestedOwnership::Concrete(ownership))
-            }
-            None => {
-                let (arguments, method) = match self.state {
-                    MethodCallPath::CallerPath => unreachable!("Already updated above"),
-                    MethodCallPath::ArgumentsPath {
-                        disabled_evaluated_arguments_including_caller: disabled_arguments,
-                        method,
-                    } => {
-                        // NOTE:
-                        // - This disable/enable flow allows us to do things like vec.push(vec.len())
-                        // - Read https://rust-lang.github.io/rfcs/2025-nested-method-calls.html for more details
-                        // - We enable left-to-right for intuitive error messages: later borrows will report errors
-                        let arguments = disabled_arguments
-                            .into_iter()
-                            .map(|arg| {
-                                let span = arg.1;
-                                arg.try_map(|v| v.enable(span))
-                            })
-                            .collect::<ExecutionResult<Vec<_>>>()?;
-                        (arguments, method)
-                    }
-                };
-                let mut call_context = FunctionCallContext {
-                    output_span_range: SpanRange::new_between(
-                        self.method.property,
-                        self.parentheses.close(),
-                    ),
-                    interpreter: context.interpreter(),
-                };
-                let output = method.execute(arguments, &mut call_context)?;
-                context.return_returned_value(output)?
             }
         })
     }

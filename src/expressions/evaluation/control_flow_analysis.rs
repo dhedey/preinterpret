@@ -45,14 +45,6 @@ pub(in super::super) fn control_flow_visit(
             ExpressionNode::Property { node, .. } => {
                 stack.push(*node);
             }
-            ExpressionNode::MethodCall {
-                receiver,
-                invocation: Invocation { parameters, .. },
-                ..
-            } => {
-                stack.push_reversed(parameters.iter().copied());
-                stack.push(*receiver); // This is a stack so this executes first
-            }
             ExpressionNode::Invocation {
                 invokable,
                 invocation: Invocation { parameters, .. },

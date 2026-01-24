@@ -123,11 +123,6 @@ impl ExpressionNode {
                 equals_token,
                 value,
             } => AssignmentBuilder::start(context, *assignee, *equals_token, *value),
-            ExpressionNode::MethodCall {
-                receiver,
-                method,
-                invocation,
-            } => MethodCallBuilder::start(context, *receiver, method, invocation),
             ExpressionNode::Invocation {
                 invokable,
                 invocation,

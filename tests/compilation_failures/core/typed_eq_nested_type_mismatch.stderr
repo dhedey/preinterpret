@@ -1,5 +1,5 @@
 error: lhs[1] is an untyped integer, but rhs[1] is a string
- --> tests/compilation_failures/core/typed_eq_nested_type_mismatch.rs:5:29
+ --> tests/compilation_failures/core/typed_eq_nested_type_mismatch.rs:5:22
   |
 5 |     run!(%[_].assert([1, 2].typed_eq([1, "two"])));
-  |                             ^^^^^^^^^^^^^^^^^^^^
+  |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^

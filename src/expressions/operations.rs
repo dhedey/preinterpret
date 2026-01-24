@@ -501,19 +501,6 @@ impl HasSpanRange for PropertyAccess {
     }
 }
 
-#[derive(Clone)]
-pub(crate) struct MethodAccess {
-    pub(super) dot: Token![.],
-    pub(crate) method: Ident,
-    pub(crate) parentheses: Parentheses,
-}
-
-impl HasSpanRange for MethodAccess {
-    fn span_range(&self) -> SpanRange {
-        SpanRange::new_between(self.dot.span, self.parentheses.span())
-    }
-}
-
 #[derive(Copy, Clone)]
 pub(crate) struct IndexAccess {
     pub(crate) brackets: Brackets,
