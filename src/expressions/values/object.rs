@@ -83,10 +83,10 @@ impl ObjectValue {
 
     pub(super) fn index_ref(&self, index: Spanned<AnyValueRef>) -> ExecutionResult<&AnyValue> {
         let key: Spanned<&str> = index.downcast_resolve("An object key")?;
-        let entry = self.entries.get(*key).ok_or_else(|| {
-            key.value_error(format!("The object does not have a field named `{}`", *key))
-        })?;
-        Ok(&entry.value)
+        match self.entries.get(*key) {
+            Some(entry) => Ok(&entry.value),
+            None => Ok(&AnyValue::None(())),
+        }
     }
 
     pub(super) fn property_mut(
@@ -102,10 +102,10 @@ impl ObjectValue {
 
     pub(super) fn property_ref(&self, access: &PropertyAccess) -> ExecutionResult<&AnyValue> {
         let key = access.property.to_string();
-        let entry = self.entries.get(&key).ok_or_else(|| {
-            access.value_error(format!("The object does not have a field named `{}`", key))
-        })?;
-        Ok(&entry.value)
+        match self.entries.get(&key) {
+            Some(entry) => Ok(&entry.value),
+            None => Ok(&AnyValue::None(())),
+        }
     }
 
     fn mut_entry(
@@ -125,8 +125,10 @@ impl ObjectValue {
                         })
                         .value
                 } else {
-                    return key_span
-                        .value_err(format!("No property found for key `{}`", entry.into_key()));
+                    return key_span.value_err(format!(
+                        "No existing property found to mutate for key `{}`",
+                        entry.into_key()
+                    ));
                 }
             }
         })

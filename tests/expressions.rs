@@ -549,32 +549,47 @@ fn test_objects() {
         ),
         r#"%{ a: 1, b: 7, c: None, x: %{}, z: None }"#
     );
+    run!(
+        let obj = %{};
+        let y = obj["non_existent_key"];
+        %[_].assert_eq(y, None);
+    );
+    run!(
+        let obj = %{};
+        let y = obj["non_existent_key"].as_ref();
+        %[_].assert_eq(y, None);
+    );
+    // TODO[functions]: Work out why this works!
+    // Is autocreate set to true?
+    run!(
+        let obj = %{};
+        let y = obj["non_existent_key"].as_mut().clone();
+        %[_].assert_eq(y, None);
+    );
+    // Regression: The above test looks very similar, but there
+    // were issues with this test breaking due to propogation through
+    // index resolution.
+    run!(
+        let obj = %{};
+        %[_].assert_eq(obj["non_existent_key"], None);
+    );
     // Method-shadowing keys can be set/accessed via indexed syntax
     // "zip" is a method on objects, but we can still use it as a key via ["zip"]
     run!(
         let obj = %{ ["zip"]: 123 };
         %[_].assert_eq(obj["zip"], 123);
     );
-    // Setting via index access also works
+    // Setting "zip" via index access also works
     run!(
         let obj = %{};
         obj["zip"] = 456;
         %[_].assert_eq(obj["zip"], 456);
     );
-    // Accessing an unset method-named key via index returns None
-    assert_eq!(
-        run!(
-            let obj = %{};
-            obj["zip"].to_debug_string()
-        ),
-        "None"
+    // Accessing a non-existent "zip" value works, and doesn't give the method
+    run!(
+        let obj = %{};
+        %[_].assert_eq(obj["zip"], None);
     );
-    // TODO[functions]: Work out why this test variant fails
-    // Similarly `let y = obj["zip"];` fails to compile currently
-    // run!(
-    //     let obj = %{};
-    //     %[_].assert_eq(obj["zip"], None);
-    // );
 }
 
 #[test]
