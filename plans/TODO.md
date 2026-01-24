@@ -214,12 +214,13 @@ Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
     - [x] Allow definition of static functions on a type
     - [x] Move `().configure_preinterpret` to `preinterpret::set_iteration_limit` and update the message: `If needed, the limit can be reconfigured with`
   
-- [ ] `x.hello` accessing a method creates a `NativeFunction` with the first parameter bound to `x`
+- [x] `x.hello` accessing a method creates a `NativeFunction` with the first parameter bound to `x`
   - [x] Add some bound receiver or something or more generally `bound_arguments: Vec<ArgumentValue>` - these should be deactivated
   - [x] `my_array.push` returns a function with `my_array` bound. The LateBound `my_array` can then be deactivated whilst the rest of the arguments are resolved, like what we do at the moment. This approach avoids the horrible javascript issues with `this` not being bound when referencing `x.y`.
   - [x] And then for objects, the method wins; BUT you can use `x["obj"]` to access the field instead of the method
   - [x] We can remove method extension code
-  - [ ] It's an error to set `x.y = z` or `%{ y: z }` if `y` is a method on object
+  - [x] It's an error to set `x.y = z` or `%{ y: z }` if `y` is a method on object
+- [ ] Fix `x["new_key"]` should be `None`
 - [ ] We can define closures (without any closed values for now)
   * Value type function `let my_func = |x, y, z| { ... };`
   * Parameters can be `x` / `x: any` (Owned), `x: &any` (Shared) or `x: &mut any` (Mutable).
@@ -249,6 +250,7 @@ Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
 - [ ] Support optional arguments
 - [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`
 - [ ] Add `array.sort`, `array.sort_by`
+- [ ] Resolve all `TODO[functions]`
 
 ## Parser - Methods using closures
 

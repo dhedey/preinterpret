@@ -1,0 +1,5 @@
+error: Cannot use `zip` as an object key because it is a method on objects. Use `["zip"]` instead.
+ --> tests/compilation_failures/expressions/object_literal_method_key.rs:6:14
+  |
+6 |         #(%{ zip: 5 })
+  |              ^^^

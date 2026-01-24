@@ -549,6 +549,32 @@ fn test_objects() {
         ),
         r#"%{ a: 1, b: 7, c: None, x: %{}, z: None }"#
     );
+    // Method-shadowing keys can be set/accessed via indexed syntax
+    // "zip" is a method on objects, but we can still use it as a key via ["zip"]
+    run!(
+        let obj = %{ ["zip"]: 123 };
+        %[_].assert_eq(obj["zip"], 123);
+    );
+    // Setting via index access also works
+    run!(
+        let obj = %{};
+        obj["zip"] = 456;
+        %[_].assert_eq(obj["zip"], 456);
+    );
+    // Accessing an unset method-named key via index returns None
+    assert_eq!(
+        run!(
+            let obj = %{};
+            obj["zip"].to_debug_string()
+        ),
+        "None"
+    );
+    // TODO[functions]: Work out why this test variant fails
+    // Similarly `let y = obj["zip"];` fails to compile currently
+    // run!(
+    //     let obj = %{};
+    //     %[_].assert_eq(obj["zip"], None);
+    // );
 }
 
 #[test]

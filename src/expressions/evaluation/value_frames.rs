@@ -199,6 +199,13 @@ impl RequestedOwnership {
         }
     }
 
+    pub(crate) fn is_assignee_request(&self) -> bool {
+        matches!(
+            self,
+            RequestedOwnership::Concrete(ArgumentOwnership::Assignee { .. })
+        )
+    }
+
     pub(crate) fn map_none(self, span: SpanRange) -> ExecutionResult<Spanned<RequestedValue>> {
         self.map_from_owned(Spanned(().into_any_value(), span))
     }
@@ -735,6 +742,13 @@ impl ObjectBuilder {
                     if self.evaluated_entries.contains_key(&key) {
                         return ident.syntax_err(format!("The key {} has already been set", key));
                     }
+                    // Check if the key shadows a method on ObjectType
+                    if <ObjectType as TypeData>::resolve_own_method(&key).is_some() {
+                        return ident.type_err(format!(
+                            "Cannot use `{}` as an object key because it is a method on objects. Use `[\"{}\"]` instead.",
+                            key, key
+                        ));
+                    }
                     self.pending = Some(PendingEntryPath::OnValueBranch {
                         key,
                         key_span: ident.span(),
@@ -988,8 +1002,24 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
         let resolver = source_kind.feature_resolver();
 
         // Attempt to resolve a method first
-        // (NB: It's an error to set an object property which is already set to a native method)
-        if let Some(method) = resolver.resolve_method(&self.access.property.to_string()) {
+        let property_name = self.access.property.to_string();
+        if let Some(method) = resolver.resolve_method(&property_name) {
+            // It's an error to assign to a property that shadows a method
+            if context.requested_ownership().is_assignee_request() {
+                return self.access.property.type_err(format!(
+                    "Cannot assign to `.{}` because it is a method on {}{}",
+                    property_name,
+                    source_kind.articled_display_name(),
+                    if matches!(source_kind, AnyValueLeafKind::Object(_)) {
+                        format!(
+                            ". Use `[\"{}\"]` instead to set the property.",
+                            property_name
+                        )
+                    } else {
+                        "".to_string()
+                    },
+                ));
+            }
             let receiver = value.expect_late_bound();
             let receiver_ownership = method.argument_ownerships().0[0];
             let receiver = receiver_ownership
@@ -1007,8 +1037,10 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
         // Query type resolution for property access capability
         let Some(interface) = resolver.resolve_property_access() else {
             return self.access.type_err(format!(
-                "Cannot access properties on {}",
-                source_kind.articled_display_name()
+                "`{}` is not a method on {}, and the {} type does not support fields",
+                property_name,
+                source_kind.articled_display_name(),
+                source_kind.source_type_name(),
             ));
         };
 
@@ -1016,6 +1048,14 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
             property: &self.access,
         };
         let auto_create = context.requested_ownership().requests_auto_create();
+
+        // If we need an owned value, we can try resolving a reference and
+        // clone the outputted value if needed - which can be much cheaper.
+        // e.g. `let x = arr[0]` only copies `arr[0]` instead of the whole array.
+        let Spanned(value, _) = context
+            .requested_ownership()
+            .replace_owned_with_copy_on_write()
+            .map_from_late_bound(Spanned(value.expect_late_bound(), source_span))?;
 
         // Execute the access via the interface
         let mapped = value.expect_any_value_and_map(

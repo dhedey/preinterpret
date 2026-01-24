@@ -31,12 +31,12 @@ fn test_method_function_has_receiver_bound() {
         push_me(4);
         %[_].assert_eq(arr.to_debug_string(), "[1, 2, 3, 4]");
     }
-    // run! {
-    //     let arr = [1, 2, 3];
-    //     let x = %{ push: arr.push };
-    //     x.push(4);
-    //     %[_].assert_eq(arr.to_debug_string(), "[1, 2, 3, 4]");
-    // }
+    run! {
+        let arr = [1, 2, 3];
+        let x = %{ push: arr.push };
+        x.push(4);
+        %[_].assert_eq(arr.to_debug_string(), "[1, 2, 3, 4]");
+    }
 }
 
 #[test]
