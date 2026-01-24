@@ -243,15 +243,17 @@ pub(crate) trait ResolvableShared<T> {
         Spanned(value, span): Spanned<Shared<T>>,
         resolution_target: &str,
     ) -> ExecutionResult<Shared<Self>> {
-        value.try_map(|v| {
-            Self::resolve_from_ref(
-                v,
-                ResolutionContext {
-                    span_range: &span,
-                    resolution_target,
-                },
-            )
-        })
+        value
+            .try_map(|v| {
+                Self::resolve_from_ref(
+                    v,
+                    ResolutionContext {
+                        span_range: &span,
+                        resolution_target,
+                    },
+                )
+            })
+            .map_err(|(err, _)| err)
     }
 
     fn resolve_ref<'a>(
@@ -303,15 +305,17 @@ pub(crate) trait ResolvableMutable<T> {
         Spanned(value, span): Spanned<Mutable<T>>,
         resolution_target: &str,
     ) -> ExecutionResult<Mutable<Self>> {
-        value.try_map(|v| {
-            Self::resolve_from_mut(
-                v,
-                ResolutionContext {
-                    span_range: &span,
-                    resolution_target,
-                },
-            )
-        })
+        value
+            .try_map(|v| {
+                Self::resolve_from_mut(
+                    v,
+                    ResolutionContext {
+                        span_range: &span,
+                        resolution_target,
+                    },
+                )
+            })
+            .map_err(|(err, _)| err)
     }
 
     fn resolve_ref_mut<'a>(

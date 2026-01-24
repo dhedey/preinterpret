@@ -126,7 +126,7 @@ impl ObjectValue {
                         .value
                 } else {
                     return key_span.value_err(format!(
-                        "No existing property found to mutate for key `{}`",
+                        "There is no pre-existing entry with key `{}` available to mutate",
                         entry.into_key()
                     ));
                 }

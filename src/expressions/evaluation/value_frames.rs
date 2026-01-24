@@ -1049,17 +1049,12 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
         };
         let auto_create = context.requested_ownership().requests_auto_create();
 
-        // If we need an owned value, we can try resolving a reference and
-        // clone the outputted value if needed - which can be much cheaper.
-        // e.g. `let x = arr[0]` only copies `arr[0]` instead of the whole array.
-        let Spanned(value, _) = context
-            .requested_ownership()
-            .replace_owned_with_copy_on_write()
-            .map_from_late_bound(Spanned(value.expect_late_bound(), source_span))?;
-
-        // Execute the access via the interface
         let mapped = value.expect_any_value_and_map(
-            |shared| shared.try_map(|value| (interface.shared_access)(ctx, value)),
+            |shared| {
+                shared
+                    .try_map(|value| (interface.shared_access)(ctx, value))
+                    .map_err(|(e, _)| e)
+            },
             |mutable| mutable.try_map(|value| (interface.mutable_access)(ctx, value, auto_create)),
             |owned| (interface.owned_access)(ctx, owned),
         )?;
@@ -1151,9 +1146,12 @@ impl EvaluationFrame for ValueIndexAccessBuilder {
                 };
                 let auto_create = context.requested_ownership().requests_auto_create();
 
-                // Execute the access via the interface
                 let result = source.expect_any_value_and_map(
-                    |shared| shared.try_map(|value| (interface.shared_access)(ctx, value, index)),
+                    |shared| {
+                        shared
+                            .try_map(|value| (interface.shared_access)(ctx, value, index))
+                            .map_err(|(e, _)| e)
+                    },
                     |mutable| {
                         mutable.try_map(|value| {
                             (interface.mutable_access)(ctx, value, index, auto_create)

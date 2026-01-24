@@ -559,19 +559,39 @@ fn test_objects() {
         let y = obj["non_existent_key"].as_ref();
         %[_].assert_eq(y, None);
     );
-    // TODO[functions]: Work out why this works!
-    // Is autocreate set to true?
+    // The following few tests look like duplicates, but they actually
+    // stretch edge-cases in the propogation of different ownerships
+    // up the ownership chain.
     run!(
         let obj = %{};
-        let y = obj["non_existent_key"].as_mut().clone();
-        %[_].assert_eq(y, None);
+        %[_].assert(obj["non_existent_key"].is_none());
+        // Ensure the line above isn't a last-use owned, so resolves a ref
+        let _ = obj;
     );
-    // Regression: The above test looks very similar, but there
-    // were issues with this test breaking due to propogation through
-    // index resolution.
+    run!(
+        let obj = %{};
+        %[_].assert(obj.non_existent_key.is_none());
+        // Ensure the line above isn't a last-use owned, so resolves a ref
+        let _ = obj;
+    );
     run!(
         let obj = %{};
         %[_].assert_eq(obj["non_existent_key"], None);
+        // Ensure the line above isn't a last-use owned, so resolves a ref
+        let _ = obj;
+    );
+    run!(
+        let obj = %{};
+        %[_].assert_eq(obj.non_existent_key, None);
+        // Ensure the line above isn't a last-use owned, so resolves a ref
+        let _ = obj;
+    );
+    run!(
+        let obj = %{};
+        obj.key = 123;
+        %[].assert_eq(obj.key, 123);
+        // Ensure the line above isn't a last-use owned, so resolves a ref
+        let _ = obj;
     );
     // Method-shadowing keys can be set/accessed via indexed syntax
     // "zip" is a method on objects, but we can still use it as a key via ["zip"]

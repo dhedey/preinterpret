@@ -210,6 +210,17 @@ impl ExecutionInterrupt {
     pub(crate) fn control_flow(control_flow: ControlFlowInterrupt) -> Self {
         Self::new(ExecutionInterruptInner::ControlFlowInterrupt(control_flow))
     }
+
+    /// Determines if the error can be caught when attempting to map a late-bound
+    /// mutable value, to retry as a shared value instead.
+    pub(crate) fn into_caught_mutable_map_attempt_error(self) -> Result<syn::Error, Self> {
+        match self.inner.as_ref() {
+            ExecutionInterruptInner::Error(ErrorKind::Value, _) => {
+                Ok(self.convert_to_final_error())
+            }
+            _ => Err(self),
+        }
+    }
 }
 
 impl From<ParseError> for ExecutionInterrupt {

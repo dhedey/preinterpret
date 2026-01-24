@@ -82,7 +82,7 @@ impl<T: 'static + ?Sized, U: 'static + ?Sized> MutableSubRcRefCell<T, U> {
     pub(crate) fn try_map<V: ?Sized, E>(
         self,
         f: impl FnOnce(&mut U) -> Result<&mut V, E>,
-    ) -> Result<MutableSubRcRefCell<T, V>, E> {
+    ) -> Result<MutableSubRcRefCell<T, V>, (E, MutableSubRcRefCell<T, U>)> {
         let mut error = None;
         let outcome = RefMut::filter_map(self.ref_mut, |inner| match f(inner) {
             Ok(value) => Some(value),
@@ -96,7 +96,13 @@ impl<T: 'static + ?Sized, U: 'static + ?Sized> MutableSubRcRefCell<T, U> {
                 ref_mut,
                 pointed_at: self.pointed_at,
             }),
-            Err(_) => Err(error.unwrap()),
+            Err(original_ref_mut) => Err((
+                error.unwrap(),
+                MutableSubRcRefCell {
+                    ref_mut: original_ref_mut,
+                    pointed_at: self.pointed_at,
+                },
+            )),
         }
     }
 
@@ -264,7 +270,7 @@ impl<T: ?Sized, U: 'static + ?Sized> SharedSubRcRefCell<T, U> {
     pub(crate) fn try_map<V: ?Sized, E>(
         self,
         f: impl FnOnce(&U) -> Result<&V, E>,
-    ) -> Result<SharedSubRcRefCell<T, V>, E> {
+    ) -> Result<SharedSubRcRefCell<T, V>, (E, SharedSubRcRefCell<T, U>)> {
         let mut error = None;
         let outcome = Ref::filter_map(self.shared_ref, |inner| match f(inner) {
             Ok(value) => Some(value),
@@ -278,7 +284,13 @@ impl<T: ?Sized, U: 'static + ?Sized> SharedSubRcRefCell<T, U> {
                 shared_ref,
                 pointed_at: self.pointed_at,
             }),
-            Err(_) => Err(error.unwrap()),
+            Err(original_shared_ref) => Err((
+                error.unwrap(),
+                SharedSubRcRefCell {
+                    shared_ref: original_shared_ref,
+                    pointed_at: self.pointed_at,
+                },
+            )),
         }
     }
 

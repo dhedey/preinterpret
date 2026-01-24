@@ -238,7 +238,10 @@ impl RequestedValue {
     pub(crate) fn expect_any_value_and_map(
         self,
         map_shared: impl FnOnce(AnyValueShared) -> ExecutionResult<AnyValueShared>,
-        map_mutable: impl FnOnce(AnyValueMutable) -> ExecutionResult<AnyValueMutable>,
+        map_mutable: impl FnOnce(
+            AnyValueMutable,
+        )
+            -> Result<AnyValueMutable, (ExecutionInterrupt, AnyValueMutable)>,
         map_owned: impl FnOnce(AnyValueOwned) -> ExecutionResult<AnyValueOwned>,
     ) -> ExecutionResult<RequestedValue> {
         Ok(match self {
@@ -247,9 +250,15 @@ impl RequestedValue {
             }
             RequestedValue::Owned(value) => RequestedValue::Owned(map_owned(value)?),
             RequestedValue::Assignee(assignee) => {
-                RequestedValue::Assignee(Assignee(map_mutable(assignee.0)?))
+                // Assignee doesn't support fallback - propagate error directly
+                let mapped = map_mutable(assignee.0).map_err(|(e, _)| e)?;
+                RequestedValue::Assignee(Assignee(mapped))
             }
-            RequestedValue::Mutable(mutable) => RequestedValue::Mutable(map_mutable(mutable)?),
+            RequestedValue::Mutable(mutable) => {
+                // Non-late-bound mutable doesn't support fallback - propagate error directly
+                let mapped = map_mutable(mutable).map_err(|(e, _)| e)?;
+                RequestedValue::Mutable(mapped)
+            }
             RequestedValue::Shared(shared) => RequestedValue::Shared(map_shared(shared)?),
             RequestedValue::CopyOnWrite(cow) => {
                 RequestedValue::CopyOnWrite(cow.map(map_shared, map_owned)?)

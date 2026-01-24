@@ -206,10 +206,18 @@ impl Spanned<LateBoundValue> {
 }
 
 impl LateBoundValue {
+    /// Maps the late-bound value through the appropriate accessor function.
+    ///
+    /// If the mutable mapping fails with a retryable reason, we fall back to `map_shared`.
+    /// This allows operations that don't need mutable access (like reading a non-existent
+    /// key from an object) to still work, with the mutable error preserved as `reason_not_mutable`.
     pub(crate) fn map_any(
         self,
         map_shared: impl FnOnce(AnyValueShared) -> ExecutionResult<AnyValueShared>,
-        map_mutable: impl FnOnce(AnyValueMutable) -> ExecutionResult<AnyValueMutable>,
+        map_mutable: impl FnOnce(
+            AnyValueMutable,
+        )
+            -> Result<AnyValueMutable, (ExecutionInterrupt, AnyValueMutable)>,
         map_owned: impl FnOnce(AnyValueOwned) -> ExecutionResult<AnyValueOwned>,
     ) -> ExecutionResult<Self> {
         Ok(match self {
@@ -220,7 +228,19 @@ impl LateBoundValue {
             LateBoundValue::CopyOnWrite(copy_on_write) => {
                 LateBoundValue::CopyOnWrite(copy_on_write.map(map_shared, map_owned)?)
             }
-            LateBoundValue::Mutable(mutable) => LateBoundValue::Mutable(map_mutable(mutable)?),
+            LateBoundValue::Mutable(mutable) => match map_mutable(mutable) {
+                Ok(mapped) => LateBoundValue::Mutable(mapped),
+                Err((error, recovered_mutable)) => {
+                    // Check if this error can be caught for fallback to shared access
+                    let reason_not_mutable = error.into_caught_mutable_map_attempt_error()?;
+                    let shared = recovered_mutable.into_shared();
+                    let mapped_shared = map_shared(shared)?;
+                    LateBoundValue::Shared(LateBoundSharedValue::new(
+                        mapped_shared,
+                        reason_not_mutable,
+                    ))
+                }
+            },
             LateBoundValue::Shared(LateBoundSharedValue {
                 shared,
                 reason_not_mutable,
@@ -316,11 +336,15 @@ impl<T: ?Sized> Mutable<T> {
         Mutable(self.0.map(value_map))
     }
 
+    /// Maps the mutable reference, returning the error and original reference on failure.
     pub(crate) fn try_map<V: ?Sized, E>(
         self,
         value_map: impl for<'a> FnOnce(&'a mut T) -> Result<&'a mut V, E>,
-    ) -> Result<Mutable<V>, E> {
-        Ok(Mutable(self.0.try_map(value_map)?))
+    ) -> Result<Mutable<V>, (E, Mutable<T>)> {
+        match self.0.try_map(value_map) {
+            Ok(mapped) => Ok(Mutable(mapped)),
+            Err((e, original)) => Err((e, Mutable(original))),
+        }
     }
 
     /// Disables this mutable reference, releasing the borrow on the RefCell.
@@ -432,11 +456,15 @@ impl<T: ?Sized> Shared<T> {
         Shared(SharedSubRcRefCell::clone(&this.0))
     }
 
+    /// Maps the shared reference, returning the error and original reference on failure.
     pub(crate) fn try_map<V: ?Sized, E>(
         self,
         value_map: impl for<'a> FnOnce(&'a T) -> Result<&'a V, E>,
-    ) -> Result<Shared<V>, E> {
-        Ok(Shared(self.0.try_map(value_map)?))
+    ) -> Result<Shared<V>, (E, Shared<T>)> {
+        match self.0.try_map(value_map) {
+            Ok(mapped) => Ok(Shared(mapped)),
+            Err((e, original)) => Err((e, Shared(original))),
+        }
     }
 
     pub(crate) fn map<V: ?Sized>(self, value_map: impl FnOnce(&T) -> &V) -> Shared<V> {
