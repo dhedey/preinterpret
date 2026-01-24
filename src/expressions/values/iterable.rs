@@ -10,7 +10,7 @@ define_dyn_type!(
     content: dyn IsIterable,
     dyn_kind: DynTypeKind::Iterable,
     type_name: "iterable",
-    articled_display_name: "an iterable (e.g. array, list, etc.)",
+    articled_value_name: "an iterable (e.g. array, list, etc.)",
 );
 
 pub(crate) type IterableValue = Box<dyn IsIterable>;

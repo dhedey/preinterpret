@@ -5,7 +5,7 @@ define_leaf_type! {
     content: UntypedFloat,
     kind: pub(crate) UntypedFloatKind,
     type_name: "untyped_float",
-    articled_display_name: "an untyped float",
+    articled_value_name: "an untyped float",
     dyn_impls: {},
 }
 

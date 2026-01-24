@@ -5,7 +5,7 @@ define_leaf_type! {
     content: ArrayValue,
     kind: pub(crate) ArrayKind,
     type_name: "array",
-    articled_display_name: "an array",
+    articled_value_name: "an array",
     dyn_impls: {
         IterableType: impl IsIterable {
             fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {

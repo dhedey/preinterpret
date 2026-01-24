@@ -7,7 +7,7 @@ define_leaf_type! {
     content: RangeValue,
     kind: pub(crate) RangeKind,
     type_name: "range",
-    articled_display_name: "a range",
+    articled_value_name: "a range",
     dyn_impls: {
         IterableType: impl IsIterable {
             fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
@@ -184,7 +184,7 @@ pub(crate) enum RangeStructure {
 }
 
 impl RangeStructure {
-    pub(crate) fn articled_display_name(&self) -> &'static str {
+    pub(crate) fn articled_value_name(&self) -> &'static str {
         match self {
             RangeStructure::FromTo => "a range start..end",
             RangeStructure::From => "a range start..",

@@ -1,4 +1,4 @@
-error: The - operator is not supported for an unsupported literal operand
+error: The - operator is not supported for an unsupported literal value operand
  --> tests/compilation_failures/expressions/untyped_integer_too_large_arithmetic_fails.rs:8:11
   |
 8 |         x - 1

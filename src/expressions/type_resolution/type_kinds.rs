@@ -4,7 +4,7 @@ use super::*;
 /// This is implemented by `ValueLeafKind`, `IntegerKind`, `FloatKind`, etc.
 pub(crate) trait IsLeafKind: Copy + Into<AnyValueLeafKind> {
     fn source_type_name(&self) -> &'static str;
-    fn articled_display_name(&self) -> &'static str;
+    fn articled_value_name(&self) -> &'static str;
     fn feature_resolver(&self) -> &'static dyn TypeFeatureResolver;
 }
 
@@ -62,11 +62,11 @@ impl TypeKind {
         }
     }
 
-    pub(crate) fn articled_display_name(&self) -> &'static str {
+    pub(crate) fn articled_value_name(&self) -> &'static str {
         match self {
-            TypeKind::Leaf(leaf_kind) => leaf_kind.articled_display_name(),
-            TypeKind::Parent(parent_kind) => parent_kind.articled_display_name(),
-            TypeKind::Dyn(dyn_kind) => dyn_kind.articled_display_name(),
+            TypeKind::Leaf(leaf_kind) => leaf_kind.articled_value_name(),
+            TypeKind::Parent(parent_kind) => parent_kind.articled_value_name(),
+            TypeKind::Dyn(dyn_kind) => dyn_kind.articled_value_name(),
         }
     }
 
@@ -98,11 +98,11 @@ pub(crate) enum ParentTypeKind {
 }
 
 impl ParentTypeKind {
-    pub(crate) fn articled_display_name(&self) -> &'static str {
+    pub(crate) fn articled_value_name(&self) -> &'static str {
         match self {
-            ParentTypeKind::Value(x) => x.articled_display_name(),
-            ParentTypeKind::Integer(x) => x.articled_display_name(),
-            ParentTypeKind::Float(x) => x.articled_display_name(),
+            ParentTypeKind::Value(x) => x.articled_value_name(),
+            ParentTypeKind::Integer(x) => x.articled_value_name(),
+            ParentTypeKind::Float(x) => x.articled_value_name(),
         }
     }
 
@@ -128,9 +128,9 @@ pub(crate) enum DynTypeKind {
 }
 
 impl DynTypeKind {
-    pub(crate) fn articled_display_name(&self) -> &'static str {
+    pub(crate) fn articled_value_name(&self) -> &'static str {
         match self {
-            DynTypeKind::Iterable => IterableType::ARTICLED_DISPLAY_NAME,
+            DynTypeKind::Iterable => IterableType::ARTICLED_VALUE_NAME,
         }
     }
 

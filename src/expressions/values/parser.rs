@@ -5,7 +5,7 @@ define_leaf_type! {
     content: ParserHandle,
     kind: pub(crate) ParserKind,
     type_name: "parser",
-    articled_display_name: "a parser",
+    articled_value_name: "a parser",
     dyn_impls: {},
 }
 

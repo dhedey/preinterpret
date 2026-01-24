@@ -202,9 +202,9 @@ impl EqualityContext for TypedEquality {
         Err(self.error_span.type_error(format!(
             "lhs{} is {}, but rhs{} is {}",
             path_str,
-            lhs.articled_kind(),
+            lhs.kind().articled_value_name(),
             path_str,
-            rhs.articled_kind()
+            rhs.kind().articled_value_name(),
         )))
     }
 
@@ -217,9 +217,9 @@ impl EqualityContext for TypedEquality {
         Err(self.error_span.type_error(format!(
             "lhs{} is {}, but rhs{} is {}",
             path_str,
-            lhs.articled_display_name(),
+            lhs.articled_value_name(),
             path_str,
-            rhs.articled_display_name()
+            rhs.articled_value_name()
         )))
     }
 
@@ -354,9 +354,9 @@ impl DebugEqualityError {
                 format!(
                     "lhs{} is {}, but rhs{} is {}",
                     path_str,
-                    lhs_kind.articled_display_name(),
+                    lhs_kind.articled_value_name(),
                     path_str,
-                    rhs_kind.articled_display_name()
+                    rhs_kind.articled_value_name()
                 )
             }
             DebugInequalityReason::RangeStructureMismatch {
@@ -366,9 +366,9 @@ impl DebugEqualityError {
                 format!(
                     "lhs{} is {}, but rhs{} is {}",
                     path_str,
-                    lhs_kind.articled_display_name(),
+                    lhs_kind.articled_value_name(),
                     path_str,
-                    rhs_kind.articled_display_name()
+                    rhs_kind.articled_value_name()
                 )
             }
             DebugInequalityReason::LengthMismatch { lhs_len, rhs_len } => {

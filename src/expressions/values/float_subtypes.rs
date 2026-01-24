@@ -144,13 +144,13 @@ macro_rules! impl_float_operations {
 impl_float_operations!(F32Type mod f32_interface: F32(f32), F64Type mod f64_interface: F64(f64));
 
 macro_rules! impl_resolvable_float_subtype {
-    ($type_def:ident, $kind:ident, $type:ty, $variant:ident, $type_name:literal, $articled_display_name:expr) => {
+    ($type_def:ident, $kind:ident, $type:ty, $variant:ident, $type_name:literal, $articled_value_name:expr) => {
         define_leaf_type! {
             pub(crate) $type_def => FloatType(FloatContent::$variant) => AnyType,
             content: $type,
             kind: pub(crate) $kind,
             type_name: $type_name,
-            articled_display_name: $articled_display_name,
+            articled_value_name: $articled_value_name,
             dyn_impls: {},
         }
 
@@ -180,8 +180,8 @@ macro_rules! impl_resolvable_float_subtype {
                     v => span.type_err(format!(
                         "{} is expected to be {}, but it is {}",
                         resolution_target,
-                        $kind.articled_display_name(),
-                        v.articled_kind(),
+                        $kind.articled_value_name(),
+                        v.kind().articled_value_name(),
                     )),
                 }
             }
@@ -205,7 +205,7 @@ macro_rules! impl_resolvable_float_subtype {
                 match value {
                     FloatContent::Untyped(x) => Ok(x.into_fallback() as $type),
                     FloatContent::$variant(x) => Ok(x),
-                    other => context.err($articled_display_name, other),
+                    other => context.err($type_def::ARTICLED_VALUE_NAME, other),
                 }
             }
         }
@@ -217,7 +217,7 @@ macro_rules! impl_resolvable_float_subtype {
             ) -> ExecutionResult<Self> {
                 match value {
                     AnyValue::Float(x) => <$type>::resolve_from_value(x, context),
-                    other => context.err($articled_display_name, other),
+                    other => context.err($type_def::ARTICLED_VALUE_NAME, other),
                 }
             }
         }
@@ -229,7 +229,7 @@ macro_rules! impl_resolvable_float_subtype {
             ) -> ExecutionResult<&'a Self> {
                 match value {
                     AnyValueContent::Float(FloatContent::$variant(x)) => Ok(x),
-                    other => context.err($articled_display_name, other),
+                    other => context.err($type_def::ARTICLED_VALUE_NAME, other),
                 }
             }
         }
@@ -241,7 +241,7 @@ macro_rules! impl_resolvable_float_subtype {
             ) -> ExecutionResult<&'a mut Self> {
                 match value {
                     AnyValueContent::Float(FloatContent::$variant(x)) => Ok(x),
-                    other => context.err($articled_display_name, other),
+                    other => context.err($type_def::ARTICLED_VALUE_NAME, other),
                 }
             }
         }

@@ -5,7 +5,7 @@ define_leaf_type! {
     content: UnsupportedLiteral,
     kind: pub(crate) UnsupportedLiteralKind,
     type_name: "unsupported_literal",
-    articled_display_name: "an unsupported literal",
+    articled_value_name: "an unsupported literal",
     dyn_impls: {},
 }
 

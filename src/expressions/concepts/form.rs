@@ -39,7 +39,7 @@ pub(crate) trait LeafAsRefForm: IsHierarchicalForm {
         } else {
             error_span.ownership_err(format!(
                 "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .clone() explicitly.",
-                type_kind.articled_display_name()
+                type_kind.articled_value_name()
             ))
         }
     }

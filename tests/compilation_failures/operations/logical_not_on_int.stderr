@@ -1,4 +1,4 @@
-error: The ! operator is not supported for an untyped integer
+error: The ! operator is not supported for an untyped integer value
  --> tests/compilation_failures/operations/logical_not_on_int.rs:4:18
   |
 4 |     let _ = run!(!5);

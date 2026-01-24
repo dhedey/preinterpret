@@ -1,4 +1,4 @@
-error: The - operator is not supported for a stream operand
+error: The - operator is not supported for a stream value operand
  --> tests/compilation_failures/operations/stream_subtract.rs:4:27
   |
 4 |     let _ = run!(%[hello] - %[world]);

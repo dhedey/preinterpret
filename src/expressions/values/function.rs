@@ -5,7 +5,7 @@ define_leaf_type! {
     content: FunctionValue,
     kind: pub(crate) FunctionValueKind,
     type_name: "fn",
-    articled_display_name: "a function",
+    articled_value_name: "a function",
     dyn_impls: {},
 }
 

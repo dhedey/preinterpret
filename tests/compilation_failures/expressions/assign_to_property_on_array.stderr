@@ -1,4 +1,4 @@
-error: `xyz` is not a method on an array, and the array type does not support fields
+error: `xyz` is not a method on an array value, and the array type does not support fields
  --> tests/compilation_failures/expressions/assign_to_property_on_array.rs:6:12
   |
 6 |         arr.xyz = "hello";

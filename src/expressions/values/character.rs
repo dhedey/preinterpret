@@ -5,7 +5,7 @@ define_leaf_type! {
     content: char,
     kind: pub(crate) CharKind,
     type_name: "char",
-    articled_display_name: "a char",
+    articled_value_name: "a char",
     dyn_impls: {},
 }
 

@@ -7,7 +7,7 @@ define_leaf_type! {
     content: bool,
     kind: pub(crate) BoolKind,
     type_name: "bool",
-    articled_display_name: "a bool",
+    articled_value_name: "a bool",
     dyn_impls: {},
 }
 

@@ -5,7 +5,7 @@ define_leaf_type! {
     content: PreinterpretApiValue,
     kind: pub(crate) PreinterpretApiKind,
     type_name: "preinterpret",
-    articled_display_name: "a preinterpret api",
+    articled_value_name: "a preinterpret api",
     dyn_impls: {},
 }
 

@@ -12,7 +12,7 @@ pub(crate) trait IsType: Sized + TypeData {
     type Variant: TypeVariant;
 
     const SOURCE_TYPE_NAME: &'static str;
-    const ARTICLED_DISPLAY_NAME: &'static str;
+    const ARTICLED_VALUE_NAME: &'static str;
 
     fn type_kind() -> TypeKind;
     fn type_kind_from_source_name(name: &str) -> Option<TypeKind>;
@@ -94,8 +94,8 @@ pub(crate) trait DowncastFrom<T: IsHierarchicalType>: IsHierarchicalType {
                 return span_range.value_err(format!(
                     "{} is expected to be {}, but it is {}",
                     resolution_target,
-                    Self::ARTICLED_DISPLAY_NAME,
-                    leaf_kind.articled_display_name(),
+                    Self::ARTICLED_VALUE_NAME,
+                    leaf_kind.articled_value_name(),
                 ));
             }
         };
@@ -120,8 +120,8 @@ pub(crate) trait DynResolveFrom<T: IsHierarchicalType>: IsDynType {
                 return span_range.value_err(format!(
                     "{} is expected to be {}, but it is {}",
                     resolution_target,
-                    Self::ARTICLED_DISPLAY_NAME,
-                    leaf_kind.articled_display_name(),
+                    Self::ARTICLED_VALUE_NAME,
+                    leaf_kind.articled_value_name(),
                 ));
             }
         };
@@ -348,10 +348,6 @@ pub(crate) trait HasLeafKind {
     fn value_kind(&self) -> AnyValueLeafKind {
         self.kind().into()
     }
-
-    fn articled_kind(&self) -> &'static str {
-        self.kind().articled_display_name()
-    }
 }
 
 // TODO[concepts]: Remove when we get rid of impl_resolvable_argument_for
@@ -382,7 +378,7 @@ macro_rules! define_parent_type {
             $($variant:ident => $variant_type:ty,)*
         },
         type_name: $source_type_name:literal,
-        articled_display_name: $articled_display_name:literal,
+        articled_value_name: $articled_value_name:literal,
     ) => {
         #[derive(Copy, Clone)]
         $type_def_vis struct $type_def;
@@ -391,7 +387,7 @@ macro_rules! define_parent_type {
             type Variant = HierarchicalTypeVariant;
 
             const SOURCE_TYPE_NAME: &'static str = $source_type_name;
-            const ARTICLED_DISPLAY_NAME: &'static str = $articled_display_name;
+            const ARTICLED_VALUE_NAME: &'static str = concat!($articled_value_name, " value");
 
             fn type_kind() -> TypeKind {
                 TypeKind::Parent(ParentTypeKind::$parent_kind($type_kind))
@@ -500,12 +496,12 @@ macro_rules! define_parent_type {
         $type_kind_vis struct $type_kind;
 
         impl $type_kind {
-            pub(crate) fn articled_display_name(&self) -> &'static str {
-                $articled_display_name
+            pub(crate) fn articled_value_name(&self) -> &'static str {
+                $type_def::ARTICLED_VALUE_NAME
             }
 
             pub(crate) fn source_type_name(&self) -> &'static str {
-                $source_type_name
+                $type_def::SOURCE_TYPE_NAME
             }
 
             pub(crate) fn feature_resolver(&self) -> &'static dyn TypeFeatureResolver {
@@ -534,9 +530,9 @@ macro_rules! define_parent_type {
                 }
             }
 
-            fn articled_display_name(&self) -> &'static str {
+            fn articled_value_name(&self) -> &'static str {
                 match self {
-                    $( Self::$variant(x) => x.articled_display_name(), )*
+                    $( Self::$variant(x) => x.articled_value_name(), )*
                 }
             }
 
@@ -577,7 +573,7 @@ macro_rules! define_leaf_type {
         content: $content_type:ty,
         kind: $kind_vis:vis $kind:ident,
         type_name: $source_type_name:literal,
-        articled_display_name: $articled_display_name:literal,
+        articled_value_name: $articled_value_name:literal,
         dyn_impls: {
             $($dyn_type:ty: impl $dyn_trait:ident { $($dyn_trait_impl:tt)* })*
         },
@@ -589,7 +585,7 @@ macro_rules! define_leaf_type {
             type Variant = HierarchicalTypeVariant;
 
             const SOURCE_TYPE_NAME: &'static str = $source_type_name;
-            const ARTICLED_DISPLAY_NAME: &'static str = $articled_display_name;
+            const ARTICLED_VALUE_NAME: &'static str = concat!($articled_value_name, " value");
 
             fn type_kind() -> TypeKind {
                 TypeKind::Leaf(AnyValueLeafKind::from($kind))
@@ -666,11 +662,11 @@ macro_rules! define_leaf_type {
 
         impl IsLeafKind for $kind {
             fn source_type_name(&self) -> &'static str {
-                $source_type_name
+                $type_def::SOURCE_TYPE_NAME
             }
 
-            fn articled_display_name(&self) -> &'static str {
-                $articled_display_name
+            fn articled_value_name(&self) -> &'static str {
+                $type_def::ARTICLED_VALUE_NAME
             }
 
             fn feature_resolver(&self) -> &'static dyn TypeFeatureResolver {
@@ -777,7 +773,7 @@ macro_rules! define_dyn_type {
         content: $dyn_type:ty,
         dyn_kind: DynTypeKind::$dyn_kind:ident,
         type_name: $source_type_name:literal,
-        articled_display_name: $articled_display_name:literal,
+        articled_value_name: $articled_value_name:literal,
     ) => {
         #[derive(Copy, Clone)]
         $type_def_vis struct $type_def;
@@ -786,7 +782,7 @@ macro_rules! define_dyn_type {
             type Variant = DynTypeVariant;
 
             const SOURCE_TYPE_NAME: &'static str = $source_type_name;
-            const ARTICLED_DISPLAY_NAME: &'static str = $articled_display_name;
+            const ARTICLED_VALUE_NAME: &'static str = concat!($articled_value_name, " value");
 
             fn type_kind() -> TypeKind {
                 TypeKind::Dyn(DynTypeKind::$dyn_kind)

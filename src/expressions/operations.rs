@@ -95,7 +95,7 @@ impl UnaryOperation {
                 self.type_error(format!(
                     "The {} operator is not supported for {} operand",
                     self,
-                    input.articled_kind(),
+                    input.kind().articled_value_name(),
                 ))
             })?;
         let input = method
@@ -325,7 +325,7 @@ impl BinaryOperation {
             None => self.type_err(format!(
                 "The {} operator is not supported for {} operand",
                 self.symbolic_description(),
-                left.articled_kind(),
+                left.kind().articled_value_name(),
             )),
         }
     }

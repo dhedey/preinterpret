@@ -177,13 +177,13 @@ impl_int_operations!(
 );
 
 macro_rules! impl_resolvable_integer_subtype {
-    ($type_def:ident, $kind:ident, $type:ty, $variant:ident, $type_name:literal, $articled_display_name:expr) => {
+    ($type_def:ident, $kind:ident, $type:ty, $variant:ident, $type_name:literal, $articled_value_name:expr) => {
         define_leaf_type! {
             pub(crate) $type_def => IntegerType(IntegerContent::$variant) => AnyType,
             content: $type,
             kind: pub(crate) $kind,
             type_name: $type_name,
-            articled_display_name: $articled_display_name,
+            articled_value_name: $articled_value_name,
             dyn_impls: {},
         }
 
@@ -213,8 +213,8 @@ macro_rules! impl_resolvable_integer_subtype {
                     v => span.type_err(format!(
                         "{} is expected to be {}, but it is {}",
                         resolution_target,
-                        $kind.articled_display_name(),
-                        v.articled_kind(),
+                        $kind.articled_value_name(),
+                        v.kind().articled_value_name(),
                     )),
                 }
             }
@@ -238,7 +238,7 @@ macro_rules! impl_resolvable_integer_subtype {
                 match value {
                     IntegerValue::Untyped(x) => Ok(x.into_fallback() as $type),
                     IntegerValue::$variant(x) => Ok(x),
-                    other => context.err($articled_display_name, other),
+                    other => context.err($type_def::ARTICLED_VALUE_NAME, other),
                 }
             }
         }
@@ -250,7 +250,7 @@ macro_rules! impl_resolvable_integer_subtype {
             ) -> ExecutionResult<Self> {
                 match value {
                     AnyValue::Integer(x) => <$type>::resolve_from_value(x, context),
-                    other => context.err($articled_display_name, other),
+                    other => context.err($type_def::ARTICLED_VALUE_NAME, other),
                 }
             }
         }
@@ -262,7 +262,7 @@ macro_rules! impl_resolvable_integer_subtype {
             ) -> ExecutionResult<&'a Self> {
                 match value {
                     AnyValue::Integer(IntegerValue::$variant(x)) => Ok(x),
-                    other => context.err($articled_display_name, other),
+                    other => context.err($type_def::ARTICLED_VALUE_NAME, other),
                 }
             }
         }
@@ -274,7 +274,7 @@ macro_rules! impl_resolvable_integer_subtype {
             ) -> ExecutionResult<&'a mut Self> {
                 match value {
                     AnyValue::Integer(IntegerValue::$variant(x)) => Ok(x),
-                    other => context.err($articled_display_name, other),
+                    other => context.err($type_def::ARTICLED_VALUE_NAME, other),
                 }
             }
         }

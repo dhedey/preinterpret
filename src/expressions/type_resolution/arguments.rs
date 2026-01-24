@@ -38,7 +38,7 @@ impl<'a> ResolutionContext<'a> {
             "{} is expected to be {}, but it is {}",
             self.resolution_target,
             articled_expected_value_kind,
-            value.articled_kind()
+            value.kind().articled_value_name(),
         ))
     }
 }

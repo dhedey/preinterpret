@@ -851,7 +851,7 @@ impl EvaluationFrame for UnaryOperationBuilder {
         self.operation.type_err(format!(
             "The {} operator is not supported for {}",
             self.operation,
-            operand.articled_kind(),
+            operand.kind().articled_value_name(),
         ))
     }
 }
@@ -936,7 +936,7 @@ impl EvaluationFrame for BinaryOperationBuilder {
                             return self.operation.type_err(format!(
                                 "The {} operator is not supported for {} operand",
                                 self.operation.symbolic_description(),
-                                left.articled_kind(),
+                                left.kind().articled_value_name(),
                             ));
                         }
                     }
@@ -1009,7 +1009,7 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
                 return self.access.property.type_err(format!(
                     "Cannot assign to `.{}` because it is a method on {}{}",
                     property_name,
-                    source_kind.articled_display_name(),
+                    source_kind.articled_value_name(),
                     if matches!(source_kind, AnyValueLeafKind::Object(_)) {
                         format!(
                             ". Use `[\"{}\"]` instead to set the property.",
@@ -1039,7 +1039,7 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
             return self.access.type_err(format!(
                 "`{}` is not a method on {}, and the {} type does not support fields",
                 property_name,
-                source_kind.articled_display_name(),
+                source_kind.articled_value_name(),
                 source_kind.source_type_name(),
             ));
         };
@@ -1120,7 +1120,7 @@ impl EvaluationFrame for ValueIndexAccessBuilder {
                 let Some(interface) = source_kind.feature_resolver().resolve_index_access() else {
                     return self.access.type_err(format!(
                         "Cannot index into {}",
-                        source_kind.articled_display_name()
+                        source_kind.articled_value_name()
                     ));
                 };
 

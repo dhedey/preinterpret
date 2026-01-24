@@ -5,7 +5,7 @@ define_leaf_type! {
     content: UntypedInteger,
     kind: pub(crate) UntypedIntegerKind,
     type_name: "untyped_int",
-    articled_display_name: "an untyped integer",
+    articled_value_name: "an untyped integer",
     dyn_impls: {},
 }
 
@@ -115,7 +115,7 @@ impl Spanned<UntypedInteger> {
             span_range.value_error(format!(
                 "The integer value {} does not fit into {}",
                 value.0,
-                kind.articled_display_name()
+                kind.articled_value_name()
             ))
         })
     }

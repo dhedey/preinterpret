@@ -221,7 +221,7 @@ Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
   - [x] We can remove method extension code
   - [x] It's an error to set `x.y = z` or `%{ y: z }` if `y` is a method on object
 - [x] Fix various noted edge cases in object property / index ownership
-- [ ] Replace `articled_kind` / `articled_display_name` with `articled_value` being `a(n) <type> value` or `values` `<type> values` and define an `articled_type`
+- [x] Replace `articled_kind` / `articled_display_name` with `articled_value_name`
 - [ ] We can define closures (without any closed values for now)
   * Value type function `let my_func = |x, y, z| { ... };`
   * Parameters can be `x` / `x: any` (Owned), `x: &any` (Shared) or `x: &mut any` (Mutable).

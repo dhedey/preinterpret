@@ -11,7 +11,7 @@ define_parent_type! {
         F64 => F64Type,
     },
     type_name: "float",
-    articled_display_name: "a float",
+    articled_value_name: "a float",
 }
 
 pub(crate) type FloatValue = FloatContent<'static, BeOwned>;

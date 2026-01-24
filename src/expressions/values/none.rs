@@ -5,8 +5,7 @@ define_leaf_type! {
     content: (),
     kind: pub(crate) NoneKind,
     type_name: "none",
-    // Instead of saying "expected a none value", we can say "expected None"
-    articled_display_name: "None",
+    articled_value_name: "a none",
     dyn_impls: {},
 }
 

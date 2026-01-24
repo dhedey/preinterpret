@@ -36,8 +36,8 @@ define_parent_type! {
         Function => FunctionType,
         PreinterpretApi => PreinterpretApiType,
     },
-    type_name: "value",
-    articled_display_name: "any value",
+    type_name: "any",
+    articled_value_name: "any",
 }
 
 define_type_features! {
@@ -255,7 +255,7 @@ impl AnyValue {
         if !self.value_kind().supports_transparent_cloning() {
             return error_span_range.ownership_err(format!(
                 "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .clone() explicitly.",
-                self.articled_kind()
+                self.kind().articled_value_name(),
             ));
         }
         Ok(self.clone())

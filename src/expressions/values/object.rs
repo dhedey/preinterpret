@@ -5,7 +5,7 @@ define_leaf_type! {
     content: ObjectValue,
     kind: pub(crate) ObjectKind,
     type_name: "object",
-    articled_display_name: "an object",
+    articled_value_name: "an object",
     dyn_impls: {
         IterableType: impl IsIterable {
             fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {

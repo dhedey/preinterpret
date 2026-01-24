@@ -1,4 +1,4 @@
-error: Cannot assign to `.zip` because it is a method on an object. Use `["zip"]` instead to set the property.
+error: Cannot assign to `.zip` because it is a method on an object value. Use `["zip"]` instead to set the property.
  --> tests/compilation_failures/expressions/assign_to_method_property.rs:8:17
   |
 8 |             obj.zip = 5;

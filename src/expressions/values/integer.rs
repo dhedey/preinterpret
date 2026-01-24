@@ -21,7 +21,7 @@ define_parent_type! {
         Isize => IsizeType,
     },
     type_name: "int",
-    articled_display_name: "an integer",
+    articled_value_name: "an integer",
 }
 
 pub(crate) type IntegerValue = IntegerContent<'static, BeOwned>;

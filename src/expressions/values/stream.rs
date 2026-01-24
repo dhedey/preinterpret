@@ -5,7 +5,7 @@ define_leaf_type! {
     content: OutputStream,
     kind: pub(crate) StreamKind,
     type_name: "stream",
-    articled_display_name: "a stream",
+    articled_value_name: "a stream",
     dyn_impls: {
         IterableType: impl IsIterable {
             fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
