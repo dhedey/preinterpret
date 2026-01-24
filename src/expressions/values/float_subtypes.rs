@@ -7,9 +7,7 @@ macro_rules! impl_float_operations {
         define_type_features! {
             impl $type_data,
             pub(crate) mod $mod_name {
-                pub(crate) mod methods {
-                }
-                pub(crate) mod unary_operations {
+                unary_operations {
                     fn neg(input: $float_type) -> $float_type {
                         -input
                     }
@@ -81,8 +79,6 @@ macro_rules! impl_float_operations {
                     fn cast_to_string(input: $float_type) -> String {
                         input.to_string()
                     }
-                }
-                pub(crate) mod binary_operations {
                 }
                 interface_items {
                     fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {

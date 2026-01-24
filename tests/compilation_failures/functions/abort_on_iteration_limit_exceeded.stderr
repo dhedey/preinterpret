@@ -1,0 +1,5 @@
+error: Type 'array' has no property, function or method named 'push_me'
+ --> tests/compilation_failures/functions/abort_on_iteration_limit_exceeded.rs:6:9
+  |
+6 |         array::push_me(arr, 4, 5);
+  |         ^^^^^^^^^^^^^^

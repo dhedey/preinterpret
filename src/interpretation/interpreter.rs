@@ -437,7 +437,7 @@ impl<S: HasSpanRange> IterationCounter<'_, S> {
     pub(crate) fn check(&self) -> ExecutionResult<()> {
         if let Some(limit) = self.iteration_limit {
             if self.count > limit {
-                return self.span_source.control_flow_err(format!("Iteration limit of {} exceeded.\nIf needed, the limit can be reconfigured with None.configure_preinterpret(%{{ iteration_limit: XXX }})", limit));
+                return self.span_source.control_flow_err(format!("Iteration limit of {} exceeded.\nIf needed, the limit can be reconfigured with preinterpret::set_iteration_limit(XXX)", limit));
             }
         }
         Ok(())
@@ -449,7 +449,6 @@ pub(crate) struct InterpreterConfig {
 }
 
 pub(crate) const DEFAULT_ITERATION_LIMIT: usize = 1000;
-pub(crate) const DEFAULT_ITERATION_LIMIT_STR: &str = "1000";
 
 impl Default for InterpreterConfig {
     fn default() -> Self {

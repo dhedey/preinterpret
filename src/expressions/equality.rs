@@ -50,7 +50,7 @@ pub(crate) trait EqualityContext {
     fn values_equal(&mut self) -> Self::Result;
 
     /// Values of the same type are not equal.
-    fn leaf_values_not_equal<T: Debug>(&mut self, lhs: &T, rhs: &T) -> Self::Result;
+    fn leaf_values_not_equal<T: Debug + ?Sized>(&mut self, lhs: &T, rhs: &T) -> Self::Result;
 
     /// Values have different kinds.
     fn kind_mismatch<L: HasLeafKind, R: HasLeafKind>(&mut self, lhs: &L, rhs: &R) -> Self::Result;
@@ -106,7 +106,7 @@ impl EqualityContext for SimpleEquality {
     }
 
     #[inline]
-    fn leaf_values_not_equal<T: Debug>(&mut self, _lhs: &T, _rhs: &T) -> bool {
+    fn leaf_values_not_equal<T: Debug + ?Sized>(&mut self, _lhs: &T, _rhs: &T) -> bool {
         false
     }
 
@@ -185,7 +185,7 @@ impl EqualityContext for TypedEquality {
     }
 
     #[inline]
-    fn leaf_values_not_equal<T: Debug>(&mut self, _lhs: &T, _rhs: &T) -> ExecutionResult<bool> {
+    fn leaf_values_not_equal<T: Debug + ?Sized>(&mut self, _lhs: &T, _rhs: &T) -> ExecutionResult<bool> {
         Ok(false)
     }
 
@@ -424,7 +424,7 @@ impl EqualityContext for DebugEquality {
     }
 
     #[inline]
-    fn leaf_values_not_equal<T: Debug>(
+    fn leaf_values_not_equal<T: Debug + ?Sized>(
         &mut self,
         lhs: &T,
         rhs: &T,

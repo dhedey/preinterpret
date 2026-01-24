@@ -176,6 +176,13 @@ impl RequestedValue {
         }
     }
 
+    pub(crate) fn expect_copy_on_write(self) -> CopyOnWriteValue {
+        match self {
+            RequestedValue::CopyOnWrite(copy_on_write) => copy_on_write,
+            _ => panic!("expect_copy_on_write() called on non-copy-on-write RequestedValue"),
+        }
+    }
+
     pub(super) fn expect_assignee(self) -> AnyValueAssignee {
         match self {
             RequestedValue::Assignee(assignee) => assignee,
@@ -335,6 +342,14 @@ impl<'a, T: RequestedValueType> Context<'a, T> {
         node: ExpressionNodeId,
     ) -> NextAction {
         self.request_argument_value(handler, node, ArgumentOwnership::Owned)
+    }
+
+    pub(super) fn request_copy_on_write<H: EvaluationFrame<ReturnType = T>>(
+        self,
+        handler: H,
+        node: ExpressionNodeId,
+    ) -> NextAction {
+        self.request_argument_value(handler, node, ArgumentOwnership::CopyOnWrite)
     }
 
     pub(super) fn request_shared<H: EvaluationFrame<ReturnType = T>>(

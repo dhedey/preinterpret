@@ -73,9 +73,7 @@ impl UntypedFloat {
 define_type_features! {
     impl UntypedFloatType,
     pub(crate) mod untyped_float_interface {
-        pub(crate) mod methods {
-        }
-        pub(crate) mod unary_operations {
+        unary_operations {
             fn neg(input: UntypedFloatFallback) -> UntypedFloat {
                 UntypedFloat::from_fallback(-input.0)
             }
@@ -147,8 +145,6 @@ define_type_features! {
             fn cast_to_string(input: UntypedFloatFallback) -> String {
                 input.0.to_string()
             }
-        }
-        pub(crate) mod binary_operations {
         }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {

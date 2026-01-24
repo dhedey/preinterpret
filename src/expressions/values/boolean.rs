@@ -24,9 +24,7 @@ impl ValuesEqual for bool {
 define_type_features! {
     impl BoolType,
     pub(crate) mod boolean_interface {
-        pub(crate) mod methods {
-        }
-        pub(crate) mod unary_operations {
+        unary_operations {
             fn not(this: bool) -> bool {
                 !this
             }
@@ -91,7 +89,7 @@ define_type_features! {
                 input.to_string()
             }
         }
-        pub(crate) mod binary_operations {
+        binary_operations {
             fn and(lhs: bool, rhs: bool) -> bool {
                 lhs && rhs
             }

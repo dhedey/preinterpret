@@ -1,0 +1,6 @@
+error: Iteration limit of 14 exceeded.
+       If needed, the limit can be reconfigured with preinterpret::set_iteration_limit(XXX)
+ --> tests/compilation_failures/functions/incorrect_type_function_name.rs:6:24
+  |
+6 |         for i in 0..15 {}
+  |                        ^^

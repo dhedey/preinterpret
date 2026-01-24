@@ -206,11 +206,7 @@ impl<'a> ValuesEqual for IntegerValueRef<'a> {
 define_type_features! {
     impl IntegerType,
     pub(crate) mod integer_interface {
-        pub(crate) mod methods {
-        }
-        pub(crate) mod unary_operations {
-        }
-        pub(crate) mod binary_operations {
+        binary_operations {
             [context] fn add(left: Spanned<IntegerValue>, right: Spanned<IntegerValue>) -> ExecutionResult<IntegerValue> {
                 match IntegerValue::resolve_untyped_to_match(left, &right)? {
                     IntegerValue::Untyped(left) => left.paired_operation(right, context, FallbackInteger::checked_add),

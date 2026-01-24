@@ -170,7 +170,7 @@ impl<'a> ValuesEqual for FloatValueRef<'a> {
 define_type_features! {
     impl FloatType,
     pub(crate) mod float_interface {
-        pub(crate) mod methods {
+        methods {
             fn is_nan(this: FloatValue) -> bool {
                 match this {
                     FloatContent::Untyped(x) => x.into_fallback().is_nan(),
@@ -211,9 +211,7 @@ define_type_features! {
                 }
             }
         }
-        pub(crate) mod unary_operations {
-        }
-        pub(crate) mod binary_operations {
+        binary_operations {
             fn add(left: FloatValue, right: Spanned<FloatValue>) -> ExecutionResult<FloatValue> {
                 match left.resolve_untyped_to_match(right.as_ref_value()) {
                     FloatContent::Untyped(left) => left.paired_operation(right, |a, b| a + b),

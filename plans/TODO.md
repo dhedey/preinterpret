@@ -204,40 +204,49 @@ Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
 
 ## Methods and closures
 
-- [ ] Consider pre-requisite work on [2026-01-types-and-forms.md](./2026-01-types-and-forms.md) for type annotations. Instead, let's move forward without support for specific types for now. To start, let's just support: `x` or `x: any`; `x: &any` and `x: &mut any`.
-- [ ] Change bindings (currently just variables) to be able to store any of the following: (nb we still restrict variables to be owned for now).
-```rust
-enum VariableContent {
-    Owned(Referenceable<AnyValue>),
-    Shared(Shared<AnyValue>),
-    Mutable(Mutable<AnyValue>),
-}
-``` 
-- [ ] Introduce basic function values
+- [x] Consider pre-requisite work on [2026-01-types-and-forms.md](./2026-01-types-and-forms.md) for type annotations. Instead, let's move forward without support for specific types for now. To start, let's just support: `x` or `x: any`; `x: &any` and `x: &mut any`.
+- [x] Introduce basic function values
+  - [x] Add `type::method` function resolution
+  - [x] New node extension in the expression parser: invocation `(...)`
+  - [x] Add tests that e.g. `array::push(arr, 1)` works.
+  - [x] Add type functions
+    - [x] Create a `preinterpret` parent type with no children.
+    - [x] Allow definition of static functions on a type
+    - [x] Move `().configure_preinterpret` to `preinterpret::set_iteration_limit` and update the message: `If needed, the limit can be reconfigured with`
+  
+- [ ] `x.hello` accessing a method creates a `NativeFunction` with the first parameter bound to `x`
+  - [ ] Add some bound receiver or something or more generally `bound_arguments: Vec<ArgumentValue>` - these should be deactivated
+  - [ ] `my_array.push` returns a function with `my_array` bound. The LateBound `my_array` can then be deactivated whilst the rest of the arguments are resolved, like what we do at the moment. This approach avoids the horrible javascript issues with `this` not being bound when referencing `x.y`.
+  - [ ] And then for objects, the method wins; BUT you can use `x["obj"]` to access the field instead of the method
+  - [ ] We can try commenting out the code to resolve a method extension,
+      and it should still work, courtesy of property access + invocation
+- [ ] We can define closures (without any closed values for now)
   * Value type function `let my_func = |x, y, z| { ... };`
   * Parameters can be `x` / `x: any` (Owned), `x: &any` (Shared) or `x: &mut any` (Mutable).
-  * To start with, they are not closures (i.e. they can't capture any outer variables)
+  * To start with, they can't capture any outer variables
 - [ ] Break/continue label resolution in functions/closures
   * Functions and closures must resolve break/continue labels statically
   * Break and continue statements should not leak out of function boundaries
   * This needs to be validated during the control flow pass
-- [ ] New node extension in the expression parser: invocation `(...)`
-- [ ] Closures
+- [ ] Closed Bindings
+  - [ ] Change bindings (currently just variables) to be able to store any of the following: (nb we still restrict variables to be owned for now).
+  ```rust
+  enum VariableContent {
+      Owned(Referenceable<AnyValue>),
+      Shared(Shared<AnyValue>),
+      Mutable(Mutable<AnyValue>),
+  }
+  ``` 
   * A function may capture variable bindings from the parent scope, these are converted into a `VariableBinding::Closure(<closed_variable_id>)`
   * The closure consists of a set of bindings attached to the function value, either:
     - `ClosedVariable::Owned(Value)` if it's the last mention of the closed variable, so it can be moved in
-    - `ClosedVariable::Referenced(Rc<RefCell<Value>>)` otherwise
-  * Invocation requests `CopyOnWrite`, and can be on a shared function or an owned function
-    (if it is the last usage of that value, as per normal red/owned binding rules)
-    * If invocation is on an owned function, then owned values from the closure can be consumed
-      by the invocation
+    - `ClosedVariable::Referenced(Rc<RefCell<Value>>)` otherwise.
+    The nice thing about this is can pull shared/mutable at runtime,
+    without needing to magically work out what to move.
+  * Invocation requests `CopyOnWrite`, and can be on a shared function or an owned function (if it is the last usage of that value, as per normal red/owned binding rules)
+    * If invocation is on an owned function, then owned values from the closure can be consumed by the invocation
     * Otherwise, the values are only available as shared/mut
-- [ ] Try to unify methods under a "resolve, then invoke" structure
-    * `array::push` should resolve to the method, and `array::push(arr, value)` should work - we'll likely want an explicit `function` section and `constants` section on type data; which we can merge with methods when resolving what `array::push` resolves to.
-    * `my_array.push` returns a closure with `my_array` bound. The LateBound `my_array` can then be deactivated whilst the rest of the arguments are resolved, like what we do at the moment. This approach avoids the horrible javascript issues with `this` not being bound when referencing `x.y`.
-    * And then for objects, the method wins; BUT you can use `x["obj"]` to access the field instead of the method
-- [ ] Create a `preinterpret` type, and move preinterpret settings to `preinterpret::...`
-- [ ] Optional arguments
+- [ ] Support optional arguments
 - [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`
 - [ ] Add `array.sort`, `array.sort_by`
 
@@ -465,7 +474,7 @@ The following are less important tasks which maybe we don't even want/need to do
 let @input[{ let _ = input.rest(); let _ = input.token_tree(); }] = %[Hello World];
 ```
 
-## Match block [blocked on slices]
+## Match block
 
 * Delay this probably - without enums it's not super important.
 * We'll need to add destructuring references, and allow destructuring `x.as_ref()`
@@ -486,6 +495,7 @@ Also:
 - [x] Merge `assignee_frames` into `value_frames` as per comment as the top of `assignee_frames`
 - [x] Rename `EvaluationItem` to `RequestedValue` and consider making `RequestedValue::AssignmentCompletion` wrap an `Owned<()>` so that it becomes truly a value.
 - [x] Merge `HasValueType` with `ValueLeafKind`
+- [ ] Fix the end span of `ClosureExpressionInner` and maybe `Expression` more generally?
 - [ ] Add `preinterpret::macro` - can this be a declarative macro? Would be slightly more efficient, as it just needs to wrap a call to `preinterpret::stream` or `preinterpret::run`...
   - [ ] When we create `input = %raw[..]` we will need to set its `end_of_stream` span to the end of the
   macro_rules! macro somehow... I'm not sure how to get that span though.
@@ -496,8 +506,7 @@ Also:
 - [ ] We might need to auto-change the span of all outputted tokens to `Span::call_site()` to get hygiene
   to be most flexible. Perhaps this can be disabled with `preinterpret::set_auto_call_site_hygiene(false)`
 - [ ] Add `LiteralPattern` (wrapping a `Literal`)
-- [ ] Better handling of `configure_preinterpret`:
-  * Move `None.configure_preinterpret` to `preinterpret::set_iteration_limit(..)`
+- [x] Better handling of `configure_preinterpret`
 - [ ] CastTarget revision:
   * The `as untyped_int` operator is not supported for string values
   * The `as char` operator is not supported for untyped integer values

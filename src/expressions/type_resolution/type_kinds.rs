@@ -33,6 +33,8 @@ impl AnyValueLeafKind {
             // A parser is a handle, so can be cloned transparently.
             // It may fail to be able to be used to parse if the underlying stream is out of scope of course.
             AnyValueLeafKind::Parser(_) => true,
+            AnyValueLeafKind::Function(_) => true,
+            AnyValueLeafKind::PreinterpretApi(_) => true,
         }
     }
 }
@@ -238,18 +240,30 @@ impl TypeProperty {
     ) -> ExecutionResult<Spanned<RequestedValue>> {
         let resolver = self.source_type.kind.feature_resolver();
         // TODO[performance] - lazily initialize properties as Shared
-        let resolved_property = resolver.resolve_type_property(&self.property.to_string());
-        match resolved_property {
-            Some(value) => ownership.map_from_shared(Spanned(
+        let property_name = &self.property.to_string();
+        if let Some(value) = resolver.resolve_type_property(property_name) {
+            return ownership.map_from_shared(Spanned(
                 SharedValue::new_from_owned(value.into_any_value()),
                 self.span_range(),
-            )),
-            None => self.type_err(format!(
-                "Type '{}' has no property named '{}'",
-                self.source_type.kind.source_name(),
-                self.property,
-            )),
+            ));
         }
+        if let Some(method) = resolver.resolve_method(property_name) {
+            return ownership.map_from_shared(Spanned(
+                SharedValue::new_from_owned(method.into_any_value()),
+                self.span_range(),
+            ));
+        }
+        if let Some(function) = resolver.resolve_type_function(property_name) {
+            return ownership.map_from_shared(Spanned(
+                SharedValue::new_from_owned(function.into_any_value()),
+                self.span_range(),
+            ));
+        }
+        return self.type_err(format!(
+            "Type '{}' has no property, function or method named '{}'",
+            self.source_type.kind.source_name(),
+            self.property,
+        ));
     }
 }
 

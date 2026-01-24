@@ -51,19 +51,19 @@ macro_rules! generate_binary_interface {
 
 macro_rules! generate_method_interface {
     (REQUIRED [] OPTIONAL [] ARGS[$method:path]) => {
-        MethodInterface::Arity0 {
+        FunctionInterface::Arity0 {
             method: |context| apply_fn0($method, context),
             argument_ownership: [],
         }
     };
     (REQUIRED [$ty1:ty,] OPTIONAL [] ARGS[$method:path]) => {
-        MethodInterface::Arity1 {
+        FunctionInterface::Arity1 {
             method: |context, a| apply_fn1($method, a, context),
             argument_ownership: [<$ty1 as IsArgument>::OWNERSHIP],
         }
     };
     (REQUIRED [$ty1:ty, $ty2:ty,] OPTIONAL [] ARGS[$method:path]) => {
-        MethodInterface::Arity2 {
+        FunctionInterface::Arity2 {
             method: |context, a, b| apply_fn2($method, a, b, context),
             argument_ownership: [
                 <$ty1 as IsArgument>::OWNERSHIP,
@@ -72,7 +72,7 @@ macro_rules! generate_method_interface {
         }
     };
     (REQUIRED [$ty1:ty, $ty2:ty, $ty3:ty,] OPTIONAL [] ARGS[$method:path]) => {
-        MethodInterface::Arity3 {
+        FunctionInterface::Arity3 {
             method: |context, a, b, c| apply_fn3($method, a, b, c, context),
             argument_ownership: [
                 <$ty1 as IsArgument>::OWNERSHIP,
@@ -82,7 +82,7 @@ macro_rules! generate_method_interface {
         }
     };
     (REQUIRED [$ty1:ty,] OPTIONAL [$ty2:ty,] ARGS[$method:path]) => {
-        MethodInterface::Arity1PlusOptional1 {
+        FunctionInterface::Arity1PlusOptional1 {
             method: |context, a, b| apply_fn1_optional1($method, a, b, context),
             argument_ownership: [
                 <$ty1 as IsArgument>::OWNERSHIP,
@@ -91,7 +91,7 @@ macro_rules! generate_method_interface {
         }
     };
     (REQUIRED [$ty1:ty, $ty2:ty,] OPTIONAL [$ty3:ty,] ARGS[$method:path]) => {
-        MethodInterface::Arity2PlusOptional1 {
+        FunctionInterface::Arity2PlusOptional1 {
             method: |context, a, b, c| apply_fn2_optional1($method, a, b, c, context),
             argument_ownership: [
                 <$ty1 as IsArgument>::OWNERSHIP,
@@ -101,7 +101,7 @@ macro_rules! generate_method_interface {
         }
     };
     (REQUIRED [$ty1:ty, $ty2:ty, $ty3:ty,] OPTIONAL [$ty4:ty,] ARGS[$method:path]) => {
-        MethodInterface::Arity3PlusOptional1 {
+        FunctionInterface::Arity3PlusOptional1 {
             method: |context, a, b, c, d| apply_fn3_optional1($method, a, b, c, d, context),
             argument_ownership: [
                 <$ty1 as IsArgument>::OWNERSHIP,
@@ -112,7 +112,7 @@ macro_rules! generate_method_interface {
         }
     };
     (REQUIRED $req:tt OPTIONAL $opt:tt ARGS[$($arg:tt)*]) => {
-        compile_error!(stringify!("This method arity is currently unsupported - add support in `MethodInterface` and `generate_method_interface`: ", $($arg)*));
+        compile_error!(stringify!("This method arity is currently unsupported - add support in `FunctionInterface` and `generate_method_interface`: ", $($arg)*));
     };
 }
 
@@ -155,8 +155,8 @@ macro_rules! parse_arg_types {
 
 #[allow(unused)]
 pub(crate) fn apply_fn0<R>(
-    f: fn(&mut MethodCallContext) -> R,
-    context: &mut MethodCallContext,
+    f: fn(&mut FunctionCallContext) -> R,
+    context: &mut FunctionCallContext,
 ) -> ExecutionResult<ReturnedValue>
 where
     R: IsReturnable,
@@ -166,9 +166,9 @@ where
 }
 
 pub(crate) fn apply_fn1<A, R>(
-    f: fn(&mut MethodCallContext, A) -> R,
+    f: fn(&mut FunctionCallContext, A) -> R,
     a: Spanned<ArgumentValue>,
-    context: &mut MethodCallContext,
+    context: &mut FunctionCallContext,
 ) -> ExecutionResult<ReturnedValue>
 where
     A: IsArgument,
@@ -179,10 +179,10 @@ where
 
 #[allow(unused)]
 pub(crate) fn apply_fn1_optional1<A, B, C>(
-    f: fn(&mut MethodCallContext, A, Option<B>) -> C,
+    f: fn(&mut FunctionCallContext, A, Option<B>) -> C,
     a: Spanned<ArgumentValue>,
     b: Option<Spanned<ArgumentValue>>,
-    context: &mut MethodCallContext,
+    context: &mut FunctionCallContext,
 ) -> ExecutionResult<ReturnedValue>
 where
     A: IsArgument,
@@ -199,10 +199,10 @@ where
 }
 
 pub(crate) fn apply_fn2<A, B, C>(
-    f: fn(&mut MethodCallContext, A, B) -> C,
+    f: fn(&mut FunctionCallContext, A, B) -> C,
     a: Spanned<ArgumentValue>,
     b: Spanned<ArgumentValue>,
-    context: &mut MethodCallContext,
+    context: &mut FunctionCallContext,
 ) -> ExecutionResult<ReturnedValue>
 where
     A: IsArgument,
@@ -213,11 +213,11 @@ where
 }
 
 pub(crate) fn apply_fn2_optional1<A, B, C, D>(
-    f: fn(&mut MethodCallContext, A, B, Option<C>) -> D,
+    f: fn(&mut FunctionCallContext, A, B, Option<C>) -> D,
     a: Spanned<ArgumentValue>,
     b: Spanned<ArgumentValue>,
     c: Option<Spanned<ArgumentValue>>,
-    context: &mut MethodCallContext,
+    context: &mut FunctionCallContext,
 ) -> ExecutionResult<ReturnedValue>
 where
     A: IsArgument,
@@ -236,11 +236,11 @@ where
 
 #[allow(unused)]
 pub(crate) fn apply_fn3<A, B, C, R>(
-    f: fn(&mut MethodCallContext, A, B, C) -> R,
+    f: fn(&mut FunctionCallContext, A, B, C) -> R,
     a: Spanned<ArgumentValue>,
     b: Spanned<ArgumentValue>,
     c: Spanned<ArgumentValue>,
-    context: &mut MethodCallContext,
+    context: &mut FunctionCallContext,
 ) -> ExecutionResult<ReturnedValue>
 where
     A: IsArgument,
@@ -258,12 +258,12 @@ where
 }
 
 pub(crate) fn apply_fn3_optional1<A, B, C, D, R>(
-    f: fn(&mut MethodCallContext, A, B, C, Option<D>) -> R,
+    f: fn(&mut FunctionCallContext, A, B, C, Option<D>) -> R,
     a: Spanned<ArgumentValue>,
     b: Spanned<ArgumentValue>,
     c: Spanned<ArgumentValue>,
     d: Option<Spanned<ArgumentValue>>,
-    context: &mut MethodCallContext,
+    context: &mut FunctionCallContext,
 ) -> ExecutionResult<ReturnedValue>
 where
     A: IsArgument,
@@ -402,12 +402,12 @@ pub(crate) fn apply_index_owned<S: ResolvableOwned<AnyValue>>(
     f(ctx, source, index)
 }
 
-pub(crate) struct MethodCallContext<'a> {
+pub(crate) struct FunctionCallContext<'a> {
     pub interpreter: &'a mut Interpreter,
     pub output_span_range: SpanRange,
 }
 
-impl<'a> HasSpanRange for MethodCallContext<'a> {
+impl<'a> HasSpanRange for FunctionCallContext<'a> {
     fn span_range(&self) -> SpanRange {
         self.output_span_range
     }
@@ -438,21 +438,26 @@ macro_rules! define_type_features {
     (
         impl $type_def:ident,
         $mod_vis:vis mod $mod_name:ident {
-            $mod_methods_vis:vis mod methods {
+            $(functions {
+                $(
+                    $([$function_context:ident])? fn $function_name:ident($($function_args:tt)*) $(-> $function_output_ty:ty)? $([ignore_type_assertion $function_ignore_type_assertion:tt])? $function_body:block
+                )*
+            })?
+            $(methods {
                 $(
                     $([$method_context:ident])? fn $method_name:ident($($method_args:tt)*) $(-> $method_output_ty:ty)? $([ignore_type_assertion $method_ignore_type_assertion:tt])? $method_body:block
                 )*
-            }
-            $mod_unary_operations_vis:vis mod unary_operations {
+            })?
+            $(unary_operations {
                 $(
                     $([$unary_context:ident])? fn $unary_name:ident($($unary_args:tt)*) $(-> $unary_output_ty:ty)? $([ignore_type_assertion $unary_ignore_type_assertion:tt])? $unary_body:block
                 )*
-            }
-            $mod_binary_operations_vis:vis mod binary_operations {
+            })?
+            $(binary_operations {
                 $(
                     $([$binary_context:ident])? fn $binary_name:ident($($binary_args:tt)*) $(-> $binary_output_ty:ty)? $([ignore_type_assertion $binary_ignore_type_assertion:tt])? $binary_body:block
                 )*
-            }
+            })?
             $(property_access($property_source_ty:ty) {
                 $([$property_shared_context:ident])? fn shared($($property_shared_args:tt)*) $property_shared_body:block
                 $([$property_mutable_context:ident])? fn mutable($($property_mutable_args:tt)*) $property_mutable_body:block
@@ -463,9 +468,9 @@ macro_rules! define_type_features {
                 $([$index_mutable_context:ident])? fn mutable($($index_mutable_args:tt)*) $index_mutable_body:block
                 $([$index_owned_context:ident])? fn owned($($index_owned_args:tt)*) $index_owned_body:block
             })?
-            interface_items {
+            $(interface_items {
                 $($items:item)*
-            }
+            })?
         }
     ) => {
         $mod_vis mod $mod_name {
@@ -476,93 +481,120 @@ macro_rules! define_type_features {
             fn asserts() {
                 fn assert_first_argument<T: IsArgument<ValueType = $type_def>>() {}
                 fn assert_output_type<T: IsReturnable>() {}
-                $(
+                $($(
                     assert_first_argument::<handle_first_arg_type!($($method_args)*,)>();
                     if_exists! {
                         {$($method_ignore_type_assertion)?}
                         {}
                         {$(assert_output_type::<$method_output_ty>();)?}
                     }
-                )*
-                $(
+                )*)?
+                $($(
                     assert_first_argument::<handle_first_arg_type!($($unary_args)*,)>();
                     if_exists! {
                         {$($unary_ignore_type_assertion)?}
                         {}
                         {$(assert_output_type::<$unary_output_ty>();)?}
                     }
-                )*
-                $(
+                )*)?
+                $($(
                     assert_first_argument::<handle_first_arg_type!($($binary_args)*,)>();
                     if_exists! {
                         {$($binary_ignore_type_assertion)?}
                         {}
                         {$(assert_output_type::<$binary_output_ty>();)?}
                     }
-                )*
+                )*)?
                 // Note: property_access and index_access source types are verified
                 // at compile time through the apply_* wrapper functions
             }
 
-            $mod_methods_vis mod methods {
-                #[allow(unused)]
-                use super::*;
-                $(
-                    pub(crate) fn $method_name(if_empty!([$($method_context)?][_context]): &mut MethodCallContext, $($method_args)*) $(-> $method_output_ty)? {
-                        $method_body
-                    }
-                )*
-            }
+            $(
+                pub(crate) mod functions {
+                    #[allow(unused)]
+                    use super::*;
+                    $(
+                        pub(crate) fn $function_name(if_empty!([$($function_context)?][_context]): &mut FunctionCallContext, $($function_args)*) $(-> $function_output_ty)? {
+                            $function_body
+                        }
+                    )*
+                }
 
-            $mod_methods_vis mod method_definitions {
-                #[allow(unused)]
-                use super::*;
-                $(
-                    $mod_methods_vis fn $method_name() -> MethodInterface {
-                        parse_arg_types!([CALLBACK: generate_method_interface![methods::$method_name]] $($method_args)*)
-                    }
-                )*
-            }
+                pub(crate) mod function_definitions {
+                    #[allow(unused)]
+                    use super::*;
+                    $(
+                        pub(crate) fn $function_name() -> FunctionInterface {
+                            parse_arg_types!([CALLBACK: generate_method_interface![functions::$function_name]] $($function_args)*)
+                        }
+                    )*
+                }
+            )?
 
-            $mod_unary_operations_vis mod unary_operations {
-                #[allow(unused)]
-                use super::*;
-                $(
-                    $mod_unary_operations_vis fn $unary_name(if_empty!([$($unary_context)?][_context]): UnaryOperationCallContext, $($unary_args)*) $(-> $unary_output_ty)? {
-                        $unary_body
-                    }
-                )*
-            }
+            $(
+                pub(crate) mod methods {
+                    #[allow(unused)]
+                    use super::*;
+                    $(
+                        pub(crate) fn $method_name(if_empty!([$($method_context)?][_context]): &mut FunctionCallContext, $($method_args)*) $(-> $method_output_ty)? {
+                            $method_body
+                        }
+                    )*
+                }
+                
+                pub(crate) mod method_definitions {
+                    #[allow(unused)]
+                    use super::*;
+                    $(
+                        pub(crate) fn $method_name() -> FunctionInterface {
+                            parse_arg_types!([CALLBACK: generate_method_interface![methods::$method_name]] $($method_args)*)
+                        }
+                    )*
+                }
+            )?
 
-            $mod_unary_operations_vis mod unary_definitions {
-                #[allow(unused)]
-                use super::*;
-                $(
-                    $mod_unary_operations_vis fn $unary_name() -> UnaryOperationInterface {
-                        parse_arg_types!([CALLBACK: generate_unary_interface![unary_operations::$unary_name]] $($unary_args)*)
-                    }
-                )*
-            }
+            $(
+                pub(crate) mod unary_operations {
+                    #[allow(unused)]
+                    use super::*;
+                    $(
+                        pub(crate) fn $unary_name(if_empty!([$($unary_context)?][_context]): UnaryOperationCallContext, $($unary_args)*) $(-> $unary_output_ty)? {
+                            $unary_body
+                        }
+                    )*
+                }
 
-            $mod_binary_operations_vis mod binary_operations {
-                #[allow(unused)]
-                use super::*;
-                $(
-                    $mod_binary_operations_vis fn $binary_name(if_empty!([$($binary_context)?][_context]): BinaryOperationCallContext, $($binary_args)*) $(-> $binary_output_ty)? {
-                        $binary_body
-                    }
-                )*
-            }
+                pub(crate) mod unary_definitions {
+                    #[allow(unused)]
+                    use super::*;
+                    $(
+                        pub(crate) fn $unary_name() -> UnaryOperationInterface {
+                            parse_arg_types!([CALLBACK: generate_unary_interface![unary_operations::$unary_name]] $($unary_args)*)
+                        }
+                    )*
+                }
+            )?
 
-            $mod_binary_operations_vis mod binary_definitions {
-                #[allow(unused)]
-                use super::*;
-                $(
-                    $mod_binary_operations_vis fn $binary_name() -> BinaryOperationInterface {
-                        parse_arg_types!([CALLBACK: generate_binary_interface![binary_operations::$binary_name]] $($binary_args)*)
-                    }
-                )*
-            }
+            $(
+                pub(crate) mod binary_operations {
+                    #[allow(unused)]
+                    use super::*;
+                    $(
+                        pub(crate) fn $binary_name(if_empty!([$($binary_context)?][_context]): BinaryOperationCallContext, $($binary_args)*) $(-> $binary_output_ty)? {
+                            $binary_body
+                        }
+                    )*
+                }
+                pub(crate) mod binary_definitions {
+                    #[allow(unused)]
+                    use super::*;
+                    $(
+                        pub(crate) fn $binary_name() -> BinaryOperationInterface {
+                            parse_arg_types!([CALLBACK: generate_binary_interface![binary_operations::$binary_name]] $($binary_args)*)
+                        }
+                    )*
+                }
+            )?
 
             $(
                 pub(crate) mod property_access {
@@ -608,22 +640,36 @@ macro_rules! define_type_features {
             )?
 
             impl TypeData for $type_def {
-                #[allow(unreachable_code)]
-                fn resolve_own_method(method_name: &str) -> Option<MethodInterface> {
-                    Some(match method_name {
-                        $(
-                            stringify!($method_name) => method_definitions::$method_name(),
-                        )*
-                        _ => return None,
-                    })
-                }
+                $(
+                    #[allow(unreachable_code)]
+                    fn resolve_own_method(method_name: &str) -> Option<FunctionInterface> {
+                        Some(match method_name {
+                            $(
+                                stringify!($method_name) => method_definitions::$method_name(),
+                            )*
+                            _ => return None,
+                        })
+                    }
+                )?
+
+                $(
+                    #[allow(unreachable_code)]
+                    fn resolve_type_function(function_name: &str) -> Option<FunctionInterface> {
+                        Some(match function_name {
+                            $(
+                                stringify!($function_name) => function_definitions::$function_name(),
+                            )*
+                            _ => return None,
+                        })
+                    }
+                )?
 
                 define_type_features!(@property_access_impl $($property_source_ty)?);
                 define_type_features!(@index_access_impl $($index_source_ty)?);
 
                 // Pass through resolve_own_unary_operation and resolve_own_binary_operation
                 // until there's a better way to define them
-                $($items)*
+                $($($items)*)?
             }
         }
     };

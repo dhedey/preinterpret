@@ -22,9 +22,7 @@ impl ValuesEqual for char {
 define_type_features! {
     impl CharType,
     pub(crate) mod char_interface {
-        pub(crate) mod methods {
-        }
-        pub(crate) mod unary_operations {
+        unary_operations {
             fn cast_to_untyped_integer(input: char) -> UntypedInteger {
                 UntypedInteger::from_fallback(input as FallbackInteger)
             }
@@ -85,7 +83,7 @@ define_type_features! {
                 input.to_string()
             }
         }
-        pub(crate) mod binary_operations {
+        binary_operations {
             fn eq(lhs: char, rhs: char) -> bool {
                 lhs == rhs
             }

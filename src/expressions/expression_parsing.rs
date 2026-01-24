@@ -107,6 +107,8 @@ impl<'a> ExpressionParser<'a> {
                 }
                 if punct.as_char() == '@' {
                     UnaryAtom::Leaf(Leaf::ParseTemplateLiteral(input.parse()?))
+                } else if punct.as_char() == '|' {
+                    UnaryAtom::Leaf(Leaf::ClosureExpression(Box::new(input.parse()?)))
                 } else if punct.as_char() == '.' {
                     UnaryAtom::Range(input.parse()?)
                 } else if punct.as_char() == '-' || punct.as_char() == '!' {
@@ -181,10 +183,17 @@ impl<'a> ExpressionParser<'a> {
                     brackets: Brackets { delim_span },
                 }));
             }
+            SourcePeekMatch::Group(Delimiter::Parenthesis) => {
+                let (_, delim_span) = input.parse_and_enter_group(None)?;
+                return Ok(NodeExtension::Invocation(Invocation {
+                    parentheses: Parentheses { delim_span },
+                    parameters: vec![],
+                }));
+            }
             SourcePeekMatch::Punct(punct) if punct.as_char() == ',' => {
                 match parent_stack_frame {
                     ExpressionStackFrame::NonEmptyArray { .. }
-                    | ExpressionStackFrame::NonEmptyMethodCallParametersList { .. }
+                    | ExpressionStackFrame::NonEmptyInvocationParametersList { .. }
                     | ExpressionStackFrame::NonEmptyObject {
                         state: ObjectStackFrameState::EntryValue { .. },
                         ..
@@ -260,7 +269,7 @@ impl<'a> ExpressionParser<'a> {
                 state: ObjectStackFrameState::EntryValue { .. },
                 ..
             } => input.parse_err("Expected comma, }, or operator"),
-            ExpressionStackFrame::NonEmptyMethodCallParametersList { .. } => {
+            ExpressionStackFrame::NonEmptyInvocationParametersList { .. } => {
                 input.parse_err("Expected comma, ) or operator")
             }
             // e.g. I've just matched the true in !true or false || true,
@@ -335,7 +344,7 @@ impl<'a> ExpressionParser<'a> {
                 }
                 NodeExtension::NonTerminalComma => {
                     let next_item = match self.expression_stack.last_mut().unwrap() {
-                        ExpressionStackFrame::NonEmptyMethodCallParametersList { parameters, .. } => {
+                        ExpressionStackFrame::NonEmptyInvocationParametersList { invocation: Invocation { parameters, .. }, .. } => {
                             parameters.push(node);
                             Some(WorkItem::RequireUnaryAtom)
                         }
@@ -376,20 +385,40 @@ impl<'a> ExpressionParser<'a> {
                         .add_node(ExpressionNode::Property { node, access }),
                 },
                 NodeExtension::MethodCall(method) => {
+                    let property: PropertyAccess = PropertyAccess { dot: method.dot, property: method.method };
+                    let invocation = Invocation { parentheses: method.parentheses, parameters: Vec::new() };
                     if self.streams.is_current_empty() {
                         self.streams.exit_group(None)?;
                         let node = self.nodes.add_node(ExpressionNode::MethodCall {
-                            node,
-                            method,
-                            parameters: Vec::new(),
+                            receiver: node,
+                            method: property,
+                            invocation,
                         });
                         WorkItem::TryParseAndApplyExtension { node }
                     } else {
                         self.push_stack_frame(
-                            ExpressionStackFrame::NonEmptyMethodCallParametersList {
+                            ExpressionStackFrame::NonEmptyInvocationParametersList {
                                 node,
-                                method,
-                                parameters: Vec::new(),
+                                method: Some(property),
+                                invocation,
+                            },
+                        )
+                    }
+                }
+                NodeExtension::Invocation(invocation) => {
+                    if self.streams.is_current_empty() {
+                        self.streams.exit_group(None)?;
+                        let node = self.nodes.add_node(ExpressionNode::Invocation {
+                            invokable: node,
+                            invocation,
+                        });
+                        WorkItem::TryParseAndApplyExtension { node }
+                    } else {
+                        self.push_stack_frame(
+                            ExpressionStackFrame::NonEmptyInvocationParametersList {
+                                node,
+                                method: None,
+                                invocation,
                             },
                         )
                     }
@@ -448,19 +477,29 @@ impl<'a> ExpressionParser<'a> {
                             .add_node(ExpressionNode::Array { brackets, items }),
                     }
                 }
-                ExpressionStackFrame::NonEmptyMethodCallParametersList {
+                ExpressionStackFrame::NonEmptyInvocationParametersList {
                     node: source,
-                    mut parameters,
                     method,
+                    mut invocation,
                 } => {
                     assert!(matches!(extension, NodeExtension::EndOfStreamOrGroup));
-                    parameters.push(node);
+                    invocation.parameters.push(node);
                     self.streams.exit_group(None)?;
-                    let node = self.nodes.add_node(ExpressionNode::MethodCall {
-                        node: source,
-                        method,
-                        parameters,
-                    });
+                    let node = match method {
+                        Some(method) => {
+                            self.nodes.add_node(ExpressionNode::MethodCall {
+                                receiver: source,
+                                method,
+                                invocation,
+                            })
+                        }
+                        None => {
+                            self.nodes.add_node(ExpressionNode::Invocation {
+                                invokable: source,
+                                invocation,
+                            })
+                        }
+                    };
                     WorkItem::TryParseAndApplyExtension { node }
                 }
                 ExpressionStackFrame::NonEmptyObject {
@@ -919,13 +958,13 @@ pub(super) enum ExpressionStackFrame {
         complete_entries: Vec<(ObjectKey, ExpressionNodeId)>,
         state: ObjectStackFrameState,
     },
-    /// A method call with a possibly incomplete list of parameters.
-    /// * When the method parameters list is opened, we add its inside to the parse stream stack
-    /// * When the method parameters list is closed, we pop it from the parse stream stack
-    NonEmptyMethodCallParametersList {
+    /// An invocation call with a possibly incomplete list of parameters.
+    /// * When the invocation parameters list is opened, we add its inside to the parse stream stack
+    /// * When the invocation parameters list is closed, we pop it from the parse stream stack
+    NonEmptyInvocationParametersList {
         node: ExpressionNodeId,
-        method: MethodAccess,
-        parameters: Vec<ExpressionNodeId>,
+        method: Option<PropertyAccess>,
+        invocation: Invocation,
     },
     /// An incomplete unary prefix operation
     /// NB: unary postfix operations such as `as` casting go straight to ExtendableNode
@@ -977,7 +1016,7 @@ impl ExpressionStackFrame {
             ExpressionStackFrame::Group { .. } => OperatorPrecendence::MIN,
             ExpressionStackFrame::NonEmptyArray { .. } => OperatorPrecendence::MIN,
             ExpressionStackFrame::NonEmptyObject { .. } => OperatorPrecendence::MIN,
-            ExpressionStackFrame::NonEmptyMethodCallParametersList { .. } => {
+            ExpressionStackFrame::NonEmptyInvocationParametersList { .. } => {
                 OperatorPrecendence::MIN
             }
             ExpressionStackFrame::IncompleteIndex { .. } => OperatorPrecendence::MIN,
@@ -1040,6 +1079,7 @@ pub(super) enum NodeExtension {
     Property(PropertyAccess),
     MethodCall(MethodAccess),
     Index(IndexAccess),
+    Invocation(Invocation),
     Range(syn::RangeLimits),
     AssignmentOperation(Token![=]),
     EndOfStreamOrGroup,
@@ -1055,6 +1095,7 @@ impl NodeExtension {
             NodeExtension::Property { .. } => OperatorPrecendence::Unambiguous,
             NodeExtension::MethodCall { .. } => OperatorPrecendence::Unambiguous,
             NodeExtension::Index { .. } => OperatorPrecendence::Unambiguous,
+            NodeExtension::Invocation { .. } => OperatorPrecendence::Unambiguous,
             NodeExtension::Range(_) => OperatorPrecendence::Range,
             NodeExtension::EndOfStreamOrGroup => OperatorPrecendence::MIN,
             NodeExtension::AssignmentOperation(_) => OperatorPrecendence::AssignExtension,
@@ -1071,6 +1112,7 @@ impl NodeExtension {
             | NodeExtension::Property { .. }
             | NodeExtension::MethodCall { .. }
             | NodeExtension::Index { .. }
+            | NodeExtension::Invocation { .. }
             | NodeExtension::Range { .. }
             | NodeExtension::AssignmentOperation { .. }
             | NodeExtension::EndOfStreamOrGroup) => {

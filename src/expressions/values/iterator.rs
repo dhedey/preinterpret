@@ -304,7 +304,7 @@ impl Iterator for Mutable<IteratorValue> {
 define_type_features! {
     impl IteratorType,
     pub(crate) mod iterator_interface {
-        pub(crate) mod methods {
+        methods {
             fn next(mut this: Mutable<IteratorValue>) -> AnyValue {
                 match this.next() {
                     Some(value) => value,
@@ -330,7 +330,7 @@ define_type_features! {
                 IteratorValue::new_for_array(ArrayValue::new(taken))
             }
         }
-        pub(crate) mod unary_operations {
+        unary_operations {
             [context] fn cast_singleton_to_value(Spanned(this, span): Spanned<IteratorValue>) -> ExecutionResult<ReturnedValue> {
                 match this.singleton_value() {
                     Some(value) => Ok(context.operation.evaluate(Spanned(value, span))?.0),
@@ -338,7 +338,6 @@ define_type_features! {
                 }
             }
         }
-        pub(crate) mod binary_operations {}
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {

@@ -8,9 +8,7 @@ macro_rules! impl_int_operations {
         define_type_features! {
             impl $integer_type_data,
             pub(crate) mod $mod_name {
-                pub(crate) mod methods {
-                }
-                pub(crate) mod unary_operations {
+                unary_operations {
                     $(
                         fn neg(Spanned(value, span): Spanned<$integer_type>) -> ExecutionResult<$integer_type> {
                             ignore_all!($signed); // Include only for signed types
@@ -95,8 +93,6 @@ macro_rules! impl_int_operations {
                     fn cast_to_string(input: $integer_type) -> String {
                         input.to_string()
                     }
-                }
-                pub(crate) mod binary_operations {
                 }
                 interface_items {
                     fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {

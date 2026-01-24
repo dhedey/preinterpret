@@ -124,9 +124,7 @@ impl Spanned<UntypedInteger> {
 define_type_features! {
     impl UntypedIntegerType,
     pub(crate) mod untyped_integer_interface {
-        pub(crate) mod methods {
-        }
-        pub(crate) mod unary_operations {
+        unary_operations {
             fn neg(Spanned(value, span): Spanned<UntypedInteger>) -> ExecutionResult<UntypedInteger> {
                 let input = value.into_fallback();
                 match input.checked_neg() {
@@ -202,8 +200,6 @@ define_type_features! {
             fn cast_to_string(input: UntypedIntegerFallback) -> String {
                 input.0.to_string()
             }
-        }
-        pub(crate) mod binary_operations {
         }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {

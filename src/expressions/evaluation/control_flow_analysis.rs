@@ -46,10 +46,16 @@ pub(in super::super) fn control_flow_visit(
                 stack.push(*node);
             }
             ExpressionNode::MethodCall {
-                node, parameters, ..
+                receiver, invocation: Invocation { parameters, .. }, ..
             } => {
                 stack.push_reversed(parameters.iter().copied());
-                stack.push(*node); // This is a stack so this executes first
+                stack.push(*receiver); // This is a stack so this executes first
+            }
+            ExpressionNode::Invocation {
+                invokable, invocation: Invocation { parameters, .. }, ..
+            } => {
+                stack.push_reversed(parameters.iter().copied());
+                stack.push(*invokable); // This is a stack so this executes first
             }
             ExpressionNode::Index { node, index, .. } => {
                 stack.push_reversed([*node, *index]);
@@ -120,6 +126,9 @@ impl Leaf {
             Leaf::ParseExpression(parse_expression) => parse_expression.control_flow_pass(context),
             Leaf::Discarded(_) => Ok(()),
             Leaf::Value(_) => Ok(()),
+            Leaf::ClosureExpression(inline_function) => {
+                inline_function.control_flow_pass(context)
+            },
         }
     }
 }

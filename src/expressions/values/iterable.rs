@@ -19,7 +19,7 @@ pub(crate) type IterableAnyRef<'a> = AnyRef<'a, dyn IsIterable>;
 define_type_features! {
     impl IterableType,
     pub(crate) mod iterable_interface {
-        pub(crate) mod methods {
+        methods {
             fn into_iter(this: IterableValue) -> ExecutionResult<IteratorValue> {
                 this.into_iterator()
             }
@@ -63,12 +63,11 @@ define_type_features! {
                 Ok(vec)
             }
         }
-        pub(crate) mod unary_operations {
+        unary_operations {
             fn cast_into_iterator(this: IterableValue) -> ExecutionResult<IteratorValue> {
                 this.into_iterator()
             }
         }
-        pub(crate) mod binary_operations {}
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {

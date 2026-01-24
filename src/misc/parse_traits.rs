@@ -598,6 +598,7 @@ impl<'a, K> AnyParseStream for ParseStream<'a, K> {
 /// This is useful for keywords or syntax which we'd like to parse
 /// in a uniform way, but don't need to keep around bloating the
 /// size of our types.
+#[derive(Copy, Clone)]
 pub(crate) struct Unused<T> {
     _marker: std::marker::PhantomData<T>,
 }

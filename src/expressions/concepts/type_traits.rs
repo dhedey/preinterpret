@@ -144,7 +144,7 @@ pub(crate) trait IsChildType: IsHierarchicalType {
 macro_rules! impl_type_feature_resolver {
     (impl TypeFeatureResolver for $type_def:ty: [$($type_defs:ty)+]) => {
         impl TypeFeatureResolver for $type_def {
-            fn resolve_method(&self, method_name: &str) -> Option<MethodInterface> {
+            fn resolve_method(&self, method_name: &str) -> Option<FunctionInterface> {
                 $(
                     if let Some(method) = <$type_defs as TypeData>::resolve_own_method(method_name) {
                         return Some(method);
@@ -175,6 +175,11 @@ macro_rules! impl_type_feature_resolver {
                     };
                 )+
                 None
+            }
+
+            fn resolve_type_function(&self, function_name: &str) -> Option<FunctionInterface> {
+                // Purposefully doesn't resolve parents, but TBC if this is right
+                <$type_def as TypeData>::resolve_type_function(function_name)
             }
 
             fn resolve_type_property(&self, property_name: &str) -> Option<AnyValue> {

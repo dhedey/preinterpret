@@ -67,7 +67,7 @@ pub(crate) fn string_to_literal(
 define_type_features! {
     impl StringType,
     pub(crate) mod string_interface {
-        pub(crate) mod methods {
+        methods {
             // ==================
             // CONVERSION METHODS
             // ==================
@@ -141,12 +141,12 @@ define_type_features! {
                 string_conversion::insert_spaces_between_words(&this)
             }
         }
-        pub(crate) mod unary_operations {
+        unary_operations {
             fn cast_to_string(this: String) -> String {
                 this
             }
         }
-        pub(crate) mod binary_operations {
+        binary_operations {
             fn add(mut lhs: String, rhs: AnyRef<String>) -> String {
                 lhs.push_str(rhs.deref());
                 lhs

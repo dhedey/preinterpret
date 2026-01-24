@@ -81,6 +81,11 @@ impl ExpressionNode {
                             parse_expression.evaluate_spanned(interpreter, ownership)
                         })?
                     }
+                    Leaf::ClosureExpression(closure_expression) => {
+                        context.evaluate(|interpreter, ownership| {
+                            closure_expression.evaluate_spanned(interpreter, ownership)
+                        })?
+                    }
                 }
             }
             ExpressionNode::Grouped { delim_span, inner } => {
@@ -119,10 +124,14 @@ impl ExpressionNode {
                 value,
             } => AssignmentBuilder::start(context, *assignee, *equals_token, *value),
             ExpressionNode::MethodCall {
-                node,
+                receiver,
                 method,
-                parameters,
-            } => MethodCallBuilder::start(context, *node, method.clone(), parameters),
+                invocation,
+            } => MethodCallBuilder::start(context, *receiver, method, invocation),
+            ExpressionNode::Invocation {
+                invokable,
+                invocation,
+            } => InvocationBuilder::start(context, *invokable, invocation),
         })
     }
 

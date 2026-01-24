@@ -2,8 +2,10 @@
 use super::*;
 
 pub(crate) trait TypeFeatureResolver {
-    /// Resolves a unary operation as a method interface for this type.
-    fn resolve_method(&self, method_name: &str) -> Option<MethodInterface>;
+    /// Resolves a method with the given name defined on this type.
+    /// A method is like a function, but guaranteed to have a first argument
+    /// (the receiver) which is assignable from the type.
+    fn resolve_method(&self, method_name: &str) -> Option<FunctionInterface>;
 
     /// Resolves a unary operation as a method interface for this type.
     fn resolve_unary_operation(
@@ -16,6 +18,9 @@ pub(crate) trait TypeFeatureResolver {
         &self,
         operation: &BinaryOperation,
     ) -> Option<BinaryOperationInterface>;
+
+    /// Resolves a function with the given name defined on this type.
+    fn resolve_type_function(&self, function_name: &str) -> Option<FunctionInterface>;
 
     /// Resolves a property of this type.
     fn resolve_type_property(&self, _property_name: &str) -> Option<AnyValue>;
@@ -36,7 +41,7 @@ pub(crate) trait TypeFeatureResolver {
 pub(crate) trait TypeData {
     /// Returns None if the method is not supported on this type itself.
     /// The method may still be supported on a type further up the resolution chain.
-    fn resolve_own_method(_method_name: &str) -> Option<MethodInterface> {
+    fn resolve_own_method(_method_name: &str) -> Option<FunctionInterface> {
         None
     }
 
@@ -61,6 +66,11 @@ pub(crate) trait TypeData {
         None
     }
 
+    /// Returns None if the function is not supported on this type itself.
+    fn resolve_type_function(_function_name: &str) -> Option<FunctionInterface> {
+        None
+    }
+
     /// Returns the property access interface for this type, if supported.
     fn resolve_own_property_access() -> Option<PropertyAccessInterface> {
         None
@@ -73,20 +83,23 @@ pub(crate) trait TypeData {
 }
 
 #[allow(unused)]
-pub(crate) enum MethodInterface {
+// It's good enough for our needs for now
+#[allow(unpredictable_function_pointer_comparisons)]
+#[derive(Clone, PartialEq, Eq)]
+pub(crate) enum FunctionInterface {
     Arity0 {
-        method: fn(&mut MethodCallContext) -> ExecutionResult<ReturnedValue>,
+        method: fn(&mut FunctionCallContext) -> ExecutionResult<ReturnedValue>,
         argument_ownership: [ArgumentOwnership; 0],
     },
     Arity1 {
         method:
-            fn(&mut MethodCallContext, Spanned<ArgumentValue>) -> ExecutionResult<ReturnedValue>,
+            fn(&mut FunctionCallContext, Spanned<ArgumentValue>) -> ExecutionResult<ReturnedValue>,
         argument_ownership: [ArgumentOwnership; 1],
     },
     /// 1 argument, 1 optional argument
     Arity1PlusOptional1 {
         method: fn(
-            &mut MethodCallContext,
+            &mut FunctionCallContext,
             Spanned<ArgumentValue>,
             Option<Spanned<ArgumentValue>>,
         ) -> ExecutionResult<ReturnedValue>,
@@ -94,7 +107,7 @@ pub(crate) enum MethodInterface {
     },
     Arity2 {
         method: fn(
-            &mut MethodCallContext,
+            &mut FunctionCallContext,
             Spanned<ArgumentValue>,
             Spanned<ArgumentValue>,
         ) -> ExecutionResult<ReturnedValue>,
@@ -102,7 +115,7 @@ pub(crate) enum MethodInterface {
     },
     Arity2PlusOptional1 {
         method: fn(
-            &mut MethodCallContext,
+            &mut FunctionCallContext,
             Spanned<ArgumentValue>,
             Spanned<ArgumentValue>,
             Option<Spanned<ArgumentValue>>,
@@ -111,7 +124,7 @@ pub(crate) enum MethodInterface {
     },
     Arity3 {
         method: fn(
-            &mut MethodCallContext,
+            &mut FunctionCallContext,
             Spanned<ArgumentValue>,
             Spanned<ArgumentValue>,
             Spanned<ArgumentValue>,
@@ -120,7 +133,7 @@ pub(crate) enum MethodInterface {
     },
     Arity3PlusOptional1 {
         method: fn(
-            &mut MethodCallContext,
+            &mut FunctionCallContext,
             Spanned<ArgumentValue>,
             Spanned<ArgumentValue>,
             Spanned<ArgumentValue>,
@@ -130,33 +143,33 @@ pub(crate) enum MethodInterface {
     },
     ArityAny {
         method: fn(
-            &mut MethodCallContext,
+            &mut FunctionCallContext,
             Vec<Spanned<ArgumentValue>>,
         ) -> ExecutionResult<ReturnedValue>,
         argument_ownership: Vec<ArgumentOwnership>,
     },
 }
 
-impl MethodInterface {
+impl FunctionInterface {
     pub(crate) fn execute(
         &self,
         arguments: Vec<Spanned<ArgumentValue>>,
-        context: &mut MethodCallContext,
+        context: &mut FunctionCallContext,
     ) -> ExecutionResult<Spanned<ReturnedValue>> {
         let output_value = match self {
-            MethodInterface::Arity0 { method, .. } => {
+            FunctionInterface::Arity0 { method, .. } => {
                 if !arguments.is_empty() {
                     return context.output_span_range.type_err("Expected 0 arguments");
                 }
                 method(context)
             }
-            MethodInterface::Arity1 { method, .. } => {
+            FunctionInterface::Arity1 { method, .. } => {
                 match <[Spanned<ArgumentValue>; 1]>::try_from(arguments) {
                     Ok([a]) => method(context, a),
                     Err(_) => context.output_span_range.type_err("Expected 1 argument"),
                 }
             }
-            MethodInterface::Arity1PlusOptional1 { method, .. } => match arguments.len() {
+            FunctionInterface::Arity1PlusOptional1 { method, .. } => match arguments.len() {
                 1 => {
                     let [a] = <[Spanned<ArgumentValue>; 1]>::try_from(arguments)
                         .ok()
@@ -173,13 +186,13 @@ impl MethodInterface {
                     .output_span_range
                     .type_err("Expected 1 or 2 arguments"),
             },
-            MethodInterface::Arity2 { method, .. } => {
+            FunctionInterface::Arity2 { method, .. } => {
                 match <[Spanned<ArgumentValue>; 2]>::try_from(arguments) {
                     Ok([a, b]) => method(context, a, b),
                     Err(_) => context.output_span_range.type_err("Expected 2 arguments"),
                 }
             }
-            MethodInterface::Arity2PlusOptional1 { method, .. } => match arguments.len() {
+            FunctionInterface::Arity2PlusOptional1 { method, .. } => match arguments.len() {
                 2 => {
                     let [a, b] = <[Spanned<ArgumentValue>; 2]>::try_from(arguments)
                         .ok()
@@ -196,13 +209,13 @@ impl MethodInterface {
                     .output_span_range
                     .type_err("Expected 2 or 3 arguments"),
             },
-            MethodInterface::Arity3 { method, .. } => {
+            FunctionInterface::Arity3 { method, .. } => {
                 match <[Spanned<ArgumentValue>; 3]>::try_from(arguments) {
                     Ok([a, b, c]) => method(context, a, b, c),
                     Err(_) => context.output_span_range.type_err("Expected 3 arguments"),
                 }
             }
-            MethodInterface::Arity3PlusOptional1 { method, .. } => match arguments.len() {
+            FunctionInterface::Arity3PlusOptional1 { method, .. } => match arguments.len() {
                 3 => {
                     let [a, b, c] = <[Spanned<ArgumentValue>; 3]>::try_from(arguments)
                         .ok()
@@ -219,7 +232,7 @@ impl MethodInterface {
                     .output_span_range
                     .type_err("Expected 3 or 4 arguments"),
             },
-            MethodInterface::ArityAny { method, .. } => method(context, arguments),
+            FunctionInterface::ArityAny { method, .. } => method(context, arguments),
         };
         output_value.map(|v| v.spanned(context.output_span_range))
     }
@@ -227,28 +240,28 @@ impl MethodInterface {
     /// Returns (argument_ownerships, required_argument_count)
     pub(crate) fn argument_ownerships(&self) -> (&[ArgumentOwnership], usize) {
         match self {
-            MethodInterface::Arity0 {
+            FunctionInterface::Arity0 {
                 argument_ownership, ..
             } => (argument_ownership, 0),
-            MethodInterface::Arity1 {
+            FunctionInterface::Arity1 {
                 argument_ownership, ..
             } => (argument_ownership, 1),
-            MethodInterface::Arity1PlusOptional1 {
+            FunctionInterface::Arity1PlusOptional1 {
                 argument_ownership, ..
             } => (argument_ownership, 1),
-            MethodInterface::Arity2 {
+            FunctionInterface::Arity2 {
                 argument_ownership, ..
             } => (argument_ownership, 2),
-            MethodInterface::Arity2PlusOptional1 {
+            FunctionInterface::Arity2PlusOptional1 {
                 argument_ownership, ..
             } => (argument_ownership, 2),
-            MethodInterface::Arity3 {
+            FunctionInterface::Arity3 {
                 argument_ownership, ..
             } => (argument_ownership, 3),
-            MethodInterface::Arity3PlusOptional1 {
+            FunctionInterface::Arity3PlusOptional1 {
                 argument_ownership, ..
             } => (argument_ownership, 3),
-            MethodInterface::ArityAny {
+            FunctionInterface::ArityAny {
                 argument_ownership, ..
             } => (argument_ownership, 0),
         }

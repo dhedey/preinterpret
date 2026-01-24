@@ -122,10 +122,15 @@ pub(super) enum ExpressionNode {
         node: ExpressionNodeId,
         access: PropertyAccess,
     },
+    // This could be merged into Invocation, once Invocation is feature complete
     MethodCall {
-        node: ExpressionNodeId,
-        method: MethodAccess,
-        parameters: Vec<ExpressionNodeId>,
+        receiver: ExpressionNodeId,
+        method: PropertyAccess,
+        invocation: Invocation,
+    },
+    Invocation {
+        invokable: ExpressionNodeId,
+        invocation: Invocation,
     },
     Index {
         node: ExpressionNodeId,
@@ -144,6 +149,11 @@ pub(super) enum ExpressionNode {
     },
 }
 
+pub(super) struct Invocation {
+    pub(super) parentheses: Parentheses,
+    pub(super) parameters: Vec<ExpressionNodeId>,
+}
+
 // We Box some of these variants to reduce the size of ExpressionNode
 pub(super) enum Leaf {
     Block(Box<ExpressionBlock>),
@@ -159,26 +169,7 @@ pub(super) enum Leaf {
     ForExpression(Box<ForExpression>),
     AttemptExpression(Box<AttemptExpression>),
     ParseExpression(Box<ParseExpression>),
-}
-
-impl HasSpanRange for Leaf {
-    fn span_range(&self) -> SpanRange {
-        match self {
-            Leaf::Variable(variable) => variable.span_range(),
-            Leaf::TypeProperty(type_property) => type_property.span_range(),
-            Leaf::Discarded(token) => token.span_range(),
-            Leaf::Block(block) => block.span_range(),
-            Leaf::Value(value) => value.span_range(),
-            Leaf::StreamLiteral(stream) => stream.span_range(),
-            Leaf::ParseTemplateLiteral(stream) => stream.span_range(),
-            Leaf::IfExpression(expression) => expression.span_range(),
-            Leaf::LoopExpression(expression) => expression.span_range(),
-            Leaf::WhileExpression(expression) => expression.span_range(),
-            Leaf::ForExpression(expression) => expression.span_range(),
-            Leaf::AttemptExpression(expression) => expression.span_range(),
-            Leaf::ParseExpression(expression) => expression.span_range(),
-        }
-    }
+    ClosureExpression(Box<ClosureExpression>),
 }
 
 impl Leaf {
@@ -196,7 +187,8 @@ impl Leaf {
             | Leaf::Discarded(_)
             | Leaf::Value(_)
             | Leaf::StreamLiteral(_)
-            | Leaf::ParseTemplateLiteral(_) => false,
+            | Leaf::ParseTemplateLiteral(_)
+            | Leaf::ClosureExpression(_) => false,
         }
     }
 }

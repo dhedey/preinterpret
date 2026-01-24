@@ -264,12 +264,17 @@ impl AssigneeValue {
     }
 }
 
-impl IsValueContent for Assignee<AnyValue> {
-    type Type = AnyType;
+impl<X: IsValueContent> IsValueContent for Assignee<X> {
+    type Type = X::Type;
     type Form = BeAssignee;
 }
 
-impl IntoValueContent<'static> for Assignee<AnyValue> {
+impl<X: IsSelfValueContent<'static>> IntoValueContent<'static> for Assignee<X>
+where
+    X::Type: IsHierarchicalType<Content<'static, X::Form> = X>,
+    X::Form: IsHierarchicalForm,
+    X::Form: LeafAsMutForm,
+{
     fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
         self.0
              .0
@@ -362,12 +367,17 @@ impl AnyValueMutable {
     }
 }
 
-impl IsValueContent for Mutable<AnyValue> {
-    type Type = AnyType;
+impl<X: IsValueContent> IsValueContent for Mutable<X> {
+    type Type = X::Type;
     type Form = BeMutable;
 }
 
-impl IntoValueContent<'static> for Mutable<AnyValue> {
+impl<X: IsSelfValueContent<'static>> IntoValueContent<'static> for Mutable<X>
+where
+    X::Type: IsHierarchicalType<Content<'static, X::Form> = X>,
+    X::Form: IsHierarchicalForm,
+    X::Form: LeafAsMutForm,
+{
     fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
         self.0
             .replace(|inner, emplacer| inner.as_mut_value().into_mutable(emplacer))
@@ -474,12 +484,17 @@ impl AnyValueShared {
     }
 }
 
-impl IsValueContent for Shared<AnyValue> {
-    type Type = AnyType;
+impl<X: IsValueContent> IsValueContent for Shared<X> {
+    type Type = X::Type;
     type Form = BeShared;
 }
 
-impl IntoValueContent<'static> for Shared<AnyValue> {
+impl<X: IsSelfValueContent<'static>> IntoValueContent<'static> for Shared<X>
+where
+    X::Type: IsHierarchicalType<Content<'static, X::Form> = X>,
+    X::Form: IsHierarchicalForm,
+    X::Form: LeafAsRefForm,
+{
     fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
         self.0
             .replace(|inner, emplacer| inner.as_ref_value().into_shared(emplacer))
@@ -621,6 +636,32 @@ impl Spanned<&mut CopyOnWrite<AnyValue>> {
         }
     }
 }
+
+impl<X: IsValueContent + Clone> IsValueContent for CopyOnWrite<X> {
+    type Type = X::Type;
+    type Form = BeCopyOnWrite;
+}
+
+impl<X: Clone + Sized> IntoValueContent<'static> for CopyOnWrite<X>
+where
+    X: IsValueContent<Form = BeOwned> + IsSelfValueContent<'static> + IntoValueContent<'static>,
+    X::Type: IsHierarchicalType<Content<'static, X::Form> = X>,
+{
+    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
+        match self.inner {
+            CopyOnWriteInner::Owned(owned) => {
+                AnyLevelCopyOnWrite::<X::Type>::Owned(owned).into_copy_on_write()
+            }
+            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
+                AnyLevelCopyOnWrite::<X::Type>::SharedWithInfallibleCloning(shared.into_content()).into_copy_on_write()
+            }
+            CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
+                AnyLevelCopyOnWrite::<X::Type>::SharedWithTransparentCloning(shared.into_content()).into_copy_on_write()
+            }
+        }
+    }
+}
+
 
 impl<T: ?Sized + ToOwned> AsRef<T> for CopyOnWrite<T> {
     fn as_ref(&self) -> &T {

@@ -398,15 +398,12 @@ impl_resolvable_argument_for! {
 define_type_features! {
     impl RangeType,
     pub(crate) mod range_interface {
-        pub(crate) mod methods {
-        }
-        pub(crate) mod unary_operations {
+        unary_operations {
             [context] fn cast_via_iterator(Spanned(this, span): Spanned<RangeValue>) -> ExecutionResult<ReturnedValue> {
                 let this_iterator = IteratorValue::new_for_range(this)?;
                 Ok(context.operation.evaluate(Spanned(this_iterator, span))?.0)
             }
         }
-        pub(crate) mod binary_operations {}
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {

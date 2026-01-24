@@ -272,7 +272,7 @@ impl IntoValueContent<'static> for BTreeMap<String, ObjectEntry> {
 define_type_features! {
     impl ObjectType,
     pub(crate) mod object_interface {
-        pub(crate) mod methods {
+        methods {
             [context] fn zip(this: ObjectValue) -> ExecutionResult<ArrayValue> {
                 ZipIterators::new_from_object(this, context.span_range())?.run_zip(context.interpreter, true)
             }
@@ -281,9 +281,6 @@ define_type_features! {
                 ZipIterators::new_from_object(this, context.span_range())?.run_zip(context.interpreter, false)
             }
         }
-        pub(crate) mod unary_operations {
-        }
-        pub(crate) mod binary_operations {}
         property_access(ObjectValue) {
             [ctx] fn shared(source: &'a ObjectValue) {
                 source.property_ref(ctx.property)

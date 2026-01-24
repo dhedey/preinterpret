@@ -194,7 +194,7 @@ impl_resolvable_argument_for! {
 define_type_features! {
     impl ArrayType,
     pub(crate) mod array_interface {
-        pub(crate) mod methods {
+        methods {
             fn push(mut this: Mutable<ArrayValue>, item: AnyValue) -> ExecutionResult<()> {
                 this.items.push(item);
                 Ok(())
@@ -205,7 +205,7 @@ define_type_features! {
                 StreamOutput::new(move |stream| this.output_items_to(&mut ToStreamContext::new(stream, error_span_range), Grouping::Grouped))
             }
         }
-        pub(crate) mod unary_operations {
+        unary_operations {
             [context] fn cast_singleton_to_value(Spanned(mut this, span): Spanned<ArrayValue>) -> ExecutionResult<ReturnedValue> {
                 let length = this.items.len();
                 if length == 1 {
@@ -218,7 +218,7 @@ define_type_features! {
                 }
             }
         }
-        pub(crate) mod binary_operations {
+        binary_operations {
             fn add(mut lhs: ArrayValue, rhs: ArrayValue) -> ArrayValue {
                 lhs.items.extend(rhs.items);
                 lhs

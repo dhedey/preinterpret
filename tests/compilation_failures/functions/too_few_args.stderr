@@ -1,0 +1,5 @@
+error: This function expects 2 arguments, but 1 was provided
+ --> tests/compilation_failures/functions/too_few_args.rs:6:9
+  |
+6 |         array::push(arr);
+  |         ^^^^^^^^^^^

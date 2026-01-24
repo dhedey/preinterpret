@@ -33,6 +33,8 @@ define_parent_type! {
         Range => RangeType,
         Iterator => IteratorType,
         Parser => ParserType,
+        Function => FunctionType,
+        PreinterpretApi => PreinterpretApiType,
     },
     type_name: "value",
     articled_display_name: "any value",
@@ -41,7 +43,7 @@ define_parent_type! {
 define_type_features! {
     impl AnyType,
     pub(crate) mod value_interface {
-        pub(crate) mod methods {
+        methods {
             fn clone(this: CopyOnWriteValue) -> AnyValue {
                 this.clone_to_owned_infallible()
             }
@@ -158,7 +160,7 @@ define_type_features! {
                 stream_interface::methods::to_literal(context, spanned)
             }
         }
-        pub(crate) mod unary_operations {
+        unary_operations {
             fn cast_to_string(Spanned(input, span_range): Spanned<AnyValue>) -> ExecutionResult<String> {
                 input.as_ref_value().concat_recursive(&ConcatBehaviour::standard(span_range))
             }
@@ -167,7 +169,7 @@ define_type_features! {
                 input.into_stream()
             }
         }
-        pub(crate) mod binary_operations {
+        binary_operations {
             fn eq(lhs: AnyValueAnyRef, rhs: AnyValueAnyRef) -> bool {
                 AnyValue::values_equal(lhs.as_ref_value(), rhs.as_ref_value())
             }
@@ -303,6 +305,11 @@ impl<'a> ValuesEqual for AnyValueRef<'a> {
             (AnyValueContent::Parser(_), _) => ctx.kind_mismatch(self, other),
             (AnyValueContent::Iterator(l), AnyValueContent::Iterator(r)) => l.test_equality(r, ctx),
             (AnyValueContent::Iterator(_), _) => ctx.kind_mismatch(self, other),
+            (AnyValueContent::Function(l), AnyValueContent::Function(r)) => {
+                l.test_equality(r, ctx)
+            }
+            (AnyValueContent::Function(_), _) => ctx.kind_mismatch(self, other),
+            (AnyValueContent::PreinterpretApi(not_a_value), _) => match **not_a_value {},
         }
     }
 }
@@ -404,6 +411,10 @@ impl<'a> AnyValueRef<'a> {
             AnyValueContent::Parser(_) => {
                 return output.type_err("Parsers cannot be output to a stream");
             }
+            AnyValueContent::Function(_) => {
+                return output.type_err("Functions cannot be output to a stream");
+            }
+            AnyValueContent::PreinterpretApi(not_a_value) => match *not_a_value {},
         };
         Ok(())
     }
@@ -445,6 +456,11 @@ impl<'a> AnyValueRef<'a> {
                     .error_span_range
                     .type_err("Parsers cannot be output to a string");
             }
+            AnyValueContent::Function(_) => {
+                return behaviour
+                    .error_span_range
+                    .type_err("Functions cannot be output to a string");
+            }
             AnyValueContent::Integer(_)
             | AnyValueContent::Float(_)
             | AnyValueContent::Char(_)
@@ -457,6 +473,7 @@ impl<'a> AnyValueRef<'a> {
                     .expect("Non-composite values should all be able to be outputted to a stream");
                 stream.concat_content_into(output, behaviour);
             }
+            AnyValueContent::PreinterpretApi(not_a_value) => match *not_a_value {}
         }
         Ok(())
     }

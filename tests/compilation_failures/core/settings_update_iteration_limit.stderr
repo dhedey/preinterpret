@@ -1,6 +1,0 @@
-error: Iteration limit of 5 exceeded.
-       If needed, the limit can be reconfigured with None.configure_preinterpret(%{ iteration_limit: XXX })
- --> tests/compilation_failures/core/settings_update_iteration_limit.rs:6:14
-  |
-6 |         loop {}
-  |              ^^

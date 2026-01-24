@@ -121,7 +121,7 @@ impl_resolvable_argument_for! {
 define_type_features! {
     impl StreamType,
     pub(crate) mod stream_interface {
-        pub(crate) mod methods {
+        methods {
             // This is also on iterable, but is specialized here for performance
             fn len(this: AnyRef<OutputStream>) -> usize {
                 this.len()
@@ -249,7 +249,7 @@ define_type_features! {
                 Ok(inner_interpreter.complete())
             }
         }
-        pub(crate) mod unary_operations {
+        unary_operations {
             [context] fn cast_coerced_to_value(Spanned(this, span): Spanned<OutputStream>) -> ExecutionResult<ReturnedValue> {
                 let coerced = this.coerce_into_value();
                 if let AnyValue::Stream(_) = &coerced {
@@ -259,7 +259,7 @@ define_type_features! {
                 Ok(context.operation.evaluate(Spanned(coerced, span))?.0)
             }
         }
-        pub(crate) mod binary_operations {
+        binary_operations {
             fn add(mut lhs: OutputStream, rhs: OutputStream) -> OutputStream {
                 rhs.append_into(&mut lhs);
                 lhs

@@ -70,7 +70,7 @@ impl Spanned<Shared<ParserHandle>> {
 
 fn parser<'a>(
     this: Spanned<Shared<ParserHandle>>,
-    context: &'a mut MethodCallContext,
+    context: &'a mut FunctionCallContext,
 ) -> ExecutionResult<OutputParseStream<'a>> {
     this.parser(context.interpreter)
 }
@@ -78,7 +78,7 @@ fn parser<'a>(
 define_type_features! {
     impl ParserType,
     pub(crate) mod parser_interface {
-        pub(crate) mod methods {
+        methods {
             // GENERAL
             // =======
 
@@ -251,11 +251,6 @@ define_type_features! {
                 let float: syn::LitFloat = parser(this, context)?.parse()?;
                 Ok(FloatValue::for_litfloat(&float)?)
             }
-        }
-        pub(crate) mod unary_operations {
-        }
-        pub(crate) mod binary_operations {}
-        interface_items {
         }
     }
 }

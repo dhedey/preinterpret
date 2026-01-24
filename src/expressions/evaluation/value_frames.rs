@@ -548,6 +548,7 @@ pub(super) enum AnyValueFrame {
     Range(RangeBuilder),
     Assignment(AssignmentBuilder),
     MethodCall(MethodCallBuilder),
+    Invocation(InvocationBuilder),
 }
 
 impl AnyValueFrame {
@@ -567,6 +568,7 @@ impl AnyValueFrame {
             AnyValueFrame::Range(frame) => frame.handle_next(context, value),
             AnyValueFrame::Assignment(frame) => frame.handle_next(context, value),
             AnyValueFrame::MethodCall(frame) => frame.handle_next(context, value),
+            AnyValueFrame::Invocation(frame) => frame.handle_next(context, value),
         }
     }
 }
@@ -1249,7 +1251,8 @@ impl EvaluationFrame for AssignmentBuilder {
 }
 
 pub(super) struct MethodCallBuilder {
-    method: MethodAccess,
+    method: PropertyAccess,
+    parentheses: Parentheses,
     unevaluated_parameters_stack: Vec<(ExpressionNodeId, ArgumentOwnership)>,
     state: MethodCallPath,
 }
@@ -1257,7 +1260,7 @@ pub(super) struct MethodCallBuilder {
 enum MethodCallPath {
     CallerPath,
     ArgumentsPath {
-        method: MethodInterface,
+        method: FunctionInterface,
         disabled_evaluated_arguments_including_caller: Vec<Spanned<ArgumentValue>>,
     },
 }
@@ -1265,13 +1268,15 @@ enum MethodCallPath {
 impl MethodCallBuilder {
     pub(super) fn start(
         context: ValueContext,
-        caller: ExpressionNodeId,
-        method: MethodAccess,
-        parameters: &[ExpressionNodeId],
+        receiver: ExpressionNodeId,
+        method: &PropertyAccess,
+        invocation: &Invocation,
     ) -> NextAction {
         let frame = Self {
-            method,
-            unevaluated_parameters_stack: parameters
+            method: method.clone(),
+            parentheses: invocation.parentheses.clone(),
+            unevaluated_parameters_stack: invocation
+                .parameters
                 .iter()
                 .rev()
                 .map(|x| {
@@ -1281,7 +1286,7 @@ impl MethodCallBuilder {
                 .collect(),
             state: MethodCallPath::CallerPath,
         };
-        context.request_late_bound(frame, caller)
+        context.request_late_bound(frame, receiver)
     }
 }
 
@@ -1302,16 +1307,18 @@ impl EvaluationFrame for MethodCallBuilder {
             MethodCallPath::CallerPath => {
                 let caller_span = span;
                 let caller = value.expect_late_bound();
+                let method_name = self.method.property.to_string();
+                let method_name = method_name.as_str();
                 let method = caller
                     .kind()
                     .feature_resolver()
-                    .resolve_method(self.method.method.to_string().as_str());
+                    .resolve_method(method_name);
                 let method = match method {
                     Some(m) => m,
                     None => {
-                        return self.method.method.type_err(format!(
+                        return self.method.property.type_err(format!(
                             "The method {} does not exist on {}",
-                            self.method.method,
+                            method_name,
                             caller.articled_kind(),
                         ))
                     }
@@ -1329,9 +1336,9 @@ impl EvaluationFrame for MethodCallBuilder {
                 if non_caller_arguments < non_caller_min_arguments
                     || non_caller_arguments > non_caller_max_arguments
                 {
-                    return self.method.method.type_err(format!(
+                    return self.method.property.type_err(format!(
                         "The method {} expects {} non-self argument/s, but {} were provided",
-                        self.method.method,
+                        method_name,
                         if non_caller_min_arguments == non_caller_max_arguments {
                             (non_caller_min_arguments).to_string()
                         } else {
@@ -1414,11 +1421,194 @@ impl EvaluationFrame for MethodCallBuilder {
                         (arguments, method)
                     }
                 };
-                let mut call_context = MethodCallContext {
-                    output_span_range: self.method.span_range(),
+                let mut call_context = FunctionCallContext {
+                    output_span_range: SpanRange::new_between(self.method.property, self.parentheses.close()),
                     interpreter: context.interpreter(),
                 };
                 let output = method.execute(arguments, &mut call_context)?;
+                context.return_returned_value(output)?
+            }
+        })
+    }
+}
+
+pub(super) struct InvocationBuilder {
+    parentheses: Parentheses,
+    unevaluated_parameters_stack: Vec<(ExpressionNodeId, ArgumentOwnership)>,
+    state: InvocationPath,
+}
+
+enum InvocationPath {
+    InvokablePath,
+    ArgumentsPath {
+        function_span: SpanRange,
+        interface: FunctionInterface,
+        disabled_evaluated_arguments: Vec<Spanned<ArgumentValue>>,
+    },
+}
+
+impl InvocationBuilder {
+    pub(super) fn start(
+        context: ValueContext,
+        invokable: ExpressionNodeId,
+        invocation: &Invocation,
+    ) -> NextAction {
+        let frame = Self {
+            parentheses: invocation.parentheses.clone(),
+            unevaluated_parameters_stack: invocation
+                .parameters
+                .iter()
+                .rev()
+                .map(|x| {
+                    // This is just a placeholder - we'll fix it up shortly
+                    (*x, ArgumentOwnership::Owned)
+                })
+                .collect(),
+            state: InvocationPath::InvokablePath,
+        };
+        context.request_copy_on_write(frame, invokable)
+    }
+}
+
+impl EvaluationFrame for InvocationBuilder {
+    type ReturnType = ReturnsValue;
+
+    fn into_any(self) -> AnyValueFrame {
+        AnyValueFrame::Invocation(self)
+    }
+
+    fn handle_next(
+        mut self,
+        mut context: ValueContext,
+        Spanned(value, span): Spanned<RequestedValue>,
+    ) -> ExecutionResult<NextAction> {
+        match self.state {
+            InvocationPath::InvokablePath => {
+                let function_span = span;
+                let function = value.expect_copy_on_write();
+
+                let function = function.into_content()
+                    .spanned(function_span)
+                    .downcast_resolve::<QqqCopyOnWrite<FunctionValue>>("An invoked value")?;
+            
+                // I need to extract
+                // (A): Function interface
+                // (B): Already bound disabled arguments -> assumed empty
+                let interface = match &function.as_ref_value().definition {
+                    FunctionDefinition::Native(interface) => interface.clone(),
+                    FunctionDefinition::Closure(_) => todo!(),
+                };
+                // Placeholder for already bound arguments. We can assume they're already disabled, and of the correct ownership/s.
+                let disabled_bound_arguments = vec![];
+
+                let unbound_arguments_count = self.unevaluated_parameters_stack.len();
+
+                let (argument_ownerships, min_arguments) = interface.argument_ownerships();
+                let max_arguments = argument_ownerships.len();
+
+                if disabled_bound_arguments.len() > max_arguments {
+                    return function_span.type_err(format!(
+                        "This function expects at most {} argument/s, but {} were already bound before this invocation",
+                        max_arguments,
+                        disabled_bound_arguments.len(),
+                    ));
+                }
+
+                let unbound_min_arguments = min_arguments - disabled_bound_arguments.len();
+                let unbound_max_arguments = max_arguments - disabled_bound_arguments.len();
+
+                if unbound_arguments_count < unbound_min_arguments
+                    || unbound_arguments_count > unbound_max_arguments
+                {
+                    let expected_arguments = if unbound_min_arguments == unbound_max_arguments {
+                        if unbound_min_arguments == 1 {
+                            "1 argument".to_string()
+                        } else {
+                            format!("{} arguments", unbound_min_arguments)
+                        }
+                    } else {
+                        format!(
+                            "{} to {} arguments",
+                            (unbound_min_arguments),
+                            (unbound_max_arguments)
+                        )
+                    };
+                    let actual_arguments = if unbound_arguments_count == 1 {
+                        "1 was provided".to_string()
+                    } else {
+                        format!("{} were provided", unbound_arguments_count)
+                    };
+                    return function_span.type_err(format!(
+                        "This function expects {}, but {}",
+                        expected_arguments,
+                        actual_arguments,
+                    ));
+                }
+
+                // We skip 1 to ignore the caller
+                let unbound_argument_ownerships: iter::Skip<
+                    std::slice::Iter<'_, ArgumentOwnership>,
+                > = argument_ownerships.iter().skip(disabled_bound_arguments.len());
+                for ((_, requested_ownership), ownership) in self
+                    .unevaluated_parameters_stack
+                    .iter_mut()
+                    .rev() // Swap the stack back to the normal order
+                    .zip(unbound_argument_ownerships)
+                {
+                    *requested_ownership = *ownership;
+                }
+
+                self.state = InvocationPath::ArgumentsPath {
+                    function_span,
+                    interface,
+                    disabled_evaluated_arguments: disabled_bound_arguments,
+                };
+            }
+            InvocationPath::ArgumentsPath {
+                ref mut disabled_evaluated_arguments,
+                ..
+            } => {
+                let argument = value.expect_argument_value();
+                let mut argument = Spanned(argument, span);
+                unsafe {
+                    // SAFETY: We enable it again before use
+                    argument.to_mut().disable();
+                }
+                disabled_evaluated_arguments.push(argument);
+            }
+        };
+        // Now plan the next action
+        Ok(match self.unevaluated_parameters_stack.pop() {
+            Some((parameter, ownership)) => {
+                context.request_any_value(self, parameter, RequestedOwnership::Concrete(ownership))
+            }
+            None => {
+                let (arguments, interface, function_span) = match self.state {
+                    InvocationPath::InvokablePath => unreachable!("Already updated above"),
+                    InvocationPath::ArgumentsPath {
+                        interface,
+                        disabled_evaluated_arguments: mut arguments,
+                        function_span,
+                    } => {
+                        // NOTE:
+                        // - This disable/enable flow allows us to do things like vec.push(vec.len())
+                        // - Read https://rust-lang.github.io/rfcs/2025-nested-method-calls.html for more details
+                        // - We enable left-to-right for intuitive error messages: later borrows will report errors
+                        unsafe {
+                            for argument in &mut arguments {
+                                // SAFETY: We disabled them above
+                                // NOTE: enable() may fail if arguments conflict (e.g., same variable)
+                                argument.to_mut().enable()?;
+                            }
+                        }
+                        (arguments, interface, function_span)
+                    }
+                };
+                let mut call_context = FunctionCallContext {
+                    output_span_range: SpanRange::new_between(function_span, self.parentheses.close()),
+                    interpreter: context.interpreter(),
+                };
+                let output = interface.execute(arguments, &mut call_context)?;
                 context.return_returned_value(output)?
             }
         })

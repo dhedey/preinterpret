@@ -30,10 +30,5 @@ impl Debug for UnsupportedLiteral {
 
 define_type_features! {
     impl UnsupportedLiteralType,
-    pub(crate) mod unsupported_literal_interface {
-        pub(crate) mod methods {}
-        pub(crate) mod unary_operations {}
-        pub(crate) mod binary_operations {}
-        interface_items {}
-    }
+    pub(crate) mod unsupported_literal_interface {}
 }

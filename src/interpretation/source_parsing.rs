@@ -6,6 +6,7 @@ new_key!(pub(crate) VariableDefinitionId);
 new_key!(pub(crate) VariableReferenceId);
 new_key!(pub(crate) ControlFlowSegmentId);
 new_key!(pub(crate) CatchLocationId);
+new_key!(pub(crate) ClosureId);
 
 pub(crate) enum InterruptDetails<'a> {
     /// Break statement (targets loops or labeled blocks)
