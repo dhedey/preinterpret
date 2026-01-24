@@ -1,0 +1,5 @@
+error: The - operator is not supported for an unsupported literal
+ --> tests/compilation_failures/expressions/fix_me_negative_max_int_fails.rs:8:11
+  |
+8 |         #(-128i8)
+  |           ^

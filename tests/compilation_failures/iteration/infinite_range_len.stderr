@@ -1,0 +1,5 @@
+error: Iterator has an inexact length
+ --> tests/compilation_failures/iteration/infinite_range_len.rs:4:18
+  |
+4 |     let _ = run!((0..).len());
+  |                  ^^^^^

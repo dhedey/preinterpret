@@ -1,0 +1,9 @@
+error: expected World
+ --> tests/compilation_failures/parsing/invalid_content_too_short.rs:4:5
+  |
+4 | /     run!(
+5 | |         let %[Hello World] = %[Hello];
+6 | |     );
+  | |_____^
+  |
+  = note: this error originates in the macro `run` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -1,0 +1,5 @@
+error: Expected trailing comma after previous non-block attempt arm
+ --> tests/compilation_failures/control_flow/attempt/attempt_with_non_block_no_trailing_comma.rs:8:9
+  |
+8 |         }
+  |         ^

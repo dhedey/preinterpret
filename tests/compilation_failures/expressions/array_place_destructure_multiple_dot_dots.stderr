@@ -1,0 +1,5 @@
+error: Only one .. is allowed in an array assignee
+ --> tests/compilation_failures/expressions/array_place_destructure_multiple_dot_dots.rs:5:11
+  |
+5 |         #([_, .., _, .., _] = [1, 2, 3, 4])
+  |           ^^^^^^^^^^^^^^^^^

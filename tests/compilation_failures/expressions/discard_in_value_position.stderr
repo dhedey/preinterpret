@@ -1,0 +1,5 @@
+error: This cannot be used in a value expression.
+ --> tests/compilation_failures/expressions/discard_in_value_position.rs:5:11
+  |
+5 |         #(_)
+  |           ^

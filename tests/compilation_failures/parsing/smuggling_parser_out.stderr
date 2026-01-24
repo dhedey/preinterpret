@@ -1,0 +1,5 @@
+error: This parser is no longer available
+  --> tests/compilation_failures/parsing/smuggling_parser_out.rs:11:17
+   |
+11 |         let _ = smuggled_input.ident();
+   |                 ^^^^^^^^^^^^^^

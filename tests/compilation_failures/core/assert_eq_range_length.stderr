@@ -1,0 +1,7 @@
+error: Assertion failed: lhs is a range start.., but rhs is a range start..end
+         lhs = 0..
+         rhs = 1..2
+ --> tests/compilation_failures/core/assert_eq_range_length.rs:4:12
+  |
+4 |     run!(%[_].assert_eq(0.., 1..2));
+  |            ^

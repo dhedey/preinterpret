@@ -1,0 +1,5 @@
+error: Objects cannot be output to a stream
+ --> tests/compilation_failures/expressions/cannot_output_object_to_stream.rs:5:12
+  |
+5 |         #(%{ hello: "world" })
+  |            ^^^^^^^^^^^^^^^^^^

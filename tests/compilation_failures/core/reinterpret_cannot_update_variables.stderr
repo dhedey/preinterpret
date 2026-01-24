@@ -1,0 +1,5 @@
+error: Cannot find variable `my_variable` in this scope
+ --> tests/compilation_failures/core/reinterpret_cannot_update_variables.rs:6:11
+  |
+6 |         %[my_variable = "updated";].reinterpret_as_run();
+  |           ^^^^^^^^^^^

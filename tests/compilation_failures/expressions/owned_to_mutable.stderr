@@ -1,0 +1,5 @@
+error: An owned value cannot be assigned to.
+ --> tests/compilation_failures/expressions/owned_to_mutable.rs:6:16
+  |
+6 |         a.swap("b");
+  |                ^^^

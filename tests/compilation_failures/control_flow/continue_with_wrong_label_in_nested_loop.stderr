@@ -1,0 +1,5 @@
+error: A labelled continue must be used inside a loop with a matching label
+ --> tests/compilation_failures/control_flow/continue_with_wrong_label_in_nested_loop.rs:6:22
+  |
+6 |             continue 'outer;
+  |                      ^^^^^^

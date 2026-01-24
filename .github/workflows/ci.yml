@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  RUSTFLAGS: -Dwarnings
+  RUSTFLAGS: -Dwarnings # Deny warnings - i.e. warnings cause build errors
 
 jobs:
   test:
@@ -31,6 +31,8 @@ jobs:
       - name: Enable type layout randomization
         run: echo RUSTFLAGS=${RUSTFLAGS}\ -Zrandomize-layout >> $GITHUB_ENV
         if: matrix.rust == 'nightly'
+      - name: Add TEST_RUST_MODE env variable
+        run: echo TEST_RUST_MODE=${{matrix.rust}} >> $GITHUB_ENV
       - run: cargo test
       - uses: actions/upload-artifact@v4
         if: matrix.rust == 'nightly' && always()
@@ -39,7 +41,7 @@ jobs:
           path: Cargo.lock
 
   msrv:
-    name: Fresh install of MSRV across self (1.61) + latest dependencies (1.68) compiles
+    name: MSRV (1.68) Compiles
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -60,6 +62,29 @@ jobs:
           components: clippy, rustfmt
           toolchain: stable
       - run: ./style-check.sh
+
+  benches:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - run: ./bench_compilation.sh
+      - run: ./bench.sh
+
+  book:
+    name: Rust Book Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - run: ./book/test.sh
 
   miri:
     name: Miri

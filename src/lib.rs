@@ -15,25 +15,11 @@
 //! * Run ./style-fix.sh
 //! -->
 //!
-//! This crate provides the `preinterpret!` macro, a simple pre-processor of the token stream. It can be used inside the output of a declarative macro, or as a mini code generation tool all of its own.
+//! Preinterpret takes the pain out of Rust code generation, providing a new paradigm to replace the clunkiness of declarative macros [[1](https://veykril.github.io/tlborm/decl-macros/patterns/callbacks.html), [2](https://github.com/rust-lang/rust/issues/96184#issue-1207293401), [3](https://veykril.github.io/tlborm/decl-macros/minutiae/metavar-and-expansion.html), [4](https://veykril.github.io/tlborm/decl-macros/patterns/push-down-acc.html)]. At its heart it is a bespoke Rust-like interpreted language, built from the ground up for code generation use cases.
 //!
-//! It is a more powerful replacement for [paste](https://crates.io/crates/paste), and also brings functionality typically reserved for procedural macros: [quote](https://crates.io/crates/quote)-like token-stream substitution and some [syn](https://crates.io/crates/syn)-based functionality for operating on tokens and literals.
-//!
-//! ```rust
-//! preinterpret::preinterpret! {
-//!     [!set! #type_name = HelloWorld]
-//!
-//!     struct #type_name;
-//!
-//!     #[doc = [!string! "This type is called [`" #type_name "`]"]]
-//!     impl #type_name {
-//!         fn [!ident_snake! say_ #type_name]() -> &'static str {
-//!             [!string! "It's time to say: " [!title! #type_name] "!"]
-//!         }
-//!     }
-//! }
-//! assert_eq!(HelloWorld::say_hello_world(), "It's time to say: Hello World!")
-//! ```
+//! The [preinterpret](https://crates.io/crates/preinterpret) crate provides:
+//! * The `stream!` macro, which starts in token stream output mode
+//! * The `run!` macro, which starts in interpreter mode, and can `emit` or return a token stream
 //!
 //! To install, add the following to your `Cargo.toml`:
 //!
@@ -42,16 +28,90 @@
 //! preinterpret = "0.2"
 //! ```
 //!
-//! This README concerns `preinterpret` v0.2 which offers a simple pre-processor. A much more comprehensive rust-inspired interpreter is coming in v1.0, currently in progress on the `develop` branch.
+//! ## Use cases
+//!
+//! ### Simple code generation
+//!
+//! Sometimes you just need to generate lots of similar code, and preinterpet can be used directly:
+//!
+//! ```rust
+//! trait TupleLength {
+//!     fn len(&self) -> usize;
+//! }
+//!
+//! preinterpret::run!{
+//!     for N in 0..=12 {
+//!         let type_params = %[];
+//!         for a in ('A'..'Z').into_iter().take(N) {
+//!             type_params += a.to_ident() + %[,];
+//!         }
+//!         emit %[
+//!             impl<#type_params> TupleLength for (#type_params) {
+//!                 fn len(&self) -> usize {
+//!                     #N
+//!                 }
+//!             }
+//!         ];
+//!     }
+//! }
+//! assert_eq!(('a', 'b', 'c').len(), 3);
+//! ```
+//!
+//! ### Inside procedural macros
+//!
+//! It can be used to simplify code generation inside procedural macro definitions:
+//! * It replaces [paste](https://crates.io/crates/paste) to allow concatenated creation of idents
+//! * It brings various features previously reserved for procedural macros: [quote](https://crates.io/crates/quote)-like token-stream substitution and [syn](https://crates.io/crates/syn)-based functionality for operating on tokens and literals.
+//!
+//! Notably, using variables to name token stream sections for clarity and reuse can make macro code a lot easier to read.
+//!
+//! ```rust
+//! macro_rules! create_my_type {
+//!     (
+//!         $(#[$attributes:meta])*
+//!         $vis:vis struct $type_name:ident {
+//!             $($field_name:ident: $inner_type:ident),* $(,)?
+//!         }
+//!     ) => {preinterpret::stream! {
+//!         #{
+//!             let type_name = %[My $type_name].to_ident();
+//!         }
+//!         
+//!         $(#[$attributes])*
+//!         $vis struct #type_name {
+//!             $($field_name: $inner_type,)*
+//!         }
+//!
+//!         impl #type_name {
+//!             $(
+//!                 fn #(%[my_ $inner_type].to_ident_snake())(&self) -> &$inner_type {
+//!                     &self.$field_name
+//!                 }
+//!             )*
+//!         }
+//!     }}
+//! }
+//! create_my_type! {
+//!     struct Struct {
+//!         field0: String,
+//!         field1: u64,
+//!     }
+//! }
+//! assert_eq!(MyStruct { field0: "Hello".into(), field1: 21 }.my_string(), "Hello")
+//! ```
+//!
+//! ### As a replacement for procedural macros
+//!
+//! Coming soon...
 //!
 //! ## User Guide
 //!
 //! Preinterpret works with its own very simple language, with two pieces of syntax:
 //!
 //! * **Commands**: `[!command_name! input token stream...]` take an input token stream and output a token stream. There are a number of commands which cover a toolkit of useful functions.
-//! * **Variables**: `[!set! #var_name = token stream...]` defines a variable, and `#var_name` substitutes the variable into another command or the output.
+//! * **Variables**: `#(let var_name = %[token stream...];)` defines a variable, and `#var_name` substitutes the variable into another command or the output.
 //!
-//! Commands can be nested intuitively. The input of all commands (except `[!raw! ...]`) are first interpreted before the command itself executes.
+//! Commands can be nested intuitively. In general, the input of commands are first interpreted before the command itself executes.
 //!
 //! ### Declarative macro example
 //!
@@ -64,8 +124,10 @@
 //!         $vis:vis struct $type_name:ident {
 //!             $($field_name:ident: $inner_type:ident),* $(,)?
 //!         }
-//!     ) => {preinterpret::preinterpret! {
-//!         [!set! #type_name = [!ident! My $type_name]]
+//!     ) => {preinterpret::stream! {
+//!         #{
+//!             let type_name = %[My $type_name].to_ident();
+//!         }
 //!         
 //!         $(#[$attributes])*
 //!         $vis struct #type_name {
@@ -74,7 +136,7 @@
 //!
 //!         impl #type_name {
 //!             $(
-//!                 fn [!ident_snake! my_ $inner_type](&self) -> &$inner_type {
+//!                 fn #(%[my_ $inner_type].to_ident_snake())(&self) -> &$inner_type {
 //!                     &self.$field_name
 //!                 }
 //!             )*
@@ -117,15 +179,17 @@
 //! For example:
 //!
 //! ```rust
-//! preinterpret::preinterpret! {
-//!     [!set! #type_name = [!ident! HelloWorld]]
+//! preinterpret::stream! {
+//!     #{
+//!         let type_name = %[HelloWorld];
+//!     }
 //!
 //!     struct #type_name;
 //!
-//!     #[doc = [!string! "This type is called [`" #type_name "`]"]]
+//!     #[doc = #(%["This type is called [`" #type_name "`]"].to_string())]
 //!     impl #type_name {
-//!         fn [!ident_snake! say_ #type_name]() -> &'static str {
-//!             [!string! "It's time to say: " [!title! #type_name] "!"]
+//!         fn #(%[say_ #type_name].to_ident_snake())() -> &'static str {
+//!             #(%["It's time to say: " #(type_name.to_string().to_title_case()) "!"].to_string())
 //!         }
 //!     }
 //! }
@@ -136,9 +200,9 @@
 //!
 //! ### Special commands
 //!
-//! * `[!set! #foo = Hello]` followed by `[!set! #foo = #bar(World)]` sets the variable `#foo` to the token stream `Hello` and `#bar` to the token stream `Hello(World)`, and outputs no tokens. Using `#foo` or `#bar` later on will output the current value in the corresponding variable.
-//! * `[!raw! abc #abc [!ident! test]]` outputs its contents as-is, without any interpretation, giving the token stream `abc #abc [!ident! test]`.
-//! * `[!ignore! $foo]` ignores all of its content and outputs no tokens. It is useful to make a declarative macro loop over a meta-variable without outputting it into the resulting stream.
+//! * `#(let foo = %[Hello];)` followed by `#(let foo = %[#bar(World)];)` sets the variable `#foo` to the token stream `Hello` and `#bar` to the token stream `Hello(World)`, and outputs no tokens. Using `#foo` or `#bar` later on will output the current value in the corresponding variable.
+//! * `%raw[abc #abc %[test]]` outputs its contents as-is, without any interpretation, giving the token stream `abc #abc %[test]`.
+//! * `let _ = %raw[$foo]` ignores all content inside `[...]` and outputs no tokens. It is useful to make a declarative macro loop over a meta-variable without outputting it into the resulting stream.
 //!
 //! ### Concatenate and convert commands
 //!
@@ -149,33 +213,33 @@
 //!
 //! The following commands output idents:
 //!
-//! * `[!ident! X Y "Z"]` outputs the ident `XYZ`
-//! * `[!ident_camel! my hello_world]` outputs `MyHelloWorld`
-//! * `[!ident_snake! my_ HelloWorld]` outputs `my_hello_world`
-//! * `[!ident_upper_snake! my_ const Name]` outputs `MY_CONST_NAME`
+//! * `%[X Y "Z"].to_ident()` outputs the ident `XYZ`
+//! * `%[my hello_world].to_ident_camel()` outputs `MyHelloWorld`
+//! * `%[my_ HelloWorld].to_ident_snake()` outputs `my_hello_world`
+//! * `%[my_ const Name].to_ident_upper_snake()` outputs `MY_CONST_NAME`
 //!
-//! The `!literal!` command outputs any kind of literal, for example:
+//! The following commands output any kind of literal, for example:
 //!
-//! * `[!literal! 31 u 32]` outputs the integer literal `31u32`
-//! * `[!literal! '"' hello '"']` outputs the string literal `"hello"`
+//! * `%[31 u 32].to_literal()` outputs the integer literal `31u32`
+//! * `%['"' hello '"'].to_literal()` outputs the string literal `"hello"`
 //!
 //! The following commands output strings, without dropping non-alphanumeric characters:
 //!
-//! * `[!string! X Y " " Z (Hello World)]` outputs `"XY Z(HelloWorld)"`
-//! * `[!upper! foo_bar]` outputs `"FOO_BAR"`
-//! * `[!lower! FooBar]` outputs `"foobar"`
-//! * `[!capitalize! fooBar]` outputs `"FooBar"`
-//! * `[!decapitalize! FooBar]` outputs `"fooBar"`
+//! * `%[X Y " " Z (Hello World)].to_string()` outputs `"XY Z(HelloWorld)"`
+//! * `"foo_bar".to_uppercase()` outputs `"FOO_BAR"`
+//! * `"FooBar".to_lowercase()` outputs `"foobar"`
+//! * `"fooBar".capitalize()"` outputs `"FooBar"`
+//! * `"FooBar".decapitalize()` outputs `"fooBar"`
 //!
 //! The following commands output strings, whilst also dropping non-alphanumeric characters:
 //!
-//! * `[!snake! FooBar]` and `[!lower_snake! FooBar]` are equivalent and output `"foo_bar"`
-//! * `[!upper_snake! FooBar]` outputs `"FOO_BAR"`
-//! * `[!camel! foo_bar]` and `[!upper_camel! foo_bar]` are equivalent and output `"FooBar"`
-//! * `[!lower_camel! foo_bar]` outputs `"fooBar"`
-//! * `[!kebab! fooBar]` outputs `"foo-bar"`
-//! * `[!title! fooBar]` outputs `"Foo Bar"`
-//! * `[!insert_spaces! fooBar]` outputs `"foo Bar"`
+//! * `"FooBar".to_lower_snake_case()` outputs `"foo_bar"`
+//! * `"FooBar".to_upper_snake_case()"` outputs `"FOO_BAR"`
+//! * `"foo_bar".to_upper_camel_case()"` outputs `"FooBar"`
+//! * `"foo_bar".to_lower_camel_case()"` outputs `"fooBar"`
+//! * `"fooBar".to_kebab_case()"` outputs `"foo-bar"`
+//! * `"fooBar".to_title_case()"` outputs `"Foo Bar"`
+//! * `"fooBar".insert_spaces()"` outputs `"foo Bar"`
 //!
 //! > [!NOTE]
 //! >
@@ -214,10 +278,12 @@
 //!             // Arbitrary (non-const) type generics
 //!             < $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? $( = $deflt:tt)? ),+ >
 //!         )?
-//!     } => {preinterpret::preinterpret!{
-//!         [!set! #impl_generics = $(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)?]
-//!         [!set! #type_generics = $(< $( $lt ),+ >)?]
-//!         [!set! #my_type = $type_name #type_generics]
+//!     } => {preinterpret::stream!{
+//!         #{
+//!             let impl_generics = %[$(< $( $lt $( : $clt $(+ $dlt )* )? ),+ >)?];
+//!             let type_generics = %[$(< $( $lt ),+ >)?];
+//!             let my_type = %[$type_name #type_generics];
+//!         }
 //!
 //!         $(
 //!             // Output each marker trait for the type
@@ -243,7 +309,7 @@
 //! macro_rules! create_struct_and_getters {
 //!     (
 //!         $name:ident { $($field:ident),* $(,)? }
-//!     ) => {preinterpret::preinterpret!{
+//!     ) => {preinterpret::stream!{
 //!         // Define a struct with the given fields
 //!         pub struct $name {
 //!             $(
@@ -254,7 +320,7 @@
 //!         impl $name {
 //!             $(
 //!                 // Define get_X for each field X
-//!                 pub fn [!ident! get_ $field](&self) -> &str {
+//!                 pub fn #(%[get_ $field].to_ident())(&self) -> &str {
 //!                     &self.$field
 //!                 }
 //!             )*
@@ -265,44 +331,6 @@
 //!   MyStruct { hello, world }
 //! }
 //! ```
-//!
-//! Variable assignment works intuitively with the `* + ?` expansion operators, allowing basic procedural logic, such as creation of loop counts and indices before [meta-variables](https://github.com/rust-lang/rust/issues/83527) are stabilized.
-//!
-//! For example:
-//! ```rust
-//! macro_rules! count_idents {
-//!     {
-//!         $($item: ident),*
-//!     } => {preinterpret::preinterpret!{
-//!         [!set! #current_index = 0usize]
-//!         $(
-//!             [!ignore! $item] // Loop over the items, but don't output them
-//!             [!set! #current_index = #current_index + 1]
-//!         )*
-//!         [!set! #count = #current_index]
-//!         #count
-//!     }}
-//! }
-//! ```
-//!
-//! To quickly explain how this works, imagine we evaluate `count_idents!(a, b, c)`. As `count_idents!` is the most outer macro, it runs first, and expands into the following token stream:
-//!
-//! ```rust
-//! let count = preinterpret::preinterpret!{
-//!   [!set! #current_index = 0usize]
-//!   [!ignore! a]
-//!   [!set! #current_index = #current_index + 1]
-//!   [!ignore! = b]
-//!   [!set! #current_index = #current_index + 1]
-//!   [!ignore! = c]
-//!   [!set! #current_index = #current_index + 1]
-//!   [!set! #count = #current_index]
-//!   #count
-//! };
-//! ```
-//!
-//! Now the `preinterpret!` macro runs, resulting in `#count` equal to the token stream `0usize + 1 + 1 + 1`.
-//! This will be improved in future releases by adding support for mathematical operations on integer literals.
 //!
 //! ### Simplicity
 //!
@@ -347,8 +375,8 @@
 //! macro_rules! impl_new_type {
 //!     {
 //!         $vis:vis $my_type:ident($my_inner_type:ty)
-//!     } => {preinterpret::preinterpret!{
-//!         #[xyz(as_type = [!string! $my_inner_type])]
+//!     } => {preinterpret::stream!{
+//!         #[xyz(as_type = #(%[$my_inner_type].to_string()))]
 //!         $vis struct $my_type($my_inner_type);
 //!     }}
 //! }
@@ -373,37 +401,219 @@
 //!
 //! Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in this crate by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
 //!
-mod command;
-mod commands;
+mod expressions;
+mod extensions;
 mod internal_prelude;
-mod interpreter;
-mod parsing;
-mod string_conversion;
+mod interpretation;
+mod misc;
 
 use internal_prelude::*;
 
-/// Runs a simple interpeter over the token stream, allowing for variable assignment and substitution,
-/// and a toolkit of commands to simplify code generation.
-///
-/// Commands look like `[!command! arguments as token stream here]` and can be nested.
-///
-/// ## Command cheat sheet
-/// * `[!set! #foo = ...]` set a variable to the provided token stream
-/// * `#foo` outputs the variable's saved token stream
-/// * `[!ident! ...]` outputs an ident from parsing the concatenated token stream
-/// * `[!ident_camel! ...]` outputs an UpperCamelCased ident from parsing the concatenated token stream
-/// * `[!ident_snake! ...]` outputs a lower_snake_cased ident from parsing the concatenated token stream
-/// * `[!ident_upper_snake! ...]` outputs an UPPER_SNAKE_CASED ident from parsing the concatenated token stream
-/// * `[!string! ...]` outputs the concatenated token stream
-/// * `[!literal! ..]` outputs a literal from parsing the concatenated token stream
-/// * `#[doc = [!string! "My documentation is for " #my_type "."]]` can be used to create documentation strings
+/// Interprets its input as a preinterpret stream.
 ///
 /// See the [crate-level documentation](crate) for full details.
 #[proc_macro]
-pub fn preinterpret(token_stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    interpret(proc_macro2::TokenStream::from(token_stream))
+pub fn stream(token_stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    preinterpret_stream_internal(proc_macro2::TokenStream::from(token_stream))
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
+}
+
+fn preinterpret_stream_internal(input: TokenStream) -> SynResult<TokenStream> {
+    let (stream, parse_state) = input
+        .source_parse_and_analyze(
+            |input| SourceStream::parse_with_span(input, Span::call_site()),
+            SourceStream::control_flow_pass,
+        )
+        .convert_to_final_result()?;
+
+    let mut interpreter = Interpreter::new(parse_state);
+
+    stream
+        .interpret(&mut interpreter)
+        .convert_to_final_result()?;
+
+    let output_stream = interpreter.complete();
+
+    Ok(output_stream.into_token_stream())
+}
+
+/// Interprets its input as a preinterpret expression block, which should return a token stream.
+///
+/// See the [crate-level documentation](crate) for full details.
+#[proc_macro]
+pub fn run(token_stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    preinterpret_run_internal(proc_macro2::TokenStream::from(token_stream))
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
+}
+
+fn preinterpret_run_internal(input: TokenStream) -> SynResult<TokenStream> {
+    let (content, parse_state) = input
+        .source_parse_and_analyze(
+            ExpressionBlockContent::parse,
+            ExpressionBlockContent::control_flow_pass,
+        )
+        .convert_to_final_result()?;
+
+    let mut interpreter = Interpreter::new(parse_state);
+
+    let entry_span = Span::call_site().span_range();
+    let returned_stream = content
+        .evaluate_spanned(&mut interpreter, entry_span, RequestedOwnership::owned())
+        .and_then(|x| x.expect_owned().into_stream())
+        .convert_to_final_result()?;
+
+    let mut output_stream = interpreter.complete();
+
+    let output = if output_stream.is_empty() {
+        returned_stream
+    } else {
+        returned_stream.append_into(&mut output_stream);
+        output_stream
+    };
+
+    Ok(output.into_token_stream())
+}
+
+/// Returns the scope and segment information for the given code.
+#[cfg(feature = "debug")]
+#[proc_macro]
+pub fn scope_debug(token_stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    debug::scope_debug(proc_macro2::TokenStream::from(token_stream))
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
+}
+
+#[cfg(feature = "debug")]
+mod debug {
+    use super::*;
+
+    pub(super) fn scope_debug(input: TokenStream) -> SynResult<TokenStream> {
+        let (_, scopes) = input
+            .clone()
+            .source_parse_and_analyze(
+                ExpressionBlockContent::parse,
+                ExpressionBlockContent::control_flow_pass,
+            )
+            .convert_to_final_result()?;
+
+        let output = format!("{:#?}", scopes);
+
+        Ok(TokenStream::from_iter([TokenTree::Literal(
+            Literal::string(output.as_str()),
+        )]))
+    }
+}
+
+/// Interprets its input as a preinterpret expression block, which should return a token stream.
+///
+/// See the [crate-level documentation](crate) for full details.
+#[cfg(feature = "benchmark")]
+#[proc_macro]
+pub fn benchmark_run(token_stream: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    benchmarking::benchmark_run(proc_macro2::TokenStream::from(token_stream))
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
+}
+
+#[cfg(feature = "benchmark")]
+mod benchmarking {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    struct TimingContext {
+        section_totals: HashMap<&'static str, (Duration, usize)>,
+    }
+
+    impl TimingContext {
+        fn new() -> Self {
+            Self {
+                section_totals: HashMap::new(),
+            }
+        }
+
+        fn time<T>(&mut self, section: &'static str, f: impl FnOnce() -> T) -> T {
+            let start = Instant::now();
+            let output = f();
+            let duration = start.elapsed();
+            let totals = self
+                .section_totals
+                .entry(section)
+                .or_insert((Duration::ZERO, 0));
+            totals.0 += duration;
+            totals.1 += 1;
+            output
+        }
+
+        fn average_duration(&self, section: &'static str) -> Option<Duration> {
+            self.section_totals
+                .get(section)
+                .map(|(total, count)| *total / (*count as u32))
+        }
+    }
+
+    fn timed<T, E>(f: impl Fn(&mut TimingContext) -> Result<T, E>) -> Result<TimingContext, E> {
+        const WARMUP: u32 = 100;
+        const REPEATS: u32 = 1000;
+        for _ in 0..WARMUP {
+            let _ = f(&mut TimingContext::new());
+        }
+        let mut context = TimingContext::new();
+        for _ in 0..REPEATS {
+            f(&mut context)?;
+        }
+        Ok(context)
+    }
+
+    pub(super) fn benchmark_run(input: TokenStream) -> SynResult<TokenStream> {
+        let results = timed(|context| -> SynResult<()> {
+            let input = input.clone();
+            let mut parsed = context.time("parsing", || {
+                parse_with(input, parse_without_analysis(ExpressionBlockContent::parse))
+                    .convert_to_final_result()
+            })?;
+
+            let scopes = context.time("analysis", || {
+                ControlFlowContext::analyze(&mut parsed, ExpressionBlockContent::control_flow_pass)
+                    .convert_to_final_result()
+            })?;
+
+            let output = context.time("evaluation", move || -> SynResult<OutputStream> {
+                let mut interpreter = Interpreter::new(scopes);
+                let entry_span = Span::call_site().span_range();
+                let returned_stream = parsed
+                    .evaluate_spanned(&mut interpreter, entry_span, RequestedOwnership::owned())
+                    .and_then(|x| x.expect_owned().into_stream())
+                    .convert_to_final_result()?;
+
+                let mut output_stream = interpreter.complete();
+
+                Ok(if output_stream.is_empty() {
+                    returned_stream
+                } else {
+                    returned_stream.append_into(&mut output_stream);
+                    output_stream
+                })
+            })?;
+
+            let _ = context.time("output", move || output.into_token_stream());
+
+            Ok(())
+        })?;
+
+        let output = format!(
+            "- Parsing    | {: >5}ns\n- Analysis   | {: >5}ns\n- Evaluation | {: >5}ns\n- Output     | {: >5}ns",
+            results.average_duration("parsing").unwrap().as_micros(),
+            results.average_duration("analysis").unwrap().as_micros(),
+            results.average_duration("evaluation").unwrap().as_micros(),
+            results.average_duration("output").unwrap().as_micros()
+        );
+
+        Ok(TokenStream::from_iter([TokenTree::Literal(
+            Literal::string(output.as_str()),
+        )]))
+    }
 }
 
 // This is the recommended way to run the doc tests in the readme

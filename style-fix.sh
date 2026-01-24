@@ -2,5 +2,7 @@
 
 set -e
 
-cargo fmt;
+cd "$(dirname "$0")"
+
 cargo clippy --fix --tests --allow-dirty --allow-staged;
+cargo fmt;

@@ -11,14 +11,29 @@ keywords = ["macros", "declarative-macros", "toolkit", "interpreter", "preproces
 # And whilst there's a development-tools::procedural-macro-helpers, there's no declarative macro category.
 categories = ["development-tools", "compilers"]
 # MSRV 1.56.0 is the start of Edition 2021
-# MSRV 1.61.0 was the old MSRV of syn
-# MRSV 1.68.0 is the new latest MSRV of syn (as of syn 2.0.107 released on 19th October 2025) - but keeping on MSRV 1.61.0 for now
+# MSRV 1.61.0 is the old MSRV of syn
+# MRSV 1.63.0 is needed to support RefMut::filter_map
+# MRSV 1.68.0 is the new latest MSRV of syn (as of syn 2.0.107 released on 19th October 2025)
 # If changing this, also update the local-check-msrv.sh script and ci.yml
-rust-version = "1.61"
+rust-version = "1.68"
 
 [lib]
 proc-macro = true
 
+[[bench]]
+name = "basic"
+harness = false
+required-features = ["benchmark"]
+
+[features]
+benchmark = [] # For internal use only
+debug = [] # Non-stable, for internal use only
+
 [dependencies]
-proc-macro2 = { version = "1.0" }
-syn = { version = "2.0", default-features = false, features = ["parsing"] }
+proc-macro2 = { version = "1.0.93" }
+syn = { version = "2.0.107", default-features = false, features = ["parsing", "derive", "printing", "clone-impls", "full"] }
+quote = { version = "1.0.38", default-features = false }
+slotmap = { version = "1.0.7" }
+
+[dev-dependencies]
+trybuild = { version = "1.0.110", features = ["diff"] }

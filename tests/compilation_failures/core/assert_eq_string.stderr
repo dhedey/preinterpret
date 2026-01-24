@@ -1,0 +1,7 @@
+error: Assertion failed: lhs != rhs: "hello" != "world"
+         lhs = "hello"
+         rhs = "world"
+ --> tests/compilation_failures/core/assert_eq_string.rs:4:12
+  |
+4 |     run!(%[_].assert_eq("hello", "world"));
+  |            ^

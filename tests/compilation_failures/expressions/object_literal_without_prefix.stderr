@@ -1,0 +1,5 @@
+error: An object literal must be prefixed with %, e.g. `%{ field: 1 }`. Without such a prefix, { .. } defines a block.
+ --> tests/compilation_failures/expressions/object_literal_without_prefix.rs:5:32
+  |
+5 |         [1, 2].intersperse("", { final_separator: "" })
+  |                                ^

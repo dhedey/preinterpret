@@ -1,0 +1,5 @@
+error: Use `@input[#{ input.read(%group[...]); }]` to match `%group[...]` stream literal content. Although this is likely not necessary, as transparent groups are typically silently ignored when parsing, unless explicitly parsing a token tree or group.
+ --> tests/compilation_failures/parsing/destructure_with_group_stream_pattern.rs:4:14
+  |
+4 |     run!(let %group[Output] = %group[Output];)
+  |              ^

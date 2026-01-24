@@ -1,0 +1,5 @@
+error: The - operator is not supported for a u32
+ --> tests/compilation_failures/operations/negate_unsigned.rs:4:18
+  |
+4 |     let _ = run!(-5u32);
+  |                  ^

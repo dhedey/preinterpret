@@ -1,0 +1,5 @@
+error: The key `x` has already used
+ --> tests/compilation_failures/expressions/object_pattern_destructuring_repeated_field.rs:5:19
+  |
+5 |         let %{ x, x } = %{ x: 1 };
+  |                   ^
