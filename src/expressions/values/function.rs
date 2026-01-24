@@ -9,9 +9,18 @@ define_leaf_type! {
     dyn_impls: {},
 }
 
-#[derive(Clone)]
 pub(crate) struct FunctionValue {
     pub(crate) definition: FunctionDefinition,
+    pub(crate) disabled_bound_arguments: Vec<Spanned<DisabledArgumentValue>>,
+}
+
+impl Clone for FunctionValue {
+    fn clone(&self) -> Self {
+        Self {
+            definition: self.definition.clone(),
+            disabled_bound_arguments: self.disabled_bound_arguments.clone(),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -52,6 +61,7 @@ impl IntoValueContent<'static> for &'static FunctionInterface {
     fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
         FunctionValue {
             definition: FunctionDefinition::Native(self),
+            disabled_bound_arguments: vec![],
         }
     }
 }
@@ -65,6 +75,7 @@ impl IntoValueContent<'static> for ClosureExpression {
     fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
         FunctionValue {
             definition: FunctionDefinition::Closure(self),
+            disabled_bound_arguments: vec![],
         }
     }
 }

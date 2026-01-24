@@ -218,6 +218,7 @@ impl<'a> ExpressionParser<'a> {
                 if punct.as_char() == '.' && input.peek2(syn::Ident) {
                     let dot = input.parse()?;
                     let ident = input.parse()?;
+                    // TODO[functions]: Disable me
                     if input.peek(token::Paren) {
                         let (_, delim_span) = input.parse_and_enter_group(None)?;
                         return Ok(NodeExtension::MethodCall(MethodAccess {

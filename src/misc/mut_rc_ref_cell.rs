@@ -47,28 +47,15 @@ impl<T: 'static + ?Sized, U: 'static + ?Sized> MutableSubRcRefCell<T, U> {
         }
     }
 
-    /// SAFETY:
-    /// * Must be paired with a call to `enable()` before any further use of the value.
-    /// * Must not use the value while disabled.
-    pub(crate) unsafe fn disable(&mut self) {
-        // Ideally we'd just decrement the ref count, but RefCell doesn't expose that.
-        // Instead, we duplicate it, so the old value gets dropped automatically,
-        // decrementing the ref count.
-        self.ref_mut = unsafe { core::ptr::read(&self.ref_mut) };
-    }
-
-    /// SAFETY:
-    /// * Must only be used after a call to `disable()`.
-    pub(crate) unsafe fn enable(&mut self) -> Result<(), BorrowMutError> {
-        // Ideally we'd just increment the ref count, but RefCell doesn't expose that.
-        // Instead, we re-borrow it mutably, which increments the ref count, then forget
-        // the new borrow.
-        match self.pointed_at.try_borrow_mut() {
-            Ok(new_ref_mut) => {
-                std::mem::forget(new_ref_mut);
-                Ok(())
-            }
-            Err(e) => Err(e),
+    /// Disables this mutable reference, releasing the borrow on the RefCell.
+    /// Returns a `DisabledMutableSubRcRefCell` which can be cloned and later re-enabled.
+    pub(crate) fn disable(self) -> DisabledMutableSubRcRefCell<T, U> {
+        let sub_ptr = self.ref_mut.deref() as *const U as *mut U;
+        // Drop the RefMut to release the borrow
+        drop(self.ref_mut);
+        DisabledMutableSubRcRefCell {
+            pointed_at: self.pointed_at,
+            sub_ptr,
         }
     }
 
@@ -180,6 +167,45 @@ impl<T: 'static + ?Sized, U: 'static + ?Sized> Deref for MutableSubRcRefCell<T, 
     }
 }
 
+/// A disabled mutable reference that can be safely cloned and dropped.
+///
+/// This type holds just the `Rc` and a raw pointer to the sub-value,
+/// without an active borrow on the RefCell. This means:
+/// - Dropping is safe (no borrow count to decrement)
+/// - Cloning is safe (just clones the Rc and copies the pointer)
+/// - The value cannot be accessed until re-enabled
+pub(crate) struct DisabledMutableSubRcRefCell<T: 'static + ?Sized, U: 'static + ?Sized> {
+    pointed_at: Rc<RefCell<T>>,
+    sub_ptr: *mut U,
+}
+
+impl<T: 'static + ?Sized, U: 'static + ?Sized> Clone for DisabledMutableSubRcRefCell<T, U> {
+    fn clone(&self) -> Self {
+        Self {
+            pointed_at: Rc::clone(&self.pointed_at),
+            sub_ptr: self.sub_ptr,
+        }
+    }
+}
+
+impl<T: 'static + ?Sized, U: 'static + ?Sized> DisabledMutableSubRcRefCell<T, U> {
+    /// Re-enables this disabled mutable reference by re-acquiring the borrow.
+    ///
+    /// Returns an error if the RefCell is currently borrowed.
+    pub(crate) fn enable(self) -> Result<MutableSubRcRefCell<T, U>, BorrowMutError> {
+        let ref_mut = self.pointed_at.try_borrow_mut()?;
+        // SAFETY:
+        // - sub_ptr was derived from a valid &mut U inside the RefCell
+        // - The Rc is still alive, so the RefCell contents haven't moved
+        // - We just acquired a mutable borrow, so we have exclusive access
+        let ref_mut = RefMut::map(ref_mut, |_| unsafe { &mut *self.sub_ptr });
+        Ok(MutableSubRcRefCell {
+            ref_mut: unsafe { less_buggy_transmute::<RefMut<'_, U>, RefMut<'static, U>>(ref_mut) },
+            pointed_at: self.pointed_at,
+        })
+    }
+}
+
 /// A shared (immutable) reference to a sub-value `U` inside a [`Rc<RefCell<T>>`].
 /// Many [`SharedSubRcRefCell`] can exist at the same time for a given [`Rc<RefCell<T>>`],
 /// but if any exist, then no [`MutableSubRcRefCell`] can exist.
@@ -268,28 +294,15 @@ impl<T: ?Sized, U: 'static + ?Sized> SharedSubRcRefCell<T, U> {
         f(&*copied_ref, &mut emplacer)
     }
 
-    /// SAFETY:
-    /// * Must be paired with a call to `enable()` before any further use of the value.
-    /// * Must not use the value while disabled.
-    pub(crate) unsafe fn disable(&mut self) {
-        // Ideally we'd just decrement the ref count, but RefCell doesn't expose that.
-        // Instead, we duplicate it, so the old value gets dropped automatically,
-        // decrementing the ref count.
-        self.shared_ref = unsafe { core::ptr::read(&self.shared_ref) };
-    }
-
-    /// SAFETY:
-    /// * Must only be used after a call to `disable()`.
-    pub(crate) unsafe fn enable(&mut self) -> Result<(), BorrowError> {
-        // Ideally we'd just increment the ref count, but RefCell doesn't expose that.
-        // Instead, we re-borrow it mutably, which increments the ref count, then forget
-        // the new borrow.
-        match self.pointed_at.try_borrow() {
-            Ok(new_ref_mut) => {
-                std::mem::forget(new_ref_mut);
-                Ok(())
-            }
-            Err(e) => Err(e),
+    /// Disables this shared reference, releasing the borrow on the RefCell.
+    /// Returns a `DisabledSharedSubRcRefCell` which can be cloned and later re-enabled.
+    pub(crate) fn disable(self) -> DisabledSharedSubRcRefCell<T, U> {
+        let sub_ptr = self.shared_ref.deref() as *const U;
+        // Drop the Ref to release the borrow
+        drop(self.shared_ref);
+        DisabledSharedSubRcRefCell {
+            pointed_at: self.pointed_at,
+            sub_ptr,
         }
     }
 }
@@ -333,6 +346,45 @@ impl<T: ?Sized, U: 'static + ?Sized> Deref for SharedSubRcRefCell<T, U> {
 
     fn deref(&self) -> &U {
         &self.shared_ref
+    }
+}
+
+/// A disabled shared reference that can be safely cloned and dropped.
+///
+/// This type holds just the `Rc` and a raw pointer to the sub-value,
+/// without an active borrow on the RefCell. This means:
+/// - Dropping is safe (no borrow count to decrement)
+/// - Cloning is safe (just clones the Rc and copies the pointer)
+/// - The value cannot be accessed until re-enabled
+pub(crate) struct DisabledSharedSubRcRefCell<T: 'static + ?Sized, U: 'static + ?Sized> {
+    pointed_at: Rc<RefCell<T>>,
+    sub_ptr: *const U,
+}
+
+impl<T: 'static + ?Sized, U: 'static + ?Sized> Clone for DisabledSharedSubRcRefCell<T, U> {
+    fn clone(&self) -> Self {
+        Self {
+            pointed_at: Rc::clone(&self.pointed_at),
+            sub_ptr: self.sub_ptr,
+        }
+    }
+}
+
+impl<T: 'static + ?Sized, U: 'static + ?Sized> DisabledSharedSubRcRefCell<T, U> {
+    /// Re-enables this disabled shared reference by re-acquiring the borrow.
+    ///
+    /// Returns an error if the RefCell is currently mutably borrowed.
+    pub(crate) fn enable(self) -> Result<SharedSubRcRefCell<T, U>, BorrowError> {
+        let shared_ref = self.pointed_at.try_borrow()?;
+        // SAFETY:
+        // - sub_ptr was derived from a valid &U inside the RefCell
+        // - The Rc is still alive, so the RefCell contents haven't moved
+        // - We just acquired a shared borrow, so the data is valid
+        let shared_ref = Ref::map(shared_ref, |_| unsafe { &*self.sub_ptr });
+        Ok(SharedSubRcRefCell {
+            shared_ref: unsafe { less_buggy_transmute::<Ref<'_, U>, Ref<'static, U>>(shared_ref) },
+            pointed_at: self.pointed_at,
+        })
     }
 }
 

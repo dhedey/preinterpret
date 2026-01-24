@@ -48,6 +48,70 @@ impl ArgumentValue {
             _ => panic!("expect_shared() called on a non-shared ArgumentValue"),
         }
     }
+
+    /// Disables this argument value, releasing any borrow on the RefCell.
+    /// Returns a `DisabledArgumentValue` which can be cloned and later re-enabled.
+    pub(crate) fn disable(self) -> DisabledArgumentValue {
+        match self {
+            ArgumentValue::Owned(owned) => DisabledArgumentValue::Owned(owned),
+            ArgumentValue::CopyOnWrite(copy_on_write) => {
+                DisabledArgumentValue::CopyOnWrite(copy_on_write.disable())
+            }
+            ArgumentValue::Mutable(mutable) => DisabledArgumentValue::Mutable(mutable.disable()),
+            ArgumentValue::Assignee(Assignee(mutable)) => {
+                DisabledArgumentValue::Assignee(mutable.disable())
+            }
+            ArgumentValue::Shared(shared) => DisabledArgumentValue::Shared(shared.disable()),
+        }
+    }
+}
+
+/// A disabled argument value that can be safely cloned and dropped.
+pub(crate) enum DisabledArgumentValue {
+    Owned(AnyValueOwned),
+    CopyOnWrite(DisabledCopyOnWrite<AnyValue>),
+    Mutable(DisabledMutable<AnyValue>),
+    Assignee(DisabledMutable<AnyValue>),
+    Shared(DisabledShared<AnyValue>),
+}
+
+impl Clone for DisabledArgumentValue {
+    fn clone(&self) -> Self {
+        match self {
+            DisabledArgumentValue::Owned(owned) => DisabledArgumentValue::Owned(owned.clone()),
+            DisabledArgumentValue::CopyOnWrite(copy_on_write) => {
+                DisabledArgumentValue::CopyOnWrite(copy_on_write.clone())
+            }
+            DisabledArgumentValue::Mutable(mutable) => {
+                DisabledArgumentValue::Mutable(mutable.clone())
+            }
+            DisabledArgumentValue::Assignee(assignee) => {
+                DisabledArgumentValue::Assignee(assignee.clone())
+            }
+            DisabledArgumentValue::Shared(shared) => DisabledArgumentValue::Shared(shared.clone()),
+        }
+    }
+}
+
+impl DisabledArgumentValue {
+    /// Re-enables this disabled argument value by re-acquiring any borrow.
+    pub(crate) fn enable(self, span: SpanRange) -> ExecutionResult<ArgumentValue> {
+        match self {
+            DisabledArgumentValue::Owned(owned) => Ok(ArgumentValue::Owned(owned)),
+            DisabledArgumentValue::CopyOnWrite(copy_on_write) => {
+                Ok(ArgumentValue::CopyOnWrite(copy_on_write.enable(span)?))
+            }
+            DisabledArgumentValue::Mutable(mutable) => {
+                Ok(ArgumentValue::Mutable(mutable.enable(span)?))
+            }
+            DisabledArgumentValue::Assignee(assignee) => {
+                Ok(ArgumentValue::Assignee(Assignee(assignee.enable(span)?)))
+            }
+            DisabledArgumentValue::Shared(shared) => {
+                Ok(ArgumentValue::Shared(shared.enable(span)?))
+            }
+        }
+    }
 }
 
 impl Spanned<ArgumentValue> {
@@ -69,39 +133,6 @@ impl Spanned<ArgumentValue> {
     #[inline]
     pub(crate) fn expect_shared(self) -> Spanned<AnyValueShared> {
         self.map(|value| value.expect_shared())
-    }
-}
-
-// Note: ArgumentValue no longer implements HasSpanRange or WithSpanRangeExt
-// since the inner value types no longer carry spans internally.
-// Spans should be tracked separately at a higher level if needed.
-
-impl Spanned<&mut ArgumentValue> {
-    /// SAFETY:
-    /// * Must be paired with a call to `enable()` before any further use of the value.
-    /// * Must not use the value while disabled.
-    pub(crate) unsafe fn disable(&mut self) {
-        match &mut self.0 {
-            ArgumentValue::Owned(_) => {}
-            ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write.spanned(self.1).disable(),
-            ArgumentValue::Mutable(mutable) => mutable.spanned(self.1).disable(),
-            ArgumentValue::Assignee(assignee) => (&mut assignee.0).spanned(self.1).disable(),
-            ArgumentValue::Shared(shared) => shared.spanned(self.1).disable(),
-        }
-    }
-
-    /// SAFETY:
-    /// * Must only be used after a call to `disable()`.
-    ///
-    /// Returns an ownership error if re-enabling fails (e.g., due to conflicting borrows).
-    pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
-        match &mut self.0 {
-            ArgumentValue::Owned(_) => Ok(()),
-            ArgumentValue::CopyOnWrite(copy_on_write) => copy_on_write.spanned(self.1).enable(),
-            ArgumentValue::Mutable(mutable) => mutable.spanned(self.1).enable(),
-            ArgumentValue::Assignee(assignee) => (&mut assignee.0).spanned(self.1).enable(),
-            ArgumentValue::Shared(shared) => shared.spanned(self.1).enable(),
-        }
     }
 }
 
@@ -176,15 +207,14 @@ impl RequestedOwnership {
         &self,
         Spanned(late_bound, span): Spanned<LateBoundValue>,
     ) -> ExecutionResult<Spanned<RequestedValue>> {
-        Ok(Spanned(
-            match self {
-                RequestedOwnership::LateBound => RequestedValue::LateBound(late_bound),
-                RequestedOwnership::Concrete(_) => {
-                    panic!("Returning a late-bound reference when concrete ownership was requested")
-                }
-            },
-            span,
-        ))
+        Ok(match self {
+            RequestedOwnership::LateBound => RequestedValue::LateBound(late_bound),
+            RequestedOwnership::Concrete(argument_ownership) => {
+                let argument = argument_ownership.map_from_late_bound(Spanned(late_bound, span))?;
+                Self::item_from_argument(argument)
+            }
+        }
+        .spanned(span))
     }
 
     pub(crate) fn map_from_argument(
@@ -824,7 +854,7 @@ enum BinaryPath {
         right: ExpressionNodeId,
     },
     OnRightBranch {
-        left: Spanned<ArgumentValue>,
+        left: Spanned<DisabledArgumentValue>,
         interface: BinaryOperationInterface,
     },
 }
@@ -882,12 +912,10 @@ impl EvaluationFrame for BinaryOperationBuilder {
                             let left = interface
                                 .lhs_ownership()
                                 .map_from_late_bound(Spanned(left, left_span))?;
-                            let mut left = Spanned(left, left_span);
+                            let left = Spanned(left, left_span);
 
-                            unsafe {
-                                // SAFETY: We re-enable it below and don't use it while disabled
-                                left.to_mut().disable();
-                            }
+                            // Disable left so we can evaluate right without borrow conflicts
+                            let left = left.map(|v| v.disable());
 
                             self.state = BinaryPath::OnRightBranch { left, interface };
                             context.request_argument_value(self, right, rhs_ownership)
@@ -902,24 +930,22 @@ impl EvaluationFrame for BinaryOperationBuilder {
                     }
                 }
             }
-            BinaryPath::OnRightBranch {
-                mut left,
-                interface,
-            } => {
-                let mut right = value.expect_argument_value();
+            BinaryPath::OnRightBranch { left, interface } => {
+                let right = value.expect_argument_value();
 
                 // NOTE:
                 // - This disable/enable flow allows us to do x += x without issues
                 // - Read https://rust-lang.github.io/rfcs/2025-nested-method-calls.html for more details
                 // - We enable left-to-right for more intuitive error messages:
                 //   If left and right clash, then the error message should be on the right, not the left
-                unsafe {
-                    // SAFETY: We disabled left above
-                    right.to_mut().disable();
-                    // SAFETY: enable() may fail if left and right reference the same variable
-                    left.to_mut().enable()?;
-                    right.to_mut().enable()?;
-                }
+
+                // Disable right, then re-enable left first (for intuitive error messages)
+                let right = right.map(|v| v.disable());
+                let left_span = left.1;
+                let right_span = right.1;
+                let left = left.try_map(|v| v.enable(left_span))?;
+                let right = right.try_map(|v| v.enable(right_span))?;
+
                 let result = interface.execute(left, right, &self.operation)?;
                 return context.return_returned_value(result);
             }
@@ -938,13 +964,8 @@ impl ValuePropertyAccessBuilder {
         node: ExpressionNodeId,
     ) -> NextAction {
         let frame = Self { access };
-        // If we need an owned value, we can try resolving a reference and
-        // clone the outputted value if needed - which can be much cheaper.
-        // e.g. `let x = arr[0]` only copies `arr[0]` instead of the whole array.
-        let ownership_request = context
-            .requested_ownership()
-            .replace_owned_with_copy_on_write();
-        context.request_any_value(frame, node, ownership_request)
+        // We need late-bound in case we resolve a method
+        context.request_late_bound(frame, node)
     }
 }
 
@@ -960,11 +981,33 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
         context: ValueContext,
         Spanned(value, source_span): Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
+        // The result span covers source through property
+        let result_span = SpanRange::new_between(source_span, self.access.span_range());
+
         // Get the source kind to check if property access is supported
         let source_kind = value.value_kind();
 
+        let resolver = source_kind.feature_resolver();
+
+        // Attempt to resolve a method first
+        // (NB: It's an error to set an object property which is already set to a native method)
+        if let Some(method) = resolver.resolve_method(&self.access.property.to_string()) {
+            let receiver = value.expect_late_bound();
+            let receiver_ownership = method.argument_ownerships().0[0];
+            let receiver = receiver_ownership
+                .map_from_late_bound(receiver.spanned(source_span))?
+                .spanned(source_span);
+            // Disable receiver so it can be stored in the FunctionValue
+            let receiver = receiver.map(|v| v.disable());
+            let function_value = FunctionValue {
+                definition: FunctionDefinition::Native(method),
+                disabled_bound_arguments: vec![receiver],
+            };
+            return context.return_value(function_value.spanned(result_span));
+        };
+
         // Query type resolution for property access capability
-        let Some(interface) = source_kind.feature_resolver().resolve_property_access() else {
+        let Some(interface) = resolver.resolve_property_access() else {
             return self.access.type_err(format!(
                 "Cannot access properties on {}",
                 source_kind.articled_display_name()
@@ -983,8 +1026,6 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
             |owned| (interface.owned_access)(ctx, owned),
         )?;
 
-        // The result span covers source through property
-        let result_span = SpanRange::new_between(source_span, self.access.span_range());
         context.return_not_necessarily_matching_requested(Spanned(mapped, result_span))
     }
 }
@@ -1261,7 +1302,7 @@ enum MethodCallPath {
     CallerPath,
     ArgumentsPath {
         method: &'static FunctionInterface,
-        disabled_evaluated_arguments_including_caller: Vec<Spanned<ArgumentValue>>,
+        disabled_evaluated_arguments_including_caller: Vec<Spanned<DisabledArgumentValue>>,
     },
 }
 
@@ -1350,7 +1391,7 @@ impl EvaluationFrame for MethodCallBuilder {
                 }
                 let caller =
                     argument_ownerships[0].map_from_late_bound(Spanned(caller, caller_span))?;
-                let mut caller = Spanned(caller, caller_span);
+                let caller = Spanned(caller, caller_span);
 
                 // We skip 1 to ignore the caller
                 let non_self_argument_ownerships: iter::Skip<
@@ -1369,10 +1410,8 @@ impl EvaluationFrame for MethodCallBuilder {
                     disabled_evaluated_arguments_including_caller: {
                         let mut params =
                             Vec::with_capacity(1 + self.unevaluated_parameters_stack.len());
-                        unsafe {
-                            // SAFETY: We enable it again before use
-                            caller.to_mut().disable();
-                        }
+                        // Disable caller so we can evaluate remaining arguments without borrow conflicts
+                        let caller = caller.map(|v| v.disable());
                         params.push(caller);
                         params
                     },
@@ -1384,11 +1423,9 @@ impl EvaluationFrame for MethodCallBuilder {
                 ..
             } => {
                 let argument = value.expect_argument_value();
-                let mut argument = Spanned(argument, span);
-                unsafe {
-                    // SAFETY: We enable it again before use
-                    argument.to_mut().disable();
-                }
+                let argument = Spanned(argument, span);
+                // Disable argument so we can evaluate remaining arguments without borrow conflicts
+                let argument = argument.map(|v| v.disable());
                 disabled_evaluated_arguments_including_caller.push(argument);
             }
         };
@@ -1401,20 +1438,20 @@ impl EvaluationFrame for MethodCallBuilder {
                 let (arguments, method) = match self.state {
                     MethodCallPath::CallerPath => unreachable!("Already updated above"),
                     MethodCallPath::ArgumentsPath {
-                        disabled_evaluated_arguments_including_caller: mut arguments,
+                        disabled_evaluated_arguments_including_caller: disabled_arguments,
                         method,
                     } => {
                         // NOTE:
                         // - This disable/enable flow allows us to do things like vec.push(vec.len())
                         // - Read https://rust-lang.github.io/rfcs/2025-nested-method-calls.html for more details
                         // - We enable left-to-right for intuitive error messages: later borrows will report errors
-                        unsafe {
-                            for argument in &mut arguments {
-                                // SAFETY: We disabled them above
-                                // NOTE: enable() may fail if arguments conflict (e.g., same variable)
-                                argument.to_mut().enable()?;
-                            }
-                        }
+                        let arguments = disabled_arguments
+                            .into_iter()
+                            .map(|arg| {
+                                let span = arg.1;
+                                arg.try_map(|v| v.enable(span))
+                            })
+                            .collect::<ExecutionResult<Vec<_>>>()?;
                         (arguments, method)
                     }
                 };
@@ -1443,7 +1480,7 @@ enum InvocationPath {
     ArgumentsPath {
         function_span: SpanRange,
         interface: &'static FunctionInterface,
-        disabled_evaluated_arguments: Vec<Spanned<ArgumentValue>>,
+        disabled_evaluated_arguments: Vec<Spanned<DisabledArgumentValue>>,
     },
 }
 
@@ -1466,7 +1503,7 @@ impl InvocationBuilder {
                 .collect(),
             state: InvocationPath::InvokablePath,
         };
-        context.request_copy_on_write(frame, invokable)
+        context.request_owned(frame, invokable)
     }
 }
 
@@ -1485,22 +1522,22 @@ impl EvaluationFrame for InvocationBuilder {
         match self.state {
             InvocationPath::InvokablePath => {
                 let function_span = span;
-                let function = value.expect_copy_on_write();
+                let function = value.expect_owned();
 
                 let function = function
                     .into_content()
                     .spanned(function_span)
-                    .downcast_resolve::<QqqCopyOnWrite<FunctionValue>>("An invoked value")?;
+                    .downcast_resolve::<FunctionValue>("An invoked value")?;
 
                 // I need to extract
                 // (A): Function interface
                 // (B): Already bound disabled arguments -> assumed empty
-                let interface = match &function.as_ref_value().definition {
-                    FunctionDefinition::Native(interface) => *interface,
+                let interface = match function.definition {
+                    FunctionDefinition::Native(interface) => interface,
                     FunctionDefinition::Closure(_) => todo!(),
                 };
                 // Placeholder for already bound arguments. We can assume they're already disabled, and of the correct ownership/s.
-                let disabled_bound_arguments = vec![];
+                let disabled_bound_arguments = function.disabled_bound_arguments;
 
                 let unbound_arguments_count = self.unevaluated_parameters_stack.len();
 
@@ -1571,11 +1608,9 @@ impl EvaluationFrame for InvocationBuilder {
                 ..
             } => {
                 let argument = value.expect_argument_value();
-                let mut argument = Spanned(argument, span);
-                unsafe {
-                    // SAFETY: We enable it again before use
-                    argument.to_mut().disable();
-                }
+                let argument = Spanned(argument, span);
+                // Disable argument so we can evaluate remaining arguments without borrow conflicts
+                let argument = argument.map(|v| v.disable());
                 disabled_evaluated_arguments.push(argument);
             }
         };
@@ -1589,20 +1624,20 @@ impl EvaluationFrame for InvocationBuilder {
                     InvocationPath::InvokablePath => unreachable!("Already updated above"),
                     InvocationPath::ArgumentsPath {
                         interface,
-                        disabled_evaluated_arguments: mut arguments,
+                        disabled_evaluated_arguments,
                         function_span,
                     } => {
                         // NOTE:
                         // - This disable/enable flow allows us to do things like vec.push(vec.len())
                         // - Read https://rust-lang.github.io/rfcs/2025-nested-method-calls.html for more details
                         // - We enable left-to-right for intuitive error messages: later borrows will report errors
-                        unsafe {
-                            for argument in &mut arguments {
-                                // SAFETY: We disabled them above
-                                // NOTE: enable() may fail if arguments conflict (e.g., same variable)
-                                argument.to_mut().enable()?;
-                            }
-                        }
+                        let arguments = disabled_evaluated_arguments
+                            .into_iter()
+                            .map(|arg| {
+                                let span = arg.1;
+                                arg.try_map(|v| v.enable(span))
+                            })
+                            .collect::<ExecutionResult<Vec<_>>>()?;
                         (arguments, interface, function_span)
                     }
                 };

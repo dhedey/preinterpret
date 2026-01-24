@@ -458,11 +458,6 @@ impl<T> Spanned<T> {
     }
 
     #[inline]
-    pub(crate) fn to_mut(&mut self) -> Spanned<&mut T> {
-        Spanned(&mut self.0, self.1)
-    }
-
-    #[inline]
     pub(crate) fn map<U>(self, f: impl FnOnce(T) -> U) -> Spanned<U> {
         Spanned(f(self.0), self.1)
     }

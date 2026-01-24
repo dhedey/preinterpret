@@ -176,6 +176,7 @@ impl RequestedValue {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn expect_copy_on_write(self) -> CopyOnWriteValue {
         match self {
             RequestedValue::CopyOnWrite(copy_on_write) => copy_on_write,
@@ -344,6 +345,7 @@ impl<'a, T: RequestedValueType> Context<'a, T> {
         self.request_argument_value(handler, node, ArgumentOwnership::Owned)
     }
 
+    #[allow(dead_code)]
     pub(super) fn request_copy_on_write<H: EvaluationFrame<ReturnType = T>>(
         self,
         handler: H,

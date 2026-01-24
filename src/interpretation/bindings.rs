@@ -322,30 +322,37 @@ impl<T: ?Sized> Mutable<T> {
     ) -> Result<Mutable<V>, E> {
         Ok(Mutable(self.0.try_map(value_map)?))
     }
+
+    /// Disables this mutable reference, releasing the borrow on the RefCell.
+    /// Returns a `DisabledMutable` which can be cloned and later re-enabled.
+    pub(crate) fn disable(self) -> DisabledMutable<T> {
+        DisabledMutable(self.0.disable())
+    }
+}
+
+/// A disabled mutable reference that can be safely cloned and dropped.
+pub(crate) struct DisabledMutable<T: 'static + ?Sized>(
+    pub(crate) DisabledMutableSubRcRefCell<AnyValue, T>,
+);
+
+impl<T: ?Sized> Clone for DisabledMutable<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T: ?Sized> DisabledMutable<T> {
+    /// Re-enables this disabled mutable reference by re-acquiring the borrow.
+    pub(crate) fn enable(self, span: SpanRange) -> ExecutionResult<Mutable<T>> {
+        self.0
+            .enable()
+            .map(Mutable)
+            .map_err(|_| span.ownership_error(MUTABLE_ERROR_MESSAGE))
+    }
 }
 
 pub(crate) static MUTABLE_ERROR_MESSAGE: &str =
     "The variable cannot be modified as it is already being modified";
-
-impl Spanned<&mut AnyValueMutable> {
-    /// SAFETY:
-    /// * Must be paired with a call to `enable()` before any further use of the value.
-    /// * Must not use the value while disabled.
-    pub(crate) unsafe fn disable(&mut self) {
-        self.0 .0.disable();
-    }
-
-    /// SAFETY:
-    /// * Must only be used after a call to `disable()`.
-    ///
-    /// Returns an ownership error if re-enabling fails (e.g., due to conflicting borrows).
-    pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
-        self.0
-             .0
-            .enable()
-            .map_err(|_| self.1.ownership_error(MUTABLE_ERROR_MESSAGE))
-    }
-}
 
 impl Spanned<AnyValueMutable> {
     pub(crate) fn transparent_clone(&self) -> ExecutionResult<AnyValue> {
@@ -435,30 +442,37 @@ impl<T: ?Sized> Shared<T> {
     pub(crate) fn map<V: ?Sized>(self, value_map: impl FnOnce(&T) -> &V) -> Shared<V> {
         Shared(self.0.map(value_map))
     }
+
+    /// Disables this shared reference, releasing the borrow on the RefCell.
+    /// Returns a `DisabledShared` which can be cloned and later re-enabled.
+    pub(crate) fn disable(self) -> DisabledShared<T> {
+        DisabledShared(self.0.disable())
+    }
+}
+
+/// A disabled shared reference that can be safely cloned and dropped.
+pub(crate) struct DisabledShared<T: 'static + ?Sized>(
+    pub(crate) DisabledSharedSubRcRefCell<AnyValue, T>,
+);
+
+impl<T: ?Sized> Clone for DisabledShared<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T: ?Sized> DisabledShared<T> {
+    /// Re-enables this disabled shared reference by re-acquiring the borrow.
+    pub(crate) fn enable(self, span: SpanRange) -> ExecutionResult<Shared<T>> {
+        self.0
+            .enable()
+            .map(Shared)
+            .map_err(|_| span.ownership_error(SHARED_ERROR_MESSAGE))
+    }
 }
 
 pub(crate) static SHARED_ERROR_MESSAGE: &str =
     "The variable cannot be read as it is already being modified";
-
-impl Spanned<&mut AnyValueShared> {
-    /// SAFETY:
-    /// * Must be paired with a call to `enable()` before any further use of the value.
-    /// * Must not use the value while disabled.
-    pub(crate) unsafe fn disable(&mut self) {
-        self.0 .0.disable();
-    }
-
-    /// SAFETY:
-    /// * Must only be used after a call to `disable()`.
-    ///
-    /// Returns an ownership error if re-enabling fails (e.g., due to conflicting borrows).
-    pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
-        self.0
-             .0
-            .enable()
-            .map_err(|_| self.1.ownership_error(SHARED_ERROR_MESSAGE))
-    }
-}
 
 impl Spanned<AnyValueShared> {
     pub(crate) fn transparent_clone(&self) -> ExecutionResult<AnyValue> {
@@ -602,38 +616,67 @@ impl<T: 'static + ToOwned + ?Sized> CopyOnWrite<T> {
             CopyOnWriteInner::SharedWithTransparentCloning(shared) => map_shared(shared),
         }
     }
+
+    /// Disables this copy-on-write value, releasing any borrow on the RefCell.
+    /// Returns a `DisabledCopyOnWrite` which can be cloned and later re-enabled.
+    pub(crate) fn disable(self) -> DisabledCopyOnWrite<T> {
+        let inner = match self.inner {
+            CopyOnWriteInner::Owned(owned) => DisabledCopyOnWriteInner::Owned(owned),
+            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
+                DisabledCopyOnWriteInner::SharedWithInfallibleCloning(shared.disable())
+            }
+            CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
+                DisabledCopyOnWriteInner::SharedWithTransparentCloning(shared.disable())
+            }
+        };
+        DisabledCopyOnWrite { inner }
+    }
 }
 
-impl Spanned<&mut CopyOnWrite<AnyValue>> {
-    /// SAFETY:
-    /// * Must be paired with a call to `enable()` before any further use of the value.
-    /// * Must not use the value while disabled.
-    pub(crate) unsafe fn disable(&mut self) {
-        match &mut self.0.inner {
-            CopyOnWriteInner::Owned(_) => {}
-            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
-                shared.spanned(self.1).disable()
-            }
-            CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
-                shared.spanned(self.1).disable()
-            }
-        }
-    }
+/// A disabled copy-on-write value that can be safely cloned and dropped.
+pub(crate) struct DisabledCopyOnWrite<T: 'static + ToOwned + ?Sized> {
+    inner: DisabledCopyOnWriteInner<T>,
+}
 
-    /// SAFETY:
-    /// * Must only be used after a call to `disable()`.
-    ///
-    /// Returns an ownership error if re-enabling fails (e.g., due to conflicting borrows).
-    pub(crate) unsafe fn enable(&mut self) -> ExecutionResult<()> {
-        match &mut self.0.inner {
-            CopyOnWriteInner::Owned(_) => Ok(()),
-            CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
-                shared.spanned(self.1).enable()
+enum DisabledCopyOnWriteInner<T: 'static + ToOwned + ?Sized> {
+    Owned(Owned<T::Owned>),
+    SharedWithInfallibleCloning(DisabledShared<T>),
+    SharedWithTransparentCloning(DisabledShared<T>),
+}
+
+impl<T: 'static + ToOwned + ?Sized> Clone for DisabledCopyOnWrite<T>
+where
+    T::Owned: Clone,
+{
+    fn clone(&self) -> Self {
+        let inner = match &self.inner {
+            DisabledCopyOnWriteInner::Owned(owned) => {
+                DisabledCopyOnWriteInner::Owned(owned.clone())
             }
-            CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
-                shared.spanned(self.1).enable()
+            DisabledCopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
+                DisabledCopyOnWriteInner::SharedWithInfallibleCloning(shared.clone())
             }
-        }
+            DisabledCopyOnWriteInner::SharedWithTransparentCloning(shared) => {
+                DisabledCopyOnWriteInner::SharedWithTransparentCloning(shared.clone())
+            }
+        };
+        Self { inner }
+    }
+}
+
+impl<T: 'static + ToOwned + ?Sized> DisabledCopyOnWrite<T> {
+    /// Re-enables this disabled copy-on-write value by re-acquiring any borrow.
+    pub(crate) fn enable(self, span: SpanRange) -> ExecutionResult<CopyOnWrite<T>> {
+        let inner = match self.inner {
+            DisabledCopyOnWriteInner::Owned(owned) => CopyOnWriteInner::Owned(owned),
+            DisabledCopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
+                CopyOnWriteInner::SharedWithInfallibleCloning(shared.enable(span)?)
+            }
+            DisabledCopyOnWriteInner::SharedWithTransparentCloning(shared) => {
+                CopyOnWriteInner::SharedWithTransparentCloning(shared.enable(span)?)
+            }
+        };
+        Ok(CopyOnWrite { inner })
     }
 }
 
