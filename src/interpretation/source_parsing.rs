@@ -1,12 +1,12 @@
 #![allow(unused)]
 use super::*;
 
+new_key!(pub(crate) FrameId);
 new_key!(pub(crate) ScopeId);
 new_key!(pub(crate) VariableDefinitionId);
 new_key!(pub(crate) VariableReferenceId);
 new_key!(pub(crate) ControlFlowSegmentId);
 new_key!(pub(crate) CatchLocationId);
-new_key!(pub(crate) ClosureId);
 
 pub(crate) enum InterruptDetails<'a> {
     /// Break statement (targets loops or labeled blocks)
@@ -37,7 +37,8 @@ pub(crate) enum FinalUseAssertion {
 #[derive(Debug)]
 pub(crate) struct ScopeDefinitions {
     // Scopes
-    pub(crate) root_scope: ScopeId,
+    pub(crate) root_frame: (FrameId, ScopeId),
+    pub(crate) frames: Arena<FrameId, RuntimeFrame>,
     pub(crate) scopes: Arena<ScopeId, ScopeData>,
     pub(crate) definitions: Arena<VariableDefinitionId, VariableDefinitionData>,
     pub(crate) references: Arena<VariableReferenceId, VariableReferenceData>,
@@ -45,7 +46,7 @@ pub(crate) struct ScopeDefinitions {
     pub(crate) catch_locations: Arena<CatchLocationId, CatchLocationData>,
     // Segments
     #[cfg(feature = "debug")]
-    root_segment: ControlFlowSegmentId,
+    root_segments: Vec<(FrameId, ControlFlowSegmentId)>,
     #[cfg(feature = "debug")]
     segments: Arena<ControlFlowSegmentId, ControlFlowSegmentData>,
     #[cfg(feature = "debug")]
@@ -54,61 +55,56 @@ pub(crate) struct ScopeDefinitions {
 
 #[allow(unused)]
 pub(crate) struct FlowAnalysisState {
-    // SCOPE DATA
-    scope_id_stack: Vec<ScopeId>,
+    frames_stack: Vec<FrameId>,
+    frames: Arena<FrameId, AllocatedFrame>,
     scopes: Arena<ScopeId, AllocatedScope>,
     definitions: Arena<VariableDefinitionId, AllocatedVariableDefinition>,
     references: Arena<VariableReferenceId, AllocatedVariableReference>,
-    // CATCH LOCATION DATA
     catch_locations: Arena<CatchLocationId, CatchLocationData>,
-    catch_location_stack: Vec<CatchLocationId>,
-    // CONTROL FLOW DATA
-    segments_stack: Vec<ControlFlowSegmentId>,
     segments: Arena<ControlFlowSegmentId, ControlFlowSegmentData>,
+
+    // >> Current positions (copied for convenience/performance)
+    /// This is frames_stack.last() (else placeholder or the last set)
+    current_frame_id: FrameId,
+    /// This is frames_stack.last().scopes_stack.last() (else placeholder or the last set)
+    current_scope_id: ScopeId,
+    /// This is frames_stack.last().segments_stack.last() (else placeholder)
+    current_segment_id: ControlFlowSegmentId,
 }
 
 impl FlowAnalysisState {
-    pub(crate) fn new() -> Self {
-        let mut scopes = Arena::new();
-        let definitions = Arena::new();
-        let references = Arena::new();
-        let root_scope = scopes.add(AllocatedScope::Defined(ScopeData {
-            parent: None,
-            definitions: Vec::new(),
-        }));
-        let mut segments = Arena::new();
-        let root_segment = segments.add(ControlFlowSegmentData {
-            scope: root_scope,
-            parent: None,
-            segment_kind: SegmentKind::Sequential,
-            children: SegmentKind::Sequential.new_children(),
-        });
+    pub(crate) fn new_empty() -> Self {
         Self {
-            scope_id_stack: vec![root_scope],
-            scopes,
-            definitions,
-            references,
+            current_frame_id: FrameId::new_placeholder(),
+            current_scope_id: ScopeId::new_placeholder(),
+            current_segment_id: ControlFlowSegmentId::new_placeholder(),
+            frames_stack: vec![],
+            frames: Arena::new(),
+            scopes: Arena::new(),
+            definitions: Arena::new(),
+            references: Arena::new(),
             catch_locations: Arena::new(),
-            catch_location_stack: Vec::new(),
-            segments_stack: vec![root_segment],
-            segments,
+            segments: Arena::new(),
         }
     }
 
-    pub(crate) fn finish(mut self) -> ParseResult<ScopeDefinitions> {
-        let root_scope = self.scope_id_stack.pop().expect("No scope to pop");
+    pub(crate) fn finish(
+        mut self,
+        root_frame: (FrameId, ScopeId),
+    ) -> ParseResult<ScopeDefinitions> {
         assert!(
-            self.scope_id_stack.is_empty(),
-            "Cannot finish - Unpopped scopes remain"
+            self.frames_stack.is_empty(),
+            "Cannot finish - Unpopped frames remain"
         );
 
-        #[allow(unused)] // If debug is off
-        let root_segment = self.segments_stack.pop().expect("No segment to pop");
-        assert!(
-            self.segments_stack.is_empty(),
-            "Cannot finish - Unpopped segments remain"
-        );
+        #[cfg(feature = "debug")]
+        let root_segments: Vec<(FrameId, ControlFlowSegmentId)> = self
+            .frames
+            .iter()
+            .map(|(frame_id, frame)| (frame_id, frame.defined_ref().root_segment))
+            .collect();
 
+        let frames = self.frames.map_all(AllocatedFrame::into_runtime);
         let scopes = self.scopes.map_all(AllocatedScope::into_defined);
         let definitions = self
             .definitions
@@ -144,7 +140,8 @@ impl FlowAnalysisState {
         }
 
         Ok(ScopeDefinitions {
-            root_scope,
+            root_frame,
+            frames,
             scopes,
             definitions,
             references,
@@ -156,6 +153,10 @@ impl FlowAnalysisState {
             #[cfg(feature = "debug")]
             final_use_debug,
         })
+    }
+
+    pub(crate) fn allocate_frame(&mut self) -> FrameId {
+        self.frames.add(AllocatedFrame::Allocated)
     }
 
     pub(crate) fn allocate_scope(&mut self) -> ScopeId {
@@ -177,30 +178,102 @@ impl FlowAnalysisState {
             })
     }
 
-    fn current_scope_id(&self) -> ScopeId {
-        *self.scope_id_stack.last().unwrap()
+    // FRAMES
+    // ======
+
+    pub(crate) fn enter_frame(&mut self, frame_id: FrameId, scope_id: ScopeId) {
+        let parent_scope = self.current_scope_id;
+        *self.frames.get_mut(frame_id) = AllocatedFrame::Defined(FrameData {
+            lexical_parent: if parent_scope.is_placeholder() {
+                None
+            } else {
+                Some(parent_scope)
+            },
+            root_segment: ControlFlowSegmentId::new_placeholder(),
+            closed_variables: BTreeMap::new(),
+            scope_stack: Vec::new(),
+            segment_stack: Vec::new(),
+            catch_location_stack: Vec::new(),
+        });
+        self.frames_stack.push(frame_id);
+        self.current_frame_id = frame_id;
+        self.enter_scope(scope_id);
+        let segment = self.enter_segment_with_valid_previous(None, None, SegmentKind::Sequential);
+        let frame = self.current_frame_mut();
+        frame.root_segment = segment;
+    }
+
+    fn current_frame(&self) -> &FrameData {
+        self.frames.get(self.current_frame_id).defined_ref()
+    }
+
+    fn current_frame_mut(&mut self) -> &mut FrameData {
+        self.frames.get_mut(self.current_frame_id).defined_mut()
+    }
+
+    pub(crate) fn exit_frame(&mut self, frame_id: FrameId, scope_id: ScopeId) {
+        self.exit_segment(self.current_frame().root_segment);
+        assert!(
+            self.segments_stack().is_empty(),
+            "Segment stack not empty after exiting frame"
+        );
+
+        self.exit_scope(scope_id);
+        assert!(
+            self.scope_id_stack_mut().is_empty(),
+            "Scope stack not empty after exiting frame"
+        );
+
+        let id = self.frames_stack.pop().expect("No frame to pop");
+        assert_eq!(id, frame_id, "Popped frame is not the current frame");
+        // If not, leave `current_frame_id` as the root frame
+        if let Some(current_frame_id) = self.frames_stack.last() {
+            self.current_frame_id = *current_frame_id;
+        }
+    }
+
+    // SCOPES
+    // ======
+
+    fn scope_id_stack(&self) -> &[ScopeId] {
+        &self.current_frame().scope_stack
+    }
+
+    fn scope_id_stack_mut(&mut self) -> &mut Vec<ScopeId> {
+        &mut self.current_frame_mut().scope_stack
     }
 
     fn current_scope(&mut self) -> &mut ScopeData {
-        self.scopes.get_mut(self.current_scope_id()).defined_mut()
+        self.scopes.get_mut(self.current_scope_id).defined_mut()
     }
 
     pub(crate) fn enter_scope(&mut self, scope_id: ScopeId) {
         *self.scopes.get_mut(scope_id) = AllocatedScope::Defined(ScopeData {
-            parent: Some(self.current_scope_id()),
             definitions: Vec::new(),
+            parent: self.scope_id_stack_mut().last().copied(),
+            frame: self.current_frame_id,
         });
-        self.scope_id_stack.push(scope_id);
+        self.scope_id_stack_mut().push(scope_id);
+        self.current_scope_id = scope_id;
+    }
+
+    /// The scope parameter is just to help catch bugs.
+    pub(crate) fn exit_scope(&mut self, scope: ScopeId) {
+        let id = self.scope_id_stack_mut().pop().expect("No scope to pop");
+        assert_eq!(id, scope, "Popped scope is not the current scope");
+
+        // If not, leave `current_scope_id` as the root scope
+        if let Some(current_scope_id) = self.scope_id_stack_mut().last() {
+            self.current_scope_id = *current_scope_id;
+        }
     }
 
     pub(crate) fn define_variable(&mut self, id: VariableDefinitionId) {
-        let scope = self.current_scope_id();
-        let segment = self.current_segment_id();
         let definition = self.definitions.get_mut(id);
         let (name, definition_name_span) = definition.take_allocated();
         *definition = AllocatedVariableDefinition::Defined(VariableDefinitionData {
-            scope,
-            segment,
+            scope: self.current_scope_id,
+            segment: self.current_segment_id,
             name,
             definition_name_span,
             references: Vec::new(),
@@ -216,10 +289,17 @@ impl FlowAnalysisState {
         id: VariableReferenceId,
         #[cfg(feature = "debug")] assertion: FinalUseAssertion,
     ) -> ParseResult<()> {
-        let segment = self.current_segment_id();
+        let segment = self.current_segment_id;
         let reference = self.references.get_mut(id);
         let (name, reference_name_span) = reference.take_allocated();
-        for scope_id in self.scope_id_stack.iter().rev() {
+        // self.scope_id_stack() but inlined so that the mutability checker is happy
+        let scope_stack = self
+            .frames
+            .get(self.current_frame_id)
+            .defined_ref()
+            .scope_stack
+            .as_slice();
+        for scope_id in scope_stack.iter().rev() {
             let scope = self.scopes.get(*scope_id).defined_ref();
             for &def_id in scope.definitions.iter().rev() {
                 let def = self.definitions.get_mut(def_id).defined_mut();
@@ -244,30 +324,24 @@ impl FlowAnalysisState {
         reference_name_span.parse_err(format!("Cannot find variable `{}` in this scope", name))
     }
 
-    /// The scope parameter is just to help catch bugs.
-    pub(crate) fn exit_scope(&mut self, scope: ScopeId) {
-        let id = self.scope_id_stack.pop().expect("No scope to pop");
-        assert_eq!(id, scope, "Popped scope is not the current scope");
-    }
-
     // SEGMENTS
     // ========
 
-    fn current_segment_id(&self) -> ControlFlowSegmentId {
-        *self.segments_stack.last().unwrap()
+    fn segments_stack(&mut self) -> &mut Vec<ControlFlowSegmentId> {
+        &mut self.current_frame_mut().segment_stack
     }
 
     fn current_segment(&mut self) -> &mut ControlFlowSegmentData {
-        self.segments.get_mut(self.current_segment_id())
+        self.segments.get_mut(self.current_segment_id)
     }
 
     pub(crate) fn enter_next_segment(&mut self, segment_kind: SegmentKind) -> ControlFlowSegmentId {
-        let parent_id = self.current_segment_id();
+        let parent_id = self.current_segment_id;
         let parent = self.segments.get(parent_id);
         if !matches!(parent.children, SegmentChildren::Sequential { .. }) {
             panic!("enter_next_segment can only be called with a sequential parent");
         }
-        self.enter_segment_with_valid_previous(parent_id, None, segment_kind)
+        self.enter_segment_with_valid_previous(Some(parent_id), None, segment_kind)
     }
 
     pub(crate) fn enter_path_segment(
@@ -275,7 +349,7 @@ impl FlowAnalysisState {
         previous_sibling_id: Option<ControlFlowSegmentId>,
         segment_kind: SegmentKind,
     ) -> ControlFlowSegmentId {
-        let parent_id = self.current_segment_id();
+        let parent_id = self.current_segment_id;
         if let Some(previous_sibling_id) = previous_sibling_id {
             let previous_sibling = self.segments.get(previous_sibling_id);
             // It might be possible if gotos exist to have a non-local parent,
@@ -290,39 +364,58 @@ impl FlowAnalysisState {
         if !matches!(parent.children, SegmentChildren::PathBased { .. }) {
             panic!("enter_path_segment can only be called with a path-based parent");
         }
-        self.enter_segment_with_valid_previous(parent_id, previous_sibling_id, segment_kind)
+        self.enter_segment_with_valid_previous(Some(parent_id), previous_sibling_id, segment_kind)
     }
 
     pub(crate) fn exit_segment(&mut self, segment: ControlFlowSegmentId) {
-        let id = self.segments_stack.pop().expect("No segment to pop");
+        let id = self.segments_stack().pop().expect("No segment to pop");
         assert_eq!(id, segment, "Popped segment is not the current segment");
+        self.current_segment_id = self
+            .segments_stack()
+            .last()
+            .copied()
+            .unwrap_or_else(ControlFlowSegmentId::new_placeholder);
     }
 
     fn enter_segment_with_valid_previous(
         &mut self,
-        parent_id: ControlFlowSegmentId,
+        parent_id: Option<ControlFlowSegmentId>,
         previous_sibling_id: Option<ControlFlowSegmentId>,
         segment_kind: SegmentKind,
     ) -> ControlFlowSegmentId {
         let child_id = self.segments.add(ControlFlowSegmentData {
-            scope: self.current_scope_id(),
-            parent: Some(parent_id),
+            scope: self.current_scope_id,
+            parent: parent_id,
             children: segment_kind.new_children(),
             segment_kind,
         });
-        self.segments_stack.push(child_id);
-        let parent = self.segments.get_mut(parent_id);
-        match &mut parent.children {
-            SegmentChildren::Sequential { ref mut children } => {
-                children.push(ControlFlowChild::Segment(child_id));
-            }
-            SegmentChildren::PathBased {
-                node_previous_map: ref mut node_parent_map,
-            } => {
-                node_parent_map.insert(child_id, previous_sibling_id);
+        self.segments_stack().push(child_id);
+        self.current_segment_id = child_id;
+        if let Some(parent_id) = parent_id {
+            let parent = self.segments.get_mut(parent_id);
+            match &mut parent.children {
+                SegmentChildren::Sequential { ref mut children } => {
+                    children.push(ControlFlowChild::Segment(child_id));
+                }
+                SegmentChildren::PathBased {
+                    node_previous_map: ref mut node_parent_map,
+                } => {
+                    node_parent_map.insert(child_id, previous_sibling_id);
+                }
             }
         }
         child_id
+    }
+
+    // CATCH LOCATIONS
+    // ===============
+
+    fn catch_location_stack(&self) -> &[CatchLocationId] {
+        &self.current_frame().catch_location_stack
+    }
+
+    fn catch_location_stack_mut(&mut self) -> &mut Vec<CatchLocationId> {
+        &mut self.current_frame_mut().catch_location_stack
     }
 
     pub(crate) fn register_catch_location(&mut self, data: CatchLocationData) -> CatchLocationId {
@@ -330,11 +423,14 @@ impl FlowAnalysisState {
     }
 
     pub(crate) fn enter_catch(&mut self, catch_location_id: CatchLocationId) {
-        self.catch_location_stack.push(catch_location_id);
+        self.catch_location_stack_mut().push(catch_location_id);
     }
 
     pub(crate) fn exit_catch(&mut self, catch_location_id: CatchLocationId) {
-        let popped = self.catch_location_stack.pop().expect("No catch to pop");
+        let popped = self
+            .catch_location_stack_mut()
+            .pop()
+            .expect("No catch to pop");
         assert_eq!(
             popped, catch_location_id,
             "Popped catch location is not the expected catch location"
@@ -350,7 +446,7 @@ impl FlowAnalysisState {
                 label: Some(label), ..
             } => {
                 let label_str = label.ident_string();
-                for &catch_location_id in self.catch_location_stack.iter().rev() {
+                for &catch_location_id in self.catch_location_stack().iter().rev() {
                     let catch_location = self.catch_locations.get(catch_location_id);
                     match catch_location {
                         CatchLocationData::Loop {
@@ -376,7 +472,7 @@ impl FlowAnalysisState {
                 label: None,
                 break_token,
             } => {
-                for &catch_location_id in self.catch_location_stack.iter().rev() {
+                for &catch_location_id in self.catch_location_stack().iter().rev() {
                     let catch_location = self.catch_locations.get(catch_location_id);
                     if let CatchLocationData::Loop { .. } = catch_location {
                         return Ok(catch_location_id);
@@ -390,7 +486,7 @@ impl FlowAnalysisState {
                 label: Some(label), ..
             } => {
                 let label_str = label.ident_string();
-                for &catch_location_id in self.catch_location_stack.iter().rev() {
+                for &catch_location_id in self.catch_location_stack().iter().rev() {
                     let catch_location = self.catch_locations.get(catch_location_id);
                     if let CatchLocationData::Loop {
                         label: Some(loc_label),
@@ -409,7 +505,7 @@ impl FlowAnalysisState {
                 label: None,
                 continue_token,
             } => {
-                for &catch_location_id in self.catch_location_stack.iter().rev() {
+                for &catch_location_id in self.catch_location_stack().iter().rev() {
                     let catch_location = self.catch_locations.get(catch_location_id);
                     if let CatchLocationData::Loop { .. } = catch_location {
                         return Ok(catch_location_id);
@@ -424,7 +520,7 @@ impl FlowAnalysisState {
                 label: Some(label),
             } => {
                 let label_str = label.ident_string();
-                for &catch_location_id in self.catch_location_stack.iter().rev() {
+                for &catch_location_id in self.catch_location_stack().iter().rev() {
                     let catch_location = self.catch_locations.get(catch_location_id);
                     if let CatchLocationData::AttemptBlock {
                         label: Some(loc_label),
@@ -442,7 +538,7 @@ impl FlowAnalysisState {
                 revert_token,
                 label: None,
             } => {
-                for &catch_location_id in self.catch_location_stack.iter().rev() {
+                for &catch_location_id in self.catch_location_stack().iter().rev() {
                     let catch_location = self.catch_locations.get(catch_location_id);
                     if let CatchLocationData::AttemptBlock { .. } = catch_location {
                         return Ok(catch_location_id);
@@ -534,6 +630,58 @@ pub(super) enum ControlFlowChild {
     VariableReference(VariableReferenceId, VariableDefinitionId),
 }
 
+enum AllocatedFrame {
+    Allocated,
+    Defined(FrameData),
+}
+
+impl AllocatedFrame {
+    fn defined_mut(&mut self) -> &mut FrameData {
+        match self {
+            AllocatedFrame::Defined(data) => data,
+            _ => panic!("Frame was accessed before it was defined"),
+        }
+    }
+
+    fn defined_ref(&self) -> &FrameData {
+        match self {
+            AllocatedFrame::Defined(data) => data,
+            _ => panic!("Frame was accessed before it was defined"),
+        }
+    }
+
+    fn into_runtime(self) -> RuntimeFrame {
+        match self {
+            AllocatedFrame::Defined(data) => RuntimeFrame {
+                closed_variables: data.closed_variables,
+            },
+            _ => panic!("Frame was not defined"),
+        }
+    }
+}
+
+struct FrameData {
+    // Only the actual root has no lexical parent
+    lexical_parent: Option<ScopeId>,
+    root_segment: ControlFlowSegmentId,
+    // When a variable name matches to a variable defined in an ancestor scope,
+    // we need to close over that variable.
+    //
+    // To do this, at every function boundary between these, we:
+    // - Define a closed variable with the same name
+    // - Create a variable reference which we can use to capture the variable
+    //   from the parent closure when the closure is created.
+    closed_variables: BTreeMap<VariableDefinitionId, VariableReferenceId>,
+    scope_stack: Vec<ScopeId>,
+    catch_location_stack: Vec<CatchLocationId>,
+    segment_stack: Vec<ControlFlowSegmentId>,
+}
+
+#[derive(Debug)]
+pub(crate) struct RuntimeFrame {
+    pub(crate) closed_variables: BTreeMap<VariableDefinitionId, VariableReferenceId>,
+}
+
 enum AllocatedScope {
     Allocated,
     Defined(ScopeData),
@@ -564,8 +712,16 @@ impl AllocatedScope {
 
 #[derive(Debug)]
 pub(crate) struct ScopeData {
-    pub(crate) parent: Option<ScopeId>,
     pub(crate) definitions: Vec<VariableDefinitionId>,
+    /// Only a None if this is a root scope of a frame
+    pub(crate) parent: Option<ScopeId>,
+    pub(crate) frame: FrameId,
+}
+
+pub(crate) enum ScopeKind {
+    Root,
+    Child,
+    FunctionBoundary,
 }
 
 enum AllocatedVariableDefinition {

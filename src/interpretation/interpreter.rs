@@ -11,7 +11,7 @@ pub(crate) struct Interpreter {
 
 impl Interpreter {
     pub(crate) fn new(scope_definitions: ScopeDefinitions) -> Self {
-        let root_scope_id = scope_definitions.root_scope;
+        let (_, root_scope_id) = scope_definitions.root_frame;
         let mut interpreter = Self {
             config: Default::default(),
             scope_definitions,
@@ -20,7 +20,7 @@ impl Interpreter {
             output_handler: OutputHandler::new(OutputStream::new()),
             input_handler: InputHandler::new(),
         };
-        interpreter.enter_scope_inner(root_scope_id, false);
+        interpreter.enter_scope_inner(root_scope_id, ScopeKind::Root);
         interpreter
     }
 
@@ -36,8 +36,8 @@ impl Interpreter {
         self.scopes.last().unwrap().id
     }
 
-    pub(crate) fn enter_scope(&mut self, id: ScopeId) {
-        self.enter_scope_inner(id, true);
+    pub(crate) fn enter_child_scope(&mut self, id: ScopeId) {
+        self.enter_scope_inner(id, ScopeKind::Child);
     }
 
     pub(crate) fn enter_scope_starting_with_revertible_segment<T>(
@@ -48,7 +48,7 @@ impl Interpreter {
         guard_clause: Option<impl FnOnce(&mut Self) -> ExecutionResult<bool>>,
         reason: MutationBlockReason,
     ) -> ExecutionResult<AttemptOutcome<T>> {
-        self.enter_scope_inner(scope_id, true);
+        self.enter_scope_inner(scope_id, ScopeKind::Child);
         self.no_mutation_above.push((scope_id, reason));
         unsafe {
             // SAFETY: This is paired with `unfreeze_existing` below,
@@ -115,10 +115,19 @@ impl Interpreter {
         }
     }
 
-    fn enter_scope_inner(&mut self, id: ScopeId, check_parent: bool) {
+    fn enter_scope_inner(&mut self, id: ScopeId, expected_kind: ScopeKind) {
         let new_scope = self.scope_definitions.scopes.get(id);
-        if check_parent {
-            assert!(new_scope.parent == Some(self.current_scope_id()));
+        match expected_kind {
+            ScopeKind::Root => {
+                assert!(new_scope.parent.is_none());
+                assert_eq!(new_scope.frame, self.scope_definitions.root_frame.0);
+            }
+            ScopeKind::FunctionBoundary => {
+                assert!(new_scope.parent.is_none());
+            }
+            ScopeKind::Child => {
+                assert_eq!(new_scope.parent, Some(self.current_scope_id()));
+            }
         }
         let variables = {
             let mut map = HashMap::new();

@@ -159,7 +159,6 @@ First, read the @./2025-11-vision.md
 - [x] Create new `Parser` value kind
 - [x] Add ParserHandle to `InputHandler` and use some generational map to store ParseStacks (or import slotmap)
   - [x] Look at https://donsz.nl/blog/arenas/
-  - [ ] If using slotmap / generational-arena, replace the arena implementation too
 - [x] Create (temporary) `parse X => |Y| { }` expression
 - [x] Bind `input` to `Parser` at the start of each parse expression
 - [x] Create `@input[...]` expression
@@ -498,6 +497,7 @@ Also:
 - [x] Merge `assignee_frames` into `value_frames` as per comment as the top of `assignee_frames`
 - [x] Rename `EvaluationItem` to `RequestedValue` and consider making `RequestedValue::AssignmentCompletion` wrap an `Owned<()>` so that it becomes truly a value.
 - [x] Merge `HasValueType` with `ValueLeafKind`
+- [ ] If using slotmap / generational-arena, replace the arena implementation too
 - [ ] Fix the end span of `ClosureExpressionInner` and maybe `Expression` more generally?
 - [ ] Add `preinterpret::macro` - can this be a declarative macro? Would be slightly more efficient, as it just needs to wrap a call to `preinterpret::stream` or `preinterpret::run`...
   - [ ] When we create `input = %raw[..]` we will need to set its `end_of_stream` span to the end of the

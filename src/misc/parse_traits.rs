@@ -201,10 +201,21 @@ impl ControlFlowContext {
         inner: impl FnOnce(&mut T, FlowCapturer) -> ParseResult<()>,
     ) -> ParseResult<ScopeDefinitions> {
         let mut context = Self {
-            state: FlowAnalysisState::new(),
+            state: FlowAnalysisState::new_empty(),
         };
+        let mut root_frame = FrameId::new_placeholder();
+        let mut root_scope = ScopeId::new_placeholder();
+        context.register_frame(&mut root_frame);
+        context.register_scope(&mut root_scope);
+        context.enter_frame(root_frame, root_scope);
         inner(parsed, &mut context)?;
-        context.state.finish()
+        context.exit_frame(root_frame, root_scope);
+        context.state.finish((root_frame, root_scope))
+    }
+
+    pub(crate) fn register_frame(&mut self, id: &mut FrameId) {
+        assert!(id.is_placeholder());
+        *id = self.state.allocate_frame();
     }
 
     pub(crate) fn register_scope(&mut self, id: &mut ScopeId) {
@@ -228,6 +239,14 @@ impl ControlFlowContext {
     ) {
         assert!(id.is_placeholder());
         *id = self.state.allocate_variable_reference(ident);
+    }
+
+    pub(crate) fn enter_frame(&mut self, frame: FrameId, scope: ScopeId) {
+        self.state.enter_frame(frame, scope);
+    }
+
+    pub(crate) fn exit_frame(&mut self, frame: FrameId, scope: ScopeId) {
+        self.state.exit_frame(frame, scope);
     }
 
     pub(crate) fn enter_scope(&mut self, scope: ScopeId) {

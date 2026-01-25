@@ -35,7 +35,7 @@ impl PartialEq for ClosureExpression {
 impl Eq for ClosureExpression {}
 
 pub(crate) struct ClosureExpressionInner {
-    _closure_id: ClosureId,
+    frame_id: FrameId,
     scope_id: ScopeId,
     _left_bar: Unused<syn::Token![|]>,
     arguments: Punctuated<FunctionArgument, syn::Token![,]>,
@@ -65,7 +65,7 @@ impl ParseSource for ClosureExpressionInner {
         let end_span = input.cursor().span();
 
         Ok(Self {
-            _closure_id: ClosureId::new_placeholder(),
+            frame_id: FrameId::new_placeholder(),
             scope_id: ScopeId::new_placeholder(),
             _left_bar: Unused::new(left_bar),
             arguments,
@@ -76,13 +76,14 @@ impl ParseSource for ClosureExpressionInner {
     }
 
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
+        context.register_frame(&mut self.frame_id);
         context.register_scope(&mut self.scope_id);
-        context.enter_scope(self.scope_id);
+        context.enter_frame(self.frame_id, self.scope_id);
         for argument in &mut self.arguments {
             argument.pattern.control_flow_pass(context)?;
         }
         self.body.control_flow_pass(context)?;
-        context.exit_scope(self.scope_id);
+        context.exit_frame(self.frame_id, self.scope_id);
         Ok(())
     }
 }

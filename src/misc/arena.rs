@@ -73,6 +73,14 @@ impl<K: ArenaKey, D> Arena<K, D> {
             .map(|(index, v)| (K::from_inner(Key::new(index)), v))
     }
 
+    #[allow(unused)]
+    pub(crate) fn iter_mut(&mut self) -> impl Iterator<Item = (K, &mut D)> {
+        self.data
+            .iter_mut()
+            .enumerate()
+            .map(|(index, v)| (K::from_inner(Key::new(index)), v))
+    }
+
     pub(crate) fn map_all<D2>(self, f: impl Fn(D) -> D2) -> Arena<K, D2> {
         Arena {
             data: self.data.into_iter().map(f).collect(),
