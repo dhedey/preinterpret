@@ -222,13 +222,12 @@ Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
 - [x] Fix various noted edge cases in object property / index ownership
 - [x] Replace `articled_kind` / `articled_display_name` with `articled_value_name`
 - [ ] We can define closures (without any closed values for now)
-  * Value type function `let my_func = |x, y, z| { ... };`
-  * Parameters can be `x` / `x: any` (Owned), `x: &any` (Shared) or `x: &mut any` (Mutable).
-  * To start with, they can't capture any outer variables
-- [ ] Break/continue label resolution in functions/closures
-  * Functions and closures must resolve break/continue labels statically
-  * Break and continue statements should not leak out of function boundaries
-  * This needs to be validated during the control flow pass
+  - [ ] Closure parsing `let my_func = |x, y, z| { ... };`, parameters can be `x` / `x: any` (Owned), `x: &any`  (Shared) or `x: &mut any` (Mutable).
+  - [x] To start with, they can't capture any outer variables
+        (variable resolution stops at the top of the frame)
+  - [x] Correct break/continue label resolution in functions/closures
+  - [ ] Closures expose an interface, and a means of invocation, and are wired into  the invocation logic
+  - [ ] Various tests
 - [ ] Closed Bindings
   - [ ] Change bindings (currently just variables) to be able to store any of the following: (nb we still restrict variables to be owned for now).
   ```rust
@@ -242,8 +241,9 @@ Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
   * The closure consists of a set of bindings attached to the function value, either:
     - `ClosedVariable::Owned(Value)` if it's the last mention of the closed variable, so it can be moved in
     - `ClosedVariable::Referenced(Rc<RefCell<Value>>)` otherwise.
-    The nice thing about this is can pull shared/mutable at runtime,
-    without needing to magically work out what to move.
+    The nice thing about this is can pull shared/mutable at runtime,  without needing to magically work out what to move.
+    - DAVID NOTE: This only works if we expect the variables to be passed by reference, not moved. There's often an expectation that value types are passed cloned...
+    - ... let's think about this a little more. Perhaps being able to support (move) expressions in future might be nice. `move(x)` / `move(a.b.as_ref())` / `move(a.b.as_mut())` => we hoist up the content into the previous frame (effectively temporarily change `current_frame_id` to be the parent in the `FlowAnalysisState` - pretty easy).
   * Invocation requests `CopyOnWrite`, and can be on a shared function or an owned function (if it is the last usage of that value, as per normal red/owned binding rules)
     * If invocation is on an owned function, then owned values from the closure can be consumed by the invocation
     * Otherwise, the values are only available as shared/mut
@@ -498,6 +498,7 @@ Also:
 - [x] Rename `EvaluationItem` to `RequestedValue` and consider making `RequestedValue::AssignmentCompletion` wrap an `Owned<()>` so that it becomes truly a value.
 - [x] Merge `HasValueType` with `ValueLeafKind`
 - [ ] If using slotmap / generational-arena, replace the arena implementation too
+- [ ] Consider if we can have memory leaks due to `Rc<..>` loops, and whether to document it, or use some kind of Arena instead.
 - [ ] Fix the end span of `ClosureExpressionInner` and maybe `Expression` more generally?
 - [ ] Add `preinterpret::macro` - can this be a declarative macro? Would be slightly more efficient, as it just needs to wrap a call to `preinterpret::stream` or `preinterpret::run`...
   - [ ] When we create `input = %raw[..]` we will need to set its `end_of_stream` span to the end of the

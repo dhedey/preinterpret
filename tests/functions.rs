@@ -48,3 +48,12 @@ fn test_preinterpret_api() {
     }
     // See `abort_on_iteration_limit_exceeded` in the failure tests for a negative case
 }
+
+#[test]
+fn test_basic_closures() {
+    // TODO[functions]: Fix me!
+    run! {
+        // let double_me = |x| x * 2;
+        // %[_].assert_eq(double_me(4), 8);
+    }
+}

@@ -1,7 +1,6 @@
 use super::*;
 
-#[derive(Clone)]
-pub(crate) struct ClosureExpression(Rc<ClosureExpressionInner>);
+pub(crate) struct ClosureExpression(Rc<ClosureDefinition>);
 
 impl ParseSource for ClosureExpression {
     fn parse(input: SourceParser) -> ParseResult<Self> {
@@ -21,8 +20,87 @@ impl ClosureExpression {
         _interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
     ) -> ExecutionResult<Spanned<RequestedValue>> {
+        // TODO[functions]: Capture variables from the parent frame.
         let span_range = self.0.span_range;
-        ownership.map_from_owned(self.clone().into_any_value().spanned(span_range))
+        let value = ClosureValue {
+            definition: Rc::clone(&self.0),
+        };
+        ownership.map_from_owned(value.into_any_value().spanned(span_range))
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct ClosureValue {
+    definition: Rc<ClosureDefinition>,
+    // TODO[functions]: Add closed_variables here
+}
+
+impl PartialEq for ClosureValue {
+    fn eq(&self, other: &Self) -> bool {
+        // A few options here:
+        // 1. Always return false. This is simple, but non-reflexive and non-intuitive.
+        //    e.g. NaN works like this
+        // 2. Check just for closure equality
+        // 3. Also check for equality of bound values
+        // I think 2 makes the most sense for now
+        Rc::ptr_eq(&self.definition, &other.definition)
+    }
+}
+
+impl ClosureValue {
+    /// Returns (argument_ownerships, required_argument_count)
+    pub(crate) fn argument_ownerships(&self) -> (&[ArgumentOwnership], usize) {
+        (
+            &self.definition.argument_ownerships,
+            self.definition.required_argument_count,
+        )
+    }
+
+    pub(crate) fn invoke(
+        self,
+        arguments: Vec<Spanned<ArgumentValue>>,
+        context: &mut FunctionCallContext,
+    ) -> ExecutionResult<Spanned<ReturnedValue>> {
+        let definition = &*self.definition;
+
+        context
+            .interpreter
+            .enter_function_boundary_scope(definition.scope_id);
+
+        for (pattern, Spanned(arg, arg_span)) in
+            definition.argument_definitions.iter().zip(arguments)
+        {
+            let value = match arg {
+                ArgumentValue::Owned(owned) => owned,
+                _ => {
+                    context.interpreter.exit_scope(definition.scope_id);
+                    return arg_span
+                        .type_err("Only owned arguments are currently supported for closures");
+                }
+            };
+            pattern.handle_destructure(context.interpreter, value)?;
+        }
+
+        let Spanned(output, output_span) = definition.body.evaluate(
+            context.interpreter,
+            RequestedOwnership::Concrete(ArgumentOwnership::AsIs),
+        )?;
+
+        let returned_value = match output {
+            RequestedValue::Owned(any_value) => ReturnedValue::Owned(any_value),
+            RequestedValue::Shared(any_value) => ReturnedValue::Shared(any_value),
+            RequestedValue::Mutable(any_value) => ReturnedValue::Mutable(any_value),
+            RequestedValue::CopyOnWrite(any_value) => ReturnedValue::CopyOnWrite(any_value),
+            _ => {
+                return output_span.type_err(
+                    "Closure body must evaluate to an Owned, Shared, Mutable, or CopyOnWrite value",
+                );
+            }
+        };
+
+        context.interpreter.exit_scope(definition.scope_id);
+
+        Ok(Spanned(returned_value, output_span))
     }
 }
 
@@ -34,22 +112,23 @@ impl PartialEq for ClosureExpression {
 
 impl Eq for ClosureExpression {}
 
-pub(crate) struct ClosureExpressionInner {
+pub(crate) struct ClosureDefinition {
     frame_id: FrameId,
     scope_id: ScopeId,
-    _left_bar: Unused<syn::Token![|]>,
-    arguments: Punctuated<FunctionArgument, syn::Token![,]>,
-    _right_bar: Unused<syn::Token![|]>,
+    required_argument_count: usize,
+    argument_ownerships: Vec<ArgumentOwnership>,
+    argument_definitions: Vec<Pattern>,
     body: Expression,
     span_range: SpanRange,
 }
 
-impl ParseSource for ClosureExpressionInner {
+impl ParseSource for ClosureDefinition {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        let left_bar: syn::Token![|] = input.parse()?;
-        let start_span = left_bar.span;
-        let arguments = input.parse_terminated()?;
-        let _right_bar = input.parse()?;
+        let start_span = input.span();
+        let _left_bar = input.parse::<syn::Token![|]>()?;
+        let punctuated_arguments = input
+            .parse_punctuated_until::<FunctionArgument, syn::Token![,]>(|x| x.peek(Token![|]))?;
+        let _right_bar = input.parse::<syn::Token![|]>()?;
         let body = input.parse()?;
 
         // Really we want to use the span of the last token in the body expression.
@@ -64,12 +143,39 @@ impl ParseSource for ClosureExpressionInner {
         // For now we'll use the off-by-one current span of the input.
         let end_span = input.cursor().span();
 
+        let mut argument_ownerships = Vec::with_capacity(punctuated_arguments.len());
+        let mut argument_definitions = Vec::with_capacity(punctuated_arguments.len());
+        for arg in punctuated_arguments.into_iter() {
+            let ownership = if let Some(annotation) = &arg.annotation {
+                match &annotation.argument_specifier {
+                    ArgumentSpecifier::ByValue { .. } => ArgumentOwnership::Owned,
+                    ArgumentSpecifier::BySharedRef { .. } => ArgumentOwnership::Shared,
+                    ArgumentSpecifier::ByMutableRef { .. } => ArgumentOwnership::Mutable,
+                }
+            } else {
+                // Default to by-value
+                ArgumentOwnership::Owned
+            };
+            let pattern = arg.pattern;
+            match (&ownership, &pattern) {
+                (ArgumentOwnership::Owned, _) => {}
+                (_, Pattern::Variable(_)) => {}
+                _ => {
+                    return pattern.parse_err(
+                        "Destructuring patterns are not currently supported for & and &mut arguments",
+                    );
+                }
+            }
+            argument_ownerships.push(ownership);
+            argument_definitions.push(pattern);
+        }
+
         Ok(Self {
             frame_id: FrameId::new_placeholder(),
             scope_id: ScopeId::new_placeholder(),
-            _left_bar: Unused::new(left_bar),
-            arguments,
-            _right_bar,
+            required_argument_count: argument_ownerships.len(),
+            argument_ownerships,
+            argument_definitions,
             body,
             span_range: SpanRange::new_between(start_span, end_span),
         })
@@ -79,8 +185,8 @@ impl ParseSource for ClosureExpressionInner {
         context.register_frame(&mut self.frame_id);
         context.register_scope(&mut self.scope_id);
         context.enter_frame(self.frame_id, self.scope_id);
-        for argument in &mut self.arguments {
-            argument.pattern.control_flow_pass(context)?;
+        for argument in &mut self.argument_definitions {
+            argument.control_flow_pass(context)?;
         }
         self.body.control_flow_pass(context)?;
         context.exit_frame(self.frame_id, self.scope_id);
@@ -90,14 +196,14 @@ impl ParseSource for ClosureExpressionInner {
 
 struct FunctionArgument {
     pattern: Pattern,
-    _annotation: Option<FunctionArgumentAnnotation>,
+    annotation: Option<FunctionArgumentAnnotation>,
 }
 
 impl ParseSource for FunctionArgument {
     fn parse(input: SourceParser) -> ParseResult<Self> {
         Ok(Self {
             pattern: input.parse()?,
-            _annotation: if input.peek(syn::Token![:]) {
+            annotation: if input.peek(syn::Token![:]) {
                 Some(input.parse()?)
             } else {
                 None
@@ -112,7 +218,7 @@ impl ParseSource for FunctionArgument {
 
 struct FunctionArgumentAnnotation {
     _colon: Unused<syn::Token![:]>,
-    _argument_specifier: ArgumentSpecifier,
+    argument_specifier: ArgumentSpecifier,
 }
 
 // They're clearer with a common prefix By
@@ -158,7 +264,7 @@ impl ParseSource for FunctionArgumentAnnotation {
         };
         Ok(Self {
             _colon,
-            _argument_specifier,
+            argument_specifier: _argument_specifier,
         })
     }
 

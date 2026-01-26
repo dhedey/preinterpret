@@ -1028,7 +1028,7 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
             // Disable receiver so it can be stored in the FunctionValue
             let receiver = receiver.map(|v| v.disable());
             let function_value = FunctionValue {
-                definition: FunctionDefinition::Native(method),
+                invokable: InvokableFunction::Native(method),
                 disabled_bound_arguments: vec![receiver],
             };
             return context.return_value(function_value.spanned(result_span));
@@ -1337,7 +1337,7 @@ enum InvocationPath {
     InvokablePath,
     ArgumentsPath {
         function_span: SpanRange,
-        interface: &'static FunctionInterface,
+        invokable: InvokableFunction,
         disabled_evaluated_arguments: Vec<Spanned<DisabledArgumentValue>>,
     },
 }
@@ -1387,19 +1387,12 @@ impl EvaluationFrame for InvocationBuilder {
                     .spanned(function_span)
                     .downcast_resolve::<FunctionValue>("An invoked value")?;
 
-                // I need to extract
-                // (A): Function interface
-                // (B): Already bound disabled arguments -> assumed empty
-                let interface = match function.definition {
-                    FunctionDefinition::Native(interface) => interface,
-                    FunctionDefinition::Closure(_) => todo!(),
-                };
-                // Placeholder for already bound arguments. We can assume they're already disabled, and of the correct ownership/s.
+                let invokable = function.invokable;
                 let disabled_bound_arguments = function.disabled_bound_arguments;
 
                 let unbound_arguments_count = self.unevaluated_parameters_stack.len();
 
-                let (argument_ownerships, min_arguments) = interface.argument_ownerships();
+                let (argument_ownerships, min_arguments) = invokable.argument_ownerships();
                 let max_arguments = argument_ownerships.len();
 
                 if disabled_bound_arguments.len() > max_arguments {
@@ -1457,7 +1450,7 @@ impl EvaluationFrame for InvocationBuilder {
 
                 self.state = InvocationPath::ArgumentsPath {
                     function_span,
-                    interface,
+                    invokable,
                     disabled_evaluated_arguments: disabled_bound_arguments,
                 };
             }
@@ -1478,10 +1471,10 @@ impl EvaluationFrame for InvocationBuilder {
                 context.request_any_value(self, parameter, RequestedOwnership::Concrete(ownership))
             }
             None => {
-                let (arguments, interface, function_span) = match self.state {
+                let (arguments, invokable, function_span) = match self.state {
                     InvocationPath::InvokablePath => unreachable!("Already updated above"),
                     InvocationPath::ArgumentsPath {
-                        interface,
+                        invokable,
                         disabled_evaluated_arguments,
                         function_span,
                     } => {
@@ -1496,7 +1489,7 @@ impl EvaluationFrame for InvocationBuilder {
                                 arg.try_map(|v| v.enable(span))
                             })
                             .collect::<ExecutionResult<Vec<_>>>()?;
-                        (arguments, interface, function_span)
+                        (arguments, invokable, function_span)
                     }
                 };
                 let mut call_context = FunctionCallContext {
@@ -1506,7 +1499,7 @@ impl EvaluationFrame for InvocationBuilder {
                     ),
                     interpreter: context.interpreter(),
                 };
-                let output = interface.execute(arguments, &mut call_context)?;
+                let output = invokable.invoke(arguments, &mut call_context)?;
                 context.return_returned_value(output)?
             }
         })

@@ -149,7 +149,7 @@ pub(crate) enum FunctionInterface {
 }
 
 impl FunctionInterface {
-    pub(crate) fn execute(
+    pub(crate) fn invoke(
         &self,
         arguments: Vec<Spanned<ArgumentValue>>,
         context: &mut FunctionCallContext,

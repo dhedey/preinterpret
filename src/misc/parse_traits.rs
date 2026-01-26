@@ -19,10 +19,19 @@ impl<'a> ParseBuffer<'a, Source> {
         T::parse_optional(self)
     }
 
-    pub fn parse_terminated<T: ParseSource, P: ParseSource>(
+    /// This parses T and P in order, finishing when the stream (i.e. group) is done.
+    pub fn parse_punctuated_until_end<T: ParseSource, P: ParseSource>(
         &'a self,
     ) -> ParseResult<Punctuated<T, P>> {
-        Punctuated::parse_terminated_using(self, T::parse, P::parse)
+        Punctuated::parse_terminated_until(self, T::parse, P::parse, |x| x.is_empty())
+    }
+
+    /// This parses T and P in order, finishing when the stream (i.e. group) is done.
+    pub fn parse_punctuated_until<T: ParseSource, P: ParseSource>(
+        &'a self,
+        end_condition: impl Fn(&Self) -> bool,
+    ) -> ParseResult<Punctuated<T, P>> {
+        Punctuated::parse_terminated_until(self, T::parse, P::parse, end_condition)
     }
 
     pub(crate) fn call<T, F: FnOnce(SourceParser) -> ParseResult<T>>(
@@ -372,7 +381,7 @@ impl<'a, K> ParseBuffer<'a, K> {
     pub fn parse_terminated_generic<T: Parse<K>, P: Parse<K>>(
         &'a self,
     ) -> ParseResult<Punctuated<T, P>> {
-        Punctuated::parse_terminated_using(self, T::parse, P::parse)
+        Punctuated::parse_terminated_until(self, T::parse, P::parse, |x| x.is_empty())
     }
 
     pub(crate) fn call_generic<T, F: FnOnce(ParseStream<K>) -> ParseResult<T>>(
@@ -569,29 +578,30 @@ impl<'a, K> ParseBuffer<'a, K> {
 // =======================
 
 pub(crate) trait PunctuatedExtensions<T, P>: Sized {
-    fn parse_terminated_using<I: AnyParseStream>(
+    fn parse_terminated_until<I: AnyParseStream>(
         input: I,
         value_parser: impl Fn(I) -> ParseResult<T>,
         punct_parser: impl Fn(I) -> ParseResult<P>,
+        end_condition: impl Fn(I) -> bool,
     ) -> ParseResult<Self>;
 }
 
 impl<T, P> PunctuatedExtensions<T, P> for Punctuated<T, P> {
     // More flexible than syn's built-in parse_terminated_with
-    fn parse_terminated_using<I: AnyParseStream>(
+    fn parse_terminated_until<I: AnyParseStream>(
         input: I,
         value_parser: impl Fn(I) -> ParseResult<T>,
         punct_parser: impl Fn(I) -> ParseResult<P>,
+        end_condition: impl Fn(I) -> bool,
     ) -> ParseResult<Self> {
         let mut punctuated = Punctuated::new();
-
         loop {
-            if input.is_empty() {
+            if end_condition(input) {
                 break;
             }
             let value = value_parser(input)?;
             punctuated.push_value(value);
-            if input.is_empty() {
+            if end_condition(input) {
                 break;
             }
             let punct = punct_parser(input)?;

@@ -40,6 +40,10 @@ impl Interpreter {
         self.enter_scope_inner(id, ScopeKind::Child);
     }
 
+    pub(crate) fn enter_function_boundary_scope(&mut self, id: ScopeId) {
+        self.enter_scope_inner(id, ScopeKind::FunctionBoundary);
+    }
+
     pub(crate) fn enter_scope_starting_with_revertible_segment<T>(
         &mut self,
         scope_id: ScopeId,

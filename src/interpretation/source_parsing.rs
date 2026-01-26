@@ -36,15 +36,13 @@ pub(crate) enum FinalUseAssertion {
 
 #[derive(Debug)]
 pub(crate) struct ScopeDefinitions {
-    // Scopes
     pub(crate) root_frame: (FrameId, ScopeId),
     pub(crate) frames: Arena<FrameId, RuntimeFrame>,
     pub(crate) scopes: Arena<ScopeId, ScopeData>,
     pub(crate) definitions: Arena<VariableDefinitionId, VariableDefinitionData>,
     pub(crate) references: Arena<VariableReferenceId, VariableReferenceData>,
-    // Catch locations
     pub(crate) catch_locations: Arena<CatchLocationId, CatchLocationData>,
-    // Segments
+    // Segment Debugging
     #[cfg(feature = "debug")]
     root_segments: Vec<(FrameId, ControlFlowSegmentId)>,
     #[cfg(feature = "debug")]
@@ -64,11 +62,11 @@ pub(crate) struct FlowAnalysisState {
     segments: Arena<ControlFlowSegmentId, ControlFlowSegmentData>,
 
     // >> Current positions (copied for convenience/performance)
-    /// This is frames_stack.last() (else placeholder or the last set)
+    /// This is always frames_stack.last() (else placeholder)
     current_frame_id: FrameId,
-    /// This is frames_stack.last().scopes_stack.last() (else placeholder or the last set)
+    /// This is always frames_stack.last().scopes_stack.last() (else placeholder)
     current_scope_id: ScopeId,
-    /// This is frames_stack.last().segments_stack.last() (else placeholder)
+    /// This is always frames_stack.last().segments_stack.last() (else placeholder)
     current_segment_id: ControlFlowSegmentId,
 }
 
@@ -226,10 +224,11 @@ impl FlowAnalysisState {
 
         let id = self.frames_stack.pop().expect("No frame to pop");
         assert_eq!(id, frame_id, "Popped frame is not the current frame");
-        // If not, leave `current_frame_id` as the root frame
-        if let Some(current_frame_id) = self.frames_stack.last() {
-            self.current_frame_id = *current_frame_id;
-        }
+        self.current_frame_id = self
+            .frames_stack
+            .last()
+            .copied()
+            .unwrap_or_else(FrameId::new_placeholder);
     }
 
     // SCOPES
@@ -262,10 +261,11 @@ impl FlowAnalysisState {
         let id = self.scope_id_stack_mut().pop().expect("No scope to pop");
         assert_eq!(id, scope, "Popped scope is not the current scope");
 
-        // If not, leave `current_scope_id` as the root scope
-        if let Some(current_scope_id) = self.scope_id_stack_mut().last() {
-            self.current_scope_id = *current_scope_id;
-        }
+        self.current_scope_id = self
+            .scope_id_stack()
+            .last()
+            .copied()
+            .unwrap_or_else(ScopeId::new_placeholder);
     }
 
     pub(crate) fn define_variable(&mut self, id: VariableDefinitionId) {
