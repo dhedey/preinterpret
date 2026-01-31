@@ -2,7 +2,7 @@ use preinterpret::*;
 
 fn main() {
     run!{
-        let arr = [1, 2, 3];
-        array::push_me(arr, 4, 5);
+        preinterpret::set_iteration_limit(14);
+        for i in 0..15 {}
     }
 }

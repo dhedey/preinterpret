@@ -227,10 +227,10 @@ Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
         (variable resolution stops at the top of the frame)
   - [x] Correct break/continue label resolution in functions/closures
   - [x] Closures expose an interface, and a means of invocation, and are wired into  the invocation logic
-- [ ] A recursion limit is implemented
-- [ ] Lots of tests
-  - [ ] Loop / Break inside closure
-  - [ ] Break doesn't compile if it would propagate outside closure
+- [x] A recursion limit is implemented
+- [x] Lots of tests
+  - [x] Loop / Break inside closure
+  - [x] Break doesn't compile if it would propagate outside closure
 - [ ] Closed Bindings
   - [ ] Change bindings (currently just variables) to be able to store any of the following: (nb we still restrict variables to be owned for now).
   ```rust

@@ -1,0 +1,5 @@
+error: A labelled break must be used inside a loop or block with a matching label
+ --> tests/compilation_failures/functions/cannot_break_to_label_outside_of_closure.rs:7:23
+  |
+7 |                 break 'outer;
+  |                       ^^^^^^

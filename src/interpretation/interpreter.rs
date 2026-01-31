@@ -3,7 +3,7 @@ use super::*;
 pub(crate) struct Interpreter {
     config: InterpreterConfig,
     scope_definitions: ScopeDefinitions,
-    frame_depth: usize,
+    call_depth: usize,
     scopes: Vec<RuntimeScope>,
     no_mutation_above: Vec<(ScopeId, MutationBlockReason)>,
     output_handler: OutputHandler,
@@ -17,7 +17,7 @@ impl Interpreter {
             config: Default::default(),
             scope_definitions,
             scopes: vec![],
-            frame_depth: 0,
+            call_depth: 0,
             no_mutation_above: vec![],
             output_handler: OutputHandler::new(OutputStream::new()),
             input_handler: InputHandler::new(),
@@ -122,21 +122,22 @@ impl Interpreter {
         }
     }
 
-    fn enter_scope_inner(&mut self, id: ScopeId, expected_kind: ScopeKind) -> ExecutionResult<()> {
+    fn enter_scope_inner(&mut self, id: ScopeId, scope_kind: ScopeKind) -> ExecutionResult<()> {
         let new_scope = self.scope_definitions.scopes.get(id);
-        let frame = match expected_kind {
+        match &scope_kind {
             ScopeKind::Root { root_frame } => {
                 assert!(new_scope.parent.is_none());
-                assert_eq!(new_scope.frame, root_frame);
-                Some((root_frame, Span::call_site().span_range()))
+                assert_eq!(new_scope.frame, *root_frame);
             }
-            ScopeKind::FunctionBoundary { new_frame, span } => {
+            ScopeKind::FunctionBoundary { span, .. } => {
                 assert!(new_scope.parent.is_none());
-                Some((new_frame, span))
+                self.call_depth += 1;
+                if self.call_depth > self.config.recursion_limit {
+                    return span.control_flow_err(format!("Recursion limit of {} exceeded.\nIf needed, the limit can be reconfigured with preinterpret::set_recursion_limit(XXX)", self.config.recursion_limit));
+                }
             }
             ScopeKind::Child => {
                 assert_eq!(new_scope.parent, Some(self.current_scope_id()));
-                None
             }
         };
         let variables = {
@@ -146,13 +147,7 @@ impl Interpreter {
             }
             map
         };
-        if let Some((_, span)) = &frame {
-            self.frame_depth += 1;
-            if self.frame_depth > self.config.stack_depth_limit {
-                return span.control_flow_err(format!("Stack depth limit of {} exceeded.\nIf needed, the limit can be reconfigured with preinterpret::set_stack_depth_limit(XXX)", self.config.stack_depth_limit));
-            }
-        }
-        self.scopes.push(RuntimeScope { id, frame, variables });
+        self.scopes.push(RuntimeScope { id, scope_kind, variables });
         Ok(())
     }
 
@@ -165,8 +160,8 @@ impl Interpreter {
         );
         let scope = self.scopes.pop()
             .expect("We've just asserted there's a scope to pop");
-        if scope.frame.is_some() {
-            self.frame_depth -= 1;
+        if let ScopeKind::FunctionBoundary { .. } = scope.scope_kind {
+            self.call_depth -= 1;
         }
     }
 
@@ -242,8 +237,8 @@ impl Interpreter {
         self.config.iteration_limit = limit;
     }
 
-    pub(crate) fn set_stack_depth_limit(&mut self, limit: usize) {
-        self.config.stack_depth_limit = limit;
+    pub(crate) fn set_recursion_limit(&mut self, limit: usize) {
+        self.config.recursion_limit = limit;
     }
 
     // Input
@@ -430,8 +425,7 @@ pub(crate) enum AttemptOutcome<T> {
 
 struct RuntimeScope {
     id: ScopeId,
-    /// Present if it's the start of a new frame
-    frame: Option<(FrameId, SpanRange)>,
+    scope_kind: ScopeKind,
     variables: HashMap<VariableDefinitionId, VariableState>,
 }
 
@@ -480,7 +474,7 @@ impl<S: HasSpanRange> IterationCounter<'_, S> {
 
 pub(crate) struct InterpreterConfig {
     iteration_limit: usize,
-    stack_depth_limit: usize,
+    recursion_limit: usize,
 }
 
 pub(crate) const DEFAULT_ITERATION_LIMIT: usize = 1000;
@@ -490,7 +484,7 @@ impl Default for InterpreterConfig {
     fn default() -> Self {
         Self {
             iteration_limit: DEFAULT_ITERATION_LIMIT,
-            stack_depth_limit: STACK_DEPTH_LIMIT,
+            recursion_limit: STACK_DEPTH_LIMIT,
         }
     }
 }

@@ -20,8 +20,8 @@ define_type_features! {
                 context.interpreter.set_iteration_limit(new_limit.0);
             }
 
-            [context] fn set_stack_depth_limit(new_limit: OptionalSuffix<usize>) {
-                context.interpreter.set_stack_depth_limit(new_limit.0);
+            [context] fn set_recursion_limit(new_limit: OptionalSuffix<usize>) {
+                context.interpreter.set_recursion_limit(new_limit.0);
             }
         }
     }

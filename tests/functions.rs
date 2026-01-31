@@ -69,13 +69,32 @@ fn test_basic_closures() {
 #[test]
 fn test_recursion() {
     run! {
+        preinterpret::set_recursion_limit(5);
         let factorial = |n, f| {
-            if n == 0 {
+            if n == 1 {
                 1
             } else {
                 n * f(n - 1, f)
             }
         };
         %[_].assert_eq(factorial(5, factorial), 120);
+        %[_].assert_eq(factorial(5, factorial), 120);
+    }
+}
+
+#[test]
+fn test_control_flow_inside_closure() {
+    run! {
+        let f = || {
+            let out;
+            for i in 0..10 {
+                if i == 5 {
+                    out = i;
+                    break;
+                }
+            }
+            out
+        };
+        %[_].assert_eq(f(), 5);
     }
 }

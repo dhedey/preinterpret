@@ -1,0 +1,6 @@
+error: Recursion limit of 4 exceeded.
+       If needed, the limit can be reconfigured with preinterpret::set_recursion_limit(XXX)
+  --> tests/compilation_failures/functions/abort_on_manual_recursion_limit_exceeded.rs:10:21
+   |
+10 |                 n * f(n - 1, f)
+   |                     ^^^^^^^^^^^

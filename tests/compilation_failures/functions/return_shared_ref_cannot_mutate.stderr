@@ -1,0 +1,5 @@
+error: A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone()` to get a mutable reference to a cloned value.
+ --> tests/compilation_failures/functions/return_shared_ref_cannot_mutate.rs:6:9
+  |
+6 |         convert_to_ref("hello").as_mut()
+  |         ^^^^^^^^^^^^^^^^^^^^^^^
