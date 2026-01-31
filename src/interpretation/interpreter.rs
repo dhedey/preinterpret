@@ -2,7 +2,7 @@ use super::*;
 
 pub(crate) struct Interpreter {
     config: InterpreterConfig,
-    scope_definitions: ScopeDefinitions,
+    scope_definitions: StaticDefinitions,
     call_depth: usize,
     scopes: Vec<RuntimeScope>,
     no_mutation_above: Vec<(ScopeId, MutationBlockReason)>,
@@ -11,7 +11,7 @@ pub(crate) struct Interpreter {
 }
 
 impl Interpreter {
-    pub(crate) fn new(scope_definitions: ScopeDefinitions) -> Self {
+    pub(crate) fn new(scope_definitions: StaticDefinitions) -> Self {
         let (root_frame_id, root_scope_id) = scope_definitions.root_frame;
         let mut interpreter = Self {
             config: Default::default(),
@@ -22,7 +22,13 @@ impl Interpreter {
             output_handler: OutputHandler::new(OutputStream::new()),
             input_handler: InputHandler::new(),
         };
-        interpreter.enter_scope_inner(root_scope_id, ScopeKind::Root { root_frame: root_frame_id })
+        interpreter
+            .enter_scope_inner(
+                root_scope_id,
+                ScopeKind::Root {
+                    root_frame: root_frame_id,
+                },
+            )
             .expect("The root scope can always be entered");
         interpreter
     }
@@ -43,8 +49,19 @@ impl Interpreter {
         self.enter_scope_inner(id, ScopeKind::Child)
     }
 
-    pub(crate) fn enter_function_boundary_scope(&mut self, id: ScopeId, frame_id: FrameId, span: SpanRange) -> ExecutionResult<()> {
-        self.enter_scope_inner(id, ScopeKind::FunctionBoundary { new_frame: frame_id, span })
+    pub(crate) fn enter_function_boundary_scope(
+        &mut self,
+        id: ScopeId,
+        frame_id: FrameId,
+        span: SpanRange,
+    ) -> ExecutionResult<()> {
+        self.enter_scope_inner(
+            id,
+            ScopeKind::FunctionBoundary {
+                new_frame: frame_id,
+                span,
+            },
+        )
     }
 
     pub(crate) fn enter_scope_starting_with_revertible_segment<T>(
@@ -147,7 +164,11 @@ impl Interpreter {
             }
             map
         };
-        self.scopes.push(RuntimeScope { id, scope_kind, variables });
+        self.scopes.push(RuntimeScope {
+            id,
+            scope_kind,
+            variables,
+        });
         Ok(())
     }
 
@@ -158,7 +179,9 @@ impl Interpreter {
             scope_id,
             self.current_scope_id()
         );
-        let scope = self.scopes.pop()
+        let scope = self
+            .scopes
+            .pop()
             .expect("We've just asserted there's a scope to pop");
         if let ScopeKind::FunctionBoundary { .. } = scope.scope_kind {
             self.call_depth -= 1;

@@ -5,7 +5,7 @@ pub(crate) trait TokenStreamParseExt: Sized {
         self,
         parser: impl FnOnce(SourceParser) -> ParseResult<T>,
         control_flow_analysis: impl FnOnce(&mut T, FlowCapturer) -> ParseResult<()>,
-    ) -> ParseResult<(T, ScopeDefinitions)>;
+    ) -> ParseResult<(T, StaticDefinitions)>;
 
     fn interpreted_parse_with<T, E: From<ParseError>>(
         self,
@@ -18,7 +18,7 @@ impl TokenStreamParseExt for TokenStream {
         self,
         parser: impl FnOnce(SourceParser) -> ParseResult<T>,
         control_flow_analysis: impl FnOnce(&mut T, FlowCapturer) -> ParseResult<()>,
-    ) -> ParseResult<(T, ScopeDefinitions)> {
+    ) -> ParseResult<(T, StaticDefinitions)> {
         let mut parsed = parse_with(self, parse_without_analysis(parser))?;
         let definitions = ControlFlowContext::analyze(&mut parsed, control_flow_analysis)?;
         Ok((parsed, definitions))

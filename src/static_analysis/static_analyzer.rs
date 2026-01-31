@@ -35,7 +35,7 @@ pub(crate) enum FinalUseAssertion {
 }
 
 #[derive(Debug)]
-pub(crate) struct ScopeDefinitions {
+pub(crate) struct StaticDefinitions {
     pub(crate) root_frame: (FrameId, ScopeId),
     pub(crate) frames: Arena<FrameId, RuntimeFrame>,
     pub(crate) scopes: Arena<ScopeId, ScopeData>,
@@ -52,7 +52,7 @@ pub(crate) struct ScopeDefinitions {
 }
 
 #[allow(unused)]
-pub(crate) struct FlowAnalysisState {
+pub(crate) struct StaticAnalyzer {
     frames_stack: Vec<FrameId>,
     frames: Arena<FrameId, AllocatedFrame>,
     scopes: Arena<ScopeId, AllocatedScope>,
@@ -70,7 +70,7 @@ pub(crate) struct FlowAnalysisState {
     current_segment_id: ControlFlowSegmentId,
 }
 
-impl FlowAnalysisState {
+impl StaticAnalyzer {
     pub(crate) fn new_empty() -> Self {
         Self {
             current_frame_id: FrameId::new_placeholder(),
@@ -89,7 +89,7 @@ impl FlowAnalysisState {
     pub(crate) fn finish(
         mut self,
         root_frame: (FrameId, ScopeId),
-    ) -> ParseResult<ScopeDefinitions> {
+    ) -> ParseResult<StaticDefinitions> {
         assert!(
             self.frames_stack.is_empty(),
             "Cannot finish - Unpopped frames remain"
@@ -137,7 +137,7 @@ impl FlowAnalysisState {
             }
         }
 
-        Ok(ScopeDefinitions {
+        Ok(StaticDefinitions {
             root_frame,
             frames,
             scopes,

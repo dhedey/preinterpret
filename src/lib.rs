@@ -406,6 +406,7 @@ mod extensions;
 mod internal_prelude;
 mod interpretation;
 mod misc;
+mod static_analysis;
 
 use internal_prelude::*;
 

@@ -28,3 +28,4 @@ pub(crate) use crate::expressions::*;
 pub(crate) use crate::extensions::*;
 pub(crate) use crate::interpretation::*;
 pub(crate) use crate::misc::*;
+pub(crate) use crate::static_analysis::*;

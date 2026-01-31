@@ -201,16 +201,16 @@ pub(crate) type SourceParser<'a> = &'a SourceParseBuffer<'a>;
 pub(crate) type FlowCapturer<'a> = &'a mut ControlFlowContext;
 
 pub(crate) struct ControlFlowContext {
-    state: FlowAnalysisState,
+    analyzer: StaticAnalyzer,
 }
 
 impl ControlFlowContext {
     pub(crate) fn analyze<T>(
         parsed: &mut T,
         inner: impl FnOnce(&mut T, FlowCapturer) -> ParseResult<()>,
-    ) -> ParseResult<ScopeDefinitions> {
+    ) -> ParseResult<StaticDefinitions> {
         let mut context = Self {
-            state: FlowAnalysisState::new_empty(),
+            analyzer: StaticAnalyzer::new_empty(),
         };
         let mut root_frame = FrameId::new_placeholder();
         let mut root_scope = ScopeId::new_placeholder();
@@ -219,17 +219,17 @@ impl ControlFlowContext {
         context.enter_frame(root_frame, root_scope);
         inner(parsed, &mut context)?;
         context.exit_frame(root_frame, root_scope);
-        context.state.finish((root_frame, root_scope))
+        context.analyzer.finish((root_frame, root_scope))
     }
 
     pub(crate) fn register_frame(&mut self, id: &mut FrameId) {
         assert!(id.is_placeholder());
-        *id = self.state.allocate_frame();
+        *id = self.analyzer.allocate_frame();
     }
 
     pub(crate) fn register_scope(&mut self, id: &mut ScopeId) {
         assert!(id.is_placeholder());
-        *id = self.state.allocate_scope();
+        *id = self.analyzer.allocate_scope();
     }
 
     pub(crate) fn register_variable_definition(
@@ -238,7 +238,7 @@ impl ControlFlowContext {
         id: &mut VariableDefinitionId,
     ) {
         assert!(id.is_placeholder());
-        *id = self.state.allocate_variable_definition(ident);
+        *id = self.analyzer.allocate_variable_definition(ident);
     }
 
     pub(crate) fn register_variable_reference(
@@ -247,27 +247,27 @@ impl ControlFlowContext {
         id: &mut VariableReferenceId,
     ) {
         assert!(id.is_placeholder());
-        *id = self.state.allocate_variable_reference(ident);
+        *id = self.analyzer.allocate_variable_reference(ident);
     }
 
     pub(crate) fn enter_frame(&mut self, frame: FrameId, scope: ScopeId) {
-        self.state.enter_frame(frame, scope);
+        self.analyzer.enter_frame(frame, scope);
     }
 
     pub(crate) fn exit_frame(&mut self, frame: FrameId, scope: ScopeId) {
-        self.state.exit_frame(frame, scope);
+        self.analyzer.exit_frame(frame, scope);
     }
 
     pub(crate) fn enter_scope(&mut self, scope: ScopeId) {
-        self.state.enter_scope(scope);
+        self.analyzer.enter_scope(scope);
     }
 
     pub(crate) fn exit_scope(&mut self, scope: ScopeId) {
-        self.state.exit_scope(scope);
+        self.analyzer.exit_scope(scope);
     }
 
     pub(crate) fn define_variable(&mut self, id: VariableDefinitionId) {
-        self.state.define_variable(id);
+        self.analyzer.define_variable(id);
     }
 
     pub(crate) fn reference_variable(
@@ -275,7 +275,7 @@ impl ControlFlowContext {
         id: VariableReferenceId,
         #[cfg(feature = "debug")] assertion: FinalUseAssertion,
     ) -> ParseResult<()> {
-        self.state.reference_variable(
+        self.analyzer.reference_variable(
             id,
             #[cfg(feature = "debug")]
             assertion,
@@ -283,7 +283,7 @@ impl ControlFlowContext {
     }
 
     pub(crate) fn enter_next_segment(&mut self, segment_kind: SegmentKind) -> ControlFlowSegmentId {
-        self.state.enter_next_segment(segment_kind)
+        self.analyzer.enter_next_segment(segment_kind)
     }
 
     pub(crate) fn enter_path_segment(
@@ -291,31 +291,31 @@ impl ControlFlowContext {
         previous_sibling_id: Option<ControlFlowSegmentId>,
         segment_kind: SegmentKind,
     ) -> ControlFlowSegmentId {
-        self.state
+        self.analyzer
             .enter_path_segment(previous_sibling_id, segment_kind)
     }
 
     pub(crate) fn exit_segment(&mut self, segment_id: ControlFlowSegmentId) {
-        self.state.exit_segment(segment_id);
+        self.analyzer.exit_segment(segment_id);
     }
 
     pub(crate) fn register_catch_location(&mut self, data: CatchLocationData) -> CatchLocationId {
-        self.state.register_catch_location(data)
+        self.analyzer.register_catch_location(data)
     }
 
     pub(crate) fn enter_catch(&mut self, catch_location_id: CatchLocationId) {
-        self.state.enter_catch(catch_location_id);
+        self.analyzer.enter_catch(catch_location_id);
     }
 
     pub(crate) fn exit_catch(&mut self, catch_location_id: CatchLocationId) {
-        self.state.exit_catch(catch_location_id);
+        self.analyzer.exit_catch(catch_location_id);
     }
 
     pub(crate) fn resolve_catch_for_interrupt(
         &self,
         interrupt_details: InterruptDetails,
     ) -> ParseResult<CatchLocationId> {
-        self.state.resolve_catch_for_interrupt(interrupt_details)
+        self.analyzer.resolve_catch_for_interrupt(interrupt_details)
     }
 }
 

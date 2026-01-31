@@ -63,9 +63,11 @@ impl ClosureValue {
     ) -> ExecutionResult<Spanned<ReturnedValue>> {
         let definition = &*self.definition;
 
-        context
-            .interpreter
-            .enter_function_boundary_scope(definition.scope_id, definition.frame_id, context.output_span_range)?;
+        context.interpreter.enter_function_boundary_scope(
+            definition.scope_id,
+            definition.frame_id,
+            context.output_span_range,
+        )?;
 
         for (pattern, Spanned(arg, arg_span)) in
             definition.argument_definitions.iter().zip(arguments)
