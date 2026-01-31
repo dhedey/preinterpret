@@ -51,9 +51,31 @@ fn test_preinterpret_api() {
 
 #[test]
 fn test_basic_closures() {
-    // TODO[functions]: Fix me!
     run! {
-        // let double_me = |x| x * 2;
-        // %[_].assert_eq(double_me(4), 8);
+        let double_me = |x| x * 2;
+        %[_].assert_eq(double_me(4), 8);
+    }
+    run! {
+        let double_me = |x| x * 2;
+        %[_].assert_eq(double_me(double_me(4)), 16);
+    }
+    run! {
+        let x = 3;
+        let double_me = |x| x * 2;
+        %[_].assert_eq(double_me(double_me(4)), 16);
+    }
+}
+
+#[test]
+fn test_recursion() {
+    run! {
+        let factorial = |n, f| {
+            if n == 0 {
+                1
+            } else {
+                n * f(n - 1, f)
+            }
+        };
+        %[_].assert_eq(factorial(5, factorial), 120);
     }
 }

@@ -201,6 +201,16 @@ impl FlowAnalysisState {
         frame.root_segment = segment;
     }
 
+    /// Updates `current_frame_id` from the frames stack.
+    /// Must be called after modifying `frames_stack`.
+    fn update_current_frame_id(&mut self) {
+        self.current_frame_id = self
+            .frames_stack
+            .last()
+            .copied()
+            .unwrap_or_else(FrameId::new_placeholder);
+    }
+
     fn current_frame(&self) -> &FrameData {
         self.frames.get(self.current_frame_id).defined_ref()
     }
@@ -224,11 +234,13 @@ impl FlowAnalysisState {
 
         let id = self.frames_stack.pop().expect("No frame to pop");
         assert_eq!(id, frame_id, "Popped frame is not the current frame");
-        self.current_frame_id = self
-            .frames_stack
-            .last()
-            .copied()
-            .unwrap_or_else(FrameId::new_placeholder);
+        self.update_current_frame_id();
+
+        // Restore current_scope_id and current_segment_id from the parent frame
+        if !self.current_frame_id.is_placeholder() {
+            self.update_current_scope_id();
+            self.update_current_segment_id();
+        }
     }
 
     // SCOPES
@@ -256,16 +268,23 @@ impl FlowAnalysisState {
         self.current_scope_id = scope_id;
     }
 
+    /// Updates `current_scope_id` from the current frame's scope stack.
+    /// Must be called after modifying the scope stack.
+    fn update_current_scope_id(&mut self) {
+        let scope_id = self
+            .current_frame()
+            .scope_stack
+            .last()
+            .copied()
+            .unwrap_or_else(ScopeId::new_placeholder);
+        self.current_scope_id = scope_id;
+    }
+
     /// The scope parameter is just to help catch bugs.
     pub(crate) fn exit_scope(&mut self, scope: ScopeId) {
         let id = self.scope_id_stack_mut().pop().expect("No scope to pop");
         assert_eq!(id, scope, "Popped scope is not the current scope");
-
-        self.current_scope_id = self
-            .scope_id_stack()
-            .last()
-            .copied()
-            .unwrap_or_else(ScopeId::new_placeholder);
+        self.update_current_scope_id();
     }
 
     pub(crate) fn define_variable(&mut self, id: VariableDefinitionId) {
@@ -370,11 +389,19 @@ impl FlowAnalysisState {
     pub(crate) fn exit_segment(&mut self, segment: ControlFlowSegmentId) {
         let id = self.segments_stack().pop().expect("No segment to pop");
         assert_eq!(id, segment, "Popped segment is not the current segment");
-        self.current_segment_id = self
-            .segments_stack()
+        self.update_current_segment_id();
+    }
+
+    /// Updates `current_segment_id` from the current frame's segment stack.
+    /// Must be called after modifying the segment stack.
+    fn update_current_segment_id(&mut self) {
+        let segment_id = self
+            .current_frame()
+            .segment_stack
             .last()
             .copied()
             .unwrap_or_else(ControlFlowSegmentId::new_placeholder);
+        self.current_segment_id = segment_id;
     }
 
     fn enter_segment_with_valid_previous(
@@ -719,9 +746,9 @@ pub(crate) struct ScopeData {
 }
 
 pub(crate) enum ScopeKind {
-    Root,
+    Root { root_frame: FrameId },
     Child,
-    FunctionBoundary,
+    FunctionBoundary { new_frame: FrameId, span: SpanRange },
 }
 
 enum AllocatedVariableDefinition {

@@ -221,13 +221,16 @@ Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
   - [x] It's an error to set `x.y = z` or `%{ y: z }` if `y` is a method on object
 - [x] Fix various noted edge cases in object property / index ownership
 - [x] Replace `articled_kind` / `articled_display_name` with `articled_value_name`
-- [ ] We can define closures (without any closed values for now)
-  - [ ] Closure parsing `let my_func = |x, y, z| { ... };`, parameters can be `x` / `x: any` (Owned), `x: &any`  (Shared) or `x: &mut any` (Mutable).
+- [x] We can define closures (without any closed values for now)
+  - [x] Closure parsing `let my_func = |x, y, z| { ... };`, parameters can be `x` / `x: any` (Owned), `x: &any`  (Shared) or `x: &mut any` (Mutable).
   - [x] To start with, they can't capture any outer variables
         (variable resolution stops at the top of the frame)
   - [x] Correct break/continue label resolution in functions/closures
-  - [ ] Closures expose an interface, and a means of invocation, and are wired into  the invocation logic
-  - [ ] Various tests
+  - [x] Closures expose an interface, and a means of invocation, and are wired into  the invocation logic
+- [ ] A recursion limit is implemented
+- [ ] Lots of tests
+  - [ ] Loop / Break inside closure
+  - [ ] Break doesn't compile if it would propagate outside closure
 - [ ] Closed Bindings
   - [ ] Change bindings (currently just variables) to be able to store any of the following: (nb we still restrict variables to be owned for now).
   ```rust

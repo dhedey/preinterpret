@@ -212,7 +212,7 @@ impl Evaluate for ScopedBlock {
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
     ) -> ExecutionResult<RequestedValue> {
-        interpreter.enter_child_scope(self.scope);
+        interpreter.enter_child_scope(self.scope)?;
         let output = self
             .content
             .evaluate_spanned(interpreter, self.span().into(), ownership)?;

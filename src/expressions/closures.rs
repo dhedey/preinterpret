@@ -65,7 +65,7 @@ impl ClosureValue {
 
         context
             .interpreter
-            .enter_function_boundary_scope(definition.scope_id);
+            .enter_function_boundary_scope(definition.scope_id, definition.frame_id, definition.span_range)?;
 
         for (pattern, Spanned(arg, arg_span)) in
             definition.argument_definitions.iter().zip(arguments)
@@ -81,7 +81,7 @@ impl ClosureValue {
             pattern.handle_destructure(context.interpreter, value)?;
         }
 
-        let Spanned(output, output_span) = definition.body.evaluate(
+        let Spanned(output, body_span) = definition.body.evaluate(
             context.interpreter,
             RequestedOwnership::Concrete(ArgumentOwnership::AsIs),
         )?;
@@ -92,7 +92,7 @@ impl ClosureValue {
             RequestedValue::Mutable(any_value) => ReturnedValue::Mutable(any_value),
             RequestedValue::CopyOnWrite(any_value) => ReturnedValue::CopyOnWrite(any_value),
             _ => {
-                return output_span.type_err(
+                return body_span.type_err(
                     "Closure body must evaluate to an Owned, Shared, Mutable, or CopyOnWrite value",
                 );
             }
@@ -100,7 +100,7 @@ impl ClosureValue {
 
         context.interpreter.exit_scope(definition.scope_id);
 
-        Ok(Spanned(returned_value, output_span))
+        Ok(Spanned(returned_value, context.output_span_range))
     }
 }
 

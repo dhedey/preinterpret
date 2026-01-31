@@ -17,7 +17,11 @@ define_type_features! {
     pub(crate) mod preinterpret_api_interface {
         functions {
             [context] fn set_iteration_limit(new_limit: OptionalSuffix<usize>) {
-                context.interpreter.set_iteration_limit(Some(new_limit.0));
+                context.interpreter.set_iteration_limit(new_limit.0);
+            }
+
+            [context] fn set_stack_depth_limit(new_limit: OptionalSuffix<usize>) {
+                context.interpreter.set_stack_depth_limit(new_limit.0);
             }
         }
     }

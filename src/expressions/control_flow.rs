@@ -382,7 +382,7 @@ impl Evaluate for ForExpression {
         for item in iterable.into_iterator()? {
             iteration_counter.increment_and_check()?;
 
-            interpreter.enter_child_scope(self.iteration_scope);
+            interpreter.enter_child_scope(self.iteration_scope)?;
             self.pattern.handle_destructure(interpreter, item)?;
 
             let body_result = self.body.evaluate_owned(interpreter);
@@ -618,7 +618,7 @@ impl Evaluate for ParseExpression {
             .evaluate_owned(interpreter)?
             .resolve_as("The input to a parse expression")?;
 
-        interpreter.enter_child_scope(self.scope);
+        interpreter.enter_child_scope(self.scope)?;
 
         let output = interpreter.start_parse(input, |interpreter, handle| {
             self.parser_variable.define(interpreter, handle);

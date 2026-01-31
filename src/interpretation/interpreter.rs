@@ -3,6 +3,7 @@ use super::*;
 pub(crate) struct Interpreter {
     config: InterpreterConfig,
     scope_definitions: ScopeDefinitions,
+    frame_depth: usize,
     scopes: Vec<RuntimeScope>,
     no_mutation_above: Vec<(ScopeId, MutationBlockReason)>,
     output_handler: OutputHandler,
@@ -11,16 +12,18 @@ pub(crate) struct Interpreter {
 
 impl Interpreter {
     pub(crate) fn new(scope_definitions: ScopeDefinitions) -> Self {
-        let (_, root_scope_id) = scope_definitions.root_frame;
+        let (root_frame_id, root_scope_id) = scope_definitions.root_frame;
         let mut interpreter = Self {
             config: Default::default(),
             scope_definitions,
             scopes: vec![],
+            frame_depth: 0,
             no_mutation_above: vec![],
             output_handler: OutputHandler::new(OutputStream::new()),
             input_handler: InputHandler::new(),
         };
-        interpreter.enter_scope_inner(root_scope_id, ScopeKind::Root);
+        interpreter.enter_scope_inner(root_scope_id, ScopeKind::Root { root_frame: root_frame_id })
+            .expect("The root scope can always be entered");
         interpreter
     }
 
@@ -36,12 +39,12 @@ impl Interpreter {
         self.scopes.last().unwrap().id
     }
 
-    pub(crate) fn enter_child_scope(&mut self, id: ScopeId) {
-        self.enter_scope_inner(id, ScopeKind::Child);
+    pub(crate) fn enter_child_scope(&mut self, id: ScopeId) -> ExecutionResult<()> {
+        self.enter_scope_inner(id, ScopeKind::Child)
     }
 
-    pub(crate) fn enter_function_boundary_scope(&mut self, id: ScopeId) {
-        self.enter_scope_inner(id, ScopeKind::FunctionBoundary);
+    pub(crate) fn enter_function_boundary_scope(&mut self, id: ScopeId, frame_id: FrameId, span: SpanRange) -> ExecutionResult<()> {
+        self.enter_scope_inner(id, ScopeKind::FunctionBoundary { new_frame: frame_id, span })
     }
 
     pub(crate) fn enter_scope_starting_with_revertible_segment<T>(
@@ -52,7 +55,7 @@ impl Interpreter {
         guard_clause: Option<impl FnOnce(&mut Self) -> ExecutionResult<bool>>,
         reason: MutationBlockReason,
     ) -> ExecutionResult<AttemptOutcome<T>> {
-        self.enter_scope_inner(scope_id, ScopeKind::Child);
+        self.enter_scope_inner(scope_id, ScopeKind::Child)?;
         self.no_mutation_above.push((scope_id, reason));
         unsafe {
             // SAFETY: This is paired with `unfreeze_existing` below,
@@ -119,20 +122,23 @@ impl Interpreter {
         }
     }
 
-    fn enter_scope_inner(&mut self, id: ScopeId, expected_kind: ScopeKind) {
+    fn enter_scope_inner(&mut self, id: ScopeId, expected_kind: ScopeKind) -> ExecutionResult<()> {
         let new_scope = self.scope_definitions.scopes.get(id);
-        match expected_kind {
-            ScopeKind::Root => {
+        let frame = match expected_kind {
+            ScopeKind::Root { root_frame } => {
                 assert!(new_scope.parent.is_none());
-                assert_eq!(new_scope.frame, self.scope_definitions.root_frame.0);
+                assert_eq!(new_scope.frame, root_frame);
+                Some((root_frame, Span::call_site().span_range()))
             }
-            ScopeKind::FunctionBoundary => {
+            ScopeKind::FunctionBoundary { new_frame, span } => {
                 assert!(new_scope.parent.is_none());
+                Some((new_frame, span))
             }
             ScopeKind::Child => {
                 assert_eq!(new_scope.parent, Some(self.current_scope_id()));
+                None
             }
-        }
+        };
         let variables = {
             let mut map = HashMap::new();
             for definition_id in new_scope.definitions.iter() {
@@ -140,7 +146,14 @@ impl Interpreter {
             }
             map
         };
-        self.scopes.push(RuntimeScope { id, variables });
+        if let Some((_, span)) = &frame {
+            self.frame_depth += 1;
+            if self.frame_depth > self.config.stack_depth_limit {
+                return span.control_flow_err(format!("Stack depth limit of {} exceeded.\nIf needed, the limit can be reconfigured with preinterpret::set_stack_depth_limit(XXX)", self.config.stack_depth_limit));
+            }
+        }
+        self.scopes.push(RuntimeScope { id, frame, variables });
+        Ok(())
     }
 
     pub(crate) fn exit_scope(&mut self, scope_id: ScopeId) {
@@ -150,7 +163,11 @@ impl Interpreter {
             scope_id,
             self.current_scope_id()
         );
-        self.scopes.pop();
+        let scope = self.scopes.pop()
+            .expect("We've just asserted there's a scope to pop");
+        if scope.frame.is_some() {
+            self.frame_depth -= 1;
+        }
     }
 
     pub(crate) fn catch_control_flow<T>(
@@ -221,8 +238,12 @@ impl Interpreter {
         }
     }
 
-    pub(crate) fn set_iteration_limit(&mut self, limit: Option<usize>) {
+    pub(crate) fn set_iteration_limit(&mut self, limit: usize) {
         self.config.iteration_limit = limit;
+    }
+
+    pub(crate) fn set_stack_depth_limit(&mut self, limit: usize) {
+        self.config.stack_depth_limit = limit;
     }
 
     // Input
@@ -409,6 +430,8 @@ pub(crate) enum AttemptOutcome<T> {
 
 struct RuntimeScope {
     id: ScopeId,
+    /// Present if it's the start of a new frame
+    frame: Option<(FrameId, SpanRange)>,
     variables: HashMap<VariableDefinitionId, VariableState>,
 }
 
@@ -438,7 +461,7 @@ impl RuntimeScope {
 pub(crate) struct IterationCounter<'a, S: HasSpanRange> {
     span_source: &'a S,
     count: usize,
-    iteration_limit: Option<usize>,
+    iteration_limit: usize,
 }
 
 impl<S: HasSpanRange> IterationCounter<'_, S> {
@@ -448,25 +471,26 @@ impl<S: HasSpanRange> IterationCounter<'_, S> {
     }
 
     pub(crate) fn check(&self) -> ExecutionResult<()> {
-        if let Some(limit) = self.iteration_limit {
-            if self.count > limit {
-                return self.span_source.control_flow_err(format!("Iteration limit of {} exceeded.\nIf needed, the limit can be reconfigured with preinterpret::set_iteration_limit(XXX)", limit));
-            }
+        if self.count > self.iteration_limit {
+            return self.span_source.control_flow_err(format!("Iteration limit of {} exceeded.\nIf needed, the limit can be reconfigured with preinterpret::set_iteration_limit(XXX)", self.iteration_limit));
         }
         Ok(())
     }
 }
 
 pub(crate) struct InterpreterConfig {
-    iteration_limit: Option<usize>,
+    iteration_limit: usize,
+    stack_depth_limit: usize,
 }
 
 pub(crate) const DEFAULT_ITERATION_LIMIT: usize = 1000;
+pub(crate) const STACK_DEPTH_LIMIT: usize = 200;
 
 impl Default for InterpreterConfig {
     fn default() -> Self {
         Self {
-            iteration_limit: Some(DEFAULT_ITERATION_LIMIT),
+            iteration_limit: DEFAULT_ITERATION_LIMIT,
+            stack_depth_limit: STACK_DEPTH_LIMIT,
         }
     }
 }

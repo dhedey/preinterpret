@@ -89,11 +89,16 @@ impl<K: ArenaKey, D> Arena<K, D> {
     }
 }
 
-fn invalid_key_message(key_index: usize) -> &'static str {
+fn invalid_key_message(key_index: usize) -> String {
     if key_index == PLACEHOLDER_KEY_INDEX {
-        "Attempted to access an arena with a placeholder key. The key must be properly initialized before use."
+        format!(
+            "Attempted to access an arena with a placeholder key. \
+             The key must be properly initialized before use.\n\
+             Backtrace:\n{:?}",
+            std::backtrace::Backtrace::force_capture()
+        )
     } else {
-        "Arena key does not exist in this arena."
+        "Arena key does not exist in this arena.".to_string()
     }
 }
 
