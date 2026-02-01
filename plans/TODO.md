@@ -232,20 +232,21 @@ Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
   - [x] Loop / Break inside closure
   - [x] Break doesn't compile if it would propagate outside closure
 - [x] Close over variables in ancestor scopes
-- [ ] Support shared/mutable arguments
-  We may need to change VariableContent (nb we still restrict variables to be owned for now).
-  ```rust
-  enum VariableContent {
-      Owned(Referenceable<AnyValue>),
-      Shared(Shared<AnyValue>),
-      Mutable(Mutable<AnyValue>),
-  }
-  ``` 
+- [x] Support shared/mutable arguments
+  - [x] Allow variable content to hold shared / mutable
+  - [x] Allow shared / mutable arguments
+  - [x] Add tests for shared/mutable, including conversions working and not
 - [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`
 - [ ] Add `array.sort`, `array.sort_by`
 - [ ] Resolve all `TODO[functions]`
 
 Possible punted:
+- [ ] Allow variables to be marked owned / shared / mutable
+  - [ ] ... and maybe no marking accepts any?
+        ... so e.g. push_one_and_return_mut can have `let y = arr; y` without erroring
+  - [ ] Else - improve the errors so that the conversion error has some hint from the target explaining that the target can be changed to allow
+  shared/mutable instead.
+- [ ] Allow destructuring shared and mutable variables and arguments
 - [ ] Support optional arguments in closures
 - [ ] Support for `move()` expressions in closures.
   - `move(x)` / `move(a.b.as_ref())` / `move(a.b.as_mut())` => we hoist up the content into the previous frame (effectively temporarily change `current_frame_id` to be the parent in the `FlowAnalysisState` - pretty easy).
@@ -449,6 +450,7 @@ preinterpret::run! {
 - [ ] Change the storage model for `OutputStream`
   - [ ] Either just use `TokenStream` directly(!) (...and ignore Rust analyzer's poor handling of none groups)
   - [ ] Or use an `Rc<Vec>` model like https://github.com/dtolnay/proc-macro2/pull/341/files and Rust itself
+- [ ] Investigate if we increase compile time perf by removing all the integer cast implementations, instead putting them on AnyInteger and via u128.
 - Address `TODO[performance]`
 
 ## Deferred

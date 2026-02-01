@@ -14,20 +14,37 @@ pub(crate) struct MutableSubRcRefCell<T: 'static + ?Sized, U: 'static + ?Sized> 
 }
 
 impl<T: 'static + ?Sized> MutableSubRcRefCell<T, T> {
-    pub(crate) fn new(pointed_at: Rc<RefCell<T>>) -> Result<Self, BorrowMutError> {
-        let ref_mut = pointed_at.try_borrow_mut()?;
-        Ok(Self {
-            // SAFETY: We must ensure that this lifetime lives as long as the
-            // reference to pointed_at (i.e. the RefCell).
-            // This is guaranteed by the fact that the only time we drop the RefCell
-            // is when we drop the MutRcRefCell, and we ensure that the RefMut is dropped first.
-            ref_mut: unsafe {
-                less_buggy_transmute::<std::cell::RefMut<'_, T>, std::cell::RefMut<'static, T>>(
-                    ref_mut,
-                )
-            },
-            pointed_at,
-        })
+    pub(crate) fn new(pointed_at: Rc<RefCell<T>>) -> Result<Self, Rc<RefCell<T>>> {
+        let ref_mut = match pointed_at.try_borrow_mut() {
+            Ok(ref_mut) => {
+                // SAFETY: We must ensure that this lifetime lives as long as the
+                // reference to pointed_at (i.e. the RefCell).
+                // This is guaranteed by the fact that the only time we drop the RefCell
+                // is when we drop the MutRcRefCell, and we ensure that the RefMut is dropped first.
+                unsafe {
+                    Some(less_buggy_transmute::<
+                        std::cell::RefMut<'_, T>,
+                        std::cell::RefMut<'static, T>,
+                    >(ref_mut))
+                }
+            }
+            Err(_) => None,
+        };
+        match ref_mut {
+            Some(ref_mut) => Ok(Self {
+                ref_mut,
+                pointed_at,
+            }),
+            None => Err(pointed_at),
+        }
+    }
+
+    pub(crate) fn new_from_owned(owned: T) -> Self
+    where
+        T: Sized,
+    {
+        let rc = Rc::new(RefCell::new(owned));
+        Self::new(rc).unwrap_or_else(|_| unreachable!("New refcell must be mut borrowable"))
     }
 }
 
@@ -42,7 +59,9 @@ impl<T: 'static + ?Sized, U: 'static + ?Sized> MutableSubRcRefCell<T, U> {
         unsafe {
             // The unwrap cannot panic because we just held a mutable borrow, we're not in Sync land, so no-one else can have a borrow.
             SharedSubRcRefCell::new(self.pointed_at)
-                .unwrap()
+                .unwrap_or_else(|_| {
+                    unreachable!("Must be able to create shared after holding mutable")
+                })
                 .map(|_| &*ptr)
         }
     }
@@ -210,6 +229,13 @@ impl<T: 'static + ?Sized, U: 'static + ?Sized> DisabledMutableSubRcRefCell<T, U>
             pointed_at: self.pointed_at,
         })
     }
+
+    pub(crate) fn into_shared(self) -> DisabledSharedSubRcRefCell<T, U> {
+        DisabledSharedSubRcRefCell {
+            pointed_at: self.pointed_at,
+            sub_ptr: self.sub_ptr as *const U,
+        }
+    }
 }
 
 /// A shared (immutable) reference to a sub-value `U` inside a [`Rc<RefCell<T>>`].
@@ -226,16 +252,36 @@ pub(crate) struct SharedSubRcRefCell<T: ?Sized, U: 'static + ?Sized> {
 }
 
 impl<T: 'static + ?Sized> SharedSubRcRefCell<T, T> {
-    pub(crate) fn new(pointed_at: Rc<RefCell<T>>) -> Result<Self, BorrowError> {
-        let shared_ref = pointed_at.try_borrow()?;
-        Ok(Self {
-            // SAFETY: We must ensure that this lifetime lives as long as the
-            // reference to pointed_at (i.e. the RefCell).
-            // This is guaranteed by the fact that the only time we drop the RefCell
-            // is when we drop the SharedSubRcRefCell, and we ensure that the Ref is dropped first.
-            shared_ref: unsafe { less_buggy_transmute::<Ref<'_, T>, Ref<'static, T>>(shared_ref) },
-            pointed_at,
-        })
+    pub(crate) fn new(pointed_at: Referenceable<T>) -> Result<Self, Referenceable<T>> {
+        let shared_ref = match pointed_at.try_borrow() {
+            Ok(shared_ref) => {
+                // SAFETY: We must ensure that this lifetime lives as long as the
+                // reference to pointed_at (i.e. the RefCell).
+                // This is guaranteed by the fact that the only time we drop the RefCell
+                // is when we drop the SharedSubRcRefCell, and we ensure that the Ref is dropped first.
+                unsafe {
+                    Some(less_buggy_transmute::<Ref<'_, T>, Ref<'static, T>>(
+                        shared_ref,
+                    ))
+                }
+            }
+            Err(_) => None,
+        };
+        match shared_ref {
+            Some(shared_ref) => Ok(Self {
+                shared_ref,
+                pointed_at,
+            }),
+            None => Err(pointed_at),
+        }
+    }
+
+    pub(crate) fn new_from_owned(owned: T) -> Self
+    where
+        T: Sized,
+    {
+        let rc = Rc::new(RefCell::new(owned));
+        Self::new(rc).unwrap_or_else(|_| unreachable!("New refcell must be borrowable"))
     }
 }
 

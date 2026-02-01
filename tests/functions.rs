@@ -69,6 +69,48 @@ fn test_simple_closures() {
 }
 
 #[test]
+fn test_closures_with_ref_arguments() {
+    run! {
+        let my_array_len = |arr: &any| arr.len();
+        let arr = [1, 2, 3];
+        %[_].assert_eq(my_array_len(arr), 3);
+    }
+    run! {
+        let my_array_push = |arr: &mut any, value| arr.push(value);
+        let arr = [1, 2, 3];
+        my_array_push(arr, 4);
+        %[_].assert_eq(arr.to_debug_string(), "[1, 2, 3, 4]");
+    }
+}
+
+#[test]
+fn can_pass_owned_to_shared_argument() {
+    run! {
+        let my_array_len = |arr: &any| arr.len();
+        %[_].assert_eq(my_array_len([1, 2, 3]), 3);
+    }
+}
+
+#[test]
+fn can_pass_owned_to_mutable_argument() {
+    run! {
+        let push_one_and_return_mut = |arr: &mut any| {
+            arr.push(0);
+            arr
+        };
+        %[_].assert_eq(push_one_and_return_mut([1, 2, 3]).len(), 4);
+    }
+}
+
+#[test]
+fn can_pass_mutable_to_shared_argument() {
+    run! {
+        let my_array_len = |arr: &any| arr.len();
+        %[_].assert_eq(my_array_len([1, 2, 3].as_mut()), 3);
+    }
+}
+
+#[test]
 fn test_recursion() {
     run! {
         preinterpret::set_recursion_limit(5);

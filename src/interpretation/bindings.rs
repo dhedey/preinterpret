@@ -1,20 +1,43 @@
 use super::*;
 
 use std::borrow::{Borrow, ToOwned};
-use std::cell::*;
 use std::rc::Rc;
 
 pub(super) enum VariableState {
     Uninitialized,
-    Value(Referenceable<AnyValue>),
+    Value(VariableContent),
     Finished,
+}
+
+/// Cheaply clonable, non-active content of a variable.
+/// By non-active, we mean that the shared/mutable invariants are not required to hold.
+/// Before use, they have to be activated. This allows more flexibility over how references
+/// can be used and held, without compromising safety.
+#[derive(Clone)]
+pub(crate) enum VariableContent {
+    // Owned, but possibly with pre-existing references
+    Referenceable(Referenceable<AnyValue>),
+    Shared(DisabledShared<AnyValue>),
+    Mutable(DisabledMutable<AnyValue>),
+}
+
+impl VariableContent {
+    fn into_owned_as_only_owner(self) -> Result<Owned<AnyValue>, VariableContent> {
+        match self {
+            VariableContent::Referenceable(data) => match Rc::try_unwrap(data) {
+                Ok(unique) => Ok(unique.into_inner()),
+                Err(original) => Err(VariableContent::Referenceable(original)),
+            },
+            other => Err(other),
+        }
+    }
 }
 
 const UNITIALIZED_ERR: &str = "Cannot resolve uninitialized variable. This shouldn't be possible, because all variables are set on first use.";
 const FINISHED_ERR: &str = "Cannot resolve finished variable. This shouldn't be possible, because is_final should be marked correctly. If you see this error, please report a bug to preinterpret on github with a reproduction case.";
 
 impl VariableState {
-    pub(crate) fn define(&mut self, value: Referenceable<AnyValue>) {
+    pub(crate) fn define(&mut self, value: VariableContent) {
         match self {
             content @ VariableState::Uninitialized => {
                 *content = VariableState::Value(value);
@@ -24,22 +47,22 @@ impl VariableState {
         }
     }
 
-    pub(crate) fn resolve_referenceable(
+    pub(crate) fn resolve_content(
         &mut self,
         is_final: bool,
         blocked_from_mutation: Option<MutationBlockReason>,
-    ) -> Referenceable<AnyValue> {
+    ) -> VariableContent {
         if is_final && blocked_from_mutation.is_none() {
             let content = std::mem::replace(self, VariableState::Finished);
             match content {
                 VariableState::Uninitialized => panic!("{}", UNITIALIZED_ERR),
-                VariableState::Value(referencable) => referencable,
+                VariableState::Value(content) => content,
                 VariableState::Finished => panic!("{}", FINISHED_ERR),
             }
         } else {
             match self {
                 VariableState::Uninitialized => panic!("{}", UNITIALIZED_ERR),
-                VariableState::Value(referencable) => Rc::clone(referencable),
+                VariableState::Value(content) => content.clone(),
                 VariableState::Finished => panic!("{}", FINISHED_ERR),
             }
         }
@@ -57,12 +80,12 @@ impl VariableState {
         // If blocked from mutation, we technically could allow is_final to work and
         // return a fully owned value without observable mutation,
         // but it's likely confusingly inconsistent, so it's better to just block it entirely.
-        let value_rc = if is_final && blocked_from_mutation.is_none() {
+        let content = if is_final && blocked_from_mutation.is_none() {
             let content = std::mem::replace(self, VariableState::Finished);
             match content {
                 VariableState::Uninitialized => panic!("{}", UNITIALIZED_ERR),
-                VariableState::Value(ref_cell) => match Rc::try_unwrap(ref_cell) {
-                    Ok(ref_cell) => {
+                VariableState::Value(content) => match content.into_owned_as_only_owner() {
+                    Ok(owned) => {
                         if matches!(
                             ownership,
                             RequestedOwnership::Concrete(ArgumentOwnership::Assignee { .. })
@@ -71,29 +94,31 @@ impl VariableState {
                         }
                         return Ok(Spanned(
                             LateBoundValue::Owned(LateBoundOwnedValue {
-                                owned: ref_cell.into_inner(),
+                                owned,
                                 is_from_last_use: true,
                             }),
                             span_range,
                         ));
                     }
-                    // It's currently referenced, proceed with normal late-bound resolution.
+                    // It's currently referenced elsewhere, proceed with normal late-bound resolution.
                     // e.g.
                     // * `let x = %[]; x.assert_eq(x, %[]);` - the final `x` resolves to a shared reference
                     // * `let x = %[]; x.assert_eq(x + %[], %[]);` - errors because the final `x` is shared but it needs to be owned
-                    Err(rc) => rc,
+                    // Or, it could be captured somewhere else, e.g. in a closure:
+                    // * `let x = %[]; let f = || x; let y = x;` - the final `x` resolves to a shared reference
+                    Err(content) => content,
                 },
                 VariableState::Finished => panic!("{}", FINISHED_ERR),
             }
         } else {
             match self {
                 VariableState::Uninitialized => panic!("{}", UNITIALIZED_ERR),
-                VariableState::Value(ref_cell) => Rc::clone(ref_cell),
+                VariableState::Value(content) => content.clone(),
                 VariableState::Finished => panic!("{}", FINISHED_ERR),
             }
         };
         let binding = VariableBinding {
-            data: value_rc,
+            content,
             variable_span,
         };
         let resolved = match ownership {
@@ -140,7 +165,7 @@ impl VariableState {
 
 #[derive(Clone)]
 pub(crate) struct VariableBinding {
-    data: Rc<RefCell<AnyValue>>,
+    content: VariableContent,
     variable_span: Span,
 }
 
@@ -156,23 +181,57 @@ impl VariableBinding {
     }
 
     fn into_mut(self) -> ExecutionResult<AnyValueMutable> {
-        MutableValue::new_from_variable(self).map_err(ExecutionInterrupt::ownership_error)
+        match self.content {
+            VariableContent::Referenceable(referenceable) => {
+                let inner = MutableSubRcRefCell::new(referenceable)
+                    .map_err(|_| self.variable_span.ownership_error(MUTABLE_ERROR_MESSAGE))?;
+                Ok(Mutable(inner))
+            }
+            VariableContent::Mutable(disabled) => disabled.enable(self.variable_span.span_range()),
+            VariableContent::Shared(shared) => self
+                .variable_span
+                .ownership_err(SHARED_TO_MUTABLE_ERROR_MESSAGE),
+        }
     }
 
     fn into_shared(self) -> ExecutionResult<AnyValueShared> {
-        SharedValue::new_from_variable(self).map_err(ExecutionInterrupt::ownership_error)
+        match self.content {
+            VariableContent::Referenceable(referenceable) => {
+                let inner = SharedSubRcRefCell::new(referenceable)
+                    .map_err(|_| self.variable_span.ownership_error(SHARED_ERROR_MESSAGE))?;
+                Ok(Shared(inner))
+            }
+            VariableContent::Mutable(mutable) => mutable
+                .into_shared()
+                .enable(self.variable_span.span_range()),
+            VariableContent::Shared(shared) => shared.enable(self.variable_span.span_range()),
+        }
     }
 
     fn into_late_bound(self) -> ExecutionResult<LateBoundValue> {
-        match MutableValue::new_from_variable(self.clone()) {
-            Ok(value) => Ok(LateBoundValue::Mutable(value)),
-            Err(reason_not_mutable) => {
-                // If we get an error with a mutable and shared reference, a mutable reference must already exist.
-                // We can just propagate the error from taking the shared reference, it should be good enough.
-                let shared = self.into_shared()?;
+        match self.content {
+            VariableContent::Referenceable(referenceable) => {
+                match MutableSubRcRefCell::new(referenceable) {
+                    Ok(mutable) => Ok(LateBoundValue::Mutable(Mutable(mutable))),
+                    Err(referenceable) => {
+                        let shared = SharedSubRcRefCell::new(referenceable).map_err(|_| {
+                            self.variable_span.ownership_error(SHARED_ERROR_MESSAGE)
+                        })?;
+                        Ok(LateBoundValue::Shared(LateBoundSharedValue::new(
+                            Shared(shared),
+                            self.variable_span.syn_error(SHARED_ERROR_MESSAGE),
+                        )))
+                    }
+                }
+            }
+            VariableContent::Mutable(mutable) => Ok(LateBoundValue::Mutable(
+                mutable.enable(self.variable_span.span_range())?,
+            )),
+            VariableContent::Shared(shared) => {
                 Ok(LateBoundValue::Shared(LateBoundSharedValue::new(
-                    shared,
-                    reason_not_mutable,
+                    shared.enable(self.variable_span.span_range())?,
+                    self.variable_span
+                        .syn_error(SHARED_TO_MUTABLE_ERROR_MESSAGE),
                 )))
             }
         }
@@ -290,7 +349,6 @@ impl Deref for LateBoundValue {
     }
 }
 
-pub(crate) type MutableValue = AnyValueMutable;
 pub(crate) type AssigneeValue = AnyValueAssignee;
 
 /// A binding of a unique (mutable) reference to a value.
@@ -394,10 +452,16 @@ impl<T: ?Sized> DisabledMutable<T> {
             .map(Mutable)
             .map_err(|_| span.ownership_error(MUTABLE_ERROR_MESSAGE))
     }
+
+    pub(crate) fn into_shared(self) -> DisabledShared<T> {
+        DisabledShared(self.0.into_shared())
+    }
 }
 
 pub(crate) static MUTABLE_ERROR_MESSAGE: &str =
     "The variable cannot be modified as it is already being modified";
+pub(crate) static SHARED_TO_MUTABLE_ERROR_MESSAGE: &str =
+    "The variable cannot be modified as it is a shared reference";
 
 impl Spanned<AnyValueMutable> {
     pub(crate) fn transparent_clone(&self) -> ExecutionResult<AnyValue> {
@@ -408,14 +472,7 @@ impl Spanned<AnyValueMutable> {
 
 impl AnyValueMutable {
     pub(crate) fn new_from_owned(value: AnyValue) -> Self {
-        // Unwrap is safe because it's a new refcell
-        Mutable(MutableSubRcRefCell::new(Rc::new(RefCell::new(value))).unwrap())
-    }
-
-    fn new_from_variable(reference: VariableBinding) -> syn::Result<Self> {
-        Ok(Mutable(MutableSubRcRefCell::new(reference.data).map_err(
-            |_| reference.variable_span.syn_error(MUTABLE_ERROR_MESSAGE),
-        )?))
+        Mutable(MutableSubRcRefCell::new_from_owned(value))
     }
 }
 
@@ -532,18 +589,11 @@ impl Spanned<AnyValueShared> {
 
 impl AnyValueShared {
     pub(crate) fn new_from_owned(value: AnyValue) -> Self {
-        // Unwrap is safe because it's a new refcell
-        Shared(SharedSubRcRefCell::new(Rc::new(RefCell::new(value))).unwrap())
+        Shared(SharedSubRcRefCell::new_from_owned(value))
     }
 
     pub(crate) fn infallible_clone(&self) -> AnyValue {
         self.0.clone()
-    }
-
-    fn new_from_variable(reference: VariableBinding) -> syn::Result<Self> {
-        Ok(Shared(SharedSubRcRefCell::new(reference.data).map_err(
-            |_| reference.variable_span.syn_error(SHARED_ERROR_MESSAGE),
-        )?))
     }
 }
 

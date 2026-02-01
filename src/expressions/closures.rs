@@ -32,7 +32,7 @@ impl ClosureExpression {
 #[derive(Clone)]
 pub(crate) struct ClosureValue {
     definition: Rc<ClosureDefinition>,
-    closed_references: Vec<(VariableDefinitionId, Referenceable<AnyValue>)>,
+    closed_references: Vec<(VariableDefinitionId, VariableContent)>,
     // TODO[functions]: Add closed_values from moves here
 }
 
@@ -76,15 +76,39 @@ impl ClosureValue {
         for (pattern, Spanned(arg, arg_span)) in
             definition.argument_definitions.iter().zip(arguments)
         {
-            let value = match arg {
-                ArgumentValue::Owned(owned) => owned,
-                _ => {
-                    context.interpreter.exit_scope(definition.scope_id);
-                    return arg_span
-                        .type_err("Only owned arguments are currently supported for closures");
+            match (pattern, arg) {
+                (pattern, ArgumentValue::Owned(owned)) => {
+                    pattern.handle_destructure(context.interpreter, owned)?;
                 }
-            };
-            pattern.handle_destructure(context.interpreter, value)?;
+                (Pattern::Discarded(_), _) => {}
+                (Pattern::Variable(variable), ArgumentValue::Shared(shared)) => {
+                    context.interpreter.define_variable(
+                        variable.definition.id,
+                        VariableContent::Shared(shared.disable()),
+                    );
+                }
+                (_, ArgumentValue::Shared(_)) => {
+                    return arg_span.type_err(
+                        "Destructuring patterns are not currently supported for & arguments",
+                    );
+                }
+                (Pattern::Variable(variable), ArgumentValue::Mutable(mutable)) => {
+                    context.interpreter.define_variable(
+                        variable.definition.id,
+                        VariableContent::Mutable(mutable.disable()),
+                    );
+                }
+                (_, ArgumentValue::Mutable(_)) => {
+                    return arg_span.type_err(
+                        "Destructuring patterns are not currently supported for &mut arguments",
+                    );
+                }
+                (_, _) => {
+                    return arg_span.type_err(
+                        "Only owned, shared and mutable arguments are currently supported for closures",
+                    );
+                }
+            }
         }
 
         let Spanned(output, body_span) = definition.body.evaluate(

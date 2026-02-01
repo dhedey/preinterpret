@@ -214,17 +214,17 @@ impl Interpreter {
     pub(crate) fn define_variable(
         &mut self,
         definition_id: VariableDefinitionId,
-        value: Referenceable<AnyValue>,
+        content: VariableContent,
     ) {
         let definition = self.scope_definitions.definitions.get(definition_id);
         let scope_data = self.scope_mut(definition.scope);
-        scope_data.define_variable(definition_id, value)
+        scope_data.define_variable(definition_id, content)
     }
 
     pub(crate) fn resolve_closed_references(
         &mut self,
         frame_id: FrameId,
-    ) -> Vec<(VariableDefinitionId, Referenceable<AnyValue>)> {
+    ) -> Vec<(VariableDefinitionId, VariableContent)> {
         let frame = self.scope_definitions.frames.get(frame_id);
         frame
             .closed_variables
@@ -241,7 +241,7 @@ impl Interpreter {
                     .variables
                     .get_mut(&definition)
                     .expect("Variable data not found in scope")
-                    .resolve_referenceable(is_final_reference, is_blocked_from_mutation);
+                    .resolve_content(is_final_reference, is_blocked_from_mutation);
                 (closure_definition_id, reference)
             })
             .collect()
@@ -487,15 +487,11 @@ struct RuntimeScope {
 }
 
 impl RuntimeScope {
-    fn define_variable(
-        &mut self,
-        definition_id: VariableDefinitionId,
-        value: Referenceable<AnyValue>,
-    ) {
+    fn define_variable(&mut self, definition_id: VariableDefinitionId, content: VariableContent) {
         self.variables
             .get_mut(&definition_id)
             .expect("Variable data not found in scope")
-            .define(value);
+            .define(content);
     }
 
     fn resolve(
