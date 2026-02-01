@@ -6,6 +6,7 @@ pub(crate) use std::{
     cell::{Ref, RefCell, RefMut},
     collections::{BTreeMap, HashMap, HashSet},
     fmt::Debug,
+    fmt::Write,
     iter,
     marker::PhantomData,
     ops::{Deref, DerefMut},

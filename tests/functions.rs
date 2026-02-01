@@ -52,7 +52,7 @@ fn test_preinterpret_api() {
 }
 
 #[test]
-fn test_basic_closures() {
+fn test_simple_closures() {
     run! {
         let double_me = |x| x * 2;
         %[_].assert_eq(double_me(4), 8);
@@ -98,5 +98,61 @@ fn test_control_flow_inside_closure() {
             out
         };
         %[_].assert_eq(f(), 5);
+    }
+}
+
+#[test]
+fn test_closed_reference_closures() {
+    run! {
+        let multiplier = 3;
+        let multiply_me = |x| x * multiplier;
+        %[_].assert_eq(multiply_me(4), 12);
+        multiplier = 5;
+        %[_].assert_eq(multiply_me(4), 20);
+    }
+    run! {
+        let multiplier = 3;
+        let multiply_me = |x| {
+            x * multiplier
+        };
+        %[_].assert_eq(multiply_me(4), 12);
+        multiplier = 5;
+        %[_].assert_eq(multiply_me(4), 20);
+    }
+    run! {
+        let multiplier = 3;
+        let multiply_me = |x| || x * multiplier;
+        %[_].assert_eq(multiply_me(4)(), 12);
+        multiplier = 5;
+        %[_].assert_eq(multiply_me(4)(), 20);
+    }
+    run! {
+        let multiplier = 3;
+        let multiply_me = |x| {
+            || x * multiplier
+        };
+        %[_].assert_eq(multiply_me(4)(), 12);
+        multiplier = 5;
+        %[_].assert_eq(multiply_me(4)(), 20);
+    }
+}
+
+#[test]
+fn test_closed_reference_last_use_allows_transfer_of_ownership() {
+    // The destructuring requires an owned object.
+    // So this test demonstrates that obj (as last use) can be transferred into the closure...
+    // ... and then retrieved as a unique reference, and so an owned object.
+    // ---
+    // If either of the commented out lines is uncommented, then this test correctly (but slightly confusingly)
+    // breaks, because multiple copies of obj are still around (either in obj.inner or inside the closure).
+    run! {
+        let obj = %{ inner: 0 };
+        let captured_obj = || {
+            obj
+        };
+        let %{ inner } = captured_obj();
+        // %[_].assert_eq(obj.inner, 0);
+        // %[_].assert_eq(captured_obj.to_debug_string(), "function[?]");
+        %[_].assert_eq(inner, 0);
     }
 }

@@ -216,7 +216,9 @@ impl ControlFlowContext {
         let mut root_scope = ScopeId::new_placeholder();
         context.register_frame(&mut root_frame);
         context.register_scope(&mut root_scope);
-        context.enter_frame(root_frame, root_scope);
+        context
+            .analyzer
+            .enter_frame(root_frame, root_scope, FrameKind::Root);
         inner(parsed, &mut context)?;
         context.exit_frame(root_frame, root_scope);
         context.analyzer.finish((root_frame, root_scope))
@@ -250,8 +252,8 @@ impl ControlFlowContext {
         *id = self.analyzer.allocate_variable_reference(ident);
     }
 
-    pub(crate) fn enter_frame(&mut self, frame: FrameId, scope: ScopeId) {
-        self.analyzer.enter_frame(frame, scope);
+    pub(crate) fn enter_closure_frame(&mut self, frame: FrameId, scope: ScopeId) {
+        self.analyzer.enter_frame(frame, scope, FrameKind::Closure);
     }
 
     pub(crate) fn exit_frame(&mut self, frame: FrameId, scope: ScopeId) {

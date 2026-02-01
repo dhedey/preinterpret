@@ -66,7 +66,10 @@ impl ParseSource for VariableDefinition {
 
 impl VariableDefinition {
     pub(crate) fn define(&self, interpreter: &mut Interpreter, value_source: impl IntoAnyValue) {
-        interpreter.define_variable(self.id, value_source.into_any_value());
+        interpreter.define_variable(
+            self.id,
+            Rc::new(RefCell::new(value_source.into_any_value())),
+        );
     }
 }
 

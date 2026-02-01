@@ -449,15 +449,23 @@ impl<'a> AnyValueRef<'a> {
             AnyValueContent::Range(range) => {
                 range.concat_recursive_into(output, behaviour)?;
             }
-            AnyValueContent::Parser(_) => {
-                return behaviour
-                    .error_span_range
-                    .type_err("Parsers cannot be output to a string");
+            AnyValueContent::Parser(parser) => {
+                if behaviour.use_debug_literal_syntax {
+                    write!(output, "parser[{:?}]", parser).unwrap();
+                } else {
+                    return behaviour
+                        .error_span_range
+                        .type_err("Parsers cannot be output to a string");
+                }
             }
             AnyValueContent::Function(_) => {
-                return behaviour
-                    .error_span_range
-                    .type_err("Functions cannot be output to a string");
+                if behaviour.use_debug_literal_syntax {
+                    output.push_str("function[?]")
+                } else {
+                    return behaviour
+                        .error_span_range
+                        .type_err("Functions cannot be output to a string");
+                }
             }
             AnyValueContent::Integer(_)
             | AnyValueContent::Float(_)

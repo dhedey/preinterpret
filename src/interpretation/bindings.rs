@@ -6,18 +6,42 @@ use std::rc::Rc;
 
 pub(super) enum VariableState {
     Uninitialized,
-    Value(Rc<RefCell<AnyValue>>),
+    Value(Referenceable<AnyValue>),
     Finished,
 }
 
+const UNITIALIZED_ERR: &str = "Cannot resolve uninitialized variable. This shouldn't be possible, because all variables are set on first use.";
+const FINISHED_ERR: &str = "Cannot resolve finished variable. This shouldn't be possible, because is_final should be marked correctly. If you see this error, please report a bug to preinterpret on github with a reproduction case.";
+
 impl VariableState {
-    pub(crate) fn define(&mut self, value: AnyValue) {
+    pub(crate) fn define(&mut self, value: Referenceable<AnyValue>) {
         match self {
             content @ VariableState::Uninitialized => {
-                *content = VariableState::Value(Rc::new(RefCell::new(value)));
+                *content = VariableState::Value(value);
             }
             VariableState::Value(_) => panic!("Cannot define existing variable"),
             VariableState::Finished => panic!("Cannot define finished variable"),
+        }
+    }
+
+    pub(crate) fn resolve_referenceable(
+        &mut self,
+        is_final: bool,
+        blocked_from_mutation: Option<MutationBlockReason>,
+    ) -> Referenceable<AnyValue> {
+        if is_final && blocked_from_mutation.is_none() {
+            let content = std::mem::replace(self, VariableState::Finished);
+            match content {
+                VariableState::Uninitialized => panic!("{}", UNITIALIZED_ERR),
+                VariableState::Value(referencable) => referencable,
+                VariableState::Finished => panic!("{}", FINISHED_ERR),
+            }
+        } else {
+            match self {
+                VariableState::Uninitialized => panic!("{}", UNITIALIZED_ERR),
+                VariableState::Value(referencable) => Rc::clone(referencable),
+                VariableState::Finished => panic!("{}", FINISHED_ERR),
+            }
         }
     }
 
@@ -28,9 +52,6 @@ impl VariableState {
         ownership: RequestedOwnership,
         blocked_from_mutation: Option<MutationBlockReason>,
     ) -> ExecutionResult<Spanned<LateBoundValue>> {
-        const UNITIALIZED_ERR: &str = "Cannot resolve uninitialized variable. This shouldn't be possible, because all variables are set on first use.";
-        const FINISHED_ERR: &str = "Cannot resolve finished variable. This shouldn't be possible, because is_final should be marked correctly. If you see this error, please report a bug to preinterpret on github with a reproduction case.";
-
         let span_range = variable_span.span_range();
 
         // If blocked from mutation, we technically could allow is_final to work and

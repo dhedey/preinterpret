@@ -211,10 +211,40 @@ impl Interpreter {
         }
     }
 
-    pub(crate) fn define_variable(&mut self, definition_id: VariableDefinitionId, value: AnyValue) {
+    pub(crate) fn define_variable(
+        &mut self,
+        definition_id: VariableDefinitionId,
+        value: Referenceable<AnyValue>,
+    ) {
         let definition = self.scope_definitions.definitions.get(definition_id);
         let scope_data = self.scope_mut(definition.scope);
         scope_data.define_variable(definition_id, value)
+    }
+
+    pub(crate) fn resolve_closed_references(
+        &mut self,
+        frame_id: FrameId,
+    ) -> Vec<(VariableDefinitionId, Referenceable<AnyValue>)> {
+        let frame = self.scope_definitions.frames.get(frame_id);
+        frame
+            .closed_variables
+            .clone()
+            .into_iter()
+            .map(|(closure_definition_id, reference_id)| {
+                let reference_def = self.scope_definitions.references.get(reference_id);
+                let is_final_reference = reference_def.is_final_reference;
+                let definition = reference_def.definition;
+                let definition_scope = reference_def.definition_scope;
+                let is_blocked_from_mutation = self.is_blocked_from_mutating(definition_scope);
+                let reference = self
+                    .scope_mut(definition_scope)
+                    .variables
+                    .get_mut(&definition)
+                    .expect("Variable data not found in scope")
+                    .resolve_referenceable(is_final_reference, is_blocked_from_mutation);
+                (closure_definition_id, reference)
+            })
+            .collect()
     }
 
     pub(crate) fn resolve(
@@ -228,11 +258,17 @@ impl Interpreter {
             reference.reference_name_span,
             reference.is_final_reference,
         );
-        let blocked_from_mutation = match self.no_mutation_above.last() {
+        let blocked_from_mutation = self.is_blocked_from_mutating(reference.definition_scope);
+        let scope_data = self.scope_mut(reference.definition_scope);
+        scope_data.resolve(definition, span, is_final, ownership, blocked_from_mutation)
+    }
+
+    fn is_blocked_from_mutating(&self, definition_scope: ScopeId) -> Option<MutationBlockReason> {
+        match self.no_mutation_above.last() {
             Some(&(no_mutation_above_scope, reason)) => 'result: {
                 for scope in self.scopes.iter().rev() {
                     match scope.id {
-                        id if id == reference.definition_scope => break 'result None,
+                        id if id == definition_scope => break 'result None,
                         id if id == no_mutation_above_scope => break 'result Some(reason),
                         _ => {}
                     }
@@ -240,9 +276,7 @@ impl Interpreter {
                 panic!("Definition scope expected in scope stack due to control flow analysis");
             }
             None => None,
-        };
-        let scope_data = self.scope_mut(reference.definition_scope);
-        scope_data.resolve(definition, span, is_final, ownership, blocked_from_mutation)
+        }
     }
 
     pub(crate) fn start_iteration_counter<'s, S: HasSpanRange>(
@@ -453,7 +487,11 @@ struct RuntimeScope {
 }
 
 impl RuntimeScope {
-    fn define_variable(&mut self, definition_id: VariableDefinitionId, value: AnyValue) {
+    fn define_variable(
+        &mut self,
+        definition_id: VariableDefinitionId,
+        value: Referenceable<AnyValue>,
+    ) {
         self.variables
             .get_mut(&definition_id)
             .expect("Variable data not found in scope")

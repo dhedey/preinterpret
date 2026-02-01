@@ -231,8 +231,9 @@ Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
 - [x] Lots of tests
   - [x] Loop / Break inside closure
   - [x] Break doesn't compile if it would propagate outside closure
-- [ ] Closed Bindings
-  - [ ] Change bindings (currently just variables) to be able to store any of the following: (nb we still restrict variables to be owned for now).
+- [x] Close over variables in ancestor scopes
+- [ ] Support shared/mutable arguments
+  We may need to change VariableContent (nb we still restrict variables to be owned for now).
   ```rust
   enum VariableContent {
       Owned(Referenceable<AnyValue>),
@@ -240,20 +241,15 @@ Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
       Mutable(Mutable<AnyValue>),
   }
   ``` 
-  * A function may capture variable bindings from the parent scope, these are converted into a `VariableBinding::Closure(<closed_variable_id>)`
-  * The closure consists of a set of bindings attached to the function value, either:
-    - `ClosedVariable::Owned(Value)` if it's the last mention of the closed variable, so it can be moved in
-    - `ClosedVariable::Referenced(Rc<RefCell<Value>>)` otherwise.
-    The nice thing about this is can pull shared/mutable at runtime,  without needing to magically work out what to move.
-    - DAVID NOTE: This only works if we expect the variables to be passed by reference, not moved. There's often an expectation that value types are passed cloned...
-    - ... let's think about this a little more. Perhaps being able to support (move) expressions in future might be nice. `move(x)` / `move(a.b.as_ref())` / `move(a.b.as_mut())` => we hoist up the content into the previous frame (effectively temporarily change `current_frame_id` to be the parent in the `FlowAnalysisState` - pretty easy).
-  * Invocation requests `CopyOnWrite`, and can be on a shared function or an owned function (if it is the last usage of that value, as per normal red/owned binding rules)
-    * If invocation is on an owned function, then owned values from the closure can be consumed by the invocation
-    * Otherwise, the values are only available as shared/mut
-- [ ] Support optional arguments
 - [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`
 - [ ] Add `array.sort`, `array.sort_by`
 - [ ] Resolve all `TODO[functions]`
+
+Possible punted:
+- [ ] Support optional arguments in closures
+- [ ] Support for `move()` expressions in closures.
+  - `move(x)` / `move(a.b.as_ref())` / `move(a.b.as_mut())` => we hoist up the content into the previous frame (effectively temporarily change `current_frame_id` to be the parent in the `FlowAnalysisState` - pretty easy).
+  - These can be an anonymous definition in the root frame of the closure, which is referenced inline.
 
 ## Parser - Methods using closures
 

@@ -17,13 +17,13 @@ impl ParseSource for ClosureExpression {
 impl ClosureExpression {
     pub(crate) fn evaluate_spanned(
         &self,
-        _interpreter: &mut Interpreter,
+        interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
     ) -> ExecutionResult<Spanned<RequestedValue>> {
-        // TODO[functions]: Capture variables from the parent frame.
         let span_range = self.0.span_range;
         let value = ClosureValue {
             definition: Rc::clone(&self.0),
+            closed_references: interpreter.resolve_closed_references(self.0.frame_id),
         };
         ownership.map_from_owned(value.into_any_value().spanned(span_range))
     }
@@ -32,7 +32,8 @@ impl ClosureExpression {
 #[derive(Clone)]
 pub(crate) struct ClosureValue {
     definition: Rc<ClosureDefinition>,
-    // TODO[functions]: Add closed_variables here
+    closed_references: Vec<(VariableDefinitionId, Referenceable<AnyValue>)>,
+    // TODO[functions]: Add closed_values from moves here
 }
 
 impl PartialEq for ClosureValue {
@@ -68,6 +69,9 @@ impl ClosureValue {
             definition.frame_id,
             context.output_span_range,
         )?;
+        for (definition, content) in self.closed_references {
+            context.interpreter.define_variable(definition, content);
+        }
 
         for (pattern, Spanned(arg, arg_span)) in
             definition.argument_definitions.iter().zip(arguments)
@@ -186,7 +190,7 @@ impl ParseSource for ClosureDefinition {
     fn control_flow_pass(&mut self, context: FlowCapturer) -> ParseResult<()> {
         context.register_frame(&mut self.frame_id);
         context.register_scope(&mut self.scope_id);
-        context.enter_frame(self.frame_id, self.scope_id);
+        context.enter_closure_frame(self.frame_id, self.scope_id);
         for argument in &mut self.argument_definitions {
             argument.control_flow_pass(context)?;
         }

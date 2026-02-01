@@ -179,16 +179,16 @@ impl StaticAnalyzer {
     // FRAMES
     // ======
 
-    pub(crate) fn enter_frame(&mut self, frame_id: FrameId, scope_id: ScopeId) {
-        let parent_scope = self.current_scope_id;
+    pub(crate) fn enter_frame(&mut self, frame_id: FrameId, scope_id: ScopeId, kind: FrameKind) {
         *self.frames.get_mut(frame_id) = AllocatedFrame::Defined(FrameData {
-            lexical_parent: if parent_scope.is_placeholder() {
-                None
-            } else {
-                Some(parent_scope)
+            kind_data: match kind {
+                FrameKind::Root => FrameKindData::Root,
+                FrameKind::Closure => FrameKindData::Closure {
+                    lexical_parent: (self.current_frame_id, self.current_scope_id),
+                    closed_variables: BTreeMap::new(),
+                },
             },
             root_segment: ControlFlowSegmentId::new_placeholder(),
-            closed_variables: BTreeMap::new(),
             scope_stack: Vec::new(),
             segment_stack: Vec::new(),
             catch_location_stack: Vec::new(),
@@ -308,39 +308,153 @@ impl StaticAnalyzer {
         id: VariableReferenceId,
         #[cfg(feature = "debug")] assertion: FinalUseAssertion,
     ) -> ParseResult<()> {
-        let segment = self.current_segment_id;
-        let reference = self.references.get_mut(id);
-        let (name, reference_name_span) = reference.take_allocated();
-        // self.scope_id_stack() but inlined so that the mutability checker is happy
-        let scope_stack = self
-            .frames
-            .get(self.current_frame_id)
-            .defined_ref()
-            .scope_stack
-            .as_slice();
+        let (name, reference_name_span) = self.references.get_mut(id).take_allocated();
+        match self.find_definition_or_create_from_parent(self.current_frame_id, name.as_str()) {
+            Some((def_id, def_scope_id, segment_id)) => {
+                let reference = self.references.get_mut(id);
+                *reference = AllocatedVariableReference::Defined(VariableReferenceData {
+                    definition: def_id,
+                    definition_scope: def_scope_id,
+                    segment: segment_id,
+                    reference_name_span,
+                    is_final_reference: false, // Some will be set to true later
+                    #[cfg(feature = "debug")]
+                    assertion,
+                });
+                self.definitions
+                    .get_mut(def_id)
+                    .defined_mut()
+                    .references
+                    .push(id);
+                self.segments
+                    .get_mut(segment_id)
+                    .children
+                    .push(ControlFlowChild::VariableReference(id, def_id));
+                Ok(())
+            }
+            None => reference_name_span
+                .parse_err(format!("Cannot find variable `{}` in this scope", name)),
+        }
+    }
+
+    // Returns:
+    // - The definition id from the given frame
+    // - The definition scope id from the given frame
+    // - The segment id of the reference in the given frame
+    fn find_definition_or_create_from_parent(
+        &mut self,
+        frame_id: FrameId,
+        name: &str,
+    ) -> Option<(VariableDefinitionId, ScopeId, ControlFlowSegmentId)> {
+        let frame = self.frames.get_mut(frame_id).defined_mut();
+        let segment_id = *frame.segment_stack.last().unwrap();
+        let scope_id = *frame.scope_stack.last().unwrap();
+        if let Some((def_id, scope_id)) =
+            Self::find_definition_from_own_frame(&*frame, &self.scopes, &self.definitions, name)
+        {
+            return Some((def_id, scope_id, segment_id));
+        }
+        // We didn't find a variable in the current frame -
+        // let's see if we can find it in the parent frame (recursively)
+        let parent_frame_id = match &frame.kind_data {
+            FrameKindData::Root => return None,
+            FrameKindData::Closure {
+                lexical_parent: (parent_frame_id, _),
+                ..
+            } => *parent_frame_id,
+        };
+        // Closed variable definitions must live in the frame's root scope/segment,
+        // because at runtime they are defined during invoke() before the body
+        // (and any child scopes) are evaluated.
+        let frame_root_scope_id = frame.scope_stack[0];
+        let frame_root_segment_id = frame.root_segment;
+        let (parent_definition, parent_definition_scope, parent_segment_id) =
+            self.find_definition_or_create_from_parent(parent_frame_id, name)?;
+        // If we find it in the parent frame, then we need to connect it up over 3 steps:
+        // 1. We need to create a reference for it in the parent frame
+        let parent_reference_id =
+            self.references
+                .add(AllocatedVariableReference::Defined(VariableReferenceData {
+                    definition: parent_definition,
+                    definition_scope: parent_definition_scope,
+                    segment: parent_segment_id,
+                    // This span is only used for ownership resolution errors,
+                    // but not for referenced closures where we copy the Referencable into the closure.
+                    reference_name_span: Span::call_site(),
+                    is_final_reference: false,
+                    #[cfg(feature = "debug")]
+                    assertion: FinalUseAssertion::None,
+                }));
+        self.definitions
+            .get_mut(parent_definition)
+            .defined_mut()
+            .references
+            .push(parent_reference_id);
+        self.segments.get_mut(parent_segment_id).children.push(
+            ControlFlowChild::VariableReference(parent_reference_id, parent_definition),
+        );
+
+        // 2. We need to create a definition for it in this frame's root scope
+        let definition_id = self.definitions.add(AllocatedVariableDefinition::Defined(
+            VariableDefinitionData {
+                scope: frame_root_scope_id,
+                segment: frame_root_segment_id,
+                name: name.to_string(),
+                // This is unused, so can put in a placeholder
+                definition_name_span: Span::call_site(),
+                references: vec![],
+            },
+        ));
+        self.scopes
+            .get_mut(frame_root_scope_id)
+            .defined_mut()
+            .definitions
+            .push(definition_id);
+        // TODO[functions]: This is incorrect - it should really be prepended before other control flow...
+        // -- in fact I'm slightly surprised we don't get issues with references before definitions.
+        self.segments
+            .get_mut(frame_root_segment_id)
+            .children
+            .push(ControlFlowChild::VariableDefinition(definition_id));
+
+        // 3. We need to add it to the closed variables of this frame
+        let frame = self.frames.get_mut(frame_id).defined_mut();
+        match &mut frame.kind_data {
+            FrameKindData::Root => unreachable!("Already returned above"),
+            FrameKindData::Closure {
+                closed_variables, ..
+            } => {
+                closed_variables.insert(name.to_string(), (definition_id, parent_reference_id));
+            }
+        }
+
+        Some((definition_id, frame_root_scope_id, segment_id))
+    }
+
+    fn find_definition_from_own_frame(
+        frame: &FrameData,
+        scopes: &Arena<ScopeId, AllocatedScope>,
+        definitions: &Arena<VariableDefinitionId, AllocatedVariableDefinition>,
+        name: &str,
+    ) -> Option<(VariableDefinitionId, ScopeId)> {
+        let scope_stack = frame.scope_stack.as_slice();
         for scope_id in scope_stack.iter().rev() {
-            let scope = self.scopes.get(*scope_id).defined_ref();
+            let scope = scopes.get(*scope_id).defined_ref();
             for &def_id in scope.definitions.iter().rev() {
-                let def = self.definitions.get_mut(def_id).defined_mut();
+                let def = definitions.get(def_id).defined_ref();
                 if def.name == name {
-                    *reference = AllocatedVariableReference::Defined(VariableReferenceData {
-                        definition: def_id,
-                        definition_scope: def.scope,
-                        segment,
-                        reference_name_span,
-                        is_final_reference: false, // Some will be set to true later
-                        #[cfg(feature = "debug")]
-                        assertion,
-                    });
-                    def.references.push(id);
-                    self.current_segment()
-                        .children
-                        .push(ControlFlowChild::VariableReference(id, def_id));
-                    return Ok(());
+                    return Some((def_id, def.scope));
                 }
             }
         }
-        reference_name_span.parse_err(format!("Cannot find variable `{}` in this scope", name))
+        match &frame.kind_data {
+            FrameKindData::Root => None,
+            FrameKindData::Closure {
+                closed_variables, ..
+            } => closed_variables
+                .get(name)
+                .map(|(def_id, _)| (*def_id, frame.scope_stack[0])),
+        }
     }
 
     // SEGMENTS
@@ -679,8 +793,20 @@ impl AllocatedFrame {
 
     fn into_runtime(self) -> RuntimeFrame {
         match self {
-            AllocatedFrame::Defined(data) => RuntimeFrame {
-                closed_variables: data.closed_variables,
+            AllocatedFrame::Defined(FrameData {
+                kind_data:
+                    FrameKindData::Closure {
+                        closed_variables, ..
+                    },
+                ..
+            }) => RuntimeFrame {
+                closed_variables: closed_variables.into_values().collect(),
+            },
+            AllocatedFrame::Defined(FrameData {
+                kind_data: FrameKindData::Root,
+                ..
+            }) => RuntimeFrame {
+                closed_variables: Vec::new(),
             },
             _ => panic!("Frame was not defined"),
         }
@@ -688,25 +814,36 @@ impl AllocatedFrame {
 }
 
 struct FrameData {
-    // Only the actual root has no lexical parent
-    lexical_parent: Option<ScopeId>,
+    kind_data: FrameKindData,
     root_segment: ControlFlowSegmentId,
-    // When a variable name matches to a variable defined in an ancestor scope,
-    // we need to close over that variable.
-    //
-    // To do this, at every function boundary between these, we:
-    // - Define a closed variable with the same name
-    // - Create a variable reference which we can use to capture the variable
-    //   from the parent closure when the closure is created.
-    closed_variables: BTreeMap<VariableDefinitionId, VariableReferenceId>,
     scope_stack: Vec<ScopeId>,
     catch_location_stack: Vec<CatchLocationId>,
     segment_stack: Vec<ControlFlowSegmentId>,
 }
 
+pub(crate) enum FrameKind {
+    Root,
+    Closure,
+}
+
+pub(crate) enum FrameKindData {
+    Root,
+    Closure {
+        lexical_parent: (FrameId, ScopeId),
+        // When a variable name matches to a variable defined in an ancestor scope,
+        // we need to close over that variable.
+        //
+        // To do this, at every function boundary between these, we:
+        // - Define a closed variable with the same name
+        // - Create a variable reference which we can use to capture the variable
+        //   from the parent closure when the closure is created.
+        closed_variables: BTreeMap<String, (VariableDefinitionId, VariableReferenceId)>,
+    },
+}
+
 #[derive(Debug)]
 pub(crate) struct RuntimeFrame {
-    pub(crate) closed_variables: BTreeMap<VariableDefinitionId, VariableReferenceId>,
+    pub(crate) closed_variables: Vec<(VariableDefinitionId, VariableReferenceId)>,
 }
 
 enum AllocatedScope {
