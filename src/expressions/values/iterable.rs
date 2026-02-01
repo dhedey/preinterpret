@@ -32,6 +32,18 @@ define_type_features! {
                 Ok(this.len(span_range)? == 0)
             }
 
+            // [context] fn map(this: IterableValue, func: Spanned<FunctionValue>) -> ExecutionResult<IteratorValue> {
+            //     let iterator = this.into_iterator()?;
+            //     let iterator = iterator.map({
+            //         let interpreter = &mut context.interpreter;
+            //         move |item| -> FunctionResult<AnyValue> {
+            //             let output = func.clone().invoke_with_bound_arguments(interpreter, RequestedOwnership::owned())?;
+            //             Ok(output.expect_owned())
+            //         }
+            //     });
+            //     Ok(IteratorValue::new_any_fallible(iterator))
+            // }
+
             [context] fn zip(this: IterableValue) -> ExecutionResult<ArrayValue> {
                 let iterator = this.into_iterator()?;
                 ZipIterators::new_from_iterator(iterator, context.span_range())?.run_zip(context.interpreter, true)
@@ -58,7 +70,7 @@ define_type_features! {
                 };
                 for item in iterator {
                     counter.increment_and_check()?;
-                    vec.push(item);
+                    vec.push(item?);
                 }
                 Ok(vec)
             }

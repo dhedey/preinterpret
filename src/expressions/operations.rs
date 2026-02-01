@@ -91,7 +91,7 @@ impl UnaryOperation {
             .kind()
             .feature_resolver()
             .resolve_unary_operation(self)
-            .ok_or_else(|| {
+            .ok_or_else(|| -> ExecutionInterrupt {
                 self.type_error(format!(
                     "The {} operator is not supported for {} operand",
                     self,

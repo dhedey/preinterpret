@@ -55,7 +55,7 @@ impl Spanned<Shared<ParserHandle>> {
         interpreter: &'i mut Interpreter,
     ) -> ExecutionResult<OutputParseStream<'i>> {
         let Spanned(handle, span) = self;
-        interpreter.parser(**handle, *span)
+        Ok(interpreter.parser(**handle, *span)?)
     }
 
     pub(crate) fn parse_with<T>(
@@ -145,9 +145,11 @@ define_type_features! {
             // Must be paired with `close`.
             [context] fn open(this: Spanned<Shared<ParserHandle>>, Spanned(delimiter_char, char_span): Spanned<char>) -> ExecutionResult<()> {
                 let delimiter = delimiter_from_open_char(delimiter_char)
-                    .ok_or_else(|| char_span.value_error(format!(
-                        "Invalid open delimiter '{}'. Expected '(', '{{', or '['", delimiter_char
-                    )))?;
+                    .ok_or_else(|| -> ExecutionInterrupt {
+                        char_span.value_error(format!(
+                            "Invalid open delimiter '{}'. Expected '(', '{{', or '['", delimiter_char
+                        ))
+                    })?;
                 this.parse_with(context.interpreter, |interpreter| {
                     interpreter.enter_input_group(Some(delimiter))?;
                     Ok(())
@@ -158,9 +160,11 @@ define_type_features! {
             // The close character must match: ')' for '(', '}' for '{', ']' for '['
             [context] fn close(this: Spanned<Shared<ParserHandle>>, Spanned(delimiter_char, char_span): Spanned<char>) -> ExecutionResult<()> {
                 let expected_delimiter = delimiter_from_close_char(delimiter_char)
-                    .ok_or_else(|| char_span.value_error(format!(
-                        "Invalid close delimiter '{}'. Expected ')', '}}', or ']'", delimiter_char
-                    )))?;
+                    .ok_or_else(|| -> ExecutionInterrupt {
+                        char_span.value_error(format!(
+                            "Invalid close delimiter '{}'. Expected ')', '}}', or ']'", delimiter_char
+                        ))
+                    })?;
                 this.parse_with(context.interpreter, |interpreter| {
                     // Check if there's a group to close first
                     if !interpreter.has_active_input_group() {
@@ -355,9 +359,7 @@ impl Evaluate for ParseTemplateLiteral {
 
         parser.parse_with(interpreter, |interpreter| self.content.consume(interpreter))?;
 
-        ownership
-            .map_from_owned(Spanned(().into_any_value(), self.span_range()))
-            .map(|spanned| spanned.0)
+        Ok(ownership.map_none(self.span_range())?.0)
     }
 }
 

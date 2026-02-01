@@ -19,7 +19,7 @@ impl ClosureExpression {
         &self,
         interpreter: &mut Interpreter,
         ownership: RequestedOwnership,
-    ) -> ExecutionResult<Spanned<RequestedValue>> {
+    ) -> FunctionResult<Spanned<RequestedValue>> {
         let span_range = self.0.span_range;
         let value = ClosureValue {
             definition: Rc::clone(&self.0),
@@ -61,14 +61,14 @@ impl ClosureValue {
         self,
         arguments: Vec<Spanned<ArgumentValue>>,
         context: &mut FunctionCallContext,
-    ) -> ExecutionResult<Spanned<ReturnedValue>> {
+    ) -> FunctionResult<Spanned<ReturnedValue>> {
         let definition = &*self.definition;
 
         context.interpreter.enter_function_boundary_scope(
             definition.scope_id,
             definition.frame_id,
             context.output_span_range,
-        )?;
+        ).expect_no_interrupts()?;
         for (definition, content) in self.closed_references {
             context.interpreter.define_variable(definition, content);
         }
@@ -78,7 +78,7 @@ impl ClosureValue {
         {
             match (pattern, arg) {
                 (pattern, ArgumentValue::Owned(owned)) => {
-                    pattern.handle_destructure(context.interpreter, owned)?;
+                    pattern.handle_destructure(context.interpreter, owned).expect_no_interrupts()?;
                 }
                 (Pattern::Discarded(_), _) => {}
                 (Pattern::Variable(variable), ArgumentValue::Shared(shared)) => {
@@ -114,7 +114,7 @@ impl ClosureValue {
         let Spanned(output, body_span) = definition.body.evaluate(
             context.interpreter,
             RequestedOwnership::Concrete(ArgumentOwnership::AsIs),
-        )?;
+        ).expect_no_interrupts()?;
 
         let returned_value = match output {
             RequestedValue::Owned(any_value) => ReturnedValue::Owned(any_value),

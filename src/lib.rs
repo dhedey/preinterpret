@@ -432,6 +432,7 @@ fn preinterpret_stream_internal(input: TokenStream) -> SynResult<TokenStream> {
 
     stream
         .interpret(&mut interpreter)
+        .expect_no_interrupts()
         .convert_to_final_result()?;
 
     let output_stream = interpreter.complete();
@@ -463,6 +464,7 @@ fn preinterpret_run_internal(input: TokenStream) -> SynResult<TokenStream> {
     let returned_stream = content
         .evaluate_spanned(&mut interpreter, entry_span, RequestedOwnership::owned())
         .and_then(|x| x.expect_owned().into_stream())
+        .expect_no_interrupts()
         .convert_to_final_result()?;
 
     let mut output_stream = interpreter.complete();
@@ -586,6 +588,7 @@ mod benchmarking {
                 let returned_stream = parsed
                     .evaluate_spanned(&mut interpreter, entry_span, RequestedOwnership::owned())
                     .and_then(|x| x.expect_owned().into_stream())
+                    .expect_no_interrupts()
                     .convert_to_final_result()?;
 
                 let mut output_stream = interpreter.complete();

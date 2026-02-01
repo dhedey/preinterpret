@@ -137,7 +137,7 @@ impl VariableReference {
     pub(crate) fn resolve_late_bound(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Spanned<LateBoundValue>> {
+    ) -> FunctionResult<Spanned<LateBoundValue>> {
         interpreter.resolve(self, RequestedOwnership::LateBound)
     }
 
@@ -145,7 +145,7 @@ impl VariableReference {
         &self,
         interpreter: &mut Interpreter,
         ownership: ArgumentOwnership,
-    ) -> ExecutionResult<ArgumentValue> {
+    ) -> FunctionResult<ArgumentValue> {
         interpreter
             .resolve(self, RequestedOwnership::Concrete(ownership))?
             .resolve(ownership)
@@ -154,7 +154,7 @@ impl VariableReference {
     pub(crate) fn resolve_shared(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<SharedValue> {
+    ) -> FunctionResult<SharedValue> {
         Ok(self
             .resolve_concrete(interpreter, ArgumentOwnership::Shared)?
             .expect_shared())

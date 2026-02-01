@@ -30,8 +30,12 @@ impl IteratorValue {
     }
 
     #[allow(unused)]
-    pub(crate) fn new_any(iterator: impl Iterator<Item = AnyValue> + 'static + Clone) -> Self {
-        Self::new_custom(Box::new(iterator))
+    pub(crate) fn new_any_infallible(iterator: impl Iterator<Item = AnyValue> + 'static + Clone) -> Self {
+        Self::new_custom_infallible(Box::new(iterator))
+    }
+
+    pub(crate) fn new_any_fallible(iterator: impl Iterator<Item = FunctionResult<AnyValue>> + 'static + Clone) -> Self {
+        Self::new_custom_fallible(Box::new(iterator))
     }
 
     pub(crate) fn new_for_array(array: ArrayValue) -> Self {
@@ -44,7 +48,7 @@ impl IteratorValue {
 
     pub(crate) fn new_for_range(range: RangeValue) -> ExecutionResult<Self> {
         let iterator = range.inner.into_iterable()?.resolve_iterator()?;
-        Ok(Self::new_custom(iterator))
+        Ok(Self::new_custom_infallible(iterator))
     }
 
     pub(crate) fn new_for_object(object: ObjectValue) -> Self {
@@ -76,8 +80,12 @@ impl IteratorValue {
         Self::new(IteratorValueInner::Vec(Box::new(iterator)))
     }
 
-    pub(crate) fn new_custom(iterator: Box<dyn ClonableIterator<Item = AnyValue>>) -> Self {
-        Self::new(IteratorValueInner::Other(iterator))
+    pub(crate) fn new_custom_infallible(iterator: Box<dyn ClonableIterator<Item = AnyValue>>) -> Self {
+        Self::new(IteratorValueInner::OtherInfallible(iterator))
+    }
+
+    pub(crate) fn new_custom_fallible(iterator: Box<dyn ClonableIterator<Item = FunctionResult<AnyValue>>>) -> Self {
+        Self::new(IteratorValueInner::OtherFallible(iterator))
     }
 
     pub(crate) fn len(&self, error_span_range: SpanRange) -> ExecutionResult<usize> {
@@ -89,12 +97,15 @@ impl IteratorValue {
         }
     }
 
-    pub(crate) fn singleton_value(mut self) -> Option<AnyValue> {
-        let first = self.next()?;
+    pub(crate) fn singleton_value(mut self) -> ExecutionResult<Option<AnyValue>> {
+        let first = match self.next() {
+            Some(value) => value?,
+            None => return Ok(None),
+        };
         if self.next().is_none() {
-            Some(first)
+            Ok(Some(first))
         } else {
-            None
+            Ok(None)
         }
     }
 
@@ -108,7 +119,7 @@ impl IteratorValue {
             if i > LIMIT {
                 return output.debug_err(format!("Only a maximum of {} items can be output to a stream from an iterator, to protect you from infinite loops. This can't currently be reconfigured with the iteration limit.", LIMIT));
             }
-            item.as_ref_value().output_to(grouping, output)?;
+            item?.as_ref_value().output_to(grouping, output)?;
         }
         Ok(())
     }
@@ -130,7 +141,7 @@ impl IteratorValue {
     }
 
     pub(crate) fn any_iterator_to_string<T: Borrow<AnyValue>>(
-        iterator: impl Iterator<Item = T>,
+        iterator: impl Iterator<Item = FunctionResult<T>>,
         output: &mut String,
         behaviour: &ConcatBehaviour,
         literal_empty: &str,
@@ -163,6 +174,7 @@ impl IteratorValue {
                     break;
                 }
             }
+            let item = item?;
             let item = item.borrow();
             if i != 0 && behaviour.output_literal_structure {
                 output.push(',');
@@ -202,7 +214,7 @@ impl IsValueContent for Box<dyn ClonableIterator<Item = AnyValue>> {
 
 impl IntoValueContent<'static> for Box<dyn ClonableIterator<Item = AnyValue>> {
     fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
-        IteratorValue::new_custom(self)
+        IteratorValue::new_custom_infallible(self)
     }
 }
 
@@ -240,13 +252,15 @@ impl ValuesEqual for IteratorValue {
         const MAX_ITERATIONS: usize = 1000;
         while index < MAX_ITERATIONS {
             match (lhs_iter.next(), rhs_iter.next()) {
-                (Some(l), Some(r)) => {
+                (Some(Ok(l)), Some(Ok(r))) => {
                     let result = ctx.with_iterator_index(index, |ctx| l.test_equality(&r, ctx));
                     if ctx.should_short_circuit(&result) {
                         return result;
                     }
                     index += 1;
                 }
+                (Some(Err(err)), _) => return ctx.error_encountered(err, ComparisonSide::Lhs),
+                (_, Some(Err(err))) => return ctx.error_encountered(err, ComparisonSide::Rhs),
                 (None, None) => return ctx.values_equal(),
                 _ => return ctx.lengths_unequal(lhs_size, rhs_size),
             }
@@ -260,21 +274,23 @@ enum IteratorValueInner {
     // We Box these so that Value is smaller on the stack
     Vec(Box<<Vec<AnyValue> as IntoIterator>::IntoIter>),
     Stream(Box<<OutputStream as IntoIterator>::IntoIter>),
-    Other(Box<dyn ClonableIterator<Item = AnyValue>>),
+    OtherInfallible(Box<dyn ClonableIterator<Item = AnyValue>>),
+    OtherFallible(Box<dyn ClonableIterator<Item = FunctionResult<AnyValue>>>),
 }
 
 impl Iterator for IteratorValue {
-    type Item = AnyValue;
+    type Item = FunctionResult<AnyValue>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.iterator {
-            IteratorValueInner::Vec(iter) => iter.next(),
+            IteratorValueInner::Vec(iter) => iter.next().map(Ok),
             IteratorValueInner::Stream(iter) => {
                 let item = iter.next()?;
                 let stream: OutputStream = item.into();
-                Some(stream.coerce_into_value())
+                Some(Ok(stream.coerce_into_value()))
             }
-            IteratorValueInner::Other(iter) => iter.next(),
+            IteratorValueInner::OtherInfallible(iter) => iter.next().map(Ok),
+            IteratorValueInner::OtherFallible(iter) => iter.next(),
         }
     }
 
@@ -282,13 +298,14 @@ impl Iterator for IteratorValue {
         match &self.iterator {
             IteratorValueInner::Vec(iter) => iter.size_hint(),
             IteratorValueInner::Stream(iter) => iter.size_hint(),
-            IteratorValueInner::Other(iter) => iter.size_hint(),
+            IteratorValueInner::OtherInfallible(iter) => iter.size_hint(),
+            IteratorValueInner::OtherFallible(iter) => iter.size_hint(),
         }
     }
 }
 
 impl Iterator for Mutable<IteratorValue> {
-    type Item = AnyValue;
+    type Item = FunctionResult<AnyValue>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let this: &mut IteratorValue = &mut *self;
@@ -305,10 +322,10 @@ define_type_features! {
     impl IteratorType,
     pub(crate) mod iterator_interface {
         methods {
-            fn next(mut this: Mutable<IteratorValue>) -> AnyValue {
+            fn next(mut this: Mutable<IteratorValue>) -> ExecutionResult<AnyValue> {
                 match this.next() {
-                    Some(value) => value,
-                    None => ().into_any_value(),
+                    Some(value) => Ok(value?),
+                    None => Ok(().into_any_value()),
                 }
             }
 
@@ -323,16 +340,16 @@ define_type_features! {
                 this
             }
 
-            fn take(this: IteratorValue, n: OptionalSuffix<usize>) -> IteratorValue {
+            fn take(this: IteratorValue, n: OptionalSuffix<usize>) -> ExecutionResult<IteratorValue> {
                 // We collect to a vec to satisfy the clonability requirement,
                 // but only return an iterator for forwards compatibility in case we change it.
-                let taken = this.take(n.0).collect::<Vec<_>>();
-                IteratorValue::new_for_array(ArrayValue::new(taken))
+                let taken = this.take(n.0).collect::<FunctionResult<Vec<_>>>()?;
+                Ok(IteratorValue::new_for_array(ArrayValue::new(taken)))
             }
         }
         unary_operations {
             [context] fn cast_singleton_to_value(Spanned(this, span): Spanned<IteratorValue>) -> ExecutionResult<ReturnedValue> {
-                match this.singleton_value() {
+                match this.singleton_value()? {
                     Some(value) => Ok(context.operation.evaluate(Spanned(value, span))?.0),
                     None => span.value_err("Only an iterator with one item can be cast to this value"),
                 }

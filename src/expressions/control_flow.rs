@@ -125,9 +125,9 @@ impl Evaluate for IfExpression {
             return else_code.evaluate(interpreter, requested_ownership);
         }
 
-        requested_ownership
-            .map_from_owned(Spanned(().into_any_value(), self.span_range()))
-            .map(|spanned| spanned.0)
+        let value = requested_ownership
+            .map_none(self.span_range())?;
+        Ok(value.0)
     }
 }
 
@@ -216,9 +216,7 @@ impl Evaluate for WhileExpression {
                 }
             }
         }
-        ownership
-            .map_none(self.span_range())
-            .map(|spanned| spanned.0)
+        Ok(ownership.map_none(self.span_range())?.0)
     }
 }
 
@@ -381,6 +379,7 @@ impl Evaluate for ForExpression {
 
         for item in iterable.into_iterator()? {
             iteration_counter.increment_and_check()?;
+            let item = item?;
 
             interpreter.enter_child_scope(self.iteration_scope)?;
             self.pattern.handle_destructure(interpreter, item)?;
@@ -407,9 +406,7 @@ impl Evaluate for ForExpression {
             }
             interpreter.exit_scope(self.iteration_scope);
         }
-        ownership
-            .map_none(self.span_range())
-            .map(|spanned| spanned.0)
+        Ok(ownership.map_none(self.span_range())?.0)
     }
 }
 

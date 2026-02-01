@@ -170,12 +170,12 @@ define_type_features! {
             }
         }
         binary_operations {
-            fn eq(lhs: AnyValueAnyRef, rhs: AnyValueAnyRef) -> bool {
-                AnyValue::values_equal(lhs.as_ref_value(), rhs.as_ref_value())
+            fn eq(lhs: AnyValueAnyRef, rhs: AnyValueAnyRef) -> ExecutionResult<bool> {
+                Ok(AnyValue::values_equal(lhs.as_ref_value(), rhs.as_ref_value())?)
             }
 
-            fn ne(lhs: AnyValueAnyRef, rhs: AnyValueAnyRef) -> bool {
-                !AnyValue::values_equal(lhs.as_ref_value(), rhs.as_ref_value())
+            fn ne(lhs: AnyValueAnyRef, rhs: AnyValueAnyRef) -> ExecutionResult<bool> {
+                Ok(!AnyValue::values_equal(lhs.as_ref_value(), rhs.as_ref_value())?)
             }
         }
         interface_items {
@@ -251,7 +251,7 @@ impl AnyValue {
     pub(crate) fn try_transparent_clone(
         &self,
         error_span_range: SpanRange,
-    ) -> ExecutionResult<AnyValue> {
+    ) -> FunctionResult<AnyValue> {
         if !self.value_kind().supports_transparent_cloning() {
             return error_span_range.ownership_err(format!(
                 "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .clone() explicitly.",
@@ -267,7 +267,7 @@ impl AnyValue {
     }
 
     /// Recursively compares two values for equality using `ValuesEqual` semantics.
-    pub(crate) fn values_equal<'a>(lhs: AnyValueRef<'a>, rhs: AnyValueRef<'a>) -> bool {
+    pub(crate) fn values_equal<'a>(lhs: AnyValueRef<'a>, rhs: AnyValueRef<'a>) -> FunctionResult<bool> {
         lhs.lenient_eq(&rhs)
     }
 }

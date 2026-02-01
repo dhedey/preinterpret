@@ -73,7 +73,7 @@ impl ZipIterators {
     ) -> ExecutionResult<Self> {
         let vec = iterator
             .take(101)
-            .map(|x| x.spanned(span_range).resolve_any_iterator("Each zip input"))
+            .map(|x| x?.spanned(span_range).resolve_any_iterator("Each zip input"))
             .collect::<Result<Vec<_>, _>>()?;
         if vec.len() == 101 {
             return span_range.value_err("A maximum of 100 iterators are allowed");
@@ -163,7 +163,7 @@ impl ZipIterators {
                     counter.increment_and_check()?;
                     let mut inner = Vec::with_capacity(iterators.len());
                     for iter in iterators.iter_mut() {
-                        inner.push(iter.next().unwrap());
+                        inner.push(iter.next().unwrap()?);
                     }
                     output.push(inner.into_any_value());
                 }
@@ -177,7 +177,7 @@ impl ZipIterators {
                             key.clone(),
                             ObjectEntry {
                                 key_span: *key_span,
-                                value: iter.next().unwrap(),
+                                value: iter.next().unwrap()?,
                             },
                         );
                     }
@@ -207,7 +207,7 @@ pub(crate) fn run_intersperse(
     let mut items = items.into_iterator()?.peekable();
 
     let mut this_item = match items.next() {
-        Some(next) => next,
+        Some(next) => next?,
         None => return Ok(ArrayValue { items: output }),
     };
 
@@ -228,7 +228,7 @@ pub(crate) fn run_intersperse(
                     RemainingItemCount::ExactlyOne
                 };
                 appender.add_separator(remaining, &mut output)?;
-                this_item = next_item;
+                this_item = next_item?;
             }
             None => {
                 appender.add_separator(RemainingItemCount::None, &mut output)?;

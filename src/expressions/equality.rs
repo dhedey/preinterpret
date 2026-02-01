@@ -66,12 +66,15 @@ pub(crate) trait EqualityContext {
     fn lengths_unequal(&mut self, lhs_len: Option<usize>, rhs_len: Option<usize>) -> Self::Result;
 
     /// Object is missing a key that the other has.
-    fn missing_key(&mut self, key: &str, missing_on: MissingSide) -> Self::Result;
+    fn missing_key(&mut self, key: &str, missing_on: ComparisonSide) -> Self::Result;
 
     fn iteration_limit_exceeded(&mut self, limit: usize) -> Self::Result {
         let message = format!("iteration limit {} exceeded", limit);
         self.leaf_values_not_equal(&message, &message)
     }
+
+    /// When an error is encountered during comparison (e.g. from an iterator)
+    fn error_encountered(&mut self, error: FunctionError, _side: ComparisonSide) -> Self::Result;
 
     /// Wrap a comparison within an array index context.
     fn with_array_index<R>(&mut self, index: usize, f: impl FnOnce(&mut Self) -> R) -> R;
@@ -98,36 +101,41 @@ pub(crate) trait EqualityContext {
 pub(crate) struct SimpleEquality;
 
 impl EqualityContext for SimpleEquality {
-    type Result = bool;
+    type Result = FunctionResult<bool>;
 
     #[inline]
-    fn values_equal(&mut self) -> bool {
-        true
+    fn values_equal(&mut self) -> Self::Result {
+        Ok(true)
     }
 
     #[inline]
-    fn leaf_values_not_equal<T: Debug + ?Sized>(&mut self, _lhs: &T, _rhs: &T) -> bool {
-        false
+    fn leaf_values_not_equal<T: Debug + ?Sized>(&mut self, _lhs: &T, _rhs: &T) -> Self::Result {
+        Ok(false)
     }
 
     #[inline]
-    fn kind_mismatch<L: HasLeafKind, R: HasLeafKind>(&mut self, _lhs: &L, _rhs: &R) -> bool {
-        false
+    fn kind_mismatch<L: HasLeafKind, R: HasLeafKind>(&mut self, _lhs: &L, _rhs: &R) -> Self::Result {
+        Ok(false)
     }
 
     #[inline]
-    fn range_structure_mismatch(&mut self, _lhs: RangeStructure, _rhs: RangeStructure) -> bool {
-        false
+    fn range_structure_mismatch(&mut self, _lhs: RangeStructure, _rhs: RangeStructure) -> Self::Result {
+        Ok(false)
     }
 
     #[inline]
-    fn lengths_unequal(&mut self, _lhs_len: Option<usize>, _rhs_len: Option<usize>) -> bool {
-        false
+    fn lengths_unequal(&mut self, _lhs_len: Option<usize>, _rhs_len: Option<usize>) -> Self::Result {
+        Ok(false)
     }
 
     #[inline]
-    fn missing_key(&mut self, _key: &str, _missing_on: MissingSide) -> bool {
-        false
+    fn missing_key(&mut self, _key: &str, _missing_on: ComparisonSide) -> Self::Result {
+        Ok(false)
+    }
+
+    #[inline]
+    fn error_encountered(&mut self, error: FunctionError, _side: ComparisonSide) -> Self::Result {
+        Err(error)
     }
 
     #[inline]
@@ -156,8 +164,11 @@ impl EqualityContext for SimpleEquality {
     }
 
     #[inline]
-    fn should_short_circuit(&self, result: &bool) -> bool {
-        !*result
+    fn should_short_circuit(&self, result: &Self::Result) -> bool {
+        match result {
+            Ok(equal) => !*equal,
+            Err(_) => true,
+        }
     }
 }
 
@@ -233,8 +244,13 @@ impl EqualityContext for TypedEquality {
     }
 
     #[inline]
-    fn missing_key(&mut self, _key: &str, _missing_on: MissingSide) -> ExecutionResult<bool> {
+    fn missing_key(&mut self, _key: &str, _missing_on: ComparisonSide) -> ExecutionResult<bool> {
         Ok(false)
+    }
+
+    #[inline]
+    fn error_encountered(&mut self, error: FunctionError, _side: ComparisonSide) -> Self::Result {
+        Err(error)?
     }
 
     #[inline]
@@ -290,7 +306,7 @@ impl EqualityContext for TypedEquality {
 
 /// Which side of the comparison is missing a key.
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum MissingSide {
+pub(crate) enum ComparisonSide {
     #[allow(dead_code)]
     Lhs,
     Rhs,
@@ -322,14 +338,18 @@ pub(crate) enum DebugInequalityReason {
     /// Object is missing a key on one side.
     MissingKey {
         key: String,
-        missing_on: MissingSide,
+        missing_on: ComparisonSide,
+    },
+    /// An error was encountered during comparison.
+    ErrorEncountered {
+        error: syn::Error,
+        side: ComparisonSide,
     },
 }
 
 pub(crate) struct DebugEqualityError {
     inner: Box<DebugEqualityErrorInner>,
 }
-
 struct DebugEqualityErrorInner {
     path: Vec<PathSegment>,
     reason: DebugInequalityReason,
@@ -381,17 +401,25 @@ impl DebugEqualityError {
                 )
             }
             DebugInequalityReason::MissingKey { key, missing_on } => match missing_on {
-                MissingSide::Lhs => {
+                ComparisonSide::Lhs => {
                     format!(
                         "lhs{} is missing key {:?}, compared to rhs{}",
                         path_str, key, path_str
                     )
                 }
-                MissingSide::Rhs => {
+                ComparisonSide::Rhs => {
                     format!(
                         "lhs{} has extra key {:?}, compared to rhs{}",
                         path_str, key, path_str
                     )
+                }
+            },
+            DebugInequalityReason::ErrorEncountered { error, side } => match side {
+                ComparisonSide::Lhs => {
+                    format!("Error encountered while comparing lhs{}: {}", path_str, error)
+                }
+                ComparisonSide::Rhs => {
+                    format!("Error encountered while comparing rhs{}: {}", path_str, error)
                 }
             },
         }
@@ -486,13 +514,24 @@ impl EqualityContext for DebugEquality {
     fn missing_key(
         &mut self,
         key: &str,
-        missing_on: MissingSide,
+        missing_on: ComparisonSide,
     ) -> Result<(), DebugEqualityError> {
         Err(DebugEqualityErrorInner {
             path: self.path.clone(),
             reason: DebugInequalityReason::MissingKey {
                 key: key.to_string(),
                 missing_on,
+            },
+        })?
+    }
+
+    #[inline]
+    fn error_encountered(&mut self, error: FunctionError, side: ComparisonSide) -> Self::Result {
+        Err(DebugEqualityErrorInner {
+            path: self.path.clone(),
+            reason: DebugInequalityReason::ErrorEncountered {
+                error: error.convert_to_syn_error(),
+                side,
             },
         })?
     }
@@ -565,7 +604,9 @@ pub(crate) trait ValuesEqual: Sized + HasLeafKind {
 
     /// Lenient equality - returns `false` for incompatible types instead of erroring.
     /// Behaves like JavaScript's `===` operator.
-    fn lenient_eq(&self, other: &Self) -> bool {
+    /// Only errors if there was a runtime error evaluating an operand (e.g. when
+    /// comparing iterators that produce errors).
+    fn lenient_eq(&self, other: &Self) -> FunctionResult<bool> {
         self.test_equality(other, &mut SimpleEquality)
     }
 

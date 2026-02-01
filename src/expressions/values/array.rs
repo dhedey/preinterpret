@@ -143,7 +143,7 @@ impl ArrayValue {
         behaviour: &ConcatBehaviour,
     ) -> ExecutionResult<()> {
         IteratorValue::any_iterator_to_string(
-            self.items.iter(),
+            self.items.iter().map(|item| Ok(item)),
             output,
             behaviour,
             "[]",

@@ -24,7 +24,7 @@ impl ExpressionNode {
                         }
                     },
                     Leaf::TypeProperty(type_property) => {
-                        context.evaluate(|_, ownership| type_property.resolve_spanned(ownership))?
+                        context.evaluate(|_, ownership| Ok(type_property.resolve_spanned(ownership)?))?
                     }
                     Leaf::Block(block) => context.evaluate(|interpreter, ownership| {
                         block.evaluate_spanned(interpreter, ownership)
@@ -83,7 +83,7 @@ impl ExpressionNode {
                     }
                     Leaf::ClosureExpression(closure_expression) => {
                         context.evaluate(|interpreter, ownership| {
-                            closure_expression.evaluate_spanned(interpreter, ownership)
+                            Ok(closure_expression.evaluate_spanned(interpreter, ownership)?)
                         })?
                     }
                 }

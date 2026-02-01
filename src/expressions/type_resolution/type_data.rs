@@ -153,7 +153,7 @@ impl FunctionInterface {
         &self,
         arguments: Vec<Spanned<ArgumentValue>>,
         context: &mut FunctionCallContext,
-    ) -> ExecutionResult<Spanned<ReturnedValue>> {
+    ) -> FunctionResult<Spanned<ReturnedValue>> {
         let output_value = match self {
             FunctionInterface::Arity0 { method, .. } => {
                 if !arguments.is_empty() {
@@ -232,7 +232,9 @@ impl FunctionInterface {
             },
             FunctionInterface::ArityAny { method, .. } => method(context, arguments),
         };
-        output_value.map(|v| v.spanned(context.output_span_range))
+        output_value
+            .map(|v| v.spanned(context.output_span_range))
+            .expect_no_interrupts()
     }
 
     /// Returns (argument_ownerships, required_argument_count)

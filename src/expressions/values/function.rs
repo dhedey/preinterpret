@@ -20,6 +20,44 @@ pub(crate) struct FunctionValue {
     pub(crate) invokable: InvokableFunction,
 }
 
+impl FunctionValue {
+    pub(crate) fn bind_argument(
+        mut self,
+        argument: Spanned<DisabledArgumentValue>,
+    ) -> FunctionValue {
+        self.disabled_bound_arguments.push(argument);
+        self
+    }
+
+    pub(crate) fn invoke_with_bound_arguments(
+        self,
+        context: &mut FunctionCallContext,
+    ) -> FunctionResult<Spanned<ReturnedValue>> {
+        let arguments = self
+            .disabled_bound_arguments
+            .into_iter()
+            .map(|Spanned(arg, span)| -> FunctionResult<_>{
+                Ok(Spanned(arg.enable(span)?, span))
+            })
+            .collect::<FunctionResult<_>>()?;
+        self.invokable.invoke(arguments, context)
+    }
+}
+
+impl Spanned<FunctionValue> {
+    pub(crate) fn invoke_with_bound_arguments(
+        self,
+        interpreter: &mut Interpreter,
+        ownership: RequestedOwnership,
+    ) -> FunctionResult<RequestedValue> {
+        let output = self.0.invoke_with_bound_arguments(&mut FunctionCallContext {
+            interpreter,
+            output_span_range: self.1,
+        })?;
+        Ok(ownership.map_from_returned(output)?.0)
+    }
+}
+
 #[derive(Clone)]
 pub(crate) enum InvokableFunction {
     Native(&'static FunctionInterface),
@@ -52,7 +90,7 @@ impl InvokableFunction {
         self,
         arguments: Vec<Spanned<ArgumentValue>>,
         context: &mut FunctionCallContext,
-    ) -> ExecutionResult<Spanned<ReturnedValue>> {
+    ) -> FunctionResult<Spanned<ReturnedValue>> {
         match self {
             InvokableFunction::Native(interface) => interface.invoke(arguments, context),
             InvokableFunction::Closure(closure) => closure.invoke(arguments, context),

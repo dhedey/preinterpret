@@ -38,7 +38,7 @@ impl RangeValue {
     ) -> ExecutionResult<()> {
         if !behaviour.use_debug_literal_syntax {
             return IteratorValue::any_iterator_to_string(
-                self.clone().inner.into_iterable()?.resolve_iterator()?,
+                self.clone().inner.into_iterable()?.resolve_iterator()?.map(|x| Ok(x)),
                 output,
                 behaviour,
                 "[<range>]",
