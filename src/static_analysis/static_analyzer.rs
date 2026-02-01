@@ -186,6 +186,7 @@ impl StaticAnalyzer {
                 FrameKind::Closure => FrameKindData::Closure {
                     lexical_parent: (self.current_frame_id, self.current_scope_id),
                     closed_variables: BTreeMap::new(),
+                    closure_definition_segment: ControlFlowSegmentId::new_placeholder(),
                 },
             },
             root_segment: ControlFlowSegmentId::new_placeholder(),
@@ -197,8 +198,23 @@ impl StaticAnalyzer {
         self.current_frame_id = frame_id;
         self.enter_scope(scope_id);
         let segment = self.enter_segment_with_valid_previous(None, None, SegmentKind::Sequential);
-        let frame = self.current_frame_mut();
+        let frame = self.frames.get_mut(frame_id).defined_mut();
         frame.root_segment = segment;
+        match &mut frame.kind_data {
+            FrameKindData::Root => {}
+            FrameKindData::Closure {
+                closure_definition_segment,
+                ..
+            } => {
+                *closure_definition_segment = Self::create_segment_with_valid_previous(
+                    &mut self.segments,
+                    Some(segment),
+                    None,
+                    SegmentKind::Sequential,
+                    scope_id,
+                );
+            }
+        }
     }
 
     /// Updates `current_frame_id` from the frames stack.
@@ -356,12 +372,13 @@ impl StaticAnalyzer {
         }
         // We didn't find a variable in the current frame -
         // let's see if we can find it in the parent frame (recursively)
-        let parent_frame_id = match &frame.kind_data {
+        let (parent_frame_id, closure_definition_segment) = match &frame.kind_data {
             FrameKindData::Root => return None,
             FrameKindData::Closure {
                 lexical_parent: (parent_frame_id, _),
+                closure_definition_segment,
                 ..
-            } => *parent_frame_id,
+            } => (*parent_frame_id, *closure_definition_segment),
         };
         // Closed variable definitions must live in the frame's root scope/segment,
         // because at runtime they are defined during invoke() before the body
@@ -410,10 +427,8 @@ impl StaticAnalyzer {
             .defined_mut()
             .definitions
             .push(definition_id);
-        // TODO[functions]: This is incorrect - it should really be prepended before other control flow...
-        // -- in fact I'm slightly surprised we don't get issues with references before definitions.
         self.segments
-            .get_mut(frame_root_segment_id)
+            .get_mut(closure_definition_segment)
             .children
             .push(ControlFlowChild::VariableDefinition(definition_id));
 
@@ -524,16 +539,33 @@ impl StaticAnalyzer {
         previous_sibling_id: Option<ControlFlowSegmentId>,
         segment_kind: SegmentKind,
     ) -> ControlFlowSegmentId {
-        let child_id = self.segments.add(ControlFlowSegmentData {
-            scope: self.current_scope_id,
+        let child_id = Self::create_segment_with_valid_previous(
+            &mut self.segments,
+            parent_id,
+            previous_sibling_id,
+            segment_kind,
+            self.current_scope_id,
+        );
+        self.segments_stack().push(child_id);
+        self.current_segment_id = child_id;
+        child_id
+    }
+
+    fn create_segment_with_valid_previous(
+        segments: &mut Arena<ControlFlowSegmentId, ControlFlowSegmentData>,
+        parent_id: Option<ControlFlowSegmentId>,
+        previous_sibling_id: Option<ControlFlowSegmentId>,
+        segment_kind: SegmentKind,
+        scope: ScopeId,
+    ) -> ControlFlowSegmentId {
+        let child_id = segments.add(ControlFlowSegmentData {
+            scope,
             parent: parent_id,
             children: segment_kind.new_children(),
             segment_kind,
         });
-        self.segments_stack().push(child_id);
-        self.current_segment_id = child_id;
         if let Some(parent_id) = parent_id {
-            let parent = self.segments.get_mut(parent_id);
+            let parent = segments.get_mut(parent_id);
             match &mut parent.children {
                 SegmentChildren::Sequential { ref mut children } => {
                     children.push(ControlFlowChild::Segment(child_id));
@@ -838,6 +870,7 @@ pub(crate) enum FrameKindData {
         // - Create a variable reference which we can use to capture the variable
         //   from the parent closure when the closure is created.
         closed_variables: BTreeMap<String, (VariableDefinitionId, VariableReferenceId)>,
+        closure_definition_segment: ControlFlowSegmentId,
     },
 }
 
