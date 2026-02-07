@@ -9,7 +9,6 @@ use super::*;
 pub(crate) enum PathSegment {
     ArrayIndex(usize),
     ObjectKey(String),
-    IteratorIndex(usize),
     RangeStart,
     RangeEnd,
 }
@@ -27,7 +26,6 @@ impl PathSegment {
                         result.push_str(&format!("[{:?}]", k))
                     }
                 }
-                PathSegment::IteratorIndex(i) => result.push_str(&format!("[{}]", i)),
                 PathSegment::RangeStart => result.push_str(".start"),
                 PathSegment::RangeEnd => result.push_str(".end"),
             }
@@ -68,19 +66,11 @@ pub(crate) trait EqualityContext {
     /// Object is missing a key that the other has.
     fn missing_key(&mut self, key: &str, missing_on: MissingSide) -> Self::Result;
 
-    fn iteration_limit_exceeded(&mut self, limit: usize) -> Self::Result {
-        let message = format!("iteration limit {} exceeded", limit);
-        self.leaf_values_not_equal(&message, &message)
-    }
-
     /// Wrap a comparison within an array index context.
     fn with_array_index<R>(&mut self, index: usize, f: impl FnOnce(&mut Self) -> R) -> R;
 
     /// Wrap a comparison within an object key context.
     fn with_object_key<R>(&mut self, key: &str, f: impl FnOnce(&mut Self) -> R) -> R;
-
-    /// Wrap a comparison within an iterator index context.
-    fn with_iterator_index<R>(&mut self, index: usize, f: impl FnOnce(&mut Self) -> R) -> R;
 
     /// Wrap a comparison within a range start context.
     fn with_range_start<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R;
@@ -137,11 +127,6 @@ impl EqualityContext for SimpleEquality {
 
     #[inline]
     fn with_object_key<R>(&mut self, _key: &str, f: impl FnOnce(&mut Self) -> R) -> R {
-        f(self)
-    }
-
-    #[inline]
-    fn with_iterator_index<R>(&mut self, _index: usize, f: impl FnOnce(&mut Self) -> R) -> R {
         f(self)
     }
 
@@ -248,14 +233,6 @@ impl EqualityContext for TypedEquality {
     #[inline]
     fn with_object_key<R>(&mut self, key: &str, f: impl FnOnce(&mut Self) -> R) -> R {
         self.path.push(PathSegment::ObjectKey(key.to_string()));
-        let result = f(self);
-        self.path.pop();
-        result
-    }
-
-    #[inline]
-    fn with_iterator_index<R>(&mut self, index: usize, f: impl FnOnce(&mut Self) -> R) -> R {
-        self.path.push(PathSegment::IteratorIndex(index));
         let result = f(self);
         self.path.pop();
         result
@@ -508,14 +485,6 @@ impl EqualityContext for DebugEquality {
     #[inline]
     fn with_object_key<R>(&mut self, key: &str, f: impl FnOnce(&mut Self) -> R) -> R {
         self.path.push(PathSegment::ObjectKey(key.to_string()));
-        let result = f(self);
-        self.path.pop();
-        result
-    }
-
-    #[inline]
-    fn with_iterator_index<R>(&mut self, index: usize, f: impl FnOnce(&mut Self) -> R) -> R {
-        self.path.push(PathSegment::IteratorIndex(index));
         let result = f(self);
         self.path.pop();
         result

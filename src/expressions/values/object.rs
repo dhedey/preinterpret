@@ -85,7 +85,7 @@ impl ObjectValue {
         let key: Spanned<&str> = index.downcast_resolve("An object key")?;
         match self.entries.get(*key) {
             Some(entry) => Ok(&entry.value),
-            None => Ok(&AnyValue::None(())),
+            None => Ok(static_none_ref()),
         }
     }
 
@@ -104,7 +104,7 @@ impl ObjectValue {
         let key = access.property.to_string();
         match self.entries.get(&key) {
             Some(entry) => Ok(&entry.value),
-            None => Ok(&AnyValue::None(())),
+            None => Ok(static_none_ref()),
         }
     }
 

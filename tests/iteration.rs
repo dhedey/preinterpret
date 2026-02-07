@@ -81,12 +81,21 @@ fn iterator_to_debug_string() {
 
 #[test]
 fn iterator_to_string() {
-    assert_eq!(run!([1, 2, 3].into_iter().to_string()), "123");
-    assert_eq!(run!(%[%group[a b] c d].into_iter().to_string()), "abcd");
-    assert_eq!(run!((3..=5).into_iter().to_string()), "345");
-    assert_eq!(run!(%{ a: 1 }.into_iter().to_string()), r#"a1"#);
-    assert_eq!(run!("Hello World".into_iter().to_string()), "Hello World");
-    assert_eq!(run!((0..10).into_iter().to_string()), "0123456789");
+    // Iterators display as "Iterator[?]" to avoid consuming them
+    assert_eq!(run!([1, 2, 3].into_iter().to_string()), "Iterator[?]");
+    // Use .to_vec().to_string() to get the actual concatenated values
+    assert_eq!(run!([1, 2, 3].into_iter().to_vec().to_string()), "123");
+    assert_eq!(
+        run!(%[%group[a b] c d].into_iter().to_vec().to_string()),
+        "abcd"
+    );
+    assert_eq!(run!((3..=5).into_iter().to_vec().to_string()), "345");
+    assert_eq!(run!(%{ a: 1 }.into_iter().to_vec().to_string()), r#"a1"#);
+    assert_eq!(
+        run!("Hello World".into_iter().to_vec().to_string()),
+        "Hello World"
+    );
+    assert_eq!(run!((0..10).into_iter().to_vec().to_string()), "0123456789");
 }
 
 #[test]
@@ -109,7 +118,7 @@ fn iterator_next() {
 fn iterator_skip_and_take() {
     run! {
         let iterator = ('A'..).into_iter();
-        %[].assert_eq(iterator.skip(1).take(4).to_string(), "BCDE");
+        %[].assert_eq(iterator.skip(1).take(4).to_vec().to_string(), "BCDE");
     }
 }
 

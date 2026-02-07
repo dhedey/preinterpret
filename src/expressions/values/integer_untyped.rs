@@ -111,13 +111,15 @@ impl UntypedInteger {
 impl Spanned<UntypedInteger> {
     pub(crate) fn into_kind(self, kind: IntegerLeafKind) -> ExecutionResult<IntegerValue> {
         let Spanned(value, span_range) = self;
-        value.try_into_kind(kind).ok_or_else(|| {
-            span_range.value_error(format!(
-                "The integer value {} does not fit into {}",
-                value.0,
-                kind.articled_value_name()
-            ))
-        })
+        value
+            .try_into_kind(kind)
+            .ok_or_else(|| -> ExecutionInterrupt {
+                span_range.value_error(format!(
+                    "The integer value {} does not fit into {}",
+                    value.0,
+                    kind.articled_value_name()
+                ))
+            })
     }
 }
 

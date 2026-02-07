@@ -52,7 +52,7 @@ impl InvokableFunction {
         self,
         arguments: Vec<Spanned<ArgumentValue>>,
         context: &mut FunctionCallContext,
-    ) -> ExecutionResult<Spanned<ReturnedValue>> {
+    ) -> FunctionResult<Spanned<ReturnedValue>> {
         match self {
             InvokableFunction::Native(interface) => interface.invoke(arguments, context),
             InvokableFunction::Closure(closure) => closure.invoke(arguments, context),

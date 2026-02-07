@@ -48,7 +48,8 @@ pub(crate) fn string_to_ident(
     span: Span,
 ) -> ExecutionResult<Ident> {
     let ident = parse_str::<Ident>(str).map_err(|err| {
-        error_source.value_error(format!("`{}` is not a valid ident: {:?}", str, err))
+        error_source
+            .value_error::<ExecutionInterrupt>(format!("`{}` is not a valid ident: {:?}", str, err))
     })?;
     Ok(ident.with_span(span))
 }
@@ -59,7 +60,10 @@ pub(crate) fn string_to_literal(
     span: Span,
 ) -> ExecutionResult<Literal> {
     let literal = Literal::from_str(str).map_err(|err| {
-        error_source.value_error(format!("`{}` is not a valid literal: {:?}", str, err))
+        error_source.value_error::<ExecutionInterrupt>(format!(
+            "`{}` is not a valid literal: {:?}",
+            str, err
+        ))
     })?;
     Ok(literal.with_span(span))
 }

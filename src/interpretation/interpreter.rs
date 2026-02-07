@@ -251,7 +251,7 @@ impl Interpreter {
         &mut self,
         variable: &VariableReference,
         ownership: RequestedOwnership,
-    ) -> ExecutionResult<Spanned<LateBoundValue>> {
+    ) -> FunctionResult<Spanned<LateBoundValue>> {
         let reference = self.scope_definitions.references.get(variable.id);
         let (definition, span, is_final) = (
             reference.definition,
@@ -347,11 +347,10 @@ impl Interpreter {
         &mut self,
         handle: ParserHandle,
         error_span_range: SpanRange,
-    ) -> ExecutionResult<OutputParseStream<'_>> {
-        let stack = self
-            .input_handler
-            .get(handle)
-            .ok_or_else(|| error_span_range.value_error("This parser is no longer available"))?;
+    ) -> FunctionResult<OutputParseStream<'_>> {
+        let stack = self.input_handler.get(handle).ok_or_else(|| {
+            error_span_range.value_error::<FunctionError>("This parser is no longer available")
+        })?;
         Ok(stack.current())
     }
 
@@ -501,7 +500,7 @@ impl RuntimeScope {
         is_final: bool,
         ownership: RequestedOwnership,
         blocked_from_mutation: Option<MutationBlockReason>,
-    ) -> ExecutionResult<Spanned<LateBoundValue>> {
+    ) -> FunctionResult<Spanned<LateBoundValue>> {
         self.variables
             .get_mut(&definition_id)
             .expect("Variable data not found in scope")

@@ -11,7 +11,7 @@ pub(crate) trait ParseResultExt<T> {
 
 impl<T> ParseResultExt<T> for ParseResult<T> {
     fn convert_to_final_result(self) -> syn::Result<T> {
-        self.map_err(|error| error.convert_to_final_error())
+        self.map_err(|error| error.convert_to_syn_error())
     }
 
     fn into_execution_result(self) -> ExecutionResult<T> {
@@ -85,7 +85,7 @@ impl ParseError {
     }
 
     /// This is not a `From` because it wants to be explicit
-    pub(crate) fn convert_to_final_error(self) -> syn::Error {
+    pub(crate) fn convert_to_syn_error(self) -> syn::Error {
         self.0.convert_to_syn_error()
     }
 }
@@ -101,13 +101,53 @@ pub(crate) enum ExecutionOutcome<T> {
 }
 
 pub(crate) trait ExecutionResultExt<T> {
+    /// Asserts that the result contains no control flow interrupts (only errors).
+    /// This is used at boundaries where control flow should have already been caught.
+    fn expect_no_interrupts(self) -> FunctionResult<T>;
+}
+
+impl<T> ExecutionResultExt<T> for ExecutionResult<T> {
+    fn expect_no_interrupts(self) -> FunctionResult<T> {
+        self.map_err(FunctionError::new)
+    }
+}
+
+/// A result type for functions that can produce errors but NOT control-flow interrupts.
+pub(crate) type FunctionResult<T> = core::result::Result<T, FunctionError>;
+
+/// A newtype wrapping `ExecutionInterrupt` that asserts it is not a control flow interrupt.
+/// This is used for functions that cannot produce control flow (break/continue/revert).
+#[derive(Debug)]
+pub(crate) struct FunctionError(ExecutionInterrupt);
+
+impl FunctionError {
+    pub(crate) fn new(interrupt: ExecutionInterrupt) -> Self {
+        debug_assert!(
+            !matches!(
+                interrupt.inner.as_ref(),
+                ExecutionInterruptInner::ControlFlowInterrupt(_)
+            ),
+            "FunctionError should not wrap a control flow interrupt. \
+             Please report this bug at https://github.com/dhedey/preinterpret/issues"
+        );
+        FunctionError(interrupt)
+    }
+}
+
+pub(crate) trait FunctionResultExt<T> {
     /// This is not a `From` because it wants to be explicit
     fn convert_to_final_result(self) -> syn::Result<T>;
 }
 
-impl<T> ExecutionResultExt<T> for ExecutionResult<T> {
+impl<T> FunctionResultExt<T> for FunctionResult<T> {
     fn convert_to_final_result(self) -> syn::Result<T> {
-        self.map_err(|error| error.convert_to_final_error())
+        self.map_err(|error| error.0.expect_error().convert_to_syn_error())
+    }
+}
+
+impl From<FunctionError> for ExecutionInterrupt {
+    fn from(error: FunctionError) -> Self {
+        error.0
     }
 }
 
@@ -173,24 +213,8 @@ impl ExecutionInterrupt {
         })
     }
 
-    pub(crate) fn syntax_error(error: syn::Error) -> Self {
-        Self::new_error(ErrorKind::Syntax, error)
-    }
-
-    pub(crate) fn type_error(error: syn::Error) -> Self {
-        Self::new_error(ErrorKind::Type, error)
-    }
-
     pub(crate) fn ownership_error(error: syn::Error) -> Self {
         Self::new_error(ErrorKind::Ownership, error)
-    }
-
-    pub(crate) fn debug_error(error: syn::Error) -> Self {
-        Self::new_error(ErrorKind::Debug, error)
-    }
-
-    pub(crate) fn assertion_error(error: syn::Error) -> Self {
-        Self::new_error(ErrorKind::Assertion, error)
     }
 
     pub(crate) fn parse_error(error: ParseError) -> Self {
@@ -198,14 +222,6 @@ impl ExecutionInterrupt {
             ErrorKind::Parse,
             error.0,
         )))
-    }
-
-    pub(crate) fn value_error(error: syn::Error) -> Self {
-        Self::new_error(ErrorKind::Value, error)
-    }
-
-    pub(crate) fn control_flow_error(error: syn::Error) -> Self {
-        Self::new_error(ErrorKind::ControlFlow, error)
     }
 
     pub(crate) fn control_flow(control_flow: ControlFlowInterrupt) -> Self {
@@ -217,7 +233,7 @@ impl ExecutionInterrupt {
     pub(crate) fn into_caught_mutable_map_attempt_error(self) -> Result<syn::Error, Self> {
         match self.inner.as_ref() {
             ExecutionInterruptInner::Error(ExecutionError(ErrorKind::Value, _)) => {
-                Ok(self.convert_to_final_error())
+                Ok(self.expect_error().convert_to_syn_error())
             }
             _ => Err(self),
         }
@@ -278,8 +294,24 @@ enum ExecutionInterruptInner {
 pub(crate) struct ExecutionError(ErrorKind, DetailedError);
 
 impl ExecutionError {
+    pub(crate) fn new(kind: ErrorKind, error: syn::Error) -> Self {
+        ExecutionError(kind, DetailedError::Standard(error))
+    }
+
     pub(crate) fn convert_to_syn_error(self) -> syn::Error {
         self.1.convert_to_syn_error()
+    }
+}
+
+impl From<ExecutionError> for ExecutionInterrupt {
+    fn from(error: ExecutionError) -> Self {
+        ExecutionInterrupt::new(ExecutionInterruptInner::Error(error))
+    }
+}
+
+impl From<ExecutionError> for FunctionError {
+    fn from(error: ExecutionError) -> Self {
+        FunctionError(ExecutionInterrupt::from(error))
     }
 }
 
@@ -350,9 +382,7 @@ impl BreakInterrupt {
             Some(value) => value,
             None => ().into_any_value(),
         };
-        ownership
-            .map_from_owned(Spanned(value, span_range))
-            .map(|spanned| spanned.0)
+        Ok(ownership.map_from_owned(Spanned(value, span_range))?.0)
     }
 }
 
@@ -373,9 +403,5 @@ impl ExecutionInterrupt {
                  Please report this bug at https://github.com/dhedey/preinterpret/issues"
             ),
         }
-    }
-
-    pub(crate) fn convert_to_final_error(self) -> syn::Error {
-        self.expect_error().convert_to_syn_error()
     }
 }

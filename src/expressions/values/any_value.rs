@@ -251,7 +251,7 @@ impl AnyValue {
     pub(crate) fn try_transparent_clone(
         &self,
         error_span_range: SpanRange,
-    ) -> ExecutionResult<AnyValue> {
+    ) -> FunctionResult<AnyValue> {
         if !self.value_kind().supports_transparent_cloning() {
             return error_span_range.ownership_err(format!(
                 "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .clone() explicitly.",
