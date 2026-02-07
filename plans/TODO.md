@@ -238,23 +238,18 @@ Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
   - [x] Add tests for shared/mutable, including conversions working and not
 - [ ] Iterable methods:
   - [ ] Unpick `feat/iterable-map` and work our what we want to keep:
-    * Half-baked `FunctionValue` changes to allow invocation
-    * Separation of `ExecutionInterrupt` and `FunctionError` - do we actually want / need it?
-      - Perhaps `Result` -> `core::Result`
-      - `ExecutionResult` -> `ExpressionResult`
-      - And `FunctionResult` -> `Result` ?
-    * `Iterator` returns `Result` change -> do we want it?
-    * `Iterator` comparison can return errors -> maybe we just have `iterator != iterator` unless `std::ptr::eq`?
+    * Salvage half-baked `FunctionValue` changes to allow invocation
+    * Separation of `ExecutionInterrupt` and `FunctionError` - incorporated below
+    * `Iterator` returns `Result` change -> replaced with below
   * To implement `.map()`, we have a few things we need first:
     - An iterator trait where Interpreter is passed at next time.
     - Possibly - not require `Clone` on iterators:
       - Make `TryClone -> Result<T, &T>`
       - Make `to_string` for iterator return `Iterator[?]`
   - [ ] Create new iterator trait `PreinterpretIterator` and `IntoPreinterpretIterator` with `.next(&mut Interpreter)`
-    - [ ] Blanket implement it for iterator
-    - [ ] Then replace e.g. for loop with it.
-    - [ ] Create `Map` and `Filter` types on top of it, to be able to
-          implement `map` and `filter`
+    - [ ] Blanket implement it for `Iterator<AnyValue> + Clone`
+    - [ ] Then replace e.g. for loop impl with it.
+    - [ ] Create `Map` and `Filter` types on top of it, to be able to implement `map` and `filter`
   - [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`
 - [ ] Add `array.sort`, `array.sort_by`
 - [ ] Resolve all `TODO[functions]`
