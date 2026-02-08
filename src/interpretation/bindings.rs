@@ -298,13 +298,13 @@ impl LateBoundValue {
     /// key from an object) to still work, with the mutable error preserved as `reason_not_mutable`.
     pub(crate) fn map_any(
         self,
-        map_shared: impl FnOnce(AnyValueShared) -> ExecutionResult<AnyValueShared>,
+        map_shared: impl FnOnce(AnyValueShared) -> FunctionResult<AnyValueShared>,
         map_mutable: impl FnOnce(
             AnyValueMutable,
         )
-            -> Result<AnyValueMutable, (ExecutionInterrupt, AnyValueMutable)>,
-        map_owned: impl FnOnce(AnyValueOwned) -> ExecutionResult<AnyValueOwned>,
-    ) -> ExecutionResult<Self> {
+            -> Result<AnyValueMutable, (FunctionError, AnyValueMutable)>,
+        map_owned: impl FnOnce(AnyValueOwned) -> FunctionResult<AnyValueOwned>,
+    ) -> FunctionResult<Self> {
         Ok(match self {
             LateBoundValue::Owned(owned) => LateBoundValue::Owned(LateBoundOwnedValue {
                 owned: map_owned(owned.owned)?,
@@ -694,9 +694,9 @@ impl<T: 'static + ToOwned + ?Sized> CopyOnWrite<T> {
 
     pub(crate) fn map<O: ToOwned + ?Sized>(
         self,
-        map_shared: impl FnOnce(Shared<T>) -> ExecutionResult<Shared<O>>,
-        map_owned: impl FnOnce(Owned<T::Owned>) -> ExecutionResult<Owned<O::Owned>>,
-    ) -> ExecutionResult<CopyOnWrite<O>> {
+        map_shared: impl FnOnce(Shared<T>) -> FunctionResult<Shared<O>>,
+        map_owned: impl FnOnce(Owned<T::Owned>) -> FunctionResult<Owned<O::Owned>>,
+    ) -> FunctionResult<CopyOnWrite<O>> {
         let inner = match self.inner {
             CopyOnWriteInner::Owned(owned) => CopyOnWriteInner::Owned(map_owned(owned)?),
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {

@@ -132,14 +132,31 @@ impl FunctionError {
         );
         FunctionError(interrupt)
     }
+
+    /// Determines if the error can be caught when attempting to map a late-bound
+    /// mutable value, to retry as a shared value instead.
+    pub(crate) fn into_caught_mutable_map_attempt_error(self) -> Result<syn::Error, Self> {
+        match self.0.inner.as_ref() {
+            ExecutionInterruptInner::Error(ExecutionError(ErrorKind::Value, _)) => {
+                Ok(self.0.expect_error().convert_to_syn_error())
+            }
+            _ => Err(self),
+        }
+    }
 }
 
 pub(crate) trait FunctionResultExt<T> {
+    fn into_execution_result(self) -> ExecutionResult<T>;
+
     /// This is not a `From` because it wants to be explicit
     fn convert_to_final_result(self) -> syn::Result<T>;
 }
 
 impl<T> FunctionResultExt<T> for FunctionResult<T> {
+    fn into_execution_result(self) -> ExecutionResult<T> {
+        self.map_err(|error| error.into())
+    }
+
     fn convert_to_final_result(self) -> syn::Result<T> {
         self.map_err(|error| error.0.expect_error().convert_to_syn_error())
     }
@@ -227,22 +244,17 @@ impl ExecutionInterrupt {
     pub(crate) fn control_flow(control_flow: ControlFlowInterrupt) -> Self {
         Self::new(ExecutionInterruptInner::ControlFlowInterrupt(control_flow))
     }
-
-    /// Determines if the error can be caught when attempting to map a late-bound
-    /// mutable value, to retry as a shared value instead.
-    pub(crate) fn into_caught_mutable_map_attempt_error(self) -> Result<syn::Error, Self> {
-        match self.inner.as_ref() {
-            ExecutionInterruptInner::Error(ExecutionError(ErrorKind::Value, _)) => {
-                Ok(self.expect_error().convert_to_syn_error())
-            }
-            _ => Err(self),
-        }
-    }
 }
 
 impl From<ParseError> for ExecutionInterrupt {
     fn from(e: ParseError) -> Self {
         ExecutionInterrupt::parse_error(e)
+    }
+}
+
+impl From<ParseError> for FunctionError {
+    fn from(e: ParseError) -> Self {
+        FunctionError::new(ExecutionInterrupt::parse_error(e))
     }
 }
 

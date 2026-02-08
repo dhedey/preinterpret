@@ -10,11 +10,11 @@ define_leaf_type! {
     articled_value_name: "a range",
     dyn_impls: {
         IterableType: impl IsIterable {
-            fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
+            fn into_iterator(self: Box<Self>) -> FunctionResult<IteratorValue> {
                 IteratorValue::new_for_range(*self)
             }
 
-            fn len(&self, error_span_range: SpanRange) -> ExecutionResult<usize> {
+            fn iterable_len(&self, error_span_range: SpanRange) -> FunctionResult<usize> {
                 self.len(error_span_range)
             }
         }
@@ -27,24 +27,27 @@ pub(crate) struct RangeValue {
 }
 
 impl RangeValue {
-    pub(crate) fn len(&self, error_span_range: SpanRange) -> ExecutionResult<usize> {
-        IteratorValue::new_for_range(self.clone())?.len(error_span_range)
+    pub(crate) fn len(&self, error_span_range: SpanRange) -> FunctionResult<usize> {
+        IteratorValue::new_for_range(self.clone())?.do_len(error_span_range)
     }
 
     pub(crate) fn concat_recursive_into(
         &self,
         output: &mut String,
         behaviour: &ConcatBehaviour,
-    ) -> ExecutionResult<()> {
+        interpreter: &mut Interpreter,
+    ) -> FunctionResult<()> {
         if !behaviour.use_debug_literal_syntax {
-            return IteratorValue::any_iterator_to_string(
-                self.clone().inner.into_iterable()?.resolve_iterator()?,
+            let mut iter = IteratorValue::new_for_range(self.clone())?;
+            return any_items_to_string(
+                &mut iter,
                 output,
                 behaviour,
                 "[<range>]",
                 "[<range> ",
                 "]",
                 true,
+                interpreter,
             );
         }
         match &*self.inner {
@@ -53,27 +56,35 @@ impl RangeValue {
                 end_exclusive,
                 ..
             } => {
-                start_inclusive
-                    .as_ref_value()
-                    .concat_recursive_into(output, behaviour)?;
+                start_inclusive.as_ref_value().concat_recursive_into(
+                    output,
+                    behaviour,
+                    interpreter,
+                )?;
                 output.push_str("..");
-                end_exclusive
-                    .as_ref_value()
-                    .concat_recursive_into(output, behaviour)?;
+                end_exclusive.as_ref_value().concat_recursive_into(
+                    output,
+                    behaviour,
+                    interpreter,
+                )?;
             }
             RangeValueInner::RangeFrom {
                 start_inclusive, ..
             } => {
-                start_inclusive
-                    .as_ref_value()
-                    .concat_recursive_into(output, behaviour)?;
+                start_inclusive.as_ref_value().concat_recursive_into(
+                    output,
+                    behaviour,
+                    interpreter,
+                )?;
                 output.push_str("..");
             }
             RangeValueInner::RangeTo { end_exclusive, .. } => {
                 output.push_str("..");
-                end_exclusive
-                    .as_ref_value()
-                    .concat_recursive_into(output, behaviour)?;
+                end_exclusive.as_ref_value().concat_recursive_into(
+                    output,
+                    behaviour,
+                    interpreter,
+                )?;
             }
             RangeValueInner::RangeFull { .. } => {
                 output.push_str("..");
@@ -83,19 +94,25 @@ impl RangeValue {
                 end_inclusive,
                 ..
             } => {
-                start_inclusive
-                    .as_ref_value()
-                    .concat_recursive_into(output, behaviour)?;
+                start_inclusive.as_ref_value().concat_recursive_into(
+                    output,
+                    behaviour,
+                    interpreter,
+                )?;
                 output.push_str("..=");
-                end_inclusive
-                    .as_ref_value()
-                    .concat_recursive_into(output, behaviour)?;
+                end_inclusive.as_ref_value().concat_recursive_into(
+                    output,
+                    behaviour,
+                    interpreter,
+                )?;
             }
             RangeValueInner::RangeToInclusive { end_inclusive, .. } => {
                 output.push_str("..=");
-                end_inclusive
-                    .as_ref_value()
-                    .concat_recursive_into(output, behaviour)?;
+                end_inclusive.as_ref_value().concat_recursive_into(
+                    output,
+                    behaviour,
+                    interpreter,
+                )?;
             }
         }
         Ok(())
@@ -106,7 +123,7 @@ impl Spanned<&RangeValue> {
     pub(crate) fn resolve_to_index_range(
         self,
         array: &ArrayValue,
-    ) -> ExecutionResult<std::ops::Range<usize>> {
+    ) -> FunctionResult<std::ops::Range<usize>> {
         let Spanned(value, span_range) = self;
         let mut start = 0;
         let mut end = array.items.len();
@@ -325,7 +342,7 @@ impl RangeValueInner {
         }
     }
 
-    pub(super) fn into_iterable(self) -> ExecutionResult<IterableRangeOf<AnyValue>> {
+    pub(super) fn into_iterable(self) -> FunctionResult<IterableRangeOf<AnyValue>> {
         Ok(match self {
             Self::Range {
                 start_inclusive,
@@ -399,9 +416,9 @@ define_type_features! {
     impl RangeType,
     pub(crate) mod range_interface {
         unary_operations {
-            [context] fn cast_via_iterator(Spanned(this, span): Spanned<RangeValue>) -> ExecutionResult<ReturnedValue> {
+            [context] fn cast_via_iterator(Spanned(this, span): Spanned<RangeValue>) -> FunctionResult<ReturnedValue> {
                 let this_iterator = IteratorValue::new_for_range(this)?;
-                Ok(context.operation.evaluate(Spanned(this_iterator, span))?.0)
+                Ok(context.operation.evaluate(Spanned(this_iterator, span), context.interpreter)?.0)
             }
         }
         interface_items {
@@ -437,7 +454,7 @@ fn resolve_range<T: ResolvableOwned<AnyValue> + ResolvableRange>(
     start: T,
     dots: syn::RangeLimits,
     end: Option<Spanned<AnyValue>>,
-) -> ExecutionResult<Box<dyn ClonableIterator<Item = AnyValue>>> {
+) -> FunctionResult<ValueIterator> {
     let definition = match (end, dots) {
         (Some(end), dots) => {
             let end = end.resolve_as("The end of this range bound")?;
@@ -452,15 +469,11 @@ fn resolve_range<T: ResolvableOwned<AnyValue> + ResolvableRange>(
 }
 
 trait ResolvableRange: Sized {
-    fn resolve(
-        definition: IterableRangeOf<Self>,
-    ) -> ExecutionResult<Box<dyn ClonableIterator<Item = AnyValue>>>;
+    fn resolve(definition: IterableRangeOf<Self>) -> FunctionResult<ValueIterator>;
 }
 
 impl IterableRangeOf<AnyValue> {
-    pub(super) fn resolve_iterator(
-        self,
-    ) -> ExecutionResult<Box<dyn ClonableIterator<Item = AnyValue>>> {
+    pub(super) fn resolve_iterator(self) -> FunctionResult<ValueIterator> {
         let (start, dots, end) = match self {
             Self::RangeFromTo { start, dots, end } => {
                 (start, dots, Some(end.spanned(dots.span_range())))
@@ -500,7 +513,7 @@ impl IterableRangeOf<AnyValue> {
 impl ResolvableRange for UntypedInteger {
     fn resolve(
         definition: IterableRangeOf<UntypedInteger>,
-    ) -> ExecutionResult<Box<dyn ClonableIterator<Item = AnyValue>>> {
+    ) -> FunctionResult<ValueIterator> {
         match definition {
             IterableRangeOf::RangeFromTo { start, dots, end } => {
                 let start = start.into_fallback();
@@ -531,7 +544,7 @@ macro_rules! define_range_resolvers {
         $($the_type:ident),* $(,)?
     ) => {$(
         impl ResolvableRange for $the_type {
-            fn resolve(definition: IterableRangeOf<Self>) -> ExecutionResult<Box<dyn ClonableIterator<Item = AnyValue>>> {
+            fn resolve(definition: IterableRangeOf<Self>) -> FunctionResult<ValueIterator> {
                 match definition {
                     IterableRangeOf::RangeFromTo { start, dots, end } => {
                         Ok(match dots {

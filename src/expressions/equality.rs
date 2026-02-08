@@ -162,10 +162,10 @@ impl TypedEquality {
 }
 
 impl EqualityContext for TypedEquality {
-    type Result = ExecutionResult<bool>;
+    type Result = FunctionResult<bool>;
 
     #[inline]
-    fn values_equal(&mut self) -> ExecutionResult<bool> {
+    fn values_equal(&mut self) -> FunctionResult<bool> {
         Ok(true)
     }
 
@@ -174,7 +174,7 @@ impl EqualityContext for TypedEquality {
         &mut self,
         _lhs: &T,
         _rhs: &T,
-    ) -> ExecutionResult<bool> {
+    ) -> FunctionResult<bool> {
         Ok(false)
     }
 
@@ -182,7 +182,7 @@ impl EqualityContext for TypedEquality {
         &mut self,
         lhs: &L,
         rhs: &R,
-    ) -> ExecutionResult<bool> {
+    ) -> FunctionResult<bool> {
         let path_str = PathSegment::fmt_path(&self.path);
         Err(self.error_span.type_error(format!(
             "lhs{} is {}, but rhs{} is {}",
@@ -213,12 +213,12 @@ impl EqualityContext for TypedEquality {
         &mut self,
         _lhs_len: Option<usize>,
         _rhs_len: Option<usize>,
-    ) -> ExecutionResult<bool> {
+    ) -> FunctionResult<bool> {
         Ok(false)
     }
 
     #[inline]
-    fn missing_key(&mut self, _key: &str, _missing_on: MissingSide) -> ExecutionResult<bool> {
+    fn missing_key(&mut self, _key: &str, _missing_on: MissingSide) -> FunctionResult<bool> {
         Ok(false)
     }
 
@@ -255,7 +255,7 @@ impl EqualityContext for TypedEquality {
     }
 
     #[inline]
-    fn should_short_circuit(&self, result: &ExecutionResult<bool>) -> bool {
+    fn should_short_circuit(&self, result: &FunctionResult<bool>) -> bool {
         // Short-circuit on Ok(false) or Err(_)
         !matches!(result, Ok(true))
     }
@@ -539,7 +539,7 @@ pub(crate) trait ValuesEqual: Sized + HasLeafKind {
     }
 
     /// Strict equality check that errors on incompatible types.
-    fn typed_eq(&self, other: &Self, error_span: SpanRange) -> ExecutionResult<bool> {
+    fn typed_eq(&self, other: &Self, error_span: SpanRange) -> FunctionResult<bool> {
         self.test_equality(other, &mut TypedEquality::new(error_span))
     }
 

@@ -252,6 +252,7 @@ Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
     - [ ] Create `Map` and `Filter` types on top of it, to be able to implement `map` and `filter`
   - [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`
 - [ ] Add `array.sort`, `array.sort_by`
+- [ ] Look into if a closure like `|| { }()` can evade `attempt` block statue mutation checks. Maybe lean into it as a way to avoid htem, and mention it in the error message
 - [ ] Resolve all `TODO[functions]`
 
 Possible punted:
@@ -453,8 +454,9 @@ preinterpret::run! {
 
 - [ ] Look at benchmarks and if anything should be sped up
 - [ ] Speeding up stream literal processing
-  - [ ] When interpreting a stream literal, we can avoid having to go through error handling pathways to get an `output` from the intepreter by storing a `OutputInterpreter<'a>` which wraps an `&mut OutputStream` and a pointer to an Intepreter, and can be converted back into/from an `Interpreter` easily
-  - [ ] Possibly similarly for an `InputInterpreter<'a>` when processing a `ConsumeStream`
+  - [ ] Avoid a little overhead by having `OutputInterpreter<'a>` store a pointer to interpreter and output stream and a `PhantomData<&'a Interpreter>` / `PhantomData<&'a OutputStream>`, and recreate output stream after a call to with_interpreter.
+   ... and get rid of `output_stack_height`, `current_output_unchecked`, `current_output_mut_unchecked`
+  - [ ] Create an `InputInterpreter<'a>` when processing a `ConsumeStream`
 - [ ] Speeding up scopes at runtime:
   - [ ] In the interpreter, store a flattened stack of variable values
   - [ ] `no_mutation_above` can be a stack offset

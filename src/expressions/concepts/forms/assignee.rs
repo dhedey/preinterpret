@@ -62,7 +62,7 @@ impl MapFromArgument for BeAssignee {
 
     fn from_argument_value(
         value: ArgumentValue,
-    ) -> ExecutionResult<Content<'static, AnyType, Self>> {
+    ) -> FunctionResult<Content<'static, AnyType, Self>> {
         Ok(value.expect_assignee().into_content())
     }
 }

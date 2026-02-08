@@ -92,7 +92,7 @@ where
     pub(crate) fn downcast_resolve<X: FromSpannedValueContent<'a, Form = C::Form>>(
         self,
         resolution_target: &str,
-    ) -> ExecutionResult<X>
+    ) -> FunctionResult<X>
     where
         <X as IsValueContent>::Type: DowncastFrom<C::Type>,
     {
@@ -107,11 +107,11 @@ where
     }
 
     // TODO[concepts]: Change to use a FromSpannedDynContent trait,
-    // so that it can return a ExecutionResult<X> and avoid needing to specify D.
+    // so that it can return a FunctionResult<X> and avoid needing to specify D.
     pub(crate) fn dyn_resolve<D: IsDynLeaf + ?Sized>(
         self,
         resolution_target: &str,
-    ) -> ExecutionResult<DynContent<'a, D::Type, C::Form>>
+    ) -> FunctionResult<DynContent<'a, D::Type, C::Form>>
     where
         <D as IsDynLeaf>::Type: DynResolveFrom<C::Type>,
         C::Form: IsDynCompatibleForm,
@@ -225,7 +225,7 @@ impl<
 {
     type ValueType = T;
     const OWNERSHIP: ArgumentOwnership = F::ARGUMENT_OWNERSHIP;
-    fn from_argument(Spanned(value, span_range): Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+    fn from_argument(Spanned(value, span_range): Spanned<ArgumentValue>) -> FunctionResult<Self> {
         let ownership_mapped = F::from_argument_value(value)?;
         let type_mapped = T::resolve(ownership_mapped, span_range, "This argument")?;
         Ok(X::from_content(type_mapped))
@@ -240,7 +240,7 @@ impl<
         T: UpcastTo<AnyType>,
     > IsReturnable for X
 {
-    fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
+    fn to_returned_value(self) -> FunctionResult<ReturnedValue> {
         let type_mapped = self.into_content().upcast::<AnyType>();
         BeOwned::into_returned_value(type_mapped)
     }

@@ -14,7 +14,7 @@ impl ResolvableArgumentTarget for () {
 }
 
 impl ResolvableOwned<AnyValue> for () {
-    fn resolve_from_value(value: AnyValue, context: ResolutionContext) -> ExecutionResult<Self> {
+    fn resolve_from_value(value: AnyValue, context: ResolutionContext) -> FunctionResult<Self> {
         match value {
             AnyValue::None(_) => Ok(()),
             other => context.err("None", other),

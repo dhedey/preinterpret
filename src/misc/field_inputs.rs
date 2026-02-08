@@ -66,7 +66,7 @@ macro_rules! define_typed_object {
         impl IsArgument for $model {
             type ValueType = ObjectType;
             const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
-            fn from_argument(value: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+            fn from_argument(value: Spanned<ArgumentValue>) -> FunctionResult<Self> {
                 Self::resolve_value(
                     value.expect_owned(),
                     "This argument",
@@ -79,7 +79,7 @@ macro_rules! define_typed_object {
         }
 
         impl ResolvableOwned<AnyValue> for $model {
-            fn resolve_from_value(value: AnyValue, context: ResolutionContext) -> ExecutionResult<Self> {
+            fn resolve_from_value(value: AnyValue, context: ResolutionContext) -> FunctionResult<Self> {
                 Self::from_object_value(ObjectValue::resolve_spanned_from_value(value, context)?)
             }
         }
@@ -105,7 +105,7 @@ macro_rules! define_typed_object {
         }
 
         impl $model {
-            fn from_object_value(Spanned(mut object, span_range): Spanned<ObjectValue>) -> ExecutionResult<Self> {
+            fn from_object_value(Spanned(mut object, span_range): Spanned<ObjectValue>) -> FunctionResult<Self> {
                 (&object).spanned(span_range).validate(&Self::validation())?;
                 Ok($model {
                     $(

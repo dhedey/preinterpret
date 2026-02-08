@@ -1,8 +1,7 @@
 pub(crate) use proc_macro2::{extra::*, *};
 pub(crate) use quote::ToTokens;
 pub(crate) use std::{
-    borrow::Borrow,
-    borrow::Cow,
+    borrow::{Borrow, Cow},
     cell::{Ref, RefCell, RefMut},
     collections::{BTreeMap, HashMap, HashSet},
     fmt::Debug,

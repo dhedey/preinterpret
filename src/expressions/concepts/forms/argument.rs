@@ -38,7 +38,7 @@ impl MapFromArgument for BeArgument {
 
     fn from_argument_value(
         value: ArgumentValue,
-    ) -> ExecutionResult<Content<'static, AnyType, Self>> {
+    ) -> FunctionResult<Content<'static, AnyType, Self>> {
         todo!("Argument")
     }
 }

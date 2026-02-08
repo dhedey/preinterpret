@@ -237,13 +237,13 @@ impl RequestedValue {
 
     pub(crate) fn expect_any_value_and_map(
         self,
-        map_shared: impl FnOnce(AnyValueShared) -> ExecutionResult<AnyValueShared>,
+        map_shared: impl FnOnce(AnyValueShared) -> FunctionResult<AnyValueShared>,
         map_mutable: impl FnOnce(
             AnyValueMutable,
         )
-            -> Result<AnyValueMutable, (ExecutionInterrupt, AnyValueMutable)>,
-        map_owned: impl FnOnce(AnyValueOwned) -> ExecutionResult<AnyValueOwned>,
-    ) -> ExecutionResult<RequestedValue> {
+            -> Result<AnyValueMutable, (FunctionError, AnyValueMutable)>,
+        map_owned: impl FnOnce(AnyValueOwned) -> FunctionResult<AnyValueOwned>,
+    ) -> FunctionResult<RequestedValue> {
         Ok(match self {
             RequestedValue::LateBound(late_bound) => {
                 RequestedValue::LateBound(late_bound.map_any(map_shared, map_mutable, map_owned)?)

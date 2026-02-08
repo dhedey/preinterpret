@@ -832,7 +832,7 @@ impl EvaluationFrame for UnaryOperationBuilder {
 
     fn handle_next(
         self,
-        context: ValueContext,
+        mut context: ValueContext,
         operand: Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         let operand = operand.expect_late_bound();
@@ -845,8 +845,11 @@ impl EvaluationFrame for UnaryOperationBuilder {
         {
             let operand_span = operand.span_range();
             let resolved_value = operand.resolve(interface.argument_ownership())?;
-            let result =
-                interface.execute(Spanned(resolved_value, operand_span), &self.operation)?;
+            let result = interface.execute(
+                Spanned(resolved_value, operand_span),
+                &self.operation,
+                context.interpreter(),
+            )?;
             return context.return_returned_value(result);
         }
         self.operation.type_err(format!(

@@ -369,9 +369,10 @@ impl EmitStatement {
         interpreter: &mut Interpreter,
     ) -> ExecutionResult<()> {
         let Spanned(value, span) = self.expression.evaluate_owned(interpreter)?;
+        let mut output = OutputInterpreter::new_checked(interpreter, &self.emit)?;
         value.as_ref_value().output_to(
             Grouping::Flattened,
-            &mut ToStreamContext::new(interpreter.output(&self.emit)?, span),
-        )
+            &mut ToStreamContext::new(&mut output, span),
+        ).into_execution_result()
     }
 }

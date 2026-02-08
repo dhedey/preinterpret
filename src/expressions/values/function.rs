@@ -60,6 +60,37 @@ impl InvokableFunction {
     }
 }
 
+impl FunctionValue {
+    /// Convenience method to invoke a `FunctionValue`, handling bound arguments.
+    /// Consumes `self` because `InvokableFunction::invoke` takes `self`.
+    pub(crate) fn invoke(
+        self,
+        mut extra_arguments: Vec<Spanned<ArgumentValue>>,
+        context: &mut FunctionCallContext,
+    ) -> FunctionResult<Spanned<ReturnedValue>> {
+        let mut arguments: Vec<Spanned<ArgumentValue>> = self
+            .disabled_bound_arguments
+            .into_iter()
+            .map(|arg| {
+                let span = arg.span_range();
+                arg.try_map(|v| v.enable(span))
+            })
+            .collect::<FunctionResult<_>>()?;
+        arguments.append(&mut extra_arguments);
+        self.invokable.invoke(arguments, context)
+    }
+}
+
+impl_resolvable_argument_for! {
+    FunctionType,
+    (value, context) -> FunctionValue {
+        match value {
+            AnyValue::Function(value) => Ok(value),
+            _ => context.err("a function", value),
+        }
+    }
+}
+
 impl ValuesEqual for FunctionValue {
     fn test_equality<C: EqualityContext>(&self, other: &Self, ctx: &mut C) -> C::Result {
         if self.invokable == other.invokable {

@@ -67,11 +67,11 @@ pub(crate) trait MapFromArgument: IsHierarchicalForm {
 
     fn from_argument_value(
         value: ArgumentValue,
-    ) -> ExecutionResult<Content<'static, AnyType, Self>>;
+    ) -> FunctionResult<Content<'static, AnyType, Self>>;
 }
 
 pub(crate) trait MapIntoReturned: IsHierarchicalForm {
     fn into_returned_value(
         value: Content<'static, AnyType, Self>,
-    ) -> ExecutionResult<ReturnedValue>;
+    ) -> FunctionResult<ReturnedValue>;
 }

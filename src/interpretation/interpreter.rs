@@ -299,11 +299,11 @@ impl Interpreter {
     }
 
     // Input
-    pub(crate) fn start_parse<T>(
+    pub(crate) fn start_parse<T, E: From<ParseError>>(
         &mut self,
         stream: OutputStream,
-        f: impl FnOnce(&mut Interpreter, ParserHandle) -> ExecutionResult<T>,
-    ) -> ExecutionResult<T> {
+        f: impl FnOnce(&mut Interpreter, ParserHandle) -> Result<T, E>,
+    ) -> Result<T, E> {
         stream.parse_with(|input| {
             let handle = unsafe {
                 // SAFETY: This is paired with `finish_parse` below,
@@ -324,11 +324,11 @@ impl Interpreter {
         })
     }
 
-    pub(crate) fn parse_with<T>(
+    pub(crate) fn parse_with<T, E>(
         &mut self,
         handle: ParserHandle,
-        f: impl FnOnce(&mut Interpreter) -> ExecutionResult<T>,
-    ) -> ExecutionResult<T> {
+        f: impl FnOnce(&mut Interpreter) -> Result<T, E>,
+    ) -> Result<T, E> {
         unsafe {
             // SAFETY: This is paired with `pop_current_handle` below,
             // without any early returns in the middle
@@ -376,7 +376,7 @@ impl Interpreter {
     pub(crate) fn enter_input_group(
         &mut self,
         required_delimiter: Option<Delimiter>,
-    ) -> ExecutionResult<(Delimiter, DelimSpan)> {
+    ) -> FunctionResult<(Delimiter, DelimSpan)> {
         self.input_handler
             .current_stack()
             .parse_and_enter_group(required_delimiter)
@@ -388,7 +388,7 @@ impl Interpreter {
     pub(crate) fn exit_input_group(
         &mut self,
         expected_delimiter: Option<Delimiter>,
-    ) -> ExecutionResult<()> {
+    ) -> FunctionResult<()> {
         self.input_handler
             .current_stack()
             .exit_group(expected_delimiter)
@@ -405,20 +405,20 @@ impl Interpreter {
     }
 
     // Output
-    pub(crate) fn in_output_group<F, R>(
+    pub(crate) fn in_output_group<F, R, E>(
         &mut self,
         delimiter: Delimiter,
         span: Span,
         f: F,
-    ) -> ExecutionResult<R>
+    ) -> Result<R, E>
     where
-        F: FnOnce(&mut Interpreter) -> ExecutionResult<R>,
+        F: FnOnce(&mut OutputInterpreter) -> Result<R, E>,
     {
         unsafe {
             // SAFETY: This is paired with `finish_inner_buffer_as_group`
             self.output_handler.start_inner_buffer();
         }
-        let result = f(self);
+        let result = f(&mut OutputInterpreter::new_unchecked(self));
         unsafe {
             // SAFETY: This is paired with `start_inner_buffer`,
             // even if `f` returns an Err propogating a control flow interrupt.
@@ -428,15 +428,15 @@ impl Interpreter {
         result
     }
 
-    pub(crate) fn capture_output<F>(&mut self, f: F) -> ExecutionResult<OutputStream>
+    pub(crate) fn capture_output<F, E>(&mut self, f: F) -> Result<OutputStream, E>
     where
-        F: FnOnce(&mut Interpreter) -> ExecutionResult<()>,
+        F: FnOnce(&mut OutputInterpreter) -> Result<(), E>,
     {
         unsafe {
             // SAFETY: This is paired with `finish_inner_buffer_as_separate_stream`
             self.output_handler.start_inner_buffer();
         }
-        let result = f(self);
+        let result = f(&mut OutputInterpreter::new_unchecked(self));
         let output = unsafe {
             // SAFETY: This is paired with `start_inner_buffer`,
             // even if `f` returns an Err propogating a control flow interrupt.
@@ -444,6 +444,18 @@ impl Interpreter {
         };
         let () = result?;
         Ok(output)
+    }
+
+    pub(crate) fn output_stack_height(&self) -> usize {
+        self.output_handler.output_stack_height()
+    }
+
+    pub(crate) fn current_output_unchecked(&self) -> &OutputStream {
+        self.output_handler.current_output_unchecked()
+    }
+
+    pub(crate) fn current_output_mut_unchecked(&mut self) -> &mut OutputStream {
+        self.output_handler.current_output_mut_unchecked()
     }
 
     pub(crate) fn output(
@@ -515,12 +527,12 @@ pub(crate) struct IterationCounter<'a, S: HasSpanRange> {
 }
 
 impl<S: HasSpanRange> IterationCounter<'_, S> {
-    pub(crate) fn increment_and_check(&mut self) -> ExecutionResult<()> {
+    pub(crate) fn increment_and_check(&mut self) -> FunctionResult<()> {
         self.count += 1;
         self.check()
     }
 
-    pub(crate) fn check(&self) -> ExecutionResult<()> {
+    pub(crate) fn check(&self) -> FunctionResult<()> {
         if self.count > self.iteration_limit {
             return self.span_source.control_flow_err(format!("Iteration limit of {} exceeded.\nIf needed, the limit can be reconfigured with preinterpret::set_iteration_limit(XXX)", self.iteration_limit));
         }

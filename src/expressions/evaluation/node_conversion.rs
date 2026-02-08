@@ -42,7 +42,7 @@ impl ExpressionNode {
                         let span = stream_literal.span_range();
                         let value = context
                             .interpreter()
-                            .capture_output(|interpreter| stream_literal.interpret(interpreter))?;
+                            .capture_output(|output| stream_literal.output_to_stream(output))?;
                         context.return_value(Spanned(value, span))?
                     }
                     Leaf::ParseTemplateLiteral(consume_literal) => {

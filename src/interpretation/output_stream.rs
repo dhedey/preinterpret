@@ -61,10 +61,10 @@ impl OutputStream {
 
     pub(crate) fn push_grouped(
         &mut self,
-        appender: impl FnOnce(&mut Self) -> ExecutionResult<()>,
+        appender: impl FnOnce(&mut Self) -> FunctionResult<()>,
         delimiter: Delimiter,
         span: Span,
-    ) -> ExecutionResult<()> {
+    ) -> FunctionResult<()> {
         let mut inner = Self::new();
         appender(&mut inner)?;
         self.push_new_group(inner, delimiter, span);
@@ -131,10 +131,10 @@ impl OutputStream {
 
     /// WARNING: With rust-analyzer, this loses transparent groups which have been inserted.
     /// Use only where that doesn't matter: https://github.com/rust-lang/rust-analyzer/issues/18211#issuecomment-2604547032
-    pub(crate) fn parse_with<T>(
+    pub(crate) fn parse_with<T, E: From<ParseError>>(
         self,
-        parser: impl FnOnce(ParseStream<Output>) -> ExecutionResult<T>,
-    ) -> ExecutionResult<T> {
+        parser: impl FnOnce(ParseStream<Output>) -> Result<T, E>,
+    ) -> Result<T, E> {
         self.into_token_stream().interpreted_parse_with(parser)
     }
 
@@ -274,7 +274,7 @@ impl OutputStream {
             }
         }
 
-        fn concat_recursive_token_stream<T: core::borrow::Borrow<TokenTree>>(
+        fn concat_recursive_token_stream<T: Borrow<TokenTree>>(
             behaviour: &ConcatBehaviour,
             output: &mut String,
             prefix_spacing: Spacing,
@@ -340,7 +340,7 @@ impl OutputStream {
         &self,
         input: ParseStream<Output>,
         output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
+    ) -> FunctionResult<()> {
         handle_parsing_exact_output_match(input, self, output)
     }
 

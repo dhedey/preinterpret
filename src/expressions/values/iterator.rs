@@ -8,43 +8,45 @@ define_leaf_type! {
     articled_value_name: "an iterator",
     dyn_impls: {
         IterableType: impl IsIterable {
-            fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
+            fn into_iterator(self: Box<Self>) -> FunctionResult<IteratorValue> {
                 Ok(*self)
             }
 
-            fn len(&self, error_span_range: SpanRange) -> ExecutionResult<usize> {
-                self.len(error_span_range)
+            fn iterable_len(&self, error_span_range: SpanRange) -> FunctionResult<usize> {
+                self.do_len(error_span_range)
             }
         }
     },
 }
 
+pub(crate) type ValueIterator = Box<dyn BoxedIterator<Item = AnyValue>>;
+
 #[derive(Clone)]
 pub(crate) struct IteratorValue {
-    iterator: IteratorValueInner,
+    inner: ValueIterator,
 }
 
 impl IteratorValue {
-    fn new(iterator: IteratorValueInner) -> Self {
-        Self { iterator }
+    pub(crate) fn new(iterator: ValueIterator) -> Self {
+        Self { inner: iterator }
     }
 
     #[allow(unused)]
     pub(crate) fn new_any(iterator: impl Iterator<Item = AnyValue> + 'static + Clone) -> Self {
-        Self::new_custom(Box::new(iterator))
+        Self::new(Box::new(iterator))
     }
 
     pub(crate) fn new_for_array(array: ArrayValue) -> Self {
-        Self::new_vec(array.items.into_iter())
+        Self::new(Box::new(array.items.into_iter()))
     }
 
     pub(crate) fn new_for_stream(stream: OutputStream) -> Self {
-        Self::new(IteratorValueInner::Stream(Box::new(stream.into_iter())))
+        Self::new(Box::new(StreamValueIterator(stream.into_iter())))
     }
 
-    pub(crate) fn new_for_range(range: RangeValue) -> ExecutionResult<Self> {
+    pub(crate) fn new_for_range(range: RangeValue) -> FunctionResult<Self> {
         let iterator = range.inner.into_iterable()?.resolve_iterator()?;
-        Ok(Self::new_custom(iterator))
+        Ok(Self::new(iterator))
     }
 
     pub(crate) fn new_for_object(object: ObjectValue) -> Self {
@@ -55,7 +57,7 @@ impl IteratorValue {
             .map(|(k, v)| vec![k.into_any_value(), v.value].into_any_value())
             .collect::<Vec<_>>()
             .into_iter();
-        Self::new_vec(iterator)
+        Self::new(Box::new(iterator))
     }
 
     pub(crate) fn new_for_string_over_chars(string: String) -> Self {
@@ -69,46 +71,46 @@ impl IteratorValue {
             .map(|c| c.into_any_value())
             .collect::<Vec<_>>()
             .into_iter();
-        Self::new_vec(iterator)
+        Self::new(Box::new(iterator))
     }
 
-    fn new_vec(iterator: std::vec::IntoIter<AnyValue>) -> Self {
-        Self::new(IteratorValueInner::Vec(Box::new(iterator)))
+    /// Returns the inner BoxedIterator box (for creating Map/Filter wrappers).
+    pub(crate) fn into_inner(self) -> ValueIterator {
+        self.inner
     }
 
-    pub(crate) fn new_custom(iterator: Box<dyn ClonableIterator<Item = AnyValue>>) -> Self {
-        Self::new(IteratorValueInner::Other(iterator))
-    }
-
-    pub(crate) fn len(&self, error_span_range: SpanRange) -> ExecutionResult<usize> {
-        let (min, max) = self.size_hint();
-        if max == Some(min) {
-            Ok(min)
+    pub(crate) fn singleton_value(
+        mut self,
+        interpreter: &mut Interpreter,
+    ) -> FunctionResult<Option<AnyValue>> {
+        let first = match self.do_next(interpreter)? {
+            Some(v) => v,
+            None => return Ok(None),
+        };
+        if self.do_next(interpreter)?.is_none() {
+            Ok(Some(first))
         } else {
-            error_span_range.value_err("Iterator has an inexact length")
-        }
-    }
-
-    pub(crate) fn singleton_value(mut self) -> Option<AnyValue> {
-        let first = self.next()?;
-        if self.next().is_none() {
-            Some(first)
-        } else {
-            None
+            Ok(None)
         }
     }
 
     pub(super) fn output_items_to(
-        self,
+        mut self,
         output: &mut ToStreamContext,
         grouping: Grouping,
-    ) -> ExecutionResult<()> {
+    ) -> FunctionResult<()> {
         const LIMIT: usize = 10_000;
-        for (i, item) in self.enumerate() {
+        let mut i = 0;
+        loop {
+            let item = match output.with_interpreter(|interpreter| self.do_next(interpreter))? {
+                Some(item) => item,
+                None => break,
+            };
             if i > LIMIT {
                 return output.debug_err(format!("Only a maximum of {} items can be output to a stream from an iterator, to protect you from infinite loops. This can't currently be reconfigured with the iteration limit.", LIMIT));
             }
             item.as_ref_value().output_to(grouping, output)?;
+            i += 1;
         }
         Ok(())
     }
@@ -117,97 +119,60 @@ impl IteratorValue {
         &self,
         output: &mut String,
         behaviour: &ConcatBehaviour,
-    ) -> ExecutionResult<()> {
+        interpreter: &mut Interpreter,
+    ) -> FunctionResult<()> {
         if behaviour.use_debug_literal_syntax {
-            Self::any_iterator_to_string(
-                self.clone(),
+            any_items_to_string(
+                &mut self.clone(),
                 output,
                 behaviour,
                 "[<iterator>]",
                 "[<iterator> ",
                 "]",
                 true,
+                interpreter,
             )
         } else {
             output.push_str("Iterator[?]");
             Ok(())
         }
     }
+}
 
-    pub(crate) fn any_iterator_to_string<T: Borrow<AnyValue>>(
-        iterator: impl Iterator<Item = T>,
-        output: &mut String,
-        behaviour: &ConcatBehaviour,
-        literal_empty: &str,
-        literal_start: &str,
-        literal_end: &str,
-        possibly_unbounded: bool,
-    ) -> ExecutionResult<()> {
-        let mut is_empty = true;
-        let max = iterator.size_hint().1;
-        for (i, item) in iterator.enumerate() {
-            if i == 0 {
-                if behaviour.output_literal_structure {
-                    output.push_str(literal_start);
-                }
-                is_empty = false;
-            }
-            if possibly_unbounded && i >= behaviour.iterator_limit {
-                if behaviour.error_after_iterator_limit {
-                    return behaviour.error_span_range.debug_err(format!("To protect against infinite loops, only a maximum of {} items can be output to a string from an iterator. You can use .to_vec() to avoid this limit. This can't currently be reconfigured with the iteration limit.", behaviour.iterator_limit));
-                } else {
-                    if behaviour.output_literal_structure {
-                        match max {
-                            Some(max) => output.push_str(&format!(
-                                ", ..<{} further items>",
-                                max.saturating_sub(i)
-                            )),
-                            None => output.push_str(", ..<possibly unbounded>"),
-                        }
-                    }
-                    break;
-                }
-            }
-            let item = item.borrow();
-            if i != 0 && behaviour.output_literal_structure {
-                output.push(',');
-            }
-            if i != 0 && behaviour.add_space_between_token_trees {
-                output.push(' ');
-            }
-            item.as_ref_value()
-                .concat_recursive_into(output, behaviour)?;
-        }
-        if behaviour.output_literal_structure {
-            if is_empty {
-                output.push_str(literal_empty);
-            } else {
-                output.push_str(literal_end);
-            }
-        }
-        Ok(())
+#[derive(Clone)]
+struct StreamValueIterator(OutputStreamIntoIter);
+
+impl PreinterpretIterator for StreamValueIterator {
+    type Item = AnyValue;
+    fn do_next(&mut self, _: &mut Interpreter) -> FunctionResult<Option<AnyValue>> {
+        Ok(Iterator::next(&mut self.0).map(|segment| {
+            let stream: OutputStream = segment.into();
+            stream.coerce_into_value()
+        }))
+    }
+    fn do_size_hint(&self) -> (usize, Option<usize>) {
+        Iterator::size_hint(&self.0)
     }
 }
 
-impl IsValueContent for IteratorValueInner {
+impl PreinterpretIterator for IteratorValue {
+    type Item = AnyValue;
+    fn do_next(&mut self, interpreter: &mut Interpreter) -> FunctionResult<Option<AnyValue>> {
+        self.inner.do_next(interpreter)
+    }
+    fn do_size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.do_size_hint()
+    }
+}
+
+impl IsValueContent for ValueIterator {
     type Type = IteratorType;
     type Form = BeOwned;
 }
 
-impl IntoValueContent<'static> for IteratorValueInner {
+impl IntoValueContent<'static> for ValueIterator {
     fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
         IteratorValue::new(self)
-    }
-}
-
-impl IsValueContent for Box<dyn ClonableIterator<Item = AnyValue>> {
-    type Type = IteratorType;
-    type Form = BeOwned;
-}
-
-impl IntoValueContent<'static> for Box<dyn ClonableIterator<Item = AnyValue>> {
-    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
-        IteratorValue::new_custom(self)
     }
 }
 
@@ -231,85 +196,64 @@ impl ValuesEqual for IteratorValue {
     }
 }
 
-#[derive(Clone)]
-enum IteratorValueInner {
-    // We Box these so that Value is smaller on the stack
-    Vec(Box<<Vec<AnyValue> as IntoIterator>::IntoIter>),
-    Stream(Box<<OutputStream as IntoIterator>::IntoIter>),
-    Other(Box<dyn ClonableIterator<Item = AnyValue>>),
-}
-
-impl Iterator for IteratorValue {
-    type Item = AnyValue;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match &mut self.iterator {
-            IteratorValueInner::Vec(iter) => iter.next(),
-            IteratorValueInner::Stream(iter) => {
-                let item = iter.next()?;
-                let stream: OutputStream = item.into();
-                Some(stream.coerce_into_value())
-            }
-            IteratorValueInner::Other(iter) => iter.next(),
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        match &self.iterator {
-            IteratorValueInner::Vec(iter) => iter.size_hint(),
-            IteratorValueInner::Stream(iter) => iter.size_hint(),
-            IteratorValueInner::Other(iter) => iter.size_hint(),
-        }
-    }
-}
-
-impl Iterator for Mutable<IteratorValue> {
-    type Item = AnyValue;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let this: &mut IteratorValue = &mut *self;
-        this.next()
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let this: &IteratorValue = self;
-        this.size_hint()
-    }
-}
-
 define_type_features! {
     impl IteratorType,
     pub(crate) mod iterator_interface {
         methods {
-            fn next(mut this: Mutable<IteratorValue>) -> AnyValue {
-                match this.next() {
-                    Some(value) => value,
-                    None => ().into_any_value(),
+            [context] fn next(mut this: Mutable<IteratorValue>) -> FunctionResult<AnyValue> {
+                match this.do_next(context.interpreter)? {
+                    Some(value) => Ok(value),
+                    None => Ok(().into_any_value()),
                 }
             }
 
-            fn skip(mut this: IteratorValue, n: OptionalSuffix<usize>) -> IteratorValue {
-                // We make this greedy instead of lazy because the Skip iterator is not clonable.
-                // We return an iterator for forwards compatibility in case we change it.
-                for _ in 0..n.0 {
-                    if this.next().is_none() {
-                        break;
-                    }
-                }
-                this
+            fn skip(this: IteratorValue, n: OptionalSuffix<usize>) -> ValueIterator {
+                this.do_skip(n.0).boxed()
             }
 
-            fn take(this: IteratorValue, n: OptionalSuffix<usize>) -> IteratorValue {
-                // We collect to a vec to satisfy the clonability requirement,
-                // but only return an iterator for forwards compatibility in case we change it.
-                let taken = this.take(n.0).collect::<Vec<_>>();
-                IteratorValue::new_for_array(ArrayValue::new(taken))
+            fn take(this: IteratorValue, n: OptionalSuffix<usize>) -> ValueIterator {
+                this.do_take(n.0).boxed()
+            }
+
+            [context] fn map(this: IteratorValue, function: FunctionValue) -> IteratorValue {
+                let inner = this.into_inner();
+                let span = context.output_span_range;
+                let f = move |item: AnyValue, interpreter: &mut Interpreter| -> FunctionResult<AnyValue> {
+                    let mut ctx = FunctionCallContext { interpreter, output_span_range: span };
+                    let argument = Spanned(ArgumentValue::Owned(item), span);
+                    let result = function.clone().invoke(vec![argument], &mut ctx)?;
+                    let owned = RequestedOwnership::owned()
+                        .map_from_returned(result)?
+                        .0
+                        .expect_owned();
+                    Ok(owned)
+                };
+                IteratorValue::new(Box::new(MapIterator::new(inner, f)))
+            }
+
+            [context] fn filter(this: IteratorValue, function: FunctionValue) -> IteratorValue {
+                let inner = this.into_inner();
+                let span = context.output_span_range;
+                let f = move |item: &AnyValue, interpreter: &mut Interpreter| -> FunctionResult<bool> {
+                    let mut ctx = FunctionCallContext { interpreter, output_span_range: span };
+                    let argument = Spanned(ArgumentValue::Owned(item.clone()), span);
+                    let result = function.clone().invoke(vec![argument], &mut ctx)?;
+                    let owned = RequestedOwnership::owned()
+                        .map_from_returned(result)?
+                        .0
+                        .expect_owned();
+                    let keep: bool = owned
+                        .spanned(span)
+                        .resolve_as("The result of a filter predicate")?;
+                    Ok(keep)
+                };
+                IteratorValue::new(Box::new(FilterIterator::new(inner, f)))
             }
         }
         unary_operations {
-            [context] fn cast_singleton_to_value(Spanned(this, span): Spanned<IteratorValue>) -> ExecutionResult<ReturnedValue> {
-                match this.singleton_value() {
-                    Some(value) => Ok(context.operation.evaluate(Spanned(value, span))?.0),
+            [context] fn cast_singleton_to_value(Spanned(this, span): Spanned<IteratorValue>) -> FunctionResult<ReturnedValue> {
+                match this.singleton_value(context.interpreter)? {
+                    Some(value) => Ok(context.operation.evaluate(Spanned(value, span), context.interpreter)?.0),
                     None => span.value_err("Only an iterator with one item can be cast to this value"),
                 }
             }

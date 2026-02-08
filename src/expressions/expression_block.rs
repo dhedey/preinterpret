@@ -29,13 +29,13 @@ impl HasSpanRange for EmbeddedExpression {
     }
 }
 
-impl Interpret for EmbeddedExpression {
-    fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        let value = self.content.evaluate_shared(interpreter)?;
+impl OutputToStream for EmbeddedExpression {
+    fn output_to_stream(&self, output: &mut OutputInterpreter) -> ExecutionResult<()> {
+        let value = output.with_interpreter(|i| self.content.evaluate_shared(i))?;
         value.as_ref_value().output_to(
             Grouping::Flattened,
-            &mut ToStreamContext::new(interpreter.output(self)?, self.span_range()),
-        )
+            &mut ToStreamContext::new(output, self.span_range()),
+        ).into_execution_result()
     }
 }
 
@@ -68,17 +68,19 @@ impl HasSpanRange for EmbeddedStatements {
     }
 }
 
-impl Interpret for EmbeddedStatements {
-    fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        let value = self
-            .content
-            .evaluate_spanned(interpreter, self.span_range(), RequestedOwnership::shared())?
+impl OutputToStream for EmbeddedStatements {
+    fn output_to_stream(&self, output: &mut OutputInterpreter) -> ExecutionResult<()> {
+        let value = output
+            .with_interpreter(|i| {
+                self.content
+                    .evaluate_spanned(i, self.span_range(), RequestedOwnership::shared())
+            })?
             .0
             .expect_shared();
         value.as_ref_value().output_to(
             Grouping::Flattened,
-            &mut ToStreamContext::new(interpreter.output(self)?, self.span_range()),
-        )
+            &mut ToStreamContext::new(output, self.span_range()),
+        ).into_execution_result()
     }
 }
 
