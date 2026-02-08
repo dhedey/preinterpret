@@ -511,9 +511,7 @@ impl IterableRangeOf<AnyValue> {
 }
 
 impl ResolvableRange for UntypedInteger {
-    fn resolve(
-        definition: IterableRangeOf<UntypedInteger>,
-    ) -> FunctionResult<ValueIterator> {
+    fn resolve(definition: IterableRangeOf<UntypedInteger>) -> FunctionResult<ValueIterator> {
         match definition {
             IterableRangeOf::RangeFromTo { start, dots, end } => {
                 let start = start.into_fallback();

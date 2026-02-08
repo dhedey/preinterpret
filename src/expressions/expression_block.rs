@@ -32,10 +32,13 @@ impl HasSpanRange for EmbeddedExpression {
 impl OutputToStream for EmbeddedExpression {
     fn output_to_stream(&self, output: &mut OutputInterpreter) -> ExecutionResult<()> {
         let value = output.with_interpreter(|i| self.content.evaluate_shared(i))?;
-        value.as_ref_value().output_to(
-            Grouping::Flattened,
-            &mut ToStreamContext::new(output, self.span_range()),
-        ).into_execution_result()
+        value
+            .as_ref_value()
+            .output_to(
+                Grouping::Flattened,
+                &mut ToStreamContext::new(output, self.span_range()),
+            )
+            .into_execution_result()
     }
 }
 
@@ -77,10 +80,13 @@ impl OutputToStream for EmbeddedStatements {
             })?
             .0
             .expect_shared();
-        value.as_ref_value().output_to(
-            Grouping::Flattened,
-            &mut ToStreamContext::new(output, self.span_range()),
-        ).into_execution_result()
+        value
+            .as_ref_value()
+            .output_to(
+                Grouping::Flattened,
+                &mut ToStreamContext::new(output, self.span_range()),
+            )
+            .into_execution_result()
     }
 }
 

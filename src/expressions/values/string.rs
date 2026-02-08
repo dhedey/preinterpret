@@ -60,10 +60,8 @@ pub(crate) fn string_to_literal(
     span: Span,
 ) -> FunctionResult<Literal> {
     let literal = Literal::from_str(str).map_err(|err| {
-        error_source.value_error::<FunctionError>(format!(
-            "`{}` is not a valid literal: {:?}",
-            str, err
-        ))
+        error_source
+            .value_error::<FunctionError>(format!("`{}` is not a valid literal: {:?}", str, err))
     })?;
     Ok(literal.with_span(span))
 }

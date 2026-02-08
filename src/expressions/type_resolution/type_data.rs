@@ -232,8 +232,7 @@ impl FunctionInterface {
             },
             FunctionInterface::ArityAny { method, .. } => method(context, arguments),
         };
-        output_value
-            .map(|v| v.spanned(context.output_span_range))
+        output_value.map(|v| v.spanned(context.output_span_range))
     }
 
     /// Returns (argument_ownerships, required_argument_count)

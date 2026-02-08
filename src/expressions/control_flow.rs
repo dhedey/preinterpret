@@ -538,7 +538,9 @@ impl Evaluate for AttemptExpression {
                 |interpreter| -> ExecutionResult<()> {
                     arm.lhs
                         .evaluate_owned(interpreter)?
-                        .downcast_resolve::<()>("The returned value from the left half of an attempt arm")
+                        .downcast_resolve::<()>(
+                            "The returned value from the left half of an attempt arm",
+                        )
                         .into_execution_result()
                 },
                 guard_clause(arm.guard.as_ref()),

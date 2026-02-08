@@ -111,15 +111,13 @@ impl UntypedInteger {
 impl Spanned<UntypedInteger> {
     pub(crate) fn into_kind(self, kind: IntegerLeafKind) -> FunctionResult<IntegerValue> {
         let Spanned(value, span_range) = self;
-        value
-            .try_into_kind(kind)
-            .ok_or_else(|| -> FunctionError {
-                span_range.value_error(format!(
-                    "The integer value {} does not fit into {}",
-                    value.0,
-                    kind.articled_value_name()
-                ))
-            })
+        value.try_into_kind(kind).ok_or_else(|| -> FunctionError {
+            span_range.value_error(format!(
+                "The integer value {} does not fit into {}",
+                value.0,
+                kind.articled_value_name()
+            ))
+        })
     }
 }
 
@@ -272,10 +270,7 @@ impl ResolvableOwned<AnyValue> for UntypedIntegerFallback {
 }
 
 impl ResolvableOwned<IntegerValue> for UntypedInteger {
-    fn resolve_from_value(
-        value: IntegerValue,
-        context: ResolutionContext,
-    ) -> FunctionResult<Self> {
+    fn resolve_from_value(value: IntegerValue, context: ResolutionContext) -> FunctionResult<Self> {
         match value {
             IntegerValue::Untyped(value) => Ok(value),
             _ => context.err("an untyped integer", value),

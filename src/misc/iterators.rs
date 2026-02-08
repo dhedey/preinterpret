@@ -64,7 +64,10 @@ pub(crate) trait PreinterpretIterator {
         }
     }
 
-    fn do_collect<T: FromIterator<Self::Item>>(self, interpreter: &mut Interpreter) -> FunctionResult<T>
+    fn do_collect<T: FromIterator<Self::Item>>(
+        self,
+        interpreter: &mut Interpreter,
+    ) -> FunctionResult<T>
     where
         Self: Sized,
     {
@@ -114,7 +117,7 @@ pub(crate) struct PreinterpretToIterator<'a, I> {
 
 impl<I: PreinterpretIterator> Iterator for PreinterpretToIterator<'_, I> {
     type Item = FunctionResult<I::Item>;
-    
+
     fn next(&mut self) -> Option<Self::Item> {
         if self.errored {
             return None;
@@ -345,10 +348,8 @@ pub(crate) fn any_items_to_string<T: Borrow<AnyValue>>(
             } else {
                 if behaviour.output_literal_structure {
                     match max {
-                        Some(max) => output.push_str(&format!(
-                            ", ..<{} further items>",
-                            max.saturating_sub(i)
-                        )),
+                        Some(max) => output
+                            .push_str(&format!(", ..<{} further items>", max.saturating_sub(i))),
                         None => output.push_str(", ..<possibly unbounded>"),
                     }
                 }
@@ -432,7 +433,8 @@ impl ZipIterators {
         span_range: SpanRange,
         interpreter: &mut Interpreter,
     ) -> FunctionResult<Self> {
-        let vec: Vec<_> = iterator.do_take(101)
+        let vec: Vec<_> = iterator
+            .do_take(101)
             .do_map(|x, _| x.spanned(span_range).resolve_any_iterator("Each zip input"))
             .do_collect(interpreter)?;
         if vec.len() == 101 {

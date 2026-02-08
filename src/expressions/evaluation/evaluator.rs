@@ -240,8 +240,7 @@ impl RequestedValue {
         map_shared: impl FnOnce(AnyValueShared) -> FunctionResult<AnyValueShared>,
         map_mutable: impl FnOnce(
             AnyValueMutable,
-        )
-            -> Result<AnyValueMutable, (FunctionError, AnyValueMutable)>,
+        ) -> Result<AnyValueMutable, (FunctionError, AnyValueMutable)>,
         map_owned: impl FnOnce(AnyValueOwned) -> FunctionResult<AnyValueOwned>,
     ) -> FunctionResult<RequestedValue> {
         Ok(match self {

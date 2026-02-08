@@ -567,10 +567,7 @@ impl Spanned<AnyValue> {
         }
     }
 
-    pub(crate) fn into_stream(
-        self,
-        interpreter: &mut Interpreter,
-    ) -> FunctionResult<OutputStream> {
+    pub(crate) fn into_stream(self, interpreter: &mut Interpreter) -> FunctionResult<OutputStream> {
         let Spanned(value, span_range) = self;
         value.into_stream(Grouping::Flattened, span_range, interpreter)
     }

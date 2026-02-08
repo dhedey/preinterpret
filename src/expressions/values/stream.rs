@@ -548,10 +548,13 @@ impl OutputToStream for ConcatenatedStreamLiteral {
                 string_to_literal(str, self, ident_span)?.into_any_value()
             }
         };
-        value.as_ref_value().output_to(
-            Grouping::Flattened,
-            &mut ToStreamContext::new(output, self.span_range()),
-        ).into_execution_result()
+        value
+            .as_ref_value()
+            .output_to(
+                Grouping::Flattened,
+                &mut ToStreamContext::new(output, self.span_range()),
+            )
+            .into_execution_result()
     }
 }
 

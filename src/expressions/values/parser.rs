@@ -55,7 +55,7 @@ impl Spanned<Shared<ParserHandle>> {
         interpreter: &'i mut Interpreter,
     ) -> FunctionResult<OutputParseStream<'i>> {
         let Spanned(handle, span) = self;
-        Ok(interpreter.parser(**handle, *span)?)
+        interpreter.parser(**handle, *span)
     }
 
     pub(crate) fn parse_with<T, E>(

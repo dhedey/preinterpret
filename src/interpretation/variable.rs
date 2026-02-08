@@ -128,10 +128,13 @@ impl VariableReference {
         grouping: Grouping,
     ) -> ExecutionResult<()> {
         let value = output.with_interpreter(|i| self.resolve_shared(i))?;
-        value.as_ref_value().output_to(
-            grouping,
-            &mut ToStreamContext::new(output, self.span_range()),
-        ).into_execution_result()
+        value
+            .as_ref_value()
+            .output_to(
+                grouping,
+                &mut ToStreamContext::new(output, self.span_range()),
+            )
+            .into_execution_result()
     }
 
     pub(crate) fn resolve_late_bound(
