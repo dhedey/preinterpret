@@ -237,20 +237,23 @@ Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
   - [x] Allow shared / mutable arguments
   - [x] Add tests for shared/mutable, including conversions working and not
 - [ ] Iterable methods:
-  - [ ] Unpick `feat/iterable-map` and work our what we want to keep:
-    * Salvage half-baked `FunctionValue` changes to allow invocation
-    * Separation of `ExecutionInterrupt` and `FunctionError` - incorporated below
-    * `Iterator` returns `Result` change -> replaced with below
+  - [x] Unpick `feat/iterable-map` and work our what we want to keep:
+    - [x] Separation of `ExecutionInterrupt` and `FunctionError` - incorporated below
+    - [x] `Iterator` returns `Result` change -> replaced with below
   * To implement `.map()`, we have a few things we need first:
-    - An iterator trait where Interpreter is passed at next time.
-    - Possibly - not require `Clone` on iterators:
+    -[x] An iterator trait where Interpreter is passed at next time.
+    -[ ] Possibly - not require `Clone` on iterators:
       - Make `TryClone -> Result<T, &T>`
       - Make `to_string` for iterator return `Iterator[?]`
-  - [ ] Create new iterator trait `PreinterpretIterator` and `IntoPreinterpretIterator` with `.next(&mut Interpreter)`
-    - [ ] Blanket implement it for `Iterator<AnyValue> + Clone`
-    - [ ] Then replace e.g. for loop impl with it.
-    - [ ] Create `Map` and `Filter` types on top of it, to be able to implement `map` and `filter`
+  - [x] Create new iterator trait `PreinterpretIterator` and `IntoPreinterpretIterator` with `.next(&mut Interpreter)`
+    - [x] Blanket implement it for `Iterator<AnyValue> + Clone`
+    - [x] Then replace e.g. for loop impl with it.
+    - [x] Create `Map` and `Filter` types on top of it, to be able to implement `map` and `filter`
+  - [ ] See if new iterators on iterator value can be fixed to be lazy
+  - [ ] Salvage half-baked `FunctionValue` changes to allow invocation
+  - [ ] Consider if IteratorValue should have `Item = ReturnedValue`
   - [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`
+  - [ ] Add tests for iterable methods
 - [ ] Add `array.sort`, `array.sort_by`
 - [ ] Look into if a closure like `|| { }()` can evade `attempt` block statue mutation checks. Maybe lean into it as a way to avoid htem, and mention it in the error message
 - [ ] Resolve all `TODO[functions]`
