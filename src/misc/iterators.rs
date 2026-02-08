@@ -146,7 +146,7 @@ pub(crate) trait BoxedIterator: 'static + PreinterpretIterator {
     fn clone_box(&self) -> Box<dyn BoxedIterator<Item = Self::Item>>;
 }
 
-impl<T: ?Sized + PreinterpretIterator + 'static + Clone> BoxedIterator for T {
+impl<T: PreinterpretIterator + 'static + Clone> BoxedIterator for T {
     fn clone_box(&self) -> Box<dyn BoxedIterator<Item = Self::Item>> {
         Box::new(self.clone())
     }
