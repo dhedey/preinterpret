@@ -251,7 +251,6 @@ Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
     - [x] Create `Map` and `Filter` types on top of it, to be able to implement `map` and `filter`
   - [ ] See if new iterators on iterator value can be fixed to be lazy
   - [ ] Salvage half-baked `FunctionValue` changes to allow invocation
-  - [ ] Consider if IteratorValue should have `Item = ReturnedValue`
   - [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`
   - [ ] Add tests for iterable methods
 - [ ] Add `array.sort`, `array.sort_by`
@@ -269,6 +268,51 @@ Possible punted:
 - [ ] Support for `move()` expressions in closures.
   - `move(x)` / `move(a.b.as_ref())` / `move(a.b.as_mut())` => we hoist up the content into the previous frame (effectively temporarily change `current_frame_id` to be the parent in the `FlowAnalysisState` - pretty easy).
   - These can be an anonymous definition in the root frame of the closure, which is referenced inline.
+
+## Fix broken "Disabled" abstraction
+
+Suddenly dawned on me - my Disabled arguments might not be safe.
+* Imagine if I get `my_arr = [[]]` a Shared `my_arr[0]` then do `my_arr.pop()`
+* Then we enable `my_arr[0]` and get a use after free(!!). e.g. `my_arr[0].push(my_arr.pop())`.
+
+Instead, as per Rust two-phase borrows https://rustc-dev-guide.rust-lang.org/borrow-check/two-phase-borrows.html -
+- We shouldn't be able to disable a `Shared`
+- A `Disabled<Mutable>` becomes a `Shared`...
+
+I have a branch `spike/fix-disabled-abstraction` to explore this... Which converts a Shared back to a Mutable (which I think is technically UB and can't be done without it). Regardless, it works for a spike, and we get a few failures:
+* `stream_append_can_use_self_in_appender` - these are OK to fail!
+* This test is *not* OK to fail:
+```rust
+#[test]
+fn can_pass_owned_to_mutable_argument() {
+    run! {
+        let push_twice_and_return_mut = |arr: &mut any| {
+            arr.push(0);
+            arr.push(0);
+            arr
+        };
+        %[_].assert_eq(push_twice_and_return_mut([1, 2, 3]).len(), 5);
+    }
+}
+```
+
+The issue is that we get a variable stored as `arr := DisabledMutable` and then when we do `arr.push()` we clone the DisabledMutable, and then enable it...
+What we actually need is a sense of "Delegating" the mut-ness to a new `Mutable`, which then on drop re-enables its parent.
+
+... actually in our model, really the bug only appears if:
+* A *parent* gets modified, which breaks our pointer
+* We have a `&mut T` for some `T != any` and someone assigns to `self as &mut any` a different type
+
+We could imagine a world where we are more clever over our mutation:
+* From a referenceable root (wrapping an `UnsafeCell<AnyValue>`), we store paths => pointers
+* It is illegal to mutate if there is an existing pointer further along a path that you in either direction:
+  * A value
+  * A more specific type of the current value
+* We allow x.a and x.b to both be read/mutated independently
+  * I can reference `x.a` and `x.b` separately, or `x[0]` and `x[1]` but in that case, can't mutate `x` itself to create new fields.
+* We track a path to which pointers are active; and don't allow mutations which could break existing pointers.
+
+- [ ] Consider if IteratorValue, Object and Array should have `Item = DisabledReturnedValue`
 
 ## Parser - Methods using closures
 
