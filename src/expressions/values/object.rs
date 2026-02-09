@@ -8,11 +8,11 @@ define_leaf_type! {
     articled_value_name: "an object",
     dyn_impls: {
         IterableType: impl IsIterable {
-            fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
+            fn into_iterator(self: Box<Self>) -> FunctionResult<IteratorValue> {
                 Ok(IteratorValue::new_for_object(*self))
             }
 
-            fn len(&self, _error_span_range: SpanRange) -> ExecutionResult<usize> {
+            fn iterable_len(&self, _error_span_range: SpanRange) -> FunctionResult<usize> {
                 Ok(self.entries.len())
             }
         }
@@ -42,12 +42,12 @@ pub(crate) struct ObjectEntry {
 }
 
 impl ObjectValue {
-    pub(super) fn into_indexed(mut self, index: Spanned<AnyValueRef>) -> ExecutionResult<AnyValue> {
+    pub(super) fn into_indexed(mut self, index: Spanned<AnyValueRef>) -> FunctionResult<AnyValue> {
         let key = index.downcast_resolve("An object key")?;
         Ok(self.remove_or_none(key))
     }
 
-    pub(super) fn into_property(mut self, access: &PropertyAccess) -> ExecutionResult<AnyValue> {
+    pub(super) fn into_property(mut self, access: &PropertyAccess) -> FunctionResult<AnyValue> {
         let key = access.property.to_string();
         Ok(self.remove_or_none(&key))
     }
@@ -76,16 +76,16 @@ impl ObjectValue {
         &mut self,
         index: Spanned<AnyValueRef>,
         auto_create: bool,
-    ) -> ExecutionResult<&mut AnyValue> {
+    ) -> FunctionResult<&mut AnyValue> {
         let index: Spanned<&str> = index.downcast_resolve("An object key")?;
         self.mut_entry(index.map(|s| s.to_string()), auto_create)
     }
 
-    pub(super) fn index_ref(&self, index: Spanned<AnyValueRef>) -> ExecutionResult<&AnyValue> {
+    pub(super) fn index_ref(&self, index: Spanned<AnyValueRef>) -> FunctionResult<&AnyValue> {
         let key: Spanned<&str> = index.downcast_resolve("An object key")?;
         match self.entries.get(*key) {
             Some(entry) => Ok(&entry.value),
-            None => Ok(&AnyValue::None(())),
+            None => Ok(static_none_ref()),
         }
     }
 
@@ -93,18 +93,18 @@ impl ObjectValue {
         &mut self,
         access: &PropertyAccess,
         auto_create: bool,
-    ) -> ExecutionResult<&mut AnyValue> {
+    ) -> FunctionResult<&mut AnyValue> {
         self.mut_entry(
             access.property.to_string().spanned(access.property.span()),
             auto_create,
         )
     }
 
-    pub(super) fn property_ref(&self, access: &PropertyAccess) -> ExecutionResult<&AnyValue> {
+    pub(super) fn property_ref(&self, access: &PropertyAccess) -> FunctionResult<&AnyValue> {
         let key = access.property.to_string();
         match self.entries.get(&key) {
             Some(entry) => Ok(&entry.value),
-            None => Ok(&AnyValue::None(())),
+            None => Ok(static_none_ref()),
         }
     }
 
@@ -112,7 +112,7 @@ impl ObjectValue {
         &mut self,
         Spanned(key, key_span): Spanned<String>,
         auto_create: bool,
-    ) -> ExecutionResult<&mut AnyValue> {
+    ) -> FunctionResult<&mut AnyValue> {
         use std::collections::btree_map::*;
         Ok(match self.entries.entry(key) {
             Entry::Occupied(entry) => &mut entry.into_mut().value,
@@ -138,7 +138,8 @@ impl ObjectValue {
         &self,
         output: &mut String,
         behaviour: &ConcatBehaviour,
-    ) -> ExecutionResult<()> {
+        interpreter: &mut Interpreter,
+    ) -> FunctionResult<()> {
         if !behaviour.use_debug_literal_syntax {
             return behaviour
                 .error_span_range
@@ -176,7 +177,7 @@ impl ObjectValue {
             entry
                 .value
                 .as_ref_value()
-                .concat_recursive_into(output, behaviour)?;
+                .concat_recursive_into(output, behaviour, interpreter)?;
             is_first = false;
         }
         if behaviour.output_literal_structure {
@@ -214,7 +215,7 @@ impl ValuesEqual for ObjectValue {
 }
 
 impl Spanned<&ObjectValue> {
-    pub(crate) fn validate(&self, validation: &impl ObjectValidate) -> ExecutionResult<()> {
+    pub(crate) fn validate(&self, validation: &impl ObjectValidate) -> FunctionResult<()> {
         let mut missing_fields = Vec::new();
         for (field_name, _) in validation.required_fields() {
             match self.entries.get(field_name) {
@@ -275,11 +276,11 @@ define_type_features! {
     impl ObjectType,
     pub(crate) mod object_interface {
         methods {
-            [context] fn zip(this: ObjectValue) -> ExecutionResult<ArrayValue> {
+            [context] fn zip(this: ObjectValue) -> FunctionResult<ArrayValue> {
                 ZipIterators::new_from_object(this, context.span_range())?.run_zip(context.interpreter, true)
             }
 
-            [context] fn zip_truncated(this: ObjectValue) -> ExecutionResult<ArrayValue> {
+            [context] fn zip_truncated(this: ObjectValue) -> FunctionResult<ArrayValue> {
                 ZipIterators::new_from_object(this, context.span_range())?.run_zip(context.interpreter, false)
             }
         }
@@ -342,7 +343,6 @@ pub(crate) trait ObjectValidate {
     }
 
     fn describe_object(&self) -> String {
-        use std::fmt::Write;
         let mut buffer = String::new();
         buffer.write_str("%{\n").unwrap();
         for (key, definition) in self.all_fields() {

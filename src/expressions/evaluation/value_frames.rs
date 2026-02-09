@@ -95,7 +95,7 @@ impl Clone for DisabledArgumentValue {
 
 impl DisabledArgumentValue {
     /// Re-enables this disabled argument value by re-acquiring any borrow.
-    pub(crate) fn enable(self, span: SpanRange) -> ExecutionResult<ArgumentValue> {
+    pub(crate) fn enable(self, span: SpanRange) -> FunctionResult<ArgumentValue> {
         match self {
             DisabledArgumentValue::Owned(owned) => Ok(ArgumentValue::Owned(owned)),
             DisabledArgumentValue::CopyOnWrite(copy_on_write) => {
@@ -206,14 +206,14 @@ impl RequestedOwnership {
         )
     }
 
-    pub(crate) fn map_none(self, span: SpanRange) -> ExecutionResult<Spanned<RequestedValue>> {
+    pub(crate) fn map_none(self, span: SpanRange) -> FunctionResult<Spanned<RequestedValue>> {
         self.map_from_owned(Spanned(().into_any_value(), span))
     }
 
     pub(crate) fn map_from_late_bound(
         &self,
         Spanned(late_bound, span): Spanned<LateBoundValue>,
-    ) -> ExecutionResult<Spanned<RequestedValue>> {
+    ) -> FunctionResult<Spanned<RequestedValue>> {
         Ok(match self {
             RequestedOwnership::LateBound => RequestedValue::LateBound(late_bound),
             RequestedOwnership::Concrete(argument_ownership) => {
@@ -227,7 +227,7 @@ impl RequestedOwnership {
     pub(crate) fn map_from_argument(
         &self,
         Spanned(value, span): Spanned<ArgumentValue>,
-    ) -> ExecutionResult<Spanned<RequestedValue>> {
+    ) -> FunctionResult<Spanned<RequestedValue>> {
         match value {
             ArgumentValue::Owned(owned) => self.map_from_owned(Spanned(owned, span)),
             ArgumentValue::Mutable(mutable) => self.map_from_mutable(Spanned(mutable, span)),
@@ -242,7 +242,7 @@ impl RequestedOwnership {
     pub(crate) fn map_from_returned(
         &self,
         Spanned(value, span): Spanned<ReturnedValue>,
-    ) -> ExecutionResult<Spanned<RequestedValue>> {
+    ) -> FunctionResult<Spanned<RequestedValue>> {
         match value {
             ReturnedValue::Owned(owned) => self.map_from_owned(Spanned(owned, span)),
             ReturnedValue::Mutable(mutable) => self.map_from_mutable(Spanned(mutable, span)),
@@ -257,7 +257,7 @@ impl RequestedOwnership {
     pub(crate) fn map_from_requested(
         &self,
         Spanned(requested, span): Spanned<RequestedValue>,
-    ) -> ExecutionResult<Spanned<RequestedValue>> {
+    ) -> FunctionResult<Spanned<RequestedValue>> {
         match requested {
             RequestedValue::Owned(owned) => self.map_from_owned(Spanned(owned, span)),
             RequestedValue::Shared(shared) => self.map_from_shared(Spanned(shared, span)),
@@ -278,7 +278,7 @@ impl RequestedOwnership {
     pub(crate) fn map_from_owned(
         &self,
         Spanned(value, span): Spanned<AnyValue>,
-    ) -> ExecutionResult<Spanned<RequestedValue>> {
+    ) -> FunctionResult<Spanned<RequestedValue>> {
         Ok(Spanned(
             match self {
                 RequestedOwnership::LateBound => {
@@ -298,7 +298,7 @@ impl RequestedOwnership {
     pub(crate) fn map_from_copy_on_write(
         &self,
         Spanned(cow, span): Spanned<CopyOnWriteValue>,
-    ) -> ExecutionResult<Spanned<RequestedValue>> {
+    ) -> FunctionResult<Spanned<RequestedValue>> {
         Ok(Spanned(
             match self {
                 RequestedOwnership::LateBound => {
@@ -315,7 +315,7 @@ impl RequestedOwnership {
     pub(crate) fn map_from_mutable(
         &self,
         Spanned(mutable, span): Spanned<AnyValueMutable>,
-    ) -> ExecutionResult<Spanned<RequestedValue>> {
+    ) -> FunctionResult<Spanned<RequestedValue>> {
         Ok(Spanned(
             match self {
                 RequestedOwnership::LateBound => {
@@ -332,7 +332,7 @@ impl RequestedOwnership {
     pub(crate) fn map_from_assignee(
         &self,
         Spanned(assignee, span): Spanned<AssigneeValue>,
-    ) -> ExecutionResult<Spanned<RequestedValue>> {
+    ) -> FunctionResult<Spanned<RequestedValue>> {
         Ok(Spanned(
             match self {
                 RequestedOwnership::LateBound => {
@@ -349,7 +349,7 @@ impl RequestedOwnership {
     pub(crate) fn map_from_shared(
         &self,
         Spanned(shared, span): Spanned<SharedValue>,
-    ) -> ExecutionResult<Spanned<RequestedValue>> {
+    ) -> FunctionResult<Spanned<RequestedValue>> {
         Ok(Spanned(
             match self {
                 RequestedOwnership::LateBound => RequestedValue::LateBound(
@@ -421,7 +421,7 @@ impl ArgumentOwnership {
     pub(crate) fn map_from_late_bound(
         &self,
         Spanned(late_bound, span): Spanned<LateBoundValue>,
-    ) -> ExecutionResult<ArgumentValue> {
+    ) -> FunctionResult<ArgumentValue> {
         match late_bound {
             LateBoundValue::Owned(owned) => self.map_from_owned_with_is_last_use(
                 Spanned(owned.owned, span),
@@ -433,17 +433,21 @@ impl ArgumentOwnership {
             LateBoundValue::Mutable(mutable) => {
                 self.map_from_mutable_inner(Spanned(mutable, span), true)
             }
-            LateBoundValue::Shared(late_bound_shared) => self
-                .map_from_shared_with_error_reason(Spanned(late_bound_shared.shared, span), |_| {
-                    ExecutionInterrupt::ownership_error(late_bound_shared.reason_not_mutable)
-                }),
+            LateBoundValue::Shared(late_bound_shared) => self.map_from_shared_with_error_reason(
+                Spanned(late_bound_shared.shared, span),
+                |_| {
+                    FunctionError::new(ExecutionInterrupt::ownership_error(
+                        late_bound_shared.reason_not_mutable,
+                    ))
+                },
+            ),
         }
     }
 
     pub(crate) fn map_from_copy_on_write(
         &self,
         Spanned(copy_on_write, span): Spanned<CopyOnWriteValue>,
-    ) -> ExecutionResult<ArgumentValue> {
+    ) -> FunctionResult<ArgumentValue> {
         match self {
             ArgumentOwnership::Owned => Ok(ArgumentValue::Owned(
                 copy_on_write.clone_to_owned_transparently(span)?,
@@ -474,7 +478,7 @@ impl ArgumentOwnership {
     pub(crate) fn map_from_shared(
         &self,
         shared: Spanned<SharedValue>,
-    ) -> ExecutionResult<ArgumentValue> {
+    ) -> FunctionResult<ArgumentValue> {
         self.map_from_shared_with_error_reason(
             shared,
             |span| span.ownership_error("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone().as_mut()` to get a mutable reference."),
@@ -484,8 +488,8 @@ impl ArgumentOwnership {
     fn map_from_shared_with_error_reason(
         &self,
         Spanned(shared, span): Spanned<SharedValue>,
-        mutable_error: impl FnOnce(SpanRange) -> ExecutionInterrupt,
-    ) -> ExecutionResult<ArgumentValue> {
+        mutable_error: impl FnOnce(SpanRange) -> FunctionError,
+    ) -> FunctionResult<ArgumentValue> {
         match self {
             ArgumentOwnership::Owned => Ok(ArgumentValue::Owned(
                 Spanned(shared, span).transparent_clone()?,
@@ -504,14 +508,14 @@ impl ArgumentOwnership {
     pub(crate) fn map_from_mutable(
         &self,
         spanned_mutable: Spanned<AnyValueMutable>,
-    ) -> ExecutionResult<ArgumentValue> {
+    ) -> FunctionResult<ArgumentValue> {
         self.map_from_mutable_inner(spanned_mutable, false)
     }
 
     pub(crate) fn map_from_assignee(
         &self,
         Spanned(assignee, span): Spanned<AssigneeValue>,
-    ) -> ExecutionResult<ArgumentValue> {
+    ) -> FunctionResult<ArgumentValue> {
         self.map_from_mutable_inner(Spanned(assignee.0, span), false)
     }
 
@@ -519,7 +523,7 @@ impl ArgumentOwnership {
         &self,
         Spanned(mutable, span): Spanned<AnyValueMutable>,
         is_late_bound: bool,
-    ) -> ExecutionResult<ArgumentValue> {
+    ) -> FunctionResult<ArgumentValue> {
         match self {
             ArgumentOwnership::Owned => {
                 if is_late_bound {
@@ -541,10 +545,7 @@ impl ArgumentOwnership {
         }
     }
 
-    pub(crate) fn map_from_owned(
-        &self,
-        owned: Spanned<AnyValue>,
-    ) -> ExecutionResult<ArgumentValue> {
+    pub(crate) fn map_from_owned(&self, owned: Spanned<AnyValue>) -> FunctionResult<ArgumentValue> {
         self.map_from_owned_with_is_last_use(owned, false)
     }
 
@@ -552,7 +553,7 @@ impl ArgumentOwnership {
         &self,
         Spanned(owned, span): Spanned<AnyValue>,
         is_from_last_use: bool,
-    ) -> ExecutionResult<ArgumentValue> {
+    ) -> FunctionResult<ArgumentValue> {
         match self {
             ArgumentOwnership::Owned | ArgumentOwnership::AsIs => Ok(ArgumentValue::Owned(owned)),
             ArgumentOwnership::CopyOnWrite => {
@@ -831,7 +832,7 @@ impl EvaluationFrame for UnaryOperationBuilder {
 
     fn handle_next(
         self,
-        context: ValueContext,
+        mut context: ValueContext,
         operand: Spanned<RequestedValue>,
     ) -> ExecutionResult<NextAction> {
         let operand = operand.expect_late_bound();
@@ -844,8 +845,11 @@ impl EvaluationFrame for UnaryOperationBuilder {
         {
             let operand_span = operand.span_range();
             let resolved_value = operand.resolve(interface.argument_ownership())?;
-            let result =
-                interface.execute(Spanned(resolved_value, operand_span), &self.operation)?;
+            let result = interface.execute(
+                Spanned(resolved_value, operand_span),
+                &self.operation,
+                context.interpreter(),
+            )?;
             return context.return_returned_value(result);
         }
         self.operation.type_err(format!(
@@ -1488,7 +1492,7 @@ impl EvaluationFrame for InvocationBuilder {
                                 let span = arg.1;
                                 arg.try_map(|v| v.enable(span))
                             })
-                            .collect::<ExecutionResult<Vec<_>>>()?;
+                            .collect::<FunctionResult<Vec<_>>>()?;
                         (arguments, invokable, function_span)
                     }
                 };

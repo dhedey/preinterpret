@@ -297,7 +297,7 @@ fn test_range() {
         5
     );
     run! {
-        %[_].assert_eq('A'.. .into_iter().take(5).to_string(), "ABCDE");
+        %[_].assert_eq('A'.. .into_iter().take(5).to_vec().to_string(), "ABCDE");
     }
 }
 

@@ -94,6 +94,22 @@ impl OutputHandler {
         );
     }
 
+    pub(super) fn output_stack_height(&self) -> usize {
+        self.output_stack.len()
+    }
+
+    pub(super) fn current_output_unchecked(&self) -> &OutputStream {
+        self.output_stack
+            .last()
+            .expect("Output stack should never be empty")
+    }
+
+    pub(super) fn current_output_mut_unchecked(&mut self) -> &mut OutputStream {
+        self.output_stack
+            .last_mut()
+            .expect("Output stack should never be empty")
+    }
+
     fn validate_index(&self, index: usize) -> Result<(), OutputHandlerError> {
         if let Some(&(freeze_at_or_below_depth, reason)) =
             self.freeze_stack_indices_at_or_below.last()

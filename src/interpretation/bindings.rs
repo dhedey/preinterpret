@@ -74,7 +74,7 @@ impl VariableState {
         is_final: bool,
         ownership: RequestedOwnership,
         blocked_from_mutation: Option<MutationBlockReason>,
-    ) -> ExecutionResult<Spanned<LateBoundValue>> {
+    ) -> FunctionResult<Spanned<LateBoundValue>> {
         let span_range = variable_span.span_range();
 
         // If blocked from mutation, we technically could allow is_final to work and
@@ -173,18 +173,20 @@ pub(crate) struct VariableBinding {
 impl VariableBinding {
     /// Gets the cloned expression value
     /// This only works if the value can be transparently cloned
-    pub(crate) fn into_transparently_cloned(self) -> ExecutionResult<AnyValue> {
+    pub(crate) fn into_transparently_cloned(self) -> FunctionResult<AnyValue> {
         let span_range = self.variable_span.span_range();
         let shared = self.into_shared()?;
         let value = shared.as_ref().try_transparent_clone(span_range)?;
         Ok(value)
     }
 
-    fn into_mut(self) -> ExecutionResult<AnyValueMutable> {
+    fn into_mut(self) -> FunctionResult<AnyValueMutable> {
         match self.content {
             VariableContent::Referenceable(referenceable) => {
-                let inner = MutableSubRcRefCell::new(referenceable)
-                    .map_err(|_| self.variable_span.ownership_error(MUTABLE_ERROR_MESSAGE))?;
+                let inner = MutableSubRcRefCell::new(referenceable).map_err(|_| {
+                    self.variable_span
+                        .ownership_error::<FunctionError>(MUTABLE_ERROR_MESSAGE)
+                })?;
                 Ok(Mutable(inner))
             }
             VariableContent::Mutable(disabled) => disabled.enable(self.variable_span.span_range()),
@@ -194,11 +196,13 @@ impl VariableBinding {
         }
     }
 
-    fn into_shared(self) -> ExecutionResult<AnyValueShared> {
+    fn into_shared(self) -> FunctionResult<AnyValueShared> {
         match self.content {
             VariableContent::Referenceable(referenceable) => {
-                let inner = SharedSubRcRefCell::new(referenceable)
-                    .map_err(|_| self.variable_span.ownership_error(SHARED_ERROR_MESSAGE))?;
+                let inner = SharedSubRcRefCell::new(referenceable).map_err(|_| {
+                    self.variable_span
+                        .ownership_error::<FunctionError>(SHARED_ERROR_MESSAGE)
+                })?;
                 Ok(Shared(inner))
             }
             VariableContent::Mutable(mutable) => mutable
@@ -208,14 +212,15 @@ impl VariableBinding {
         }
     }
 
-    fn into_late_bound(self) -> ExecutionResult<LateBoundValue> {
+    fn into_late_bound(self) -> FunctionResult<LateBoundValue> {
         match self.content {
             VariableContent::Referenceable(referenceable) => {
                 match MutableSubRcRefCell::new(referenceable) {
                     Ok(mutable) => Ok(LateBoundValue::Mutable(Mutable(mutable))),
                     Err(referenceable) => {
                         let shared = SharedSubRcRefCell::new(referenceable).map_err(|_| {
-                            self.variable_span.ownership_error(SHARED_ERROR_MESSAGE)
+                            self.variable_span
+                                .ownership_error::<FunctionError>(SHARED_ERROR_MESSAGE)
                         })?;
                         Ok(LateBoundValue::Shared(LateBoundSharedValue::new(
                             Shared(shared),
@@ -280,7 +285,7 @@ pub(crate) enum LateBoundValue {
 }
 
 impl Spanned<LateBoundValue> {
-    pub(crate) fn resolve(self, ownership: ArgumentOwnership) -> ExecutionResult<ArgumentValue> {
+    pub(crate) fn resolve(self, ownership: ArgumentOwnership) -> FunctionResult<ArgumentValue> {
         ownership.map_from_late_bound(self)
     }
 }
@@ -293,13 +298,12 @@ impl LateBoundValue {
     /// key from an object) to still work, with the mutable error preserved as `reason_not_mutable`.
     pub(crate) fn map_any(
         self,
-        map_shared: impl FnOnce(AnyValueShared) -> ExecutionResult<AnyValueShared>,
+        map_shared: impl FnOnce(AnyValueShared) -> FunctionResult<AnyValueShared>,
         map_mutable: impl FnOnce(
             AnyValueMutable,
-        )
-            -> Result<AnyValueMutable, (ExecutionInterrupt, AnyValueMutable)>,
-        map_owned: impl FnOnce(AnyValueOwned) -> ExecutionResult<AnyValueOwned>,
-    ) -> ExecutionResult<Self> {
+        ) -> Result<AnyValueMutable, (FunctionError, AnyValueMutable)>,
+        map_owned: impl FnOnce(AnyValueOwned) -> FunctionResult<AnyValueOwned>,
+    ) -> FunctionResult<Self> {
         Ok(match self {
             LateBoundValue::Owned(owned) => LateBoundValue::Owned(LateBoundOwnedValue {
                 owned: map_owned(owned.owned)?,
@@ -446,7 +450,7 @@ impl<T: ?Sized> Clone for DisabledMutable<T> {
 
 impl<T: ?Sized> DisabledMutable<T> {
     /// Re-enables this disabled mutable reference by re-acquiring the borrow.
-    pub(crate) fn enable(self, span: SpanRange) -> ExecutionResult<Mutable<T>> {
+    pub(crate) fn enable(self, span: SpanRange) -> FunctionResult<Mutable<T>> {
         self.0
             .enable()
             .map(Mutable)
@@ -464,7 +468,7 @@ pub(crate) static SHARED_TO_MUTABLE_ERROR_MESSAGE: &str =
     "The variable cannot be modified as it is a shared reference";
 
 impl Spanned<AnyValueMutable> {
-    pub(crate) fn transparent_clone(&self) -> ExecutionResult<AnyValue> {
+    pub(crate) fn transparent_clone(&self) -> FunctionResult<AnyValue> {
         let value = self.0.as_ref().try_transparent_clone(self.1)?;
         Ok(value)
     }
@@ -569,7 +573,7 @@ impl<T: ?Sized> Clone for DisabledShared<T> {
 
 impl<T: ?Sized> DisabledShared<T> {
     /// Re-enables this disabled shared reference by re-acquiring the borrow.
-    pub(crate) fn enable(self, span: SpanRange) -> ExecutionResult<Shared<T>> {
+    pub(crate) fn enable(self, span: SpanRange) -> FunctionResult<Shared<T>> {
         self.0
             .enable()
             .map(Shared)
@@ -581,7 +585,7 @@ pub(crate) static SHARED_ERROR_MESSAGE: &str =
     "The variable cannot be read as it is already being modified";
 
 impl Spanned<AnyValueShared> {
-    pub(crate) fn transparent_clone(&self) -> ExecutionResult<AnyValue> {
+    pub(crate) fn transparent_clone(&self) -> FunctionResult<AnyValue> {
         let value = self.0.as_ref().try_transparent_clone(self.1)?;
         Ok(value)
     }
@@ -689,9 +693,9 @@ impl<T: 'static + ToOwned + ?Sized> CopyOnWrite<T> {
 
     pub(crate) fn map<O: ToOwned + ?Sized>(
         self,
-        map_shared: impl FnOnce(Shared<T>) -> ExecutionResult<Shared<O>>,
-        map_owned: impl FnOnce(Owned<T::Owned>) -> ExecutionResult<Owned<O::Owned>>,
-    ) -> ExecutionResult<CopyOnWrite<O>> {
+        map_shared: impl FnOnce(Shared<T>) -> FunctionResult<Shared<O>>,
+        map_owned: impl FnOnce(Owned<T::Owned>) -> FunctionResult<Owned<O::Owned>>,
+    ) -> FunctionResult<CopyOnWrite<O>> {
         let inner = match self.inner {
             CopyOnWriteInner::Owned(owned) => CopyOnWriteInner::Owned(map_owned(owned)?),
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
@@ -765,7 +769,7 @@ where
 
 impl<T: 'static + ToOwned + ?Sized> DisabledCopyOnWrite<T> {
     /// Re-enables this disabled copy-on-write value by re-acquiring any borrow.
-    pub(crate) fn enable(self, span: SpanRange) -> ExecutionResult<CopyOnWrite<T>> {
+    pub(crate) fn enable(self, span: SpanRange) -> FunctionResult<CopyOnWrite<T>> {
         let inner = match self.inner {
             DisabledCopyOnWriteInner::Owned(owned) => CopyOnWriteInner::Owned(owned),
             DisabledCopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
@@ -838,7 +842,7 @@ impl CopyOnWrite<AnyValue> {
     pub(crate) fn clone_to_owned_transparently(
         self,
         span: SpanRange,
-    ) -> ExecutionResult<AnyValueOwned> {
+    ) -> FunctionResult<AnyValueOwned> {
         match self.inner {
             CopyOnWriteInner::Owned(owned) => Ok(owned),
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => Ok(shared.infallible_clone()),

@@ -65,13 +65,11 @@ pub(crate) trait IsDynCompatibleForm: IsHierarchicalForm {
 pub(crate) trait MapFromArgument: IsHierarchicalForm {
     const ARGUMENT_OWNERSHIP: ArgumentOwnership;
 
-    fn from_argument_value(
-        value: ArgumentValue,
-    ) -> ExecutionResult<Content<'static, AnyType, Self>>;
+    fn from_argument_value(value: ArgumentValue)
+        -> FunctionResult<Content<'static, AnyType, Self>>;
 }
 
 pub(crate) trait MapIntoReturned: IsHierarchicalForm {
-    fn into_returned_value(
-        value: Content<'static, AnyType, Self>,
-    ) -> ExecutionResult<ReturnedValue>;
+    fn into_returned_value(value: Content<'static, AnyType, Self>)
+        -> FunctionResult<ReturnedValue>;
 }

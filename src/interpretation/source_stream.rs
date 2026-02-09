@@ -23,10 +23,10 @@ impl SourceStream {
     }
 }
 
-impl Interpret for SourceStream {
-    fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+impl OutputToStream for SourceStream {
+    fn output_to_stream(&self, output: &mut OutputInterpreter) -> ExecutionResult<()> {
         for item in self.items.iter() {
-            item.interpret(interpreter)?;
+            item.output_to_stream(output)?;
         }
         Ok(())
     }
@@ -83,27 +83,25 @@ impl ParseSource for SourceItem {
     }
 }
 
-impl Interpret for SourceItem {
-    fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+impl OutputToStream for SourceItem {
+    fn output_to_stream(&self, output: &mut OutputInterpreter) -> ExecutionResult<()> {
         match self {
             SourceItem::Variable(variable) => {
-                variable.interpret(interpreter)?;
+                variable.output_to_stream(output)?;
             }
             SourceItem::EmbeddedExpression(block) => {
-                block.interpret(interpreter)?;
+                block.output_to_stream(output)?;
             }
             SourceItem::EmbeddedStatements(statements) => {
-                statements.interpret(interpreter)?;
+                statements.output_to_stream(output)?;
             }
             SourceItem::SourceGroup(group) => {
-                group.interpret(interpreter)?;
+                group.output_to_stream(output)?;
             }
-            SourceItem::Punct(punct) => interpreter.output(punct)?.push_punct(punct.clone()),
-            SourceItem::Ident(ident) => interpreter.output(ident)?.push_ident(ident.clone()),
-            SourceItem::Literal(literal) => {
-                interpreter.output(literal)?.push_literal(literal.clone())
-            }
-            SourceItem::StreamLiteral(stream_literal) => stream_literal.interpret(interpreter)?,
+            SourceItem::Punct(punct) => output.push_punct(punct.clone()),
+            SourceItem::Ident(ident) => output.push_ident(ident.clone()),
+            SourceItem::Literal(literal) => output.push_literal(literal.clone()),
+            SourceItem::StreamLiteral(stream_literal) => stream_literal.output_to_stream(output)?,
         }
         Ok(())
     }
@@ -147,12 +145,12 @@ impl ParseSource for SourceGroup {
     }
 }
 
-impl Interpret for SourceGroup {
-    fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        interpreter.in_output_group(
+impl OutputToStream for SourceGroup {
+    fn output_to_stream(&self, output: &mut OutputInterpreter) -> ExecutionResult<()> {
+        output.in_output_group(
             self.source_delimiter,
             self.source_delim_span.join(),
-            |interpreter| self.content.interpret(interpreter),
+            |output| self.content.output_to_stream(output),
         )
     }
 }

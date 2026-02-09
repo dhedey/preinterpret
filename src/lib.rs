@@ -431,7 +431,8 @@ fn preinterpret_stream_internal(input: TokenStream) -> SynResult<TokenStream> {
     let mut interpreter = Interpreter::new(parse_state);
 
     stream
-        .interpret(&mut interpreter)
+        .output_to_stream(&mut OutputInterpreter::new_unchecked(&mut interpreter))
+        .expect_no_interrupts()
         .convert_to_final_result()?;
 
     let output_stream = interpreter.complete();
@@ -460,9 +461,13 @@ fn preinterpret_run_internal(input: TokenStream) -> SynResult<TokenStream> {
     let mut interpreter = Interpreter::new(parse_state);
 
     let entry_span = Span::call_site().span_range();
-    let returned_stream = content
+    let returned_value = content
         .evaluate_spanned(&mut interpreter, entry_span, RequestedOwnership::owned())
-        .and_then(|x| x.expect_owned().into_stream())
+        .expect_no_interrupts()
+        .convert_to_final_result()?;
+    let returned_stream = returned_value
+        .expect_owned()
+        .into_stream(&mut interpreter)
         .convert_to_final_result()?;
 
     let mut output_stream = interpreter.complete();
@@ -583,9 +588,13 @@ mod benchmarking {
             let output = context.time("evaluation", move || -> SynResult<OutputStream> {
                 let mut interpreter = Interpreter::new(scopes);
                 let entry_span = Span::call_site().span_range();
-                let returned_stream = parsed
+                let returned_value = parsed
                     .evaluate_spanned(&mut interpreter, entry_span, RequestedOwnership::owned())
-                    .and_then(|x| x.expect_owned().into_stream())
+                    .expect_no_interrupts()
+                    .convert_to_final_result()?;
+                let returned_stream = returned_value
+                    .expect_owned()
+                    .into_stream(&mut interpreter)
                     .convert_to_final_result()?;
 
                 let mut output_stream = interpreter.complete();

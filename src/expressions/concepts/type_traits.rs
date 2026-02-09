@@ -86,7 +86,7 @@ pub(crate) trait DowncastFrom<T: IsHierarchicalType>: IsHierarchicalType {
         content: Content<'a, T, F>,
         span_range: SpanRange,
         resolution_target: &str,
-    ) -> ExecutionResult<Content<'a, Self, F>> {
+    ) -> FunctionResult<Content<'a, Self, F>> {
         let content = match Self::downcast_from(content) {
             Ok(c) => c,
             Err(existing) => {
@@ -112,7 +112,7 @@ pub(crate) trait DynResolveFrom<T: IsHierarchicalType>: IsDynType {
         content: Content<'a, T, F>,
         span_range: SpanRange,
         resolution_target: &str,
-    ) -> ExecutionResult<DynContent<'a, Self, F>> {
+    ) -> FunctionResult<DynContent<'a, Self, F>> {
         let content = match Self::downcast_from(content) {
             Ok(c) => c,
             Err(existing) => {
@@ -816,7 +816,7 @@ macro_rules! define_dyn_type {
         impl IsArgument for Box<$dyn_type> {
             type ValueType = $type_def;
             const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
-            fn from_argument(Spanned(value, span_range): Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+            fn from_argument(Spanned(value, span_range): Spanned<ArgumentValue>) -> FunctionResult<Self> {
                 let form_mapped = BeOwned::from_argument_value(value)?;
                 <$type_def as DynResolveFrom<AnyType>>::resolve(form_mapped, span_range, "This argument")
             }
@@ -825,7 +825,7 @@ macro_rules! define_dyn_type {
         impl<'a> IsArgument for AnyRef<'a, $dyn_type> {
             type ValueType = $type_def;
             const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Shared;
-            fn from_argument(Spanned(value, span_range): Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+            fn from_argument(Spanned(value, span_range): Spanned<ArgumentValue>) -> FunctionResult<Self> {
                 let form_mapped = BeAnyRef::from_argument_value(value)?;
                 <$type_def as DynResolveFrom<AnyType>>::resolve(form_mapped, span_range, "This argument")
             }
@@ -834,7 +834,7 @@ macro_rules! define_dyn_type {
         impl<'a> IsArgument for AnyMut<'a, $dyn_type> {
             type ValueType = $type_def;
             const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Mutable;
-            fn from_argument(Spanned(value, span_range): Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+            fn from_argument(Spanned(value, span_range): Spanned<ArgumentValue>) -> FunctionResult<Self> {
                 let form_mapped = BeAnyMut::from_argument_value(value)?;
                 <$type_def as DynResolveFrom<AnyType>>::resolve(form_mapped, span_range, "This argument")
             }

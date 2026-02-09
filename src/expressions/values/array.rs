@@ -8,11 +8,11 @@ define_leaf_type! {
     articled_value_name: "an array",
     dyn_impls: {
         IterableType: impl IsIterable {
-            fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
+            fn into_iterator(self: Box<Self>) -> FunctionResult<IteratorValue> {
                 Ok(IteratorValue::new_for_array(*self))
             }
 
-            fn len(&self, _error_span_range: SpanRange) -> ExecutionResult<usize> {
+            fn iterable_len(&self, _error_span_range: SpanRange) -> FunctionResult<usize> {
                 Ok(self.items.len())
             }
         }
@@ -33,7 +33,7 @@ impl ArrayValue {
         &self,
         output: &mut ToStreamContext,
         grouping: Grouping,
-    ) -> ExecutionResult<()> {
+    ) -> FunctionResult<()> {
         for item in &self.items {
             item.as_ref_value().output_to(grouping, output)?;
         }
@@ -43,7 +43,7 @@ impl ArrayValue {
     pub(super) fn into_indexed(
         mut self,
         Spanned(index, span_range): Spanned<AnyValueRef>,
-    ) -> ExecutionResult<AnyValue> {
+    ) -> FunctionResult<AnyValue> {
         Ok(match index {
             AnyValueContent::Integer(integer) => {
                 let index =
@@ -62,7 +62,7 @@ impl ArrayValue {
     pub(super) fn index_mut(
         &mut self,
         Spanned(index, span_range): Spanned<AnyValueRef>,
-    ) -> ExecutionResult<&mut AnyValue> {
+    ) -> FunctionResult<&mut AnyValue> {
         Ok(match index {
             AnyValueContent::Integer(integer) => {
                 let index =
@@ -80,7 +80,7 @@ impl ArrayValue {
     pub(super) fn index_ref(
         &self,
         Spanned(index, span_range): Spanned<AnyValueRef>,
-    ) -> ExecutionResult<&AnyValue> {
+    ) -> FunctionResult<&AnyValue> {
         Ok(match index {
             AnyValueContent::Integer(integer) => {
                 let index =
@@ -99,7 +99,7 @@ impl ArrayValue {
         &self,
         Spanned(index, span_range): Spanned<AnyValueRef>,
         is_exclusive: bool,
-    ) -> ExecutionResult<usize> {
+    ) -> FunctionResult<usize> {
         match index {
             AnyValueContent::Integer(int) => {
                 self.resolve_valid_index_from_integer(Spanned(int, span_range), is_exclusive)
@@ -112,7 +112,7 @@ impl ArrayValue {
         &self,
         Spanned(integer, span): Spanned<IntegerValueRef>,
         is_exclusive: bool,
-    ) -> ExecutionResult<usize> {
+    ) -> FunctionResult<usize> {
         let index: OptionalSuffix<usize> =
             Spanned(integer.clone_to_owned_infallible(), span).resolve_as("An array index")?;
         let index = index.0;
@@ -141,15 +141,17 @@ impl ArrayValue {
         &self,
         output: &mut String,
         behaviour: &ConcatBehaviour,
-    ) -> ExecutionResult<()> {
-        IteratorValue::any_iterator_to_string(
-            self.items.iter(),
+        interpreter: &mut Interpreter,
+    ) -> FunctionResult<()> {
+        any_items_to_string(
+            &mut self.items.iter(),
             output,
             behaviour,
             "[]",
             "[",
             "]",
             false, // Output all the vec because it's already in memory
+            interpreter,
         )
     }
 }
@@ -195,21 +197,23 @@ define_type_features! {
     impl ArrayType,
     pub(crate) mod array_interface {
         methods {
-            fn push(mut this: Mutable<ArrayValue>, item: AnyValue) -> ExecutionResult<()> {
+            fn push(mut this: Mutable<ArrayValue>, item: AnyValue) -> FunctionResult<()> {
                 this.items.push(item);
                 Ok(())
             }
 
-            [context] fn to_stream_grouped(this: ArrayValue) -> StreamOutput<impl StreamAppender> [ignore_type_assertion!] {
+            [context] fn to_stream_grouped(this: ArrayValue) -> FunctionResult<OutputStream> {
                 let error_span_range = context.span_range();
-                StreamOutput::new(move |stream| this.output_items_to(&mut ToStreamContext::new(stream, error_span_range), Grouping::Grouped))
+                context.interpreter.capture_output(|output| {
+                    this.output_items_to(&mut ToStreamContext::new(output, error_span_range), Grouping::Grouped)
+                })
             }
         }
         unary_operations {
-            [context] fn cast_singleton_to_value(Spanned(mut this, span): Spanned<ArrayValue>) -> ExecutionResult<ReturnedValue> {
+            [context] fn cast_singleton_to_value(Spanned(mut this, span): Spanned<ArrayValue>) -> FunctionResult<ReturnedValue> {
                 let length = this.items.len();
                 if length == 1 {
-                    Ok(context.operation.evaluate(this.items.pop().unwrap().spanned(span))?.0)
+                    Ok(context.operation.evaluate(this.items.pop().unwrap().spanned(span), context.interpreter)?.0)
                 } else {
                     context.operation.value_err(format!(
                         "Only a singleton array can be cast to this value but the array has {} elements",

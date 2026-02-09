@@ -1,5 +1,0 @@
-error: To protect against infinite loops, only a maximum of 1000 items can be output to a string from an iterator. You can use .to_vec() to avoid this limit. This can't currently be reconfigured with the iteration limit.
- --> tests/compilation_failures/expressions/large_range_to_string.rs:5:11
-  |
-5 |         #((0..10000) as iterator as string)
-  |           ^^^^^^^^^^^^^^^^^^^^^^

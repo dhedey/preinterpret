@@ -237,7 +237,7 @@ impl TypeProperty {
     pub(crate) fn resolve_spanned(
         &self,
         ownership: RequestedOwnership,
-    ) -> ExecutionResult<Spanned<RequestedValue>> {
+    ) -> FunctionResult<Spanned<RequestedValue>> {
         let resolver = self.source_type.kind.feature_resolver();
         // TODO[performance] - lazily initialize properties as Shared
         let property_name = &self.property.to_string();

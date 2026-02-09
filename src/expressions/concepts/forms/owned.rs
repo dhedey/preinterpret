@@ -50,7 +50,7 @@ impl MapFromArgument for BeOwned {
 
     fn from_argument_value(
         value: ArgumentValue,
-    ) -> ExecutionResult<Content<'static, AnyType, Self>> {
+    ) -> FunctionResult<Content<'static, AnyType, Self>> {
         Ok(value.expect_owned())
     }
 }
@@ -58,7 +58,7 @@ impl MapFromArgument for BeOwned {
 impl MapIntoReturned for BeOwned {
     fn into_returned_value(
         content: Content<'static, AnyType, Self>,
-    ) -> ExecutionResult<ReturnedValue> {
+    ) -> FunctionResult<ReturnedValue> {
         Ok(ReturnedValue::Owned(content))
     }
 }

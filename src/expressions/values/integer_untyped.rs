@@ -28,7 +28,7 @@ impl UntypedInteger {
         context: BinaryOperationCallContext,
         lhs: impl std::fmt::Display,
         rhs: impl std::fmt::Display,
-    ) -> ExecutionInterrupt {
+    ) -> FunctionError {
         context.error(format!(
             "The untyped integer operation {} {} {} overflowed in {} space",
             lhs,
@@ -63,7 +63,7 @@ impl UntypedInteger {
         rhs: Spanned<IntegerValue>,
         context: BinaryOperationCallContext,
         perform_fn: fn(FallbackInteger, FallbackInteger) -> Option<FallbackInteger>,
-    ) -> ExecutionResult<IntegerValue> {
+    ) -> FunctionResult<IntegerValue> {
         let lhs = self.0;
         let rhs: UntypedInteger = rhs.downcast_resolve("This operand")?;
         let rhs = rhs.0;
@@ -76,7 +76,7 @@ impl UntypedInteger {
         self,
         rhs: Spanned<IntegerValue>,
         compare_fn: fn(FallbackInteger, FallbackInteger) -> bool,
-    ) -> ExecutionResult<bool> {
+    ) -> FunctionResult<bool> {
         let lhs = self.0;
         let rhs: UntypedInteger = rhs.downcast_resolve("This operand")?;
         let rhs = rhs.0;
@@ -88,7 +88,7 @@ impl UntypedInteger {
         rhs: u32,
         context: BinaryOperationCallContext,
         perform_fn: fn(FallbackInteger, u32) -> Option<FallbackInteger>,
-    ) -> ExecutionResult<IntegerValue> {
+    ) -> FunctionResult<IntegerValue> {
         let lhs = self.0;
         let output = perform_fn(lhs, rhs)
             .ok_or_else(|| UntypedInteger::binary_overflow_error(context, lhs, rhs))?;
@@ -109,9 +109,9 @@ impl UntypedInteger {
 }
 
 impl Spanned<UntypedInteger> {
-    pub(crate) fn into_kind(self, kind: IntegerLeafKind) -> ExecutionResult<IntegerValue> {
+    pub(crate) fn into_kind(self, kind: IntegerLeafKind) -> FunctionResult<IntegerValue> {
         let Spanned(value, span_range) = self;
-        value.try_into_kind(kind).ok_or_else(|| {
+        value.try_into_kind(kind).ok_or_else(|| -> FunctionError {
             span_range.value_error(format!(
                 "The integer value {} does not fit into {}",
                 value.0,
@@ -125,7 +125,7 @@ define_type_features! {
     impl UntypedIntegerType,
     pub(crate) mod untyped_integer_interface {
         unary_operations {
-            fn neg(Spanned(value, span): Spanned<UntypedInteger>) -> ExecutionResult<UntypedInteger> {
+            fn neg(Spanned(value, span): Spanned<UntypedInteger>) -> FunctionResult<UntypedInteger> {
                 let input = value.into_fallback();
                 match input.checked_neg() {
                     Some(negated) => Ok(UntypedInteger::from_fallback(negated)),
@@ -249,7 +249,7 @@ impl IsValueContent for UntypedIntegerFallback {
 impl IsArgument for UntypedIntegerFallback {
     type ValueType = UntypedIntegerType;
     const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
-    fn from_argument(value: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+    fn from_argument(value: Spanned<ArgumentValue>) -> FunctionResult<Self> {
         Self::resolve_value(value.expect_owned(), "This argument")
     }
 }
@@ -262,7 +262,7 @@ impl ResolvableOwned<AnyValue> for UntypedIntegerFallback {
     fn resolve_from_value(
         input_value: AnyValue,
         context: ResolutionContext,
-    ) -> ExecutionResult<Self> {
+    ) -> FunctionResult<Self> {
         let value: UntypedInteger =
             ResolvableOwned::<AnyValue>::resolve_from_value(input_value, context)?;
         Ok(UntypedIntegerFallback(value.into_fallback()))
@@ -270,10 +270,7 @@ impl ResolvableOwned<AnyValue> for UntypedIntegerFallback {
 }
 
 impl ResolvableOwned<IntegerValue> for UntypedInteger {
-    fn resolve_from_value(
-        value: IntegerValue,
-        context: ResolutionContext,
-    ) -> ExecutionResult<Self> {
+    fn resolve_from_value(value: IntegerValue, context: ResolutionContext) -> FunctionResult<Self> {
         match value {
             IntegerValue::Untyped(value) => Ok(value),
             _ => context.err("an untyped integer", value),

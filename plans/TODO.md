@@ -237,26 +237,25 @@ Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
   - [x] Allow shared / mutable arguments
   - [x] Add tests for shared/mutable, including conversions working and not
 - [ ] Iterable methods:
-  - [ ] Unpick `feat/iterable-map` and work our what we want to keep:
-    * Half-baked `FunctionValue` changes to allow invocation
-    * Separation of `ExecutionInterrupt` and `FunctionError` - do we actually want / need it?
-      - Perhaps `Result` -> `core::Result`
-      - `ExecutionResult` -> `ExpressionResult`
-      - And `FunctionResult` -> `Result` ?
-    * `Iterator` returns `Result` change -> do we want it?
-    * `Iterator` comparison can return errors -> maybe we just have `iterator != iterator` unless `std::ptr::eq`?
+  - [x] Unpick `feat/iterable-map` and work our what we want to keep:
+    - [x] Separation of `ExecutionInterrupt` and `FunctionError` - incorporated below
+    - [x] `Iterator` returns `Result` change -> replaced with below
   * To implement `.map()`, we have a few things we need first:
-    - An iterator trait where Interpreter is passed at next time.
-    - Possibly - not require `Clone` on iterators:
+    -[x] An iterator trait where Interpreter is passed at next time.
+    -[ ] Possibly - not require `Clone` on iterators:
       - Make `TryClone -> Result<T, &T>`
       - Make `to_string` for iterator return `Iterator[?]`
-  - [ ] Create new iterator trait `PreinterpretIterator` and `IntoPreinterpretIterator` with `.next(&mut Interpreter)`
-    - [ ] Blanket implement it for iterator
-    - [ ] Then replace e.g. for loop with it.
-    - [ ] Create `Map` and `Filter` types on top of it, to be able to
-          implement `map` and `filter`
+  - [x] Create new iterator trait `PreinterpretIterator` and `IntoPreinterpretIterator` with `.next(&mut Interpreter)`
+    - [x] Blanket implement it for `Iterator<AnyValue> + Clone`
+    - [x] Then replace e.g. for loop impl with it.
+    - [x] Create `Map` and `Filter` types on top of it, to be able to implement `map` and `filter`
+  - [ ] See if new iterators on iterator value can be fixed to be lazy
+  - [ ] Salvage half-baked `FunctionValue` changes to allow invocation
+  - [ ] Consider if IteratorValue should have `Item = ReturnedValue`
   - [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`
+  - [ ] Add tests for iterable methods
 - [ ] Add `array.sort`, `array.sort_by`
+- [ ] Look into if a closure like `|| { }()` can evade `attempt` block statue mutation checks. Maybe lean into it as a way to avoid htem, and mention it in the error message
 - [ ] Resolve all `TODO[functions]`
 
 Possible punted:
@@ -458,8 +457,9 @@ preinterpret::run! {
 
 - [ ] Look at benchmarks and if anything should be sped up
 - [ ] Speeding up stream literal processing
-  - [ ] When interpreting a stream literal, we can avoid having to go through error handling pathways to get an `output` from the intepreter by storing a `OutputInterpreter<'a>` which wraps an `&mut OutputStream` and a pointer to an Intepreter, and can be converted back into/from an `Interpreter` easily
-  - [ ] Possibly similarly for an `InputInterpreter<'a>` when processing a `ConsumeStream`
+  - [ ] Avoid a little overhead by having `OutputInterpreter<'a>` store a pointer to interpreter and output stream and a `PhantomData<&'a Interpreter>` / `PhantomData<&'a OutputStream>`, and recreate output stream after a call to with_interpreter.
+   ... and get rid of `output_stack_height`, `current_output_unchecked`, `current_output_mut_unchecked`
+  - [ ] Create an `InputInterpreter<'a>` when processing a `ConsumeStream`
 - [ ] Speeding up scopes at runtime:
   - [ ] In the interpreter, store a flattened stack of variable values
   - [ ] `no_mutation_above` can be a stack offset

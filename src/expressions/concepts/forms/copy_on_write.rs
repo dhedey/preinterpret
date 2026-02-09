@@ -76,7 +76,7 @@ impl MapFromArgument for BeCopyOnWrite {
 
     fn from_argument_value(
         value: ArgumentValue,
-    ) -> ExecutionResult<Content<'static, AnyType, Self>> {
+    ) -> FunctionResult<Content<'static, AnyType, Self>> {
         match value.expect_copy_on_write().inner {
             CopyOnWriteInner::Owned(owned) => Ok(BeCopyOnWrite::new_owned(owned)),
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {

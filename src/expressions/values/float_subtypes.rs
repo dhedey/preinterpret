@@ -158,13 +158,13 @@ macro_rules! impl_resolvable_float_subtype {
             type ValueType = FloatType;
             const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
 
-            fn from_argument(argument: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+            fn from_argument(argument: Spanned<ArgumentValue>) -> FunctionResult<Self> {
                 argument.expect_owned().resolve_as("This argument")
             }
         }
 
         impl ResolveAs<OptionalSuffix<$type>> for Spanned<AnyValue> {
-            fn resolve_as(self, resolution_target: &str) -> ExecutionResult<OptionalSuffix<$type>> {
+            fn resolve_as(self, resolution_target: &str) -> FunctionResult<OptionalSuffix<$type>> {
                 let span = self.span_range();
                 let float_value: FloatValue = self.resolve_as(resolution_target)?;
                 Spanned(float_value, span).resolve_as(resolution_target)
@@ -172,7 +172,7 @@ macro_rules! impl_resolvable_float_subtype {
         }
 
         impl ResolveAs<OptionalSuffix<$type>> for Spanned<FloatValue> {
-            fn resolve_as(self, resolution_target: &str) -> ExecutionResult<OptionalSuffix<$type>> {
+            fn resolve_as(self, resolution_target: &str) -> FunctionResult<OptionalSuffix<$type>> {
                 let Spanned(value, span) = self;
                 match value {
                     FloatContent::Untyped(v) => Ok(OptionalSuffix(v.into_fallback() as $type)),
@@ -201,7 +201,7 @@ macro_rules! impl_resolvable_float_subtype {
             fn resolve_from_value(
                 value: FloatValue,
                 context: ResolutionContext,
-            ) -> ExecutionResult<Self> {
+            ) -> FunctionResult<Self> {
                 match value {
                     FloatContent::Untyped(x) => Ok(x.into_fallback() as $type),
                     FloatContent::$variant(x) => Ok(x),
@@ -214,7 +214,7 @@ macro_rules! impl_resolvable_float_subtype {
             fn resolve_from_value(
                 value: AnyValue,
                 context: ResolutionContext,
-            ) -> ExecutionResult<Self> {
+            ) -> FunctionResult<Self> {
                 match value {
                     AnyValue::Float(x) => <$type>::resolve_from_value(x, context),
                     other => context.err($type_def::ARTICLED_VALUE_NAME, other),
@@ -226,7 +226,7 @@ macro_rules! impl_resolvable_float_subtype {
             fn resolve_from_ref<'a>(
                 value: &'a AnyValue,
                 context: ResolutionContext,
-            ) -> ExecutionResult<&'a Self> {
+            ) -> FunctionResult<&'a Self> {
                 match value {
                     AnyValueContent::Float(FloatContent::$variant(x)) => Ok(x),
                     other => context.err($type_def::ARTICLED_VALUE_NAME, other),
@@ -238,7 +238,7 @@ macro_rules! impl_resolvable_float_subtype {
             fn resolve_from_mut<'a>(
                 value: &'a mut AnyValue,
                 context: ResolutionContext,
-            ) -> ExecutionResult<&'a mut Self> {
+            ) -> FunctionResult<&'a mut Self> {
                 match value {
                     AnyValueContent::Float(FloatContent::$variant(x)) => Ok(x),
                     other => context.err($type_def::ARTICLED_VALUE_NAME, other),

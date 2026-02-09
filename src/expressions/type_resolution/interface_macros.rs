@@ -157,7 +157,7 @@ macro_rules! parse_arg_types {
 pub(crate) fn apply_fn0<R>(
     f: fn(&mut FunctionCallContext) -> R,
     context: &mut FunctionCallContext,
-) -> ExecutionResult<ReturnedValue>
+) -> FunctionResult<ReturnedValue>
 where
     R: IsReturnable,
 {
@@ -169,7 +169,7 @@ pub(crate) fn apply_fn1<A, R>(
     f: fn(&mut FunctionCallContext, A) -> R,
     a: Spanned<ArgumentValue>,
     context: &mut FunctionCallContext,
-) -> ExecutionResult<ReturnedValue>
+) -> FunctionResult<ReturnedValue>
 where
     A: IsArgument,
     R: IsReturnable,
@@ -183,7 +183,7 @@ pub(crate) fn apply_fn1_optional1<A, B, C>(
     a: Spanned<ArgumentValue>,
     b: Option<Spanned<ArgumentValue>>,
     context: &mut FunctionCallContext,
-) -> ExecutionResult<ReturnedValue>
+) -> FunctionResult<ReturnedValue>
 where
     A: IsArgument,
     B: IsArgument,
@@ -203,7 +203,7 @@ pub(crate) fn apply_fn2<A, B, C>(
     a: Spanned<ArgumentValue>,
     b: Spanned<ArgumentValue>,
     context: &mut FunctionCallContext,
-) -> ExecutionResult<ReturnedValue>
+) -> FunctionResult<ReturnedValue>
 where
     A: IsArgument,
     B: IsArgument,
@@ -218,7 +218,7 @@ pub(crate) fn apply_fn2_optional1<A, B, C, D>(
     b: Spanned<ArgumentValue>,
     c: Option<Spanned<ArgumentValue>>,
     context: &mut FunctionCallContext,
-) -> ExecutionResult<ReturnedValue>
+) -> FunctionResult<ReturnedValue>
 where
     A: IsArgument,
     B: IsArgument,
@@ -241,7 +241,7 @@ pub(crate) fn apply_fn3<A, B, C, R>(
     b: Spanned<ArgumentValue>,
     c: Spanned<ArgumentValue>,
     context: &mut FunctionCallContext,
-) -> ExecutionResult<ReturnedValue>
+) -> FunctionResult<ReturnedValue>
 where
     A: IsArgument,
     B: IsArgument,
@@ -264,7 +264,7 @@ pub(crate) fn apply_fn3_optional1<A, B, C, D, R>(
     c: Spanned<ArgumentValue>,
     d: Option<Spanned<ArgumentValue>>,
     context: &mut FunctionCallContext,
-) -> ExecutionResult<ReturnedValue>
+) -> FunctionResult<ReturnedValue>
 where
     A: IsArgument,
     B: IsArgument,
@@ -286,7 +286,7 @@ pub(crate) fn apply_unary_fn<A, R>(
     f: fn(UnaryOperationCallContext, A) -> R,
     a: Spanned<ArgumentValue>,
     context: UnaryOperationCallContext,
-) -> ExecutionResult<ReturnedValue>
+) -> FunctionResult<ReturnedValue>
 where
     A: IsArgument,
     R: IsReturnable,
@@ -299,7 +299,7 @@ pub(crate) fn apply_binary_fn<A, B, R>(
     lhs: Spanned<ArgumentValue>,
     rhs: Spanned<ArgumentValue>,
     context: BinaryOperationCallContext,
-) -> ExecutionResult<ReturnedValue>
+) -> FunctionResult<ReturnedValue>
 where
     A: IsArgument,
     B: IsArgument,
@@ -313,10 +313,10 @@ where
 // ============================================================================
 
 pub(crate) fn apply_property_shared<'a, S: ResolvableShared<AnyValue> + ?Sized + 'a>(
-    f: for<'b> fn(PropertyAccessCallContext, &'b S) -> ExecutionResult<&'b AnyValue>,
+    f: for<'b> fn(PropertyAccessCallContext, &'b S) -> FunctionResult<&'b AnyValue>,
     ctx: PropertyAccessCallContext,
     source: &'a AnyValue,
-) -> ExecutionResult<&'a AnyValue> {
+) -> FunctionResult<&'a AnyValue> {
     let source = S::resolve_from_ref(
         source,
         ResolutionContext::new(&ctx.property.span_range(), "The property access source"),
@@ -325,11 +325,11 @@ pub(crate) fn apply_property_shared<'a, S: ResolvableShared<AnyValue> + ?Sized +
 }
 
 pub(crate) fn apply_property_mutable<'a, S: ResolvableMutable<AnyValue> + ?Sized + 'a>(
-    f: for<'b> fn(PropertyAccessCallContext, &'b mut S, bool) -> ExecutionResult<&'b mut AnyValue>,
+    f: for<'b> fn(PropertyAccessCallContext, &'b mut S, bool) -> FunctionResult<&'b mut AnyValue>,
     ctx: PropertyAccessCallContext,
     source: &'a mut AnyValue,
     auto_create: bool,
-) -> ExecutionResult<&'a mut AnyValue> {
+) -> FunctionResult<&'a mut AnyValue> {
     let source = S::resolve_from_mut(
         source,
         ResolutionContext::new(&ctx.property.span_range(), "The property access source"),
@@ -338,10 +338,10 @@ pub(crate) fn apply_property_mutable<'a, S: ResolvableMutable<AnyValue> + ?Sized
 }
 
 pub(crate) fn apply_property_owned<S: ResolvableOwned<AnyValue>>(
-    f: fn(PropertyAccessCallContext, S) -> ExecutionResult<AnyValue>,
+    f: fn(PropertyAccessCallContext, S) -> FunctionResult<AnyValue>,
     ctx: PropertyAccessCallContext,
     source: AnyValue,
-) -> ExecutionResult<AnyValue> {
+) -> FunctionResult<AnyValue> {
     let source = S::resolve_from_value(
         source,
         ResolutionContext::new(&ctx.property.span_range(), "The property access source"),
@@ -358,11 +358,11 @@ pub(crate) fn apply_index_shared<'a, S: ResolvableShared<AnyValue> + ?Sized + 'a
         IndexAccessCallContext,
         &'b S,
         Spanned<AnyValueRef>,
-    ) -> ExecutionResult<&'b AnyValue>,
+    ) -> FunctionResult<&'b AnyValue>,
     ctx: IndexAccessCallContext,
     source: &'a AnyValue,
     index: Spanned<AnyValueRef>,
-) -> ExecutionResult<&'a AnyValue> {
+) -> FunctionResult<&'a AnyValue> {
     let source = S::resolve_from_ref(
         source,
         ResolutionContext::new(&ctx.access.span_range(), "The index access source"),
@@ -376,12 +376,12 @@ pub(crate) fn apply_index_mutable<'a, S: ResolvableMutable<AnyValue> + ?Sized + 
         &'b mut S,
         Spanned<AnyValueRef>,
         bool,
-    ) -> ExecutionResult<&'b mut AnyValue>,
+    ) -> FunctionResult<&'b mut AnyValue>,
     ctx: IndexAccessCallContext,
     source: &'a mut AnyValue,
     index: Spanned<AnyValueRef>,
     auto_create: bool,
-) -> ExecutionResult<&'a mut AnyValue> {
+) -> FunctionResult<&'a mut AnyValue> {
     let source = S::resolve_from_mut(
         source,
         ResolutionContext::new(&ctx.access.span_range(), "The index access source"),
@@ -390,11 +390,11 @@ pub(crate) fn apply_index_mutable<'a, S: ResolvableMutable<AnyValue> + ?Sized + 
 }
 
 pub(crate) fn apply_index_owned<S: ResolvableOwned<AnyValue>>(
-    f: fn(IndexAccessCallContext, S, Spanned<AnyValueRef>) -> ExecutionResult<AnyValue>,
+    f: fn(IndexAccessCallContext, S, Spanned<AnyValueRef>) -> FunctionResult<AnyValue>,
     ctx: IndexAccessCallContext,
     source: AnyValue,
     index: Spanned<AnyValueRef>,
-) -> ExecutionResult<AnyValue> {
+) -> FunctionResult<AnyValue> {
     let source = S::resolve_from_value(
         source,
         ResolutionContext::new(&ctx.access.span_range(), "The index access source"),
@@ -413,9 +413,9 @@ impl<'a> HasSpanRange for FunctionCallContext<'a> {
     }
 }
 
-#[derive(Clone, Copy)]
 pub(crate) struct UnaryOperationCallContext<'a> {
     pub operation: &'a UnaryOperation,
+    pub interpreter: &'a mut Interpreter,
 }
 
 #[derive(Clone, Copy)]
@@ -425,11 +425,11 @@ pub(crate) struct BinaryOperationCallContext<'a> {
 
 impl<'a> BinaryOperationCallContext<'a> {
     #[allow(unused)]
-    pub(crate) fn err<T>(&self, message: impl std::fmt::Display) -> ExecutionResult<T> {
+    pub(crate) fn err<T>(&self, message: impl std::fmt::Display) -> FunctionResult<T> {
         self.operation.value_err(message)
     }
 
-    pub(crate) fn error(&self, message: impl std::fmt::Display) -> ExecutionInterrupt {
+    pub(crate) fn error(&self, message: impl std::fmt::Display) -> FunctionError {
         self.operation.value_error(message)
     }
 }
@@ -601,11 +601,11 @@ macro_rules! define_type_features {
                     #[allow(unused)]
                     use super::*;
 
-                    pub(crate) fn shared<'a>(if_empty!([$($property_shared_context)?][_ctx]): PropertyAccessCallContext, $($property_shared_args)*) -> ExecutionResult<&'a AnyValue> $property_shared_body
+                    pub(crate) fn shared<'a>(if_empty!([$($property_shared_context)?][_ctx]): PropertyAccessCallContext, $($property_shared_args)*) -> FunctionResult<&'a AnyValue> $property_shared_body
 
-                    pub(crate) fn mutable<'a>(if_empty!([$($property_mutable_context)?][_ctx]): PropertyAccessCallContext, $($property_mutable_args)*) -> ExecutionResult<&'a mut AnyValue> $property_mutable_body
+                    pub(crate) fn mutable<'a>(if_empty!([$($property_mutable_context)?][_ctx]): PropertyAccessCallContext, $($property_mutable_args)*) -> FunctionResult<&'a mut AnyValue> $property_mutable_body
 
-                    pub(crate) fn owned(if_empty!([$($property_owned_context)?][_ctx]): PropertyAccessCallContext, $($property_owned_args)*) -> ExecutionResult<AnyValue> $property_owned_body
+                    pub(crate) fn owned(if_empty!([$($property_owned_context)?][_ctx]): PropertyAccessCallContext, $($property_owned_args)*) -> FunctionResult<AnyValue> $property_owned_body
                 }
 
                 pub(crate) fn property_access_interface() -> PropertyAccessInterface {
@@ -622,11 +622,11 @@ macro_rules! define_type_features {
                     #[allow(unused)]
                     use super::*;
 
-                    pub(crate) fn shared<'a>(if_empty!([$($index_shared_context)?][_ctx]): IndexAccessCallContext, $($index_shared_args)*) -> ExecutionResult<&'a AnyValue> $index_shared_body
+                    pub(crate) fn shared<'a>(if_empty!([$($index_shared_context)?][_ctx]): IndexAccessCallContext, $($index_shared_args)*) -> FunctionResult<&'a AnyValue> $index_shared_body
 
-                    pub(crate) fn mutable<'a>(if_empty!([$($index_mutable_context)?][_ctx]): IndexAccessCallContext, $($index_mutable_args)*) -> ExecutionResult<&'a mut AnyValue> $index_mutable_body
+                    pub(crate) fn mutable<'a>(if_empty!([$($index_mutable_context)?][_ctx]): IndexAccessCallContext, $($index_mutable_args)*) -> FunctionResult<&'a mut AnyValue> $index_mutable_body
 
-                    pub(crate) fn owned(if_empty!([$($index_owned_context)?][_ctx]): IndexAccessCallContext, $($index_owned_args)*) -> ExecutionResult<AnyValue> $index_owned_body
+                    pub(crate) fn owned(if_empty!([$($index_owned_context)?][_ctx]): IndexAccessCallContext, $($index_owned_args)*) -> FunctionResult<AnyValue> $index_owned_body
                 }
 
                 pub(crate) fn index_access_interface() -> IndexAccessInterface {

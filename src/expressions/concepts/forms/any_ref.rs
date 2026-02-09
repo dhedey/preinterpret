@@ -52,7 +52,7 @@ impl MapFromArgument for BeAnyRef {
 
     fn from_argument_value(
         value: ArgumentValue,
-    ) -> ExecutionResult<Content<'static, AnyType, Self>> {
+    ) -> FunctionResult<Content<'static, AnyType, Self>> {
         Ok(value
             .expect_shared()
             .0
