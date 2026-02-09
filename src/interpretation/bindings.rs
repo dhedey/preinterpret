@@ -433,37 +433,36 @@ impl<T: ?Sized> Mutable<T> {
     /// Disables this mutable reference, releasing the borrow on the RefCell.
     /// Returns a `DisabledMutable` which can be cloned and later re-enabled.
     pub(crate) fn disable(self) -> DisabledMutable<T> {
-        DisabledMutable(self.0.disable())
+        DisabledMutable(self.into_shared())
     }
 }
 
 /// A disabled mutable reference that can be safely cloned and dropped.
 pub(crate) struct DisabledMutable<T: 'static + ?Sized>(
-    pub(crate) DisabledMutableSubRcRefCell<AnyValue, T>,
+    Shared<T>,
 );
 
 impl<T: ?Sized> Clone for DisabledMutable<T> {
     fn clone(&self) -> Self {
-        Self(self.0.clone())
+        Self(Shared::clone(&self.0))
     }
 }
 
 impl<T: ?Sized> DisabledMutable<T> {
     /// Re-enables this disabled mutable reference by re-acquiring the borrow.
     pub(crate) fn enable(self, span: SpanRange) -> FunctionResult<Mutable<T>> {
-        self.0
-            .enable()
-            .map(Mutable)
-            .map_err(|_| span.ownership_error(MUTABLE_ERROR_MESSAGE))
+        self.0.0.try_into_mutable().map_err(|_| {
+            span.ownership_error::<FunctionError>(MUTABLE_ERROR_MESSAGE)
+        }).map(Mutable)
     }
 
     pub(crate) fn into_shared(self) -> DisabledShared<T> {
-        DisabledShared(self.0.into_shared())
+        DisabledShared(self.0)
     }
 }
 
 pub(crate) static MUTABLE_ERROR_MESSAGE: &str =
-    "The variable cannot be modified as it is already being modified";
+    "The variable cannot be modified as another reference currently exists to it";
 pub(crate) static SHARED_TO_MUTABLE_ERROR_MESSAGE: &str =
     "The variable cannot be modified as it is a shared reference";
 
@@ -556,28 +555,25 @@ impl<T: ?Sized> Shared<T> {
     /// Disables this shared reference, releasing the borrow on the RefCell.
     /// Returns a `DisabledShared` which can be cloned and later re-enabled.
     pub(crate) fn disable(self) -> DisabledShared<T> {
-        DisabledShared(self.0.disable())
+        DisabledShared(self)
     }
 }
 
 /// A disabled shared reference that can be safely cloned and dropped.
 pub(crate) struct DisabledShared<T: 'static + ?Sized>(
-    pub(crate) DisabledSharedSubRcRefCell<AnyValue, T>,
+    pub(crate) Shared<T>,
 );
 
 impl<T: ?Sized> Clone for DisabledShared<T> {
     fn clone(&self) -> Self {
-        Self(self.0.clone())
+        Self(Shared::clone(&self.0))
     }
 }
 
 impl<T: ?Sized> DisabledShared<T> {
     /// Re-enables this disabled shared reference by re-acquiring the borrow.
     pub(crate) fn enable(self, span: SpanRange) -> FunctionResult<Shared<T>> {
-        self.0
-            .enable()
-            .map(Shared)
-            .map_err(|_| span.ownership_error(SHARED_ERROR_MESSAGE))
+        Ok(self.0)
     }
 }
 

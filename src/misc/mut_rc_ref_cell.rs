@@ -352,6 +352,27 @@ impl<T: ?Sized, U: 'static + ?Sized> SharedSubRcRefCell<T, U> {
         f(&*copied_ref, &mut emplacer)
     }
 
+    fn as_ptr(&self) -> *const U {
+        self.shared_ref.deref() as *const U
+    }
+
+    pub(crate) fn try_into_mutable(self) -> Result<MutableSubRcRefCell<T, U>, Self> {
+        let ptr = self.as_ptr() as *mut U;
+        drop(self.shared_ref);
+        // SAFETY:
+        // - The pointer was previously a reference, so it is safe to deference it here
+        //   (the pointer is pointing into the Rc<RefCell<...>> which hasn't moved)
+        // - All our invariants for SharedSubRcRefCell / MutableSubRcRefCell are maintained
+        unsafe {
+            match MutableSubRcRefCell::new(self.pointed_at) {
+                Ok(mutable) => Ok(mutable.map(|_| &mut *ptr)),
+                Err(pointed_at) => Err(SharedSubRcRefCell::new(pointed_at)
+                    .unwrap_or_else(|_| panic!("Just had a Shared, so must be able to recreate it"))
+                    .map(|_| &*ptr)),
+            }
+        }
+    }
+
     /// Disables this shared reference, releasing the borrow on the RefCell.
     /// Returns a `DisabledSharedSubRcRefCell` which can be cloned and later re-enabled.
     pub(crate) fn disable(self) -> DisabledSharedSubRcRefCell<T, U> {
