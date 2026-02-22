@@ -41,6 +41,7 @@ impl AnyValueLeafKind {
 
 // A AnyValueLeafKind represents a kind of leaf value.
 // But a TypeKind represents a type in the hierarchy, which points at a type data.
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub(crate) enum TypeKind {
     Leaf(AnyValueLeafKind),
     Parent(ParentTypeKind),
@@ -91,6 +92,37 @@ impl TypeKind {
     }
 }
 
+/// This is the subtyping ordering.
+/// - I define that X <= Y if Y is a subtype of X.
+/// - Think "X is shallower than Y in the enum representation"
+///
+/// This must be accurate so that the Dynamic References works correctly.
+/// e.g. if I have a `a: &mut AnyValue` and a `b: &mut IntegerValue` pointing
+/// to the same memory, then I can't use a to change to a String.
+impl PartialOrd for TypeKind {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        if self == other {
+            return Some(std::cmp::Ordering::Equal);
+        }
+        // TODO: implement a more complete partial ord that reflects the actual subtyping relationships.
+        match (self, other) {
+            // None-equal dyns are not subtypes
+            (TypeKind::Dyn(_), _) => None,
+            (_, TypeKind::Dyn(_)) => None,
+            // All non-any-values are strict subtypes of AnyValue
+            (TypeKind::Parent(ParentTypeKind::Value(_)), _) => Some(std::cmp::Ordering::Less),
+            (_, TypeKind::Parent(ParentTypeKind::Value(_))) => Some(std::cmp::Ordering::Greater),
+            // TODO: Non-equal leave types should kinda be an error, assuming they're pointing
+            // at the same value
+            (TypeKind::Leaf(_), _) => None,
+            (_, TypeKind::Leaf(_)) => None,
+            // TODO: Handle intermediate parents
+            _ => None,
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub(crate) enum ParentTypeKind {
     Value(AnyValueTypeKind),
     Integer(IntegerTypeKind),
@@ -123,6 +155,7 @@ impl ParentTypeKind {
     }
 }
 
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub(crate) enum DynTypeKind {
     Iterable,
 }

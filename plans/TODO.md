@@ -241,10 +241,8 @@ Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
     - [x] Separation of `ExecutionInterrupt` and `FunctionError` - incorporated below
     - [x] `Iterator` returns `Result` change -> replaced with below
   * To implement `.map()`, we have a few things we need first:
-    -[x] An iterator trait where Interpreter is passed at next time.
-    -[ ] Possibly - not require `Clone` on iterators:
-      - Make `TryClone -> Result<T, &T>`
-      - Make `to_string` for iterator return `Iterator[?]`
+    - [x] An iterator trait where Interpreter is passed at next time.
+    - [x] Make `to_string` for iterator return `Iterator[?]`
   - [x] Create new iterator trait `PreinterpretIterator` and `IntoPreinterpretIterator` with `.next(&mut Interpreter)`
     - [x] Blanket implement it for `Iterator<AnyValue> + Clone`
     - [x] Then replace e.g. for loop impl with it.
@@ -254,22 +252,21 @@ Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
   - [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`
   - [ ] Add tests for iterable methods
 - [ ] Add `array.sort`, `array.sort_by`
-- [ ] Look into if a closure like `|| { }()` can evade `attempt` block statue mutation checks. Maybe lean into it as a way to avoid htem, and mention it in the error message
+- [ ] Look into if a closure like `|| { }()` can evade `attempt` block statue mutation checks. Maybe lean into it as a way to avoid them, and mention it in the error message
 - [ ] Resolve all `TODO[functions]`
 
 Possible punted:
-- [ ] Allow variables to be marked owned / shared / mutable
-  - [ ] ... and maybe no marking accepts any?
-        ... so e.g. push_one_and_return_mut can have `let y = arr; y` without erroring
-  - [ ] Else - improve the errors so that the conversion error has some hint from the target explaining that the target can be changed to allow
-  shared/mutable instead.
 - [ ] Allow destructuring shared and mutable variables and arguments
 - [ ] Support optional arguments in closures
 - [ ] Support for `move()` expressions in closures.
   - `move(x)` / `move(a.b.as_ref())` / `move(a.b.as_mut())` => we hoist up the content into the previous frame (effectively temporarily change `current_frame_id` to be the parent in the `FlowAnalysisState` - pretty easy).
   - These can be an anonymous definition in the root frame of the closure, which is referenced inline.
+-[ ] Possibly - not require `Clone` on iterators:
+  - Make `TryClone -> Result<T, &T>`
 
 ## Fix broken "Disabled" abstraction
+
+### Background
 
 Suddenly dawned on me - my Disabled arguments might not be safe.
 * Imagine if I get `my_arr = [[]]` a Shared `my_arr[0]` then do `my_arr.pop()`
@@ -297,22 +294,36 @@ fn can_pass_owned_to_mutable_argument() {
 ```
 
 The issue is that we get a variable stored as `arr := DisabledMutable` and then when we do `arr.push()` we clone the DisabledMutable, and then enable it...
-What we actually need is a sense of "Delegating" the mut-ness to a new `Mutable`, which then on drop re-enables its parent.
 
-... actually in our model, really the bug only appears if:
-* A *parent* gets modified, which breaks our pointer
-* We have a `&mut T` for some `T != any` and someone assigns to `self as &mut any` a different type
+### Task list
+
+- [x] Write up model in `dynamic_references/mod.rs`
+- [x] Add structure for `dynamic_references`
+- [x] Create Referenceable, and Reference types
+- [ ] Create error messages for rule breaks in `referenceable.rs`
+- [ ] Add the following to `ReferenceCore` and maybe others:
+  - [ ] Ability to map deeper. Should take a `PathExtension` and a new span.
+        See rule (c) from `dynamic_references/mod.rs`
+  - [ ] Various mapping functions (e.g. array offset; object key)
+  - [ ] Try map
+  - [ ] Emplacing
+- [ ] Check for missing features from `Shared` / `SharedSubRcRefCell` and `Mutable` / `MutableSubRcRefCell`
+
+
+### Other ideas
 
 We could imagine a world where we are more clever over our mutation:
-* From a referenceable root (wrapping an `UnsafeCell<AnyValue>`), we store paths => pointers
-* It is illegal to mutate if there is an existing pointer further along a path that you in either direction:
-  * A value
-  * A more specific type of the current value
-* We allow x.a and x.b to both be read/mutated independently
-  * I can reference `x.a` and `x.b` separately, or `x[0]` and `x[1]` but in that case, can't mutate `x` itself to create new fields.
-* We track a path to which pointers are active; and don't allow mutations which could break existing pointers.
+* Note that I can reference `x.a` and `x.b` separately, or `x[0]` and `x[1]` but in that case, can't mutate `x` itself to create new fields.
+  * Or we use a `ExpandableVec<N>` which allocates a `Vec<Box<[_; N]>>` and doesn't move the inner chunks; allowing us to add new fields without breaking pointers to existing ones.
+  Maybe some SmallVec or SegVec like library has this feature? Stores an initial chunk `[_; N]` and then a `Vec<Box<[_; N]>>`
 
 - [ ] Consider if IteratorValue, Object and Array should have `Item = DisabledReturnedValue`
+  - [ ] And add `iter()` and `iter_mut()` methods
+- [ ] Allow variables to be marked owned / shared / mutable
+  - [ ] ... and maybe no marking accepts any?
+        ... so e.g. push_one_and_return_mut can have `let y = arr; y` without erroring
+  - [ ] Else - improve the errors so that the conversion error has some hint from the target explaining that the target can be changed to allow
+  shared/mutable instead.
 
 ## Parser - Methods using closures
 
@@ -345,7 +356,7 @@ input.repeated(
 )
 ```
 - [ ] `input.any_group(|inner| { })`
-- [ ] `input.group('()', |inner| { })`
+- [ ] `input.group("()", |inner| { })`
 - [ ] `input.transparent_group(|inner| { })`
 
 ## Parser - Better Types for Tokens

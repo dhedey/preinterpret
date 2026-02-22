@@ -1,5 +1,6 @@
 mod arena;
 mod errors;
+mod dynamic_references;
 mod field_inputs;
 mod iterators;
 mod keywords;
@@ -8,6 +9,7 @@ mod parse_traits;
 pub(crate) mod string_conversion;
 
 pub(crate) use arena::*;
+pub(crate) use dynamic_references::*;
 pub(crate) use errors::*;
 pub(crate) use field_inputs::*;
 pub(crate) use iterators::*;
