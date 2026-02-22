@@ -3,7 +3,7 @@ use std::mem::transmute;
 use super::*;
 
 /// A flexible type which can either be a reference to a value of type `T`,
-/// or an emplaced reference from a [`Shared<T>`].
+/// or an emplaced reference from a [`SharedReference<T>`].
 pub(crate) struct AnyRef<'a, T: ?Sized + 'static> {
     inner: AnyRefInner<'a, T>,
 }
@@ -16,7 +16,7 @@ impl<'a, T: ?Sized + 'static> AnyRef<'a, T> {
                 inner: AnyRefInner::Direct(f(value)),
             },
             AnyRefInner::Encapsulated(shared) => AnyRef {
-                inner: AnyRefInner::Encapsulated(shared.map(|x| f(x))),
+                inner: AnyRefInner::Encapsulated(shared.map_legacy(|x| f(x))),
             },
         }
     }
@@ -31,7 +31,7 @@ impl<'a, T: ?Sized + 'static> AnyRef<'a, T> {
                 inner: AnyRefInner::Direct(f(value)?),
             },
             AnyRefInner::Encapsulated(shared) => AnyRef {
-                inner: AnyRefInner::Encapsulated(shared.map_optional(f)?),
+                inner: AnyRefInner::Encapsulated(shared.map_optional_legacy(f)?),
             },
         })
     }
@@ -107,15 +107,15 @@ impl<'a, T: ?Sized> ToSpannedRef<'a> for &'a T {
     }
 }
 
-impl<'a, T: ?Sized> From<Shared<T>> for AnyRef<'a, T> {
-    fn from(value: Shared<T>) -> Self {
+impl<'a, T: ?Sized> From<SharedReference<T>> for AnyRef<'a, T> {
+    fn from(value: SharedReference<T>) -> Self {
         Self {
-            inner: AnyRefInner::Encapsulated(value.0),
+            inner: AnyRefInner::Encapsulated(value),
         }
     }
 }
 
-impl<T: ?Sized> ToSpannedRef<'static> for Shared<T> {
+impl<T: ?Sized> ToSpannedRef<'static> for SharedReference<T> {
     type Target = T;
     fn into_ref(self) -> AnyRef<'static, Self::Target> {
         self.into()
@@ -127,7 +127,7 @@ impl<T: ?Sized> ToSpannedRef<'static> for Shared<T> {
 
 enum AnyRefInner<'a, T: 'static + ?Sized> {
     Direct(&'a T),
-    Encapsulated(SharedSubRcRefCell<AnyValue, T>),
+    Encapsulated(SharedReference<T>),
 }
 
 impl<'a, T: 'static + ?Sized> Deref for AnyRef<'a, T> {
@@ -142,7 +142,7 @@ impl<'a, T: 'static + ?Sized> Deref for AnyRef<'a, T> {
 }
 
 /// A flexible type which can either be a mutable reference to a value of type `T`,
-/// or an emplaced reference from a [`Mutable<T>`].
+/// or an emplaced reference from a [`MutableReference<T>`].
 pub(crate) struct AnyMut<'a, T: 'static + ?Sized> {
     inner: AnyMutInner<'a, T>,
 }
@@ -166,7 +166,7 @@ impl<'a, T: ?Sized + 'static> AnyMut<'a, T> {
                 inner: AnyMutInner::Direct(f(value)),
             },
             AnyMutInner::Encapsulated(mutable) => AnyMut {
-                inner: AnyMutInner::Encapsulated(mutable.map(|x| f(x))),
+                inner: AnyMutInner::Encapsulated(mutable.map_legacy(|x| f(x))),
             },
         }
     }
@@ -181,7 +181,7 @@ impl<'a, T: ?Sized + 'static> AnyMut<'a, T> {
                 inner: AnyMutInner::Direct(f(value)?),
             },
             AnyMutInner::Encapsulated(mutable) => AnyMut {
-                inner: AnyMutInner::Encapsulated(mutable.map_optional(f)?),
+                inner: AnyMutInner::Encapsulated(mutable.map_optional_legacy(f)?),
             },
         })
     }
@@ -248,17 +248,17 @@ impl<'a, T: ?Sized + 'static> IntoAnyMut<'a> for &'a mut T {
     }
 }
 
-impl<'a, T: ?Sized> From<Mutable<T>> for AnyMut<'a, T> {
-    fn from(value: Mutable<T>) -> Self {
+impl<'a, T: ?Sized> From<MutableReference<T>> for AnyMut<'a, T> {
+    fn from(value: MutableReference<T>) -> Self {
         Self {
-            inner: AnyMutInner::Encapsulated(value.0),
+            inner: AnyMutInner::Encapsulated(value),
         }
     }
 }
 
 enum AnyMutInner<'a, T: 'static + ?Sized> {
     Direct(&'a mut T),
-    Encapsulated(MutableSubRcRefCell<AnyValue, T>),
+    Encapsulated(MutableReference<T>),
 }
 
 impl<'a, T: 'static + ?Sized> Deref for AnyMut<'a, T> {

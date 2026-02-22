@@ -1,19 +1,21 @@
 use super::*;
 
-pub(crate) type Referenceable<L> = Rc<RefCell<L>>;
+// The old `pub(crate) type Referenceable<L> = Rc<RefCell<L>>;` has been replaced by
+// `dynamic_references::Referenceable` which is NOT generic (always wraps AnyValue).
+// For the form system, we use Rc<RefCell<L>> directly as the leaf type.
 
-impl<L: IsValueLeaf> IsValueContent for Referenceable<L> {
+impl<L: IsValueLeaf> IsValueContent for Rc<RefCell<L>> {
     type Type = L::Type;
     type Form = BeReferenceable;
 }
 
-impl<'a, L: IsValueLeaf> IntoValueContent<'a> for Referenceable<L> {
+impl<'a, L: IsValueLeaf> IntoValueContent<'a> for Rc<RefCell<L>> {
     fn into_content(self) -> Content<'a, Self::Type, Self::Form> {
         self
     }
 }
 
-impl<'a, L: IsValueLeaf> FromValueContent<'a> for Referenceable<L> {
+impl<'a, L: IsValueLeaf> FromValueContent<'a> for Rc<RefCell<L>> {
     fn from_content(content: Content<'a, Self::Type, Self::Form>) -> Self {
         content
     }
@@ -29,5 +31,5 @@ pub(crate) struct BeReferenceable;
 impl IsForm for BeReferenceable {}
 
 impl IsHierarchicalForm for BeReferenceable {
-    type Leaf<'a, T: IsLeafType> = Referenceable<T::Leaf>;
+    type Leaf<'a, T: IsLeafType> = Rc<RefCell<T::Leaf>>;
 }

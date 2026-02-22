@@ -80,10 +80,14 @@ impl MapFromArgument for BeCopyOnWrite {
         match value.expect_copy_on_write().inner {
             CopyOnWriteInner::Owned(owned) => Ok(BeCopyOnWrite::new_owned(owned)),
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
-                Ok(BeCopyOnWrite::new_shared_in_place_of_owned(shared))
+                let content = shared
+                    .replace_legacy(|inner, emplacer| inner.as_ref_value().into_shared(emplacer));
+                Ok(BeCopyOnWrite::new_shared_in_place_of_owned(content))
             }
             CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
-                Ok(BeCopyOnWrite::new_shared_in_place_of_shared(shared))
+                let content = shared
+                    .replace_legacy(|inner, emplacer| inner.as_ref_value().into_shared(emplacer));
+                Ok(BeCopyOnWrite::new_shared_in_place_of_shared(content))
             }
         }
     }

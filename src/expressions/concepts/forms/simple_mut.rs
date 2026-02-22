@@ -76,7 +76,7 @@ where
                 leaf: <BeMut as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
                 // SAFETY: 'l = 'a = 'e so this is valid
-                unsafe { self.emplacer.emplace_unchecked(leaf) }
+                unsafe { self.emplacer.emplace_unchecked_legacy(leaf) }
             }
         };
         let __mapper = __InlineMapper { emplacer };
@@ -107,7 +107,7 @@ where
                 leaf: <BeMut as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
                 // SAFETY: 'l = 'a = 'e so this is valid
-                unsafe { QqqAssignee(self.emplacer.emplace_unchecked(leaf)) }
+                unsafe { QqqAssignee(self.emplacer.emplace_unchecked_legacy(leaf)) }
             }
         };
         let __mapper = __InlineMapper { emplacer };
@@ -138,7 +138,9 @@ where
                 leaf: <BeMut as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
                 // SAFETY: 'l = 'a = 'e so this is valid
-                unsafe { Mutable(self.emplacer.emplace_unchecked(leaf)).into() }
+                let mutable_ref: MutableReference<_> =
+                    unsafe { self.emplacer.emplace_unchecked_legacy(leaf) };
+                mutable_ref.into()
             }
         };
         let __mapper = __InlineMapper { emplacer };

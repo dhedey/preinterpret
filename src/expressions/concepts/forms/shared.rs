@@ -1,6 +1,6 @@
 use super::*;
 
-pub(crate) type QqqShared<T> = SharedSubRcRefCell<AnyValue, T>;
+pub(crate) type QqqShared<T> = SharedReference<T>;
 
 impl<L: IsValueLeaf> IsValueContent for QqqShared<L> {
     type Type = L::Type;
@@ -36,9 +36,9 @@ impl IsDynCompatibleForm for BeShared {
     where
         T::Leaf: CastDyn<D>,
     {
-        leaf.replace(|content, emplacer| match <T::Leaf>::map_ref(content) {
-            Ok(mapped) => Ok(emplacer.emplace(mapped)),
-            Err(this) => Err(emplacer.emplace(this)),
+        leaf.replace_legacy(|content, emplacer| match <T::Leaf>::map_ref(content) {
+            Ok(mapped) => Ok(unsafe { emplacer.emplace_unchecked_legacy(mapped) }),
+            Err(this) => Err(unsafe { emplacer.emplace_unchecked_legacy(this) }),
         })
     }
 }
@@ -55,7 +55,9 @@ impl MapFromArgument for BeShared {
     fn from_argument_value(
         value: ArgumentValue,
     ) -> FunctionResult<Content<'static, AnyType, Self>> {
-        Ok(value.expect_shared().into_content())
+        Ok(value
+            .expect_shared()
+            .replace_legacy(|inner, emplacer| inner.as_ref_value().into_shared(emplacer)))
     }
 }
 

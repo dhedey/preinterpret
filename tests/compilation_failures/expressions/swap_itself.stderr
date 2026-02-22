@@ -1,5 +1,12 @@
-error: The variable cannot be modified as it is already being modified
- --> tests/compilation_failures/expressions/swap_itself.rs:6:16
+error: Cannot create mutable reference because it clashes with another reference: the mutable reference is observable from the other reference, which breaks aliasing rulesThis reference-: [*active*] &mut <variable> (of type any)Other reference: [*active*] &mut <variable> (of type any)
+ --> tests/compilation_failures/expressions/swap_itself.rs:4:13
   |
-6 |         a.swap(a);
-  |                ^
+4 |       let _ = run!{
+  |  _____________^
+5 | |         let a = "a";
+6 | |         a.swap(a);
+7 | |         a
+8 | |     };
+  | |_____^
+  |
+  = note: this error originates in the macro `run` (in Nightly builds, run with -Z macro-backtrace for more info)

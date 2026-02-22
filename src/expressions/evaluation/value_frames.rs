@@ -1056,10 +1056,12 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
         let mapped = value.expect_any_value_and_map(
             |shared| {
                 shared
-                    .try_map(|value| (interface.shared_access)(ctx, value))
+                    .try_map_legacy(|value| (interface.shared_access)(ctx, value))
                     .map_err(|(e, _)| e)
             },
-            |mutable| mutable.try_map(|value| (interface.mutable_access)(ctx, value, auto_create)),
+            |mutable| {
+                mutable.try_map_legacy(|value| (interface.mutable_access)(ctx, value, auto_create))
+            },
             |owned| (interface.owned_access)(ctx, owned),
         )?;
 
@@ -1153,11 +1155,11 @@ impl EvaluationFrame for ValueIndexAccessBuilder {
                 let result = source.expect_any_value_and_map(
                     |shared| {
                         shared
-                            .try_map(|value| (interface.shared_access)(ctx, value, index))
+                            .try_map_legacy(|value| (interface.shared_access)(ctx, value, index))
                             .map_err(|(e, _)| e)
                     },
                     |mutable| {
-                        mutable.try_map(|value| {
+                        mutable.try_map_legacy(|value| {
                             (interface.mutable_access)(ctx, value, index, auto_create)
                         })
                     },

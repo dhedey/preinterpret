@@ -55,7 +55,6 @@ impl MapFromArgument for BeAnyRef {
     ) -> FunctionResult<Content<'static, AnyType, Self>> {
         Ok(value
             .expect_shared()
-            .0
-            .replace(|inner, emplacer| inner.as_ref_value().into_shared_any_ref(emplacer)))
+            .replace_legacy(|inner, emplacer| inner.as_ref_value().into_shared_any_ref(emplacer)))
     }
 }

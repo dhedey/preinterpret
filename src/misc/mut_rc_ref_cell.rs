@@ -1,5 +1,13 @@
+#![allow(unused, dead_code)]
+// This module is no longer exported - kept for reference during migration.
+// All types have been replaced by dynamic_references equivalents.
+
 use crate::internal_prelude::*;
 use std::cell::{BorrowError, BorrowMutError};
+use std::rc::Rc;
+
+// Local alias to avoid conflict with dynamic_references::Referenceable
+type Referenceable<L> = Rc<std::cell::RefCell<L>>;
 
 /// A mutable reference to a sub-value `U` inside a [`Rc<RefCell<T>>`].
 /// Only one [`MutableSubRcRefCell`] can exist at a time for a given [`Rc<RefCell<T>>`].

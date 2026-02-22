@@ -60,7 +60,6 @@ impl MapFromArgument for BeAnyMut {
     ) -> FunctionResult<Content<'static, AnyType, Self>> {
         Ok(value
             .expect_mutable()
-            .0
-            .replace(|inner, emplacer| inner.as_mut_value().into_mutable_any_mut(emplacer)))
+            .replace_legacy(|inner, emplacer| inner.as_mut_value().into_mutable_any_mut(emplacer)))
     }
 }

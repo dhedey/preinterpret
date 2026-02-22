@@ -58,12 +58,16 @@ impl IsArgument for ArgumentValue {
     }
 }
 
-impl<T: ResolvableShared<AnyValue> + ResolvableArgumentTarget + ?Sized> IsArgument for Shared<T> {
-    type ValueType = T::ValueType;
+// NOTE: IsArgument for SharedReference<T> with leaf T is now provided by the blanket impl
+// in content.rs via FromValueContent + MapFromArgument (BeShared).
+// For the parent type AnyValue (which is not IsValueLeaf), we provide an explicit impl:
+impl IsArgument for SharedReference<AnyValue> {
+    type ValueType = AnyType;
     const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Shared;
 
     fn from_argument(argument: Spanned<ArgumentValue>) -> FunctionResult<Self> {
-        T::resolve_shared(argument.expect_shared(), "This argument")
+        let Spanned(shared, _span) = argument.expect_shared();
+        Ok(shared)
     }
 }
 
@@ -90,12 +94,16 @@ impl<T: ResolvableMutable<AnyValue> + ResolvableArgumentTarget + ?Sized> IsArgum
     }
 }
 
-impl<T: ResolvableMutable<AnyValue> + ResolvableArgumentTarget + ?Sized> IsArgument for Mutable<T> {
-    type ValueType = T::ValueType;
+// NOTE: IsArgument for MutableReference<T> with leaf T is now provided by the blanket impl
+// in content.rs via FromValueContent + MapFromArgument (BeMutable).
+// For the parent type AnyValue (which is not IsValueLeaf), we provide an explicit impl:
+impl IsArgument for MutableReference<AnyValue> {
+    type ValueType = AnyType;
     const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Mutable;
 
     fn from_argument(argument: Spanned<ArgumentValue>) -> FunctionResult<Self> {
-        T::resolve_mutable(argument.expect_mutable(), "This argument")
+        let Spanned(mutable, _span) = argument.expect_mutable();
+        Ok(mutable)
     }
 }
 
@@ -165,7 +173,9 @@ impl<T: ResolvableOwned<AnyValue>> ResolveAs<T> for Spanned<AnyValue> {
     }
 }
 
-impl<T: ResolvableShared<AnyValue> + ?Sized> ResolveAs<Shared<T>> for Spanned<AnyValueShared> {
+impl<T: ResolvableShared<AnyValue> + ?Sized + 'static> ResolveAs<Shared<T>>
+    for Spanned<AnyValueShared>
+{
     fn resolve_as(self, resolution_target: &str) -> FunctionResult<Shared<T>> {
         T::resolve_shared(self, resolution_target)
     }
@@ -185,7 +195,9 @@ impl<'a, T: ResolvableShared<AnyValue> + ?Sized> ResolveAs<Spanned<&'a T>>
     }
 }
 
-impl<T: ResolvableMutable<AnyValue> + ?Sized> ResolveAs<Mutable<T>> for Spanned<AnyValueMutable> {
+impl<T: ResolvableMutable<AnyValue> + ?Sized + 'static> ResolveAs<Mutable<T>>
+    for Spanned<AnyValueMutable>
+{
     fn resolve_as(self, resolution_target: &str) -> FunctionResult<Mutable<T>> {
         T::resolve_mutable(self, resolution_target)
     }
@@ -242,9 +254,12 @@ pub(crate) trait ResolvableShared<T> {
     fn resolve_shared(
         Spanned(value, span): Spanned<Shared<T>>,
         resolution_target: &str,
-    ) -> FunctionResult<Shared<Self>> {
+    ) -> FunctionResult<Shared<Self>>
+    where
+        Self: 'static,
+    {
         value
-            .try_map(|v| {
+            .try_map_legacy(|v| {
                 Self::resolve_from_ref(
                     v,
                     ResolutionContext {
@@ -304,9 +319,12 @@ pub(crate) trait ResolvableMutable<T> {
     fn resolve_mutable(
         Spanned(value, span): Spanned<Mutable<T>>,
         resolution_target: &str,
-    ) -> FunctionResult<Mutable<Self>> {
+    ) -> FunctionResult<Mutable<Self>>
+    where
+        Self: 'static,
+    {
         value
-            .try_map(|v| {
+            .try_map_legacy(|v| {
                 Self::resolve_from_mut(
                     v,
                     ResolutionContext {

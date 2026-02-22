@@ -1,12 +1,17 @@
-use std::process::Child;
-
 use super::*;
 
+#[derive(Clone)]
 pub(crate) struct Referenceable {
     core: Rc<ReferenceableCore<AnyValue>>,
 }
 
 impl Referenceable {
+    pub(crate) fn new(root: AnyValue, root_name: String, root_span: SpanRange) -> Self {
+        Self {
+            core: Rc::new(ReferenceableCore::new(root, root_name, root_span)),
+        }
+    }
+
     pub(crate) fn new_inactive_shared(&self) -> InactiveSharedReference<AnyValue> {
         InactiveSharedReference(ReferenceCore::new_root(
             self.core.clone(),
@@ -19,6 +24,14 @@ impl Referenceable {
             self.core.clone(),
             ReferenceKind::InactiveMutable,
         ))
+    }
+
+    /// Attempts to unwrap the inner value if this is the sole owner (no outstanding references).
+    pub(crate) fn try_into_inner(self) -> Result<AnyValue, Self> {
+        match Rc::try_unwrap(self.core) {
+            Ok(core) => Ok(core.into_inner()),
+            Err(core) => Err(Self { core }),
+        }
     }
 }
 
@@ -53,6 +66,10 @@ impl<T> ReferenceableCore<T> {
 
     pub(super) fn data_mut(&self) -> RefMut<'_, ReferenceableData> {
         self.data.borrow_mut()
+    }
+
+    pub(super) fn into_inner(self) -> T {
+        self.root.into_inner()
     }
 }
 
@@ -194,7 +211,7 @@ impl ReferenceableData {
     ) {
         let data = self.for_reference_mut(id);
         data.creation_span = new_span;
-        let mut last_path_part = data.path.parts.last_mut().expect("path is non-empty");
+        let last_path_part = data.path.parts.last_mut().expect("path is non-empty");
         match (last_path_part, path_extension) {
             (last_path_part, PathExtension::Child(specifier, child_bound_as)) => {
                 let parent_type = specifier.bound_type_kind();

@@ -76,7 +76,7 @@ where
                 leaf: <BeRef as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
                 // SAFETY: 'l = 'a = 'e so this is valid
-                unsafe { self.emplacer.emplace_unchecked(leaf) }
+                unsafe { self.emplacer.emplace_unchecked_legacy(leaf) }
             }
         };
         let __mapper = __InlineMapper { emplacer };
@@ -107,7 +107,9 @@ where
                 leaf: <BeRef as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
                 // SAFETY: 'l = 'a = 'e so this is valid
-                unsafe { Shared(self.emplacer.emplace_unchecked(leaf)).into() }
+                let shared_ref: SharedReference<_> =
+                    unsafe { self.emplacer.emplace_unchecked_legacy(leaf) };
+                shared_ref.into()
             }
         };
         let __mapper = __InlineMapper { emplacer };

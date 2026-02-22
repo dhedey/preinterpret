@@ -68,7 +68,11 @@ impl VariableDefinition {
     pub(crate) fn define(&self, interpreter: &mut Interpreter, value_source: impl IntoAnyValue) {
         interpreter.define_variable(
             self.id,
-            VariableContent::Referenceable(Rc::new(RefCell::new(value_source.into_any_value()))),
+            VariableContent::Referenceable(Referenceable::new(
+                value_source.into_any_value(),
+                "<variable>".to_string(),
+                SpanRange::new_single(Span::call_site()),
+            )),
         );
     }
 }

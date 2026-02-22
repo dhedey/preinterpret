@@ -1,6 +1,6 @@
 use super::*;
 
-pub(crate) struct QqqAssignee<T: 'static + ?Sized>(pub(crate) MutableSubRcRefCell<AnyValue, T>);
+pub(crate) struct QqqAssignee<T: 'static + ?Sized>(pub(crate) MutableReference<T>);
 
 impl<L: IsValueLeaf> IsValueContent for QqqAssignee<L> {
     type Type = L::Type;
@@ -37,9 +37,13 @@ impl IsDynCompatibleForm for BeAssignee {
         T::Leaf: CastDyn<D>,
     {
         leaf.0
-            .replace(|content, emplacer| match <T::Leaf>::map_mut(content) {
-                Ok(mapped) => Ok(QqqAssignee(emplacer.emplace(mapped))),
-                Err(this) => Err(QqqAssignee(emplacer.emplace(this))),
+            .replace_legacy(|content, emplacer| match <T::Leaf>::map_mut(content) {
+                Ok(mapped) => Ok(QqqAssignee(unsafe {
+                    emplacer.emplace_unchecked_legacy(mapped)
+                })),
+                Err(this) => Err(QqqAssignee(unsafe {
+                    emplacer.emplace_unchecked_legacy(this)
+                })),
             })
     }
 }

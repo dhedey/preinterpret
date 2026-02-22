@@ -54,6 +54,115 @@ impl<T: ?Sized> MutableReference<T> {
     }
 }
 
+impl MutableReference<AnyValue> {
+    /// Creates a new MutableReference from an owned value, wrapping it in a Referenceable.
+    pub(crate) fn new_from_owned(value: AnyValue) -> Self {
+        let referenceable = Referenceable::new(
+            value,
+            "<anonymous>".to_string(),
+            SpanRange::new_single(Span::call_site()),
+        );
+        referenceable
+            .new_inactive_mutable()
+            .activate()
+            .expect("Freshly created referenceable must be borrowable as mutable")
+    }
+}
+
+impl<T: ?Sized> MutableReference<T> {
+    /// Disables this mutable reference (bridge for old `disable()` API).
+    /// Equivalent to `deactivate()` in the new naming.
+    pub(crate) fn disable(self) -> InactiveMutableReference<T> {
+        self.deactivate()
+    }
+
+    /// Converts this mutable reference into a shared reference.
+    /// Bridge for old `into_shared()` API.
+    pub(crate) fn into_shared(self) -> SharedReference<T> {
+        let inactive = self.deactivate();
+        let inactive_shared = inactive.into_shared();
+        inactive_shared
+            .activate()
+            .expect("Converting mutable to shared should always succeed since we just released the mutable borrow")
+    }
+
+    /// Safe map that uses a placeholder path extension.
+    /// Bridge method for migration.
+    pub(crate) fn map_legacy<V: ?Sized + 'static>(
+        self,
+        value_map: impl FnOnce(&mut T) -> &mut V,
+    ) -> MutableReference<V> {
+        self.emplace_map(move |input, emplacer| {
+            // SAFETY: Conservative path extension
+            unsafe {
+                emplacer.emplace(
+                    value_map(input),
+                    PathExtension::Tightened(AnyType::type_kind()),
+                    SpanRange::new_single(Span::call_site()),
+                )
+            }
+        })
+    }
+
+    /// Safe try_map that uses a placeholder path extension.
+    /// Bridge method for migration.
+    pub(crate) fn try_map_legacy<V: ?Sized + 'static, E>(
+        self,
+        value_map: impl FnOnce(&mut T) -> Result<&mut V, E>,
+    ) -> Result<MutableReference<V>, (E, MutableReference<T>)> {
+        self.emplace_map(|input, emplacer| match value_map(input) {
+            Ok(output) => {
+                // SAFETY: Conservative path extension
+                Ok(unsafe {
+                    emplacer.emplace(
+                        output,
+                        PathExtension::Tightened(AnyType::type_kind()),
+                        SpanRange::new_single(Span::call_site()),
+                    )
+                })
+            }
+            Err(e) => Err((e, emplacer.revert())),
+        })
+    }
+
+    /// Safe map_optional that uses a placeholder path extension.
+    /// Bridge method for migration.
+    #[allow(unused)]
+    pub(crate) fn map_optional_legacy<V: ?Sized + 'static>(
+        self,
+        value_map: impl FnOnce(&mut T) -> Option<&mut V>,
+    ) -> Option<MutableReference<V>> {
+        self.emplace_map(|input, emplacer| match value_map(input) {
+            Some(output) => Some(unsafe {
+                emplacer.emplace(
+                    output,
+                    PathExtension::Tightened(AnyType::type_kind()),
+                    SpanRange::new_single(Span::call_site()),
+                )
+            }),
+            None => {
+                let _ = emplacer.revert();
+                None
+            }
+        })
+    }
+
+    /// Bridge for the old `replace()` pattern.
+    pub(crate) fn replace_legacy<O>(
+        self,
+        f: impl for<'e> FnOnce(&'e mut T, &mut MutableEmplacerV2<'e, T>) -> O,
+    ) -> O {
+        self.emplace_map(f)
+    }
+}
+
+impl<T: ?Sized> InactiveMutableReference<T> {
+    /// Re-enables this inactive mutable reference (bridge for old `enable()` API).
+    pub(crate) fn enable(self, _span: SpanRange) -> FunctionResult<MutableReference<T>> {
+        self.activate()
+    }
+}
+
 impl<T: ?Sized> Deref for MutableReference<T> {
     type Target = T;
 
@@ -64,6 +173,18 @@ impl<T: ?Sized> Deref for MutableReference<T> {
         // - The pointer is guaranteed to be valid and properly aligned for the duration of the reference's lifetime.
         // - The reference kind checks ensure that it is not mutably aliased while active.
         unsafe { self.0.pointer.as_ref() }
+    }
+}
+
+impl<T: ?Sized> AsRef<T> for MutableReference<T> {
+    fn as_ref(&self) -> &T {
+        self
+    }
+}
+
+impl<T: ?Sized> AsMut<T> for MutableReference<T> {
+    fn as_mut(&mut self) -> &mut T {
+        self
     }
 }
 
@@ -78,8 +199,13 @@ impl<T: ?Sized> DerefMut for MutableReference<T> {
     }
 }
 
-#[derive(Clone)]
 pub(crate) struct InactiveMutableReference<T: ?Sized>(pub(super) ReferenceCore<T>);
+
+impl<T: ?Sized> Clone for InactiveMutableReference<T> {
+    fn clone(&self) -> Self {
+        InactiveMutableReference(self.0.clone())
+    }
+}
 
 impl<T: ?Sized> InactiveMutableReference<T> {
     pub(crate) fn activate(self) -> FunctionResult<MutableReference<T>> {
@@ -138,4 +264,25 @@ impl<'e, T: ?Sized> MutableEmplacerV2<'e, T> {
         // - The caller ensures that the PathExtension is correct
         unsafe { MutableReference(self.0.emplace_unchecked(pointer, path_extension, new_span)) }
     }
+
+    /// Legacy bridge: emplace_unchecked without PathExtension.
+    /// Uses a conservative default path extension.
+    ///
+    /// SAFETY:
+    /// - The caller must ensure that the value's lifetime is derived from the original content
+    pub(crate) unsafe fn emplace_unchecked_legacy<V: 'static + ?Sized>(
+        &mut self,
+        value: &mut V,
+    ) -> MutableReference<V> {
+        unsafe {
+            self.emplace_unchecked(
+                value,
+                PathExtension::Tightened(AnyType::type_kind()),
+                SpanRange::new_single(Span::call_site()),
+            )
+        }
+    }
 }
+
+/// Legacy type alias for backward compatibility
+pub(crate) type MutableEmplacer<'e, T> = MutableEmplacerV2<'e, T>;

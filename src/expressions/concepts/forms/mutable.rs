@@ -1,6 +1,6 @@
 use super::*;
 
-pub(crate) type QqqMutable<T> = MutableSubRcRefCell<AnyValue, T>;
+pub(crate) type QqqMutable<T> = MutableReference<T>;
 
 impl<L: IsValueLeaf> IsValueContent for QqqMutable<L> {
     type Type = L::Type;
@@ -36,9 +36,9 @@ impl IsDynCompatibleForm for BeMutable {
     where
         T::Leaf: CastDyn<D>,
     {
-        leaf.replace(|content, emplacer| match <T::Leaf>::map_mut(content) {
-            Ok(mapped) => Ok(emplacer.emplace(mapped)),
-            Err(this) => Err(emplacer.emplace(this)),
+        leaf.replace_legacy(|content, emplacer| match <T::Leaf>::map_mut(content) {
+            Ok(mapped) => Ok(unsafe { emplacer.emplace_unchecked_legacy(mapped) }),
+            Err(this) => Err(unsafe { emplacer.emplace_unchecked_legacy(this) }),
         })
     }
 }
@@ -61,7 +61,9 @@ impl MapFromArgument for BeMutable {
     fn from_argument_value(
         value: ArgumentValue,
     ) -> FunctionResult<Content<'static, AnyType, Self>> {
-        Ok(value.expect_mutable().into_content())
+        Ok(value
+            .expect_mutable()
+            .replace_legacy(|inner, emplacer| inner.as_mut_value().into_mutable(emplacer)))
     }
 }
 
