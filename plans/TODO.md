@@ -304,10 +304,8 @@ The issue is that we get a variable stored as `arr := DisabledMutable` and then 
 - [ ] Add the following to `ReferenceCore` and maybe others:
   - [x] Emplacing
   - [x] Map, Try map
-  - [ ] Ability to map deeper. Should take a `PathExtension` and a new span.
-        See rule (c) from `dynamic_references/mod.rs`
+  - [x] Ability to map deeper. Should take a `PathExtension` and a new span.
 - [ ] Try replacing `Shared` / `Mutable`
-
 
 ### Other ideas
 

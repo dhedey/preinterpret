@@ -189,12 +189,49 @@ impl ReferenceableData {
     pub(super) fn derive_reference(
         &mut self,
         id: LocalReferenceId,
-        path_extension: ReferencePathExtension,
+        path_extension: PathExtension,
         new_span: SpanRange,
     ) {
         let data = self.for_reference_mut(id);
         data.creation_span = new_span;
-        // TODO[references]: Extend the path
+        let mut last_path_part = data.path.parts.last_mut().expect("path is non-empty");
+        match (last_path_part, path_extension) {
+            (last_path_part, PathExtension::Child(specifier, child_bound_as)) => {
+                let parent_type = specifier.bound_type_kind();
+                match last_path_part {
+                    PathPart::Value { bound_as } => {
+                        if !bound_as.is_tightening_to(&parent_type) {
+                            panic!(
+                                "Invalid path extension: cannot derive {} from {}",
+                                parent_type.source_name(),
+                                bound_as.source_name()
+                            );
+                        }
+                    }
+                    PathPart::Child(_) => {
+                        panic!("Invalid path extension: paths are expected to end in a value")
+                    }
+                }
+                *last_path_part = PathPart::Child(specifier);
+                data.path.parts.push(PathPart::Value {
+                    bound_as: child_bound_as,
+                });
+            }
+            (PathPart::Value { bound_as }, PathExtension::Tightened(new_bound_as)) => {
+                if bound_as.is_tightening_to(&new_bound_as) {
+                    *bound_as = new_bound_as;
+                } else {
+                    panic!(
+                        "Invalid path extension: cannot derive {} from {}",
+                        new_bound_as.source_name(),
+                        bound_as.source_name()
+                    );
+                }
+            }
+            (PathPart::Child(_), _) => {
+                panic!("Invalid path extension: paths are expected to end in a value");
+            }
+        }
     }
 
     fn display_path(
@@ -314,7 +351,7 @@ impl PathComparison {
             PathComparison::RightIsDescendent => {
                 "mutation may invalidate the other descendent reference"
             }
-            PathComparison::ReferencesEqual(TypeBindingComparison::RightIsMoreSpecific) => {
+            PathComparison::ReferencesEqual(TypeBindingComparison::RightDerivesFromLeft) => {
                 "mutation may invalidate the other reference with more specific type"
             }
             PathComparison::ReferencesEqual(TypeBindingComparison::Incomparable) => {
@@ -322,7 +359,7 @@ impl PathComparison {
             }
             // Activated reference is descendent of existing reference
             PathComparison::ReferencesEqual(TypeBindingComparison::Equal)
-            | PathComparison::ReferencesEqual(TypeBindingComparison::LeftIsMoreSpecific)
+            | PathComparison::ReferencesEqual(TypeBindingComparison::LeftDerivesFromRight)
             | PathComparison::LeftIsDescendent => {
                 if other_is_active {
                     "the mutable reference is observable from the other reference, which breaks aliasing rules"
@@ -365,7 +402,12 @@ impl ReferencePath {
     }
 }
 
-pub(crate) struct ReferencePathExtension;
+pub(crate) enum PathExtension {
+    /// Extends the path with a child reference (e.g. .x or [0])
+    Child(ChildSpecifier, TypeKind),
+    /// Extends the path with a value of a certain type (e.g. dereferencing a pointer)
+    Tightened(TypeKind),
+}
 
 #[derive(PartialEq, Eq, Clone)]
 enum PathPart {
@@ -374,7 +416,7 @@ enum PathPart {
 }
 
 #[derive(PartialEq, Eq, Clone)]
-enum ChildSpecifier {
+pub(crate) enum ChildSpecifier {
     ArrayChild(usize),
     ObjectChild(String),
 }

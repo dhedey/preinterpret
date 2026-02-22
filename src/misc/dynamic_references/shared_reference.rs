@@ -26,12 +26,12 @@ impl<T> SharedReference<T> {
     }
 
     /// SAFETY:
-    /// - The caller must ensure that the ReferencePathExtension is correct
-    ///   (an overly-specific ReferencePathExtension may cause safety issues)
+    /// - The caller must ensure that the PathExtension is correct
+    ///   (an overly-specific PathExtension may cause safety issues)
     pub(crate) unsafe fn map<V: ?Sized + 'static>(
         self,
         f: impl FnOnce(&T) -> &V,
-        path_extension: ReferencePathExtension,
+        path_extension: PathExtension,
         new_span: SpanRange,
     ) -> SharedReference<V> {
         self.emplace_map(move |input, emplacer| {
@@ -40,12 +40,12 @@ impl<T> SharedReference<T> {
     }
 
     /// SAFETY:
-    /// - The caller must ensure that the ReferencePathExtension is correct
-    ///   (an overly-specific ReferencePathExtension may cause safety issues)
+    /// - The caller must ensure that the PathExtension is correct
+    ///   (an overly-specific PathExtension may cause safety issues)
     pub(crate) unsafe fn try_map<V: ?Sized + 'static, E>(
         self,
         f: impl FnOnce(&T) -> Result<&V, E>,
-        path_extension: ReferencePathExtension,
+        path_extension: PathExtension,
         new_span: SpanRange,
     ) -> Result<SharedReference<V>, (E, SharedReference<T>)> {
         self.emplace_map(|input, emplacer| match f(input) {
@@ -89,12 +89,12 @@ impl<'e, T: ?Sized> SharedEmplacerV2<'e, T> {
     }
 
     /// SAFETY:
-    /// - The caller must ensure that the ReferencePathExtension is correct
-    ///   (an overly-specific ReferencePathExtension may cause safety issues)
+    /// - The caller must ensure that the PathExtension is correct
+    ///   (an overly-specific PathExtension may cause safety issues)
     pub(crate) unsafe fn emplace<V: 'static + ?Sized>(
         &mut self,
         value: &'e V,
-        path_extension: ReferencePathExtension,
+        path_extension: PathExtension,
         new_span: SpanRange,
     ) -> SharedReference<V> {
         unsafe {
@@ -106,18 +106,18 @@ impl<'e, T: ?Sized> SharedEmplacerV2<'e, T> {
 
     /// SAFETY:
     /// - The caller must ensure that the value's lifetime is derived from the original content
-    /// - The caller must ensure that the ReferencePathExtension is correct
+    /// - The caller must ensure that the PathExtension is correct
     pub(crate) unsafe fn emplace_unchecked<V: 'static + ?Sized>(
         &mut self,
         value: &V,
-        path_extension: ReferencePathExtension,
+        path_extension: PathExtension,
         new_span: SpanRange,
     ) -> SharedReference<V> {
         // SAFETY: The pointer is from a reference so non-null
         let pointer = unsafe { NonNull::new_unchecked(value as *const V as *mut V) };
         // SAFETY:
         // - The caller ensures that the reference is derived from the original content
-        // - The caller ensures that the ReferencePathExtension is correct
+        // - The caller ensures that the PathExtension is correct
         unsafe { SharedReference(self.0.emplace_unchecked(pointer, path_extension, new_span)) }
     }
 }

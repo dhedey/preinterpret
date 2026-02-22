@@ -91,6 +91,16 @@ impl TypeKind {
         }
     }
 
+    pub(crate) fn is_tightening_to(&self, other: &Self) -> bool {
+        match self.compare_bindings(other) {
+            TypeBindingComparison::Equal => true,
+            TypeBindingComparison::RightDerivesFromLeft => true,
+            TypeBindingComparison::LeftDerivesFromRight => false,
+            TypeBindingComparison::Incomparable => false,
+            TypeBindingComparison::Incompatible => false,
+        }
+    }
+
     /// This is the subtyping ordering.
     /// - I define that X <= Y if Y is a subtype of X.
     /// - Think "X is shallower than Y in the enum representation"
@@ -103,25 +113,28 @@ impl TypeKind {
             return TypeBindingComparison::Equal;
         }
         match (self, other) {
-            // Dyns are not binding-comparable to other bindings/dyns except themself
-            (TypeKind::Dyn(_), _) => TypeBindingComparison::Incomparable,
-            (_, TypeKind::Dyn(_)) => TypeBindingComparison::Incomparable,
+            // Dyns are not binding-comparable to other dyns
+            (TypeKind::Dyn(_), TypeKind::Dyn(_)) => TypeBindingComparison::Incomparable,
+            // Assuming the values are compatible, a dyn can be derived from any leaf/parent,
+            // but not the other way around (at present at least)
+            (TypeKind::Dyn(_), _) => TypeBindingComparison::LeftDerivesFromRight,
+            (_, TypeKind::Dyn(_)) => TypeBindingComparison::RightDerivesFromLeft,
             // All non-any-values are strict subtypes of AnyValue
             (TypeKind::Parent(ParentTypeKind::Value(_)), _) => {
-                TypeBindingComparison::RightIsMoreSpecific
+                TypeBindingComparison::RightDerivesFromLeft
             }
             (_, TypeKind::Parent(ParentTypeKind::Value(_))) => {
-                TypeBindingComparison::LeftIsMoreSpecific
+                TypeBindingComparison::LeftDerivesFromRight
             }
             // Integer types
             (
                 TypeKind::Parent(ParentTypeKind::Integer(_)),
                 TypeKind::Leaf(AnyValueLeafKind::Integer(_)),
-            ) => TypeBindingComparison::RightIsMoreSpecific,
+            ) => TypeBindingComparison::RightDerivesFromLeft,
             (
                 TypeKind::Leaf(AnyValueLeafKind::Integer(_)),
                 TypeKind::Parent(ParentTypeKind::Integer(_)),
-            ) => TypeBindingComparison::LeftIsMoreSpecific,
+            ) => TypeBindingComparison::LeftDerivesFromRight,
             (TypeKind::Parent(ParentTypeKind::Integer(_)), _) => {
                 TypeBindingComparison::Incompatible
             }
@@ -132,11 +145,11 @@ impl TypeKind {
             (
                 TypeKind::Parent(ParentTypeKind::Float(_)),
                 TypeKind::Leaf(AnyValueLeafKind::Float(_)),
-            ) => TypeBindingComparison::RightIsMoreSpecific,
+            ) => TypeBindingComparison::RightDerivesFromLeft,
             (
                 TypeKind::Leaf(AnyValueLeafKind::Float(_)),
                 TypeKind::Parent(ParentTypeKind::Float(_)),
-            ) => TypeBindingComparison::LeftIsMoreSpecific,
+            ) => TypeBindingComparison::LeftDerivesFromRight,
             (TypeKind::Parent(ParentTypeKind::Float(_)), _) => TypeBindingComparison::Incompatible,
             (_, TypeKind::Parent(ParentTypeKind::Float(_))) => TypeBindingComparison::Incompatible,
             // Non-equal leaf types are incomparable
@@ -150,8 +163,8 @@ impl TypeKind {
 // is compatible with some other form.
 pub(crate) enum TypeBindingComparison {
     Equal,
-    RightIsMoreSpecific,
-    LeftIsMoreSpecific,
+    RightDerivesFromLeft,
+    LeftDerivesFromRight,
     Incomparable,
     // Indicates that the types are incompatible.
     // Such a comparison shouldn't arise between valid references.

@@ -25,12 +25,12 @@ impl<T: ?Sized> MutableReference<T> {
     }
 
     /// SAFETY:
-    /// - The caller must ensure that the ReferencePathExtension is correct
-    ///   (an overly-specific ReferencePathExtension may cause safety issues)
+    /// - The caller must ensure that the PathExtension is correct
+    ///   (an overly-specific PathExtension may cause safety issues)
     pub(crate) unsafe fn map<V: ?Sized + 'static>(
         self,
         f: impl FnOnce(&mut T) -> &mut V,
-        path_extension: ReferencePathExtension,
+        path_extension: PathExtension,
         new_span: SpanRange,
     ) -> MutableReference<V> {
         self.emplace_map(move |input, emplacer| {
@@ -39,12 +39,12 @@ impl<T: ?Sized> MutableReference<T> {
     }
 
     /// SAFETY:
-    /// - The caller must ensure that the ReferencePathExtension is correct
-    ///   (an overly-specific ReferencePathExtension may cause safety issues)
+    /// - The caller must ensure that the PathExtension is correct
+    ///   (an overly-specific PathExtension may cause safety issues)
     pub(crate) unsafe fn try_map<V: ?Sized + 'static, E>(
         self,
         f: impl FnOnce(&mut T) -> Result<&mut V, E>,
-        path_extension: ReferencePathExtension,
+        path_extension: PathExtension,
         new_span: SpanRange,
     ) -> Result<MutableReference<V>, (E, MutableReference<T>)> {
         self.emplace_map(|input, emplacer| match f(input) {
@@ -107,12 +107,12 @@ impl<'e, T: ?Sized> MutableEmplacerV2<'e, T> {
     }
 
     /// SAFETY:
-    /// - The caller must ensure that the ReferencePathExtension is correct
-    ///   (an overly-specific ReferencePathExtension may cause safety issues)
+    /// - The caller must ensure that the PathExtension is correct
+    ///   (an overly-specific PathExtension may cause safety issues)
     pub(crate) unsafe fn emplace<V: 'static + ?Sized>(
         &mut self,
         value: &'e mut V,
-        path_extension: ReferencePathExtension,
+        path_extension: PathExtension,
         new_span: SpanRange,
     ) -> MutableReference<V> {
         unsafe {
@@ -124,18 +124,18 @@ impl<'e, T: ?Sized> MutableEmplacerV2<'e, T> {
 
     /// SAFETY:
     /// - The caller must ensure that the value's lifetime is derived from the original content
-    /// - The caller must ensure that the ReferencePathExtension is correct
+    /// - The caller must ensure that the PathExtension is correct
     pub(crate) unsafe fn emplace_unchecked<V: 'static + ?Sized>(
         &mut self,
         value: &mut V,
-        path_extension: ReferencePathExtension,
+        path_extension: PathExtension,
         new_span: SpanRange,
     ) -> MutableReference<V> {
         // SAFETY: The pointer is from a reference so non-null
         let pointer = unsafe { NonNull::new_unchecked(value as *mut V) };
         // SAFETY:
         // - The caller ensures that the reference is derived from the original content
-        // - The caller ensures that the ReferencePathExtension is correct
+        // - The caller ensures that the PathExtension is correct
         unsafe { MutableReference(self.0.emplace_unchecked(pointer, path_extension, new_span)) }
     }
 }
