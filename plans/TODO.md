@@ -302,12 +302,12 @@ The issue is that we get a variable stored as `arr := DisabledMutable` and then 
 - [x] Create Referenceable, and Reference types
 - [ ] Create error messages for rule breaks in `referenceable.rs`
 - [ ] Add the following to `ReferenceCore` and maybe others:
+  - [x] Emplacing
   - [ ] Ability to map deeper. Should take a `PathExtension` and a new span.
         See rule (c) from `dynamic_references/mod.rs`
   - [ ] Various mapping functions (e.g. array offset; object key)
   - [ ] Try map
-  - [ ] Emplacing
-- [ ] Check for missing features from `Shared` / `SharedSubRcRefCell` and `Mutable` / `MutableSubRcRefCell`
+- [ ] Try replacing `Shared` / `Mutable`
 
 
 ### Other ideas
