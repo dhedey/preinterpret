@@ -300,13 +300,12 @@ The issue is that we get a variable stored as `arr := DisabledMutable` and then 
 - [x] Write up model in `dynamic_references/mod.rs`
 - [x] Add structure for `dynamic_references`
 - [x] Create Referenceable, and Reference types
-- [ ] Create error messages for rule breaks in `referenceable.rs`
+- [x] Create error messages for rule breaks in `referenceable.rs`
 - [ ] Add the following to `ReferenceCore` and maybe others:
   - [x] Emplacing
+  - [x] Map, Try map
   - [ ] Ability to map deeper. Should take a `PathExtension` and a new span.
         See rule (c) from `dynamic_references/mod.rs`
-  - [ ] Various mapping functions (e.g. array offset; object key)
-  - [ ] Try map
 - [ ] Try replacing `Shared` / `Mutable`
 
 

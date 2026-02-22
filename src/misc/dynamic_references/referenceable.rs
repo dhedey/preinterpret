@@ -1,3 +1,5 @@
+use std::process::Child;
+
 use super::*;
 
 pub(crate) struct Referenceable {
@@ -8,14 +10,14 @@ impl Referenceable {
     pub(crate) fn new_inactive_shared(&self) -> InactiveSharedReference<AnyValue> {
         InactiveSharedReference(ReferenceCore::new_root(
             self.core.clone(),
-            ReferenceKind::Inactive,
+            ReferenceKind::InactiveShared,
         ))
     }
 
     pub(crate) fn new_inactive_mutable(&self) -> InactiveMutableReference<AnyValue> {
         InactiveMutableReference(ReferenceCore::new_root(
             self.core.clone(),
-            ReferenceKind::Inactive,
+            ReferenceKind::InactiveMutable,
         ))
     }
 }
@@ -23,8 +25,6 @@ impl Referenceable {
 pub(super) struct ReferenceableCore<T> {
     // Guaranteed not-null
     root: UnsafeCell<T>,
-    root_name: String,
-    pub(super) root_span: SpanRange,
     data: RefCell<ReferenceableData>,
 }
 
@@ -32,9 +32,9 @@ impl<T> ReferenceableCore<T> {
     pub(super) fn new(root: T, root_name: String, root_span: SpanRange) -> Self {
         Self {
             root: UnsafeCell::new(root),
-            root_name,
-            root_span,
             data: RefCell::new(ReferenceableData {
+                root_name,
+                root_span,
                 arena: SlotMap::with_key(),
             }),
         }
@@ -54,39 +54,6 @@ impl<T> ReferenceableCore<T> {
     pub(super) fn data_mut(&self) -> RefMut<'_, ReferenceableData> {
         self.data.borrow_mut()
     }
-
-    pub(super) fn display_path(
-        &self,
-        mut f: impl std::fmt::Write,
-        id: LocalReferenceId,
-    ) -> std::fmt::Result {
-        f.write_str(&self.root_name)?;
-        let data = self.data();
-        let data = data.for_reference(id);
-        for part in data.path.parts.iter() {
-            match part {
-                PathPart::Value { bound_as } => {
-                    f.write_str(&format!(" (of type {})", bound_as.source_name()))?;
-                }
-                PathPart::ArrayChild(i) => {
-                    f.write_char('[')?;
-                    write!(f, "{}", i)?;
-                    f.write_char(']')?;
-                }
-                PathPart::ObjectChild(key) => {
-                    if syn::parse_str::<Ident>(key).is_ok() {
-                        f.write_char('.')?;
-                        f.write_str(key)?;
-                    } else {
-                        f.write_char('[')?;
-                        write!(f, "{:?}", key)?;
-                        f.write_char(']')?;
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
 }
 
 new_key_type! {
@@ -94,10 +61,18 @@ new_key_type! {
 }
 
 pub(super) struct ReferenceableData {
+    // Could be in Referencable Core, but having it here makes the error message API easier
+    root_name: String,
+    // Could be in Referencable Core, but having it here makes the error message API easier
+    root_span: SpanRange,
     arena: SlotMap<LocalReferenceId, TrackedReference>,
 }
 
 impl ReferenceableData {
+    pub(super) fn root_span(&self) -> SpanRange {
+        self.root_span
+    }
+
     pub(super) fn new_reference(&mut self, data: TrackedReference) -> LocalReferenceId {
         self.arena.insert(data)
     }
@@ -117,7 +92,24 @@ impl ReferenceableData {
     }
 
     pub(super) fn deactivate_reference(&mut self, id: LocalReferenceId) {
-        self.for_reference_mut(id).reference_kind = ReferenceKind::Inactive;
+        let data = self.for_reference_mut(id);
+        data.reference_kind = match data.reference_kind {
+            ReferenceKind::ActiveMutable => ReferenceKind::InactiveMutable,
+            ReferenceKind::ActiveShared => ReferenceKind::InactiveShared,
+            _ => panic!("cannot deactivate an inactive reference"),
+        }
+    }
+
+    pub(super) fn make_shared(&mut self, id: LocalReferenceId) {
+        let data = self.for_reference_mut(id);
+        data.reference_kind = match data.reference_kind {
+            ReferenceKind::InactiveMutable | ReferenceKind::InactiveShared => {
+                ReferenceKind::InactiveShared
+            }
+            ReferenceKind::ActiveMutable | ReferenceKind::ActiveShared => {
+                ReferenceKind::ActiveShared
+            }
+        }
     }
 
     pub(super) fn activate_mutable_reference(
@@ -128,26 +120,35 @@ impl ReferenceableData {
         // Perform checks as per the module doc on `dynamic_references`
         for (other_id, other_data) in self.arena.iter() {
             if other_id != id {
-                match other_data.path.partial_cmp(&data.path) {
+                let error_reason = data
+                    .path
+                    .compare(&other_data.path)
+                    .error_comparing_mutable_with_other(other_data.reference_kind.is_active());
+                let error_reason = match error_reason {
+                    Some(reason) => reason,
                     None => continue,
-                    Some(Ordering::Equal | Ordering::Less) => {
-                        if other_data.reference_kind.is_active() {
-                            // TODO[references]: Fix this
-                            todo!("// BETTER ERROR: Safety invariant break")
-                        }
-                    }
-                    Some(Ordering::Greater) => {
-                        // TODO[references]: Fix this
-                        todo!("// BETTER ERROR: Validity invariant break")
-                    }
-                }
+                };
+                let mut error_message =
+                    "Cannot create mutable reference because it clashes with another reference: "
+                        .to_string();
+                error_message.push_str(error_reason);
+                let _ = write!(error_message, "This reference-: ");
+                self.display_path(&mut error_message, id, Some(ReferenceKind::ActiveMutable));
+                let _ = write!(error_message, "Other reference: ");
+                self.display_path(&mut error_message, other_id, None);
+                return data.creation_span.ownership_err(error_message);
             }
         }
+
         let data = self.for_reference_mut(id);
         data.reference_kind = match data.reference_kind {
-            ReferenceKind::Inactive => ReferenceKind::ActiveMutable,
+            ReferenceKind::InactiveMutable => ReferenceKind::ActiveMutable,
+            ReferenceKind::InactiveShared => {
+                panic!("cannot mut-activate an inactive shared reference")
+            }
             _ => panic!("cannot mut-activate an active reference"),
         };
+
         Ok(())
     }
 
@@ -156,21 +157,30 @@ impl ReferenceableData {
         // Perform checks as per the module doc on `dynamic_references`
         for (other_id, other_data) in self.arena.iter() {
             if other_id != id && other_data.reference_kind == ReferenceKind::ActiveMutable {
-                match other_data.path.partial_cmp(&data.path) {
-                    Some(Ordering::Equal | Ordering::Greater) => {
-                        // TODO[references]
-                        todo!("// BETTER ERROR: Safety invariant break")
-                    }
-                    Some(Ordering::Less) => {
-                        panic!("Unexpected mutability invariant break: shared-activating a reference with an active mutable parent. This should already be prevented by the mutable reference's activation checks, so this likely indicates a bug in the implementation.")
-                    }
-                    _ => continue,
-                }
+                let error_reason = other_data
+                    .path
+                    .compare(&data.path)
+                    .error_comparing_mutable_with_other(true);
+                let error_reason = match error_reason {
+                    Some(reason) => reason,
+                    None => continue,
+                };
+                let mut error_message =
+                    "Cannot create shared reference because it clashes with a mutable reference: "
+                        .to_string();
+                error_message.push_str(error_reason);
+                let _ = write!(error_message, "This reference-: ");
+                self.display_path(&mut error_message, id, Some(ReferenceKind::ActiveShared));
+                let _ = write!(error_message, "Other reference: ");
+                self.display_path(&mut error_message, other_id, None);
+                return data.creation_span.ownership_err(error_message);
             }
         }
         let data = self.for_reference_mut(id);
         data.reference_kind = match data.reference_kind {
-            ReferenceKind::Inactive => ReferenceKind::ActiveShared,
+            ReferenceKind::InactiveShared | ReferenceKind::InactiveMutable => {
+                ReferenceKind::ActiveShared
+            }
             _ => panic!("cannot shared-activate an active reference"),
         };
         Ok(())
@@ -186,6 +196,49 @@ impl ReferenceableData {
         data.creation_span = new_span;
         // TODO[references]: Extend the path
     }
+
+    fn display_path(
+        &self,
+        mut f: impl std::fmt::Write,
+        id: LocalReferenceId,
+        override_kind: Option<ReferenceKind>,
+    ) -> std::fmt::Result {
+        let data = self.for_reference(id);
+        let kind = override_kind.unwrap_or(data.reference_kind);
+        match kind {
+            // These are the same width to allow alignment in the error message
+            ReferenceKind::InactiveShared => f.write_str("[inactive]     &")?,
+            ReferenceKind::InactiveMutable => f.write_str("[inactive] &mut ")?,
+            ReferenceKind::ActiveShared => f.write_str("[*active*]     &")?,
+            ReferenceKind::ActiveMutable => f.write_str("[*active*] &mut ")?,
+        }
+        f.write_str(&self.root_name)?;
+        for part in data.path.parts.iter() {
+            match part {
+                PathPart::Value { bound_as } => {
+                    f.write_str(&format!(" (of type {})", bound_as.source_name()))?;
+                }
+                PathPart::Child(child) => match child {
+                    ChildSpecifier::ArrayChild(i) => {
+                        f.write_char('[')?;
+                        write!(f, "{}", i)?;
+                        f.write_char(']')?;
+                    }
+                    ChildSpecifier::ObjectChild(key) => {
+                        if syn::parse_str::<Ident>(key).is_ok() {
+                            f.write_char('.')?;
+                            f.write_str(key)?;
+                        } else {
+                            f.write_char('[')?;
+                            write!(f, "{:?}", key)?;
+                            f.write_char(']')?;
+                        }
+                    }
+                },
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
@@ -197,7 +250,8 @@ pub(super) struct TrackedReference {
 
 #[derive(PartialEq, Eq, Copy, Clone)]
 pub(super) enum ReferenceKind {
-    Inactive,
+    InactiveShared,
+    InactiveMutable,
     ActiveShared,
     ActiveMutable,
 }
@@ -205,7 +259,7 @@ pub(super) enum ReferenceKind {
 impl ReferenceKind {
     fn is_active(&self) -> bool {
         match self {
-            ReferenceKind::Inactive => false,
+            ReferenceKind::InactiveShared | ReferenceKind::InactiveMutable => false,
             ReferenceKind::ActiveShared | ReferenceKind::ActiveMutable => true,
         }
     }
@@ -228,25 +282,86 @@ pub(super) struct ReferencePath {
     parts: Vec<PathPart>,
 }
 
+enum PathComparison {
+    /// The paths have diverged in a manner which permits mutual mutability
+    /// e.g. left = x.a and right = x.b
+    Divergent,
+    /// The paths parts overlap in a manner which forbids mutual mutability,
+    /// but they are not identical or in an ancestor/descendant relationship.
+    /// e.g. left = x[0..10], right = x[5..15]
+    Overlapping,
+    /// The right path is a descendent of the left path.
+    /// e.g. right = left.x or right = left[0]["key"]
+    RightIsDescendent,
+    /// The left path is a descendent of the right path.
+    /// e.g. left = right.x or left = right[0]["key"]
+    LeftIsDescendent,
+    /// The left and right path refer to the same leaf value.
+    /// But they may be in different forms. e.g. left = &any and right = &integer
+    ReferencesEqual(TypeBindingComparison),
+    /// Represents an impossible comparison which indicates a broken invariant
+    /// (e.g. left: &integer and right: &string)
+    Incompatible,
+}
+
+impl PathComparison {
+    fn error_comparing_mutable_with_other(self, other_is_active: bool) -> Option<&'static str> {
+        Some(match self {
+            PathComparison::Divergent => return None,
+            PathComparison::Overlapping => {
+                "they overlap, so mutation may invalidate the other reference"
+            }
+            PathComparison::RightIsDescendent => {
+                "mutation may invalidate the other descendent reference"
+            }
+            PathComparison::ReferencesEqual(TypeBindingComparison::RightIsMoreSpecific) => {
+                "mutation may invalidate the other reference with more specific type"
+            }
+            PathComparison::ReferencesEqual(TypeBindingComparison::Incomparable) => {
+                "mutation may invalidate the other reference with an incompatible type"
+            }
+            // Activated reference is descendent of existing reference
+            PathComparison::ReferencesEqual(TypeBindingComparison::Equal)
+            | PathComparison::ReferencesEqual(TypeBindingComparison::LeftIsMoreSpecific)
+            | PathComparison::LeftIsDescendent => {
+                if other_is_active {
+                    "the mutable reference is observable from the other reference, which breaks aliasing rules"
+                } else {
+                    return None;
+                }
+            }
+            PathComparison::ReferencesEqual(TypeBindingComparison::Incompatible) => {
+                panic!("Unexpected incompatible type comparison. This indicates a bug in preinterpret.")
+            }
+            PathComparison::Incompatible => {
+                panic!("Unexpected incompatible reference comparison. This indicates a bug in preinterpret.")
+            }
+        })
+    }
+}
+
 impl ReferencePath {
     pub(super) fn leaf(bound_as: TypeKind) -> Self {
         Self {
             parts: vec![PathPart::Value { bound_as }],
         }
     }
-}
 
-impl PartialOrd for ReferencePath {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn compare(&self, other: &Self) -> PathComparison {
         for (own, other) in self.parts.iter().zip(&other.parts) {
-            match own.partial_cmp(other) {
-                // If incomparable, the paths have diverged so are incomparable
-                None => return None,
-                Some(Ordering::Equal) => continue,
-                Some(ordered) => return Some(ordered),
-            }
+            return match own.compare(other) {
+                PathPartComparison::Divergent => PathComparison::Divergent,
+                PathPartComparison::IdenticalChildReference => continue,
+                PathPartComparison::OverlappingChildReference => PathComparison::Overlapping,
+                PathPartComparison::RightIsDescendent => PathComparison::RightIsDescendent,
+                PathPartComparison::LeftIsDescendent => PathComparison::LeftIsDescendent,
+                PathPartComparison::ReferencesEqual(inner) => {
+                    PathComparison::ReferencesEqual(inner)
+                }
+                PathPartComparison::Incompatible => PathComparison::Incompatible,
+            };
         }
-        Some(self.parts.len().cmp(&other.parts.len()))
+        unreachable!("BUG: PathParts should be [Child* Value] and so can't end with a comparison of PathPartComparison::IdenticalDeeperReference")
     }
 }
 
@@ -255,36 +370,88 @@ pub(crate) struct ReferencePathExtension;
 #[derive(PartialEq, Eq, Clone)]
 enum PathPart {
     Value { bound_as: TypeKind },
+    Child(ChildSpecifier),
+}
+
+#[derive(PartialEq, Eq, Clone)]
+enum ChildSpecifier {
     ArrayChild(usize),
     ObjectChild(String),
 }
 
-impl PathPart {
+impl ChildSpecifier {
     fn bound_type_kind(&self) -> TypeKind {
         match self {
-            PathPart::Value { bound_as } => *bound_as,
-            PathPart::ArrayChild(_) => ArrayType::type_kind(),
-            PathPart::ObjectChild(_) => ObjectType::type_kind(),
+            ChildSpecifier::ArrayChild(_) => ArrayType::type_kind(),
+            ChildSpecifier::ObjectChild(_) => ObjectType::type_kind(),
         }
     }
 }
 
-impl PartialOrd for PathPart {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+enum PathPartComparison {
+    /// The paths have diverged in a manner which permits mutual mutability
+    /// e.g. left = x.a and right = x.b
+    Divergent,
+    /// The path parts match.
+    /// e.g. left = root.x.?? and right = root.x.??
+    IdenticalChildReference,
+    /// The paths parts overlap in a manner which forbids mutual mutability,
+    /// but they are not identical or in an ancestor/descendant relationship.
+    /// e.g. left = x[0..10], right = x[5..15]
+    #[allow(unused)] // Kept for future, and to ensure we have the correct abstraction
+    OverlappingChildReference,
+    /// The right path is a descendent of the left path.
+    /// e.g. right = left.x or right = left[0]["key"]
+    RightIsDescendent,
+    /// The left path is a descendent of the right path.
+    /// e.g. left = right.x or left = right[0]["key"]
+    LeftIsDescendent,
+    /// The left and right path refer to the same leaf value.
+    /// But they may be in different forms. e.g. left = &any and right = &integer
+    ReferencesEqual(TypeBindingComparison),
+    /// Represents an impossible comparison which indicates a broken invariant
+    /// (e.g. left: &integer and right: &string)
+    Incompatible,
+}
+
+impl PathPart {
+    fn compare(&self, other: &Self) -> PathPartComparison {
         match (self, other) {
-            (PathPart::ArrayChild(i), PathPart::ArrayChild(j)) if i == j => Some(Ordering::Equal),
-            (PathPart::ArrayChild(_), PathPart::ArrayChild(_)) => None,
-            (PathPart::ObjectChild(a), PathPart::ObjectChild(b)) if a == b => Some(Ordering::Equal),
-            (PathPart::ObjectChild(_), PathPart::ObjectChild(_)) => None,
-            // TODO[references]: I'm not sure this is right
-            // - A path being incomparable is a divergence
-            // - A type being incomparable is:
-            //  - A broken invariant if they are incompatible (e.g. String and Int)
-            //  - ?? if it's compatible dyn and a concrete type (e.g. dyn Iterator and Array)
-            // - So we probably don't want to make PathPart and TypeKind implement PartialOrd,
-            //   we probably want a more senamtically meaningful output enum which we can handle
-            //   correctly in upstream logic
-            (this, other) => this.bound_type_kind().partial_cmp(&other.bound_type_kind()),
+            (PathPart::Child(a), PathPart::Child(b)) => match (a, b) {
+                (ChildSpecifier::ArrayChild(i), ChildSpecifier::ArrayChild(j)) if i == j => {
+                    PathPartComparison::IdenticalChildReference
+                }
+                (ChildSpecifier::ArrayChild(_), ChildSpecifier::ArrayChild(_)) => {
+                    PathPartComparison::Divergent
+                }
+                (ChildSpecifier::ObjectChild(a), ChildSpecifier::ObjectChild(b)) if a == b => {
+                    PathPartComparison::IdenticalChildReference
+                }
+                (ChildSpecifier::ObjectChild(_), ChildSpecifier::ObjectChild(_)) => {
+                    PathPartComparison::Divergent
+                }
+                _ => PathPartComparison::Incompatible,
+            },
+            (PathPart::Child(a), PathPart::Value { bound_as }) => {
+                if a.bound_type_kind() == *bound_as {
+                    PathPartComparison::LeftIsDescendent
+                } else {
+                    PathPartComparison::Incompatible
+                }
+            }
+            (PathPart::Value { bound_as }, PathPart::Child(b)) => {
+                if b.bound_type_kind() == *bound_as {
+                    PathPartComparison::RightIsDescendent
+                } else {
+                    PathPartComparison::Incompatible
+                }
+            }
+            (
+                PathPart::Value { bound_as },
+                PathPart::Value {
+                    bound_as: other_bound_as,
+                },
+            ) => PathPartComparison::ReferencesEqual(bound_as.compare_bindings(other_bound_as)),
         }
     }
 }

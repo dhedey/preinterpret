@@ -4,7 +4,7 @@ pub(crate) struct MutableReference<T: ?Sized>(pub(super) ReferenceCore<T>);
 
 impl<T: ?Sized> MutableReference<T> {
     pub(crate) fn deactivate(self) -> InactiveMutableReference<T> {
-        self.0.deactivate_reference();
+        self.0.core.data_mut().deactivate_reference(self.0.id);
         InactiveMutableReference(self.0)
     }
 
@@ -83,7 +83,10 @@ pub(crate) struct InactiveMutableReference<T: ?Sized>(pub(super) ReferenceCore<T
 
 impl<T: ?Sized> InactiveMutableReference<T> {
     pub(crate) fn activate(self) -> FunctionResult<MutableReference<T>> {
-        self.0.activate_mutable_reference()?;
+        self.0
+            .core
+            .data_mut()
+            .activate_mutable_reference(self.0.id)?;
         Ok(MutableReference(self.0))
     }
 
@@ -91,6 +94,7 @@ impl<T: ?Sized> InactiveMutableReference<T> {
         // As an inactive reference, we are free to map between them
         // ... we could even enable the other way around, but that'd likely allow breaking
         // application invariants which we want to respect.
+        self.0.core.data_mut().make_shared(self.0.id);
         InactiveSharedReference(self.0)
     }
 }

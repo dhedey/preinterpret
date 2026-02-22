@@ -5,7 +5,7 @@ pub(crate) struct SharedReference<T: ?Sized>(pub(super) ReferenceCore<T>);
 
 impl<T> SharedReference<T> {
     pub(crate) fn deactivate(self) -> InactiveSharedReference<T> {
-        self.0.deactivate_reference();
+        self.0.core.data_mut().deactivate_reference(self.0.id);
         InactiveSharedReference(self.0)
     }
 
@@ -73,7 +73,10 @@ pub(crate) struct InactiveSharedReference<T: ?Sized>(pub(super) ReferenceCore<T>
 
 impl<T: ?Sized> InactiveSharedReference<T> {
     pub(crate) fn activate(self) -> FunctionResult<SharedReference<T>> {
-        self.0.activate_shared_reference()?;
+        self.0
+            .core
+            .data_mut()
+            .activate_shared_reference(self.0.id)?;
         Ok(SharedReference(self.0))
     }
 }

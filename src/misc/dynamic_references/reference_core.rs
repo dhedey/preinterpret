@@ -11,11 +11,15 @@ impl ReferenceCore<AnyValue> {
         core: Rc<ReferenceableCore<AnyValue>>,
         reference_kind: ReferenceKind,
     ) -> Self {
-        let new_id = core.data_mut().new_reference(TrackedReference {
-            path: ReferencePath::leaf(AnyType::type_kind()),
-            reference_kind,
-            creation_span: core.root_span,
-        });
+        let new_id = {
+            let mut data_mut = core.data_mut();
+            let creation_span = data_mut.root_span();
+            data_mut.new_reference(TrackedReference {
+                path: ReferencePath::leaf(AnyType::type_kind()),
+                reference_kind,
+                creation_span,
+            })
+        };
         Self {
             pointer: core.root(),
             id: new_id,
@@ -25,18 +29,6 @@ impl ReferenceCore<AnyValue> {
 }
 
 impl<T: ?Sized> ReferenceCore<T> {
-    pub(super) fn activate_mutable_reference(&self) -> FunctionResult<()> {
-        self.core.data_mut().activate_mutable_reference(self.id)
-    }
-
-    pub(super) fn activate_shared_reference(&self) -> FunctionResult<()> {
-        self.core.data_mut().activate_shared_reference(self.id)
-    }
-
-    pub(super) fn deactivate_reference(&self) {
-        self.core.data_mut().deactivate_reference(self.id);
-    }
-
     pub(super) fn into_emplacer<'e>(self) -> EmplacerCore<'e, T> {
         // NOTE: The clean-up duty is delegated to the emplacer
         let reference = ManuallyDrop::new(self);

@@ -83,6 +83,8 @@ Honestly, it's really hard. Would need to think about what operations can be per
 
 Might come back to this at some point.
 
+Relevant todos are marked as `TODO[non-leaf-form]`
+
 ## What's next?
 
 Let's put the "concepts" to-leaf on indefinite pause. It's definitely resulted in a lot of good cleaning up, BUT it's also created a lot of mess.

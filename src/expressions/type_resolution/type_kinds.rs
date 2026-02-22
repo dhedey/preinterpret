@@ -90,36 +90,72 @@ impl TypeKind {
             TypeKind::Dyn(dyn_kind) => dyn_kind.source_name(),
         }
     }
-}
 
-/// This is the subtyping ordering.
-/// - I define that X <= Y if Y is a subtype of X.
-/// - Think "X is shallower than Y in the enum representation"
-///
-/// This must be accurate so that the Dynamic References works correctly.
-/// e.g. if I have a `a: &mut AnyValue` and a `b: &mut IntegerValue` pointing
-/// to the same memory, then I can't use a to change to a String.
-impl PartialOrd for TypeKind {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    /// This is the subtyping ordering.
+    /// - I define that X <= Y if Y is a subtype of X.
+    /// - Think "X is shallower than Y in the enum representation"
+    ///
+    /// This must be accurate so that the Dynamic References works correctly.
+    /// e.g. if I have a `a: &mut AnyValue` and a `b: &mut IntegerValue` pointing
+    /// to the same memory, then I can't use a to change to a String.
+    pub(crate) fn compare_bindings(&self, other: &Self) -> TypeBindingComparison {
         if self == other {
-            return Some(std::cmp::Ordering::Equal);
+            return TypeBindingComparison::Equal;
         }
-        // TODO: implement a more complete partial ord that reflects the actual subtyping relationships.
         match (self, other) {
-            // None-equal dyns are not subtypes
-            (TypeKind::Dyn(_), _) => None,
-            (_, TypeKind::Dyn(_)) => None,
+            // Dyns are not binding-comparable to other bindings/dyns except themself
+            (TypeKind::Dyn(_), _) => TypeBindingComparison::Incomparable,
+            (_, TypeKind::Dyn(_)) => TypeBindingComparison::Incomparable,
             // All non-any-values are strict subtypes of AnyValue
-            (TypeKind::Parent(ParentTypeKind::Value(_)), _) => Some(std::cmp::Ordering::Less),
-            (_, TypeKind::Parent(ParentTypeKind::Value(_))) => Some(std::cmp::Ordering::Greater),
-            // TODO: Non-equal leave types should kinda be an error, assuming they're pointing
-            // at the same value
-            (TypeKind::Leaf(_), _) => None,
-            (_, TypeKind::Leaf(_)) => None,
-            // TODO: Handle intermediate parents
-            _ => None,
+            (TypeKind::Parent(ParentTypeKind::Value(_)), _) => {
+                TypeBindingComparison::RightIsMoreSpecific
+            }
+            (_, TypeKind::Parent(ParentTypeKind::Value(_))) => {
+                TypeBindingComparison::LeftIsMoreSpecific
+            }
+            // Integer types
+            (
+                TypeKind::Parent(ParentTypeKind::Integer(_)),
+                TypeKind::Leaf(AnyValueLeafKind::Integer(_)),
+            ) => TypeBindingComparison::RightIsMoreSpecific,
+            (
+                TypeKind::Leaf(AnyValueLeafKind::Integer(_)),
+                TypeKind::Parent(ParentTypeKind::Integer(_)),
+            ) => TypeBindingComparison::LeftIsMoreSpecific,
+            (TypeKind::Parent(ParentTypeKind::Integer(_)), _) => {
+                TypeBindingComparison::Incompatible
+            }
+            (_, TypeKind::Parent(ParentTypeKind::Integer(_))) => {
+                TypeBindingComparison::Incompatible
+            }
+            // Float types
+            (
+                TypeKind::Parent(ParentTypeKind::Float(_)),
+                TypeKind::Leaf(AnyValueLeafKind::Float(_)),
+            ) => TypeBindingComparison::RightIsMoreSpecific,
+            (
+                TypeKind::Leaf(AnyValueLeafKind::Float(_)),
+                TypeKind::Parent(ParentTypeKind::Float(_)),
+            ) => TypeBindingComparison::LeftIsMoreSpecific,
+            (TypeKind::Parent(ParentTypeKind::Float(_)), _) => TypeBindingComparison::Incompatible,
+            (_, TypeKind::Parent(ParentTypeKind::Float(_))) => TypeBindingComparison::Incompatible,
+            // Non-equal leaf types are incomparable
+            (TypeKind::Leaf(_), TypeKind::Leaf(_)) => TypeBindingComparison::Incompatible,
         }
     }
+}
+
+// TODO[non-leaf-form]: This abstraction isn't quite right.
+// We probably need to reference whether the form we're looking at
+// is compatible with some other form.
+pub(crate) enum TypeBindingComparison {
+    Equal,
+    RightIsMoreSpecific,
+    LeftIsMoreSpecific,
+    Incomparable,
+    // Indicates that the types are incompatible.
+    // Such a comparison shouldn't arise between valid references.
+    Incompatible,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
