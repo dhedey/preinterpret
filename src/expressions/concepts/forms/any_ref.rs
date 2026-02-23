@@ -34,9 +34,16 @@ impl IsDynCompatibleForm for BeAnyRef {
     where
         T::Leaf: CastDyn<D>,
     {
-        leaf.replace(|content, emplacer| match <T::Leaf>::map_ref(content) {
-            Ok(mapped) => Ok(emplacer.emplace(mapped)),
-            Err(this) => Err(emplacer.emplace(this)),
+        leaf.replace(|content, emplacer| {
+            let span = emplacer.current_span();
+            match <T::Leaf>::map_ref(content) {
+                Ok(mapped) => Ok(unsafe {
+                    emplacer.emplace(mapped, PathExtension::Tightened(T::type_kind()), span)
+                }),
+                Err(this) => Err(unsafe {
+                    emplacer.emplace(this, PathExtension::Tightened(T::type_kind()), span)
+                }),
+            }
         })
     }
 }
@@ -55,6 +62,6 @@ impl MapFromArgument for BeAnyRef {
     ) -> FunctionResult<Content<'static, AnyType, Self>> {
         Ok(value
             .expect_shared()
-            .replace_legacy(|inner, emplacer| inner.as_ref_value().into_shared_any_ref(emplacer)))
+            .emplace_map(|inner, emplacer| inner.as_ref_value().into_shared_any_ref(emplacer)))
     }
 }

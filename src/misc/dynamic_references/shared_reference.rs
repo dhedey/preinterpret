@@ -82,85 +82,15 @@ impl SharedReference<AnyValue> {
 }
 
 impl<T: ?Sized> SharedReference<T> {
+    /// Returns the current creation span of the tracked reference.
+    pub(crate) fn current_span(&self) -> SpanRange {
+        self.0.core.data().for_reference(self.0.id).creation_span
+    }
+
     /// Disables this shared reference (bridge for old `disable()` API).
     /// Equivalent to `deactivate()` in the new naming.
     pub(crate) fn disable(self) -> InactiveSharedReference<T> {
         self.deactivate()
-    }
-
-    /// Safe map that uses a placeholder path extension.
-    /// This is a bridge method for migration - callers should eventually switch to
-    /// the unsafe `map()` with proper PathExtension.
-    pub(crate) fn map_legacy<V: ?Sized + 'static>(
-        self,
-        value_map: impl FnOnce(&T) -> &V,
-    ) -> SharedReference<V> {
-        self.emplace_map(move |input, emplacer| {
-            // SAFETY: We use Tightened(AnyType::type_kind()) as a conservative path extension
-            // that says "we're still at the same depth, just changing our view".
-            // This may be overly conservative but won't cause memory safety issues.
-            unsafe {
-                emplacer.emplace(
-                    value_map(input),
-                    PathExtension::Tightened(AnyType::type_kind()),
-                    SpanRange::new_single(Span::call_site()),
-                )
-            }
-        })
-    }
-
-    /// Safe try_map that uses a placeholder path extension.
-    /// Bridge method for migration.
-    pub(crate) fn try_map_legacy<V: ?Sized + 'static, E>(
-        self,
-        value_map: impl FnOnce(&T) -> Result<&V, E>,
-    ) -> Result<SharedReference<V>, (E, SharedReference<T>)> {
-        self.emplace_map(|input, emplacer| match value_map(input) {
-            Ok(output) => {
-                // SAFETY: Same conservative path extension as map_legacy
-                Ok(unsafe {
-                    emplacer.emplace(
-                        output,
-                        PathExtension::Tightened(AnyType::type_kind()),
-                        SpanRange::new_single(Span::call_site()),
-                    )
-                })
-            }
-            Err(e) => Err((e, emplacer.revert())),
-        })
-    }
-
-    /// Safe map_optional that uses a placeholder path extension.
-    /// Bridge method for migration.
-    pub(crate) fn map_optional_legacy<V: ?Sized + 'static>(
-        self,
-        value_map: impl FnOnce(&T) -> Option<&V>,
-    ) -> Option<SharedReference<V>> {
-        self.emplace_map(|input, emplacer| match value_map(input) {
-            Some(output) => {
-                // SAFETY: Same conservative path extension as map_legacy
-                Some(unsafe {
-                    emplacer.emplace(
-                        output,
-                        PathExtension::Tightened(AnyType::type_kind()),
-                        SpanRange::new_single(Span::call_site()),
-                    )
-                })
-            }
-            None => {
-                let _ = emplacer.revert(); // drop the reverted reference
-                None
-            }
-        })
-    }
-
-    /// Bridge for the old `replace()` pattern.
-    /// Uses the emplace_map internally with a legacy path extension.
-    pub(crate) fn replace_legacy<O>(
-        self,
-        f: impl for<'e> FnOnce(&'e T, &mut SharedEmplacerV2<'e, T>) -> O,
-    ) -> O {
-        self.emplace_map(f)
     }
 }
 
@@ -217,6 +147,12 @@ impl<'e, T: ?Sized> SharedEmplacerV2<'e, T> {
         SharedReference(self.0.revert())
     }
 
+    /// Returns the current creation span of the tracked reference.
+    /// Useful for preserving the span during internal type-narrowing operations.
+    pub(crate) fn current_span(&self) -> SpanRange {
+        self.0.current_span()
+    }
+
     /// SAFETY:
     /// - The caller must ensure that the PathExtension is correct
     ///   (an overly-specific PathExtension may cause safety issues)
@@ -248,24 +184,6 @@ impl<'e, T: ?Sized> SharedEmplacerV2<'e, T> {
         // - The caller ensures that the reference is derived from the original content
         // - The caller ensures that the PathExtension is correct
         unsafe { SharedReference(self.0.emplace_unchecked(pointer, path_extension, new_span)) }
-    }
-
-    /// Legacy bridge: emplace_unchecked without PathExtension.
-    /// Uses a conservative default path extension.
-    ///
-    /// SAFETY:
-    /// - The caller must ensure that the value's lifetime is derived from the original content
-    pub(crate) unsafe fn emplace_unchecked_legacy<V: 'static + ?Sized>(
-        &mut self,
-        value: &V,
-    ) -> SharedReference<V> {
-        unsafe {
-            self.emplace_unchecked(
-                value,
-                PathExtension::Tightened(AnyType::type_kind()),
-                SpanRange::new_single(Span::call_site()),
-            )
-        }
     }
 }
 

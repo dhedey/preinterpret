@@ -76,7 +76,14 @@ where
                 leaf: <BeMut as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
                 // SAFETY: 'l = 'a = 'e so this is valid
-                unsafe { self.emplacer.emplace_unchecked_legacy(leaf) }
+                let span = self.emplacer.current_span();
+                unsafe {
+                    self.emplacer.emplace_unchecked(
+                        leaf,
+                        PathExtension::Tightened(T::type_kind()),
+                        span,
+                    )
+                }
             }
         };
         let __mapper = __InlineMapper { emplacer };
@@ -107,7 +114,14 @@ where
                 leaf: <BeMut as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
                 // SAFETY: 'l = 'a = 'e so this is valid
-                unsafe { QqqAssignee(self.emplacer.emplace_unchecked_legacy(leaf)) }
+                let span = self.emplacer.current_span();
+                unsafe {
+                    QqqAssignee(self.emplacer.emplace_unchecked(
+                        leaf,
+                        PathExtension::Tightened(T::type_kind()),
+                        span,
+                    ))
+                }
             }
         };
         let __mapper = __InlineMapper { emplacer };
@@ -138,8 +152,14 @@ where
                 leaf: <BeMut as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
                 // SAFETY: 'l = 'a = 'e so this is valid
-                let mutable_ref: MutableReference<_> =
-                    unsafe { self.emplacer.emplace_unchecked_legacy(leaf) };
+                let span = self.emplacer.current_span();
+                let mutable_ref: MutableReference<_> = unsafe {
+                    self.emplacer.emplace_unchecked(
+                        leaf,
+                        PathExtension::Tightened(T::type_kind()),
+                        span,
+                    )
+                };
                 mutable_ref.into()
             }
         };

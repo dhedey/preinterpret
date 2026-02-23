@@ -9,29 +9,50 @@ pub(crate) struct AnyRef<'a, T: ?Sized + 'static> {
 }
 
 impl<'a, T: ?Sized + 'static> AnyRef<'a, T> {
+    /// SAFETY: The caller must ensure the PathExtension is correct.
     #[allow(unused)]
-    pub(crate) fn map<S: ?Sized>(self, f: impl for<'r> FnOnce(&'r T) -> &'r S) -> AnyRef<'a, S> {
+    pub(crate) unsafe fn map<S: ?Sized>(
+        self,
+        f: impl for<'r> FnOnce(&'r T) -> &'r S,
+        path_extension: PathExtension,
+        new_span: SpanRange,
+    ) -> AnyRef<'a, S> {
         match self.inner {
             AnyRefInner::Direct(value) => AnyRef {
                 inner: AnyRefInner::Direct(f(value)),
             },
             AnyRefInner::Encapsulated(shared) => AnyRef {
-                inner: AnyRefInner::Encapsulated(shared.map_legacy(|x| f(x))),
+                inner: AnyRefInner::Encapsulated(unsafe {
+                    shared.map(|x| f(x), path_extension, new_span)
+                }),
             },
         }
     }
 
+    /// SAFETY: The caller must ensure the PathExtension is correct.
     #[allow(unused)]
-    pub(crate) fn map_optional<S: ?Sized>(
+    pub(crate) unsafe fn map_optional<S: ?Sized>(
         self,
         f: impl for<'r> FnOnce(&'r T) -> Option<&'r S>,
+        path_extension: PathExtension,
+        new_span: SpanRange,
     ) -> Option<AnyRef<'a, S>> {
         Some(match self.inner {
             AnyRefInner::Direct(value) => AnyRef {
                 inner: AnyRefInner::Direct(f(value)?),
             },
             AnyRefInner::Encapsulated(shared) => AnyRef {
-                inner: AnyRefInner::Encapsulated(shared.map_optional_legacy(f)?),
+                inner: AnyRefInner::Encapsulated(shared.emplace_map(|input, emplacer| match f(
+                    input,
+                ) {
+                    Some(output) => {
+                        Some(unsafe { emplacer.emplace(output, path_extension, new_span) })
+                    }
+                    None => {
+                        let _ = emplacer.revert();
+                        None
+                    }
+                })?),
             },
         })
     }
@@ -60,26 +81,62 @@ pub(crate) struct AnyRefEmplacer<'a, 'e: 'a, T: 'static + ?Sized> {
 }
 
 impl<'a, 'e: 'a, T: 'static + ?Sized> AnyRefEmplacer<'a, 'e, T> {
-    pub(crate) fn emplace<V: 'static + ?Sized>(&mut self, value: &'e V) -> AnyRef<'a, V> {
-        unsafe {
-            // SAFETY: The lifetime 'e is equal to the &'e content argument in replace
-            // So this guarantees that the returned reference is valid as long as the AnyRef exists
-            self.emplace_unchecked(value)
+    /// Returns the current span of the underlying reference (if encapsulated),
+    /// or a placeholder span (if direct).
+    pub(crate) fn current_span(&self) -> SpanRange {
+        match &self
+            .inner
+            .as_ref()
+            .expect("Emplacer already consumed")
+            .inner
+        {
+            AnyRefInner::Direct(_) => SpanRange::new_single(Span::call_site()),
+            AnyRefInner::Encapsulated(shared) => shared.current_span(),
         }
     }
 
-    // SAFETY:
-    // * The caller must ensure that the value's lifetime is derived from the original content
+    /// SAFETY: The caller must ensure the PathExtension is correct.
+    pub(crate) unsafe fn emplace<V: 'static + ?Sized>(
+        &mut self,
+        value: &'e V,
+        path_extension: PathExtension,
+        new_span: SpanRange,
+    ) -> AnyRef<'a, V> {
+        unsafe {
+            // SAFETY: The lifetime 'e is equal to the &'e content argument in replace
+            // So this guarantees that the returned reference is valid as long as the AnyRef exists
+            self.emplace_unchecked(value, path_extension, new_span)
+        }
+    }
+
+    /// SAFETY:
+    /// - The caller must ensure that the value's lifetime is derived from the original content
+    /// - The caller must ensure the PathExtension is correct
     pub(crate) unsafe fn emplace_unchecked<V: 'static + ?Sized>(
         &mut self,
         value: &V,
+        path_extension: PathExtension,
+        new_span: SpanRange,
     ) -> AnyRef<'a, V> {
-        self.inner
+        let any_ref = self
+            .inner
             .take()
-            .expect("You can only emplace to create a new AnyRef value once")
-            .map(|_|
+            .expect("You can only emplace to create a new AnyRef value once");
+        match any_ref.inner {
+            AnyRefInner::Direct(_) => AnyRef {
                 // SAFETY: As defined in the rustdoc above
-                unsafe { transmute::<&V, &'static V>(value) })
+                inner: AnyRefInner::Direct(unsafe { transmute::<&V, &'static V>(value) }),
+            },
+            AnyRefInner::Encapsulated(shared) => AnyRef {
+                inner: AnyRefInner::Encapsulated(unsafe {
+                    shared.map(
+                        |_| transmute::<&V, &'static V>(value),
+                        path_extension,
+                        new_span,
+                    )
+                }),
+            },
+        }
     }
 }
 
@@ -156,32 +213,50 @@ impl<'a, T: ?Sized> From<&'a mut T> for AnyMut<'a, T> {
 }
 
 impl<'a, T: ?Sized + 'static> AnyMut<'a, T> {
+    /// SAFETY: The caller must ensure the PathExtension is correct.
     #[allow(unused)]
-    pub(crate) fn map<S: ?Sized>(
+    pub(crate) unsafe fn map<S: ?Sized>(
         self,
         f: impl for<'r> FnOnce(&'r mut T) -> &'r mut S,
+        path_extension: PathExtension,
+        new_span: SpanRange,
     ) -> AnyMut<'a, S> {
         match self.inner {
             AnyMutInner::Direct(value) => AnyMut {
                 inner: AnyMutInner::Direct(f(value)),
             },
             AnyMutInner::Encapsulated(mutable) => AnyMut {
-                inner: AnyMutInner::Encapsulated(mutable.map_legacy(|x| f(x))),
+                inner: AnyMutInner::Encapsulated(unsafe {
+                    mutable.map(|x| f(x), path_extension, new_span)
+                }),
             },
         }
     }
 
+    /// SAFETY: The caller must ensure the PathExtension is correct.
     #[allow(unused)]
-    pub(crate) fn map_optional<S: ?Sized>(
+    pub(crate) unsafe fn map_optional<S: ?Sized>(
         self,
         f: impl for<'r> FnOnce(&'r mut T) -> Option<&'r mut S>,
+        path_extension: PathExtension,
+        new_span: SpanRange,
     ) -> Option<AnyMut<'a, S>> {
         Some(match self.inner {
             AnyMutInner::Direct(value) => AnyMut {
                 inner: AnyMutInner::Direct(f(value)?),
             },
             AnyMutInner::Encapsulated(mutable) => AnyMut {
-                inner: AnyMutInner::Encapsulated(mutable.map_optional_legacy(f)?),
+                inner: AnyMutInner::Encapsulated(mutable.emplace_map(
+                    |input, emplacer| match f(input) {
+                        Some(output) => {
+                            Some(unsafe { emplacer.emplace(output, path_extension, new_span) })
+                        }
+                        None => {
+                            let _ = emplacer.revert();
+                            None
+                        }
+                    },
+                )?),
             },
         })
     }
@@ -211,26 +286,62 @@ pub(crate) struct AnyMutEmplacer<'a, 'e: 'a, T: 'static + ?Sized> {
 }
 
 impl<'a, 'e: 'a, T: 'static + ?Sized> AnyMutEmplacer<'a, 'e, T> {
-    pub(crate) fn emplace<V: 'static + ?Sized>(&mut self, value: &'e mut V) -> AnyMut<'a, V> {
-        unsafe {
-            // SAFETY: The lifetime 'e is equal to the &'e content argument in replace
-            // So this guarantees that the returned reference is valid as long as the AnyMut exists
-            self.emplace_unchecked(value)
+    /// Returns the current span of the underlying reference (if encapsulated),
+    /// or a placeholder span (if direct).
+    pub(crate) fn current_span(&self) -> SpanRange {
+        match &self
+            .inner
+            .as_ref()
+            .expect("Emplacer already consumed")
+            .inner
+        {
+            AnyMutInner::Direct(_) => SpanRange::new_single(Span::call_site()),
+            AnyMutInner::Encapsulated(mutable) => mutable.current_span(),
         }
     }
 
-    // SAFETY:
-    // * The caller must ensure that the value's lifetime is derived from the original content
+    /// SAFETY: The caller must ensure the PathExtension is correct.
+    pub(crate) unsafe fn emplace<V: 'static + ?Sized>(
+        &mut self,
+        value: &'e mut V,
+        path_extension: PathExtension,
+        new_span: SpanRange,
+    ) -> AnyMut<'a, V> {
+        unsafe {
+            // SAFETY: The lifetime 'e is equal to the &'e content argument in replace
+            // So this guarantees that the returned reference is valid as long as the AnyMut exists
+            self.emplace_unchecked(value, path_extension, new_span)
+        }
+    }
+
+    /// SAFETY:
+    /// - The caller must ensure that the value's lifetime is derived from the original content
+    /// - The caller must ensure the PathExtension is correct
     pub(crate) unsafe fn emplace_unchecked<V: 'static + ?Sized>(
         &mut self,
         value: &mut V,
+        path_extension: PathExtension,
+        new_span: SpanRange,
     ) -> AnyMut<'a, V> {
-        self.inner
+        let any_mut = self
+            .inner
             .take()
-            .expect("You can only emplace to create a new AnyMut value once")
-            .map(|_|
+            .expect("You can only emplace to create a new AnyMut value once");
+        match any_mut.inner {
+            AnyMutInner::Direct(_) => AnyMut {
                 // SAFETY: As defined in the rustdoc above
-                unsafe { transmute::<&mut V, &'static mut V>(value) })
+                inner: AnyMutInner::Direct(unsafe { transmute::<&mut V, &'static mut V>(value) }),
+            },
+            AnyMutInner::Encapsulated(mutable) => AnyMut {
+                inner: AnyMutInner::Encapsulated(unsafe {
+                    mutable.map(
+                        |_| transmute::<&mut V, &'static mut V>(value),
+                        path_extension,
+                        new_span,
+                    )
+                }),
+            },
+        }
     }
 }
 

@@ -81,12 +81,12 @@ impl MapFromArgument for BeCopyOnWrite {
             CopyOnWriteInner::Owned(owned) => Ok(BeCopyOnWrite::new_owned(owned)),
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
                 let content = shared
-                    .replace_legacy(|inner, emplacer| inner.as_ref_value().into_shared(emplacer));
+                    .emplace_map(|inner, emplacer| inner.as_ref_value().into_shared(emplacer));
                 Ok(BeCopyOnWrite::new_shared_in_place_of_owned(content))
             }
             CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
                 let content = shared
-                    .replace_legacy(|inner, emplacer| inner.as_ref_value().into_shared(emplacer));
+                    .emplace_map(|inner, emplacer| inner.as_ref_value().into_shared(emplacer));
                 Ok(BeCopyOnWrite::new_shared_in_place_of_shared(content))
             }
         }

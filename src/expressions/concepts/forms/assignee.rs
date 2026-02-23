@@ -36,15 +36,21 @@ impl IsDynCompatibleForm for BeAssignee {
     where
         T::Leaf: CastDyn<D>,
     {
-        leaf.0
-            .replace_legacy(|content, emplacer| match <T::Leaf>::map_mut(content) {
+        leaf.0.emplace_map(|content, emplacer| {
+            let span = emplacer.current_span();
+            match <T::Leaf>::map_mut(content) {
                 Ok(mapped) => Ok(QqqAssignee(unsafe {
-                    emplacer.emplace_unchecked_legacy(mapped)
+                    emplacer.emplace_unchecked(
+                        mapped,
+                        PathExtension::Tightened(T::type_kind()),
+                        span,
+                    )
                 })),
                 Err(this) => Err(QqqAssignee(unsafe {
-                    emplacer.emplace_unchecked_legacy(this)
+                    emplacer.emplace_unchecked(this, PathExtension::Tightened(T::type_kind()), span)
                 })),
-            })
+            }
+        })
     }
 }
 

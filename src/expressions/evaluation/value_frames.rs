@@ -1053,14 +1053,35 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
         };
         let auto_create = context.requested_ownership().requests_auto_create();
 
+        let property_name_for_shared = property_name.clone();
         let mapped = value.expect_any_value_and_map(
             |shared| {
-                shared
-                    .try_map_legacy(|value| (interface.shared_access)(ctx, value))
-                    .map_err(|(e, _)| e)
+                // SAFETY: Property access navigates to a named child of the source value.
+                unsafe {
+                    shared
+                        .try_map(
+                            |value| (interface.shared_access)(ctx, value),
+                            PathExtension::Child(
+                                ChildSpecifier::ObjectChild(property_name_for_shared),
+                                AnyType::type_kind(),
+                            ),
+                            result_span,
+                        )
+                        .map_err(|(e, _)| e)
+                }
             },
             |mutable| {
-                mutable.try_map_legacy(|value| (interface.mutable_access)(ctx, value, auto_create))
+                // SAFETY: Property access navigates to a named child of the source value.
+                unsafe {
+                    mutable.try_map(
+                        |value| (interface.mutable_access)(ctx, value, auto_create),
+                        PathExtension::Child(
+                            ChildSpecifier::ObjectChild(property_name),
+                            AnyType::type_kind(),
+                        ),
+                        result_span,
+                    )
+                }
             },
             |owned| (interface.owned_access)(ctx, owned),
         )?;
@@ -1152,20 +1173,33 @@ impl EvaluationFrame for ValueIndexAccessBuilder {
                 };
                 let auto_create = context.requested_ownership().requests_auto_create();
 
+                let result_span = SpanRange::new_between(source_span, self.access.span_range());
                 let result = source.expect_any_value_and_map(
                     |shared| {
-                        shared
-                            .try_map_legacy(|value| (interface.shared_access)(ctx, value, index))
-                            .map_err(|(e, _)| e)
+                        // SAFETY: Tightened(AnyType) is conservative for index access.
+                        // A future improvement could derive ChildSpecifier from the index value.
+                        unsafe {
+                            shared
+                                .try_map(
+                                    |value| (interface.shared_access)(ctx, value, index),
+                                    PathExtension::Tightened(AnyType::type_kind()),
+                                    result_span,
+                                )
+                                .map_err(|(e, _)| e)
+                        }
                     },
                     |mutable| {
-                        mutable.try_map_legacy(|value| {
-                            (interface.mutable_access)(ctx, value, index, auto_create)
-                        })
+                        // SAFETY: Tightened(AnyType) is conservative for index access.
+                        unsafe {
+                            mutable.try_map(
+                                |value| (interface.mutable_access)(ctx, value, index, auto_create),
+                                PathExtension::Tightened(AnyType::type_kind()),
+                                result_span,
+                            )
+                        }
                     },
                     |owned| (interface.owned_access)(ctx, owned, index),
                 )?;
-                let result_span = SpanRange::new_between(source_span, self.access.span_range());
                 context.return_not_necessarily_matching_requested(Spanned(result, result_span))?
             }
         })

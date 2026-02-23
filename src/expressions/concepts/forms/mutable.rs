@@ -36,9 +36,20 @@ impl IsDynCompatibleForm for BeMutable {
     where
         T::Leaf: CastDyn<D>,
     {
-        leaf.replace_legacy(|content, emplacer| match <T::Leaf>::map_mut(content) {
-            Ok(mapped) => Ok(unsafe { emplacer.emplace_unchecked_legacy(mapped) }),
-            Err(this) => Err(unsafe { emplacer.emplace_unchecked_legacy(this) }),
+        leaf.emplace_map(|content, emplacer| {
+            let span = emplacer.current_span();
+            match <T::Leaf>::map_mut(content) {
+                Ok(mapped) => Ok(unsafe {
+                    emplacer.emplace_unchecked(
+                        mapped,
+                        PathExtension::Tightened(T::type_kind()),
+                        span,
+                    )
+                }),
+                Err(this) => Err(unsafe {
+                    emplacer.emplace_unchecked(this, PathExtension::Tightened(T::type_kind()), span)
+                }),
+            }
         })
     }
 }
@@ -63,7 +74,7 @@ impl MapFromArgument for BeMutable {
     ) -> FunctionResult<Content<'static, AnyType, Self>> {
         Ok(value
             .expect_mutable()
-            .replace_legacy(|inner, emplacer| inner.as_mut_value().into_mutable(emplacer)))
+            .emplace_map(|inner, emplacer| inner.as_mut_value().into_mutable(emplacer)))
     }
 }
 

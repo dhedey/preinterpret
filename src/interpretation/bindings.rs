@@ -398,7 +398,7 @@ where
 {
     fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
         self.0
-            .replace_legacy(|inner, emplacer| inner.as_mut_value().into_assignee(emplacer))
+            .emplace_map(|inner, emplacer| inner.as_mut_value().into_assignee(emplacer))
     }
 }
 
@@ -617,13 +617,13 @@ where
             }
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
                 let content = shared
-                    .replace_legacy(|inner, emplacer| inner.as_ref_value().into_shared(emplacer));
+                    .emplace_map(|inner, emplacer| inner.as_ref_value().into_shared(emplacer));
                 AnyLevelCopyOnWrite::<X::Type>::SharedWithInfallibleCloning(content)
                     .into_copy_on_write()
             }
             CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
                 let content = shared
-                    .replace_legacy(|inner, emplacer| inner.as_ref_value().into_shared(emplacer));
+                    .emplace_map(|inner, emplacer| inner.as_ref_value().into_shared(emplacer));
                 AnyLevelCopyOnWrite::<X::Type>::SharedWithTransparentCloning(content)
                     .into_copy_on_write()
             }

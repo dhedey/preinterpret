@@ -258,17 +258,25 @@ pub(crate) trait ResolvableShared<T> {
     where
         Self: 'static,
     {
-        value
-            .try_map_legacy(|v| {
-                Self::resolve_from_ref(
-                    v,
-                    ResolutionContext {
-                        span_range: &span,
-                        resolution_target,
+        // SAFETY: Tightened(AnyType) is conservative - it preserves the current path depth.
+        // The span is the actual source expression span for accurate error messages.
+        unsafe {
+            value
+                .try_map(
+                    |v| {
+                        Self::resolve_from_ref(
+                            v,
+                            ResolutionContext {
+                                span_range: &span,
+                                resolution_target,
+                            },
+                        )
                     },
+                    PathExtension::Tightened(AnyType::type_kind()),
+                    span,
                 )
-            })
-            .map_err(|(err, _)| err)
+                .map_err(|(err, _)| err)
+        }
     }
 
     fn resolve_ref<'a>(
@@ -323,17 +331,25 @@ pub(crate) trait ResolvableMutable<T> {
     where
         Self: 'static,
     {
-        value
-            .try_map_legacy(|v| {
-                Self::resolve_from_mut(
-                    v,
-                    ResolutionContext {
-                        span_range: &span,
-                        resolution_target,
+        // SAFETY: Tightened(AnyType) is conservative - it preserves the current path depth.
+        // The span is the actual source expression span for accurate error messages.
+        unsafe {
+            value
+                .try_map(
+                    |v| {
+                        Self::resolve_from_mut(
+                            v,
+                            ResolutionContext {
+                                span_range: &span,
+                                resolution_target,
+                            },
+                        )
                     },
+                    PathExtension::Tightened(AnyType::type_kind()),
+                    span,
                 )
-            })
-            .map_err(|(err, _)| err)
+                .map_err(|(err, _)| err)
+        }
     }
 
     fn resolve_ref_mut<'a>(

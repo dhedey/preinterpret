@@ -36,9 +36,20 @@ impl IsDynCompatibleForm for BeShared {
     where
         T::Leaf: CastDyn<D>,
     {
-        leaf.replace_legacy(|content, emplacer| match <T::Leaf>::map_ref(content) {
-            Ok(mapped) => Ok(unsafe { emplacer.emplace_unchecked_legacy(mapped) }),
-            Err(this) => Err(unsafe { emplacer.emplace_unchecked_legacy(this) }),
+        leaf.emplace_map(|content, emplacer| {
+            let span = emplacer.current_span();
+            match <T::Leaf>::map_ref(content) {
+                Ok(mapped) => Ok(unsafe {
+                    emplacer.emplace_unchecked(
+                        mapped,
+                        PathExtension::Tightened(T::type_kind()),
+                        span,
+                    )
+                }),
+                Err(this) => Err(unsafe {
+                    emplacer.emplace_unchecked(this, PathExtension::Tightened(T::type_kind()), span)
+                }),
+            }
         })
     }
 }
@@ -57,7 +68,7 @@ impl MapFromArgument for BeShared {
     ) -> FunctionResult<Content<'static, AnyType, Self>> {
         Ok(value
             .expect_shared()
-            .replace_legacy(|inner, emplacer| inner.as_ref_value().into_shared(emplacer)))
+            .emplace_map(|inner, emplacer| inner.as_ref_value().into_shared(emplacer)))
     }
 }
 
