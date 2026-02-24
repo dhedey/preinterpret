@@ -50,7 +50,7 @@ define_type_features! {
 
             fn as_mut(Spanned(this, span): Spanned<ArgumentValue>) -> FunctionResult<AnyValueMutable> {
                 Ok(match this {
-                    ArgumentValue::Owned(owned) => Mutable::new_from_owned(owned),
+                    ArgumentValue::Owned(owned) => Mutable::new_from_owned(owned, None, span),
                     ArgumentValue::CopyOnWrite(copy_on_write) => ArgumentOwnership::Mutable
                         .map_from_copy_on_write(Spanned(copy_on_write, span))?
                         .expect_mutable(),

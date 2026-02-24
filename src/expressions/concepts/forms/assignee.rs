@@ -28,27 +28,25 @@ impl IsHierarchicalForm for BeAssignee {
 }
 
 impl IsDynCompatibleForm for BeAssignee {
-    type DynLeaf<'a, D: 'static + ?Sized> = QqqAssignee<D>;
+    type DynLeaf<'a, D: IsDynType> = QqqAssignee<D::DynContent>;
 
-    fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
+    fn leaf_to_dyn<'a, T: IsLeafType, D: IsDynType>(
         leaf: Self::Leaf<'a, T>,
     ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
-        T::Leaf: CastDyn<D>,
+        T::Leaf: CastDyn<D::DynContent>,
     {
         leaf.0.emplace_map(|content, emplacer| {
-            let span = emplacer.current_span();
             match <T::Leaf>::map_mut(content) {
                 Ok(mapped) => Ok(QqqAssignee(unsafe {
+                    // TODO[references]: Pass a span here by propagating from DynResolveFrom
                     emplacer.emplace_unchecked(
                         mapped,
-                        PathExtension::Tightened(T::type_kind()),
-                        span,
+                        PathExtension::Tightened(D::type_kind()),
+                        None,
                     )
                 })),
-                Err(this) => Err(QqqAssignee(unsafe {
-                    emplacer.emplace_unchecked(this, PathExtension::Tightened(T::type_kind()), span)
-                })),
+                Err(this) => Err(QqqAssignee(emplacer.revert())),
             }
         })
     }

@@ -29,13 +29,13 @@ impl IsHierarchicalForm for BeRef {
 }
 
 impl IsDynCompatibleForm for BeRef {
-    type DynLeaf<'a, D: 'static + ?Sized> = &'a D;
+    type DynLeaf<'a, D: IsDynType> = &'a D::DynContent;
 
-    fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
+    fn leaf_to_dyn<'a, T: IsLeafType, D: IsDynType>(
         leaf: Self::Leaf<'a, T>,
     ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
-        T::Leaf: CastDyn<D>,
+        T::Leaf: CastDyn<D::DynContent>,
     {
         <T::Leaf>::map_ref(leaf)
     }
@@ -76,12 +76,12 @@ where
                 leaf: <BeRef as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
                 // SAFETY: 'l = 'a = 'e so this is valid
-                let span = self.emplacer.current_span();
                 unsafe {
                     self.emplacer.emplace_unchecked(
                         leaf,
                         PathExtension::Tightened(T::type_kind()),
-                        span,
+                        // TODO[references]: Pass a span here by propagating from DynResolveFrom
+                        None,
                     )
                 }
             }
@@ -114,12 +114,12 @@ where
                 leaf: <BeRef as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
                 // SAFETY: 'l = 'a = 'e so this is valid
-                let span = self.emplacer.current_span();
                 let shared_ref: SharedReference<_> = unsafe {
                     self.emplacer.emplace_unchecked(
                         leaf,
                         PathExtension::Tightened(T::type_kind()),
-                        span,
+                        // TODO[references]: Pass a span here by propagating from DynResolveFrom
+                        None,
                     )
                 };
                 shared_ref.into()

@@ -29,13 +29,13 @@ impl IsHierarchicalForm for BeMut {
 }
 
 impl IsDynCompatibleForm for BeMut {
-    type DynLeaf<'a, D: 'static + ?Sized> = &'a mut D;
+    type DynLeaf<'a, D: IsDynType> = &'a mut D::DynContent;
 
-    fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
+    fn leaf_to_dyn<'a, T: IsLeafType, D: IsDynType>(
         leaf: Self::Leaf<'a, T>,
     ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
-        T::Leaf: CastDyn<D>,
+        T::Leaf: CastDyn<D::DynContent>,
     {
         <T::Leaf>::map_mut(leaf)
     }
@@ -76,12 +76,12 @@ where
                 leaf: <BeMut as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
                 // SAFETY: 'l = 'a = 'e so this is valid
-                let span = self.emplacer.current_span();
                 unsafe {
                     self.emplacer.emplace_unchecked(
                         leaf,
                         PathExtension::Tightened(T::type_kind()),
-                        span,
+                        // TODO[references]: Pass a span here by propagating from DynResolveFrom
+                        None,
                     )
                 }
             }
@@ -114,12 +114,12 @@ where
                 leaf: <BeMut as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
                 // SAFETY: 'l = 'a = 'e so this is valid
-                let span = self.emplacer.current_span();
                 unsafe {
                     QqqAssignee(self.emplacer.emplace_unchecked(
                         leaf,
                         PathExtension::Tightened(T::type_kind()),
-                        span,
+                        // TODO[references]: Pass a span here by propagating from DynResolveFrom
+                        None,
                     ))
                 }
             }
@@ -152,12 +152,12 @@ where
                 leaf: <BeMut as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
                 // SAFETY: 'l = 'a = 'e so this is valid
-                let span = self.emplacer.current_span();
                 let mutable_ref: MutableReference<_> = unsafe {
                     self.emplacer.emplace_unchecked(
                         leaf,
                         PathExtension::Tightened(T::type_kind()),
-                        span,
+                        // TODO[references]: Pass a span here by propagating from DynResolveFrom
+                        None,
                     )
                 };
                 mutable_ref.into()

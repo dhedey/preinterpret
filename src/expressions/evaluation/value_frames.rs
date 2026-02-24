@@ -452,13 +452,15 @@ impl ArgumentOwnership {
             ArgumentOwnership::Owned => Ok(ArgumentValue::Owned(
                 copy_on_write.clone_to_owned_transparently(span)?,
             )),
-            ArgumentOwnership::Shared => Ok(ArgumentValue::Shared(copy_on_write.into_shared())),
+            ArgumentOwnership::Shared => Ok(ArgumentValue::Shared(copy_on_write.into_shared(span))),
             ArgumentOwnership::Mutable => {
                 if copy_on_write.acts_as_shared_reference() {
                     span.ownership_err("A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone()` to get a mutable reference to a cloned value.")
                 } else {
                     Ok(ArgumentValue::Mutable(Mutable::new_from_owned(
                         copy_on_write.clone_to_owned_transparently(span)?,
+                        None,
+                        span,
                     )))
                 }
             }
@@ -559,9 +561,9 @@ impl ArgumentOwnership {
             ArgumentOwnership::CopyOnWrite => {
                 Ok(ArgumentValue::CopyOnWrite(CopyOnWrite::owned(owned)))
             }
-            ArgumentOwnership::Mutable => {
-                Ok(ArgumentValue::Mutable(Mutable::new_from_owned(owned)))
-            }
+            ArgumentOwnership::Mutable => Ok(ArgumentValue::Mutable(Mutable::new_from_owned(
+                owned, None, span,
+            ))),
             ArgumentOwnership::Assignee { .. } => {
                 if is_from_last_use {
                     span.ownership_err("The final usage of a variable cannot be assigned to. You can use `let _ = ..` to discard a value.")
@@ -569,7 +571,9 @@ impl ArgumentOwnership {
                     span.ownership_err("An owned value cannot be assigned to.")
                 }
             }
-            ArgumentOwnership::Shared => Ok(ArgumentValue::Shared(Shared::new_from_owned(owned))),
+            ArgumentOwnership::Shared => Ok(ArgumentValue::Shared(Shared::new_from_owned(
+                owned, None, span,
+            ))),
         }
     }
 }
@@ -1065,7 +1069,7 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
                                 ChildSpecifier::ObjectChild(property_name_for_shared),
                                 AnyType::type_kind(),
                             ),
-                            result_span,
+                            Some(result_span),
                         )
                         .map_err(|(e, _)| e)
                 }
@@ -1079,7 +1083,7 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
                             ChildSpecifier::ObjectChild(property_name),
                             AnyType::type_kind(),
                         ),
-                        result_span,
+                        Some(result_span),
                     )
                 }
             },
@@ -1183,7 +1187,7 @@ impl EvaluationFrame for ValueIndexAccessBuilder {
                                 .try_map(
                                     |value| (interface.shared_access)(ctx, value, index),
                                     PathExtension::Tightened(AnyType::type_kind()),
-                                    result_span,
+                                    Some(result_span),
                                 )
                                 .map_err(|(e, _)| e)
                         }
@@ -1194,7 +1198,7 @@ impl EvaluationFrame for ValueIndexAccessBuilder {
                             mutable.try_map(
                                 |value| (interface.mutable_access)(ctx, value, index, auto_create),
                                 PathExtension::Tightened(AnyType::type_kind()),
-                                result_span,
+                                Some(result_span),
                             )
                         }
                     },

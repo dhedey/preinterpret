@@ -12,7 +12,7 @@ impl<T: ?Sized> MutableReference<T> {
     /// a structure arbitrarily.
     pub(crate) fn emplace_map<O>(
         mut self,
-        f: impl for<'e> FnOnce(&'e mut T, &mut MutableEmplacerV2<'e, T>) -> O,
+        f: impl for<'e> FnOnce(&'e mut T, &mut MutableEmplacer<'e, T>) -> O,
     ) -> O {
         // SAFETY: The validity + safety invariants are upheld by `ReferenceableCore`
         // ... assuming this id is marked as a mutable reference for the duration.
@@ -20,7 +20,7 @@ impl<T: ?Sized> MutableReference<T> {
         // - Delegating to the created MutableReference if it is emplaced
         // - Surviving until Drop at the end of this method if it is not emplaced
         let copied_mut = unsafe { self.0.pointer.as_mut() };
-        let mut emplacer = MutableEmplacerV2(self.0.into_emplacer());
+        let mut emplacer = MutableEmplacer(self.0.into_emplacer());
         f(copied_mut, &mut emplacer)
     }
 
@@ -31,7 +31,7 @@ impl<T: ?Sized> MutableReference<T> {
         self,
         f: impl FnOnce(&mut T) -> &mut V,
         path_extension: PathExtension,
-        new_span: SpanRange,
+        new_span: Option<SpanRange>,
     ) -> MutableReference<V> {
         self.emplace_map(move |input, emplacer| {
             emplacer.emplace(f(input), path_extension, new_span)
@@ -45,7 +45,7 @@ impl<T: ?Sized> MutableReference<T> {
         self,
         f: impl FnOnce(&mut T) -> Result<&mut V, E>,
         path_extension: PathExtension,
-        new_span: SpanRange,
+        new_span: Option<SpanRange>,
     ) -> Result<MutableReference<V>, (E, MutableReference<T>)> {
         self.emplace_map(|input, emplacer| match f(input) {
             Ok(output) => Ok(emplacer.emplace(output, path_extension, new_span)),
@@ -56,12 +56,12 @@ impl<T: ?Sized> MutableReference<T> {
 
 impl MutableReference<AnyValue> {
     /// Creates a new MutableReference from an owned value, wrapping it in a Referenceable.
-    pub(crate) fn new_from_owned(value: AnyValue) -> Self {
-        let referenceable = Referenceable::new(
-            value,
-            "<anonymous>".to_string(),
-            SpanRange::new_single(Span::call_site()),
-        );
+    pub(crate) fn new_from_owned(
+        value: AnyValue,
+        root_name: Option<String>,
+        span_range: SpanRange,
+    ) -> Self {
+        let referenceable = Referenceable::new(value, root_name, span_range);
         referenceable
             .new_inactive_mutable()
             .activate()
@@ -70,11 +70,6 @@ impl MutableReference<AnyValue> {
 }
 
 impl<T: ?Sized> MutableReference<T> {
-    /// Returns the current creation span of the tracked reference.
-    pub(crate) fn current_span(&self) -> SpanRange {
-        self.0.core.data().for_reference(self.0.id).creation_span
-    }
-
     /// Disables this mutable reference (bridge for old `disable()` API).
     /// Equivalent to `deactivate()` in the new naming.
     pub(crate) fn disable(self) -> InactiveMutableReference<T> {
@@ -161,17 +156,11 @@ impl<T: ?Sized> InactiveMutableReference<T> {
     }
 }
 
-pub(crate) struct MutableEmplacerV2<'e, T: ?Sized>(EmplacerCore<'e, T>);
+pub(crate) struct MutableEmplacer<'e, T: ?Sized>(EmplacerCore<'e, T>);
 
-impl<'e, T: ?Sized> MutableEmplacerV2<'e, T> {
+impl<'e, T: ?Sized> MutableEmplacer<'e, T> {
     pub(crate) fn revert(&mut self) -> MutableReference<T> {
         MutableReference(self.0.revert())
-    }
-
-    /// Returns the current creation span of the tracked reference.
-    /// Useful for preserving the span during internal type-narrowing operations.
-    pub(crate) fn current_span(&self) -> SpanRange {
-        self.0.current_span()
     }
 
     /// SAFETY:
@@ -181,7 +170,7 @@ impl<'e, T: ?Sized> MutableEmplacerV2<'e, T> {
         &mut self,
         value: &'e mut V,
         path_extension: PathExtension,
-        new_span: SpanRange,
+        new_span: Option<SpanRange>,
     ) -> MutableReference<V> {
         unsafe {
             // SAFETY: The lifetime 'e is equal to the &'e content argument in replace
@@ -197,7 +186,7 @@ impl<'e, T: ?Sized> MutableEmplacerV2<'e, T> {
         &mut self,
         value: &mut V,
         path_extension: PathExtension,
-        new_span: SpanRange,
+        new_span: Option<SpanRange>,
     ) -> MutableReference<V> {
         // SAFETY: The pointer is from a reference so non-null
         let pointer = unsafe { NonNull::new_unchecked(value as *mut V) };
@@ -207,6 +196,3 @@ impl<'e, T: ?Sized> MutableEmplacerV2<'e, T> {
         unsafe { MutableReference(self.0.emplace_unchecked(pointer, path_extension, new_span)) }
     }
 }
-
-/// Legacy type alias for backward compatibility
-pub(crate) type MutableEmplacer<'e, T> = MutableEmplacerV2<'e, T>;

@@ -15,7 +15,7 @@ impl<'a, T: ?Sized + 'static> AnyRef<'a, T> {
         self,
         f: impl for<'r> FnOnce(&'r T) -> &'r S,
         path_extension: PathExtension,
-        new_span: SpanRange,
+        new_span: Option<SpanRange>,
     ) -> AnyRef<'a, S> {
         match self.inner {
             AnyRefInner::Direct(value) => AnyRef {
@@ -35,7 +35,7 @@ impl<'a, T: ?Sized + 'static> AnyRef<'a, T> {
         self,
         f: impl for<'r> FnOnce(&'r T) -> Option<&'r S>,
         path_extension: PathExtension,
-        new_span: SpanRange,
+        new_span: Option<SpanRange>,
     ) -> Option<AnyRef<'a, S>> {
         Some(match self.inner {
             AnyRefInner::Direct(value) => AnyRef {
@@ -57,7 +57,7 @@ impl<'a, T: ?Sized + 'static> AnyRef<'a, T> {
         })
     }
 
-    pub(crate) fn replace<O>(
+    pub(crate) fn emplace_map<O>(
         self,
         f: impl for<'e> FnOnce(&'e T, &mut AnyRefEmplacer<'a, 'e, T>) -> O,
     ) -> O {
@@ -81,18 +81,8 @@ pub(crate) struct AnyRefEmplacer<'a, 'e: 'a, T: 'static + ?Sized> {
 }
 
 impl<'a, 'e: 'a, T: 'static + ?Sized> AnyRefEmplacer<'a, 'e, T> {
-    /// Returns the current span of the underlying reference (if encapsulated),
-    /// or a placeholder span (if direct).
-    pub(crate) fn current_span(&self) -> SpanRange {
-        match &self
-            .inner
-            .as_ref()
-            .expect("Emplacer already consumed")
-            .inner
-        {
-            AnyRefInner::Direct(_) => SpanRange::new_single(Span::call_site()),
-            AnyRefInner::Encapsulated(shared) => shared.current_span(),
-        }
+    pub(crate) fn revert(&mut self) -> AnyRef<'a, T> {
+        self.inner.take().expect("Emplacer already consumed")
     }
 
     /// SAFETY: The caller must ensure the PathExtension is correct.
@@ -100,7 +90,7 @@ impl<'a, 'e: 'a, T: 'static + ?Sized> AnyRefEmplacer<'a, 'e, T> {
         &mut self,
         value: &'e V,
         path_extension: PathExtension,
-        new_span: SpanRange,
+        new_span: Option<SpanRange>,
     ) -> AnyRef<'a, V> {
         unsafe {
             // SAFETY: The lifetime 'e is equal to the &'e content argument in replace
@@ -116,7 +106,7 @@ impl<'a, 'e: 'a, T: 'static + ?Sized> AnyRefEmplacer<'a, 'e, T> {
         &mut self,
         value: &V,
         path_extension: PathExtension,
-        new_span: SpanRange,
+        new_span: Option<SpanRange>,
     ) -> AnyRef<'a, V> {
         let any_ref = self
             .inner
@@ -219,7 +209,7 @@ impl<'a, T: ?Sized + 'static> AnyMut<'a, T> {
         self,
         f: impl for<'r> FnOnce(&'r mut T) -> &'r mut S,
         path_extension: PathExtension,
-        new_span: SpanRange,
+        new_span: Option<SpanRange>,
     ) -> AnyMut<'a, S> {
         match self.inner {
             AnyMutInner::Direct(value) => AnyMut {
@@ -239,7 +229,7 @@ impl<'a, T: ?Sized + 'static> AnyMut<'a, T> {
         self,
         f: impl for<'r> FnOnce(&'r mut T) -> Option<&'r mut S>,
         path_extension: PathExtension,
-        new_span: SpanRange,
+        new_span: Option<SpanRange>,
     ) -> Option<AnyMut<'a, S>> {
         Some(match self.inner {
             AnyMutInner::Direct(value) => AnyMut {
@@ -261,11 +251,12 @@ impl<'a, T: ?Sized + 'static> AnyMut<'a, T> {
         })
     }
 
-    pub(crate) fn replace<O>(
+    pub(crate) fn emplace_map<O>(
         mut self,
         f: impl for<'e> FnOnce(&'e mut T, &mut AnyMutEmplacer<'a, 'e, T>) -> O,
     ) -> O {
         let copied_mut = self.deref_mut() as *mut T;
+        // TODO[references]: Change the emplacer to take a *mut T directly, to avoid the duplicate &mut T
         let mut emplacer = AnyMutEmplacer {
             inner: Some(self),
             encapsulation_lifetime: std::marker::PhantomData,
@@ -286,18 +277,8 @@ pub(crate) struct AnyMutEmplacer<'a, 'e: 'a, T: 'static + ?Sized> {
 }
 
 impl<'a, 'e: 'a, T: 'static + ?Sized> AnyMutEmplacer<'a, 'e, T> {
-    /// Returns the current span of the underlying reference (if encapsulated),
-    /// or a placeholder span (if direct).
-    pub(crate) fn current_span(&self) -> SpanRange {
-        match &self
-            .inner
-            .as_ref()
-            .expect("Emplacer already consumed")
-            .inner
-        {
-            AnyMutInner::Direct(_) => SpanRange::new_single(Span::call_site()),
-            AnyMutInner::Encapsulated(mutable) => mutable.current_span(),
-        }
+    pub(crate) fn revert(&mut self) -> AnyMut<'a, T> {
+        self.inner.take().expect("Emplacer already consumed")
     }
 
     /// SAFETY: The caller must ensure the PathExtension is correct.
@@ -305,7 +286,7 @@ impl<'a, 'e: 'a, T: 'static + ?Sized> AnyMutEmplacer<'a, 'e, T> {
         &mut self,
         value: &'e mut V,
         path_extension: PathExtension,
-        new_span: SpanRange,
+        new_span: Option<SpanRange>,
     ) -> AnyMut<'a, V> {
         unsafe {
             // SAFETY: The lifetime 'e is equal to the &'e content argument in replace
@@ -321,7 +302,7 @@ impl<'a, 'e: 'a, T: 'static + ?Sized> AnyMutEmplacer<'a, 'e, T> {
         &mut self,
         value: &mut V,
         path_extension: PathExtension,
-        new_span: SpanRange,
+        new_span: Option<SpanRange>,
     ) -> AnyMut<'a, V> {
         let any_mut = self
             .inner

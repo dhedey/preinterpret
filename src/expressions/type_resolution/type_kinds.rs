@@ -94,8 +94,10 @@ impl TypeKind {
     pub(crate) fn is_tightening_to(&self, other: &Self) -> bool {
         match self.compare_bindings(other) {
             TypeBindingComparison::Equal => true,
-            TypeBindingComparison::RightDerivesFromLeft => true,
-            TypeBindingComparison::LeftDerivesFromRight => false,
+            TypeBindingComparison::RightDerivesFromLeftButIsNotSubtype => true,
+            TypeBindingComparison::RightIsSubtypeOfLeft => true,
+            TypeBindingComparison::LeftDerivesFromRightButIsNotSubtype => false,
+            TypeBindingComparison::LeftIsSubtypeOfRight => false,
             TypeBindingComparison::Incomparable => false,
             TypeBindingComparison::Incompatible => false,
         }
@@ -117,24 +119,24 @@ impl TypeKind {
             (TypeKind::Dyn(_), TypeKind::Dyn(_)) => TypeBindingComparison::Incomparable,
             // Assuming the values are compatible, a dyn can be derived from any leaf/parent,
             // but not the other way around (at present at least)
-            (TypeKind::Dyn(_), _) => TypeBindingComparison::LeftDerivesFromRight,
-            (_, TypeKind::Dyn(_)) => TypeBindingComparison::RightDerivesFromLeft,
+            (TypeKind::Dyn(_), _) => TypeBindingComparison::LeftDerivesFromRightButIsNotSubtype,
+            (_, TypeKind::Dyn(_)) => TypeBindingComparison::RightDerivesFromLeftButIsNotSubtype,
             // All non-any-values are strict subtypes of AnyValue
             (TypeKind::Parent(ParentTypeKind::Value(_)), _) => {
-                TypeBindingComparison::RightDerivesFromLeft
+                TypeBindingComparison::RightIsSubtypeOfLeft
             }
             (_, TypeKind::Parent(ParentTypeKind::Value(_))) => {
-                TypeBindingComparison::LeftDerivesFromRight
+                TypeBindingComparison::LeftIsSubtypeOfRight
             }
             // Integer types
             (
                 TypeKind::Parent(ParentTypeKind::Integer(_)),
                 TypeKind::Leaf(AnyValueLeafKind::Integer(_)),
-            ) => TypeBindingComparison::RightDerivesFromLeft,
+            ) => TypeBindingComparison::RightIsSubtypeOfLeft,
             (
                 TypeKind::Leaf(AnyValueLeafKind::Integer(_)),
                 TypeKind::Parent(ParentTypeKind::Integer(_)),
-            ) => TypeBindingComparison::LeftDerivesFromRight,
+            ) => TypeBindingComparison::LeftIsSubtypeOfRight,
             (TypeKind::Parent(ParentTypeKind::Integer(_)), _) => {
                 TypeBindingComparison::Incompatible
             }
@@ -145,11 +147,11 @@ impl TypeKind {
             (
                 TypeKind::Parent(ParentTypeKind::Float(_)),
                 TypeKind::Leaf(AnyValueLeafKind::Float(_)),
-            ) => TypeBindingComparison::RightDerivesFromLeft,
+            ) => TypeBindingComparison::RightIsSubtypeOfLeft,
             (
                 TypeKind::Leaf(AnyValueLeafKind::Float(_)),
                 TypeKind::Parent(ParentTypeKind::Float(_)),
-            ) => TypeBindingComparison::LeftDerivesFromRight,
+            ) => TypeBindingComparison::LeftIsSubtypeOfRight,
             (TypeKind::Parent(ParentTypeKind::Float(_)), _) => TypeBindingComparison::Incompatible,
             (_, TypeKind::Parent(ParentTypeKind::Float(_))) => TypeBindingComparison::Incompatible,
             // Non-equal leaf types are incomparable
@@ -163,8 +165,14 @@ impl TypeKind {
 // is compatible with some other form.
 pub(crate) enum TypeBindingComparison {
     Equal,
-    RightDerivesFromLeft,
-    LeftDerivesFromRight,
+    // e.g. U8Value is a subtype of IntegerValue
+    RightIsSubtypeOfLeft,
+    // e.g. dyn IterableValue derives from ArrayValue, but isn't a subtype of it.
+    RightDerivesFromLeftButIsNotSubtype,
+    // e.g. U8Value is a subtype of IntegerValue
+    LeftIsSubtypeOfRight,
+    // e.g. dyn IterableValue derives from ArrayValue, but isn't a subtype of it.
+    LeftDerivesFromRightButIsNotSubtype,
     Incomparable,
     // Indicates that the types are incompatible.
     // Such a comparison shouldn't arise between valid references.
@@ -322,22 +330,34 @@ impl TypeProperty {
     ) -> FunctionResult<Spanned<RequestedValue>> {
         let resolver = self.source_type.kind.feature_resolver();
         // TODO[performance] - lazily initialize properties as Shared
-        let property_name = &self.property.to_string();
-        if let Some(value) = resolver.resolve_type_property(property_name) {
+        let property_name = self.property.to_string();
+        if let Some(value) = resolver.resolve_type_property(&property_name) {
             return ownership.map_from_shared(Spanned(
-                SharedValue::new_from_owned(value.into_any_value()),
+                SharedValue::new_from_owned(
+                    value.into_any_value(),
+                    Some(property_name),
+                    self.span_range(),
+                ),
                 self.span_range(),
             ));
         }
-        if let Some(method) = resolver.resolve_method(property_name) {
+        if let Some(method) = resolver.resolve_method(&property_name) {
             return ownership.map_from_shared(Spanned(
-                SharedValue::new_from_owned(method.into_any_value()),
+                SharedValue::new_from_owned(
+                    method.into_any_value(),
+                    Some(property_name.clone()),
+                    self.span_range(),
+                ),
                 self.span_range(),
             ));
         }
-        if let Some(function) = resolver.resolve_type_function(property_name) {
+        if let Some(function) = resolver.resolve_type_function(&property_name) {
             return ownership.map_from_shared(Spanned(
-                SharedValue::new_from_owned(function.into_any_value()),
+                SharedValue::new_from_owned(
+                    function.into_any_value(),
+                    Some(property_name.clone()),
+                    self.span_range(),
+                ),
                 self.span_range(),
             ));
         }

@@ -58,10 +58,7 @@ impl IsArgument for ArgumentValue {
     }
 }
 
-// NOTE: IsArgument for SharedReference<T> with leaf T is now provided by the blanket impl
-// in content.rs via FromValueContent + MapFromArgument (BeShared).
-// For the parent type AnyValue (which is not IsValueLeaf), we provide an explicit impl:
-impl IsArgument for SharedReference<AnyValue> {
+impl IsArgument for Shared<AnyValue> {
     type ValueType = AnyType;
     const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Shared;
 
@@ -94,10 +91,7 @@ impl<T: ResolvableMutable<AnyValue> + ResolvableArgumentTarget + ?Sized> IsArgum
     }
 }
 
-// NOTE: IsArgument for MutableReference<T> with leaf T is now provided by the blanket impl
-// in content.rs via FromValueContent + MapFromArgument (BeMutable).
-// For the parent type AnyValue (which is not IsValueLeaf), we provide an explicit impl:
-impl IsArgument for MutableReference<AnyValue> {
+impl IsArgument for Mutable<AnyValue> {
     type ValueType = AnyType;
     const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Mutable;
 
@@ -223,7 +217,7 @@ pub(crate) trait ResolvableArgumentTarget {
     type ValueType: TypeData;
 }
 
-pub(crate) trait ResolvableOwned<T>: Sized {
+pub(crate) trait ResolvableOwned<T: IsValueContent>: Sized {
     fn resolve_from_value(value: T, context: ResolutionContext) -> FunctionResult<Self>;
 
     fn resolve_spanned_from_value(
@@ -247,7 +241,7 @@ pub(crate) trait ResolvableOwned<T>: Sized {
     }
 }
 
-pub(crate) trait ResolvableShared<T> {
+pub(crate) trait ResolvableShared<T: IsValueContent> {
     fn resolve_from_ref<'a>(value: &'a T, context: ResolutionContext) -> FunctionResult<&'a Self>;
 
     /// The `resolution_target` should be capitalized, e.g. "This argument" or "The value destructed with an object pattern"
@@ -258,8 +252,7 @@ pub(crate) trait ResolvableShared<T> {
     where
         Self: 'static,
     {
-        // SAFETY: Tightened(AnyType) is conservative - it preserves the current path depth.
-        // The span is the actual source expression span for accurate error messages.
+        // SAFETY: Tightened(T::Type) is correct
         unsafe {
             value
                 .try_map(
@@ -272,8 +265,9 @@ pub(crate) trait ResolvableShared<T> {
                             },
                         )
                     },
-                    PathExtension::Tightened(AnyType::type_kind()),
-                    span,
+                    // TODO[references]: Move unsafe to this constructor so the blocks can be smaller
+                    PathExtension::Tightened(T::Type::type_kind()),
+                    Some(span),
                 )
                 .map_err(|(err, _)| err)
         }
@@ -308,7 +302,7 @@ pub(crate) trait ResolvableShared<T> {
     }
 }
 
-pub(crate) trait ResolvableMutable<T> {
+pub(crate) trait ResolvableMutable<T: IsValueContent> {
     fn resolve_from_mut<'a>(
         value: &'a mut T,
         context: ResolutionContext,
@@ -331,8 +325,7 @@ pub(crate) trait ResolvableMutable<T> {
     where
         Self: 'static,
     {
-        // SAFETY: Tightened(AnyType) is conservative - it preserves the current path depth.
-        // The span is the actual source expression span for accurate error messages.
+        // SAFETY: Tightened(T::Type) is correct
         unsafe {
             value
                 .try_map(
@@ -345,8 +338,8 @@ pub(crate) trait ResolvableMutable<T> {
                             },
                         )
                     },
-                    PathExtension::Tightened(AnyType::type_kind()),
-                    span,
+                    PathExtension::Tightened(T::Type::type_kind()),
+                    Some(span),
                 )
                 .map_err(|(err, _)| err)
         }
@@ -443,46 +436,3 @@ macro_rules! impl_resolvable_argument_for {
 }
 
 pub(crate) use impl_resolvable_argument_for;
-
-macro_rules! impl_delegated_resolvable_argument_for {
-    (($value:ident: $delegate:ty) -> $type:ty { $expr:expr }) => {
-        impl ResolvableArgumentTarget for $type {
-            type ValueType = <$delegate as ResolvableArgumentTarget>::ValueType;
-        }
-
-        impl ResolvableOwned<Value> for $type {
-            fn resolve_from_value(
-                input_value: Value,
-                context: ResolutionContext,
-            ) -> FunctionResult<Self> {
-                let $value: $delegate =
-                    ResolvableOwned::<Value>::resolve_from_value(input_value, context)?;
-                Ok($expr)
-            }
-        }
-
-        impl ResolvableShared<Value> for $type {
-            fn resolve_from_ref<'a>(
-                input_value: &'a Value,
-                context: ResolutionContext,
-            ) -> FunctionResult<&'a Self> {
-                let $value: &$delegate =
-                    ResolvableShared::<Value>::resolve_from_ref(input_value, context)?;
-                Ok(&$expr)
-            }
-        }
-
-        impl ResolvableMutable<Value> for $type {
-            fn resolve_from_mut<'a>(
-                input_value: &'a mut Value,
-                context: ResolutionContext,
-            ) -> FunctionResult<&'a mut Self> {
-                let $value: &mut $delegate =
-                    ResolvableMutable::<Value>::resolve_from_mut(input_value, context)?;
-                Ok(&mut $expr)
-            }
-        }
-    };
-}
-
-pub(crate) use impl_delegated_resolvable_argument_for;

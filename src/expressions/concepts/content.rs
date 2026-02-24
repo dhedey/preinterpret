@@ -2,8 +2,7 @@ use super::*;
 
 /// Shorthand for representing the form F of a type T with a particular lifetime 'a.
 pub(crate) type Content<'a, T, F> = <T as IsHierarchicalType>::Content<'a, F>;
-pub(crate) type DynContent<'a, D, F> =
-    <F as IsDynCompatibleForm>::DynLeaf<'a, <D as IsDynType>::DynContent>;
+pub(crate) type DynContent<'a, D, F> = <F as IsDynCompatibleForm>::DynLeaf<'a, D>;
 
 /// For types which have an associated value (type and form)
 pub(crate) trait IsValueContent {
@@ -68,18 +67,6 @@ where
         Self::Type: UpcastTo<AnyType>,
     {
         self.upcast()
-    }
-
-    fn into_referenceable(self) -> Content<'a, Self::Type, BeReferenceable>
-    where
-        Self: IsValueContent<Form = BeOwned>,
-    {
-        map_via_leaf! {
-            input: (Content<'a, Self::Type, Self::Form>) = self.into_content(),
-            fn map_leaf<F = BeOwned, T>(leaf) -> (Content<'a, T, BeReferenceable>) {
-                Rc::new(RefCell::new(leaf))
-            }
-        }
     }
 }
 

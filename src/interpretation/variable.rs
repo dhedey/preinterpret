@@ -70,8 +70,8 @@ impl VariableDefinition {
             self.id,
             VariableContent::Referenceable(Referenceable::new(
                 value_source.into_any_value(),
-                "<variable>".to_string(),
-                SpanRange::new_single(Span::call_site()),
+                Some(self.ident.to_string()),
+                self.ident.span_range(),
             )),
         );
     }

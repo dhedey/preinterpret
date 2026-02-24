@@ -25,23 +25,21 @@ impl IsHierarchicalForm for BeAnyMut {
 }
 
 impl IsDynCompatibleForm for BeAnyMut {
-    type DynLeaf<'a, D: 'static + ?Sized> = AnyMut<'a, D>;
+    type DynLeaf<'a, D: IsDynType> = AnyMut<'a, D::DynContent>;
 
-    fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
+    fn leaf_to_dyn<'a, T: IsLeafType, D: IsDynType>(
         leaf: Self::Leaf<'a, T>,
     ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
-        T::Leaf: CastDyn<D>,
+        T::Leaf: CastDyn<D::DynContent>,
     {
-        leaf.replace(|content, emplacer| {
-            let span = emplacer.current_span();
+        leaf.emplace_map(|content, emplacer| {
             match <T::Leaf>::map_mut(content) {
                 Ok(mapped) => Ok(unsafe {
-                    emplacer.emplace(mapped, PathExtension::Tightened(T::type_kind()), span)
+                    // TODO[references]: Pass a span here by propagating from DynResolveFrom
+                    emplacer.emplace(mapped, PathExtension::Tightened(D::type_kind()), None)
                 }),
-                Err(this) => Err(unsafe {
-                    emplacer.emplace(this, PathExtension::Tightened(T::type_kind()), span)
-                }),
+                Err(this) => Err(emplacer.revert()),
             }
         })
     }

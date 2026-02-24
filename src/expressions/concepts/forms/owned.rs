@@ -21,13 +21,13 @@ impl IsHierarchicalForm for BeOwned {
 }
 
 impl IsDynCompatibleForm for BeOwned {
-    type DynLeaf<'a, D: 'static + ?Sized> = Box<D>;
+    type DynLeaf<'a, D: IsDynType> = Box<D::DynContent>;
 
-    fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
+    fn leaf_to_dyn<'a, T: IsLeafType, D: IsDynType>(
         leaf: Self::Leaf<'a, T>,
     ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
-        T::Leaf: CastDyn<D>,
+        T::Leaf: CastDyn<D::DynContent>,
     {
         <T::Leaf>::map_boxed(Box::new(leaf)).map_err(|boxed| *boxed)
     }

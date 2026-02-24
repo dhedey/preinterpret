@@ -18,7 +18,7 @@ impl<T: ?Sized> SharedReference<T> {
     /// a structure arbitrarily.
     pub(crate) fn emplace_map<O>(
         self,
-        f: impl for<'e> FnOnce(&'e T, &mut SharedEmplacerV2<'e, T>) -> O,
+        f: impl for<'e> FnOnce(&'e T, &mut SharedEmplacer<'e, T>) -> O,
     ) -> O {
         // SAFETY: The validity + safety invariants are upheld by `ReferenceableCore`
         // ... assuming this id is marked as a shared reference for the duration.
@@ -26,7 +26,7 @@ impl<T: ?Sized> SharedReference<T> {
         // - Delegating to the created SharedReference if it is emplaced
         // - Surviving until Drop at the end of this method if it is not emplaced
         let copied_ref = unsafe { self.0.pointer.as_ref() };
-        let mut emplacer = SharedEmplacerV2(self.0.into_emplacer());
+        let mut emplacer = SharedEmplacer(self.0.into_emplacer());
         f(copied_ref, &mut emplacer)
     }
 
@@ -37,7 +37,7 @@ impl<T: ?Sized> SharedReference<T> {
         self,
         f: impl FnOnce(&T) -> &V,
         path_extension: PathExtension,
-        new_span: SpanRange,
+        new_span: Option<SpanRange>,
     ) -> SharedReference<V> {
         self.emplace_map(move |input, emplacer| {
             emplacer.emplace(f(input), path_extension, new_span)
@@ -51,7 +51,7 @@ impl<T: ?Sized> SharedReference<T> {
         self,
         f: impl FnOnce(&T) -> Result<&V, E>,
         path_extension: PathExtension,
-        new_span: SpanRange,
+        new_span: Option<SpanRange>,
     ) -> Result<SharedReference<V>, (E, SharedReference<T>)> {
         self.emplace_map(|input, emplacer| match f(input) {
             Ok(output) => Ok(emplacer.emplace(output, path_extension, new_span)),
@@ -63,12 +63,12 @@ impl<T: ?Sized> SharedReference<T> {
 impl SharedReference<AnyValue> {
     /// Creates a new SharedReference from an owned value, wrapping it in a Referenceable.
     /// Uses a placeholder name and span for the Referenceable root.
-    pub(crate) fn new_from_owned(value: AnyValue) -> Self {
-        let referenceable = Referenceable::new(
-            value,
-            "<anonymous>".to_string(),
-            SpanRange::new_single(Span::call_site()),
-        );
+    pub(crate) fn new_from_owned(
+        value: AnyValue,
+        root_name: Option<String>,
+        span_range: SpanRange,
+    ) -> Self {
+        let referenceable = Referenceable::new(value, root_name, span_range);
         referenceable
             .new_inactive_shared()
             .activate()
@@ -82,11 +82,6 @@ impl SharedReference<AnyValue> {
 }
 
 impl<T: ?Sized> SharedReference<T> {
-    /// Returns the current creation span of the tracked reference.
-    pub(crate) fn current_span(&self) -> SpanRange {
-        self.0.core.data().for_reference(self.0.id).creation_span
-    }
-
     /// Disables this shared reference (bridge for old `disable()` API).
     /// Equivalent to `deactivate()` in the new naming.
     pub(crate) fn disable(self) -> InactiveSharedReference<T> {
@@ -140,17 +135,11 @@ impl<T: ?Sized> InactiveSharedReference<T> {
     }
 }
 
-pub(crate) struct SharedEmplacerV2<'e, T: ?Sized>(EmplacerCore<'e, T>);
+pub(crate) struct SharedEmplacer<'e, T: ?Sized>(EmplacerCore<'e, T>);
 
-impl<'e, T: ?Sized> SharedEmplacerV2<'e, T> {
+impl<'e, T: ?Sized> SharedEmplacer<'e, T> {
     pub(crate) fn revert(&mut self) -> SharedReference<T> {
         SharedReference(self.0.revert())
-    }
-
-    /// Returns the current creation span of the tracked reference.
-    /// Useful for preserving the span during internal type-narrowing operations.
-    pub(crate) fn current_span(&self) -> SpanRange {
-        self.0.current_span()
     }
 
     /// SAFETY:
@@ -160,7 +149,7 @@ impl<'e, T: ?Sized> SharedEmplacerV2<'e, T> {
         &mut self,
         value: &'e V,
         path_extension: PathExtension,
-        new_span: SpanRange,
+        new_span: Option<SpanRange>,
     ) -> SharedReference<V> {
         unsafe {
             // SAFETY: The lifetime 'e is equal to the &'e content argument in replace
@@ -176,7 +165,7 @@ impl<'e, T: ?Sized> SharedEmplacerV2<'e, T> {
         &mut self,
         value: &V,
         path_extension: PathExtension,
-        new_span: SpanRange,
+        new_span: Option<SpanRange>,
     ) -> SharedReference<V> {
         // SAFETY: The pointer is from a reference so non-null
         let pointer = unsafe { NonNull::new_unchecked(value as *const V as *mut V) };
@@ -186,6 +175,3 @@ impl<'e, T: ?Sized> SharedEmplacerV2<'e, T> {
         unsafe { SharedReference(self.0.emplace_unchecked(pointer, path_extension, new_span)) }
     }
 }
-
-/// Legacy type alias for backward compatibility
-pub(crate) type SharedEmplacer<'e, T> = SharedEmplacerV2<'e, T>;

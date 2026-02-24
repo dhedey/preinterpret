@@ -6,7 +6,7 @@ pub(crate) struct Referenceable {
 }
 
 impl Referenceable {
-    pub(crate) fn new(root: AnyValue, root_name: String, root_span: SpanRange) -> Self {
+    pub(crate) fn new(root: AnyValue, root_name: Option<String>, root_span: SpanRange) -> Self {
         Self {
             core: Rc::new(ReferenceableCore::new(root, root_name, root_span)),
         }
@@ -42,7 +42,7 @@ pub(super) struct ReferenceableCore<T> {
 }
 
 impl<T> ReferenceableCore<T> {
-    pub(super) fn new(root: T, root_name: String, root_span: SpanRange) -> Self {
+    pub(super) fn new(root: T, root_name: Option<String>, root_span: SpanRange) -> Self {
         Self {
             root: UnsafeCell::new(root),
             data: RefCell::new(ReferenceableData {
@@ -60,10 +60,6 @@ impl<T> ReferenceableCore<T> {
         }
     }
 
-    pub(super) fn data(&self) -> Ref<'_, ReferenceableData> {
-        self.data.borrow()
-    }
-
     pub(super) fn data_mut(&self) -> RefMut<'_, ReferenceableData> {
         self.data.borrow_mut()
     }
@@ -79,7 +75,7 @@ new_key_type! {
 
 pub(super) struct ReferenceableData {
     // Could be in Referencable Core, but having it here makes the error message API easier
-    root_name: String,
+    root_name: Option<String>,
     // Could be in Referencable Core, but having it here makes the error message API easier
     root_span: SpanRange,
     arena: SlotMap<LocalReferenceId, TrackedReference>,
@@ -145,14 +141,14 @@ impl ReferenceableData {
                     Some(reason) => reason,
                     None => continue,
                 };
-                let mut error_message =
-                    "Cannot create mutable reference because it clashes with another reference: "
-                        .to_string();
-                error_message.push_str(error_reason);
-                let _ = write!(error_message, "This reference-: ");
-                self.display_path(&mut error_message, id, Some(ReferenceKind::ActiveMutable));
-                let _ = write!(error_message, "Other reference: ");
-                self.display_path(&mut error_message, other_id, None);
+                let mut error_message = String::new();
+                let _ = write!(error_message, "Cannot create a mutable reference because it clashes with an existing reference:");
+                let _ = write!(error_message, "\nThis reference : ");
+                let _ =
+                    self.display_path(&mut error_message, id, Some(ReferenceKind::ActiveMutable));
+                let _ = write!(error_message, "\nOther reference: ");
+                let _ = self.display_path(&mut error_message, other_id, None);
+                let _ = write!(error_message, "\nReason         : {}\n", error_reason);
                 return data.creation_span.ownership_err(error_message);
             }
         }
@@ -182,14 +178,14 @@ impl ReferenceableData {
                     Some(reason) => reason,
                     None => continue,
                 };
-                let mut error_message =
-                    "Cannot create shared reference because it clashes with a mutable reference: "
-                        .to_string();
-                error_message.push_str(error_reason);
-                let _ = write!(error_message, "This reference-: ");
-                self.display_path(&mut error_message, id, Some(ReferenceKind::ActiveShared));
-                let _ = write!(error_message, "Other reference: ");
-                self.display_path(&mut error_message, other_id, None);
+                let mut error_message = String::new();
+                let _ = write!(error_message, "Cannot create a shared reference because it clashes with an existing mutable reference:");
+                let _ = write!(error_message, "\nThis reference : ");
+                let _ =
+                    self.display_path(&mut error_message, id, Some(ReferenceKind::ActiveShared));
+                let _ = write!(error_message, "\nOther reference: ");
+                let _ = self.display_path(&mut error_message, other_id, None);
+                let _ = write!(error_message, "\nReason         : {}\n", error_reason);
                 return data.creation_span.ownership_err(error_message);
             }
         }
@@ -207,10 +203,12 @@ impl ReferenceableData {
         &mut self,
         id: LocalReferenceId,
         path_extension: PathExtension,
-        new_span: SpanRange,
+        new_span: Option<SpanRange>,
     ) {
         let data = self.for_reference_mut(id);
-        data.creation_span = new_span;
+        if let Some(span) = new_span {
+            data.creation_span = span;
+        }
         let last_path_part = data.path.parts.last_mut().expect("path is non-empty");
         match (last_path_part, path_extension) {
             (last_path_part, PathExtension::Child(specifier, child_bound_as)) => {
@@ -266,7 +264,10 @@ impl ReferenceableData {
             ReferenceKind::ActiveShared => f.write_str("[*active*]     &")?,
             ReferenceKind::ActiveMutable => f.write_str("[*active*] &mut ")?,
         }
-        f.write_str(&self.root_name)?;
+        match self.root_name.as_ref() {
+            Some(name) => f.write_str(name)?,
+            None => f.write_str("[root]")?,
+        }
         for part in data.path.parts.iter() {
             match part {
                 PathPart::Value { bound_as } => {
@@ -299,6 +300,8 @@ impl ReferenceableData {
 pub(super) struct TrackedReference {
     pub(super) path: ReferencePath,
     pub(super) reference_kind: ReferenceKind,
+    /// Storing this span isn't strictly necessary for now...
+    /// But it's added for a future world where the diagnostic API is stabilized and we can add a diagnostic onto the clashing reference.
     pub(super) creation_span: SpanRange,
 }
 
@@ -363,23 +366,27 @@ impl PathComparison {
         Some(match self {
             PathComparison::Divergent => return None,
             PathComparison::Overlapping => {
-                "they overlap, so mutation may invalidate the other reference"
+                "mutation may invalidate the other overlapping reference"
             }
             PathComparison::RightIsDescendent => {
                 "mutation may invalidate the other descendent reference"
             }
-            PathComparison::ReferencesEqual(TypeBindingComparison::RightDerivesFromLeft) => {
-                "mutation may invalidate the other reference with more specific type"
-            }
-            PathComparison::ReferencesEqual(TypeBindingComparison::Incomparable) => {
+            PathComparison::ReferencesEqual(TypeBindingComparison::RightIsSubtypeOfLeft)
+            | PathComparison::ReferencesEqual(
+                TypeBindingComparison::RightDerivesFromLeftButIsNotSubtype,
+            )
+            | PathComparison::ReferencesEqual(
+                TypeBindingComparison::LeftDerivesFromRightButIsNotSubtype,
+            )
+            | PathComparison::ReferencesEqual(TypeBindingComparison::Incomparable) => {
                 "mutation may invalidate the other reference with an incompatible type"
             }
-            // Activated reference is descendent of existing reference
+            // Mutable reference is a descendent of the other reference
             PathComparison::ReferencesEqual(TypeBindingComparison::Equal)
-            | PathComparison::ReferencesEqual(TypeBindingComparison::LeftDerivesFromRight)
+            | PathComparison::ReferencesEqual(TypeBindingComparison::LeftIsSubtypeOfRight)
             | PathComparison::LeftIsDescendent => {
                 if other_is_active {
-                    "the mutable reference is observable from the other reference, which breaks aliasing rules"
+                    "mutation may be observed from the other active reference, which breaks aliasing rules"
                 } else {
                     return None;
                 }
@@ -434,6 +441,7 @@ enum PathPart {
 
 #[derive(PartialEq, Eq, Clone)]
 pub(crate) enum ChildSpecifier {
+    #[allow(unused)] // TODO[references]: Use this correctly
     ArrayChild(usize),
     ObjectChild(String),
 }

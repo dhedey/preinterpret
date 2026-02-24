@@ -675,9 +675,9 @@ impl CopyOnWrite<AnyValue> {
     }
 
     /// Converts to shared reference
-    pub(crate) fn into_shared(self) -> SharedValue {
+    pub(crate) fn into_shared(self, span: SpanRange) -> SharedValue {
         match self.inner {
-            CopyOnWriteInner::Owned(owned) => SharedValue::new_from_owned(owned),
+            CopyOnWriteInner::Owned(owned) => SharedValue::new_from_owned(owned, None, span),
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => shared,
             CopyOnWriteInner::SharedWithTransparentCloning(shared) => shared,
         }

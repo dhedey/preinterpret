@@ -28,28 +28,19 @@ impl IsHierarchicalForm for BeMutable {
 }
 
 impl IsDynCompatibleForm for BeMutable {
-    type DynLeaf<'a, D: 'static + ?Sized> = QqqMutable<D>;
+    type DynLeaf<'a, D: IsDynType> = QqqMutable<D::DynContent>;
 
-    fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
+    fn leaf_to_dyn<'a, T: IsLeafType, D: IsDynType>(
         leaf: Self::Leaf<'a, T>,
     ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
-        T::Leaf: CastDyn<D>,
+        T::Leaf: CastDyn<D::DynContent>,
     {
-        leaf.emplace_map(|content, emplacer| {
-            let span = emplacer.current_span();
-            match <T::Leaf>::map_mut(content) {
-                Ok(mapped) => Ok(unsafe {
-                    emplacer.emplace_unchecked(
-                        mapped,
-                        PathExtension::Tightened(T::type_kind()),
-                        span,
-                    )
-                }),
-                Err(this) => Err(unsafe {
-                    emplacer.emplace_unchecked(this, PathExtension::Tightened(T::type_kind()), span)
-                }),
-            }
+        leaf.emplace_map(|content, emplacer| match <T::Leaf>::map_mut(content) {
+            Ok(mapped) => Ok(unsafe {
+                emplacer.emplace_unchecked(mapped, PathExtension::Tightened(D::type_kind()), None)
+            }),
+            Err(_) => Err(emplacer.revert()),
         })
     }
 }

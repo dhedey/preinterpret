@@ -4,7 +4,6 @@ mod errors;
 mod field_inputs;
 mod iterators;
 mod keywords;
-mod mut_rc_ref_cell;
 mod parse_traits;
 pub(crate) mod string_conversion;
 
@@ -14,8 +13,6 @@ pub(crate) use errors::*;
 pub(crate) use field_inputs::*;
 pub(crate) use iterators::*;
 pub(crate) use keywords::*;
-// Old RefCell-based abstractions - no longer glob-exported; replaced by dynamic_references.
-// pub(crate) use mut_rc_ref_cell::*;
 pub(crate) use parse_traits::*;
 
 use crate::internal_prelude::*;

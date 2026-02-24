@@ -90,12 +90,6 @@ impl<'e, T: ?Sized> EmplacerCore<'e, T> {
         }
     }
 
-    /// Returns the current creation span of the tracked reference.
-    pub(crate) fn current_span(&self) -> SpanRange {
-        let inner = self.inner.as_ref().expect("Emplacer already consumed");
-        inner.core.data().for_reference(inner.id).creation_span
-    }
-
     /// SAFETY:
     /// - The caller must ensure that the pointer is derived from the original content
     /// - The caller must ensure that the PathExtension is correct
@@ -103,7 +97,7 @@ impl<'e, T: ?Sized> EmplacerCore<'e, T> {
         &mut self,
         pointer: NonNull<V>,
         path_extension: PathExtension,
-        new_span: SpanRange,
+        new_span: Option<SpanRange>,
     ) -> ReferenceCore<V> {
         let emplacer_core = self.take();
         let id = emplacer_core.id;
