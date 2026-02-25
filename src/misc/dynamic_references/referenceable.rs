@@ -104,6 +104,10 @@ impl ReferenceableData {
         self.arena.remove(id);
     }
 
+    pub(super) fn set_creation_span(&mut self, id: LocalReferenceId, span: SpanRange) {
+        self.for_reference_mut(id).creation_span = span;
+    }
+
     pub(super) fn deactivate_reference(&mut self, id: LocalReferenceId) {
         let data = self.for_reference_mut(id);
         data.reference_kind = match data.reference_kind {

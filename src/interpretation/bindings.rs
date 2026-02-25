@@ -180,15 +180,17 @@ impl VariableBinding {
     }
 
     fn into_mut(self) -> FunctionResult<AnyValueMutable> {
+        let span = self.variable_span.span_range();
         match self.content {
-            VariableContent::Referenceable(referenceable) => referenceable
-                .new_inactive_mutable()
-                .activate()
-                .map_err(|_| {
+            VariableContent::Referenceable(referenceable) => {
+                let inactive = referenceable.new_inactive_mutable();
+                inactive.set_tracked_span(span);
+                inactive.activate().map_err(|_| {
                     self.variable_span
                         .ownership_error::<FunctionError>(MUTABLE_ERROR_MESSAGE)
-                }),
-            VariableContent::Mutable(disabled) => disabled.enable(self.variable_span.span_range()),
+                })
+            }
+            VariableContent::Mutable(disabled) => disabled.enable(span),
             VariableContent::Shared(shared) => self
                 .variable_span
                 .ownership_err(SHARED_TO_MUTABLE_ERROR_MESSAGE),
@@ -196,29 +198,33 @@ impl VariableBinding {
     }
 
     fn into_shared(self) -> FunctionResult<AnyValueShared> {
+        let span = self.variable_span.span_range();
         match self.content {
             VariableContent::Referenceable(referenceable) => {
-                referenceable.new_inactive_shared().activate().map_err(|_| {
+                let inactive = referenceable.new_inactive_shared();
+                inactive.set_tracked_span(span);
+                inactive.activate().map_err(|_| {
                     self.variable_span
                         .ownership_error::<FunctionError>(SHARED_ERROR_MESSAGE)
                 })
             }
-            VariableContent::Mutable(mutable) => mutable
-                .into_shared()
-                .enable(self.variable_span.span_range()),
-            VariableContent::Shared(shared) => shared.enable(self.variable_span.span_range()),
+            VariableContent::Mutable(mutable) => mutable.into_shared().enable(span),
+            VariableContent::Shared(shared) => shared.enable(span),
         }
     }
 
     fn into_late_bound(self) -> FunctionResult<LateBoundValue> {
+        let span = self.variable_span.span_range();
         match self.content {
             VariableContent::Referenceable(referenceable) => {
                 let inactive_mut = referenceable.new_inactive_mutable();
+                inactive_mut.set_tracked_span(span);
                 match inactive_mut.activate() {
                     Ok(mutable) => Ok(LateBoundValue::Mutable(mutable)),
                     Err(_) => {
                         // Mutable failed, try shared
                         let inactive_shared = referenceable.new_inactive_shared();
+                        inactive_shared.set_tracked_span(span);
                         let shared = inactive_shared.activate().map_err(|_| {
                             self.variable_span
                                 .ownership_error::<FunctionError>(SHARED_ERROR_MESSAGE)
@@ -230,12 +236,10 @@ impl VariableBinding {
                     }
                 }
             }
-            VariableContent::Mutable(mutable) => Ok(LateBoundValue::Mutable(
-                mutable.enable(self.variable_span.span_range())?,
-            )),
+            VariableContent::Mutable(mutable) => Ok(LateBoundValue::Mutable(mutable.enable(span)?)),
             VariableContent::Shared(shared) => {
                 Ok(LateBoundValue::Shared(LateBoundSharedValue::new(
-                    shared.enable(self.variable_span.span_range())?,
+                    shared.enable(span)?,
                     self.variable_span
                         .syn_error(SHARED_TO_MUTABLE_ERROR_MESSAGE),
                 )))

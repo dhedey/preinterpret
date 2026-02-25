@@ -82,12 +82,28 @@ impl<T: ?Sized> MutableReference<T> {
             .activate()
             .expect("Converting mutable to shared should always succeed since we just released the mutable borrow")
     }
+
+    /// Updates the tracked span for this reference, which is used in
+    /// borrow-conflict error messages to point to the usage site.
+    #[allow(unused)]
+    pub(crate) fn set_tracked_span(&self, span: SpanRange) {
+        self.0.core.data_mut().set_creation_span(self.0.id, span);
+    }
 }
 
 impl<T: ?Sized> InactiveMutableReference<T> {
-    /// Re-enables this inactive mutable reference (bridge for old `enable()` API).
-    pub(crate) fn enable(self, _span: SpanRange) -> FunctionResult<MutableReference<T>> {
+    /// Re-enables this inactive mutable reference.
+    /// Updates the tracked span to the given usage-site span before activating,
+    /// so that borrow-conflict errors point to the correct location.
+    pub(crate) fn enable(self, span: SpanRange) -> FunctionResult<MutableReference<T>> {
+        self.set_tracked_span(span);
         self.activate()
+    }
+
+    /// Updates the tracked span for this reference, which is used in
+    /// borrow-conflict error messages to point to the usage site.
+    pub(crate) fn set_tracked_span(&self, span: SpanRange) {
+        self.0.core.data_mut().set_creation_span(self.0.id, span);
     }
 }
 
