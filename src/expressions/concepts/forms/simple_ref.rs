@@ -32,7 +32,7 @@ impl IsDynCompatibleForm for BeRef {
     type DynLeaf<'a, D: IsDynType> = &'a D::DynContent;
 
     fn leaf_to_dyn<'a, T: IsLeafType, D: IsDynType>(
-        leaf: Self::Leaf<'a, T>,
+        Spanned(leaf, _span): Spanned<Self::Leaf<'a, T>>,
     ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
         T::Leaf: CastDyn<D::DynContent>,
@@ -55,12 +55,14 @@ where
     fn into_shared<'b, T: 'static>(
         self,
         emplacer: &'b mut SharedEmplacer<'a, T>,
+        span: SpanRange,
     ) -> Content<'static, Self::Type, BeShared>
     where
         Self: Sized,
     {
         struct __InlineMapper<'b, 'e2, X: 'static> {
             emplacer: &'b mut SharedEmplacer<'e2, X>,
+            span: SpanRange,
         }
         impl<'b, 'e2, X> LeafMapper<BeRef> for __InlineMapper<'b, 'e2, X> {
             type Output<'a, T: IsHierarchicalType> = Content<'static, T, BeShared>;
@@ -80,25 +82,26 @@ where
                     self.emplacer.emplace_unchecked(
                         leaf,
                         PathExtension::Tightened(T::type_kind()),
-                        // TODO[references]: Pass a span here by propagating from DynResolveFrom
-                        None,
+                        Some(self.span),
                     )
                 }
             }
         };
-        let __mapper = __InlineMapper { emplacer };
+        let __mapper = __InlineMapper { emplacer, span };
         <Self::Type>::map_with::<BeRef, _>(__mapper, self)
     }
 
     fn into_shared_any_ref<'b, T: 'static>(
         self,
         emplacer: &'b mut SharedEmplacer<'a, T>,
+        span: SpanRange,
     ) -> Content<'static, Self::Type, BeAnyRef>
     where
         Self: Sized,
     {
         struct __InlineMapper<'b, 'e2, X: 'static> {
             emplacer: &'b mut SharedEmplacer<'e2, X>,
+            span: SpanRange,
         }
         impl<'b, 'e2, X> LeafMapper<BeRef> for __InlineMapper<'b, 'e2, X> {
             type Output<'a, T: IsHierarchicalType> = Content<'static, T, BeAnyRef>;
@@ -118,14 +121,13 @@ where
                     self.emplacer.emplace_unchecked(
                         leaf,
                         PathExtension::Tightened(T::type_kind()),
-                        // TODO[references]: Pass a span here by propagating from DynResolveFrom
-                        None,
+                        Some(self.span),
                     )
                 };
                 shared_ref.into()
             }
         };
-        let __mapper = __InlineMapper { emplacer };
+        let __mapper = __InlineMapper { emplacer, span };
         <Self::Type>::map_with::<BeRef, _>(__mapper, self)
     }
 }

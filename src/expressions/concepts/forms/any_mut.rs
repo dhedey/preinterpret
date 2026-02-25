@@ -28,19 +28,16 @@ impl IsDynCompatibleForm for BeAnyMut {
     type DynLeaf<'a, D: IsDynType> = AnyMut<'a, D::DynContent>;
 
     fn leaf_to_dyn<'a, T: IsLeafType, D: IsDynType>(
-        leaf: Self::Leaf<'a, T>,
+        Spanned(leaf, span): Spanned<Self::Leaf<'a, T>>,
     ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
         T::Leaf: CastDyn<D::DynContent>,
     {
-        leaf.emplace_map(|content, emplacer| {
-            match <T::Leaf>::map_mut(content) {
-                Ok(mapped) => Ok(unsafe {
-                    // TODO[references]: Pass a span here by propagating from DynResolveFrom
-                    emplacer.emplace(mapped, PathExtension::Tightened(D::type_kind()), None)
-                }),
-                Err(this) => Err(emplacer.revert()),
-            }
+        leaf.emplace_map(|content, emplacer| match <T::Leaf>::map_mut(content) {
+            Ok(mapped) => Ok(unsafe {
+                emplacer.emplace(mapped, PathExtension::Tightened(D::type_kind()), Some(span))
+            }),
+            Err(_this) => Err(emplacer.revert()),
         })
     }
 }
@@ -61,10 +58,10 @@ impl MapFromArgument for BeAnyMut {
     const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Mutable;
 
     fn from_argument_value(
-        value: ArgumentValue,
+        Spanned(value, span): Spanned<ArgumentValue>,
     ) -> FunctionResult<Content<'static, AnyType, Self>> {
-        Ok(value
-            .expect_mutable()
-            .emplace_map(|inner, emplacer| inner.as_mut_value().into_mutable_any_mut(emplacer)))
+        Ok(value.expect_mutable().emplace_map(|inner, emplacer| {
+            inner.as_mut_value().into_mutable_any_mut(emplacer, span)
+        }))
     }
 }

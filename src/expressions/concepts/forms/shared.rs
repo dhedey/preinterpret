@@ -31,14 +31,18 @@ impl IsDynCompatibleForm for BeShared {
     type DynLeaf<'a, D: IsDynType> = QqqShared<D::DynContent>;
 
     fn leaf_to_dyn<'a, T: IsLeafType, D: IsDynType>(
-        leaf: Self::Leaf<'a, T>,
+        Spanned(leaf, span): Spanned<Self::Leaf<'a, T>>,
     ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
         T::Leaf: CastDyn<D::DynContent>,
     {
         leaf.emplace_map(|content, emplacer| match <T::Leaf>::map_ref(content) {
             Ok(mapped) => Ok(unsafe {
-                emplacer.emplace_unchecked(mapped, PathExtension::Tightened(D::type_kind()), None)
+                emplacer.emplace_unchecked(
+                    mapped,
+                    PathExtension::Tightened(D::type_kind()),
+                    Some(span),
+                )
             }),
             Err(_) => Err(emplacer.revert()),
         })
@@ -55,11 +59,11 @@ impl MapFromArgument for BeShared {
     const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Shared;
 
     fn from_argument_value(
-        value: ArgumentValue,
+        Spanned(value, span): Spanned<ArgumentValue>,
     ) -> FunctionResult<Content<'static, AnyType, Self>> {
         Ok(value
             .expect_shared()
-            .emplace_map(|inner, emplacer| inner.as_ref_value().into_shared(emplacer)))
+            .emplace_map(|inner, emplacer| inner.as_ref_value().into_shared(emplacer, span)))
     }
 }
 

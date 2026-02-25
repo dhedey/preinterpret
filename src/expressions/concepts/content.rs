@@ -213,7 +213,7 @@ impl<
     type ValueType = T;
     const OWNERSHIP: ArgumentOwnership = F::ARGUMENT_OWNERSHIP;
     fn from_argument(Spanned(value, span_range): Spanned<ArgumentValue>) -> FunctionResult<Self> {
-        let ownership_mapped = F::from_argument_value(value)?;
+        let ownership_mapped = F::from_argument_value(Spanned(value, span_range))?;
         let type_mapped = T::resolve(ownership_mapped, span_range, "This argument")?;
         Ok(X::from_content(type_mapped))
     }

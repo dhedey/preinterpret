@@ -31,14 +31,18 @@ impl IsDynCompatibleForm for BeMutable {
     type DynLeaf<'a, D: IsDynType> = QqqMutable<D::DynContent>;
 
     fn leaf_to_dyn<'a, T: IsLeafType, D: IsDynType>(
-        leaf: Self::Leaf<'a, T>,
+        Spanned(leaf, span): Spanned<Self::Leaf<'a, T>>,
     ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
         T::Leaf: CastDyn<D::DynContent>,
     {
         leaf.emplace_map(|content, emplacer| match <T::Leaf>::map_mut(content) {
             Ok(mapped) => Ok(unsafe {
-                emplacer.emplace_unchecked(mapped, PathExtension::Tightened(D::type_kind()), None)
+                emplacer.emplace_unchecked(
+                    mapped,
+                    PathExtension::Tightened(D::type_kind()),
+                    Some(span),
+                )
             }),
             Err(_) => Err(emplacer.revert()),
         })
@@ -61,11 +65,11 @@ impl MapFromArgument for BeMutable {
     const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Mutable;
 
     fn from_argument_value(
-        value: ArgumentValue,
+        Spanned(value, span): Spanned<ArgumentValue>,
     ) -> FunctionResult<Content<'static, AnyType, Self>> {
         Ok(value
             .expect_mutable()
-            .emplace_map(|inner, emplacer| inner.as_mut_value().into_mutable(emplacer)))
+            .emplace_map(|inner, emplacer| inner.as_mut_value().into_mutable(emplacer, span)))
     }
 }
 

@@ -32,7 +32,7 @@ impl IsDynCompatibleForm for BeMut {
     type DynLeaf<'a, D: IsDynType> = &'a mut D::DynContent;
 
     fn leaf_to_dyn<'a, T: IsLeafType, D: IsDynType>(
-        leaf: Self::Leaf<'a, T>,
+        Spanned(leaf, _span): Spanned<Self::Leaf<'a, T>>,
     ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
         T::Leaf: CastDyn<D::DynContent>,
@@ -55,12 +55,14 @@ where
     fn into_mutable<'b, T: 'static>(
         self,
         emplacer: &'b mut MutableEmplacer<'a, T>,
+        span: SpanRange,
     ) -> Content<'static, Self::Type, BeMutable>
     where
         Self: Sized,
     {
         struct __InlineMapper<'b, 'e2, X: 'static> {
             emplacer: &'b mut MutableEmplacer<'e2, X>,
+            span: SpanRange,
         }
         impl<'b, 'e2, X> LeafMapper<BeMut> for __InlineMapper<'b, 'e2, X> {
             type Output<'a, T: IsHierarchicalType> = Content<'static, T, BeMutable>;
@@ -80,25 +82,26 @@ where
                     self.emplacer.emplace_unchecked(
                         leaf,
                         PathExtension::Tightened(T::type_kind()),
-                        // TODO[references]: Pass a span here by propagating from DynResolveFrom
-                        None,
+                        Some(self.span),
                     )
                 }
             }
         };
-        let __mapper = __InlineMapper { emplacer };
+        let __mapper = __InlineMapper { emplacer, span };
         <Self::Type>::map_with::<BeMut, _>(__mapper, self)
     }
 
     fn into_assignee<'b, T: 'static>(
         self,
         emplacer: &'b mut MutableEmplacer<'a, T>,
+        span: SpanRange,
     ) -> Content<'static, Self::Type, BeAssignee>
     where
         Self: Sized,
     {
         struct __InlineMapper<'b, 'e2, X: 'static> {
             emplacer: &'b mut MutableEmplacer<'e2, X>,
+            span: SpanRange,
         }
         impl<'b, 'e2, X> LeafMapper<BeMut> for __InlineMapper<'b, 'e2, X> {
             type Output<'a, T: IsHierarchicalType> = Content<'static, T, BeAssignee>;
@@ -118,25 +121,26 @@ where
                     QqqAssignee(self.emplacer.emplace_unchecked(
                         leaf,
                         PathExtension::Tightened(T::type_kind()),
-                        // TODO[references]: Pass a span here by propagating from DynResolveFrom
-                        None,
+                        Some(self.span),
                     ))
                 }
             }
         };
-        let __mapper = __InlineMapper { emplacer };
+        let __mapper = __InlineMapper { emplacer, span };
         <Self::Type>::map_with::<BeMut, _>(__mapper, self)
     }
 
     fn into_mutable_any_mut<'b, T: 'static>(
         self,
         emplacer: &'b mut MutableEmplacer<'a, T>,
+        span: SpanRange,
     ) -> Content<'static, Self::Type, BeAnyMut>
     where
         Self: Sized,
     {
         struct __InlineMapper<'b, 'e2, X: 'static> {
             emplacer: &'b mut MutableEmplacer<'e2, X>,
+            span: SpanRange,
         }
         impl<'b, 'e2, X> LeafMapper<BeMut> for __InlineMapper<'b, 'e2, X> {
             type Output<'a, T: IsHierarchicalType> = Content<'static, T, BeAnyMut>;
@@ -156,14 +160,13 @@ where
                     self.emplacer.emplace_unchecked(
                         leaf,
                         PathExtension::Tightened(T::type_kind()),
-                        // TODO[references]: Pass a span here by propagating from DynResolveFrom
-                        None,
+                        Some(self.span),
                     )
                 };
                 mutable_ref.into()
             }
         };
-        let __mapper = __InlineMapper { emplacer };
+        let __mapper = __InlineMapper { emplacer, span };
         <Self::Type>::map_with::<BeMut, _>(__mapper, self)
     }
 }

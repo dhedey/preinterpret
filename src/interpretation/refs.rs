@@ -9,45 +9,53 @@ pub(crate) struct AnyRef<'a, T: ?Sized + 'static> {
 }
 
 impl<'a, T: ?Sized + 'static> AnyRef<'a, T> {
-    /// SAFETY: The caller must ensure the PathExtension is correct.
+    /// Maps this `AnyRef` using a closure that returns a [`MappedRef`].
+    ///
+    /// The unsafe PathExtension assertion is confined to the [`MappedRef::new`] constructor.
     #[allow(unused)]
-    pub(crate) unsafe fn map<S: ?Sized>(
+    pub(crate) fn map<S: ?Sized + 'static>(
         self,
-        f: impl for<'r> FnOnce(&'r T) -> &'r S,
-        path_extension: PathExtension,
-        new_span: Option<SpanRange>,
+        f: impl for<'r> FnOnce(&'r T) -> MappedRef<'r, S>,
     ) -> AnyRef<'a, S> {
         match self.inner {
-            AnyRefInner::Direct(value) => AnyRef {
-                inner: AnyRefInner::Direct(f(value)),
-            },
+            AnyRefInner::Direct(value) => {
+                let mapped = f(value);
+                AnyRef {
+                    inner: AnyRefInner::Direct(mapped.value),
+                }
+            }
             AnyRefInner::Encapsulated(shared) => AnyRef {
-                inner: AnyRefInner::Encapsulated(unsafe {
-                    shared.map(|x| f(x), path_extension, new_span)
-                }),
+                inner: AnyRefInner::Encapsulated(shared.map(f)),
             },
         }
     }
 
-    /// SAFETY: The caller must ensure the PathExtension is correct.
+    /// Maps this `AnyRef` using a closure that returns an optional [`MappedRef`].
+    ///
+    /// The unsafe PathExtension assertion is confined to the [`MappedRef::new`] constructor.
     #[allow(unused)]
-    pub(crate) unsafe fn map_optional<S: ?Sized>(
+    pub(crate) fn map_optional<S: ?Sized + 'static>(
         self,
-        f: impl for<'r> FnOnce(&'r T) -> Option<&'r S>,
-        path_extension: PathExtension,
-        new_span: Option<SpanRange>,
+        f: impl for<'r> FnOnce(&'r T) -> Option<MappedRef<'r, S>>,
     ) -> Option<AnyRef<'a, S>> {
         Some(match self.inner {
-            AnyRefInner::Direct(value) => AnyRef {
-                inner: AnyRefInner::Direct(f(value)?),
-            },
+            AnyRefInner::Direct(value) => {
+                let mapped = f(value)?;
+                AnyRef {
+                    inner: AnyRefInner::Direct(mapped.value),
+                }
+            }
             AnyRefInner::Encapsulated(shared) => AnyRef {
                 inner: AnyRefInner::Encapsulated(shared.emplace_map(|input, emplacer| match f(
                     input,
                 ) {
-                    Some(output) => {
-                        Some(unsafe { emplacer.emplace(output, path_extension, new_span) })
-                    }
+                    Some(mapped) => Some(unsafe {
+                        emplacer.emplace_unchecked(
+                            mapped.value,
+                            mapped.path_extension,
+                            Some(mapped.span),
+                        )
+                    }),
                     None => {
                         let _ = emplacer.revert();
                         None
@@ -118,13 +126,13 @@ impl<'a, 'e: 'a, T: 'static + ?Sized> AnyRefEmplacer<'a, 'e, T> {
                 inner: AnyRefInner::Direct(unsafe { transmute::<&V, &'static V>(value) }),
             },
             AnyRefInner::Encapsulated(shared) => AnyRef {
-                inner: AnyRefInner::Encapsulated(unsafe {
-                    shared.map(
-                        |_| transmute::<&V, &'static V>(value),
+                inner: AnyRefInner::Encapsulated(shared.emplace_map(|_, emplacer| unsafe {
+                    emplacer.emplace_unchecked(
+                        transmute::<&V, &'static V>(value),
                         path_extension,
                         new_span,
                     )
-                }),
+                })),
             },
         }
     }
@@ -203,44 +211,52 @@ impl<'a, T: ?Sized> From<&'a mut T> for AnyMut<'a, T> {
 }
 
 impl<'a, T: ?Sized + 'static> AnyMut<'a, T> {
-    /// SAFETY: The caller must ensure the PathExtension is correct.
+    /// Maps this `AnyMut` using a closure that returns a [`MappedMut`].
+    ///
+    /// The unsafe PathExtension assertion is confined to the [`MappedMut::new`] constructor.
     #[allow(unused)]
-    pub(crate) unsafe fn map<S: ?Sized>(
+    pub(crate) fn map<S: ?Sized + 'static>(
         self,
-        f: impl for<'r> FnOnce(&'r mut T) -> &'r mut S,
-        path_extension: PathExtension,
-        new_span: Option<SpanRange>,
+        f: impl for<'r> FnOnce(&'r mut T) -> MappedMut<'r, S>,
     ) -> AnyMut<'a, S> {
         match self.inner {
-            AnyMutInner::Direct(value) => AnyMut {
-                inner: AnyMutInner::Direct(f(value)),
-            },
+            AnyMutInner::Direct(value) => {
+                let mapped = f(value);
+                AnyMut {
+                    inner: AnyMutInner::Direct(mapped.value),
+                }
+            }
             AnyMutInner::Encapsulated(mutable) => AnyMut {
-                inner: AnyMutInner::Encapsulated(unsafe {
-                    mutable.map(|x| f(x), path_extension, new_span)
-                }),
+                inner: AnyMutInner::Encapsulated(mutable.map(f)),
             },
         }
     }
 
-    /// SAFETY: The caller must ensure the PathExtension is correct.
+    /// Maps this `AnyMut` using a closure that returns an optional [`MappedMut`].
+    ///
+    /// The unsafe PathExtension assertion is confined to the [`MappedMut::new`] constructor.
     #[allow(unused)]
-    pub(crate) unsafe fn map_optional<S: ?Sized>(
+    pub(crate) fn map_optional<S: ?Sized + 'static>(
         self,
-        f: impl for<'r> FnOnce(&'r mut T) -> Option<&'r mut S>,
-        path_extension: PathExtension,
-        new_span: Option<SpanRange>,
+        f: impl for<'r> FnOnce(&'r mut T) -> Option<MappedMut<'r, S>>,
     ) -> Option<AnyMut<'a, S>> {
         Some(match self.inner {
-            AnyMutInner::Direct(value) => AnyMut {
-                inner: AnyMutInner::Direct(f(value)?),
-            },
+            AnyMutInner::Direct(value) => {
+                let mapped = f(value)?;
+                AnyMut {
+                    inner: AnyMutInner::Direct(mapped.value),
+                }
+            }
             AnyMutInner::Encapsulated(mutable) => AnyMut {
                 inner: AnyMutInner::Encapsulated(mutable.emplace_map(
                     |input, emplacer| match f(input) {
-                        Some(output) => {
-                            Some(unsafe { emplacer.emplace(output, path_extension, new_span) })
-                        }
+                        Some(mapped) => Some(unsafe {
+                            emplacer.emplace_unchecked(
+                                mapped.value,
+                                mapped.path_extension,
+                                Some(mapped.span),
+                            )
+                        }),
                         None => {
                             let _ = emplacer.revert();
                             None
@@ -252,33 +268,63 @@ impl<'a, T: ?Sized + 'static> AnyMut<'a, T> {
     }
 
     pub(crate) fn emplace_map<O>(
-        mut self,
+        self,
         f: impl for<'e> FnOnce(&'e mut T, &mut AnyMutEmplacer<'a, 'e, T>) -> O,
     ) -> O {
-        let copied_mut = self.deref_mut() as *mut T;
-        // TODO[references]: Change the emplacer to take a *mut T directly, to avoid the duplicate &mut T
-        let mut emplacer = AnyMutEmplacer {
-            inner: Some(self),
-            encapsulation_lifetime: std::marker::PhantomData,
-        };
-        f(
-            // SAFETY: We are cloning a mutable reference here, but it is safe because:
-            // - What it's pointing at still lives, inside emplacer.inner
-            // - No other "mutable reference" is created except at encapsulation time
-            unsafe { &mut *copied_mut },
-            &mut emplacer,
-        )
+        match self.inner {
+            AnyMutInner::Direct(direct_mut) => {
+                // Convert to raw pointer to avoid &mut aliasing: the emplacer
+                // stores the raw pointer, so no second &mut T exists.
+                let raw_ptr = direct_mut as *mut T;
+                let mut emplacer = AnyMutEmplacer {
+                    inner: Some(AnyMutEmplacerState::Direct(raw_ptr, PhantomData)),
+                    encapsulation_lifetime: std::marker::PhantomData,
+                };
+                // SAFETY: raw_ptr was derived from a valid &'a mut T, and the original
+                // reference was consumed by converting to *mut T.
+                f(unsafe { &mut *raw_ptr }, &mut emplacer)
+            }
+            AnyMutInner::Encapsulated(mut mutable) => {
+                // MutableReference internally stores NonNull<T> (a raw pointer),
+                // not &mut T, so there is no aliasing issue.
+                let raw_ptr = (&mut *mutable) as *mut T;
+                let mut emplacer = AnyMutEmplacer {
+                    inner: Some(AnyMutEmplacerState::Encapsulated(mutable)),
+                    encapsulation_lifetime: std::marker::PhantomData,
+                };
+                // SAFETY: raw_ptr was derived from the MutableReference which
+                // uses NonNull internally (not &mut), so no aliasing occurs.
+                f(unsafe { &mut *raw_ptr }, &mut emplacer)
+            }
+        }
     }
 }
 
 pub(crate) struct AnyMutEmplacer<'a, 'e: 'a, T: 'static + ?Sized> {
-    inner: Option<AnyMut<'a, T>>,
+    inner: Option<AnyMutEmplacerState<'a, T>>,
     encapsulation_lifetime: std::marker::PhantomData<&'e ()>,
+}
+
+/// Stores either a raw pointer (for Direct) or a MutableReference (for Encapsulated),
+/// avoiding &mut aliasing that would occur if we stored the full AnyMut.
+enum AnyMutEmplacerState<'a, T: 'static + ?Sized> {
+    Direct(*mut T, PhantomData<&'a mut T>),
+    Encapsulated(MutableReference<T>),
 }
 
 impl<'a, 'e: 'a, T: 'static + ?Sized> AnyMutEmplacer<'a, 'e, T> {
     pub(crate) fn revert(&mut self) -> AnyMut<'a, T> {
-        self.inner.take().expect("Emplacer already consumed")
+        let state = self.inner.take().expect("Emplacer already consumed");
+        match state {
+            AnyMutEmplacerState::Direct(ptr, _) => AnyMut {
+                // SAFETY: ptr was derived from a valid &'a mut T and no other
+                // &mut T currently exists (the one passed to the closure has ended).
+                inner: AnyMutInner::Direct(unsafe { &mut *ptr }),
+            },
+            AnyMutEmplacerState::Encapsulated(mutable) => AnyMut {
+                inner: AnyMutInner::Encapsulated(mutable),
+            },
+        }
     }
 
     /// SAFETY: The caller must ensure the PathExtension is correct.
@@ -304,23 +350,23 @@ impl<'a, 'e: 'a, T: 'static + ?Sized> AnyMutEmplacer<'a, 'e, T> {
         path_extension: PathExtension,
         new_span: Option<SpanRange>,
     ) -> AnyMut<'a, V> {
-        let any_mut = self
+        let state = self
             .inner
             .take()
             .expect("You can only emplace to create a new AnyMut value once");
-        match any_mut.inner {
-            AnyMutInner::Direct(_) => AnyMut {
+        match state {
+            AnyMutEmplacerState::Direct(_, _) => AnyMut {
                 // SAFETY: As defined in the rustdoc above
                 inner: AnyMutInner::Direct(unsafe { transmute::<&mut V, &'static mut V>(value) }),
             },
-            AnyMutInner::Encapsulated(mutable) => AnyMut {
-                inner: AnyMutInner::Encapsulated(unsafe {
-                    mutable.map(
-                        |_| transmute::<&mut V, &'static mut V>(value),
+            AnyMutEmplacerState::Encapsulated(mutable) => AnyMut {
+                inner: AnyMutInner::Encapsulated(mutable.emplace_map(|_, emplacer| unsafe {
+                    emplacer.emplace_unchecked(
+                        transmute::<&mut V, &'static mut V>(value),
                         path_extension,
                         new_span,
                     )
-                }),
+                })),
             },
         }
     }

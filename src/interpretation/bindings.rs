@@ -397,8 +397,11 @@ where
     X::Form: LeafAsMutForm,
 {
     fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
-        self.0
-            .emplace_map(|inner, emplacer| inner.as_mut_value().into_assignee(emplacer))
+        self.0.emplace_map(|inner, emplacer| {
+            inner
+                .as_mut_value()
+                .into_assignee(emplacer, Span::call_site().span_range())
+        })
     }
 }
 
@@ -616,14 +619,20 @@ where
                 AnyLevelCopyOnWrite::<X::Type>::Owned(owned).into_copy_on_write()
             }
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
-                let content = shared
-                    .emplace_map(|inner, emplacer| inner.as_ref_value().into_shared(emplacer));
+                let content = shared.emplace_map(|inner, emplacer| {
+                    inner
+                        .as_ref_value()
+                        .into_shared(emplacer, Span::call_site().span_range())
+                });
                 AnyLevelCopyOnWrite::<X::Type>::SharedWithInfallibleCloning(content)
                     .into_copy_on_write()
             }
             CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
-                let content = shared
-                    .emplace_map(|inner, emplacer| inner.as_ref_value().into_shared(emplacer));
+                let content = shared.emplace_map(|inner, emplacer| {
+                    inner
+                        .as_ref_value()
+                        .into_shared(emplacer, Span::call_site().span_range())
+                });
                 AnyLevelCopyOnWrite::<X::Type>::SharedWithTransparentCloning(content)
                     .into_copy_on_write()
             }

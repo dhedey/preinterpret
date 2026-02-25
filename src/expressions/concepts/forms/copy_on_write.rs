@@ -75,18 +75,20 @@ impl MapFromArgument for BeCopyOnWrite {
     const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::CopyOnWrite;
 
     fn from_argument_value(
-        value: ArgumentValue,
+        Spanned(value, span): Spanned<ArgumentValue>,
     ) -> FunctionResult<Content<'static, AnyType, Self>> {
         match value.expect_copy_on_write().inner {
             CopyOnWriteInner::Owned(owned) => Ok(BeCopyOnWrite::new_owned(owned)),
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
-                let content = shared
-                    .emplace_map(|inner, emplacer| inner.as_ref_value().into_shared(emplacer));
+                let content = shared.emplace_map(|inner, emplacer| {
+                    inner.as_ref_value().into_shared(emplacer, span)
+                });
                 Ok(BeCopyOnWrite::new_shared_in_place_of_owned(content))
             }
             CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
-                let content = shared
-                    .emplace_map(|inner, emplacer| inner.as_ref_value().into_shared(emplacer));
+                let content = shared.emplace_map(|inner, emplacer| {
+                    inner.as_ref_value().into_shared(emplacer, span)
+                });
                 Ok(BeCopyOnWrite::new_shared_in_place_of_shared(content))
             }
         }

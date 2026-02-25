@@ -56,7 +56,7 @@ pub(crate) trait IsDynCompatibleForm: IsHierarchicalForm {
     type DynLeaf<'a, D: IsDynType>;
 
     fn leaf_to_dyn<'a, T: IsLeafType, D: IsDynType>(
-        leaf: Self::Leaf<'a, T>,
+        leaf: Spanned<Self::Leaf<'a, T>>,
     ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
         T::Leaf: CastDyn<D::DynContent>;
@@ -65,9 +65,9 @@ pub(crate) trait IsDynCompatibleForm: IsHierarchicalForm {
 pub(crate) trait MapFromArgument: IsHierarchicalForm {
     const ARGUMENT_OWNERSHIP: ArgumentOwnership;
 
-    // TODO[references]: Have this take a span so that we can store it into the emplacer
-    fn from_argument_value(value: ArgumentValue)
-        -> FunctionResult<Content<'static, AnyType, Self>>;
+    fn from_argument_value(
+        value: Spanned<ArgumentValue>,
+    ) -> FunctionResult<Content<'static, AnyType, Self>>;
 }
 
 pub(crate) trait MapIntoReturned: IsHierarchicalForm {

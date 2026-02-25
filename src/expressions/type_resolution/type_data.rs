@@ -338,23 +338,28 @@ impl BinaryOperationInterface {
 #[derive(Clone, Copy)]
 pub(crate) struct PropertyAccessCallContext<'a> {
     pub property: &'a PropertyAccess,
+    pub output_span_range: SpanRange,
 }
 
 /// Interface for property access on a type (e.g., `obj.field`).
 ///
 /// Unlike unary/binary operations which return owned values, property access
-/// returns references into the source value. This requires three separate
-/// access methods for shared, mutable, and owned access patterns.
+/// returns references into the source value. The shared and mutable access methods
+/// return [`MappedRef`]/[`MappedMut`] which bundle the result with a [`PathExtension`]
+/// describing the navigation.
 pub(crate) struct PropertyAccessInterface {
-    /// Access a property by shared reference.
-    pub shared_access:
-        for<'a> fn(PropertyAccessCallContext, &'a AnyValue) -> FunctionResult<&'a AnyValue>,
+    /// Access a property by shared reference, returning a [`MappedRef`] with path info.
+    pub shared_access: for<'a> fn(
+        PropertyAccessCallContext,
+        &'a AnyValue,
+    ) -> FunctionResult<MappedRef<'a, AnyValue>>,
     /// Access a property by mutable reference, optionally auto-creating if missing.
+    /// Returns a [`MappedMut`] with path info.
     pub mutable_access: for<'a> fn(
         PropertyAccessCallContext,
         &'a mut AnyValue,
         bool,
-    ) -> FunctionResult<&'a mut AnyValue>,
+    ) -> FunctionResult<MappedMut<'a, AnyValue>>,
     /// Extract a property from an owned value.
     pub owned_access: fn(PropertyAccessCallContext, AnyValue) -> FunctionResult<AnyValue>,
 }
@@ -367,28 +372,31 @@ pub(crate) struct PropertyAccessInterface {
 #[derive(Clone, Copy)]
 pub(crate) struct IndexAccessCallContext<'a> {
     pub access: &'a IndexAccess,
+    pub output_span_range: SpanRange,
 }
 
 /// Interface for index access on a type (e.g., `arr[0]` or `obj["key"]`).
 ///
 /// Similar to property access, but the index is an evaluated expression
-/// rather than a static identifier.
+/// rather than a static identifier. The shared and mutable access methods
+/// return [`MappedRef`]/[`MappedMut`] which bundle the result with a [`PathExtension`].
 pub(crate) struct IndexAccessInterface {
     /// The ownership requirement for the index value.
     pub index_ownership: ArgumentOwnership,
-    /// Access an element by shared reference.
+    /// Access an element by shared reference, returning a [`MappedRef`] with path info.
     pub shared_access: for<'a> fn(
         IndexAccessCallContext,
         &'a AnyValue,
         Spanned<AnyValueRef>,
-    ) -> FunctionResult<&'a AnyValue>,
+    ) -> FunctionResult<MappedRef<'a, AnyValue>>,
     /// Access an element by mutable reference, optionally auto-creating if missing.
+    /// Returns a [`MappedMut`] with path info.
     pub mutable_access: for<'a> fn(
         IndexAccessCallContext,
         &'a mut AnyValue,
         Spanned<AnyValueRef>,
         bool,
-    ) -> FunctionResult<&'a mut AnyValue>,
+    ) -> FunctionResult<MappedMut<'a, AnyValue>>,
     /// Extract an element from an owned value.
     pub owned_access:
         fn(IndexAccessCallContext, AnyValue, Spanned<AnyValueRef>) -> FunctionResult<AnyValue>,

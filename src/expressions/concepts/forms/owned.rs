@@ -24,7 +24,7 @@ impl IsDynCompatibleForm for BeOwned {
     type DynLeaf<'a, D: IsDynType> = Box<D::DynContent>;
 
     fn leaf_to_dyn<'a, T: IsLeafType, D: IsDynType>(
-        leaf: Self::Leaf<'a, T>,
+        Spanned(leaf, _span): Spanned<Self::Leaf<'a, T>>,
     ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
         T::Leaf: CastDyn<D::DynContent>,
@@ -49,7 +49,7 @@ impl MapFromArgument for BeOwned {
     const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
 
     fn from_argument_value(
-        value: ArgumentValue,
+        Spanned(value, _span): Spanned<ArgumentValue>,
     ) -> FunctionResult<Content<'static, AnyType, Self>> {
         Ok(value.expect_owned())
     }

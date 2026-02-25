@@ -31,24 +31,22 @@ impl IsDynCompatibleForm for BeAssignee {
     type DynLeaf<'a, D: IsDynType> = QqqAssignee<D::DynContent>;
 
     fn leaf_to_dyn<'a, T: IsLeafType, D: IsDynType>(
-        leaf: Self::Leaf<'a, T>,
+        Spanned(leaf, span): Spanned<Self::Leaf<'a, T>>,
     ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
         T::Leaf: CastDyn<D::DynContent>,
     {
-        leaf.0.emplace_map(|content, emplacer| {
-            match <T::Leaf>::map_mut(content) {
+        leaf.0
+            .emplace_map(|content, emplacer| match <T::Leaf>::map_mut(content) {
                 Ok(mapped) => Ok(QqqAssignee(unsafe {
-                    // TODO[references]: Pass a span here by propagating from DynResolveFrom
                     emplacer.emplace_unchecked(
                         mapped,
                         PathExtension::Tightened(D::type_kind()),
-                        None,
+                        Some(span),
                     )
                 })),
-                Err(this) => Err(QqqAssignee(emplacer.revert())),
-            }
-        })
+                Err(_this) => Err(QqqAssignee(emplacer.revert())),
+            })
     }
 }
 
@@ -69,7 +67,7 @@ impl MapFromArgument for BeAssignee {
         ArgumentOwnership::Assignee { auto_create: false };
 
     fn from_argument_value(
-        value: ArgumentValue,
+        Spanned(value, _span): Spanned<ArgumentValue>,
     ) -> FunctionResult<Content<'static, AnyType, Self>> {
         Ok(value.expect_assignee().into_content())
     }

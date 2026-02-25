@@ -30,31 +30,41 @@ impl<T: ?Sized> SharedReference<T> {
         f(copied_ref, &mut emplacer)
     }
 
-    /// SAFETY:
-    /// - The caller must ensure that the PathExtension is correct
-    ///   (an overly-specific PathExtension may cause safety issues)
-    pub(crate) unsafe fn map<V: ?Sized + 'static>(
+    /// Maps this shared reference using a closure that returns a [`MappedRef`].
+    ///
+    /// The unsafe PathExtension assertion is confined to the [`MappedRef::new`] constructor,
+    /// making this method itself safe.
+    pub(crate) fn map<V: ?Sized + 'static>(
         self,
-        f: impl FnOnce(&T) -> &V,
-        path_extension: PathExtension,
-        new_span: Option<SpanRange>,
+        f: impl for<'r> FnOnce(&'r T) -> MappedRef<'r, V>,
     ) -> SharedReference<V> {
         self.emplace_map(move |input, emplacer| {
-            emplacer.emplace(f(input), path_extension, new_span)
+            let mapped = f(input);
+            // SAFETY: MappedRef constructor already validated the PathExtension
+            unsafe {
+                emplacer.emplace_unchecked(mapped.value, mapped.path_extension, Some(mapped.span))
+            }
         })
     }
 
-    /// SAFETY:
-    /// - The caller must ensure that the PathExtension is correct
-    ///   (an overly-specific PathExtension may cause safety issues)
-    pub(crate) unsafe fn try_map<V: ?Sized + 'static, E>(
+    /// Fallible version of [`map`](Self::map) that returns the original reference on error.
+    ///
+    /// The unsafe PathExtension assertion is confined to the [`MappedRef::new`] constructor.
+    pub(crate) fn try_map<V: ?Sized + 'static, E>(
         self,
-        f: impl FnOnce(&T) -> Result<&V, E>,
-        path_extension: PathExtension,
-        new_span: Option<SpanRange>,
+        f: impl for<'r> FnOnce(&'r T) -> Result<MappedRef<'r, V>, E>,
     ) -> Result<SharedReference<V>, (E, SharedReference<T>)> {
         self.emplace_map(|input, emplacer| match f(input) {
-            Ok(output) => Ok(emplacer.emplace(output, path_extension, new_span)),
+            Ok(mapped) => {
+                // SAFETY: MappedRef constructor already validated the PathExtension
+                Ok(unsafe {
+                    emplacer.emplace_unchecked(
+                        mapped.value,
+                        mapped.path_extension,
+                        Some(mapped.span),
+                    )
+                })
+            }
             Err(e) => Err((e, emplacer.revert())),
         })
     }
@@ -140,22 +150,6 @@ pub(crate) struct SharedEmplacer<'e, T: ?Sized>(EmplacerCore<'e, T>);
 impl<'e, T: ?Sized> SharedEmplacer<'e, T> {
     pub(crate) fn revert(&mut self) -> SharedReference<T> {
         SharedReference(self.0.revert())
-    }
-
-    /// SAFETY:
-    /// - The caller must ensure that the PathExtension is correct
-    ///   (an overly-specific PathExtension may cause safety issues)
-    pub(crate) unsafe fn emplace<V: 'static + ?Sized>(
-        &mut self,
-        value: &'e V,
-        path_extension: PathExtension,
-        new_span: Option<SpanRange>,
-    ) -> SharedReference<V> {
-        unsafe {
-            // SAFETY: The lifetime 'e is equal to the &'e content argument in replace
-            // So this guarantees that the returned reference is valid as long as the SharedSubRcRefCell exists
-            self.emplace_unchecked(value, path_extension, new_span)
-        }
     }
 
     /// SAFETY:

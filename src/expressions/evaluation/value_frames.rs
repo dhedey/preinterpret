@@ -1054,39 +1054,17 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
 
         let ctx = PropertyAccessCallContext {
             property: &self.access,
+            output_span_range: result_span,
         };
         let auto_create = context.requested_ownership().requests_auto_create();
 
-        let property_name_for_shared = property_name.clone();
         let mapped = value.expect_any_value_and_map(
             |shared| {
-                // SAFETY: Property access navigates to a named child of the source value.
-                unsafe {
-                    shared
-                        .try_map(
-                            |value| (interface.shared_access)(ctx, value),
-                            PathExtension::Child(
-                                ChildSpecifier::ObjectChild(property_name_for_shared),
-                                AnyType::type_kind(),
-                            ),
-                            Some(result_span),
-                        )
-                        .map_err(|(e, _)| e)
-                }
+                shared
+                    .try_map(|value| (interface.shared_access)(ctx, value))
+                    .map_err(|(e, _)| e)
             },
-            |mutable| {
-                // SAFETY: Property access navigates to a named child of the source value.
-                unsafe {
-                    mutable.try_map(
-                        |value| (interface.mutable_access)(ctx, value, auto_create),
-                        PathExtension::Child(
-                            ChildSpecifier::ObjectChild(property_name),
-                            AnyType::type_kind(),
-                        ),
-                        Some(result_span),
-                    )
-                }
-            },
+            |mutable| mutable.try_map(|value| (interface.mutable_access)(ctx, value, auto_create)),
             |owned| (interface.owned_access)(ctx, owned),
         )?;
 
@@ -1172,35 +1150,23 @@ impl EvaluationFrame for ValueIndexAccessBuilder {
                 let index = value.expect_shared();
                 let index = index.as_ref_value().spanned(span);
 
+                let result_span = SpanRange::new_between(source_span, self.access.span_range());
                 let ctx = IndexAccessCallContext {
                     access: &self.access,
+                    output_span_range: result_span,
                 };
                 let auto_create = context.requested_ownership().requests_auto_create();
 
-                let result_span = SpanRange::new_between(source_span, self.access.span_range());
                 let result = source.expect_any_value_and_map(
                     |shared| {
-                        // SAFETY: Tightened(AnyType) is conservative for index access.
-                        // A future improvement could derive ChildSpecifier from the index value.
-                        unsafe {
-                            shared
-                                .try_map(
-                                    |value| (interface.shared_access)(ctx, value, index),
-                                    PathExtension::Tightened(AnyType::type_kind()),
-                                    Some(result_span),
-                                )
-                                .map_err(|(e, _)| e)
-                        }
+                        shared
+                            .try_map(|value| (interface.shared_access)(ctx, value, index))
+                            .map_err(|(e, _)| e)
                     },
                     |mutable| {
-                        // SAFETY: Tightened(AnyType) is conservative for index access.
-                        unsafe {
-                            mutable.try_map(
-                                |value| (interface.mutable_access)(ctx, value, index, auto_create),
-                                PathExtension::Tightened(AnyType::type_kind()),
-                                Some(result_span),
-                            )
-                        }
+                        mutable.try_map(|value| {
+                            (interface.mutable_access)(ctx, value, index, auto_create)
+                        })
                     },
                     |owned| (interface.owned_access)(ctx, owned, index),
                 )?;

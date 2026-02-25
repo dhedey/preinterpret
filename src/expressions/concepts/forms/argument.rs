@@ -37,7 +37,7 @@ impl MapFromArgument for BeArgument {
     const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::AsIs;
 
     fn from_argument_value(
-        value: ArgumentValue,
+        Spanned(value, _span): Spanned<ArgumentValue>,
     ) -> FunctionResult<Content<'static, AnyType, Self>> {
         todo!("Argument")
     }

@@ -252,25 +252,25 @@ pub(crate) trait ResolvableShared<T: IsValueContent> {
     where
         Self: 'static,
     {
-        // SAFETY: Tightened(T::Type) is correct
-        unsafe {
-            value
-                .try_map(
-                    |v| {
-                        Self::resolve_from_ref(
-                            v,
-                            ResolutionContext {
-                                span_range: &span,
-                                resolution_target,
-                            },
-                        )
+        value
+            .try_map(|v| {
+                let resolved = Self::resolve_from_ref(
+                    v,
+                    ResolutionContext {
+                        span_range: &span,
+                        resolution_target,
                     },
-                    // TODO[references]: Move unsafe to this constructor so the blocks can be smaller
-                    PathExtension::Tightened(T::Type::type_kind()),
-                    Some(span),
-                )
-                .map_err(|(err, _)| err)
-        }
+                )?;
+                // SAFETY: Tightened(T::Type) correctly describes type narrowing
+                Ok(unsafe {
+                    MappedRef::new(
+                        resolved,
+                        PathExtension::Tightened(T::Type::type_kind()),
+                        span,
+                    )
+                })
+            })
+            .map_err(|(err, _)| err)
     }
 
     fn resolve_ref<'a>(
@@ -325,24 +325,25 @@ pub(crate) trait ResolvableMutable<T: IsValueContent> {
     where
         Self: 'static,
     {
-        // SAFETY: Tightened(T::Type) is correct
-        unsafe {
-            value
-                .try_map(
-                    |v| {
-                        Self::resolve_from_mut(
-                            v,
-                            ResolutionContext {
-                                span_range: &span,
-                                resolution_target,
-                            },
-                        )
+        value
+            .try_map(|v| {
+                let resolved = Self::resolve_from_mut(
+                    v,
+                    ResolutionContext {
+                        span_range: &span,
+                        resolution_target,
                     },
-                    PathExtension::Tightened(T::Type::type_kind()),
-                    Some(span),
-                )
-                .map_err(|(err, _)| err)
-        }
+                )?;
+                // SAFETY: Tightened(T::Type) correctly describes type narrowing
+                Ok(unsafe {
+                    MappedMut::new(
+                        resolved,
+                        PathExtension::Tightened(T::Type::type_kind()),
+                        span,
+                    )
+                })
+            })
+            .map_err(|(err, _)| err)
     }
 
     fn resolve_ref_mut<'a>(
