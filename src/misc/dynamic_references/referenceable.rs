@@ -433,66 +433,6 @@ pub(crate) enum PathExtension {
     Tightened(TypeKind),
 }
 
-/// A mapped shared reference bundled with its [`PathExtension`] and span.
-///
-/// Constructing this is unsafe because the caller must ensure the
-/// [`PathExtension`] correctly describes the relationship between the
-/// source and mapped reference.
-pub(crate) struct MappedRef<'a, V: ?Sized> {
-    value: &'a V,
-    path_extension: PathExtension,
-    span: SpanRange,
-}
-
-impl<'a, V: ?Sized> MappedRef<'a, V> {
-    /// SAFETY: The caller must ensure that the PathExtension correctly describes
-    /// the navigation from the source reference to this mapped reference.
-    /// An overly-specific PathExtension may cause safety issues.
-    pub(crate) unsafe fn new(value: &'a V, path_extension: PathExtension, span: SpanRange) -> Self {
-        Self {
-            value,
-            path_extension,
-            span,
-        }
-    }
-
-    pub(crate) fn into_parts(self) -> (&'a V, PathExtension, SpanRange) {
-        (self.value, self.path_extension, self.span)
-    }
-}
-
-/// A mapped mutable reference bundled with its [`PathExtension`] and span.
-///
-/// Constructing this is unsafe because the caller must ensure the
-/// [`PathExtension`] correctly describes the relationship between the
-/// source and mapped reference.
-pub(crate) struct MappedMut<'a, V: ?Sized> {
-    value: &'a mut V,
-    path_extension: PathExtension,
-    span: SpanRange,
-}
-
-impl<'a, V: ?Sized> MappedMut<'a, V> {
-    /// SAFETY: The caller must ensure that the PathExtension correctly describes
-    /// the navigation from the source reference to this mapped reference.
-    /// An overly-specific PathExtension may cause safety issues.
-    pub(crate) unsafe fn new(
-        value: &'a mut V,
-        path_extension: PathExtension,
-        span: SpanRange,
-    ) -> Self {
-        Self {
-            value,
-            path_extension,
-            span,
-        }
-    }
-
-    pub(crate) fn into_parts(self) -> (&'a mut V, PathExtension, SpanRange) {
-        (self.value, self.path_extension, self.span)
-    }
-}
-
 #[derive(PartialEq, Eq, Clone)]
 enum PathPart {
     Value { bound_as: TypeKind },

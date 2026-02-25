@@ -1,5 +1,3 @@
-use std::mem::transmute;
-
 use super::*;
 
 /// A flexible type which can either be a reference to a value of type `T`,
@@ -49,12 +47,7 @@ impl<'a, T: ?Sized + 'static> AnyRef<'a, T> {
                 inner: AnyRefInner::Encapsulated(shared.emplace_map(|input, emplacer| match f(
                     input,
                 ) {
-                    Some(mapped) => {
-                        let (value, path_extension, span) = mapped.into_parts();
-                        // SAFETY: PathExtension validated by MappedRef constructor.
-                        // Lifetime checked by emplace (value: &'e S).
-                        Some(unsafe { emplacer.emplace(value, path_extension, Some(span)) })
-                    }
+                    Some(mapped) => Some(emplacer.emplace(mapped)),
                     None => {
                         let _ = emplacer.revert();
                         None
@@ -92,45 +85,30 @@ impl<'a, 'e: 'a, T: 'static + ?Sized> AnyRefEmplacer<'a, 'e, T> {
         self.inner.take().expect("Emplacer already consumed")
     }
 
-    /// SAFETY: The caller must ensure the PathExtension is correct.
-    pub(crate) unsafe fn emplace<V: 'static + ?Sized>(
+    /// Emplaces a mapped shared reference, consuming the emplacer's reference tracking.
+    ///
+    /// This is safe because all preconditions (correct PathExtension and valid reference
+    /// derivation) are validated by the [`MappedRef`] constructor.
+    pub(crate) fn emplace<V: 'static + ?Sized>(
         &mut self,
-        value: &'e V,
-        path_extension: PathExtension,
-        new_span: Option<SpanRange>,
-    ) -> AnyRef<'a, V> {
-        unsafe {
-            // SAFETY: The lifetime 'e is equal to the &'e content argument in replace
-            // So this guarantees that the returned reference is valid as long as the AnyRef exists
-            self.emplace_unchecked(value, path_extension, new_span)
-        }
-    }
-
-    /// SAFETY:
-    /// - The caller must ensure that the value's lifetime is derived from the original content
-    /// - The caller must ensure the PathExtension is correct
-    pub(crate) unsafe fn emplace_unchecked<V: 'static + ?Sized>(
-        &mut self,
-        value: &V,
-        path_extension: PathExtension,
-        new_span: Option<SpanRange>,
+        mapped: MappedRef<'e, V>,
     ) -> AnyRef<'a, V> {
         let any_ref = self
             .inner
             .take()
             .expect("You can only emplace to create a new AnyRef value once");
+        let (value, path_extension, span) = mapped.into_parts();
         match any_ref.inner {
             AnyRefInner::Direct(_) => AnyRef {
-                // SAFETY: As defined in the rustdoc above
-                inner: AnyRefInner::Direct(unsafe { transmute::<&V, &'static V>(value) }),
+                // 'e: 'a is guaranteed by the struct constraint, so coercion is valid
+                inner: AnyRefInner::Direct(value),
             },
             AnyRefInner::Encapsulated(shared) => AnyRef {
-                inner: AnyRefInner::Encapsulated(shared.emplace_map(|_, emplacer| unsafe {
-                    emplacer.emplace_unchecked(
-                        transmute::<&V, &'static V>(value),
-                        path_extension,
-                        new_span,
-                    )
+                inner: AnyRefInner::Encapsulated(shared.emplace_map(|_, emplacer| {
+                    // SAFETY: The value's lifetime ('e) matches the SharedEmplacer's lifetime
+                    // since both are derived from the same underlying data
+                    let remapped = unsafe { MappedRef::new_unchecked(value, path_extension, span) };
+                    emplacer.emplace(remapped)
                 })),
             },
         }
@@ -249,12 +227,7 @@ impl<'a, T: ?Sized + 'static> AnyMut<'a, T> {
             AnyMutInner::Encapsulated(mutable) => AnyMut {
                 inner: AnyMutInner::Encapsulated(mutable.emplace_map(
                     |input, emplacer| match f(input) {
-                        Some(mapped) => {
-                            let (value, path_extension, span) = mapped.into_parts();
-                            // SAFETY: PathExtension validated by MappedMut constructor.
-                            // Lifetime checked by emplace (value: &'e mut S).
-                            Some(unsafe { emplacer.emplace(value, path_extension, Some(span)) })
-                        }
+                        Some(mapped) => Some(emplacer.emplace(mapped)),
                         None => {
                             let _ = emplacer.revert();
                             None
@@ -325,45 +298,30 @@ impl<'a, 'e: 'a, T: 'static + ?Sized> AnyMutEmplacer<'a, 'e, T> {
         }
     }
 
-    /// SAFETY: The caller must ensure the PathExtension is correct.
-    pub(crate) unsafe fn emplace<V: 'static + ?Sized>(
+    /// Emplaces a mapped mutable reference, consuming the emplacer's reference tracking.
+    ///
+    /// This is safe because all preconditions (correct PathExtension and valid reference
+    /// derivation) are validated by the [`MappedMut`] constructor.
+    pub(crate) fn emplace<V: 'static + ?Sized>(
         &mut self,
-        value: &'e mut V,
-        path_extension: PathExtension,
-        new_span: Option<SpanRange>,
-    ) -> AnyMut<'a, V> {
-        unsafe {
-            // SAFETY: The lifetime 'e is equal to the &'e content argument in replace
-            // So this guarantees that the returned reference is valid as long as the AnyMut exists
-            self.emplace_unchecked(value, path_extension, new_span)
-        }
-    }
-
-    /// SAFETY:
-    /// - The caller must ensure that the value's lifetime is derived from the original content
-    /// - The caller must ensure the PathExtension is correct
-    pub(crate) unsafe fn emplace_unchecked<V: 'static + ?Sized>(
-        &mut self,
-        value: &mut V,
-        path_extension: PathExtension,
-        new_span: Option<SpanRange>,
+        mapped: MappedMut<'e, V>,
     ) -> AnyMut<'a, V> {
         let state = self
             .inner
             .take()
             .expect("You can only emplace to create a new AnyMut value once");
+        let (value, path_extension, span) = mapped.into_parts();
         match state {
             AnyMutEmplacerState::Direct(_, _) => AnyMut {
-                // SAFETY: As defined in the rustdoc above
-                inner: AnyMutInner::Direct(unsafe { transmute::<&mut V, &'static mut V>(value) }),
+                // 'e: 'a is guaranteed by the struct constraint, so coercion is valid
+                inner: AnyMutInner::Direct(value),
             },
             AnyMutEmplacerState::Encapsulated(mutable) => AnyMut {
-                inner: AnyMutInner::Encapsulated(mutable.emplace_map(|_, emplacer| unsafe {
-                    emplacer.emplace_unchecked(
-                        transmute::<&mut V, &'static mut V>(value),
-                        path_extension,
-                        new_span,
-                    )
+                inner: AnyMutInner::Encapsulated(mutable.emplace_map(|_, emplacer| {
+                    // SAFETY: The value's lifetime ('e) matches the MutableEmplacer's lifetime
+                    // since both are derived from the same underlying data
+                    let remapped = unsafe { MappedMut::new_unchecked(value, path_extension, span) };
+                    emplacer.emplace(remapped)
                 })),
             },
         }

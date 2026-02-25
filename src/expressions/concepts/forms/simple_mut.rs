@@ -77,14 +77,16 @@ where
                 self,
                 leaf: <BeMut as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
-                // SAFETY: 'l = 'a = 'e so this is valid
-                unsafe {
-                    self.emplacer.emplace_unchecked(
+                // SAFETY: 'l = 'a = 'e2 so the lifetime transmute is valid, and
+                // PathExtension::Tightened correctly describes type narrowing
+                let mapped = unsafe {
+                    MappedMut::new_unchecked(
                         leaf,
                         PathExtension::Tightened(T::type_kind()),
-                        Some(self.span),
+                        self.span,
                     )
-                }
+                };
+                self.emplacer.emplace(mapped)
             }
         };
         let __mapper = __InlineMapper { emplacer, span };
@@ -116,14 +118,16 @@ where
                 self,
                 leaf: <BeMut as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
-                // SAFETY: 'l = 'a = 'e so this is valid
-                unsafe {
-                    QqqAssignee(self.emplacer.emplace_unchecked(
+                // SAFETY: 'l = 'a = 'e2 so the lifetime transmute is valid, and
+                // PathExtension::Tightened correctly describes type narrowing
+                let mapped = unsafe {
+                    MappedMut::new_unchecked(
                         leaf,
                         PathExtension::Tightened(T::type_kind()),
-                        Some(self.span),
-                    ))
-                }
+                        self.span,
+                    )
+                };
+                QqqAssignee(self.emplacer.emplace(mapped))
             }
         };
         let __mapper = __InlineMapper { emplacer, span };
@@ -155,14 +159,16 @@ where
                 self,
                 leaf: <BeMut as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
-                // SAFETY: 'l = 'a = 'e so this is valid
-                let mutable_ref: MutableReference<_> = unsafe {
-                    self.emplacer.emplace_unchecked(
+                // SAFETY: 'l = 'a = 'e2 so the lifetime transmute is valid, and
+                // PathExtension::Tightened correctly describes type narrowing
+                let mapped = unsafe {
+                    MappedMut::new_unchecked(
                         leaf,
                         PathExtension::Tightened(T::type_kind()),
-                        Some(self.span),
+                        self.span,
                     )
                 };
+                let mutable_ref: MutableReference<_> = self.emplacer.emplace(mapped);
                 mutable_ref.into()
             }
         };

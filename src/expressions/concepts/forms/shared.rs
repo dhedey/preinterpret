@@ -37,9 +37,13 @@ impl IsDynCompatibleForm for BeShared {
         T::Leaf: CastDyn<D::DynContent>,
     {
         leaf.emplace_map(|content, emplacer| match <T::Leaf>::map_ref(content) {
-            Ok(mapped) => Ok(unsafe {
-                emplacer.emplace(mapped, PathExtension::Tightened(D::type_kind()), Some(span))
-            }),
+            Ok(mapped) => {
+                // SAFETY: PathExtension::Tightened correctly describes type narrowing
+                let mapped_ref = unsafe {
+                    MappedRef::new(mapped, PathExtension::Tightened(D::type_kind()), span)
+                };
+                Ok(emplacer.emplace(mapped_ref))
+            }
             Err(_) => Err(emplacer.revert()),
         })
     }

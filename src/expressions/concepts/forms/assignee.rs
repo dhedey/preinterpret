@@ -38,9 +38,13 @@ impl IsDynCompatibleForm for BeAssignee {
     {
         leaf.0
             .emplace_map(|content, emplacer| match <T::Leaf>::map_mut(content) {
-                Ok(mapped) => Ok(QqqAssignee(unsafe {
-                    emplacer.emplace(mapped, PathExtension::Tightened(D::type_kind()), Some(span))
-                })),
+                Ok(mapped) => {
+                    // SAFETY: PathExtension::Tightened correctly describes type narrowing
+                    let mapped_mut = unsafe {
+                        MappedMut::new(mapped, PathExtension::Tightened(D::type_kind()), span)
+                    };
+                    Ok(QqqAssignee(emplacer.emplace(mapped_mut)))
+                }
                 Err(_this) => Err(QqqAssignee(emplacer.revert())),
             })
     }

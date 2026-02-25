@@ -1,3 +1,5 @@
+use std::mem::transmute;
+
 use super::*;
 
 pub(crate) struct MutableReference<T: ?Sized>(pub(super) ReferenceCore<T>);
@@ -32,12 +34,7 @@ impl<T: ?Sized> MutableReference<T> {
         self,
         f: impl for<'r> FnOnce(&'r mut T) -> MappedMut<'r, V>,
     ) -> MutableReference<V> {
-        self.emplace_map(move |input, emplacer| {
-            let (value, path_extension, span) = f(input).into_parts();
-            // SAFETY: MappedMut constructor already validated the PathExtension.
-            // The lifetime is checked by emplace (value: &'e mut V).
-            unsafe { emplacer.emplace(value, path_extension, Some(span)) }
-        })
+        self.emplace_map(move |input, emplacer| emplacer.emplace(f(input)))
     }
 
     /// Fallible version of [`map`](Self::map) that returns the original reference on error.
@@ -48,12 +45,7 @@ impl<T: ?Sized> MutableReference<T> {
         f: impl for<'r> FnOnce(&'r mut T) -> Result<MappedMut<'r, V>, E>,
     ) -> Result<MutableReference<V>, (E, MutableReference<T>)> {
         self.emplace_map(|input, emplacer| match f(input) {
-            Ok(mapped) => {
-                let (value, path_extension, span) = mapped.into_parts();
-                // SAFETY: MappedMut constructor already validated the PathExtension.
-                // The lifetime is checked by emplace (value: &'e mut V).
-                Ok(unsafe { emplacer.emplace(value, path_extension, Some(span)) })
-            }
+            Ok(mapped) => Ok(emplacer.emplace(mapped)),
             Err(e) => Err((e, emplacer.revert())),
         })
     }
@@ -161,6 +153,54 @@ impl<T: ?Sized> InactiveMutableReference<T> {
     }
 }
 
+/// A mapped mutable reference bundled with its [`PathExtension`] and span.
+///
+/// Constructing this is unsafe because the caller must ensure the
+/// [`PathExtension`] correctly describes the relationship between the
+/// source and mapped reference.
+pub(crate) struct MappedMut<'a, V: ?Sized> {
+    value: &'a mut V,
+    path_extension: PathExtension,
+    span: SpanRange,
+}
+
+impl<'a, V: ?Sized> MappedMut<'a, V> {
+    /// SAFETY: The caller must ensure that the PathExtension correctly describes
+    /// the navigation from the source reference to this mapped reference.
+    /// An overly-specific PathExtension may cause safety issues.
+    pub(crate) unsafe fn new(
+        value: &'a mut V,
+        path_extension: PathExtension,
+        span: SpanRange,
+    ) -> Self {
+        Self {
+            value,
+            path_extension,
+            span,
+        }
+    }
+
+    /// SAFETY: In addition to the safety requirements of [`new`](Self::new), the caller
+    /// must ensure that the reference lifetime is valid for the target lifetime `'a`.
+    /// This is needed when the compiler cannot prove the lifetime relationship
+    /// (e.g. in LeafMapper implementations where `'l` and `'e` cannot be unified).
+    pub(crate) unsafe fn new_unchecked<'any>(
+        value: &'any mut V,
+        path_extension: PathExtension,
+        span: SpanRange,
+    ) -> Self {
+        Self {
+            value: unsafe { transmute::<&'any mut V, &'a mut V>(value) },
+            path_extension,
+            span,
+        }
+    }
+
+    pub(crate) fn into_parts(self) -> (&'a mut V, PathExtension, SpanRange) {
+        (self.value, self.path_extension, self.span)
+    }
+}
+
 pub(crate) struct MutableEmplacer<'e, T: ?Sized>(EmplacerCore<'e, T>);
 
 impl<'e, T: ?Sized> MutableEmplacer<'e, T> {
@@ -168,33 +208,23 @@ impl<'e, T: ?Sized> MutableEmplacer<'e, T> {
         MutableReference(self.0.revert())
     }
 
-    /// SAFETY: The caller must ensure that the PathExtension is correct.
+    /// Emplaces a mapped mutable reference, consuming the emplacer's reference tracking.
     ///
-    /// The lifetime `'e` is checked by the compiler, ensuring the value is derived
-    /// from the original content.
-    pub(crate) unsafe fn emplace<V: 'static + ?Sized>(
+    /// This is safe because all preconditions (correct PathExtension and valid reference
+    /// derivation) are validated by the [`MappedMut`] constructor.
+    pub(crate) fn emplace<V: 'static + ?Sized>(
         &mut self,
-        value: &'e mut V,
-        path_extension: PathExtension,
-        new_span: Option<SpanRange>,
+        mapped: MappedMut<'e, V>,
     ) -> MutableReference<V> {
-        unsafe { self.emplace_unchecked(value, path_extension, new_span) }
-    }
-
-    /// SAFETY:
-    /// - The caller must ensure that the value's lifetime is derived from the original content
-    /// - The caller must ensure that the PathExtension is correct
-    pub(crate) unsafe fn emplace_unchecked<V: 'static + ?Sized>(
-        &mut self,
-        value: &mut V,
-        path_extension: PathExtension,
-        new_span: Option<SpanRange>,
-    ) -> MutableReference<V> {
-        // SAFETY: The pointer is from a reference so non-null
+        let (value, path_extension, span) = mapped.into_parts();
+        // SAFETY: The pointer is from a valid reference (guaranteed by MappedMut constructor),
+        // and the PathExtension was validated by the MappedMut constructor.
         let pointer = unsafe { NonNull::new_unchecked(value as *mut V) };
-        // SAFETY:
-        // - The caller ensures that the reference is derived from the original content
-        // - The caller ensures that the PathExtension is correct
-        unsafe { MutableReference(self.0.emplace_unchecked(pointer, path_extension, new_span)) }
+        unsafe {
+            MutableReference(
+                self.0
+                    .emplace_unchecked(pointer, path_extension, Some(span)),
+            )
+        }
     }
 }

@@ -1,3 +1,5 @@
+use std::mem::transmute;
+
 use super::*;
 
 pub(crate) struct SharedReference<T: ?Sized>(pub(super) ReferenceCore<T>);
@@ -38,12 +40,7 @@ impl<T: ?Sized> SharedReference<T> {
         self,
         f: impl for<'r> FnOnce(&'r T) -> MappedRef<'r, V>,
     ) -> SharedReference<V> {
-        self.emplace_map(move |input, emplacer| {
-            let (value, path_extension, span) = f(input).into_parts();
-            // SAFETY: MappedRef constructor already validated the PathExtension.
-            // The lifetime is checked by emplace (value: &'e V).
-            unsafe { emplacer.emplace(value, path_extension, Some(span)) }
-        })
+        self.emplace_map(move |input, emplacer| emplacer.emplace(f(input)))
     }
 
     /// Fallible version of [`map`](Self::map) that returns the original reference on error.
@@ -54,12 +51,7 @@ impl<T: ?Sized> SharedReference<T> {
         f: impl for<'r> FnOnce(&'r T) -> Result<MappedRef<'r, V>, E>,
     ) -> Result<SharedReference<V>, (E, SharedReference<T>)> {
         self.emplace_map(|input, emplacer| match f(input) {
-            Ok(mapped) => {
-                let (value, path_extension, span) = mapped.into_parts();
-                // SAFETY: MappedRef constructor already validated the PathExtension.
-                // The lifetime is checked by emplace (value: &'e V).
-                Ok(unsafe { emplacer.emplace(value, path_extension, Some(span)) })
-            }
+            Ok(mapped) => Ok(emplacer.emplace(mapped)),
             Err(e) => Err((e, emplacer.revert())),
         })
     }
@@ -140,6 +132,50 @@ impl<T: ?Sized> InactiveSharedReference<T> {
     }
 }
 
+/// A mapped shared reference bundled with its [`PathExtension`] and span.
+///
+/// Constructing this is unsafe because the caller must ensure the
+/// [`PathExtension`] correctly describes the relationship between the
+/// source and mapped reference.
+pub(crate) struct MappedRef<'a, V: ?Sized> {
+    value: &'a V,
+    path_extension: PathExtension,
+    span: SpanRange,
+}
+
+impl<'a, V: ?Sized> MappedRef<'a, V> {
+    /// SAFETY: The caller must ensure that the PathExtension correctly describes
+    /// the navigation from the source reference to this mapped reference.
+    /// An overly-specific PathExtension may cause safety issues.
+    pub(crate) unsafe fn new(value: &'a V, path_extension: PathExtension, span: SpanRange) -> Self {
+        Self {
+            value,
+            path_extension,
+            span,
+        }
+    }
+
+    /// SAFETY: In addition to the safety requirements of [`new`](Self::new), the caller
+    /// must ensure that the reference lifetime is valid for the target lifetime `'a`.
+    /// This is needed when the compiler cannot prove the lifetime relationship
+    /// (e.g. in LeafMapper implementations where `'l` and `'e` cannot be unified).
+    pub(crate) unsafe fn new_unchecked<'any>(
+        value: &'any V,
+        path_extension: PathExtension,
+        span: SpanRange,
+    ) -> Self {
+        Self {
+            value: unsafe { transmute::<&'any V, &'a V>(value) },
+            path_extension,
+            span,
+        }
+    }
+
+    pub(crate) fn into_parts(self) -> (&'a V, PathExtension, SpanRange) {
+        (self.value, self.path_extension, self.span)
+    }
+}
+
 pub(crate) struct SharedEmplacer<'e, T: ?Sized>(EmplacerCore<'e, T>);
 
 impl<'e, T: ?Sized> SharedEmplacer<'e, T> {
@@ -147,33 +183,23 @@ impl<'e, T: ?Sized> SharedEmplacer<'e, T> {
         SharedReference(self.0.revert())
     }
 
-    /// SAFETY: The caller must ensure that the PathExtension is correct.
+    /// Emplaces a mapped shared reference, consuming the emplacer's reference tracking.
     ///
-    /// The lifetime `'e` is checked by the compiler, ensuring the value is derived
-    /// from the original content.
-    pub(crate) unsafe fn emplace<V: 'static + ?Sized>(
+    /// This is safe because all preconditions (correct PathExtension and valid reference
+    /// derivation) are validated by the [`MappedRef`] constructor.
+    pub(crate) fn emplace<V: 'static + ?Sized>(
         &mut self,
-        value: &'e V,
-        path_extension: PathExtension,
-        new_span: Option<SpanRange>,
+        mapped: MappedRef<'e, V>,
     ) -> SharedReference<V> {
-        unsafe { self.emplace_unchecked(value, path_extension, new_span) }
-    }
-
-    /// SAFETY:
-    /// - The caller must ensure that the value's lifetime is derived from the original content
-    /// - The caller must ensure that the PathExtension is correct
-    pub(crate) unsafe fn emplace_unchecked<V: 'static + ?Sized>(
-        &mut self,
-        value: &V,
-        path_extension: PathExtension,
-        new_span: Option<SpanRange>,
-    ) -> SharedReference<V> {
-        // SAFETY: The pointer is from a reference so non-null
+        let (value, path_extension, span) = mapped.into_parts();
+        // SAFETY: The pointer is from a valid reference (guaranteed by MappedRef constructor),
+        // and the PathExtension was validated by the MappedRef constructor.
         let pointer = unsafe { NonNull::new_unchecked(value as *const V as *mut V) };
-        // SAFETY:
-        // - The caller ensures that the reference is derived from the original content
-        // - The caller ensures that the PathExtension is correct
-        unsafe { SharedReference(self.0.emplace_unchecked(pointer, path_extension, new_span)) }
+        unsafe {
+            SharedReference(
+                self.0
+                    .emplace_unchecked(pointer, path_extension, Some(span)),
+            )
+        }
     }
 }

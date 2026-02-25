@@ -37,9 +37,13 @@ impl IsDynCompatibleForm for BeMutable {
         T::Leaf: CastDyn<D::DynContent>,
     {
         leaf.emplace_map(|content, emplacer| match <T::Leaf>::map_mut(content) {
-            Ok(mapped) => Ok(unsafe {
-                emplacer.emplace(mapped, PathExtension::Tightened(D::type_kind()), Some(span))
-            }),
+            Ok(mapped) => {
+                // SAFETY: PathExtension::Tightened correctly describes type narrowing
+                let mapped_mut = unsafe {
+                    MappedMut::new(mapped, PathExtension::Tightened(D::type_kind()), span)
+                };
+                Ok(emplacer.emplace(mapped_mut))
+            }
             Err(_) => Err(emplacer.revert()),
         })
     }
