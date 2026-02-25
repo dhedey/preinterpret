@@ -614,17 +614,11 @@ where
                 AnyLevelCopyOnWrite::<X::Type>::Owned(owned).into_copy_on_write()
             }
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
-                let content = shared.emplace_map(|inner, emplacer| {
-                    inner.as_ref_value().into_shared(emplacer, None)
-                });
-                AnyLevelCopyOnWrite::<X::Type>::SharedWithInfallibleCloning(content)
+                AnyLevelCopyOnWrite::<X::Type>::SharedWithInfallibleCloning(shared.into_content())
                     .into_copy_on_write()
             }
             CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
-                let content = shared.emplace_map(|inner, emplacer| {
-                    inner.as_ref_value().into_shared(emplacer, None)
-                });
-                AnyLevelCopyOnWrite::<X::Type>::SharedWithTransparentCloning(content)
+                AnyLevelCopyOnWrite::<X::Type>::SharedWithTransparentCloning(shared.into_content())
                     .into_copy_on_write()
             }
         }

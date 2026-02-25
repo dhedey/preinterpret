@@ -305,13 +305,25 @@ The issue is that we get a variable stored as `arr := DisabledMutable` and then 
   - [x] Emplacing
   - [x] Map, Try map
   - [x] Ability to map deeper. Should take a `PathExtension` and a new span.
-- [ ] Try replacing existing RefCell based abstractions with new custom dynamic references,
-      and report on what breaks:
-      - `pub(crate) type Referenceable<L> = Rc<RefCell<L>>;` becomes `pub(crate) type Referenceable<L> = dynamic_references::Referenceable`
-      - `Shared` / `SharedSubRcRefCell` - both become type aliases for `SharedReference`
-      - `DisabledShared` becomes `InactiveSharedReference`
-      - `Mutable` / `MutableSubRcRefCell` - becomes type alias for `MutableReference`
-      - `DisabledMutable` becomes `InactiveMutableReference`
+- [x] Try replacing existing RefCell based abstractions with new custom dynamic references, and report on what breaks:
+  - `pub(crate) type Referenceable<L> = Rc<RefCell<L>>;` becomes `pub(crate) type Referenceable<L> = dynamic_references::Referenceable`
+  - `Shared` / `SharedSubRcRefCell` - both become type aliases for `SharedReference`
+  - `DisabledShared` becomes `InactiveSharedReference`
+  - `Mutable` / `MutableSubRcRefCell` - becomes type alias for `MutableReference`
+  - `DisabledMutable` becomes `InactiveMutableReference`
+- [ ] Replace all the aliases:
+  - Remove `QqqShared`, `QqqMutable`, `SharedValue`, `AssigneeValue`
+  - Move `type Shared<T>` and `type Mutable<T>` alongside `SharedReference` / `MutableReference`
+  - Remove references to `MutableReference` and `SharedReference` outside these aliases
+  - Rename `SharedReference -> Shared` and `MutableReference -> Mutable`
+  - Rename `DisabledShared` -> `InactiveShared` and same for `Mutable`
+  - Remove `type AssigneeValue` and `type SharedValue`
+  - Move `Assignee` out of bindings. To e.g. `dynamic_references`
+  - See what else can be deleted from `bindings.rs`
+  - Rename `PathExtension::Tightened` to `PathExtension::TypeNarrowed`
+  - Rename  `DisabledArgumentValue` and `DisabledCopyOnWrite` to
+   `Inactive__` and their method from `enable` to `activate` and ditto
+   with `disable -> deactivate`
 
 ### Other ideas
 
