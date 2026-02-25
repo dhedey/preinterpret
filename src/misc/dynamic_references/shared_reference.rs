@@ -67,8 +67,7 @@ impl SharedReference<AnyValue> {
     ) -> Self {
         let referenceable = Referenceable::new(value, root_name, span_range);
         referenceable
-            .new_inactive_shared()
-            .activate()
+            .new_active_shared(span_range)
             .expect("Freshly created referenceable must be borrowable as shared")
     }
 
@@ -83,29 +82,6 @@ impl<T: ?Sized> SharedReference<T> {
     /// Equivalent to `deactivate()` in the new naming.
     pub(crate) fn disable(self) -> InactiveSharedReference<T> {
         self.deactivate()
-    }
-
-    /// Updates the tracked span for this reference, which is used in
-    /// borrow-conflict error messages to point to the usage site.
-    #[allow(unused)]
-    pub(crate) fn set_tracked_span(&self, span: SpanRange) {
-        self.0.core.data_mut().set_creation_span(self.0.id, span);
-    }
-}
-
-impl<T: ?Sized> InactiveSharedReference<T> {
-    /// Re-enables this inactive shared reference.
-    /// Updates the tracked span to the given usage-site span before activating,
-    /// so that borrow-conflict errors point to the correct location.
-    pub(crate) fn enable(self, span: SpanRange) -> FunctionResult<SharedReference<T>> {
-        self.set_tracked_span(span);
-        self.activate()
-    }
-
-    /// Updates the tracked span for this reference, which is used in
-    /// borrow-conflict error messages to point to the usage site.
-    pub(crate) fn set_tracked_span(&self, span: SpanRange) {
-        self.0.core.data_mut().set_creation_span(self.0.id, span);
     }
 }
 
@@ -137,11 +113,11 @@ impl<T: ?Sized> Clone for InactiveSharedReference<T> {
 }
 
 impl<T: ?Sized> InactiveSharedReference<T> {
-    pub(crate) fn activate(self) -> FunctionResult<SharedReference<T>> {
+    pub(crate) fn activate(self, span: SpanRange) -> FunctionResult<SharedReference<T>> {
         self.0
             .core
             .data_mut()
-            .activate_shared_reference(self.0.id)?;
+            .activate_shared_reference(self.0.id, span)?;
         Ok(SharedReference(self.0))
     }
 }

@@ -183,14 +183,12 @@ impl VariableBinding {
         let span = self.variable_span.span_range();
         match self.content {
             VariableContent::Referenceable(referenceable) => {
-                let inactive = referenceable.new_inactive_mutable();
-                inactive.set_tracked_span(span);
-                inactive.activate().map_err(|_| {
+                referenceable.new_active_mutable(span).map_err(|_| {
                     self.variable_span
                         .ownership_error::<FunctionError>(MUTABLE_ERROR_MESSAGE)
                 })
             }
-            VariableContent::Mutable(disabled) => disabled.enable(span),
+            VariableContent::Mutable(inactive) => inactive.activate(span),
             VariableContent::Shared(shared) => self
                 .variable_span
                 .ownership_err(SHARED_TO_MUTABLE_ERROR_MESSAGE),
@@ -201,15 +199,13 @@ impl VariableBinding {
         let span = self.variable_span.span_range();
         match self.content {
             VariableContent::Referenceable(referenceable) => {
-                let inactive = referenceable.new_inactive_shared();
-                inactive.set_tracked_span(span);
-                inactive.activate().map_err(|_| {
+                referenceable.new_active_shared(span).map_err(|_| {
                     self.variable_span
                         .ownership_error::<FunctionError>(SHARED_ERROR_MESSAGE)
                 })
             }
-            VariableContent::Mutable(mutable) => mutable.into_shared().enable(span),
-            VariableContent::Shared(shared) => shared.enable(span),
+            VariableContent::Mutable(inactive) => inactive.into_shared().activate(span),
+            VariableContent::Shared(inactive) => inactive.activate(span),
         }
     }
 
@@ -217,15 +213,11 @@ impl VariableBinding {
         let span = self.variable_span.span_range();
         match self.content {
             VariableContent::Referenceable(referenceable) => {
-                let inactive_mut = referenceable.new_inactive_mutable();
-                inactive_mut.set_tracked_span(span);
-                match inactive_mut.activate() {
+                match referenceable.new_active_mutable(span) {
                     Ok(mutable) => Ok(LateBoundValue::Mutable(mutable)),
                     Err(_) => {
                         // Mutable failed, try shared
-                        let inactive_shared = referenceable.new_inactive_shared();
-                        inactive_shared.set_tracked_span(span);
-                        let shared = inactive_shared.activate().map_err(|_| {
+                        let shared = referenceable.new_active_shared(span).map_err(|_| {
                             self.variable_span
                                 .ownership_error::<FunctionError>(SHARED_ERROR_MESSAGE)
                         })?;
@@ -236,10 +228,12 @@ impl VariableBinding {
                     }
                 }
             }
-            VariableContent::Mutable(mutable) => Ok(LateBoundValue::Mutable(mutable.enable(span)?)),
-            VariableContent::Shared(shared) => {
+            VariableContent::Mutable(inactive) => {
+                Ok(LateBoundValue::Mutable(inactive.activate(span)?))
+            }
+            VariableContent::Shared(inactive) => {
                 Ok(LateBoundValue::Shared(LateBoundSharedValue::new(
-                    shared.enable(span)?,
+                    inactive.activate(span)?,
                     self.variable_span
                         .syn_error(SHARED_TO_MUTABLE_ERROR_MESSAGE),
                 )))
@@ -593,11 +587,11 @@ impl<T: 'static + ToOwned + ?Sized> DisabledCopyOnWrite<T> {
     pub(crate) fn enable(self, span: SpanRange) -> FunctionResult<CopyOnWrite<T>> {
         let inner = match self.inner {
             DisabledCopyOnWriteInner::Owned(owned) => CopyOnWriteInner::Owned(owned),
-            DisabledCopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
-                CopyOnWriteInner::SharedWithInfallibleCloning(shared.enable(span)?)
+            DisabledCopyOnWriteInner::SharedWithInfallibleCloning(inactive) => {
+                CopyOnWriteInner::SharedWithInfallibleCloning(inactive.activate(span)?)
             }
-            DisabledCopyOnWriteInner::SharedWithTransparentCloning(shared) => {
-                CopyOnWriteInner::SharedWithTransparentCloning(shared.enable(span)?)
+            DisabledCopyOnWriteInner::SharedWithTransparentCloning(inactive) => {
+                CopyOnWriteInner::SharedWithTransparentCloning(inactive.activate(span)?)
             }
         };
         Ok(CopyOnWrite { inner })

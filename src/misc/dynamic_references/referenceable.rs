@@ -26,6 +26,20 @@ impl Referenceable {
         ))
     }
 
+    pub(crate) fn new_active_shared(
+        &self,
+        span: SpanRange,
+    ) -> FunctionResult<SharedReference<AnyValue>> {
+        self.new_inactive_shared().activate(span)
+    }
+
+    pub(crate) fn new_active_mutable(
+        &self,
+        span: SpanRange,
+    ) -> FunctionResult<MutableReference<AnyValue>> {
+        self.new_inactive_mutable().activate(span)
+    }
+
     /// Attempts to unwrap the inner value if this is the sole owner (no outstanding references).
     pub(crate) fn try_into_inner(self) -> Result<AnyValue, Self> {
         match Rc::try_unwrap(self.core) {
@@ -104,10 +118,6 @@ impl ReferenceableData {
         self.arena.remove(id);
     }
 
-    pub(super) fn set_creation_span(&mut self, id: LocalReferenceId, span: SpanRange) {
-        self.for_reference_mut(id).creation_span = span;
-    }
-
     pub(super) fn deactivate_reference(&mut self, id: LocalReferenceId) {
         let data = self.for_reference_mut(id);
         data.reference_kind = match data.reference_kind {
@@ -132,7 +142,9 @@ impl ReferenceableData {
     pub(super) fn activate_mutable_reference(
         &mut self,
         id: LocalReferenceId,
+        span: SpanRange,
     ) -> FunctionResult<()> {
+        self.for_reference_mut(id).creation_span = span;
         let data = self.for_reference(id);
         // Perform checks as per the module doc on `dynamic_references`
         for (other_id, other_data) in self.arena.iter() {
@@ -169,7 +181,12 @@ impl ReferenceableData {
         Ok(())
     }
 
-    pub(super) fn activate_shared_reference(&mut self, id: LocalReferenceId) -> FunctionResult<()> {
+    pub(super) fn activate_shared_reference(
+        &mut self,
+        id: LocalReferenceId,
+        span: SpanRange,
+    ) -> FunctionResult<()> {
+        self.for_reference_mut(id).creation_span = span;
         let data = self.for_reference(id);
         // Perform checks as per the module doc on `dynamic_references`
         for (other_id, other_data) in self.arena.iter() {

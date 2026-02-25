@@ -60,8 +60,7 @@ impl MutableReference<AnyValue> {
     ) -> Self {
         let referenceable = Referenceable::new(value, root_name, span_range);
         referenceable
-            .new_inactive_mutable()
-            .activate()
+            .new_active_mutable(span_range)
             .expect("Freshly created referenceable must be borrowable as mutable")
     }
 }
@@ -76,34 +75,17 @@ impl<T: ?Sized> MutableReference<T> {
     /// Converts this mutable reference into a shared reference.
     /// Bridge for old `into_shared()` API.
     pub(crate) fn into_shared(self) -> SharedReference<T> {
+        let span = self
+            .0
+            .core
+            .data_mut()
+            .for_reference(self.0.id)
+            .creation_span;
         let inactive = self.deactivate();
         let inactive_shared = inactive.into_shared();
         inactive_shared
-            .activate()
+            .activate(span)
             .expect("Converting mutable to shared should always succeed since we just released the mutable borrow")
-    }
-
-    /// Updates the tracked span for this reference, which is used in
-    /// borrow-conflict error messages to point to the usage site.
-    #[allow(unused)]
-    pub(crate) fn set_tracked_span(&self, span: SpanRange) {
-        self.0.core.data_mut().set_creation_span(self.0.id, span);
-    }
-}
-
-impl<T: ?Sized> InactiveMutableReference<T> {
-    /// Re-enables this inactive mutable reference.
-    /// Updates the tracked span to the given usage-site span before activating,
-    /// so that borrow-conflict errors point to the correct location.
-    pub(crate) fn enable(self, span: SpanRange) -> FunctionResult<MutableReference<T>> {
-        self.set_tracked_span(span);
-        self.activate()
-    }
-
-    /// Updates the tracked span for this reference, which is used in
-    /// borrow-conflict error messages to point to the usage site.
-    pub(crate) fn set_tracked_span(&self, span: SpanRange) {
-        self.0.core.data_mut().set_creation_span(self.0.id, span);
     }
 }
 
@@ -152,11 +134,11 @@ impl<T: ?Sized> Clone for InactiveMutableReference<T> {
 }
 
 impl<T: ?Sized> InactiveMutableReference<T> {
-    pub(crate) fn activate(self) -> FunctionResult<MutableReference<T>> {
+    pub(crate) fn activate(self, span: SpanRange) -> FunctionResult<MutableReference<T>> {
         self.0
             .core
             .data_mut()
-            .activate_mutable_reference(self.0.id)?;
+            .activate_mutable_reference(self.0.id, span)?;
         Ok(MutableReference(self.0))
     }
 

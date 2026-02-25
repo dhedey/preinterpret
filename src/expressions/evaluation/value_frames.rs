@@ -101,14 +101,14 @@ impl DisabledArgumentValue {
             DisabledArgumentValue::CopyOnWrite(copy_on_write) => {
                 Ok(ArgumentValue::CopyOnWrite(copy_on_write.enable(span)?))
             }
-            DisabledArgumentValue::Mutable(mutable) => {
-                Ok(ArgumentValue::Mutable(mutable.enable(span)?))
+            DisabledArgumentValue::Mutable(inactive) => {
+                Ok(ArgumentValue::Mutable(inactive.activate(span)?))
             }
-            DisabledArgumentValue::Assignee(assignee) => {
-                Ok(ArgumentValue::Assignee(Assignee(assignee.enable(span)?)))
+            DisabledArgumentValue::Assignee(inactive) => {
+                Ok(ArgumentValue::Assignee(Assignee(inactive.activate(span)?)))
             }
-            DisabledArgumentValue::Shared(shared) => {
-                Ok(ArgumentValue::Shared(shared.enable(span)?))
+            DisabledArgumentValue::Shared(inactive) => {
+                Ok(ArgumentValue::Shared(inactive.activate(span)?))
             }
         }
     }
