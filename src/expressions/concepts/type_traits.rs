@@ -42,6 +42,15 @@ pub(crate) trait IsHierarchicalType: IsType<Variant = HierarchicalTypeVariant> {
     fn content_to_leaf_kind<F: IsHierarchicalForm>(
         content: &Self::Content<'_, F>,
     ) -> Self::LeafKind;
+
+    /// Shrinks the lifetime of a content value from `'a` to `'b`.
+    /// This is safe because all forms' leaf types are covariant in `'a`,
+    /// as enforced by [`IsHierarchicalForm::covariant_leaf`].
+    fn covariant<'a, 'b, F: IsHierarchicalForm>(
+        content: Self::Content<'a, F>,
+    ) -> Self::Content<'b, F>
+    where
+        'a: 'b;
 }
 
 pub(crate) trait IsLeafType:
@@ -455,6 +464,20 @@ macro_rules! define_parent_type {
             ) -> Self::LeafKind {
                 content.kind()
             }
+
+            #[inline]
+            fn covariant<'a, 'b, F: IsHierarchicalForm>(
+                content: Self::Content<'a, F>,
+            ) -> Self::Content<'b, F>
+            where
+                'a: 'b,
+            {
+                match content {
+                    $( $content::$variant(x) => $content::$variant(
+                        <$variant_type>::covariant::<F>(x)
+                    ), )*
+                }
+            }
         }
 
         $content_vis enum $content<'a, F: IsHierarchicalForm> {
@@ -632,6 +655,16 @@ macro_rules! define_leaf_type {
                 _content: &Self::Content<'_, F>,
             ) -> Self::LeafKind {
                 $kind
+            }
+
+            #[inline]
+            fn covariant<'a, 'b, F: IsHierarchicalForm>(
+                content: Self::Content<'a, F>,
+            ) -> Self::Content<'b, F>
+            where
+                'a: 'b,
+            {
+                F::covariant_leaf::<Self>(content)
             }
         }
 

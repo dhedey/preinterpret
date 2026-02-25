@@ -140,7 +140,7 @@ impl<T: ?Sized> InactiveSharedReference<T> {
 pub(crate) struct MappedRef<'a, V: ?Sized> {
     value: &'a V,
     path_extension: PathExtension,
-    span: SpanRange,
+    span: Option<SpanRange>,
 }
 
 impl<'a, V: ?Sized> MappedRef<'a, V> {
@@ -151,7 +151,7 @@ impl<'a, V: ?Sized> MappedRef<'a, V> {
         Self {
             value,
             path_extension,
-            span,
+            span: Some(span),
         }
     }
 
@@ -162,7 +162,7 @@ impl<'a, V: ?Sized> MappedRef<'a, V> {
     pub(crate) unsafe fn new_unchecked<'any>(
         value: &'any V,
         path_extension: PathExtension,
-        span: SpanRange,
+        span: Option<SpanRange>,
     ) -> Self {
         Self {
             value: unsafe { transmute::<&'any V, &'a V>(value) },
@@ -171,7 +171,7 @@ impl<'a, V: ?Sized> MappedRef<'a, V> {
         }
     }
 
-    pub(crate) fn into_parts(self) -> (&'a V, PathExtension, SpanRange) {
+    pub(crate) fn into_parts(self) -> (&'a V, PathExtension, Option<SpanRange>) {
         (self.value, self.path_extension, self.span)
     }
 }
@@ -195,11 +195,6 @@ impl<'e, T: ?Sized> SharedEmplacer<'e, T> {
         // SAFETY: The pointer is from a valid reference (guaranteed by MappedRef constructor),
         // and the PathExtension was validated by the MappedRef constructor.
         let pointer = unsafe { NonNull::new_unchecked(value as *const V as *mut V) };
-        unsafe {
-            SharedReference(
-                self.0
-                    .emplace_unchecked(pointer, path_extension, Some(span)),
-            )
-        }
+        unsafe { SharedReference(self.0.emplace_unchecked(pointer, path_extension, span)) }
     }
 }

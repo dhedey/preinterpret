@@ -34,6 +34,14 @@ impl IsForm for BeCopyOnWrite {}
 
 impl IsHierarchicalForm for BeCopyOnWrite {
     type Leaf<'a, T: IsLeafType> = QqqCopyOnWrite<T::Leaf>;
+
+    #[inline]
+    fn covariant_leaf<'a, 'b, T: IsLeafType>(leaf: Self::Leaf<'a, T>) -> Self::Leaf<'b, T>
+    where
+        'a: 'b,
+    {
+        leaf
+    }
 }
 
 impl BeCopyOnWrite {
@@ -80,16 +88,10 @@ impl MapFromArgument for BeCopyOnWrite {
         match value.expect_copy_on_write().inner {
             CopyOnWriteInner::Owned(owned) => Ok(BeCopyOnWrite::new_owned(owned)),
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
-                let content = shared.emplace_map(|inner, emplacer| {
-                    inner.as_ref_value().into_shared(emplacer, span)
-                });
-                Ok(BeCopyOnWrite::new_shared_in_place_of_owned(content))
+                Ok(BeCopyOnWrite::new_shared_in_place_of_owned(shared))
             }
             CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
-                let content = shared.emplace_map(|inner, emplacer| {
-                    inner.as_ref_value().into_shared(emplacer, span)
-                });
-                Ok(BeCopyOnWrite::new_shared_in_place_of_shared(content))
+                Ok(BeCopyOnWrite::new_shared_in_place_of_shared(shared))
             }
         }
     }

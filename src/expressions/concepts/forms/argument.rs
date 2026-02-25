@@ -31,6 +31,14 @@ impl IsForm for BeArgument {}
 
 impl IsHierarchicalForm for BeArgument {
     type Leaf<'a, T: IsLeafType> = Argument<T::Leaf>;
+
+    #[inline]
+    fn covariant_leaf<'a, 'b, T: IsLeafType>(leaf: Self::Leaf<'a, T>) -> Self::Leaf<'b, T>
+    where
+        'a: 'b,
+    {
+        leaf
+    }
 }
 
 impl MapFromArgument for BeArgument {

@@ -26,6 +26,14 @@ impl IsForm for BeRef {}
 
 impl IsHierarchicalForm for BeRef {
     type Leaf<'a, T: IsLeafType> = &'a T::Leaf;
+
+    #[inline]
+    fn covariant_leaf<'a, 'b, T: IsLeafType>(leaf: Self::Leaf<'a, T>) -> Self::Leaf<'b, T>
+    where
+        'a: 'b,
+    {
+        leaf
+    }
 }
 
 impl IsDynCompatibleForm for BeRef {
@@ -52,19 +60,19 @@ where
     Self: IsValueContent<Form = BeRef>,
     Self::Type: IsHierarchicalType<Content<'a, Self::Form> = Self>,
 {
-    fn into_shared<'b, T: 'static>(
+    fn into_shared<'o, 'b, T: 'static>(
         self,
         emplacer: &'b mut SharedEmplacer<'a, T>,
-        span: SpanRange,
-    ) -> Content<'static, Self::Type, BeShared>
+        span: Option<SpanRange>,
+    ) -> Content<'o, Self::Type, BeShared>
     where
         Self: Sized,
     {
-        struct __InlineMapper<'b, 'e2, X: 'static> {
-            emplacer: &'b mut SharedEmplacer<'e2, X>,
-            span: SpanRange,
+        struct __InlineMapper<'b, 'e, X: 'static> {
+            emplacer: &'b mut SharedEmplacer<'e, X>,
+            span: Option<SpanRange>,
         }
-        impl<'b, 'e2, X> LeafMapper<BeRef> for __InlineMapper<'b, 'e2, X> {
+        impl<'b, 'e, X> LeafMapper<BeRef> for __InlineMapper<'b, 'e, X> {
             type Output<'a, T: IsHierarchicalType> = Content<'static, T, BeShared>;
 
             fn to_parent_output<'a, T: IsChildType>(
@@ -90,20 +98,21 @@ where
             }
         };
         let __mapper = __InlineMapper { emplacer, span };
-        <Self::Type>::map_with::<BeRef, _>(__mapper, self)
+        let content = <Self::Type>::map_with::<BeRef, _>(__mapper, self);
+        <Self::Type>::covariant::<BeShared>(content)
     }
 
-    fn into_shared_any_ref<'b, T: 'static>(
+    fn into_shared_any_ref<'o, 'b, T: 'static>(
         self,
         emplacer: &'b mut SharedEmplacer<'a, T>,
-        span: SpanRange,
-    ) -> Content<'static, Self::Type, BeAnyRef>
+        span: Option<SpanRange>,
+    ) -> Content<'o, Self::Type, BeAnyRef>
     where
         Self: Sized,
     {
         struct __InlineMapper<'b, 'e2, X: 'static> {
             emplacer: &'b mut SharedEmplacer<'e2, X>,
-            span: SpanRange,
+            span: Option<SpanRange>,
         }
         impl<'b, 'e2, X> LeafMapper<BeRef> for __InlineMapper<'b, 'e2, X> {
             type Output<'a, T: IsHierarchicalType> = Content<'static, T, BeAnyRef>;
@@ -132,7 +141,8 @@ where
             }
         };
         let __mapper = __InlineMapper { emplacer, span };
-        <Self::Type>::map_with::<BeRef, _>(__mapper, self)
+        let content = <Self::Type>::map_with::<BeRef, _>(__mapper, self);
+        <Self::Type>::covariant::<BeAnyRef>(content)
     }
 }
 

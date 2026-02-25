@@ -44,6 +44,14 @@ impl IsForm for BeLateBound {}
 
 impl IsHierarchicalForm for BeLateBound {
     type Leaf<'a, T: IsLeafType> = QqqLateBound<T::Leaf>;
+
+    #[inline]
+    fn covariant_leaf<'a, 'b, T: IsLeafType>(leaf: Self::Leaf<'a, T>) -> Self::Leaf<'b, T>
+    where
+        'a: 'b,
+    {
+        leaf
+    }
 }
 
 pub(crate) struct QqqLateBoundOwned<O: 'static> {

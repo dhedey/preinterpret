@@ -25,6 +25,14 @@ impl IsForm for BeAssignee {}
 
 impl IsHierarchicalForm for BeAssignee {
     type Leaf<'a, T: IsLeafType> = QqqAssignee<T::Leaf>;
+
+    #[inline]
+    fn covariant_leaf<'a, 'b, T: IsLeafType>(leaf: Self::Leaf<'a, T>) -> Self::Leaf<'b, T>
+    where
+        'a: 'b,
+    {
+        leaf
+    }
 }
 
 impl IsDynCompatibleForm for BeAssignee {

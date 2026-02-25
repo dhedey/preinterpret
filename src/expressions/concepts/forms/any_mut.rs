@@ -22,6 +22,14 @@ pub(crate) struct BeAnyMut;
 impl IsForm for BeAnyMut {}
 impl IsHierarchicalForm for BeAnyMut {
     type Leaf<'a, T: IsLeafType> = AnyMut<'a, T::Leaf>;
+
+    #[inline]
+    fn covariant_leaf<'a, 'b, T: IsLeafType>(leaf: Self::Leaf<'a, T>) -> Self::Leaf<'b, T>
+    where
+        'a: 'b,
+    {
+        leaf
+    }
 }
 
 impl IsDynCompatibleForm for BeAnyMut {
@@ -65,7 +73,9 @@ impl MapFromArgument for BeAnyMut {
         Spanned(value, span): Spanned<ArgumentValue>,
     ) -> FunctionResult<Content<'static, AnyType, Self>> {
         Ok(value.expect_mutable().emplace_map(|inner, emplacer| {
-            inner.as_mut_value().into_mutable_any_mut(emplacer, span)
+            inner
+                .as_mut_value()
+                .into_mutable_any_mut(emplacer, Some(span))
         }))
     }
 }

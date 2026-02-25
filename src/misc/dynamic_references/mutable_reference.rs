@@ -161,7 +161,7 @@ impl<T: ?Sized> InactiveMutableReference<T> {
 pub(crate) struct MappedMut<'a, V: ?Sized> {
     value: &'a mut V,
     path_extension: PathExtension,
-    span: SpanRange,
+    span: Option<SpanRange>,
 }
 
 impl<'a, V: ?Sized> MappedMut<'a, V> {
@@ -176,7 +176,7 @@ impl<'a, V: ?Sized> MappedMut<'a, V> {
         Self {
             value,
             path_extension,
-            span,
+            span: Some(span),
         }
     }
 
@@ -187,7 +187,7 @@ impl<'a, V: ?Sized> MappedMut<'a, V> {
     pub(crate) unsafe fn new_unchecked<'any>(
         value: &'any mut V,
         path_extension: PathExtension,
-        span: SpanRange,
+        span: Option<SpanRange>,
     ) -> Self {
         Self {
             value: unsafe { transmute::<&'any mut V, &'a mut V>(value) },
@@ -196,7 +196,7 @@ impl<'a, V: ?Sized> MappedMut<'a, V> {
         }
     }
 
-    pub(crate) fn into_parts(self) -> (&'a mut V, PathExtension, SpanRange) {
+    pub(crate) fn into_parts(self) -> (&'a mut V, PathExtension, Option<SpanRange>) {
         (self.value, self.path_extension, self.span)
     }
 }
@@ -220,11 +220,6 @@ impl<'e, T: ?Sized> MutableEmplacer<'e, T> {
         // SAFETY: The pointer is from a valid reference (guaranteed by MappedMut constructor),
         // and the PathExtension was validated by the MappedMut constructor.
         let pointer = unsafe { NonNull::new_unchecked(value as *mut V) };
-        unsafe {
-            MutableReference(
-                self.0
-                    .emplace_unchecked(pointer, path_extension, Some(span)),
-            )
-        }
+        unsafe { MutableReference(self.0.emplace_unchecked(pointer, path_extension, span)) }
     }
 }

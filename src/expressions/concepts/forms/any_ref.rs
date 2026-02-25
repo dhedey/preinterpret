@@ -23,6 +23,14 @@ impl IsForm for BeAnyRef {}
 
 impl IsHierarchicalForm for BeAnyRef {
     type Leaf<'a, T: IsLeafType> = crate::internal_prelude::AnyRef<'a, T::Leaf>;
+
+    #[inline]
+    fn covariant_leaf<'a, 'b, T: IsLeafType>(leaf: Self::Leaf<'a, T>) -> Self::Leaf<'b, T>
+    where
+        'a: 'b,
+    {
+        leaf
+    }
 }
 
 impl IsDynCompatibleForm for BeAnyRef {
@@ -60,7 +68,9 @@ impl MapFromArgument for BeAnyRef {
         Spanned(value, span): Spanned<ArgumentValue>,
     ) -> FunctionResult<Content<'static, AnyType, Self>> {
         Ok(value.expect_shared().emplace_map(|inner, emplacer| {
-            inner.as_ref_value().into_shared_any_ref(emplacer, span)
+            inner
+                .as_ref_value()
+                .into_shared_any_ref(emplacer, Some(span))
         }))
     }
 }

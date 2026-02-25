@@ -18,6 +18,13 @@ pub(crate) trait IsHierarchicalForm: IsForm {
     type Leaf<'a, T: IsLeafType>: IsValueContent<Type = T, Form = Self>
         + IntoValueContent<'a>
         + FromValueContent<'a>;
+
+    /// Proof of covariance: shrinks the lifetime of a leaf from `'a` to `'b`.
+    /// Implementors should use the identity function `{ leaf }` as the body.
+    /// This will only compile if the leaf type is genuinely covariant in `'a`.
+    fn covariant_leaf<'a, 'b, T: IsLeafType>(leaf: Self::Leaf<'a, T>) -> Self::Leaf<'b, T>
+    where
+        'a: 'b;
 }
 
 pub(crate) trait LeafAsRefForm: IsHierarchicalForm {

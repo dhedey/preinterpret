@@ -2,17 +2,26 @@ use super::*;
 
 pub(crate) type QqqMutable<T> = MutableReference<T>;
 
-impl<L: IsValueLeaf> IsValueContent for QqqMutable<L> {
-    type Type = L::Type;
+impl<X: IsValueContent> IsValueContent for QqqMutable<X> {
+    type Type = X::Type;
     type Form = BeMutable;
 }
 
-impl<'a, L: IsValueLeaf> IntoValueContent<'a> for QqqMutable<L> {
+impl<'a, X: IsValueContent> IntoValueContent<'a> for QqqMutable<X>
+where
+    X: 'static,
+    X::Type: IsHierarchicalType<Content<'static, X::Form> = X>,
+    X::Form: IsHierarchicalForm,
+    X::Form: LeafAsMutForm,
+{
     fn into_content(self) -> Content<'a, Self::Type, Self::Form> {
-        self
+        self.emplace_map(|inner, emplacer| inner.as_mut_value().into_mutable(emplacer, None))
     }
 }
 
+// Note we can't implement this more widely than leaves.
+// This is because e.g. Content<AnyType, BeMutable> has Mutable() in its leaves,
+// This can't be mapped back to having Mutable(Content<AnyType, BeOwned>).
 impl<'a, L: IsValueLeaf> FromValueContent<'a> for QqqMutable<L> {
     fn from_content(content: Content<'a, Self::Type, Self::Form>) -> Self {
         content
@@ -25,6 +34,14 @@ impl IsForm for BeMutable {}
 
 impl IsHierarchicalForm for BeMutable {
     type Leaf<'a, T: IsLeafType> = QqqMutable<T::Leaf>;
+
+    #[inline]
+    fn covariant_leaf<'a, 'b, T: IsLeafType>(leaf: Self::Leaf<'a, T>) -> Self::Leaf<'b, T>
+    where
+        'a: 'b,
+    {
+        leaf
+    }
 }
 
 impl IsDynCompatibleForm for BeMutable {
@@ -69,7 +86,7 @@ impl MapFromArgument for BeMutable {
     ) -> FunctionResult<Content<'static, AnyType, Self>> {
         Ok(value
             .expect_mutable()
-            .emplace_map(|inner, emplacer| inner.as_mut_value().into_mutable(emplacer, span)))
+            .emplace_map(|inner, emplacer| inner.as_mut_value().into_mutable(emplacer, Some(span))))
     }
 }
 

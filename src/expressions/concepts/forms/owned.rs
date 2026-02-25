@@ -18,6 +18,14 @@ impl IsForm for BeOwned {}
 
 impl IsHierarchicalForm for BeOwned {
     type Leaf<'a, T: IsLeafType> = T::Leaf;
+
+    #[inline]
+    fn covariant_leaf<'a, 'b, T: IsLeafType>(leaf: Self::Leaf<'a, T>) -> Self::Leaf<'b, T>
+    where
+        'a: 'b,
+    {
+        leaf
+    }
 }
 
 impl IsDynCompatibleForm for BeOwned {
