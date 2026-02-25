@@ -19,9 +19,9 @@ impl<'a, T: ?Sized + 'static> AnyRef<'a, T> {
     ) -> AnyRef<'a, S> {
         match self.inner {
             AnyRefInner::Direct(value) => {
-                let mapped = f(value);
+                let (value, _path_extension, _span) = f(value).into_parts();
                 AnyRef {
-                    inner: AnyRefInner::Direct(mapped.value),
+                    inner: AnyRefInner::Direct(value),
                 }
             }
             AnyRefInner::Encapsulated(shared) => AnyRef {
@@ -40,22 +40,21 @@ impl<'a, T: ?Sized + 'static> AnyRef<'a, T> {
     ) -> Option<AnyRef<'a, S>> {
         Some(match self.inner {
             AnyRefInner::Direct(value) => {
-                let mapped = f(value)?;
+                let (value, _path_extension, _span) = f(value)?.into_parts();
                 AnyRef {
-                    inner: AnyRefInner::Direct(mapped.value),
+                    inner: AnyRefInner::Direct(value),
                 }
             }
             AnyRefInner::Encapsulated(shared) => AnyRef {
                 inner: AnyRefInner::Encapsulated(shared.emplace_map(|input, emplacer| match f(
                     input,
                 ) {
-                    Some(mapped) => Some(unsafe {
-                        emplacer.emplace_unchecked(
-                            mapped.value,
-                            mapped.path_extension,
-                            Some(mapped.span),
-                        )
-                    }),
+                    Some(mapped) => {
+                        let (value, path_extension, span) = mapped.into_parts();
+                        // SAFETY: PathExtension validated by MappedRef constructor.
+                        // Lifetime checked by emplace (value: &'e S).
+                        Some(unsafe { emplacer.emplace(value, path_extension, Some(span)) })
+                    }
                     None => {
                         let _ = emplacer.revert();
                         None
@@ -221,9 +220,9 @@ impl<'a, T: ?Sized + 'static> AnyMut<'a, T> {
     ) -> AnyMut<'a, S> {
         match self.inner {
             AnyMutInner::Direct(value) => {
-                let mapped = f(value);
+                let (value, _path_extension, _span) = f(value).into_parts();
                 AnyMut {
-                    inner: AnyMutInner::Direct(mapped.value),
+                    inner: AnyMutInner::Direct(value),
                 }
             }
             AnyMutInner::Encapsulated(mutable) => AnyMut {
@@ -242,21 +241,20 @@ impl<'a, T: ?Sized + 'static> AnyMut<'a, T> {
     ) -> Option<AnyMut<'a, S>> {
         Some(match self.inner {
             AnyMutInner::Direct(value) => {
-                let mapped = f(value)?;
+                let (value, _path_extension, _span) = f(value)?.into_parts();
                 AnyMut {
-                    inner: AnyMutInner::Direct(mapped.value),
+                    inner: AnyMutInner::Direct(value),
                 }
             }
             AnyMutInner::Encapsulated(mutable) => AnyMut {
                 inner: AnyMutInner::Encapsulated(mutable.emplace_map(
                     |input, emplacer| match f(input) {
-                        Some(mapped) => Some(unsafe {
-                            emplacer.emplace_unchecked(
-                                mapped.value,
-                                mapped.path_extension,
-                                Some(mapped.span),
-                            )
-                        }),
+                        Some(mapped) => {
+                            let (value, path_extension, span) = mapped.into_parts();
+                            // SAFETY: PathExtension validated by MappedMut constructor.
+                            // Lifetime checked by emplace (value: &'e mut S).
+                            Some(unsafe { emplacer.emplace(value, path_extension, Some(span)) })
+                        }
                         None => {
                             let _ = emplacer.revert();
                             None

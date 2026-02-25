@@ -33,11 +33,10 @@ impl<T: ?Sized> MutableReference<T> {
         f: impl for<'r> FnOnce(&'r mut T) -> MappedMut<'r, V>,
     ) -> MutableReference<V> {
         self.emplace_map(move |input, emplacer| {
-            let mapped = f(input);
-            // SAFETY: MappedMut constructor already validated the PathExtension
-            unsafe {
-                emplacer.emplace_unchecked(mapped.value, mapped.path_extension, Some(mapped.span))
-            }
+            let (value, path_extension, span) = f(input).into_parts();
+            // SAFETY: MappedMut constructor already validated the PathExtension.
+            // The lifetime is checked by emplace (value: &'e mut V).
+            unsafe { emplacer.emplace(value, path_extension, Some(span)) }
         })
     }
 
@@ -50,14 +49,10 @@ impl<T: ?Sized> MutableReference<T> {
     ) -> Result<MutableReference<V>, (E, MutableReference<T>)> {
         self.emplace_map(|input, emplacer| match f(input) {
             Ok(mapped) => {
-                // SAFETY: MappedMut constructor already validated the PathExtension
-                Ok(unsafe {
-                    emplacer.emplace_unchecked(
-                        mapped.value,
-                        mapped.path_extension,
-                        Some(mapped.span),
-                    )
-                })
+                let (value, path_extension, span) = mapped.into_parts();
+                // SAFETY: MappedMut constructor already validated the PathExtension.
+                // The lifetime is checked by emplace (value: &'e mut V).
+                Ok(unsafe { emplacer.emplace(value, path_extension, Some(span)) })
             }
             Err(e) => Err((e, emplacer.revert())),
         })
@@ -171,6 +166,19 @@ pub(crate) struct MutableEmplacer<'e, T: ?Sized>(EmplacerCore<'e, T>);
 impl<'e, T: ?Sized> MutableEmplacer<'e, T> {
     pub(crate) fn revert(&mut self) -> MutableReference<T> {
         MutableReference(self.0.revert())
+    }
+
+    /// SAFETY: The caller must ensure that the PathExtension is correct.
+    ///
+    /// The lifetime `'e` is checked by the compiler, ensuring the value is derived
+    /// from the original content.
+    pub(crate) unsafe fn emplace<V: 'static + ?Sized>(
+        &mut self,
+        value: &'e mut V,
+        path_extension: PathExtension,
+        new_span: Option<SpanRange>,
+    ) -> MutableReference<V> {
+        unsafe { self.emplace_unchecked(value, path_extension, new_span) }
     }
 
     /// SAFETY:

@@ -439,9 +439,9 @@ pub(crate) enum PathExtension {
 /// [`PathExtension`] correctly describes the relationship between the
 /// source and mapped reference.
 pub(crate) struct MappedRef<'a, V: ?Sized> {
-    pub(crate) value: &'a V,
-    pub(crate) path_extension: PathExtension,
-    pub(crate) span: SpanRange,
+    value: &'a V,
+    path_extension: PathExtension,
+    span: SpanRange,
 }
 
 impl<'a, V: ?Sized> MappedRef<'a, V> {
@@ -455,6 +455,10 @@ impl<'a, V: ?Sized> MappedRef<'a, V> {
             span,
         }
     }
+
+    pub(crate) fn into_parts(self) -> (&'a V, PathExtension, SpanRange) {
+        (self.value, self.path_extension, self.span)
+    }
 }
 
 /// A mapped mutable reference bundled with its [`PathExtension`] and span.
@@ -463,9 +467,9 @@ impl<'a, V: ?Sized> MappedRef<'a, V> {
 /// [`PathExtension`] correctly describes the relationship between the
 /// source and mapped reference.
 pub(crate) struct MappedMut<'a, V: ?Sized> {
-    pub(crate) value: &'a mut V,
-    pub(crate) path_extension: PathExtension,
-    pub(crate) span: SpanRange,
+    value: &'a mut V,
+    path_extension: PathExtension,
+    span: SpanRange,
 }
 
 impl<'a, V: ?Sized> MappedMut<'a, V> {
@@ -482,6 +486,10 @@ impl<'a, V: ?Sized> MappedMut<'a, V> {
             path_extension,
             span,
         }
+    }
+
+    pub(crate) fn into_parts(self) -> (&'a mut V, PathExtension, SpanRange) {
+        (self.value, self.path_extension, self.span)
     }
 }
 

@@ -38,11 +38,7 @@ impl IsDynCompatibleForm for BeShared {
     {
         leaf.emplace_map(|content, emplacer| match <T::Leaf>::map_ref(content) {
             Ok(mapped) => Ok(unsafe {
-                emplacer.emplace_unchecked(
-                    mapped,
-                    PathExtension::Tightened(D::type_kind()),
-                    Some(span),
-                )
+                emplacer.emplace(mapped, PathExtension::Tightened(D::type_kind()), Some(span))
             }),
             Err(_) => Err(emplacer.revert()),
         })
