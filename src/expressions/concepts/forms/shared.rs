@@ -8,6 +8,7 @@ impl<X: IsValueContent> IsValueContent for Shared<X> {
 impl<'a, X: IsValueContent> IntoValueContent<'a> for Shared<X>
 where
     X: 'static,
+    X: IsSelfValueContent<'static>,
     X::Type: IsHierarchicalType<Content<'static, X::Form> = X>,
     X::Form: IsHierarchicalForm,
     X::Form: LeafAsRefForm,

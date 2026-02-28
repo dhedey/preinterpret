@@ -4,7 +4,7 @@ pub(crate) enum QqqLateBound<T: 'static> {
     /// An owned value that can be converted to any ownership type
     Owned(QqqLateBoundOwned<T>),
     /// A copy-on-write value that can be converted to an owned value
-    CopyOnWrite(QqqCopyOnWrite<T>),
+    CopyOnWrite(CopyOnWrite<T>),
     /// A mutable reference
     Mutable(Mutable<T>),
     /// A shared reference where mutable access failed for a specific reason

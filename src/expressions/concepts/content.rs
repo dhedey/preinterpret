@@ -180,7 +180,7 @@ where
     fn clone_to_owned_transparently<'r>(
         &'r self,
         span_range: SpanRange,
-    ) -> ExecutionResult<Content<'static, Self::Type, BeOwned>>
+    ) -> FunctionResult<Content<'static, Self::Type, BeOwned>>
     where
         'a: 'r,
         Self::Form: LeafAsRefForm,
@@ -189,7 +189,7 @@ where
         map_via_leaf! {
             input: &'r (Content<'a, Self::Type, Self::Form>) = self,
             state: SpanRange | let span_range = span_range,
-            fn map_leaf<F: LeafAsRefForm, T>(leaf) -> (ExecutionResult<Content<'static, T, BeOwned>>) {
+            fn map_leaf<F: LeafAsRefForm, T>(leaf) -> (FunctionResult<Content<'static, T, BeOwned>>) {
                 F::leaf_clone_to_owned_transparently(leaf, span_range)
             }
         }

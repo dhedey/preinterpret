@@ -39,7 +39,7 @@ pub(crate) trait LeafAsRefForm: IsHierarchicalForm {
     fn leaf_clone_to_owned_transparently<'r, 'a: 'r, T: IsLeafType>(
         leaf: &'r Self::Leaf<'a, T>,
         error_span: SpanRange,
-    ) -> ExecutionResult<T::Leaf> {
+    ) -> FunctionResult<T::Leaf> {
         let type_kind = T::type_kind();
         if type_kind.supports_transparent_cloning() {
             Ok(Self::leaf_clone_to_owned_infallible(leaf))

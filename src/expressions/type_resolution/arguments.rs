@@ -153,17 +153,24 @@ impl IsArgument for Mutable<AnyValue> {
 //     }
 // }
 
-impl<T: ResolvableShared<AnyValue> + ResolvableArgumentTarget> IsArgument for CopyOnWrite<T>
-where
-    T: ResolvableOwned<AnyValue>,
-{
-    type ValueType = T::ValueType;
+// See the "We have some friction" post above
+impl IsArgument for CopyOnWrite<AnyValue> {
+    type ValueType = AnyType;
+    const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::CopyOnWrite;
+
+    fn from_argument(Spanned(value, _): Spanned<ArgumentValue>) -> FunctionResult<Self> {
+        Ok(value.expect_copy_on_write())
+    }
+}
+
+impl IsArgument for CopyOnWrite<FloatValue> {
+    type ValueType = AnyType;
     const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::CopyOnWrite;
 
     fn from_argument(Spanned(value, span): Spanned<ArgumentValue>) -> FunctionResult<Self> {
         value.expect_copy_on_write().map(
-            |v| T::resolve_shared(v.spanned(span), "This argument"),
-            |v| T::resolve_value(v.spanned(span), "This argument"),
+            |v| FloatValue::resolve_shared(v.spanned(span), "This argument"),
+            |v| FloatValue::resolve_value(v.spanned(span), "This argument"),
         )
     }
 }

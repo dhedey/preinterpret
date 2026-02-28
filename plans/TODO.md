@@ -300,7 +300,7 @@ Suddenly dawned on me - my Disabled arguments might not be safe.
   - [x] Rename  `DisabledArgumentValue` and `DisabledCopyOnWrite` to `Inactive__` and their method from `enable` to `activate` and ditto with `disable -> deactivate`
 - [ ] See what else can be deleted from `bindings.rs`
   - [ ] Unify LateBound into `QqqLateBound`
-  - [ ] Unify CopyOnWrite into `QqqCopyOnWrite`
+  - [x] Unify CopyOnWrite into `QqqCopyOnWrite`
 - [ ] Add various tests:
   - [ ] Stretching different error messages
   - [ ] Showing I can do e.g. `x.a += x.b`
