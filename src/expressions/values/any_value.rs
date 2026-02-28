@@ -8,6 +8,7 @@ pub(crate) type AnyValueAnyRef<'a> = AnyValueContent<'a, BeAnyRef>;
 pub(crate) type AnyValueShared = Shared<AnyValue>;
 pub(crate) type AnyValueMutable = Mutable<AnyValue>;
 pub(crate) type AnyValueAssignee = Assignee<AnyValue>;
+pub(crate) type AnyValueCopyOnWrite = CopyOnWrite<AnyValue>;
 // pub(crate) type AnyValueShared = AnyValueContent<'static, BeShared>;
 // pub(crate) type AnyValueMutable = AnyValueContent<'static, BeMutable>;
 // pub(crate) type AnyValueAssignee = AnyValueContent<'static, BeAssignee>;
@@ -44,7 +45,7 @@ define_type_features! {
     impl AnyType,
     pub(crate) mod value_interface {
         methods {
-            fn clone(this: CopyOnWriteValue) -> AnyValue {
+            fn clone(this: AnyValueCopyOnWrite) -> AnyValue {
                 this.clone_to_owned_infallible()
             }
 
@@ -64,28 +65,28 @@ define_type_features! {
 
             // NOTE:
             // All value types can be coerced into SharedValue as an input, so this method does actually do something
-            fn as_ref(this: SharedValue) -> SharedValue {
+            fn as_ref(this: AnyValueShared) -> AnyValueShared {
                 this
             }
 
-            fn swap(mut a: AssigneeValue, mut b: AssigneeValue) -> () {
+            fn swap(mut a: AnyValueAssignee, mut b: AnyValueAssignee) -> () {
                 core::mem::swap(a.0.deref_mut(), b.0.deref_mut());
             }
 
-            fn replace(mut a: AssigneeValue, b: AnyValue) -> AnyValue {
+            fn replace(mut a: AnyValueAssignee, b: AnyValue) -> AnyValue {
                 core::mem::replace(a.0.deref_mut(), b)
             }
 
-            [context] fn debug(Spanned(this, span_range): Spanned<CopyOnWriteValue>) -> FunctionResult<()> {
+            [context] fn debug(Spanned(this, span_range): Spanned<AnyValueCopyOnWrite>) -> FunctionResult<()> {
                 let message = this.as_ref_value().concat_recursive(&ConcatBehaviour::debug(span_range), context.interpreter)?;
                 span_range.debug_err(message)
             }
 
-            [context] fn to_debug_string(Spanned(this, span_range): Spanned<CopyOnWriteValue>) -> FunctionResult<String> {
+            [context] fn to_debug_string(Spanned(this, span_range): Spanned<AnyValueCopyOnWrite>) -> FunctionResult<String> {
                 this.as_ref_value().concat_recursive(&ConcatBehaviour::debug(span_range), context.interpreter)
             }
 
-            [context] fn to_stream(Spanned(input, span_range): Spanned<CopyOnWriteValue>) -> FunctionResult<OutputStream> {
+            [context] fn to_stream(Spanned(input, span_range): Spanned<AnyValueCopyOnWrite>) -> FunctionResult<OutputStream> {
                 let interpreter_ptr = context.interpreter as *mut Interpreter;
                 input.map_into(
                     // SAFETY: map_into only calls one of these two closures,
@@ -95,7 +96,7 @@ define_type_features! {
                 )
             }
 
-            [context] fn to_group(Spanned(input, span_range): Spanned<CopyOnWriteValue>) -> FunctionResult<OutputStream> {
+            [context] fn to_group(Spanned(input, span_range): Spanned<AnyValueCopyOnWrite>) -> FunctionResult<OutputStream> {
                 let interpreter_ptr = context.interpreter as *mut Interpreter;
                 input.map_into(
                     // SAFETY: map_into only calls one of these two closures,
@@ -105,11 +106,11 @@ define_type_features! {
                 )
             }
 
-            [context] fn to_string(Spanned(input, span_range): Spanned<SharedValue>) -> FunctionResult<String> {
+            [context] fn to_string(Spanned(input, span_range): Spanned<AnyValueShared>) -> FunctionResult<String> {
                 input.as_ref_value().concat_recursive(&ConcatBehaviour::standard(span_range), context.interpreter)
             }
 
-            [context] fn with_span(value: Spanned<CopyOnWriteValue>, spans: AnyRef<OutputStream>) -> FunctionResult<OutputStream> {
+            [context] fn with_span(value: Spanned<AnyValueCopyOnWrite>, spans: AnyRef<OutputStream>) -> FunctionResult<OutputStream> {
                 let mut this = to_stream(context, value)?;
                 let span_to_use = match spans.resolve_content_span_range() {
                     Some(span_range) => span_range.span_from_join_else_start(),
@@ -121,7 +122,7 @@ define_type_features! {
 
             // TYPE CHECKING
             // ===============================
-            fn is_none(this: SharedValue) -> bool {
+            fn is_none(this: AnyValueShared) -> bool {
                 this.is_none()
             }
 

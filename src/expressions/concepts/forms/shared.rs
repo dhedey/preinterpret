@@ -1,13 +1,11 @@
 use super::*;
 
-pub(crate) type QqqShared<T> = SharedReference<T>;
-
-impl<X: IsValueContent> IsValueContent for QqqShared<X> {
+impl<X: IsValueContent> IsValueContent for Shared<X> {
     type Type = X::Type;
     type Form = BeShared;
 }
 
-impl<'a, X: IsValueContent> IntoValueContent<'a> for QqqShared<X>
+impl<'a, X: IsValueContent> IntoValueContent<'a> for Shared<X>
 where
     X: 'static,
     X::Type: IsHierarchicalType<Content<'static, X::Form> = X>,
@@ -22,7 +20,7 @@ where
 // Note we can't implement this more widely than leaves.
 // This is because e.g. Content<AnyType, BeShared> has Shared() in its leaves,
 // This can't be mapped back to having Shared(Content<AnyType, BeOwned>).
-impl<'a, L: IsValueLeaf> FromValueContent<'a> for QqqShared<L> {
+impl<'a, L: IsValueLeaf> FromValueContent<'a> for Shared<L> {
     fn from_content(content: Content<'a, Self::Type, Self::Form>) -> Self {
         content
     }
@@ -33,7 +31,7 @@ pub(crate) struct BeShared;
 impl IsForm for BeShared {}
 
 impl IsHierarchicalForm for BeShared {
-    type Leaf<'a, T: IsLeafType> = QqqShared<T::Leaf>;
+    type Leaf<'a, T: IsLeafType> = Shared<T::Leaf>;
 
     #[inline]
     fn covariant_leaf<'a, 'b, T: IsLeafType>(leaf: Self::Leaf<'a, T>) -> Self::Leaf<'b, T>
@@ -45,7 +43,7 @@ impl IsHierarchicalForm for BeShared {
 }
 
 impl IsDynCompatibleForm for BeShared {
-    type DynLeaf<'a, D: IsDynType> = QqqShared<D::DynContent>;
+    type DynLeaf<'a, D: IsDynType> = Shared<D::DynContent>;
 
     fn leaf_to_dyn<'a, T: IsLeafType, D: IsDynType>(
         Spanned(leaf, span): Spanned<Self::Leaf<'a, T>>,
@@ -55,9 +53,9 @@ impl IsDynCompatibleForm for BeShared {
     {
         leaf.emplace_map(|content, emplacer| match <T::Leaf>::map_ref(content) {
             Ok(mapped) => {
-                // SAFETY: PathExtension::Tightened correctly describes type narrowing
+                // SAFETY: PathExtension is correct for mapping to a dyn type
                 let mapped_ref = unsafe {
-                    MappedRef::new(mapped, PathExtension::Tightened(D::type_kind()), span)
+                    MappedRef::new(mapped, PathExtension::TypeNarrowing(D::type_kind()), span)
                 };
                 Ok(emplacer.emplace(mapped_ref))
             }

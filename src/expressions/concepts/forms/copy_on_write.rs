@@ -5,10 +5,10 @@ pub(crate) enum QqqCopyOnWrite<L: 'static> {
     Owned(Owned<L>),
     /// For use when the CopyOnWrite value effectively represents the owned value (post-clone).
     /// In this case, returning a Cow is just an optimization and we can always clone infallibly.
-    SharedWithInfallibleCloning(QqqShared<L>),
+    SharedWithInfallibleCloning(Shared<L>),
     /// For use when the CopyOnWrite value represents a pre-cloned read-only value.
     /// A transparent clone may fail in this case at use time.
-    SharedWithTransparentCloning(QqqShared<L>),
+    SharedWithTransparentCloning(Shared<L>),
 }
 
 impl<L: IsValueLeaf> IsValueContent for QqqCopyOnWrite<L> {
@@ -221,7 +221,7 @@ where
                 // // Apply map, get Shared<Content<'a, M::TTo, BeOwned>>
                 // let shared = map_via_leaf! {
                 //     input: (Content<'a, Self::Type, BeShared>) = shared,
-                //     fn map_leaf<F = BeShared, T>(leaf) -> (ExecutionResult<QqqShared<Content<'static, AnyType, BeOwned>>>) {
+                //     fn map_leaf<F = BeShared, T>(leaf) -> (ExecutionResult<Shared<Content<'static, AnyType, BeOwned>>>) {
                 //         leaf.try_map(|value_ref| {
                 //             let from_ref = value_ref.into_any();
                 //             inner_map_ref(from_ref) // &Content<M::TTo, BeOwned>

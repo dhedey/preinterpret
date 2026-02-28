@@ -89,7 +89,7 @@ impl ClosureValue {
                 (Pattern::Variable(variable), ArgumentValue::Shared(shared)) => {
                     context.interpreter.define_variable(
                         variable.definition.id,
-                        VariableContent::Shared(shared.disable()),
+                        VariableContent::Shared(shared.deactivate()),
                     );
                 }
                 (_, ArgumentValue::Shared(_)) => {
@@ -100,7 +100,7 @@ impl ClosureValue {
                 (Pattern::Variable(variable), ArgumentValue::Mutable(mutable)) => {
                     context.interpreter.define_variable(
                         variable.definition.id,
-                        VariableContent::Mutable(mutable.disable()),
+                        VariableContent::Mutable(mutable.deactivate()),
                     );
                 }
                 (_, ArgumentValue::Mutable(_)) => {

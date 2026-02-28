@@ -80,14 +80,45 @@ impl IsArgument for Shared<AnyValue> {
 //     }
 // }
 
-impl<T: ResolvableMutable<AnyValue> + ResolvableArgumentTarget + ?Sized> IsArgument
-    for Assignee<T>
-{
-    type ValueType = T::ValueType;
+// We have some friction:
+// - Assignee wants to take whole parent types e.g. AnyValue or FloatValue, so it
+//   can replace them
+// - The blanket impl of IsArgument for X: FromValueContent<'static, Type = T, Form = F>
+//   breaks down, because this only works for LeafContent based types (which e.g. have
+//   Assignee in each leaf, which isn't very useful)
+// - But FromValueContent for leaves is required by the Form system
+// - So for now, we're stuck implementing IsArgument manually for Assignee<X> for each parent
+//   X that we need.
+//
+// TODO[non-leaf-form]: Future work -
+// - Rename the Content type alias/associated type to LeafContent or something
+// - Make IsValueContent / FromValueContent more flexible, so it can capture the group level
+//   somehow, and take values with the content at any given level above the input level.
+
+impl IsArgument for Assignee<AnyValue> {
+    type ValueType = AnyType;
     const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Assignee { auto_create: false };
 
     fn from_argument(argument: Spanned<ArgumentValue>) -> FunctionResult<Self> {
-        T::resolve_assignee(argument.expect_assignee(), "This argument")
+        Ok(argument.expect_assignee().0)
+    }
+}
+
+impl IsArgument for Assignee<FloatValue> {
+    type ValueType = FloatType;
+    const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Assignee { auto_create: false };
+
+    fn from_argument(argument: Spanned<ArgumentValue>) -> FunctionResult<Self> {
+        FloatValue::resolve_assignee(argument.expect_assignee(), "This argument")
+    }
+}
+
+impl IsArgument for Assignee<IntegerValue> {
+    type ValueType = IntegerType;
+    const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Assignee { auto_create: false };
+
+    fn from_argument(argument: Spanned<ArgumentValue>) -> FunctionResult<Self> {
+        IntegerValue::resolve_assignee(argument.expect_assignee(), "This argument")
     }
 }
 
@@ -122,10 +153,9 @@ impl IsArgument for Mutable<AnyValue> {
 //     }
 // }
 
-impl<T: ResolvableShared<AnyValue> + ResolvableArgumentTarget + ToOwned> IsArgument
-    for CopyOnWrite<T>
+impl<T: ResolvableShared<AnyValue> + ResolvableArgumentTarget> IsArgument for CopyOnWrite<T>
 where
-    T::Owned: ResolvableOwned<AnyValue>,
+    T: ResolvableOwned<AnyValue>,
 {
     type ValueType = T::ValueType;
     const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::CopyOnWrite;
@@ -133,12 +163,7 @@ where
     fn from_argument(Spanned(value, span): Spanned<ArgumentValue>) -> FunctionResult<Self> {
         value.expect_copy_on_write().map(
             |v| T::resolve_shared(v.spanned(span), "This argument"),
-            |v| {
-                <T::Owned as ResolvableOwned<AnyValue>>::resolve_value(
-                    v.spanned(span),
-                    "This argument",
-                )
-            },
+            |v| T::resolve_value(v.spanned(span), "This argument"),
         )
     }
 }
@@ -265,7 +290,7 @@ pub(crate) trait ResolvableShared<T: IsValueContent> {
                 Ok(unsafe {
                     MappedRef::new(
                         resolved,
-                        PathExtension::Tightened(T::Type::type_kind()),
+                        PathExtension::TypeNarrowing(T::Type::type_kind()),
                         span,
                     )
                 })
@@ -338,7 +363,7 @@ pub(crate) trait ResolvableMutable<T: IsValueContent> {
                 Ok(unsafe {
                     MappedMut::new(
                         resolved,
-                        PathExtension::Tightened(T::Type::type_kind()),
+                        PathExtension::TypeNarrowing(T::Type::type_kind()),
                         span,
                     )
                 })

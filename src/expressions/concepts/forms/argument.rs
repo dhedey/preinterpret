@@ -3,9 +3,9 @@ use super::*;
 pub(crate) enum Argument<L: IsValueLeaf> {
     Owned(L),
     CopyOnWrite(QqqCopyOnWrite<L>),
-    Mutable(QqqMutable<L>),
-    Assignee(QqqAssignee<L>),
-    Shared(QqqShared<L>),
+    Mutable(Mutable<L>),
+    Assignee(Assignee<L>),
+    Shared(Shared<L>),
 }
 
 impl<L: IsValueLeaf> IsValueContent for Argument<L> {

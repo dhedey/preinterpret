@@ -1,6 +1,6 @@
 use super::*;
 
-use std::borrow::{Borrow, ToOwned};
+use std::borrow::Borrow;
 
 pub(super) enum VariableState {
     Uninitialized,
@@ -8,16 +8,16 @@ pub(super) enum VariableState {
     Finished,
 }
 
-/// Cheaply clonable, non-active content of a variable.
-/// By non-active, we mean that the shared/mutable invariants are not required to hold.
+/// Cheaply clonable, inactive content of a variable.
+/// By inactive, we mean that the shared/mutable aliasing invariants are not required to hold.
 /// Before use, they have to be activated. This allows more flexibility over how references
 /// can be used and held, without compromising safety.
 #[derive(Clone)]
 pub(crate) enum VariableContent {
     // Owned, but possibly with pre-existing references
     Referenceable(Referenceable),
-    Shared(DisabledShared<AnyValue>),
-    Mutable(DisabledMutable<AnyValue>),
+    Shared(InactiveShared<AnyValue>),
+    Mutable(InactiveMutable<AnyValue>),
 }
 
 impl VariableContent {
@@ -168,7 +168,6 @@ pub(crate) struct VariableBinding {
     variable_span: Span,
 }
 
-#[allow(unused)]
 impl VariableBinding {
     /// Gets the cloned expression value
     /// This only works if the value can be transparently cloned
@@ -182,14 +181,9 @@ impl VariableBinding {
     fn into_mut(self) -> FunctionResult<AnyValueMutable> {
         let span = self.variable_span.span_range();
         match self.content {
-            VariableContent::Referenceable(referenceable) => {
-                referenceable.new_active_mutable(span).map_err(|_| {
-                    self.variable_span
-                        .ownership_error::<FunctionError>(MUTABLE_ERROR_MESSAGE)
-                })
-            }
+            VariableContent::Referenceable(referenceable) => referenceable.new_active_mutable(span),
             VariableContent::Mutable(inactive) => inactive.activate(span),
-            VariableContent::Shared(shared) => self
+            VariableContent::Shared(_) => self
                 .variable_span
                 .ownership_err(SHARED_TO_MUTABLE_ERROR_MESSAGE),
         }
@@ -198,12 +192,7 @@ impl VariableBinding {
     fn into_shared(self) -> FunctionResult<AnyValueShared> {
         let span = self.variable_span.span_range();
         match self.content {
-            VariableContent::Referenceable(referenceable) => {
-                referenceable.new_active_shared(span).map_err(|_| {
-                    self.variable_span
-                        .ownership_error::<FunctionError>(SHARED_ERROR_MESSAGE)
-                })
-            }
+            VariableContent::Referenceable(referenceable) => referenceable.new_active_shared(span),
             VariableContent::Mutable(inactive) => inactive.into_shared().activate(span),
             VariableContent::Shared(inactive) => inactive.activate(span),
         }
@@ -215,15 +204,12 @@ impl VariableBinding {
             VariableContent::Referenceable(referenceable) => {
                 match referenceable.new_active_mutable(span) {
                     Ok(mutable) => Ok(LateBoundValue::Mutable(mutable)),
-                    Err(_) => {
+                    Err(err) => {
                         // Mutable failed, try shared
-                        let shared = referenceable.new_active_shared(span).map_err(|_| {
-                            self.variable_span
-                                .ownership_error::<FunctionError>(SHARED_ERROR_MESSAGE)
-                        })?;
+                        let shared = referenceable.new_active_shared(span)?;
                         Ok(LateBoundValue::Shared(LateBoundSharedValue::new(
                             shared,
-                            self.variable_span.syn_error(SHARED_ERROR_MESSAGE),
+                            err.expect_ownership_error()?,
                         )))
                     }
                 }
@@ -242,6 +228,8 @@ impl VariableBinding {
     }
 }
 
+static SHARED_TO_MUTABLE_ERROR_MESSAGE: &str = "Cannot mutate a non-mutable reference";
+
 pub(crate) struct LateBoundOwnedValue {
     pub(crate) owned: AnyValueOwned,
     pub(crate) is_from_last_use: bool,
@@ -249,12 +237,12 @@ pub(crate) struct LateBoundOwnedValue {
 
 /// A shared value where mutable access failed for a specific reason
 pub(crate) struct LateBoundSharedValue {
-    pub(crate) shared: SharedValue,
+    pub(crate) shared: AnyValueShared,
     pub(crate) reason_not_mutable: syn::Error,
 }
 
 impl LateBoundSharedValue {
-    pub(crate) fn new(shared: SharedValue, reason_not_mutable: syn::Error) -> Self {
+    pub(crate) fn new(shared: AnyValueShared, reason_not_mutable: syn::Error) -> Self {
         Self {
             shared,
             reason_not_mutable,
@@ -276,7 +264,7 @@ pub(crate) enum LateBoundValue {
     /// An owned value that can be converted to any ownership type
     Owned(LateBoundOwnedValue),
     /// A copy-on-write value that can be converted to an owned value
-    CopyOnWrite(CopyOnWriteValue),
+    CopyOnWrite(AnyValueCopyOnWrite),
     /// A mutable reference
     Mutable(AnyValueMutable),
     /// A shared reference where mutable access failed for a specific reason
@@ -353,140 +341,46 @@ impl Deref for LateBoundValue {
 }
 
 // ============================================================================
-// Type aliases: Old names → New dynamic reference types
-// ============================================================================
-
-/// Type alias: `Shared<T>` is now `SharedReference<T>`.
-pub(crate) type Shared<T> = SharedReference<T>;
-
-/// Type alias: `Mutable<T>` is now `MutableReference<T>`.
-pub(crate) type Mutable<T> = MutableReference<T>;
-
-/// Type alias: `DisabledShared<T>` is now `InactiveSharedReference<T>`.
-pub(crate) type DisabledShared<T> = InactiveSharedReference<T>;
-
-/// Type alias: `DisabledMutable<T>` is now `InactiveMutableReference<T>`.
-pub(crate) type DisabledMutable<T> = InactiveMutableReference<T>;
-
-pub(crate) type AssigneeValue = AnyValueAssignee;
-pub(crate) type SharedValue = AnyValueShared;
-
-/// A binding of a unique (mutable) reference to a value.
-/// See [`ArgumentOwnership::Assignee`] for more details.
-///
-/// If you need span information, wrap with `Spanned<Assignee<T>>`.
-pub(crate) struct Assignee<T: 'static + ?Sized>(pub MutableReference<T>);
-
-impl AssigneeValue {
-    pub(crate) fn set(&mut self, content: impl IntoAnyValue) {
-        *self.0 = content.into_any_value();
-    }
-}
-
-impl<X: IsValueContent> IsValueContent for Assignee<X> {
-    type Type = X::Type;
-    type Form = BeAssignee;
-}
-
-impl<X: IsSelfValueContent<'static>> IntoValueContent<'static> for Assignee<X>
-where
-    X::Type: IsHierarchicalType<Content<'static, X::Form> = X>,
-    X::Form: IsHierarchicalForm,
-    X::Form: LeafAsMutForm,
-{
-    fn into_content(self) -> Content<'static, Self::Type, Self::Form> {
-        self.0
-            .emplace_map(|inner, emplacer| inner.as_mut_value().into_assignee(emplacer, None))
-    }
-}
-
-impl<T: 'static + ?Sized> Deref for Assignee<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T: 'static + ?Sized> DerefMut for Assignee<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-pub(crate) static MUTABLE_ERROR_MESSAGE: &str =
-    "The variable cannot be modified as it is already being modified";
-pub(crate) static SHARED_TO_MUTABLE_ERROR_MESSAGE: &str =
-    "The variable cannot be modified as it is a shared reference";
-
-impl Spanned<AnyValueMutable> {
-    pub(crate) fn transparent_clone(&self) -> FunctionResult<AnyValue> {
-        let value = self.0.as_ref().try_transparent_clone(self.1)?;
-        Ok(value)
-    }
-}
-
-impl Spanned<AnyValueShared> {
-    pub(crate) fn transparent_clone(&self) -> FunctionResult<AnyValue> {
-        let value = self.0.as_ref().try_transparent_clone(self.1)?;
-        Ok(value)
-    }
-}
-
-pub(crate) static SHARED_ERROR_MESSAGE: &str =
-    "The variable cannot be read as it is already being modified";
-
-// ============================================================================
-// IntoValueContent impls for the new types (formerly on Shared<X> / Mutable<X>)
-// ============================================================================
-
-// Note: IsValueContent and IntoValueContent are implemented via QqqShared/QqqMutable
-// in the forms system, since SharedReference<T> IS the leaf type now.
-
-// ============================================================================
 // CopyOnWrite
 // ============================================================================
 
 /// Copy-on-write value that can be either owned or shared
-pub(crate) struct CopyOnWrite<T: 'static + ToOwned + ?Sized> {
+pub(crate) struct CopyOnWrite<T: 'static> {
     pub(crate) inner: CopyOnWriteInner<T>,
 }
 
-pub(crate) enum CopyOnWriteInner<T: 'static + ToOwned + ?Sized> {
+pub(crate) enum CopyOnWriteInner<T: 'static> {
     /// An owned value that can be used directly
-    Owned(Owned<T::Owned>),
+    Owned(Owned<T>),
     /// For use when the CopyOnWrite value effectively represents the owned value (post-clone).
     /// In this case, returning a Cow is just an optimization and we can always clone infallibly.
-    SharedWithInfallibleCloning(SharedReference<T>),
+    SharedWithInfallibleCloning(Shared<T>),
     /// For use when the CopyOnWrite value represents a pre-cloned read-only value.
     /// A transparent clone may fail in this case at use time.
-    SharedWithTransparentCloning(SharedReference<T>),
+    SharedWithTransparentCloning(Shared<T>),
 }
 
-impl<T: 'static + ToOwned + ?Sized> CopyOnWrite<T> {
-    pub(crate) fn shared_in_place_of_owned(shared: SharedReference<T>) -> Self {
+impl<T: 'static> CopyOnWrite<T> {
+    pub(crate) fn shared_in_place_of_owned(shared: Shared<T>) -> Self {
         Self {
             inner: CopyOnWriteInner::SharedWithInfallibleCloning(shared),
         }
     }
 
-    pub(crate) fn shared_in_place_of_shared(shared: SharedReference<T>) -> Self {
+    pub(crate) fn shared_in_place_of_shared(shared: Shared<T>) -> Self {
         Self {
             inner: CopyOnWriteInner::SharedWithTransparentCloning(shared),
         }
     }
 
-    pub(crate) fn owned(owned: Owned<T::Owned>) -> Self {
+    pub(crate) fn owned(owned: Owned<T>) -> Self {
         Self {
             inner: CopyOnWriteInner::Owned(owned),
         }
     }
 
     #[allow(unused)]
-    pub(crate) fn extract_owned<U>(
-        self,
-        map: impl FnOnce(T::Owned) -> Result<U, T::Owned>,
-    ) -> Result<U, Self> {
+    pub(crate) fn extract_owned<U>(self, map: impl FnOnce(T) -> Result<U, T>) -> Result<U, Self> {
         match self.inner {
             CopyOnWriteInner::Owned(value) => match map(value) {
                 Ok(mapped) => Ok(mapped),
@@ -506,11 +400,11 @@ impl<T: 'static + ToOwned + ?Sized> CopyOnWrite<T> {
         }
     }
 
-    pub(crate) fn map<O: ToOwned + ?Sized>(
+    pub(crate) fn map<S>(
         self,
-        map_shared: impl FnOnce(SharedReference<T>) -> FunctionResult<SharedReference<O>>,
-        map_owned: impl FnOnce(Owned<T::Owned>) -> FunctionResult<Owned<O::Owned>>,
-    ) -> FunctionResult<CopyOnWrite<O>> {
+        map_shared: impl FnOnce(Shared<T>) -> FunctionResult<Shared<S>>,
+        map_owned: impl FnOnce(Owned<T>) -> FunctionResult<Owned<S>>,
+    ) -> FunctionResult<CopyOnWrite<S>> {
         let inner = match self.inner {
             CopyOnWriteInner::Owned(owned) => CopyOnWriteInner::Owned(map_owned(owned)?),
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
@@ -525,8 +419,8 @@ impl<T: 'static + ToOwned + ?Sized> CopyOnWrite<T> {
 
     pub(crate) fn map_into<U>(
         self,
-        map_shared: impl FnOnce(SharedReference<T>) -> U,
-        map_owned: impl FnOnce(Owned<T::Owned>) -> U,
+        map_shared: impl FnOnce(Shared<T>) -> U,
+        map_owned: impl FnOnce(Owned<T>) -> U,
     ) -> U {
         match self.inner {
             CopyOnWriteInner::Owned(owned) => map_owned(owned),
@@ -535,62 +429,59 @@ impl<T: 'static + ToOwned + ?Sized> CopyOnWrite<T> {
         }
     }
 
-    /// Disables this copy-on-write value, releasing any borrow.
-    /// Returns a `DisabledCopyOnWrite` which can be cloned and later re-enabled.
-    pub(crate) fn disable(self) -> DisabledCopyOnWrite<T> {
+    /// Deactivates this copy-on-write value, releasing any borrow.
+    /// Returns a `InactiveCopyOnWrite` which can be cloned and later re-activated.
+    pub(crate) fn deactivate(self) -> InactiveCopyOnWrite<T> {
         let inner = match self.inner {
-            CopyOnWriteInner::Owned(owned) => DisabledCopyOnWriteInner::Owned(owned),
+            CopyOnWriteInner::Owned(owned) => InactiveCopyOnWriteInner::Owned(owned),
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
-                DisabledCopyOnWriteInner::SharedWithInfallibleCloning(shared.disable())
+                InactiveCopyOnWriteInner::SharedWithInfallibleCloning(shared.deactivate())
             }
             CopyOnWriteInner::SharedWithTransparentCloning(shared) => {
-                DisabledCopyOnWriteInner::SharedWithTransparentCloning(shared.disable())
+                InactiveCopyOnWriteInner::SharedWithTransparentCloning(shared.deactivate())
             }
         };
-        DisabledCopyOnWrite { inner }
+        InactiveCopyOnWrite { inner }
     }
 }
 
 /// A disabled copy-on-write value that can be safely cloned and dropped.
-pub(crate) struct DisabledCopyOnWrite<T: 'static + ToOwned + ?Sized> {
-    inner: DisabledCopyOnWriteInner<T>,
+pub(crate) struct InactiveCopyOnWrite<T: 'static> {
+    inner: InactiveCopyOnWriteInner<T>,
 }
 
-enum DisabledCopyOnWriteInner<T: 'static + ToOwned + ?Sized> {
-    Owned(Owned<T::Owned>),
-    SharedWithInfallibleCloning(InactiveSharedReference<T>),
-    SharedWithTransparentCloning(InactiveSharedReference<T>),
+enum InactiveCopyOnWriteInner<T: 'static> {
+    Owned(Owned<T>),
+    SharedWithInfallibleCloning(InactiveShared<T>),
+    SharedWithTransparentCloning(InactiveShared<T>),
 }
 
-impl<T: 'static + ToOwned + ?Sized> Clone for DisabledCopyOnWrite<T>
-where
-    T::Owned: Clone,
-{
+impl<T: 'static + Clone> Clone for InactiveCopyOnWrite<T> {
     fn clone(&self) -> Self {
         let inner = match &self.inner {
-            DisabledCopyOnWriteInner::Owned(owned) => {
-                DisabledCopyOnWriteInner::Owned(owned.clone())
+            InactiveCopyOnWriteInner::Owned(owned) => {
+                InactiveCopyOnWriteInner::Owned(owned.clone())
             }
-            DisabledCopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
-                DisabledCopyOnWriteInner::SharedWithInfallibleCloning(shared.clone())
+            InactiveCopyOnWriteInner::SharedWithInfallibleCloning(shared) => {
+                InactiveCopyOnWriteInner::SharedWithInfallibleCloning(shared.clone())
             }
-            DisabledCopyOnWriteInner::SharedWithTransparentCloning(shared) => {
-                DisabledCopyOnWriteInner::SharedWithTransparentCloning(shared.clone())
+            InactiveCopyOnWriteInner::SharedWithTransparentCloning(shared) => {
+                InactiveCopyOnWriteInner::SharedWithTransparentCloning(shared.clone())
             }
         };
         Self { inner }
     }
 }
 
-impl<T: 'static + ToOwned + ?Sized> DisabledCopyOnWrite<T> {
-    /// Re-enables this disabled copy-on-write value by re-acquiring any borrow.
-    pub(crate) fn enable(self, span: SpanRange) -> FunctionResult<CopyOnWrite<T>> {
+impl<T: 'static> InactiveCopyOnWrite<T> {
+    /// Re-activates this inactive copy-on-write value by re-acquiring any borrow.
+    pub(crate) fn activate(self, span: SpanRange) -> FunctionResult<CopyOnWrite<T>> {
         let inner = match self.inner {
-            DisabledCopyOnWriteInner::Owned(owned) => CopyOnWriteInner::Owned(owned),
-            DisabledCopyOnWriteInner::SharedWithInfallibleCloning(inactive) => {
+            InactiveCopyOnWriteInner::Owned(owned) => CopyOnWriteInner::Owned(owned),
+            InactiveCopyOnWriteInner::SharedWithInfallibleCloning(inactive) => {
                 CopyOnWriteInner::SharedWithInfallibleCloning(inactive.activate(span)?)
             }
-            DisabledCopyOnWriteInner::SharedWithTransparentCloning(inactive) => {
+            InactiveCopyOnWriteInner::SharedWithTransparentCloning(inactive) => {
                 CopyOnWriteInner::SharedWithTransparentCloning(inactive.activate(span)?)
             }
         };
@@ -625,13 +516,13 @@ where
     }
 }
 
-impl<T: ?Sized + ToOwned> AsRef<T> for CopyOnWrite<T> {
+impl<T> AsRef<T> for CopyOnWrite<T> {
     fn as_ref(&self) -> &T {
         self
     }
 }
 
-impl<T: ?Sized + ToOwned> Deref for CopyOnWrite<T> {
+impl<T> Deref for CopyOnWrite<T> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -669,13 +560,11 @@ impl CopyOnWrite<AnyValue> {
     }
 
     /// Converts to shared reference
-    pub(crate) fn into_shared(self, span: SpanRange) -> SharedValue {
+    pub(crate) fn into_shared(self, span: SpanRange) -> AnyValueShared {
         match self.inner {
-            CopyOnWriteInner::Owned(owned) => SharedValue::new_from_owned(owned, None, span),
+            CopyOnWriteInner::Owned(owned) => AnyValueShared::new_from_owned(owned, None, span),
             CopyOnWriteInner::SharedWithInfallibleCloning(shared) => shared,
             CopyOnWriteInner::SharedWithTransparentCloning(shared) => shared,
         }
     }
 }
-
-pub(crate) type CopyOnWriteValue = CopyOnWrite<AnyValue>;

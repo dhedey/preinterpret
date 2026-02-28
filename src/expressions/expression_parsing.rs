@@ -123,7 +123,7 @@ impl<'a> ExpressionParser<'a> {
                     "true" | "false" => {
                         let bool = input.parse::<syn::LitBool>()?;
                         UnaryAtom::Leaf(Leaf::Value(Spanned(
-                            SharedValue::new_from_owned(bool.value.into_any_value(), None, bool.span.span_range()),
+                            AnyValueShared::new_from_owned(bool.value.into_any_value(), None, bool.span.span_range()),
                             bool.span.span_range(),
                         )))
                     }
@@ -136,7 +136,7 @@ impl<'a> ExpressionParser<'a> {
                     "None" => {
                         let none_ident = input.parse_any_ident()?; // consume the "None" token
                         UnaryAtom::Leaf(Leaf::Value(Spanned(
-                            SharedValue::new_from_owned(().into_any_value(), None, none_ident.span().span_range()),
+                            AnyValueShared::new_from_owned(().into_any_value(), None, none_ident.span().span_range()),
                             none_ident.span().span_range(),
                         )))
                     }
@@ -155,7 +155,7 @@ impl<'a> ExpressionParser<'a> {
                 let lit: syn::Lit = input.parse()?;
                 let span_range = lit.span().span_range();
                 UnaryAtom::Leaf(Leaf::Value(Spanned(
-                    SharedValue::new_from_owned(AnyValue::for_syn_lit(lit), None, span_range),
+                    AnyValueShared::new_from_owned(AnyValue::for_syn_lit(lit), None, span_range),
                     span_range,
                 )))
             },

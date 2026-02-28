@@ -86,11 +86,11 @@ where
                 leaf: <BeMut as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
                 // SAFETY: 'l = 'a = 'e2 so the lifetime transmute is valid, and
-                // PathExtension::Tightened correctly describes type narrowing
+                // PathExtension correctly describes mapping to a leaf type T
                 let mapped = unsafe {
                     MappedMut::new_unchecked(
                         leaf,
-                        PathExtension::Tightened(T::type_kind()),
+                        PathExtension::TypeNarrowing(T::type_kind()),
                         self.span,
                     )
                 };
@@ -128,15 +128,15 @@ where
                 leaf: <BeMut as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
                 // SAFETY: 'l = 'a = 'e2 so the lifetime transmute is valid, and
-                // PathExtension::Tightened correctly describes type narrowing
+                // PathExtension correctly describes mapping to a leaf type T
                 let mapped = unsafe {
                     MappedMut::new_unchecked(
                         leaf,
-                        PathExtension::Tightened(T::type_kind()),
+                        PathExtension::TypeNarrowing(T::type_kind()),
                         self.span,
                     )
                 };
-                QqqAssignee(self.emplacer.emplace(mapped))
+                Assignee(self.emplacer.emplace(mapped))
             }
         };
         let __mapper = __InlineMapper { emplacer, span };
@@ -170,16 +170,15 @@ where
                 leaf: <BeMut as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
                 // SAFETY: 'l = 'a = 'e2 so the lifetime transmute is valid, and
-                // PathExtension::Tightened correctly describes type narrowing
+                // PathExtension correctly describes mapping to a leaf type T
                 let mapped = unsafe {
                     MappedMut::new_unchecked(
                         leaf,
-                        PathExtension::Tightened(T::type_kind()),
+                        PathExtension::TypeNarrowing(T::type_kind()),
                         self.span,
                     )
                 };
-                let mutable_ref: MutableReference<_> = self.emplacer.emplace(mapped);
-                mutable_ref.into()
+                self.emplacer.emplace(mapped).into()
             }
         };
         let __mapper = __InlineMapper { emplacer, span };

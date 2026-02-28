@@ -7,7 +7,7 @@ use super::*;
 /// which indicates what ownership type to resolve to.
 pub(crate) enum ArgumentValue {
     Owned(AnyValueOwned),
-    CopyOnWrite(CopyOnWriteValue),
+    CopyOnWrite(AnyValueCopyOnWrite),
     Mutable(AnyValueMutable),
     Assignee(AnyValueAssignee),
     Shared(AnyValueShared),
@@ -21,7 +21,7 @@ impl ArgumentValue {
         }
     }
 
-    pub(crate) fn expect_copy_on_write(self) -> CopyOnWriteValue {
+    pub(crate) fn expect_copy_on_write(self) -> AnyValueCopyOnWrite {
         match self {
             ArgumentValue::CopyOnWrite(value) => value,
             _ => panic!("expect_copy_on_write() called on a non-copy-on-write ArgumentValue"),
@@ -49,65 +49,65 @@ impl ArgumentValue {
         }
     }
 
-    /// Disables this argument value, releasing any borrow on the RefCell.
-    /// Returns a `DisabledArgumentValue` which can be cloned and later re-enabled.
-    pub(crate) fn disable(self) -> DisabledArgumentValue {
+    /// Deactivates this argument value, releasing any borrow on the RefCell.
+    /// Returns a `InactiveArgumentValue` which can be cloned and later re-enabled.
+    pub(crate) fn deactivate(self) -> InactiveArgumentValue {
         match self {
-            ArgumentValue::Owned(owned) => DisabledArgumentValue::Owned(owned),
+            ArgumentValue::Owned(owned) => InactiveArgumentValue::Owned(owned),
             ArgumentValue::CopyOnWrite(copy_on_write) => {
-                DisabledArgumentValue::CopyOnWrite(copy_on_write.disable())
+                InactiveArgumentValue::CopyOnWrite(copy_on_write.deactivate())
             }
-            ArgumentValue::Mutable(mutable) => DisabledArgumentValue::Mutable(mutable.disable()),
+            ArgumentValue::Mutable(mutable) => InactiveArgumentValue::Mutable(mutable.deactivate()),
             ArgumentValue::Assignee(Assignee(mutable)) => {
-                DisabledArgumentValue::Assignee(mutable.disable())
+                InactiveArgumentValue::Assignee(mutable.deactivate())
             }
-            ArgumentValue::Shared(shared) => DisabledArgumentValue::Shared(shared.disable()),
+            ArgumentValue::Shared(shared) => InactiveArgumentValue::Shared(shared.deactivate()),
         }
     }
 }
 
-/// A disabled argument value that can be safely cloned and dropped.
-pub(crate) enum DisabledArgumentValue {
+/// An inactive argument value that can be safely cloned and dropped.
+pub(crate) enum InactiveArgumentValue {
     Owned(AnyValueOwned),
-    CopyOnWrite(DisabledCopyOnWrite<AnyValue>),
-    Mutable(DisabledMutable<AnyValue>),
-    Assignee(DisabledMutable<AnyValue>),
-    Shared(DisabledShared<AnyValue>),
+    CopyOnWrite(InactiveCopyOnWrite<AnyValue>),
+    Mutable(InactiveMutable<AnyValue>),
+    Assignee(InactiveMutable<AnyValue>),
+    Shared(InactiveShared<AnyValue>),
 }
 
-impl Clone for DisabledArgumentValue {
+impl Clone for InactiveArgumentValue {
     fn clone(&self) -> Self {
         match self {
-            DisabledArgumentValue::Owned(owned) => DisabledArgumentValue::Owned(owned.clone()),
-            DisabledArgumentValue::CopyOnWrite(copy_on_write) => {
-                DisabledArgumentValue::CopyOnWrite(copy_on_write.clone())
+            InactiveArgumentValue::Owned(owned) => InactiveArgumentValue::Owned(owned.clone()),
+            InactiveArgumentValue::CopyOnWrite(copy_on_write) => {
+                InactiveArgumentValue::CopyOnWrite(copy_on_write.clone())
             }
-            DisabledArgumentValue::Mutable(mutable) => {
-                DisabledArgumentValue::Mutable(mutable.clone())
+            InactiveArgumentValue::Mutable(mutable) => {
+                InactiveArgumentValue::Mutable(mutable.clone())
             }
-            DisabledArgumentValue::Assignee(assignee) => {
-                DisabledArgumentValue::Assignee(assignee.clone())
+            InactiveArgumentValue::Assignee(assignee) => {
+                InactiveArgumentValue::Assignee(assignee.clone())
             }
-            DisabledArgumentValue::Shared(shared) => DisabledArgumentValue::Shared(shared.clone()),
+            InactiveArgumentValue::Shared(shared) => InactiveArgumentValue::Shared(shared.clone()),
         }
     }
 }
 
-impl DisabledArgumentValue {
+impl InactiveArgumentValue {
     /// Re-enables this disabled argument value by re-acquiring any borrow.
     pub(crate) fn enable(self, span: SpanRange) -> FunctionResult<ArgumentValue> {
         match self {
-            DisabledArgumentValue::Owned(owned) => Ok(ArgumentValue::Owned(owned)),
-            DisabledArgumentValue::CopyOnWrite(copy_on_write) => {
-                Ok(ArgumentValue::CopyOnWrite(copy_on_write.enable(span)?))
+            InactiveArgumentValue::Owned(owned) => Ok(ArgumentValue::Owned(owned)),
+            InactiveArgumentValue::CopyOnWrite(copy_on_write) => {
+                Ok(ArgumentValue::CopyOnWrite(copy_on_write.activate(span)?))
             }
-            DisabledArgumentValue::Mutable(inactive) => {
+            InactiveArgumentValue::Mutable(inactive) => {
                 Ok(ArgumentValue::Mutable(inactive.activate(span)?))
             }
-            DisabledArgumentValue::Assignee(inactive) => {
+            InactiveArgumentValue::Assignee(inactive) => {
                 Ok(ArgumentValue::Assignee(Assignee(inactive.activate(span)?)))
             }
-            DisabledArgumentValue::Shared(inactive) => {
+            InactiveArgumentValue::Shared(inactive) => {
                 Ok(ArgumentValue::Shared(inactive.activate(span)?))
             }
         }
@@ -164,8 +164,7 @@ impl AsRef<AnyValue> for ArgumentValue {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum RequestedOwnership {
-    /// Receives any of Owned, SharedReference or MutableReference, depending on what
-    /// is available.
+    /// Receives any of Owned, Shared or Mutable, depending on what is available.
     /// This can then be used to resolve the value kind, and use the correct one.
     LateBound,
     /// A concrete value of the correct type.
@@ -297,7 +296,7 @@ impl RequestedOwnership {
 
     pub(crate) fn map_from_copy_on_write(
         &self,
-        Spanned(cow, span): Spanned<CopyOnWriteValue>,
+        Spanned(cow, span): Spanned<AnyValueCopyOnWrite>,
     ) -> FunctionResult<Spanned<RequestedValue>> {
         Ok(Spanned(
             match self {
@@ -331,7 +330,7 @@ impl RequestedOwnership {
 
     pub(crate) fn map_from_assignee(
         &self,
-        Spanned(assignee, span): Spanned<AssigneeValue>,
+        Spanned(assignee, span): Spanned<AnyValueAssignee>,
     ) -> FunctionResult<Spanned<RequestedValue>> {
         Ok(Spanned(
             match self {
@@ -348,7 +347,7 @@ impl RequestedOwnership {
 
     pub(crate) fn map_from_shared(
         &self,
-        Spanned(shared, span): Spanned<SharedValue>,
+        Spanned(shared, span): Spanned<AnyValueShared>,
     ) -> FunctionResult<Spanned<RequestedValue>> {
         Ok(Spanned(
             match self {
@@ -446,7 +445,7 @@ impl ArgumentOwnership {
 
     pub(crate) fn map_from_copy_on_write(
         &self,
-        Spanned(copy_on_write, span): Spanned<CopyOnWriteValue>,
+        Spanned(copy_on_write, span): Spanned<AnyValueCopyOnWrite>,
     ) -> FunctionResult<ArgumentValue> {
         match self {
             ArgumentOwnership::Owned => Ok(ArgumentValue::Owned(
@@ -479,7 +478,7 @@ impl ArgumentOwnership {
 
     pub(crate) fn map_from_shared(
         &self,
-        shared: Spanned<SharedValue>,
+        shared: Spanned<AnyValueShared>,
     ) -> FunctionResult<ArgumentValue> {
         self.map_from_shared_with_error_reason(
             shared,
@@ -489,13 +488,13 @@ impl ArgumentOwnership {
 
     fn map_from_shared_with_error_reason(
         &self,
-        Spanned(shared, span): Spanned<SharedValue>,
+        Spanned(shared, span): Spanned<AnyValueShared>,
         mutable_error: impl FnOnce(SpanRange) -> FunctionError,
     ) -> FunctionResult<ArgumentValue> {
         match self {
-            ArgumentOwnership::Owned => Ok(ArgumentValue::Owned(
-                Spanned(shared, span).transparent_clone()?,
-            )),
+            ArgumentOwnership::Owned => {
+                Ok(ArgumentValue::Owned(shared.try_transparent_clone(span)?))
+            }
             ArgumentOwnership::CopyOnWrite => Ok(ArgumentValue::CopyOnWrite(
                 CopyOnWrite::shared_in_place_of_shared(shared),
             )),
@@ -516,7 +515,7 @@ impl ArgumentOwnership {
 
     pub(crate) fn map_from_assignee(
         &self,
-        Spanned(assignee, span): Spanned<AssigneeValue>,
+        Spanned(assignee, span): Spanned<AnyValueAssignee>,
     ) -> FunctionResult<ArgumentValue> {
         self.map_from_mutable_inner(Spanned(assignee.0, span), false)
     }
@@ -529,9 +528,7 @@ impl ArgumentOwnership {
         match self {
             ArgumentOwnership::Owned => {
                 if is_late_bound {
-                    Ok(ArgumentValue::Owned(
-                        Spanned(mutable, span).transparent_clone()?,
-                    ))
+                    Ok(ArgumentValue::Owned(mutable.try_transparent_clone(span)?))
                 } else {
                     span.ownership_err("An owned value is required, but a mutable reference was received. This indicates a possible bug. If this was intended, use `.clone()` to get an owned value.")
                 }
@@ -874,7 +871,7 @@ enum BinaryPath {
         right: ExpressionNodeId,
     },
     OnRightBranch {
-        left: Spanned<DisabledArgumentValue>,
+        left: Spanned<InactiveArgumentValue>,
         interface: BinaryOperationInterface,
     },
 }
@@ -935,7 +932,7 @@ impl EvaluationFrame for BinaryOperationBuilder {
                             let left = Spanned(left, left_span);
 
                             // Disable left so we can evaluate right without borrow conflicts
-                            let left = left.map(|v| v.disable());
+                            let left = left.map(|v| v.deactivate());
 
                             self.state = BinaryPath::OnRightBranch { left, interface };
                             context.request_argument_value(self, right, rhs_ownership)
@@ -960,7 +957,7 @@ impl EvaluationFrame for BinaryOperationBuilder {
                 //   If left and right clash, then the error message should be on the right, not the left
 
                 // Disable right, then re-enable left first (for intuitive error messages)
-                let right = right.map(|v| v.disable());
+                let right = right.map(|v| v.deactivate());
                 let left_span = left.1;
                 let right_span = right.1;
                 let left = left.try_map(|v| v.enable(left_span))?;
@@ -1034,7 +1031,7 @@ impl EvaluationFrame for ValuePropertyAccessBuilder {
                 .map_from_late_bound(receiver.spanned(source_span))?
                 .spanned(source_span);
             // Disable receiver so it can be stored in the FunctionValue
-            let receiver = receiver.map(|v| v.disable());
+            let receiver = receiver.map(|v| v.deactivate());
             let function_value = FunctionValue {
                 invokable: InvokableFunction::Native(method),
                 disabled_bound_arguments: vec![receiver],
@@ -1348,7 +1345,7 @@ enum InvocationPath {
     ArgumentsPath {
         function_span: SpanRange,
         invokable: InvokableFunction,
-        disabled_evaluated_arguments: Vec<Spanned<DisabledArgumentValue>>,
+        disabled_evaluated_arguments: Vec<Spanned<InactiveArgumentValue>>,
     },
 }
 
@@ -1471,7 +1468,7 @@ impl EvaluationFrame for InvocationBuilder {
                 let argument = value.expect_argument_value();
                 let argument = Spanned(argument, span);
                 // Disable argument so we can evaluate remaining arguments without borrow conflicts
-                let argument = argument.map(|v| v.disable());
+                let argument = argument.map(|v| v.deactivate());
                 disabled_evaluated_arguments.push(argument);
             }
         };

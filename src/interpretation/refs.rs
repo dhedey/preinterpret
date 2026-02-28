@@ -1,7 +1,9 @@
+use std::mem::transmute;
+
 use super::*;
 
 /// A flexible type which can either be a reference to a value of type `T`,
-/// or an emplaced reference from a [`SharedReference<T>`].
+/// or an emplaced reference from a [`Shared<T>`].
 pub(crate) struct AnyRef<'a, T: ?Sized + 'static> {
     inner: AnyRefInner<'a, T>,
 }
@@ -59,30 +61,60 @@ impl<'a, T: ?Sized + 'static> AnyRef<'a, T> {
 
     pub(crate) fn emplace_map<O>(
         self,
-        f: impl for<'e> FnOnce(&'e T, &mut AnyRefEmplacer<'a, 'e, T>) -> O,
+        f: impl for<'m> FnOnce(&'m T, &mut AnyRefEmplacer<'_, 'a, 'm, T>) -> O,
     ) -> O {
-        let copied_ref = self.deref() as *const T;
-        let mut emplacer = AnyRefEmplacer {
-            inner: Some(self),
-            encapsulation_lifetime: std::marker::PhantomData,
-        };
-        f(
-            // SAFETY: The underlying reference is valid for the lifetime of self
-            // So we can copy it fine
-            unsafe { &*copied_ref },
-            &mut emplacer,
-        )
+        match self.inner {
+            AnyRefInner::Direct(direct_ref) => {
+                let raw_ptr = direct_ref as *const T;
+                let mut emplacer = AnyRefEmplacer {
+                    inner: AnyRefEmplacerState::Direct(DirectRefEmplacerState {
+                        ptr: Some(raw_ptr),
+                        original_lifetime: PhantomData,
+                    }),
+                };
+                // SAFETY: raw_ptr was derived from a valid &'a T, and the original
+                // reference was consumed by converting to *const T.
+                f(unsafe { &*raw_ptr }, &mut emplacer)
+            }
+            AnyRefInner::Encapsulated(shared) => shared.emplace_map(|x, shared_emplacer| {
+                let mut emplacer = AnyRefEmplacer {
+                    inner: AnyRefEmplacerState::Encapsulated(shared_emplacer),
+                };
+                f(x, &mut emplacer)
+            }),
+        }
     }
 }
 
-pub(crate) struct AnyRefEmplacer<'a, 'e: 'a, T: 'static + ?Sized> {
-    inner: Option<AnyRef<'a, T>>,
-    encapsulation_lifetime: std::marker::PhantomData<&'e ()>,
+pub(crate) struct AnyRefEmplacer<'x, 'a, 'm: 'x, T: 'static + ?Sized> {
+    inner: AnyRefEmplacerState<'x, 'a, 'm, T>,
 }
 
-impl<'a, 'e: 'a, T: 'static + ?Sized> AnyRefEmplacer<'a, 'e, T> {
+enum AnyRefEmplacerState<'x, 'a, 'm: 'x, T: 'static + ?Sized> {
+    Direct(DirectRefEmplacerState<'a, T>),
+    Encapsulated(&'x mut SharedEmplacer<'m, T>),
+}
+
+struct DirectRefEmplacerState<'a, T: 'static + ?Sized> {
+    ptr: Option<*const T>,
+    original_lifetime: PhantomData<&'a T>,
+}
+
+impl<'x, 'a, 'm, T: 'static + ?Sized> AnyRefEmplacer<'x, 'a, 'm, T> {
     pub(crate) fn revert(&mut self) -> AnyRef<'a, T> {
-        self.inner.take().expect("Emplacer already consumed")
+        match &mut self.inner {
+            AnyRefEmplacerState::Direct(DirectRefEmplacerState { ptr, .. }) => {
+                let ptr = ptr.take().expect("Emplacer already consumed");
+                AnyRef {
+                    // SAFETY: ptr was derived from a valid &'a T and the original
+                    // reference was consumed when creating the emplacer.
+                    inner: AnyRefInner::Direct(unsafe { &*ptr }),
+                }
+            }
+            AnyRefEmplacerState::Encapsulated(emplacer) => AnyRef {
+                inner: AnyRefInner::Encapsulated(emplacer.revert()),
+            },
+        }
     }
 
     /// Emplaces a mapped shared reference, consuming the emplacer's reference tracking.
@@ -91,25 +123,19 @@ impl<'a, 'e: 'a, T: 'static + ?Sized> AnyRefEmplacer<'a, 'e, T> {
     /// derivation) are validated by the [`MappedRef`] constructor.
     pub(crate) fn emplace<V: 'static + ?Sized>(
         &mut self,
-        mapped: MappedRef<'e, V>,
+        mapped: MappedRef<'m, V>,
     ) -> AnyRef<'a, V> {
-        let any_ref = self
-            .inner
-            .take()
-            .expect("You can only emplace to create a new AnyRef value once");
-        let (value, path_extension, span) = mapped.into_parts();
-        match any_ref.inner {
-            AnyRefInner::Direct(_) => AnyRef {
-                // 'e: 'a is guaranteed by the struct constraint, so coercion is valid
-                inner: AnyRefInner::Direct(value),
-            },
-            AnyRefInner::Encapsulated(shared) => AnyRef {
-                inner: AnyRefInner::Encapsulated(shared.emplace_map(|_, emplacer| {
-                    // SAFETY: The value's lifetime ('e) matches the SharedEmplacer's lifetime
-                    // since both are derived from the same underlying data
-                    let remapped = unsafe { MappedRef::new_unchecked(value, path_extension, span) };
-                    emplacer.emplace(remapped)
-                })),
+        match &mut self.inner {
+            AnyRefEmplacerState::Direct(_) => {
+                let (value, _, _) = mapped.into_parts();
+                // SAFETY: In Direct case, 'm == 'a, so the lifetime of the value is valid for 'a
+                let value = unsafe { transmute::<&'m V, &'a V>(value) };
+                AnyRef {
+                    inner: AnyRefInner::Direct(value),
+                }
+            }
+            AnyRefEmplacerState::Encapsulated(emplacer) => AnyRef {
+                inner: AnyRefInner::Encapsulated(emplacer.emplace(mapped)),
             },
         }
     }
@@ -139,15 +165,15 @@ impl<'a, T: ?Sized> ToSpannedRef<'a> for &'a T {
     }
 }
 
-impl<'a, T: ?Sized> From<SharedReference<T>> for AnyRef<'a, T> {
-    fn from(value: SharedReference<T>) -> Self {
+impl<'a, T: ?Sized> From<Shared<T>> for AnyRef<'a, T> {
+    fn from(value: Shared<T>) -> Self {
         Self {
             inner: AnyRefInner::Encapsulated(value),
         }
     }
 }
 
-impl<T: ?Sized> ToSpannedRef<'static> for SharedReference<T> {
+impl<T: ?Sized> ToSpannedRef<'static> for Shared<T> {
     type Target = T;
     fn into_ref(self) -> AnyRef<'static, Self::Target> {
         self.into()
@@ -159,7 +185,7 @@ impl<T: ?Sized> ToSpannedRef<'static> for SharedReference<T> {
 
 enum AnyRefInner<'a, T: 'static + ?Sized> {
     Direct(&'a T),
-    Encapsulated(SharedReference<T>),
+    Encapsulated(Shared<T>),
 }
 
 impl<'a, T: 'static + ?Sized> Deref for AnyRef<'a, T> {
@@ -174,7 +200,7 @@ impl<'a, T: 'static + ?Sized> Deref for AnyRef<'a, T> {
 }
 
 /// A flexible type which can either be a mutable reference to a value of type `T`,
-/// or an emplaced reference from a [`MutableReference<T>`].
+/// or an emplaced reference from a [`Mutable<T>`].
 pub(crate) struct AnyMut<'a, T: 'static + ?Sized> {
     inner: AnyMutInner<'a, T>,
 }
@@ -240,7 +266,7 @@ impl<'a, T: ?Sized + 'static> AnyMut<'a, T> {
 
     pub(crate) fn emplace_map<O>(
         self,
-        f: impl for<'e> FnOnce(&'e mut T, &mut AnyMutEmplacer<'a, 'e, T>) -> O,
+        f: impl for<'m> FnOnce(&'m mut T, &mut AnyMutEmplacer<'_, 'a, 'm, T>) -> O,
     ) -> O {
         match self.inner {
             AnyMutInner::Direct(direct_mut) => {
@@ -248,52 +274,53 @@ impl<'a, T: ?Sized + 'static> AnyMut<'a, T> {
                 // stores the raw pointer, so no second &mut T exists.
                 let raw_ptr = direct_mut as *mut T;
                 let mut emplacer = AnyMutEmplacer {
-                    inner: Some(AnyMutEmplacerState::Direct(raw_ptr, PhantomData)),
-                    encapsulation_lifetime: std::marker::PhantomData,
+                    inner: AnyMutEmplacerState::Direct(DirectMutEmplacerState {
+                        ptr: Some(raw_ptr),
+                        original_lifetime: PhantomData,
+                    }),
                 };
                 // SAFETY: raw_ptr was derived from a valid &'a mut T, and the original
                 // reference was consumed by converting to *mut T.
                 f(unsafe { &mut *raw_ptr }, &mut emplacer)
             }
-            AnyMutInner::Encapsulated(mut mutable) => {
-                // MutableReference internally stores NonNull<T> (a raw pointer),
-                // not &mut T, so there is no aliasing issue.
-                let raw_ptr = (&mut *mutable) as *mut T;
+            AnyMutInner::Encapsulated(mutable) => mutable.emplace_map(|x, mut_emplacer| {
                 let mut emplacer = AnyMutEmplacer {
-                    inner: Some(AnyMutEmplacerState::Encapsulated(mutable)),
-                    encapsulation_lifetime: std::marker::PhantomData,
+                    inner: AnyMutEmplacerState::Encapsulated(mut_emplacer),
                 };
-                // SAFETY: raw_ptr was derived from the MutableReference which
-                // uses NonNull internally (not &mut), so no aliasing occurs.
-                f(unsafe { &mut *raw_ptr }, &mut emplacer)
-            }
+
+                f(x, &mut emplacer)
+            }),
         }
     }
 }
 
-pub(crate) struct AnyMutEmplacer<'a, 'e: 'a, T: 'static + ?Sized> {
-    inner: Option<AnyMutEmplacerState<'a, T>>,
-    encapsulation_lifetime: std::marker::PhantomData<&'e ()>,
+pub(crate) struct AnyMutEmplacer<'x, 'a, 'm: 'x, T: 'static + ?Sized> {
+    inner: AnyMutEmplacerState<'x, 'a, 'm, T>,
 }
 
-/// Stores either a raw pointer (for Direct) or a MutableReference (for Encapsulated),
-/// avoiding &mut aliasing that would occur if we stored the full AnyMut.
-enum AnyMutEmplacerState<'a, T: 'static + ?Sized> {
-    Direct(*mut T, PhantomData<&'a mut T>),
-    Encapsulated(MutableReference<T>),
+enum AnyMutEmplacerState<'x, 'a, 'm: 'x, T: 'static + ?Sized> {
+    Direct(DirectMutEmplacerState<'a, T>),
+    Encapsulated(&'x mut MutableEmplacer<'m, T>),
 }
 
-impl<'a, 'e: 'a, T: 'static + ?Sized> AnyMutEmplacer<'a, 'e, T> {
+struct DirectMutEmplacerState<'a, T: 'static + ?Sized> {
+    ptr: Option<*mut T>,
+    original_lifetime: PhantomData<&'a mut T>,
+}
+
+impl<'x, 'a, 'm, T: 'static + ?Sized> AnyMutEmplacer<'x, 'a, 'm, T> {
     pub(crate) fn revert(&mut self) -> AnyMut<'a, T> {
-        let state = self.inner.take().expect("Emplacer already consumed");
-        match state {
-            AnyMutEmplacerState::Direct(ptr, _) => AnyMut {
-                // SAFETY: ptr was derived from a valid &'a mut T and no other
-                // &mut T currently exists (the one passed to the closure has ended).
-                inner: AnyMutInner::Direct(unsafe { &mut *ptr }),
-            },
-            AnyMutEmplacerState::Encapsulated(mutable) => AnyMut {
-                inner: AnyMutInner::Encapsulated(mutable),
+        match &mut self.inner {
+            AnyMutEmplacerState::Direct(DirectMutEmplacerState { ptr, .. }) => {
+                let ptr = ptr.take().expect("Emplacer already consumed");
+                AnyMut {
+                    // SAFETY: ptr was derived from a valid &'a mut T and no other
+                    // &mut T currently exists (the one passed to the closure has ended).
+                    inner: AnyMutInner::Direct(unsafe { &mut *ptr }),
+                }
+            }
+            AnyMutEmplacerState::Encapsulated(emplacer) => AnyMut {
+                inner: AnyMutInner::Encapsulated(emplacer.revert()),
             },
         }
     }
@@ -304,25 +331,19 @@ impl<'a, 'e: 'a, T: 'static + ?Sized> AnyMutEmplacer<'a, 'e, T> {
     /// derivation) are validated by the [`MappedMut`] constructor.
     pub(crate) fn emplace<V: 'static + ?Sized>(
         &mut self,
-        mapped: MappedMut<'e, V>,
+        mapped: MappedMut<'m, V>,
     ) -> AnyMut<'a, V> {
-        let state = self
-            .inner
-            .take()
-            .expect("You can only emplace to create a new AnyMut value once");
-        let (value, path_extension, span) = mapped.into_parts();
-        match state {
-            AnyMutEmplacerState::Direct(_, _) => AnyMut {
-                // 'e: 'a is guaranteed by the struct constraint, so coercion is valid
-                inner: AnyMutInner::Direct(value),
-            },
-            AnyMutEmplacerState::Encapsulated(mutable) => AnyMut {
-                inner: AnyMutInner::Encapsulated(mutable.emplace_map(|_, emplacer| {
-                    // SAFETY: The value's lifetime ('e) matches the MutableEmplacer's lifetime
-                    // since both are derived from the same underlying data
-                    let remapped = unsafe { MappedMut::new_unchecked(value, path_extension, span) };
-                    emplacer.emplace(remapped)
-                })),
+        match &mut self.inner {
+            AnyMutEmplacerState::Direct(_) => {
+                let (value, _, _) = mapped.into_parts();
+                // SAFETY: In Direct case, 'm == 'a, so the lifetime of the value is valid for 'a
+                let value = unsafe { transmute::<&'m mut V, &'a mut V>(value) };
+                AnyMut {
+                    inner: AnyMutInner::Direct(value),
+                }
+            }
+            AnyMutEmplacerState::Encapsulated(emplacer) => AnyMut {
+                inner: AnyMutInner::Encapsulated(emplacer.emplace(mapped)),
             },
         }
     }
@@ -342,8 +363,8 @@ impl<'a, T: ?Sized + 'static> IntoAnyMut<'a> for &'a mut T {
     }
 }
 
-impl<'a, T: ?Sized> From<MutableReference<T>> for AnyMut<'a, T> {
-    fn from(value: MutableReference<T>) -> Self {
+impl<'a, T: ?Sized> From<Mutable<T>> for AnyMut<'a, T> {
+    fn from(value: Mutable<T>) -> Self {
         Self {
             inner: AnyMutInner::Encapsulated(value),
         }
@@ -352,7 +373,7 @@ impl<'a, T: ?Sized> From<MutableReference<T>> for AnyMut<'a, T> {
 
 enum AnyMutInner<'a, T: 'static + ?Sized> {
     Direct(&'a mut T),
-    Encapsulated(MutableReference<T>),
+    Encapsulated(Mutable<T>),
 }
 
 impl<'a, T: 'static + ?Sized> Deref for AnyMut<'a, T> {

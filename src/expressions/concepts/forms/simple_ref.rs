@@ -86,11 +86,11 @@ where
                 leaf: <BeRef as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
                 // SAFETY: 'l = 'a = 'e2 so the lifetime transmute is valid, and
-                // PathExtension::Tightened correctly describes type narrowing
+                // PathExtension correctly describes mapping to a leaf type T
                 let mapped = unsafe {
                     MappedRef::new_unchecked(
                         leaf,
-                        PathExtension::Tightened(T::type_kind()),
+                        PathExtension::TypeNarrowing(T::type_kind()),
                         self.span,
                     )
                 };
@@ -128,16 +128,15 @@ where
                 leaf: <BeRef as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
                 // SAFETY: 'l = 'a = 'e2 so the lifetime transmute is valid, and
-                // PathExtension::Tightened correctly describes type narrowing
+                // PathExtension correctly describes mapping to a leaf type T
                 let mapped = unsafe {
                     MappedRef::new_unchecked(
                         leaf,
-                        PathExtension::Tightened(T::type_kind()),
+                        PathExtension::TypeNarrowing(T::type_kind()),
                         self.span,
                     )
                 };
-                let shared_ref: SharedReference<_> = self.emplacer.emplace(mapped);
-                shared_ref.into()
+                self.emplacer.emplace(mapped).into()
             }
         };
         let __mapper = __InlineMapper { emplacer, span };

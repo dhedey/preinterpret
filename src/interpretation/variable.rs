@@ -161,7 +161,7 @@ impl VariableReference {
     pub(crate) fn resolve_shared(
         &self,
         interpreter: &mut Interpreter,
-    ) -> FunctionResult<SharedValue> {
+    ) -> FunctionResult<AnyValueShared> {
         Ok(self
             .resolve_concrete(interpreter, ArgumentOwnership::Shared)?
             .expect_shared())

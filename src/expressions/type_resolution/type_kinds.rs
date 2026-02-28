@@ -91,7 +91,7 @@ impl TypeKind {
         }
     }
 
-    pub(crate) fn is_tightening_to(&self, other: &Self) -> bool {
+    pub(crate) fn is_narrowing_to(&self, other: &Self) -> bool {
         match self.compare_bindings(other) {
             TypeBindingComparison::Equal => true,
             TypeBindingComparison::RightDerivesFromLeftButIsNotSubtype => true,
@@ -333,7 +333,7 @@ impl TypeProperty {
         let property_name = self.property.to_string();
         if let Some(value) = resolver.resolve_type_property(&property_name) {
             return ownership.map_from_shared(Spanned(
-                SharedValue::new_from_owned(
+                AnyValueShared::new_from_owned(
                     value.into_any_value(),
                     Some(property_name),
                     self.span_range(),
@@ -343,7 +343,7 @@ impl TypeProperty {
         }
         if let Some(method) = resolver.resolve_method(&property_name) {
             return ownership.map_from_shared(Spanned(
-                SharedValue::new_from_owned(
+                AnyValueShared::new_from_owned(
                     method.into_any_value(),
                     Some(property_name.clone()),
                     self.span_range(),
@@ -353,7 +353,7 @@ impl TypeProperty {
         }
         if let Some(function) = resolver.resolve_type_function(&property_name) {
             return ownership.map_from_shared(Spanned(
-                SharedValue::new_from_owned(
+                AnyValueShared::new_from_owned(
                     function.into_any_value(),
                     Some(property_name.clone()),
                     self.span_range(),

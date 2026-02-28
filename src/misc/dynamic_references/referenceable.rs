@@ -12,31 +12,25 @@ impl Referenceable {
         }
     }
 
-    pub(crate) fn new_inactive_shared(&self) -> InactiveSharedReference<AnyValue> {
-        InactiveSharedReference(ReferenceCore::new_root(
+    pub(crate) fn new_inactive_shared(&self) -> InactiveShared<AnyValue> {
+        InactiveShared(ReferenceCore::new_root(
             self.core.clone(),
             ReferenceKind::InactiveShared,
         ))
     }
 
-    pub(crate) fn new_inactive_mutable(&self) -> InactiveMutableReference<AnyValue> {
-        InactiveMutableReference(ReferenceCore::new_root(
+    pub(crate) fn new_inactive_mutable(&self) -> InactiveMutable<AnyValue> {
+        InactiveMutable(ReferenceCore::new_root(
             self.core.clone(),
             ReferenceKind::InactiveMutable,
         ))
     }
 
-    pub(crate) fn new_active_shared(
-        &self,
-        span: SpanRange,
-    ) -> FunctionResult<SharedReference<AnyValue>> {
+    pub(crate) fn new_active_shared(&self, span: SpanRange) -> FunctionResult<Shared<AnyValue>> {
         self.new_inactive_shared().activate(span)
     }
 
-    pub(crate) fn new_active_mutable(
-        &self,
-        span: SpanRange,
-    ) -> FunctionResult<MutableReference<AnyValue>> {
+    pub(crate) fn new_active_mutable(&self, span: SpanRange) -> FunctionResult<Mutable<AnyValue>> {
         self.new_inactive_mutable().activate(span)
     }
 
@@ -236,7 +230,7 @@ impl ReferenceableData {
                 let parent_type = specifier.bound_type_kind();
                 match last_path_part {
                     PathPart::Value { bound_as } => {
-                        if !bound_as.is_tightening_to(&parent_type) {
+                        if !bound_as.is_narrowing_to(&parent_type) {
                             panic!(
                                 "Invalid path extension: cannot derive {} from {}",
                                 parent_type.source_name(),
@@ -253,12 +247,12 @@ impl ReferenceableData {
                     bound_as: child_bound_as,
                 });
             }
-            (PathPart::Value { bound_as }, PathExtension::Tightened(new_bound_as)) => {
-                if bound_as.is_tightening_to(&new_bound_as) {
+            (PathPart::Value { bound_as }, PathExtension::TypeNarrowing(new_bound_as)) => {
+                if bound_as.is_narrowing_to(&new_bound_as) {
                     *bound_as = new_bound_as;
                 } else {
                     panic!(
-                        "Invalid path extension: cannot derive {} from {}",
+                        "Invalid path extension: cannot narrow to {} from {}",
                         new_bound_as.source_name(),
                         bound_as.source_name()
                     );
@@ -450,8 +444,8 @@ impl ReferencePath {
 pub(crate) enum PathExtension {
     /// Extends the path with a child reference (e.g. .x or [0])
     Child(ChildSpecifier, TypeKind),
-    /// Extends the path with a value of a certain type (e.g. dereferencing a pointer)
-    Tightened(TypeKind),
+    /// Extends the path with a value of a certain type
+    TypeNarrowing(TypeKind),
 }
 
 #[derive(PartialEq, Eq, Clone)]

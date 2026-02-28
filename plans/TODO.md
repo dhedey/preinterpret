@@ -272,36 +272,13 @@ Suddenly dawned on me - my Disabled arguments might not be safe.
 * Imagine if I get `my_arr = [[]]` a Shared `my_arr[0]` then do `my_arr.pop()`
 * Then we enable `my_arr[0]` and get a use after free(!!). e.g. `my_arr[0].push(my_arr.pop())`.
 
-Instead, as per Rust two-phase borrows https://rustc-dev-guide.rust-lang.org/borrow-check/two-phase-borrows.html -
-- We shouldn't be able to disable a `Shared`
-- A `Disabled<Mutable>` becomes a `Shared`...
-
-I have a branch `spike/fix-disabled-abstraction` to explore this... Which converts a Shared back to a Mutable (which I think is technically UB and can't be done without it). Regardless, it works for a spike, and we get a few failures:
-* `stream_append_can_use_self_in_appender` - these are OK to fail!
-* This test is *not* OK to fail:
-```rust
-#[test]
-fn can_pass_owned_to_mutable_argument() {
-    run! {
-        let push_twice_and_return_mut = |arr: &mut any| {
-            arr.push(0);
-            arr.push(0);
-            arr
-        };
-        %[_].assert_eq(push_twice_and_return_mut([1, 2, 3]).len(), 5);
-    }
-}
-```
-
-The issue is that we get a variable stored as `arr := DisabledMutable` and then when we do `arr.push()` we clone the DisabledMutable, and then enable it...
-
 ### Task list
 
 - [x] Write up model in `dynamic_references/mod.rs`
 - [x] Add structure for `dynamic_references`
 - [x] Create Referenceable, and Reference types
 - [x] Create error messages for rule breaks in `referenceable.rs`
-- [ ] Add the following to `ReferenceCore` and maybe others:
+- [x] Add the following to `ReferenceCore` and maybe others:
   - [x] Emplacing
   - [x] Map, Try map
   - [x] Ability to map deeper. Should take a `PathExtension` and a new span.
@@ -311,19 +288,23 @@ The issue is that we get a variable stored as `arr := DisabledMutable` and then 
   - `DisabledShared` becomes `InactiveSharedReference`
   - `Mutable` / `MutableSubRcRefCell` - becomes type alias for `MutableReference`
   - `DisabledMutable` becomes `InactiveMutableReference`
-- [ ] Replace all the aliases:
-  - Remove `QqqShared`, `QqqMutable`, `SharedValue`, `AssigneeValue`
-  - Move `type Shared<T>` and `type Mutable<T>` alongside `SharedReference` / `MutableReference`
-  - Remove references to `MutableReference` and `SharedReference` outside these aliases
-  - Rename `SharedReference -> Shared` and `MutableReference -> Mutable`
-  - Rename `DisabledShared` -> `InactiveShared` and same for `Mutable`
-  - Remove `type AssigneeValue` and `type SharedValue`
-  - Move `Assignee` out of bindings. To e.g. `dynamic_references`
-  - See what else can be deleted from `bindings.rs`
-  - Rename `PathExtension::Tightened` to `PathExtension::TypeNarrowed`
-  - Rename  `DisabledArgumentValue` and `DisabledCopyOnWrite` to
-   `Inactive__` and their method from `enable` to `activate` and ditto
-   with `disable -> deactivate`
+- [x] Replace all the aliases:
+  - [x] Remove `Shared`, `Mutable`, `SharedValue`, `AssigneeValue`
+  - [x] Move `type Shared<T>` and `type Mutable<T>` alongside `SharedReference` / `MutableReference`
+  - [x] Remove references to `MutableReference` and `SharedReference` outside these aliases
+  - [x] Rename `SharedReference -> Shared` and `MutableReference -> Mutable`
+  - [x] Rename `DisabledShared` -> `InactiveShared` and same for `Mutable`
+  - [x] Remove `type AssigneeValue` and `type SharedValue`
+  - [x] Move `Assignee` out of bindings. To e.g. `dynamic_references`
+  - [x] Rename `PathExtension::Tightening` to `PathExtension::TypeNarrowing`
+  - [x] Rename  `DisabledArgumentValue` and `DisabledCopyOnWrite` to `Inactive__` and their method from `enable` to `activate` and ditto with `disable -> deactivate`
+- [ ] See what else can be deleted from `bindings.rs`
+  - [ ] Unify LateBound into `QqqLateBound`
+  - [ ] Unify CopyOnWrite into `QqqCopyOnWrite`
+- [ ] Add various tests:
+  - [ ] Stretching different error messages
+  - [ ] Showing I can do e.g. `x.a += x.b`
+  - [ ] Show that `let my_arr = [[]]; my_arr[0].push(my_arr.pop())` gives a suitable error
 
 ### Other ideas
 

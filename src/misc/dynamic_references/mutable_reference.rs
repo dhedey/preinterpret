@@ -2,19 +2,20 @@ use std::mem::transmute;
 
 use super::*;
 
-pub(crate) struct MutableReference<T: ?Sized>(pub(super) ReferenceCore<T>);
+/// Represents an active `&mut T` reference, to something derived from a Referenceable root.
+pub(crate) struct Mutable<T: ?Sized>(pub(super) ReferenceCore<T>);
 
-impl<T: ?Sized> MutableReference<T> {
-    pub(crate) fn deactivate(self) -> InactiveMutableReference<T> {
+impl<T: ?Sized> Mutable<T> {
+    pub(crate) fn deactivate(self) -> InactiveMutable<T> {
         self.0.core.data_mut().deactivate_reference(self.0.id);
-        InactiveMutableReference(self.0)
+        InactiveMutable(self.0)
     }
 
     /// A powerful map method which lets you place the resultant mapped reference inside
     /// a structure arbitrarily.
     pub(crate) fn emplace_map<O>(
         mut self,
-        f: impl for<'e> FnOnce(&'e mut T, &mut MutableEmplacer<'e, T>) -> O,
+        f: impl for<'a> FnOnce(&'a mut T, &mut MutableEmplacer<'a, T>) -> O,
     ) -> O {
         // SAFETY: The validity + safety invariants are upheld by `ReferenceableCore`
         // ... assuming this id is marked as a mutable reference for the duration.
@@ -32,8 +33,8 @@ impl<T: ?Sized> MutableReference<T> {
     /// making this method itself safe.
     pub(crate) fn map<V: ?Sized + 'static>(
         self,
-        f: impl for<'r> FnOnce(&'r mut T) -> MappedMut<'r, V>,
-    ) -> MutableReference<V> {
+        f: impl for<'a> FnOnce(&'a mut T) -> MappedMut<'a, V>,
+    ) -> Mutable<V> {
         self.emplace_map(move |input, emplacer| emplacer.emplace(f(input)))
     }
 
@@ -42,8 +43,8 @@ impl<T: ?Sized> MutableReference<T> {
     /// The unsafe PathExtension assertion is confined to the [`MappedMut::new`] constructor.
     pub(crate) fn try_map<V: ?Sized + 'static, E>(
         self,
-        f: impl for<'r> FnOnce(&'r mut T) -> Result<MappedMut<'r, V>, E>,
-    ) -> Result<MutableReference<V>, (E, MutableReference<T>)> {
+        f: impl for<'a> FnOnce(&'a mut T) -> Result<MappedMut<'a, V>, E>,
+    ) -> Result<Mutable<V>, (E, Mutable<T>)> {
         self.emplace_map(|input, emplacer| match f(input) {
             Ok(mapped) => Ok(emplacer.emplace(mapped)),
             Err(e) => Err((e, emplacer.revert())),
@@ -51,7 +52,7 @@ impl<T: ?Sized> MutableReference<T> {
     }
 }
 
-impl MutableReference<AnyValue> {
+impl Mutable<AnyValue> {
     /// Creates a new MutableReference from an owned value, wrapping it in a Referenceable.
     pub(crate) fn new_from_owned(
         value: AnyValue,
@@ -65,31 +66,14 @@ impl MutableReference<AnyValue> {
     }
 }
 
-impl<T: ?Sized> MutableReference<T> {
-    /// Disables this mutable reference (bridge for old `disable()` API).
-    /// Equivalent to `deactivate()` in the new naming.
-    pub(crate) fn disable(self) -> InactiveMutableReference<T> {
-        self.deactivate()
-    }
-
-    /// Converts this mutable reference into a shared reference.
-    /// Bridge for old `into_shared()` API.
-    pub(crate) fn into_shared(self) -> SharedReference<T> {
-        let span = self
-            .0
-            .core
-            .data_mut()
-            .for_reference(self.0.id)
-            .creation_span;
-        let inactive = self.deactivate();
-        let inactive_shared = inactive.into_shared();
-        inactive_shared
-            .activate(span)
-            .expect("Converting mutable to shared should always succeed since we just released the mutable borrow")
+impl<T: ?Sized> Mutable<T> {
+    pub(crate) fn into_shared(self) -> Shared<T> {
+        self.0.core.data_mut().make_shared(self.0.id);
+        Shared(self.0)
     }
 }
 
-impl<T: ?Sized> Deref for MutableReference<T> {
+impl<T: ?Sized> Deref for Mutable<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -102,19 +86,19 @@ impl<T: ?Sized> Deref for MutableReference<T> {
     }
 }
 
-impl<T: ?Sized> AsRef<T> for MutableReference<T> {
+impl<T: ?Sized> AsRef<T> for Mutable<T> {
     fn as_ref(&self) -> &T {
         self
     }
 }
 
-impl<T: ?Sized> AsMut<T> for MutableReference<T> {
+impl<T: ?Sized> AsMut<T> for Mutable<T> {
     fn as_mut(&mut self) -> &mut T {
         self
     }
 }
 
-impl<T: ?Sized> DerefMut for MutableReference<T> {
+impl<T: ?Sized> DerefMut for Mutable<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         // SAFETY: See the rustdoc on dynamic_references/mod.rs for full details.
         // To summarize:
@@ -125,29 +109,33 @@ impl<T: ?Sized> DerefMut for MutableReference<T> {
     }
 }
 
-pub(crate) struct InactiveMutableReference<T: ?Sized>(pub(super) ReferenceCore<T>);
+/// Represents an inactive but *valid* mutable reference.
+///
+/// It can't currently deref into a `&mut T`, but can after being activated, when
+/// the aliasing rules get checked and enforced.
+pub(crate) struct InactiveMutable<T: ?Sized>(pub(super) ReferenceCore<T>);
 
-impl<T: ?Sized> Clone for InactiveMutableReference<T> {
+impl<T: ?Sized> Clone for InactiveMutable<T> {
     fn clone(&self) -> Self {
-        InactiveMutableReference(self.0.clone())
+        InactiveMutable(self.0.clone())
     }
 }
 
-impl<T: ?Sized> InactiveMutableReference<T> {
-    pub(crate) fn activate(self, span: SpanRange) -> FunctionResult<MutableReference<T>> {
+impl<T: ?Sized> InactiveMutable<T> {
+    pub(crate) fn activate(self, span: SpanRange) -> FunctionResult<Mutable<T>> {
         self.0
             .core
             .data_mut()
             .activate_mutable_reference(self.0.id, span)?;
-        Ok(MutableReference(self.0))
+        Ok(Mutable(self.0))
     }
 
-    pub(crate) fn into_shared(self) -> InactiveSharedReference<T> {
+    pub(crate) fn into_shared(self) -> InactiveShared<T> {
         // As an inactive reference, we are free to map between them
         // ... we could even enable the other way around, but that'd likely allow breaking
         // application invariants which we want to respect.
         self.0.core.data_mut().make_shared(self.0.id);
-        InactiveSharedReference(self.0)
+        InactiveShared(self.0)
     }
 }
 
@@ -199,25 +187,25 @@ impl<'a, V: ?Sized> MappedMut<'a, V> {
     }
 }
 
-pub(crate) struct MutableEmplacer<'e, T: ?Sized>(EmplacerCore<'e, T>);
+pub(crate) struct MutableEmplacer<'a, T: ?Sized>(EmplacerCore<'a, T>);
 
-impl<'e, T: ?Sized> MutableEmplacer<'e, T> {
-    pub(crate) fn revert(&mut self) -> MutableReference<T> {
-        MutableReference(self.0.revert())
+impl<'a, T: ?Sized> MutableEmplacer<'a, T> {
+    pub(crate) fn revert(&mut self) -> Mutable<T> {
+        Mutable(self.0.revert())
     }
 
     /// Emplaces a mapped mutable reference, consuming the emplacer's reference tracking.
     ///
     /// This is safe because all preconditions (correct PathExtension and valid reference
     /// derivation) are validated by the [`MappedMut`] constructor.
-    pub(crate) fn emplace<V: 'static + ?Sized>(
+    pub(crate) fn emplace<'e: 'a, V: 'static + ?Sized>(
         &mut self,
         mapped: MappedMut<'e, V>,
-    ) -> MutableReference<V> {
+    ) -> Mutable<V> {
         let (value, path_extension, span) = mapped.into_parts();
         // SAFETY: The pointer is from a valid reference (guaranteed by MappedMut constructor),
         // and the PathExtension was validated by the MappedMut constructor.
         let pointer = unsafe { NonNull::new_unchecked(value as *mut V) };
-        unsafe { MutableReference(self.0.emplace_unchecked(pointer, path_extension, span)) }
+        unsafe { Mutable(self.0.emplace_unchecked(pointer, path_extension, span)) }
     }
 }

@@ -6,7 +6,7 @@ pub(crate) enum QqqLateBound<T: 'static> {
     /// A copy-on-write value that can be converted to an owned value
     CopyOnWrite(QqqCopyOnWrite<T>),
     /// A mutable reference
-    Mutable(QqqMutable<T>),
+    Mutable(Mutable<T>),
     /// A shared reference where mutable access failed for a specific reason
     Shared(QqqLateBoundShared<T>),
 }
@@ -61,6 +61,6 @@ pub(crate) struct QqqLateBoundOwned<O: 'static> {
 
 /// A shared value where mutable access failed for a specific reason
 pub(crate) struct QqqLateBoundShared<T: 'static> {
-    pub(crate) shared: QqqShared<T>,
+    pub(crate) shared: Shared<T>,
     pub(crate) reason_not_mutable: syn::Error,
 }

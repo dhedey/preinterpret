@@ -1,13 +1,11 @@
 use super::*;
 
-pub(crate) type QqqMutable<T> = MutableReference<T>;
-
-impl<X: IsValueContent> IsValueContent for QqqMutable<X> {
+impl<X: IsValueContent> IsValueContent for Mutable<X> {
     type Type = X::Type;
     type Form = BeMutable;
 }
 
-impl<'a, X: IsValueContent> IntoValueContent<'a> for QqqMutable<X>
+impl<'a, X: IsValueContent> IntoValueContent<'a> for Mutable<X>
 where
     X: 'static,
     X::Type: IsHierarchicalType<Content<'static, X::Form> = X>,
@@ -22,7 +20,7 @@ where
 // Note we can't implement this more widely than leaves.
 // This is because e.g. Content<AnyType, BeMutable> has Mutable() in its leaves,
 // This can't be mapped back to having Mutable(Content<AnyType, BeOwned>).
-impl<'a, L: IsValueLeaf> FromValueContent<'a> for QqqMutable<L> {
+impl<'a, L: IsValueLeaf> FromValueContent<'a> for Mutable<L> {
     fn from_content(content: Content<'a, Self::Type, Self::Form>) -> Self {
         content
     }
@@ -33,7 +31,7 @@ pub(crate) struct BeMutable;
 impl IsForm for BeMutable {}
 
 impl IsHierarchicalForm for BeMutable {
-    type Leaf<'a, T: IsLeafType> = QqqMutable<T::Leaf>;
+    type Leaf<'a, T: IsLeafType> = Mutable<T::Leaf>;
 
     #[inline]
     fn covariant_leaf<'a, 'b, T: IsLeafType>(leaf: Self::Leaf<'a, T>) -> Self::Leaf<'b, T>
@@ -45,7 +43,7 @@ impl IsHierarchicalForm for BeMutable {
 }
 
 impl IsDynCompatibleForm for BeMutable {
-    type DynLeaf<'a, D: IsDynType> = QqqMutable<D::DynContent>;
+    type DynLeaf<'a, D: IsDynType> = Mutable<D::DynContent>;
 
     fn leaf_to_dyn<'a, T: IsLeafType, D: IsDynType>(
         Spanned(leaf, span): Spanned<Self::Leaf<'a, T>>,
@@ -55,9 +53,9 @@ impl IsDynCompatibleForm for BeMutable {
     {
         leaf.emplace_map(|content, emplacer| match <T::Leaf>::map_mut(content) {
             Ok(mapped) => {
-                // SAFETY: PathExtension::Tightened correctly describes type narrowing
+                // SAFETY: PathExtension is correct for mapping to a dyn type
                 let mapped_mut = unsafe {
-                    MappedMut::new(mapped, PathExtension::Tightened(D::type_kind()), span)
+                    MappedMut::new(mapped, PathExtension::TypeNarrowing(D::type_kind()), span)
                 };
                 Ok(emplacer.emplace(mapped_mut))
             }

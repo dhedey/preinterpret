@@ -44,9 +44,9 @@ impl IsDynCompatibleForm for BeAnyRef {
     {
         leaf.emplace_map(|content, emplacer| match <T::Leaf>::map_ref(content) {
             Ok(mapped) => {
-                // SAFETY: PathExtension::Tightened correctly describes type narrowing
+                // SAFETY: PathExtension is correct for mapping to a dyn type
                 let mapped_ref = unsafe {
-                    MappedRef::new(mapped, PathExtension::Tightened(D::type_kind()), span)
+                    MappedRef::new(mapped, PathExtension::TypeNarrowing(D::type_kind()), span)
                 };
                 Ok(emplacer.emplace(mapped_ref))
             }

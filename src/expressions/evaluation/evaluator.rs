@@ -149,8 +149,8 @@ pub(crate) enum RequestedValue {
     Owned(AnyValueOwned),
     Shared(AnyValueShared),
     Mutable(AnyValueMutable),
-    CopyOnWrite(CopyOnWriteValue),
-    Assignee(AssigneeValue),
+    CopyOnWrite(AnyValueCopyOnWrite),
+    Assignee(AnyValueAssignee),
 
     // RequestedOwnership::LateBound
     // -------------------------------
@@ -177,7 +177,7 @@ impl RequestedValue {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn expect_copy_on_write(self) -> CopyOnWriteValue {
+    pub(crate) fn expect_copy_on_write(self) -> AnyValueCopyOnWrite {
         match self {
             RequestedValue::CopyOnWrite(copy_on_write) => copy_on_write,
             _ => panic!("expect_copy_on_write() called on non-copy-on-write RequestedValue"),

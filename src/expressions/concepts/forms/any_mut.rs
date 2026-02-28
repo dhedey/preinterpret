@@ -43,9 +43,9 @@ impl IsDynCompatibleForm for BeAnyMut {
     {
         leaf.emplace_map(|content, emplacer| match <T::Leaf>::map_mut(content) {
             Ok(mapped) => {
-                // SAFETY: PathExtension::Tightened correctly describes type narrowing
+                // SAFETY: PathExtension is correct for mapping to a dyn type
                 let mapped_mut = unsafe {
-                    MappedMut::new(mapped, PathExtension::Tightened(D::type_kind()), span)
+                    MappedMut::new(mapped, PathExtension::TypeNarrowing(D::type_kind()), span)
                 };
                 Ok(emplacer.emplace(mapped_mut))
             }
