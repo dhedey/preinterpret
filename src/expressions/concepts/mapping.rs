@@ -146,6 +146,9 @@ macro_rules! __map_via_leaf_to_parent {
     ($output:ident -> ExecutionResult<Content<$lt:lifetime, $t:ident, $form:ty>>) => {
         Ok($t::into_parent($output?))
     };
+    ($output:ident -> FunctionResult<Content<$lt:lifetime, $t:ident, $form:ty>>) => {
+        Ok($t::into_parent($output?))
+    };
     ($output:ident -> Result<Content<$lt:lifetime, $t:ident, $form:ty>, $err:ty>) => {
         Ok($t::into_parent($output?))
     };

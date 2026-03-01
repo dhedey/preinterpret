@@ -5,14 +5,14 @@ define_leaf_type! {
     content: ObjectValue,
     kind: pub(crate) ObjectKind,
     type_name: "object",
-    articled_display_name: "an object",
+    articled_value_name: "an object",
     dyn_impls: {
         IterableType: impl IsIterable {
-            fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
+            fn into_iterator(self: Box<Self>) -> FunctionResult<IteratorValue> {
                 Ok(IteratorValue::new_for_object(*self))
             }
 
-            fn len(&self, _error_span_range: SpanRange) -> ExecutionResult<usize> {
+            fn iterable_len(&self, _error_span_range: SpanRange) -> FunctionResult<usize> {
                 Ok(self.entries.len())
             }
         }
@@ -42,12 +42,12 @@ pub(crate) struct ObjectEntry {
 }
 
 impl ObjectValue {
-    pub(super) fn into_indexed(mut self, index: Spanned<AnyValueRef>) -> ExecutionResult<AnyValue> {
+    pub(super) fn into_indexed(mut self, index: Spanned<AnyValueRef>) -> FunctionResult<AnyValue> {
         let key = index.downcast_resolve("An object key")?;
         Ok(self.remove_or_none(key))
     }
 
-    pub(super) fn into_property(mut self, access: &PropertyAccess) -> ExecutionResult<AnyValue> {
+    pub(super) fn into_property(mut self, access: &PropertyAccess) -> FunctionResult<AnyValue> {
         let key = access.property.to_string();
         Ok(self.remove_or_none(&key))
     }
@@ -72,47 +72,30 @@ impl ObjectValue {
         }
     }
 
-    pub(super) fn index_mut(
-        &mut self,
-        index: Spanned<AnyValueRef>,
-        auto_create: bool,
-    ) -> ExecutionResult<&mut AnyValue> {
-        let index: Spanned<&str> = index.downcast_resolve("An object key")?;
-        self.mut_entry(index.map(|s| s.to_string()), auto_create)
-    }
-
-    pub(super) fn index_ref(&self, index: Spanned<AnyValueRef>) -> ExecutionResult<&AnyValue> {
-        let key: Spanned<&str> = index.downcast_resolve("An object key")?;
-        let entry = self.entries.get(*key).ok_or_else(|| {
-            key.value_error(format!("The object does not have a field named `{}`", *key))
-        })?;
-        Ok(&entry.value)
-    }
-
     pub(super) fn property_mut(
         &mut self,
         access: &PropertyAccess,
         auto_create: bool,
-    ) -> ExecutionResult<&mut AnyValue> {
+    ) -> FunctionResult<&mut AnyValue> {
         self.mut_entry(
             access.property.to_string().spanned(access.property.span()),
             auto_create,
         )
     }
 
-    pub(super) fn property_ref(&self, access: &PropertyAccess) -> ExecutionResult<&AnyValue> {
+    pub(super) fn property_ref(&self, access: &PropertyAccess) -> FunctionResult<&AnyValue> {
         let key = access.property.to_string();
-        let entry = self.entries.get(&key).ok_or_else(|| {
-            access.value_error(format!("The object does not have a field named `{}`", key))
-        })?;
-        Ok(&entry.value)
+        match self.entries.get(&key) {
+            Some(entry) => Ok(&entry.value),
+            None => Ok(static_none_ref()),
+        }
     }
 
     fn mut_entry(
         &mut self,
         Spanned(key, key_span): Spanned<String>,
         auto_create: bool,
-    ) -> ExecutionResult<&mut AnyValue> {
+    ) -> FunctionResult<&mut AnyValue> {
         use std::collections::btree_map::*;
         Ok(match self.entries.entry(key) {
             Entry::Occupied(entry) => &mut entry.into_mut().value,
@@ -125,8 +108,10 @@ impl ObjectValue {
                         })
                         .value
                 } else {
-                    return key_span
-                        .value_err(format!("No property found for key `{}`", entry.into_key()));
+                    return key_span.value_err(format!(
+                        "There is no pre-existing entry with key `{}` available to mutate",
+                        entry.into_key()
+                    ));
                 }
             }
         })
@@ -136,7 +121,8 @@ impl ObjectValue {
         &self,
         output: &mut String,
         behaviour: &ConcatBehaviour,
-    ) -> ExecutionResult<()> {
+        interpreter: &mut Interpreter,
+    ) -> FunctionResult<()> {
         if !behaviour.use_debug_literal_syntax {
             return behaviour
                 .error_span_range
@@ -174,7 +160,7 @@ impl ObjectValue {
             entry
                 .value
                 .as_ref_value()
-                .concat_recursive_into(output, behaviour)?;
+                .concat_recursive_into(output, behaviour, interpreter)?;
             is_first = false;
         }
         if behaviour.output_literal_structure {
@@ -212,7 +198,7 @@ impl ValuesEqual for ObjectValue {
 }
 
 impl Spanned<&ObjectValue> {
-    pub(crate) fn validate(&self, validation: &impl ObjectValidate) -> ExecutionResult<()> {
+    pub(crate) fn validate(&self, validation: &impl ObjectValidate) -> FunctionResult<()> {
         let mut missing_fields = Vec::new();
         for (field_name, _) in validation.required_fields() {
             match self.entries.get(field_name) {
@@ -272,35 +258,83 @@ impl IntoValueContent<'static> for BTreeMap<String, ObjectEntry> {
 define_type_features! {
     impl ObjectType,
     pub(crate) mod object_interface {
-        pub(crate) mod methods {
-            [context] fn zip(this: ObjectValue) -> ExecutionResult<ArrayValue> {
+        methods {
+            [context] fn zip(this: ObjectValue) -> FunctionResult<ArrayValue> {
                 ZipIterators::new_from_object(this, context.span_range())?.run_zip(context.interpreter, true)
             }
 
-            [context] fn zip_truncated(this: ObjectValue) -> ExecutionResult<ArrayValue> {
+            [context] fn zip_truncated(this: ObjectValue) -> FunctionResult<ArrayValue> {
                 ZipIterators::new_from_object(this, context.span_range())?.run_zip(context.interpreter, false)
             }
         }
-        pub(crate) mod unary_operations {
-        }
-        pub(crate) mod binary_operations {}
         property_access(ObjectValue) {
             [ctx] fn shared(source: &'a ObjectValue) {
-                source.property_ref(ctx.property)
+                let value = source.property_ref(ctx.property)?;
+                // SAFETY: ObjectChild correctly describes navigating to a named property
+                Ok(unsafe {
+                    MappedRef::new(
+                        value,
+                        PathExtension::Child(
+                            ChildSpecifier::ObjectChild(ctx.property.property.to_string()),
+                            AnyType::type_kind(),
+                        ),
+                        ctx.output_span_range,
+                    )
+                })
             }
             [ctx] fn mutable(source: &'a mut ObjectValue, auto_create: bool) {
-                source.property_mut(ctx.property, auto_create)
+                let value = source.property_mut(ctx.property, auto_create)?;
+                // SAFETY: ObjectChild correctly describes navigating to a named property
+                Ok(unsafe {
+                    MappedMut::new(
+                        value,
+                        PathExtension::Child(
+                            ChildSpecifier::ObjectChild(ctx.property.property.to_string()),
+                            AnyType::type_kind(),
+                        ),
+                        ctx.output_span_range,
+                    )
+                })
             }
             [ctx] fn owned(source: ObjectValue) {
                 source.into_property(ctx.property)
             }
         }
         index_access(ObjectValue) {
-            fn shared(source: &'a ObjectValue, index: Spanned<AnyValueRef>) {
-                source.index_ref(index)
+            [ctx] fn shared(source: &'a ObjectValue, index: Spanned<AnyValueRef>) {
+                let key: Spanned<&str> = index.downcast_resolve("An object key")?;
+                let key_string = key.to_string();
+                let value = match source.entries.get(*key) {
+                    Some(entry) => &entry.value,
+                    None => static_none_ref(),
+                };
+                // SAFETY: ObjectChild correctly describes navigating to a named key
+                Ok(unsafe {
+                    MappedRef::new(
+                        value,
+                        PathExtension::Child(
+                            ChildSpecifier::ObjectChild(key_string),
+                            AnyType::type_kind(),
+                        ),
+                        ctx.output_span_range,
+                    )
+                })
             }
-            fn mutable(source: &'a mut ObjectValue, index: Spanned<AnyValueRef>, auto_create: bool) {
-                source.index_mut(index, auto_create)
+            [ctx] fn mutable(source: &'a mut ObjectValue, index: Spanned<AnyValueRef>, auto_create: bool) {
+                let key: Spanned<&str> = index.downcast_resolve("An object key")?;
+                let key_string = key.to_string();
+                let value = source.mut_entry(key.map(|s| s.to_string()), auto_create)?;
+                // SAFETY: ObjectChild correctly describes navigating to a named key
+                Ok(unsafe {
+                    MappedMut::new(
+                        value,
+                        PathExtension::Child(
+                            ChildSpecifier::ObjectChild(key_string),
+                            AnyType::type_kind(),
+                        ),
+                        ctx.output_span_range,
+                    )
+                })
             }
             fn owned(source: ObjectValue, index: Spanned<AnyValueRef>) {
                 source.into_indexed(index)
@@ -343,7 +377,6 @@ pub(crate) trait ObjectValidate {
     }
 
     fn describe_object(&self) -> String {
-        use std::fmt::Write;
         let mut buffer = String::new();
         buffer.write_str("%{\n").unwrap();
         for (key, definition) in self.all_fields() {

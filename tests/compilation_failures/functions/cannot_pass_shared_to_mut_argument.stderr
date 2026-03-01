@@ -1,0 +1,5 @@
+error: A mutable reference is required, but a shared reference was received, this indicates a possible bug as the updated value won't be accessible. To proceed regardless, use `.clone().as_mut()` to get a mutable reference.
+ --> tests/compilation_failures/functions/cannot_pass_shared_to_mut_argument.rs:6:25
+  |
+6 |         my_array_mut_fn([1, 2, 3].as_ref());
+  |                         ^^^^^^^^^^^^^^^^^^

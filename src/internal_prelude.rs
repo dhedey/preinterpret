@@ -1,11 +1,11 @@
 pub(crate) use proc_macro2::{extra::*, *};
 pub(crate) use quote::ToTokens;
 pub(crate) use std::{
-    borrow::Borrow,
-    borrow::Cow,
-    cell::{Ref, RefCell, RefMut},
+    borrow::{Borrow, Cow},
+    cell::{RefCell, RefMut},
     collections::{BTreeMap, HashMap, HashSet},
     fmt::Debug,
+    fmt::Write,
     iter,
     marker::PhantomData,
     ops::{Deref, DerefMut},
@@ -28,3 +28,4 @@ pub(crate) use crate::expressions::*;
 pub(crate) use crate::extensions::*;
 pub(crate) use crate::interpretation::*;
 pub(crate) use crate::misc::*;
+pub(crate) use crate::static_analysis::*;

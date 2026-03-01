@@ -52,7 +52,7 @@ impl<'a> ControlFlowAnalyzer<'a> {
         let mut output = HashMap::new();
 
         for (definition_id, definition) in self.definitions.iter() {
-            let ancestor_scopes = self.create_ancestor_scopes(definition.scope);
+            let ancestor_scopes = self.create_local_ancestor_scopes(definition.scope);
 
             let (last_use_candidates, markers) = self.last_reference_first_phase(
                 definition_id,
@@ -75,7 +75,7 @@ impl<'a> ControlFlowAnalyzer<'a> {
         return output;
     }
 
-    fn create_ancestor_scopes(&self, scope: ScopeId) -> HashSet<ScopeId> {
+    fn create_local_ancestor_scopes(&self, scope: ScopeId) -> HashSet<ScopeId> {
         let mut scopes = HashSet::new();
         let mut current = self.scopes.get(scope).parent;
         while let Some(scope) = current {

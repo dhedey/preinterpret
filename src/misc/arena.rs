@@ -73,6 +73,14 @@ impl<K: ArenaKey, D> Arena<K, D> {
             .map(|(index, v)| (K::from_inner(Key::new(index)), v))
     }
 
+    #[allow(unused)]
+    pub(crate) fn iter_mut(&mut self) -> impl Iterator<Item = (K, &mut D)> {
+        self.data
+            .iter_mut()
+            .enumerate()
+            .map(|(index, v)| (K::from_inner(Key::new(index)), v))
+    }
+
     pub(crate) fn map_all<D2>(self, f: impl Fn(D) -> D2) -> Arena<K, D2> {
         Arena {
             data: self.data.into_iter().map(f).collect(),
@@ -81,11 +89,16 @@ impl<K: ArenaKey, D> Arena<K, D> {
     }
 }
 
-fn invalid_key_message(key_index: usize) -> &'static str {
+fn invalid_key_message(key_index: usize) -> String {
     if key_index == PLACEHOLDER_KEY_INDEX {
-        "Attempted to access an arena with a placeholder key. The key must be properly initialized before use."
+        format!(
+            "Attempted to access an arena with a placeholder key. \
+             The key must be properly initialized before use.\n\
+             Backtrace:\n{:?}",
+            std::backtrace::Backtrace::force_capture()
+        )
     } else {
-        "Arena key does not exist in this arena."
+        "Arena key does not exist in this arena.".to_string()
     }
 }
 

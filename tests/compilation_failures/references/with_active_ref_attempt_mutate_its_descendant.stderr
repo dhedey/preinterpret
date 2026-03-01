@@ -1,0 +1,8 @@
+error: Cannot create a shared reference because it clashes with an existing mutable reference:
+       This reference : [*active*]     &x (of type any)
+       Other reference: [*active*] &mut x (of type any)
+       Reason         : mutation may be observed from the other active reference, which breaks aliasing rules
+ --> tests/compilation_failures/references/with_active_ref_attempt_mutate_its_descendant.rs:9:13
+  |
+9 |             x.a += 1;
+  |             ^

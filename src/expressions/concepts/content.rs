@@ -2,8 +2,7 @@ use super::*;
 
 /// Shorthand for representing the form F of a type T with a particular lifetime 'a.
 pub(crate) type Content<'a, T, F> = <T as IsHierarchicalType>::Content<'a, F>;
-pub(crate) type DynContent<'a, D, F> =
-    <F as IsDynCompatibleForm>::DynLeaf<'a, <D as IsDynType>::DynContent>;
+pub(crate) type DynContent<'a, D, F> = <F as IsDynCompatibleForm>::DynLeaf<'a, D>;
 
 /// For types which have an associated value (type and form)
 pub(crate) trait IsValueContent {
@@ -69,18 +68,6 @@ where
     {
         self.upcast()
     }
-
-    fn into_referenceable(self) -> Content<'a, Self::Type, BeReferenceable>
-    where
-        Self: IsValueContent<Form = BeOwned>,
-    {
-        map_via_leaf! {
-            input: (Content<'a, Self::Type, Self::Form>) = self.into_content(),
-            fn map_leaf<F = BeOwned, T>(leaf) -> (Content<'a, T, BeReferenceable>) {
-                Rc::new(RefCell::new(leaf))
-            }
-        }
-    }
 }
 
 impl<'a, C> Spanned<C>
@@ -92,7 +79,7 @@ where
     pub(crate) fn downcast_resolve<X: FromSpannedValueContent<'a, Form = C::Form>>(
         self,
         resolution_target: &str,
-    ) -> ExecutionResult<X>
+    ) -> FunctionResult<X>
     where
         <X as IsValueContent>::Type: DowncastFrom<C::Type>,
     {
@@ -107,11 +94,11 @@ where
     }
 
     // TODO[concepts]: Change to use a FromSpannedDynContent trait,
-    // so that it can return a ExecutionResult<X> and avoid needing to specify D.
+    // so that it can return a FunctionResult<X> and avoid needing to specify D.
     pub(crate) fn dyn_resolve<D: IsDynLeaf + ?Sized>(
         self,
         resolution_target: &str,
-    ) -> ExecutionResult<DynContent<'a, D::Type, C::Form>>
+    ) -> FunctionResult<DynContent<'a, D::Type, C::Form>>
     where
         <D as IsDynLeaf>::Type: DynResolveFrom<C::Type>,
         C::Form: IsDynCompatibleForm,
@@ -193,7 +180,7 @@ where
     fn clone_to_owned_transparently<'r>(
         &'r self,
         span_range: SpanRange,
-    ) -> ExecutionResult<Content<'static, Self::Type, BeOwned>>
+    ) -> FunctionResult<Content<'static, Self::Type, BeOwned>>
     where
         'a: 'r,
         Self::Form: LeafAsRefForm,
@@ -202,7 +189,7 @@ where
         map_via_leaf! {
             input: &'r (Content<'a, Self::Type, Self::Form>) = self,
             state: SpanRange | let span_range = span_range,
-            fn map_leaf<F: LeafAsRefForm, T>(leaf) -> (ExecutionResult<Content<'static, T, BeOwned>>) {
+            fn map_leaf<F: LeafAsRefForm, T>(leaf) -> (FunctionResult<Content<'static, T, BeOwned>>) {
                 F::leaf_clone_to_owned_transparently(leaf, span_range)
             }
         }
@@ -225,8 +212,8 @@ impl<
 {
     type ValueType = T;
     const OWNERSHIP: ArgumentOwnership = F::ARGUMENT_OWNERSHIP;
-    fn from_argument(Spanned(value, span_range): Spanned<ArgumentValue>) -> ExecutionResult<Self> {
-        let ownership_mapped = F::from_argument_value(value)?;
+    fn from_argument(Spanned(value, span_range): Spanned<ArgumentValue>) -> FunctionResult<Self> {
+        let ownership_mapped = F::from_argument_value(Spanned(value, span_range))?;
         let type_mapped = T::resolve(ownership_mapped, span_range, "This argument")?;
         Ok(X::from_content(type_mapped))
     }
@@ -240,7 +227,7 @@ impl<
         T: UpcastTo<AnyType>,
     > IsReturnable for X
 {
-    fn to_returned_value(self) -> ExecutionResult<ReturnedValue> {
+    fn to_returned_value(self) -> FunctionResult<ReturnedValue> {
         let type_mapped = self.into_content().upcast::<AnyType>();
         BeOwned::into_returned_value(type_mapped)
     }

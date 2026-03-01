@@ -8,6 +8,8 @@ pub(crate) type AnyValueAnyRef<'a> = AnyValueContent<'a, BeAnyRef>;
 pub(crate) type AnyValueShared = Shared<AnyValue>;
 pub(crate) type AnyValueMutable = Mutable<AnyValue>;
 pub(crate) type AnyValueAssignee = Assignee<AnyValue>;
+pub(crate) type AnyValueCopyOnWrite = CopyOnWrite<AnyValue>;
+pub(crate) type AnyValueLateBound = LateBound<AnyValue>;
 // pub(crate) type AnyValueShared = AnyValueContent<'static, BeShared>;
 // pub(crate) type AnyValueMutable = AnyValueContent<'static, BeMutable>;
 // pub(crate) type AnyValueAssignee = AnyValueContent<'static, BeAssignee>;
@@ -33,22 +35,24 @@ define_parent_type! {
         Range => RangeType,
         Iterator => IteratorType,
         Parser => ParserType,
+        Function => FunctionType,
+        PreinterpretApi => PreinterpretApiType,
     },
-    type_name: "value",
-    articled_display_name: "any value",
+    type_name: "any",
+    articled_value_name: "any",
 }
 
 define_type_features! {
     impl AnyType,
     pub(crate) mod value_interface {
-        pub(crate) mod methods {
-            fn clone(this: CopyOnWriteValue) -> AnyValue {
+        methods {
+            fn clone(this: AnyValueCopyOnWrite) -> AnyValue {
                 this.clone_to_owned_infallible()
             }
 
-            fn as_mut(Spanned(this, span): Spanned<ArgumentValue>) -> ExecutionResult<AnyValueMutable> {
+            fn as_mut(Spanned(this, span): Spanned<ArgumentValue>) -> FunctionResult<AnyValueMutable> {
                 Ok(match this {
-                    ArgumentValue::Owned(owned) => Mutable::new_from_owned(owned),
+                    ArgumentValue::Owned(owned) => Mutable::new_from_owned(owned, None, span),
                     ArgumentValue::CopyOnWrite(copy_on_write) => ArgumentOwnership::Mutable
                         .map_from_copy_on_write(Spanned(copy_on_write, span))?
                         .expect_mutable(),
@@ -62,46 +66,52 @@ define_type_features! {
 
             // NOTE:
             // All value types can be coerced into SharedValue as an input, so this method does actually do something
-            fn as_ref(this: SharedValue) -> SharedValue {
+            fn as_ref(this: AnyValueShared) -> AnyValueShared {
                 this
             }
 
-            fn swap(mut a: AssigneeValue, mut b: AssigneeValue) -> () {
+            fn swap(mut a: AnyValueAssignee, mut b: AnyValueAssignee) -> () {
                 core::mem::swap(a.0.deref_mut(), b.0.deref_mut());
             }
 
-            fn replace(mut a: AssigneeValue, b: AnyValue) -> AnyValue {
+            fn replace(mut a: AnyValueAssignee, b: AnyValue) -> AnyValue {
                 core::mem::replace(a.0.deref_mut(), b)
             }
 
-            fn debug(Spanned(this, span_range): Spanned<CopyOnWriteValue>) -> ExecutionResult<()> {
-                let message = this.as_ref_value().concat_recursive(&ConcatBehaviour::debug(span_range))?;
+            [context] fn debug(Spanned(this, span_range): Spanned<AnyValueCopyOnWrite>) -> FunctionResult<()> {
+                let message = this.as_ref_value().concat_recursive(&ConcatBehaviour::debug(span_range), context.interpreter)?;
                 span_range.debug_err(message)
             }
 
-            fn to_debug_string(Spanned(this, span_range): Spanned<CopyOnWriteValue>) -> ExecutionResult<String> {
-                this.as_ref_value().concat_recursive(&ConcatBehaviour::debug(span_range))
+            [context] fn to_debug_string(Spanned(this, span_range): Spanned<AnyValueCopyOnWrite>) -> FunctionResult<String> {
+                this.as_ref_value().concat_recursive(&ConcatBehaviour::debug(span_range), context.interpreter)
             }
 
-            fn to_stream(Spanned(input, span_range): Spanned<CopyOnWriteValue>) -> ExecutionResult<OutputStream> {
+            [context] fn to_stream(Spanned(input, span_range): Spanned<AnyValueCopyOnWrite>) -> FunctionResult<OutputStream> {
+                let interpreter_ptr = context.interpreter as *mut Interpreter;
                 input.map_into(
-                    |shared| shared.as_ref_value().output_to_new_stream(Grouping::Flattened, span_range),
-                    |owned| owned.into_stream(Grouping::Flattened, span_range),
+                    // SAFETY: map_into only calls one of these two closures,
+                    // so only one mutable reference is active at a time.
+                    |shared| shared.as_ref_value().output_to_new_stream(Grouping::Flattened, span_range, unsafe { &mut *interpreter_ptr }),
+                    |owned| owned.into_stream(Grouping::Flattened, span_range, unsafe { &mut *interpreter_ptr }),
                 )
             }
 
-            fn to_group(Spanned(input, span_range): Spanned<CopyOnWriteValue>) -> ExecutionResult<OutputStream> {
+            [context] fn to_group(Spanned(input, span_range): Spanned<AnyValueCopyOnWrite>) -> FunctionResult<OutputStream> {
+                let interpreter_ptr = context.interpreter as *mut Interpreter;
                 input.map_into(
-                    |shared| shared.as_ref_value().output_to_new_stream(Grouping::Grouped, span_range),
-                    |owned| owned.into_stream(Grouping::Grouped, span_range),
+                    // SAFETY: map_into only calls one of these two closures,
+                    // so only one mutable reference is active at a time.
+                    |shared| shared.as_ref_value().output_to_new_stream(Grouping::Grouped, span_range, unsafe { &mut *interpreter_ptr }),
+                    |owned| owned.into_stream(Grouping::Grouped, span_range, unsafe { &mut *interpreter_ptr }),
                 )
             }
 
-            fn to_string(Spanned(input, span_range): Spanned<SharedValue>) -> ExecutionResult<String> {
-                input.as_ref_value().concat_recursive(&ConcatBehaviour::standard(span_range))
+            [context] fn to_string(Spanned(input, span_range): Spanned<AnyValueShared>) -> FunctionResult<String> {
+                input.as_ref_value().concat_recursive(&ConcatBehaviour::standard(span_range), context.interpreter)
             }
 
-            [context] fn with_span(value: Spanned<CopyOnWriteValue>, spans: AnyRef<OutputStream>) -> ExecutionResult<OutputStream> {
+            [context] fn with_span(value: Spanned<AnyValueCopyOnWrite>, spans: AnyRef<OutputStream>) -> FunctionResult<OutputStream> {
                 let mut this = to_stream(context, value)?;
                 let span_to_use = match spans.resolve_content_span_range() {
                     Some(span_range) => span_range.span_from_join_else_start(),
@@ -113,61 +123,61 @@ define_type_features! {
 
             // TYPE CHECKING
             // ===============================
-            fn is_none(this: SharedValue) -> bool {
+            fn is_none(this: AnyValueShared) -> bool {
                 this.is_none()
             }
 
             // EQUALITY METHODS
             // ===============================
             // Compare values with strict type checking - errors on value kind mismatch.
-            [context] fn typed_eq(this: AnyValueAnyRef, other: AnyValueAnyRef) -> ExecutionResult<bool> {
+            [context] fn typed_eq(this: AnyValueAnyRef, other: AnyValueAnyRef) -> FunctionResult<bool> {
                 this.as_ref_value().typed_eq(&other.as_ref_value(), context.span_range())
             }
 
             // STRING-BASED CONVERSION METHODS
             // ===============================
 
-            [context] fn to_ident(this: Spanned<AnyValue>) -> ExecutionResult<Ident> {
-                let stream = this.into_stream()?;
+            [context] fn to_ident(this: Spanned<AnyValue>) -> FunctionResult<Ident> {
+                let stream = this.into_stream(context.interpreter)?;
                 let spanned = stream.into_spanned_ref(context.output_span_range);
                 stream_interface::methods::to_ident(context, spanned)
             }
 
-            [context] fn to_ident_camel(this: Spanned<AnyValue>) -> ExecutionResult<Ident> {
-                let stream = this.into_stream()?;
+            [context] fn to_ident_camel(this: Spanned<AnyValue>) -> FunctionResult<Ident> {
+                let stream = this.into_stream(context.interpreter)?;
                 let spanned = stream.into_spanned_ref(context.output_span_range);
                 stream_interface::methods::to_ident_camel(context, spanned)
             }
 
-            [context] fn to_ident_snake(this: Spanned<AnyValue>) -> ExecutionResult<Ident> {
-                let stream = this.into_stream()?;
+            [context] fn to_ident_snake(this: Spanned<AnyValue>) -> FunctionResult<Ident> {
+                let stream = this.into_stream(context.interpreter)?;
                 let spanned = stream.into_spanned_ref(context.output_span_range);
                 stream_interface::methods::to_ident_snake(context, spanned)
             }
 
-            [context] fn to_ident_upper_snake(this: Spanned<AnyValue>) -> ExecutionResult<Ident> {
-                let stream = this.into_stream()?;
+            [context] fn to_ident_upper_snake(this: Spanned<AnyValue>) -> FunctionResult<Ident> {
+                let stream = this.into_stream(context.interpreter)?;
                 let spanned = stream.into_spanned_ref(context.output_span_range);
                 stream_interface::methods::to_ident_upper_snake(context, spanned)
             }
 
             // Some literals become Value::UnsupportedLiteral but can still be round-tripped back to a stream
-            [context] fn to_literal(this: Spanned<AnyValue>) -> ExecutionResult<AnyValue> {
-                let stream = this.into_stream()?;
+            [context] fn to_literal(this: Spanned<AnyValue>) -> FunctionResult<AnyValue> {
+                let stream = this.into_stream(context.interpreter)?;
                 let spanned = stream.into_spanned_ref(context.output_span_range);
                 stream_interface::methods::to_literal(context, spanned)
             }
         }
-        pub(crate) mod unary_operations {
-            fn cast_to_string(Spanned(input, span_range): Spanned<AnyValue>) -> ExecutionResult<String> {
-                input.as_ref_value().concat_recursive(&ConcatBehaviour::standard(span_range))
+        unary_operations {
+            [context] fn cast_to_string(Spanned(input, span_range): Spanned<AnyValue>) -> FunctionResult<String> {
+                input.as_ref_value().concat_recursive(&ConcatBehaviour::standard(span_range), context.interpreter)
             }
 
-            fn cast_to_stream(input: Spanned<AnyValue>) -> ExecutionResult<OutputStream> {
-                input.into_stream()
+            [context] fn cast_to_stream(Spanned(input, span_range): Spanned<AnyValue>) -> FunctionResult<OutputStream> {
+                input.into_stream(Grouping::Flattened, span_range, context.interpreter)
             }
         }
-        pub(crate) mod binary_operations {
+        binary_operations {
             fn eq(lhs: AnyValueAnyRef, rhs: AnyValueAnyRef) -> bool {
                 AnyValue::values_equal(lhs.as_ref_value(), rhs.as_ref_value())
             }
@@ -249,11 +259,11 @@ impl AnyValue {
     pub(crate) fn try_transparent_clone(
         &self,
         error_span_range: SpanRange,
-    ) -> ExecutionResult<AnyValue> {
+    ) -> FunctionResult<AnyValue> {
         if !self.value_kind().supports_transparent_cloning() {
             return error_span_range.ownership_err(format!(
                 "An owned value is required, but a reference was received, and {} does not support transparent cloning. You may wish to use .clone() explicitly.",
-                self.articled_kind()
+                self.kind().articled_value_name(),
             ));
         }
         Ok(self.clone())
@@ -303,6 +313,9 @@ impl<'a> ValuesEqual for AnyValueRef<'a> {
             (AnyValueContent::Parser(_), _) => ctx.kind_mismatch(self, other),
             (AnyValueContent::Iterator(l), AnyValueContent::Iterator(r)) => l.test_equality(r, ctx),
             (AnyValueContent::Iterator(_), _) => ctx.kind_mismatch(self, other),
+            (AnyValueContent::Function(l), AnyValueContent::Function(r)) => l.test_equality(r, ctx),
+            (AnyValueContent::Function(_), _) => ctx.kind_mismatch(self, other),
+            (AnyValueContent::PreinterpretApi(not_a_value), _) => match **not_a_value {},
         }
     }
 }
@@ -312,18 +325,21 @@ impl AnyValue {
         self,
         grouping: Grouping,
         error_span_range: SpanRange,
-    ) -> ExecutionResult<OutputStream> {
+        interpreter: &mut Interpreter,
+    ) -> FunctionResult<OutputStream> {
         match (self, grouping) {
             (AnyValueContent::Stream(value), Grouping::Flattened) => Ok(value),
             (AnyValueContent::Stream(value), Grouping::Grouped) => {
                 let mut output: OutputStream = OutputStream::new();
-                let span = ToStreamContext::new(&mut output, error_span_range).new_token_span();
+                let span = Span::call_site();
                 output.push_new_group(value, Delimiter::None, span);
                 Ok(output)
             }
-            (other, grouping) => other
-                .as_ref_value()
-                .output_to_new_stream(grouping, error_span_range),
+            (other, grouping) => {
+                other
+                    .as_ref_value()
+                    .output_to_new_stream(grouping, error_span_range, interpreter)
+            }
         }
     }
 }
@@ -333,20 +349,21 @@ impl<'a> AnyValueRef<'a> {
         self,
         grouping: Grouping,
         error_span_range: SpanRange,
-    ) -> ExecutionResult<OutputStream> {
-        let mut output = OutputStream::new();
-        self.output_to(
-            grouping,
-            &mut ToStreamContext::new(&mut output, error_span_range),
-        )?;
-        Ok(output)
+        interpreter: &mut Interpreter,
+    ) -> FunctionResult<OutputStream> {
+        interpreter.capture_output(|output| {
+            self.output_to(
+                grouping,
+                &mut ToStreamContext::new(output, error_span_range),
+            )
+        })
     }
 
     pub(crate) fn output_to(
         self,
         grouping: Grouping,
         output: &mut ToStreamContext,
-    ) -> ExecutionResult<()> {
+    ) -> FunctionResult<()> {
         match grouping {
             Grouping::Grouped => {
                 // Grouping can be important for different values, to ensure they're read atomically
@@ -362,7 +379,7 @@ impl<'a> AnyValueRef<'a> {
         Ok(())
     }
 
-    fn output_flattened_to(self, output: &mut ToStreamContext) -> ExecutionResult<()> {
+    fn output_flattened_to(self, output: &mut ToStreamContext) -> FunctionResult<()> {
         match self {
             AnyValueContent::None(_) => {}
             AnyValueContent::Integer(value) => {
@@ -393,7 +410,7 @@ impl<'a> AnyValueRef<'a> {
                 return output.type_err("Objects cannot be output to a stream");
             }
             AnyValueContent::Array(array) => array.output_items_to(output, Grouping::Flattened)?,
-            AnyValueContent::Stream(value) => value.append_cloned_into(output.output_stream),
+            AnyValueContent::Stream(value) => value.append_cloned_into(output),
             AnyValueContent::Iterator(iterator) => iterator
                 .clone()
                 .output_items_to(output, Grouping::Flattened)?,
@@ -404,13 +421,21 @@ impl<'a> AnyValueRef<'a> {
             AnyValueContent::Parser(_) => {
                 return output.type_err("Parsers cannot be output to a stream");
             }
+            AnyValueContent::Function(_) => {
+                return output.type_err("Functions cannot be output to a stream");
+            }
+            AnyValueContent::PreinterpretApi(not_a_value) => match *not_a_value {},
         };
         Ok(())
     }
 
-    pub(crate) fn concat_recursive(self, behaviour: &ConcatBehaviour) -> ExecutionResult<String> {
+    pub(crate) fn concat_recursive(
+        self,
+        behaviour: &ConcatBehaviour,
+        interpreter: &mut Interpreter,
+    ) -> FunctionResult<String> {
         let mut output = String::new();
-        self.concat_recursive_into(&mut output, behaviour)?;
+        self.concat_recursive_into(&mut output, behaviour, interpreter)?;
         Ok(output)
     }
 
@@ -418,7 +443,8 @@ impl<'a> AnyValueRef<'a> {
         self,
         output: &mut String,
         behaviour: &ConcatBehaviour,
-    ) -> ExecutionResult<()> {
+        interpreter: &mut Interpreter,
+    ) -> FunctionResult<()> {
         match self {
             AnyValueContent::None(_) => {
                 if behaviour.show_none_values {
@@ -429,21 +455,34 @@ impl<'a> AnyValueRef<'a> {
                 stream.concat_as_literal_into(output, behaviour);
             }
             AnyValueContent::Array(array) => {
-                array.concat_recursive_into(output, behaviour)?;
+                array.concat_recursive_into(output, behaviour, interpreter)?;
             }
             AnyValueContent::Object(object) => {
-                object.concat_recursive_into(output, behaviour)?;
+                object.concat_recursive_into(output, behaviour, interpreter)?;
             }
             AnyValueContent::Iterator(iterator) => {
-                iterator.concat_recursive_into(output, behaviour)?;
+                iterator.concat_recursive_into(output, behaviour, interpreter)?;
             }
             AnyValueContent::Range(range) => {
-                range.concat_recursive_into(output, behaviour)?;
+                range.concat_recursive_into(output, behaviour, interpreter)?;
             }
-            AnyValueContent::Parser(_) => {
-                return behaviour
-                    .error_span_range
-                    .type_err("Parsers cannot be output to a string");
+            AnyValueContent::Parser(parser) => {
+                if behaviour.use_debug_literal_syntax {
+                    write!(output, "parser[{:?}]", parser).unwrap();
+                } else {
+                    return behaviour
+                        .error_span_range
+                        .type_err("Parsers cannot be output to a string");
+                }
+            }
+            AnyValueContent::Function(_) => {
+                if behaviour.use_debug_literal_syntax {
+                    output.push_str("function[?]")
+                } else {
+                    return behaviour
+                        .error_span_range
+                        .type_err("Functions cannot be output to a string");
+                }
             }
             AnyValueContent::Integer(_)
             | AnyValueContent::Float(_)
@@ -453,58 +492,65 @@ impl<'a> AnyValueRef<'a> {
             | AnyValueContent::String(_) => {
                 // This isn't the most efficient, but it's less code and debug doesn't need to be super efficient.
                 let stream = self
-                    .output_to_new_stream(Grouping::Flattened, behaviour.error_span_range)
+                    .output_to_new_stream(
+                        Grouping::Flattened,
+                        behaviour.error_span_range,
+                        interpreter,
+                    )
                     .expect("Non-composite values should all be able to be outputted to a stream");
                 stream.concat_content_into(output, behaviour);
             }
+            AnyValueContent::PreinterpretApi(not_a_value) => match *not_a_value {},
         }
         Ok(())
     }
 }
 
 pub(crate) struct ToStreamContext<'a> {
-    output_stream: &'a mut OutputStream,
+    inner: OutputInterpreter<'a>,
     error_span_range: SpanRange,
 }
 
 impl<'a> ToStreamContext<'a> {
-    pub(crate) fn new(output_stream: &'a mut OutputStream, error_span_range: SpanRange) -> Self {
+    pub(crate) fn new(output: &'a mut OutputInterpreter, error_span_range: SpanRange) -> Self {
         Self {
-            output_stream,
+            inner: output.reborrow(),
             error_span_range,
         }
     }
 
-    pub(crate) fn push_grouped(
+    pub(crate) fn push_grouped<E>(
         &mut self,
-        f: impl FnOnce(&mut ToStreamContext) -> ExecutionResult<()>,
+        f: impl FnOnce(&mut ToStreamContext) -> Result<(), E>,
         delimiter: Delimiter,
-    ) -> ExecutionResult<()> {
+    ) -> Result<(), E> {
         let span = self.new_token_span();
-        self.output_stream.push_grouped(
-            |inner| f(&mut ToStreamContext::new(inner, self.error_span_range)),
-            delimiter,
-            span,
-        )
+        let error_span_range = self.error_span_range;
+        self.inner.in_output_group(delimiter, span, |inner| {
+            let mut ctx = ToStreamContext {
+                inner: inner.reborrow(),
+                error_span_range,
+            };
+            f(&mut ctx)
+        })
     }
 
     pub(crate) fn new_token_span(&self) -> Span {
-        // By default, we use call_site span for generated tokens
         Span::call_site()
     }
 }
 
-impl Deref for ToStreamContext<'_> {
-    type Target = OutputStream;
+impl<'a> Deref for ToStreamContext<'a> {
+    type Target = OutputInterpreter<'a>;
 
     fn deref(&self) -> &Self::Target {
-        self.output_stream
+        &self.inner
     }
 }
 
 impl DerefMut for ToStreamContext<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.output_stream
+        &mut self.inner
     }
 }
 
@@ -523,15 +569,15 @@ impl Spanned<AnyValue> {
         }
     }
 
-    pub(crate) fn into_stream(self) -> ExecutionResult<OutputStream> {
+    pub(crate) fn into_stream(self, interpreter: &mut Interpreter) -> FunctionResult<OutputStream> {
         let Spanned(value, span_range) = self;
-        value.into_stream(Grouping::Flattened, span_range)
+        value.into_stream(Grouping::Flattened, span_range, interpreter)
     }
 
     pub(crate) fn resolve_any_iterator(
         self,
         resolution_target: &str,
-    ) -> ExecutionResult<IteratorValue> {
+    ) -> FunctionResult<IteratorValue> {
         self.dyn_resolve::<dyn IsIterable>(resolution_target)?
             .into_iterator()
     }

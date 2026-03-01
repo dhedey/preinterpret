@@ -11,7 +11,7 @@ pub(crate) trait ParseResultExt<T> {
 
 impl<T> ParseResultExt<T> for ParseResult<T> {
     fn convert_to_final_result(self) -> syn::Result<T> {
-        self.map_err(|error| error.convert_to_final_error())
+        self.map_err(|error| error.convert_to_syn_error())
     }
 
     fn into_execution_result(self) -> ExecutionResult<T> {
@@ -45,7 +45,7 @@ impl HasSpan for DetailedError {
 
 impl DetailedError {
     /// This is not a `From` because it wants to be explicit
-    pub(crate) fn convert_to_final_error(self) -> syn::Error {
+    pub(crate) fn convert_to_syn_error(self) -> syn::Error {
         match self {
             DetailedError::Standard(e) => e,
             DetailedError::Contextual(e, message) => e.concat(&format!("\n{}", message)),
@@ -85,8 +85,8 @@ impl ParseError {
     }
 
     /// This is not a `From` because it wants to be explicit
-    pub(crate) fn convert_to_final_error(self) -> syn::Error {
-        self.0.convert_to_final_error()
+    pub(crate) fn convert_to_syn_error(self) -> syn::Error {
+        self.0.convert_to_syn_error()
     }
 }
 
@@ -101,13 +101,79 @@ pub(crate) enum ExecutionOutcome<T> {
 }
 
 pub(crate) trait ExecutionResultExt<T> {
+    /// Asserts that the result contains no control flow interrupts (only errors).
+    /// This is used at boundaries where control flow should have already been caught.
+    fn expect_no_interrupts(self) -> FunctionResult<T>;
+}
+
+impl<T> ExecutionResultExt<T> for ExecutionResult<T> {
+    fn expect_no_interrupts(self) -> FunctionResult<T> {
+        self.map_err(FunctionError::new)
+    }
+}
+
+/// A result type for functions that can produce errors but NOT control-flow interrupts.
+pub(crate) type FunctionResult<T> = core::result::Result<T, FunctionError>;
+
+/// A newtype wrapping `ExecutionInterrupt` that asserts it is not a control flow interrupt.
+/// This is used for functions that cannot produce control flow (break/continue/revert).
+#[derive(Debug)]
+pub(crate) struct FunctionError(ExecutionInterrupt);
+
+impl FunctionError {
+    pub(crate) fn new(interrupt: ExecutionInterrupt) -> Self {
+        debug_assert!(
+            !matches!(
+                interrupt.inner.as_ref(),
+                ExecutionInterruptInner::ControlFlowInterrupt(_)
+            ),
+            "FunctionError should not wrap a control flow interrupt. \
+             Please report this bug at https://github.com/dhedey/preinterpret/issues"
+        );
+        FunctionError(interrupt)
+    }
+
+    /// Determines if the error can be caught when attempting to map a late-bound
+    /// mutable value, to retry as a shared value instead.
+    pub(crate) fn into_caught_mutable_map_attempt_error(self) -> Result<syn::Error, Self> {
+        match self.0.inner.as_ref() {
+            ExecutionInterruptInner::Error(ExecutionError(ErrorKind::Value, _)) => {
+                Ok(self.0.expect_error().convert_to_syn_error())
+            }
+            _ => Err(self),
+        }
+    }
+
+    pub(crate) fn expect_ownership_error(self) -> Result<syn::Error, Self> {
+        match self.0.inner.as_ref() {
+            ExecutionInterruptInner::Error(ExecutionError(ErrorKind::Ownership, _)) => {
+                Ok(self.0.expect_error().convert_to_syn_error())
+            }
+            _ => panic!("Expected ownership error"),
+        }
+    }
+}
+
+pub(crate) trait FunctionResultExt<T> {
+    fn into_execution_result(self) -> ExecutionResult<T>;
+
     /// This is not a `From` because it wants to be explicit
     fn convert_to_final_result(self) -> syn::Result<T>;
 }
 
-impl<T> ExecutionResultExt<T> for ExecutionResult<T> {
+impl<T> FunctionResultExt<T> for FunctionResult<T> {
+    fn into_execution_result(self) -> ExecutionResult<T> {
+        self.map_err(|error| error.into())
+    }
+
     fn convert_to_final_result(self) -> syn::Result<T> {
-        self.map_err(|error| error.convert_to_final_error())
+        self.map_err(|error| error.0.expect_error().convert_to_syn_error())
+    }
+}
+
+impl From<FunctionError> for ExecutionInterrupt {
+    fn from(error: FunctionError) -> Self {
+        error.0
     }
 }
 
@@ -124,11 +190,9 @@ impl ExecutionInterrupt {
     }
 
     fn new_error(kind: ErrorKind, error: syn::Error) -> Self {
+        let error = ExecutionError(kind, DetailedError::Standard(error));
         ExecutionInterrupt {
-            inner: Box::new(ExecutionInterruptInner::Error(
-                kind,
-                DetailedError::Standard(error),
-            )),
+            inner: Box::new(ExecutionInterruptInner::Error(error)),
         }
     }
 
@@ -154,14 +218,14 @@ impl ExecutionInterrupt {
     /// it encounters.
     pub(crate) fn is_catchable_by_attempt_block(&self, catch_location_id: CatchLocationId) -> bool {
         match self.inner.as_ref() {
-            ExecutionInterruptInner::Error(ErrorKind::Syntax, _) => false,
-            ExecutionInterruptInner::Error(ErrorKind::Type, _) => false,
-            ExecutionInterruptInner::Error(ErrorKind::Ownership, _) => false,
-            ExecutionInterruptInner::Error(ErrorKind::Debug, _) => false,
-            ExecutionInterruptInner::Error(ErrorKind::Assertion, _) => true,
-            ExecutionInterruptInner::Error(ErrorKind::Value, _) => true,
-            ExecutionInterruptInner::Error(ErrorKind::ControlFlow, _) => false,
-            ExecutionInterruptInner::Error(ErrorKind::Parse, _) => true,
+            ExecutionInterruptInner::Error(ExecutionError(ErrorKind::Syntax, _)) => false,
+            ExecutionInterruptInner::Error(ExecutionError(ErrorKind::Type, _)) => false,
+            ExecutionInterruptInner::Error(ExecutionError(ErrorKind::Ownership, _)) => false,
+            ExecutionInterruptInner::Error(ExecutionError(ErrorKind::Debug, _)) => false,
+            ExecutionInterruptInner::Error(ExecutionError(ErrorKind::Assertion, _)) => true,
+            ExecutionInterruptInner::Error(ExecutionError(ErrorKind::Value, _)) => true,
+            ExecutionInterruptInner::Error(ExecutionError(ErrorKind::ControlFlow, _)) => false,
+            ExecutionInterruptInner::Error(ExecutionError(ErrorKind::Parse, _)) => true,
             ExecutionInterruptInner::ControlFlowInterrupt(interrupt) => {
                 interrupt.catch_location_id() == catch_location_id
             }
@@ -170,41 +234,20 @@ impl ExecutionInterrupt {
 
     pub(crate) fn error_mut(&mut self) -> Option<(ErrorKind, &mut DetailedError)> {
         Some(match self.inner.as_mut() {
-            ExecutionInterruptInner::Error(kind, error) => (*kind, error),
+            ExecutionInterruptInner::Error(ExecutionError(kind, error)) => (*kind, error),
             ExecutionInterruptInner::ControlFlowInterrupt { .. } => return None,
         })
-    }
-
-    pub(crate) fn syntax_error(error: syn::Error) -> Self {
-        Self::new_error(ErrorKind::Syntax, error)
-    }
-
-    pub(crate) fn type_error(error: syn::Error) -> Self {
-        Self::new_error(ErrorKind::Type, error)
     }
 
     pub(crate) fn ownership_error(error: syn::Error) -> Self {
         Self::new_error(ErrorKind::Ownership, error)
     }
 
-    pub(crate) fn debug_error(error: syn::Error) -> Self {
-        Self::new_error(ErrorKind::Debug, error)
-    }
-
-    pub(crate) fn assertion_error(error: syn::Error) -> Self {
-        Self::new_error(ErrorKind::Assertion, error)
-    }
-
     pub(crate) fn parse_error(error: ParseError) -> Self {
-        Self::new(ExecutionInterruptInner::Error(ErrorKind::Parse, error.0))
-    }
-
-    pub(crate) fn value_error(error: syn::Error) -> Self {
-        Self::new_error(ErrorKind::Value, error)
-    }
-
-    pub(crate) fn control_flow_error(error: syn::Error) -> Self {
-        Self::new_error(ErrorKind::ControlFlow, error)
+        Self::new(ExecutionInterruptInner::Error(ExecutionError(
+            ErrorKind::Parse,
+            error.0,
+        )))
     }
 
     pub(crate) fn control_flow(control_flow: ControlFlowInterrupt) -> Self {
@@ -215,6 +258,12 @@ impl ExecutionInterrupt {
 impl From<ParseError> for ExecutionInterrupt {
     fn from(e: ParseError) -> Self {
         ExecutionInterrupt::parse_error(e)
+    }
+}
+
+impl From<ParseError> for FunctionError {
+    fn from(e: ParseError) -> Self {
+        FunctionError::new(ExecutionInterrupt::parse_error(e))
     }
 }
 
@@ -257,9 +306,34 @@ impl ErrorKind {
 #[derive(Debug)]
 enum ExecutionInterruptInner {
     /// Some runtime error
-    Error(ErrorKind, DetailedError),
+    Error(ExecutionError),
     /// Indicates unwinding due to control flow (break/continue)
     ControlFlowInterrupt(ControlFlowInterrupt),
+}
+
+#[derive(Debug)]
+pub(crate) struct ExecutionError(ErrorKind, DetailedError);
+
+impl ExecutionError {
+    pub(crate) fn new(kind: ErrorKind, error: syn::Error) -> Self {
+        ExecutionError(kind, DetailedError::Standard(error))
+    }
+
+    pub(crate) fn convert_to_syn_error(self) -> syn::Error {
+        self.1.convert_to_syn_error()
+    }
+}
+
+impl From<ExecutionError> for ExecutionInterrupt {
+    fn from(error: ExecutionError) -> Self {
+        ExecutionInterrupt::new(ExecutionInterruptInner::Error(error))
+    }
+}
+
+impl From<ExecutionError> for FunctionError {
+    fn from(error: ExecutionError) -> Self {
+        FunctionError(ExecutionInterrupt::from(error))
+    }
 }
 
 pub(crate) enum ControlFlowInterrupt {
@@ -329,9 +403,7 @@ impl BreakInterrupt {
             Some(value) => value,
             None => ().into_any_value(),
         };
-        ownership
-            .map_from_owned(Spanned(value, span_range))
-            .map(|spanned| spanned.0)
+        Ok(ownership.map_from_owned(Spanned(value, span_range))?.0)
     }
 }
 
@@ -344,27 +416,13 @@ pub(crate) struct RevertInterrupt {
 }
 
 impl ExecutionInterrupt {
-    pub(crate) fn convert_to_final_error(self) -> syn::Error {
+    pub(crate) fn expect_error(self) -> ExecutionError {
         match *self.inner {
-            ExecutionInterruptInner::Error(_, e) => e.convert_to_final_error(),
-            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Break(_)) => {
-                panic!(
-                    "Internal error: break escaped to root (should be caught at parse time). \
-                     Please report this bug at https://github.com/dhedey/preinterpret/issues"
-                )
-            }
-            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Continue(_)) => {
-                panic!(
-                    "Internal error: continue escaped to root (should be caught at parse time). \
-                     Please report this bug at https://github.com/dhedey/preinterpret/issues"
-                )
-            }
-            ExecutionInterruptInner::ControlFlowInterrupt(ControlFlowInterrupt::Revert(_)) => {
-                panic!(
-                    "Internal error: revert escaped to root (should be caught at parse time). \
-                     Please report this bug at https://github.com/dhedey/preinterpret/issues"
-                )
-            }
+            ExecutionInterruptInner::Error(error) => error,
+            ExecutionInterruptInner::ControlFlowInterrupt(_) => panic!(
+                "Internal error: expected error but got control flow interrupt. \
+                 Please report this bug at https://github.com/dhedey/preinterpret/issues"
+            ),
         }
     }
 }

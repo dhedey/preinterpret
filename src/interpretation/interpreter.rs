@@ -2,7 +2,8 @@ use super::*;
 
 pub(crate) struct Interpreter {
     config: InterpreterConfig,
-    scope_definitions: ScopeDefinitions,
+    scope_definitions: StaticDefinitions,
+    call_depth: usize,
     scopes: Vec<RuntimeScope>,
     no_mutation_above: Vec<(ScopeId, MutationBlockReason)>,
     output_handler: OutputHandler,
@@ -10,17 +11,25 @@ pub(crate) struct Interpreter {
 }
 
 impl Interpreter {
-    pub(crate) fn new(scope_definitions: ScopeDefinitions) -> Self {
-        let root_scope_id = scope_definitions.root_scope;
+    pub(crate) fn new(scope_definitions: StaticDefinitions) -> Self {
+        let (root_frame_id, root_scope_id) = scope_definitions.root_frame;
         let mut interpreter = Self {
             config: Default::default(),
             scope_definitions,
             scopes: vec![],
+            call_depth: 0,
             no_mutation_above: vec![],
             output_handler: OutputHandler::new(OutputStream::new()),
             input_handler: InputHandler::new(),
         };
-        interpreter.enter_scope_inner(root_scope_id, false);
+        interpreter
+            .enter_scope_inner(
+                root_scope_id,
+                ScopeKind::Root {
+                    root_frame: root_frame_id,
+                },
+            )
+            .expect("The root scope can always be entered");
         interpreter
     }
 
@@ -36,8 +45,23 @@ impl Interpreter {
         self.scopes.last().unwrap().id
     }
 
-    pub(crate) fn enter_scope(&mut self, id: ScopeId) {
-        self.enter_scope_inner(id, true);
+    pub(crate) fn enter_child_scope(&mut self, id: ScopeId) -> ExecutionResult<()> {
+        self.enter_scope_inner(id, ScopeKind::Child)
+    }
+
+    pub(crate) fn enter_function_boundary_scope(
+        &mut self,
+        id: ScopeId,
+        frame_id: FrameId,
+        span: SpanRange,
+    ) -> ExecutionResult<()> {
+        self.enter_scope_inner(
+            id,
+            ScopeKind::FunctionBoundary {
+                new_frame: frame_id,
+                span,
+            },
+        )
     }
 
     pub(crate) fn enter_scope_starting_with_revertible_segment<T>(
@@ -48,7 +72,7 @@ impl Interpreter {
         guard_clause: Option<impl FnOnce(&mut Self) -> ExecutionResult<bool>>,
         reason: MutationBlockReason,
     ) -> ExecutionResult<AttemptOutcome<T>> {
-        self.enter_scope_inner(scope_id, true);
+        self.enter_scope_inner(scope_id, ScopeKind::Child)?;
         self.no_mutation_above.push((scope_id, reason));
         unsafe {
             // SAFETY: This is paired with `unfreeze_existing` below,
@@ -115,11 +139,24 @@ impl Interpreter {
         }
     }
 
-    fn enter_scope_inner(&mut self, id: ScopeId, check_parent: bool) {
+    fn enter_scope_inner(&mut self, id: ScopeId, scope_kind: ScopeKind) -> ExecutionResult<()> {
         let new_scope = self.scope_definitions.scopes.get(id);
-        if check_parent {
-            assert!(new_scope.parent == Some(self.current_scope_id()));
-        }
+        match &scope_kind {
+            ScopeKind::Root { root_frame } => {
+                assert!(new_scope.parent.is_none());
+                assert_eq!(new_scope.frame, *root_frame);
+            }
+            ScopeKind::FunctionBoundary { span, .. } => {
+                assert!(new_scope.parent.is_none());
+                self.call_depth += 1;
+                if self.call_depth > self.config.recursion_limit {
+                    return span.control_flow_err(format!("Recursion limit of {} exceeded.\nIf needed, the limit can be reconfigured with preinterpret::set_recursion_limit(XXX)", self.config.recursion_limit));
+                }
+            }
+            ScopeKind::Child => {
+                assert_eq!(new_scope.parent, Some(self.current_scope_id()));
+            }
+        };
         let variables = {
             let mut map = HashMap::new();
             for definition_id in new_scope.definitions.iter() {
@@ -127,7 +164,12 @@ impl Interpreter {
             }
             map
         };
-        self.scopes.push(RuntimeScope { id, variables });
+        self.scopes.push(RuntimeScope {
+            id,
+            scope_kind,
+            variables,
+        });
+        Ok(())
     }
 
     pub(crate) fn exit_scope(&mut self, scope_id: ScopeId) {
@@ -137,7 +179,13 @@ impl Interpreter {
             scope_id,
             self.current_scope_id()
         );
-        self.scopes.pop();
+        let scope = self
+            .scopes
+            .pop()
+            .expect("We've just asserted there's a scope to pop");
+        if let ScopeKind::FunctionBoundary { .. } = scope.scope_kind {
+            self.call_depth -= 1;
+        }
     }
 
     pub(crate) fn catch_control_flow<T>(
@@ -163,28 +211,64 @@ impl Interpreter {
         }
     }
 
-    pub(crate) fn define_variable(&mut self, definition_id: VariableDefinitionId, value: AnyValue) {
+    pub(crate) fn define_variable(
+        &mut self,
+        definition_id: VariableDefinitionId,
+        content: VariableContent,
+    ) {
         let definition = self.scope_definitions.definitions.get(definition_id);
         let scope_data = self.scope_mut(definition.scope);
-        scope_data.define_variable(definition_id, value)
+        scope_data.define_variable(definition_id, content)
+    }
+
+    pub(crate) fn resolve_closed_references(
+        &mut self,
+        frame_id: FrameId,
+    ) -> Vec<(VariableDefinitionId, VariableContent)> {
+        let frame = self.scope_definitions.frames.get(frame_id);
+        frame
+            .closed_variables
+            .clone()
+            .into_iter()
+            .map(|(closure_definition_id, reference_id)| {
+                let reference_def = self.scope_definitions.references.get(reference_id);
+                let is_final_reference = reference_def.is_final_reference;
+                let definition = reference_def.definition;
+                let definition_scope = reference_def.definition_scope;
+                let is_blocked_from_mutation = self.is_blocked_from_mutating(definition_scope);
+                let reference = self
+                    .scope_mut(definition_scope)
+                    .variables
+                    .get_mut(&definition)
+                    .expect("Variable data not found in scope")
+                    .resolve_content(is_final_reference, is_blocked_from_mutation);
+                (closure_definition_id, reference)
+            })
+            .collect()
     }
 
     pub(crate) fn resolve(
         &mut self,
         variable: &VariableReference,
         ownership: RequestedOwnership,
-    ) -> ExecutionResult<Spanned<LateBoundValue>> {
+    ) -> FunctionResult<Spanned<AnyValueLateBound>> {
         let reference = self.scope_definitions.references.get(variable.id);
         let (definition, span, is_final) = (
             reference.definition,
             reference.reference_name_span,
             reference.is_final_reference,
         );
-        let blocked_from_mutation = match self.no_mutation_above.last() {
+        let blocked_from_mutation = self.is_blocked_from_mutating(reference.definition_scope);
+        let scope_data = self.scope_mut(reference.definition_scope);
+        scope_data.resolve(definition, span, is_final, ownership, blocked_from_mutation)
+    }
+
+    fn is_blocked_from_mutating(&self, definition_scope: ScopeId) -> Option<MutationBlockReason> {
+        match self.no_mutation_above.last() {
             Some(&(no_mutation_above_scope, reason)) => 'result: {
                 for scope in self.scopes.iter().rev() {
                     match scope.id {
-                        id if id == reference.definition_scope => break 'result None,
+                        id if id == definition_scope => break 'result None,
                         id if id == no_mutation_above_scope => break 'result Some(reason),
                         _ => {}
                     }
@@ -192,9 +276,7 @@ impl Interpreter {
                 panic!("Definition scope expected in scope stack due to control flow analysis");
             }
             None => None,
-        };
-        let scope_data = self.scope_mut(reference.definition_scope);
-        scope_data.resolve(definition, span, is_final, ownership, blocked_from_mutation)
+        }
     }
 
     pub(crate) fn start_iteration_counter<'s, S: HasSpanRange>(
@@ -208,16 +290,20 @@ impl Interpreter {
         }
     }
 
-    pub(crate) fn set_iteration_limit(&mut self, limit: Option<usize>) {
+    pub(crate) fn set_iteration_limit(&mut self, limit: usize) {
         self.config.iteration_limit = limit;
     }
 
+    pub(crate) fn set_recursion_limit(&mut self, limit: usize) {
+        self.config.recursion_limit = limit;
+    }
+
     // Input
-    pub(crate) fn start_parse<T>(
+    pub(crate) fn start_parse<T, E: From<ParseError>>(
         &mut self,
         stream: OutputStream,
-        f: impl FnOnce(&mut Interpreter, ParserHandle) -> ExecutionResult<T>,
-    ) -> ExecutionResult<T> {
+        f: impl FnOnce(&mut Interpreter, ParserHandle) -> Result<T, E>,
+    ) -> Result<T, E> {
         stream.parse_with(|input| {
             let handle = unsafe {
                 // SAFETY: This is paired with `finish_parse` below,
@@ -238,11 +324,11 @@ impl Interpreter {
         })
     }
 
-    pub(crate) fn parse_with<T>(
+    pub(crate) fn parse_with<T, E>(
         &mut self,
         handle: ParserHandle,
-        f: impl FnOnce(&mut Interpreter) -> ExecutionResult<T>,
-    ) -> ExecutionResult<T> {
+        f: impl FnOnce(&mut Interpreter) -> Result<T, E>,
+    ) -> Result<T, E> {
         unsafe {
             // SAFETY: This is paired with `pop_current_handle` below,
             // without any early returns in the middle
@@ -261,11 +347,10 @@ impl Interpreter {
         &mut self,
         handle: ParserHandle,
         error_span_range: SpanRange,
-    ) -> ExecutionResult<OutputParseStream<'_>> {
-        let stack = self
-            .input_handler
-            .get(handle)
-            .ok_or_else(|| error_span_range.value_error("This parser is no longer available"))?;
+    ) -> FunctionResult<OutputParseStream<'_>> {
+        let stack = self.input_handler.get(handle).ok_or_else(|| {
+            error_span_range.value_error::<FunctionError>("This parser is no longer available")
+        })?;
         Ok(stack.current())
     }
 
@@ -291,7 +376,7 @@ impl Interpreter {
     pub(crate) fn enter_input_group(
         &mut self,
         required_delimiter: Option<Delimiter>,
-    ) -> ExecutionResult<(Delimiter, DelimSpan)> {
+    ) -> FunctionResult<(Delimiter, DelimSpan)> {
         self.input_handler
             .current_stack()
             .parse_and_enter_group(required_delimiter)
@@ -303,7 +388,7 @@ impl Interpreter {
     pub(crate) fn exit_input_group(
         &mut self,
         expected_delimiter: Option<Delimiter>,
-    ) -> ExecutionResult<()> {
+    ) -> FunctionResult<()> {
         self.input_handler
             .current_stack()
             .exit_group(expected_delimiter)
@@ -320,20 +405,20 @@ impl Interpreter {
     }
 
     // Output
-    pub(crate) fn in_output_group<F, R>(
+    pub(crate) fn in_output_group<F, R, E>(
         &mut self,
         delimiter: Delimiter,
         span: Span,
         f: F,
-    ) -> ExecutionResult<R>
+    ) -> Result<R, E>
     where
-        F: FnOnce(&mut Interpreter) -> ExecutionResult<R>,
+        F: FnOnce(&mut OutputInterpreter) -> Result<R, E>,
     {
         unsafe {
             // SAFETY: This is paired with `finish_inner_buffer_as_group`
             self.output_handler.start_inner_buffer();
         }
-        let result = f(self);
+        let result = f(&mut OutputInterpreter::new_unchecked(self));
         unsafe {
             // SAFETY: This is paired with `start_inner_buffer`,
             // even if `f` returns an Err propogating a control flow interrupt.
@@ -343,15 +428,15 @@ impl Interpreter {
         result
     }
 
-    pub(crate) fn capture_output<F>(&mut self, f: F) -> ExecutionResult<OutputStream>
+    pub(crate) fn capture_output<F, E>(&mut self, f: F) -> Result<OutputStream, E>
     where
-        F: FnOnce(&mut Interpreter) -> ExecutionResult<()>,
+        F: FnOnce(&mut OutputInterpreter) -> Result<(), E>,
     {
         unsafe {
             // SAFETY: This is paired with `finish_inner_buffer_as_separate_stream`
             self.output_handler.start_inner_buffer();
         }
-        let result = f(self);
+        let result = f(&mut OutputInterpreter::new_unchecked(self));
         let output = unsafe {
             // SAFETY: This is paired with `start_inner_buffer`,
             // even if `f` returns an Err propogating a control flow interrupt.
@@ -359,6 +444,18 @@ impl Interpreter {
         };
         let () = result?;
         Ok(output)
+    }
+
+    pub(crate) fn output_stack_height(&self) -> usize {
+        self.output_handler.output_stack_height()
+    }
+
+    pub(crate) fn current_output_unchecked(&self) -> &OutputStream {
+        self.output_handler.current_output_unchecked()
+    }
+
+    pub(crate) fn current_output_mut_unchecked(&mut self) -> &mut OutputStream {
+        self.output_handler.current_output_mut_unchecked()
     }
 
     pub(crate) fn output(
@@ -396,15 +493,16 @@ pub(crate) enum AttemptOutcome<T> {
 
 struct RuntimeScope {
     id: ScopeId,
+    scope_kind: ScopeKind,
     variables: HashMap<VariableDefinitionId, VariableState>,
 }
 
 impl RuntimeScope {
-    fn define_variable(&mut self, definition_id: VariableDefinitionId, value: AnyValue) {
+    fn define_variable(&mut self, definition_id: VariableDefinitionId, content: VariableContent) {
         self.variables
             .get_mut(&definition_id)
             .expect("Variable data not found in scope")
-            .define(value);
+            .define(content);
     }
 
     fn resolve(
@@ -414,7 +512,7 @@ impl RuntimeScope {
         is_final: bool,
         ownership: RequestedOwnership,
         blocked_from_mutation: Option<MutationBlockReason>,
-    ) -> ExecutionResult<Spanned<LateBoundValue>> {
+    ) -> FunctionResult<Spanned<AnyValueLateBound>> {
         self.variables
             .get_mut(&definition_id)
             .expect("Variable data not found in scope")
@@ -425,36 +523,36 @@ impl RuntimeScope {
 pub(crate) struct IterationCounter<'a, S: HasSpanRange> {
     span_source: &'a S,
     count: usize,
-    iteration_limit: Option<usize>,
+    iteration_limit: usize,
 }
 
 impl<S: HasSpanRange> IterationCounter<'_, S> {
-    pub(crate) fn increment_and_check(&mut self) -> ExecutionResult<()> {
+    pub(crate) fn increment_and_check(&mut self) -> FunctionResult<()> {
         self.count += 1;
         self.check()
     }
 
-    pub(crate) fn check(&self) -> ExecutionResult<()> {
-        if let Some(limit) = self.iteration_limit {
-            if self.count > limit {
-                return self.span_source.control_flow_err(format!("Iteration limit of {} exceeded.\nIf needed, the limit can be reconfigured with None.configure_preinterpret(%{{ iteration_limit: XXX }})", limit));
-            }
+    pub(crate) fn check(&self) -> FunctionResult<()> {
+        if self.count > self.iteration_limit {
+            return self.span_source.control_flow_err(format!("Iteration limit of {} exceeded.\nIf needed, the limit can be reconfigured with preinterpret::set_iteration_limit(XXX)", self.iteration_limit));
         }
         Ok(())
     }
 }
 
 pub(crate) struct InterpreterConfig {
-    iteration_limit: Option<usize>,
+    iteration_limit: usize,
+    recursion_limit: usize,
 }
 
 pub(crate) const DEFAULT_ITERATION_LIMIT: usize = 1000;
-pub(crate) const DEFAULT_ITERATION_LIMIT_STR: &str = "1000";
+pub(crate) const STACK_DEPTH_LIMIT: usize = 200;
 
 impl Default for InterpreterConfig {
     fn default() -> Self {
         Self {
-            iteration_limit: Some(DEFAULT_ITERATION_LIMIT),
+            iteration_limit: DEFAULT_ITERATION_LIMIT,
+            recursion_limit: STACK_DEPTH_LIMIT,
         }
     }
 }

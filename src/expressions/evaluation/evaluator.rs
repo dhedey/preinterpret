@@ -149,12 +149,12 @@ pub(crate) enum RequestedValue {
     Owned(AnyValueOwned),
     Shared(AnyValueShared),
     Mutable(AnyValueMutable),
-    CopyOnWrite(CopyOnWriteValue),
-    Assignee(AssigneeValue),
+    CopyOnWrite(AnyValueCopyOnWrite),
+    Assignee(AnyValueAssignee),
 
     // RequestedOwnership::LateBound
     // -------------------------------
-    LateBound(LateBoundValue),
+    LateBound(AnyValueLateBound),
 
     // Marks completion of an assignment frame
     // ---------------------------------------
@@ -176,6 +176,14 @@ impl RequestedValue {
         }
     }
 
+    #[allow(dead_code)]
+    pub(crate) fn expect_copy_on_write(self) -> AnyValueCopyOnWrite {
+        match self {
+            RequestedValue::CopyOnWrite(copy_on_write) => copy_on_write,
+            _ => panic!("expect_copy_on_write() called on non-copy-on-write RequestedValue"),
+        }
+    }
+
     pub(super) fn expect_assignee(self) -> AnyValueAssignee {
         match self {
             RequestedValue::Assignee(assignee) => assignee,
@@ -183,7 +191,7 @@ impl RequestedValue {
         }
     }
 
-    pub(crate) fn expect_late_bound(self) -> LateBoundValue {
+    pub(crate) fn expect_late_bound(self) -> AnyValueLateBound {
         match self {
             RequestedValue::LateBound(late_bound) => late_bound,
             _ => panic!("expect_late_bound() called on non-late-bound RequestedValue"),
@@ -229,19 +237,27 @@ impl RequestedValue {
 
     pub(crate) fn expect_any_value_and_map(
         self,
-        map_shared: impl FnOnce(AnyValueShared) -> ExecutionResult<AnyValueShared>,
-        map_mutable: impl FnOnce(AnyValueMutable) -> ExecutionResult<AnyValueMutable>,
-        map_owned: impl FnOnce(AnyValueOwned) -> ExecutionResult<AnyValueOwned>,
-    ) -> ExecutionResult<RequestedValue> {
+        map_shared: impl FnOnce(AnyValueShared) -> FunctionResult<AnyValueShared>,
+        map_mutable: impl FnOnce(
+            AnyValueMutable,
+        ) -> Result<AnyValueMutable, (FunctionError, AnyValueMutable)>,
+        map_owned: impl FnOnce(AnyValueOwned) -> FunctionResult<AnyValueOwned>,
+    ) -> FunctionResult<RequestedValue> {
         Ok(match self {
             RequestedValue::LateBound(late_bound) => {
                 RequestedValue::LateBound(late_bound.map_any(map_shared, map_mutable, map_owned)?)
             }
             RequestedValue::Owned(value) => RequestedValue::Owned(map_owned(value)?),
             RequestedValue::Assignee(assignee) => {
-                RequestedValue::Assignee(Assignee(map_mutable(assignee.0)?))
+                // Assignee doesn't support fallback - propagate error directly
+                let mapped = map_mutable(assignee.0).map_err(|(e, _)| e)?;
+                RequestedValue::Assignee(Assignee(mapped))
             }
-            RequestedValue::Mutable(mutable) => RequestedValue::Mutable(map_mutable(mutable)?),
+            RequestedValue::Mutable(mutable) => {
+                // Non-late-bound mutable doesn't support fallback - propagate error directly
+                let mapped = map_mutable(mutable).map_err(|(e, _)| e)?;
+                RequestedValue::Mutable(mapped)
+            }
             RequestedValue::Shared(shared) => RequestedValue::Shared(map_shared(shared)?),
             RequestedValue::CopyOnWrite(cow) => {
                 RequestedValue::CopyOnWrite(cow.map(map_shared, map_owned)?)
@@ -271,7 +287,7 @@ impl Spanned<RequestedValue> {
     }
 
     #[inline]
-    pub(crate) fn expect_late_bound(self) -> Spanned<LateBoundValue> {
+    pub(crate) fn expect_late_bound(self) -> Spanned<AnyValueLateBound> {
         self.map(|v| v.expect_late_bound())
     }
 
@@ -335,6 +351,15 @@ impl<'a, T: RequestedValueType> Context<'a, T> {
         node: ExpressionNodeId,
     ) -> NextAction {
         self.request_argument_value(handler, node, ArgumentOwnership::Owned)
+    }
+
+    #[allow(dead_code)]
+    pub(super) fn request_copy_on_write<H: EvaluationFrame<ReturnType = T>>(
+        self,
+        handler: H,
+        node: ExpressionNodeId,
+    ) -> NextAction {
+        self.request_argument_value(handler, node, ArgumentOwnership::CopyOnWrite)
     }
 
     pub(super) fn request_shared<H: EvaluationFrame<ReturnType = T>>(
@@ -451,7 +476,7 @@ impl<'a> Context<'a, ReturnsValue> {
 
     pub(super) fn return_late_bound(
         self,
-        late_bound: Spanned<LateBoundValue>,
+        late_bound: Spanned<AnyValueLateBound>,
     ) -> ExecutionResult<NextAction> {
         let value = self.request.map_from_late_bound(late_bound)?;
         Ok(NextAction::return_requested(value))

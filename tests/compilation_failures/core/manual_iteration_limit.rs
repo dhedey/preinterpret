@@ -2,7 +2,7 @@ use preinterpret::*;
 
 fn main() {
     run!{
-        None.configure_preinterpret(%{ iteration_limit: 5 });
+        preinterpret::set_iteration_limit(4);
         loop {}
     };
 }

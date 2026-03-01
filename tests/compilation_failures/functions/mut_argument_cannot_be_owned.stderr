@@ -1,0 +1,5 @@
+error: An owned value is required, but a reference was received, and an array value does not support transparent cloning. You may wish to use .clone() explicitly.
+ --> tests/compilation_failures/functions/mut_argument_cannot_be_owned.rs:6:35
+  |
+6 |             let [first, second] = arr;
+  |                                   ^^^

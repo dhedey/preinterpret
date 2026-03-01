@@ -41,14 +41,14 @@ jobs:
           path: Cargo.lock
 
   msrv:
-    name: MSRV (1.68) Compiles
+    name: MSRV (1.71) Compiles
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.68
+          toolchain: 1.71
       - run: cargo check
 
   style-check:

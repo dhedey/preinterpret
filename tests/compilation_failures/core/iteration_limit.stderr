@@ -1,0 +1,6 @@
+error: Iteration limit of 1000 exceeded.
+       If needed, the limit can be reconfigured with preinterpret::set_iteration_limit(XXX)
+ --> tests/compilation_failures/core/iteration_limit.rs:5:14
+  |
+5 |         loop {}
+  |              ^^

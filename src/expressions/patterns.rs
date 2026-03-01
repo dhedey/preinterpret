@@ -14,7 +14,7 @@ pub(crate) enum Pattern {
     Object(ObjectPattern),
     Stream(StreamPattern),
     ParseTemplatePattern(ParseTemplatePattern),
-    Discarded(Unused<Token![_]>),
+    Discarded(Token![_]),
 }
 
 impl ParseSource for Pattern {
@@ -64,6 +64,25 @@ impl ParseSource for Pattern {
     }
 }
 
+impl HasSpanRange for Pattern {
+    fn span_range(&self) -> SpanRange {
+        match self {
+            Pattern::Variable(variable) => variable.definition.ident.span_range(),
+            Pattern::Array(array) => array.brackets.span_range(),
+            Pattern::Object(object) => {
+                SpanRange::new_between(object.prefix.span, object.braces.close())
+            }
+            Pattern::Stream(stream) => {
+                SpanRange::new_between(stream.prefix.span, stream.brackets.close())
+            }
+            Pattern::ParseTemplatePattern(pattern) => {
+                SpanRange::new_between(pattern.prefix.span, pattern.brackets.close())
+            }
+            Pattern::Discarded(token) => token.span_range(),
+        }
+    }
+}
+
 impl HandleDestructure for Pattern {
     fn handle_destructure(
         &self,
@@ -94,7 +113,7 @@ impl ParseSource for ArrayPattern {
         let (brackets, inner) = input.parse_brackets()?;
         Ok(Self {
             brackets,
-            items: inner.parse_terminated()?,
+            items: inner.parse_punctuated_until_end()?,
         })
     }
 
@@ -197,19 +216,19 @@ impl ParseSource for PatternOrDotDot {
 }
 
 pub struct ObjectPattern {
-    _prefix: Unused<Token![%]>,
+    prefix: Token![%],
     braces: Braces,
     entries: Punctuated<ObjectEntry, Token![,]>,
 }
 
 impl ParseSource for ObjectPattern {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        let _prefix = input.parse()?;
+        let prefix = input.parse()?;
         let (_braces, inner) = input.parse_braces()?;
         Ok(Self {
-            _prefix,
+            prefix,
             braces: _braces,
-            entries: inner.parse_terminated()?,
+            entries: inner.parse_punctuated_until_end()?,
         })
     }
 
@@ -326,7 +345,7 @@ impl ParseSource for ObjectEntry {
 }
 
 pub struct StreamPattern {
-    _prefix: Unused<Token![%]>,
+    prefix: Token![%],
     brackets: Brackets,
     // TODO[parsers]: Replace with a distinct type that doesn't allow embedded statements, but does allow %[group] and %[raw]
     content: ParseTemplateStream,
@@ -334,10 +353,10 @@ pub struct StreamPattern {
 
 impl ParseSource for StreamPattern {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        let _prefix = input.parse()?;
+        let prefix = input.parse()?;
         let (brackets, inner) = input.parse_brackets()?;
         Ok(Self {
-            _prefix,
+            prefix,
             brackets,
             content: ParseTemplateStream::parse_with_span(&inner, brackets.span())?,
         })
@@ -364,7 +383,7 @@ impl HandleDestructure for StreamPattern {
 /// and used to capture the consumed stream into a variable. There, the ident is a reference
 /// to an existing variable, whose value is expected to be a parser.
 pub(crate) struct ParseTemplatePattern {
-    _prefix: Unused<Token![@]>,
+    prefix: Token![@],
     parser_definition: VariableDefinition,
     brackets: Brackets,
     content: ParseTemplateStream,
@@ -372,12 +391,12 @@ pub(crate) struct ParseTemplatePattern {
 
 impl ParseSource for ParseTemplatePattern {
     fn parse(input: SourceParser) -> ParseResult<Self> {
-        let _prefix = input.parse()?;
+        let prefix = input.parse()?;
         let parser_definition = input.parse()?;
         let (brackets, inner) = input.parse_brackets()?;
         let content = ParseTemplateStream::parse_with_span(&inner, brackets.span())?;
         Ok(Self {
-            _prefix,
+            prefix,
             parser_definition,
             brackets,
             content,

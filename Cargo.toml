@@ -14,8 +14,9 @@ categories = ["development-tools", "compilers"]
 # MSRV 1.61.0 is the old MSRV of syn
 # MRSV 1.63.0 is needed to support RefMut::filter_map
 # MRSV 1.68.0 is the new latest MSRV of syn (as of syn 2.0.107 released on 19th October 2025)
+# MRSV 1.71.0 is the new latest MSRV of unicode-ident (released on 8th February 2026)
 # If changing this, also update the local-check-msrv.sh script and ci.yml
-rust-version = "1.68"
+rust-version = "1.71"
 
 [lib]
 proc-macro = true

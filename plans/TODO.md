@@ -159,7 +159,6 @@ First, read the @./2025-11-vision.md
 - [x] Create new `Parser` value kind
 - [x] Add ParserHandle to `InputHandler` and use some generational map to store ParseStacks (or import slotmap)
   - [x] Look at https://donsz.nl/blog/arenas/
-  - [ ] If using slotmap / generational-arena, replace the arena implementation too
 - [x] Create (temporary) `parse X => |Y| { }` expression
 - [x] Bind `input` to `Parser` at the start of each parse expression
 - [x] Create `@input[...]` expression
@@ -204,42 +203,125 @@ Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
 
 ## Methods and closures
 
-- [ ] Consider pre-requisite work on [2026-01-types-and-forms.md](./2026-01-types-and-forms.md) for type annotations. Instead, let's move forward without support for specific types for now. To start, let's just support: `x` or `x: any`; `x: &any` and `x: &mut any`.
-- [ ] Change bindings (currently just variables) to be able to store any of the following: (nb we still restrict variables to be owned for now).
-```rust
-enum VariableContent {
-    Owned(Referenceable<AnyValue>),
-    Shared(Shared<AnyValue>),
-    Mutable(Mutable<AnyValue>),
-}
-``` 
-- [ ] Introduce basic function values
-  * Value type function `let my_func = |x, y, z| { ... };`
-  * Parameters can be `x` / `x: any` (Owned), `x: &any` (Shared) or `x: &mut any` (Mutable).
-  * To start with, they are not closures (i.e. they can't capture any outer variables)
-- [ ] Break/continue label resolution in functions/closures
-  * Functions and closures must resolve break/continue labels statically
-  * Break and continue statements should not leak out of function boundaries
-  * This needs to be validated during the control flow pass
-- [ ] New node extension in the expression parser: invocation `(...)`
-- [ ] Closures
-  * A function may capture variable bindings from the parent scope, these are converted into a `VariableBinding::Closure(<closed_variable_id>)`
-  * The closure consists of a set of bindings attached to the function value, either:
-    - `ClosedVariable::Owned(Value)` if it's the last mention of the closed variable, so it can be moved in
-    - `ClosedVariable::Referenced(Rc<RefCell<Value>>)` otherwise
-  * Invocation requests `CopyOnWrite`, and can be on a shared function or an owned function
-    (if it is the last usage of that value, as per normal red/owned binding rules)
-    * If invocation is on an owned function, then owned values from the closure can be consumed
-      by the invocation
-    * Otherwise, the values are only available as shared/mut
-- [ ] Try to unify methods under a "resolve, then invoke" structure
-    * `array::push` should resolve to the method, and `array::push(arr, value)` should work - we'll likely want an explicit `function` section and `constants` section on type data; which we can merge with methods when resolving what `array::push` resolves to.
-    * `my_array.push` returns a closure with `my_array` bound. The LateBound `my_array` can then be deactivated whilst the rest of the arguments are resolved, like what we do at the moment. This approach avoids the horrible javascript issues with `this` not being bound when referencing `x.y`.
-    * And then for objects, the method wins; BUT you can use `x["obj"]` to access the field instead of the method
-- [ ] Create a `preinterpret` type, and move preinterpret settings to `preinterpret::...`
-- [ ] Optional arguments
-- [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`
+- [x] Consider pre-requisite work on [2026-01-types-and-forms.md](./2026-01-types-and-forms.md) for type annotations. Instead, let's move forward without support for specific types for now. To start, let's just support: `x` or `x: any`; `x: &any` and `x: &mut any`.
+- [x] Introduce basic function values
+  - [x] Add `type::method` function resolution
+  - [x] New node extension in the expression parser: invocation `(...)`
+  - [x] Add tests that e.g. `array::push(arr, 1)` works.
+  - [x] Add type functions
+    - [x] Create a `preinterpret` parent type with no children.
+    - [x] Allow definition of static functions on a type
+    - [x] Move `().configure_preinterpret` to `preinterpret::set_iteration_limit` and update the message: `If needed, the limit can be reconfigured with`
+  
+- [x] `x.hello` accessing a method creates a `NativeFunction` with the first parameter bound to `x`
+  - [x] Add some bound receiver or something or more generally `bound_arguments: Vec<ArgumentValue>` - these should be deactivated
+  - [x] `my_array.push` returns a function with `my_array` bound. The LateBound `my_array` can then be deactivated whilst the rest of the arguments are resolved, like what we do at the moment. This approach avoids the horrible javascript issues with `this` not being bound when referencing `x.y`.
+  - [x] And then for objects, the method wins; BUT you can use `x["obj"]` to access the field instead of the method
+  - [x] We can remove method extension code
+  - [x] It's an error to set `x.y = z` or `%{ y: z }` if `y` is a method on object
+- [x] Fix various noted edge cases in object property / index ownership
+- [x] Replace `articled_kind` / `articled_display_name` with `articled_value_name`
+- [x] We can define closures (without any closed values for now)
+  - [x] Closure parsing `let my_func = |x, y, z| { ... };`, parameters can be `x` / `x: any` (Owned), `x: &any`  (Shared) or `x: &mut any` (Mutable).
+  - [x] To start with, they can't capture any outer variables
+        (variable resolution stops at the top of the frame)
+  - [x] Correct break/continue label resolution in functions/closures
+  - [x] Closures expose an interface, and a means of invocation, and are wired into  the invocation logic
+- [x] A recursion limit is implemented
+- [x] Lots of tests
+  - [x] Loop / Break inside closure
+  - [x] Break doesn't compile if it would propagate outside closure
+- [x] Close over variables in ancestor scopes
+- [x] Support shared/mutable arguments
+  - [x] Allow variable content to hold shared / mutable
+  - [x] Allow shared / mutable arguments
+  - [x] Add tests for shared/mutable, including conversions working and not
+- [ ] Iterable methods:
+  - [x] Unpick `feat/iterable-map` and work our what we want to keep:
+    - [x] Separation of `ExecutionInterrupt` and `FunctionError` - incorporated below
+    - [x] `Iterator` returns `Result` change -> replaced with below
+  * To implement `.map()`, we have a few things we need first:
+    - [x] An iterator trait where Interpreter is passed at next time.
+    - [x] Make `to_string` for iterator return `Iterator[?]`
+  - [x] Create new iterator trait `PreinterpretIterator` and `IntoPreinterpretIterator` with `.next(&mut Interpreter)`
+    - [x] Blanket implement it for `Iterator<AnyValue> + Clone`
+    - [x] Then replace e.g. for loop impl with it.
+    - [x] Create `Map` and `Filter` types on top of it, to be able to implement `map` and `filter`
+  - [ ] See if new iterators on iterator value can be fixed to be lazy
+  - [ ] Salvage half-baked `FunctionValue` changes to allow invocation
+  - [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`
+  - [ ] Add tests for iterable methods
+- [ ] Look into if a closure like `|| { }()` can evade `attempt` block statue mutation checks. Maybe lean into it as a way to avoid them, and mention it in the error message
+- [ ] Resolve all `TODO[functions]`
+
+Possible punted:
 - [ ] Add `array.sort`, `array.sort_by`
+- [ ] Allow destructuring shared and mutable variables and arguments
+- [ ] Support optional arguments in closures
+- [ ] Support for `move()` expressions in closures.
+  - `move(x)` / `move(a.b.as_ref())` / `move(a.b.as_mut())` => we hoist up the content into the previous frame (effectively temporarily change `current_frame_id` to be the parent in the `FlowAnalysisState` - pretty easy).
+  - These can be an anonymous definition in the root frame of the closure, which is referenced inline.
+- [ ] Possibly - not require `Clone` on iterators:
+  - Make `TryClone -> Result<T, &T>`
+
+## Fix broken "Disabled" abstraction
+
+### Background
+
+Suddenly dawned on me - my Disabled arguments might not be safe.
+* Imagine if I get `my_arr = [[]]` a Shared `my_arr[0]` then do `my_arr.pop()`
+* Then we enable `my_arr[0]` and get a use after free(!!). e.g. `my_arr[0].push(my_arr.pop())`.
+
+### Task list
+
+- [x] Write up model in `dynamic_references/mod.rs`
+- [x] Add structure for `dynamic_references`
+- [x] Create Referenceable, and Reference types
+- [x] Create error messages for rule breaks in `referenceable.rs`
+- [x] Add the following to `ReferenceCore` and maybe others:
+  - [x] Emplacing
+  - [x] Map, Try map
+  - [x] Ability to map deeper. Should take a `PathExtension` and a new span.
+- [x] Try replacing existing RefCell based abstractions with new custom dynamic references, and report on what breaks:
+  - `pub(crate) type Referenceable<L> = Rc<RefCell<L>>;` becomes `pub(crate) type Referenceable<L> = dynamic_references::Referenceable`
+  - `Shared` / `SharedSubRcRefCell` - both become type aliases for `SharedReference`
+  - `DisabledShared` becomes `InactiveSharedReference`
+  - `Mutable` / `MutableSubRcRefCell` - becomes type alias for `MutableReference`
+  - `DisabledMutable` becomes `InactiveMutableReference`
+- [x] Replace all the aliases:
+  - [x] Remove `Shared`, `Mutable`, `SharedValue`, `AssigneeValue`
+  - [x] Move `type Shared<T>` and `type Mutable<T>` alongside `SharedReference` / `MutableReference`
+  - [x] Remove references to `MutableReference` and `SharedReference` outside these aliases
+  - [x] Rename `SharedReference -> Shared` and `MutableReference -> Mutable`
+  - [x] Rename `DisabledShared` -> `InactiveShared` and same for `Mutable`
+  - [x] Remove `type AssigneeValue` and `type SharedValue`
+  - [x] Move `Assignee` out of bindings. To e.g. `dynamic_references`
+  - [x] Rename `PathExtension::Tightening` to `PathExtension::TypeNarrowing`
+  - [x] Rename  `DisabledArgumentValue` and `DisabledCopyOnWrite` to `Inactive__` and their method from `enable` to `activate` and ditto with `disable -> deactivate`
+- [x] See what else can be deleted from `bindings.rs`
+  - [x] Unify LateBound into `LateBound`
+  - [x] Unify CopyOnWrite into `QqqCopyOnWrite`
+- [x] Add various tests:
+  - [x] Stretching different error messages
+  - [x] Showing I can do e.g. `x.a += x.b`
+  - [x] Show that `let my_arr = [[]]; my_arr[0].push(my_arr.pop())` gives a suitable error
+
+### Other ideas
+
+- [ ] Make it so that we disable the parent whilst resolving a property/index 
+
+We could imagine a world where we are more clever over our mutation:
+* Note that I can reference `x.a` and `x.b` separately, or `x[0]` and `x[1]` but in that case, can't mutate `x` itself to create new fields.
+  * Or we use a `ExpandableVec<N>` which allocates a `Vec<Box<[_; N]>>` and doesn't move the inner chunks; allowing us to add new fields without breaking pointers to existing ones.
+  Maybe some SmallVec or SegVec like library has this feature? Stores an initial chunk `[_; N]` and then a `Vec<Box<[_; N]>>`
+
+- [ ] Consider if IteratorValue, Object and Array should have `Item = DisabledReturnedValue`
+  - [ ] And add `iter()` and `iter_mut()` methods
+- [ ] Allow variables to be marked owned / shared / mutable
+  - [ ] ... and maybe no marking accepts any?
+        ... so e.g. push_one_and_return_mut can have `let y = arr; y` without erroring
+  - [ ] Else - improve the errors so that the conversion error has some hint from the target explaining that the target can be changed to allow
+  shared/mutable instead.
 
 ## Parser - Methods using closures
 
@@ -272,7 +354,7 @@ input.repeated(
 )
 ```
 - [ ] `input.any_group(|inner| { })`
-- [ ] `input.group('()', |inner| { })`
+- [ ] `input.group("()", |inner| { })`
 - [ ] `input.transparent_group(|inner| { })`
 
 ## Parser - Better Types for Tokens
@@ -428,8 +510,9 @@ preinterpret::run! {
 
 - [ ] Look at benchmarks and if anything should be sped up
 - [ ] Speeding up stream literal processing
-  - [ ] When interpreting a stream literal, we can avoid having to go through error handling pathways to get an `output` from the intepreter by storing a `OutputInterpreter<'a>` which wraps an `&mut OutputStream` and a pointer to an Intepreter, and can be converted back into/from an `Interpreter` easily
-  - [ ] Possibly similarly for an `InputInterpreter<'a>` when processing a `ConsumeStream`
+  - [ ] Avoid a little overhead by having `OutputInterpreter<'a>` store a pointer to interpreter and output stream and a `PhantomData<&'a Interpreter>` / `PhantomData<&'a OutputStream>`, and recreate output stream after a call to with_interpreter.
+   ... and get rid of `output_stack_height`, `current_output_unchecked`, `current_output_mut_unchecked`
+  - [ ] Create an `InputInterpreter<'a>` when processing a `ConsumeStream`
 - [ ] Speeding up scopes at runtime:
   - [ ] In the interpreter, store a flattened stack of variable values
   - [ ] `no_mutation_above` can be a stack offset
@@ -439,6 +522,7 @@ preinterpret::run! {
 - [ ] Change the storage model for `OutputStream`
   - [ ] Either just use `TokenStream` directly(!) (...and ignore Rust analyzer's poor handling of none groups)
   - [ ] Or use an `Rc<Vec>` model like https://github.com/dtolnay/proc-macro2/pull/341/files and Rust itself
+- [ ] Investigate if we increase compile time perf by removing all the integer cast implementations, instead putting them on AnyInteger and via u128.
 - Address `TODO[performance]`
 
 ## Deferred
@@ -465,7 +549,7 @@ The following are less important tasks which maybe we don't even want/need to do
 let @input[{ let _ = input.rest(); let _ = input.token_tree(); }] = %[Hello World];
 ```
 
-## Match block [blocked on slices]
+## Match block
 
 * Delay this probably - without enums it's not super important.
 * We'll need to add destructuring references, and allow destructuring `x.as_ref()`
@@ -486,6 +570,9 @@ Also:
 - [x] Merge `assignee_frames` into `value_frames` as per comment as the top of `assignee_frames`
 - [x] Rename `EvaluationItem` to `RequestedValue` and consider making `RequestedValue::AssignmentCompletion` wrap an `Owned<()>` so that it becomes truly a value.
 - [x] Merge `HasValueType` with `ValueLeafKind`
+- [ ] If using slotmap / generational-arena, replace the arena implementation too
+- [ ] Consider if we can have memory leaks due to `Rc<..>` loops, and whether to document it, or use some kind of Arena instead.
+- [ ] Fix the end span of `ClosureExpressionInner` and maybe `Expression` more generally?
 - [ ] Add `preinterpret::macro` - can this be a declarative macro? Would be slightly more efficient, as it just needs to wrap a call to `preinterpret::stream` or `preinterpret::run`...
   - [ ] When we create `input = %raw[..]` we will need to set its `end_of_stream` span to the end of the
   macro_rules! macro somehow... I'm not sure how to get that span though.
@@ -496,8 +583,7 @@ Also:
 - [ ] We might need to auto-change the span of all outputted tokens to `Span::call_site()` to get hygiene
   to be most flexible. Perhaps this can be disabled with `preinterpret::set_auto_call_site_hygiene(false)`
 - [ ] Add `LiteralPattern` (wrapping a `Literal`)
-- [ ] Better handling of `configure_preinterpret`:
-  * Move `None.configure_preinterpret` to `preinterpret::set_iteration_limit(..)`
+- [x] Better handling of `configure_preinterpret`
 - [ ] CastTarget revision:
   * The `as untyped_int` operator is not supported for string values
   * The `as char` operator is not supported for untyped integer values

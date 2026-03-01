@@ -9,7 +9,6 @@ use super::*;
 pub(crate) enum PathSegment {
     ArrayIndex(usize),
     ObjectKey(String),
-    IteratorIndex(usize),
     RangeStart,
     RangeEnd,
 }
@@ -27,7 +26,6 @@ impl PathSegment {
                         result.push_str(&format!("[{:?}]", k))
                     }
                 }
-                PathSegment::IteratorIndex(i) => result.push_str(&format!("[{}]", i)),
                 PathSegment::RangeStart => result.push_str(".start"),
                 PathSegment::RangeEnd => result.push_str(".end"),
             }
@@ -50,7 +48,7 @@ pub(crate) trait EqualityContext {
     fn values_equal(&mut self) -> Self::Result;
 
     /// Values of the same type are not equal.
-    fn leaf_values_not_equal<T: Debug>(&mut self, lhs: &T, rhs: &T) -> Self::Result;
+    fn leaf_values_not_equal<T: Debug + ?Sized>(&mut self, lhs: &T, rhs: &T) -> Self::Result;
 
     /// Values have different kinds.
     fn kind_mismatch<L: HasLeafKind, R: HasLeafKind>(&mut self, lhs: &L, rhs: &R) -> Self::Result;
@@ -68,19 +66,11 @@ pub(crate) trait EqualityContext {
     /// Object is missing a key that the other has.
     fn missing_key(&mut self, key: &str, missing_on: MissingSide) -> Self::Result;
 
-    fn iteration_limit_exceeded(&mut self, limit: usize) -> Self::Result {
-        let message = format!("iteration limit {} exceeded", limit);
-        self.leaf_values_not_equal(&message, &message)
-    }
-
     /// Wrap a comparison within an array index context.
     fn with_array_index<R>(&mut self, index: usize, f: impl FnOnce(&mut Self) -> R) -> R;
 
     /// Wrap a comparison within an object key context.
     fn with_object_key<R>(&mut self, key: &str, f: impl FnOnce(&mut Self) -> R) -> R;
-
-    /// Wrap a comparison within an iterator index context.
-    fn with_iterator_index<R>(&mut self, index: usize, f: impl FnOnce(&mut Self) -> R) -> R;
 
     /// Wrap a comparison within a range start context.
     fn with_range_start<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R;
@@ -106,7 +96,7 @@ impl EqualityContext for SimpleEquality {
     }
 
     #[inline]
-    fn leaf_values_not_equal<T: Debug>(&mut self, _lhs: &T, _rhs: &T) -> bool {
+    fn leaf_values_not_equal<T: Debug + ?Sized>(&mut self, _lhs: &T, _rhs: &T) -> bool {
         false
     }
 
@@ -137,11 +127,6 @@ impl EqualityContext for SimpleEquality {
 
     #[inline]
     fn with_object_key<R>(&mut self, _key: &str, f: impl FnOnce(&mut Self) -> R) -> R {
-        f(self)
-    }
-
-    #[inline]
-    fn with_iterator_index<R>(&mut self, _index: usize, f: impl FnOnce(&mut Self) -> R) -> R {
         f(self)
     }
 
@@ -177,15 +162,19 @@ impl TypedEquality {
 }
 
 impl EqualityContext for TypedEquality {
-    type Result = ExecutionResult<bool>;
+    type Result = FunctionResult<bool>;
 
     #[inline]
-    fn values_equal(&mut self) -> ExecutionResult<bool> {
+    fn values_equal(&mut self) -> FunctionResult<bool> {
         Ok(true)
     }
 
     #[inline]
-    fn leaf_values_not_equal<T: Debug>(&mut self, _lhs: &T, _rhs: &T) -> ExecutionResult<bool> {
+    fn leaf_values_not_equal<T: Debug + ?Sized>(
+        &mut self,
+        _lhs: &T,
+        _rhs: &T,
+    ) -> FunctionResult<bool> {
         Ok(false)
     }
 
@@ -193,14 +182,14 @@ impl EqualityContext for TypedEquality {
         &mut self,
         lhs: &L,
         rhs: &R,
-    ) -> ExecutionResult<bool> {
+    ) -> FunctionResult<bool> {
         let path_str = PathSegment::fmt_path(&self.path);
         Err(self.error_span.type_error(format!(
             "lhs{} is {}, but rhs{} is {}",
             path_str,
-            lhs.articled_kind(),
+            lhs.kind().articled_value_name(),
             path_str,
-            rhs.articled_kind()
+            rhs.kind().articled_value_name(),
         )))
     }
 
@@ -213,9 +202,9 @@ impl EqualityContext for TypedEquality {
         Err(self.error_span.type_error(format!(
             "lhs{} is {}, but rhs{} is {}",
             path_str,
-            lhs.articled_display_name(),
+            lhs.articled_value_name(),
             path_str,
-            rhs.articled_display_name()
+            rhs.articled_value_name()
         )))
     }
 
@@ -224,12 +213,12 @@ impl EqualityContext for TypedEquality {
         &mut self,
         _lhs_len: Option<usize>,
         _rhs_len: Option<usize>,
-    ) -> ExecutionResult<bool> {
+    ) -> FunctionResult<bool> {
         Ok(false)
     }
 
     #[inline]
-    fn missing_key(&mut self, _key: &str, _missing_on: MissingSide) -> ExecutionResult<bool> {
+    fn missing_key(&mut self, _key: &str, _missing_on: MissingSide) -> FunctionResult<bool> {
         Ok(false)
     }
 
@@ -244,14 +233,6 @@ impl EqualityContext for TypedEquality {
     #[inline]
     fn with_object_key<R>(&mut self, key: &str, f: impl FnOnce(&mut Self) -> R) -> R {
         self.path.push(PathSegment::ObjectKey(key.to_string()));
-        let result = f(self);
-        self.path.pop();
-        result
-    }
-
-    #[inline]
-    fn with_iterator_index<R>(&mut self, index: usize, f: impl FnOnce(&mut Self) -> R) -> R {
-        self.path.push(PathSegment::IteratorIndex(index));
         let result = f(self);
         self.path.pop();
         result
@@ -274,7 +255,7 @@ impl EqualityContext for TypedEquality {
     }
 
     #[inline]
-    fn should_short_circuit(&self, result: &ExecutionResult<bool>) -> bool {
+    fn should_short_circuit(&self, result: &FunctionResult<bool>) -> bool {
         // Short-circuit on Ok(false) or Err(_)
         !matches!(result, Ok(true))
     }
@@ -350,9 +331,9 @@ impl DebugEqualityError {
                 format!(
                     "lhs{} is {}, but rhs{} is {}",
                     path_str,
-                    lhs_kind.articled_display_name(),
+                    lhs_kind.articled_value_name(),
                     path_str,
-                    rhs_kind.articled_display_name()
+                    rhs_kind.articled_value_name()
                 )
             }
             DebugInequalityReason::RangeStructureMismatch {
@@ -362,9 +343,9 @@ impl DebugEqualityError {
                 format!(
                     "lhs{} is {}, but rhs{} is {}",
                     path_str,
-                    lhs_kind.articled_display_name(),
+                    lhs_kind.articled_value_name(),
                     path_str,
-                    rhs_kind.articled_display_name()
+                    rhs_kind.articled_value_name()
                 )
             }
             DebugInequalityReason::LengthMismatch { lhs_len, rhs_len } => {
@@ -424,7 +405,7 @@ impl EqualityContext for DebugEquality {
     }
 
     #[inline]
-    fn leaf_values_not_equal<T: Debug>(
+    fn leaf_values_not_equal<T: Debug + ?Sized>(
         &mut self,
         lhs: &T,
         rhs: &T,
@@ -510,14 +491,6 @@ impl EqualityContext for DebugEquality {
     }
 
     #[inline]
-    fn with_iterator_index<R>(&mut self, index: usize, f: impl FnOnce(&mut Self) -> R) -> R {
-        self.path.push(PathSegment::IteratorIndex(index));
-        let result = f(self);
-        self.path.pop();
-        result
-    }
-
-    #[inline]
     fn with_range_start<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
         self.path.push(PathSegment::RangeStart);
         let result = f(self);
@@ -566,7 +539,7 @@ pub(crate) trait ValuesEqual: Sized + HasLeafKind {
     }
 
     /// Strict equality check that errors on incompatible types.
-    fn typed_eq(&self, other: &Self, error_span: SpanRange) -> ExecutionResult<bool> {
+    fn typed_eq(&self, other: &Self, error_span: SpanRange) -> FunctionResult<bool> {
         self.test_equality(other, &mut TypedEquality::new(error_span))
     }
 

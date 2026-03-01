@@ -19,10 +19,10 @@ impl ParseSource for EmbeddedVariable {
     }
 }
 
-impl Interpret for EmbeddedVariable {
-    fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+impl OutputToStream for EmbeddedVariable {
+    fn output_to_stream(&self, output: &mut OutputInterpreter) -> ExecutionResult<()> {
         self.reference
-            .substitute_into_output(interpreter, Grouping::Flattened)
+            .substitute_into_output(output, Grouping::Flattened)
     }
 }
 
@@ -66,7 +66,14 @@ impl ParseSource for VariableDefinition {
 
 impl VariableDefinition {
     pub(crate) fn define(&self, interpreter: &mut Interpreter, value_source: impl IntoAnyValue) {
-        interpreter.define_variable(self.id, value_source.into_any_value());
+        interpreter.define_variable(
+            self.id,
+            VariableContent::Referenceable(Referenceable::new(
+                value_source.into_any_value(),
+                Some(self.ident.to_string()),
+                self.ident.span_range(),
+            )),
+        );
     }
 }
 
@@ -121,20 +128,23 @@ impl ParseSource for VariableReference {
 impl VariableReference {
     fn substitute_into_output(
         &self,
-        interpreter: &mut Interpreter,
+        output: &mut OutputInterpreter,
         grouping: Grouping,
     ) -> ExecutionResult<()> {
-        let value = self.resolve_shared(interpreter)?;
-        value.as_ref_value().output_to(
-            grouping,
-            &mut ToStreamContext::new(interpreter.output(self)?, self.span_range()),
-        )
+        let value = output.with_interpreter(|i| self.resolve_shared(i))?;
+        value
+            .as_ref_value()
+            .output_to(
+                grouping,
+                &mut ToStreamContext::new(output, self.span_range()),
+            )
+            .into_execution_result()
     }
 
     pub(crate) fn resolve_late_bound(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Spanned<LateBoundValue>> {
+    ) -> FunctionResult<Spanned<AnyValueLateBound>> {
         interpreter.resolve(self, RequestedOwnership::LateBound)
     }
 
@@ -142,7 +152,7 @@ impl VariableReference {
         &self,
         interpreter: &mut Interpreter,
         ownership: ArgumentOwnership,
-    ) -> ExecutionResult<ArgumentValue> {
+    ) -> FunctionResult<ArgumentValue> {
         interpreter
             .resolve(self, RequestedOwnership::Concrete(ownership))?
             .resolve(ownership)
@@ -151,7 +161,7 @@ impl VariableReference {
     pub(crate) fn resolve_shared(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<SharedValue> {
+    ) -> FunctionResult<AnyValueShared> {
         Ok(self
             .resolve_concrete(interpreter, ArgumentOwnership::Shared)?
             .expect_shared())

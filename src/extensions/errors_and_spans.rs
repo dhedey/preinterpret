@@ -23,60 +23,81 @@ pub(crate) trait SpanErrorExt {
         Err(self.syn_error(message).into())
     }
 
-    fn syntax_err<T>(&self, message: impl std::fmt::Display) -> ExecutionResult<T> {
+    fn syntax_err<T, E: From<ExecutionError>>(
+        &self,
+        message: impl std::fmt::Display,
+    ) -> Result<T, E> {
         Err(self.syntax_error(message))
     }
 
-    fn syntax_error(&self, message: impl std::fmt::Display) -> ExecutionInterrupt {
-        ExecutionInterrupt::syntax_error(self.syn_error(message))
+    fn syntax_error<E: From<ExecutionError>>(&self, message: impl std::fmt::Display) -> E {
+        ExecutionError::new(ErrorKind::Syntax, self.syn_error(message)).into()
     }
 
-    fn type_err<T>(&self, message: impl std::fmt::Display) -> ExecutionResult<T> {
+    fn type_err<T, E: From<ExecutionError>>(
+        &self,
+        message: impl std::fmt::Display,
+    ) -> Result<T, E> {
         Err(self.type_error(message))
     }
 
-    fn type_error(&self, message: impl std::fmt::Display) -> ExecutionInterrupt {
-        ExecutionInterrupt::type_error(self.syn_error(message))
+    fn type_error<E: From<ExecutionError>>(&self, message: impl std::fmt::Display) -> E {
+        ExecutionError::new(ErrorKind::Type, self.syn_error(message)).into()
     }
 
-    fn control_flow_err<T>(&self, message: impl std::fmt::Display) -> ExecutionResult<T> {
+    fn control_flow_err<T, E: From<ExecutionError>>(
+        &self,
+        message: impl std::fmt::Display,
+    ) -> Result<T, E> {
         Err(self.control_flow_error(message))
     }
 
-    fn control_flow_error(&self, message: impl std::fmt::Display) -> ExecutionInterrupt {
-        ExecutionInterrupt::control_flow_error(self.syn_error(message))
+    fn control_flow_error<E: From<ExecutionError>>(&self, message: impl std::fmt::Display) -> E {
+        ExecutionError::new(ErrorKind::ControlFlow, self.syn_error(message)).into()
     }
 
-    fn ownership_err<T>(&self, message: impl std::fmt::Display) -> ExecutionResult<T> {
+    fn ownership_err<T, E: From<ExecutionError>>(
+        &self,
+        message: impl std::fmt::Display,
+    ) -> Result<T, E> {
         Err(self.ownership_error(message))
     }
 
-    fn ownership_error(&self, message: impl std::fmt::Display) -> ExecutionInterrupt {
-        ExecutionInterrupt::ownership_error(self.syn_error(message))
+    fn ownership_error<E: From<ExecutionError>>(&self, message: impl std::fmt::Display) -> E {
+        ExecutionError::new(ErrorKind::Ownership, self.syn_error(message)).into()
     }
 
-    fn assertion_err<T>(&self, message: impl std::fmt::Display) -> ExecutionResult<T> {
+    fn assertion_err<T, E: From<ExecutionError>>(
+        &self,
+        message: impl std::fmt::Display,
+    ) -> Result<T, E> {
         Err(self.assertion_error(message))
     }
 
-    fn debug_error(&self, message: impl std::fmt::Display) -> ExecutionInterrupt {
-        ExecutionInterrupt::debug_error(self.syn_error(message))
+    fn assertion_error<E: From<ExecutionError>>(&self, message: impl std::fmt::Display) -> E {
+        ExecutionError::new(ErrorKind::Assertion, self.syn_error(message)).into()
     }
 
-    fn debug_err<T>(&self, message: impl std::fmt::Display) -> ExecutionResult<T> {
+    fn debug_err<T, E: From<ExecutionError>>(
+        &self,
+        message: impl std::fmt::Display,
+    ) -> Result<T, E> {
         Err(self.debug_error(message))
     }
 
-    fn assertion_error(&self, message: impl std::fmt::Display) -> ExecutionInterrupt {
-        ExecutionInterrupt::assertion_error(self.syn_error(message))
+    fn debug_error<E: From<ExecutionError>>(&self, message: impl std::fmt::Display) -> E {
+        ExecutionError::new(ErrorKind::Debug, self.syn_error(message)).into()
     }
 
-    fn value_err<T>(&self, message: impl std::fmt::Display) -> ExecutionResult<T> {
+    fn value_err<T, E: From<ExecutionError>>(
+        &self,
+        message: impl std::fmt::Display,
+    ) -> Result<T, E> {
         Err(self.value_error(message))
     }
 
-    fn value_error(&self, message: impl std::fmt::Display) -> ExecutionInterrupt {
-        ExecutionInterrupt::value_error(self.syn_error(message))
+    fn value_error<E: From<ExecutionError>>(&self, message: impl std::fmt::Display) -> E {
+        ExecutionError::new(ErrorKind::Value, self.syn_error(message)).into()
     }
 }
 
@@ -455,11 +476,6 @@ impl<T> Spanned<T> {
     #[allow(unused)]
     pub(crate) fn to_ref(&self) -> Spanned<&T> {
         Spanned(&self.0, self.1)
-    }
-
-    #[inline]
-    pub(crate) fn to_mut(&mut self) -> Spanned<&mut T> {
-        Spanned(&mut self.0, self.1)
     }
 
     #[inline]

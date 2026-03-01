@@ -5,7 +5,7 @@ define_leaf_type! {
     content: UntypedFloat,
     kind: pub(crate) UntypedFloatKind,
     type_name: "untyped_float",
-    articled_display_name: "an untyped float",
+    articled_value_name: "an untyped float",
     dyn_impls: {},
 }
 
@@ -38,7 +38,7 @@ impl UntypedFloat {
         self,
         rhs: Spanned<FloatValue>,
         perform_fn: fn(FallbackFloat, FallbackFloat) -> FallbackFloat,
-    ) -> ExecutionResult<FloatValue> {
+    ) -> FunctionResult<FloatValue> {
         let lhs = self.0;
         let rhs: UntypedFloat = rhs.downcast_resolve("This operand")?;
         let rhs = rhs.0;
@@ -50,7 +50,7 @@ impl UntypedFloat {
         self,
         rhs: Spanned<FloatValue>,
         compare_fn: fn(FallbackFloat, FallbackFloat) -> bool,
-    ) -> ExecutionResult<bool> {
+    ) -> FunctionResult<bool> {
         let lhs = self.0;
         let rhs: UntypedFloat = rhs.downcast_resolve("This operand")?;
         let rhs = rhs.0;
@@ -73,9 +73,7 @@ impl UntypedFloat {
 define_type_features! {
     impl UntypedFloatType,
     pub(crate) mod untyped_float_interface {
-        pub(crate) mod methods {
-        }
-        pub(crate) mod unary_operations {
+        unary_operations {
             fn neg(input: UntypedFloatFallback) -> UntypedFloat {
                 UntypedFloat::from_fallback(-input.0)
             }
@@ -148,8 +146,6 @@ define_type_features! {
                 input.0.to_string()
             }
         }
-        pub(crate) mod binary_operations {
-        }
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {
@@ -193,7 +189,7 @@ pub(crate) struct UntypedFloatFallback(pub FallbackFloat);
 impl IsArgument for UntypedFloatFallback {
     type ValueType = UntypedFloatType;
     const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
-    fn from_argument(value: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+    fn from_argument(value: Spanned<ArgumentValue>) -> FunctionResult<Self> {
         Self::resolve_value(value.expect_owned(), "This argument")
     }
 }
@@ -206,14 +202,14 @@ impl ResolvableOwned<AnyValue> for UntypedFloatFallback {
     fn resolve_from_value(
         input_value: AnyValue,
         context: ResolutionContext,
-    ) -> ExecutionResult<Self> {
+    ) -> FunctionResult<Self> {
         let value = UntypedFloat::resolve_from_value(input_value, context)?;
         Ok(UntypedFloatFallback(value.0))
     }
 }
 
 impl ResolvableOwned<FloatValue> for UntypedFloat {
-    fn resolve_from_value(value: FloatValue, context: ResolutionContext) -> ExecutionResult<Self> {
+    fn resolve_from_value(value: FloatValue, context: ResolutionContext) -> FunctionResult<Self> {
         match value {
             FloatContent::Untyped(value) => Ok(value),
             _ => context.err("an untyped float", value),

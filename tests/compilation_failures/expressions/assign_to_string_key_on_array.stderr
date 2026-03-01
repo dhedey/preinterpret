@@ -1,0 +1,5 @@
+error: The index must be an integer or a range
+ --> tests/compilation_failures/expressions/assign_to_string_key_on_array.rs:6:13
+  |
+6 |         arr["to_string"] = "hello";
+  |             ^^^^^^^^^^^

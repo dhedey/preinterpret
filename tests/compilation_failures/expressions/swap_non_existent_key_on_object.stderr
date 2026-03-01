@@ -1,0 +1,5 @@
+error: There is no pre-existing entry with key `unused_key` available to mutate
+  --> tests/compilation_failures/expressions/swap_non_existent_key_on_object.rs:23:13
+   |
+23 |         obj.unused_key.replace(123);
+   |             ^^^^^^^^^^

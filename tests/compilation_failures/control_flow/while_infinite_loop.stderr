@@ -1,5 +1,5 @@
 error: Iteration limit of 1000 exceeded.
-       If needed, the limit can be reconfigured with None.configure_preinterpret(%{ iteration_limit: XXX })
+       If needed, the limit can be reconfigured with preinterpret::set_iteration_limit(XXX)
  --> tests/compilation_failures/control_flow/while_infinite_loop.rs:4:21
   |
 4 |     run!(while true {});

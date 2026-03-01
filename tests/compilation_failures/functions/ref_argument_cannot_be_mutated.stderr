@@ -1,0 +1,5 @@
+error: Cannot mutate a non-mutable reference
+ --> tests/compilation_failures/functions/ref_argument_cannot_be_mutated.rs:5:48
+  |
+5 |         let my_array_push = |arr: &any, value| arr.push(value);
+  |                                                ^^^

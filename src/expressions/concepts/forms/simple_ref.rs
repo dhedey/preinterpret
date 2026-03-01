@@ -26,16 +26,24 @@ impl IsForm for BeRef {}
 
 impl IsHierarchicalForm for BeRef {
     type Leaf<'a, T: IsLeafType> = &'a T::Leaf;
+
+    #[inline]
+    fn covariant_leaf<'a, 'b, T: IsLeafType>(leaf: Self::Leaf<'a, T>) -> Self::Leaf<'b, T>
+    where
+        'a: 'b,
+    {
+        leaf
+    }
 }
 
 impl IsDynCompatibleForm for BeRef {
-    type DynLeaf<'a, D: 'static + ?Sized> = &'a D;
+    type DynLeaf<'a, D: IsDynType> = &'a D::DynContent;
 
-    fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
-        leaf: Self::Leaf<'a, T>,
+    fn leaf_to_dyn<'a, T: IsLeafType, D: IsDynType>(
+        Spanned(leaf, _span): Spanned<Self::Leaf<'a, T>>,
     ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
-        T::Leaf: CastDyn<D>,
+        T::Leaf: CastDyn<D::DynContent>,
     {
         <T::Leaf>::map_ref(leaf)
     }
@@ -52,17 +60,19 @@ where
     Self: IsValueContent<Form = BeRef>,
     Self::Type: IsHierarchicalType<Content<'a, Self::Form> = Self>,
 {
-    fn into_shared<'b, T: 'static>(
+    fn into_shared<'o, 'b, T: 'static>(
         self,
         emplacer: &'b mut SharedEmplacer<'a, T>,
-    ) -> Content<'static, Self::Type, BeShared>
+        span: Option<SpanRange>,
+    ) -> Content<'o, Self::Type, BeShared>
     where
         Self: Sized,
     {
-        struct __InlineMapper<'b, 'e2, X: 'static> {
-            emplacer: &'b mut SharedEmplacer<'e2, X>,
+        struct __InlineMapper<'b, 'e, X: 'static> {
+            emplacer: &'b mut SharedEmplacer<'e, X>,
+            span: Option<SpanRange>,
         }
-        impl<'b, 'e2, X> LeafMapper<BeRef> for __InlineMapper<'b, 'e2, X> {
+        impl<'b, 'e, X> LeafMapper<BeRef> for __InlineMapper<'b, 'e, X> {
             type Output<'a, T: IsHierarchicalType> = Content<'static, T, BeShared>;
 
             fn to_parent_output<'a, T: IsChildType>(
@@ -75,23 +85,34 @@ where
                 self,
                 leaf: <BeRef as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
-                // SAFETY: 'l = 'a = 'e so this is valid
-                unsafe { self.emplacer.emplace_unchecked(leaf) }
+                // SAFETY: 'l = 'a = 'e2 so the lifetime transmute is valid, and
+                // PathExtension correctly describes mapping to a leaf type T
+                let mapped = unsafe {
+                    MappedRef::new_unchecked(
+                        leaf,
+                        PathExtension::TypeNarrowing(T::type_kind()),
+                        self.span,
+                    )
+                };
+                self.emplacer.emplace(mapped)
             }
         };
-        let __mapper = __InlineMapper { emplacer };
-        <Self::Type>::map_with::<BeRef, _>(__mapper, self)
+        let __mapper = __InlineMapper { emplacer, span };
+        let content = <Self::Type>::map_with::<BeRef, _>(__mapper, self);
+        <Self::Type>::covariant::<BeShared>(content)
     }
 
-    fn into_shared_any_ref<'b, T: 'static>(
+    fn into_shared_any_ref<'o, 'b, T: 'static>(
         self,
         emplacer: &'b mut SharedEmplacer<'a, T>,
-    ) -> Content<'static, Self::Type, BeAnyRef>
+        span: Option<SpanRange>,
+    ) -> Content<'o, Self::Type, BeAnyRef>
     where
         Self: Sized,
     {
         struct __InlineMapper<'b, 'e2, X: 'static> {
             emplacer: &'b mut SharedEmplacer<'e2, X>,
+            span: Option<SpanRange>,
         }
         impl<'b, 'e2, X> LeafMapper<BeRef> for __InlineMapper<'b, 'e2, X> {
             type Output<'a, T: IsHierarchicalType> = Content<'static, T, BeAnyRef>;
@@ -106,12 +127,21 @@ where
                 self,
                 leaf: <BeRef as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
-                // SAFETY: 'l = 'a = 'e so this is valid
-                unsafe { Shared(self.emplacer.emplace_unchecked(leaf)).into() }
+                // SAFETY: 'l = 'a = 'e2 so the lifetime transmute is valid, and
+                // PathExtension correctly describes mapping to a leaf type T
+                let mapped = unsafe {
+                    MappedRef::new_unchecked(
+                        leaf,
+                        PathExtension::TypeNarrowing(T::type_kind()),
+                        self.span,
+                    )
+                };
+                self.emplacer.emplace(mapped).into()
             }
         };
-        let __mapper = __InlineMapper { emplacer };
-        <Self::Type>::map_with::<BeRef, _>(__mapper, self)
+        let __mapper = __InlineMapper { emplacer, span };
+        let content = <Self::Type>::map_with::<BeRef, _>(__mapper, self);
+        <Self::Type>::covariant::<BeAnyRef>(content)
     }
 }
 

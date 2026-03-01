@@ -1,8 +1,8 @@
 use super::*;
 
 pub(crate) trait IsIterable: 'static {
-    fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue>;
-    fn len(&self, error_span_range: SpanRange) -> ExecutionResult<usize>;
+    fn into_iterator(self: Box<Self>) -> FunctionResult<IteratorValue>;
+    fn iterable_len(&self, error_span_range: SpanRange) -> FunctionResult<usize>;
 }
 
 define_dyn_type!(
@@ -10,7 +10,7 @@ define_dyn_type!(
     content: dyn IsIterable,
     dyn_kind: DynTypeKind::Iterable,
     type_name: "iterable",
-    articled_display_name: "an iterable (e.g. array, list, etc.)",
+    articled_value_name: "an iterable (e.g. array, list, etc.)",
 );
 
 pub(crate) type IterableValue = Box<dyn IsIterable>;
@@ -19,56 +19,59 @@ pub(crate) type IterableAnyRef<'a> = AnyRef<'a, dyn IsIterable>;
 define_type_features! {
     impl IterableType,
     pub(crate) mod iterable_interface {
-        pub(crate) mod methods {
-            fn into_iter(this: IterableValue) -> ExecutionResult<IteratorValue> {
+        methods {
+            fn into_iter(this: IterableValue) -> FunctionResult<IteratorValue> {
                 this.into_iterator()
             }
 
-            fn len(Spanned(this, span_range): Spanned<IterableAnyRef>) -> ExecutionResult<usize> {
-                this.len(span_range)
+            fn len(Spanned(this, span_range): Spanned<IterableAnyRef>) -> FunctionResult<usize> {
+                this.iterable_len(span_range)
             }
 
-            fn is_empty(Spanned(this, span_range): Spanned<IterableAnyRef>) -> ExecutionResult<bool> {
-                Ok(this.len(span_range)? == 0)
+            fn is_empty(Spanned(this, span_range): Spanned<IterableAnyRef>) -> FunctionResult<bool> {
+                Ok(this.iterable_len(span_range)? == 0)
             }
 
-            [context] fn zip(this: IterableValue) -> ExecutionResult<ArrayValue> {
+            [context] fn zip(this: IterableValue) -> FunctionResult<ArrayValue> {
                 let iterator = this.into_iterator()?;
-                ZipIterators::new_from_iterator(iterator, context.span_range())?.run_zip(context.interpreter, true)
+                ZipIterators::new_from_iterator(iterator, context.span_range(), context.interpreter)?.run_zip(context.interpreter, true)
             }
 
-            [context] fn zip_truncated(this: IterableValue) -> ExecutionResult<ArrayValue> {
+            [context] fn zip_truncated(this: IterableValue) -> FunctionResult<ArrayValue> {
                 let iterator = this.into_iterator()?;
-                ZipIterators::new_from_iterator(iterator, context.span_range())?.run_zip(context.interpreter, false)
+                ZipIterators::new_from_iterator(iterator, context.span_range(), context.interpreter)?.run_zip(context.interpreter, false)
             }
 
-            fn intersperse(this: IterableValue, separator: AnyValue, settings: Option<IntersperseSettings>) -> ExecutionResult<ArrayValue> {
-                run_intersperse(this, separator, settings.unwrap_or_default())
+            [context] fn intersperse(this: IterableValue, separator: AnyValue, settings: Option<IntersperseSettings>) -> FunctionResult<ArrayValue> {
+                run_intersperse(this, separator, settings.unwrap_or_default(), context.interpreter)
             }
 
-            [context] fn to_vec(this: IterableValue) -> ExecutionResult<Vec<AnyValue>> {
+            [context] fn to_vec(this: IterableValue) -> FunctionResult<Vec<AnyValue>> {
                 let error_span_range = context.span_range();
                 let mut counter = context.interpreter.start_iteration_counter(&error_span_range);
-                let iterator = this.into_iterator()?;
-                let max_hint = iterator.size_hint().1;
+                let mut iterator = this.into_iterator()?;
+                let max_hint = iterator.do_size_hint().1;
                 let mut vec = if let Some(max) = max_hint {
                     Vec::with_capacity(max)
                 } else {
                     Vec::new()
                 };
-                for item in iterator {
+                loop {
+                    let item = match iterator.do_next(context.interpreter)? {
+                        Some(item) => item,
+                        None => break,
+                    };
                     counter.increment_and_check()?;
                     vec.push(item);
                 }
                 Ok(vec)
             }
         }
-        pub(crate) mod unary_operations {
-            fn cast_into_iterator(this: IterableValue) -> ExecutionResult<IteratorValue> {
+        unary_operations {
+            fn cast_into_iterator(this: IterableValue) -> FunctionResult<IteratorValue> {
                 this.into_iterator()
             }
         }
-        pub(crate) mod binary_operations {}
         interface_items {
             fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
                 Some(match operation {

@@ -2,8 +2,10 @@
 use super::*;
 
 pub(crate) trait TypeFeatureResolver {
-    /// Resolves a unary operation as a method interface for this type.
-    fn resolve_method(&self, method_name: &str) -> Option<MethodInterface>;
+    /// Resolves a method with the given name defined on this type.
+    /// A method is like a function, but guaranteed to have a first argument
+    /// (the receiver) which is assignable from the type.
+    fn resolve_method(&self, method_name: &str) -> Option<&'static FunctionInterface>;
 
     /// Resolves a unary operation as a method interface for this type.
     fn resolve_unary_operation(
@@ -16,6 +18,9 @@ pub(crate) trait TypeFeatureResolver {
         &self,
         operation: &BinaryOperation,
     ) -> Option<BinaryOperationInterface>;
+
+    /// Resolves a function with the given name defined on this type.
+    fn resolve_type_function(&self, function_name: &str) -> Option<&'static FunctionInterface>;
 
     /// Resolves a property of this type.
     fn resolve_type_property(&self, _property_name: &str) -> Option<AnyValue>;
@@ -36,7 +41,7 @@ pub(crate) trait TypeFeatureResolver {
 pub(crate) trait TypeData {
     /// Returns None if the method is not supported on this type itself.
     /// The method may still be supported on a type further up the resolution chain.
-    fn resolve_own_method(_method_name: &str) -> Option<MethodInterface> {
+    fn resolve_own_method(_method_name: &str) -> Option<&'static FunctionInterface> {
         None
     }
 
@@ -61,6 +66,11 @@ pub(crate) trait TypeData {
         None
     }
 
+    /// Returns None if the function is not supported on this type itself.
+    fn resolve_type_function(_function_name: &str) -> Option<&'static FunctionInterface> {
+        None
+    }
+
     /// Returns the property access interface for this type, if supported.
     fn resolve_own_property_access() -> Option<PropertyAccessInterface> {
         None
@@ -73,90 +83,91 @@ pub(crate) trait TypeData {
 }
 
 #[allow(unused)]
-pub(crate) enum MethodInterface {
+#[derive(Clone)]
+pub(crate) enum FunctionInterface {
     Arity0 {
-        method: fn(&mut MethodCallContext) -> ExecutionResult<ReturnedValue>,
+        method: fn(&mut FunctionCallContext) -> FunctionResult<ReturnedValue>,
         argument_ownership: [ArgumentOwnership; 0],
     },
     Arity1 {
         method:
-            fn(&mut MethodCallContext, Spanned<ArgumentValue>) -> ExecutionResult<ReturnedValue>,
+            fn(&mut FunctionCallContext, Spanned<ArgumentValue>) -> FunctionResult<ReturnedValue>,
         argument_ownership: [ArgumentOwnership; 1],
     },
     /// 1 argument, 1 optional argument
     Arity1PlusOptional1 {
         method: fn(
-            &mut MethodCallContext,
+            &mut FunctionCallContext,
             Spanned<ArgumentValue>,
             Option<Spanned<ArgumentValue>>,
-        ) -> ExecutionResult<ReturnedValue>,
+        ) -> FunctionResult<ReturnedValue>,
         argument_ownership: [ArgumentOwnership; 2],
     },
     Arity2 {
         method: fn(
-            &mut MethodCallContext,
+            &mut FunctionCallContext,
             Spanned<ArgumentValue>,
             Spanned<ArgumentValue>,
-        ) -> ExecutionResult<ReturnedValue>,
+        ) -> FunctionResult<ReturnedValue>,
         argument_ownership: [ArgumentOwnership; 2],
     },
     Arity2PlusOptional1 {
         method: fn(
-            &mut MethodCallContext,
+            &mut FunctionCallContext,
             Spanned<ArgumentValue>,
             Spanned<ArgumentValue>,
             Option<Spanned<ArgumentValue>>,
-        ) -> ExecutionResult<ReturnedValue>,
+        ) -> FunctionResult<ReturnedValue>,
         argument_ownership: [ArgumentOwnership; 3],
     },
     Arity3 {
         method: fn(
-            &mut MethodCallContext,
+            &mut FunctionCallContext,
             Spanned<ArgumentValue>,
             Spanned<ArgumentValue>,
             Spanned<ArgumentValue>,
-        ) -> ExecutionResult<ReturnedValue>,
+        ) -> FunctionResult<ReturnedValue>,
         argument_ownership: [ArgumentOwnership; 3],
     },
     Arity3PlusOptional1 {
         method: fn(
-            &mut MethodCallContext,
+            &mut FunctionCallContext,
             Spanned<ArgumentValue>,
             Spanned<ArgumentValue>,
             Spanned<ArgumentValue>,
             Option<Spanned<ArgumentValue>>,
-        ) -> ExecutionResult<ReturnedValue>,
+        ) -> FunctionResult<ReturnedValue>,
         argument_ownership: [ArgumentOwnership; 4],
     },
     ArityAny {
         method: fn(
-            &mut MethodCallContext,
+            &mut FunctionCallContext,
             Vec<Spanned<ArgumentValue>>,
-        ) -> ExecutionResult<ReturnedValue>,
+        ) -> FunctionResult<ReturnedValue>,
         argument_ownership: Vec<ArgumentOwnership>,
     },
 }
 
-impl MethodInterface {
-    pub(crate) fn execute(
+impl FunctionInterface {
+    pub(crate) fn invoke(
         &self,
         arguments: Vec<Spanned<ArgumentValue>>,
-        context: &mut MethodCallContext,
-    ) -> ExecutionResult<Spanned<ReturnedValue>> {
+        context: &mut FunctionCallContext,
+    ) -> FunctionResult<Spanned<ReturnedValue>> {
         let output_value = match self {
-            MethodInterface::Arity0 { method, .. } => {
+            FunctionInterface::Arity0 { method, .. } => {
                 if !arguments.is_empty() {
                     return context.output_span_range.type_err("Expected 0 arguments");
                 }
                 method(context)
             }
-            MethodInterface::Arity1 { method, .. } => {
+            FunctionInterface::Arity1 { method, .. } => {
                 match <[Spanned<ArgumentValue>; 1]>::try_from(arguments) {
                     Ok([a]) => method(context, a),
                     Err(_) => context.output_span_range.type_err("Expected 1 argument"),
                 }
             }
-            MethodInterface::Arity1PlusOptional1 { method, .. } => match arguments.len() {
+            FunctionInterface::Arity1PlusOptional1 { method, .. } => match arguments.len() {
                 1 => {
                     let [a] = <[Spanned<ArgumentValue>; 1]>::try_from(arguments)
                         .ok()
@@ -173,13 +184,13 @@ impl MethodInterface {
                     .output_span_range
                     .type_err("Expected 1 or 2 arguments"),
             },
-            MethodInterface::Arity2 { method, .. } => {
+            FunctionInterface::Arity2 { method, .. } => {
                 match <[Spanned<ArgumentValue>; 2]>::try_from(arguments) {
                     Ok([a, b]) => method(context, a, b),
                     Err(_) => context.output_span_range.type_err("Expected 2 arguments"),
                 }
             }
-            MethodInterface::Arity2PlusOptional1 { method, .. } => match arguments.len() {
+            FunctionInterface::Arity2PlusOptional1 { method, .. } => match arguments.len() {
                 2 => {
                     let [a, b] = <[Spanned<ArgumentValue>; 2]>::try_from(arguments)
                         .ok()
@@ -196,13 +207,13 @@ impl MethodInterface {
                     .output_span_range
                     .type_err("Expected 2 or 3 arguments"),
             },
-            MethodInterface::Arity3 { method, .. } => {
+            FunctionInterface::Arity3 { method, .. } => {
                 match <[Spanned<ArgumentValue>; 3]>::try_from(arguments) {
                     Ok([a, b, c]) => method(context, a, b, c),
                     Err(_) => context.output_span_range.type_err("Expected 3 arguments"),
                 }
             }
-            MethodInterface::Arity3PlusOptional1 { method, .. } => match arguments.len() {
+            FunctionInterface::Arity3PlusOptional1 { method, .. } => match arguments.len() {
                 3 => {
                     let [a, b, c] = <[Spanned<ArgumentValue>; 3]>::try_from(arguments)
                         .ok()
@@ -219,7 +230,7 @@ impl MethodInterface {
                     .output_span_range
                     .type_err("Expected 3 or 4 arguments"),
             },
-            MethodInterface::ArityAny { method, .. } => method(context, arguments),
+            FunctionInterface::ArityAny { method, .. } => method(context, arguments),
         };
         output_value.map(|v| v.spanned(context.output_span_range))
     }
@@ -227,28 +238,28 @@ impl MethodInterface {
     /// Returns (argument_ownerships, required_argument_count)
     pub(crate) fn argument_ownerships(&self) -> (&[ArgumentOwnership], usize) {
         match self {
-            MethodInterface::Arity0 {
+            FunctionInterface::Arity0 {
                 argument_ownership, ..
             } => (argument_ownership, 0),
-            MethodInterface::Arity1 {
+            FunctionInterface::Arity1 {
                 argument_ownership, ..
             } => (argument_ownership, 1),
-            MethodInterface::Arity1PlusOptional1 {
+            FunctionInterface::Arity1PlusOptional1 {
                 argument_ownership, ..
             } => (argument_ownership, 1),
-            MethodInterface::Arity2 {
+            FunctionInterface::Arity2 {
                 argument_ownership, ..
             } => (argument_ownership, 2),
-            MethodInterface::Arity2PlusOptional1 {
+            FunctionInterface::Arity2PlusOptional1 {
                 argument_ownership, ..
             } => (argument_ownership, 2),
-            MethodInterface::Arity3 {
+            FunctionInterface::Arity3 {
                 argument_ownership, ..
             } => (argument_ownership, 3),
-            MethodInterface::Arity3PlusOptional1 {
+            FunctionInterface::Arity3PlusOptional1 {
                 argument_ownership, ..
             } => (argument_ownership, 3),
-            MethodInterface::ArityAny {
+            FunctionInterface::ArityAny {
                 argument_ownership, ..
             } => (argument_ownership, 0),
         }
@@ -257,7 +268,7 @@ impl MethodInterface {
 
 pub(crate) struct UnaryOperationInterface {
     pub method:
-        fn(UnaryOperationCallContext, Spanned<ArgumentValue>) -> ExecutionResult<ReturnedValue>,
+        fn(UnaryOperationCallContext, Spanned<ArgumentValue>) -> FunctionResult<ReturnedValue>,
     pub argument_ownership: ArgumentOwnership,
 }
 
@@ -266,10 +277,14 @@ impl UnaryOperationInterface {
         &self,
         Spanned(input, input_span): Spanned<ArgumentValue>,
         operation: &UnaryOperation,
-    ) -> ExecutionResult<Spanned<ReturnedValue>> {
+        interpreter: &mut Interpreter,
+    ) -> FunctionResult<Spanned<ReturnedValue>> {
         let output_span_range = operation.output_span_range(input_span);
         Ok((self.method)(
-            UnaryOperationCallContext { operation },
+            UnaryOperationCallContext {
+                operation,
+                interpreter,
+            },
             Spanned(input, input_span),
         )?
         .spanned(output_span_range))
@@ -285,7 +300,7 @@ pub(crate) struct BinaryOperationInterface {
         BinaryOperationCallContext,
         Spanned<ArgumentValue>,
         Spanned<ArgumentValue>,
-    ) -> ExecutionResult<ReturnedValue>,
+    ) -> FunctionResult<ReturnedValue>,
     pub lhs_ownership: ArgumentOwnership,
     pub rhs_ownership: ArgumentOwnership,
 }
@@ -296,7 +311,7 @@ impl BinaryOperationInterface {
         Spanned(lhs, lhs_span): Spanned<ArgumentValue>,
         Spanned(rhs, rhs_span): Spanned<ArgumentValue>,
         operation: &BinaryOperation,
-    ) -> ExecutionResult<Spanned<ReturnedValue>> {
+    ) -> FunctionResult<Spanned<ReturnedValue>> {
         let output_span_range = SpanRange::new_between(lhs_span, rhs_span);
         Ok((self.method)(
             BinaryOperationCallContext { operation },
@@ -323,25 +338,30 @@ impl BinaryOperationInterface {
 #[derive(Clone, Copy)]
 pub(crate) struct PropertyAccessCallContext<'a> {
     pub property: &'a PropertyAccess,
+    pub output_span_range: SpanRange,
 }
 
 /// Interface for property access on a type (e.g., `obj.field`).
 ///
 /// Unlike unary/binary operations which return owned values, property access
-/// returns references into the source value. This requires three separate
-/// access methods for shared, mutable, and owned access patterns.
+/// returns references into the source value. The shared and mutable access methods
+/// return [`MappedRef`]/[`MappedMut`] which bundle the result with a [`PathExtension`]
+/// describing the navigation.
 pub(crate) struct PropertyAccessInterface {
-    /// Access a property by shared reference.
-    pub shared_access:
-        for<'a> fn(PropertyAccessCallContext, &'a AnyValue) -> ExecutionResult<&'a AnyValue>,
+    /// Access a property by shared reference, returning a [`MappedRef`] with path info.
+    pub shared_access: for<'a> fn(
+        PropertyAccessCallContext,
+        &'a AnyValue,
+    ) -> FunctionResult<MappedRef<'a, AnyValue>>,
     /// Access a property by mutable reference, optionally auto-creating if missing.
+    /// Returns a [`MappedMut`] with path info.
     pub mutable_access: for<'a> fn(
         PropertyAccessCallContext,
         &'a mut AnyValue,
         bool,
-    ) -> ExecutionResult<&'a mut AnyValue>,
+    ) -> FunctionResult<MappedMut<'a, AnyValue>>,
     /// Extract a property from an owned value.
-    pub owned_access: fn(PropertyAccessCallContext, AnyValue) -> ExecutionResult<AnyValue>,
+    pub owned_access: fn(PropertyAccessCallContext, AnyValue) -> FunctionResult<AnyValue>,
 }
 
 // ============================================================================
@@ -352,29 +372,32 @@ pub(crate) struct PropertyAccessInterface {
 #[derive(Clone, Copy)]
 pub(crate) struct IndexAccessCallContext<'a> {
     pub access: &'a IndexAccess,
+    pub output_span_range: SpanRange,
 }
 
 /// Interface for index access on a type (e.g., `arr[0]` or `obj["key"]`).
 ///
 /// Similar to property access, but the index is an evaluated expression
-/// rather than a static identifier.
+/// rather than a static identifier. The shared and mutable access methods
+/// return [`MappedRef`]/[`MappedMut`] which bundle the result with a [`PathExtension`].
 pub(crate) struct IndexAccessInterface {
     /// The ownership requirement for the index value.
     pub index_ownership: ArgumentOwnership,
-    /// Access an element by shared reference.
+    /// Access an element by shared reference, returning a [`MappedRef`] with path info.
     pub shared_access: for<'a> fn(
         IndexAccessCallContext,
         &'a AnyValue,
         Spanned<AnyValueRef>,
-    ) -> ExecutionResult<&'a AnyValue>,
+    ) -> FunctionResult<MappedRef<'a, AnyValue>>,
     /// Access an element by mutable reference, optionally auto-creating if missing.
+    /// Returns a [`MappedMut`] with path info.
     pub mutable_access: for<'a> fn(
         IndexAccessCallContext,
         &'a mut AnyValue,
         Spanned<AnyValueRef>,
         bool,
-    ) -> ExecutionResult<&'a mut AnyValue>,
+    ) -> FunctionResult<MappedMut<'a, AnyValue>>,
     /// Extract an element from an owned value.
     pub owned_access:
-        fn(IndexAccessCallContext, AnyValue, Spanned<AnyValueRef>) -> ExecutionResult<AnyValue>,
+        fn(IndexAccessCallContext, AnyValue, Spanned<AnyValueRef>) -> FunctionResult<AnyValue>,
 }

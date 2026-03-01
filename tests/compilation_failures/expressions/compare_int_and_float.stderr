@@ -1,4 +1,4 @@
-error: This argument is expected to be an integer, but it is an untyped float
+error: This argument is expected to be an integer value, but it is an untyped float value
  --> tests/compilation_failures/expressions/compare_int_and_float.rs:5:15
   |
 5 |         #(5 < 6.4)

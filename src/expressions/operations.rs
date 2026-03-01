@@ -85,23 +85,24 @@ impl UnaryOperation {
     pub(super) fn evaluate<T: IntoAnyValue>(
         &self,
         Spanned(input, input_span): Spanned<T>,
-    ) -> ExecutionResult<Spanned<ReturnedValue>> {
+        interpreter: &mut Interpreter,
+    ) -> FunctionResult<Spanned<ReturnedValue>> {
         let input = input.into_any_value();
         let method = input
             .kind()
             .feature_resolver()
             .resolve_unary_operation(self)
-            .ok_or_else(|| {
+            .ok_or_else(|| -> FunctionError {
                 self.type_error(format!(
                     "The {} operator is not supported for {} operand",
                     self,
-                    input.articled_kind(),
+                    input.kind().articled_value_name(),
                 ))
             })?;
         let input = method
             .argument_ownership
             .map_from_owned(Spanned(input, input_span))?;
-        method.execute(Spanned(input, input_span), self)
+        method.execute(Spanned(input, input_span), self, interpreter)
     }
 }
 
@@ -305,7 +306,7 @@ impl BinaryOperation {
         &self,
         Spanned(left, left_span): Spanned<L>,
         Spanned(right, right_span): Spanned<R>,
-    ) -> ExecutionResult<Spanned<ReturnedValue>> {
+    ) -> FunctionResult<Spanned<ReturnedValue>> {
         let left = left.into_any_value();
         let right = right.into_any_value();
         match left
@@ -325,7 +326,7 @@ impl BinaryOperation {
             None => self.type_err(format!(
                 "The {} operator is not supported for {} operand",
                 self.symbolic_description(),
-                left.articled_kind(),
+                left.kind().articled_value_name(),
             )),
         }
     }
@@ -418,7 +419,7 @@ pub(super) trait HandleBinaryOperation: Sized + std::fmt::Display + Copy {
         context: BinaryOperationCallContext,
         lhs: Self,
         rhs: impl std::fmt::Display,
-    ) -> ExecutionInterrupt {
+    ) -> FunctionError {
         context.error(format!(
             "The {} operation {} {} {} overflowed",
             Self::type_name(),
@@ -433,7 +434,7 @@ pub(super) trait HandleBinaryOperation: Sized + std::fmt::Display + Copy {
         rhs: impl ResolveAs<OptionalSuffix<Self>>,
         context: BinaryOperationCallContext,
         perform_fn: fn(Self, Self) -> Option<Self>,
-    ) -> ExecutionResult<T> {
+    ) -> FunctionResult<T> {
         let lhs = self;
         let rhs = rhs.resolve_as("This operand")?;
         perform_fn(lhs, rhs.0)
@@ -445,7 +446,7 @@ pub(super) trait HandleBinaryOperation: Sized + std::fmt::Display + Copy {
         self,
         rhs: impl ResolveAs<OptionalSuffix<Self>>,
         perform_fn: fn(Self, Self) -> Self,
-    ) -> ExecutionResult<T> {
+    ) -> FunctionResult<T> {
         let lhs = self;
         let rhs = rhs.resolve_as("This operand")?;
         Ok(perform_fn(lhs, rhs.0).into())
@@ -455,7 +456,7 @@ pub(super) trait HandleBinaryOperation: Sized + std::fmt::Display + Copy {
         self,
         rhs: impl ResolveAs<OptionalSuffix<Self>>,
         compare_fn: fn(Self, Self) -> bool,
-    ) -> ExecutionResult<bool> {
+    ) -> FunctionResult<bool> {
         let lhs = self;
         let rhs = rhs.resolve_as("This operand")?;
         Ok(compare_fn(lhs, rhs.0))
@@ -466,7 +467,7 @@ pub(super) trait HandleBinaryOperation: Sized + std::fmt::Display + Copy {
         rhs: u32,
         context: BinaryOperationCallContext,
         perform_fn: impl FnOnce(Self, u32) -> Option<O>,
-    ) -> ExecutionResult<T> {
+    ) -> FunctionResult<T> {
         let lhs = self;
         perform_fn(lhs, rhs)
             .map(|r| r.into())
@@ -498,19 +499,6 @@ pub(crate) struct PropertyAccess {
 impl HasSpanRange for PropertyAccess {
     fn span_range(&self) -> SpanRange {
         SpanRange::new_between(self.dot.span, self.property.span())
-    }
-}
-
-#[derive(Clone)]
-pub(crate) struct MethodAccess {
-    pub(super) dot: Token![.],
-    pub(crate) method: Ident,
-    pub(crate) parentheses: Parentheses,
-}
-
-impl HasSpanRange for MethodAccess {
-    fn span_range(&self) -> SpanRange {
-        SpanRange::new_between(self.dot.span, self.parentheses.span())
     }
 }
 

@@ -1,4 +1,4 @@
-error: The * operator is not supported for a string operand
+error: The * operator is not supported for a string value operand
  --> tests/compilation_failures/operations/multiply_strings.rs:4:26
   |
 4 |     let _ = run!("hello" * 3);

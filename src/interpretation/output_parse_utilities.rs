@@ -44,7 +44,7 @@ impl ParseUntil {
         &self,
         input: OutputParseStream,
         output: &mut OutputStream,
-    ) -> ExecutionResult<()> {
+    ) -> FunctionResult<()> {
         match self {
             ParseUntil::End => {
                 let remaining = input.parse::<TokenStream>()?;
@@ -98,7 +98,7 @@ pub(crate) fn handle_parsing_exact_output_match(
     input: ParseStream<Output>,
     expected: &OutputStream,
     output: &mut OutputStream,
-) -> ExecutionResult<()> {
+) -> FunctionResult<()> {
     for item in expected.iter() {
         match item {
             OutputTokenTreeRef::TokenTree(token_tree) => {
@@ -123,7 +123,7 @@ fn handle_parsing_exact_stream_match(
     input: ParseStream<Output>,
     expected: TokenStream,
     output: &mut OutputStream,
-) -> ExecutionResult<()> {
+) -> FunctionResult<()> {
     for item in expected.into_iter() {
         handle_parsing_exact_token_tree(input, &item, output)?;
     }
@@ -134,7 +134,7 @@ fn handle_parsing_exact_token_tree(
     input: ParseStream<Output>,
     expected: &TokenTree,
     output: &mut OutputStream,
-) -> ExecutionResult<()> {
+) -> FunctionResult<()> {
     match expected {
         TokenTree::Group(group) => {
             handle_parsing_exact_group(
@@ -162,9 +162,9 @@ fn handle_parsing_exact_token_tree(
 fn handle_parsing_exact_group(
     input: ParseStream<Output>,
     delimiter: Delimiter,
-    parse_inner: impl FnOnce(ParseStream<Output>, &mut OutputStream) -> ExecutionResult<()>,
+    parse_inner: impl FnOnce(ParseStream<Output>, &mut OutputStream) -> FunctionResult<()>,
     output: &mut OutputStream,
-) -> ExecutionResult<()> {
+) -> FunctionResult<()> {
     // Because `None` is ignored by Syn at parsing time, we can effectively be most permissive by ignoring them.
     // This removes a bit of a footgun for users.
     // If they really want to check for a None group, they can embed `@[GROUP @[EXACT ...]]` transformer.

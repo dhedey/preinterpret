@@ -18,16 +18,24 @@ impl IsForm for BeOwned {}
 
 impl IsHierarchicalForm for BeOwned {
     type Leaf<'a, T: IsLeafType> = T::Leaf;
+
+    #[inline]
+    fn covariant_leaf<'a, 'b, T: IsLeafType>(leaf: Self::Leaf<'a, T>) -> Self::Leaf<'b, T>
+    where
+        'a: 'b,
+    {
+        leaf
+    }
 }
 
 impl IsDynCompatibleForm for BeOwned {
-    type DynLeaf<'a, D: 'static + ?Sized> = Box<D>;
+    type DynLeaf<'a, D: IsDynType> = Box<D::DynContent>;
 
-    fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
-        leaf: Self::Leaf<'a, T>,
+    fn leaf_to_dyn<'a, T: IsLeafType, D: IsDynType>(
+        Spanned(leaf, _span): Spanned<Self::Leaf<'a, T>>,
     ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
-        T::Leaf: CastDyn<D>,
+        T::Leaf: CastDyn<D::DynContent>,
     {
         <T::Leaf>::map_boxed(Box::new(leaf)).map_err(|boxed| *boxed)
     }
@@ -49,8 +57,8 @@ impl MapFromArgument for BeOwned {
     const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
 
     fn from_argument_value(
-        value: ArgumentValue,
-    ) -> ExecutionResult<Content<'static, AnyType, Self>> {
+        Spanned(value, _span): Spanned<ArgumentValue>,
+    ) -> FunctionResult<Content<'static, AnyType, Self>> {
         Ok(value.expect_owned())
     }
 }
@@ -58,7 +66,7 @@ impl MapFromArgument for BeOwned {
 impl MapIntoReturned for BeOwned {
     fn into_returned_value(
         content: Content<'static, AnyType, Self>,
-    ) -> ExecutionResult<ReturnedValue> {
+    ) -> FunctionResult<ReturnedValue> {
         Ok(ReturnedValue::Owned(content))
     }
 }

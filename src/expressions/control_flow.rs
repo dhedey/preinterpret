@@ -125,9 +125,7 @@ impl Evaluate for IfExpression {
             return else_code.evaluate(interpreter, requested_ownership);
         }
 
-        requested_ownership
-            .map_from_owned(Spanned(().into_any_value(), self.span_range()))
-            .map(|spanned| spanned.0)
+        Ok(requested_ownership.map_none(self.span_range())?.0)
     }
 }
 
@@ -216,9 +214,7 @@ impl Evaluate for WhileExpression {
                 }
             }
         }
-        ownership
-            .map_none(self.span_range())
-            .map(|spanned| spanned.0)
+        Ok(ownership.map_none(self.span_range())?.0)
     }
 }
 
@@ -379,10 +375,15 @@ impl Evaluate for ForExpression {
         let scope = interpreter.current_scope_id();
         let mut iteration_counter = interpreter.start_iteration_counter(&span);
 
-        for item in iterable.into_iterator()? {
+        let mut iterator = iterable.into_iterator()?;
+        loop {
+            let item = match iterator.do_next(interpreter)? {
+                Some(item) => item,
+                None => break,
+            };
             iteration_counter.increment_and_check()?;
 
-            interpreter.enter_scope(self.iteration_scope);
+            interpreter.enter_child_scope(self.iteration_scope)?;
             self.pattern.handle_destructure(interpreter, item)?;
 
             let body_result = self.body.evaluate_owned(interpreter);
@@ -407,9 +408,7 @@ impl Evaluate for ForExpression {
             }
             interpreter.exit_scope(self.iteration_scope);
         }
-        ownership
-            .map_none(self.span_range())
-            .map(|spanned| spanned.0)
+        Ok(ownership.map_none(self.span_range())?.0)
     }
 }
 
@@ -527,7 +526,8 @@ impl Evaluate for AttemptExpression {
                 move |interpreter: &mut Interpreter| -> ExecutionResult<bool> {
                     guard_expression
                         .evaluate_owned(interpreter)?
-                        .resolve_as("The guard condition of an attempt arm")
+                        .downcast_resolve::<bool>("The guard condition of an attempt arm")
+                        .into_execution_result()
                 }
             })
         }
@@ -538,7 +538,10 @@ impl Evaluate for AttemptExpression {
                 |interpreter| -> ExecutionResult<()> {
                     arm.lhs
                         .evaluate_owned(interpreter)?
-                        .resolve_as("The returned value from the left half of an attempt arm")
+                        .downcast_resolve::<()>(
+                            "The returned value from the left half of an attempt arm",
+                        )
+                        .into_execution_result()
                 },
                 guard_clause(arm.guard.as_ref()),
                 MutationBlockReason::AttemptRevertibleSegment,
@@ -618,7 +621,7 @@ impl Evaluate for ParseExpression {
             .evaluate_owned(interpreter)?
             .resolve_as("The input to a parse expression")?;
 
-        interpreter.enter_scope(self.scope);
+        interpreter.enter_child_scope(self.scope)?;
 
         let output = interpreter.start_parse(input, |interpreter, handle| {
             self.parser_variable.define(interpreter, handle);

@@ -1,0 +1,5 @@
+error: Type 'array' has no property, function or method named 'push_me'
+ --> tests/compilation_failures/functions/incorrect_type_function_name.rs:6:9
+  |
+6 |         array::push_me(arr, 4, 5);
+  |         ^^^^^^^^^^^^^^

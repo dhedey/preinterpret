@@ -4,7 +4,7 @@ use super::*;
 /// This is implemented by `ValueLeafKind`, `IntegerKind`, `FloatKind`, etc.
 pub(crate) trait IsLeafKind: Copy + Into<AnyValueLeafKind> {
     fn source_type_name(&self) -> &'static str;
-    fn articled_display_name(&self) -> &'static str;
+    fn articled_value_name(&self) -> &'static str;
     fn feature_resolver(&self) -> &'static dyn TypeFeatureResolver;
 }
 
@@ -33,12 +33,15 @@ impl AnyValueLeafKind {
             // A parser is a handle, so can be cloned transparently.
             // It may fail to be able to be used to parse if the underlying stream is out of scope of course.
             AnyValueLeafKind::Parser(_) => true,
+            AnyValueLeafKind::Function(_) => true,
+            AnyValueLeafKind::PreinterpretApi(_) => true,
         }
     }
 }
 
 // A AnyValueLeafKind represents a kind of leaf value.
 // But a TypeKind represents a type in the hierarchy, which points at a type data.
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub(crate) enum TypeKind {
     Leaf(AnyValueLeafKind),
     Parent(ParentTypeKind),
@@ -60,11 +63,11 @@ impl TypeKind {
         }
     }
 
-    pub(crate) fn articled_display_name(&self) -> &'static str {
+    pub(crate) fn articled_value_name(&self) -> &'static str {
         match self {
-            TypeKind::Leaf(leaf_kind) => leaf_kind.articled_display_name(),
-            TypeKind::Parent(parent_kind) => parent_kind.articled_display_name(),
-            TypeKind::Dyn(dyn_kind) => dyn_kind.articled_display_name(),
+            TypeKind::Leaf(leaf_kind) => leaf_kind.articled_value_name(),
+            TypeKind::Parent(parent_kind) => parent_kind.articled_value_name(),
+            TypeKind::Dyn(dyn_kind) => dyn_kind.articled_value_name(),
         }
     }
 
@@ -87,8 +90,96 @@ impl TypeKind {
             TypeKind::Dyn(dyn_kind) => dyn_kind.source_name(),
         }
     }
+
+    pub(crate) fn is_narrowing_to(&self, other: &Self) -> bool {
+        match self.compare_bindings(other) {
+            TypeBindingComparison::Equal => true,
+            TypeBindingComparison::RightDerivesFromLeftButIsNotSubtype => true,
+            TypeBindingComparison::RightIsSubtypeOfLeft => true,
+            TypeBindingComparison::LeftDerivesFromRightButIsNotSubtype => false,
+            TypeBindingComparison::LeftIsSubtypeOfRight => false,
+            TypeBindingComparison::Incomparable => false,
+            TypeBindingComparison::Incompatible => false,
+        }
+    }
+
+    /// This is the subtyping ordering.
+    /// - I define that X <= Y if Y is a subtype of X.
+    /// - Think "X is shallower than Y in the enum representation"
+    ///
+    /// This must be accurate so that the Dynamic References works correctly.
+    /// e.g. if I have a `a: &mut AnyValue` and a `b: &mut IntegerValue` pointing
+    /// to the same memory, then I can't use a to change to a String.
+    pub(crate) fn compare_bindings(&self, other: &Self) -> TypeBindingComparison {
+        if self == other {
+            return TypeBindingComparison::Equal;
+        }
+        match (self, other) {
+            // Dyns are not binding-comparable to other dyns
+            (TypeKind::Dyn(_), TypeKind::Dyn(_)) => TypeBindingComparison::Incomparable,
+            // Assuming the values are compatible, a dyn can be derived from any leaf/parent,
+            // but not the other way around (at present at least)
+            (TypeKind::Dyn(_), _) => TypeBindingComparison::LeftDerivesFromRightButIsNotSubtype,
+            (_, TypeKind::Dyn(_)) => TypeBindingComparison::RightDerivesFromLeftButIsNotSubtype,
+            // All non-any-values are strict subtypes of AnyValue
+            (TypeKind::Parent(ParentTypeKind::Value(_)), _) => {
+                TypeBindingComparison::RightIsSubtypeOfLeft
+            }
+            (_, TypeKind::Parent(ParentTypeKind::Value(_))) => {
+                TypeBindingComparison::LeftIsSubtypeOfRight
+            }
+            // Integer types
+            (
+                TypeKind::Parent(ParentTypeKind::Integer(_)),
+                TypeKind::Leaf(AnyValueLeafKind::Integer(_)),
+            ) => TypeBindingComparison::RightIsSubtypeOfLeft,
+            (
+                TypeKind::Leaf(AnyValueLeafKind::Integer(_)),
+                TypeKind::Parent(ParentTypeKind::Integer(_)),
+            ) => TypeBindingComparison::LeftIsSubtypeOfRight,
+            (TypeKind::Parent(ParentTypeKind::Integer(_)), _) => {
+                TypeBindingComparison::Incompatible
+            }
+            (_, TypeKind::Parent(ParentTypeKind::Integer(_))) => {
+                TypeBindingComparison::Incompatible
+            }
+            // Float types
+            (
+                TypeKind::Parent(ParentTypeKind::Float(_)),
+                TypeKind::Leaf(AnyValueLeafKind::Float(_)),
+            ) => TypeBindingComparison::RightIsSubtypeOfLeft,
+            (
+                TypeKind::Leaf(AnyValueLeafKind::Float(_)),
+                TypeKind::Parent(ParentTypeKind::Float(_)),
+            ) => TypeBindingComparison::LeftIsSubtypeOfRight,
+            (TypeKind::Parent(ParentTypeKind::Float(_)), _) => TypeBindingComparison::Incompatible,
+            (_, TypeKind::Parent(ParentTypeKind::Float(_))) => TypeBindingComparison::Incompatible,
+            // Non-equal leaf types are incomparable
+            (TypeKind::Leaf(_), TypeKind::Leaf(_)) => TypeBindingComparison::Incompatible,
+        }
+    }
 }
 
+// TODO[non-leaf-form]: This abstraction isn't quite right.
+// We probably need to reference whether the form we're looking at
+// is compatible with some other form.
+pub(crate) enum TypeBindingComparison {
+    Equal,
+    // e.g. U8Value is a subtype of IntegerValue
+    RightIsSubtypeOfLeft,
+    // e.g. dyn IterableValue derives from ArrayValue, but isn't a subtype of it.
+    RightDerivesFromLeftButIsNotSubtype,
+    // e.g. U8Value is a subtype of IntegerValue
+    LeftIsSubtypeOfRight,
+    // e.g. dyn IterableValue derives from ArrayValue, but isn't a subtype of it.
+    LeftDerivesFromRightButIsNotSubtype,
+    Incomparable,
+    // Indicates that the types are incompatible.
+    // Such a comparison shouldn't arise between valid references.
+    Incompatible,
+}
+
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub(crate) enum ParentTypeKind {
     Value(AnyValueTypeKind),
     Integer(IntegerTypeKind),
@@ -96,11 +187,11 @@ pub(crate) enum ParentTypeKind {
 }
 
 impl ParentTypeKind {
-    pub(crate) fn articled_display_name(&self) -> &'static str {
+    pub(crate) fn articled_value_name(&self) -> &'static str {
         match self {
-            ParentTypeKind::Value(x) => x.articled_display_name(),
-            ParentTypeKind::Integer(x) => x.articled_display_name(),
-            ParentTypeKind::Float(x) => x.articled_display_name(),
+            ParentTypeKind::Value(x) => x.articled_value_name(),
+            ParentTypeKind::Integer(x) => x.articled_value_name(),
+            ParentTypeKind::Float(x) => x.articled_value_name(),
         }
     }
 
@@ -121,14 +212,15 @@ impl ParentTypeKind {
     }
 }
 
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub(crate) enum DynTypeKind {
     Iterable,
 }
 
 impl DynTypeKind {
-    pub(crate) fn articled_display_name(&self) -> &'static str {
+    pub(crate) fn articled_value_name(&self) -> &'static str {
         match self {
-            DynTypeKind::Iterable => IterableType::ARTICLED_DISPLAY_NAME,
+            DynTypeKind::Iterable => IterableType::ARTICLED_VALUE_NAME,
         }
     }
 
@@ -235,21 +327,45 @@ impl TypeProperty {
     pub(crate) fn resolve_spanned(
         &self,
         ownership: RequestedOwnership,
-    ) -> ExecutionResult<Spanned<RequestedValue>> {
+    ) -> FunctionResult<Spanned<RequestedValue>> {
         let resolver = self.source_type.kind.feature_resolver();
         // TODO[performance] - lazily initialize properties as Shared
-        let resolved_property = resolver.resolve_type_property(&self.property.to_string());
-        match resolved_property {
-            Some(value) => ownership.map_from_shared(Spanned(
-                SharedValue::new_from_owned(value.into_any_value()),
+        let property_name = self.property.to_string();
+        if let Some(value) = resolver.resolve_type_property(&property_name) {
+            return ownership.map_from_shared(Spanned(
+                AnyValueShared::new_from_owned(
+                    value.into_any_value(),
+                    Some(property_name),
+                    self.span_range(),
+                ),
                 self.span_range(),
-            )),
-            None => self.type_err(format!(
-                "Type '{}' has no property named '{}'",
-                self.source_type.kind.source_name(),
-                self.property,
-            )),
+            ));
         }
+        if let Some(method) = resolver.resolve_method(&property_name) {
+            return ownership.map_from_shared(Spanned(
+                AnyValueShared::new_from_owned(
+                    method.into_any_value(),
+                    Some(property_name.clone()),
+                    self.span_range(),
+                ),
+                self.span_range(),
+            ));
+        }
+        if let Some(function) = resolver.resolve_type_function(&property_name) {
+            return ownership.map_from_shared(Spanned(
+                AnyValueShared::new_from_owned(
+                    function.into_any_value(),
+                    Some(property_name.clone()),
+                    self.span_range(),
+                ),
+                self.span_range(),
+            ));
+        }
+        self.type_err(format!(
+            "Type '{}' has no property, function or method named '{}'",
+            self.source_type.kind.source_name(),
+            self.property,
+        ))
     }
 }
 

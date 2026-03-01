@@ -8,11 +8,9 @@ macro_rules! impl_int_operations {
         define_type_features! {
             impl $integer_type_data,
             pub(crate) mod $mod_name {
-                pub(crate) mod methods {
-                }
-                pub(crate) mod unary_operations {
+                unary_operations {
                     $(
-                        fn neg(Spanned(value, span): Spanned<$integer_type>) -> ExecutionResult<$integer_type> {
+                        fn neg(Spanned(value, span): Spanned<$integer_type>) -> FunctionResult<$integer_type> {
                             ignore_all!($signed); // Include only for signed types
                             match value.checked_neg() {
                                 Some(negated) => Ok(negated),
@@ -95,8 +93,6 @@ macro_rules! impl_int_operations {
                     fn cast_to_string(input: $integer_type) -> String {
                         input.to_string()
                     }
-                }
-                pub(crate) mod binary_operations {
                 }
                 interface_items {
                     fn resolve_own_unary_operation(operation: &UnaryOperation) -> Option<UnaryOperationInterface> {
@@ -181,13 +177,13 @@ impl_int_operations!(
 );
 
 macro_rules! impl_resolvable_integer_subtype {
-    ($type_def:ident, $kind:ident, $type:ty, $variant:ident, $type_name:literal, $articled_display_name:expr) => {
+    ($type_def:ident, $kind:ident, $type:ty, $variant:ident, $type_name:literal, $articled_value_name:expr) => {
         define_leaf_type! {
             pub(crate) $type_def => IntegerType(IntegerContent::$variant) => AnyType,
             content: $type,
             kind: pub(crate) $kind,
             type_name: $type_name,
-            articled_display_name: $articled_display_name,
+            articled_value_name: $articled_value_name,
             dyn_impls: {},
         }
 
@@ -195,13 +191,13 @@ macro_rules! impl_resolvable_integer_subtype {
             type ValueType = IntegerType;
             const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
 
-            fn from_argument(argument: Spanned<ArgumentValue>) -> ExecutionResult<Self> {
+            fn from_argument(argument: Spanned<ArgumentValue>) -> FunctionResult<Self> {
                 argument.expect_owned().resolve_as("This argument")
             }
         }
 
         impl ResolveAs<OptionalSuffix<$type>> for Spanned<AnyValue> {
-            fn resolve_as(self, resolution_target: &str) -> ExecutionResult<OptionalSuffix<$type>> {
+            fn resolve_as(self, resolution_target: &str) -> FunctionResult<OptionalSuffix<$type>> {
                 let span = self.span_range();
                 let integer_value: IntegerValue = self.resolve_as(resolution_target)?;
                 Spanned(integer_value, span).resolve_as(resolution_target)
@@ -209,7 +205,7 @@ macro_rules! impl_resolvable_integer_subtype {
         }
 
         impl ResolveAs<OptionalSuffix<$type>> for Spanned<IntegerValue> {
-            fn resolve_as(self, resolution_target: &str) -> ExecutionResult<OptionalSuffix<$type>> {
+            fn resolve_as(self, resolution_target: &str) -> FunctionResult<OptionalSuffix<$type>> {
                 let Spanned(value, span) = self;
                 match value {
                     IntegerValue::Untyped(v) => Ok(OptionalSuffix(v.into_fallback() as $type)),
@@ -217,8 +213,8 @@ macro_rules! impl_resolvable_integer_subtype {
                     v => span.type_err(format!(
                         "{} is expected to be {}, but it is {}",
                         resolution_target,
-                        $kind.articled_display_name(),
-                        v.articled_kind(),
+                        $kind.articled_value_name(),
+                        v.kind().articled_value_name(),
                     )),
                 }
             }
@@ -238,11 +234,11 @@ macro_rules! impl_resolvable_integer_subtype {
             fn resolve_from_value(
                 value: IntegerValue,
                 context: ResolutionContext,
-            ) -> ExecutionResult<Self> {
+            ) -> FunctionResult<Self> {
                 match value {
                     IntegerValue::Untyped(x) => Ok(x.into_fallback() as $type),
                     IntegerValue::$variant(x) => Ok(x),
-                    other => context.err($articled_display_name, other),
+                    other => context.err($type_def::ARTICLED_VALUE_NAME, other),
                 }
             }
         }
@@ -251,10 +247,10 @@ macro_rules! impl_resolvable_integer_subtype {
             fn resolve_from_value(
                 value: AnyValue,
                 context: ResolutionContext,
-            ) -> ExecutionResult<Self> {
+            ) -> FunctionResult<Self> {
                 match value {
                     AnyValue::Integer(x) => <$type>::resolve_from_value(x, context),
-                    other => context.err($articled_display_name, other),
+                    other => context.err($type_def::ARTICLED_VALUE_NAME, other),
                 }
             }
         }
@@ -263,10 +259,10 @@ macro_rules! impl_resolvable_integer_subtype {
             fn resolve_from_ref<'a>(
                 value: &'a AnyValue,
                 context: ResolutionContext,
-            ) -> ExecutionResult<&'a Self> {
+            ) -> FunctionResult<&'a Self> {
                 match value {
                     AnyValue::Integer(IntegerValue::$variant(x)) => Ok(x),
-                    other => context.err($articled_display_name, other),
+                    other => context.err($type_def::ARTICLED_VALUE_NAME, other),
                 }
             }
         }
@@ -275,10 +271,10 @@ macro_rules! impl_resolvable_integer_subtype {
             fn resolve_from_mut<'a>(
                 value: &'a mut AnyValue,
                 context: ResolutionContext,
-            ) -> ExecutionResult<&'a mut Self> {
+            ) -> FunctionResult<&'a mut Self> {
                 match value {
                     AnyValue::Integer(IntegerValue::$variant(x)) => Ok(x),
-                    other => context.err($articled_display_name, other),
+                    other => context.err($type_def::ARTICLED_VALUE_NAME, other),
                 }
             }
         }

@@ -1,5 +1,5 @@
-error: lhs["multi-word key"] is an untyped integer, but rhs["multi-word key"] is a string
- --> tests/compilation_failures/core/typed_eq_object_value_type_mismatch_2.rs:5:54
+error: lhs["multi-word key"] is an untyped integer value, but rhs["multi-word key"] is a string value
+ --> tests/compilation_failures/core/typed_eq_object_value_type_mismatch_2.rs:5:23
   |
 5 |         let result = %{ a: 1, ["multi-word key"]: 2 }.typed_eq(%{ a: 1, ["multi-word key"]: "two" });
-  |                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

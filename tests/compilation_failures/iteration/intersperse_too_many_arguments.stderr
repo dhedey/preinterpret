@@ -1,5 +1,5 @@
-error: The method intersperse expects 1 to 2 non-self argument/s, but 3 were provided
- --> tests/compilation_failures/iteration/intersperse_too_many_arguments.rs:5:16
+error: This function expects 1 to 2 arguments, but 3 were provided
+ --> tests/compilation_failures/iteration/intersperse_too_many_arguments.rs:5:9
   |
 5 |         [1, 2].intersperse("", %{}, %{})
-  |                ^^^^^^^^^^^
+  |         ^^^^^^^^^^^^^^^^^^

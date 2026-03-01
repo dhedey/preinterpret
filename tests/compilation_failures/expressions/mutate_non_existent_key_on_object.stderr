@@ -1,0 +1,5 @@
+error: The += operator is not supported for a none value operand
+ --> tests/compilation_failures/expressions/mutate_non_existent_key_on_object.rs:6:26
+  |
+6 |         obj["false_key"] += 1;
+  |                          ^^

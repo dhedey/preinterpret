@@ -5,14 +5,14 @@ define_leaf_type! {
     content: OutputStream,
     kind: pub(crate) StreamKind,
     type_name: "stream",
-    articled_display_name: "a stream",
+    articled_value_name: "a stream",
     dyn_impls: {
         IterableType: impl IsIterable {
-            fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
+            fn into_iterator(self: Box<Self>) -> FunctionResult<IteratorValue> {
                 Ok(IteratorValue::new_for_stream(*self))
             }
 
-            fn len(&self, _error_span_range: SpanRange) -> ExecutionResult<usize> {
+            fn iterable_len(&self, _error_span_range: SpanRange) -> FunctionResult<usize> {
                 Ok(self.len())
             }
         }
@@ -121,7 +121,7 @@ impl_resolvable_argument_for! {
 define_type_features! {
     impl StreamType,
     pub(crate) mod stream_interface {
-        pub(crate) mod methods {
+        methods {
             // This is also on iterable, but is specialized here for performance
             fn len(this: AnyRef<OutputStream>) -> usize {
                 this.len()
@@ -132,7 +132,7 @@ define_type_features! {
                 this.is_empty()
             }
 
-            fn flatten(this: OutputStream) -> ExecutionResult<TokenStream> {
+            fn flatten(this: OutputStream) -> FunctionResult<TokenStream> {
                 Ok(this.to_token_stream_removing_any_transparent_groups())
             }
 
@@ -142,39 +142,39 @@ define_type_features! {
                 OutputStream::raw(this.to_token_stream_removing_any_transparent_groups())
             }
 
-            fn infer(this: OutputStream) -> ExecutionResult<AnyValue> {
+            fn infer(this: OutputStream) -> FunctionResult<AnyValue> {
                 Ok(this.coerce_into_value())
             }
 
-            fn split(this: OutputStream, separator: AnyRef<OutputStream>, settings: Option<SplitSettings>) -> ExecutionResult<ArrayValue> {
+            fn split(this: OutputStream, separator: AnyRef<OutputStream>, settings: Option<SplitSettings>) -> FunctionResult<ArrayValue> {
                 handle_split(this, &separator, settings.unwrap_or_default())
             }
 
             // STRING-BASED CONVERSION METHODS
             // ===============================
 
-            [context] fn to_ident(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Ident> {
+            [context] fn to_ident(this: Spanned<AnyRef<OutputStream>>) -> FunctionResult<Ident> {
                 let string = this.concat_content(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident(context, string.into_spanned_ref(this.span_range()))
             }
 
-            [context] fn to_ident_camel(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_camel(this: Spanned<AnyRef<OutputStream>>) -> FunctionResult<Ident> {
                 let string = this.concat_content(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident_camel(context, string.into_spanned_ref(this.span_range()))
             }
 
-            [context] fn to_ident_snake(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_snake(this: Spanned<AnyRef<OutputStream>>) -> FunctionResult<Ident> {
                 let string = this.concat_content(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident_snake(context, string.into_spanned_ref(this.span_range()))
             }
 
-            [context] fn to_ident_upper_snake(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_upper_snake(this: Spanned<AnyRef<OutputStream>>) -> FunctionResult<Ident> {
                 let string = this.concat_content(&ConcatBehaviour::standard(this.span_range()));
                 string_interface::methods::to_ident_upper_snake(context, string.into_spanned_ref(this.span_range()))
             }
 
             // Some literals become Value::UnsupportedLiteral but can still be round-tripped back to a stream
-            [context] fn to_literal(this: Spanned<AnyRef<OutputStream>>) -> ExecutionResult<AnyValue> {
+            [context] fn to_literal(this: Spanned<AnyRef<OutputStream>>) -> FunctionResult<AnyValue> {
                 let string = this.concat_content(&ConcatBehaviour::literal(this.span_range()));
                 let literal = string_interface::methods::to_literal(context, string.into_spanned_ref(this.span_range()))?;
                 Ok(AnyValue::for_literal(literal).into_any_value())
@@ -184,18 +184,18 @@ define_type_features! {
             // ============
 
             // NOTE: with_span() exists on all values, this is just a specialized mutable version for streams
-            fn set_span(mut this: Mutable<OutputStream>, span_source: AnyRef<OutputStream>) -> ExecutionResult<()> {
+            fn set_span(mut this: Mutable<OutputStream>, span_source: AnyRef<OutputStream>) -> FunctionResult<()> {
                 let span_range = span_source.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
                 this.replace_first_level_spans(span_range.join_into_span_else_start());
                 Ok(())
             }
 
-            fn error(this: AnyRef<OutputStream>, message: AnyRef<String>) -> ExecutionResult<Never> {
+            fn error(this: AnyRef<OutputStream>, message: AnyRef<String>) -> FunctionResult<Never> {
                 let error_span_range = this.resolve_content_span_range().unwrap_or(Span::call_site().span_range());
                 error_span_range.assertion_err(message.as_str())
             }
 
-            fn assert(this: AnyRef<OutputStream>, condition: bool, message: Option<AnyRef<String>>) -> ExecutionResult<()> {
+            fn assert(this: AnyRef<OutputStream>, condition: bool, message: Option<AnyRef<String>>) -> FunctionResult<()> {
                 if condition {
                     Ok(())
                 } else {
@@ -208,7 +208,7 @@ define_type_features! {
                 }
             }
 
-            fn assert_eq(this: AnyRef<OutputStream>, lhs: Spanned<AnyValueAnyRef>, rhs: Spanned<AnyValueAnyRef>, message: Option<AnyRef<String>>) -> ExecutionResult<()> {
+            [context] fn assert_eq(this: AnyRef<OutputStream>, lhs: Spanned<AnyValueAnyRef>, rhs: Spanned<AnyValueAnyRef>, message: Option<AnyRef<String>>) -> FunctionResult<()> {
                 match AnyValueRef::debug_eq(&lhs.as_ref_value(), &rhs.as_ref_value()) {
                     Ok(()) => Ok(()),
                     Err(debug_error) => {
@@ -218,8 +218,8 @@ define_type_features! {
                             None => format!(
                                 "Assertion failed: {}\n  lhs = {}\n  rhs = {}",
                                 debug_error.format_message(),
-                                lhs.as_ref_value().concat_recursive(&ConcatBehaviour::debug(lhs.span_range()))?,
-                                rhs.as_ref_value().concat_recursive(&ConcatBehaviour::debug(rhs.span_range()))?,
+                                lhs.as_ref_value().concat_recursive(&ConcatBehaviour::debug(lhs.span_range()), context.interpreter)?,
+                                rhs.as_ref_value().concat_recursive(&ConcatBehaviour::debug(rhs.span_range()), context.interpreter)?,
                             ),
                         };
                         error_span_range.assertion_err(message)
@@ -227,39 +227,42 @@ define_type_features! {
                 }
             }
 
-            [context] fn reinterpret_as_run(Spanned(this, span_range): Spanned<OutputStream>) -> ExecutionResult<AnyValue> {
+            [context] fn reinterpret_as_run(Spanned(this, span_range): Spanned<OutputStream>) -> FunctionResult<AnyValue> {
                 let source = this.into_token_stream();
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(ExpressionBlockContent::parse, ExpressionBlockContent::control_flow_pass)?;
                 let mut inner_interpreter = Interpreter::new(scope_definitions);
-                let return_value = reparsed.evaluate_spanned(&mut inner_interpreter, span_range, RequestedOwnership::owned())?.expect_owned();
+                let return_value = reparsed.evaluate_spanned(&mut inner_interpreter, span_range, RequestedOwnership::owned())
+                    .expect_no_interrupts()?
+                    .expect_owned();
                 if !inner_interpreter.complete().is_empty() {
                     return context.control_flow_err("reinterpret_as_run does not allow non-empty emit output")
                 }
                 Ok(return_value.0)
             }
 
-            fn reinterpret_as_stream(Spanned(this, span_range): Spanned<OutputStream>) -> ExecutionResult<OutputStream> {
+            fn reinterpret_as_stream(Spanned(this, span_range): Spanned<OutputStream>) -> FunctionResult<OutputStream> {
                 let source = this.into_token_stream();
                 let (reparsed, scope_definitions) = source.source_parse_and_analyze(
                     |input| SourceStream::parse_with_span(input, span_range.span_from_join_else_start()),
                     SourceStream::control_flow_pass,
                 )?;
                 let mut inner_interpreter = Interpreter::new(scope_definitions);
-                reparsed.interpret(&mut inner_interpreter)?;
+                reparsed.output_to_stream(&mut OutputInterpreter::new_unchecked(&mut inner_interpreter))
+                    .expect_no_interrupts()?;
                 Ok(inner_interpreter.complete())
             }
         }
-        pub(crate) mod unary_operations {
-            [context] fn cast_coerced_to_value(Spanned(this, span): Spanned<OutputStream>) -> ExecutionResult<ReturnedValue> {
+        unary_operations {
+            [context] fn cast_coerced_to_value(Spanned(this, span): Spanned<OutputStream>) -> FunctionResult<ReturnedValue> {
                 let coerced = this.coerce_into_value();
                 if let AnyValue::Stream(_) = &coerced {
                     return span.value_err("The stream could not be coerced into a single value");
                 }
                 // Re-run the cast operation on the coerced value
-                Ok(context.operation.evaluate(Spanned(coerced, span))?.0)
+                Ok(context.operation.evaluate(Spanned(coerced, span), context.interpreter)?.0)
             }
         }
-        pub(crate) mod binary_operations {
+        binary_operations {
             fn add(mut lhs: OutputStream, rhs: OutputStream) -> OutputStream {
                 rhs.append_into(&mut lhs);
                 lhs
@@ -329,13 +332,13 @@ impl ParseSource for StreamLiteral {
     }
 }
 
-impl Interpret for StreamLiteral {
-    fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
+impl OutputToStream for StreamLiteral {
+    fn output_to_stream(&self, output: &mut OutputInterpreter) -> ExecutionResult<()> {
         match self {
-            StreamLiteral::Regular(lit) => lit.interpret(interpreter),
-            StreamLiteral::Raw(lit) => lit.interpret(interpreter),
-            StreamLiteral::Grouped(lit) => lit.interpret(interpreter),
-            StreamLiteral::Concatenated(lit) => lit.interpret(interpreter),
+            StreamLiteral::Regular(lit) => lit.output_to_stream(output),
+            StreamLiteral::Raw(lit) => lit.output_to_stream(output),
+            StreamLiteral::Grouped(lit) => lit.output_to_stream(output),
+            StreamLiteral::Concatenated(lit) => lit.output_to_stream(output),
         }
     }
 }
@@ -374,9 +377,9 @@ impl ParseSource for RegularStreamLiteral {
     }
 }
 
-impl Interpret for RegularStreamLiteral {
-    fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        self.content.interpret(interpreter)
+impl OutputToStream for RegularStreamLiteral {
+    fn output_to_stream(&self, output: &mut OutputInterpreter) -> ExecutionResult<()> {
+        self.content.output_to_stream(output)
     }
 }
 
@@ -412,11 +415,9 @@ impl ParseSource for RawStreamLiteral {
     }
 }
 
-impl Interpret for RawStreamLiteral {
-    fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        interpreter
-            .output(self)?
-            .extend_raw_tokens(self.content.clone());
+impl OutputToStream for RawStreamLiteral {
+    fn output_to_stream(&self, output: &mut OutputInterpreter) -> ExecutionResult<()> {
+        output.extend_raw_tokens(self.content.clone());
         Ok(())
     }
 }
@@ -453,10 +454,10 @@ impl ParseSource for GroupedStreamLiteral {
     }
 }
 
-impl Interpret for GroupedStreamLiteral {
-    fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        interpreter.in_output_group(Delimiter::None, self.brackets.span(), |interpreter| {
-            self.content.interpret(interpreter)
+impl OutputToStream for GroupedStreamLiteral {
+    fn output_to_stream(&self, output: &mut OutputInterpreter) -> ExecutionResult<()> {
+        output.in_output_group(Delimiter::None, self.brackets.span(), |output| {
+            self.content.output_to_stream(output)
         })
     }
 }
@@ -516,10 +517,9 @@ impl ParseSource for ConcatenatedStreamLiteral {
     }
 }
 
-impl Interpret for ConcatenatedStreamLiteral {
-    fn interpret(&self, interpreter: &mut Interpreter) -> ExecutionResult<()> {
-        let stream =
-            interpreter.capture_output(|interpreter| self.content.interpret(interpreter))?;
+impl OutputToStream for ConcatenatedStreamLiteral {
+    fn output_to_stream(&self, output: &mut OutputInterpreter) -> ExecutionResult<()> {
+        let stream = output.capture_output(|output| self.content.output_to_stream(output))?;
         let string = stream.concat_content(&ConcatBehaviour::standard(self.span_range()));
         let ident_span = stream
             .resolve_content_span_range()
@@ -548,10 +548,13 @@ impl Interpret for ConcatenatedStreamLiteral {
                 string_to_literal(str, self, ident_span)?.into_any_value()
             }
         };
-        value.as_ref_value().output_to(
-            Grouping::Flattened,
-            &mut ToStreamContext::new(interpreter.output(self)?, self.span_range()),
-        )
+        value
+            .as_ref_value()
+            .output_to(
+                Grouping::Flattened,
+                &mut ToStreamContext::new(output, self.span_range()),
+            )
+            .into_execution_result()
     }
 }
 

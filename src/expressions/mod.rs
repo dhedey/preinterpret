@@ -2,6 +2,7 @@
 use crate::internal_prelude::*;
 use expression_parsing::*;
 
+mod closures;
 mod concepts;
 mod control_flow;
 mod equality;
@@ -16,6 +17,7 @@ mod statements;
 mod type_resolution;
 mod values;
 
+pub(crate) use closures::*;
 #[allow(unused_imports)] // Whilst we're building it out
 pub(crate) use concepts::*;
 pub(crate) use control_flow::*;

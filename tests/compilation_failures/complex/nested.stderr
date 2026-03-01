@@ -1,5 +1,5 @@
-error: The method error expects 1 non-self argument/s, but 0 were provided
- --> tests/compilation_failures/complex/nested.rs:9:25
+error: This function expects 1 argument, but 0 were provided
+ --> tests/compilation_failures/complex/nested.rs:9:21
   |
 9 |                     %[].error()
-  |                         ^^^^^
+  |                     ^^^^^^^^^

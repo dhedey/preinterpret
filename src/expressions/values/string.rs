@@ -5,14 +5,14 @@ define_leaf_type! {
     content: String,
     kind: pub(crate) StringKind,
     type_name: "string",
-    articled_display_name: "a string",
+    articled_value_name: "a string",
     dyn_impls: {
         IterableType: impl IsIterable {
-            fn into_iterator(self: Box<Self>) -> ExecutionResult<IteratorValue> {
+            fn into_iterator(self: Box<Self>) -> FunctionResult<IteratorValue> {
                 Ok(IteratorValue::new_for_string_over_chars(*self))
             }
 
-            fn len(&self, _error_span_range: SpanRange) -> ExecutionResult<usize> {
+            fn iterable_len(&self, _error_span_range: SpanRange) -> FunctionResult<usize> {
                 // The iterator is over chars, so this must count chars.
                 // But contrast, string.len() counts bytes
                 Ok(self.chars().count())
@@ -46,9 +46,10 @@ pub(crate) fn string_to_ident(
     str: &str,
     error_source: &impl HasSpanRange,
     span: Span,
-) -> ExecutionResult<Ident> {
+) -> FunctionResult<Ident> {
     let ident = parse_str::<Ident>(str).map_err(|err| {
-        error_source.value_error(format!("`{}` is not a valid ident: {:?}", str, err))
+        error_source
+            .value_error::<FunctionError>(format!("`{}` is not a valid ident: {:?}", str, err))
     })?;
     Ok(ident.with_span(span))
 }
@@ -57,9 +58,10 @@ pub(crate) fn string_to_literal(
     str: &str,
     error_source: &impl HasSpanRange,
     span: Span,
-) -> ExecutionResult<Literal> {
+) -> FunctionResult<Literal> {
     let literal = Literal::from_str(str).map_err(|err| {
-        error_source.value_error(format!("`{}` is not a valid literal: {:?}", str, err))
+        error_source
+            .value_error::<FunctionError>(format!("`{}` is not a valid literal: {:?}", str, err))
     })?;
     Ok(literal.with_span(span))
 }
@@ -67,30 +69,30 @@ pub(crate) fn string_to_literal(
 define_type_features! {
     impl StringType,
     pub(crate) mod string_interface {
-        pub(crate) mod methods {
+        methods {
             // ==================
             // CONVERSION METHODS
             // ==================
-            [context] fn to_ident(this: Spanned<AnyRef<String>>) -> ExecutionResult<Ident> {
+            [context] fn to_ident(this: Spanned<AnyRef<String>>) -> FunctionResult<Ident> {
                 string_to_ident(&this, &this, context.span_from_join_else_start())
             }
 
-            [context] fn to_ident_camel(this: Spanned<AnyRef<String>>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_camel(this: Spanned<AnyRef<String>>) -> FunctionResult<Ident> {
                 let str = string_conversion::to_upper_camel_case(&this);
                 string_to_ident(&str, &this, context.span_from_join_else_start())
             }
 
-            [context] fn to_ident_snake(this: Spanned<AnyRef<String>>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_snake(this: Spanned<AnyRef<String>>) -> FunctionResult<Ident> {
                 let str = string_conversion::to_lower_snake_case(&this);
                 string_to_ident(&str, &this, context.span_from_join_else_start())
             }
 
-            [context] fn to_ident_upper_snake(this: Spanned<AnyRef<String>>) -> ExecutionResult<Ident> {
+            [context] fn to_ident_upper_snake(this: Spanned<AnyRef<String>>) -> FunctionResult<Ident> {
                 let str = string_conversion::to_upper_snake_case(&this);
                 string_to_ident(&str, &this, context.span_from_join_else_start())
             }
 
-            [context] fn to_literal(this: Spanned<AnyRef<String>>) -> ExecutionResult<Literal> {
+            [context] fn to_literal(this: Spanned<AnyRef<String>>) -> FunctionResult<Literal> {
                 string_to_literal(&this, &this, context.span_from_join_else_start())
             }
 
@@ -141,12 +143,12 @@ define_type_features! {
                 string_conversion::insert_spaces_between_words(&this)
             }
         }
-        pub(crate) mod unary_operations {
+        unary_operations {
             fn cast_to_string(this: String) -> String {
                 this
             }
         }
-        pub(crate) mod binary_operations {
+        binary_operations {
             fn add(mut lhs: String, rhs: AnyRef<String>) -> String {
                 lhs.push_str(rhs.deref());
                 lhs
@@ -228,7 +230,7 @@ impl ResolvableShared<AnyValue> for str {
     fn resolve_from_ref<'a>(
         value: &'a AnyValue,
         context: ResolutionContext,
-    ) -> ExecutionResult<&'a Self> {
+    ) -> FunctionResult<&'a Self> {
         match value {
             AnyValueContent::String(s) => Ok(s.as_str()),
             _ => context.err("a string", value),

@@ -167,9 +167,7 @@ fn test_reinterpret() {
 fn test_very_long_expression_works() {
     assert_eq!(
         run! {
-            None.configure_preinterpret(%{
-                iteration_limit: 100000,
-            });
+            preinterpret::set_iteration_limit(100000);
             let expression = %[];
             for _ in 0..100000 {
                 expression += %[1 +]
@@ -299,7 +297,7 @@ fn test_range() {
         5
     );
     run! {
-        %[_].assert_eq('A'.. .into_iter().take(5).to_string(), "ABCDE");
+        %[_].assert_eq('A'.. .into_iter().take(5).to_vec().to_string(), "ABCDE");
     }
 }
 
@@ -551,6 +549,67 @@ fn test_objects() {
         ),
         r#"%{ a: 1, b: 7, c: None, x: %{}, z: None }"#
     );
+    run!(
+        let obj = %{};
+        let y = obj["non_existent_key"];
+        %[_].assert_eq(y, None);
+    );
+    run!(
+        let obj = %{};
+        let y = obj["non_existent_key"].as_ref();
+        %[_].assert_eq(y, None);
+    );
+    // The following few tests look like duplicates, but they actually
+    // stretch edge-cases in the propogation of different ownerships
+    // up the ownership chain.
+    run!(
+        let obj = %{};
+        %[_].assert(obj["non_existent_key"].is_none());
+        // Ensure the line above isn't a last-use owned, so resolves a ref
+        let _ = obj;
+    );
+    run!(
+        let obj = %{};
+        %[_].assert(obj.non_existent_key.is_none());
+        // Ensure the line above isn't a last-use owned, so resolves a ref
+        let _ = obj;
+    );
+    run!(
+        let obj = %{};
+        %[_].assert_eq(obj["non_existent_key"], None);
+        // Ensure the line above isn't a last-use owned, so resolves a ref
+        let _ = obj;
+    );
+    run!(
+        let obj = %{};
+        %[_].assert_eq(obj.non_existent_key, None);
+        // Ensure the line above isn't a last-use owned, so resolves a ref
+        let _ = obj;
+    );
+    run!(
+        let obj = %{};
+        obj.key = 123;
+        %[].assert_eq(obj.key, 123);
+        // Ensure the line above isn't a last-use owned, so resolves a ref
+        let _ = obj;
+    );
+    // Method-shadowing keys can be set/accessed via indexed syntax
+    // "zip" is a method on objects, but we can still use it as a key via ["zip"]
+    run!(
+        let obj = %{ ["zip"]: 123 };
+        %[_].assert_eq(obj["zip"], 123);
+    );
+    // Setting "zip" via index access also works
+    run!(
+        let obj = %{};
+        obj["zip"] = 456;
+        %[_].assert_eq(obj["zip"], 456);
+    );
+    // Accessing a non-existent "zip" value works, and doesn't give the method
+    run!(
+        let obj = %{};
+        %[_].assert_eq(obj["zip"], None);
+    );
 }
 
 #[test]
@@ -573,6 +632,10 @@ fn test_method_calls() {
     );
     // Push returns None
     assert_eq!(run!([1, 2, 3].as_mut().push(4).to_debug_string()), "None");
+    // Pop returns last value
+    assert_eq!(run!([1, 2].as_mut().pop().to_debug_string()), "2");
+    // Pop empty returns None
+    assert_eq!(run!([].as_mut().pop().to_debug_string()), "None");
     // Converting to mut and then to shared works
     assert_eq!(run!([].as_mut().len().to_debug_string()), "0usize");
     assert_eq!(

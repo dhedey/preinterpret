@@ -23,9 +23,8 @@ impl ExpressionNode {
                                 .return_argument_value(Spanned(resolved, variable.span_range()))?
                         }
                     },
-                    Leaf::TypeProperty(type_property) => {
-                        context.evaluate(|_, ownership| type_property.resolve_spanned(ownership))?
-                    }
+                    Leaf::TypeProperty(type_property) => context
+                        .evaluate(|_, ownership| Ok(type_property.resolve_spanned(ownership)?))?,
                     Leaf::Block(block) => context.evaluate(|interpreter, ownership| {
                         block.evaluate_spanned(interpreter, ownership)
                     })?,
@@ -33,7 +32,7 @@ impl ExpressionNode {
                         // We return a freely clonable CopyOnWrite in order to delay the clone of the literal if it's not necessary
                         // This allows something like e.g. x[0][5][2] to only clone the innermost value instead of the full multi-dimensional array
                         let shared_cloned = Shared::clone(value);
-                        let cow = CopyOnWriteValue::shared_in_place_of_owned(shared_cloned);
+                        let cow = AnyValueCopyOnWrite::shared_in_place_of_owned(shared_cloned);
                         context.return_returned_value(Spanned(
                             ReturnedValue::CopyOnWrite(cow),
                             *span_range,
@@ -43,7 +42,7 @@ impl ExpressionNode {
                         let span = stream_literal.span_range();
                         let value = context
                             .interpreter()
-                            .capture_output(|interpreter| stream_literal.interpret(interpreter))?;
+                            .capture_output(|output| stream_literal.output_to_stream(output))?;
                         context.return_value(Spanned(value, span))?
                     }
                     Leaf::ParseTemplateLiteral(consume_literal) => {
@@ -79,6 +78,11 @@ impl ExpressionNode {
                     Leaf::ParseExpression(parse_expression) => {
                         context.evaluate(|interpreter, ownership| {
                             parse_expression.evaluate_spanned(interpreter, ownership)
+                        })?
+                    }
+                    Leaf::ClosureExpression(closure_expression) => {
+                        context.evaluate(|interpreter, ownership| {
+                            Ok(closure_expression.evaluate_spanned(interpreter, ownership)?)
                         })?
                     }
                 }
@@ -118,11 +122,10 @@ impl ExpressionNode {
                 equals_token,
                 value,
             } => AssignmentBuilder::start(context, *assignee, *equals_token, *value),
-            ExpressionNode::MethodCall {
-                node,
-                method,
-                parameters,
-            } => MethodCallBuilder::start(context, *node, method.clone(), parameters),
+            ExpressionNode::Invocation {
+                invokable,
+                invocation,
+            } => InvocationBuilder::start(context, *invokable, invocation),
         })
     }
 

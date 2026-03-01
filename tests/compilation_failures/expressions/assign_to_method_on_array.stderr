@@ -1,0 +1,5 @@
+error: Cannot assign to `.to_string` because it is a method on an array value
+ --> tests/compilation_failures/expressions/assign_to_method_on_array.rs:6:13
+  |
+6 |         arr.to_string = "hello";
+  |             ^^^^^^^^^
