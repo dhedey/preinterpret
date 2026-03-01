@@ -261,7 +261,7 @@ Possible punted:
 - [ ] Support for `move()` expressions in closures.
   - `move(x)` / `move(a.b.as_ref())` / `move(a.b.as_mut())` => we hoist up the content into the previous frame (effectively temporarily change `current_frame_id` to be the parent in the `FlowAnalysisState` - pretty easy).
   - These can be an anonymous definition in the root frame of the closure, which is referenced inline.
--[ ] Possibly - not require `Clone` on iterators:
+- [ ] Possibly - not require `Clone` on iterators:
   - Make `TryClone -> Result<T, &T>`
 
 ## Fix broken "Disabled" abstraction

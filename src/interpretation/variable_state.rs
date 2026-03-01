@@ -30,8 +30,8 @@ impl VariableContent {
     }
 }
 
-const UNITIALIZED_ERR: &str = "Cannot resolve uninitialized variable. This shouldn't be possible, because all variables are set on first use.";
-const FINISHED_ERR: &str = "Cannot resolve finished variable. This shouldn't be possible, because is_final should be marked correctly. If you see this error, please report a bug to preinterpret on github with a reproduction case.";
+const UNINITIALIZED_ERR: &str = "Cannot resolve uninitialized variable. This shouldn't be possible, because all variables are set on first use.";
+const FINISHED_ERR: &str = "Cannot resolve finished variable. This shouldn't be possible, because is_final should be marked correctly. If you see this error, please report a bug to preinterpret on GitHub with a reproduction case.";
 
 impl VariableState {
     pub(crate) fn define(&mut self, value: VariableContent) {
@@ -52,13 +52,13 @@ impl VariableState {
         if is_final && blocked_from_mutation.is_none() {
             let content = std::mem::replace(self, VariableState::Finished);
             match content {
-                VariableState::Uninitialized => panic!("{}", UNITIALIZED_ERR),
+                VariableState::Uninitialized => panic!("{}", UNINITIALIZED_ERR),
                 VariableState::Value(content) => content,
                 VariableState::Finished => panic!("{}", FINISHED_ERR),
             }
         } else {
             match self {
-                VariableState::Uninitialized => panic!("{}", UNITIALIZED_ERR),
+                VariableState::Uninitialized => panic!("{}", UNINITIALIZED_ERR),
                 VariableState::Value(content) => content.clone(),
                 VariableState::Finished => panic!("{}", FINISHED_ERR),
             }
@@ -80,7 +80,7 @@ impl VariableState {
         let content = if is_final && blocked_from_mutation.is_none() {
             let content = std::mem::replace(self, VariableState::Finished);
             match content {
-                VariableState::Uninitialized => panic!("{}", UNITIALIZED_ERR),
+                VariableState::Uninitialized => panic!("{}", UNINITIALIZED_ERR),
                 VariableState::Value(content) => match content.into_owned_as_only_owner() {
                     Ok(owned) => {
                         if matches!(
@@ -109,7 +109,7 @@ impl VariableState {
             }
         } else {
             match self {
-                VariableState::Uninitialized => panic!("{}", UNITIALIZED_ERR),
+                VariableState::Uninitialized => panic!("{}", UNINITIALIZED_ERR),
                 VariableState::Value(content) => content.clone(),
                 VariableState::Finished => panic!("{}", FINISHED_ERR),
             }

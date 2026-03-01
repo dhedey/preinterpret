@@ -1,7 +1,7 @@
 error: Cannot create a mutable reference because it clashes with an existing reference:
        This reference : [*active*] &mut my_arr (of type any)
        Other reference: [inactive] &mut my_arr[0] (of type any)
-       Reason         : mutation may invalidate the other descendent reference
+       Reason         : mutation may invalidate the other descendant reference
  --> tests/compilation_failures/references/with_inactive_mut_attempt_mutate_its_ancestor.rs:6:24
   |
 6 |         my_arr[0].push(my_arr.pop())

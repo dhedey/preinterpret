@@ -164,7 +164,7 @@ impl IsArgument for CopyOnWrite<AnyValue> {
 }
 
 impl IsArgument for CopyOnWrite<FloatValue> {
-    type ValueType = AnyType;
+    type ValueType = FloatType;
     const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::CopyOnWrite;
 
     fn from_argument(Spanned(value, span): Spanned<ArgumentValue>) -> FunctionResult<Self> {

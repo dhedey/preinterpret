@@ -132,7 +132,7 @@ impl CopyOnWrite<AnyValue> {
     }
 }
 
-/// A disabled copy-on-write value that can be safely cloned and dropped.
+/// An inactive copy-on-write value that can be safely cloned and dropped.
 pub(crate) enum InactiveCopyOnWrite<T: 'static> {
     Owned(Owned<T>),
     SharedWithInfallibleCloning(InactiveShared<T>),

@@ -362,12 +362,12 @@ enum PathComparison {
     /// but they are not identical or in an ancestor/descendant relationship.
     /// e.g. left = x[0..10], right = x[5..15]
     Overlapping,
-    /// The right path is a descendent of the left path.
+    /// The right path is a descendant of the left path.
     /// e.g. right = left.x or right = left[0]["key"]
-    RightIsDescendent,
-    /// The left path is a descendent of the right path.
+    RightIsDescendant,
+    /// The left path is a descendant of the right path.
     /// e.g. left = right.x or left = right[0]["key"]
-    LeftIsDescendent,
+    LeftIsDescendant,
     /// The left and right path refer to the same leaf value.
     /// But they may be in different forms. e.g. left = &any and right = &integer
     ReferencesEqual(TypeBindingComparison),
@@ -390,8 +390,8 @@ impl PathComparison {
             PathComparison::Overlapping => {
                 "mutation may invalidate the other overlapping reference"
             }
-            PathComparison::RightIsDescendent => {
-                "mutation may invalidate the other descendent reference"
+            PathComparison::RightIsDescendant => {
+                "mutation may invalidate the other descendant reference"
             }
             PathComparison::ReferencesEqual(TypeBindingComparison::RightIsSubtypeOfLeft)
             | PathComparison::ReferencesEqual(
@@ -403,10 +403,10 @@ impl PathComparison {
             | PathComparison::ReferencesEqual(TypeBindingComparison::Incomparable) => {
                 "mutation may invalidate the other reference by setting it to an incompatible type"
             }
-            // Mutable reference is a descendent of the other reference
+            // Mutable reference is a descendant of the other reference
             PathComparison::ReferencesEqual(TypeBindingComparison::Equal)
             | PathComparison::ReferencesEqual(TypeBindingComparison::LeftIsSubtypeOfRight)
-            | PathComparison::LeftIsDescendent => {
+            | PathComparison::LeftIsDescendant => {
                 if other_is_active {
                     "mutation may be observed from the other active reference, which breaks aliasing rules"
                 } else {
@@ -436,8 +436,8 @@ impl ReferencePath {
                 PathPartComparison::Divergent => PathComparison::Divergent,
                 PathPartComparison::IdenticalChildReference => continue,
                 PathPartComparison::OverlappingChildReference => PathComparison::Overlapping,
-                PathPartComparison::RightIsDescendent => PathComparison::RightIsDescendent,
-                PathPartComparison::LeftIsDescendent => PathComparison::LeftIsDescendent,
+                PathPartComparison::RightIsDescendant => PathComparison::RightIsDescendant,
+                PathPartComparison::LeftIsDescendant => PathComparison::LeftIsDescendant,
                 PathPartComparison::ReferencesEqual(inner) => {
                     PathComparison::ReferencesEqual(inner)
                 }
@@ -488,12 +488,12 @@ enum PathPartComparison {
     /// e.g. left = x[0..10], right = x[5..15]
     #[allow(unused)] // Kept for future, and to ensure we have the correct abstraction
     OverlappingChildReference,
-    /// The right path is a descendent of the left path.
+    /// The right path is a descendant of the left path.
     /// e.g. right = left.x or right = left[0]["key"]
-    RightIsDescendent,
-    /// The left path is a descendent of the right path.
+    RightIsDescendant,
+    /// The left path is a descendant of the right path.
     /// e.g. left = right.x or left = right[0]["key"]
-    LeftIsDescendent,
+    LeftIsDescendant,
     /// The left and right path refer to the same leaf value.
     /// But they may be in different forms. e.g. left = &any and right = &integer
     ReferencesEqual(TypeBindingComparison),
@@ -523,14 +523,14 @@ impl PathPart {
             },
             (PathPart::Child(a), PathPart::Value { bound_as }) => {
                 if bound_as.is_narrowing_to(&a.parent_type_kind()) {
-                    PathPartComparison::LeftIsDescendent
+                    PathPartComparison::LeftIsDescendant
                 } else {
                     PathPartComparison::Incompatible
                 }
             }
             (PathPart::Value { bound_as }, PathPart::Child(b)) => {
                 if bound_as.is_narrowing_to(&b.parent_type_kind()) {
-                    PathPartComparison::RightIsDescendent
+                    PathPartComparison::RightIsDescendant
                 } else {
                     PathPartComparison::Incompatible
                 }
