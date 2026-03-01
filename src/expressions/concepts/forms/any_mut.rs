@@ -22,20 +22,34 @@ pub(crate) struct BeAnyMut;
 impl IsForm for BeAnyMut {}
 impl IsHierarchicalForm for BeAnyMut {
     type Leaf<'a, T: IsLeafType> = AnyMut<'a, T::Leaf>;
+
+    #[inline]
+    fn covariant_leaf<'a, 'b, T: IsLeafType>(leaf: Self::Leaf<'a, T>) -> Self::Leaf<'b, T>
+    where
+        'a: 'b,
+    {
+        leaf
+    }
 }
 
 impl IsDynCompatibleForm for BeAnyMut {
-    type DynLeaf<'a, D: 'static + ?Sized> = AnyMut<'a, D>;
+    type DynLeaf<'a, D: IsDynType> = AnyMut<'a, D::DynContent>;
 
-    fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
-        leaf: Self::Leaf<'a, T>,
+    fn leaf_to_dyn<'a, T: IsLeafType, D: IsDynType>(
+        Spanned(leaf, span): Spanned<Self::Leaf<'a, T>>,
     ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
-        T::Leaf: CastDyn<D>,
+        T::Leaf: CastDyn<D::DynContent>,
     {
-        leaf.replace(|content, emplacer| match <T::Leaf>::map_mut(content) {
-            Ok(mapped) => Ok(emplacer.emplace(mapped)),
-            Err(this) => Err(emplacer.emplace(this)),
+        leaf.emplace_map(|content, emplacer| match <T::Leaf>::map_mut(content) {
+            Ok(mapped) => {
+                // SAFETY: PathExtension is correct for mapping to a dyn type
+                let mapped_mut = unsafe {
+                    MappedMut::new(mapped, PathExtension::TypeNarrowing(D::type_kind()), span)
+                };
+                Ok(emplacer.emplace(mapped_mut))
+            }
+            Err(_this) => Err(emplacer.revert()),
         })
     }
 }
@@ -56,11 +70,12 @@ impl MapFromArgument for BeAnyMut {
     const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Mutable;
 
     fn from_argument_value(
-        value: ArgumentValue,
+        Spanned(value, span): Spanned<ArgumentValue>,
     ) -> FunctionResult<Content<'static, AnyType, Self>> {
-        Ok(value
-            .expect_mutable()
-            .0
-            .replace(|inner, emplacer| inner.as_mut_value().into_mutable_any_mut(emplacer)))
+        Ok(value.expect_mutable().emplace_map(|inner, emplacer| {
+            inner
+                .as_mut_value()
+                .into_mutable_any_mut(emplacer, Some(span))
+        }))
     }
 }

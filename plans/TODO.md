@@ -241,34 +241,87 @@ Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
     - [x] Separation of `ExecutionInterrupt` and `FunctionError` - incorporated below
     - [x] `Iterator` returns `Result` change -> replaced with below
   * To implement `.map()`, we have a few things we need first:
-    -[x] An iterator trait where Interpreter is passed at next time.
-    -[ ] Possibly - not require `Clone` on iterators:
-      - Make `TryClone -> Result<T, &T>`
-      - Make `to_string` for iterator return `Iterator[?]`
+    - [x] An iterator trait where Interpreter is passed at next time.
+    - [x] Make `to_string` for iterator return `Iterator[?]`
   - [x] Create new iterator trait `PreinterpretIterator` and `IntoPreinterpretIterator` with `.next(&mut Interpreter)`
     - [x] Blanket implement it for `Iterator<AnyValue> + Clone`
     - [x] Then replace e.g. for loop impl with it.
     - [x] Create `Map` and `Filter` types on top of it, to be able to implement `map` and `filter`
   - [ ] See if new iterators on iterator value can be fixed to be lazy
   - [ ] Salvage half-baked `FunctionValue` changes to allow invocation
-  - [ ] Consider if IteratorValue should have `Item = ReturnedValue`
   - [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`
   - [ ] Add tests for iterable methods
-- [ ] Add `array.sort`, `array.sort_by`
-- [ ] Look into if a closure like `|| { }()` can evade `attempt` block statue mutation checks. Maybe lean into it as a way to avoid htem, and mention it in the error message
+- [ ] Look into if a closure like `|| { }()` can evade `attempt` block statue mutation checks. Maybe lean into it as a way to avoid them, and mention it in the error message
 - [ ] Resolve all `TODO[functions]`
 
 Possible punted:
-- [ ] Allow variables to be marked owned / shared / mutable
-  - [ ] ... and maybe no marking accepts any?
-        ... so e.g. push_one_and_return_mut can have `let y = arr; y` without erroring
-  - [ ] Else - improve the errors so that the conversion error has some hint from the target explaining that the target can be changed to allow
-  shared/mutable instead.
+- [ ] Add `array.sort`, `array.sort_by`
 - [ ] Allow destructuring shared and mutable variables and arguments
 - [ ] Support optional arguments in closures
 - [ ] Support for `move()` expressions in closures.
   - `move(x)` / `move(a.b.as_ref())` / `move(a.b.as_mut())` => we hoist up the content into the previous frame (effectively temporarily change `current_frame_id` to be the parent in the `FlowAnalysisState` - pretty easy).
   - These can be an anonymous definition in the root frame of the closure, which is referenced inline.
+- [ ] Possibly - not require `Clone` on iterators:
+  - Make `TryClone -> Result<T, &T>`
+
+## Fix broken "Disabled" abstraction
+
+### Background
+
+Suddenly dawned on me - my Disabled arguments might not be safe.
+* Imagine if I get `my_arr = [[]]` a Shared `my_arr[0]` then do `my_arr.pop()`
+* Then we enable `my_arr[0]` and get a use after free(!!). e.g. `my_arr[0].push(my_arr.pop())`.
+
+### Task list
+
+- [x] Write up model in `dynamic_references/mod.rs`
+- [x] Add structure for `dynamic_references`
+- [x] Create Referenceable, and Reference types
+- [x] Create error messages for rule breaks in `referenceable.rs`
+- [x] Add the following to `ReferenceCore` and maybe others:
+  - [x] Emplacing
+  - [x] Map, Try map
+  - [x] Ability to map deeper. Should take a `PathExtension` and a new span.
+- [x] Try replacing existing RefCell based abstractions with new custom dynamic references, and report on what breaks:
+  - `pub(crate) type Referenceable<L> = Rc<RefCell<L>>;` becomes `pub(crate) type Referenceable<L> = dynamic_references::Referenceable`
+  - `Shared` / `SharedSubRcRefCell` - both become type aliases for `SharedReference`
+  - `DisabledShared` becomes `InactiveSharedReference`
+  - `Mutable` / `MutableSubRcRefCell` - becomes type alias for `MutableReference`
+  - `DisabledMutable` becomes `InactiveMutableReference`
+- [x] Replace all the aliases:
+  - [x] Remove `Shared`, `Mutable`, `SharedValue`, `AssigneeValue`
+  - [x] Move `type Shared<T>` and `type Mutable<T>` alongside `SharedReference` / `MutableReference`
+  - [x] Remove references to `MutableReference` and `SharedReference` outside these aliases
+  - [x] Rename `SharedReference -> Shared` and `MutableReference -> Mutable`
+  - [x] Rename `DisabledShared` -> `InactiveShared` and same for `Mutable`
+  - [x] Remove `type AssigneeValue` and `type SharedValue`
+  - [x] Move `Assignee` out of bindings. To e.g. `dynamic_references`
+  - [x] Rename `PathExtension::Tightening` to `PathExtension::TypeNarrowing`
+  - [x] Rename  `DisabledArgumentValue` and `DisabledCopyOnWrite` to `Inactive__` and their method from `enable` to `activate` and ditto with `disable -> deactivate`
+- [x] See what else can be deleted from `bindings.rs`
+  - [x] Unify LateBound into `LateBound`
+  - [x] Unify CopyOnWrite into `QqqCopyOnWrite`
+- [x] Add various tests:
+  - [x] Stretching different error messages
+  - [x] Showing I can do e.g. `x.a += x.b`
+  - [x] Show that `let my_arr = [[]]; my_arr[0].push(my_arr.pop())` gives a suitable error
+
+### Other ideas
+
+- [ ] Make it so that we disable the parent whilst resolving a property/index 
+
+We could imagine a world where we are more clever over our mutation:
+* Note that I can reference `x.a` and `x.b` separately, or `x[0]` and `x[1]` but in that case, can't mutate `x` itself to create new fields.
+  * Or we use a `ExpandableVec<N>` which allocates a `Vec<Box<[_; N]>>` and doesn't move the inner chunks; allowing us to add new fields without breaking pointers to existing ones.
+  Maybe some SmallVec or SegVec like library has this feature? Stores an initial chunk `[_; N]` and then a `Vec<Box<[_; N]>>`
+
+- [ ] Consider if IteratorValue, Object and Array should have `Item = DisabledReturnedValue`
+  - [ ] And add `iter()` and `iter_mut()` methods
+- [ ] Allow variables to be marked owned / shared / mutable
+  - [ ] ... and maybe no marking accepts any?
+        ... so e.g. push_one_and_return_mut can have `let y = arr; y` without erroring
+  - [ ] Else - improve the errors so that the conversion error has some hint from the target explaining that the target can be changed to allow
+  shared/mutable instead.
 
 ## Parser - Methods using closures
 
@@ -301,7 +354,7 @@ input.repeated(
 )
 ```
 - [ ] `input.any_group(|inner| { })`
-- [ ] `input.group('()', |inner| { })`
+- [ ] `input.group("()", |inner| { })`
 - [ ] `input.transparent_group(|inner| { })`
 
 ## Parser - Better Types for Tokens

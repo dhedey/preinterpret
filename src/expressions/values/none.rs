@@ -9,6 +9,10 @@ define_leaf_type! {
     dyn_impls: {},
 }
 
+pub(crate) const fn none() -> AnyValue {
+    AnyValue::None(())
+}
+
 impl ResolvableArgumentTarget for () {
     type ValueType = NoneType;
 }

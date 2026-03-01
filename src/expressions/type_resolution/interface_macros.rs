@@ -313,10 +313,10 @@ where
 // ============================================================================
 
 pub(crate) fn apply_property_shared<'a, S: ResolvableShared<AnyValue> + ?Sized + 'a>(
-    f: for<'b> fn(PropertyAccessCallContext, &'b S) -> FunctionResult<&'b AnyValue>,
+    f: for<'b> fn(PropertyAccessCallContext, &'b S) -> FunctionResult<MappedRef<'b, AnyValue>>,
     ctx: PropertyAccessCallContext,
     source: &'a AnyValue,
-) -> FunctionResult<&'a AnyValue> {
+) -> FunctionResult<MappedRef<'a, AnyValue>> {
     let source = S::resolve_from_ref(
         source,
         ResolutionContext::new(&ctx.property.span_range(), "The property access source"),
@@ -325,11 +325,15 @@ pub(crate) fn apply_property_shared<'a, S: ResolvableShared<AnyValue> + ?Sized +
 }
 
 pub(crate) fn apply_property_mutable<'a, S: ResolvableMutable<AnyValue> + ?Sized + 'a>(
-    f: for<'b> fn(PropertyAccessCallContext, &'b mut S, bool) -> FunctionResult<&'b mut AnyValue>,
+    f: for<'b> fn(
+        PropertyAccessCallContext,
+        &'b mut S,
+        bool,
+    ) -> FunctionResult<MappedMut<'b, AnyValue>>,
     ctx: PropertyAccessCallContext,
     source: &'a mut AnyValue,
     auto_create: bool,
-) -> FunctionResult<&'a mut AnyValue> {
+) -> FunctionResult<MappedMut<'a, AnyValue>> {
     let source = S::resolve_from_mut(
         source,
         ResolutionContext::new(&ctx.property.span_range(), "The property access source"),
@@ -358,11 +362,11 @@ pub(crate) fn apply_index_shared<'a, S: ResolvableShared<AnyValue> + ?Sized + 'a
         IndexAccessCallContext,
         &'b S,
         Spanned<AnyValueRef>,
-    ) -> FunctionResult<&'b AnyValue>,
+    ) -> FunctionResult<MappedRef<'b, AnyValue>>,
     ctx: IndexAccessCallContext,
     source: &'a AnyValue,
     index: Spanned<AnyValueRef>,
-) -> FunctionResult<&'a AnyValue> {
+) -> FunctionResult<MappedRef<'a, AnyValue>> {
     let source = S::resolve_from_ref(
         source,
         ResolutionContext::new(&ctx.access.span_range(), "The index access source"),
@@ -370,18 +374,19 @@ pub(crate) fn apply_index_shared<'a, S: ResolvableShared<AnyValue> + ?Sized + 'a
     f(ctx, source, index)
 }
 
+#[allow(clippy::type_complexity)]
 pub(crate) fn apply_index_mutable<'a, S: ResolvableMutable<AnyValue> + ?Sized + 'a>(
     f: for<'b> fn(
         IndexAccessCallContext,
         &'b mut S,
         Spanned<AnyValueRef>,
         bool,
-    ) -> FunctionResult<&'b mut AnyValue>,
+    ) -> FunctionResult<MappedMut<'b, AnyValue>>,
     ctx: IndexAccessCallContext,
     source: &'a mut AnyValue,
     index: Spanned<AnyValueRef>,
     auto_create: bool,
-) -> FunctionResult<&'a mut AnyValue> {
+) -> FunctionResult<MappedMut<'a, AnyValue>> {
     let source = S::resolve_from_mut(
         source,
         ResolutionContext::new(&ctx.access.span_range(), "The index access source"),
@@ -601,9 +606,9 @@ macro_rules! define_type_features {
                     #[allow(unused)]
                     use super::*;
 
-                    pub(crate) fn shared<'a>(if_empty!([$($property_shared_context)?][_ctx]): PropertyAccessCallContext, $($property_shared_args)*) -> FunctionResult<&'a AnyValue> $property_shared_body
+                    pub(crate) fn shared<'a>(if_empty!([$($property_shared_context)?][_ctx]): PropertyAccessCallContext, $($property_shared_args)*) -> FunctionResult<MappedRef<'a, AnyValue>> $property_shared_body
 
-                    pub(crate) fn mutable<'a>(if_empty!([$($property_mutable_context)?][_ctx]): PropertyAccessCallContext, $($property_mutable_args)*) -> FunctionResult<&'a mut AnyValue> $property_mutable_body
+                    pub(crate) fn mutable<'a>(if_empty!([$($property_mutable_context)?][_ctx]): PropertyAccessCallContext, $($property_mutable_args)*) -> FunctionResult<MappedMut<'a, AnyValue>> $property_mutable_body
 
                     pub(crate) fn owned(if_empty!([$($property_owned_context)?][_ctx]): PropertyAccessCallContext, $($property_owned_args)*) -> FunctionResult<AnyValue> $property_owned_body
                 }
@@ -622,9 +627,9 @@ macro_rules! define_type_features {
                     #[allow(unused)]
                     use super::*;
 
-                    pub(crate) fn shared<'a>(if_empty!([$($index_shared_context)?][_ctx]): IndexAccessCallContext, $($index_shared_args)*) -> FunctionResult<&'a AnyValue> $index_shared_body
+                    pub(crate) fn shared<'a>(if_empty!([$($index_shared_context)?][_ctx]): IndexAccessCallContext, $($index_shared_args)*) -> FunctionResult<MappedRef<'a, AnyValue>> $index_shared_body
 
-                    pub(crate) fn mutable<'a>(if_empty!([$($index_mutable_context)?][_ctx]): IndexAccessCallContext, $($index_mutable_args)*) -> FunctionResult<&'a mut AnyValue> $index_mutable_body
+                    pub(crate) fn mutable<'a>(if_empty!([$($index_mutable_context)?][_ctx]): IndexAccessCallContext, $($index_mutable_args)*) -> FunctionResult<MappedMut<'a, AnyValue>> $index_mutable_body
 
                     pub(crate) fn owned(if_empty!([$($index_owned_context)?][_ctx]): IndexAccessCallContext, $($index_owned_args)*) -> FunctionResult<AnyValue> $index_owned_body
                 }

@@ -2,10 +2,10 @@ use super::*;
 
 pub(crate) enum Argument<L: IsValueLeaf> {
     Owned(L),
-    CopyOnWrite(QqqCopyOnWrite<L>),
-    Mutable(QqqMutable<L>),
-    Assignee(QqqAssignee<L>),
-    Shared(QqqShared<L>),
+    CopyOnWrite(CopyOnWrite<L>),
+    Mutable(Mutable<L>),
+    Assignee(Assignee<L>),
+    Shared(Shared<L>),
 }
 
 impl<L: IsValueLeaf> IsValueContent for Argument<L> {
@@ -31,13 +31,21 @@ impl IsForm for BeArgument {}
 
 impl IsHierarchicalForm for BeArgument {
     type Leaf<'a, T: IsLeafType> = Argument<T::Leaf>;
+
+    #[inline]
+    fn covariant_leaf<'a, 'b, T: IsLeafType>(leaf: Self::Leaf<'a, T>) -> Self::Leaf<'b, T>
+    where
+        'a: 'b,
+    {
+        leaf
+    }
 }
 
 impl MapFromArgument for BeArgument {
     const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::AsIs;
 
     fn from_argument_value(
-        value: ArgumentValue,
+        Spanned(value, _span): Spanned<ArgumentValue>,
     ) -> FunctionResult<Content<'static, AnyType, Self>> {
         todo!("Argument")
     }

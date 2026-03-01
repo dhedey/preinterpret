@@ -18,6 +18,13 @@ pub(crate) trait IsHierarchicalForm: IsForm {
     type Leaf<'a, T: IsLeafType>: IsValueContent<Type = T, Form = Self>
         + IntoValueContent<'a>
         + FromValueContent<'a>;
+
+    /// Proof of covariance: shrinks the lifetime of a leaf from `'a` to `'b`.
+    /// Implementors should use the identity function `{ leaf }` as the body.
+    /// This will only compile if the leaf type is genuinely covariant in `'a`.
+    fn covariant_leaf<'a, 'b, T: IsLeafType>(leaf: Self::Leaf<'a, T>) -> Self::Leaf<'b, T>
+    where
+        'a: 'b;
 }
 
 pub(crate) trait LeafAsRefForm: IsHierarchicalForm {
@@ -32,7 +39,7 @@ pub(crate) trait LeafAsRefForm: IsHierarchicalForm {
     fn leaf_clone_to_owned_transparently<'r, 'a: 'r, T: IsLeafType>(
         leaf: &'r Self::Leaf<'a, T>,
         error_span: SpanRange,
-    ) -> ExecutionResult<T::Leaf> {
+    ) -> FunctionResult<T::Leaf> {
         let type_kind = T::type_kind();
         if type_kind.supports_transparent_cloning() {
             Ok(Self::leaf_clone_to_owned_infallible(leaf))
@@ -53,20 +60,21 @@ pub(crate) trait IsDynCompatibleForm: IsHierarchicalForm {
     /// The container for a dyn Trait based type.
     /// The DynLeaf can be similar to the standard leaf, but must be
     /// able to support an unsized D.
-    type DynLeaf<'a, D: 'static + ?Sized>;
+    type DynLeaf<'a, D: IsDynType>;
 
-    fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
-        leaf: Self::Leaf<'a, T>,
+    fn leaf_to_dyn<'a, T: IsLeafType, D: IsDynType>(
+        leaf: Spanned<Self::Leaf<'a, T>>,
     ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
-        T::Leaf: CastDyn<D>;
+        T::Leaf: CastDyn<D::DynContent>;
 }
 
 pub(crate) trait MapFromArgument: IsHierarchicalForm {
     const ARGUMENT_OWNERSHIP: ArgumentOwnership;
 
-    fn from_argument_value(value: ArgumentValue)
-        -> FunctionResult<Content<'static, AnyType, Self>>;
+    fn from_argument_value(
+        value: Spanned<ArgumentValue>,
+    ) -> FunctionResult<Content<'static, AnyType, Self>>;
 }
 
 pub(crate) trait MapIntoReturned: IsHierarchicalForm {

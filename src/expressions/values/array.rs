@@ -59,42 +59,6 @@ impl ArrayValue {
         })
     }
 
-    pub(super) fn index_mut(
-        &mut self,
-        Spanned(index, span_range): Spanned<AnyValueRef>,
-    ) -> FunctionResult<&mut AnyValue> {
-        Ok(match index {
-            AnyValueContent::Integer(integer) => {
-                let index =
-                    self.resolve_valid_index_from_integer(Spanned(integer, span_range), false)?;
-                &mut self.items[index]
-            }
-            AnyValueContent::Range(..) => {
-                // TODO[slice-support] Temporary until we add slice types - we error here
-                return span_range.ownership_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]");
-            }
-            _ => return span_range.type_err("The index must be an integer or a range"),
-        })
-    }
-
-    pub(super) fn index_ref(
-        &self,
-        Spanned(index, span_range): Spanned<AnyValueRef>,
-    ) -> FunctionResult<&AnyValue> {
-        Ok(match index {
-            AnyValueContent::Integer(integer) => {
-                let index =
-                    self.resolve_valid_index_from_integer(Spanned(integer, span_range), false)?;
-                &self.items[index]
-            }
-            AnyValueContent::Range(..) => {
-                // TODO[slice-support] Temporary until we add slice types - we error here
-                return span_range.ownership_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]");
-            }
-            _ => return span_range.type_err("The index must be an integer or a range"),
-        })
-    }
-
     pub(super) fn resolve_valid_index(
         &self,
         Spanned(index, span_range): Spanned<AnyValueRef>,
@@ -197,9 +161,12 @@ define_type_features! {
     impl ArrayType,
     pub(crate) mod array_interface {
         methods {
-            fn push(mut this: Mutable<ArrayValue>, item: AnyValue) -> FunctionResult<()> {
+            fn push(mut this: Mutable<ArrayValue>, item: AnyValue) -> (){
                 this.items.push(item);
-                Ok(())
+            }
+
+            fn pop(mut this: Mutable<ArrayValue>) -> AnyValue {
+                this.items.pop().unwrap_or(none())
             }
 
             [context] fn to_stream_grouped(this: ArrayValue) -> FunctionResult<OutputStream> {
@@ -233,11 +200,51 @@ define_type_features! {
             }
         }
         index_access(ArrayValue) {
-            fn shared(source: &'a ArrayValue, index: Spanned<AnyValueRef>) {
-                source.index_ref(index)
+            [ctx] fn shared(source: &'a ArrayValue, Spanned(index, span_range): Spanned<AnyValueRef>) {
+                match index {
+                    AnyValueContent::Integer(integer) => {
+                        let idx = source.resolve_valid_index_from_integer(Spanned(integer, span_range), false)?;
+                        // SAFETY: ArrayChild correctly describes navigating to an array element
+                        Ok(unsafe {
+                            MappedRef::new(
+                                &source.items[idx],
+                                PathExtension::Child(
+                                    ChildSpecifier::ArrayChild(idx),
+                                    AnyType::type_kind(),
+                                ),
+                                ctx.output_span_range,
+                            )
+                        })
+                    }
+                    AnyValueContent::Range(..) => {
+                        // TODO[slice-support] Temporary until we add slice types - we error here
+                        span_range.ownership_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]")
+                    }
+                    _ => span_range.type_err("The index must be an integer or a range"),
+                }
             }
-            fn mutable(source: &'a mut ArrayValue, index: Spanned<AnyValueRef>, _auto_create: bool) {
-                source.index_mut(index)
+            [ctx] fn mutable(source: &'a mut ArrayValue, Spanned(index, span_range): Spanned<AnyValueRef>, _auto_create: bool) {
+                match index {
+                    AnyValueContent::Integer(integer) => {
+                        let idx = source.resolve_valid_index_from_integer(Spanned(integer, span_range), false)?;
+                        // SAFETY: ArrayChild correctly describes navigating to an array element
+                        Ok(unsafe {
+                            MappedMut::new(
+                                &mut source.items[idx],
+                                PathExtension::Child(
+                                    ChildSpecifier::ArrayChild(idx),
+                                    AnyType::type_kind(),
+                                ),
+                                ctx.output_span_range,
+                            )
+                        })
+                    }
+                    AnyValueContent::Range(..) => {
+                        // TODO[slice-support] Temporary until we add slice types - we error here
+                        span_range.ownership_err("Currently, a range-indexed array must be owned. Use `.take()` or `.clone()` before indexing [..]")
+                    }
+                    _ => span_range.type_err("The index must be an integer or a range"),
+                }
             }
             fn owned(source: ArrayValue, index: Spanned<AnyValueRef>) {
                 source.into_indexed(index)

@@ -72,23 +72,6 @@ impl ObjectValue {
         }
     }
 
-    pub(super) fn index_mut(
-        &mut self,
-        index: Spanned<AnyValueRef>,
-        auto_create: bool,
-    ) -> FunctionResult<&mut AnyValue> {
-        let index: Spanned<&str> = index.downcast_resolve("An object key")?;
-        self.mut_entry(index.map(|s| s.to_string()), auto_create)
-    }
-
-    pub(super) fn index_ref(&self, index: Spanned<AnyValueRef>) -> FunctionResult<&AnyValue> {
-        let key: Spanned<&str> = index.downcast_resolve("An object key")?;
-        match self.entries.get(*key) {
-            Some(entry) => Ok(&entry.value),
-            None => Ok(static_none_ref()),
-        }
-    }
-
     pub(super) fn property_mut(
         &mut self,
         access: &PropertyAccess,
@@ -286,21 +269,72 @@ define_type_features! {
         }
         property_access(ObjectValue) {
             [ctx] fn shared(source: &'a ObjectValue) {
-                source.property_ref(ctx.property)
+                let value = source.property_ref(ctx.property)?;
+                // SAFETY: ObjectChild correctly describes navigating to a named property
+                Ok(unsafe {
+                    MappedRef::new(
+                        value,
+                        PathExtension::Child(
+                            ChildSpecifier::ObjectChild(ctx.property.property.to_string()),
+                            AnyType::type_kind(),
+                        ),
+                        ctx.output_span_range,
+                    )
+                })
             }
             [ctx] fn mutable(source: &'a mut ObjectValue, auto_create: bool) {
-                source.property_mut(ctx.property, auto_create)
+                let value = source.property_mut(ctx.property, auto_create)?;
+                // SAFETY: ObjectChild correctly describes navigating to a named property
+                Ok(unsafe {
+                    MappedMut::new(
+                        value,
+                        PathExtension::Child(
+                            ChildSpecifier::ObjectChild(ctx.property.property.to_string()),
+                            AnyType::type_kind(),
+                        ),
+                        ctx.output_span_range,
+                    )
+                })
             }
             [ctx] fn owned(source: ObjectValue) {
                 source.into_property(ctx.property)
             }
         }
         index_access(ObjectValue) {
-            fn shared(source: &'a ObjectValue, index: Spanned<AnyValueRef>) {
-                source.index_ref(index)
+            [ctx] fn shared(source: &'a ObjectValue, index: Spanned<AnyValueRef>) {
+                let key: Spanned<&str> = index.downcast_resolve("An object key")?;
+                let key_string = key.to_string();
+                let value = match source.entries.get(*key) {
+                    Some(entry) => &entry.value,
+                    None => static_none_ref(),
+                };
+                // SAFETY: ObjectChild correctly describes navigating to a named key
+                Ok(unsafe {
+                    MappedRef::new(
+                        value,
+                        PathExtension::Child(
+                            ChildSpecifier::ObjectChild(key_string),
+                            AnyType::type_kind(),
+                        ),
+                        ctx.output_span_range,
+                    )
+                })
             }
-            fn mutable(source: &'a mut ObjectValue, index: Spanned<AnyValueRef>, auto_create: bool) {
-                source.index_mut(index, auto_create)
+            [ctx] fn mutable(source: &'a mut ObjectValue, index: Spanned<AnyValueRef>, auto_create: bool) {
+                let key: Spanned<&str> = index.downcast_resolve("An object key")?;
+                let key_string = key.to_string();
+                let value = source.mut_entry(key.map(|s| s.to_string()), auto_create)?;
+                // SAFETY: ObjectChild correctly describes navigating to a named key
+                Ok(unsafe {
+                    MappedMut::new(
+                        value,
+                        PathExtension::Child(
+                            ChildSpecifier::ObjectChild(key_string),
+                            AnyType::type_kind(),
+                        ),
+                        ctx.output_span_range,
+                    )
+                })
             }
             fn owned(source: ObjectValue, index: Spanned<AnyValueRef>) {
                 source.into_indexed(index)

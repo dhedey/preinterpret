@@ -632,6 +632,10 @@ fn test_method_calls() {
     );
     // Push returns None
     assert_eq!(run!([1, 2, 3].as_mut().push(4).to_debug_string()), "None");
+    // Pop returns last value
+    assert_eq!(run!([1, 2].as_mut().pop().to_debug_string()), "2");
+    // Pop empty returns None
+    assert_eq!(run!([].as_mut().pop().to_debug_string()), "None");
     // Converting to mut and then to shared works
     assert_eq!(run!([].as_mut().len().to_debug_string()), "0usize");
     assert_eq!(

@@ -23,20 +23,34 @@ impl IsForm for BeAnyRef {}
 
 impl IsHierarchicalForm for BeAnyRef {
     type Leaf<'a, T: IsLeafType> = crate::internal_prelude::AnyRef<'a, T::Leaf>;
+
+    #[inline]
+    fn covariant_leaf<'a, 'b, T: IsLeafType>(leaf: Self::Leaf<'a, T>) -> Self::Leaf<'b, T>
+    where
+        'a: 'b,
+    {
+        leaf
+    }
 }
 
 impl IsDynCompatibleForm for BeAnyRef {
-    type DynLeaf<'a, D: 'static + ?Sized> = crate::internal_prelude::AnyRef<'a, D>;
+    type DynLeaf<'a, D: IsDynType> = crate::internal_prelude::AnyRef<'a, D::DynContent>;
 
-    fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
-        leaf: Self::Leaf<'a, T>,
+    fn leaf_to_dyn<'a, T: IsLeafType, D: IsDynType>(
+        Spanned(leaf, span): Spanned<Self::Leaf<'a, T>>,
     ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
-        T::Leaf: CastDyn<D>,
+        T::Leaf: CastDyn<D::DynContent>,
     {
-        leaf.replace(|content, emplacer| match <T::Leaf>::map_ref(content) {
-            Ok(mapped) => Ok(emplacer.emplace(mapped)),
-            Err(this) => Err(emplacer.emplace(this)),
+        leaf.emplace_map(|content, emplacer| match <T::Leaf>::map_ref(content) {
+            Ok(mapped) => {
+                // SAFETY: PathExtension is correct for mapping to a dyn type
+                let mapped_ref = unsafe {
+                    MappedRef::new(mapped, PathExtension::TypeNarrowing(D::type_kind()), span)
+                };
+                Ok(emplacer.emplace(mapped_ref))
+            }
+            Err(_this) => Err(emplacer.revert()),
         })
     }
 }
@@ -51,11 +65,12 @@ impl MapFromArgument for BeAnyRef {
     const ARGUMENT_OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Shared;
 
     fn from_argument_value(
-        value: ArgumentValue,
+        Spanned(value, span): Spanned<ArgumentValue>,
     ) -> FunctionResult<Content<'static, AnyType, Self>> {
-        Ok(value
-            .expect_shared()
-            .0
-            .replace(|inner, emplacer| inner.as_ref_value().into_shared_any_ref(emplacer)))
+        Ok(value.expect_shared().emplace_map(|inner, emplacer| {
+            inner
+                .as_ref_value()
+                .into_shared_any_ref(emplacer, Some(span))
+        }))
     }
 }

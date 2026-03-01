@@ -33,7 +33,6 @@ impl ClosureExpression {
 pub(crate) struct ClosureValue {
     definition: Rc<ClosureDefinition>,
     closed_references: Vec<(VariableDefinitionId, VariableContent)>,
-    // TODO[functions]: Add closed_values from moves here
 }
 
 impl PartialEq for ClosureValue {
@@ -89,7 +88,7 @@ impl ClosureValue {
                 (Pattern::Variable(variable), ArgumentValue::Shared(shared)) => {
                     context.interpreter.define_variable(
                         variable.definition.id,
-                        VariableContent::Shared(shared.disable()),
+                        VariableContent::Shared(shared.deactivate()),
                     );
                 }
                 (_, ArgumentValue::Shared(_)) => {
@@ -100,7 +99,7 @@ impl ClosureValue {
                 (Pattern::Variable(variable), ArgumentValue::Mutable(mutable)) => {
                     context.interpreter.define_variable(
                         variable.definition.id,
-                        VariableContent::Mutable(mutable.disable()),
+                        VariableContent::Mutable(mutable.deactivate()),
                     );
                 }
                 (_, ArgumentValue::Mutable(_)) => {

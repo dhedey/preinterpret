@@ -16,7 +16,7 @@ define_type_features! {
 
 #[derive(Clone)]
 pub(crate) struct FunctionValue {
-    pub(crate) disabled_bound_arguments: Vec<Spanned<DisabledArgumentValue>>,
+    pub(crate) disabled_bound_arguments: Vec<Spanned<InactiveArgumentValue>>,
     pub(crate) invokable: InvokableFunction,
 }
 

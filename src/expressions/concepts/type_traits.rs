@@ -42,6 +42,15 @@ pub(crate) trait IsHierarchicalType: IsType<Variant = HierarchicalTypeVariant> {
     fn content_to_leaf_kind<F: IsHierarchicalForm>(
         content: &Self::Content<'_, F>,
     ) -> Self::LeafKind;
+
+    /// Shrinks the lifetime of a content value from `'a` to `'b`.
+    /// This is safe because all forms' leaf types are covariant in `'a`,
+    /// as enforced by [`IsHierarchicalForm::covariant_leaf`].
+    fn covariant<'a, 'b, F: IsHierarchicalForm>(
+        content: Self::Content<'a, F>,
+    ) -> Self::Content<'b, F>
+    where
+        'a: 'b;
 }
 
 pub(crate) trait IsLeafType:
@@ -57,7 +66,6 @@ pub(crate) trait IsLeafType:
     + for<'a> IsHierarchicalType<Content<'a, BeMut> = <BeMut as IsHierarchicalForm>::Leaf<'a, Self>>
     + for<'a> IsHierarchicalType<Content<'a, BeAnyRef> = <BeAnyRef as IsHierarchicalForm>::Leaf<'a, Self>>
     + for<'a> IsHierarchicalType<Content<'a, BeAnyMut> = <BeAnyMut as IsHierarchicalForm>::Leaf<'a, Self>>
-    + for<'a> IsHierarchicalType<Content<'a, BeReferenceable> = <BeReferenceable as IsHierarchicalForm>::Leaf<'a, Self>>
     + for<'a> IsHierarchicalType<Content<'a, BeAssignee> = <BeAssignee as IsHierarchicalForm>::Leaf<'a, Self>>
     + for<'a> IsHierarchicalType<Content<'a, BeCopyOnWrite> = <BeCopyOnWrite as IsHierarchicalForm>::Leaf<'a, Self>>
     + for<'a> IsHierarchicalType<Content<'a, BeArgument> = <BeArgument as IsHierarchicalForm>::Leaf<'a, Self>>
@@ -106,6 +114,7 @@ pub(crate) trait DowncastFrom<T: IsHierarchicalType>: IsHierarchicalType {
 pub(crate) trait DynResolveFrom<T: IsHierarchicalType>: IsDynType {
     fn downcast_from<'a, F: IsHierarchicalForm + IsDynCompatibleForm>(
         content: Content<'a, T, F>,
+        span: SpanRange,
     ) -> Result<DynContent<'a, Self, F>, Content<'a, T, F>>;
 
     fn resolve<'a, F: IsHierarchicalForm + IsDynCompatibleForm>(
@@ -113,7 +122,7 @@ pub(crate) trait DynResolveFrom<T: IsHierarchicalType>: IsDynType {
         span_range: SpanRange,
         resolution_target: &str,
     ) -> FunctionResult<DynContent<'a, Self, F>> {
-        let content = match Self::downcast_from(content) {
+        let content = match Self::downcast_from(content, span_range) {
             Ok(c) => c,
             Err(existing) => {
                 let leaf_kind = T::content_to_leaf_kind::<F>(&existing);
@@ -455,6 +464,20 @@ macro_rules! define_parent_type {
             ) -> Self::LeafKind {
                 content.kind()
             }
+
+            #[inline]
+            fn covariant<'a, 'b, F: IsHierarchicalForm>(
+                content: Self::Content<'a, F>,
+            ) -> Self::Content<'b, F>
+            where
+                'a: 'b,
+            {
+                match content {
+                    $( $content::$variant(x) => $content::$variant(
+                        <$variant_type>::covariant::<F>(x)
+                    ), )*
+                }
+            }
         }
 
         $content_vis enum $content<'a, F: IsHierarchicalForm> {
@@ -471,7 +494,6 @@ macro_rules! define_parent_type {
                 }
             }
         }
-
 
         impl<'a, F: IsHierarchicalForm> Copy for $content<'a, F>
         where
@@ -634,6 +656,16 @@ macro_rules! define_leaf_type {
             ) -> Self::LeafKind {
                 $kind
             }
+
+            #[inline]
+            fn covariant<'a, 'b, F: IsHierarchicalForm>(
+                content: Self::Content<'a, F>,
+            ) -> Self::Content<'b, F>
+            where
+                'a: 'b,
+            {
+                F::covariant_leaf::<Self>(content)
+            }
         }
 
         impl IsLeafType for $type_def {
@@ -712,11 +744,17 @@ macro_rules! define_leaf_type {
 
 pub(crate) use define_leaf_type;
 
-pub(crate) struct DynMapper<D: ?Sized>(std::marker::PhantomData<D>);
+pub(crate) struct DynMapper<D: IsDynType> {
+    _phantom: std::marker::PhantomData<D>,
+    pub(crate) span: SpanRange,
+}
 
-impl<D: ?Sized> DynMapper<D> {
-    pub(crate) const fn new() -> Self {
-        Self(std::marker::PhantomData)
+impl<D: IsDynType> DynMapper<D> {
+    pub(crate) fn new(span: SpanRange) -> Self {
+        Self {
+            _phantom: std::marker::PhantomData,
+            span,
+        }
     }
 }
 
@@ -770,7 +808,7 @@ pub(crate) use impl_value_content_traits;
 macro_rules! define_dyn_type {
     (
         $type_def_vis:vis $type_def:ident,
-        content: $dyn_type:ty,
+        content: $dyn_content:ty,
         dyn_kind: DynTypeKind::$dyn_kind:ident,
         type_name: $source_type_name:literal,
         articled_value_name: $articled_value_name:literal,
@@ -802,53 +840,53 @@ macro_rules! define_dyn_type {
         }
 
         impl IsDynType for $type_def {
-            type DynContent = $dyn_type;
+            type DynContent = $dyn_content;
         }
 
         impl_type_feature_resolver! {
             impl TypeFeatureResolver for $type_def: [$type_def]
         }
 
-        impl IsDynLeaf for $dyn_type {
+        impl IsDynLeaf for $dyn_content {
             type Type = $type_def;
         }
 
-        impl IsArgument for Box<$dyn_type> {
+        impl IsArgument for Box<$dyn_content> {
             type ValueType = $type_def;
             const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Owned;
             fn from_argument(Spanned(value, span_range): Spanned<ArgumentValue>) -> FunctionResult<Self> {
-                let form_mapped = BeOwned::from_argument_value(value)?;
+                let form_mapped = BeOwned::from_argument_value(Spanned(value, span_range))?;
                 <$type_def as DynResolveFrom<AnyType>>::resolve(form_mapped, span_range, "This argument")
             }
         }
 
-        impl<'a> IsArgument for AnyRef<'a, $dyn_type> {
+        impl<'a> IsArgument for AnyRef<'a, $dyn_content> {
             type ValueType = $type_def;
             const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Shared;
             fn from_argument(Spanned(value, span_range): Spanned<ArgumentValue>) -> FunctionResult<Self> {
-                let form_mapped = BeAnyRef::from_argument_value(value)?;
+                let form_mapped = BeAnyRef::from_argument_value(Spanned(value, span_range))?;
                 <$type_def as DynResolveFrom<AnyType>>::resolve(form_mapped, span_range, "This argument")
             }
         }
 
-        impl<'a> IsArgument for AnyMut<'a, $dyn_type> {
+        impl<'a> IsArgument for AnyMut<'a, $dyn_content> {
             type ValueType = $type_def;
             const OWNERSHIP: ArgumentOwnership = ArgumentOwnership::Mutable;
             fn from_argument(Spanned(value, span_range): Spanned<ArgumentValue>) -> FunctionResult<Self> {
-                let form_mapped = BeAnyMut::from_argument_value(value)?;
+                let form_mapped = BeAnyMut::from_argument_value(Spanned(value, span_range))?;
                 <$type_def as DynResolveFrom<AnyType>>::resolve(form_mapped, span_range, "This argument")
             }
         }
 
         impl<T: IsHierarchicalType> DynResolveFrom<T> for $type_def
         {
-            fn downcast_from<'a, F: IsHierarchicalForm + IsDynCompatibleForm>(content: Content<'a, T, F>) -> Result<DynContent<'a, Self, F>, Content<'a, T, F>> {
-                T::map_with::<'a, F, _>(DynMapper::<$dyn_type>::new(), content)
+            fn downcast_from<'a, F: IsHierarchicalForm + IsDynCompatibleForm>(content: Content<'a, T, F>, span: SpanRange) -> Result<DynContent<'a, Self, F>, Content<'a, T, F>> {
+                T::map_with::<'a, F, _>(DynMapper::<$type_def>::new(span), content)
             }
         }
 
-        impl<F: IsDynCompatibleForm> LeafMapper<F> for DynMapper<$dyn_type> {
-            type Output<'a, T: IsHierarchicalType> =  Result<F::DynLeaf<'a, $dyn_type>, Content<'a, T, F>>;
+        impl<F: IsDynCompatibleForm> LeafMapper<F> for DynMapper<$type_def> {
+            type Output<'a, T: IsHierarchicalType> =  Result<F::DynLeaf<'a, $type_def>, Content<'a, T, F>>;
 
             fn to_parent_output<'a, T: IsChildType>(
                 output: Self::Output<'a, T>,
@@ -863,7 +901,7 @@ macro_rules! define_dyn_type {
                 self,
                 leaf: F::Leaf<'a, T>,
             ) -> Self::Output<'a, T> {
-                F::leaf_to_dyn(leaf)
+                F::leaf_to_dyn(Spanned(leaf, self.span))
             }
         }
     };
