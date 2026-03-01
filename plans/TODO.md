@@ -298,8 +298,8 @@ Suddenly dawned on me - my Disabled arguments might not be safe.
   - [x] Move `Assignee` out of bindings. To e.g. `dynamic_references`
   - [x] Rename `PathExtension::Tightening` to `PathExtension::TypeNarrowing`
   - [x] Rename  `DisabledArgumentValue` and `DisabledCopyOnWrite` to `Inactive__` and their method from `enable` to `activate` and ditto with `disable -> deactivate`
-- [ ] See what else can be deleted from `bindings.rs`
-  - [ ] Unify LateBound into `QqqLateBound`
+- [x] See what else can be deleted from `bindings.rs`
+  - [x] Unify LateBound into `LateBound`
   - [x] Unify CopyOnWrite into `QqqCopyOnWrite`
 - [ ] Add various tests:
   - [ ] Stretching different error messages

@@ -9,6 +9,7 @@ pub(crate) type AnyValueShared = Shared<AnyValue>;
 pub(crate) type AnyValueMutable = Mutable<AnyValue>;
 pub(crate) type AnyValueAssignee = Assignee<AnyValue>;
 pub(crate) type AnyValueCopyOnWrite = CopyOnWrite<AnyValue>;
+pub(crate) type AnyValueLateBound = LateBound<AnyValue>;
 // pub(crate) type AnyValueShared = AnyValueContent<'static, BeShared>;
 // pub(crate) type AnyValueMutable = AnyValueContent<'static, BeMutable>;
 // pub(crate) type AnyValueAssignee = AnyValueContent<'static, BeAssignee>;

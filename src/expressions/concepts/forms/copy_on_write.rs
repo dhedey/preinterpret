@@ -23,9 +23,7 @@ where
 {
     fn into_content(self) -> Content<'a, Self::Type, Self::Form> {
         match self {
-            CopyOnWrite::Owned(owned) => {
-                BeCopyOnWrite::new_owned(owned)
-            }
+            CopyOnWrite::Owned(owned) => BeCopyOnWrite::new_owned(owned),
             CopyOnWrite::SharedWithInfallibleCloning(shared) => {
                 BeCopyOnWrite::new_shared_in_place_of_owned(shared)
             }
@@ -158,7 +156,7 @@ impl<T: 'static + Clone> Clone for InactiveCopyOnWrite<T> {
 impl<T: 'static> InactiveCopyOnWrite<T> {
     /// Re-activates this inactive copy-on-write value by re-acquiring any borrow.
     pub(crate) fn activate(self, span: SpanRange) -> FunctionResult<CopyOnWrite<T>> {
-       Ok(match self {
+        Ok(match self {
             InactiveCopyOnWrite::Owned(owned) => CopyOnWrite::Owned(owned),
             InactiveCopyOnWrite::SharedWithInfallibleCloning(inactive) => {
                 CopyOnWrite::SharedWithInfallibleCloning(inactive.activate(span)?)

@@ -211,7 +211,7 @@ impl RequestedOwnership {
 
     pub(crate) fn map_from_late_bound(
         &self,
-        Spanned(late_bound, span): Spanned<LateBoundValue>,
+        Spanned(late_bound, span): Spanned<AnyValueLateBound>,
     ) -> FunctionResult<Spanned<RequestedValue>> {
         Ok(match self {
             RequestedOwnership::LateBound => RequestedValue::LateBound(late_bound),
@@ -281,7 +281,7 @@ impl RequestedOwnership {
         Ok(Spanned(
             match self {
                 RequestedOwnership::LateBound => {
-                    RequestedValue::LateBound(LateBoundValue::Owned(LateBoundOwnedValue {
+                    RequestedValue::LateBound(LateBound::Owned(LateBoundOwned {
                         owned: value,
                         is_from_last_use: false,
                     }))
@@ -301,7 +301,7 @@ impl RequestedOwnership {
         Ok(Spanned(
             match self {
                 RequestedOwnership::LateBound => {
-                    RequestedValue::LateBound(LateBoundValue::CopyOnWrite(cow))
+                    RequestedValue::LateBound(AnyValueLateBound::CopyOnWrite(cow))
                 }
                 RequestedOwnership::Concrete(requested) => {
                     Self::item_from_argument(requested.map_from_copy_on_write(Spanned(cow, span))?)
@@ -318,7 +318,7 @@ impl RequestedOwnership {
         Ok(Spanned(
             match self {
                 RequestedOwnership::LateBound => {
-                    RequestedValue::LateBound(LateBoundValue::Mutable(mutable))
+                    RequestedValue::LateBound(AnyValueLateBound::Mutable(mutable))
                 }
                 RequestedOwnership::Concrete(requested) => {
                     Self::item_from_argument(requested.map_from_mutable(Spanned(mutable, span))?)
@@ -335,7 +335,7 @@ impl RequestedOwnership {
         Ok(Spanned(
             match self {
                 RequestedOwnership::LateBound => {
-                    RequestedValue::LateBound(LateBoundValue::Mutable(assignee.0))
+                    RequestedValue::LateBound(AnyValueLateBound::Mutable(assignee.0))
                 }
                 RequestedOwnership::Concrete(requested) => {
                     Self::item_from_argument(requested.map_from_assignee(Spanned(assignee, span))?)
@@ -352,7 +352,7 @@ impl RequestedOwnership {
         Ok(Spanned(
             match self {
                 RequestedOwnership::LateBound => RequestedValue::LateBound(
-                    LateBoundValue::CopyOnWrite(CopyOnWrite::shared_in_place_of_shared(shared)),
+                    AnyValueLateBound::CopyOnWrite(CopyOnWrite::shared_in_place_of_shared(shared)),
                 ),
                 RequestedOwnership::Concrete(requested) => {
                     Self::item_from_argument(requested.map_from_shared(Spanned(shared, span))?)
@@ -419,20 +419,20 @@ pub(crate) enum ArgumentOwnership {
 impl ArgumentOwnership {
     pub(crate) fn map_from_late_bound(
         &self,
-        Spanned(late_bound, span): Spanned<LateBoundValue>,
+        Spanned(late_bound, span): Spanned<AnyValueLateBound>,
     ) -> FunctionResult<ArgumentValue> {
         match late_bound {
-            LateBoundValue::Owned(owned) => self.map_from_owned_with_is_last_use(
+            LateBound::Owned(owned) => self.map_from_owned_with_is_last_use(
                 Spanned(owned.owned, span),
                 owned.is_from_last_use,
             ),
-            LateBoundValue::CopyOnWrite(copy_on_write) => {
+            LateBound::CopyOnWrite(copy_on_write) => {
                 self.map_from_copy_on_write(Spanned(copy_on_write, span))
             }
-            LateBoundValue::Mutable(mutable) => {
+            LateBound::Mutable(mutable) => {
                 self.map_from_mutable_inner(Spanned(mutable, span), true)
             }
-            LateBoundValue::Shared(late_bound_shared) => self.map_from_shared_with_error_reason(
+            LateBound::Shared(late_bound_shared) => self.map_from_shared_with_error_reason(
                 Spanned(late_bound_shared.shared, span),
                 |_| {
                     FunctionError::new(ExecutionInterrupt::ownership_error(
@@ -910,7 +910,7 @@ impl EvaluationFrame for BinaryOperationBuilder {
 
                 // Check for lazy evaluation first (short-circuit operators)
                 // Use operator span for type errors since the error is about the operation's requirements
-                let left_value = Spanned(left.as_value(), left_span);
+                let left_value = Spanned(&*left, left_span);
                 if let Some(result) = self.operation.lazy_evaluate(left_value)? {
                     // For short-circuit, the result span is just the left operand's span
                     // (the right operand was never evaluated)
