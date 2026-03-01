@@ -81,8 +81,6 @@
 //! Was based off an `Rc<RefCell<AnyValue>>` which we could use to create Active/Mutable references, and deactivate them.
 //! However, it didn't respect (a.1) and it didn't permit mutiple mutable references on different paths.
 
-// TODO[references]: Remove once integrated
-#![allow(unused)]
 mod mutable_reference;
 mod reference_core;
 mod referenceable;
@@ -93,7 +91,6 @@ use crate::internal_prelude::*;
 use reference_core::*;
 use slotmap::{new_key_type, SlotMap};
 use std::cell::UnsafeCell;
-use std::cmp::Ordering;
 use std::mem::ManuallyDrop;
 use std::ptr::NonNull;
 

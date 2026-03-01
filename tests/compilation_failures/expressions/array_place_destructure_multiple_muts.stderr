@@ -1,4 +1,7 @@
-error: The variable cannot be read as it is already being modified
+error: Cannot create a shared reference because it clashes with an existing mutable reference:
+       This reference : [*active*]     &arr (of type any)
+       Other reference: [*active*] &mut arr (of type any)
+       Reason         : mutation may be observed from the other active reference, which breaks aliasing rules
  --> tests/compilation_failures/expressions/array_place_destructure_multiple_muts.rs:6:13
   |
 6 |         arr[arr[1]] = 3;

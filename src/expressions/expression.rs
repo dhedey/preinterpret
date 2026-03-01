@@ -50,7 +50,7 @@ impl Expression {
     pub(crate) fn evaluate_shared(
         &self,
         interpreter: &mut Interpreter,
-    ) -> ExecutionResult<Spanned<SharedValue>> {
+    ) -> ExecutionResult<Spanned<AnyValueShared>> {
         Ok(self
             .evaluate(interpreter, RequestedOwnership::shared())?
             .expect_shared())
@@ -154,7 +154,7 @@ pub(super) enum Leaf {
     Variable(VariableReference),
     TypeProperty(TypeProperty),
     Discarded(Token![_]),
-    Value(Spanned<SharedValue>),
+    Value(Spanned<AnyValueShared>),
     StreamLiteral(StreamLiteral),
     ParseTemplateLiteral(ParseTemplateLiteral),
     IfExpression(Box<IfExpression>),

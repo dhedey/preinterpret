@@ -91,13 +91,14 @@ impl<'e, T: ?Sized> EmplacerCore<'e, T> {
     }
 
     /// SAFETY:
-    /// - The caller must ensure that the pointer is derived from the original content
+    /// - The caller must ensure that the pointer is derived from the original content,
+    ///   or more specifically, it lives at least as long as that content
     /// - The caller must ensure that the PathExtension is correct
     pub(crate) unsafe fn emplace_unchecked<V: 'static + ?Sized>(
         &mut self,
         pointer: NonNull<V>,
         path_extension: PathExtension,
-        new_span: SpanRange,
+        new_span: Option<SpanRange>,
     ) -> ReferenceCore<V> {
         let emplacer_core = self.take();
         let id = emplacer_core.id;

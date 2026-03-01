@@ -251,7 +251,7 @@ impl Interpreter {
         &mut self,
         variable: &VariableReference,
         ownership: RequestedOwnership,
-    ) -> FunctionResult<Spanned<LateBoundValue>> {
+    ) -> FunctionResult<Spanned<AnyValueLateBound>> {
         let reference = self.scope_definitions.references.get(variable.id);
         let (definition, span, is_final) = (
             reference.definition,
@@ -512,7 +512,7 @@ impl RuntimeScope {
         is_final: bool,
         ownership: RequestedOwnership,
         blocked_from_mutation: Option<MutationBlockReason>,
-    ) -> FunctionResult<Spanned<LateBoundValue>> {
+    ) -> FunctionResult<Spanned<AnyValueLateBound>> {
         self.variables
             .get_mut(&definition_id)
             .expect("Variable data not found in scope")

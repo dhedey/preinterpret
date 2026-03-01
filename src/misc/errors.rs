@@ -143,6 +143,15 @@ impl FunctionError {
             _ => Err(self),
         }
     }
+
+    pub(crate) fn expect_ownership_error(self) -> Result<syn::Error, Self> {
+        match self.0.inner.as_ref() {
+            ExecutionInterruptInner::Error(ExecutionError(ErrorKind::Ownership, _)) => {
+                Ok(self.0.expect_error().convert_to_syn_error())
+            }
+            _ => panic!("Expected ownership error"),
+        }
+    }
 }
 
 pub(crate) trait FunctionResultExt<T> {

@@ -6,7 +6,7 @@ use super::*;
 /// See also [`RequestedValue`] for values that have been fully evaluated.
 pub(crate) enum ReturnedValue {
     Owned(AnyValueOwned),
-    CopyOnWrite(CopyOnWriteValue),
+    CopyOnWrite(AnyValueCopyOnWrite),
     Mutable(AnyValueMutable),
     Shared(AnyValueShared),
 }

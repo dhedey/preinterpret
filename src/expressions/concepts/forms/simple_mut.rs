@@ -26,16 +26,24 @@ impl IsForm for BeMut {}
 
 impl IsHierarchicalForm for BeMut {
     type Leaf<'a, T: IsLeafType> = &'a mut T::Leaf;
+
+    #[inline]
+    fn covariant_leaf<'a, 'b, T: IsLeafType>(leaf: Self::Leaf<'a, T>) -> Self::Leaf<'b, T>
+    where
+        'a: 'b,
+    {
+        leaf
+    }
 }
 
 impl IsDynCompatibleForm for BeMut {
-    type DynLeaf<'a, D: 'static + ?Sized> = &'a mut D;
+    type DynLeaf<'a, D: IsDynType> = &'a mut D::DynContent;
 
-    fn leaf_to_dyn<'a, T: IsLeafType, D: ?Sized + 'static>(
-        leaf: Self::Leaf<'a, T>,
+    fn leaf_to_dyn<'a, T: IsLeafType, D: IsDynType>(
+        Spanned(leaf, _span): Spanned<Self::Leaf<'a, T>>,
     ) -> Result<Self::DynLeaf<'a, D>, Content<'a, T, Self>>
     where
-        T::Leaf: CastDyn<D>,
+        T::Leaf: CastDyn<D::DynContent>,
     {
         <T::Leaf>::map_mut(leaf)
     }
@@ -52,15 +60,17 @@ where
     Self: IsValueContent<Form = BeMut>,
     Self::Type: IsHierarchicalType<Content<'a, Self::Form> = Self>,
 {
-    fn into_mutable<'b, T: 'static>(
+    fn into_mutable<'o, 'b, T: 'static>(
         self,
         emplacer: &'b mut MutableEmplacer<'a, T>,
-    ) -> Content<'static, Self::Type, BeMutable>
+        span: Option<SpanRange>,
+    ) -> Content<'o, Self::Type, BeMutable>
     where
         Self: Sized,
     {
         struct __InlineMapper<'b, 'e2, X: 'static> {
             emplacer: &'b mut MutableEmplacer<'e2, X>,
+            span: Option<SpanRange>,
         }
         impl<'b, 'e2, X> LeafMapper<BeMut> for __InlineMapper<'b, 'e2, X> {
             type Output<'a, T: IsHierarchicalType> = Content<'static, T, BeMutable>;
@@ -75,23 +85,34 @@ where
                 self,
                 leaf: <BeMut as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
-                // SAFETY: 'l = 'a = 'e so this is valid
-                unsafe { self.emplacer.emplace_unchecked(leaf) }
+                // SAFETY: 'l = 'a = 'e2 so the lifetime transmute is valid, and
+                // PathExtension correctly describes mapping to a leaf type T
+                let mapped = unsafe {
+                    MappedMut::new_unchecked(
+                        leaf,
+                        PathExtension::TypeNarrowing(T::type_kind()),
+                        self.span,
+                    )
+                };
+                self.emplacer.emplace(mapped)
             }
         };
-        let __mapper = __InlineMapper { emplacer };
-        <Self::Type>::map_with::<BeMut, _>(__mapper, self)
+        let __mapper = __InlineMapper { emplacer, span };
+        let content = <Self::Type>::map_with::<BeMut, _>(__mapper, self);
+        <Self::Type>::covariant::<BeMutable>(content)
     }
 
-    fn into_assignee<'b, T: 'static>(
+    fn into_assignee<'o, 'b, T: 'static>(
         self,
         emplacer: &'b mut MutableEmplacer<'a, T>,
-    ) -> Content<'static, Self::Type, BeAssignee>
+        span: Option<SpanRange>,
+    ) -> Content<'o, Self::Type, BeAssignee>
     where
         Self: Sized,
     {
         struct __InlineMapper<'b, 'e2, X: 'static> {
             emplacer: &'b mut MutableEmplacer<'e2, X>,
+            span: Option<SpanRange>,
         }
         impl<'b, 'e2, X> LeafMapper<BeMut> for __InlineMapper<'b, 'e2, X> {
             type Output<'a, T: IsHierarchicalType> = Content<'static, T, BeAssignee>;
@@ -106,23 +127,34 @@ where
                 self,
                 leaf: <BeMut as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
-                // SAFETY: 'l = 'a = 'e so this is valid
-                unsafe { QqqAssignee(self.emplacer.emplace_unchecked(leaf)) }
+                // SAFETY: 'l = 'a = 'e2 so the lifetime transmute is valid, and
+                // PathExtension correctly describes mapping to a leaf type T
+                let mapped = unsafe {
+                    MappedMut::new_unchecked(
+                        leaf,
+                        PathExtension::TypeNarrowing(T::type_kind()),
+                        self.span,
+                    )
+                };
+                Assignee(self.emplacer.emplace(mapped))
             }
         };
-        let __mapper = __InlineMapper { emplacer };
-        <Self::Type>::map_with::<BeMut, _>(__mapper, self)
+        let __mapper = __InlineMapper { emplacer, span };
+        let content = <Self::Type>::map_with::<BeMut, _>(__mapper, self);
+        <Self::Type>::covariant::<BeAssignee>(content)
     }
 
-    fn into_mutable_any_mut<'b, T: 'static>(
+    fn into_mutable_any_mut<'o, 'b, T: 'static>(
         self,
         emplacer: &'b mut MutableEmplacer<'a, T>,
-    ) -> Content<'static, Self::Type, BeAnyMut>
+        span: Option<SpanRange>,
+    ) -> Content<'o, Self::Type, BeAnyMut>
     where
         Self: Sized,
     {
         struct __InlineMapper<'b, 'e2, X: 'static> {
             emplacer: &'b mut MutableEmplacer<'e2, X>,
+            span: Option<SpanRange>,
         }
         impl<'b, 'e2, X> LeafMapper<BeMut> for __InlineMapper<'b, 'e2, X> {
             type Output<'a, T: IsHierarchicalType> = Content<'static, T, BeAnyMut>;
@@ -137,12 +169,21 @@ where
                 self,
                 leaf: <BeMut as IsHierarchicalForm>::Leaf<'l, T>,
             ) -> Self::Output<'l, T> {
-                // SAFETY: 'l = 'a = 'e so this is valid
-                unsafe { Mutable(self.emplacer.emplace_unchecked(leaf)).into() }
+                // SAFETY: 'l = 'a = 'e2 so the lifetime transmute is valid, and
+                // PathExtension correctly describes mapping to a leaf type T
+                let mapped = unsafe {
+                    MappedMut::new_unchecked(
+                        leaf,
+                        PathExtension::TypeNarrowing(T::type_kind()),
+                        self.span,
+                    )
+                };
+                self.emplacer.emplace(mapped).into()
             }
         };
-        let __mapper = __InlineMapper { emplacer };
-        <Self::Type>::map_with::<BeMut, _>(__mapper, self)
+        let __mapper = __InlineMapper { emplacer, span };
+        let content = <Self::Type>::map_with::<BeMut, _>(__mapper, self);
+        <Self::Type>::covariant::<BeAnyMut>(content)
     }
 }
 
