@@ -33,7 +33,6 @@ impl ClosureExpression {
 pub(crate) struct ClosureValue {
     definition: Rc<ClosureDefinition>,
     closed_references: Vec<(VariableDefinitionId, VariableContent)>,
-    // TODO[functions]: Add closed_values from moves here
 }
 
 impl PartialEq for ClosureValue {

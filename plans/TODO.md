@@ -251,11 +251,11 @@ Moved to [2026-01-types-and-forms.md](./2026-01-types-and-forms.md).
   - [ ] Salvage half-baked `FunctionValue` changes to allow invocation
   - [ ] Add `iterable.map`, `iterable.filter`, `iterable.flatten`, `iterable.flatmap`
   - [ ] Add tests for iterable methods
-- [ ] Add `array.sort`, `array.sort_by`
 - [ ] Look into if a closure like `|| { }()` can evade `attempt` block statue mutation checks. Maybe lean into it as a way to avoid them, and mention it in the error message
 - [ ] Resolve all `TODO[functions]`
 
 Possible punted:
+- [ ] Add `array.sort`, `array.sort_by`
 - [ ] Allow destructuring shared and mutable variables and arguments
 - [ ] Support optional arguments in closures
 - [ ] Support for `move()` expressions in closures.
@@ -301,12 +301,14 @@ Suddenly dawned on me - my Disabled arguments might not be safe.
 - [x] See what else can be deleted from `bindings.rs`
   - [x] Unify LateBound into `LateBound`
   - [x] Unify CopyOnWrite into `QqqCopyOnWrite`
-- [ ] Add various tests:
-  - [ ] Stretching different error messages
-  - [ ] Showing I can do e.g. `x.a += x.b`
-  - [ ] Show that `let my_arr = [[]]; my_arr[0].push(my_arr.pop())` gives a suitable error
+- [x] Add various tests:
+  - [x] Stretching different error messages
+  - [x] Showing I can do e.g. `x.a += x.b`
+  - [x] Show that `let my_arr = [[]]; my_arr[0].push(my_arr.pop())` gives a suitable error
 
 ### Other ideas
+
+- [ ] Make it so that we disable the parent whilst resolving a property/index 
 
 We could imagine a world where we are more clever over our mutation:
 * Note that I can reference `x.a` and `x.b` separately, or `x[0]` and `x[1]` but in that case, can't mutate `x` itself to create new fields.

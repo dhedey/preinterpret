@@ -227,7 +227,7 @@ impl ReferenceableData {
         let last_path_part = data.path.parts.last_mut().expect("path is non-empty");
         match (last_path_part, path_extension) {
             (last_path_part, PathExtension::Child(specifier, child_bound_as)) => {
-                let parent_type = specifier.bound_type_kind();
+                let parent_type = specifier.parent_type_kind();
                 match last_path_part {
                     PathPart::Value { bound_as } => {
                         if !bound_as.is_narrowing_to(&parent_type) {
@@ -378,6 +378,13 @@ enum PathComparison {
 
 impl PathComparison {
     fn error_comparing_mutable_with_other(self, other_is_active: bool) -> Option<&'static str> {
+        // We are looking to start actively mutating a reference (the "Left" reference),
+        // with a pre-existing other reference around (the "Right" reference).
+        // The method protects against the various ways this may break invariants of the Right:
+        // - If the other reference is active, it must not overlap with any mutable reference
+        //   (i.e. the aliasing rules must be respected)
+        // - If the other reference is inactive, observable mutation may happen, but
+        //   Right must remain pointing at valid memory for its type
         Some(match self {
             PathComparison::Divergent => return None,
             PathComparison::Overlapping => {
@@ -394,7 +401,7 @@ impl PathComparison {
                 TypeBindingComparison::LeftDerivesFromRightButIsNotSubtype,
             )
             | PathComparison::ReferencesEqual(TypeBindingComparison::Incomparable) => {
-                "mutation may invalidate the other reference with an incompatible type"
+                "mutation may invalidate the other reference by setting it to an incompatible type"
             }
             // Mutable reference is a descendent of the other reference
             PathComparison::ReferencesEqual(TypeBindingComparison::Equal)
@@ -461,7 +468,7 @@ pub(crate) enum ChildSpecifier {
 }
 
 impl ChildSpecifier {
-    fn bound_type_kind(&self) -> TypeKind {
+    fn parent_type_kind(&self) -> TypeKind {
         match self {
             ChildSpecifier::ArrayChild(_) => ArrayType::type_kind(),
             ChildSpecifier::ObjectChild(_) => ObjectType::type_kind(),
@@ -505,23 +512,24 @@ impl PathPart {
                 (ChildSpecifier::ArrayChild(_), ChildSpecifier::ArrayChild(_)) => {
                     PathPartComparison::Divergent
                 }
+                (ChildSpecifier::ArrayChild(_), _) => PathPartComparison::Incompatible,
                 (ChildSpecifier::ObjectChild(a), ChildSpecifier::ObjectChild(b)) if a == b => {
                     PathPartComparison::IdenticalChildReference
                 }
                 (ChildSpecifier::ObjectChild(_), ChildSpecifier::ObjectChild(_)) => {
                     PathPartComparison::Divergent
                 }
-                _ => PathPartComparison::Incompatible,
+                (ChildSpecifier::ObjectChild(_), _) => PathPartComparison::Incompatible,
             },
             (PathPart::Child(a), PathPart::Value { bound_as }) => {
-                if a.bound_type_kind() == *bound_as {
+                if bound_as.is_narrowing_to(&a.parent_type_kind()) {
                     PathPartComparison::LeftIsDescendent
                 } else {
                     PathPartComparison::Incompatible
                 }
             }
             (PathPart::Value { bound_as }, PathPart::Child(b)) => {
-                if b.bound_type_kind() == *bound_as {
+                if bound_as.is_narrowing_to(&b.parent_type_kind()) {
                     PathPartComparison::RightIsDescendent
                 } else {
                     PathPartComparison::Incompatible

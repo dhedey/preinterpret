@@ -1,0 +1,8 @@
+error: Cannot create a mutable reference because it clashes with an existing reference:
+       This reference : [*active*] &mut x (of type any)
+       Other reference: [inactive]     &x.a (of type any)
+       Reason         : mutation may invalidate the other descendent reference
+ --> tests/compilation_failures/references/with_inactive_ref_attempt_mutate_its_ancestor.rs:7:13
+  |
+7 |             x.b = "new!!";
+  |             ^

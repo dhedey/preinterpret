@@ -161,9 +161,12 @@ define_type_features! {
     impl ArrayType,
     pub(crate) mod array_interface {
         methods {
-            fn push(mut this: Mutable<ArrayValue>, item: AnyValue) -> FunctionResult<()> {
+            fn push(mut this: Mutable<ArrayValue>, item: AnyValue) -> (){
                 this.items.push(item);
-                Ok(())
+            }
+
+            fn pop(mut this: Mutable<ArrayValue>) -> AnyValue {
+                this.items.pop().unwrap_or(none())
             }
 
             [context] fn to_stream_grouped(this: ArrayValue) -> FunctionResult<OutputStream> {
