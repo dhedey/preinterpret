@@ -158,7 +158,7 @@ impl ReferenceableData {
                     self.display_path(&mut error_message, id, Some(ReferenceKind::ActiveMutable));
                 let _ = write!(error_message, "\nOther reference: ");
                 let _ = self.display_path(&mut error_message, other_id, None);
-                let _ = write!(error_message, "\nReason         : {}\n", error_reason);
+                let _ = write!(error_message, "\nReason         : {}", error_reason);
                 return data.creation_span.ownership_err(error_message);
             }
         }
@@ -200,7 +200,7 @@ impl ReferenceableData {
                     self.display_path(&mut error_message, id, Some(ReferenceKind::ActiveShared));
                 let _ = write!(error_message, "\nOther reference: ");
                 let _ = self.display_path(&mut error_message, other_id, None);
-                let _ = write!(error_message, "\nReason         : {}\n", error_reason);
+                let _ = write!(error_message, "\nReason         : {}", error_reason);
                 return data.creation_span.ownership_err(error_message);
             }
         }
